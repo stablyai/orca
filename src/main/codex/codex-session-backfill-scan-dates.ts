@@ -1,9 +1,5 @@
 import type { CodexSessionBackfillDate } from './codex-session-backfill-types'
 
-// Set algebra over the UTC date directories that make up a bounded backfill
-// pass. Kept apart from the walk itself so the durable marker, the scheduler,
-// and the pass all agree on identity, ordering, and range expansion.
-
 export function getCodexSessionBackfillDate(date = new Date()): CodexSessionBackfillDate {
   return [
     String(date.getUTCFullYear()).padStart(4, '0'),
@@ -17,10 +13,7 @@ export function isCodexSessionBackfillDate(value: unknown): value is CodexSessio
     return false
   }
   const key = value.join('-')
-  // Why: shape alone accepts directories the calendar never produces (2026/99/99
-  // from a corrupted marker, 2025/02/29); a UTC round-trip rejects them for free.
-  // Deliberately no age or future bound — this also gates which managed rollouts
-  // get published, and a clock-skewed future directory holds real sessions.
+  // Validate calendar dates but allow future ones: clock-skewed rollouts still contain real sessions.
   return (
     /^\d{4}-\d{2}-\d{2}$/.test(key) &&
     toCodexSessionBackfillDateKey(getCodexSessionBackfillDate(toUtcDate(value))) === key
@@ -38,7 +31,6 @@ export function compareCodexSessionBackfillDates(
   return toCodexSessionBackfillDateKey(left).localeCompare(toCodexSessionBackfillDateKey(right))
 }
 
-/** Deduplicated ascending union; invalid entries are dropped. */
 export function mergeCodexSessionBackfillDates(
   ...groups: readonly (readonly CodexSessionBackfillDate[] | undefined)[]
 ): CodexSessionBackfillDate[] {
@@ -61,7 +53,6 @@ export function subtractCodexSessionBackfillDates(
   return dates.filter((date) => !removedKeys.has(toCodexSessionBackfillDateKey(date)))
 }
 
-/** Reads persisted marker dates; anything unrecognized is discarded. */
 export function parseCodexSessionBackfillDates(value: unknown): CodexSessionBackfillDate[] {
   return Array.isArray(value)
     ? mergeCodexSessionBackfillDates(value.filter(isCodexSessionBackfillDate))
@@ -82,14 +73,7 @@ export function getCodexSessionBackfillDatesBetween(
   return dates
 }
 
-/**
- * Widens a pending set into the contiguous range that ends at `today`.
- *
- * Why: an abnormal exit or a pane held open across midnight leaves activity on
- * dates nobody got to record. The gap between the oldest pending date and today
- * is the smallest window that provably contains them. Returns null once that
- * window outgrows `maxDates`, where a full walk is the cheaper certainty.
- */
+/** Cover unrecorded midnight/crash activity; null requests a full scan when the date range is too wide. */
 export function expandCodexSessionBackfillDatesThroughToday(
   dates: readonly CodexSessionBackfillDate[],
   today: CodexSessionBackfillDate,

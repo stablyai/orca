@@ -4,13 +4,7 @@ import { isShellProcess } from './tui-agent-startup'
 import { useAppStore } from '@/store'
 import { inspectRuntimeTerminalProcess } from '@/runtime/runtime-terminal-inspection'
 
-// Why: agent CLIs vary widely in how they signal readiness. Title-based
-// detection (OSC titles parsed by detectAgentStatusFromTitle) is the tightest
-// signal we have — an agent that emits "✳ " or ". "/"* " prefixes has fully
-// taken over the PTY. For agents that don't set titles, fall back to
-// foreground-process equality (the launched binary is alive and owns the fg
-// job), then finally to the presence of any non-shell child process. A hard
-// timeout prevents the Use-button flow from hanging on a missing binary.
+// Prefer idle titles, then matching foreground process, then a non-shell child after grace; bound waiting so missing binaries cannot hang Use.
 export type AgentReadyReason = 'title-idle' | 'foreground-match' | 'child-process' | 'timeout'
 
 export type AgentReadyResult = {
@@ -38,10 +32,7 @@ function titleSuggestsReady(tabId: string): boolean {
       }
     }
   }
-  // Why: fall back to the persisted tab.title when runtime pane titles haven't
-  // been populated yet (e.g. the TerminalPane has not mounted a title handler
-  // for this tab). Finding the tab by id walks every worktree, which is fine
-  // at poll rates — the map is small.
+  // Before pane title handlers mount, use the persisted tab title; the small tab map is safe to scan at poll rate.
   if (titles.length === 0) {
     for (const tabs of Object.values(state.tabsByWorktree)) {
       const tab = tabs.find((t) => t.id === tabId)
@@ -54,18 +45,7 @@ function titleSuggestsReady(tabId: string): boolean {
   return titles.some((title) => classifyTitleActivity(title) === 'idle')
 }
 
-/**
- * Wait until the agent we launched on `tabId` is ready to accept typed input.
- *
- * Checks, in order of preference:
- *   1. Terminal title reports an idle agent status.
- *   2. Foreground process name matches `expectedProcess`.
- *   3. PTY has at least one non-shell child process (after a brief grace
- *      period so we don't accept the shell's own transient children).
- *
- * Resolves early on the first match, or after `timeoutMs` with
- * `{ ready: false, reason: 'timeout' }`. Never rejects.
- */
+/** Resolve readiness by idle title, matching process or non-shell child after grace. Timeout resolves ready:false; never rejects. */
 export async function waitForAgentReady(
   tabId: string,
   expectedProcess: string,
@@ -97,10 +77,7 @@ export async function waitForAgentReady(
         return { ready: true, reason: 'foreground-match' }
       }
 
-      // Why: child-process check is the weakest signal (it fires for any
-      // non-shell subprocess, including `ls` or `git`). Gate it behind a few
-      // polls so the shell's own startup children don't spoof readiness on
-      // cold-start. Never accept it while the foreground is still a shell.
+      // Non-shell children can be startup ls/git; delay this weakest signal and reject it while foreground remains a shell.
       if (attempt >= 4 && !isShellProcess(foreground)) {
         if (process.hasChildProcesses) {
           return { ready: true, reason: 'child-process' }

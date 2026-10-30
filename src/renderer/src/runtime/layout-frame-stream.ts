@@ -1,12 +1,14 @@
-// The layout stream a frame sync reads: this window's own main's, or a paired server's under this
-// window's ids. Only the local stream's positions answer this window's layout.apply replies.
+// Read local-main or paired-server frames under this window’s IDs; positions settle that source main’s apply replies.
 
 import type { AppState } from '@/store/types'
+import type { HeldDrawnTabs } from '@/store/workspace-layout-frame-held-tabs'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import type { WorkspaceLayoutChangeFrame } from '../../../shared/workspace-layout/workspace-layout-stream-frames'
 import {
   beginLayoutFramePositions,
   endLayoutFramePositions,
+  layoutFramePositionKey,
+  noteLayoutFrameEpoch,
   noteLayoutFramePosition
 } from './layout-frame-position'
 import { subscribeRuntimeLayout, type RuntimeLayoutStreamStatus } from './runtime-layout-client'
@@ -16,6 +18,8 @@ import { framesDrawWorkspace } from './workspace-layout-frame-drawn-workspaces'
 export type LayoutFrameSource = {
   target: RuntimeClientTarget
   draws: (state: AppState) => (key: string) => boolean
+  /** Tabs this window draws that the source's frames never carry: every build keeps them as drawn. */
+  heldTabs?: HeldDrawnTabs
   /** Frames under this window's ids; the local stream's already are. */
   translate?: (frame: WorkspaceLayoutChangeFrame) => WorkspaceLayoutChangeFrame
   onStatus?: (status: RuntimeLayoutStreamStatus) => void
@@ -32,15 +36,20 @@ export function openLayoutFrameStream(
   receive: (frame: WorkspaceLayoutChangeFrame) => void,
   onOpen: (open: boolean) => void
 ): { close: () => void } {
+  const key = layoutFramePositionKey(source.target)
   const local = source.target.kind === 'local'
   let open = true
-  if (local) {
-    beginLayoutFramePositions()
-  }
-  return subscribeRuntimeLayout(
+  beginLayoutFramePositions(key)
+  const stream = subscribeRuntimeLayout(
     source.target,
     {},
-    (frame) => receive(source.translate ? source.translate(frame) : frame),
+    (frame) => {
+      noteLayoutFrameEpoch(
+        frame.type === 'snapshot' || frame.type === 'records' ? frame.epoch : undefined,
+        key
+      )
+      receive(source.translate ? source.translate(frame) : frame)
+    },
     (status) => {
       if (status.state === 'lost' || status.state === 'refused') {
         console.warn('[layout-owner] layout stream stopped:', status)
@@ -48,21 +57,26 @@ export function openLayoutFrameStream(
       if (status.state === 'connecting' && !open) {
         // The stream reopens after a loss; replies wait for its frames again.
         open = true
-        if (local) {
-          beginLayoutFramePositions()
-        }
+        beginLayoutFramePositions(key)
         onOpen(true)
       } else if (status.state !== 'connecting' && status.state !== 'live') {
         open = false
-        if (local) {
-          endLayoutFramePositions()
-        }
+        endLayoutFramePositions(key)
         onOpen(false)
       }
       source.onStatus?.(status)
     },
-    // After the frame's flush. A held tab may still show as the window drew it, so a waiting reply
-    // checks the store rather than assume the frame shows.
-    (seq) => queueMicrotask(() => local && open && noteLayoutFramePosition(seq))
+    // After flush, check store before releasing replies: held tabs can still show the window’s tree.
+    (seq) => queueMicrotask(() => open && noteLayoutFramePosition(seq, key))
   )
+  return {
+    close: () => {
+      stream.close()
+      // A closed server stream sends no more frames: replies waiting on it show now.
+      if (!local && open) {
+        open = false
+        endLayoutFramePositions(key)
+      }
+    }
+  }
 }

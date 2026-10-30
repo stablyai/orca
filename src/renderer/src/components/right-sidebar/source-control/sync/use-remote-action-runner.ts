@@ -26,17 +26,14 @@ export type SourceControlRemoteActionKind =
   | 'publish'
   | 'rebase'
 
-// Why: statuses distinguish real failures from supersession and no-ops; collapsing to { ok: false } made Create PR treat supersession as a destructive failure.
+// Distinguish failures from supersession/no-ops so Create PR cannot treat supersession as destructive failure.
 export type RunRemoteActionResult =
   | { status: 'ok' }
   | { status: 'failed'; error: SourceControlActionError }
   | { status: 'superseded' }
   | { status: 'skipped' }
 
-/**
- * Single dispatcher for remote-only actions; error-swallow lives here since store slices already
- * surface actionable toasts.
- */
+/** Store slices own failure toasts; swallow remote-action errors here. */
 export function useSourceControlRemoteActionRunner({
   activeRepoTarget,
   activeWorktree,
@@ -131,7 +128,7 @@ export function useSourceControlRemoteActionRunner({
           return { status: 'ok' }
         }
         if (kind === 'push') {
-          // Why: kind 'push' must stay a regular push; auto-upgrading made the always-enabled dropdown Push row silently force-push against its tooltip.
+          // Keep Push regular; automatic force escalation would contradict its dropdown tooltip.
           await pushBranch(
             target.worktreeId,
             target.worktreePath,
@@ -216,7 +213,7 @@ export function useSourceControlRemoteActionRunner({
         }
         return { status: 'ok' }
       } catch (error) {
-        // Why: editor-slice actions own the failure toast; keep the latest failure inline too since dropdown-only actions like Fetch look silent once the menu closes.
+        // Keep failures inline after dropdowns close; store actions already own the toast.
         if (remoteActionErrorSequenceByWorktreeRef.current[target.worktreeId] !== sequence) {
           return { status: 'superseded' }
         }
@@ -267,14 +264,14 @@ export function useSourceControlRemoteActionRunner({
     ]
   )
 
-  // Why: commit first and run the follow-up remote op only if handleCommit succeeded, so we never push a commit the user didn't land.
+  // Run remote follow-ups only after commit succeeds.
   const runCompoundCommitAction = useCallback(
     async (remoteKind: 'push' | 'sync'): Promise<void> => {
       const ok = await handleCommit()
       if (!ok) {
         return
       }
-      // Why: "Commit & Force Push" maps to remoteKind 'push', so route to force_push when the upstream shape requires lease force (kind 'push' no longer auto-upgrades).
+      // Commit & Force Push retains remoteKind push; select the explicit lease-force path.
       if (
         remoteKind === 'push' &&
         shouldForcePushWithLeaseForUpstream(remoteStatusForActions ?? remoteStatus)

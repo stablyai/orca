@@ -1,9 +1,12 @@
 import type { AppState } from '@/store'
 import { joinPath } from '@/lib/path'
 import type { OpenFile } from '@/store/slices/editor'
-import { conflictOverviewFileId } from '@/store/slices/editor/file-ids/editor-file-ids'
+import {
+  conflictOverviewView,
+  type ConflictOverviewState
+} from '@/store/slices/editor/buffers/editor-buffer-conflict-overview'
 
-type EditorDraftState = Pick<AppState, 'editorDrafts' | 'openFiles'>
+type EditorDraftState = Pick<AppState, 'editorDrafts'> & ConflictOverviewState
 type EditorPanelDraftSelector = (state: EditorDraftState) => Record<string, string>
 
 const EMPTY_EDITOR_PANEL_DRAFTS = Object.freeze({}) as Record<string, string>
@@ -11,8 +14,7 @@ const EMPTY_EDITOR_PANEL_DRAFTS = Object.freeze({}) as Record<string, string>
 export function createEditorPanelDraftSelector(
   activeFile: OpenFile | null
 ): EditorPanelDraftSelector {
-  // Why: previews and conflict review can render a related file, but drafts
-  // from every other panel must not wake this editor on each keystroke.
+  // Include related preview/conflict files without subscribing this editor to unrelated panels’ typing.
   const fileIds = activeFile
     ? [
         activeFile.id,
@@ -26,37 +28,46 @@ export function createEditorPanelDraftSelector(
           joinPath(activeFile.filePath, entry.path)
         )
       : []
-  // Why: an overview file open in a tab shows under that tab's id (a server file's is not its path).
+  // Resolve overview drafts through record view IDs; server file IDs need not equal paths.
   const selectedFileIds = (state: EditorDraftState): string[] =>
     overviewPaths.length === 0 || !activeFile
       ? fileIds
       : Array.from(
           new Set([
             ...fileIds,
-            ...overviewPaths.map((path) =>
-              conflictOverviewFileId(state.openFiles, activeFile.worktreeId, path)
+            ...overviewPaths.map(
+              (path) => conflictOverviewView(state, activeFile.worktreeId, path)?.id ?? path
             )
           ])
         )
   let previousDrafts: AppState['editorDrafts'] | null = null
+  let previousOpenFiles: EditorDraftState['openFiles'] | null = null
+  let previousViews: EditorDraftState['editorBufferViews'] | null = null
   let previousSelection = EMPTY_EDITOR_PANEL_DRAFTS
 
   return (state) => {
-    // Why: every Zustand write reruns the selector. The slice identity guard
-    // keeps unrelated terminal/status traffic allocation-free.
-    if (previousDrafts === state.editorDrafts) {
+    // Guard slice identities so terminal/status writes allocate nothing; overview IDs also depend on current tabs and record views.
+    if (
+      previousDrafts === state.editorDrafts &&
+      (overviewPaths.length === 0 ||
+        (previousOpenFiles === state.openFiles && previousViews === state.editorBufferViews))
+    ) {
       return previousSelection
     }
     previousDrafts = state.editorDrafts
+    previousOpenFiles = state.openFiles
+    previousViews = state.editorBufferViews
 
     const ids = selectedFileIds(state)
-    const changed = ids.some((fileId) => {
-      const draft = state.editorDrafts[fileId]
-      return (
-        draft !== previousSelection[fileId] ||
-        (draft === undefined && Object.hasOwn(previousSelection, fileId))
-      )
-    })
+    const idSet = new Set(ids)
+    const changed =
+      ids.some((fileId) => {
+        const draft = state.editorDrafts[fileId]
+        return (
+          draft !== previousSelection[fileId] ||
+          (draft === undefined && Object.hasOwn(previousSelection, fileId))
+        )
+      }) || Object.keys(previousSelection).some((fileId) => !idSet.has(fileId))
     if (!changed) {
       return previousSelection
     }

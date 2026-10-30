@@ -1,16 +1,16 @@
 import { describe, expect, it, vi, type Mock } from 'vitest'
 import { createMockSubprocess } from './daemon-pty-adapter-test-harness'
 import { TerminalHost, type TerminalHostOptions } from './terminal-host'
+import { killWithDescendantSweep } from '../pty-descendant-termination'
 
-// Why mocked: the plain-shell teardown sweeps for real, and an unmocked run would put a live
-// process-table probe behind these tests.
+// Prevent fake PIDs from reaching real process-table probes.
 vi.mock('../pty-descendant-termination', () => ({
   killWithDescendantSweep: vi.fn()
 }))
 
 type SpawnSubprocess = TerminalHostOptions['spawnSubprocess']
 
-/** Shells that exit only when the test says so, standing in for one inside its kill grace. */
+/** Keep the native child alive until the test explicitly reports exit. */
 function spawnManuallyExitedSubprocess(): {
   spawnSubprocess: Mock<SpawnSubprocess>
   handles: ReturnType<typeof createMockSubprocess>[]
@@ -44,7 +44,6 @@ describe('TerminalHost listing of a session it is killing', () => {
 
     const killed = host.kill(sessionId, { immediate })
 
-    // The relaunched app lists here: the closed pane must read as closing, not restorable.
     expect(host.listSessions()).toMatchObject([{ sessionId, state: 'exiting', isAlive: true }])
     expect(host.hasLiveSessions()).toBe(true)
 
@@ -62,8 +61,11 @@ describe('TerminalHost listing of a session it is killing', () => {
     vi.mocked(handles[0]!.kill).mockImplementation(() => {
       throw new Error('EPERM')
     })
+    vi.mocked(killWithDescendantSweep).mockImplementationOnce(async (_pid, killRoot) => {
+      killRoot()
+    })
 
-    expect(() => host.kill(sessionId)).toThrow('EPERM')
+    await expect(host.kill(sessionId)).rejects.toThrow('EPERM')
 
     expect(host.listSessions()).toMatchObject([{ sessionId, state: 'running', isAlive: true }])
     handles[0]!._simulateExit(0)

@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -38,6 +38,12 @@ describe('usage source cache file', () => {
     await writeUsageSourceCache(ref, [{ path: 'a.jsonl' }])
 
     await expect(readUsageSourceCache(ref)).resolves.toEqual([{ path: 'a.jsonl' }])
+  })
+
+  it.skipIf(process.platform === 'win32')('writes the sidecar owner-only', async () => {
+    await writeUsageSourceCache(ref, [{ path: 'a.jsonl' }])
+
+    expect(statSync(ref.path).mode & 0o777).toBe(0o600)
   })
 
   it('rejects attribution from a sidecar committed ahead of its report', async () => {

@@ -17,7 +17,6 @@ const testState = vi.hoisted(() => ({
   runtimeEnvironments: [] as { id: string; createdAt: number; pairingRevision?: number }[]
 }))
 
-/** Only the store fields this screen's selectors read; the mock supplies nothing else. */
 type MockedSettingsNavState = {
   settings: GlobalSettings | null
   repos: Repo[]

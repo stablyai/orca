@@ -1,5 +1,3 @@
-// Which rows wait at the tail, after the live turn's activity line, rather than in the transcript.
-
 import type { AgentJournalRenderItem, AgentJournalSubmission } from './agent-session-journal-types'
 import type { AgentSessionLatestTurn } from './agent-session-wire'
 import { readAgentJournalTurn } from './agent-session-turn-record'
@@ -8,17 +6,9 @@ import { isStructuredAgentSessionCommandTurn } from './structured-agent-session-
 import { runningStructuredAgentSessionTurnScope } from './structured-agent-session-live-turn'
 import { structuredAgentSessionOpeningSendIn } from './structured-agent-session-opening-send'
 
-/**
- * The rows accepted but not yet handed over while a conversation command's turn runs, as a message
- * sent during `/compact` is: the host hands nothing over until the command ends, so they draw after
- * that turn's live activity. Any other running turn takes a send within moments, so it stays put,
- * unless a person's Stop is ending it (`stopping`): the host holds a send made then until it ends,
- * so those, and this client's own sends made then that it has not recorded yet, draw after the
- * live activity too. A send made before the Stop stays where it is. While a send ahead is still
- * opening its turn (`submissions`), the rows sent after it wait too, queued or not recorded yet:
- * the host takes none of them into that turn until it opens, and a queued row's place, the row that
- * accepted it, is above the handover that moved that send.
- */
+/** Place pending sends after live activity when host handover waits: during conversation commands (/compact), Stop, or a send still opening its turn.
+ * Include this client’s unrecorded sends; ordinary running turns accept sends promptly, and pre-Stop sends stay put.
+ * While a turn opens, later sends wait regardless of queue/publication state; queued positions precede the handover that moved the opening send. */
 export function nativeChatMessagesWaitingBehindLiveTurn(
   messages: readonly {
     id: string
@@ -32,8 +22,7 @@ export function nativeChatMessagesWaitingBehindLiveTurn(
   items: readonly AgentJournalRenderItem[] | null | undefined,
   stopping = false,
   submissions?: readonly AgentJournalSubmission[],
-  /** The host's view of current work (`latestTurn`, `working`): an ended generation's running turn
-   *  or unanswered send holds nothing. Absent from an older host, whose rows are read instead. */
+  /** Host current-work view excludes ended generations’ stale turns/sends. Older hosts omit it; fall back to rows. */
   host: { latestTurn?: AgentSessionLatestTurn | null; working?: boolean } = {}
 ): ReadonlySet<string> {
   const waits = (message: (typeof messages)[number]): boolean =>
@@ -80,8 +69,7 @@ function commandTurnRunning(
   )
 }
 
-/** While a send is still opening its turn, that send's turn is the live one, not a message sent
- *  after it that waits behind it (`nativeChatMessagesWaitingBehindLiveTurn`). */
+/** An opening send owns the live turn; later waiting messages cannot replace its key. */
 export function nativeChatOpeningTurnKey(
   messages: readonly { id: string }[],
   turnKeys: readonly (string | undefined)[],

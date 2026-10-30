@@ -20,7 +20,7 @@ export function installMainWindowCloseLifecycle(args: {
   store: Store | null
 }): { dispose: () => void } {
   const { focus, mainWindow, opts, rendererWebContentsId, state, store } = args
-  // Intercept close so the renderer can confirm killing running-process terminals (replies window:confirm-close to proceed).
+  // Renderer confirms save/process guards through window:confirm-close.
   let windowCloseConfirmed = false
   const confirmCloseChannel = 'window:confirm-close'
   const closeRequestReceivedChannel = 'window:close-request-received'
@@ -39,8 +39,7 @@ export function installMainWindowCloseLifecycle(args: {
     if (quitRendererAckTimer) {
       return
     }
-    // Why: will-quit cannot run until the renderer-backed window closes; an
-    // already-frozen renderer otherwise makes Force Quit the only escape.
+    // will-quit waits for window close; bound frozen-renderer acknowledgement so Quit remains usable.
     quitRendererAckTimer = setTimeout(() => {
       quitRendererAckTimer = null
       quitRendererAckRequestId = null
@@ -59,7 +58,7 @@ export function installMainWindowCloseLifecycle(args: {
     }
   }
 
-  // Windows minimize-to-tray: hide instead of close when enabled; returns true when it hid so callers skip their close path.
+  // Windows tray minimization owns close when enabled; callers must skip their normal close path.
   const hideToTrayIfEnabled = (): boolean => {
     const isRendererCrashed = mainWindow.webContents.isCrashed?.() ?? false
     if (
@@ -72,7 +71,7 @@ export function installMainWindowCloseLifecycle(args: {
       return false
     }
     mainWindow.hide()
-    // Why: notify once that closing only hid the window; the persisted flag stops it repeating on every later minimize.
+    // Persist the one-time tray notice so later minimize actions stay quiet.
     if (store.getUI().trayMinimizeNoticeShown !== true) {
       try {
         new Notification({
@@ -92,43 +91,42 @@ export function installMainWindowCloseLifecycle(args: {
 
   mainWindow.on('close', (e) => {
     const userQuitClose = consumeUserQuitWindowClose(mainWindow)
-    // Why: Alt+F4/programmatic closes hit the native event; apply the same minimize-to-tray guard the renderer-drawn X uses.
+    // Alt+F4/programmatic closes need the same tray guard as the custom X.
     if (!windowCloseConfirmed && !userQuitClose && hideToTrayIfEnabled()) {
       e.preventDefault()
       return
     }
     const isRendererCrashed = mainWindow.webContents.isCrashed?.() ?? false
-    // Why: only a gone/crashed renderer (can't answer) may bypass close confirmation; a hung-but-alive one still must (#5787).
+    // Only gone/crashed renderers can bypass confirmation; hung-but-live renderers must answer (#5787).
     const closeAction = resolveWindowCloseAction({
       windowCloseConfirmed,
       rendererProcessGone: focus.isRendererProcessGone(),
       isRendererCrashed
     })
     if (closeAction !== 'request-confirmation') {
-      // allow-confirmed: renderer already replied and re-entered close().
-      // bypass-gone: a gone renderer can't answer window:close-requested, so let OS close complete rather than trap a blank window.
+      // Confirmed close reenters here; truly gone renderers cannot answer and must remain closable.
       if (closeAction === 'allow-confirmed') {
         windowCloseConfirmed = false
       }
-      // Why: window teardown emits resize/move/unmaximize; freeze bounds persistence so they can't clobber saved size (v1.3.26-rc2).
+      // Freeze remembered bounds before teardown resize/move/unmaximize events can overwrite them.
       state.freezeBoundsOnQuit()
       return
     }
     e.preventDefault()
     const isQuitting = opts?.getIsQuitting?.() ?? false
     const requestId = ++closeRequestSequence
-    // Why userQuitClose: a serve host's user Quit only closes windows, yet a frozen renderer must not trap it.
+    // User Quit on serve closes windows without quitting the host; still bound frozen-renderer acknowledgement.
     if (isQuitting || userQuitClose) {
       armQuitRendererAckTimer(requestId)
     }
-    // Why: renderer owns the close decision; the always-mounted App root subscription lets even pre-workspace states reply (#5144).
+    // The always-mounted App subscription can confirm even before a workspace exists (#5144).
     mainWindow.webContents.send('window:close-requested', {
       isQuitting,
       requestId
     })
   })
   mainWindow.webContents.on('will-prevent-unload', () => {
-    // Why: a prevented beforeunload cancels the quit; release the bounds-persistence freeze so later resizing still saves.
+    // A veto cancels quit; resume bounds persistence for subsequent user resizing.
     state.resumeBoundsPersistence()
     clearQuitRendererAckTimer()
     opts?.onQuitAborted?.()
@@ -148,7 +146,7 @@ export function installMainWindowCloseLifecycle(args: {
   }
   ipcMain.on(trafficLightChannel, onSyncTrafficLights)
 
-  // Why: renderer-drawn window controls on Windows/Linux replicate the native title-bar buttons hidden by custom chrome.
+  // Custom Windows/Linux controls replace hidden native titlebar buttons.
   const minimizeChannel = 'window:minimize'
   const onMinimize = (): void => {
     if (!mainWindow.isDestroyed()) {
@@ -166,24 +164,24 @@ export function installMainWindowCloseLifecycle(args: {
       mainWindow.maximize()
     }
   }
-  // Why: mainWindow.close() from an IPC handler on Windows can make 'close' misfire, so send window:close-requested directly.
+  // Windows close from IPC can misfire; send the renderer close request directly.
   const requestCloseChannel = 'window:request-close'
   const onRequestClose = (): void => {
     if (mainWindow.isDestroyed()) {
       return
     }
-    // Why: renderer-drawn X routes here (not the native close event), so the minimize-to-tray guard must also run here.
+    // Custom X bypasses native close; apply the tray guard here too.
     if (hideToTrayIfEnabled()) {
       return
     }
     mainWindow.webContents.send('window:close-requested', { isQuitting: false })
   }
-  // Why: renderer-drawn title-bar ··· menu button replicates the Alt-key reveal autoHideMenuBar provides (Windows/Linux).
+  // Custom titlebar menu replaces Alt reveal of the hidden Windows/Linux menu.
   const popupMenuChannel = 'menu:popup'
   const onPopupMenu = (): void => {
     Menu.getApplicationMenu()?.popup({ window: mainWindow })
   }
-  // Why: WindowControls mounts after window:maximize-changed already fired, so expose a synchronous getter to init its icon.
+  // Controls mount after the first maximize event; expose current state for their initial icon.
   const isMaximizedChannel = 'window:isMaximized'
   const onIsMaximized = (): boolean => {
     return !mainWindow.isDestroyed() && mainWindow.isMaximized()

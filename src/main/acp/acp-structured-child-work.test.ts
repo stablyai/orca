@@ -1,6 +1,7 @@
+import { readAgentJournalTurn } from '../../shared/agent-session-turn-record'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { _internals } from '../agent-hooks/server'
-import { isSubagentBlock } from '../../shared/native-chat-types'
+import { isBackgroundTaskBlock, isSubagentBlock } from '../../shared/native-chat-types'
 import type { AgentChildWorkView } from '../../shared/agent-status-child-work-view'
 import { closeProviderTimelineRigs } from '../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
 import {
@@ -36,7 +37,6 @@ function cleanupScriptedHost(hosted: Awaited<ReturnType<typeof openHostRig>>) {
     const scriptedPrompt = prompt
     if (scriptedPrompt) {
       const { agent } = hosted.rig.child()
-      // Only teardown's actual cancel ends this fixture's scripted prompt.
       agent.on('session/cancel', () => agent.reply(scriptedPrompt, { stopReason: 'cancelled' }))
     }
     await hosted.host.close(SESSION, 'user-close')
@@ -146,7 +146,40 @@ describe('Grok roster evidence through the existing host child store', () => {
         membership: 'live'
       })
     ])
-    expect(childWork.views()).toMatchObject([{ providerId: 'subagent-1', outcome: 'succeeded' }])
+    expect(childWork.views()).toMatchObject([
+      {
+        providerId: 'subagent-1',
+        description: label,
+        membership: 'settled',
+        outcome: 'succeeded',
+        ...(name === 's7-subagent-foreground' ? { totalTokens: 13778 } : {})
+      }
+    ])
+    const rows = (await hosted.host.history({ sessionId: SESSION, direction: 'tail' })).page.items
+    expect(
+      rows.flatMap((row) =>
+        row.agentId !== undefined && row.body.kind === 'message'
+          ? [{ agentId: row.agentId, blocks: row.body.blocks }]
+          : []
+      )
+    ).toEqual([
+      {
+        agentId: 'subagent-1',
+        blocks: [
+          { type: 'text', text: name === 's7-subagent-foreground' ? '4' : 'notes.txt, README.md' }
+        ]
+      }
+    ])
+    expect(rows.flatMap((row) => readAgentJournalTurn(row.body) ?? [])).toMatchObject([
+      { state: 'completed', outcome: 'success' }
+    ])
+    if (name === 's7-subagent-background') {
+      expect(
+        rows.flatMap((row) =>
+          row.body.kind === 'message' ? row.body.blocks.filter(isBackgroundTaskBlock) : []
+        )
+      ).toEqual([])
+    }
     expect(
       (await hosted.host.history({ sessionId: SESSION, direction: 'tail' })).page.backgroundTasks
     ).toBeNull()
@@ -156,7 +189,7 @@ describe('Grok roster evidence through the existing host child store', () => {
     const f = await fixture()
     await f.spawn('first')
     await f.spawn('sibling')
-    // Each saved row keeps the raw label; the shared presentation derives the ordinal, as the strip does.
+    // Ordinals belong to presentation; persisted labels stay unchanged.
     expect(await f.roster()).toMatchObject([{ label: 'Exact label' }, { label: 'Exact label' }])
     expect((await f.strip())?.tasks).toMatchObject([
       { id: 'first', kind: 'agent', description: 'Exact label' },
@@ -188,7 +221,7 @@ describe('Grok roster evidence through the existing host child store', () => {
       })
     })
     expect(await f.targetedStop('first')).toMatchObject({ ok: true, value: { cancelled: true } })
-    // The accepted Stop settles that run until Grok's own ending says how it ended.
+    // Grok's eventual ending can revise the provisional Stop outcome.
     expect(f.childWork.views()).toMatchObject([
       { providerId: 'first', membership: 'settled', outcome: 'cancelled' },
       { providerId: 'sibling', membership: 'live' }
@@ -382,8 +415,8 @@ describe('Grok roster evidence through the existing host child store', () => {
     }
   })
 
-  // Grok's own refusal means it did nothing; a reply about another subagent proves nothing, so it is
-  // unknown. The Stop is accepted either way, and its note says which.
+  // Refusal proves no cancellation; a mismatched reply leaves the outcome unknown.
+  // Stop is accepted in either case; its note reports the cancellation outcome.
   it.each([
     ['rpc-error', "The background task wasn't stopped."],
     ['mismatched-id', 'Cancellation was not confirmed.']

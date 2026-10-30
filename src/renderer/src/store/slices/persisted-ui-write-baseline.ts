@@ -1,13 +1,6 @@
 import type { PersistedUIState } from '../../../../shared/persisted-ui-state-types'
 
-/**
- * Mirror-shaped snapshot of the fields the debounced persisted-UI writer owns.
- *
- * Why (STA-5781): the shared PersistedUIState is edited concurrently by desktop,
- * web, and mobile clients. Whole-snapshot writes let a stale mirror overwrite
- * another client's disjoint fields, so hydration captures this baseline and the
- * writer persists only the fields this client actually changed since then.
- */
+/** Capture hydrated baseline and persist only locally changed fields: shared desktop/web/mobile UI snapshots otherwise overwrite peers’ disjoint updates (STA-5781). */
 export type PersistedUIWriteBaseline = {
   sidebarWidth: number
   sidebarOpen: boolean
@@ -37,10 +30,7 @@ export type PersistedUIWriteBaseline = {
   manuallyUnreadTurnsByPaneKey: Record<string, number>
 }
 
-// Why `satisfies Record<...>` rather than a keyof[] annotation: a plain `satisfies
-// readonly (keyof ...)[]` only validates listed elements, so a field added to the
-// type but forgotten here would silently never persist again — the exact bug class
-// this module exists to close (see ui-state-schema-parity.ts for the same lesson).
+// Require exhaustive Record coverage; keyof arrays validate members but silently omit new fields, losing persistence (ui-state-schema-parity.ts).
 const PERSISTED_UI_WRITE_BASELINE_FIELD_SET = {
   sidebarWidth: true,
   sidebarOpen: true,
@@ -140,12 +130,7 @@ export function diffPersistedUIWriteFields(
   return changed as Partial<PersistedUIWriteBaseline>
 }
 
-/**
- * Convert a mirror-shaped field patch to the ui.set wire shape. Built key-by-key
- * (no spread): a spread is not excess-property-checked, so a future mirror field
- * whose store name differs from its wire name would ship a bogus key and make the
- * strict paired-host UiUpdate schema reject the whole payload.
- */
+/** Build wire patch key-by-key for excess-property checks; spreads could send renamed store fields and make strict paired UiUpdate reject all fields. */
 export function persistedUIWriteFieldsToWireUpdate(
   fields: Partial<PersistedUIWriteBaseline>
 ): Partial<PersistedUIState> {
@@ -158,8 +143,7 @@ export function persistedUIWriteFieldsToWireUpdate(
       // The mirror keeps the positive form; the durable file keeps the hide form.
       update.hideSleepingWorkspaces = fields.showSleepingWorkspaces !== true
     } else if (field === 'filterRepoIds') {
-      // Why: the store keeps this readonly for identity stability, but PersistedUI crosses to
-      // main, which owns a mutable array — copy at the boundary rather than widening the wire type.
+      // Copy readonly store arrays at mutable main wire boundary; keep selector identity guarantees local.
       update.filterRepoIds = [...(fields.filterRepoIds ?? [])]
     } else {
       assignSameNameWireField(
@@ -177,9 +161,7 @@ type SameNameWriteField = Exclude<
   'showSleepingWorkspaces' | 'filterRepoIds'
 >
 
-// Compile check: every non-special mirror field must exist on PersistedUIState
-// under the same name with an assignable type — indexing PersistedUIState[K]
-// fails to compile for a renamed field, and the conditional flags a type drift.
+// Compile-check nonspecial mirror fields against wire names/types so renames or drift cannot silently break persistence.
 type MisassignableWireField = {
   [K in SameNameWriteField]: PersistedUIWriteBaseline[K] extends PersistedUIState[K] ? never : K
 }[SameNameWriteField]

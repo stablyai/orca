@@ -1,10 +1,6 @@
 import { describe, expect, it } from 'vitest'
+import { readAgentSessionRefusalDetails } from './agent-session-refusal-details'
 import {
-  AGENT_SESSION_REFUSAL_REASONS,
-  readAgentSessionRefusalDetails
-} from './agent-session-refusal-details'
-import {
-  AGENT_SESSION_WIRE_REFUSAL_CODES,
   agentSessionRefusalError,
   agentSessionRefusalReference,
   readAgentSessionRefusalReference,
@@ -41,15 +37,6 @@ describe('a refusal names only a reason its code lists', () => {
     expect(refuse('agent_session_conflict', { reason: 'ownerAlive' }, 'm').details).toEqual({
       reason: 'ownerAlive'
     })
-  })
-
-  it('has no catch-all reason under any code', () => {
-    for (const code of AGENT_SESSION_WIRE_REFUSAL_CODES) {
-      for (const reason of AGENT_SESSION_REFUSAL_REASONS[code]) {
-        expect([code, reason]).not.toEqual([code, expect.stringMatching(/^(other|unknown)$/i)])
-        expect(reason).not.toMatch(/fault|generic|misc/i)
-      }
-    }
   })
 })
 

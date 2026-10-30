@@ -64,7 +64,6 @@ function readGitExecOptions(call: unknown[]): GitExecOptions {
   }
 }
 
-// Answers the proof the way git does inside a finished clone of `originUrl` at `path`.
 function answerAsCloneOf(path: string, originUrl: string): void {
   gitExecFileAsyncMock.mockImplementation((...call: unknown[]) => {
     const args = call[0]
@@ -130,7 +129,7 @@ describe('repos:add + repos:clone', () => {
       Promise.resolve({
         stdout:
           args[0] === 'config' && args.includes('.gitmodules') && cloned
-            ? 'submodule.lib.path vendor/lib\n'
+            ? 'submodule.lib.path\nvendor/lib\0'
             : '',
         stderr: ''
       })
@@ -319,7 +318,7 @@ describe('repos:add + repos:clone', () => {
       destination
     })
 
-    // Without this env, a clone needing auth makes Git Credential Manager pop and loop its OAuth window on Windows.
+    // Suppress Windows Git Credential Manager OAuth windows during noninteractive cloning.
     expect(gitSpawnMock).toHaveBeenCalledWith(
       ['clone', '--progress', '--', 'https://example.com/orca.git', join(destination, 'orca')],
       expect.objectContaining({
@@ -569,7 +568,7 @@ describe('repos:add + repos:clone', () => {
   it('dedupes retry when abort races with a successful clone close', async () => {
     const destination = await createTempRoot()
     const clonePath = join(destination, 'orca')
-    // The queued request finds the first clone's project and must see a finished clone there.
+    // The queued caller must prove the first clone finished before reusing its registration.
     answerAsCloneOf(clonePath, 'https://example.com/orca.git')
     const repos: unknown[] = []
     mockStore.getRepos.mockImplementation(() => repos)
@@ -605,7 +604,7 @@ describe('repos:add + repos:clone', () => {
   it('serializes concurrent clones for the same target', async () => {
     const destination = await createTempRoot()
     const clonePath = join(destination, 'orca')
-    // The queued request finds the first clone's project and must see a finished clone there.
+    // The queued caller must prove the first clone finished before reusing its registration.
     answerAsCloneOf(clonePath, 'https://example.com/orca.git')
     const repos: unknown[] = []
     mockStore.getRepos.mockImplementation(() => repos)
@@ -724,7 +723,7 @@ describe('repos:add + repos:clone', () => {
       expect(gitSpawnMock).toHaveBeenCalledTimes(1)
       expect(mockStore.addRepo).not.toHaveBeenCalled()
       expect(mockWindow.webContents.send).toHaveBeenCalledWith('repos:changed')
-      // The folder git just re-created has no worktree root, and the cached roots predate it.
+      // Recreated project folders invalidate both worktree-root preparation and cached authorization.
       expect(prepareLocalWorktreeRootForRepoMock).toHaveBeenCalledWith(mockStore, saved)
       expect(invalidateAuthorizedRootsCacheMock).toHaveBeenCalled()
     })

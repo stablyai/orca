@@ -24,7 +24,6 @@ function makeState(
     ],
     projectGroups: [],
     rightSidebarOpen: true,
-    // Source Control is git-only, so a folder workspace renders Explorer as the fallback.
     rightSidebarTab: 'source-control',
     rightSidebarExplorerView: 'files',
     gitStatusHugeByWorktree: {},

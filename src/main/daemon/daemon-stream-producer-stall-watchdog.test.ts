@@ -9,8 +9,7 @@ import {
 const MiB = 1024 * 1024
 const CHUNK = 'x'.repeat(64 * 1024)
 
-/** A stream socket whose peer accepts nothing until drain() is called — the half-open link that
- *  neither drains nor closes. */
+/** Model a half-open consumer that neither drains nor closes until drain() is called. */
 function createStallableSocket() {
   const written: string[] = []
   const completions: (() => void)[] = []
@@ -51,7 +50,6 @@ function createWiring() {
   const subprocess = { pause: vi.fn(), resume: vi.fn() }
   const producer = new SessionProducerPause(subprocess)
   const batcher = new DaemonStreamDataBatcher(() => ({ streamSocket: socket }), {
-    // Mirrors DaemonServer's wiring onto TerminalHost.
     onProducerBackpressureChanged: (_sessionId, paused, onStallTimeout) => {
       if (paused) {
         producer.pause('stream', true, onStallTimeout)
@@ -75,7 +73,7 @@ function createWiring() {
       drain()
       batcher.flush('client')
     }
-    // Settle the last writes: the session stays accounted until the kernel takes its in-flight bytes.
+    // Retain accounting until in-flight writes complete.
     drain()
     expect(batcher.queuedCharsForClient('client')).toBe(0)
   }
@@ -104,7 +102,6 @@ describe('producer stall watchdog end to end', () => {
     vi.advanceTimersByTime(STREAM_BACKPRESSURE_STALL_WATCHDOG_MS)
     expect(subprocess.resume).toHaveBeenCalledOnce()
 
-    // The shell runs again; its output is now keep-tail thinned rather than queued without bound.
     for (let chunk = 0; chunk < 16; chunk++) {
       batcher.enqueue('client', 'flood', CHUNK)
       batcher.flush('client')
@@ -112,7 +109,6 @@ describe('producer stall watchdog end to end', () => {
     expect(subprocess.pause).toHaveBeenCalledOnce()
     expect(2 * batcher.queuedCharsForClient('client')).toBeLessThan(4 * MiB)
 
-    // The gap rides the stream in byte order, so the client sees it as soon as the link recovers.
     drain()
     batcher.flush('client')
     expect(droppedChars(written)).toBeGreaterThan(0)
@@ -141,7 +137,7 @@ describe('producer stall watchdog end to end', () => {
     const { drainFully, produceUntilPaused, subprocess, written } = createWiring()
     produceUntilPaused()
 
-    // A real client drains multi-MB backlogs in well under a second; give it 10ms a pass.
+    // Drain in 10ms passes, comfortably inside the watchdog deadline.
     drainFully(10)
     expect(subprocess.resume).toHaveBeenCalledOnce()
 
@@ -155,7 +151,7 @@ describe('producer stall watchdog end to end', () => {
     const { batcher, produceUntilPaused, subprocess, written } = createWiring()
     produceUntilPaused()
 
-    // What onStreamDisconnected does once keepalive probes fail and the peer's socket closes.
+    // Model the server's stream-disconnect cleanup.
     batcher.clear('client')
     expect(subprocess.resume).toHaveBeenCalledOnce()
 

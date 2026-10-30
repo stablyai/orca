@@ -1,4 +1,4 @@
-import { createElement } from 'react'
+import { createElement, useState } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -7,6 +7,7 @@ vi.mock('./mobile-tasks-dependencies', async () => {
   return {
     useCallback: react.useCallback,
     useMemo: react.useMemo,
+    useState: react.useState,
     ...(await import('../../../src/shared/work-items'))
   }
 })
@@ -43,6 +44,7 @@ function buildModel(
     taskUiReady: true,
     setError: vi.fn(),
     setGithubCurrentPage: vi.fn(),
+    setGithubCountedTotalPages: vi.fn(),
     setGithubLoadingTargetPage: vi.fn(),
     setGithubPages: vi.fn(),
     setGithubPaginationLoading: vi.fn(),
@@ -53,15 +55,19 @@ function buildModel(
 let renderer: ReactTestRenderer | null = null
 let changePage: ((page: number) => Promise<void>) | null = null
 let canLoadUncountedNextPage = false
+let totalPages = 0
 
 function mount(model: ReturnType<typeof buildModel>): void {
   function Harness(): null {
+    const [countedTotalPages, setCountedTotalPages] = useState(model.githubCountedTotalPages)
+    model.setGithubCountedTotalPages.mockImplementation(setCountedTotalPages)
     const actions = useMobileTasksTaskPaginationActions(
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixture carries every member the page handler reads.
-      model as unknown as TaskListLoadingModel
+      { ...model, githubCountedTotalPages: countedTotalPages } as unknown as TaskListLoadingModel
     )
     changePage = actions.handleGitHubPageChange
     canLoadUncountedNextPage = actions.githubCanLoadUncountedNextPage
+    totalPages = actions.githubTotalPages
     return null
   }
   act(() => {
@@ -79,13 +85,19 @@ describe('GitHub task page change', () => {
   it('asks for the target page by number and shows it', async () => {
     const model = buildModel(async () => ({
       items: oldSelectionPage,
-      failedCount: 0
+      failedCount: 0,
+      errorTypes: []
     }))
     mount(model)
     await act(async () => {
       await changePage?.(1)
     })
-    expect(model.fetchGitHubItemsPage).toHaveBeenCalledWith(client, model.selectedHostedRepos, 1)
+    expect(model.fetchGitHubItemsPage).toHaveBeenCalledWith(
+      client,
+      model.selectedHostedRepos,
+      1,
+      expect.any(Function)
+    )
     expect(model.setGithubPages).toHaveBeenCalledWith([firstPage, oldSelectionPage])
     expect(model.setItems).toHaveBeenCalledWith(oldSelectionPage)
   })
@@ -103,15 +115,54 @@ describe('GitHub task page change', () => {
     act(() => {
       pending = changePage?.(1)
     })
-    // The repo picker changed: loadTasks bumps the generation and loads the new list.
     model.loadGenerationRef.current += 1
     await act(async () => {
-      land({ items: oldSelectionPage, failedCount: 0 })
+      land({ items: oldSelectionPage, failedCount: 0, errorTypes: [] })
       await pending
     })
     expect(model.setGithubPages).not.toHaveBeenCalled()
     expect(model.setItems).not.toHaveBeenCalled()
     expect(model.setGithubPaginationLoading).toHaveBeenLastCalledWith(false)
+  })
+
+  it('explains a clean empty next page and withdraws speculative Next', async () => {
+    const model = buildModel(async () => ({ items: [], failedCount: 0, errorTypes: [] }), null)
+    model.githubPages = [
+      Array.from({ length: 72 }, (_, index) => ({
+        key: `github:repo-1:issue:${index}`,
+        source: { repoId: 'repo-1' }
+      }))
+    ]
+    mount(model)
+    expect(canLoadUncountedNextPage).toBe(true)
+    await act(async () => {
+      await changePage?.(1)
+    })
+    expect(model.setError).toHaveBeenCalledWith('No more results on page 2.')
+    expect(canLoadUncountedNextPage).toBe(false)
+    expect(model.setItems).not.toHaveBeenCalled()
+  })
+
+  it('explains an all-repo failure and keeps the page retryable', async () => {
+    const model = buildModel(async () => ({ items: [], failedCount: 1, errorTypes: [] }))
+    mount(model)
+    await act(async () => {
+      await changePage?.(1)
+    })
+    expect(model.setError).toHaveBeenCalledWith('Page 2 could not be loaded from GitHub.')
+    expect(model.setGithubCountedTotalPages).not.toHaveBeenCalled()
+    expect(model.setItems).not.toHaveBeenCalled()
+  })
+
+  it('keeps a real count when an empty page is returned', async () => {
+    const model = buildModel(async () => ({ items: [], failedCount: 0, errorTypes: [] }), 3)
+    mount(model)
+    await act(async () => {
+      await changePage?.(1)
+    })
+    expect(model.setError).toHaveBeenCalledWith('No more results on page 2.')
+    expect(totalPages).toBe(3)
+    expect(model.setItems).not.toHaveBeenCalled()
   })
 
   describe('without a count, as in the default all-repos view', () => {
@@ -123,7 +174,7 @@ describe('GitHub task page change', () => {
     }
 
     function lastPageOffersNext(page: PageRow[]): boolean {
-      const model = buildModel(async () => ({ items: [], failedCount: 0 }), null)
+      const model = buildModel(async () => ({ items: [], failedCount: 0, errorTypes: [] }), null)
       model.githubPages = [page]
       model.selectedHostedRepos = [{ id: 'repo-a' }, { id: 'repo-b' }]
       mount(model)

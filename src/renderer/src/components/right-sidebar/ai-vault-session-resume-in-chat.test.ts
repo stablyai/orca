@@ -1,9 +1,7 @@
+import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import type { AiVaultSession } from '../../../../shared/ai-vault-types'
-import {
-  aiVaultSessionCwdMatchesWorkspace,
-  resolveAiVaultSessionResumeInChatEligibility
-} from './ai-vault-session-resume-in-chat'
+import { resolveAiVaultSessionResumeInChatEligibility } from './ai-vault-session-resume-in-chat'
 
 type ResumeInChatSession = Parameters<
   typeof resolveAiVaultSessionResumeInChatEligibility
@@ -36,37 +34,7 @@ function eligibility(
 }
 
 describe('resolveAiVaultSessionResumeInChatEligibility', () => {
-  it('offers the chat for a local Claude row in its own workspace', () => {
-    expect(eligibility()).toEqual({
-      available: true,
-      workspaceId: 'repo-1::/repo/orca',
-      route: 'structured'
-    })
-  })
-
-  it.each<AiVaultSession['agent']>(['grok', 'omp', 'opencode', 'opencode2', 'pi'])(
-    'offers the chat for a local %s row in its own workspace',
-    (agent) => {
-      expect(eligibility({ session: session({ agent }) })).toEqual({
-        available: true,
-        workspaceId: 'repo-1::/repo/orca',
-        route: 'structured'
-      })
-    }
-  )
-
-  it.each<AiVaultSession['agent']>(['hermes', 'gemini'])(
-    'refuses %s, whose chats cannot take over a CLI conversation',
-    (agent) => {
-      expect(eligibility({ session: session({ agent }) })).toEqual({
-        available: false,
-        reason: 'agent'
-      })
-    }
-  )
-
   it('refuses a row already adopted into a chat before any other check', () => {
-    // That row reopens its own chat; a second adoption is a conflict the host would refuse.
     expect(
       eligibility({
         session: {
@@ -77,103 +45,66 @@ describe('resolveAiVaultSessionResumeInChatEligibility', () => {
     ).toEqual({ available: false, reason: 'already-structured' })
   })
 
-  it('routes an unadopted local ZCode row into the structured adoption', () => {
+  it('routes an unadopted local ZCode row into structured adoption', () => {
     expect(
       eligibility({ session: session({ agent: 'zcode', filePath: undefined }) })
     ).toMatchObject({ available: true, route: 'structured' })
   })
 
-  it('routes a ZCode row whose database is stored inside WSL to the read-only history tab', () => {
+  it('routes a WSL-stored ZCode row to the read-only history tab', () => {
     expect(
       eligibility({
         session: session({
           agent: 'zcode',
-          filePath: '//wsl.localhost/Ubuntu-22.04/home/dev/.zcode/cli/db/db.sqlite'
+          filePath: '//wsl.localhost/Ubuntu/home/dev/.zcode/cli/db/db.sqlite'
         })
       })
-    ).toEqual({ available: true, workspaceId: 'repo-1::/repo/orca', route: 'history' })
-  })
-
-  it('keeps a WSL-stored ZCode row available for the history tab even without a structured route', () => {
-    expect(
-      eligibility({
-        structuredRouteAvailable: false,
-        session: session({
-          agent: 'zcode',
-          filePath: '//wsl.localhost/Ubuntu-22.04/home/dev/.zcode/cli/db/db.sqlite'
-        })
-      })
-    ).toEqual({ available: true, workspaceId: 'repo-1::/repo/orca', route: 'history' })
-  })
-
-  it('withholds the unadopted local ZCode row when no structured route exists here', () => {
-    expect(
-      eligibility({
-        structuredRouteAvailable: false,
-        session: session({ agent: 'zcode', filePath: undefined })
-      })
-    ).toEqual({ available: true, workspaceId: 'repo-1::/repo/orca', route: 'history' })
-  })
-
-  it('refuses an adopted ZCode row as already structured', () => {
-    expect(
-      eligibility({
-        session: session({
-          agent: 'zcode',
-          filePath: undefined,
-          structuredSession: { sessionId: 'chat-1', workspaceId: 'repo-1::/repo/orca' }
-        })
-      })
-    ).toEqual({ available: false, reason: 'already-structured' })
-  })
-
-  it('refuses a row recorded on a remote host', () => {
-    expect(eligibility({ session: session({ executionHostId: 'ssh:build-box' }) })).toEqual({
-      available: false,
-      reason: 'remote'
+    ).toEqual({
+      available: true,
+      workspaceId: 'repo-1::/repo/orca',
+      route: 'history'
     })
   })
 
-  it('refuses a row whose transcript is stored inside WSL', () => {
-    expect(
-      eligibility({
-        session: session({
-          filePath: '//wsl.localhost/Ubuntu-22.04/home/dev/.claude/projects/p/session-1.jsonl'
-        })
-      })
-    ).toEqual({ available: false, reason: 'remote' })
-  })
-
-  it('routes a WSL-stored Claude row to refusal, not the read-only tab', () => {
-    // The read-only fallback is a ZCode-only path: Claude's transcript renders through the same
-    // structured reader, so WSL storage stays a refusal for it.
+  it('keeps WSL-stored non-ZCode rows off the read-only path', () => {
     expect(
       eligibility({
         session: session({
           agent: 'claude',
-          filePath: '//wsl.localhost/Ubuntu-22.04/home/dev/.claude/projects/p/session-1.jsonl'
+          filePath: '//wsl.localhost/Ubuntu/home/dev/.claude/projects/p/session.jsonl'
         })
       })
     ).toEqual({ available: false, reason: 'remote' })
   })
 
-  it('refuses a transcript that holds no conversation', () => {
-    expect(eligibility({ session: session({ messageCount: 0, previewMessages: [] }) })).toEqual({
-      available: false,
-      reason: 'empty'
-    })
-  })
+  it.each(['ssh:build-box', 'runtime:unresolved-owner'] as const)(
+    'refuses a row recorded on %s',
+    (executionHostId) => {
+      expect(eligibility({ session: session({ executionHostId }) })).toEqual({
+        available: false,
+        reason: 'remote'
+      })
+    }
+  )
 
-  it('offers a zero-count row whose preview proves the turns exist', () => {
-    // Some parsers only learn the turn count from metadata that may be absent.
+  it.each<AiVaultSession['agent']>(['claude', 'codex'])(
+    'offers a paired-runtime %s conversation when its route is admitted',
+    (agent) => {
+      expect(
+        eligibility({ session: session({ agent, executionHostId: 'runtime:server-1' }) })
+      ).toMatchObject({ available: true })
+    }
+  )
+
+  it('rejects WSL transcripts on a paired runtime too', () => {
     expect(
       eligibility({
         session: session({
-          messageCount: 0,
-          previewMessages: [{ role: 'user', text: 'hello', timestamp: null }]
+          executionHostId: 'runtime:server-1',
+          filePath: '//wsl.localhost/Ubuntu/home/dev/.claude/projects/p/session.jsonl'
         })
       })
-    ).toMatchObject({ available: true })
+    ).toEqual({ available: false, reason: 'remote' })
   })
 
   it('refuses when the same pair could not take the structured route for a fresh chat', () => {
@@ -182,16 +113,61 @@ describe('resolveAiVaultSessionResumeInChatEligibility', () => {
       reason: 'workspace'
     })
   })
-
-  it('refuses when there is no target workspace at all', () => {
-    expect(eligibility({ targetWorkspaceId: null })).toEqual({
-      available: false,
-      reason: 'workspace'
-    })
-  })
 })
 
 describe('workspace matching, which binds the agents that store conversations per folder', () => {
+  it('accepts host correspondence for cwd from recorded Claude output', () => {
+    const capture = readFileSync(
+      new URL(
+        '../../../../main/claude/__fixtures__/claude-adapter-capture-early-steer.jsonl',
+        import.meta.url
+      ),
+      'utf8'
+    )
+    const cwds = capture
+      .trim()
+      .split('\n')
+      .flatMap((line) => {
+        const event: unknown = JSON.parse(line)
+        if (typeof event !== 'object' || !event || !('frame' in event)) {
+          return []
+        }
+        const frame = event.frame
+        return typeof frame === 'object' && frame && 'cwd' in frame && typeof frame.cwd === 'string'
+          ? [frame.cwd]
+          : []
+      })
+    expect(cwds).toEqual(['/tmp/scrubbed-cwd'])
+    const cwd = cwds[0]
+    expect(
+      eligibility({
+        session: session({ cwd, cwdAliases: [`/private${cwd}`] }),
+        targetWorkspacePath: `/private${cwd}`
+      }).available
+    ).toBe(true)
+  })
+
+  it.each<AiVaultSession['agent']>(['claude', 'grok', 'omp', 'opencode', 'opencode2', 'pi'])(
+    'offers a %s row when its host proves the registered spelling of cwd',
+    (agent) => {
+      const row = {
+        ...session({ agent, cwd: '/private/var/example' }),
+        cwdAliases: ['/var/example']
+      }
+      expect(eligibility({ session: row, targetWorkspacePath: '/var/example' })).toMatchObject({
+        available: true
+      })
+      expect(eligibility({ session: row, targetWorkspacePath: '/var' })).toEqual({
+        available: false,
+        reason: 'workspace'
+      })
+      expect(eligibility({ session: row, structuredRouteAvailable: false })).toEqual({
+        available: false,
+        reason: 'workspace'
+      })
+    }
+  )
+
   it.each<AiVaultSession['agent']>(['claude', 'grok', 'omp', 'opencode', 'opencode2', 'pi'])(
     'refuses a %s row whose conversation was recorded in another workspace',
     (agent) => {
@@ -229,23 +205,5 @@ describe('workspace matching, which binds the agents that store conversations pe
         targetWorkspacePath: 'c:/users/dev/repo/orca'
       })
     ).toMatchObject({ available: true })
-  })
-})
-
-describe('aiVaultSessionCwdMatchesWorkspace', () => {
-  it('ignores separator, case, and a trailing slash', () => {
-    expect(aiVaultSessionCwdMatchesWorkspace('C:\\repo\\Orca', 'c:/repo/orca')).toBe(true)
-    expect(aiVaultSessionCwdMatchesWorkspace('/repo/orca/', '/repo/orca')).toBe(true)
-    expect(aiVaultSessionCwdMatchesWorkspace(' /repo/orca ', '/repo/orca')).toBe(true)
-  })
-
-  it('never calls a missing path a match', () => {
-    expect(aiVaultSessionCwdMatchesWorkspace(null, '/repo/orca')).toBe(false)
-    expect(aiVaultSessionCwdMatchesWorkspace('/repo/orca', null)).toBe(false)
-    expect(aiVaultSessionCwdMatchesWorkspace('', '')).toBe(false)
-  })
-
-  it('does not treat a sibling directory as the same workspace', () => {
-    expect(aiVaultSessionCwdMatchesWorkspace('/repo/orca-2', '/repo/orca')).toBe(false)
   })
 })

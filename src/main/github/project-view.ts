@@ -1,4 +1,4 @@
-// Re-export the public API so existing `./project-view` call sites keep working; the split is internal-only.
+// Preserve the public import entry point across the internal module split.
 export { isValidOwnerSlug, isValidRepoSlug } from './project-view/internals'
 export { classifyProjectError } from './project-view/project-error-classification'
 export { updateIssueBySlug } from './project-view/mutations'

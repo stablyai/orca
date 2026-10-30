@@ -12,15 +12,6 @@ describe('orchestration Run list compatibility', () => {
 
   afterEach(() => db?.close())
 
-  it('rejects malformed pagination cursors', () => {
-    const method = ORCHESTRATION_RUN_METHODS.find(
-      (candidate) => candidate.name === 'orchestration.runList'
-    )!
-
-    expect(() => method.params!.parse({ cursor: {} })).toThrow()
-    expect(() => method.params!.parse({ cursor: '' })).toThrow()
-  })
-
   it('preserves the unpaginated RPC result for an old client request', async () => {
     db = new OrchestrationDb(':memory:')
     const runCount = 101

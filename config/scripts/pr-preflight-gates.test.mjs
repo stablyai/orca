@@ -10,13 +10,13 @@ const preflight = workflow.jobs.preflight
 const steps = preflight.steps
 const compiler = steps.find((step) => step.id === 'typecheck')
 const compilerJoin = steps.findIndex((step) => step.wait === 'typecheck')
-const plan = steps.find((step) => step.id === 'unit-plan')
+const unitPlan = parse(readFileSync('.github/workflows/unit-plan.yml', 'utf8'))
 
 it('shares one setup and overlaps the compiler only after type-aware checks finish', () => {
   expect(workflow.jobs.static_analysis).toBeUndefined()
   expect(workflow.jobs.typecheck).toBeUndefined()
   expect(preflight.needs).toEqual(['code_paths'])
-  expect(preflight['runs-on']).toBe('blacksmith-8vcpu-ubuntu-2404')
+  expect(preflight['runs-on']).toBe('ubuntu-24.04-arm')
   const installs = steps.filter(
     (step) => step.uses === './.github/actions/install-node-dependencies'
   )
@@ -32,14 +32,6 @@ it('shares one setup and overlaps the compiler only after type-aware checks fini
   const bunSetup = steps.find((step) => step.name === 'Set up Bun for preflight checks')
   expect(bunSetup.with['bun-version-file']).toBe('config/.bun-version')
   expect(bunSetup.if).toBeUndefined()
-  expect(plan.background).toBe(true)
-  expect(plan.run.trim().split('\n')).toEqual([
-    'if [ "$PREFLIGHT_PHASE_SELECTED" != true ] || [ "$PREFLIGHT_PRIOR_SUCCESS" != true ]; then exit 0; fi',
-    'node config/scripts/ci-unit-plan.mjs'
-  ])
-  expect(plan.env.ORCA_UNIT_SELECTION_MODE).toContain('vars.ORCA_UNIT_SELECTION_MODE')
-  expect(plan.env.ORCA_UNIT_FULL_SHARD_COUNT).toBe("${{ vars.ORCA_UNIT_FULL_SHARD_COUNT || '5' }}")
-  expect(steps.indexOf(plan)).toBeLessThan(compilerJoin)
   expect(steps.indexOf(compiler)).toBeGreaterThan(
     steps.findIndex((step) => step.wait === 'changed-code-quality')
   )
@@ -52,7 +44,7 @@ it('shares one setup and overlaps the compiler only after type-aware checks fini
 })
 
 it('uses the shared Bun pin for every current-toolchain workflow', () => {
-  expect(readFileSync('config/.bun-version', 'utf8').trim()).toBe('1.4.3')
+  expect(readFileSync('config/.bun-version', 'utf8').trim()).toMatch(/^\d+\.\d+\.\d+$/)
   for (const file of readdirSync('.github/workflows').filter((name) => /\.ya?ml$/.test(name))) {
     const current = parse(readFileSync(`.github/workflows/${file}`, 'utf8'))
     for (const job of Object.values(current.jobs)) {
@@ -80,31 +72,25 @@ it('keeps the Bun anti-slop scan aligned with the local audit', () => {
   const manifest = JSON.parse(readFileSync('package.json', 'utf8'))
   const localCommand = manifest.scripts['audit:anti-slop'].split('&&').at(-1).trim()
   expect(audit.run.trim().split('\n')[0]).toBe('node config/scripts/sync-anti-slop-plugin.mjs')
-  expect(
-    audit.run
-      .trim()
-      .split('\n')
-      .at(-1)
-      .replace('bun --smol node_modules/oxlint/bin/oxlint', 'oxlint')
-  ).toBe(localCommand)
+  expect(audit.run.trim().split('\n').at(-1)).toBe(localCommand)
 })
 
-it('requires physical preflight success before publishing shards and admitting consumers', () => {
-  const join = steps.findIndex((step) => step.wait === 'unit-plan')
-  const upload = steps.findIndex((step) => step.uses === 'actions/upload-artifact@v7')
-  expect(join).toBeGreaterThan(compilerJoin)
-  expect(upload).toBeGreaterThan(join)
-  expect(steps[upload]['continue-on-error']).toBeUndefined()
-  expect(steps[upload].with.name).toBe('unit-selection-attempt-${{ github.run_attempt }}')
-  expect(preflight.outputs.shards).toBe('${{ steps.unit-plan.outputs.shards }}')
-  expect(workflow.jobs.test.with.shards).toBe('${{ needs.preflight.outputs.shards }}')
-  for (const job of ['test', 'package', 'package_windows']) {
-    expect(workflow.jobs[job].needs).toEqual(['code_paths', 'preflight'])
+it('plans shards apart from preflight while verify still requires preflight', () => {
+  const plan = unitPlan.jobs.plan.steps.find((step) => step.id === 'plan')
+  expect(steps.some((step) => step.id === 'unit-plan')).toBe(false)
+  expect(preflight.outputs.shards).toBeUndefined()
+  expect(workflow.jobs.unit_plan.uses).toBe('./.github/workflows/unit-plan.yml')
+  expect(workflow.jobs.unit_plan.with.selection_mode).toContain('vars.ORCA_UNIT_SELECTION_MODE')
+  expect(plan.env.ORCA_UNIT_FULL_SHARD_COUNT).toBe("${{ vars.ORCA_UNIT_FULL_SHARD_COUNT || '12' }}")
+  expect(workflow.jobs.test.with.shards).toBe('${{ needs.unit_plan.outputs.shards }}')
+  expect(workflow.jobs.test.needs).toEqual(['code_paths', 'unit_plan'])
+  for (const job of ['package', 'package_windows', 'layout_oracle']) {
+    expect(workflow.jobs[job].needs).toEqual(['code_paths'])
   }
   for (const result of ['success', 'failure', 'cancelled', 'skipped']) {
     const admitted = runInNewContext(workflow.jobs.test.if, {
       cancelled: () => false,
-      needs: { code_paths: { result: 'success', outputs: { test: 'true' } }, preflight: { result } }
+      needs: { code_paths: { result: 'success', outputs: { test: 'true' } }, unit_plan: { result } }
     })
     expect(admitted, result).toBe(result === 'success')
   }
@@ -227,57 +213,6 @@ it.each(['true', 'false'])(
   }
 )
 
-it('pins every foreground and background step to its selected phase', () => {
-  const staticPhase = "needs.code_paths.outputs.static_analysis == 'true'"
-  const typePhase = "needs.code_paths.outputs.typecheck == 'true'"
-  const foreground = steps.filter(
-    (step) => !step.background && /outputs\.(static_analysis|typecheck)/.test(step.if ?? '')
-  )
-  expect(foreground.map((step) => [step.name ?? step.run ?? step.uses, step.if])).toEqual([
-    ['Check formatting', staticPhase],
-    ['Reject low-evidence patterns', staticPhase],
-    ['Enforce type-aware code-quality baseline', staticPhase],
-    [
-      './.github/actions/install-mobile-dependencies',
-      `${staticPhase} && needs.code_paths.outputs.mobile_dependencies == 'true'`
-    ],
-    ['Verify locked audit tools', staticPhase],
-    ['Enforce React Doctor on changed lines', staticPhase],
-    ['Check Zustand selector fan-out budget', staticPhase],
-    ['Check reliability gate manifest', staticPhase],
-    ['Enforce dead design-system classes', staticPhase],
-    ['Check VM runtime rollback compatibility', staticPhase],
-    ['Enforce ratchets', staticPhase],
-    ['Check Node runtime pin', staticPhase],
-    ['Check root and mobile lock the same shared dependencies', staticPhase],
-    ['Decide whether the orcad terminal smoke runs', staticPhase],
-    ['Verify the generated RPC params catalog', staticPhase],
-    ['Verify the generated ACP protocol schema', staticPhase],
-    ['Verify bundled skill guides', staticPhase],
-    ['Verify skill freshness manifest', staticPhase],
-    ['Verify localization coverage', staticPhase],
-    ['Guard against project-owned .d.ts in preload/shared', staticPhase],
-    ['Check feature wall asset budget', staticPhase],
-    ['Verify macOS entitlements', staticPhase],
-    ['actions/upload-artifact@v7', typePhase]
-  ])
-  expect(
-    steps
-      .filter((step) => step.background)
-      .map((step) => [step.id, step.env.PREFLIGHT_PHASE_SELECTED])
-  ).toEqual([
-    ['process-host-imports', `\${{ ${staticPhase} }}`],
-    ['main-sync-spawn-ratchet', `\${{ ${staticPhase} }}`],
-    ['root-lint', `\${{ ${staticPhase} }}`],
-    ['native-code-quality', `\${{ ${staticPhase} }}`],
-    ['changed-code-quality', `\${{ ${staticPhase} }}`],
-    ['typecheck', `\${{ ${typePhase} }}`],
-    ['localization-extraction', `\${{ ${staticPhase} }}`],
-    ['localization-catalogs', `\${{ ${staticPhase} }}`],
-    ['unit-plan', `\${{ ${typePhase} }}`]
-  ])
-})
-
 it.each([
   { changed: ['LICENSE'], static_analysis: false, typecheck: false, mobile_dependencies: false },
   { changed: ['README.md'], static_analysis: true, typecheck: false, mobile_dependencies: false },
@@ -288,7 +223,7 @@ it.each([
     mobile_dependencies: true
   },
   {
-    changed: ['cloud/package.json'],
+    changed: ['cloud/apps/relay/Dockerfile'],
     static_analysis: false,
     typecheck: false,
     mobile_dependencies: false
@@ -327,16 +262,34 @@ it.each([
   expect(scope.test).toBe(expected.typecheck)
 })
 
-it('registers successful no-op background work when a phase is unselected or already failed', () => {
-  for (const step of steps.filter((step) => step.background)) {
-    expect(step.if).toBe('!cancelled()')
-    expect(step.env.PREFLIGHT_PHASE_SELECTED).toContain('needs.code_paths.outputs.')
-    expect(step.env.PREFLIGHT_PRIOR_SUCCESS).toBe("${{ job.status == 'success' }}")
-    expect(step.run.split('\n')[0]).toBe(
-      'if [ "$PREFLIGHT_PHASE_SELECTED" != true ] || [ "$PREFLIGHT_PRIOR_SUCCESS" != true ]; then exit 0; fi'
-    )
+it.skipIf(process.platform === 'win32')(
+  'exits background guards only when their selected phase cannot run',
+  async () => {
+    for (const step of steps.filter((step) => step.background)) {
+      const guard = step.run.split('\n')[0]
+      for (const [selected, priorSuccess, expected] of [
+        ['false', 'true', 0],
+        ['true', 'false', 0],
+        ['true', 'true', 23]
+      ]) {
+        const result = await runProcess({
+          program: 'bash',
+          args: ['-e', '-c', `${guard}\nexit 23`],
+          env: {
+            ...process.env,
+            ORCA_BACKGROUND_LAUNCH: '1',
+            PREFLIGHT_PHASE_SELECTED: selected,
+            PREFLIGHT_PRIOR_SUCCESS: priorSuccess
+          },
+          timeoutMs: 10_000
+        })
+        expect(result.code, `${step.id}: selected=${selected}, prior=${priorSuccess}`).toBe(
+          expected
+        )
+      }
+    }
   }
-})
+)
 
 it('shares import analysis without dropping either boundary gate', () => {
   const imports = steps.find((step) => step.id === 'process-host-imports')

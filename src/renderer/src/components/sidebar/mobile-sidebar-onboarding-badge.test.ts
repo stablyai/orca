@@ -97,13 +97,11 @@ describe('mobile sidebar onboarding badge', () => {
 
     await renderHookProbe()
 
-    // Failed initial load: loaded flips true but the error flag suppresses the
-    // onboarding badge so it can't masquerade as "no devices paired".
+    // A failed device load must not masquerade as a successfully loaded empty list.
     await vi.waitFor(() => expect(listDevices).toHaveBeenCalledTimes(1))
     await vi.waitFor(() => expect(latestHookState?.visible).toBe(false))
     expect(latestHookState?.hasPairedDevice).toBe(false)
 
-    // Regaining focus re-fetches and un-wedges the persistent sidebar consumer.
     await act(async () => {
       window.dispatchEvent(new Event('focus'))
     })

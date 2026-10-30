@@ -10,34 +10,29 @@ import {
   getFolderWorkspaceWorktree
 } from './slices/worktrees/listing/detected-worktree-meta'
 
-// The one read path for workspace records. Backed by today's store fields; readers outside the
-// writers go through here (config/scripts/check-workspace-record-read-ratchet.mjs).
+// Route workspace readers here; check-workspace-record-read-ratchet.mjs enforces this boundary.
 
 export type WorkspaceRecordState = Pick<AppState, 'worktreesByRepo' | 'folderWorkspaces'>
 
-// ─── Compatibility views ─────────────────────────────────────────────
-
 /** Git worktrees per repo id, in listing order. */
-export function selectWorktreesByRepo(
-  state: Pick<AppState, 'worktreesByRepo'>
-): AppState['worktreesByRepo'] {
+export function selectWorktreesByRepo<TState extends { worktreesByRepo?: unknown }>(
+  state: TState
+): TState['worktreesByRepo'] {
   return state.worktreesByRepo
 }
 
-export function selectFolderWorkspaces(
-  state: Pick<AppState, 'folderWorkspaces'>
-): AppState['folderWorkspaces'] {
+export function selectFolderWorkspaces<TState extends { folderWorkspaces?: unknown }>(
+  state: TState
+): TState['folderWorkspaces'] {
   return state.folderWorkspaces
 }
 
 /** Checkouts git reports that Orca does not track, per repo id. */
-export function selectDetectedWorktreesByRepo(
-  state: Pick<AppState, 'detectedWorktreesByRepo'>
-): AppState['detectedWorktreesByRepo'] {
+export function selectDetectedWorktreesByRepo<TState extends { detectedWorktreesByRepo?: unknown }>(
+  state: TState
+): TState['detectedWorktreesByRepo'] {
   return state.detectedWorktreesByRepo
 }
-
-// ─── Keyed records ───────────────────────────────────────────────────
 
 function findFolderWorkspaceForTarget(
   folderWorkspaces: readonly FolderWorkspace[],

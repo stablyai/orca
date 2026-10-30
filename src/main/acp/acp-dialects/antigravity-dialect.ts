@@ -6,8 +6,7 @@ import { acpPermissionPresentation, pendingAcpResolution } from '../acp-timeline
 import type { ToolCallUpdate } from '../generated/acp-protocol.generated'
 import type { AcpDialect, AcpRequestPresentation } from './acp-dialect'
 
-// Antigravity asks the person a question as a permission request on an `interaction_` tool call,
-// one choice per option, sent even in its yolo mode: a question, never an approval to auto-allow.
+// interaction_ permissions are questions, even in yolo mode; never auto-approve them.
 function questionRequest(method: string, params: unknown): AcpRequestPresentation | undefined {
   const request =
     method === 'session/request_permission' ? readAcpPermissionRequest(params, () => {}) : null
@@ -32,7 +31,7 @@ function questionRequest(method: string, params: unknown): AcpRequestPresentatio
           : legacyAgentSessionQuestionAnswers(body, response.optionId)
       const [answer] = answers ?? []
       const optionId = answer?.optionIds[0]
-      // The server takes back one of its own choices; it has no free-text answer.
+      // The server accepts one offered choice and no free text.
       if (
         answers?.length !== 1 ||
         answer?.optionIds.length !== 1 ||
@@ -54,7 +53,7 @@ const securityWarningSchema = z.looseObject({
   })
 })
 
-// The server marks a risky "Allow Always" with a prompt-injection warning in that option's `_meta`.
+// Risky Allow Always options carry warnings in option metadata.
 function warnedApproval(method: string, params: unknown): AcpRequestPresentation | undefined {
   const request =
     method === 'session/request_permission' ? readAcpPermissionRequest(params, () => {}) : null
@@ -67,9 +66,7 @@ function warnedApproval(method: string, params: unknown): AcpRequestPresentation
     : undefined
 }
 
-// A command arrives as `rawInput {command_line, working_dir}`, and once done as `rawOutput
-// {commandLine, workingDir, exitCode, combinedOutput, formatted_output}` with no content blocks;
-// the shared shape is `rawInput.command` and `rawOutput {stdout, exitCode}`.
+// Normalize the server's command-field variants to command/cwd and stdout/exitCode.
 const optionalText = z.string().optional()
 const commandFieldsSchema = z.looseObject({
   CommandLine: optionalText,
@@ -113,8 +110,8 @@ function normalizeToolUpdate(update: ToolCallUpdate): ToolCallUpdate {
 export const ANTIGRAVITY_ACP_DIALECT: AcpDialect = {
   request: (method, params) => questionRequest(method, params) ?? warnedApproval(method, params),
   normalizeToolUpdate,
-  // Its command's title is the command line itself; the kind is what names a command row.
+  // Avoid using the full command line as the tool name.
   toolName: (update) => (update.kind === 'execute' ? 'execute' : undefined),
-  // The server's own sign-out clears the sign-in every Antigravity chat on the host shares.
+  // Logout would clear the account shared by every Antigravity chat on this host.
   withheldCommands: ['logout']
 }

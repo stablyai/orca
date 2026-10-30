@@ -105,7 +105,6 @@ describe('reconcileMountedPanesToLayout', () => {
       expect.objectContaining({ leafId: C }),
       expect.objectContaining({ ptyId: 'pty-main-c' })
     )
-    // The next frame finds the sets agreeing and mounts nothing again.
     expect(reconcile(layout, false, { [C]: 'pty-main-c' })).toBe(false)
     expect(onPaneCreated).toHaveBeenCalledTimes(1)
   })
@@ -126,7 +125,6 @@ describe('reconcileMountedPanesToLayout', () => {
 
     expect(leaves()).toEqual([A, B, C])
     expect(manager.getActivePane()?.leafId).toBe(A)
-    // Asked once: a later pane main adds takes focus again.
     const D = '44444444-4444-4444-8444-444444444444'
     reconcile(
       split('vertical', leaf(A), split('horizontal', leaf(B), split('vertical', leaf(C), leaf(D))))
@@ -157,7 +155,6 @@ describe('reconcileMountedPanesToLayout', () => {
   it('takes main’s ratios, then another client’s move, without recreating a pane', () => {
     const before = manager.getPanes().map((pane) => pane.container)
 
-    // Neither adds or closes a pane: the store already holds main's tree.
     expect(reconcile(split('vertical', leaf(A), leaf(B), 0.7))).toBe(false)
     expect(serialized()).toEqual(split('vertical', leaf(A), leaf(B), 0.7))
 

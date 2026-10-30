@@ -1,9 +1,9 @@
 import { useState } from 'react'
-import type { JiraProjectReference } from '../../../../shared/jira-project-reference'
+import type { JiraProjectReference } from '../../../../shared/jira/jira-project-reference'
 import type { Repo } from '../../../../shared/repo-types'
 import type { TaskSourceContext } from '../../../../shared/task-source-context'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
-import { resolveJiraSourceHostId } from '../../../../shared/jira-source-host'
+import { resolveJiraSourceHostId } from '../../../../shared/jira/jira-source-host'
 import { useJiraProjectInventory } from '../use-jira-project-inventory'
 
 const LOCAL_SOURCE = { kind: 'local' } as const

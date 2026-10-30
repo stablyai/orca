@@ -137,7 +137,9 @@ describe('count baseline', () => {
       ['src/a.ts', 1],
       ['src/c.ts', 0]
     ])
-    expect(parseCountBaseline(formatCountBaseline(counts, ['# header']))).toEqual(
+    const formatted = formatCountBaseline(counts, ['# header'])
+    expect(formatted).toBe('# header\n1 src/a.ts\n2 src/b.ts\n')
+    expect(parseCountBaseline(formatted)).toEqual(
       new Map([
         ['src/a.ts', 1],
         ['src/b.ts', 2]

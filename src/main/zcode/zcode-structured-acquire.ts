@@ -3,7 +3,7 @@
 // the snapshot, and answer the host with the provider handle once the child took a session.
 
 import { randomUUID } from 'node:crypto'
-import { zcodeProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
+import { zcodeProviderHandle } from './zcode-provider-handle'
 import type { AgentSessionProcessIdentity } from '../../shared/agent-session-record'
 import {
   AgentSessionAcquisitionExitUnprovenError,

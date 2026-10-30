@@ -49,7 +49,6 @@ export function sendPointToPointMessage(args: {
     markWorkerDoneMutationEffectFree,
     withSendWarnings
   } = args
-  // Point-to-point — existing single-recipient behavior
   revalidateLegacyCoordinator?.()
   const messageType = (params.type ?? 'status') as MessageType
   const processIncarnation = isDispatchMutationMessageType(messageType)
@@ -107,7 +106,7 @@ export function sendPointToPointMessage(args: {
 
     if (msg.type === 'worker_done' || msg.type === 'heartbeat') {
       const reconciled = reconcileLifecycleMessage(db, msg)
-      // Why: a suppressed message is already read, so skip waking a check waiter to an empty result.
+      // Suppressed mail is already read; do not wake a waiter to an empty inbox.
       if (reconciled.action === 'suppressed') {
         return recordReceiptForPostCommitNudge(
           recordMutationReceipt,
@@ -139,7 +138,7 @@ export function sendPointToPointMessage(args: {
       runtime.notifyMessageArrived(msg.to_handle, msg.type)
     )
   }
-  // Why: worker_done wakes the Run only after its mailbox row, settlement, and replay receipt commit together.
+  // Wake the Run only after worker_done mail, settlement and replay receipt commit atomically.
   if (messageType === 'worker_done') {
     markWorkerDoneMutationEffectFree?.()
   }

@@ -37,6 +37,7 @@ it('publishes the resolved chat program with its environment overlay', () => {
     resolveZcodeChatProgram({ PATH: '/usr/bin' }, {}, { resolveInvocation: () => desktop })
   ).toEqual({
     command: '/opt/ZCode/zcode',
+    prefixArgs: ['/opt/ZCode/resources/glm/zcode.cjs'],
     env: {
       PATH: '/usr/bin',
       ELECTRON_RUN_AS_NODE: '1'

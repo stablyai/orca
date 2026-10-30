@@ -1,20 +1,20 @@
 import type { SkillCloudVersion } from '../../../../shared/skill-cloud-contract'
 import { translate } from '@/i18n/i18n'
 import { groupInstallState, type SkillManagedInstallGroup } from './skill-managed-install-groups'
+import { uiDateTimeFormat } from '@/i18n/ui-intl-formatters'
 
-const dateFormatter = new Intl.DateTimeFormat(undefined, {
+const DATE_OPTIONS: Intl.DateTimeFormatOptions = {
   year: 'numeric',
   month: 'short',
   day: 'numeric'
-})
+}
 
 function formatDate(value: string): string | null {
   const parsed = new Date(value)
-  return Number.isNaN(parsed.getTime()) ? null : dateFormatter.format(parsed)
+  return Number.isNaN(parsed.getTime()) ? null : uiDateTimeFormat(DATE_OPTIONS).format(parsed)
 }
 
-/** Bundles have no name until the package loads, so the row names itself after
- *  what it actually put on disk. */
+/** Before a bundle package loads, derive its title from the skills installed on disk. */
 export function managedInstallTitle(group: SkillManagedInstallGroup): string {
   const [first, ...rest] = group.installs
   if (!first) {
@@ -42,10 +42,7 @@ export function managedInstalledOnLabel(group: SkillManagedInstallGroup): string
     : null
 }
 
-/**
- * `unchanged` is the normal case and saying so on every row is noise, so only
- * the two states a person can act on get words.
- */
+/** Leave unchanged installs quiet; label only states the user can act on. */
 export function managedInstallStateNote(group: SkillManagedInstallGroup): string | null {
   const state = groupInstallState(group)
   if (state === 'modified') {
@@ -65,8 +62,7 @@ export function managedSkillStateNote(state: string): string | null {
     : null
 }
 
-/** Version ids are opaque, so the date does the identifying and the installed
- *  one is marked rather than spelled out a second time. */
+/** Identify opaque versions by date and mark the installed one without repeating its label. */
 export function managedVersionLabel(
   version: SkillCloudVersion,
   installedVersionId: string

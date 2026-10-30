@@ -39,7 +39,6 @@ const hasCli =
   (process.platform !== 'win32' || existsSync(windowsLauncher))
 const skip = skipForMissingInputs('artifact', hasCli ? [] : ['the packaged server CLI'])
 
-/** The launcher the server would hand its children, pinned to `userData`. */
 function serverCliLauncher(userData: string): string {
   if (process.platform === 'win32') {
     const binDir = join(userData, 'cli', 'bin')

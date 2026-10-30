@@ -4,9 +4,13 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { ChevronLeft, Globe } from 'lucide-react-native'
 import Svg, { Path } from 'react-native-svg'
 import { OrcaLogo } from '../components/OrcaLogo'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { colors, spacing, typography } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 
 function GithubIcon({ size = 16, color = colors.textSecondary }) {
+  useMobileColorScheme()
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill={color}>
       <Path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z" />
@@ -15,6 +19,7 @@ function GithubIcon({ size = 16, color = colors.textSecondary }) {
 }
 
 function XIcon({ size = 16, color = colors.textSecondary }) {
+  useMobileColorScheme()
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill={color}>
       <Path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
@@ -31,10 +36,12 @@ export default function AboutScreen({
   openExternal: (url: string) => Promise<unknown>
   versionLabel: string
 }) {
-  const [error, setError] = useState<string | null>(null)
+  const t = useMobileTranslation()
+  useMobileColorScheme()
+  const [error, setError] = useState(false)
   const openLink = (url: string) => {
-    setError(null)
-    void openExternal(url).catch(() => setError('Could not open the link. Try again.'))
+    setError(false)
+    void openExternal(url).catch(() => setError(true))
   }
   const insets = useSafeAreaInsets()
 
@@ -44,25 +51,27 @@ export default function AboutScreen({
         <Pressable
           style={styles.backButton}
           accessibilityRole="button"
-          accessibilityLabel="Back"
+          accessibilityLabel={t('common.back', 'Back')}
           onPress={onBack}
         >
           <ChevronLeft size={22} color={colors.textSecondary} />
         </Pressable>
-        <Text style={styles.heading}>About</Text>
+        <Text style={styles.heading}>{t('settings.aboutScreen.title', 'About')}</Text>
       </View>
 
       <View style={styles.brand}>
         <OrcaLogo size={28} />
         <Text style={styles.brandName}>Orca</Text>
-        <Text style={styles.brandSub}>Open-source agent IDE for 100x builders</Text>
+        <Text style={styles.brandSub}>
+          {t('settings.aboutScreen.tagline', 'Open-source agent IDE for 100x builders')}
+        </Text>
       </View>
 
       <View style={styles.section}>
         <Pressable
           style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
           accessibilityRole="button"
-          accessibilityLabel="Orca website"
+          accessibilityLabel={t('settings.aboutScreen.website', 'Orca website')}
           onPress={() => openLink('https://onOrca.dev')}
         >
           <Globe size={16} color={colors.textSecondary} />
@@ -72,7 +81,7 @@ export default function AboutScreen({
         <Pressable
           style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
           accessibilityRole="button"
-          accessibilityLabel="Orca source code"
+          accessibilityLabel={t('settings.aboutScreen.sourceCode', 'Orca source code')}
           onPress={() => openLink('https://github.com/stablyai/orca')}
         >
           <GithubIcon />
@@ -82,7 +91,7 @@ export default function AboutScreen({
         <Pressable
           style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
           accessibilityRole="button"
-          accessibilityLabel="Orca on X"
+          accessibilityLabel={t('settings.aboutScreen.socialProfile', 'Orca on X')}
           onPress={() => openLink('https://x.com/orca_build')}
         >
           <XIcon />
@@ -93,14 +102,14 @@ export default function AboutScreen({
       <Text style={styles.versionText}>{versionLabel}</Text>
       {error && (
         <Text accessibilityRole="alert" style={styles.errorText}>
-          {error}
+          {t('settings.aboutScreen.openLinkFailed', 'Could not open the link. Try again.')}
         </Text>
       )}
     </View>
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   container: {
     flex: 1,
     backgroundColor: colors.bgBase,
@@ -184,4 +193,4 @@ const styles = StyleSheet.create({
     fontSize: typography.metaSize,
     color: colors.statusRed
   }
-})
+}))

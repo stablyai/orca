@@ -121,7 +121,7 @@ export function rotateSshProviderAuthority(targetId: string): DirectSshAuthority
   const previousGeneration = getSshConnectionGeneration(targetId)
   const nextGeneration = advanceSshConnectionGeneration(targetId)
   const authority = createAuthority(targetId, nextGeneration)
-  // Why: a recreated target skips ahead of its forgotten floor without rolling the scope; only a scope roll revokes every target.
+  // Recreated targets advance their forgotten floor; only session-scope rollover revokes all targets.
   if (!isSshConnectionGenerationInCurrentSession(previousGeneration)) {
     authorityByTarget.clear()
     authorityByTarget.set(targetId, authority)

@@ -25,11 +25,7 @@ export function getRepoSshConnection(repo: RepoSshFields): RepoSshConnection | n
   return repo.connectionId ? { environmentId: null, targetId: repo.connectionId } : null
 }
 
-/**
- * The target and status that gate creating a workspace in a repo. A server's own target is read
- * from that server's state, never this client's map (#25887). When this client cannot verify it
- * (server unreachable or not hydrated) nothing is gated here: the server owns the answer.
- */
+/** Gate workspace creation with the repo owner’s SSH state, never this client’s map (#25887). Unreachable/unhydrated server state cannot prove a gate; let that server decide. */
 export function selectRepoSshGateInput(
   state: RuntimeAwareSshStatusState,
   repo: RepoSshFields

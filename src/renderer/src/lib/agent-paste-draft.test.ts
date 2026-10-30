@@ -13,7 +13,7 @@ import {
   submitPromptToAgentPty
 } from './agent-paste-draft'
 import { TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
-import type * as RemoteRuntimePtyIdModule from '../../../shared/remote-runtime-pty-id'
+import type * as RemoteRuntimePtyIdModule from '../../../shared/remote-runtime/remote-runtime-pty-id'
 
 const testState = vi.hoisted(() => ({
   appState: {
@@ -58,12 +58,11 @@ vi.mock('@/components/terminal-pane/pty-pre-handler-buffer', () => ({
 vi.mock('@/runtime/runtime-terminal-inspection', () => ({
   inspectRuntimeTerminalProcess: testState.inspectRuntimeTerminalProcess
 }))
-vi.mock('../../../shared/remote-runtime-pty-id', async (importOriginal) => ({
+vi.mock('../../../shared/remote-runtime/remote-runtime-pty-id', async (importOriginal) => ({
   ...(await importOriginal<typeof RemoteRuntimePtyIdModule>()),
   isRemoteRuntimePtyId: testState.isRemoteRuntimePtyId
 }))
 vi.mock('@/runtime/runtime-terminal-verified-input', () => ({
-  // Why drop the kind: this suite pins write shapes; startup-draft-input-kind.test.ts pins kinds.
   sendRuntimePtyInputVerified: (ptyId: string, data: string) =>
     testState.sendRuntimePtyInputVerified(ptyId, data)
 }))
@@ -242,10 +241,7 @@ describe('pasteDraftWhenAgentReady', () => {
   })
 
   it('does not paste on the quiet window for opencode (it never arms one)', async () => {
-    // Why: opencode is silent for ~1.5-2s between enabling bracketed paste and
-    // mounting its composer. A quiet window would fire during that gap and paste
-    // before the composer exists (the original bug), so the cursor signal must
-    // not arm one. With process inspection failing, delivery times out instead.
+    // OpenCode can pause after enabling bracketed paste before mounting its composer; cursor/quiet alone must not authorize early paste.
     testState.inspectRuntimeTerminalProcess.mockResolvedValue(null)
     const onTimeout = vi.fn()
     const promise = pasteDraftWhenAgentReady({
@@ -259,12 +255,10 @@ describe('pasteDraftWhenAgentReady', () => {
     testState.ptyObserver?.(DECSET_BRACKETED_PASTE)
     await flushMicrotasks()
 
-    // Quiet-window duration elapses with no show-cursor: must NOT paste.
     await vi.advanceTimersByTimeAsync(1500)
     await flushMicrotasks()
     expect(testState.sendRuntimePtyInputVerified).not.toHaveBeenCalled()
 
-    // Only the hard timeout (and failed process check) resolves it — to false.
     await vi.advanceTimersByTimeAsync(20_000)
     await flushMicrotasks(5)
     await vi.advanceTimersByTimeAsync(1000)
@@ -274,8 +268,7 @@ describe('pasteDraftWhenAgentReady', () => {
   })
 
   it('best-effort pastes for opencode at the hard timeout when its process is running', async () => {
-    // Why: with no quiet window, the hard-timeout process-ownership check is the
-    // backstop if show-cursor is somehow missed — same model as Codex.
+    // If show-cursor is missed, process ownership remains the hard-timeout fallback, as for Codex.
     testState.inspectRuntimeTerminalProcess.mockResolvedValue({
       foregroundProcess: 'opencode',
       hasChildProcesses: false
@@ -294,7 +287,6 @@ describe('pasteDraftWhenAgentReady', () => {
 
     await expect(promise).resolves.toBe(true)
     expect(testState.sendRuntimePtyInputVerified).toHaveBeenCalledWith('pty-1', PASTED_ISSUE_URL)
-    // The composer was never observed; the caller must be able to hedge its success notice.
     expect(onUnconfirmedDelivery).toHaveBeenCalledTimes(1)
   })
 
@@ -423,10 +415,7 @@ describe('pasteDraftWhenAgentReady', () => {
   })
 
   it('waits past the default budget for a cold-boot Codex composer glyph (STA-3367)', async () => {
-    // Why: first-run/cold codex can take >8s to mount its composer. The '›' glyph
-    // is a positive readiness proof, so the marker-gated budget waits for it
-    // instead of giving up at 8s and dropping the handoff prompt. Process
-    // inspection stays 'bash' so only the real marker — not the fallback — delivers.
+    // Cold Codex can need over 8s; require its real composer marker within the longer budget while inspection still reports bash.
     const promise = pasteDraftWhenAgentReady({
       tabId: 'tab-1',
       content: ISSUE_URL,
@@ -435,7 +424,6 @@ describe('pasteDraftWhenAgentReady', () => {
     await flushMicrotasks()
 
     testState.ptyObserver?.(DECSET_BRACKETED_PASTE)
-    // Old 8s budget would have already timed out and dropped the prompt here.
     await vi.advanceTimersByTimeAsync(8000)
     await flushMicrotasks()
     expect(testState.sendRuntimePtyInputVerified).not.toHaveBeenCalled()
@@ -448,9 +436,7 @@ describe('pasteDraftWhenAgentReady', () => {
   })
 
   it('gives up on a never-spawned PTY at the spawn budget, not the composer budget (STA-3367)', async () => {
-    // Why: the two waits must not each spend the marker budget. A tab whose PTY
-    // never appears is a failed launch, and must not also burn the 20s cold-boot
-    // composer window before the caller is told.
+    // A missing PTY must fail within its own budget rather than also spend the cold-composer timeout.
     testState.appState.ptyIdsByTabId = {}
     const onTimeout = vi.fn()
     const promise = pasteDraftWhenAgentReady({
@@ -470,9 +456,7 @@ describe('pasteDraftWhenAgentReady', () => {
   })
 
   it('starts the composer budget once the PTY exists, so a slow spawn does not shorten it', async () => {
-    // Why: "tab has a PTY" and "composer accepts input" are separate states. A
-    // spawn that eats most of a shared budget would leave a cold codex too little
-    // room and re-drop the prompt — the exact STA-3367 failure.
+    // PTY appearance and composer readiness need separate budgets or a slow spawn consumes the cold-start grace (STA-3367).
     testState.appState.ptyIdsByTabId = {}
     const promise = pasteDraftWhenAgentReady({
       tabId: 'tab-1',
@@ -480,7 +464,6 @@ describe('pasteDraftWhenAgentReady', () => {
       agent: 'codex'
     })
 
-    // PTY takes 4s to appear — most of the old shared 8s budget.
     await vi.advanceTimersByTimeAsync(4000)
     testState.appState.ptyIdsByTabId = { 'tab-1': ['pty-1'] }
     for (const subscriber of testState.storeSubscribers) {
@@ -488,8 +471,7 @@ describe('pasteDraftWhenAgentReady', () => {
     }
 
     testState.ptyObserver?.(DECSET_BRACKETED_PASTE)
-    // 19s of cold boot after the PTY appeared: past a shared budget, inside the
-    // composer's own window.
+    // The composer gets its own window after PTY appearance, beyond the old shared budget.
     await vi.advanceTimersByTimeAsync(19000)
     await flushMicrotasks()
     expect(testState.sendRuntimePtyInputVerified).not.toHaveBeenCalled()

@@ -1,17 +1,5 @@
 // @vitest-environment happy-dom
-// Replays two recorded Linux native-IME captures against a real xterm Terminal and asserts the
-// recorded onData verbatim. Both were taken against a live ibus-daemon / fcitx5 on Xvfb :99 with
-// the Hangul engine, typing 한abc글 then Enter five times, and both read `ed959c616263eab8800a`
-// off the PTY on every repetition.
-//
-// The gesture is the one Linux IME users report on: commit a syllable, type ASCII with the IME
-// still selected, commit another. Its two failure modes are a syllable lost and a syllable sent
-// twice, so the whole trace is asserted as one string rather than per-event — a drop, a repeat and
-// a reorder each move it.
-//
-// This is offline coverage for what only tests/e2e/terminal-linux-ime-native.spec.ts had, and that
-// spec needs a Linux host with a real input framework. Five repetitions are kept because "exactly
-// once" is a claim about the steady state, not about the first commit.
+// Replay real IBus/fcitx5 Hangul traces against xterm and assert whole PTY output across five repetitions to catch drops, duplicates and reordering beyond the first commit.
 import { Terminal } from '@xterm/xterm'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import fcitx5Trace from './__fixtures__/fcitx5-hangul-mixed-ascii-terminal-trace.json'
@@ -104,24 +92,29 @@ function replayEvent(textarea: HTMLTextAreaElement, recorded: RecordedEvent): vo
 
 type PreeditSample = { data: string; shown: boolean }
 
-async function replayTrace(
-  trace: RecordedTrace
-): Promise<{ stream: string; preedits: PreeditSample[]; inputSignals: TypingInputSignal[] }> {
+async function replayTrace(trace: RecordedTrace): Promise<{
+  stream: string
+  preedits: PreeditSample[]
+  highlights: string[]
+  inputSignals: TypingInputSignal[]
+}> {
   const { emitted, terminal, textarea } = openTerminal()
   const preedits: PreeditSample[] = []
+  const highlights: string[] = []
   const inputSignals: TypingInputSignal[] = []
   const detachInputEvents = installTypingLatencyInputEvents(window, (signal) => {
     inputSignals.push(signal)
   })
   try {
     for (const recorded of trace.dom) {
-      // Keys were driven 20 ms apart, so every physical key event began its own task; the composition
-      // and input events the IME derived from one key stay in that key's task, which is what lets
-      // xterm's deferred commit see them.
+      // Physical keys start separate tasks; composition/input derived from one key stay in its task for deferred commit.
       if (recorded.type === 'keydown' || recorded.type === 'keyup') {
         await nextEventLoop()
       }
       replayEvent(textarea, recorded)
+      if (terminal.element?.querySelector('.xterm-composition-preedit-selected')) {
+        highlights.push(recorded.type)
+      }
       if (recorded.type === 'compositionupdate' && recorded.data) {
         const view = terminal.element?.querySelector('.composition-view')
         preedits.push({ data: recorded.data, shown: view?.classList.contains('active') === true })
@@ -130,7 +123,7 @@ async function replayTrace(
     // Two turns: the commit's deferred send, then the late-native-commit window it opens.
     await nextEventLoop()
     await nextEventLoop()
-    return { stream: emitted.join(''), preedits, inputSignals }
+    return { stream: emitted.join(''), preedits, highlights, inputSignals }
   } finally {
     detachInputEvents()
     terminal.dispose()
@@ -188,12 +181,16 @@ describe.each([
     expect(stream.replaceAll('\r', '\n')).toBe(lines)
   })
 
-  // Why: bytes reaching the PTY say nothing about whether the user could SEE what they were
-  // composing. A preedit written into a hidden overlay types blind and still passes every
-  // onData assertion above, which is how that class of defect has shipped before.
+  // Output bytes alone cannot prove visible preedit; assert the overlay too so composing cannot pass while hidden.
   it('keeps the preedit visible for every recorded composition update', async () => {
     const { preedits } = await replayTrace(trace)
     expect(preedits.length).toBeGreaterThan(0)
     expect(preedits.filter((sample) => !sample.shown)).toEqual([])
+  })
+
+  // Why: Hangul IMEs keep the syllable they are replacing selected until the input event collapses
+  // it, so reading the selection any earlier flashes every syllable as a converted clause.
+  it('does not highlight the syllable the IME is replacing', async () => {
+    expect((await replayTrace(trace)).highlights).toEqual([])
   })
 })

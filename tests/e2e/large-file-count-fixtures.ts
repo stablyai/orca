@@ -12,11 +12,7 @@ export type LargeFileCountRepoOptions = {
   modifiedFiles?: number
   /** Fan-out per directory; issue #8013 repos are wide trees, not one flat dir. */
   filesPerDirectory?: number
-  /**
-   * Minimum size of each untracked file. Untracked line stats read full file
-   * contents (mtime-cached), so per-poll I/O cost only shows up when
-   * untracked files have realistic sizes.
-   */
+  // Use realistic untracked sizes to expose full-content line-stat I/O on cache misses.
   untrackedFileBytes?: number
 }
 
@@ -31,11 +27,7 @@ function runGit(repoPath: string, args: string[]): void {
   execFileSync('git', args, { cwd: repoPath, stdio: 'pipe' })
 }
 
-/**
- * Removes a fixture repo, retrying ENOTEMPTY/EBUSY races: the app's git status
- * poll can still be writing index.lock (or the watcher holding dirs) while the
- * test tears down.
- */
+// Retry removal while Git status/index locks or watchers still hold the fixture.
 export async function removeLargeFileCountRepo(repoPath: string): Promise<void> {
   for (let attempt = 0; attempt < 5; attempt += 1) {
     try {
@@ -76,12 +68,7 @@ function writeFileTree(
   }
 }
 
-/**
- * Repro fixture for issue #8013: a repo whose file count (tracked, untracked,
- * or modified) is large enough to stress every per-file code path — the
- * streamed `git status` scan, per-entry line stats, the IPC payload, and the
- * Source Control row rendering.
- */
+// Stress status scanning, line stats, IPC and row rendering with issue #8013’s large file counts.
 export function createLargeFileCountRepo(
   options: LargeFileCountRepoOptions = {}
 ): LargeFileCountRepo {

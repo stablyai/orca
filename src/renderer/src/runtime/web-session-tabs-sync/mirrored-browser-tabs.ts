@@ -66,16 +66,7 @@ export function browserWorkspaceHasClientHostedEnvironmentPage(
   })
 }
 
-/**
- * The host publishes `title || url || 'Browser'` (see the runtime's browser tab projection), so a
- * page that has not produced a real title yet arrives as its own url — or as the bare default.
- * Neither says anything the local row does not already say better, so while the page still sits at
- * the url this client gave it, the local title stands and only a real navigation replaces it.
- *
- * Scope: the pre-adoption/staged window, every placement the host actually drives, and the mirror
- * of a page some other client hosts. Rows whose guest is ours never reach here — see
- * resolveMirroredBrowserPageContent.
- */
+/** Retain local title against host URL/Browser fallbacks only while URL matches. Covers staged, server-driven and other-client mirrors; our own guest rows bypass this via resolveMirroredBrowserPageContent. */
 export function resolveMirroredBrowserTitle(
   tab: RuntimeMobileSessionBrowserTab,
   existingPage: BrowserPage | undefined
@@ -89,13 +80,7 @@ export function resolveMirroredBrowserTitle(
   return published || 'Browser'
 }
 
-/**
- * Whether the guest running this page is one of ours. `placement.kind === 'client'` says only that
- * *some* client hosts it: a second desktop, or the web client that installs no page renderer at
- * all, mirrors the same row with nothing of its own to see it with. The placement names the lease
- * holder, so the comparison is exact, and it holds from the moment the host mints the placement —
- * before our guest has attached — which is the window the title would otherwise flicker through.
- */
+/** Only exact placement lease-holder identity proves this client hosts the guest; client kind alone includes other desktops/web. Ownership starts before attachment to prevent first-snapshot title flicker. */
 export function clientHostsMirroredBrowserPage(tab: RuntimeMobileSessionBrowserTab): boolean {
   if (tab.placement?.kind !== 'client') {
     return false
@@ -104,18 +89,7 @@ export function clientHostsMirroredBrowserPage(tab: RuntimeMobileSessionBrowserT
   return hostClientId !== null && tab.placement.browserHostClientId === hostClientId
 }
 
-/**
- * A page hosted by this client lives in our own guest webview; the host only ever learns its
- * content second-hand through a fire-and-forget metadata publish, so its snapshot is a stale echo
- * at best and the registry's `'Browser'`/create-time defaults at worst. Once a local row exists it
- * is the truth.
- *
- * The url is part of the payload and not just a symptom: rewinding it to the host's create-time
- * value is what breaks the staged-title hold's url-equality arm on the following snapshot.
- *
- * Every other row keeps taking the host values — a client that hosts no guest has no second
- * opinion to offer, and freezing its mirror would strand it on whatever its first snapshot said.
- */
+/** Our guest row owns content; host metadata is delayed echo/create defaults. Rewinding URL also defeats staged-title matching next frame. Other clients have no guest evidence and must follow host content rather than freeze their first snapshot. */
 export function resolveMirroredBrowserPageContent(
   tab: RuntimeMobileSessionBrowserTab,
   existingPage: BrowserPage | undefined
@@ -169,10 +143,7 @@ export function buildMirroredBrowserTabs(
     const hostGroupId = hostGroupIdByTabId.get(tab.id) ?? fallbackGroupId
     const existingClientGroupId =
       existing?.unifiedTab?.groupId !== hostGroupId ? existing?.unifiedTab?.groupId : undefined
-    // Why: a staged row was placed by this client, so wherever it sits now is the user's own
-    // choice — including a split made after the create recorded its intent. Rows the client never
-    // staged carry no such truth: a pre-response snapshot may have parked them in the host group,
-    // and there the record is what repairs them.
+    // Staged rows’ current groups reflect user moves and beat create intent; unstaged early mirrors still need the record to repair host placement.
     const preferredClientGroupId =
       existing && state.remoteBrowserPageHandlesByPageId[existing.page.id]?.staged === true
         ? (existing.unifiedTab?.groupId ?? recordedClientGroupId)
@@ -191,16 +162,14 @@ export function buildMirroredBrowserTabs(
       worktreeId: snapshot.worktree,
       ...content,
       faviconUrl: existing?.page.faviconUrl ?? null,
-      // Why: a client-hosted page's load failure is observed by the local guest webview and the
-      // host publishes no loadError for it, so the host snapshot must not clear the local record.
+      // Guest owns client-hosted loadError; host omission must not clear it.
       loadError:
         (tab.placement?.kind === 'client' ? existing?.page.loadError : tab.loadError) ?? null,
       createdAt,
       browserRuntimeEnvironmentId: environmentId,
       viewportPresetId: existing?.page.viewportPresetId ?? null
     }
-    // Why: reuse hinges on browserPageEqual comparing workspaceId — the removed-workspace
-    // page-list cleanup gates on page.workspaceId matching this entry's workspace.id.
+    // Reuse requires workspaceId equality or removed-workspace cleanup misses the retained page list.
     const page = existing && browserPageEqual(existing.page, nextPage) ? existing.page : nextPage
     const existingPageIds = existing?.workspace.pageIds
     const workspace: BrowserWorkspace = {
@@ -228,6 +197,7 @@ export function buildMirroredBrowserTabs(
       page,
       certificateFailure: tab.certificateFailure ?? null,
       remotePageId: tab.browserPageId,
+      ...(tab.browserProfileId ? { browserProfileId: tab.browserProfileId } : {}),
       ...(tab.placement ? { placement: tab.placement } : {}),
       unifiedTab: buildBrowserUnifiedTab(
         workspace,

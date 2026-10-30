@@ -1,6 +1,5 @@
 const MAX_TIMER_MS = 2_147_483_647
 
-/** Paced spawn requests waiting for a slot, a deadline, or their caller's cancellation. */
 export class TerminalSpawnWaiters {
   private readonly waiters = new Set<() => void>()
 

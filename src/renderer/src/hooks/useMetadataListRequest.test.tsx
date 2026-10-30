@@ -63,6 +63,11 @@ describe('useMetadataListRequest', () => {
       first.resolve(['first'])
       await first.promise
     })
-    expect(view.result.current).toEqual({ data: ['second'], loading: false, error: null })
+    expect(view.result.current).toEqual({
+      data: ['second'],
+      loading: false,
+      error: null,
+      resolvedKey: 'second'
+    })
   })
 })

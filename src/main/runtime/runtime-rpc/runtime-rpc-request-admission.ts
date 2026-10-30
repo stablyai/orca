@@ -6,14 +6,22 @@ import { errorResponse } from '../rpc/errors'
 import { RuntimeRpcBinaryRouting } from './runtime-rpc-binary-routing'
 import { classifyRuntimeLongPoll, type RuntimeLongPollClass } from './runtime-rpc-long-poll'
 import { OWNER_RPC_CALLER_SCOPE, type RpcCallerScope } from '../rpc/rpc-caller-scope'
+import { LOCAL_CLI_RPC_CALLER } from '../rpc/rpc-caller-identity'
+
+// Short calls that stop on disconnect without long-poll keepalives or admission slots.
+const DISCONNECT_FORWARDED_METHODS = new Set([
+  'browser.eval',
+  'linear.commentEdit',
+  'linear.commentDelete'
+])
 
 export class RuntimeRpcRequestAdmission extends RuntimeRpcBinaryRouting {
-  // Why: Unix socket dispatch is one-shot and auths via the shared token from the 0o600 metadata file. See §3.1.
+  // One-shot Unix requests use shared tokens from mode-0600 metadata (design §3.1).
   protected async handleMessage(
     rawMessage: string,
     context?: RpcMessageContext
   ): Promise<RpcResponse> {
-    // Why: the transport sends an empty message when a client exceeds max size, then closes the connection.
+    // Oversized clients arrive as empty messages before transport closes them.
     if (!rawMessage) {
       return this.buildError('unknown', 'request_too_large', 'RPC request exceeds the maximum size')
     }
@@ -24,14 +32,14 @@ export class RuntimeRpcRequestAdmission extends RuntimeRpcBinaryRouting {
     }
     const { request, callerScope } = parsed
 
-    // Why: long-poll admission fence; short RPCs bypass the counter. See §7 risk #2.
+    // Only long polls consume admission slots; short RPCs bypass (design §7).
     const longPoll = classifyRuntimeLongPoll(request)
     const rejection = this.admitLongPoll(longPoll)
     if (rejection) {
       return this.buildError(request.id, 'runtime_busy', rejection)
     }
     if (longPoll) {
-      // Why: arm keepalive only for long-polls; short RPCs never create the setInterval. See §3.1.
+      // Arm keepalives for long polls only; short calls pay no interval cost (design §3.1).
       context?.startKeepalive()
     }
 
@@ -39,10 +47,12 @@ export class RuntimeRpcRequestAdmission extends RuntimeRpcBinaryRouting {
       return await this.dispatcher.dispatch(request, {
         signal:
           longPoll ||
-          request.method === 'linear.commentEdit' ||
-          request.method === 'linear.commentDelete'
+          request.method.startsWith('linear.') ||
+          DISCONNECT_FORWARDED_METHODS.has(request.method)
             ? context?.signal
             : undefined,
+        connectionSignal: context?.signal,
+        caller: LOCAL_CLI_RPC_CALLER,
         callerScope
       })
     } finally {
@@ -50,9 +60,7 @@ export class RuntimeRpcRequestAdmission extends RuntimeRpcBinaryRouting {
     }
   }
 
-  // Why: one fence for both transports — the total cap protects short RPCs, the ask
-  // sub-cap protects terminal.wait / check --wait from slow reply-blocked asks.
-  // Returns the rejection message, or null once the slot is reserved.
+  // Share total/ask fences across transports: preserve short-RPC slots and reserve wait/check capacity from slow asks.
   protected admitLongPoll(
     longPoll: RuntimeLongPollClass | null,
     pairedDeviceId?: string

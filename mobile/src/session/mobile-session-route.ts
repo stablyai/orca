@@ -10,8 +10,7 @@ export type MobileSessionRouteParams = {
   executionHost?: ExecutionHostId
 }
 
-/** Identities stay raw — the navigator owns the params, so pre-encoding a
- *  workspace id would reach the session screen still escaped. */
+// Leave identities raw because the navigator owns parameter encoding.
 export function mobileSessionRouteTarget({
   hostId,
   worktreeId,

@@ -1,9 +1,7 @@
 const MAX_REFRESH_ORDERING_WORKTREES = 1024
 const strictUpstreamRefreshGenerationByWorktree = new Map<string, number>()
 const automaticRefreshGenerationByWorktree = new Map<string, number>()
-// Why: automatic ordering is latest-APPLIED-wins, not latest-started-wins. A
-// later-started refresh that fails (or never applies) must not veto an earlier
-// refresh's good result, so the fence only advances when a result is applied.
+// Advance the fence on apply, not start, so failed newer requests cannot veto an earlier good result.
 const lastAppliedAutomaticGenerationByWorktree = new Map<string, number>()
 const automaticUpstreamRefreshInFlightByWorktree = new Map<string, number>()
 
@@ -61,11 +59,7 @@ export function shouldApplyAutomaticUpstreamRefresh(
   )
 }
 
-/**
- * Check-and-claim variant used immediately before applying state. On success
- * it advances the applied fence so an older concurrent refresh that settles
- * later cannot overwrite this refresh's newer result.
- */
+/** Advance the applied fence atomically before state writes so older concurrent results cannot overwrite newer data. */
 export function claimAutomaticUpstreamRefreshApply(
   worktreeId: string,
   order: AutomaticRefreshOrder,

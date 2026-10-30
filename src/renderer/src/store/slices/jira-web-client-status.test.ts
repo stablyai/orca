@@ -1,15 +1,6 @@
-import { create } from 'zustand'
 import { afterEach, expect, it, vi } from 'vitest'
-import type { AppState } from '../types'
 import { withFallback } from '@/web/preload-api/web-fallback-api'
-import { createJiraSlice } from './jira'
-
-function createTestStore() {
-  return create<AppState>()((...args) => {
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Connection reads use only settings and the fully initialized Jira slice.
-    return { settings: null, ...createJiraSlice(...args) } as AppState
-  })
-}
+import { createTestStore } from './store-test-helpers'
 
 afterEach(() => {
   vi.unstubAllGlobals()

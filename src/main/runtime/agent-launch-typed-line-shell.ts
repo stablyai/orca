@@ -1,13 +1,7 @@
 import { basename } from 'node:path'
 
-/**
- * The shell a local pane's startup line gets typed into, named before the spawn the way the spawn
- * picks it: the request's shell, the default-shell setting, then `SHELL`
- * (`ipc/pty/runtime/spawn-preflight.ts`, then the local or daemon launch plan).
- *
- * Undefined where the host cannot name it: a remote host, whose relay picks its own login shell,
- * and Windows, whose pane may be cmd, PowerShell, Git Bash or a WSL distro.
- */
+/** Match local spawn shell precedence: request → default setting → SHELL.
+ * Remote relays and Windows shell families cannot be named by this POSIX lookup. */
 export function nameLocalTypedLineShell(args: {
   isRemote: boolean
   shellOverride?: string
@@ -26,11 +20,7 @@ export function nameLocalTypedLineShell(args: {
   return basename(shellPath).toLowerCase()
 }
 
-/**
- * Whether the execution host can prove a launched agent holds its terminal before a paste
- * (`launched-agent-foreground`). A Windows host cannot, and a local WSL pane runs on one; an SSH
- * host is judged by its own platform.
- */
+/** Foreground proof depends on the execution host: local WSL still uses Windows PTY machinery; SSH uses its host platform. */
 export function launchHostProvesAgentInFront(args: {
   isRemote: boolean
   launchPlatform: NodeJS.Platform

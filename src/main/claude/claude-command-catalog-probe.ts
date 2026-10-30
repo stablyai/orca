@@ -5,8 +5,7 @@ import { ClaudeSlashCommandCatalog } from './claude-slash-command-catalog'
 
 const REQUEST_ID = 'orca-command-discovery'
 
-// Why: `initialize` answers the session's `/` surface (built-ins, commands, skills, plugins) with
-// no API turn, the same list a live chat seeds its menu from.
+// initialize lists the live chat command surface without spending an API turn.
 const CLAUDE_COMMAND_LIST_STDIN = `${JSON.stringify({
   type: 'control_request',
   request_id: REQUEST_ID,
@@ -18,23 +17,23 @@ const INITIALIZE_JSON_LIMITS = { structuralTokens: 64 * 1024, nestingDepth: 16 }
 export type ClaudeCommandCatalogProbe = (request: {
   cwd: string
   accountHomePath: string
+  signal?: AbortSignal
   isCurrent?: () => boolean
 }) => Promise<AgentSessionSlashCommand[]>
 
-/** Asks Claude, in the folder a chat launches in, what its `/` menu holds. */
 export function createClaudeCommandCatalogProbe(
   deps: ClaudeModelCatalogProbeDeps
 ): ClaudeCommandCatalogProbe {
-  return async ({ cwd, accountHomePath, isCurrent }) => {
+  return async ({ cwd, accountHomePath, isCurrent, signal }) => {
     const stdout = await runClaudeListing(deps, {
       accountHomePath,
       cwd,
       stdin: CLAUDE_COMMAND_LIST_STDIN,
       site: 'claude-command-catalog-probe',
-      isCurrent
+      isCurrent,
+      signal
     })
     const commands = readInitializeCommands(stdout)
-    // A CLI whose `initialize` answers no commands answers nothing the menu can use.
     if (!commands?.length) {
       throw new Error('claude listed no commands')
     }

@@ -1,4 +1,4 @@
-import { create } from 'zustand'
+import { create, type StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { createRepoSlice } from './repos'
@@ -29,7 +29,7 @@ import { createRateLimitSlice } from './rate-limits'
 import { createSshSlice } from './ssh'
 import { createRuntimeEnvironmentSshSlice } from './runtime-environment-ssh'
 import { createWslHostsSlice } from './wsl-hosts'
-import { createAgentStatusSlice } from './agent-status'
+import { createAgentStatusSlice } from './agent-status/agent-status'
 import { createPaneForegroundAgentSlice } from './pane-foreground-agent'
 import { createDiffCommentsSlice } from './diffComments'
 import { createDetectedAgentsSlice } from './detected-agents'
@@ -53,6 +53,8 @@ import { createStructuredSessionLaunchDirectorySlice } from './structured-sessio
 import { createStructuredChatSleptAtSlice } from './structured-chat-slept-at'
 import { createWorkspaceAttentionSlice } from './workspace-attention/workspace-attention-slice'
 import '@/i18n/i18n'
+import { withEditorBufferRecords } from '../editor-buffer-record-lifecycle'
+import { withAgentConversationRetention } from '../agent-conversation-retention'
 import { makeWorktree, TEST_REPO } from './worktrees-slice-test-fixtures'
 export { makeWorktree, TEST_REPO } from './worktrees-slice-test-fixtures'
 export {
@@ -63,67 +65,74 @@ export {
   makeTabGroup
 } from './store-session-test-harness'
 
+const withTestStorePolicies = (creator: StateCreator<AppState, [], []>, check: boolean) =>
+  withEditorBufferRecords(withAgentConversationRetention(creator), check)
+
 export function createTestStore() {
-  return create<AppState>()((...a) => ({
-    ...createRepoSlice(...a),
-    ...createSparsePresetsSlice(...a),
-    ...createWorktreeSlice(...a),
-    ...createTerminalSlice(...a),
-    ...createTabsSlice(...a),
-    ...createUISlice(...a),
-    ...createSettingsSlice(...a),
-    ...createKeybindingsSlice(...a),
-    ...createGitHubSlice(...a),
-    ...createHostedReviewSlice(...a),
-    ...createLinearSlice(...a),
-    ...createPreflightSlice(...a),
-    ...createJiraSlice(...a),
-    ...createEditorSlice(...a),
-    ...createStatsSlice(...a),
-    ...createMemorySlice(...a),
-    ...createWorkspaceSpaceSlice(...a),
-    ...createClaudeUsageSlice(...a),
-    ...createCodexUsageSlice(...a),
-    ...createOpenCodeUsageSlice(...a),
-    ...createMuseUsageSlice(...a),
-    ...createBrowserSlice(...a),
-    ...createRateLimitSlice(...a),
-    ...createSshSlice(...a),
-    ...createRuntimeEnvironmentSshSlice(...a),
-    ...createWslHostsSlice(...a),
-    ...createAgentStatusSlice(...a),
-    ...createPaneForegroundAgentSlice(...a),
-    ...createDiffCommentsSlice(...a),
-    ...createDetectedAgentsSlice(...a),
-    ...createRuntimeDetectedAgentsSlice(...a),
-    ...createWorktreeNavHistorySlice(...a),
-    ...createDictationSlice(...a),
-    ...createWorkspaceCleanupSlice(...a),
-    ...createWorkspaceCleanupBrowseSlice(...a),
-    ...createRuntimeStatusSlice(...a),
-    ...createPullRequestGenerationSlice(...a),
-    ...createCommitMessageGenerationSlice(...a),
-    ...createPinnedTabCloseConfirmSlice(...a),
-    ...createRecentlyClosedTabsSlice(...a),
-    ...createOrcaProfilesSlice(...a),
-    ...createNewIssueDraftSlice(...a),
-    ...createFeedbackDraftSlice(...a),
-    ...createTaskCreationDraftsSlice(...a),
-    ...createRemoteServerUpdatesSlice(...a),
-    ...createTerminalQuickCommandHostsSlice(...a),
-    ...createStructuredSessionLaunchDirectorySlice(...a),
-    ...createStructuredChatSleptAtSlice(...a),
-    ...createWorkspaceAttentionSlice(...a)
-  }))
+  // Why the record middleware: views of one file share a record only through it, as in the app.
+  return create<AppState>()(
+    withTestStorePolicies(
+      (...a) => ({
+        ...createRepoSlice(...a),
+        ...createSparsePresetsSlice(...a),
+        ...createWorktreeSlice(...a),
+        ...createTerminalSlice(...a),
+        ...createTabsSlice(...a),
+        ...createUISlice(...a),
+        ...createSettingsSlice(...a),
+        ...createKeybindingsSlice(...a),
+        ...createGitHubSlice(...a),
+        ...createHostedReviewSlice(...a),
+        ...createLinearSlice(...a),
+        ...createPreflightSlice(...a),
+        ...createJiraSlice(...a),
+        ...createEditorSlice(...a),
+        ...createStatsSlice(...a),
+        ...createMemorySlice(...a),
+        ...createWorkspaceSpaceSlice(...a),
+        ...createClaudeUsageSlice(...a),
+        ...createCodexUsageSlice(...a),
+        ...createOpenCodeUsageSlice(...a),
+        ...createMuseUsageSlice(...a),
+        ...createBrowserSlice(...a),
+        ...createRateLimitSlice(...a),
+        ...createSshSlice(...a),
+        ...createRuntimeEnvironmentSshSlice(...a),
+        ...createWslHostsSlice(...a),
+        ...createAgentStatusSlice(...a),
+        ...createPaneForegroundAgentSlice(...a),
+        ...createDiffCommentsSlice(...a),
+        ...createDetectedAgentsSlice(...a),
+        ...createRuntimeDetectedAgentsSlice(...a),
+        ...createWorktreeNavHistorySlice(...a),
+        ...createDictationSlice(...a),
+        ...createWorkspaceCleanupSlice(...a),
+        ...createWorkspaceCleanupBrowseSlice(...a),
+        ...createRuntimeStatusSlice(...a),
+        ...createPullRequestGenerationSlice(...a),
+        ...createCommitMessageGenerationSlice(...a),
+        ...createPinnedTabCloseConfirmSlice(...a),
+        ...createRecentlyClosedTabsSlice(...a),
+        ...createOrcaProfilesSlice(...a),
+        ...createNewIssueDraftSlice(...a),
+        ...createFeedbackDraftSlice(...a),
+        ...createTaskCreationDraftsSlice(...a),
+        ...createRemoteServerUpdatesSlice(...a),
+        ...createTerminalQuickCommandHostsSlice(...a),
+        ...createStructuredSessionLaunchDirectorySlice(...a),
+        ...createStructuredChatSleptAtSlice(...a),
+        ...createWorkspaceAttentionSlice(...a)
+      }),
+      true
+    )
+  )
 }
 
 export function seedStore(
   store: ReturnType<typeof createTestStore>,
   state: Partial<AppState>
 ): void {
-  // The cascade tests intentionally centralize the default repo fixture here
-  // so the test files can stay under the enforced max-lines limit without
-  // disabling the lint rule and hiding further growth.
+  // Centralize fixture to keep cascade suites within max-lines limits without suppressing growth checks.
   store.setState({
     repos: [{ ...TEST_REPO, executionHostId: 'local' }],
     ...state

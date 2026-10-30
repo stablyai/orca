@@ -12,7 +12,6 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { runProcess } from '@orca/process-host'
 import { pinnedNodeRuntimeAsset } from '../../../shared/node-runtime-pin'
-import type { OrcadHostTransport } from '../../ssh/orcad-host-transport'
 import {
   ensureRemoteOrcadNodeRuntime,
   posixNodeRuntimeExecutable,
@@ -31,14 +30,14 @@ import {
 import { execCommand } from '../../ssh/remote-exec/remote-exec-command'
 import type * as ExecCommandModule from '../../ssh/remote-exec/remote-exec-command'
 import { getRemoteHostPlatform } from '../../ssh/ssh-remote-platform'
+import { unusedOrcadHostTransport } from '../../ssh/unused-host-transport.test-fixture'
 
 vi.mock('../../ssh/remote-exec/remote-exec-command', async (importOriginal) => ({
   ...(await importOriginal<typeof ExecCommandModule>()),
   execCommand: vi.fn()
 }))
 
-// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: every remote call goes through the mocked execCommand, which runs it in a local shell.
-const conn = {} as OrcadHostTransport
+const conn = unusedOrcadHostTransport()
 const host = getRemoteHostPlatform('linux-x64')
 const target = 'linux-x64-glibc'
 const pin = pinnedNodeRuntimeAsset(target).executableSha256
@@ -81,7 +80,7 @@ beforeEach(() => {
   root = mkdtempSync(join(tmpdir(), 'runtime-recorded-probe-'))
   shim = join(root, 'shim')
   mkdirSync(shim)
-  // Counts full hashes; the bytes stand in for the pinned executable.
+  // Count full executable hashes behind this stubbed pin.
   writeFileSync(
     join(shim, 'sha256sum'),
     `#!/bin/sh\nprintf x >> ${JSON.stringify(join(root, 'hashes'))}\necho "${pin}  $1"\n`,
@@ -114,7 +113,7 @@ describe.skipIf(process.platform === 'win32')('recorded runtime probe', () => {
     const executable = posixNodeRuntimeExecutable(host, runtimeDir)
     const before = statSync(executable)
     writeFileSync(executable, 'NODE')
-    // Fast writes can share a filesystem timestamp; establish a changed cache signature.
+    // Force signature change when fast writes share filesystem clock resolution.
     utimesSync(executable, before.atime, new Date(before.mtimeMs + 1_000))
     const after = statSync(executable)
     expect(after.ino).toBe(before.ino)

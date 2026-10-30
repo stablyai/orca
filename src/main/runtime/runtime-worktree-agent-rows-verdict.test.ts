@@ -1,3 +1,4 @@
+import { agentSessionConversationView } from '../../shared/agent-session-conversation-view'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../shared/agent-session-journal-types'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -28,8 +29,7 @@ vi.mock('../telemetry/cohort-classifier', () => ({
   getCohortAtEmit: vi.fn(() => ({ nth_repo_added: 2 }))
 }))
 
-// A request that failed reads as failed on every surface the host feeds: the journal's verdict
-// travels the real feed, the status-store ingest and `worktree ps`, never just the projection.
+// Exercise verdict propagation through the real feed, status store and worktree ps.
 const SESSION = 'verdict-session'
 const WORKSPACE_ID = 'workspace-1'
 const SUBJECT = makeStructuredAgentStatusSubject(
@@ -74,13 +74,13 @@ async function openJournal(): Promise<AgentSessionJournal> {
   })
 }
 
-/** What the host's real feed publishes for this journal. */
+/** Publish through the real host feed. */
 function publishedSummary(journal: AgentSessionJournal): AgentSessionStatusSummary {
   const session = indexedStatusFeedSession({ journal })
   const feed = new StructuredAgentSessionStatusFeed({
     logger: createStructuredAgentSessionLogger(),
     sessions: new Map([[SESSION, session]]),
-    getRecord: () => agentSessionRecordFixture(),
+    getConversation: () => agentSessionConversationView(agentSessionRecordFixture()),
     now: () => 1_000
   })
   const events: AgentSessionStatusEvent[] = []
@@ -112,7 +112,7 @@ function ingest(summary: AgentSessionStatusSummary, children: AgentChildWorkEvid
   const summaries = new Map([[WORKSPACE_ID, row]])
   attachRuntimeWorktreeAgentRows({
     summaries,
-    workingTerminalEvidenceByWorktreeId: new Map(),
+    terminalTitleEvidenceByWorktreeId: new Map(),
     rowSources: collectRuntimeWorktreeAgentSources({
       mirroredWorktreeIdByTabId: new Map(),
       connectedPtyEvidence: {
@@ -208,7 +208,7 @@ describe('a request that failed reads as failed through the feed, the ingest and
       state: 'working',
       mainAgent: { state: 'done', outcome: 'failure' }
     })
-    // The row carries the main agent's own clock, which dates the failure apart from the working row.
+    // The main agent's own clock dates its failure separately from the working child.
     expect(ps).toMatchObject({
       state: 'working',
       mainAgent: {

@@ -38,8 +38,7 @@ function isTargetList(
   return Array.isArray(found)
 }
 
-// Why: macOS atomic writes split delete→create across payloads; debounce deletion so a same-path create cancels the tombstone before it paints.
-// Under sustained writes the halves land one batch interval apart plus stat jitter (WSL/9P, AV scans), so allow two intervals.
+// Debounce macOS atomic delete/create halves for two batch intervals plus stat jitter, allowing recreation to cancel the tombstone.
 export const EXTERNAL_MUTATION_DEBOUNCE_MS = WATCH_BATCH_INTERVAL_MS * 2 + 50
 
 type PendingDeleteTimer = {
@@ -186,8 +185,7 @@ export function buildEditorExternalWatchEventHandler(
 
     for (const change of batchPaths.changes) {
       const matching = batchPaths.matchingOpenFiles(change)
-      // Why: most watched paths match no open file, and the notification below is only ever read
-      // past this point — building it first allocates (and dictionary-modes) it for nothing.
+      // Allocate notifications only after matching an open file; most watched paths have none.
       if (matching.length === 0 && !batchPaths.hasCombinedDiffConsumer) {
         continue
       }

@@ -1,14 +1,4 @@
-/**
- * Binds a rebuilt host catalog to the cache, the scheduler, and the authority
- * event stream.
- *
- * The catalog is the only thing that decides what may be fetched: applying one
- * advances the affected authorities' generations first (so anything in flight
- * under the old membership is discarded), evicts entries the catalog no longer
- * lists, and only then asks for what is missing or stale. Authorities that are
- * merely unreachable are left alone — an all-hosts refresh must never dial a
- * connection the user did not ask for.
- */
+/** Apply catalog membership/incarnation generations before fetching, discard stale work and evict missing entries. Background All-hosts refresh preserves unreachable authorities without dialing them. */
 
 import { getRuntimeEnvironmentRevision } from '@/runtime/runtime-environment-revision'
 import type { LegacyAutomationPartitionContext } from '../../../../shared/automation-legacy-list-partition'
@@ -95,8 +85,7 @@ function isFetchable(entry: AutomationHostCatalogEntry, selectedStableKey: strin
   if (entry.catalogState === 'removed') {
     return false
   }
-  // A disconnected authority proves nothing about its rows, so it keeps the stale ones
-  // and a Reconnect action instead of being dialled by a background refresh.
+  // Preserve stale rows/Reconnect for disconnected authorities; only explicit selection may ask them again.
   return entry.authorityHealth !== 'unavailable' || entry.stableKey === selectedStableKey
 }
 
@@ -164,10 +153,7 @@ export function createAutomationHostQueryController(
     }
   })
 
-  // Subscribed here by default: an unsubscribed controller silently stops
-  // refreshing on writes, which looks like stale data, not a missing wire. A
-  // caller that opts out with `eventTarget: null` (the React hook, whose
-  // StrictMode-safe lifecycle owns the subscription) takes that duty on itself.
+  // Subscribe by default so writes refresh rows; eventTarget:null transfers subscription duty to the caller’s StrictMode-safe lifecycle.
   const eventTarget =
     options.eventTarget === undefined ? (globalThis.window ?? null) : options.eventTarget
   const unsubscribe = eventTarget
@@ -182,8 +168,7 @@ export function createAutomationHostQueryController(
       selected = applyOptions.selectedStableKey ?? null
       // Membership first: a request captured under the old membership must not commit.
       const generations = syncAutomationHostCatalogGenerations(catalog)
-      // A re-adopted host keeps its stable key, so eviction below never sees it:
-      // only this drops rows the host's previous incarnation answered with.
+      // Re-adoption preserves stable keys, so explicitly discard the prior incarnation’s cached rows.
       for (const stableKey of generations.reincarnatedStableKeys) {
         cache.discardIncarnation(stableKey)
       }
@@ -194,8 +179,7 @@ export function createAutomationHostQueryController(
       }
       scheduler.cancelQueued()
       const manual = applyOptions.force === true
-      // A manual refresh bypasses TTL, but a host already known to fail stays failed
-      // with its own Retry rather than being dialled again by the all-hosts button.
+      // Manual refresh bypasses TTL but leaves known failures to their own Retry.
       await scheduler.refresh(targetsFor(catalog), {
         force: manual,
         skipKnownFailures: manual

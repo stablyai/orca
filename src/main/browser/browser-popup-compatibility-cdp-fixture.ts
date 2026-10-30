@@ -124,7 +124,7 @@ beforeAll(async () => {
     throw new Error('Missing mock origin')
   }
   origin = `http://127.0.0.1:${address.port}`
-  // Build current source, including the hidden BaseWindow policy, before any Electron launch.
+  // Rebuild the hidden-window launch policy before launching Electron.
   await buildVite({
     configFile: false,
     logLevel: 'silent',
@@ -212,8 +212,7 @@ beforeAll(async () => {
       throw new Error('Missing guest page')
     }
     pages.set(name, page)
-    // A fresh runner's first launch can take tens of seconds to start Chromium's GPU process, and
-    // no hidden page paints until it does; charge that to startup, not the first test's poll.
+    // Wait for the first compositor frame during startup; fresh CI GPU initialization can be slow.
     stopFrameCaptures.set(
       page,
       await startHiddenRendererFrameCapture(page, (hasFrame) =>

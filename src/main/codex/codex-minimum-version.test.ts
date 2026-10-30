@@ -128,7 +128,10 @@ describe('Codex structured launch version admission', () => {
       const resolve = withSupportedCodexCli(
         createCodexStructuredLaunchResolver({
           store: { getRecord: () => value, pinLaunchDirectory: vi.fn() },
-          resolveCommand: () => '/host/bin/codex',
+          resolveCommand: () => ({
+            command: '/host/bin/codex',
+            prefixArgs: ['run', '--', 'codex']
+          }),
           resolveEnvironment: async () => ({ PATH: '/host/bin', HOME: '/host/home' }),
           resolveLaunchArgs: () => [],
           resolveWorkspacePath: async () => '/folder'
@@ -150,9 +153,13 @@ describe('Codex structured launch version admission', () => {
         identity: identityFor(value.sessionId),
         spawnToken: TEST_SPAWN_TOKEN
       })
-      expect(launch).toMatchObject({ command: '/host/bin/codex', args: ['app-server'] })
+      expect(launch).toMatchObject({
+        command: '/host/bin/codex',
+        args: ['run', '--', 'codex', 'app-server']
+      })
       expect(readVersion.mock.calls.at(-1)?.[0]).toEqual({
         program: launch.command,
+        prefixArgs: ['run', '--', 'codex'],
         cwd: launch.cwd,
         env: resolveProviderChildEnv(launch, process.env)
       })
@@ -180,7 +187,7 @@ describe('Codex structured launch version admission', () => {
       const resolve = withSupportedCodexCli(
         createCodexStructuredLaunchResolver({
           store: { getRecord: () => value, pinLaunchDirectory: vi.fn() },
-          resolveCommand: () => '/host/project-aware-codex',
+          resolveCommand: () => ({ command: '/host/project-aware-codex', prefixArgs: [] }),
           resolveEnvironment: async () => ({ PATH: '/host/bin' }),
           resolveLaunchArgs: () => [],
           resolveWorkspacePath: async () => '/workspace'
@@ -207,7 +214,12 @@ describe('Codex structured launch version admission', () => {
         })
       ).toMatchObject({
         ok: true,
-        command: shell === 'cmd' ? 'codex "--model" "chosen"' : "codex '--model' 'chosen'"
+        command:
+          shell === 'cmd'
+            ? 'codex "--model" "chosen"'
+            : shell === 'posix'
+              ? "codex '-c' 'disable_paste_burst=true' '--model' 'chosen'"
+              : "codex '--model' 'chosen'"
       })
     }
   )

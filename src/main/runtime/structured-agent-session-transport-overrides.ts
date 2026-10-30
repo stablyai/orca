@@ -1,7 +1,7 @@
 import type { CodexModelCatalogProbeDeps } from '../codex/codex-model-catalog-probe'
 import type { AcpStructuredSessionAdapterDeps } from '../acp/acp-structured-session-adapter-deps'
 import type { AcpStructuredLaunchPartDeps } from '../acp/acp-structured-launch-resolution'
-import type { ClaudeStructuredSessionAdapterDeps } from '../claude/claude-structured-session-adapter'
+import type { ClaudeStructuredSessionAdapterDeps } from '../claude/structured/claude-structured-session-state'
 import type { ZcodeStructuredSessionAdapterDeps } from '../zcode/zcode-structured-session-state'
 import type { ZcodeStructuredLaunchPartDeps } from '../zcode/zcode-structured-launch-resolution'
 import type { CodexStructuredSessionAdapterDeps } from '../codex/codex-structured-session-adapter'
@@ -21,8 +21,7 @@ export type StructuredAgentSessionTransportOverrides = {
   /** Scripted transports must also replace the real host's version probe. */
   readCodexInstallation?: AgentCliVersionReader
   openAcpConnection?: AcpStructuredSessionAdapterDeps['connect']
-  /** Answers an ACP launch's command lookup and version probe for a scripted child; every launch
-   *  still resolves and checks through them. Unset, the real binary is found and probed. */
+  /** Replace command lookup/version probing for scripted ACP children; unset uses the real binary. */
   acpLaunchCommand?: Pick<AcpStructuredLaunchPartDeps, 'resolveCommand' | 'probeVersion'>
   openClaudeConnection?: ClaudeStructuredSessionAdapterDeps['openConnection']
   openZcodeConnection?: ZcodeStructuredSessionAdapterDeps['openConnection']

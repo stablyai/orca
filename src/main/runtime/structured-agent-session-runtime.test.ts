@@ -79,7 +79,6 @@ describe('structured agent-session store presence', () => {
     return JournalHostDatabase.open(profile)
   }
 
-  // Every host install creates the database, chats or not; startup restore must not wait on one.
   it('reports a profile whose database holds no chat absent', async () => {
     ;(await openProfileDatabase()).close()
 
@@ -195,8 +194,7 @@ describe('structured agent-session owner probe', () => {
   it('frees a lease that names neither an owner nor a spawn token', async () => {
     const probe = deadProbe()
     const scan = vi.fn(async () => [] as number[])
-    // Nothing was ever minted that a child could be carrying, so no scan is even needed;
-    // answering `indeterminate` here is what latches every released record into recovery.
+    // Without an owner or minted token no scan is needed; indeterminate would trap released records in recovery.
     const result = await createStructuredAgentSessionOwnerProbe(HOST_ID, probe, scan)(record(null))
 
     expect(probe).not.toHaveBeenCalled()

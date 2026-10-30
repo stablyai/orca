@@ -108,7 +108,6 @@ describe('parseCodexSessionFile', () => {
     })
   })
 
-  // A fork of a legacy-history thread copies the parent's session_meta in after its own.
   it("keeps a fork's own session_meta when its parent's follows it", async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-ai-vault-codex-fork-'))
     tempRoots.push(root)
@@ -324,7 +323,6 @@ describe('parseCodexSessionFile', () => {
           }
         },
         {
-          // A /model switch mid-session writes a later turn_context.
           timestamp: '2026-07-05T10:00:03.000Z',
           type: 'turn_context',
           payload: { cwd: '/repo/app', model: 'gpt-5.5' }

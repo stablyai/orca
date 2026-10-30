@@ -5,8 +5,6 @@ import { useHostRepoList, type HostRepoListResource } from './use-host-repo-list
 
 type Repo = { id: string }
 
-/** Renders the hook and exposes the latest resource plus a deferred fetcher so a
- *  test can decide exactly when (and for which client) a response lands. */
 function mountResource() {
   const pending: { resolve: (repos: Repo[]) => void; reject: (err: Error) => void }[] = []
   let latest: HostRepoListResource<Repo> | null = null
@@ -84,7 +82,6 @@ describe('useHostRepoList', () => {
     expect(probe.callCount).toBe(1)
   })
 
-  // Regression (#12966): a host with no repos must not be re-fetched forever.
   it('treats an empty response as a real answer', async () => {
     const probe = mountResource()
     await act(async () => {
@@ -121,8 +118,6 @@ describe('useHostRepoList', () => {
     expect(probe.callCount).toBe(2)
   })
 
-  // Regression: the screen is reused across hosts, so the previous host's list
-  // must never answer for the new one.
   it('drops the cached list as soon as the client changes', async () => {
     const probe = mountResource()
     await act(async () => {
@@ -141,8 +136,7 @@ describe('useHostRepoList', () => {
     expect(probe.callCount).toBe(2)
   })
 
-  // Regression: navigation keeps the old client alive, so its slow repo.list can
-  // still resolve after the swap. It must not become the new host's answer.
+  // The previous client can resolve after host navigation; its list must not become the new host’s answer.
   it('discards a response that arrives after the client changed', async () => {
     const probe = mountResource()
     await act(async () => {
@@ -161,8 +155,7 @@ describe('useHostRepoList', () => {
     expect(probe.resource.state.repos).toEqual([{ id: 'from-host-b' }])
   })
 
-  // Regression: A -> B -> A reuses the same client object, so a client-key match
-  // alone let a stale request for A overwrite a newer result for A.
+  // A → B → A reuses client identity; an old A reply must not overwrite a newer A result.
   it('discards a stale response after returning to the original client', async () => {
     const probe = mountResource()
     await act(async () => {
@@ -180,9 +173,7 @@ describe('useHostRepoList', () => {
     expect(probe.resource.state.repos).toEqual([{ id: 'new-a' }])
   })
 
-  // Regression: a refresh calls reload() and loadTasks() in the same event, and
-  // React has not rendered the `requested` dispatch yet, so ensureLoaded saw
-  // `loaded` and returned the very list the reload was replacing.
+  // Reload and ensureLoaded share an event before requested state commits; join the replacement request.
   it('joins an in-flight reload instead of serving the list it will replace', async () => {
     const probe = mountResource()
     await act(async () => {
@@ -212,9 +203,7 @@ describe('useHostRepoList', () => {
     expect(probe.resource.state.status).toBe('idle')
   })
 
-  // Regression: the resource used to be a fresh object per render, so consumers
-  // that held it in a dependency array re-created their callbacks every render
-  // and their effects re-fired forever ("Maximum update depth exceeded").
+  // Keep resource/callback identities stable so consumer effects cannot form a render loop.
   it('keeps a stable identity across renders that change nothing', async () => {
     const probe = mountResource()
     const first = probe.resource
@@ -227,7 +216,6 @@ describe('useHostRepoList', () => {
       void probe.resource.ensureLoaded()
     })
     await probe.settle(0, [{ id: 'a' }])
-    // A load changes state, so the object may differ, but the callbacks must not.
     expect(probe.resource.ensureLoaded).toBe(first.ensureLoaded)
     expect(probe.resource.reload).toBe(first.reload)
     const loaded = probe.resource
@@ -245,7 +233,6 @@ describe('useHostRepoList', () => {
       void probe.resource.reload()
     })
     expect(probe.callCount).toBe(2)
-    // The previous list stays visible while the reload is in flight.
     expect(probe.resource.state.repos).toEqual([{ id: 'a' }])
     await probe.settle(1, [{ id: 'a' }, { id: 'b' }])
     expect(probe.resource.state.repos).toEqual([{ id: 'a' }, { id: 'b' }])

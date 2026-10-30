@@ -1,7 +1,7 @@
 import { readCodexThreadId, readCodexTurnId } from './codex-structured-thread-facts'
 import type { StructuredAgentSessionAdapter } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import { AGENT_SESSION_HISTORY_MAX_LIMIT } from '../../shared/agent-session-wire'
-import { isCodexAppServerRequestError } from './codex-app-server-connection'
+import { isCodexAppServerRequestError } from './app-server/codex-app-server-request-error'
 import type { CodexSession } from './codex-structured-session-state'
 
 function record(value: unknown): Record<string, unknown> {
@@ -21,8 +21,7 @@ function cursor(value: unknown): string | null {
   throw new Error('agent_session_rewind:invalid-provider-cursor')
 }
 
-/** Visits the provider's turn ids newest first, a page at a time, until `visit` answers. Only the
- *  turns a rewind undoes are read, so a chat's length never bounds it. */
+/** Stop paging at the target so rewind cost depends on the undone tail, not total chat length. */
 async function findInCodexTurnsNewestFirst<T>(
   session: Pick<CodexSession, 'connection' | 'threadId'>,
   visit: (turnId: string, index: number) => T | undefined,
@@ -112,11 +111,7 @@ async function preflightCodexRewind(
   return { ok: true }
 }
 
-/**
- * Whether a revert whose reply was lost took effect. Applied only when the newest turn is the last
- * one the rewind keeps: anything else (the target, or an order this rewind can't explain) never
- * truncates the chat.
- */
+/** Confirm a lost revert reply only when history ends at the expected retained turn. */
 export async function recoverCodexRewind(
   session: CodexSession,
   input: { fence: number; beforeTurnId: string; keptTurnId: string | null },
@@ -138,7 +133,7 @@ export async function recoverCodexRewind(
     },
     timeoutMs
   )
-  // A rewind to the first turn keeps none: only an emptied history is its revert.
+  // Rewinding the first turn is confirmed only by empty history.
   const applied = verdict === true || (input.keptTurnId === null && turns === 0)
   if (!applied && verdict !== 'unapplied') {
     throw new Error('agent_session_rewind:outcome-unknown')

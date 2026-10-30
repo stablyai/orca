@@ -19,6 +19,8 @@ import {
 } from './worktree-repo-index'
 import { findKnownWorktreeById } from './slices/worktrees/listing/detected-worktree-meta'
 import { selectWorktreesByRepo } from './workspace-record-selectors'
+import { worktreeCopyOwnerKey } from './slices/worktrees/metadata/worktree-copy-review-clear'
+import { findSoleHostCopy } from '../../../shared/worktree/host-qualified-identity'
 
 export { getProjectHostSetupProjectionFromState } from './project-host-setup-selector'
 export {
@@ -37,8 +39,7 @@ function getCachedHasAnyWorktrees(worktreesByRepo: AppState['worktreesByRepo']):
     return cached
   }
 
-  // Why: this selector sits in an always-mounted scanner. Cache by slice
-  // identity so unrelated store writes do not rescan every repo bucket.
+  // Cache always-mounted scanner lookup by slice identity to avoid global rescans on unrelated writes.
   const hasWorktrees = Object.values(worktreesByRepo).some((worktrees) => worktrees.length > 0)
   hasAnyWorktreesCache.set(worktreesByRepo, hasWorktrees)
   return hasWorktrees
@@ -57,20 +58,7 @@ type FloatingWorkspaceUnreadCache = {
 
 let floatingWorkspaceUnreadCache: FloatingWorkspaceUnreadCache | null = null
 
-/**
- * True when any terminal tab in the floating workspace has an unacknowledged
- * bell or agent completion — the signal behind the launcher attention dot.
- *
- * Derives from the existing "show until interact" unread maps rather than a
- * bespoke flag, so it clears exactly when the user engages with (or closes) the
- * offending tab, and reflects only tabs that still exist (stale map entries for
- * removed tabs cannot light it). Bells mark `unreadTerminalTabs[tabId]`;
- * completions mark `unreadAgentCompletionPanes[paneKey]` — both ungated.
- *
- * The launcher and floating overlay both stay mounted. Cache their shared
- * reference projection so the second consumer and unrelated Zustand writes
- * return in O(1) without repeating either unread-map scan.
- */
+/** Derive floating attention from live tabs’ bell/completion maps, clearing on engagement/close; stale removed-tab entries cannot light it. Share reference-cached projection across mounted launcher/overlay to avoid repeated scans. */
 export function selectFloatingWorkspaceHasUnread(state: FloatingWorkspaceUnreadState): boolean {
   const tabs = state.tabsByWorktree[FLOATING_TERMINAL_WORKTREE_ID] ?? EMPTY_TABS
   const cached = floatingWorkspaceUnreadCache
@@ -131,9 +119,8 @@ export function getWorktreeMapFromState(
 }
 
 /**
- * The row for one id on one host (STA-4343). Prefer this over the id-keyed map
- * anywhere the caller already knows which host's row it is acting on — the map
- * keeps a single row per id and cannot represent a two-host collision.
+ * The one copy of `worktreeId` on `hostId` (STA-4343). Ids repeat across hosts, so a lookup that
+ * still matches two copies answers undefined instead of first-wins; callers refuse rather than guess.
  */
 export function getWorktreeOnHostFromState(
   state: Pick<AppState, 'worktreesByRepo'>,
@@ -141,7 +128,10 @@ export function getWorktreeOnHostFromState(
   hostId: ExecutionHostId | undefined
 ): Worktree | undefined {
   const rows = getCachedWorktreesById(selectWorktreesByRepo(state), worktreeId)
-  return hostId ? rows.find((row) => row.hostId === hostId) : rows[0]
+  return findSoleHostCopy(
+    hostId ? rows.filter((row) => row.hostId === hostId) : rows,
+    worktreeCopyOwnerKey
+  )
 }
 
 export function getHasAnyWorktreesFromState(state: Pick<AppState, 'worktreesByRepo'>): boolean {
@@ -152,7 +142,6 @@ export function getRepoMapFromState(state: Pick<AppState, 'repos'>): Map<string,
   return getCachedRepoMap(state.repos)
 }
 
-// ─── Repos ──────────────────────────────────────────────────────────
 export const useRepos = () => useAppStore((s) => s.repos)
 export const useActiveRepo = () =>
   useAppStore(useShallow((s) => selectRepoByIdForActiveWorkspace(s, s.activeRepoId)))
@@ -163,9 +152,7 @@ type ActiveWorkspaceRepoState = Pick<
   'repos' | 'activeRepoId' | 'activeWorkspaceExecutionHostId'
 >
 
-// Why: mirrors getIndexedRepoMap above — the host-scoped branch re-filtered every
-// repo on each store write even though its answer only moves when `repos` or the
-// active workspace host does.
+// Cache host-filtered repo branch by repos/active host; unrelated writes must not rescan every repo.
 const activeWorkspaceRepoCache = new WeakMap<AppState['repos'], Map<string, Repo | null>>()
 
 function resolveRepoOnActiveWorkspaceHost(
@@ -180,8 +167,7 @@ function resolveRepoOnActiveWorkspaceHost(
   if (hostMatch) {
     return hostMatch
   }
-  // Why: withRepoHostOwnership keeps a paired-hub worktree on its own SSH host while the repo
-  // stays hub-owned, so that one mismatch still names the right repo; every other stays closed.
+  // Paired-hub repo/SSH-worktree mismatch is valid via withRepoHostOwnership; reject other mismatches.
   if (parseExecutionHostId(activeWorkspaceExecutionHostId)?.kind !== 'ssh') {
     return null
   }
@@ -224,7 +210,6 @@ export const useRepoById = (repoId: string | null) =>
 export const useProjectHostSetupProjection = () =>
   useAppStore((s) => getProjectHostSetupProjectionFromState(s))
 
-// ─── Worktrees ──────────────────────────────────────────────────────
 export const useActiveWorktreeId = () => useAppStore((s) => s.activeWorktreeId)
 export const useWorktreesForRepo = (repoId: string | null) =>
   useAppStore((s) =>

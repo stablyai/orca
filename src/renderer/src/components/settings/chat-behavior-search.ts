@@ -34,6 +34,18 @@ export const getChatBehaviorEntriesByKey = createLocalizedCatalog(() => ({
       translate('components.settings.nativeChat.queueSearchSteer', 'steer')
     ]
   },
+  linkPreviews: {
+    targetSectionId: 'chat-link-previews',
+    title: translate('components.settings.nativeChat.linkPreviewsTitle', 'Link previews'),
+    description: translate(
+      'components.settings.nativeChat.linkPreviewsCopy',
+      'Hovering a web link shows a preview card. Orca fetches the page to build it, so the site can see the request.'
+    ),
+    keywords: [
+      translate('components.settings.nativeChat.linkPreviewsSearchUnfurl', 'unfurl'),
+      translate('components.settings.nativeChat.linkPreviewsSearchHover', 'hover card')
+    ]
+  },
   shellEnvironment: {
     targetSectionId: 'chat-shell-environment',
     title: translate(

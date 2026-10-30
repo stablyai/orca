@@ -1,7 +1,3 @@
-/* Why: the browser slice of the persisted workspace session. Split out of
- * workspace-session-schema.ts to keep that file inside its line budget; the
- * schemas themselves are unchanged apart from the per-entry tolerance the
- * session schema now declares everywhere. */
 import { z } from 'zod'
 import type { BrowserWorkspace } from './browser-workspace-types'
 import { normalizeBrowserHistoryEntries } from './workspace-session-browser-history'
@@ -15,11 +11,7 @@ const browserLoadErrorSchema = z.object({
   validatedUrl: z.string()
 })
 
-/**
- * Why persisted at all: this is the page's identity. A restored page re-reads the document off
- * today's owners and mints a fresh grant for it, and the grant it had before the restart is
- * deliberately not written anywhere — see `BrowserPageDocLocation`.
- */
+/** Persist document identity only; restore re-reads its current owner and mints a fresh grant rather than saving grant URLs. */
 const browserPageDocLocationSchema = z.object({
   kind: z.literal('workspace-doc'),
   worktreeId: z.string(),
@@ -36,19 +28,13 @@ const browserViewportPresetIdSchema = z.enum([
   'desktop'
 ])
 
-// Why: the z.ZodType<BrowserWorkspace> cast only aligns the static type — it
-// does NOT let new fields survive parsing. z.object strips unknown keys, so
-// every additive field must be listed below (optional+nullable) or it is
-// dropped on restore.
+// z.object strips unlisted fields regardless of the static BrowserWorkspace annotation; declare additive fields here for restore.
 export const browserWorkspaceSchema: z.ZodType<BrowserWorkspace> = z.object({
   id: z.string(),
   worktreeId: z.string(),
   label: z.string().optional(),
   sessionProfileId: z.string().nullable().optional(),
-  // Why: optional+nullable so pre-field sessions still validate; without this
-  // zod strips the persisted partition on restore, and an isolated tab whose
-  // profile mirror is stale at startup would silently fall back to the shared
-  // default partition — reopening the storage leak (#6923) across restarts.
+  // Preserve isolated storage across restarts even if the profile mirror is stale; tolerate pre-field sessions (#6923).
   sessionPartition: z.string().nullable().optional(),
   activePageId: z.string().nullable().optional(),
   pageIds: z.array(z.string()).optional(),
@@ -93,22 +79,14 @@ export const browserPageSchema = z.object({
   // Why: explicit null marks a browser page as client-local even when its
   // worktree is remote-owned; older sessions omit it and keep inferred runtime.
   browserRuntimeEnvironmentId: z.string().nullable().optional(),
-  // Why: the pair the relaunched client rebuilds the remote page handle from. Optional so older
-  // sessions still validate; stripping either half restores the page as a fresh server tab.
+  // Both remote page identity fields must survive restore to reclaim a client-hosted page; older sessions may omit them.
   remoteBrowserPageId: z.string().nullable().optional(),
   remoteBrowserPageClientHosted: z.boolean().optional(),
-  // Why: optional+nullable so sessions persisted before viewport presets were
-  // added still validate; without this, zod would strip the field during
-  // restore and reset the user's chosen preset on every app restart.
+  // Preserve the viewport preset across restart while accepting older sessions.
   viewportPresetId: browserViewportPresetIdSchema.nullable().optional(),
-  // Why listed here and not just typed: z.object strips what it does not name, so an unlisted
-  // docLocation restores a workspace document as a blank New Tab — the page keeps its blank url
-  // and loses the only field that said which document it was.
+  // Without docLocation, a workspace document’s blank URL restores as New Tab.
   docLocation: browserPageDocLocationSchema.nullable().optional(),
-  // Why persisted: one-level history across an address-bar conversion should survive a restart.
-  // The url variant holds a store url that already passed every fence on its way in — and the
-  // same prefix fence every other url sink applies stands at this door too, so a session file
-  // carrying the preview scheme sheds the provenance rather than handing it back to history.
+  // Persist one-level conversion history; reject preview-scheme URLs at this read boundary as at every URL sink.
   convertedFrom: browserPageConversionOriginSchema,
   convertedTo: browserPageConversionOriginSchema
 })

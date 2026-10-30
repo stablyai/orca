@@ -43,7 +43,7 @@ export abstract class OrcaRuntimeWithScheduleMobileSessionTabsChanged extends Or
     if (!snapshot) {
       return
     }
-    // Why: browser bridge events are already worktree-scoped; don't fan out every workspace snapshot during navigation/tab churn.
+    // Browser events are workspace-scoped; navigation/churn must not broadcast every workspace.
     const result = this.toMobileSessionTabsResult(snapshot)
     for (const subscription of this.mobileSessionTabListeners) {
       subscription.listener(
@@ -99,8 +99,7 @@ export abstract class OrcaRuntimeWithScheduleMobileSessionTabsChanged extends Or
     return launch ? { ...result, initialSurfaceLaunch: launch } : result
   }
 
-  // Why: only an unpublished graph is "ask me later"; once it publishes, a worktree with no entry
-  // really has no tabs, and saying so lets a client open its first terminal.
+  // Only unpublished graphs mean ask later; published graphs without an entry are empty, allowing the first terminal create.
   protected emptyMobileSessionTabsResult(
     worktreeId: string,
     publishedEpoch: number | null
@@ -119,8 +118,7 @@ export abstract class OrcaRuntimeWithScheduleMobileSessionTabsChanged extends Or
     }
   }
 
-  // Why: a publication only notifies worktrees it has entries for, so a client told "ask me later"
-  // about an empty worktree would otherwise never hear the answer.
+  // Empty workspaces get no normal publication notice; explicitly settle clients previously told ask later.
   protected notifyEmptyWorktreeOnPublication(worktreeId: string): void {
     if (this.worktreesAwaitingSessionTabsPublication.has(worktreeId)) {
       return
@@ -170,7 +168,7 @@ export abstract class OrcaRuntimeWithScheduleMobileSessionTabsChanged extends Or
   ): Promise<string> {
     const worktreeId =
       this.getExplicitSessionWorktreeIdSelector(worktreeSelector) ??
-      (await this.resolveWorktreeSelector(worktreeSelector)).id
+      (await this.resolveWorkspaceSelector(worktreeSelector)).id
     const snapshot = this.mobileSessionTabsByWorktree.get(worktreeId)
     const tab = snapshot?.tabs.find(
       (candidate): candidate is RuntimeMobileSessionMarkdownTab =>

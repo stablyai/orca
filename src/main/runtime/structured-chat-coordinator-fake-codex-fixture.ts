@@ -1,11 +1,8 @@
-// A fake Codex app-server for the structured chat coordinator mail tests: it answers the JSON-RPC
-// calls the adapter makes, and misbehaves on the knobs in `providerFaults`.
-
 import type {
   CodexAppServerConnection,
-  CodexAppServerConnectionHandlers,
-  openCodexAppServerConnection
-} from '../codex/codex-app-server-connection'
+  CodexAppServerConnectionHandlers
+} from '../codex/app-server/codex-app-server-connection-types'
+import type { openCodexAppServerConnection } from '../codex/codex-app-server-connection'
 import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session-mutation-envelope'
 import { attachFingerprintFields } from '../native-chat/agent-session-wire/structured-agent-session-attach'
 import { isRecord } from './rpc/orchestration-session-caller-test-fixture'
@@ -177,7 +174,6 @@ export function attachParams(sessionId: string) {
   }
 }
 
-/** A healthy provider and a fresh id sequence, before each test. */
 export function resetProviderFaults(): void {
   operations = 0
   providerFaults.dieBeforeEveryEcho = false

@@ -1,12 +1,4 @@
-/**
- * Decommissioning a managed orcad: stop its active instance and record that nothing serves.
- *
- * Runs under the activation fence and journal, so an interrupted decommission recovers like an
- * activation does. It refuses while the terminal census says terminals are live or cannot be
- * counted, and it never signals: the instance-bound request reaches only the orcad it names.
- * Only proven exit deactivates the record; anything less withdraws the request or keeps the
- * fence. Windows runs the same steps: the request is a staged file and exit proof is orcad's own.
- */
+// Journal instance-bound stop under the activation fence; refuse live/unknown terminal census and deactivate only after proven exit.
 import { randomUUID } from 'node:crypto'
 import type { OrcadActivationRecord } from '../activation/orcad-activation-record'
 import {
@@ -30,9 +22,9 @@ import type { OrcadDecommissionResult } from '../../../shared/orcad-decommission
 import type { OrcadTerminalCensus } from '../../../shared/orcad-terminal-census'
 
 type OrcadDecommissionOptions = OrcadSlotOptions & {
-  /** The record the caller reviewed; a changed host record refuses rather than guessing. */
+  /** Refuse if the host record changed since caller review. */
   record: OrcadActivationRecord
-  /** Taken by the caller just before; any live or uncounted terminal refuses. */
+  /** Fresh census must prove no live or uncounted terminals. */
   census: OrcadTerminalCensus
   now?: () => Date
 }
@@ -106,16 +98,15 @@ export async function decommissionRemoteOrcad(
         schemaVersion: 1 as const,
         transactionId: transaction.transactionId,
         ...target.context,
-        // Best effort: an idle daemon goes with orcad, a busy one keeps its terminals.
+        // Idle daemon retirement is best-effort; busy daemons retain their terminals.
         retireIdleDaemon: true as const
       }
-      // Durable before it can reach the host, so recovery can settle exactly this request.
+      // Journal exact stop intent before dispatch so recovery can settle the same request.
       transaction = withOrcadDecommissionStopDispatched(transaction, request, now())
       await writeOrcadActivationTransaction(options, transaction)
 
       const settlement = await settleOrcadDecommissionStop(options, request)
       if (settlement.state === 'withdrawn') {
-        // orcad never acted on it and keeps serving; the record never changed.
         return refuse(settlement.verdict, 'orcad_decommission_stop_withdrawn', settlement.reason)
       }
       if (settlement.state === 'unsettled') {

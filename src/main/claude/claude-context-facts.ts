@@ -1,10 +1,3 @@
-// Where the Claude CLI's context facts land in the journal, and when a fresh
-// `/context` breakdown is worth asking for. The facts live on turn rows and are
-// written to the open turn, else the newest turn the journal holds; this keeps
-// only what tells a late answer it is stale, whose window a result reports,
-// whether the newest window still serves the model responding, and the window the
-// CLI last reported or a written model's name implies, for a journal holding none.
-
 import {
   contextTokensFromUsage,
   MAX_CONTEXT_MODEL_ID_CHARS,
@@ -32,28 +25,24 @@ import {
 
 const CONVERSATION_FRAME_TYPES = new Set(['assistant', 'user', 'stream_event'])
 
-/** The row of the turn a requested report describes; null when no turn was open to name. */
+/** Null targets the newest journal turn when no turn was open at request time. */
 export type ClaudeContextReportTarget = AgentJournalItemIdentity | null
 
-/** How much of an answer still holds: all of it, or only the window of the model the CLI runs. */
 export type ClaudeContextReportPart = 'report' | 'window'
 
-/** The model may have changed since the newest window, so no estimate can be divided by it. */
 const STALE = Symbol('stale-window')
 
 export class ClaudeContextFacts {
   private activity = 0
-  /** Whose window a result's per-model usage should report. */
   private mainModel: ClaudeMainThreadModel = { initModel: null, responseModel: null }
-  /** The response model the newest window serves; null adopts the next one. Every window write resets it. */
+  /** Null adopts the next response model; STALE blocks estimates until a fresh window arrives. */
   private servedModel: string | null | typeof STALE = null
-  /** A report measured the window since the turn's init and the last model write, so the result's inference cannot beat it. */
+  /** A report since the latest init or model change overrides result-based window inference. */
   private windowReported = false
-  /** The window the CLI last reported, or the last written model's name implies, until another write can change the model. */
+  /** Reported or configured window fallback until a model change invalidates it. */
   private windowHint: number | null = null
-  /** Nothing this writer wrote proves the journal holds a window, so the hint may be the only one. */
+  /** Check the journal before seeding a configured window hint. */
   private journalMayLackWindow = true
-  /** The last response fact written, so a response's per-block frames revise its row once. */
   private lastResponse: string | null = null
   private readonly requestListeners = new Set<(target: ClaudeContextReportTarget) => void>()
 
@@ -62,8 +51,6 @@ export class ClaudeContextFacts {
     private readonly sink: StructuredAgentSessionEventSink
   ) {}
 
-  /** Bumped whenever the main conversation moves; a subagent's frames leave the
-   *  session's own context as it was. */
   get activityRevision(): number {
     return this.activity
   }
@@ -72,7 +59,7 @@ export class ClaudeContextFacts {
     this.activity += 1
   }
 
-  /** Every frame, ahead of journaling it. */
+  /** Observe before journaling. */
   observe(message: Record<string, unknown>, observedAt: number): void {
     if (CONVERSATION_FRAME_TYPES.has(String(message.type)) && isRootClaudeFrame(message)) {
       this.markActivity()
@@ -82,7 +69,6 @@ export class ClaudeContextFacts {
         ? claudeText(message.model)
         : null
     if (initModel) {
-      // The turn's init is the newest word on the model; its own responses follow it.
       this.mainModel = { initModel, responseModel: null }
       this.windowReported = false
     }
@@ -92,7 +78,6 @@ export class ClaudeContextFacts {
     }
   }
 
-  /** A write that can change the main thread's model or window: hold estimates until a new window lands. */
   modelMayHaveChanged(observedAt: number = Date.now()): void {
     this.servedModel = STALE
     this.windowReported = false
@@ -100,20 +85,17 @@ export class ClaudeContextFacts {
     this.forget(observedAt, true)
   }
 
-  /** A model write the child applied; its name sizes estimates until a window is measured. */
   modelWritten(model: string): void {
     this.windowHint = claudeContextWindowHint(model)
   }
 
-  /** A frame after it is journaled, so a response lands on the turn it opened.
-   *  Every main-thread response counts, text or not: tool-only ones are where
-   *  the context grows fastest. */
+  /** Observe after journaling so usage, including tool-only responses, lands on the opened turn. */
   observeResponse(message: Record<string, unknown>, observedAt: number): void {
     if (message.type !== 'assistant' || !isRootClaudeFrame(message)) {
       return
     }
     const response = claudeRecord(message.message)
-    // Synthetic rows carry no usage and a placeholder model; neither says anything about the window.
+    // Synthetic responses have zero usage and placeholder models.
     const usage = claudeTokenUsage(response?.usage)
     if (!usage || contextTokensFromUsage(usage) === 0) {
       return
@@ -127,14 +109,14 @@ export class ClaudeContextFacts {
       this.windowHint === null ? null : { tokens: this.windowHint, capturedAt: observedAt }
     let window: AgentSessionContextWindow | undefined
     if (this.servedModel === STALE) {
-      // Only a written model's name says which window serves now; anything else waits for the report.
+      // After a model change, only a configured hint can serve estimates before the report.
       if (!hint) {
         return
       }
       window = hint
       this.servedModel = null
     } else if (model && this.servedModel !== null && model !== this.servedModel) {
-      // An approved plan hands the turn to another model mid-turn; only a response says so.
+      // Plan approval can switch models mid-turn without a new init.
       this.modelMayHaveChanged(observedAt)
       return
     }
@@ -154,8 +136,6 @@ export class ClaudeContextFacts {
     )
   }
 
-  /** End the turn a root result settles, with the window its per-model usage
-   *  reports, then ask for the breakdown. */
   settle(message: Record<string, unknown>, end: ClaudeTurnEnd): void {
     const tokens = this.windowReported
       ? null
@@ -177,8 +157,7 @@ export class ClaudeContextFacts {
     this.requestReport(settled)
   }
 
-  /** Record a requested report on the turn it was asked for; its window serves later estimates.
-   *  `window` keeps only the window, for an answer the conversation moved past. */
+  /** Reports overtaken by activity retain only the window; full reports also replace usage. */
   recordReport(
     target: ClaudeContextReportTarget,
     report: AgentSessionContextReport,
@@ -187,7 +166,7 @@ export class ClaudeContextFacts {
     const window = { tokens: report.windowTokens, capturedAt: report.capturedAt }
     this.servedModel = null
     this.windowReported = true
-    // A chat with no turn row yet drops this write, so the first response still needs the window.
+    // Before the first turn exists, retain the report's window for the first response.
     this.windowHint = report.windowTokens
     const contextUsage: AgentSessionContextUsage =
       part === 'report' ? { used: { kind: 'report', ...report }, window } : { window }
@@ -208,14 +187,13 @@ export class ClaudeContextFacts {
     this.requestListeners.clear()
   }
 
-  /** The open turn's row, else the newest turn the journal holds when the write runs. */
   private write(
     contextUsage: AgentSessionContextUsage,
     windowIfNoneHeld?: AgentSessionContextWindow
   ): void {
     const identity = this.turn.identity
     const target: AgentJournalTurnRowTarget = identity ? { identity } : { newest: true }
-    // A context fact often lands with no later frame to publish it, so it publishes itself.
+    // No later frame may arrive to publish this fact.
     writeAgentJournalTurnRow(
       this.sink,
       target,
@@ -224,7 +202,6 @@ export class ClaudeContextFacts {
     )
   }
 
-  /** The context no longer holds what the journal says; a report asked for before now describes the old one. */
   private forget(observedAt: number, requestReport: boolean): void {
     this.markActivity()
     this.lastResponse = null

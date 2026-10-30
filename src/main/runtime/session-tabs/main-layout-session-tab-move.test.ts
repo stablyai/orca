@@ -1,5 +1,4 @@
-// Layout-owner build: a phone's or paired client's tab move in a workspace main owns is main's own
-// layout command, window or not; the window is not asked to move it.
+// Phone/paired tab moves use main layout commands for owned workspaces, without asking a window.
 import { describe, expect, it, vi } from 'vitest'
 import {
   TAB_ID,
@@ -82,37 +81,72 @@ describe("a client's tab move in a workspace main owns", () => {
     expect(groups().map((entry) => entry.tabOrder)).toEqual([[TAB_ID], ['a', 'b']])
   })
 
-  it('leaves a move in a group showing a tab main lacks to the window, as today', async () => {
-    const { runtime, moveSessionTab, groups, group } = await setup({ window: true })
+  /** The client was shown a row main holds no tab for (drawn before main's frame) at the group's front. */
+  function showUnheldRow(runtime: unknown): void {
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the move reads only this member, which OrcaRuntimeService implements.
-    const rowsOf = runtime as unknown as {
+    const rowsOf = runtime as {
       toMobileSessionTabsResult: (shown: unknown) => {
         tabGroups?: { id: string; tabOrder: string[] }[]
       }
     }
     const real = rowsOf.toMobileSessionTabsResult.bind(runtime)
-    // The window shows a diff tab main's layout does not hold.
     rowsOf.toMobileSessionTabsResult = (shown) => {
       const rows = real(shown)
       return {
         ...rows,
         tabGroups: rows.tabGroups?.map((entry) => ({
           ...entry,
-          tabOrder: [...entry.tabOrder, 'diff-1']
+          tabOrder: ['diff-1', ...entry.tabOrder]
         }))
       }
     }
-    const before = groups()
+  }
 
+  // Main moves rows itself (L280); client-only rows retain no position, but client indices still count them.
+  it('moves in a group showing a row main holds no tab for, without asking the window', async () => {
+    const { runtime, moveSessionTab, groups, group } = await setup({ window: true })
+    showUnheldRow(runtime)
+
+    // Shown: diff-1, terminal, a, b. Index 1 is before the terminal.
     await runtime.moveMobileSessionTab(WT, {
       kind: 'move-to-group',
+      tabId: 'b',
+      targetGroupId: group,
+      index: 1
+    })
+    expect(groups().map((entry) => entry.tabOrder)).toEqual([['b', TAB_ID, 'a']])
+
+    await runtime.moveMobileSessionTab(WT, {
+      kind: 'reorder',
       tabId: 'a',
       targetGroupId: group,
-      index: 0
+      tabOrder: ['a', 'diff-1', 'b', TAB_ID]
     })
+    expect(groups().map((entry) => entry.tabOrder)).toEqual([['a', 'b', TAB_ID]])
+    expect(moveSessionTab).not.toHaveBeenCalled()
+  })
 
-    expect(moveSessionTab).toHaveBeenCalledOnce()
+  it('refuses an order that does not name exactly the rows shown, moving nothing', async () => {
+    const { runtime, moveSessionTab, groups, group } = await setup({ window: true })
+    showUnheldRow(runtime)
+    const before = groups()
+
+    for (const tabOrder of [
+      ['a', 'b', TAB_ID],
+      ['a', 'other', 'b', TAB_ID],
+      ['a', 'diff-1', 'diff-1', 'b', TAB_ID]
+    ]) {
+      await expect(
+        runtime.moveMobileSessionTab(WT, {
+          kind: 'reorder',
+          tabId: 'a',
+          targetGroupId: group,
+          tabOrder
+        })
+      ).rejects.toThrow('invalid_tab_order')
+    }
     expect(groups()).toEqual(before)
+    expect(moveSessionTab).not.toHaveBeenCalled()
   })
 
   it("refuses with today's codes and moves nothing", async () => {

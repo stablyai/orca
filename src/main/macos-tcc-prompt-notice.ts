@@ -6,19 +6,12 @@ import { getCanonicalUserDataPath } from './persistence'
 import { MacosTccPromptWatch } from './macos-tcc-prompt-watch'
 import { reclaimOrphanedTccLogStreams } from './macos-tcc-log-stream-orphans'
 
-/**
- * Surfaces Full Disk Access guidance only to users macOS is actually prompting
- * (#9756), instead of nudging every Mac user. Counts Orca-attributed TCC
- * dialogs across launches and tells the renderer when the first one lands.
- */
-
-/** Why: the first detected dialog identifies an affected user; the notice remains one-time. */
 export const TCC_PROMPT_NOTICE_THRESHOLD = 1
 
-/** Why: re-arm users who may have trusted the former false-positive Full Disk Access badge. */
+// Re-arm users who may have trusted the former false-positive Full Disk Access badge.
 export const TCC_PROMPT_NOTICE_VERSION = 2
 
-/** Why: preserve detection when Electron never emits `ready-to-show` without competing with startup. */
+// Fall back when ready-to-show never fires, while keeping detection out of startup’s critical path.
 export const TCC_PROMPT_WATCH_START_FALLBACK_MS = 10_000
 
 export const TCC_PROMPT_NOTICE_CHANNEL = 'macosTccPrompts:threshold'
@@ -77,7 +70,7 @@ function loadTally(): TccPromptTally {
       return { ...EMPTY_TALLY }
     }
     if (typeof parsed.acknowledgedAfterClose !== 'boolean') {
-      // Why: an incomplete tally proves only a past prompt, not that access is still missing.
+      // An incomplete tally proves a past prompt, not that access is still missing.
       return { ...EMPTY_TALLY }
     }
     const acknowledgedAfterClose = parsed.acknowledgedAfterClose === true
@@ -97,7 +90,7 @@ function saveTally(): void {
   try {
     writeFileAtomically(tallyPath(), `${JSON.stringify(tally, null, 2)}\n`)
   } catch {
-    // Best-effort: losing the count only means the notice arrives a launch later.
+    // Failed persistence only delays the notice until another prompt.
   }
 }
 
@@ -154,7 +147,6 @@ export function releasePendingTccPromptNotice(ownerToken: number, claimId?: numb
   }
 }
 
-/** Permanently stops the notice for this user; the watcher shuts down with it. */
 export function dismissTccPromptNotice(): void {
   pendingClaim = null
   tally = { ...tally, dismissed: true, notified: true, acknowledgedAfterClose: true }
@@ -178,7 +170,7 @@ function sendTccPromptNotice(mainWindow: BrowserWindow, payload: TccPromptNotice
   try {
     mainWindow.webContents.send(TCC_PROMPT_NOTICE_CHANNEL, payload)
   } catch {
-    // Why: the durable renderer pull recovers a send lost during renderer teardown.
+    // The durable renderer pull recovers sends lost during teardown.
   }
 }
 
@@ -227,7 +219,7 @@ export function initTccPromptNotice(
   }
   if (!orphanReclaimScheduled) {
     orphanReclaimScheduled = true
-    // Why: runs even after the notice is dismissed, since older builds' orphans are still alive.
+    // Legacy orphan cleanup remains necessary after the notice is dismissed.
     setTimeout(
       () => void reclaimOrphanedTccLogStreams(),
       TCC_PROMPT_WATCH_START_FALLBACK_MS
@@ -263,7 +255,7 @@ export function initTccPromptNotice(
       if (target) {
         sendTccPromptNotice(target, payload)
       }
-      // Why: pending state is renderer-acknowledged, so the log child can stop at threshold.
+      // The persisted pending notice survives until renderer acknowledgement, so logging can stop now.
       stopTccPromptNotice()
     }
   })

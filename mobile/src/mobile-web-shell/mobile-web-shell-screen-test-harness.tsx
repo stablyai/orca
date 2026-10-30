@@ -2,17 +2,19 @@ import { createElement, type ComponentType, type ReactElement } from 'react'
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { vi, type Mock } from 'vitest'
 import type { FakeRpcClient } from './bridge-host-test-fakes'
+import {
+  createDownloadProgressFeed,
+  downloadFraction,
+  type PublishedDownloadProgressFeed
+} from './download-progress-feed'
 import type {
   MobileWebShellSessionState,
   MobileWebShellUpdateNotice
 } from './mobile-web-shell-session-contract'
 import type { ShellPageFrame } from './shell-page-frame'
+import type { NativeStackState } from './native-stack-return'
 
-/**
- * Everything the screen's cases mock away, as one mutable record, plus the helpers that mount it.
- * Separate from the cases because the `vi.mock` factories that read it must stay in the test file
- * while nothing else here has to, and the file was over `max-lines` with both.
- */
+// Keep mutable fixtures outside cases while vi.mock registration stays in each test module.
 export type ScreenDependencies = {
   retry: Mock
   reportShellFailure: Mock
@@ -20,47 +22,36 @@ export type ScreenDependencies = {
   reportDocumentLoaded: Mock
   reportPageReady: Mock
   reportPagePainted: Mock
-  /** The profile read rejected, which is the one state that has no host to build against. */
   snapshotUnreadable: boolean
   storageRefreshes: number
   openUrl: Mock
   push: Mock
   back: Mock
-  /** What the native stack answers: false is a page opened as the first screen on it. */
   canGoBack: boolean
+  rootState: NativeStackState | undefined
+  dispatch: Mock
   pathname: string
   pageRoutes: readonly string[]
   routeGrants: readonly string[]
   lifecycle: string[]
-  /** Every render of the shell view, which is one per render of the screen above it. */
   viewRenders: number
-  /** Every frame the shell posted to the page, raw. */
   posted: string[]
-  /** Whether the view refuses what it is handed, which is a page the post never reached. */
   postFails: boolean
   state: MobileWebShellSessionState
-  /** Non-null when the generation on screen is a fallback from an update the shell refused. */
+  downloadProgress: PublishedDownloadProgressFeed
   updateNotice: MobileWebShellUpdateNotice | null
-  /** What the session reducer says about the page's handshake; true only for the fence's case. */
   pageReady: boolean
-  /** How far the document on screen has got, which is what decides whether the cover is up. */
   pageFrame: ShellPageFrame
-  /** Null for every case but the bridge's: with no client the hook builds no host at all. */
   client: FakeRpcClient | null
-  /** The IME events the app's own keyboard seam subscribes to, by name. */
   keyboardListeners: Map<string, (event: { endCoordinates: { height: number } }) => void>
-  /** The device-key listeners the screen registered, by name. Empty unless the page claims Back. */
   backHandlers: Map<string, () => boolean>
-  /** Every option patch the screen wrote onto its own place on the stack, in order. */
   setScreenOptions: Mock
-  /** Whether the session says the page is holding the device Back key. */
   backClaimed: boolean
-  /** What `Platform.OS` answers, which picks the keyboard events. */
+  ownsHostArea: boolean
+  screenFocused: boolean
   platform: 'ios' | 'android'
   reportPageBackClaim: Mock
-  /** Whether the mounted host would take a press, which is a page that declared it takes one. */
   sendBackDelivers: boolean
-  /** One entry per press the screen handed to the host. */
   backSends: number
 }
 
@@ -79,8 +70,7 @@ export const SCREEN_BUILD_ID = 'a1b2c3d4e5f6'.repeat(5) + 'abcd'
 export const SCREEN_DIRECTORY =
   '/var/mobile/Containers/Data/Caches/mobile-web/deadbeef/generations/a1b2'
 
-/** Called from the test file's `vi.hoisted`, so `__DEV__` is on before the screen is imported and
- *  the developer facts are reachable at all — they are the one thing that must never grow a secret. */
+// Run from vi.hoisted so __DEV__ is set before import and secret-free developer facts are exercised.
 export function createScreenDependencies(): ScreenDependencies {
   Object.assign(globalThis, { __DEV__: true })
   return {
@@ -96,6 +86,8 @@ export function createScreenDependencies(): ScreenDependencies {
     push: vi.fn(),
     back: vi.fn(),
     canGoBack: true,
+    rootState: undefined,
+    dispatch: vi.fn(),
     pathname: '/h/host-1',
     pageRoutes: ['/h/[hostId]'],
     routeGrants: DEFAULT_ROUTE_GRANTS,
@@ -104,6 +96,7 @@ export function createScreenDependencies(): ScreenDependencies {
     posted: [],
     postFails: false,
     state: { kind: 'checking' },
+    downloadProgress: createDownloadProgressFeed(),
     updateNotice: null,
     pageReady: false,
     pageFrame: 'pending',
@@ -112,6 +105,8 @@ export function createScreenDependencies(): ScreenDependencies {
     backHandlers: new Map(),
     setScreenOptions: vi.fn(),
     backClaimed: false,
+    ownsHostArea: false,
+    screenFocused: true,
     platform: 'ios',
     reportPageBackClaim: vi.fn(),
     sendBackDelivers: true,
@@ -119,11 +114,7 @@ export function createScreenDependencies(): ScreenDependencies {
   }
 }
 
-/**
- * File-level, not per describe: every block shares one mutable record, so a reset scoped to one of
- * them leaves whatever the others set. `routeGrants` is reset for that reason — a case that grants
- * the screencast lane would otherwise hand it to every case that follows.
- */
+// Reset at file scope: describe blocks share this record and must not inherit prior route grants.
 export function resetScreenDependencies(dependencies: ScreenDependencies): void {
   dependencies.retry.mockReset()
   dependencies.reportShellFailure.mockReset()
@@ -133,6 +124,7 @@ export function resetScreenDependencies(dependencies: ScreenDependencies): void 
   dependencies.reportPagePainted.mockReset()
   dependencies.snapshotUnreadable = false
   dependencies.storageRefreshes = 0
+  dependencies.downloadProgress = createDownloadProgressFeed()
   dependencies.lifecycle.length = 0
   dependencies.viewRenders = 0
   dependencies.posted.length = 0
@@ -145,12 +137,16 @@ export function resetScreenDependencies(dependencies: ScreenDependencies): void 
   dependencies.openUrl.mockReset()
   dependencies.openUrl.mockImplementation(() => Promise.resolve(true))
   dependencies.canGoBack = true
+  dependencies.rootState = undefined
+  dependencies.dispatch.mockReset()
   dependencies.pathname = '/h/host-1'
   dependencies.updateNotice = null
   dependencies.backHandlers.clear()
   dependencies.setScreenOptions.mockReset()
   dependencies.reportPageBackClaim.mockReset()
   dependencies.backClaimed = false
+  dependencies.ownsHostArea = false
+  dependencies.screenFocused = true
   dependencies.platform = 'ios'
   dependencies.sendBackDelivers = true
   dependencies.backSends = 0
@@ -167,11 +163,9 @@ export function readyState(sessionId: string): MobileWebShellSessionState {
   }
 }
 
-/** Unmounted between cases: the shell's stack latch is one per stack, so a screen left mounted is
- *  a screen still holding whatever pop it took. */
+// Unmount between cases to release the per-stack pop latch.
 const mounted: ReactTestRenderer[] = []
 
-/** Registers a tree the caller mounted itself, so the teardown below reaches it too. */
 export function trackRenderedScreen(tree: ReactTestRenderer): void {
   mounted.push(tree)
 }
@@ -184,10 +178,7 @@ export function unmountRenderedScreens(): void {
   })
 }
 
-/**
- * The screen is passed in rather than imported: this module is loaded from `vi.hoisted`, before the
- * mocks are registered, so importing the module under test here would load it unmocked.
- */
+// Pass the screen in: importing it from this vi.hoisted dependency would load it before mocks register.
 export type ScreenComponent = ComponentType<{
   hostId: string
   route: { pathname: string }
@@ -200,12 +191,19 @@ function element(Screen: ScreenComponent): ReactElement {
   })
 }
 
+function setScreenState(dependencies: ScreenDependencies, state: MobileWebShellSessionState): void {
+  dependencies.state = state
+  if (state.kind === 'fetching') {
+    dependencies.downloadProgress.publish(downloadFraction(state.receivedBytes, state.totalBytes))
+  }
+}
+
 export async function renderScreen(
   Screen: ScreenComponent,
   dependencies: ScreenDependencies,
   state: MobileWebShellSessionState
 ): Promise<ReactTestRenderer> {
-  dependencies.state = state
+  setScreenState(dependencies, state)
   const rendered: { tree: ReactTestRenderer | null } = { tree: null }
   await act(async () => {
     rendered.tree = create(element(Screen))
@@ -223,19 +221,17 @@ export async function updateScreen(
   tree: ReactTestRenderer,
   state: MobileWebShellSessionState
 ): Promise<void> {
-  dependencies.state = state
+  setScreenState(dependencies, state)
   await act(async () => {
     tree.update(element(Screen))
   })
 }
 
-/** Host elements are matched by name, not by `findAllByType`: React's `ElementType` does not admit
- *  an arbitrary React Native host name, so the typed form is a predicate. */
+// Match host names by predicate because ElementType excludes arbitrary React Native host strings.
 export function byName(tree: ReactTestRenderer, name: string): ReactTestInstance[] {
   return tree.root.findAll((node) => String(node.type) === name)
 }
 
-/** The nearest laid-out ancestor of a node, which is the box its own box is measured against. */
 export function hostParentOf(node: ReactTestInstance): string | null {
   let current: ReactTestInstance | null = node.parent
   while (current !== null) {

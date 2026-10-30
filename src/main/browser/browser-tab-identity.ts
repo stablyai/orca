@@ -1,8 +1,4 @@
-// Why one owner: a tab's identity is read by the session request hook and written to the guest over
-// two layers (the WebContents UA and a CDP override that outranks it). When each layer derived it on
-// its own, a desktop viewport preset installed a CDP override with no userAgentMetadata, and Chromium
-// then drops navigator.userAgentData and every sec-ch-ua header for that tab — a Chrome UA with no
-// client hints, which bot checks read as a spoof. Every layer now asks this module instead.
+// Share identity between WebContents, CDP and request hooks so user agents and client hints agree.
 
 import type { BrowserProcessUserAgentIdentity } from './browser-process-user-agent'
 import { googleAuthUserAgent, isGoogleAuthUrl } from './browser-google-auth-ua'
@@ -21,9 +17,9 @@ export type UserAgentMetadata = {
 }
 
 export type BrowserTabIdentity =
-  /** The process identity, with its client hints left to Chromium. */
+  /** Desktop client hints remain browser-owned. */
   | { kind: 'process'; userAgent: string }
-  /** Firefox on Google's auth hosts; real Firefox sends no client hints. */
+  /** Firefox auth identity omits client hints. */
   | { kind: 'google-auth'; userAgent: string }
   | { kind: 'mobile'; userAgent: string; userAgentMetadata: UserAgentMetadata }
 
@@ -31,17 +27,13 @@ export function googleAuthTabIdentity(): BrowserTabIdentity {
   return { kind: 'google-auth', userAgent: googleAuthUserAgent() }
 }
 
-/**
- * The identity a tab presents at `url`. Desktop presets and "no preset" are deliberately the same
- * input: only a mobile preset changes who the tab claims to be.
- */
+// Desktop presets preserve process identity; only mobile presets replace it.
 export function resolveBrowserTabIdentity(args: {
   url: string
   mobile: boolean
   processIdentity: BrowserProcessUserAgentIdentity
 }): BrowserTabIdentity {
-  // Firefox is delivered per-target and cannot reach workers; keep it clean-only to preserve one
-  // coherent identity per mode instead of pairing a Firefox document with native workers.
+  // Native mode must preserve its process identity on auth requests.
   if (args.processIdentity.mode === 'clean' && isGoogleAuthUrl(args.url)) {
     return googleAuthTabIdentity()
   }
@@ -51,8 +43,7 @@ export function resolveBrowserTabIdentity(args: {
   return { kind: 'process', userAgent: args.processIdentity.userAgent }
 }
 
-// Why: responsive sites UA-sniff; this is Chrome DevTools' default iPhone UA template with the real
-// Chrome major spliced in so the userAgentMetadata brands below agree with it.
+// Match the mobile UA version to the client-hint brands.
 function buildMobileUserAgent(chromeMajor: string): string {
   return `Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/${chromeMajor}.0.0.0 Mobile/15E148 Safari/604.1`
 }
@@ -64,7 +55,6 @@ function extractChromeMajor(ua: string): string {
 
 function buildMobileTabIdentity(processUserAgent: string): BrowserTabIdentity {
   const chromeMajor = extractChromeMajor(processUserAgent)
-  // Why: userAgentMetadata must accompany the mobile UA so client hints match, or bot-detection flags the desktop-hint leak.
   return {
     kind: 'mobile',
     userAgent: buildMobileUserAgent(chromeMajor),

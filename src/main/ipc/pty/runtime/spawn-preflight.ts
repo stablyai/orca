@@ -14,7 +14,8 @@ import {
   ptySessionIdForAgentCreateOperation
 } from '../../../daemon/pty-session-id'
 import { resolvePathEnvKey } from '../../../pty/windows-environment-path'
-import type { RuntimePtySpawnState } from './spawn-state'
+import { isRuntimeWslBackgroundStart, type RuntimePtySpawnState } from './spawn-state'
+import { localPtySpawnCwd } from '../host-env/spawn-cwd'
 import { resolvePtySpawnStartupTarget } from '../spawn-startup-target'
 import { resolvePtySpawnHostEnv } from '../spawn-host-env'
 import { ptySpawnPaneFromIds, stampPtySpawnPaneEnv } from '../spawn-pane-env'
@@ -29,12 +30,18 @@ export async function prepareRuntimePtySpawn(
 ): Promise<PtySpawnResult | null> {
   const args = ctx.args
   if (!ctx.preAdoptedStablePane) {
-    const admission = ctx.deps.assertWorkspaceAcceptsNewPty(args.worktreeId, args.sessionId)
+    const admission = ctx.deps.assertWorkspaceAcceptsNewPty(
+      args.worktreeId,
+      args.sessionId,
+      localPtySpawnCwd(args),
+      // Main's background start must not stat a stopped distro's folder as a user act (E9).
+      args.wslUserAct !== true
+    )
     if (admission) {
       await admission
     }
   }
-  // Only this machine spawns here: an `ssh:` connection throws, so every line below is local.
+  // SSH execution is rejected here; remaining preparation belongs to this machine.
   ctx.provider = getProvider(getConnectionExecutionHostId(args.connectionId))
   const freshSpawnRecovery = ctx.preAdoptedStablePane
     ? undefined
@@ -45,7 +52,7 @@ export async function prepareRuntimePtySpawn(
   ctx.isClaudeLaunch = !ctx.preAdoptedStablePane && isClaudeLaunchCommand(args.command)
   ctx.isDaemonHostSpawn =
     !(ctx.provider instanceof LocalPtyProvider) && !routesFreshSpawnsToLocalProvider(ctx.provider)
-  ctx.callerRequestedSessionId = args.sessionId?.trim()
+  ctx.callerRequestedSessionId = args.sessionId
   ctx.requestedSessionId =
     ctx.callerRequestedSessionId ??
     (ctx.isDaemonHostSpawn && args.agentSessionCreateOperationId
@@ -55,12 +62,11 @@ export async function prepareRuntimePtySpawn(
     ctx.requestedSessionId ??
     (ctx.isDaemonHostSpawn ? mintPtySessionId(args.worktreeId) : undefined)
   ctx.effectiveSessionAppId = ctx.sessionId
-  ctx.isNewDaemonSession =
+  ctx.ownsNewIncarnation =
     !ctx.preAdoptedStablePane &&
     ctx.isDaemonHostSpawn &&
     (ctx.callerRequestedSessionId === undefined || args.isNewSession === true)
-  // Why: runtime-created terminals carry no renderer projectRuntime. An agent launch brings the PTY
-  // its command was quoted for; anything else takes the project's runtime and `--shell` pick.
+  // Runtime requests use planned command runtime, or project runtime plus explicit --shell; they have no renderer runtime.
   const target = await resolvePtySpawnStartupTarget({
     worktreeId: args.worktreeId,
     cwd: args.cwd,
@@ -70,7 +76,11 @@ export async function prepareRuntimePtySpawn(
     projectRuntimeSource: { kind: 'store', store: ctx.deps.store },
     preAdopted: ctx.preAdoptedStablePane !== null,
     getSettings: ctx.deps.getSettings,
-    resolveStartupCwd: ctx.deps.resolvePtySpawnStartupCwd
+    resolveStartupCwd: ctx.deps.resolvePtySpawnStartupCwd,
+    // The same verdict as spawn-options' `wslBackgroundStart`, held before the cwd probe and any provider.
+    ...(isRuntimeWslBackgroundStart(ctx)
+      ? { wslStartHold: { wslBackgroundStart: true, sessionId: ctx.sessionId } }
+      : {})
   })
   ctx.cwd = target.cwd
   ctx.requestedCwd = target.requestedCwd
@@ -80,6 +90,7 @@ export async function prepareRuntimePtySpawn(
   ctx.terminalRuntimeOptions = target.terminalRuntimeOptions
   ctx.daemonShellOverride = ctx.terminalRuntimeOptions.shellOverride
   ctx.expectedWslDistro = target.expectedWslDistro
+  ctx.wslHoldReadAnchor = target.wslHoldReadAnchor
   ctx.codexSelectionTarget = target.codexSelectionTarget
   args.env = withClaudeProfileTerminalEnv(args.env, ctx.codexSelectionTarget)
   ctx.claudeAuth =
@@ -116,7 +127,7 @@ export async function prepareRuntimePtySpawn(
     ctx.env = { ...ctx.env, ORCA_TERMINAL_HANDLE: args.preAllocatedHandle }
   }
   if (ctx.env) {
-    // Why a copy: without a handle or Claude auth this is still the caller's env, which a split reuses.
+    // Clone caller environment before injection; another split may reuse it.
     ctx.env = { ...ctx.env }
     const pane = ptySpawnPaneFromIds(args)
     const jcodeEnv = pane ? await ensureJcodeRuntimeDir(pane.paneKey) : undefined
@@ -125,8 +136,6 @@ export async function prepareRuntimePtySpawn(
       jcodeRuntimeDir: jcodeEnv?.[JCODE_RUNTIME_DIR_ENV_KEY]
     })
   }
-  // Why: a dropped resume still applies here, but this controller's result has no field for
-  // notifyResumeUnavailable — runtime/relay panes start fresh without the notice.
   const hostEnv = await resolvePtySpawnHostEnv({
     launchAgent: args.launchAgent,
     command: args.command,
@@ -143,12 +152,22 @@ export async function prepareRuntimePtySpawn(
     mintedSessionId: ctx.requestedSessionId === undefined,
     resumeOnSelectedAccount: false,
     emptySessionIdSkipsHostEnv: true,
+    // The distro may stop after the hold read: a background start's prep must not wake it (E9).
+    wslPassiveRestore: args.wslUserAct !== true,
     requestedAgentTeamsPath: ctx.requestedAgentTeamsPath,
     provider: ctx.provider,
     deps: ctx.deps
   })
+  ctx.agentResumeUnavailable = hostEnv.codexResumeLaunch.notifyResumeUnavailable
+  if (hostEnv.codexResumeLaunch.droppedResumeArgv && args.launchConfig) {
+    args.launchConfig = {
+      ...args.launchConfig,
+      agentCommand: hostEnv.launchCommand ?? args.launchConfig.agentCommand
+    }
+  }
   ctx.launchCommand = hostEnv.launchCommand
   ctx.codexResumeArgvDropped = hostEnv.codexResumeLaunch.droppedResumeArgv
+  ctx.codexResumeUnavailable = hostEnv.codexResumeLaunch.notifyResumeUnavailable
   ctx.env = hostEnv.env
   ctx.selectedCodexHomePath = hostEnv.selectedCodexHomePath
   ctx.codexResumeHomeSelected = hostEnv.codexResumeHomeSelected

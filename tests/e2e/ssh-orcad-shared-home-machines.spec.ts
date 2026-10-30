@@ -1,13 +1,5 @@
-/**
- * Two machines sharing one `$HOME` (an NFS home across a cluster) each run their own managed
- * server (#29059), on real Docker SSH hosts that mount one volume as `/root`:
- *
- * Host A connects first and keeps the login home's install. Host B then connects and gets a
- * server of its own instead of judging A's PID on the wrong machine. A's server keeps running
- * with its records untouched, and both reconnect to their own server.
- *
- * Docker only. `ORCA_E2E_ORCAD_CONVERT_TEMPLATE` names the linux-x64-glibc orcad build.
- */
+// #29059: two Docker machines sharing /root must keep independent managed servers and records across reconnect.
+// Host B must not judge A’s recorded PID in its own namespace; use ORCA_E2E_ORCAD_CONVERT_TEMPLATE for linux-x64-glibc.
 import { execFileSync, spawnSync } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import type { ElectronApplication, Page } from '@stablyai/playwright-test'
@@ -28,11 +20,7 @@ const TEMPLATE_SOURCE = process.env.ORCA_E2E_ORCAD_CONVERT_TEMPLATE
 const LOGIN_HOME_SLOTS = '/root/.orca-remote/orcad-*/.orcad-pid'
 const MACHINE_HOME_SLOTS = '/root/.orca-remote/hosts/*/.orca-remote/orcad-*/.orcad-pid'
 
-/**
- * PIDs recorded under `pattern` whose process in this container runs from that slot. Why the
- * command-line check: each container has its own PID namespace, so A's recorded PID can be
- * some unrelated live process on B.
- */
+// Require recorded PID command lines to match the slot in this container; another namespace can reuse that PID.
 function runningPids(target: DockerSshHostTarget, pattern: string): string[] {
   return execDockerSshHostTargetCommand(
     target,

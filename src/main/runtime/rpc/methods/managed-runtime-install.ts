@@ -1,7 +1,4 @@
-// The runtime Orca installs for an agent, on the host that receives the call: the one that runs
-// that agent's chats. Needs no workspace. Negotiated by `managed-runtime.install.v1`; Remove by
-// `managed-runtime.remove.v1`. Status is pushed: a snapshot on subscribe, then one per state
-// revision.
+// Install on the agent's chat host without a workspace; negotiate install.v1/remove.v1 and stream a snapshot followed by state revisions.
 
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import {
@@ -28,7 +25,7 @@ function installationFor(agent: string, runtime: OrcaRuntimeService): ManagedRun
   }
   const dataDirectory = getProfileUserDataPath()
   const releases = spec.managedRuntime.root(dataDirectory)
-  // What a start would run, outside Orca's releases: the launch's own lookup decides.
+  // Use the launch's own lookup to find external runtimes.
   const findExternal = async (): Promise<boolean> => {
     const settings = runtime.requireStore().getSettings()
     const env = {
@@ -36,13 +33,13 @@ function installationFor(agent: string, runtime: OrcaRuntimeService): ManagedRun
       ...spec.env
     }
     try {
-      const command = resolveAcpLaunchCommand(spec, env, {
+      const { command } = resolveAcpLaunchCommand(spec, env, {
         commandSettings: settings,
         dataDirectory
       })
       return command !== spec.command && !isPathInsideOrEqual(releases, command)
     } catch (error) {
-      // An unrunnable Command setting refuses the start itself; it is no copy.
+      // An unrunnable Command setting refuses start; it is not an external runtime copy.
       if (isAgentSessionPreSpawnError(error)) {
         return false
       }

@@ -89,10 +89,11 @@ export function resolveZcodeChatProgram(
   environment: Record<string, string>,
   commandSettings: StructuredAgentCommandSettings,
   deps: ZcodeStructuredLaunchPartDeps = {}
-): { command: string; env: Record<string, string> } {
+): { command: string; prefixArgs: string[]; env: Record<string, string> } {
   const invocation = resolveInvocation(environment, commandSettings, deps)
   return {
     command: invocation.command,
+    prefixArgs: [...invocation.prefixArgs],
     env: { ...environment, ...invocation.envOverlay }
   }
 }

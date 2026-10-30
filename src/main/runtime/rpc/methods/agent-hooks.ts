@@ -18,7 +18,10 @@ export const AGENT_HOOK_METHODS = [
           ORCA_CODEX_HOME: params.orcaCodexHome,
           WSL_DISTRO_NAME: params.wslDistro
         },
-        hooksEnabled: isAgentStatusHooksEnabledForAgent(runtime.getClientSettings(), 'codex')
+        hooksEnabled: isAgentStatusHooksEnabledForAgent(
+          runtime.requireStore().getSettings(),
+          'codex'
+        )
       })
     }
   })

@@ -1,5 +1,4 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-// These transport fixtures never read abandoned-launch ownership from the app store.
 const appStore = vi.hoisted(() => ({
   getState: vi.fn(() => {
     throw new Error('These transport fixtures must not read app-store ownership')
@@ -25,11 +24,7 @@ import { writeHeadlessTerminal } from './pty-connection-test-async'
 import { buildFoldedImageReplayWrites } from './terminal-snapshot-replay-paint'
 import { stubRuntimeEnvironmentBridge } from '../../runtime/runtime-environment-bridge-fixture'
 
-// P2-5 / P2-7: a pushed snapshot is sent because the client's stream broke (dropped
-// output, reconnect, restore), so the pane's own history ends somewhere before the
-// image. Keeping that history under an image that carries none spliced the two with a
-// silent gap. Real frames go through the real multiplexer and transport here; only the
-// replay-drain's final paint is done by hand, with the same function it calls.
+// Host push recovery can follow a byte gap; never splice stale client history under a historyless image. Drive real wire transport and the production drain’s paint function.
 
 const COLS = 40
 const ROWS = 5
@@ -185,8 +180,7 @@ describe('pushed remote snapshots never splice stale history above the image', (
     expect(await paint(data, meta)).toEqual(Array.from({ length: 8 }, (_, i) => `LINE-${1956 + i}`))
   })
 
-  // A reconnect while a TUI runs: the pane's normal buffer froze when the TUI entered alt,
-  // and an image without history has nothing to replace that pre-TUI scrollback with.
+  // Live TUI normal buffers stay frozen; a historyless image cannot replace their preserved pre-TUI scrollback.
   async function paintOverLiveTui(data: string, meta?: Record<string, unknown>) {
     const term = new Terminal({ cols: COLS, rows: ROWS, scrollback: 1000, allowProposedApi: true })
     const history = Array.from({ length: 30 }, (_, i) => `HIST-${i}`).join('\r\n')

@@ -21,7 +21,6 @@ import { isFrameDrawnServerWorkspace } from './frame-drawn-server-workspaces'
 import { buildFrameDrawnWorkspaceStatusPatch } from './frame-drawn-workspace-status-patch'
 import { indexMirroredTerminalSurfaces } from './mirrored-terminal-handle-index'
 
-/** Reconcile one host frame through the staged terminal/browser/layout pipeline. */
 export function applyWebSessionTabsSnapshotWithContext(
   state: WebSessionTabsSyncState,
   rawSnapshot: RuntimeMobileSessionTabsResult,
@@ -49,23 +48,11 @@ export function applyWebSessionTabsSnapshotWithContext(
     previousSnapshotTabIds && isFrameDrawnServerWorkspace(environmentId, worktreeId)
       ? previousSnapshotTabIds
       : null
-  // A frame-drawn workspace still runs these stages for their intent and id-mapping ledgers; unbatched
-  // so their discarded record copies never reach the batch's shared state.
-  const base = prepareWebSessionTabsSnapshotBase(
-    state,
-    rawSnapshot,
-    environmentId,
-    worktreeId,
-    now,
-    frameDrawnPreviousTabIds ? undefined : batchContext,
-    options
-  )
-  const browser = prepareWebSessionTabsSnapshotBrowser(base)
-  const unified = prepareWebSessionTabsSnapshotUnified(browser)
   if (frameDrawnPreviousTabIds) {
+    // Server frames own tabs/IDs/focus and writes use server IDs; skip mirror intent ledgers for these workspaces.
     return buildFrameDrawnWorkspaceStatusPatch(
       state,
-      base.snapshot,
+      rawSnapshot,
       environmentId,
       worktreeId,
       frameDrawnPreviousTabIds,
@@ -73,6 +60,19 @@ export function applyWebSessionTabsSnapshotWithContext(
       batchContext
     )
   }
+  // Interim (ledger L240): from here on only for a server without `layout.intents.v1`, until the
+  // Phase 2 server cutoff retires the mirror's tab ids, close and focus intents.
+  const base = prepareWebSessionTabsSnapshotBase(
+    state,
+    rawSnapshot,
+    environmentId,
+    worktreeId,
+    now,
+    batchContext,
+    options
+  )
+  const browser = prepareWebSessionTabsSnapshotBrowser(base)
+  const unified = prepareWebSessionTabsSnapshotUnified(browser)
   const groups = prepareWebSessionTabsSnapshotGroups(unified)
   const terminalRecords = applyTerminalRecordUpdates(groups)
   const browserRecords = applyBrowserRecordUpdates(terminalRecords)

@@ -1,6 +1,3 @@
-// What the adapter reports for one turn: how a dispatch is admitted and named,
-// and which turn a cancellation is allowed to interrupt.
-
 import { describe, expect, it, vi } from 'vitest'
 import { ClaudeControlRequestError } from './claude-stream-json-connection'
 import { claudeUnwrittenUserMessageError } from './claude-agent-sdk-user-message-queue'
@@ -103,7 +100,6 @@ describe('ClaudeStructuredSessionAdapter turns and controls', () => {
     await expect(
       adapter.setOption({ sessionId: 'session-1', key: 'model', value: 'sonnet', fence: 7 })
     ).resolves.toEqual({ model: 'sonnet' })
-    // A literal model goes straight to the CLI; then it asks for the new model's window.
     expect(claude.connections[0].calls.slice(-3)).toEqual([
       { subtype: 'interrupt', params: {} },
       { subtype: 'set_model', params: { model: 'sonnet' } },
@@ -161,8 +157,7 @@ describe('ClaudeStructuredSessionAdapter turns and controls', () => {
     )
   })
 
-  // Claude's interrupt is session-scoped, so naming the running turn asks for what a Stop naming
-  // no turn does; the later send's missing echo holds neither.
+  // Session-scoped interrupt must remain available while a later send awaits its echo.
   it.each([
     ['names the running turn', { turnId: 'turn-T' }],
     ['names no turn', {}]
@@ -248,7 +243,7 @@ describe('ClaudeStructuredSessionAdapter turns and controls', () => {
       }
     })
     const adapter = await acquired(claude)
-    // The model is reported by a cycle's init frame, so start one.
+    // Dispatch triggers the init frame carrying the model.
     await adapter.dispatch({
       sessionId: 'session-1',
       clientMessageId: 'seed-cycle',
@@ -264,6 +259,7 @@ describe('ClaudeStructuredSessionAdapter turns and controls', () => {
     expect(options.current).toEqual({
       model: 'claude-sonnet-5',
       effort: 'high',
+      reportedPermissionMode: undefined,
       confirmed: ['model', 'effort']
     })
     expect(options.models.some((model) => model.label === 'Default')).toBe(false)
@@ -279,7 +275,7 @@ describe('ClaudeStructuredSessionAdapter turns and controls', () => {
       }
     })
     const adapter = await acquired(claude)
-    // The custom model only reports on the first cycle's init frame.
+    // Dispatch triggers the init frame carrying the custom model.
     await adapter.dispatch({
       sessionId: 'session-1',
       clientMessageId: 'seed-cycle',
@@ -298,6 +294,7 @@ describe('ClaudeStructuredSessionAdapter turns and controls', () => {
     expect(result.current).toEqual({
       model: 'custom-model',
       effort: 'high',
+      reportedPermissionMode: undefined,
       confirmed: ['model', 'effort']
     })
   })

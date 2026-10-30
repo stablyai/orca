@@ -39,6 +39,8 @@ import { NativeChatInteractiveCard } from './NativeChatInteractiveCard'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { useNativeChatInteractivePromptCard } from './use-native-chat-interactive-prompt-card'
 import { useNativeChatPromptCardPresentation } from './use-native-chat-prompt-card-presentation'
+import { asyncQuestionSourceScope } from '../../../../shared/native-chat/input/native-chat-ask'
+import { useNativeChatAsyncQuestions } from './use-native-chat-async-questions'
 import { nativeChatPromptDismissals } from './native-chat-prompt-dismissals'
 
 // Answered occurrences outlive a view by design; each test starts with none.
@@ -117,29 +119,50 @@ function CardHarness({
   canSend,
   messages,
   transcriptSettled,
-  targetPtyId = 'pty-1'
+  targetPtyId = 'pty-1',
+  sourceKey = 'transcript/host/session'
 }: {
   canSend: boolean
   messages?: readonly NativeChatMessage[]
   transcriptSettled: boolean
   targetPtyId?: string
+  sourceKey?: string
 }): React.JSX.Element {
+  const asyncQuestions = useNativeChatAsyncQuestions({
+    paneKey: 'tab-1:leaf-1',
+    sourceKey,
+    sourceScope: asyncQuestionSourceScope({
+      kind: 'transcript',
+      agent: 'codex',
+      sessionId: 'session',
+      transcriptPath: null
+    }),
+    viewKey: targetPtyId,
+    messages: messages ?? NO_MESSAGES,
+    settled: transcriptSettled && messages !== undefined
+  })
   const card = useNativeChatInteractivePromptCard({
     paneKey: 'tab-1:leaf-1',
     messages: messages ?? NO_MESSAGES,
+    transcriptAsk: asyncQuestions.blocking ?? asyncQuestions.prompt,
     transcriptSettled: transcriptSettled && messages !== undefined
   })
   const presentation = useNativeChatPromptCardPresentation({
     paneKey: 'tab-1:leaf-1',
     targetPtyId,
     card,
+    dismissAsync: asyncQuestions.dismiss,
     canSend
   })
   return (
     <TooltipProvider>
       {presentation.card ? (
         <NativeChatInteractiveCard
-          key={presentation.occurrenceKey ?? 'prompt'}
+          key={
+            presentation.card.kind === 'question' && presentation.card.prompt.replyAsMessage
+              ? asyncQuestions.ownerKey
+              : (presentation.occurrenceKey ?? 'prompt')
+          }
           card={presentation.card}
           onDismiss={presentation.dismiss}
           onCollapse={presentation.collapse}
@@ -512,10 +535,7 @@ describe('NativeChatInteractiveCard answer lifecycle', () => {
   })
 })
 
-// A headless host, a relay gap, or a replay can leave the pane with no live
-// `interactivePrompt` while the transcript still holds the unresolved call (#11761).
-// Which asks the transcript still counts as pending (orphaned calls, turn boundaries)
-// is the shared parser's contract — covered in `src/shared/native-chat-ask.test.ts`.
+// Transcript fallback covers missing live prompts; native-chat-ask.test.ts owns pending-call parsing.
 describe('NativeChatInteractiveCard transcript fallback', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -549,8 +569,7 @@ describe('NativeChatInteractiveCard transcript fallback', () => {
   })
 
   it('still renders while the mirrored status says the agent is working', () => {
-    // Why no state gate: the mirrored status channel is exactly what fails in the
-    // reported topology, so keying the fallback on it would suppress the card.
+    // Mirrored status can fail independently of the transcript, so it cannot gate fallback prompts.
     storeState.agentStatusByPaneKey['tab-1:leaf-1'].state = 'working'
     render(cardElement(true, [askCallMessage('Tabs or spaces?')]))
 
@@ -582,8 +601,6 @@ describe('NativeChatInteractiveCard transcript fallback', () => {
     expect(screen.queryByText('Tabs or spaces?')).not.toBeInTheDocument()
   })
 
-  // The view passes the command-boundary-trimmed messages, so an ask abandoned via
-  // `/clear` cannot come back as a permanent card sitting over the composer.
   it('drops an ask abandoned by /clear', () => {
     const abandoned = { ...askCallMessage('Tabs or spaces?'), timestamp: 100 }
     const trimmed = applyCommandMarkerBoundaries(
@@ -593,5 +610,138 @@ describe('NativeChatInteractiveCard transcript fallback', () => {
     render(cardElement(true, trimmed))
 
     expect(screen.queryByText('Tabs or spaces?')).not.toBeInTheDocument()
+  })
+})
+
+describe('terminal async contributors through the production hooks and card', () => {
+  const row = (id: string, title: string): NativeChatMessage => ({
+    id,
+    role: 'assistant',
+    timestamp: null,
+    source: 'transcript',
+    blocks: [
+      {
+        type: 'tool-call',
+        name: 'request_user_input_async',
+        input: { questions: [{ title, options: ['Tabs', 'Spaces'] }] }
+      }
+    ]
+  })
+  beforeEach(() => {
+    vi.clearAllMocks()
+    paneStatus.interactivePrompt = undefined
+    paneStatus.toolName = undefined
+    paneStatus.state = 'done'
+  })
+  afterEach(cleanup)
+
+  it('retains terminal choices across an agent notice until legacy human input', () => {
+    const q1 = row('one', 'Q1?')
+    const notice: NativeChatMessage = {
+      id: 'mail',
+      role: 'user',
+      timestamp: 2,
+      source: 'transcript',
+      blocks: [{ type: 'text', text: 'You have 1 orchestration message.' }],
+      from: {
+        kind: 'agent',
+        senders: [
+          {
+            party: { address: 'term_a', terminalHandle: 'term_a', orcaSessionId: null },
+            name: 'Coder'
+          }
+        ],
+        orchestration: {
+          message: 'mail-notice',
+          mailbox: 'term_b',
+          dispatchId: null,
+          messages: [{ messageId: 'mail-1', runId: 'run-1', from: 'term_a' }]
+        }
+      }
+    }
+    const view = render(cardElement(true, [q1]))
+    fireEvent.click(screen.getByRole('button', { name: /Spaces/ }))
+    view.rerender(cardElement(true, [q1, notice]))
+    expect(screen.getByText('Q1?')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Spaces/ })).toHaveAttribute('aria-pressed', 'true')
+    view.rerender(cardElement(true, [q1, notice, { ...notice, id: 'human', from: undefined }]))
+    expect(composerShown()).toBe(true)
+    expect(mocks.sendAnswer).not.toHaveBeenCalled()
+  })
+
+  it('filters Q1 before grouping Q2 and never writes Cancel, including window movement', () => {
+    const q1 = row('one', 'Q1?')
+    const q2 = row('two', 'Q2?')
+    const view = render(cardElement(true, [q1]))
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+    view.rerender(cardElement(true, [q1, q2]))
+    expect(screen.queryByText('Q1?')).not.toBeInTheDocument()
+    expect(screen.getByText('Q2?')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+    view.rerender(cardElement(true, []))
+    view.rerender(cardElement(true, [row('one', 'Edited Q1?'), q2]))
+    expect(composerShown()).toBe(true)
+    expect(mocks.cancelAsk).not.toHaveBeenCalled()
+    expect(mocks.cancel).not.toHaveBeenCalled()
+    expect(mocks.sendRawVerified).not.toHaveBeenCalled()
+    // Async hides cannot refuse a live blocking prompt with the same definition.
+    paneStatus.interactivePrompt = JSON.stringify({
+      questions: [{ question: 'Q1?', options: ['Tabs', 'Spaces'] }]
+    })
+    view.rerender(cardElement(true, [q1, q2]))
+    expect(screen.getByText('Q1?')).toBeInTheDocument()
+  })
+
+  it.each(['same-owner', 'source', 'PTY'])(
+    'captures answered Q1 IDs while Q2 arrives (%s)',
+    (replacement) => {
+      let finish: (delivered: boolean) => void = () => {
+        throw new Error('not submitted')
+      }
+      mocks.sendAnswer.mockImplementation((_prompt, _selections, done) => {
+        finish = done!
+        return { settleAfterMs: 500 }
+      })
+      const q1 = row('one', 'Q1?')
+      const q2 = row('two', 'Q2?')
+      const element = (
+        messages: NativeChatMessage[],
+        sourceKey = 'transcript/host/session',
+        targetPtyId = 'pty-1'
+      ) => (
+        <CardHarness
+          canSend
+          transcriptSettled
+          messages={messages}
+          sourceKey={sourceKey}
+          targetPtyId={targetPtyId}
+        />
+      )
+      const view = render(element([q1]))
+      chooseSpacesAndSubmit()
+      view.rerender(
+        element(
+          [q1, q2],
+          replacement === 'source' ? 'transcript/other/session' : undefined,
+          replacement === 'PTY' ? 'pty-2' : undefined
+        )
+      )
+      act(() => finish(true))
+      if (replacement === 'same-owner') {
+        expect(screen.getByText('Q2?')).toBeInTheDocument()
+        expect(screen.queryByText('Q1?')).not.toBeInTheDocument()
+      } else {
+        expect(screen.getByText('Q1?')).toBeInTheDocument()
+      }
+    }
+  )
+
+  it('resets an edited pending form without unmounting its answer owner', () => {
+    const view = render(cardElement(true, [row('one', 'Q1?')]))
+    fireEvent.click(screen.getByRole('button', { name: /Spaces/ }))
+    expect(screen.getByRole('button', { name: /Spaces/ })).toHaveAttribute('aria-pressed', 'true')
+    view.rerender(cardElement(true, [row('one', 'Revised Q1?')]))
+    expect(screen.getByRole('button', { name: /Spaces/ })).toHaveAttribute('aria-pressed', 'false')
+    expect(mocks.cancelPending).not.toHaveBeenCalled()
   })
 })

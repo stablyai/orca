@@ -112,9 +112,7 @@ describe('buildMobileSessionTabSnapshots', () => {
   })
 
   it('withholds a launch draft seeded for a different agent than the tab runs', () => {
-    // The seed is keyed by tab id, which survives an agent switch. Desktop's
-    // consumer declines on mismatch; publishing anyway would prefill the new
-    // agent's mobile chat with the previous agent's link.
+    // Tab-keyed startup seeds survive agent switches; decline mismatches like desktop or mobile prefills the prior agent’s link.
     const leafId = '11111111-1111-4111-8111-111111111111'
     const state = makeState({
       tabsByWorktree: {
@@ -392,6 +390,7 @@ describe('buildMobileSessionTabSnapshots', () => {
           prompt: 'fix parity',
           updatedAt: 1_700_000_000_000,
           stateStartedAt: 1_699_999_999_000,
+          firstStateStartedAt: 1_699_999_990_000,
           agentType: 'codex',
           paneKey,
           terminalTitle: 'codex [working]',
@@ -408,6 +407,7 @@ describe('buildMobileSessionTabSnapshots', () => {
           state: 'working',
           prompt: 'fix parity',
           agentType: 'codex',
+          firstStateStartedAt: 1_699_999_990_000,
           paneKey
         }
       }

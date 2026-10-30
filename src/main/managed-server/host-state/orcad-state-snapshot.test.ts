@@ -22,12 +22,10 @@ const ROOT = '/home/u/.orca'
 const SNAP = '/home/u/.orca-remote/orcad-state-snapshots/pre-0.2.0+bb01-1000'
 const BASE = '/home/u/.orca-remote'
 
-/** Every `for m in <members>;` list a command walks. */
 function memberLists(command: string): string[] {
   return [...command.matchAll(/for m in ([^;]+);/g)].map((match) => match[1])
 }
 
-/** The work inside the lock-and-deadline wrapper, with its quoting undone. */
 function innerScript(command: string): string {
   return command.replaceAll(`'\\''`, `'`)
 }
@@ -39,8 +37,7 @@ describe('capturing the pre-activation snapshot', () => {
     ])
   })
 
-  // The live daemon owns <root>/daemon and outlives every restart. Restoring a stale copy of
-  // its socket, PID record and token would break the fence that keeps its terminals adoptable.
+  // Restoring daemon sockets, PID or auth tokens would break adoption of terminals surviving restart.
   it.each(ORCAD_SNAPSHOT_EXCLUDED)('never captures, removes or restores over %s', (excluded) => {
     const commands = [
       captureOrcadStateSnapshotCommand(posix, ROOT, SNAP, BASE),
@@ -64,7 +61,7 @@ describe('capturing the pre-activation snapshot', () => {
     ['EMPTY', 'empty'],
     ['tar: broken', 'failed'],
     ['', 'failed'],
-    // A gateway that merges stderr into stdout appends bash's job notice after the verdict (#30491).
+    // Gateways may append shell job notices after a valid verdict (#30491).
     ['CAPTURED\r\nsh: line 1:  2468 Terminated   ( while sleep 60 ... )\n', 'captured'],
     ['FAILED\nCAPTURED-looking noise', 'failed']
   ])('parses %j as %s', (output, expected) => {

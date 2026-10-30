@@ -11,7 +11,7 @@ afterEach(async () => {
   await Promise.all(guestAborts.splice(0).map((abort) => abort()))
 })
 
-async function armGuest(previousMarker?: string) {
+async function armGuest(previousMarker?: string, inShadowRoot = false) {
   const { Window } = await import('happy-dom')
   const window = new Window()
   guestAborts.push(() => window.happyDOM.abort())
@@ -32,14 +32,20 @@ async function armGuest(previousMarker?: string) {
     target.setAttribute(BROWSER_GRAB_SELECTED_ATTRIBUTE, previousMarker)
   }
   scroller.appendChild(target)
-  document.body.appendChild(scroller)
+  const shadowHost = document.createElement('div')
+  document.body.appendChild(inShadowRoot ? shadowHost : scroller)
+  if (inShadowRoot) {
+    const pageRoot = shadowHost.attachShadow({ mode: 'open' })
+    pageRoot.appendChild(scroller)
+    Object.defineProperty(pageRoot, 'elementFromPoint', { value: () => target })
+  }
   let targetRect: Rect = { x: 40, y: 300, width: 120, height: 30 }
   const contentSize = { width: 120, height: 30 }
   const rootSize = { width: 1000, height: 800 }
   const spacing = { padding: 0, border: 0 }
   target.getBoundingClientRect = () =>
     new window.DOMRect(targetRect.x, targetRect.y, targetRect.width, targetRect.height)
-  document.elementFromPoint = () => target
+  document.elementFromPoint = () => (inShadowRoot ? shadowHost : target)
 
   const frames: (() => void)[] = []
   const resizeCallbacks: (() => void)[] = []
@@ -89,8 +95,7 @@ async function armGuest(previousMarker?: string) {
     }
   }
   const outline = (): Rect => {
-    // The outline is the first box inside the overlay container.
-    const box = shadowRoots[0].firstElementChild?.firstElementChild
+    const box = shadowRoots.at(-1)?.firstElementChild?.firstElementChild
     if (!(box instanceof window.HTMLElement)) {
       throw new Error('outline not rendered')
     }
@@ -103,7 +108,6 @@ async function armGuest(previousMarker?: string) {
     }
   }
 
-  // Hover the target, then click-freeze it like awaitClick does.
   grab.host.dispatchEvent(new window.MouseEvent('mousemove', { clientX: 50, clientY: 310 }))
   flushFrames()
   grab.freezeHighlight('selection-1')
@@ -182,6 +186,19 @@ describe('grab overlay after the click', () => {
     const guest = await armGuest()
     expect(guest.outline()).toEqual({ x: 40, y: 300, width: 120, height: 30 })
 
+    guest.moveTarget({ x: 40, y: 180, width: 120, height: 30 })
+    guest.scroller.dispatchEvent(new guest.window.Event('scroll'))
+    guest.flushFrames()
+
+    expect(guest.outline()).toEqual({ x: 40, y: 180, width: 120, height: 30 })
+  })
+
+  it('selects an element inside an open shadow root and follows its scroll', async () => {
+    const guest = await armGuest(undefined, true)
+    expect(guest.target.getAttribute(BROWSER_GRAB_SELECTED_ATTRIBUTE)).toBe('selection-1')
+    expect(guest.outline()).toEqual({ x: 40, y: 300, width: 120, height: 30 })
+
+    // Scroll events stay inside the shadow root, so window capture never sees them.
     guest.moveTarget({ x: 40, y: 180, width: 120, height: 30 })
     guest.scroller.dispatchEvent(new guest.window.Event('scroll'))
     guest.flushFrames()

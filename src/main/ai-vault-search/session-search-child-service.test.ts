@@ -29,16 +29,12 @@ it('forwards every call to the child and returns what it answered', async () => 
     kind: 'unavailable',
     reason: 'disabled'
   })
-  // The scope verdict rides beside the request, never inside it.
   expect(calls.search).toHaveBeenCalledWith({ query: 'ledger' }, hostScope)
   expect(await service.status()).toEqual(indexingStatus)
   await service.reconcile()
   expect(calls.reconcile).toHaveBeenCalledTimes(1)
 })
 
-// A child that is starting, restarting or refusing is "not yet", which is an
-// answer to the caller's question; turning it into a throw would make a paired
-// client show a transport error for a host that is simply booting.
 it('maps a child that cannot answer to not-ready rather than an error', async () => {
   const service = createChildSessionSearchService(
     stubCalls({

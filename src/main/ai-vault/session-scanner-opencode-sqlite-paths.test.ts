@@ -1,9 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  buildOpenCodeSqliteCandidatePath,
-  looksLikeOpenCodeSqliteCandidate,
-  splitOpenCodeSqliteCandidate
-} from './session-scanner-opencode-sqlite-paths'
+import { splitOpenCodeSqliteCandidate } from './session-scanner-opencode-sqlite-paths'
 
 describe('splitOpenCodeSqliteCandidate', () => {
   it('splits a synthetic db#sessionId path', () => {
@@ -38,21 +34,5 @@ describe('splitOpenCodeSqliteCandidate', () => {
 
   it('rejects an empty sessionId', () => {
     expect(splitOpenCodeSqliteCandidate('/data/opencode.db#')).toBeNull()
-  })
-})
-
-describe('looksLikeOpenCodeSqliteCandidate', () => {
-  it('returns true for a synthetic path', () => {
-    expect(looksLikeOpenCodeSqliteCandidate('/x/opencode.db#ses_1')).toBe(true)
-  })
-
-  it('returns false for a real filesystem path', () => {
-    expect(looksLikeOpenCodeSqliteCandidate('/x/storage/session/proj/ses_1.json')).toBe(false)
-  })
-})
-
-describe('buildOpenCodeSqliteCandidatePath', () => {
-  it('joins dbPath and sessionId with #', () => {
-    expect(buildOpenCodeSqliteCandidatePath('/d/opencode.db', 'ses_1')).toBe('/d/opencode.db#ses_1')
   })
 })

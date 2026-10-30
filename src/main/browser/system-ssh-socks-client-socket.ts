@@ -1,7 +1,5 @@
-import { EventEmitter } from 'node:events'
-import { connect, type Socket } from 'node:net'
 import type { BrowserNetworkTunnelOpen } from '../../shared/browser-network-tunnel-protocol'
-import type { BrowserNetworkTunnelSocket } from './browser-network-tunnel-stream-state'
+import { ProxyHandshakeSocket, type ProxyHandshakeTransport } from './proxy-handshake-socket'
 
 const SOCKS_VERSION = 5
 const SOCKS_NO_AUTH = 0
@@ -9,87 +7,26 @@ const SOCKS_CONNECT = 1
 const SOCKS_DOMAIN = 3
 const MAX_HANDSHAKE_BYTES = 512
 
-export class SystemSshSocksClientSocket extends EventEmitter implements BrowserNetworkTunnelSocket {
-  destroyed = false
-  private readonly socket: Socket
+export class SystemSshSocksClientSocket extends ProxyHandshakeSocket {
   private readonly connectRequest: Uint8Array
-  private paused = false
   private handshake: Uint8Array<ArrayBufferLike> = new Uint8Array()
-  private phase: 'method' | 'connect' | 'ready' = 'method'
+  private phase: 'method' | 'connect' = 'method'
 
-  /** `proxy` is a loopback port (the system-SSH forward) or any no-auth SOCKS5 endpoint. */
-  constructor(proxy: number | { host: string; port: number }, target: BrowserNetworkTunnelOpen) {
+  /** `openTransport` reaches a no-auth SOCKS5 server, such as the local end of `ssh -D`. */
+  constructor(
+    target: BrowserNetworkTunnelOpen,
+    openTransport: (signal: AbortSignal) => Promise<ProxyHandshakeTransport>
+  ) {
     super()
     this.connectRequest = encodeConnectRequest(target)
-    const endpoint = typeof proxy === 'number' ? { host: '127.0.0.1', port: proxy } : proxy
-    this.socket = connect({ ...endpoint, allowHalfOpen: true })
-    this.socket.once('connect', () => {
-      this.socket.write(new Uint8Array([SOCKS_VERSION, 1, SOCKS_NO_AUTH]))
-    })
-    this.socket.on('data', (bytes) =>
-      this.onHandshakeData(typeof bytes === 'string' ? Buffer.from(bytes) : bytes)
-    )
-    this.socket.on('end', () => this.emit('end'))
-    this.socket.on('close', () => {
-      this.destroyed = true
-      this.emit('close')
-    })
-    this.socket.on('error', (error) => this.emit('error', error))
+    this.start(openTransport)
   }
 
-  setNoDelay(noDelay = true): this {
-    this.socket.setNoDelay(noDelay)
-    return this
+  protected begin(): void {
+    this.send(new Uint8Array([SOCKS_VERSION, 1, SOCKS_NO_AUTH]))
   }
 
-  pause(): this {
-    this.paused = true
-    if (this.phase === 'ready') {
-      this.socket.pause()
-    }
-    return this
-  }
-
-  resume(): this {
-    this.paused = false
-    if (this.phase === 'ready') {
-      this.socket.resume()
-    }
-    return this
-  }
-
-  write(bytes: Uint8Array<ArrayBufferLike>, callback?: () => void): boolean {
-    if (this.phase !== 'ready' || this.destroyed) {
-      callback?.()
-      return false
-    }
-    return this.socket.write(bytes, callback)
-  }
-
-  end(): this {
-    this.socket.end()
-    return this
-  }
-
-  destroy(): this {
-    this.destroyed = true
-    this.socket.destroy()
-    return this
-  }
-
-  fail(error: Error): void {
-    if (this.destroyed) {
-      return
-    }
-    this.emit('error', error)
-    this.socket.destroy()
-  }
-
-  private onHandshakeData(bytes: Buffer): void {
-    if (this.phase === 'ready') {
-      this.emit('data', bytes)
-      return
-    }
+  protected onHandshakeData(bytes: Buffer): void {
     this.handshake = appendBytes(this.handshake, bytes)
     if (this.handshake.byteLength > MAX_HANDSHAKE_BYTES) {
       this.fail(new Error('system_ssh_socks_handshake_overflow'))
@@ -105,7 +42,7 @@ export class SystemSshSocksClientSocket extends EventEmitter implements BrowserN
       }
       this.handshake = this.handshake.slice(2)
       this.phase = 'connect'
-      this.socket.write(this.connectRequest)
+      this.send(this.connectRequest)
     }
     this.finishConnectHandshake()
   }
@@ -126,14 +63,7 @@ export class SystemSshSocksClientSocket extends EventEmitter implements BrowserN
     }
     const remaining = this.handshake.slice(replyLength)
     this.handshake = new Uint8Array()
-    this.phase = 'ready'
-    if (this.paused) {
-      this.socket.pause()
-    }
-    this.emit('connect')
-    if (remaining.byteLength > 0) {
-      this.emit('data', remaining)
-    }
+    this.finishHandshake(remaining)
   }
 }
 

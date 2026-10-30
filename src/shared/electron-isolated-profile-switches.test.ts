@@ -16,8 +16,7 @@ describe('isolated profile detection', () => {
 
 describe('electronIsolatedProfileSwitches', () => {
   it('keeps the keychain out of an isolated profile', () => {
-    // Without these the fresh HOME has no login keychain, and Chromium's OSCrypt waits on the
-    // authorization prompt it raises before anything is advertised (#25453).
+    // Fresh HOME lacks a login keychain; OSCrypt otherwise blocks readiness on an unanswered authorization prompt (#25453).
     expect(electronIsolatedProfileSwitches({ ORCA_E2E_HOME_DIR: '/tmp/e2e-home' })).toEqual([
       '--password-store=basic',
       '--use-mock-keychain'

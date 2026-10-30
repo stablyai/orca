@@ -5,10 +5,7 @@ import { createInterface } from 'node:readline'
 export const PAIRING_HIDDEN_LINE =
   'Pairing URL: hidden because this supervised server is not writing to a terminal. Pair from the desktop app, or run `orca serve` in a terminal.'
 
-/**
- * Drops the human readiness block's pairing secrets: the web-client URL (it embeds the offer),
- * the mobile QR, and the pairing URL itself. Stateful because the QR spans many lines.
- */
+/** Remove readiness pairing secrets, retaining state for multiline QR output. */
 export function createPairingRedactor(): (line: string) => string | null {
   let inQr = false
   return (line) => {
@@ -39,16 +36,11 @@ function redactReadyJson(line: string): string {
         pairing: { available: false, reason: 'hidden', guidance: PAIRING_HIDDEN_LINE }
       })
     }
-  } catch {
-    // Not the readiness payload after all; pass it through.
-  }
+  } catch {}
   return line
 }
 
-/**
- * Only for `--supervise` writing to a log: a service journal must never hold a live bearer
- * offer. A plain `orca serve` keeps inheriting stdout, which scripts parse for `Pairing URL:`.
- */
+/** Redact service logs; plain serve retains pairing stdout for scripts. */
 export function shouldRedactSupervisedStdout(
   supervise: boolean,
   stdoutIsTty: boolean = process.stdout.isTTY === true
@@ -60,7 +52,6 @@ let stdoutErrorsIgnored = false
 
 export type ServeSpawnChild = Parameters<typeof superviseForegroundServe>[0]['spawnChild']
 
-/** Pipes the child's stdout through the redactor; stdio slots other than stdout are kept. */
 export function redactingSpawn(spawn: ServeSpawnChild): ServeSpawnChild {
   return (spec) => {
     const stdio: ProcessSpec['stdio'] = Array.isArray(spec.stdio)
@@ -68,7 +59,7 @@ export function redactingSpawn(spawn: ServeSpawnChild): ServeSpawnChild {
       : ['inherit', 'pipe', 'inherit']
     const child = spawn({ ...spec, stdio })
     if (child.stdout) {
-      // Why: a closed log pipe must not crash the supervisor; the server keeps running.
+      // Closed log pipes must not crash the supervisor.
       child.stdout.on('error', () => undefined)
       if (!stdoutErrorsIgnored) {
         stdoutErrorsIgnored = true

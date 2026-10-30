@@ -1,8 +1,4 @@
-// Which of a set of markers are still offers, read off the host's own live journals.
-//
-// A different question from storage: the durable record decides which markers are still present;
-// this decides which of those a resume may act on. The offer, the click and the pre-send check all
-// ask it, and the start asks the same `hostCanStartRecord`, so none offers what the start refuses.
+// Recheck stored offers against live journals and the same launch support used by startup.
 
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import type { AgentSessionWireRefusal } from '../../../shared/agent-session-wire'
@@ -17,7 +13,6 @@ import {
   type StructuredAgentSessionResumableSet
 } from './structured-agent-session-restart-resume-set'
 
-/** The only part of a live session this reads. */
 export type StructuredAgentSessionRestartJournalSource = { journal: AgentSessionJournal }
 
 export type StructuredAgentSessionRestartCandidateReader = (
@@ -26,14 +21,12 @@ export type StructuredAgentSessionRestartCandidateReader = (
 ) => StructuredAgentSessionResumableSet
 
 export function createStructuredAgentSessionRestartCandidateReader(deps: {
-  /** The host's live session map; a marker's chat is readable once listing has revealed it. */
+  /** Only explicit actions open marker chats; passive listings use saved previews. */
   sessions: ReadonlyMap<string, StructuredAgentSessionRestartJournalSource>
   getRecord: (sessionId: string) => AgentSessionRecord | null
   adapter: StructuredAgentSessionAdapter
   agents: Pick<StructuredAgentRegistry, 'definition'>
-  /** Whether the chat moved on since the offer was taken; see the offer withdrawal. */
   movedOn: (marker: AgentSessionResumeMarker) => boolean
-  /** Whether the chat was saved by a newer Orca: its whole database, or its journal's open. */
   savedByNewerOrca: (sessionId: string) => boolean
 }): StructuredAgentSessionRestartCandidateReader {
   return (markers, leaseState) =>
@@ -43,17 +36,17 @@ export function createStructuredAgentSessionRestartCandidateReader(deps: {
       supportsRecord: (record) => hostCanStartRecord(deps, record),
       movedOn: deps.movedOn,
       savedByNewerOrca: deps.savedByNewerOrca,
-      latestPrompt: (sessionId) =>
-        latestStructuredAgentSessionPrompt(
-          deps.sessions.get(sessionId)?.journal.snapshot().items ?? []
-        ),
+      latestPrompt: (sessionId) => {
+        const session = deps.sessions.get(sessionId)
+        return session
+          ? latestStructuredAgentSessionPrompt(session.journal.snapshot().items)
+          : (deps.getRecord(sessionId)?.lastTurn?.prompt ?? '')
+      },
       leaseState
     })
 }
 
-/** The listing's reader, which skips a newer Orca's chats, and the one right before sending, which
- *  skips nothing for them: turning one away there would spend its offer, so its send is refused
- *  instead and settling keeps the offer. */
+/** Listing skips newer chats; pre-send must retain them so refused sends preserve their offers. */
 export function createStructuredAgentSessionRestartCandidateReaders(
   deps: Parameters<typeof createStructuredAgentSessionRestartCandidateReader>[0]
 ): {
@@ -69,8 +62,7 @@ export function createStructuredAgentSessionRestartCandidateReaders(
   }
 }
 
-/** Chats the latest reveal found saved by a newer Orca: listing skips them and never spends their
- *  offers. Each reveal re-derives its chat's entry; nothing is stored. */
+/** Transient newer-chat flags, re-derived by reveal; listing must never spend their offers. */
 export function createNewerOrcaChats(databaseIsNewer: () => boolean) {
   const chats = new Set<string>()
   return {

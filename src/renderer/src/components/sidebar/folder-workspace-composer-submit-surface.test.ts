@@ -17,7 +17,7 @@ vi.mock('@/lib/worktree-activation', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   activateAndRevealFolderWorkspace: mocks.activateAndRevealFolderWorkspace
 }))
-vi.mock('@/lib/launch-agent-in-new-tab', () => ({ launchAgentInNewTab: mocks.terminal }))
+vi.mock('@/lib/launch-agent-in-new-tab', () => ({ launchAgentInNewTabWithOutcome: mocks.terminal }))
 vi.mock('@/runtime/structured-agent-session-client', () => ({
   callStructuredAgentSession: vi.fn(async () => ({ supported: false, reason: 'wsl' }))
 }))

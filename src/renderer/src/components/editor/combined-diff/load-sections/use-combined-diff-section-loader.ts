@@ -16,10 +16,12 @@ import { getDiffSectionLoadErrorMessage } from './combined-diff-section-load-tim
 import { getInitialCombinedDiffSectionLoadIndices } from './combined-diff-initial-section-load'
 import { isUnchangedDiffSectionReload } from './combined-diff-section-load-state'
 import type { CombinedDiffSectionLoadRegistry } from './combined-diff-section-load-registry'
+import type { CombinedDiffLoadRequest } from './combined-diff-load-scheduler'
 
 export function useCombinedDiffSectionLoader({
   entrySet,
   file,
+  generation,
   registry,
   sectionCount,
   setSectionHeights,
@@ -27,6 +29,7 @@ export function useCombinedDiffSectionLoader({
 }: {
   entrySet: CombinedDiffEntrySet
   file: OpenFile
+  generation: number
   registry: CombinedDiffSectionLoadRegistry
   sectionCount: number
   setSectionHeights: React.Dispatch<React.SetStateAction<Record<number, number>>>
@@ -110,23 +113,20 @@ export function useCombinedDiffSectionLoader({
       }
 
       if (generationRef.current !== gen) {
-        // Why: the generation reset already cleared the in-flight set, and a newer load for this
-        // index may own the entry now — deleting it here would hide that load from the guard above.
+        // Generation reset already cleared the set; a newer load may now own this index.
         return
       }
       loadingIndicesRef.current.delete(index)
       const invalidatedMidFlight = (sectionLoadTokensRef.current.get(index) ?? 0) !== loadToken
       if (invalidatedMidFlight && !supersededLoadIndicesRef.current.has(index)) {
-        // Why: an invalidation landed mid-flight and deferred its reload to this settle point, so
-        // the refetch happens once here instead of racing a second fetch against this one.
+        // Refetch once at settlement after mid-flight invalidation rather than racing a duplicate load.
         supersededLoadIndicesRef.current.add(index)
         requestSectionReloadRef.current(index)
         return
       }
-      // Why: under sustained writes every load is invalidated mid-flight; after one discard, commit
-      // this newer result and refetch once more rather than never showing anything new.
+      // Sustained writes can invalidate every fetch; commit after one discard and refetch again to avoid starving visible updates.
       supersededLoadIndicesRef.current.delete(index)
-      // Why: a section the user started editing keeps its draft; never commit disk content over it.
+      // User edits outrank incoming disk content.
       if (sectionsRef.current[index]?.dirty) {
         loadedIndicesRef.current.add(index)
         return
@@ -146,8 +146,7 @@ export function useCombinedDiffSectionLoader({
       const storedResult = getStoredTextDiffResult(result, largeDiffRenderLimit)
       loadedIndicesRef.current.add(index)
       const current = sectionsRef.current[index]
-      // A revalidation lands on a section that is already showing content. If the refetch matches
-      // what's on screen, committing it would swap Monaco models and re-measure for nothing.
+      // Identical revalidation must not swap Monaco models or remeasure an unchanged row.
       const wasShowingContent = current !== undefined && !current.loading
       if (
         wasShowingContent &&
@@ -159,10 +158,11 @@ export function useCombinedDiffSectionLoader({
           modifiedContent: storedContent.modifiedContent
         })
       ) {
+        // Persist the newly loaded index even when the body and its model stay unchanged.
+        setSections((prev) => [...prev])
         return
       }
       if (wasShowingContent) {
-        // Why: content really changed, so the old Monaco height no longer describes this row.
         setSectionHeights((prev) => removeDiffSectionMeasuredHeight(prev, index))
       }
       setSections((prev) => {
@@ -176,7 +176,7 @@ export function useCombinedDiffSectionLoader({
                 loading: false,
                 error,
                 largeDiffRenderLimit,
-                // Why: models are keyed by path, so a changed refetch must not reuse the old model.
+                // Changed content needs a fresh generation because model paths otherwise retain the old snapshot.
                 contentGeneration: wasShowingContent
                   ? (s.contentGeneration ?? 0) + 1
                   : s.contentGeneration
@@ -196,6 +196,7 @@ export function useCombinedDiffSectionLoader({
       commitEntries,
       file.filePath,
       file.runtimeEnvironmentId,
+      file.worktreeId,
       isAllMode,
       isBranchMode,
       isCommitMode,
@@ -205,13 +206,12 @@ export function useCombinedDiffSectionLoader({
   )
   loadSectionRef.current = loadSectionNow
 
-  // Progressive loading: queue diff content when a section becomes visible.
   const loadSection = useCallback(
-    (index: number) => {
+    (index: number, options: CombinedDiffLoadRequest = { viewportOnly: true }) => {
       if (sectionsRef.current[index]?.collapsed || sectionsRef.current[index]?.loadOnDemand) {
         return
       }
-      loadSchedulerRef.current.request(index)
+      loadSchedulerRef.current.request(index, options)
     },
     [loadSchedulerRef, sectionsRef]
   )
@@ -234,7 +234,7 @@ export function useCombinedDiffSectionLoader({
   )
 
   useEffect(() => {
-    // Why: queue the first rows deterministically so the visible viewport doesn't depend on IntersectionObserver delivery.
+    // Queue initial rows deterministically so viewport loading cannot depend on IntersectionObserver delivery.
     const currentSections = sectionsRef.current
     for (let index = 0; index < currentSections.length; index += 1) {
       if (currentSections[index]?.loading && loadedIndicesRef.current.has(index)) {
@@ -249,10 +249,10 @@ export function useCombinedDiffSectionLoader({
 
     for (const index of initialIndices) {
       if (!currentSections[index]?.collapsed) {
-        loadSection(index)
+        loadSection(index, { viewportOnly: false })
       }
     }
-  }, [entrySignature, loadSection, loadedIndicesRef, sectionCount, sectionsRef])
+  }, [entrySignature, generation, loadSection, loadedIndicesRef, sectionCount, sectionsRef])
 
   return { loadSection, loadDeferredSection }
 }

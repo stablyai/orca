@@ -5,7 +5,6 @@ import { translate } from '@/i18n/i18n'
 
 export const SECTION_STALE_MESSAGE = 'This file changed on disk since this section loaded.'
 
-/** A refused section save: reload the section (discarding its edits) or overwrite explicitly. */
 export function DiffSectionSaveConflictBar({
   onReload,
   onOverwrite

@@ -2,10 +2,7 @@ import { useLayoutEffect, useRef, type MutableRefObject, type RefObject } from '
 import { saveBrowserAddressBarEditSession } from './browser-address-bar-edit-session'
 import type { BrowserAddressBarEditSessionBinding } from './use-browser-address-bar-edit-session'
 
-/**
- * The bar's half of an edit session: hands an in-progress edit to whatever mounts next for the
- * same page, and puts the suggestion list back the way a handed-on edit left it.
- */
+/** Carry a live edit and suggestion-list state to the replacement bar for the same page. */
 export function useBrowserAddressBarEditHandoff({
   editSession,
   inputRef,
@@ -35,10 +32,7 @@ export function useBrowserAddressBarEditHandoff({
     if (!resumedChrome) {
       return
     }
-    // Why after the fact rather than as the initial state: the pane resumes in its own layout
-    // effect, which runs after this bar has already mounted (and after the focus it takes has
-    // opened the dropdown the way a fresh click would). This is what puts it back as the user
-    // left it. Re-arming the blur grace window keeps the resumed focus from closing it again.
+    // Restore after the pane’s layout resume reopens suggestions through focus; rearm blur grace to preserve the saved chrome state.
     if (resumedChrome.preview) {
       prePreviewValueRef.current = resumedChrome.preview.typedQuery
       setSelectedValueOverride(resumedChrome.preview.previewedUrl)
@@ -47,16 +41,14 @@ export function useBrowserAddressBarEditHandoff({
     setOpen(resumedChrome.suggestionsOpen)
   }, [openedAtRef, prePreviewValueRef, resumedChrome, setOpen, setSelectedValueOverride])
 
-  // Why layout and not a passive cleanup: React destroys passive effects for a deleted tree after
-  // its DOM is gone, and by then document.activeElement is the body — every edit would read idle.
+  // Save in layout cleanup before DOM removal; passive cleanup would see body focus and lose the edit.
   useLayoutEffect(() => {
     const input = inputRef.current
     if (!editSessionPageId || !input) {
       return
     }
     return () => {
-      // Why only a focused bar: an idle one has no edit to hand on, and resuming it would seize
-      // focus and reopen a dropdown for a user who was reading the page.
+      // Only focused bars have edits to resume; idle bars must not seize focus or reopen suggestions.
       if (document.activeElement !== input) {
         return
       }
@@ -74,8 +66,7 @@ export function useBrowserAddressBarEditHandoff({
                 direction: input.selectionDirection ?? 'none'
               },
         suggestionsOpen: liveEditRef.current.open,
-        // Why the draft alone is not enough: mid-preview it holds the highlighted suggestion, and
-        // dropping this would strand the user with no way back to what they actually typed.
+        // During preview the draft holds a suggestion URL; retain the separate typed query for Escape.
         preview:
           typedQuery === null || inlineTyped !== null
             ? null

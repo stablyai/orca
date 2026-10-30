@@ -11,11 +11,15 @@ import {
   adoptsCliConversations,
   CLI_CONVERSATION_ADOPTING_AGENTS
 } from '../../../../shared/structured-agent-cli-conversation-adoption'
-import { canOpenAiVaultSessionHistoryChat } from './ai-vault-session-history-chat'
-import { STRUCTURED_AGENT_SESSION_RESUME_HISTORY_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
+import {
+  STRUCTURED_AGENT_SESSION_RESUME_HISTORY_RUNTIME_CAPABILITY,
+  STRUCTURED_AGENT_SESSION_RESUME_LINKED_CWD_RUNTIME_CAPABILITY
+} from '../../../../shared/protocol-version'
 import { resolveAiVaultTargetWorkspacePath } from './ai-vault-session-launch-target'
 import {
   resolveAiVaultSessionResumeInChatEligibility,
+  aiVaultSessionResumeInChatWorkspaceMatters,
+  aiVaultSessionCwdMatchesWorkspace,
   type AiVaultResumeInChatEligibility
 } from './ai-vault-session-resume-in-chat'
 import {
@@ -37,22 +41,16 @@ export function resolveAiVaultSessionResumeInChatForWorkspace(args: {
   const targetWorkspacePath = targetWorkspaceId
     ? resolveAiVaultTargetWorkspacePath(args.targetState, targetWorkspaceId)
     : null
-  // A read-only chat tab has no host conversation to find, so the owner/capability questions a
-  // structured resume asks do not apply; the eligibility answer alone decides.
-  if (canOpenAiVaultSessionHistoryChat(args.session)) {
-    return resolveAiVaultSessionResumeInChatEligibility({
-      session: args.session,
-      targetWorkspaceId,
-      targetWorkspacePath,
-      structuredRouteAvailable: targetWorkspaceId !== null
-    })
-  }
   const state = useAppStore.getState()
-  // The conversation lives on the host that recorded it, so only a chat on that same host can
-  // resume it, the rule the terminal resume follows; that host also answers for the capability.
+  // Like terminal resume, native resume requires the recording host, which also owns capability checks.
   const targetOwner = targetWorkspaceId
     ? resolveStructuredAgentSessionOwner(state, targetWorkspaceId)
     : null
+  const aliasDependent =
+    args.session.agent !== 'pi' &&
+    aiVaultSessionResumeInChatWorkspaceMatters(args.session.agent) &&
+    !aiVaultSessionCwdMatchesWorkspace(args.session.cwd, targetWorkspacePath)
+  const capabilities = targetOwner ? resolveHostCapabilities(state, targetOwner) : null
   return resolveAiVaultSessionResumeInChatEligibility({
     session: args.session,
     targetWorkspaceId,
@@ -72,14 +70,14 @@ export function resolveAiVaultSessionResumeInChatForWorkspace(args: {
           settings: args.settings
         })
       ) &&
-      resolveHostCapabilities(state, targetOwner)?.includes(
-        STRUCTURED_AGENT_SESSION_RESUME_HISTORY_RUNTIME_CAPABILITY
-      ) === true
+      (!aliasDependent ||
+        capabilities?.includes(STRUCTURED_AGENT_SESSION_RESUME_LINKED_CWD_RUNTIME_CAPABILITY) ===
+          true) &&
+      capabilities?.includes(STRUCTURED_AGENT_SESSION_RESUME_HISTORY_RUNTIME_CAPABILITY) === true
   })
 }
 
-/** A history row's resume target and its resume-in-chat eligibility, composed once so every surface
- *  offering the row's moves (the Session History panel, the tab menu) asks the same questions. */
+/** Share history-row resume eligibility across Session History and tab-menu actions. */
 export function resolveAiVaultHistoryRowResume(
   args: Parameters<typeof resolveAiVaultHistorySessionResumeState>[0] & {
     targetState: AiVaultSessionResumeTargetState

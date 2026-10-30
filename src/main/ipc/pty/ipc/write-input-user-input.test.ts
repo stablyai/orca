@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TerminalRunFactsRegister } from '../../../runtime/terminal-run-facts'
 import { ptyOwnership } from '../provider/ownership-state'
 import { createPtyWriteInput } from './write-input'
+import * as inputAdmission from '../../../runtime/terminal-input-admission'
 import {
   WRITE_ACCEPTED,
   writeRefused,
@@ -46,10 +47,24 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  vi.restoreAllMocks()
   ptyOwnership.delete(PTY_ID)
 })
 
 describe('renderer PTY writes: input kind', () => {
+  it.each(['writePtyInput', 'writePtyInputAccepted'] as const)(
+    '%s forwards desktop provenance to shared admission',
+    async (writer) => {
+      const policy = vi.spyOn(inputAdmission, 'isTerminalInputPaused')
+      await createWriteInput(new TerminalRunFactsRegister())[writer]({
+        id: PTY_ID,
+        data: 'keys',
+        inputKind: 'driving'
+      })
+      expect(policy).toHaveBeenCalledWith(expect.anything(), PTY_ID, 'desktop')
+    }
+  )
+
   it.each(['local', 'ssh:ssh-connection'] as const)(
     'observes a settled write only after acceptance on the execution host (%s)',
     async (owner) => {

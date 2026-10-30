@@ -70,11 +70,10 @@ describe('saving a restored tab', () => {
     ['a tab stored by absolute path', '/tmp/audit.md', 'wt-1', '/tmp/audit.md']
   ])('saves %s as the file the user named', async (_label, relativePath, worktreeId, filePath) => {
     const store = createEditorStore()
-    // Hydration restores the tab exactly as persisted; nothing is re-granted first.
+    // Persisted ownership must suffice without granting access again during hydration.
     store
       .getState()
       .openFile({ filePath, relativePath, worktreeId, language: 'markdown', mode: 'edit' })
-    // The file's own id: its path, or an owned id when main owns the layout.
     const fileId = store.getState().openFiles.find((file) => file.filePath === filePath)!.id
     store.getState().setEditorDraft(fileId, 'edited')
     store.getState().markFileDirty(fileId, true)

@@ -1,17 +1,4 @@
-/**
- * STA-4343: the Space Manager's ORDINARY delete must route to the row's host.
- *
- * The Space scan lists one row per execution host, so two rows can share a
- * `repoId::path` worktree id. The force-delete path carried `executionHostId`;
- * the ordinary Delete one line above it passed a bare id, which resolves through
- * the id-keyed lookup and lands on whichever host happens to be first. Clicking
- * Delete on the SSH row therefore deleted the LOCAL checkout.
- *
- * A Space row carries no `instanceId` (see WorkspaceSpaceWorktree), so the fix
- * cannot hand-build an identity — it has to resolve the store row on that host
- * and pass the store row's own identity, or the confirmed-target check rejects
- * every Space delete as stale.
- */
+/** Space deletion must resolve each scan row on its host and carry the store’s instance identity; bare IDs can target another checkout. */
 import { describe, expect, it } from 'vitest'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { WorkspaceSpaceWorktree } from '../../../../shared/workspace-space-types'
@@ -57,13 +44,11 @@ function storeRow(hostId: ExecutionHostId): Worktree {
 const localStoreRow = storeRow(LOCAL)
 const sshStoreRow = storeRow(SSH)
 
-/** Stands in for getWorktreeOnHostFromState: resolve on the named host. */
 function lookupOnHost(worktreeId: string, hostId: ExecutionHostId | undefined) {
   const matches = [localStoreRow, sshStoreRow].filter((row) => row.id === worktreeId)
   return hostId ? matches.find((row) => row.hostId === hostId) : matches[0]
 }
 
-/** The panel's delete path: Space row -> store row on ITS host -> identity. */
 function identitiesForSpaceDelete(targets: readonly WorkspaceSpaceWorktree[]) {
   return toWorktreeDeleteIdentities(
     targets.flatMap((target) => {
@@ -94,8 +79,7 @@ describe('Space Manager delete routes to the row host', () => {
   })
 
   it('carries the store row instanceId so the confirmed-target check accepts it', () => {
-    // Regression guard: hand-building {id, hostId} with no instanceId would make
-    // resolveWorktreeBatchDeleteTargets refuse every Space delete instead.
+    // Hand-built identities lacking instanceId would make every confirmed delete stale.
     const identities = identitiesForSpaceDelete([spaceRow(SSH)])
 
     expect(identities).toEqual([{ id: SHARED_ID, instanceId: `instance-${SSH}`, hostId: SSH }])

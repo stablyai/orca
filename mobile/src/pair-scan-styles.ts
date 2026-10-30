@@ -1,7 +1,8 @@
 import { StyleSheet } from 'react-native'
 import { colors, spacing, radii, typography } from '../src/theme/mobile-theme'
+import { themedStyleSheet } from '../src/theme/themed-styles'
 
-export const pairScanStyles = StyleSheet.create({
+export const pairScanStyles = themedStyleSheet(() => ({
   container: {
     flex: 1,
     backgroundColor: colors.bgBase,
@@ -47,9 +48,7 @@ export const pairScanStyles = StyleSheet.create({
     borderRadius: radii.camera,
     overflow: 'hidden'
   },
-  // Why: holds the layout slot while the camera is unmounted during
-  // paste, so the bottom action button doesn't snap up to fill the
-  // empty space.
+  // Reserve the camera slot during paste mode so the bottom action cannot jump upward.
   cameraPlaceholder: {
     flex: 1,
     backgroundColor: colors.bgPanel,
@@ -182,4 +181,4 @@ export const pairScanStyles = StyleSheet.create({
     fontSize: typography.bodySize,
     fontWeight: '500'
   }
-})
+}))

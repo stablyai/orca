@@ -36,12 +36,15 @@ const { storeState } = vi.hoisted(() => ({
 }))
 
 vi.mock('@/store', () => ({
-  useAppStore: (selector: (state: StoreState) => unknown) => {
-    if (!storeState.current) {
-      throw new Error('Store state was not installed')
-    }
-    return selector(storeState.current)
-  }
+  useAppStore: Object.assign(
+    (selector: (state: StoreState) => unknown) => {
+      if (!storeState.current) {
+        throw new Error('Store state was not installed')
+      }
+      return selector(storeState.current)
+    },
+    { getState: () => storeState.current }
+  )
 }))
 
 vi.mock('@/components/linear-api-key-dialog', () => ({
@@ -152,8 +155,7 @@ describe('ConnectIntegrationsList', () => {
 
     const { markup } = await renderConnectIntegrationsList()
 
-    // Step 1 is not a prerequisite: the task step starts collapsed but offers
-    // an "Open" affordance instead of a disabled, dimmed row.
+    // Review is optional ordering: tracker-first users can expand the task step.
     expect(markup).toContain('Open')
     expect(markup).not.toContain('opacity-55')
     expect(markup).not.toContain('Add Linear access')
@@ -181,15 +183,12 @@ describe('ConnectIntegrationsList', () => {
     expect(markup).toContain('issues available as tasks')
     expect(markup).toContain('add Linear or Jira if your team plans work there')
     expect(markup).not.toContain('Use GitHub issues')
-    // The step is done but stays expanded so Linear/Jira remain discoverable
-    // for teams that plan work in a dedicated tracker.
+    // Keep dedicated trackers discoverable even when code-host issues already satisfy tasks.
     expect(markup).toContain('Add Linear access')
     expect(markup).toContain('Connect Jira')
   })
 
   it('offers GitHub and GitLab as task sources when review came from a non-task provider', async () => {
-    // Bitbucket satisfies review but cannot serve tasks, so step 2 must still
-    // offer the code hosts as connectable task sources alongside the trackers.
     installStore(
       makePreflightStatus({
         bitbucket: { configured: true, authenticated: true, account: 'acme' }
@@ -218,7 +217,6 @@ describe('ConnectIntegrationsList', () => {
     expect(markup).toContain('GitHub')
     expect(markup).toContain('connected for tasks')
     expect(markup).toContain(' and ')
-    // A connected tracker collapses the step to its summary.
     expect(markup).not.toContain('Connect Jira')
   })
 })

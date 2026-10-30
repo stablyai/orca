@@ -24,8 +24,7 @@ function clientCanRenderStructuredAgentSessionTab(
   tab: RuntimeMobileSessionAgentTab,
   clientCapabilities: readonly RuntimeCapability[] | undefined
 ): boolean {
-  // Every shipped client reads only Claude and Codex as chats; any other agent's tab would list
-  // with an empty pane, so it waits for a client that says it renders the host's agents.
+  // Legacy clients render only Claude/Codex chats; require explicit support for other agents to avoid empty panes.
   return clientRendersStructuredAgent(clientCapabilities, tab.agent)
 }
 
@@ -55,17 +54,14 @@ export function projectSessionTabAgentStatus<TPayload extends SessionTabsPayload
   const structuredVisible = supportsStructuredAgentSessions({ clientKind, clientCapabilities })
   let projected: TPayload
   if (clientKind === 'mobile') {
-    // Why: deleting the row left the user hunting for a chat the desktop says exists; the row
-    // survives with a title naming the fix. Nothing is removed, so no group/layout repair applies.
+    // Keep an actionable fallback row so the chat is discoverable; retaining it needs no layout repair.
     projected = projectUnsupportedAgentSessionTabTitles(payload, {
       clientKind,
       clientCapabilities
     })
   } else {
     projected = structuredVisible ? payload : projectAgentSessionTabsOut(payload, () => true)
-    // Why: a paired client renders only the agents it says it does (mobile's
-    // resolveMobileNativeChat returns null for every other agent), so an ungated row would
-    // list and select into a pane that shows neither chat nor terminal.
+    // Gate chat rows by client rendering support or selection opens neither chat nor terminal.
     if (structuredVisible && clientKind !== undefined) {
       projected = projectAgentSessionTabsOut(
         projected,
@@ -79,7 +75,7 @@ export function projectSessionTabAgentStatus<TPayload extends SessionTabsPayload
   ) {
     projected = projectRestoredAgentStatusAsLegacyDone(projected)
   }
-  // Why: only paired runtimes have legacy `done` completion side effects; mobile must keep its row without changing the exact v2 auth shape.
+  // Legacy done completion applies only to paired runtimes; mobile retains rows without changing v2 authentication.
   if (
     clientKind !== 'runtime' ||
     clientCapabilities?.includes(AGENT_SESSION_BOUNDARY_RUNTIME_CAPABILITY)

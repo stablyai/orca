@@ -16,17 +16,14 @@ vi.mock('expo-crypto', async () => {
   }
 })
 
-/** The grids this fake host names on its manifest reply. The phone pages whatever grid the host
- *  names, so a few KiB exercises the same shapes as the real 384 KiB range and 48 KiB chunk; the
- *  desktop suite pins that the real host names `MOBILE_WEB_BUNDLE_RANGE_BYTES`. */
+// Use smaller host-declared grids to exercise paging cheaply; desktop tests pin production sizes.
 const RANGE_GRID = 4096
 const CHUNK_GRID = 1024
 
 type Inflation = { readonly outLength: number; readonly resultLength: number }
 type LoggedInflation = Inflation & { readonly body: Uint8Array }
 
-/** Every inflation in the process, keyed by the gzip body it was handed; a host reads back only
- *  the bodies it sent, so a read left running by an earlier test's fetch never lands in its sink. */
+// Key inflation observations by body so late reads from earlier fetches cannot enter this host’s results.
 const inflationLog = vi.hoisted((): LoggedInflation[] => [])
 
 // Observes the bound the decoder hands fflate, and what fflate hands back inside it.
@@ -78,11 +75,7 @@ function noiseBytes(byteLength: number): Uint8Array {
 
 type HostCall = { method: string; params: Record<string, unknown> }
 
-/**
- * A host that serves both read methods by the real one's rules: ranges on its advertised grid,
- * gzipped at level 6 when that shrinks them. `ranges: false` is a host that predates the method.
- * `tamper` replaces the body of one range reply.
- */
+// Mirror host gzip-if-smaller range rules; omission of ranges models older chunk-only hosts.
 function rangeHost(
   files: Record<string, Uint8Array>,
   options: { ranges?: boolean; tamper?: (call: HostCall, body: string) => string } = {}
@@ -181,17 +174,6 @@ function rangeHost(
     calls,
     wireBase64Bytes: () => wireBase64Bytes,
     peakInFlight: () => peakInFlight,
-    /** Waits until nothing is in flight and nothing new was sent for a few ticks, so a read a
-     *  missing sibling stop would still send is counted instead of left pending. */
-    drain: async (): Promise<void> => {
-      let quiet = 0
-      for (let tick = 0; tick < 2000 && quiet < 10; tick += 1) {
-        const sent = calls.length
-        await new Promise((resolve) => setTimeout(resolve, 0))
-        quiet = inFlight === 0 && calls.length === sent ? quiet + 1 : 0
-      }
-    },
-    /** This host's inflations only: those whose body is one it sent. */
     inflations: (): Inflation[] =>
       inflationLog
         .filter((entry) => sentGzipBodies.has(encodeBase64(entry.body)))
@@ -202,7 +184,6 @@ function rangeHost(
 const EXACT = 'assets/exact.js'
 const NOISE = 'assets/noise.bin'
 const EMPTY = 'assets/empty.txt'
-/** One asset over a range, one an exact multiple of it, one incompressible, one empty. */
 const FILES: Record<string, Uint8Array> = {
   'assets/app.js': scriptBytes(RANGE_GRID * 2 + 500, 1),
   [EXACT]: scriptBytes(RANGE_GRID * 2, 4),
@@ -215,7 +196,6 @@ function readsOf(calls: readonly HostCall[], method: string): HostCall[] {
   return calls.filter((call) => call.method === method)
 }
 
-/** One read per grid slot, and one for an empty asset. */
 function slotsOn(grid: number, files: Record<string, Uint8Array> = FILES): number {
   return Object.values(files).reduce(
     (total, file) => total + Math.max(1, Math.ceil(file.byteLength / grid)),
@@ -294,30 +274,34 @@ describe('fetchMobileWebBundle from a host whose manifest names a range grid', (
     expect(await refusalOf(fetchMobileWebBundle({ client: host.client }))).toBe('range-undecodable')
   })
 
-  // A 4 MiB inflation answering the first window: fflate fills the bounded buffer and stops
-  // there. Twenty reads are planned, so a fetch that kept going after the refusal is visible.
+  // Bound a gzip bomb at one byte over its slot; enough planned reads expose continued dispatch after refusal.
   it('refuses a gzip bomb at one byte over the window and sends little after it', async () => {
-    const bomb = encodeBase64(gzipSync(new Uint8Array(4 * 1024 * 1024), { level: 9 }))
-    const many = Object.fromEntries(
-      Array.from({ length: 10 }, (_, index) => [
-        `assets/part-${String(index)}.js`,
-        scriptBytes(RANGE_GRID * 2, index)
-      ])
-    )
-    const host = rangeHost(many, {
-      tamper: (call, body) =>
-        call.params.path === 'assets/part-0.js' && call.params.offset === 0 ? bomb : body
-    })
+    vi.useFakeTimers()
+    try {
+      const bomb = encodeBase64(gzipSync(new Uint8Array(4 * 1024 * 1024), { level: 9 }))
+      const many = Object.fromEntries(
+        Array.from({ length: 10 }, (_, index) => [
+          `assets/part-${String(index)}.js`,
+          scriptBytes(RANGE_GRID * 2, index)
+        ])
+      )
+      const host = rangeHost(many, {
+        tamper: (call, body) =>
+          call.params.path === 'assets/part-0.js' && call.params.offset === 0 ? bomb : body
+      })
 
-    expect(await refusalOf(fetchMobileWebBundle({ client: host.client }))).toBe('chunk-oversize')
-    await host.drain()
-    const window = RANGE_GRID + 1
-    // Exactly one body filled the spare byte: the bomb, stopped there.
-    expect(host.inflations().filter((inflation) => inflation.resultLength === window)).toEqual([
-      { outLength: window, resultLength: window }
-    ])
-    // The sibling stop: at most the four in flight and one more each, never all twenty.
-    expect(readsOf(host.calls, 'mobileWeb.bundle.range').length).toBeLessThanOrEqual(8)
+      const refusal = refusalOf(fetchMobileWebBundle({ client: host.client }))
+      await vi.runAllTimersAsync()
+      expect(await refusal).toBe('chunk-oversize')
+      const window = RANGE_GRID + 1
+      expect(host.inflations().filter((inflation) => inflation.resultLength === window)).toEqual([
+        { outLength: window, resultLength: window }
+      ])
+      // Sibling stop permits only in-flight work and immediate follow-ups, never the full planned grid.
+      expect(readsOf(host.calls, 'mobileWeb.bundle.range').length).toBeLessThanOrEqual(8)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('refuses a range that inflates short of its window as short', async () => {

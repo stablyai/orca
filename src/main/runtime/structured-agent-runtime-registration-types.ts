@@ -72,15 +72,15 @@ export type StructuredAgentLaunchCheck = {
   resolveLaunch: (
     env: Record<string, string>,
     commandSettings: StructuredAgentCommandSettings
-  ) => { command: string; env: Record<string, string> }
+  ) => { command: string; prefixArgs: string[]; env: Record<string, string> }
   /** The ascending releases that binary's `--version` must reach; see `agentCliMinimumVersion`. */
   minimumVersions: readonly string[]
 }
 
 export type StructuredAgentChatProgram = {
-  /** Resolves the program a chat launch runs without spawning it. */
+  /** Resolves the binary a chat start from `env` runs, spawning nothing; throws launch refusals. */
   resolve: StructuredAgentLaunchCheck['resolveLaunch']
-  /** Whether Orca can provide the program when none is installed. */
+  /** Whether Orca can download this program on this host when none is found. */
   installable?: () => boolean
 }
 
@@ -91,11 +91,11 @@ export type StructuredAgentRuntimeMetadata = StructuredAgentCliConversations & {
   modelCatalog: (context: StructuredAgentModelCatalogContext) => AgentModelCatalogDiscovery
   /** Whether this agent's chats can run at `location`; answered without building the host. */
   supportsLocation: (location: AgentSessionExecutionLocation) => boolean
-  /** How the host finds this agent's chat program independently of terminal CLI detection. */
-  chatProgram?: StructuredAgentChatProgram
   /** How create asks whether the agent installed on this host runs a structured chat, with the
    *  environment a launch starts from; absent when the location alone decides. */
   launchCheck?: StructuredAgentLaunchCheck
+  /** How the host health snapshot finds this agent's chat program; absent answers unknown. */
+  chatProgram?: StructuredAgentChatProgram
   /** The account a chat of this agent pins; see `StructuredAgentAccountHomeRequest`. */
   resolveAccountHome: (
     request: StructuredAgentAccountHomeRequest,

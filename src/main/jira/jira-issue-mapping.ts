@@ -8,7 +8,7 @@ import type {
   JiraSite,
   JiraStatus,
   JiraUser
-} from '../../shared/jira-types'
+} from '../../shared/jira/jira-types'
 import { adfToMarkdownText, textToAdf, type AdfToMarkdownOptions } from './adf-markdown'
 import {
   asRecord,
@@ -36,14 +36,12 @@ export const ISSUE_FIELDS = [
   'timeestimate'
 ]
 
-// Why: list/typeahead only need identity + metadata; description ADF parse is the hot-path cost.
+// Lists need metadata without expensive description parsing.
 export const ISSUE_LIST_FIELDS = ISSUE_FIELDS.filter((field) => field !== 'description')
 
-// Why: detail reads need attachment metadata so inline ADF media can be resolved
-// to downloadable image content; list/search omit this for payload size.
+// Only detail reads need attachment metadata for inline media.
 export const ISSUE_DETAIL_FIELDS = [...ISSUE_FIELDS, 'attachment']
-// `created`/`updated` are required: mapJiraIssue falls back to "now" when they're absent,
-// which would silently report the lookup time as the issue's timestamps.
+// Omitted timestamps would make mapJiraIssue report lookup time as creation/update time.
 export const ISSUE_SUMMARY_FIELDS = [
   'summary',
   'project',
@@ -222,7 +220,7 @@ function sprintState(value: unknown): string | undefined {
   return asString(asRecord(value).state) || undefined
 }
 
-// Why: Jira orders an issue's sprints by id, not state, so the last one may be closed.
+// Sprints are ordered by ID; the last entry may be closed.
 export function mapSprint(value: unknown): string | undefined {
   const sprints = Array.isArray(value) ? value : value ? [value] : []
   const active = sprints.find((sprint) => sprintState(sprint)?.toLowerCase() === 'active')

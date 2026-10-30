@@ -27,10 +27,11 @@ import type {
   SkillShareResolvedOperation
 } from '../../shared/skill-sharing-contract'
 import type {
-  SkillFreshnessInventory,
-  SkillUpdateRun,
-  SkillUpdateStartResult
-} from '../../shared/skill-freshness'
+  BundledSkillExecuteRequest,
+  BundledSkillInstallResult,
+  BundledSkillPlan,
+  BundledSkillPlanRequest
+} from '../../shared/bundled-skill-plan'
 
 import type {
   SkillDeletePlan,
@@ -40,13 +41,12 @@ import type {
 
 export type SkillsApi = {
   discover: (target?: SkillDiscoveryTarget) => Promise<SkillDiscoveryResult>
-  freshnessInventory: () => Promise<SkillFreshnessInventory>
-  startUpdateRun: (names: string[]) => Promise<SkillUpdateStartResult>
-  cancelUpdateRun: () => Promise<void>
-  acknowledgeUpdateRun: () => Promise<void>
-  getUpdateRun: () => Promise<SkillUpdateRun>
+  /** This machine's plan for Orca's installed skills; paired hosts plan over RPC. */
+  bundledPlan: (request?: BundledSkillPlanRequest) => Promise<BundledSkillPlan>
+  bundledExecute: (request: BundledSkillExecuteRequest) => Promise<BundledSkillInstallResult>
   prepareShare: (input: {
     skillIds: string[]
+    skillDirectories?: string[]
     bundleName: string
     target?: SkillDiscoveryTarget
     packageId?: string
@@ -71,9 +71,7 @@ export type SkillsApi = {
     input: SkillBundleInstallPreviewInput
   ) => Promise<SkillBundleInstallPreviewOperation>
   removeInstall: (input: SkillRemoveInput) => Promise<SkillRemoveOperation>
-  /** Whether the host answering `previewDelete`/`delete` supports them. Always
-   *  true on desktop; on web the "local" host is a remote server that updates
-   *  independently and may predate the capability. */
+  /** Always true on desktop; web clients may use a server predating skill deletion. */
   deleteSupported: () => Promise<boolean>
   previewDelete: (request: SkillDeleteRequest) => Promise<SkillDeletePlan>
   delete: (request: SkillDeleteRequest) => Promise<SkillDeleteResult>
@@ -81,13 +79,8 @@ export type SkillsApi = {
   getPackage: (packageId: string) => Promise<SkillCloudOperation<SkillCloudPackageDetails>>
   listOwnedShares: () => Promise<SkillCloudOperation<SkillCloudOwnedShare[]>>
   revokeShare: (shareId: string) => Promise<SkillCloudOperation<void>>
-  deletePackageVersion: (input: {
-    packageId: string
-    versionId: string
-  }) => Promise<SkillCloudOperation<void>>
   deletePackage: (packageId: string) => Promise<SkillCloudOperation<void>>
   listWslDistros: (environmentId?: string) => Promise<string[]>
   onInstallProgress: (callback: (progress: SkillInstallProgress) => void) => () => void
   onShareProgress: (callback: (progress: SkillShareProgress) => void) => () => void
-  onUpdateRun: (callback: (run: SkillUpdateRun) => void) => () => void
 }

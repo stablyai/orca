@@ -40,16 +40,13 @@ export function SetProjectLocationDialog({
   onReady
 }: SetProjectLocationDialogProps): React.JSX.Element {
   const open = option !== null
-  // Why: keep the last option rendered through the close animation, so the body
-  // doesn't blank out as the dialog slides away.
+  // Keep the last body through the close animation to avoid blanking it mid-exit.
   const [renderOption, setRenderOption] = useState(option)
   if (option !== null && option !== renderOption) {
     setRenderOption(option)
   }
   const activeOption = option ?? renderOption
-  // Why: Radix dismisses on Escape from a document-capture listener, so the host
-  // browser can never intercept it itself. The body parks a back-out here so
-  // Escape steps out of the browser instead of discarding the half-filled form.
+  // Radix captures document Escape first; delegate browser back-out here so the form survives leaving the browser.
   const exitHostBrowser = useRef<(() => boolean) | null>(null)
 
   return (
@@ -111,25 +108,19 @@ function SetProjectLocationDialogBody({
   const [cloneUrl, setCloneUrl] = useState(defaultCloneUrl)
   const [cloneDestination, setCloneDestination] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
-  // Why: an SSH clone is unbounded and the dialog stays dismissable while it
-  // runs. Without this, a clone the user backed out of minutes ago still fires
-  // onReady, silently moving the run target (and resetting start-from) under a
-  // form they have since pointed at another host.
+  // Clones may finish long after dismissal; do not retarget a composer the user has since moved to another host.
   const abandoned = useRef(false)
   useEffect(() => {
-    // Re-armed on mount: StrictMode runs mount/cleanup/mount, and latching this
-    // on the first cleanup would disable the success path for the whole session.
+    // Reset on mount because StrictMode’s setup/cleanup/setup would otherwise permanently abandon this dialog.
     abandoned.current = false
     return () => {
       abandoned.current = true
     }
   }, [])
   const parsedHost = parseExecutionHostId(option.hostId)
-  // Remote hosts browse in-dialog; the local host gets the native folder picker.
   const remoteHost =
     parsedHost?.kind === 'ssh' || parsedHost?.kind === 'runtime' ? parsedHost : null
   const canClone = projectKind === 'git'
-  // Both views browse for a path; this is the field each one writes back to.
   const pathFields: Record<BrowseField, { value: string; set: (path: string) => void }> = {
     existing: { value: setupPath, set: setSetupPath },
     clone: { value: cloneDestination, set: setCloneDestination }

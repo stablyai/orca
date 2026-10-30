@@ -33,8 +33,7 @@ function metadataFor(endpoint: string): RuntimeMetadata {
     pid: process.pid,
     transports: [
       { kind: process.platform === 'win32' ? 'named-pipe' : 'unix', endpoint },
-      // Why: the websocket entry must not be picked — it is reachable from
-      // anywhere on the network and proves nothing about this profile's owner.
+      // Network reachability does not prove ownership of this local profile.
       { kind: 'websocket', endpoint: 'ws://127.0.0.1:1' }
     ],
     authToken: 'token',
@@ -51,8 +50,6 @@ function nextEndpoint(): string {
 
 describe('probeRuntimeListener', () => {
   it('accepts a runtime that is listening but silent', async () => {
-    // Why: this is the case the pid could never distinguish — the owner is alive
-    // and holding the profile, it just has not answered RPC yet.
     const endpoint = nextEndpoint()
     const server = createServer((socket) => {
       sockets.add(socket)
@@ -65,16 +62,13 @@ describe('probeRuntimeListener', () => {
   })
 
   it('frees a profile whose endpoint was never bound', async () => {
-    // Why: a runtime unlinks its socket on shutdown. Reading that as an owner is
-    // what makes a stale profile refuse serve forever.
     await expect(probeRuntimeListener(metadataFor(nextEndpoint()))).resolves.toBe('not-listening')
   })
 
   it.skipIf(process.platform === 'win32')(
     'frees a profile whose owner was killed with its socket file still on disk',
     async () => {
-      // Why: this is the STA-4336 crash shape — SIGKILL skips the unlink, so the path
-      // survives and only its refusal distinguishes it from a live owner.
+      // SIGKILL leaves the socket path behind; connection refusal proves absence.
       const endpoint = nextEndpoint()
       const child = spawn(process.execPath, [
         '-e',
@@ -91,9 +85,7 @@ describe('probeRuntimeListener', () => {
   it.skipIf(process.platform === 'win32')(
     'refuses to call a profile free when the endpoint could not be reached at all',
     async () => {
-      // Why: only ENOENT/ECONNREFUSED disown an endpoint. Anything else — here an
-      // unreadable directory — leaves an owner possible, and guessing "free" is
-      // what spawns the second main that aborts pre-JS.
+      // Permission errors cannot prove the profile is free for another Electron main.
       const dir = join(mkdtempSync(join(tmpdir(), 'orca-probe-')), 'locked')
       mkdirSync(dir)
       chmodSync(dir, 0o000)
@@ -106,9 +98,7 @@ describe('probeRuntimeListener', () => {
   )
 
   it('refuses to call a profile free when a connect neither lands nor is refused', async () => {
-    // Why: the cap keeps this off the launch path's critical time, but a connect that
-    // ran out of time proved nothing. Fake timers fire the cap before the real connect
-    // can settle, which is the only way to reach that branch deterministically.
+    // Fake timers expire the probe before a real connection can settle.
     vi.useFakeTimers()
     try {
       const probe = probeRuntimeListener(metadataFor(nextEndpoint()))
@@ -125,12 +115,9 @@ describe('probeRuntimeListener', () => {
     ['a blank endpoint', '   '],
     ['a numeric endpoint', 42]
   ])('frees a profile whose metadata carries %s instead of dialling it', async (_label, value) => {
-    // Why: the metadata file is unvalidated JSON. A missing or blank endpoint throws
-    // out of createConnection and would fail serve outright, and a number is read as a
-    // TCP port — 127.0.0.1:42 could be answered by something that is not Orca at all.
+    // Invalid endpoints can throw or dial an unrelated numeric TCP port.
     const metadata = metadataFor(nextEndpoint())
     const transport = { ...metadata.transports[0]! }
-    // The file on disk is untyped JSON, so the probe must survive a non-string endpoint.
     Object.assign(transport, { endpoint: value })
 
     await expect(probeRuntimeListener({ ...metadata, transports: [transport] })).resolves.toBe(

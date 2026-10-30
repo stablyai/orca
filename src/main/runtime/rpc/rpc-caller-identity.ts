@@ -1,35 +1,26 @@
-/**
- * Who is calling, as the host's own transport established it.
- *
- * One identity per caller, stamped by the dispatcher from what the connection proved — the runtime
- * socket, the desktop's IPC channel, or a paired device's authenticated socket — and never read
- * from request params, so a caller cannot claim to be another. Durable per-caller state (the launch
- * ledger's namespace) and per-caller behaviour (whose view a launch moves) both read this.
- */
+/** Transport-proven identity, never request params, controls durable ledger namespaces and whose view a launch moves. */
 
 import type { RpcDispatchStreamingOptions } from './dispatcher-stream-options'
 
 export type RpcCallerIdentity =
   /** The `orca` CLI over the runtime socket, and the in-process bridges that relay it. */
   | { kind: 'local-cli' }
-  /** This host's own desktop app over IPC. One identity for every window, so a reload or an app
-   *  restart still names the same caller. */
+  /** All local IPC windows share identity across reload and app restart. */
   | { kind: 'desktop' }
   /** A paired phone or remote desktop, by its device subject, which survives credential rotation. */
   | { kind: 'paired-device'; deviceId: string }
 
 export const DESKTOP_RPC_CALLER: RpcCallerIdentity = { kind: 'desktop' }
+/** Stamped by the owner-token runtime socket, which only the local `orca` CLI holds. */
+export const LOCAL_CLI_RPC_CALLER: RpcCallerIdentity = { kind: 'local-cli' }
 
-/**
- * A transport that names its caller is believed; one that declares no client at all is the
- * in-process runtime socket, trusted as it always was; one that declares a client it cannot name has
- * no identity, and anything that needs one refuses it.
- *
- * Temporary: "no declared client" means the local CLI, so the SSH remote CLI bridge and browser
- * automation share its namespace, and a new transport that forgets to stamp its caller inherits it.
- * Before plugins ship (plan §4) the runtime socket stamps `local-cli` itself and no stamp means no
- * identity.
- */
+/** The orca CLI agents run, locally or forwarded from a remote host; relayed devices are people. */
+export function isAgentRpcCaller(caller: RpcCallerIdentity | undefined): boolean {
+  return caller?.kind === 'local-cli'
+}
+
+/** Trust explicit transport identity; unnamed declared clients have none. Temporarily, no declared client means local CLI.
+ * The runtime socket stamps local-cli explicitly; plugin approval never trusts identity alone (it needs the approve fingerprint). */
 export function resolveRpcCallerIdentity(
   transport:
     | Pick<RpcDispatchStreamingOptions, 'caller' | 'clientKind' | 'pairedDeviceId'>
@@ -45,11 +36,7 @@ export function resolveRpcCallerIdentity(
   return transport?.clientKind === undefined ? { kind: 'local-cli' } : undefined
 }
 
-/**
- * The caller's namespace in the durable operation ledger. Rows outlive the process, so these strings
- * are permanent: the CLI and paired-device keys are the ones rows were written under before this
- * identity existed.
- */
+/** Permanent durable-ledger keys: existing CLI and device rows must remain addressable across versions. */
 export function rpcCallerOperationKey(caller: RpcCallerIdentity): string {
   switch (caller.kind) {
     case 'local-cli':

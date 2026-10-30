@@ -1,7 +1,7 @@
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
   AGENT_SESSION_JOURNAL_SCHEMA_VERSION
@@ -14,13 +14,16 @@ import type {
 import {
   REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES,
   serializeRemoteRuntimePayload
-} from '../../../shared/remote-runtime-memory-limits'
+} from '../../../shared/remote-runtime/remote-runtime-memory-limits'
 import type { JournalRow } from '../agent-session-journal/journal-row-schema'
 import {
   createTrackedJournalOpener,
   openTestJournalHostDatabase,
   insertTestJournalRow
 } from '../agent-session-journal/journal-host-database-test-support'
+import * as journalReducer from '../agent-session-journal/journal-reducer'
+import { StructuredAgentSessionCurrentWork } from './structured-agent-session-current-work'
+import { StructuredAgentSessionJournalProjections } from './structured-agent-session-status-journal-projection'
 import { StructuredAgentSessionStatusFeed } from './structured-agent-session-status-feed'
 import { MAX_RETAINED_SESSION_ACTIVITIES } from './structured-agent-session-activity-retention'
 import { AgentSessionSubscribers } from './structured-agent-session-subscribers'
@@ -45,6 +48,82 @@ afterEach(async () => {
 })
 
 describe('AgentSessionSubscribers', () => {
+  it('renders history once per source for N/10N items and one/three readers', async () => {
+    const render = vi.spyOn(journalReducer, 'renderJournalState')
+    try {
+      for (const size of [100, 1000]) {
+        for (const readers of [1, 3]) {
+          const journal = await journals.open({
+            identity: {
+              sessionId: SESSION,
+              workspaceId: 'workspace-1',
+              hostId: 'local',
+              agent: 'codex',
+              providerHandle: codexProviderHandle('thread-1')
+            },
+            stateDirectory: join(root, `${size}-${readers}`)
+          })
+          const options = { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+          const identity = (ordinal: number) => ({
+            provider: 'codex' as const,
+            threadId: 'thread-1',
+            turnId: 'turn',
+            ordinal
+          })
+          const body = (text: string) => ({
+            kind: 'message' as const,
+            role: 'assistant' as const,
+            blocks: [{ type: 'text' as const, text }]
+          })
+          for (let index = 0; index < size; index++) {
+            await journal.appendItem(identity(index), body('initial'), options)
+          }
+          const projections = new StructuredAgentSessionJournalProjections()
+          const events: AgentSessionSubscribeEvent[] = []
+          const subscribers = new AgentSessionSubscribers({
+            readCurrentWork: () => new StructuredAgentSessionCurrentWork(journal, 1, 0),
+            onJournalPublished: () => {
+              projections.read(journal, null)
+            }
+          })
+          for (let index = 0; index < readers; index++) {
+            subscribers.open({
+              id: String(index),
+              sessionId: SESSION,
+              journal,
+              fence: 1,
+              boundedFrames: index === 1,
+              emit: (event) => events.push(event)
+            })
+          }
+          subscribers.publish(SESSION, journal)
+          for (const text of ['streamed', 'newer']) {
+            const prior = journal.snapshot()
+            await journal.appendItem(identity(size - 1), body(text), options)
+            render.mockClear()
+            events.length = 0
+            subscribers.publish(SESSION, journal)
+            expect(render).toHaveBeenCalledTimes(1)
+            const current = journal.snapshot()
+            expect(current).not.toBe(prior)
+            expect(current.items).toHaveLength(size)
+            expect(current.items.at(-1)?.body).toEqual(body(text))
+            expect(journal.publicRead().snapshot).toBe(current)
+            expect(events.filter((event) => event.type === 'batch')).toHaveLength(2 * readers)
+            expect(
+              events
+                .flatMap((event) => (event.type === 'batch' ? event.batch.items : []))
+                .map((item) => item.body)
+            ).toEqual(Array.from({ length: readers }, () => body(text)))
+            expect(render).toHaveBeenCalledTimes(1)
+          }
+        }
+      }
+    } finally {
+      render.mockRestore()
+    }
+  })
+
   it('bounds retained turn activity across session churn', async () => {
     const journal = await journals.open({
       identity: {
@@ -226,9 +305,7 @@ describe('AgentSessionSubscribers', () => {
   })
 
   it('settles a session nobody is reading, from running to idle', async () => {
-    // The defect this whole feed exists for: status used to come from a transcript reader, so a
-    // session with no open pane had no reader and froze on whatever it last said. Nothing here
-    // ever calls `subscribers.open`.
+    // Never open a subscriber: status must publish independently of transcript readers.
     const journal = await journals.open({
       identity: {
         sessionId: SESSION,
@@ -258,7 +335,7 @@ describe('AgentSessionSubscribers', () => {
           }
         ]
       ]),
-      getRecord: () => null,
+      getConversation: () => null,
       now: () => 1_000
     })
     const subscribers = new AgentSessionSubscribers({
@@ -407,8 +484,7 @@ describe('AgentSessionSubscribers', () => {
       },
       stateDirectory: journalDir
     })
-    // A row admitted before identity bounding: its removal id alone exceeds
-    // the outbound cap, so no catch-up batch can ever carry it.
+    // A legacy removal ID exceeds the outbound cap alone, making catch-up impossible.
     const hugeItemId = `codex:thread-1:${'h'.repeat(5 * 1024 * 1024)}:1`
     const resumeCursor = seeded.cursor()
     const seq = resumeCursor.sequence
@@ -435,8 +511,7 @@ describe('AgentSessionSubscribers', () => {
         ts: 2_001
       }
     ]
-    // Staged straight into the session database, exactly as a previous writer
-    // would have committed them.
+    // Direct writes model legacy persisted rows.
     await seeded.close()
     const opened = openTestJournalHostDatabase(journalDir)
     try {
@@ -470,7 +545,6 @@ describe('AgentSessionSubscribers', () => {
       emit: (event) => events.push(event)
     })
 
-    // Every event a remote subscriber receives must fit the outbound channel.
     for (const event of events) {
       expect(Buffer.byteLength(serializeRemoteRuntimePayload(event), 'utf8')).toBeLessThanOrEqual(
         REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES
@@ -479,8 +553,7 @@ describe('AgentSessionSubscribers', () => {
     const reset = events.find((event) => event.type === 'reset')
     expect(reset).toBeDefined()
 
-    // Forward progress: the reset advanced the subscriber past the unsendable
-    // row, so the next publish has nothing stale to re-deliver.
+    // Reset must advance past the unsendable row so later publications make progress.
     const settled = events.length
     subscribers.publish(SESSION, journal)
     expect(events.slice(settled).filter((event) => event.type === 'reset')).toEqual([])

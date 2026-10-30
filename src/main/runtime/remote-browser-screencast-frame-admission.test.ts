@@ -3,7 +3,7 @@ import { EventEmitter } from 'node:events'
 import { describe, expect, it, vi } from 'vitest'
 
 import { deriveSharedKey, encrypt, generateKeyPair } from '../../shared/e2ee-crypto'
-import { REMOTE_RUNTIME_MAX_OUTBOUND_BINARY_FRAME_BYTES } from '../../shared/remote-runtime-memory-limits'
+import { REMOTE_RUNTIME_MAX_OUTBOUND_BINARY_FRAME_BYTES } from '../../shared/remote-runtime/remote-runtime-memory-limits'
 import { startBrowserScreencast } from '../browser/browser-screencast-stream'
 import { E2EEChannel } from './rpc/e2ee-channel'
 import { sendRemoteBrowserScreencastFrame } from './remote-browser-screencast-frame-admission'
@@ -28,8 +28,7 @@ function createMockWebContents() {
   return { isDestroyed: vi.fn(() => false), debugger: dbg }
 }
 
-// Why: exercises the real E2EE channel so the oracle fails if an over-limit frame ever reaches
-// the transport that answers it with close code 1013.
+// Use real E2EE admission to catch oversized frames before they close the transport with 1013.
 function createRuntimeBinarySender() {
   const serverKeys = generateKeyPair()
   const clientKeys = generateKeyPair()

@@ -1,4 +1,8 @@
 import { toast } from 'sonner'
+import {
+  parseRoutableExecutionHostId,
+  type ExecutionHostId
+} from '../../../../shared/execution-host'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import type { AiVaultSession } from '../../../../shared/ai-vault-types'
@@ -15,7 +19,7 @@ import { activateAndRevealWorkspace } from '@/lib/worktree-activation'
 import {
   beginStructuredAgentSessionProvisionalLaunch,
   structuredLaunchOwner
-} from '@/lib/structured-agent-session-provisional-tab'
+} from '@/lib/agent-session/structured-agent-session-provisional-tab'
 import { admitStructuredLaunchOnHost } from '@/lib/structured-agent-session-host-admission'
 import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
 import { cliConversationExitGuidance } from '@/lib/cli-conversation-exit-guidance'
@@ -31,19 +35,21 @@ export type AiVaultChatReplacement = {
   afterTabId: string
   /** Told the new tab's id once it opens. */
   focusIntent: NativeChatComposerFocusIntent
-  /** Called exactly once; null when no launch began. True: it accounted for a failure itself,
-   *  so no failure toast. */
+  /** Called once; null means no launch began. Return true to suppress the already-handled failure toast. */
   onSettled: (settlement: StructuredAgentLaunchSettlement | null) => boolean
 }
 
-export function activateAiVaultResumeWorkspace(workspaceId: string): boolean {
-  return activateAndRevealWorkspace(workspaceId) !== false
+export function activateAiVaultResumeWorkspace(
+  workspaceId: string,
+  executionHostId?: ExecutionHostId
+): boolean {
+  return (
+    activateAndRevealWorkspace(workspaceId, executionHostId ? { executionHostId } : undefined) !==
+    false
+  )
 }
 
-/** Adopt a vault conversation into a new structured chat. The route was decided by the
- *  eligibility gate that showed this action, so it re-enters as a verdict. No legacy fallback:
- *  resume has no terminal equivalent short of the resume command, and switching surface silently
- *  would hide the refusal the user needs to see. */
+/** Adopt through the eligibility verdict; silent terminal fallback would hide actionable refusals. */
 export async function resumeAiVaultSessionInNewChat(
   session: AiVaultSession,
   rowAgent: CliConversationRowAgent,
@@ -52,17 +58,27 @@ export async function resumeAiVaultSessionInNewChat(
   replacing?: AiVaultChatReplacement
 ): Promise<void> {
   try {
-    // Codex rows can live under a shared legacy home; the same preparation the terminal resume
-    // runs re-pins them, and its result is what names the conversation the host will look for.
+    const recordingHost = parseRoutableExecutionHostId(session.executionHostId)
+    const workspaceOwner = structuredLaunchOwner({ route: 'structured-native-chat' }, worktreeId)
+    if (
+      !recordingHost ||
+      recordingHost.kind === 'ssh' ||
+      workspaceOwner?.executionHostId !== recordingHost.id
+    ) {
+      throw new Error('The conversation workspace is no longer on its recording host.')
+    }
+    const executionHostId = recordingHost.id
+    // Reuse terminal preparation to repin Codex rows from legacy shared homes before host lookup.
     const [preparedSession, agent] = await Promise.all([
       prepareAiVaultSessionForResume(session),
-      adoptingAgentOnHost(rowAgent, worktreeId)
+      adoptingAgentOnHost(rowAgent, worktreeId, executionHostId)
     ])
     const plan = adoptAgentSessionLaunchVerdict({
       route: 'structured-native-chat',
       requestId,
       agent,
       worktreeId,
+      executionHostId,
       resumeFrom: { providerSessionId: preparedSession.sessionId }
     })
     const selection = useAppStore.getState()
@@ -76,8 +92,12 @@ export async function resumeAiVaultSessionInNewChat(
       beforeOpen: waitForCreate
         ? undefined
         : () => {
-            if (useAppStore.getState().activeWorktreeId !== worktreeId) {
-              return activateAiVaultResumeWorkspace(worktreeId)
+            if (
+              useAppStore.getState().activeWorktreeId !== worktreeId ||
+              structuredLaunchOwner({ route: 'structured-native-chat' }, worktreeId)
+                ?.executionHostId !== executionHostId
+            ) {
+              return activateAiVaultResumeWorkspace(worktreeId, executionHostId)
             }
             return true
           }
@@ -100,7 +120,7 @@ export async function resumeAiVaultSessionInNewChat(
         resolveWebSessionVisibleTabId(state, selection.activeWorktreeId ?? '') ===
           resolveWebSessionVisibleTabId(selection, selection.activeWorktreeId ?? '')
       ) {
-        activateAiVaultResumeWorkspace(worktreeId)
+        activateAiVaultResumeWorkspace(worktreeId, executionHostId)
       }
       const handled = replacing?.onSettled(settlement) === true
       if (settlement.kind === 'failed' && !settlement.notified && !handled) {
@@ -113,14 +133,17 @@ export async function resumeAiVaultSessionInNewChat(
   }
 }
 
-/** The first chat the worktree's host does not refuse to take the row over, trying them in order.
- *  A host that cannot answer yet keeps the chat it was asked about, whose own launch reports it. */
+/** Try chats until one is not refused; an unreachable host keeps the requested chat so its launch reports the error. */
 export async function adoptingAgentOnHost(
   rowAgent: CliConversationRowAgent,
-  worktreeId: string
+  worktreeId: string,
+  executionHostId?: ExecutionHostId
 ): Promise<TuiAgent> {
   const [first, ...rest] = CLI_CONVERSATION_ADOPTING_AGENTS[rowAgent]
-  const owner = structuredLaunchOwner({ route: 'structured-native-chat' }, worktreeId)
+  const owner = structuredLaunchOwner(
+    { route: 'structured-native-chat', ...(executionHostId ? { executionHostId } : {}) },
+    worktreeId
+  )
   const selector = toRuntimeWorktreeSelector(worktreeId)
   let agent: TuiAgent = first
   for (const next of rest) {
@@ -135,9 +158,7 @@ export async function adoptingAgentOnHost(
   return agent
 }
 
-/** The host refuses an adoption whose conversation another chat already holds, and refuses one it
- *  cannot find under any account home it recognises. Both are actionable, and neither is the
- *  generic "could not prepare" the terminal resume reports. */
+/** Ownership conflicts and missing account-home conversations need actionable errors, not generic terminal preparation failures. */
 function notifyAiVaultSessionResumeInChatFailure(
   error: unknown,
   rowAgent: CliConversationRowAgent

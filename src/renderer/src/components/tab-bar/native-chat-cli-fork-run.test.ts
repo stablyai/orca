@@ -1,5 +1,6 @@
 import { beforeEach, expect, it, vi } from 'vitest'
 import { runNativeChatCliFork } from './native-chat-cli-fork-run'
+import type * as LaunchFeedback from '../right-sidebar/ai-vault-session-launch-feedback'
 import type {
   NativeChatCliForkPreparation,
   NativeChatCliForkSubject
@@ -34,10 +35,10 @@ vi.mock('@/store', () => ({
   }
 }))
 vi.mock('./tab-session-history-switch', () => ({
-  resolveTabSessionHistorySubject: () => ({
-    kind: 'chat',
-    request: { executionHostScope: mocks.host }
-  })
+  resolveNativeChatCliForkIdentity: () => ({ executionHostScope: mocks.host }),
+  resolveTabSessionHistorySubject: () => {
+    throw new Error('History projection in currentness')
+  }
 }))
 vi.mock('@/lib/native-chat-cli-fork-preparation', () => ({
   prepareNativeChatCliFork: mocks.prepare
@@ -52,10 +53,10 @@ vi.mock('../right-sidebar/ai-vault-session-resume-in-chat-launch', () => ({
 }))
 vi.mock('sonner', () => ({ toast: { error: mocks.error } }))
 vi.mock('@/lib/launch-ai-vault-session', () => ({ launchAiVaultSessionInNewTab: mocks.launch }))
-vi.mock('../right-sidebar/ai-vault-session-launch-feedback', () => ({
-  notifyAiVaultSessionQueued: mocks.notify,
-  notifyAiVaultSessionPreparationFailure: mocks.error
-}))
+vi.mock('../right-sidebar/ai-vault-session-launch-feedback', async (importOriginal) => {
+  const actual = await importOriginal<typeof LaunchFeedback>()
+  return { ...actual, notifyAiVaultSessionQueued: mocks.notify }
+})
 
 const subject: NativeChatCliForkSubject = {
   kind: 'chat',
@@ -93,6 +94,8 @@ it('shares pending across menu openings and suppresses dispatch after source ret
   const first = runNativeChatCliFork(args)
   await runNativeChatCliFork(args)
   expect(mocks.prepare).toHaveBeenCalledTimes(1)
+  mocks.listeners.forEach((listener) => listener())
+  expect(mocks.error).not.toHaveBeenCalled()
   closeSource()
   settle(prepared)
   await first
@@ -149,3 +152,53 @@ it('reveals the successful source workspace after another workspace was selected
   expect(mocks.notify).not.toHaveBeenCalled()
   expect(mocks.error).toHaveBeenCalledTimes(1)
 })
+
+it.each([
+  {
+    agent: 'claude' as const,
+    message: 'execution_owner_reconciling',
+    expected: 'Orca could not prepare this Claude conversation. Start a new chat to continue.'
+  },
+  {
+    agent: 'codex' as const,
+    message:
+      "Error invoking remote method 'aiVault:prepareSessionResume': Error: execution_owner_reconciling",
+    expected: 'Orca could not prepare this Codex conversation. Start a new chat to continue.'
+  },
+  {
+    agent: 'claude' as const,
+    message: 'agent_session_conflict',
+    expected: 'Update Orca on the host that runs this chat to resume it in a new CLI.'
+  },
+  {
+    agent: 'codex' as const,
+    message:
+      "Error invoking remote method 'aiVault:prepareSessionResume': Error: agent_session_ownership_unknown",
+    expected: 'Update Orca on the host that runs this chat to resume it in a new CLI.'
+  },
+  {
+    agent: 'claude' as const,
+    message: 'The session host is unavailable. Reconnect it and retry resume.',
+    expected: 'The session host is unavailable. Reconnect it and retry resume.'
+  }
+])(
+  'shows actionable $agent preparation feedback for $message and releases pending',
+  async ({ agent, message, expected }) => {
+    const onComplete = vi.fn()
+    mocks.prepare.mockRejectedValue(new Error(message))
+    await runNativeChatCliFork({ ...args, agent, onComplete })
+    expect(mocks.error).toHaveBeenCalledExactlyOnceWith(expected)
+    expect(mocks.launch).not.toHaveBeenCalled()
+    expect(mocks.notify).not.toHaveBeenCalled()
+    expect(mocks.activate).not.toHaveBeenCalled()
+    expect(onComplete).toHaveBeenCalledTimes(1)
+    expect(mocks.listeners.size).toBe(0)
+
+    await runNativeChatCliFork({ ...args, agent, onComplete })
+    expect(mocks.prepare).toHaveBeenCalledTimes(2)
+    expect(mocks.error.mock.calls).toEqual([[expected], [expected]])
+    expect(mocks.launch).not.toHaveBeenCalled()
+    expect(onComplete).toHaveBeenCalledTimes(2)
+    expect(mocks.listeners.size).toBe(0)
+  }
+)

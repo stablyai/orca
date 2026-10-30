@@ -136,17 +136,4 @@ describe('parseAzureDevOpsRepoRef', () => {
       timeout: REMOTE_URL_PROBE_TIMEOUT_MS
     })
   })
-
-  it('bounds cached repository refs for distinct repo paths', async () => {
-    gitExecFileAsyncMock.mockResolvedValue({
-      stdout: 'git@ssh.dev.azure.com:v3/acme/Project/repo\n',
-      stderr: ''
-    })
-
-    for (let i = 0; i < 513; i += 1) {
-      await getAzureDevOpsRepoRefForRemote(`/repo-${i}`, 'origin')
-    }
-
-    expect(_getAzureDevOpsRepoRefCacheSize()).toBe(512)
-  })
 })

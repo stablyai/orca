@@ -1,9 +1,4 @@
-// Persists the reusable portion of the AI Vault session parse cache, one SQLite
-// row per transcript, so a fresh launch reuses prior parse work instead of
-// re-reading the whole transcript corpus (issue #9210: 6.7 GB / 109 s cold
-// scans). The in-memory map is the hot tier; the database is read on a miss and
-// written only with what changed. Only the scanner child opens it, and every
-// failure degrades to a re-parse.
+// Scanner-owned SQLite rows back the hot cache; failures fall back to transcript parsing (#9210).
 import { stat } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { setImmediate as yieldToEventLoop } from 'node:timers/promises'
@@ -22,14 +17,11 @@ import {
 const WRITE_DEBOUNCE_MS = 1_500
 const WRITE_MAX_WAIT_MS = 15_000
 const WRITE_CHUNK_ROWS = 500
-// How long a row goes unparsed before its transcript is checked for on disk.
-// Only a missing transcript ends a row, so time away never empties the cache.
+// Recheck inactive native rows for missing transcripts; inactivity alone does not evict them.
 const RECHECK_AFTER_MS = 30 * 24 * 60 * 60_000
-// Per helper start; it restarts often enough to work through a large backlog.
+// Bound cleanup work per scanner start.
 const RECHECK_BATCH_ROWS = 1_000
-// WSL transcripts (`\\wsl.localhost\…`, `\\wsl$\…`) are never stat-checked here:
-// that could boot a stopped distro or hang on a stuck one outside the scanner's
-// running-distro filter. Their rows age out instead, after half a year unparsed.
+// Never stat WSL rows: stopped distros can boot or hang; expire unused rows after 180 days instead.
 const WSL_PATH_GLOB = '[\\/][\\/][wW][sS][lL][.$]*'
 const WSL_EXPIRE_AFTER_MS = 180 * 24 * 60 * 60_000
 const SQLITE_SESSION_AGENTS = ['opencode', 'opencode2', 'zcode'] as const
@@ -42,21 +34,21 @@ export type SessionParseCachePersistenceOptions = {
 
 let options: SessionParseCachePersistenceOptions | null = null
 let owner = false
-// undefined: not opened yet; null: unavailable for this process's life.
+// Undefined is unopened; null disables persistence for this process.
 let database: SessionParseCacheDatabase | null | undefined
 const pendingWrites = new Map<string, PersistedSessionParseCacheEntry>()
 const pendingScopeCwds = new Map<string, SessionScopeCwdStamp>()
 let writeTimer: NodeJS.Timeout | null = null
 let pendingSince: number | null = null
 
-/** Electron main records where the cache lives for the scanner child it spawns; it never opens it. */
+/** Main passes cache options to the scanner child without opening the database. */
 export function configureSessionParseCachePersistence(
   next: SessionParseCachePersistenceOptions
 ): void {
   options = { ...next }
 }
 
-/** The scanner child's half: lookups read through to the database and changes are written back. */
+/** Only the scanner child owns database read-through and write-back. */
 export function initSessionParseCachePersistence(next: SessionParseCachePersistenceOptions): void {
   configureSessionParseCachePersistence(next)
   owner = true
@@ -84,28 +76,18 @@ export function resetSessionParseCachePersistenceForTests(): void {
   setSessionParseCacheColdTier(null)
 }
 
-/** Write every queued row now, before process exit. Each committed chunk survives a kill. */
+/** Flush queued chunks before exit instead of waiting for debounce. */
 export async function flushSessionParseCachePersist(): Promise<void> {
   clearWriteTimer()
   while (pendingWrites.size > 0) {
-    const chunk: [string, PersistedSessionParseCacheEntry][] = []
-    for (const row of pendingWrites) {
-      chunk.push(row)
-      pendingWrites.delete(row[0])
-      if (chunk.length === WRITE_CHUNK_ROWS) {
-        break
-      }
-    }
+    const chunk = takeWriteChunk(pendingWrites)
     openedDatabase()?.write(chunk, Date.now())
     if (pendingWrites.size > 0) {
       await yieldToEventLoop()
     }
   }
   while (pendingScopeCwds.size > 0) {
-    const chunk = [...pendingScopeCwds].slice(0, WRITE_CHUNK_ROWS)
-    for (const [path] of chunk) {
-      pendingScopeCwds.delete(path)
-    }
+    const chunk = takeWriteChunk(pendingScopeCwds)
     openedDatabase()?.writeScopeCwds(chunk, Date.now())
     if (pendingScopeCwds.size > 0) {
       await yieldToEventLoop()
@@ -113,7 +95,18 @@ export async function flushSessionParseCachePersist(): Promise<void> {
   }
 }
 
-// Opened on first need, so Electron main (which never looks rows up) never opens it.
+function takeWriteChunk<T>(pending: Map<string, T>): [string, T][] {
+  const chunk: [string, T][] = []
+  for (const row of pending) {
+    chunk.push(row)
+    pending.delete(row[0])
+    if (chunk.length === WRITE_CHUNK_ROWS) {
+      break
+    }
+  }
+  return chunk
+}
+
 function openedDatabase(): SessionParseCacheDatabase | null {
   if (database !== undefined || !owner || options === null) {
     return database ?? null
@@ -131,8 +124,7 @@ function openedDatabase(): SessionParseCacheDatabase | null {
   return database
 }
 
-// A row for a transcript deleted outside Orca is never looked up again, so the
-// file system, not a timer, decides when it ends.
+// Native expiry needs filesystem absence; WSL rows instead use age to avoid probing distros.
 async function dropRowsForMissingTranscripts(db: SessionParseCacheDatabase): Promise<void> {
   let dropped = db.deleteSeenBefore(Date.now() - WSL_EXPIRE_AFTER_MS, WSL_PATH_GLOB)
   const stale = db.pathsSeenBefore(Date.now() - RECHECK_AFTER_MS, RECHECK_BATCH_ROWS, WSL_PATH_GLOB)
@@ -149,8 +141,7 @@ async function dropRowsForMissingTranscripts(db: SessionParseCacheDatabase): Pro
   }
 }
 
-// SQLite-backed sessions (OpenCode and its forks) are keyed `<db>#<id>`, so for
-// those the database file stands in for the transcript.
+// Synthetic db#session keys use the database file as the transcript for existence checks.
 async function transcriptMissing(path: string): Promise<boolean> {
   const sqliteSession = SQLITE_SESSION_AGENTS.map((agent) =>
     splitOpenCodeSqliteCandidate(path, agent)
@@ -158,7 +149,7 @@ async function transcriptMissing(path: string): Promise<boolean> {
   return (await pathMissing(path)) && (!sqliteSession || (await pathMissing(sqliteSession.dbPath)))
 }
 
-// Unreachable (a permission error, a slow mount) is not missing.
+// Permission failures and slow mounts do not prove absence.
 async function pathMissing(path: string): Promise<boolean> {
   try {
     await stat(path)
@@ -219,7 +210,7 @@ function scheduleFlush(): void {
   writeTimer.unref?.()
 }
 
-// Immediate, so a queued write or a later lookup can't bring the row back.
+// Delete immediately so queued writes and later cold lookups cannot resurrect the row.
 function deleteRow(path: string): void {
   pendingWrites.delete(path)
   pendingScopeCwds.delete(path)

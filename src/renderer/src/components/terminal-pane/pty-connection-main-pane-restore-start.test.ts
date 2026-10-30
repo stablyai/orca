@@ -1,6 +1,4 @@
-// Layout-owner build: a pane with no live terminal is started by main, never by the window. A
-// sleeping pane asks main on its first view and attaches once main binds it; a reattach that finds
-// its terminal gone asks main too, and nothing the window does starts or resumes a terminal.
+// Layout-owner main starts or resumes missing terminals; the window only asks and attaches, including after a failed reattach.
 import { bindPtyConnectionTestMocks } from './pty-connection-mocks.spec'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushAsyncTicks } from './pty-connection-test-async'
@@ -17,11 +15,13 @@ import type { StoreState } from './pty-connection-test-store-state'
 import type { TerminalPaneStart } from '@/store/terminals/terminal-state'
 import type { LayoutApplyHandlers, WindowLayoutCommand } from '@/runtime/layout-apply-send'
 import type * as LayoutApplySend from '@/runtime/layout-apply-send'
+import { LOCAL_LAYOUT_APPLY_ORIGIN } from '@/runtime/server-layout-apply-routes'
 import {
   installTerminalTestGlobals,
   restoreTerminalTestGlobals
 } from './pty-connection-test-environment'
 import { PANE_NOT_LIVE_ERROR } from '../../../../shared/pane-attach-only-view'
+import { mockPanePtyArgs } from './pty-connection-test-connect-mock-pane'
 
 vi.mock('../../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))
 
@@ -87,10 +87,7 @@ async function connectBound(
     restoredPtyIdByLeafId: { [LEAF]: 'pty-old' },
     isVisibleRef: { current: visible }
   })
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixtures implement the pane, manager and deps members connectPanePty reads.
-  const args = [createPane(1), createManager(1), deps] as unknown as Parameters<
-    typeof connectPanePty
-  >
+  const args = mockPanePtyArgs(createPane(1), createManager(1), deps)
   const connection = connectPanePty(...args)
   await flushAsyncTicks()
   return { transport, deps, connection }
@@ -99,7 +96,7 @@ async function connectBound(
 /** Main's start: the frame shows the pane starting, its reply lands, then the pane binds. */
 async function mainStartsAndBinds(ptyId: string): Promise<void> {
   setStore({ terminalPaneStartsByPaneKey: { [PANE_KEY]: { status: 'resuming' } } })
-  sent.at(-1)?.handlers.apply({})
+  sent.at(-1)?.handlers.apply({}, LOCAL_LAYOUT_APPLY_ORIGIN)
   await flushAsyncTicks()
   setStore({ ...layoutBoundTo(ptyId), terminalPaneStartsByPaneKey: {} })
   await flushAsyncTicks()

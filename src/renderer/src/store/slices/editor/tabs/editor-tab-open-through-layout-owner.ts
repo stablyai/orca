@@ -1,6 +1,4 @@
-// Editor tab opens in a layout-owner build: the window proposes the tab id and sends the open;
-// main's frame draws the tab, and only then is it selected. The open file itself is the window's
-// and is written at once. A caller acting on the tab waits with `afterPendingTab`.
+// Window writes OpenFile immediately but selects proposed tabs only after main frames draw them. Tab consumers wait via afterPendingTab.
 
 import type { Tab } from '../../../../../../shared/tab-types'
 import { createBrowserUuid } from '@/lib/browser-uuid'
@@ -34,7 +32,7 @@ type EditorTabOpen = {
 }
 
 /** What lets a reload or a second client rebuild the tab: an edit file's record, any view. */
-function editorTabContent(
+export function editorTabContent(
   file: OpenFile
 ): Pick<Extract<WindowLayoutCommand, { type: 'openEditorTab' }>, 'file' | 'view'> {
   const view = layoutEditorViewOfOpenFile(file)
@@ -67,11 +65,7 @@ function placementGroupId(
   return groups[0]?.id ?? state.ensureWorktreeRootGroup?.(worktreeId)
 }
 
-/**
- * Sends a new editor tab's open; returns the proposed tab id, or null when main is not asked (a
- * paired server owns the workspace's layout, or the window lacks the open file): the caller
- * draws it as today.
- */
+/** Return proposed tab ID; null for paired-owned layouts/missing OpenFile means caller draws directly. */
 export function openEditorTabThroughLayoutOwner(
   state: AppState,
   open: EditorTabOpen

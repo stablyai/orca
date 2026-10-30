@@ -1,8 +1,7 @@
 import { MOBILE_AGENT_SESSION_RPC_METHODS } from './runtime-rpc-mobile-agent-session-methods'
 import { PAIRED_DESKTOP_METHODS } from './runtime-rpc-mobile-paired-desktop-methods'
 
-// Why: a relaying Mac sends `execution-host` calls to the host named by the call's target (itself when
-// local) and keeps `paired-desktop` calls. A route is what allowlists a phone method.
+// Execution-host routes follow the configured target; paired-desktop routes stay with the relaying Mac. This table also defines mobile allowlisting.
 export type MobileRpcMethodRoute = 'execution-host' | 'paired-desktop'
 
 export const EXECUTION_HOST_METHODS = [
@@ -43,6 +42,7 @@ export const EXECUTION_HOST_METHODS = [
   'files.open',
   'files.openDiff',
   'files.read',
+  'files.readChatImage',
   'files.readChunk',
   'files.readDir',
   'files.readDocPreview',
@@ -66,6 +66,7 @@ export const EXECUTION_HOST_METHODS = [
   'git.commit',
   'git.commitCompare',
   'git.commitDiff',
+  'git.completeMerge',
   'git.diff',
   'git.discard',
   'git.discoverCommitMessageModels',
@@ -79,6 +80,7 @@ export const EXECUTION_HOST_METHODS = [
   'git.pull',
   'git.push',
   'git.rebaseFromBase',
+  'git.resolveConflict',
   'git.stage',
   'git.status',
   'git.unstage',
@@ -92,6 +94,7 @@ export const EXECUTION_HOST_METHODS = [
   'github.listAssignableUsers',
   'github.listLabels',
   'github.listWorkItems',
+  'github.markPRReadyForReview',
   'github.mergePR',
   'github.prCheckDetails',
   'github.prChecks',
@@ -145,7 +148,7 @@ export const EXECUTION_HOST_METHODS = [
   'nativeChat.readSession',
   'nativeChat.subscribe',
   'nativeChat.unsubscribe',
-  // Why: the phone reports a takeover out of band, the same signal the desktop renderer sends.
+  // Mobile reports takeover out of band, matching desktop renderer signaling.
   'orchestration.workerTerminalUserInput',
   'projectGroup.list',
   'repo.baseRefDefault',
@@ -156,6 +159,8 @@ export const EXECUTION_HOST_METHODS = [
   'repo.searchRefs',
   'repo.sparsePresets',
   'repo.update',
+  // The host that owns the workspace scans its skills.
+  'skills.discover',
   // SSH targets belong to the host that holds them; untargeted calls stay the Mac's own, as on the desktop.
   'ssh.connect',
   'ssh.getState',
@@ -164,6 +169,7 @@ export const EXECUTION_HOST_METHODS = [
   'ssh.listTargets',
   // A targeted status is the server's own, so a server workspace gates on what that server supports.
   'status.get',
+  'session.readTerminalScrollback',
   'session.tabs.activate',
   'session.tabs.close',
   'session.tabs.closeLifecycle',

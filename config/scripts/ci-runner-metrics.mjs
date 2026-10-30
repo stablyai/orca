@@ -1,3 +1,5 @@
+import { jobExecutions } from './ci-job-executions.mjs'
+
 const minutesBetween = (start, end) => {
   const value = (Date.parse(end) - Date.parse(start)) / 60_000
   return Number.isFinite(value) ? Math.max(0, value) : 0
@@ -42,8 +44,9 @@ export function runnerDemand(runs, samples) {
   for (const { run, jobs, weight } of samples) {
     const row = workflows.get(workflowKey(run))
     row.sampledRuns++
+    const executions = jobExecutions(jobs)
     const firstSuccess = new Map()
-    for (const job of jobs) {
+    for (const job of executions) {
       if (job.name && Number.isInteger(job.run_attempt) && job.conclusion === 'success') {
         firstSuccess.set(
           job.name,
@@ -51,7 +54,7 @@ export function runnerDemand(runs, samples) {
         )
       }
     }
-    for (const job of jobs) {
+    for (const job of executions) {
       if (!job.runner_name || !job.started_at) {
         continue
       }

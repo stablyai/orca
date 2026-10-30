@@ -11,7 +11,7 @@ import {
 import {
   _resetHiddenRendererPtyDeliveryGateForTest,
   markHiddenRendererPty
-} from '../ipc/pty-hidden-delivery-gate'
+} from '../ipc/pty/delivery/pty-hidden-delivery-gate'
 
 const ALL_ON = {
   terminalMainSideEffectAuthority: true,

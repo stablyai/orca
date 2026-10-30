@@ -61,10 +61,7 @@ export function terminateWindowsLoginProcessTree(
   })
 }
 
-/**
- * Stops an interrupted interactive login before its credential directory is removed.
- * The final close wait is bounded because a broken child handle must not hang Ctrl-C.
- */
+/** Wait for close before credential cleanup, bounded so a broken child cannot hang Ctrl-C. */
 export async function terminateInteractiveLoginProcess(
   child: ChildProcess,
   signal: NodeJS.Signals,
@@ -112,9 +109,6 @@ export async function terminateInteractiveLoginProcess(
   }
 }
 
-/**
- * Runs an account add with signal-safe cleanup and primary-error precedence.
- */
 export async function withInteractiveLoginCleanup<T>(
   session: InteractiveLoginSession,
   cleanup: () => Promise<void>,
@@ -147,7 +141,7 @@ export async function withInteractiveLoginCleanup<T>(
       .catch(reportCleanupFailure)
       .finally(() => process.exit(INTERRUPT_EXIT_CODES[signal] ?? 1))
   }
-  // Why: repeated signals must keep awaiting the same cleanup instead of restoring Node defaults.
+  // Repeated signals must await the same cleanup instead of restoring Node's termination default.
   for (const signal of INTERRUPT_SIGNALS) {
     process.on(signal, onSignal)
   }
@@ -172,7 +166,6 @@ export async function withInteractiveLoginCleanup<T>(
   }
   if (addFailed) {
     if (cleanupError !== undefined) {
-      // Why: retain the error that explains the failed account add.
       reportCleanupFailure(cleanupError)
     }
     throw addError

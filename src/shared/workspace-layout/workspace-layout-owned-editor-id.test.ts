@@ -1,5 +1,4 @@
-// Editor tabs under an owner-qualified id (a floating file, a second owner of a path, a tab moved
-// to its file's workspace) keep every fact main matches to their file by id.
+// Owned editor IDs must retain facts main associates with the file for floating, contested and moved files.
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../constants'

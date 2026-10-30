@@ -8,7 +8,6 @@ import { createStoreCascadesMockApi } from './store-cascades-test-harness'
 const mockUnregisterPtyDataHandlers = vi.hoisted(() => vi.fn<() => unknown[]>(() => []))
 const mockRestorePtyDataHandlersAfterFailedShutdown = vi.hoisted(() => vi.fn())
 
-// Mock sonner (imported by repos.ts)
 vi.mock('sonner', () => ({
   toast: { info: vi.fn(), success: vi.fn(), error: vi.fn(), warning: vi.fn() }
 }))
@@ -18,7 +17,6 @@ vi.mock('@/components/terminal-pane/pty-dispatcher', () => ({
   unregisterPtyDataHandlers: mockUnregisterPtyDataHandlers
 }))
 
-// Mock agent-status (imported by terminal-helpers)
 vi.mock('@/lib/agent-status', async (importOriginal) => {
   const actual = await importOriginal<typeof AgentStatusModule>()
   return {
@@ -123,10 +121,7 @@ describe('setActiveWorktree', () => {
     )
   })
 
-  // Regression for #9911: a split SSH tab's single relay slot points at the
-  // last-bound pane; when it exits, clearTabPtyId must promote a surviving pane
-  // instead of clearing, or a later relay-drop bulk-clear leaves the survivor
-  // visible only in the layout leaf map and the orphan sweep deletes the live tab.
+  // Promote a surviving split pane into the relay slot on exit; otherwise relay-drop clearing can make orphan sweep delete the live tab (#9911).
   it('promotes a surviving pane into the relay slot so a split tab is not orphaned after a relay drop', () => {
     const store = createTestStore()
     const wt = 'repo1::/path/wt1'
@@ -168,7 +163,6 @@ describe('setActiveWorktree', () => {
     expect(state.ptyIdsByTabId[tabId]).toEqual([])
     expect(state.tabsByWorktree[wt][0].ptyId).toBeNull()
     expect(state.lastKnownRelayPtyIdByTabId[tabId]).toBe('pty-A')
-    // Survivor A is still reconnectable, so the sweep must not delete the tab.
     expect(getOrphanTerminalIds(state, wt)).not.toContain(tabId)
   })
 

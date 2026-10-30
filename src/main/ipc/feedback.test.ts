@@ -400,7 +400,6 @@ describe('submitFeedback', () => {
       expect(body).toBeInstanceOf(FormData)
       expect(body.getAll('feedbackImage')).toHaveLength(2)
       expect(body.get('feedback')).toBe('images attached')
-      // Why: multipart must not lose the enrichment fields the JSON lane sends.
       expect(body.get('submissionType')).toBe('feedback')
       expect(body.get('appVersion')).toBe('1.2.3-test')
     })
@@ -551,8 +550,7 @@ describe('submitFeedback', () => {
       expect(fetchMock).not.toHaveBeenCalled()
     })
 
-    // Why: the renderer screens types first, so this lane only matters for a
-    // renderer invoking the channel directly — the case the handler guards.
+    // Enforce MIME ownership at IPC even if a renderer bypasses its own checks.
     it('rejects a prototype member posing as a content type over IPC', async () => {
       registerFeedbackHandlers()
       const result = (await handlers.get('feedback:submit')?.(null, {
@@ -596,8 +594,7 @@ describe('submitFeedback', () => {
     })
 
     it('does not fail a crash report over images it was never going to send', async () => {
-      // Why: the crash lane discards images, so validating them there would
-      // abort a crash report the user needs delivered.
+      // Crash submissions discard images; invalid unused images must not block delivery.
       await submitFeedback({
         ...diagnosticSubmitArgs(),
         images: Array.from({ length: 9 }, () => ({

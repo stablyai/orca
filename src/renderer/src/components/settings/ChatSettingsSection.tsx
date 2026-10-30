@@ -3,7 +3,6 @@ import { AppearanceChatSection } from './AppearanceChatSection'
 import { ChatBehaviorSetting } from './ChatBehaviorSetting'
 import { ChatNamingSetting } from './ChatNamingSetting'
 import { NativeChatInlineVisualsSetting } from './NativeChatInlineVisualsSetting'
-import { NativeChatProvidersSetting } from './NativeChatProvidersSetting'
 import { SettingsSection } from './SettingsSection'
 import { SettingsSubsectionHeader } from './SettingsFormControls'
 import { matchesSettingsSearch } from './settings-search'
@@ -18,6 +17,8 @@ import { getChatBehaviorTitle } from './chat-behavior-search'
 export function ChatSettingsSection({
   settings,
   updateSettings,
+  fontSuggestions,
+  onRequestFontSuggestions,
   writeSourceControlAiSettings,
   onChatPromptDirtyChange,
   chatPromptDiscardSignal,
@@ -28,6 +29,8 @@ export function ChatSettingsSection({
 }: {
   settings: GlobalSettings
   updateSettings: (updates: Partial<GlobalSettings>) => void | Promise<void>
+  fontSuggestions?: string[]
+  onRequestFontSuggestions?: () => void
   writeSourceControlAiSettings: (patch: SourceControlAiSettingsPatch) => Promise<void>
   onChatPromptDirtyChange?: (dirty: boolean) => void
   chatPromptDiscardSignal?: number
@@ -65,6 +68,8 @@ export function ChatSettingsSection({
                   <AppearanceChatSection
                     settings={settings}
                     updateSettings={updateSettings}
+                    fontSuggestions={fontSuggestions}
+                    onRequestFontSuggestions={onRequestFontSuggestions}
                     forceVisiblePrimary={matchesSettingsSearch(query, [
                       { title },
                       { title: appearanceTitle }
@@ -73,13 +78,6 @@ export function ChatSettingsSection({
                 </CardContent>
               </Card>
             </section>
-          ) : null}
-          {showDesktopOnlySettings ? (
-            <NativeChatProvidersSetting
-              settings={settings}
-              updateSettings={updateSettings}
-              forceVisible={matchesSettingsSearch(query, [{ title }])}
-            />
           ) : null}
           {showDesktopOnlySettings ? (
             <NativeChatInlineVisualsSetting

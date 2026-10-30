@@ -1,9 +1,11 @@
+import { mobileNativeChatDraftDestination } from './native-chat/composer/mobile-native-chat-draft-inputs'
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { SessionOptionDescriptor } from '../../../src/shared/native-chat-session-options'
+import type { SessionOptionDescriptor } from '../../../src/shared/native-chat/input/native-chat-session-options'
 import type { RpcClient } from '../transport/rpc-client'
 import type { ConnectionState } from '../transport/types'
+import type { MobileNativeChatPrompts } from './native-chat/input/use-mobile-native-chat-prompts'
 
 const acceptSend = vi.fn()
 const captureSendOrigin = vi.fn()
@@ -11,9 +13,8 @@ const clearDraftForSend = vi.fn()
 const restoreRejectedDraft = vi.fn()
 const holdUnconfirmedSend = vi.fn()
 
-// Mutable stand-ins so the launch-draft wiring below can drive chat resolution
-// and transcript state; defaults keep the send-seam tests unchanged.
 const viewMode = { isTabChatView: (_tabId: string) => true }
+let draftPending: { id: string }[] = []
 const sessionState = { messages: [] as unknown[], status: 'ready', transcriptLoading: false }
 const structuredSendWithOutcome = vi.fn()
 const structuredCancel = vi.fn()
@@ -68,16 +69,13 @@ const structuredSessionState = {
   loadingEarlier: false,
   loadEarlier: vi.fn()
 }
-const draftsArgs: Record<string, unknown>[] = []
-const promptsState = {
-  permission: null as unknown,
-  question: null as unknown,
-  detectedAsk: null as unknown,
-  ask: null as unknown
+const promptsState: Pick<MobileNativeChatPrompts, 'permission' | 'ask' | 'waitStartedAt'> = {
+  permission: null,
+  ask: null,
+  waitStartedAt: null
 }
 
-// The controller composes many session hooks; each is mocked to a minimal shape
-// so this test isolates the send seam (outcome -> drafts accounting).
+// Isolate send outcomes and draft accounting by stubbing unrelated controller hooks.
 vi.mock('./use-mobile-session-view-mode', () => ({
   useMobileSessionViewMode: () => ({
     isTabChatView: (tabId: string) => viewMode.isTabChatView(tabId),
@@ -85,11 +83,15 @@ vi.mock('./use-mobile-session-view-mode', () => ({
     toggleTabChatView: vi.fn()
   })
 }))
+vi.mock('./use-mobile-structured-session-commands', () => ({
+  useMobileStructuredSessionCommands: () => ({ commands: undefined, refresh: vi.fn() })
+}))
 vi.mock('./use-mobile-native-chat-session', () => ({
   useMobileNativeChatSession: () => sessionState
 }))
 vi.mock('./use-mobile-structured-agent-session', () => ({
   useMobileStructuredAgentSession: () => ({
+    asyncQuestionSourceScope: 'journal/host/session/epoch',
     session: structuredSessionState,
     ...structuredActivity,
     queued: { cards: [], send: vi.fn(), delete: vi.fn(), edit: vi.fn() },
@@ -108,13 +110,12 @@ vi.mock('./use-mobile-structured-agent-session', () => ({
     invokeStructuredOption: structuredInvokeOption
   })
 }))
-vi.mock('./use-mobile-native-chat-drafts', () => ({
-  useMobileNativeChatDrafts: (args: Record<string, unknown>) => {
-    draftsArgs.push(args)
+vi.mock('./native-chat/composer/use-mobile-native-chat-drafts', () => ({
+  useMobileNativeChatDrafts: () => {
     return {
-      composerText: '',
+      draftKey: null,
       setComposerText: vi.fn(),
-      pending: [],
+      pending: draftPending,
       imagePreviewsByMessageId: {},
       captureSendOrigin,
       readSeededLaunchDraft: () => null,
@@ -126,60 +127,56 @@ vi.mock('./use-mobile-native-chat-drafts', () => ({
     }
   }
 }))
-vi.mock('./use-mobile-native-chat-prompts', () => ({
+vi.mock('./native-chat/input/use-mobile-native-chat-prompts', () => ({
   useMobileNativeChatPrompts: () => promptsState
 }))
 const answerSendArgs: { streamIdentity?: string }[] = []
-vi.mock('./use-mobile-native-chat-answer-send', () => ({
+vi.mock('./native-chat/input/use-mobile-native-chat-answer-send', () => ({
   useMobileNativeChatAnswerSend: (args: { streamIdentity?: string }) => {
     answerSendArgs.push(args)
     return { answerAsk: vi.fn(), cancelPending: vi.fn() }
   }
 }))
-vi.mock('./mobile-native-chat-permission-send', () => ({
+vi.mock('./native-chat/input/mobile-native-chat-permission-send', () => ({
   useMobileNativeChatPermissionSend: () => vi.fn()
 }))
+const terminalStop = vi.fn(async () => true)
 vi.mock('./use-mobile-native-chat-stop', () => ({
-  useMobileNativeChatStop: () => vi.fn()
+  useMobileNativeChatStop: () => terminalStop
 }))
-vi.mock('./use-mobile-native-chat-file-search', () => ({
+vi.mock('./native-chat/composer/use-mobile-native-chat-file-search', () => ({
   useMobileNativeChatFileSearch: () => ({ nativeChatFilePaths: [], loadNativeChatFiles: vi.fn() })
 }))
-// Partial: the stale-input heal reaches the real transport through image-send,
-// which must read the REAL timeout constant, not a copy that can silently drift.
-vi.mock('./mobile-native-chat-send', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('./mobile-native-chat-send')>()),
+// Keep the real timeout constant available to stale-input heal through the partial send mock.
+vi.mock('./native-chat/mobile-native-chat-send', async (importOriginal) => ({
+  ...(await importOriginal<typeof NativeChatSend>()),
   sendMobileNativeChatMessageWithOutcome: vi.fn()
 }))
 
-import { sendMobileNativeChatMessageWithOutcome } from './mobile-native-chat-send'
+import * as NativeChatSend from './native-chat/mobile-native-chat-send'
 import {
   isMobileNativeChatInputStale,
   markMobileNativeChatInputStale,
   resetMobileNativeChatStaleInputForTests
-} from './mobile-native-chat-stale-input'
-import {
-  useMobileNativeChatController,
-  type MobileNativeChatController
-} from './use-mobile-native-chat-controller'
+} from './native-chat/mobile-native-chat-stale-input'
+import { useMobileNativeChatController } from './use-mobile-native-chat-controller'
+import type { MobileNativeChatController } from './mobile-native-chat-controller-contract'
 import type { MobileNativeChatStatus } from './use-mobile-native-chat-session'
-import { mobileNativeChatPromptDismissals } from './mobile-native-chat-prompt-dismissals'
+import { mobileNativeChatPromptDismissals } from './native-chat/input/mobile-native-chat-prompt-dismissals'
 import { structuredAgentSessionHostSupport } from './mobile-structured-agent-session-host-support'
 
-const sendWithOutcome = vi.mocked(sendMobileNativeChatMessageWithOutcome)
+const sendWithOutcome = vi.mocked(NativeChatSend.sendMobileNativeChatMessageWithOutcome)
 
 const ORIGIN = {
   draftKey: 'h\0w\0tab-1',
+  draftDestination: mobileNativeChatDraftDestination('h\0w\0tab-1'),
   draftEditGeneration: 0,
   pendingKey: 'h\0w\0tab-1\0session-1',
   normalizedText: 'look',
-  baselineOccurrences: 0,
-  baselineTailMessageId: null,
-  baselineResolved: true,
+  boundary: { afterMessageId: null },
   sentAt: 0
 }
 
-/** Harness props for a structured chat tab running `agent`. */
 function structuredTab(agent: string) {
   const tab = {
     type: 'agent-session',
@@ -197,8 +194,6 @@ describe('useMobileNativeChatController handleNativeChatSend', () => {
   let controller: MobileNativeChatController | null = null
   const onSendError = vi.fn()
   const onSendResolved = vi.fn()
-  // Only the stale-input heal reaches the transport directly (the message send
-  // itself is mocked above).
   const clientStub = { sendRequest: vi.fn() }
 
   function Harness({
@@ -251,13 +246,7 @@ describe('useMobileNativeChatController handleNativeChatSend', () => {
     controller = null
   })
 
-  it('leaves structured prompt cancellation unavailable on the legacy bridge lane', () => {
-    expect(controller?.handleNativeChatCancelPrompt).toBeUndefined()
-  })
-
   it('clears an orphaned image paste before a question-card answer (#10228)', async () => {
-    // The chat overlay wires the question card straight to this send, bypassing
-    // the image hook that used to own the only heal.
     markMobileNativeChatInputStale('term-1')
     clientStub.sendRequest.mockResolvedValue({
       id: 'send',
@@ -304,15 +293,13 @@ describe('useMobileNativeChatController handleNativeChatSend', () => {
       accepted = await controller!.handleNativeChatCancelAsk()
     })
     expect(accepted).toBe(true)
-    // The clear would be swallowed by the live overlay but still acked, burning
-    // the marker and leaving the paste to corrupt the next real message.
+    // A swallowed but acknowledged clear would consume the marker without removing stale input.
     expect(clientStub.sendRequest).not.toHaveBeenCalled()
     expect(isMobileNativeChatInputStale('term-1')).toBe(true)
   })
 
   it('retires a held failure banner when a card action is accepted', async () => {
-    // The banner is route-owned and outlives the write that raised it, so an accepted
-    // answer or permission reply must clear it too — not just a composer send.
+    // Accepted answers/permission replies must clear the route-owned send-error banner too.
     sendWithOutcome.mockResolvedValue('accepted')
     await act(async () => {
       await controller!.handleNativeChatCancelAsk()
@@ -327,21 +314,6 @@ describe('useMobileNativeChatController handleNativeChatSend', () => {
     expect(onSendResolved).not.toHaveBeenCalled()
   })
 
-  it('threads the optimistic-echo image URIs into acceptSend on an accepted send', async () => {
-    sendWithOutcome.mockResolvedValue('accepted')
-    let accepted = false
-    await act(async () => {
-      accepted = await controller!.handleNativeChatSend('look', ['file:///a.jpg'])
-    })
-    expect(accepted).toBe(true)
-    expect(acceptSend).toHaveBeenCalledWith(ORIGIN, 'look', ['file:///a.jpg'])
-    // A terminal-backed chat pastes images into the agent's own input.
-    expect(controller!.nativeChatAcceptsImages).toBe(true)
-    // Optimistic clear happens at send time, never a restore on success.
-    expect(clearDraftForSend).toHaveBeenCalledWith(ORIGIN, 'look')
-    expect(restoreRejectedDraft).not.toHaveBeenCalled()
-  })
-
   it('routes structured agent-session sends away from terminal/nativeChat transports', async () => {
     await act(async () => {
       renderer?.update(createElement(Harness, structuredTab('codex')))
@@ -353,7 +325,13 @@ describe('useMobileNativeChatController handleNativeChatSend', () => {
     })
 
     expect(accepted).toBe(true)
-    expect(structuredSendWithOutcome).toHaveBeenCalledWith('look')
+    expect(structuredSendWithOutcome).toHaveBeenCalledWith(
+      'look',
+      undefined,
+      undefined,
+      undefined,
+      []
+    )
     expect(sendWithOutcome).not.toHaveBeenCalled()
     expect(clientStub.sendRequest).not.toHaveBeenCalled()
   })
@@ -365,36 +343,35 @@ describe('useMobileNativeChatController handleNativeChatSend', () => {
     await act(async () => {
       await controller!.handleNativeChatSend('/review')
     })
-    expect(structuredSendWithOutcome).toHaveBeenCalledWith('/review')
-    // The structured session draws it; the drafts' text-matched echo is the terminal lane's.
+    expect(structuredSendWithOutcome).toHaveBeenCalledWith(
+      '/review',
+      undefined,
+      undefined,
+      undefined,
+      []
+    )
     expect(acceptSend).not.toHaveBeenCalled()
     expect(restoreRejectedDraft).not.toHaveBeenCalled()
-    // Its options report decides attach, not the built-in answer.
     expect(controller!.nativeChatAcceptsImages).toBe(false)
   })
 
-  it('separates structured working status from provider cancellation availability', async () => {
+  it('offers prompt Cancel only while a provider turn runs', async () => {
     const props = structuredTab('codex')
     structuredActivity.isWorking = true
     try {
       await act(async () => {
         renderer?.update(createElement(Harness, props))
       })
-      expect(controller?.nativeChatAgentWorking).toBe(true)
-      expect(controller?.nativeChatCanStop).toBe(false)
-      // No turn to stop, so a card offers no X (a Pi dialog can open outside a turn).
+      expect(controller?.nativeChatTurnActive).toBe(true)
       expect(controller?.handleNativeChatCancelPrompt).toBeUndefined()
       structuredActivity.turnId = 'provider-turn'
       await act(async () => {
         renderer?.update(createElement(Harness, props))
       })
-      expect(controller?.nativeChatCanStop).toBe(true)
       expect(controller?.handleNativeChatCancelPrompt).toEqual(expect.any(Function))
-      // A host that stops what the chat has in flight takes Stop before a turn; a card still can't.
       structuredActivity.turnId = null
       harnessHostSupport = structuredAgentSessionHostSupport(['agent-session.conversation-stop.v1'])
       await act(async () => renderer?.update(createElement(Harness, props)))
-      expect(controller?.nativeChatCanStop).toBe(true)
       expect(controller?.handleNativeChatCancelPrompt).toBeUndefined()
     } finally {
       harnessHostSupport = null
@@ -422,7 +399,7 @@ describe('useMobileNativeChatController handleNativeChatSend', () => {
     expect(sendWithOutcome).not.toHaveBeenCalled()
 
     await act(async () => {
-      expect(await controller!.handleNativeChatQuestionAnswer('choice-a')).toBe(true)
+      expect(await controller!.handleNativeChatQuestionAnswer?.('choice-a')).toBe(true)
     })
     expect(structuredRespondQuestion).toHaveBeenCalledWith('choice-a')
     expect(clientStub.sendRequest).not.toHaveBeenCalled()
@@ -436,9 +413,7 @@ describe('useMobileNativeChatController handleNativeChatSend', () => {
   })
 
   it('pre-clears separately for a text-only send but never for an image send', async () => {
-    // The image path pastes the image behind its OWN leading Ctrl+U and then calls
-    // this send; a second clear here wipes the image off the input line and the
-    // agent receives text alone while the echo bubble still shows the thumbnail.
+    // Image paste already cleared input; clearing again here would erase the photo before the text send.
     sendWithOutcome.mockResolvedValue('accepted')
 
     await act(async () => {
@@ -472,7 +447,6 @@ describe('useMobileNativeChatController handleNativeChatSend', () => {
     expect(accepted).toBe(true)
     expect(acceptSend).not.toHaveBeenCalled()
     expect(holdUnconfirmedSend).toHaveBeenCalledWith(ORIGIN, 'look', expect.any(Function))
-    // Delivery-unknown usually means delivered — keep the composer clear.
     expect(clearDraftForSend).toHaveBeenCalledWith(ORIGIN, 'look')
     expect(restoreRejectedDraft).not.toHaveBeenCalled()
   })
@@ -483,15 +457,13 @@ describe('useMobileNativeChatController handleNativeChatSend', () => {
     await act(async () => {
       outcome = await controller!.handleNativeChatSendWithOutcome('look', ['file:///a.jpg'])
     })
-    // Image sends heal a possibly-orphaned paste off this — 'unknown' must not
-    // collapse into the boolean 'sent' shape (#10228).
+    // Preserve unknown outcomes so image callers can heal potentially orphaned pastes.
     expect(outcome).toBe('unknown')
     expect(holdUnconfirmedSend).toHaveBeenCalledWith(ORIGIN, 'look', expect.any(Function))
   })
 
   it('fails a send fast while the socket is down, before spending the heal budget', async () => {
-    // The lease collapses a render after connState, so a question-card answer could
-    // otherwise sit in `sending` for the whole 15s heal+send budget.
+    // Gate on live connection immediately; lease state collapses one render later.
     markMobileNativeChatInputStale('term-1')
     await act(async () => {
       renderer?.update(createElement(Harness, { connState: 'connecting' }))
@@ -515,113 +487,7 @@ describe('useMobileNativeChatController handleNativeChatSend', () => {
     expect(accepted).toBe(false)
     expect(acceptSend).not.toHaveBeenCalled()
     expect(onSendError).toHaveBeenCalledWith('Message not sent')
-    // A definite rejection puts the optimistically-cleared text back.
     expect(restoreRejectedDraft).toHaveBeenCalledWith(ORIGIN, 'look')
-  })
-
-  it('does not restore a rejected question answer into the composer', async () => {
-    sendWithOutcome.mockResolvedValue('rejected')
-    let accepted = true
-    await act(async () => {
-      accepted = await controller!.handleNativeChatQuestionAnswer('1')
-    })
-
-    expect(accepted).toBe(false)
-    expect(clearDraftForSend).not.toHaveBeenCalled()
-    expect(restoreRejectedDraft).not.toHaveBeenCalled()
-    expect(onSendError).toHaveBeenCalledWith('Message not sent')
-  })
-})
-
-describe('useMobileNativeChatController launch-draft wiring', () => {
-  let renderer: ReactTestRenderer | null = null
-  const clientStub = { sendRequest: vi.fn() }
-
-  const chatTab = {
-    type: 'terminal',
-    id: 'tab-1',
-    title: 'Claude',
-    terminal: 'term-1',
-    launchAgent: 'claude',
-    launchDraft: 'https://github.com/o/r/issues/12',
-    launchDraftCreatedAt: 7,
-    isActive: true
-  }
-
-  function Harness({ tab }: { tab: unknown }): null {
-    useMobileNativeChatController({
-      client: clientStub as unknown as RpcClient,
-      connState: 'connected',
-      hostId: 'h',
-      worktreeId: 'w',
-      activeSessionTab: tab as never,
-      activeSessionTabId: 'tab-1',
-      activeHandleRef: { current: 'term-1' },
-      deviceTokenRef: { current: null },
-      nativeChatTranscriptIsLocalReadable: true,
-      nativeChatInputLeaseReady: true,
-      onSendError: vi.fn(),
-      onSendResolved: vi.fn()
-    })
-    return null
-  }
-
-  function render(tab: unknown): void {
-    act(() => {
-      renderer = create(createElement(Harness, { tab }))
-    })
-  }
-
-  beforeEach(() => {
-    draftsArgs.length = 0
-    viewMode.isTabChatView = () => true
-    sessionState.messages = []
-    sessionState.status = 'ready'
-    sessionState.transcriptLoading = false
-  })
-
-  afterEach(() => {
-    act(() => renderer?.unmount())
-    renderer = null
-  })
-
-  it('forwards the tab launch draft and chat-active flag for a chat-resolved tab', () => {
-    render(chatTab)
-
-    expect(draftsArgs.at(-1)).toMatchObject({
-      tabId: 'tab-1',
-      launchDraft: 'https://github.com/o/r/issues/12',
-      launchDraftCreatedAt: 7,
-      chatActive: true,
-      transcriptLoading: false
-    })
-  })
-
-  it('forwards the raw draft with chatActive false when the tab shows the terminal', () => {
-    // Nulling the draft off-chat is indistinguishable from a host retraction and
-    // permanently declines the prefill; the flag is what keeps them apart.
-    viewMode.isTabChatView = () => false
-    render(chatTab)
-
-    expect(draftsArgs.at(-1)).toMatchObject({
-      launchDraft: 'https://github.com/o/r/issues/12',
-      chatActive: false
-    })
-  })
-
-  it('forwards the session hook’s transcriptLoading, not its status', () => {
-    // 'working' masks 'loading' in status, so only the read-phase signal is honest.
-    sessionState.status = 'working'
-    sessionState.transcriptLoading = true
-    render(chatTab)
-
-    expect(draftsArgs.at(-1)).toMatchObject({ transcriptLoading: true })
-  })
-
-  it('forwards a null draft for a tab that publishes none', () => {
-    render({ ...chatTab, launchDraft: undefined })
-
-    expect(draftsArgs.at(-1)).toMatchObject({ launchDraft: null, chatActive: true })
   })
 })
 
@@ -632,8 +498,7 @@ describe('useMobileNativeChatController ask dismissal across a transcript reload
   const PROMPT = { questions: [{ question: 'Which path?', multiSelect: false, options: [] }] }
 
   const chatTab = { type: 'terminal', id: 'tab-1', launchAgent: 'claude' }
-  /** Mutable so a test can move the user to another tab — or restart the agent
-   *  into a new provider session on the same tab — mid-render. */
+  // Allow tab/session changes mid-render to expose stale scope state.
   const activeTab = { id: 'tab-1', sessionId: 'session-1' }
 
   function Harness(): null {
@@ -658,18 +523,13 @@ describe('useMobileNativeChatController ask dismissal across a transcript reload
     return null
   }
 
-  /** Re-render under the current viewMode/prompts/session stand-ins. */
   function step(): void {
     act(() => {
       renderer?.update(createElement(Harness))
     })
   }
 
-  /** Drive the transcript stand-in the way the real hook couples its fields, so
-   *  these tests can only express states the session hook can actually reach:
-   *  `transcriptLoading` is exactly `status === 'loading'`, and `messages` is
-   *  withheld until a read lands. `rows` is what the last landed read left
-   *  behind — 0 means no read has ever landed for this identity. */
+  // Couple transcript doubles as production does: loading withholds messages, while retained rows may survive a read failure.
   function setTranscript(status: MobileNativeChatStatus, rows = 1): void {
     sessionState.status = status
     sessionState.transcriptLoading = status === 'loading'
@@ -681,7 +541,7 @@ describe('useMobileNativeChatController ask dismissal across a transcript reload
     mobileNativeChatPromptDismissals.clearForTests()
     viewMode.isTabChatView = () => true
     setTranscript('ready')
-    Object.assign(promptsState, { ask: PROMPT, detectedAsk: PROMPT })
+    promptsState.ask = PROMPT
     act(() => {
       renderer = create(createElement(Harness))
     })
@@ -691,7 +551,7 @@ describe('useMobileNativeChatController ask dismissal across a transcript reload
     act(() => renderer?.unmount())
     renderer = null
     controller = null
-    Object.assign(promptsState, { ask: null, detectedAsk: null })
+    promptsState.ask = null
     setTranscript('ready', 0)
     viewMode.isTabChatView = () => true
     activeTab.id = 'tab-1'
@@ -702,8 +562,7 @@ describe('useMobileNativeChatController ask dismissal across a transcript reload
     act(() => controller?.dismissNativeChatAsk())
     expect(controller?.nativeChatAsk).toBeNull()
 
-    // Another tab's agent is parked on a byte-identical question; it is a
-    // different pending prompt and tab 1's answer must not hide it.
+    // Identical asks on different tabs are distinct occurrences.
     activeTab.id = 'tab-2'
     step()
 
@@ -711,77 +570,45 @@ describe('useMobileNativeChatController ask dismissal across a transcript reload
   })
 
   it('shows a restarted session’s identical first question on the same tab', () => {
-    // A restart, `/clear`, or resume swaps the provider session inside one tab,
-    // and the next session's first question is often byte-identical — same repo,
-    // same prompt, same template. Keyed by tab alone the old answer hides it, so
-    // the live card never renders and the turn sits blocked with nothing to act on.
+    // Provider-session changes within one tab must retire dismissal identity even when question text repeats.
     act(() => controller?.dismissNativeChatAsk())
     expect(controller?.nativeChatAsk).toBeNull()
 
-    // The restart re-subscribes the transcript, so the read is in flight for a beat.
     activeTab.sessionId = 'session-2'
     setTranscript('loading')
     promptsState.ask = null
-    promptsState.detectedAsk = null
     step()
 
     setTranscript('ready')
     promptsState.ask = PROMPT
-    promptsState.detectedAsk = PROMPT
     step()
 
     expect(controller?.nativeChatAsk).not.toBeNull()
-  })
-
-  it('retires the dismissal only on the ungated prompt, not the gated one', () => {
-    // The paused gate hides the card whenever the agent is not waiting, but a
-    // hidden card is no evidence the sticky status prompt cleared. Feeding the
-    // gated `ask` in as the detected prompt would read that gap as "prompt gone",
-    // retire the dismissal, and bring the answered card back when it reopens.
-    act(() => controller?.dismissNativeChatAsk())
-    expect(controller?.nativeChatAsk).toBeNull()
-
-    promptsState.ask = null
-    step()
-
-    promptsState.ask = PROMPT
-    step()
-
-    expect(controller?.nativeChatAsk).toBeNull()
   })
 
   it('keeps the dismissal while the re-subscribed transcript is still empty', () => {
-    // Toggling views re-subscribes the transcript, so a transcript-derived ask
-    // reads as null for a beat with chat already visible. Believing that null
-    // retires the dismissal and the answered card comes back (#12497).
+    // Re-subscribing after a view toggle briefly hides transcript asks; that null must not retire their dismissals.
     expect(controller?.nativeChatAsk).not.toBeNull()
     act(() => controller?.dismissNativeChatAsk())
     expect(controller?.nativeChatAsk).toBeNull()
 
-    // Chat -> terminal.
     viewMode.isTabChatView = () => false
     promptsState.ask = null
-    promptsState.detectedAsk = null
     step()
 
-    // Terminal -> chat: observable again, but the transcript read is in flight.
     viewMode.isTabChatView = () => true
     setTranscript('loading')
     step()
 
-    // The read lands and re-derives the same still-pending ask.
     setTranscript('ready')
     promptsState.ask = PROMPT
-    promptsState.detectedAsk = PROMPT
     step()
 
     expect(controller?.nativeChatAsk).toBeNull()
   })
 
   it('accepts an answer taken while the first transcript read is still in flight', () => {
-    // A status-derived ask renders before any transcript lands, so the load window
-    // must stay observable whenever a prompt is actually on screen — otherwise the
-    // dismissal is silently dropped and the answered card never goes away.
+    // A visible status ask remains observable before transcript arrival so answering it can still dismiss the card.
     act(() => renderer?.unmount())
     setTranscript('loading')
     act(() => {
@@ -795,113 +622,87 @@ describe('useMobileNativeChatController ask dismissal across a transcript reload
   })
 
   it('still retires the dismissal once a settled transcript reports no prompt', () => {
-    // The load-window guard must not swallow the genuine reset: a prompt that
-    // clears with the read settled means the agent moved on.
     act(() => controller?.dismissNativeChatAsk())
     expect(controller?.nativeChatAsk).toBeNull()
 
     promptsState.ask = null
-    promptsState.detectedAsk = null
     step()
 
     promptsState.ask = PROMPT
-    promptsState.detectedAsk = PROMPT
     step()
 
     expect(controller?.nativeChatAsk).not.toBeNull()
   })
 
   it('keeps the dismissal while a dropped client empties the transcript', () => {
-    // `transcriptLoading` is only true for an in-flight read. A dropped client
-    // parks the session at 'idle', where the hook withholds `messages` with that
-    // flag already false — so the derived prompt reads null for a reason that
-    // says nothing about the agent, and the reset effect retired a live dismissal.
+    // Disconnected idle also withholds messages without loading; its null cannot prove the prompt cleared.
     act(() => controller?.dismissNativeChatAsk())
     expect(controller?.nativeChatAsk).toBeNull()
 
     setTranscript('idle')
     promptsState.ask = null
-    promptsState.detectedAsk = null
     step()
 
-    // Reconnect: the read lands and the same question is still pending.
     setTranscript('ready')
     promptsState.ask = PROMPT
-    promptsState.detectedAsk = PROMPT
     step()
 
     expect(controller?.nativeChatAsk).toBeNull()
   })
 
   it('keeps the dismissal when the first read of a transcript errors', () => {
-    // The host forwards an initial-drain failure as an error frame carrying an
-    // EMPTY list, and that frame is not terminal — a real snapshot follows once
-    // the read recovers. Judging the prompt from that never-populated list
-    // retires the dismissal, and the recovered read brings the answered card
-    // back over the composer.
+    // Initial-drain errors publish empty rows before later recovery; do not treat never-read emptiness as prompt clearance.
     act(() => controller?.dismissNativeChatAsk())
     expect(controller?.nativeChatAsk).toBeNull()
 
     setTranscript('error', 0)
     promptsState.ask = null
-    promptsState.detectedAsk = null
     step()
 
-    // The read recovers with the same question still pending.
     setTranscript('ready')
     promptsState.ask = PROMPT
-    promptsState.detectedAsk = PROMPT
     step()
 
     expect(controller?.nativeChatAsk).toBeNull()
   })
 
   it('retires the dismissal when a failed read still reports the last transcript', () => {
-    // A read error that lands on top of rows from an earlier read leaves those
-    // rows in `messages`, so a prompt that clears under it is real evidence —
-    // unlike the never-read empty list of 'idle'/'waiting-session'. Treating
-    // every error as unobservable would freeze the dismissal and hide the next
-    // identical question for good.
+    // Errors with retained history can still prove a prompt cleared; blanket error suppression would hide the next identical ask.
     act(() => controller?.dismissNativeChatAsk())
     expect(controller?.nativeChatAsk).toBeNull()
 
     setTranscript('error')
     promptsState.ask = null
-    promptsState.detectedAsk = null
     step()
 
     promptsState.ask = PROMPT
-    promptsState.detectedAsk = PROMPT
     step()
 
     expect(controller?.nativeChatAsk).not.toBeNull()
   })
 
   it('keeps the dismissal while the tab has no provider session yet', () => {
-    // 'waiting-session' withholds `messages` the same way, also with
-    // transcriptLoading false. The tab still shows chat (resolveMobileNativeChat
-    // resolves from `launchAgent` alone), so a live dismissal is on screen for it.
+    // Waiting-session withholds messages without loading while launch identity can keep chat visible.
     act(() => controller?.dismissNativeChatAsk())
     expect(controller?.nativeChatAsk).toBeNull()
 
     setTranscript('waiting-session')
     promptsState.ask = null
-    promptsState.detectedAsk = null
     step()
 
     setTranscript('ready')
     promptsState.ask = PROMPT
-    promptsState.detectedAsk = PROMPT
     step()
 
     expect(controller?.nativeChatAsk).toBeNull()
   })
 })
 
-describe('useMobileNativeChatController streaming scope', () => {
+describe('useMobileNativeChatController terminal turn', () => {
   let renderer: ReactTestRenderer | null = null
   let controller: MobileNativeChatController | null = null
   const clientStub = { sendRequest: vi.fn() }
+  const turnStartedAt = 1_700_000_000_000
 
   const workingTab = {
     type: 'terminal',
@@ -913,7 +714,10 @@ describe('useMobileNativeChatController streaming scope', () => {
       workingMode: undefined as 'monitoring' | undefined,
       agentType: 'claude',
       lastAssistantMessage: 'Partial reply',
-      providerSession: { id: 'session-1' }
+      providerSession: { id: 'session-1' },
+      updatedAt: turnStartedAt,
+      stateStartedAt: turnStartedAt,
+      turnStartedAt
     },
     isActive: true
   }
@@ -936,9 +740,17 @@ describe('useMobileNativeChatController streaming scope', () => {
     return null
   }
 
+  function rerender(): void {
+    act(() => renderer?.update(createElement(Harness)))
+  }
+
   beforeEach(() => {
+    // Hook freshness is read against the clock, so pin it to the hook's own update.
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(turnStartedAt)
     viewMode.isTabChatView = () => true
     workingTab.agentStatus.workingMode = undefined
+    workingTab.agentStatus.stateStartedAt = turnStartedAt
     act(() => {
       renderer = create(createElement(Harness))
     })
@@ -949,44 +761,72 @@ describe('useMobileNativeChatController streaming scope', () => {
     renderer = null
     controller = null
     viewMode.isTabChatView = () => true
+    Reflect.deleteProperty(sessionState, 'transcriptLifecycle')
+    vi.useRealTimers()
   })
 
-  it('holds the stream scope and liveness while the user peeks at the terminal', () => {
-    expect(controller?.showNativeChat).toBe(true)
-    expect(controller?.nativeChatAgentWorking).toBe(true)
-    const scopeKey = controller?.nativeChatStreamScopeKey
-    expect(scopeKey).toContain('session-1')
-    expect(controller?.nativeChatStreamLive).toBe(true)
-
-    viewMode.isTabChatView = () => false
-    act(() => renderer?.update(createElement(Harness)))
-
-    expect(controller?.showNativeChat).toBe(false)
-    expect(controller?.nativeChatAgentWorking).toBe(false)
-    expect(controller?.nativeChatStreamScopeKey).toBe(scopeKey)
-    expect(controller?.nativeChatStreamLive).toBe(true)
+  it('runs the turn clock and streams the hook preview while the agent works', () => {
+    expect(controller?.nativeChatTurnActive).toBe(true)
+    expect(controller?.nativeChatCanStop).toBe(true)
+    expect(controller?.nativeChatStreamingText).toBe('Partial reply')
+    expect(controller?.nativeChatWorkingStartedAt).toBe(turnStartedAt)
   })
 
   it('treats passive monitoring as outside the foreground turn', () => {
     workingTab.agentStatus.workingMode = 'monitoring'
-    act(() => renderer?.update(createElement(Harness)))
+    rerender()
 
-    expect(controller?.nativeChatAgentWorking).toBe(false)
-    expect(controller?.nativeChatStreamLive).toBe(false)
+    expect(controller?.nativeChatTurnActive).toBe(false)
     expect(controller?.nativeChatStreamingText).toBeUndefined()
     expect(controller?.nativeChatSessionOptions?.isWorking).toBe(false)
   })
 
-  it('keeps the delayed-send route guard view-gated, unlike the stream scope', () => {
+  it("ends working at the transcript's turn end when the final hook never came", () => {
+    Object.assign(sessionState, {
+      transcriptLifecycle: { state: 'completed', turnId: 't1', timestamp: turnStartedAt + 30_000 }
+    })
+    rerender()
+
+    expect(controller?.nativeChatTurnActive).toBe(false)
+    expect(controller?.nativeChatCanStop).toBe(false)
+  })
+
+  it('holds Stop until the agent starts a newer turn', () => {
+    act(() => controller?.handleNativeChatStop())
+    expect(controller?.nativeChatCanStop).toBe(false)
+
+    workingTab.agentStatus.stateStartedAt = turnStartedAt + 60_000
+    rerender()
+    expect(controller?.nativeChatCanStop).toBe(true)
+  })
+
+  it('ends the Stop hold once a new message is sent, as desktop does', () => {
+    act(() => controller?.handleNativeChatStop())
+    expect(controller?.nativeChatCanStop).toBe(false)
+
+    draftPending = [{ id: 'pending-1' }]
+    try {
+      rerender()
+      expect(controller?.nativeChatCanStop).toBe(true)
+    } finally {
+      draftPending = []
+    }
+  })
+
+  it('offers Stop again when the Escape definitely went nowhere', async () => {
+    terminalStop.mockResolvedValueOnce(false)
+    await act(async () => controller?.handleNativeChatStop())
+    expect(controller?.nativeChatCanStop).toBe(true)
+  })
+
+  it('keeps the delayed-send route guard view-gated', () => {
     const before = answerSendArgs.at(-1)?.streamIdentity
-    expect(before).toBe(controller?.nativeChatStreamScopeKey)
+    expect(before).toContain('term-1')
 
     viewMode.isTabChatView = () => false
-    act(() => renderer?.update(createElement(Harness)))
+    rerender()
 
-    const after = answerSendArgs.at(-1)?.streamIdentity
-    expect(after).not.toBe(before)
-    expect(after).not.toContain('session-1')
-    expect(controller?.nativeChatStreamScopeKey).toBe(before)
+    expect(answerSendArgs.at(-1)?.streamIdentity).not.toBe(before)
+    expect(controller?.nativeChatTurnActive).toBe(false)
   })
 })

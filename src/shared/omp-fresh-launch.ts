@@ -61,10 +61,8 @@ export function withFreshOmpLaunch(command: string, shell: AgentStartupShell, su
     return `if (${path} -and (Test-Path -LiteralPath ${path} -PathType Leaf)) { ${launch} } else { $global:LASTEXITCODE = 1; Write-Error '${error}' }`
   }
   if (shell === 'cmd') {
-    // Why %~$NAME:! over %NAME%: it reads the variable by name (path if it exists, else empty), so
-    // the guard also works when the line arrived inside another variable, where %NAME% stays
-    // literal. `%!` is substituted across the whole body, so only `%!` or `%~…!` text changes:
-    // the quoter writes a prompt's `!` as `^!` in quotes; a raw OMP command override could form it.
+    // By-name %~$NAME:! reads paths even inside expanded startup variables, where %NAME% stays literal.
+    // The FOR variable substitutes only %!/%~…! across the body; quoted prompt ! is escaped, although raw overrides could form it.
     return `${CMD_FRESH_CONFIG_FOR}if exist ${path} (if not exist "${path.slice(1, -1)}\\*" (${launch}) else (echo ${error} 1>&2 & verify invalid 2>nul)) else (echo ${error} 1>&2 & verify invalid 2>nul)`
   }
   const available = `printenv ${ORCA_OMP_FRESH_CONFIG_ENV} >/dev/null && test -f ${path}`
