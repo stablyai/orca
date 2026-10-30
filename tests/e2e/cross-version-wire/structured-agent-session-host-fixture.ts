@@ -16,7 +16,27 @@ export function structuredHostStub(
   sessionId: string,
   workspaceId: string
 ): Record<string, ReturnType<typeof vi.fn>> {
+  let tabId: string | null = `tab-${sessionId}`
+  const tabs = {
+    getSessionTabId: vi.fn<StructuredAgentSessionHost['getSessionTabId']>((id) =>
+      id === sessionId ? tabId : null
+    ),
+    setSessionTabVisibility: vi.fn<StructuredAgentSessionHost['setSessionTabVisibility']>(
+      async (id, visible, nextTabId, options) => {
+        options?.check?.()
+        options?.capture?.(id === sessionId ? tabId : null)
+        if (id === sessionId) {
+          tabId = visible ? (nextTabId ?? `tab-${sessionId}`) : null
+        }
+      }
+    ),
+    notifySessionTabHidden: vi.fn<StructuredAgentSessionHost['notifySessionTabHidden']>()
+  } satisfies Pick<
+    StructuredAgentSessionHost,
+    'getSessionTabId' | 'setSessionTabVisibility' | 'notifySessionTabHidden'
+  >
   return {
+    ...tabs,
     // Keep restart-resume spies flat for manifest/delta assertions; installableHost rebuilds the nested member.
     restartResumableList: vi.fn(async () => []),
     restartResumableFailures: vi.fn(async () => []),
@@ -122,10 +142,12 @@ export function structuredHostStub(
 export function installableHost(
   hostCalls: Record<string, ReturnType<typeof vi.fn>>
 ): StructuredAgentSessionHost {
+  const logger: StructuredAgentSessionHost['deps']['logger'] = { warn: vi.fn(), error: vi.fn() }
   const host = {
     ...hostCalls,
     // The catalog read checks the session's record for a floating chat's own folder; none here.
     deps: {
+      logger,
       modelCatalog: { read: hostCalls.modelCatalog, demand: vi.fn(async () => {}) },
       store: { getRecord: () => null, getConversation: () => null, getOperationRow: () => null }
     },
