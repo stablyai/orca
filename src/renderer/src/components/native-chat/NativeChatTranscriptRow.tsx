@@ -1,4 +1,5 @@
 import { memo, useContext } from 'react'
+import { NativeChatForkContext } from './native-chat-fork-context'
 import type { CommentMarkdownLinkClickHandler } from '@/components/sidebar/CommentMarkdown'
 import { cn } from '@/lib/utils'
 import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
@@ -51,6 +52,7 @@ export const NativeChatTranscriptRow = memo(function NativeChatTranscriptRow({
 }): React.JSX.Element {
   // Offered only on the conversation's own turn-opening prompts (`nativeChatRowOffersRewind`).
   const rewind = useContext(NativeChatRewindContext)
+  const fork = useContext(NativeChatForkContext)
   const sectionClassName = cn(
     slot.depth > 0 && 'border-l-2 border-border/60 pl-3',
     slot.depth > 1 && 'ml-4'
@@ -140,6 +142,7 @@ export const NativeChatTranscriptRow = memo(function NativeChatTranscriptRow({
               ? rewind
               : undefined
           }
+          fork={slot.depth === 0 && fork?.eligibleItemIds.has(message.id) ? fork : undefined}
           workRun={workRun}
         />
       )}

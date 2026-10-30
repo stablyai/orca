@@ -23,7 +23,7 @@ afterEach(async () => {
   await rm(directory, { recursive: true, force: true })
 })
 
-async function namedFeed() {
+async function namedFeed(forkedFrom?: AgentSessionRecord['forkedFrom']) {
   const journal = await journals.open({
     identity: {
       sessionId: 'session',
@@ -35,7 +35,11 @@ async function namedFeed() {
     stateDirectory: directory,
     now: () => 100
   })
-  let record: AgentSessionRecord = { ...agentSessionRecordFixture(), sessionId: 'session' }
+  let record: AgentSessionRecord = {
+    ...agentSessionRecordFixture(),
+    sessionId: 'session',
+    ...(forkedFrom ? { forkedFrom } : {})
+  }
   let failure: StructuredChatNamingFailure | undefined
   const sessions = new Map([['session', indexedStatusFeedSession({ journal })]])
   const feed = new StructuredAgentSessionStatusFeed({
@@ -159,4 +163,18 @@ it('shows a closed chat its naming failure only while it keeps the name that fai
   sleep(undefined)
   expect(events.at(-1)).not.toHaveProperty('session.sleptAt')
   expect(lastName(events)).toBe('parser/explain')
+})
+
+it('retains branch lineage after the child tab closes and for later subscribers', async () => {
+  const forkedFrom = { sessionId: 'codex_closed_parent', itemId: 'assistant-b' }
+  const { feed, events, sessions } = await namedFeed(forkedFrom)
+  expect(events.at(-1)).toMatchObject({ sessions: [{ forkedFrom }] })
+  feed.revokeLive('session')
+  sessions.clear()
+  const late: AgentSessionStatusEvent[] = []
+  feed.subscribe({ id: 'reloaded', emit: (event) => late.push(event) })
+  expect(late.at(-1)).toMatchObject({
+    type: 'snapshot',
+    sessions: [{ sessionId: 'session', forkedFrom }]
+  })
 })

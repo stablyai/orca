@@ -1,4 +1,5 @@
 import { memo, useRef } from 'react'
+import type { NativeChatForkSurface } from './native-chat-fork-context'
 import type { NativeChatRewindSurface } from './use-native-chat-rewind'
 import type { CommentMarkdownLinkClickHandler } from '@/components/sidebar/CommentMarkdown'
 import { NativeChatUserMessageRow } from './NativeChatUserMessageRow'
@@ -54,6 +55,7 @@ export type MessageRowProps = {
   runtimeContext?: RuntimeFileOperationArgs | null
   /** On a user row: discards it and everything after it. */
   rewind?: NativeChatRewindSurface
+  fork?: NativeChatForkSurface
   /** All messages in this work run, message first; preserve row identity when a message becomes a run. */
   workRun?: readonly NativeChatMessage[]
 }

@@ -5,7 +5,10 @@ import type {
   StagedStructuredLaunchPrompt,
   StructuredPromptDeliveryResult
 } from '@/lib/structured-agent-session-launch-prompt'
-import type { StructuredAgentSessionResumeSource } from '../../../shared/structured-agent-session-create'
+import type {
+  StructuredAgentSessionForkSource,
+  StructuredAgentSessionResumeSource
+} from '../../../shared/structured-agent-session-create'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import type { StructuredLaunchAttempt } from './structured-agent-session-launch-request'
@@ -23,6 +26,7 @@ export type StructuredAgentLaunchOptions = {
   promptKeptByCaller?: true
   // Conversation adoption is launch identity, not a preference; see launchIdentity.
   resumeFrom?: StructuredAgentSessionResumeSource
+  forkFrom?: StructuredAgentSessionForkSource
   /** The host the route decided on; read only by the caller that starts the launch. */
   executionHostId?: ExecutionHostId
   /** The saved selection a paired host reported it will seed; read only by the starting caller. */

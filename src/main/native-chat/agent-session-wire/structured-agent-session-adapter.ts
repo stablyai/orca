@@ -15,7 +15,11 @@ import type {
   AgentJournalTurnItem,
   AgentSessionJournalIdentity
 } from '../../../shared/agent-session-journal-types'
-import type { AgentSessionProviderHandleLink } from '../../../shared/agent-session-provider-handle'
+import type { JournalReplacementItem } from '../agent-session-journal/journal-epoch-replacement'
+import type {
+  AgentSessionProviderHandle,
+  AgentSessionProviderHandleLink
+} from '../../../shared/agent-session-provider-handle'
 import type {
   AgentSessionAccountHome,
   AgentSessionExecutionLocation,
@@ -217,6 +221,17 @@ export type StructuredAgentSessionAdapter = StructuredAgentSessionAdapterStop & 
     fence: number
     beforeTurnId: string
   }): Promise<{ ok: true } | { ok: false; reason: AgentSessionRewindReason }>
+  forkConversation?(input: {
+    record: AgentSessionRecord
+    lastTurnId: string
+    sessionId: string
+    signal?: AbortSignal
+    beforeFork: () => Promise<void>
+  }): Promise<{
+    providerHandle: AgentSessionProviderHandle
+    items: JournalReplacementItem[]
+    options?: Readonly<Record<string, string>>
+  }>
   /** Save the rewind fork before changing journal/record; refusals preserve the conversation, even at rest. */
   forkForRewind?(input: {
     record: AgentSessionRecord

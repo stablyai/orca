@@ -1,6 +1,7 @@
 import { sha256 } from './sha256'
 import type {
   StructuredAgentSessionFirstMessage,
+  StructuredAgentSessionForkSource,
   StructuredAgentSessionResumeSource
 } from './structured-agent-session-create'
 import type { StructuredAgentId } from './agent-session-provider-handle'
@@ -48,6 +49,7 @@ export function structuredAgentSessionCreateFingerprint(input: {
   worktree: string
   agent: StructuredAgentId
   resumeFrom?: StructuredAgentSessionResumeSource
+  forkFrom?: StructuredAgentSessionForkSource
   tabId?: string
   firstMessage?: StructuredAgentSessionFirstMessage
   optionsMode?: 'replace-model-selection'
@@ -61,6 +63,7 @@ export function structuredAgentSessionCreateFingerprint(input: {
       agent: input.agent,
       // Dropping undefined preserves blank-create digests; resume intent must not replay as blank create.
       resumeFrom: input.resumeFrom,
+      forkFrom: input.forkFrom,
       // Include tabId in the host digest; retries replay its recorded host-owned ID.
       tabId: input.tabId,
       firstMessage: input.firstMessage,

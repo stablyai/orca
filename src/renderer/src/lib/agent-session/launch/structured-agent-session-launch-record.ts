@@ -2,6 +2,7 @@ import { isTuiAgent } from '../../../../../shared/tui-agent-config'
 import type { TuiAgent } from '../../../../../shared/tui-agent'
 import type {
   StructuredAgentSessionFirstMessage,
+  StructuredAgentSessionForkSource,
   StructuredAgentSessionResumeSource
 } from '../../../../../shared/structured-agent-session-create'
 import { isAgentSessionOptions } from '../../../../../shared/agent-session-record'
@@ -53,6 +54,7 @@ export type StructuredAgentLaunchPersistedRecord = {
   payloadFingerprint: string
   expectedRuntimeFence: number | null
   resumeFrom?: StructuredAgentSessionResumeSource
+  forkFrom?: StructuredAgentSessionForkSource
   firstMessage?: StructuredAgentSessionFirstMessage
   explicitLaunchOptions?: Readonly<Record<string, string>>
   optionsMode?: 'replace-model-selection'
@@ -68,7 +70,7 @@ export function structuredAgentLaunchRecordFor(
   intent: StructuredAgentSessionLaunchIntent,
   lifecycle: StructuredAgentLaunchPersistedLifecycle
 ): StructuredAgentLaunchPersistedRecord {
-  const { envelope, resumeFrom, firstMessage, optionsMode, options } = intent.params
+  const { envelope, resumeFrom, forkFrom, firstMessage, optionsMode, options } = intent.params
   // A local launch re-reads this machine's settings on reload; only a paired server's seed is kept.
   const pairedSeed = intent.target.kind === 'local' ? undefined : intent.seedOptions
   return {
@@ -81,6 +83,7 @@ export function structuredAgentLaunchRecordFor(
     payloadFingerprint: envelope.payloadFingerprint,
     expectedRuntimeFence: envelope.expectedRuntimeFence,
     ...(resumeFrom ? { resumeFrom } : {}),
+    ...(forkFrom ? { forkFrom } : {}),
     ...(firstMessage ? { firstMessage } : {}),
     ...(optionsMode ? { optionsMode } : {}),
     ...(options ? { options } : {}),
@@ -122,6 +125,7 @@ export function validRecord(value: unknown): value is Omit<
     expectedRuntimeFence
   } = value
   const resumeFrom = 'resumeFrom' in value ? value.resumeFrom : undefined
+  const forkFrom = 'forkFrom' in value ? value.forkFrom : undefined
   const executionHostId = 'executionHostId' in value ? value.executionHostId : undefined
   const failedAt = 'failedAt' in value ? value.failedAt : undefined
   const firstMessage = 'firstMessage' in value ? value.firstMessage : undefined
@@ -147,6 +151,15 @@ export function validRecord(value: unknown): value is Omit<
       value.explicitLaunchOptions === undefined ||
       isAgentSessionOptions(value.explicitLaunchOptions)) &&
     (createMessageSupport === undefined || typeof createMessageSupport === 'boolean') &&
+    (forkFrom === undefined ||
+      (typeof forkFrom === 'object' &&
+        forkFrom !== null &&
+        'sessionId' in forkFrom &&
+        typeof forkFrom.sessionId === 'string' &&
+        'itemId' in forkFrom &&
+        typeof forkFrom.itemId === 'string' &&
+        'expectedEpoch' in forkFrom &&
+        typeof forkFrom.expectedEpoch === 'string')) &&
     (resumeFrom === undefined ||
       (typeof resumeFrom === 'object' &&
         resumeFrom !== null &&

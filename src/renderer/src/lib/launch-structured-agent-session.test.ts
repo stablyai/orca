@@ -1,6 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { structuredAgentSessionPayloadFingerprint } from '../../../shared/structured-agent-session-mutation'
-import { callStructuredAgentSession } from '@/runtime/structured-agent-session-client'
+import {
+  callStructuredAgentSession,
+  structuredAgentSessionHostSupports
+} from '@/runtime/structured-agent-session-client'
 import { useAppStore } from '@/store'
 import {
   createStructuredAgentSessionLaunchIntent,
@@ -18,7 +21,8 @@ import {
 } from '@/runtime/web-session-focus-intent'
 
 vi.mock('@/runtime/structured-agent-session-client', () => ({
-  callStructuredAgentSession: vi.fn()
+  callStructuredAgentSession: vi.fn(),
+  structuredAgentSessionHostSupports: vi.fn(async () => false)
 }))
 const hostPermission = vi.hoisted(() =>
   vi.fn<() => Promise<{ kind: string; hostMode?: null }>>(async () => ({ kind: 'allowed' }))
@@ -28,6 +32,51 @@ vi.mock('@/runtime/structured-chat-host-permission', () => ({
 }))
 
 describe('structured agent session launch', () => {
+  it('keeps fork identity through retry/reload without global model or permission seeds', () => {
+    const forkFrom = { sessionId: 'parent', itemId: 'answer-B', expectedEpoch: 'epoch-1' }
+    const intent = createStructuredAgentSessionLaunchIntent(
+      'folder:workspace',
+      'codex',
+      'local',
+      undefined,
+      { model: 'global-model', permissionMode: 'own' },
+      false,
+      forkFrom
+    )
+    expect(intent.params.forkFrom).toEqual(forkFrom)
+    expect(intent.seedOptions).toBeUndefined()
+    expect(intent.params.options).toBeUndefined()
+    const retry = retryStructuredAgentSessionLaunchIntent(intent)
+    expect(retry.params.forkFrom).toEqual(forkFrom)
+    expect(retry.params.envelope.clientOperationId).not.toBe(
+      intent.params.envelope.clientOperationId
+    )
+    const restored = restoreStructuredAgentSessionLaunchIntent({
+      worktreeId: intent.worktreeId,
+      executionHostId: intent.executionHostId,
+      agent: intent.agent,
+      ...intent.params.envelope,
+      forkFrom
+    })
+    expect(restored.params).toEqual(intent.params)
+    expect(restored.seedOptions).toBeUndefined()
+  })
+
+  it('never sends fork params to an older execution host', async () => {
+    vi.mocked(structuredAgentSessionHostSupports).mockResolvedValueOnce(false)
+    const intent = createStructuredAgentSessionLaunchIntent(
+      'workspace-1',
+      'codex',
+      'local',
+      undefined,
+      undefined,
+      false,
+      { sessionId: 'parent', itemId: 'answer-B', expectedEpoch: 'epoch-1' }
+    )
+    await expect(launchStructuredAgentSession(intent)).rejects.toThrow('Update the execution host')
+    expect(callStructuredAgentSession).not.toHaveBeenCalled()
+  })
+
   beforeEach(() => {
     vi.mocked(callStructuredAgentSession).mockReset()
   })
@@ -56,6 +105,23 @@ describe('structured agent session launch', () => {
       false
     )
     expect(peekWebSessionFocusIntent(owner, worktreeId)).toBeNull()
+  })
+
+  it('keeps a prior fork outcome unknown when capability cannot be confirmed on replay', async () => {
+    vi.mocked(structuredAgentSessionHostSupports).mockResolvedValueOnce(false)
+    const intent = createStructuredAgentSessionLaunchIntent(
+      'workspace-1',
+      'codex',
+      'local',
+      undefined,
+      undefined,
+      false,
+      { sessionId: 'parent', itemId: 'answer-B', expectedEpoch: 'epoch-1' }
+    )
+    await expect(launchStructuredAgentSession(intent, undefined, true)).rejects.toBeInstanceOf(
+      StructuredAgentSessionCreateUnknownOutcomeError
+    )
+    expect(callStructuredAgentSession).not.toHaveBeenCalled()
   })
 
   // The chat opens before its host answers, so the create is the last thing that can say no.

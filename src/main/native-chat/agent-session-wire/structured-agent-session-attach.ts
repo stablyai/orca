@@ -41,6 +41,7 @@ import { structuredAgentSessionRefusalMessage } from './structured-agent-session
 
 /** Clients cannot assert spawn tokens, claim keys or owner death; only host observations grant authority. */
 export type AgentSessionAttachParams = {
+  forkedFrom?: AgentSessionRecord['forkedFrom']
   envelope: AgentSessionMutationEnvelope
   location: AgentSessionExecutionLocation
   provider: StructuredAgentId
@@ -204,6 +205,7 @@ export function reserveRequestFor(input: {
     location: params.location,
     provider: params.provider,
     accountHome: params.accountHome,
+    ...(params.forkedFrom ? { forkedFrom: params.forkedFrom } : {}),
     ...(params.options ? { options: params.options, models: input.models } : {}),
     ...(params.envelope.expectedRuntimeFence === null && params.surfaceTabId
       ? { surfaceTabId: params.surfaceTabId }

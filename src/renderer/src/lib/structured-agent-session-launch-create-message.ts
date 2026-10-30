@@ -35,6 +35,10 @@ export function prepareStructuredLaunchCreateMessage(
   hostTakesExplicitOptions: boolean
 ): void {
   const { intent } = state
+  if (intent.params.forkFrom) {
+    intent.createPrepared = true
+    return
+  }
   if (intent.createPrepared) {
     return
   }
@@ -146,6 +150,9 @@ export function publishStructuredLaunchCreateOptions(
   state: StructuredLaunchState,
   receipt: StructuredAgentLaunchReceipt
 ): StructuredAgentLaunchReceipt | Promise<StructuredAgentLaunchReceipt> {
+  if (state.intent.params.forkFrom) {
+    return receipt
+  }
   if (state.intent.createMessageSupport !== true) {
     return applyStructuredLaunchExplicitOptions(state, receipt)
   }

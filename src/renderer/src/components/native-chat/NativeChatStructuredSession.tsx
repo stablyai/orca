@@ -1,3 +1,4 @@
+import { NativeChatForkScope } from './NativeChatForkScope'
 import { useNativeChatHandOff } from './use-native-chat-hand-off'
 import { cn } from '@/lib/utils'
 import { NATIVE_CHAT_APPEARANCE_ROOT_CLASS } from './native-chat-appearance-style'
@@ -14,7 +15,6 @@ import { NativeChatEmptyState } from './NativeChatEmptyState'
 import { NativeChatEmptyPane } from './NativeChatEmptyPane'
 import { NativeChatLoadingCue } from './NativeChatLoadingCue'
 import { NativeChatMessageList } from './NativeChatMessageList'
-import { NativeChatContextClearFade } from './NativeChatContextClearFade'
 import { useStructuredNativeChatSubmitReveal } from './use-structured-native-chat-submit-reveal'
 import { useStructuredPromptResponseHold } from './use-structured-prompt-response-hold'
 import { NativeChatStructuredQuestionCard } from './NativeChatStructuredQuestionCard'
@@ -278,7 +278,7 @@ export function NativeChatStructuredSession(
       data-native-chat-scheme={appearanceStyle.colorScheme}
     >
       {nativeChatPaneHeader(props, ownerWorktreeId, appearanceStyle.colorScheme, handOff)}
-      <NativeChatContextClearFade clearing={controller.contextClear.clearing}>
+      <NativeChatForkScope pane={props} worktreeId={ownerWorktreeId} controller={controller}>
         {find.isOpen ? <NativeChatFindBar find={find} isVisible={props.isVisible} /> : null}
         {viewState.kind === 'loading' || (viewState.kind === 'error' && !readFailure) ? (
           historyPhase !== 'unread' && <NativeChatLoadingCue />
@@ -321,7 +321,7 @@ export function NativeChatStructuredSession(
             </NativeChatOrcaStopContext.Provider>
           </NativeChatRewindContext.Provider>
         )}
-      </NativeChatContextClearFade>
+      </NativeChatForkScope>
       {readFailure?.final ? null : (
         <>
           {/* Keep queued drafts outside the transcript and above the background-task dock. */}

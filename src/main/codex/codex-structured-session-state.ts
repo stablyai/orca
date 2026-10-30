@@ -24,7 +24,10 @@ import type { CodexSkillReport } from './codex-structured-skill-report'
 import type { CodexJournalTranslator } from './codex-structured-journal-translation'
 import type { StructuredAgentSessionLifecycleEvent } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import type { CodexStructuredPermissionPolicy } from '../../shared/codex-permission-policy'
-import type { StructuredLaunchRequest } from '../runtime/structured-agent-launch-composition'
+import type {
+  StructuredAgentLaunchReader,
+  StructuredLaunchRequest
+} from '../runtime/structured-agent-launch-composition'
 import type {
   AgentModelCatalogSessionAccess,
   AgentModelCatalogStore
@@ -98,6 +101,7 @@ export type CodexStructuredSessionEvent =
 export type CodexStructuredSessionAdapterDeps = {
   resolveAccountKind?: (home: string) => AgentSessionAccountKind | undefined
   atRestCommands?: StructuredAgentSessionAtRestCommands
+  readLaunch?: StructuredAgentLaunchReader<CodexStructuredLaunch>
   resolveLaunch: (input: StructuredLaunchRequest) => Promise<CodexStructuredLaunch>
   onEvent?: (event: CodexStructuredSessionEvent) => void
   logger?: StructuredAgentSessionLogger

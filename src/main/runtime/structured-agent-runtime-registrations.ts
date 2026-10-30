@@ -62,6 +62,14 @@ function createCodexAdapter(context: StructuredAgentAdapterContext): StructuredA
         : {}),
       ...(deps.resolveCodexCommand ? { resolveCommand: deps.resolveCodexCommand } : {})
     }),
+    readLaunch: composeStructuredLaunchRead(
+      CODEX_STRUCTURED_AGENT,
+      structuredAgentLaunchSources(context),
+      codexStructuredLaunchPart({
+        resolveLaunchArgs: () => deps.resolveLaunchArgs('codex'),
+        ...(deps.resolveCodexCommand ? { resolveCommand: deps.resolveCodexCommand } : {})
+      })
+    ),
     resolveLaunch: withSupportedCodexCli(
       composeStructuredLaunch(
         CODEX_STRUCTURED_AGENT,

@@ -8,7 +8,6 @@ import {
   type AgentSessionAttachResult,
   type AgentSessionMutationResult
 } from '../../../shared/agent-session-wire'
-import type { StructuredAgentSessionCaller } from './structured-agent-session-host-types'
 import { isAgentSessionRefusalError } from '../../../shared/agent-session-wire-refusals'
 import { journalOpenRefusalError } from '../agent-session-journal/journal-open-failure'
 import type { StructuredAgentSessionAttachContext } from './structured-agent-session-attach-context'
@@ -28,10 +27,10 @@ import {
 } from './structured-agent-session-provider-support'
 import { performSend } from './structured-agent-session-turns'
 import { observedReceipt } from './structured-agent-session-operation-settlement'
-import { attachStructuredAgentSession } from './structured-agent-session-attach-orchestration'
 import { readAgentSessionHydrationPage } from './agent-session-history-page'
 import { resolveAgentSessionReplayOutcome } from './structured-agent-session-replay-outcome'
 import { openingMessageOptions } from './structured-agent-session-execution-options'
+import type { JournalReplacementItem } from '../agent-session-journal/journal-epoch-replacement'
 
 export type StructuredAgentSessionCreateOptions = {
   firstMessage?: StructuredAgentSessionFirstMessage
@@ -39,6 +38,8 @@ export type StructuredAgentSessionCreateOptions = {
   catalogModels?: Parameters<typeof reserveRequestFor>[0]['models']
   /** Publish after durable creation, before agent delivery starts. */
   publishTab?: () => Promise<void>
+  /** Host-only materialization, usable only by the live operation claimant. */
+  materialized?: { items: JournalReplacementItem[] }
 }
 
 export function createStructuredAgentSession(
@@ -62,7 +63,7 @@ export function createStructuredAgentSession(
   )
 }
 
-async function foundConversation(
+export async function foundConversation(
   context: StructuredAgentSessionAttachContext,
   callerKey: string,
   params: AgentSessionAttachParams,
@@ -124,7 +125,9 @@ async function foundConversation(
       ...(await pinnedAgentSessionLaunchEnv(deps.resolveLaunchEnv, params))
     }
   })
-  const candidate = store.founding.prepare(request)
+  const candidate = options.materialized
+    ? store.founding.prepareClaimed(request)
+    : store.founding.prepare(request)
   if (!hostCanStartRecord(deps, candidate.record)) {
     return {
       ok: false,
@@ -156,7 +159,9 @@ async function foundConversation(
   }
   const prepared = replayed
     ? { ok: true as const, items: null }
-    : await prepareCreateTranscript(context, params)
+    : options.materialized
+      ? { ok: true as const, items: options.materialized.items }
+      : await prepareCreateTranscript(context, params)
   if (!prepared.ok) {
     const { refusal } = prepared
     return {
@@ -224,7 +229,9 @@ async function foundConversation(
           return sent
         }
       } else {
-        await store.founding.commit(request)
+        await (options.materialized
+          ? store.founding.commitClaimed(request)
+          : store.founding.commit(request))
       }
       committed = true
     }
@@ -276,22 +283,5 @@ async function foundConversation(
     if (!committed && !existing) {
       await session.journal.close()
     }
-  }
-}
-
-export function structuredAgentSessionEntryDelegates(
-  context: () => StructuredAgentSessionAttachContext
-) {
-  return {
-    attach: (
-      caller: StructuredAgentSessionCaller,
-      params: AgentSessionAttachParams,
-      options?: Parameters<typeof attachStructuredAgentSession>[3]
-    ) => attachStructuredAgentSession(context(), caller.callerKey, params, options),
-    create: (
-      caller: StructuredAgentSessionCaller,
-      params: AgentSessionAttachParams,
-      options?: StructuredAgentSessionCreateOptions
-    ) => createStructuredAgentSession(context(), caller.callerKey, params, options)
   }
 }

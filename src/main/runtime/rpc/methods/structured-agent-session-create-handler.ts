@@ -64,6 +64,46 @@ export async function handleStructuredAgentSessionCreate(
       reason: 'requestMalformed'
     })
   }
+  if ('worktree' in params && params.forkFrom) {
+    const conflict = agentSessionFingerprintConflict(
+      params.envelope,
+      structuredAgentSessionCreateIntentFingerprint(params)
+    )
+    if (conflict) {
+      return { ok: false, refusal: conflict }
+    }
+    if (
+      ORCA_LAYOUT_OWNER_IS_MAIN &&
+      structuredAgentSessionClosedBeforeCreate(params.envelope.sessionId)
+    ) {
+      return { ok: false, refusal: structuredAgentSessionClosedBeforeCreateRefusal() }
+    }
+    await ensureHostInstalled(ctx)
+    const host = requireHost(ctx)
+    return host.fork(callerFor(ctx), params, {
+      publishTab: async () => {
+        if (
+          ORCA_LAYOUT_OWNER_IS_MAIN &&
+          structuredAgentSessionClosedBeforeCreate(params.envelope.sessionId)
+        ) {
+          return
+        }
+        const record = host.deps.store.getRecord(params.envelope.sessionId)
+        if (!record) {
+          throw new Error('The branched chat record is unavailable.')
+        }
+        await ctx.runtime.publishStructuredAgentSessionTab({
+          workspaceId: record.location.workspaceId,
+          sessionId: record.sessionId,
+          agent: record.provider,
+          activate: true,
+          ...(ctx.caller?.kind === 'desktop' ? { placedByWindow: true } : {}),
+          ...(params.tabPlacement ? { placement: params.tabPlacement } : {}),
+          ...(params.tabId ? { tabId: params.tabId } : {})
+        })
+      }
+    })
+  }
   // Before attach, return refusals instead of throwing so clients can distinguish no effects from unknown outcomes.
   const prepared = await resolveUncommittedStructuredCreate(async () => {
     if ('worktree' in params) {

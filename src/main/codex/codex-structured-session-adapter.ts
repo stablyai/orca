@@ -1,3 +1,4 @@
+import { materializeCodexConversationFork } from './codex-conversation-fork'
 import { projectCodexSessionOptions } from './codex-structured-service-tier'
 import * as codexRewind from './codex-structured-rewind'
 import type { AgentSessionBackgroundTaskState } from '../../shared/agent-session-wire'
@@ -87,6 +88,9 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
 
   readCommands: NonNullable<StructuredAgentSessionAdapter['readCommands']> = (sessionId) =>
     this.sessions.get(sessionId)?.skillReport?.read()
+
+  forkConversation: NonNullable<StructuredAgentSessionAdapter['forkConversation']> = (input) =>
+    materializeCodexConversationFork(this.deps, input, this.sessions.get(input.record.sessionId))
 
   readonly atRestCommands: CodexStructuredSessionAdapterDeps['atRestCommands']
 

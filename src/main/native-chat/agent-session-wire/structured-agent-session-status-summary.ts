@@ -85,6 +85,7 @@ export function structuredAgentSessionStatusSummary({
     ...(providerSession ? { providerSession } : {}),
     ...(launchDirectory ? { launchDirectory } : {}),
     ...structuredSummaryConversationNaming(record, namingFailure),
+    ...(record?.forkedFrom ? { forkedFrom: record.forkedFrom } : {}),
     ...(typeof record?.sleptAt === 'number' ? { sleptAt: record.sleptAt } : {}),
     updatedAt: journal.lastActivityAt() || now()
   }

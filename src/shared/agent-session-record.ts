@@ -1,3 +1,4 @@
+import { isAgentSessionForkSource, type AgentSessionForkSource } from './agent-session-fork-source'
 import { isAgentSessionRewindRecord, type AgentSessionRewindRecord } from './agent-session-rewind'
 import { isAgentSessionLaunchArgs } from './agent-session-launch-args'
 import { isAgentSessionConversationName } from './agent-session/agent-session-conversation-name'
@@ -131,6 +132,7 @@ export type AgentSessionRecord = {
   options?: Record<string, string>
   /** The permission mode the user chose; Orca's, so a provider's options answer never replaces it. */
   permissionMode?: string
+  forkedFrom?: AgentSessionForkSource
   rewind?: AgentSessionRewindRecord
   conversationCommand?: AgentSessionConversationCommandRecord
   /** The conversation's one name: Orca's automatic name or the user's rename. Session History,
@@ -321,6 +323,7 @@ export function isPersistedAgentSessionObservationRecord(
       (record.options === undefined || isAgentSessionOptions(record.options)) &&
       (record.permissionMode === undefined ||
         isBoundedString(record.permissionMode, MAX_ID_LENGTH)) &&
+      (record.forkedFrom === undefined || isAgentSessionForkSource(record.forkedFrom)) &&
       (record.rewind === undefined || isAgentSessionRewindRecord(record.rewind)) &&
       (record.providerContextBoundary === undefined ||
         isAgentSessionProviderContextBoundary(record.providerContextBoundary)) &&

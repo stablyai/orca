@@ -1,3 +1,13 @@
+import {
+  CreateIntentFields,
+  CreateIntentParams,
+  StructuredAgent
+} from './structured-agent-session-create-params'
+export {
+  CreateIntentParams,
+  ResumeSource,
+  StructuredAgent
+} from './structured-agent-session-create-params'
 import { AgentSessionSelectionSchema } from '../agent-session-execution-options'
 import {
   SendBody,
@@ -12,8 +22,6 @@ import {
   SessionId
 } from './structured-agent-session-identifiers'
 import { z } from 'zod'
-import { CREATE_TAB_FIELDS } from './structured-agent-session-create-tab-params'
-import { isStructuredAgentId } from '../agent-session-provider-handle-encoding'
 import { normalizeExecutionHostId } from '../execution-host'
 import { AGENT_SESSION_RESPONSE_OPTION_ID_MAX_LENGTH } from '../agent-session-question-answer'
 import {
@@ -57,9 +65,6 @@ export const ProviderHandle = z.discriminatedUnion('kind', [
     .strict()
 ])
 
-/** Host-registered agents; clients gate names beyond Claude/Codex on the registered-agents capability. */
-export const StructuredAgent = z.string().refine(isStructuredAgentId, 'Invalid agent')
-
 export const ExecutionHostId = z
   .string()
   .max(MAX_ID_LENGTH)
@@ -97,20 +102,6 @@ export const AttachParams = z
   })
   .strict()
 
-/** Identity only: derive transcript/account paths host-side so clients cannot choose imported files or credential directories. */
-export const ResumeSource = z
-  .object({
-    providerSessionId: Identifier('Invalid provider session id'),
-    cliSource: z
-      .object({
-        workspaceId: Identifier('Invalid workspace id'),
-        paneKey: Identifier('Invalid pane key')
-      })
-      .strict()
-      .optional()
-  })
-  .strict()
-
 export const CreateSupportParams = z
   .object({
     worktree: Identifier('Invalid worktree selector'),
@@ -137,27 +128,6 @@ export const SendParams = z
     (value) => value.options === undefined || value.selection === undefined,
     'Choose options or selection'
   )
-
-export const CreateIntentParams = z
-  .object({
-    envelope: MutationEnvelope,
-    worktree: Identifier('Invalid worktree selector'),
-    agent: StructuredAgent,
-    resumeFrom: ResumeSource.optional(),
-    ...CREATE_TAB_FIELDS,
-    /** Both fields require `agentSession.create.message.v1` on the executing host. */
-    firstMessage: z
-      .object({
-        clientMessageId: Identifier('Invalid client message id'),
-        body: SendBody,
-        selection: AgentSessionSelectionSchema.optional()
-      })
-      .strict()
-      .optional(),
-    options: AgentSessionOptions.optional(),
-    optionsMode: z.literal('replace-model-selection').optional()
-  })
-  .strict()
 
 export const CreateParams = z.union([AttachParams, CreateIntentParams])
 
@@ -231,7 +201,7 @@ export const SwitchToChatParams = OptionsParams.extend({
         })
         .strict()
         .optional(),
-      create: CreateIntentParams.omit({ firstMessage: true }).optional(),
+      create: CreateIntentFields.omit({ firstMessage: true, forkFrom: true }).optional(),
       source: TerminalClose.required().optional()
     })
     .strict()

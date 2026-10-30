@@ -1,12 +1,16 @@
-import { ResumeSource } from './rpc-contract/structured-agent-session-params'
+import { CreateIntentParams, ResumeSource } from './rpc-contract/structured-agent-session-params'
 import { STRUCTURED_AGENT_SESSION_CLI_SOURCE_RUNTIME_CAPABILITY } from './structured-agent-session-surface-capabilities'
 import { describe, expect, it } from 'vitest'
 import { RUNTIME_CAPABILITIES } from './protocol-version'
-import { AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY } from './agent-session-create-capabilities'
+import {
+  AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY,
+  AGENT_SESSION_CODEX_FORK_RUNTIME_CAPABILITY
+} from './agent-session-create-capabilities'
 
 import {
   structuredAgentSessionCreateParams,
   type StructuredAgentSessionFirstMessage,
+  type StructuredAgentSessionForkSource,
   type StructuredAgentSessionResumeSource
 } from './structured-agent-session-create'
 import {
@@ -27,6 +31,7 @@ function nextUuid(): string {
 function createParams(
   overrides: {
     resumeFrom?: StructuredAgentSessionResumeSource
+    forkFrom?: StructuredAgentSessionForkSource
     tabId?: string
     firstMessage?: StructuredAgentSessionFirstMessage
     options?: Record<string, string>
@@ -148,4 +153,40 @@ it('negotiates a strict pane identity and includes it in the create fingerprint 
       }
     }).envelope.payloadFingerprint
   )
+})
+
+describe('Codex branch create contract', () => {
+  const forkFrom = { sessionId: 'codex_parent', itemId: 'assistant-b', expectedEpoch: 'epoch-1' }
+
+  it('fingerprints the parent, selected item and epoch and admits only host-derived Codex forks', () => {
+    expect(RUNTIME_CAPABILITIES).toContain(AGENT_SESSION_CODEX_FORK_RUNTIME_CAPABILITY)
+    const params = createParams({ forkFrom })
+    expect(CreateIntentParams.parse(params)).toEqual(params)
+    expect(params.envelope.payloadFingerprint).not.toBe(createParams().envelope.payloadFingerprint)
+    for (const changed of [
+      { ...forkFrom, sessionId: 'codex_other' },
+      { ...forkFrom, itemId: 'assistant-c' },
+      { ...forkFrom, expectedEpoch: 'epoch-2' }
+    ]) {
+      expect(createParams({ forkFrom: changed }).envelope.payloadFingerprint).not.toBe(
+        params.envelope.payloadFingerprint
+      )
+    }
+    for (const invalid of [
+      { agent: 'claude' },
+      { resumeFrom: RESUME },
+      { options: { model: 'client-picked' } },
+      { optionsMode: 'replace-model-selection' },
+      {
+        firstMessage: {
+          clientMessageId: 'message',
+          body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'hello' }] }
+        }
+      },
+      { forkFrom: { ...forkFrom, expectedEpoch: 0 } },
+      { forkFrom: { ...forkFrom, accountHome: '/client/path' } }
+    ]) {
+      expect(CreateIntentParams.safeParse({ ...params, ...invalid }).success).toBe(false)
+    }
+  })
 })

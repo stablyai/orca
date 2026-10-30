@@ -50,6 +50,9 @@ export type StructuredLaunchSelection = {
 export function initialStructuredLaunchSelection(
   intent: StructuredAgentSessionLaunchIntent
 ): StructuredLaunchSelection {
+  if (intent.params.forkFrom) {
+    return { seedPending: true }
+  }
   return {
     seed: intent.seedOptions,
     ...(intent.explicitLaunchOptions ? { explicit: intent.explicitLaunchOptions } : {}),

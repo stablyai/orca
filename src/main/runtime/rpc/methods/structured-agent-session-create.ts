@@ -18,6 +18,7 @@ import type { StructuredAgentSessionHost } from '../../../native-chat/agent-sess
 import type { StructuredAgentSessionCaller } from '../../../native-chat/agent-session-wire/structured-agent-session-host-types'
 import type {
   StructuredAgentSessionResumeSource,
+  StructuredAgentSessionForkSource,
   StructuredAgentSessionFirstMessage
 } from '../../../../shared/structured-agent-session-create'
 import { structuredAgentSessionOptionOverridesRefusal } from '../../../native-chat/agent-session-wire/structured-agent-session-options-read'
@@ -50,6 +51,7 @@ export function structuredAgentSessionCreateIntentFingerprint(params: {
   worktree: string
   agent: string
   resumeFrom?: StructuredAgentSessionResumeSource
+  forkFrom?: StructuredAgentSessionForkSource
   tabId?: string
   firstMessage?: StructuredAgentSessionFirstMessage
   optionsMode?: 'replace-model-selection'
@@ -62,6 +64,7 @@ export function structuredAgentSessionCreateIntentFingerprint(params: {
       worktree: params.worktree,
       agent: params.agent,
       resumeFrom: params.resumeFrom,
+      forkFrom: params.forkFrom,
       tabId: params.tabId,
       firstMessage: params.firstMessage,
       optionsMode: params.optionsMode,

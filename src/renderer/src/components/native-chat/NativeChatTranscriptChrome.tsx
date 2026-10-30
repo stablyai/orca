@@ -1,3 +1,5 @@
+import { NativeChatForkAction } from './NativeChatForkAction'
+import type { NativeChatForkSurface } from './native-chat-fork-context'
 import { useEffect, useRef, useState } from 'react'
 import { ArrowUp, Image as ImageIcon } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -267,11 +269,13 @@ export function NativeChatImageAttachments({
 }
 
 export function NativeChatAgentControls({
+  fork,
   markdown,
   timestamp,
   onScrollToTop,
   className
 }: {
+  fork?: { itemId: string; surface: NativeChatForkSurface }
   markdown: string
   timestamp: number | null
   onScrollToTop: () => void
@@ -294,6 +298,7 @@ export function NativeChatAgentControls({
       >
         <ArrowUp className="size-3.5" />
       </button>
+      {fork ? <NativeChatForkAction itemId={fork.itemId} fork={fork.surface} /> : null}
       <NativeChatMessageTimestamp timestamp={timestamp} />
     </div>
   )

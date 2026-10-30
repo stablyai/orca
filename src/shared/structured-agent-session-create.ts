@@ -15,11 +15,18 @@ export type StructuredAgentSessionResumeSource = {
   cliSource?: { workspaceId: string; paneKey: string }
 }
 
+export type StructuredAgentSessionForkSource = {
+  sessionId: string
+  itemId: string
+  expectedEpoch: string
+}
+
 export type StructuredAgentSessionCreateParams = {
   envelope: AgentSessionMutationEnvelope
   worktree: string
   agent: StructuredAgentId
   resumeFrom?: StructuredAgentSessionResumeSource
+  forkFrom?: StructuredAgentSessionForkSource
   /** Sent only to a host advertising `AGENT_SESSION_CREATE_TAB_ID_RUNTIME_CAPABILITY`. */
   tabId?: string
   /** Sent only to a host advertising `AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY`. */
@@ -56,6 +63,7 @@ export function structuredAgentSessionCreateParams(args: {
   worktree: string
   agent: StructuredAgentId
   resumeFrom?: StructuredAgentSessionResumeSource
+  forkFrom?: StructuredAgentSessionForkSource
   tabId?: string
   firstMessage?: StructuredAgentSessionFirstMessage
   optionsMode?: 'replace-model-selection'
@@ -69,6 +77,7 @@ export function structuredAgentSessionCreateParams(args: {
     worktree: args.worktree,
     agent: args.agent,
     ...(args.resumeFrom ? { resumeFrom: args.resumeFrom } : {}),
+    ...(args.forkFrom ? { forkFrom: args.forkFrom } : {}),
     ...(args.tabId ? { tabId: args.tabId } : {}),
     ...(args.firstMessage ? { firstMessage: args.firstMessage } : {}),
     ...(args.optionsMode ? { optionsMode: args.optionsMode } : {}),

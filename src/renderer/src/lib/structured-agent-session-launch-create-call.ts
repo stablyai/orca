@@ -1,4 +1,7 @@
-import { AGENT_SESSION_SEND_SELECTION_RUNTIME_CAPABILITY } from '../../../shared/agent-session-create-capabilities'
+import {
+  AGENT_SESSION_CODEX_FORK_RUNTIME_CAPABILITY,
+  AGENT_SESSION_SEND_SELECTION_RUNTIME_CAPABILITY
+} from '../../../shared/agent-session-create-capabilities'
 import type {
   AgentSessionAttachResult,
   AgentSessionMutationResult
@@ -113,8 +116,26 @@ export async function launchStructuredAgentSession(
   /** A chat closed while its host was being asked issues no create. */
   isCancelled: () => boolean = () => false
 ): Promise<StructuredAgentLaunchReceipt> {
+  if (
+    intent.params.forkFrom &&
+    !(await structuredAgentSessionHostSupports(
+      intent.target,
+      AGENT_SESSION_CODEX_FORK_RUNTIME_CAPABILITY
+    ))
+  ) {
+    if (priorCreateOutcomeUnknown) {
+      throw new StructuredAgentSessionCreateUnknownOutcomeError(
+        'The branch outcome could not be confirmed. Reconnect to its execution host before checking again.',
+        'agent_session_operation_unknown'
+      )
+    }
+    throw new StructuredAgentSessionCreateRefusalError(
+      'Update the execution host to branch this chat.',
+      'structured_agent_session_unsupported'
+    )
+  }
   const hostSeed = await requireHostCreateSupport(intent)
-  if (intent.target.kind !== 'local') {
+  if (!intent.params.forkFrom && intent.target.kind !== 'local') {
     onHostSeed?.(hostSeed)
   }
   await requireHostPermission(intent)

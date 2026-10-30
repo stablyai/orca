@@ -74,6 +74,15 @@ export class StructuredAgentSessionAdapterRouter implements StructuredAgentSessi
     this.owner(input.sessionId).rewind?.(input) ??
     Promise.resolve({ ok: false, reason: 'unsupported' })
 
+  forkConversation: NonNullable<StructuredAgentSessionAdapter['forkConversation']> = (input) => {
+    const fork = this.capabilityOwner(input.record.sessionId, input.record.provider)?.adapter
+      .forkConversation
+    if (!fork) {
+      throw new Error('Branching is unavailable for this provider.')
+    }
+    return fork(input)
+  }
+
   forkForRewind: NonNullable<StructuredAgentSessionAdapter['forkForRewind']> = (input) =>
     this.capabilityOwner(input.record.sessionId, input.record.provider)?.adapter.forkForRewind?.(
       input

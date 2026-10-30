@@ -4,6 +4,29 @@ import { commitAgentSessionFounding } from './agent-session-founding-admission'
 import type { AgentSessionReserveRequest } from './agent-session/ownership/agent-session-reservation-admission'
 import { draftAgentSessionStoreState } from './agent-session-store-draft'
 import type { AgentSessionStoreTransactions } from './agent-session-store-transactions'
+import { agentSessionOperationKey } from '../../shared/agent-session-operation-ledger'
+import type { AgentSessionStoreState } from './agent-session-store-state'
+
+/** Only the live claimant may finish a create whose provider effect preceded founding. */
+function finishClaimedFounding(
+  state: AgentSessionStoreState,
+  request: AgentSessionReserveRequest,
+  legacyIds: readonly string[]
+) {
+  const key = agentSessionOperationKey(request.operation.callerKey, request.operation.operationId)
+  const claimed = state.operations.get(key)
+  if (
+    claimed?.outcome.status !== 'unknown' ||
+    claimed.fingerprint !== request.operation.fingerprint
+  ) {
+    throw agentSessionRefusalError('agent_session_operation_unknown', { reason: 'outcomeUnknown' })
+  }
+  state.operations.delete(key)
+  const result = commitAgentSessionFounding(state, request, legacyIds)
+  const operationRow = { ...claimed, outcome: result.operationRow.outcome }
+  state.operations.set(key, operationRow)
+  return { ...result, operationRow }
+}
 
 /** Founding shares the store's admission and publishes only after the message transaction commits. */
 export function createAgentSessionFoundingStore(
@@ -11,6 +34,23 @@ export function createAgentSessionFoundingStore(
   firstRecordListeners: ReadonlySet<() => void>
 ) {
   return {
+    prepareClaimed: (request: AgentSessionReserveRequest) =>
+      finishClaimedFounding(
+        draftAgentSessionStoreState(transactions.state),
+        request,
+        transactions.legacySessionTabIds
+      ),
+    commitClaimed: async (request: AgentSessionReserveRequest) => {
+      let heldBefore = true
+      const result = await transactions.transact((draft) => {
+        heldBefore = draft.records.size > 0 || draft.unreadableRecords.size > 0
+        return finishClaimedFounding(draft, request, transactions.legacySessionTabIds)
+      })
+      if (!heldBefore) {
+        firstRecordListeners.forEach((listener) => listener())
+      }
+      return result
+    },
     prepare: (request: AgentSessionReserveRequest) =>
       commitAgentSessionFounding(
         draftAgentSessionStoreState(transactions.state),

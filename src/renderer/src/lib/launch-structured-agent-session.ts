@@ -5,6 +5,7 @@ import {
   structuredAgentSessionCreateParams,
   type StructuredAgentSessionCreateParams,
   type StructuredAgentSessionFirstMessage,
+  type StructuredAgentSessionForkSource,
   type StructuredAgentSessionResumeSource
 } from '../../../shared/structured-agent-session-create'
 import { structuredLaunchSeedOptions } from '../../../shared/native-chat/input/native-chat-session-option-defaults'
@@ -88,7 +89,8 @@ export function createStructuredAgentSessionLaunchIntent(
   executionHostId?: ExecutionHostId,
   resumeFrom?: StructuredAgentSessionResumeSource,
   hostSeedOptions?: LaunchSeed,
-  activate = true
+  activate = true,
+  forkFrom?: StructuredAgentSessionForkSource
 ): StructuredAgentSessionLaunchIntent {
   const owner = structuredAgentSessionOwnerTarget(
     worktreeId,
@@ -110,7 +112,8 @@ export function createStructuredAgentSessionLaunchIntent(
     agent,
     sessionId,
     resumeFrom,
-    hostSeedOptions
+    hostSeedOptions,
+    forkFrom
   )
 }
 
@@ -120,7 +123,8 @@ function buildStructuredAgentSessionLaunchIntent(
   agent: TuiAgent,
   sessionId: string,
   resumeFrom: StructuredAgentSessionResumeSource | undefined,
-  hostSeedOptions: LaunchSeed
+  hostSeedOptions: LaunchSeed,
+  forkFrom?: StructuredAgentSessionForkSource
 ): StructuredAgentSessionLaunchIntent {
   const state = useAppStore.getState()
   return {
@@ -134,9 +138,10 @@ function buildStructuredAgentSessionLaunchIntent(
       worktree: toRuntimeWorktreeSelector(worktreeId),
       agent,
       ...(resumeFrom ? { resumeFrom } : {}),
+      ...(forkFrom ? { forkFrom } : {}),
       randomUuid: createBrowserUuid
     }),
-    ...launchSeedOptions(state, owner, agent, hostSeedOptions)
+    ...(forkFrom ? {} : launchSeedOptions(state, owner, agent, hostSeedOptions))
   }
 }
 
@@ -151,7 +156,8 @@ export function retryStructuredAgentSessionLaunchIntent(
       intent.agent,
       intent.sessionId,
       intent.params.resumeFrom,
-      intent.seedOptions
+      intent.seedOptions,
+      intent.params.forkFrom
     ),
     explicitLaunchOptions: intent.explicitLaunchOptions
   }
@@ -166,6 +172,7 @@ export function restoreStructuredAgentSessionLaunchIntent(args: {
   payloadFingerprint: string
   expectedRuntimeFence: number | null
   resumeFrom?: StructuredAgentSessionResumeSource
+  forkFrom?: StructuredAgentSessionForkSource
   /** A paired server's seed, kept with the launch so a reload shows what create runs. */
   explicitLaunchOptions?: Readonly<Record<string, string>>
   seedOptions?: Readonly<Record<string, string>>
@@ -193,6 +200,7 @@ export function restoreStructuredAgentSessionLaunchIntent(args: {
       worktree: toRuntimeWorktreeSelector(args.worktreeId),
       agent: args.agent,
       ...(args.resumeFrom ? { resumeFrom: args.resumeFrom } : {}),
+      ...(args.forkFrom ? { forkFrom: args.forkFrom } : {}),
       ...(args.firstMessage ? { firstMessage: args.firstMessage } : {}),
       ...(args.optionsMode ? { optionsMode: args.optionsMode } : {}),
       ...(args.options ? { options: args.options } : {})
@@ -202,7 +210,7 @@ export function restoreStructuredAgentSessionLaunchIntent(args: {
       : { createMessageSupport: args.createMessageSupport }),
     ...(args.createMessageSupport === undefined ? {} : { createPrepared: true as const }),
     ...(args.explicitLaunchOptions ? { explicitLaunchOptions: args.explicitLaunchOptions } : {}),
-    ...launchSeedOptions(state, { target }, args.agent, args.seedOptions)
+    ...(args.forkFrom ? {} : launchSeedOptions(state, { target }, args.agent, args.seedOptions))
   }
 }
 

@@ -202,6 +202,7 @@ export type AgentSessionSubscribeEvent =
 
 /** Host-projected list status avoids client transcript replay; older hosts lack this additive method. */
 export type AgentSessionStatusSummary = {
+  forkedFrom?: AgentSessionRecord['forkedFrom']
   rewindBlockedReason?: AgentSessionRewindReason
   sessionId: string
   workspaceId: string

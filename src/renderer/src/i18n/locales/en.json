@@ -20063,6 +20063,12 @@
       },
       "webPeek": {
         "unavailable": "No preview for this page."
+      },
+      "fork": {
+        "pending": "Creating branch…",
+        "action": "Branch in new chat",
+        "source": "Forked from parent chat",
+        "failed": "The branch could not be confirmed. Check the new chat before trying again."
       }
     },
     "tab": {
