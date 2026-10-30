@@ -1,9 +1,9 @@
-// Layout-owner builds: the liveness a main-owned pane's terminal.list row reports.
-
 import type { PtyLivenessVerdict } from '../../../../shared/pty-liveness-verdict'
-import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime-pty-id'
+import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
 import { paneTerminalFact, type RuntimePtyRegistryView } from '../../runtime-leaf-record-projection'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import { startedMainTerminalSurfaces, type SurfacesOwner } from './main-terminal-surfaces'
 
 /** A pane main owns: its bound terminal, and whether a status says that binding is not live. */
 export type MainPaneBinding = {
@@ -13,10 +13,7 @@ export type MainPaneBinding = {
   starting: boolean
 }
 
-/**
- * The host's verdict on the pane's terminal. `exited` needs proof: the local inventory answered
- * without it, or the registry holds its exit. A pane with a status is never live.
- */
+/** Exited needs local-inventory absence or recorded exit proof; any pane status prevents live. */
 export function mainPaneVerdict(
   pane: MainPaneBinding,
   host: RuntimePtyRegistryView & {
@@ -54,4 +51,24 @@ function provenAbsent(
     parseAppSshPtyId(ptyId) === null &&
     !host.controllerHasPty(ptyId)
   )
+}
+
+/** Main-bound disconnected PTYs can survive listing gaps; certified exit or host-unverifiable evidence ends this retained-live claim. */
+export function mainBindsUnendedTerminal(
+  runtime: SurfacesOwner,
+  ptyId: string,
+  recorded: { verdict: { status: string } } | undefined
+): boolean {
+  const status = recorded?.verdict.status
+  return (
+    ORCA_LAYOUT_OWNER_IS_MAIN &&
+    status !== 'exited' &&
+    status !== 'unverifiable' &&
+    mainHoldsTerminal(runtime, ptyId)
+  )
+}
+
+/** Whether a pane main owns holds the terminal now: its workspace and stamped incarnation match. */
+export function mainHoldsTerminal(runtime: SurfacesOwner, ptyId: string): boolean {
+  return (startedMainTerminalSurfaces(runtime)?.findPaneForPty(ptyId) ?? null) !== null
 }

@@ -37,7 +37,6 @@ describe('totalHomeStats', () => {
   })
 
   it('drops a removed desktop from the total', () => {
-    // Replies are cached for the life of the process, so the entry outlives the pairing.
     const byHost = {
       'host-1': stats(),
       'host-2': stats({ totalAgentsSpawned: 5, totalPRsCreated: 1, totalAgentTimeMs: 30_000 })

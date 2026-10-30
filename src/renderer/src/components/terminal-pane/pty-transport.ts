@@ -105,6 +105,10 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
       }
       return
     }
+    if (opts.releasePreconnectInput && !opts.releasePreconnectInput()) {
+      dropPreconnectInput('startup work appeared before it attached')
+      return
+    }
     await preconnectInputBuffer.flush({
       isCurrent: () => !destroyed && connected && ptyId === id,
       sendInput: (data, inputKind) => inputWriteQueue.enqueue(id, data, inputKind),

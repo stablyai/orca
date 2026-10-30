@@ -295,11 +295,7 @@ export function renderSidebarFeedRows(
   return { rows, sectionRows }
 }
 
-/**
- * The sidebar a feed reader shows: the host's published inputs through the same builder, filters
- * and host sections the desktop window runs, with no clock. The window's transient overlays (drag
- * previews, search, hover hold, agent-send reveal) and its desktop-only cards are not inputs here.
- */
+/** Build from published host inputs through shared filters/grouping without a clock; transient window overlays/cards stay outside. */
 export function buildSidebarFeedRows(
   domains: SidebarFeedDomains,
   catalog: SidebarFeedCatalog,

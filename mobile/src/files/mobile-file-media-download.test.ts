@@ -147,8 +147,10 @@ describe('mobile media download', () => {
     expect(r.sink.dispose).toHaveBeenCalledOnce()
   })
   it('discards cached bytes when the owning host disconnects', async () => {
+    const bytes = new Uint8Array([1, 2, 3])
     const r = rig([
-      stat(3),
+      stat(6),
+      chunk(bytes, false),
       {
         id: '1',
         ok: false,
@@ -157,6 +159,8 @@ describe('mobile media download', () => {
       }
     ])
     await expect(r.run()).rejects.toThrow('SSH provider unavailable')
+    expect(r.sink.append).toHaveBeenCalledExactlyOnceWith(new Uint8Array(bytes))
+    expect(r.sink.finish).not.toHaveBeenCalled()
     expect(r.sink.dispose).toHaveBeenCalledOnce()
   })
 })

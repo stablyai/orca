@@ -23,7 +23,7 @@ export function findTerminalTab(
   return null
 }
 
-/** An emptied group closes, even the last one: an empty group is never saved, so it never stays. */
+/** Close emptied groups, including the last, to match persisted layout. */
 export function removeTabFromWorkspace(workspace: WorkspaceLayout, tabId: string): WorkspaceLayout {
   let groupLayout = workspace.groupLayout
   const groups = workspace.groups.flatMap((group) => {
@@ -96,10 +96,7 @@ export type ExitedSurface = {
   incarnationId?: string
 }
 
-/**
- * Where an exited terminal's pane is: `gone` when no tab holds it any more, `replaced` when it
- * now shows another terminal or incarnation.
- */
+/** Find the exited terminal’s pane; gone means removed, replaced means a different terminal/incarnation now owns it. */
 export function locateExitedSurface(
   model: WorkspaceLayoutModel,
   surface: ExitedSurface
@@ -119,10 +116,7 @@ export function locateExitedSurface(
   return leaf?.ptyId && leaf.ptyId !== surface.ptyId ? 'replaced' : location
 }
 
-/**
- * Today's exit retirement: null when the pane now shows another terminal or incarnation (left
- * alone); else the model without the pane, unchanged when its tab no longer holds it.
- */
+/** Retire the pane unless its terminal/incarnation was replaced; an already-removed pane is a no-op. */
 export function retireExitedSurface(
   model: WorkspaceLayoutModel,
   surface: ExitedSurface

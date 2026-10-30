@@ -4,7 +4,7 @@ import { homedir, tmpdir } from 'node:os'
 import type * as Os from 'node:os'
 import { join } from 'node:path'
 
-// Why: temp homes exceed sun_path on macOS but not on Linux; keep asserted config bytes host-independent.
+// Bypass platform-specific socket paths so asserted config bytes stay host-independent.
 vi.mock('./codex-daemon-socket-path-guard', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   applyCodexDaemonSocketGuard: (config: string) => config
@@ -31,7 +31,6 @@ beforeEach(() => {
   previousUserDataPath = process.env.ORCA_USER_DATA_PATH
   process.env.ORCA_USER_DATA_PATH = userDataDir
   homedirMock.mockReturnValue(tmpHome)
-  // Why: promotion writes into homedir()/.codex; refuse to run against the real one.
   if (homedir() !== tmpHome) {
     throw new Error('node:os homedir mock is not active; refusing to touch the real ~/.codex')
   }
@@ -65,7 +64,6 @@ function setRuntimeConfig(content: string): void {
   writeFileSync(runtimeConfigPath(), content, 'utf-8')
 }
 
-// Mimics `codex features disable daemon_auto_start` run with CODEX_HOME = Orca's mirror home.
 function turnOffInMirror(raw = 'false'): void {
   const existing = existsSync(runtimeConfigPath()) ? readRuntimeConfig() : ''
   setRuntimeConfig(
@@ -83,7 +81,6 @@ describe('[features].daemon_auto_start write-back promotion', () => {
 
     expect(readSystemConfig()).toBe('model = "o4"\n\n[features]\ndaemon_auto_start = false\n')
     expect(readRuntimeConfig()).toContain('daemon_auto_start = false')
-    // Why: the next pass mirrors the promoted source, so the setting must survive it.
     syncSystemConfigIntoManagedCodexHome()
     expect(readRuntimeConfig()).toContain('daemon_auto_start = false')
   })
@@ -126,7 +123,6 @@ describe('[features].daemon_auto_start write-back promotion', () => {
     expect(readSystemConfig()).toBe(
       'model = "gpt-5"\n\n[features]\ncodex_hooks = true\napps = false\ndaemon_auto_start = false\n'
     )
-    // The runtime keeps its own hooks spelling; only the promoted key crosses over.
     expect(readRuntimeConfig()).toContain('hooks = true')
     const settled = readSystemConfig()
     syncSystemConfigIntoManagedCodexHome()
@@ -178,7 +174,6 @@ describe('[features].daemon_auto_start write-back promotion', () => {
     writeFileSync(baselinePath(), JSON.stringify(baseline), 'utf-8')
     turnOffInMirror()
 
-    // Why: without a recorded ancestor neither side is known to be newer, so both are kept.
     syncSystemConfigIntoManagedCodexHome()
     syncSystemConfigIntoManagedCodexHome()
 

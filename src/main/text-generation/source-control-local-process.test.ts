@@ -1,3 +1,11 @@
+import * as supervisedStop from '../provider-process/supervised-child-process-stop'
+import { createMockDiscoveryChild } from './commit-message-text-generation-test-harness'
+import {
+  MAX_SOURCE_CONTROL_AGENT_OUTPUT_BYTES,
+  SOURCE_CONTROL_GENERATION_TIMEOUT_MS
+} from './source-control-generation-limits'
+import { cancelLocalGeneration } from './source-control-generation-lanes'
+import { generateConversationName } from './conversation-name-generation-request'
 import { EventEmitter } from 'node:events'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -5,7 +13,6 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { rootOnlyProviderClosePolicy } from '../provider-process/provider-process-close'
 import { PROVIDER_SUPERVISOR_MAX_STOP_MS } from '../provider-process/provider-process-supervisor'
-import { SOURCE_CONTROL_GENERATION_TIMEOUT_MS } from './source-control-generation-limits'
 import { discoverModelsLocal } from './commit-message-model-discovery'
 import { cancelGenerateCommitMessageLocal } from './commit-message-text-generation'
 import { spawnSourceControlAgent } from './source-control-agent-launch'
@@ -46,7 +53,7 @@ function fakeSupervisor(exitsOn: NodeJS.Signals | null): FakeSupervisor {
   return child
 }
 
-// Behaves as the supervisor does: a SIGTERM ends it, after the time its provider takes to stop.
+// Model supervisor SIGTERM completion after provider cleanup delay.
 function fakeSupervisedAgent(stopMs: number): FakeSupervisor & {
   stdout: EventEmitter
   stderr: EventEmitter
@@ -110,9 +117,9 @@ describe('killSourceControlAgentProcess for a supervised agent', () => {
 
     await vi.advanceTimersByTimeAsync(1)
     expect(terminateTreeMock).toHaveBeenCalledWith(child, {
-      site: 'source-control-text-generation'
+      site: 'source-control-text-generation',
+      supervised: true
     })
-    // The shared close then gives the forced root its own short wait.
     await vi.advanceTimersByTimeAsync(rootOnlyProviderClosePolicy(true).forcedExitMs)
     await stopped
     expect(child.kill).not.toHaveBeenCalledWith('SIGKILL')
@@ -162,6 +169,193 @@ describe('a supervised agent one-shot that runs out of time', () => {
     await expect(second).resolves.toMatchObject({ success: true, message: 'Update README' })
     expect(agents[0]!.kill).not.toHaveBeenCalledWith('SIGKILL')
     expect(terminateTreeMock).not.toHaveBeenCalled()
+  })
+})
+
+describe('context-owned one-shot settlement', () => {
+  it.each(['timeout', 'cancel', 'error', 'stdin', 'overflow', 'exit-first', 'reject-cleanup'])(
+    'owns terminal evidence and cleanup after %s',
+    async (route) => {
+      vi.useFakeTimers()
+      const child = Object.assign(createMockDiscoveryChild(), { supervised: true as const })
+      const stop = supervisedStop.stopSupervisedChildProcess
+      const cleanup = Promise.withResolvers<void>()
+      const stopping = vi
+        .spyOn(supervisedStop, 'stopSupervisedChildProcess')
+        .mockImplementation(async (...args) => {
+          const result = await stop(...args)
+          await cleanup.promise
+          if (route === 'reject-cleanup') {
+            throw new Error('Cleanup refused')
+          }
+          return result
+        })
+      const errors = vi.spyOn(console, 'error').mockImplementation(() => {})
+      try {
+        if (route === 'stdin') {
+          child.stdin.end.mockImplementation(() => {
+            throw new Error('Broken input')
+          })
+        }
+        let settled = false
+        const request = generateConversationName({
+          context: { firstPrompt: 'Explain migrations' },
+          params: { agentId: 'codex', model: 'selected-model' },
+          target: { kind: 'local', cwd: '/owned', env: { CODEX_HOME: `/isolated/${route}` } },
+          spawnAgent: () => child,
+          shouldExecute: () => true
+        }).then((result) => {
+          settled = true
+          return result
+        })
+        await vi.advanceTimersByTimeAsync(0)
+        if (route === 'exit-first') {
+          child.emit('exit', 0)
+        }
+        if (route === 'cancel') {
+          cancelLocalGeneration('conversation-name', '/owned')
+        } else if (route === 'error') {
+          child.emit('error', new Error('Live failure'))
+        } else if (route === 'overflow') {
+          child.stdout.emit('data', Buffer.alloc(MAX_SOURCE_CONTROL_AGENT_OUTPUT_BYTES + 1))
+        } else if (route !== 'stdin') {
+          await vi.advanceTimersByTimeAsync(SOURCE_CONTROL_GENERATION_TIMEOUT_MS)
+        }
+        expect(settled).toBe(false)
+        expect(stopping).toHaveBeenCalledOnce()
+        Object.defineProperty(child, 'signalCode', { value: 'SIGTERM' })
+        child.emit('exit', null, 'SIGTERM')
+        await vi.advanceTimersByTimeAsync(0)
+        expect(settled).toBe(false)
+        cleanup.resolve()
+        await vi.advanceTimersByTimeAsync(0)
+        if (route === 'overflow') {
+          // Overflow's existing result policy is classified only at close.
+          expect(settled).toBe(false)
+          child.emit('close', 1)
+        }
+        await expect(request).resolves.toMatchObject({ success: false })
+        child.emit('error', new Error('Late error'))
+        expect(stopping).toHaveBeenCalledOnce()
+        expect(child.kill.mock.calls).toEqual([['SIGTERM']])
+      } finally {
+        cleanup.resolve()
+        stopping.mockRestore()
+        errors.mockRestore()
+      }
+    }
+  )
+
+  it.each(['claude', 'opencode', 'custom'] as const)(
+    'preserves applicable %s plans and skips stale fallback',
+    async (agentId) => {
+      for (const currentAfterClose of [true, false]) {
+        const first = createMockDiscoveryChild()
+        const second = createMockDiscoveryChild()
+        const spawnAgent = vi.fn().mockReturnValueOnce(first).mockReturnValueOnce(second)
+        let current = true
+        const request = generateConversationName({
+          context: { firstPrompt: 'Explain migrations' },
+          params: {
+            agentId,
+            model: agentId === 'opencode' ? 'vendor/model' : 'selected-model',
+            thinkingLevel: 'high',
+            customAgentCommand: 'chosen-agent --model selected-model',
+            agentCommandOverride: agentId === 'custom' ? undefined : `${agentId} --user-option`
+          },
+          target: { kind: 'local', cwd: '/configured', env: { NAMING_FIXTURE: 'selected-env' } },
+          spawnAgent,
+          shouldExecute: () => current
+        })
+        expect(spawnAgent).toHaveBeenCalledOnce()
+        expect(spawnAgent.mock.calls[0]![0]).toMatchObject({
+          cwd: '/configured',
+          env: { NAMING_FIXTURE: 'selected-env' }
+        })
+        first.stderr.emit(
+          'data',
+          Buffer.from(
+            agentId === 'claude'
+              ? 'You cannot use --strict-mcp-config when an enterprise MCP config is present'
+              : 'Unrecognized flag: --variant in command opencode run'
+          )
+        )
+        first.emit('exit', 1)
+        await Promise.resolve()
+        expect(spawnAgent).toHaveBeenCalledOnce()
+        current = currentAfterClose
+        first.emit('close', 1)
+        if (currentAfterClose && agentId !== 'custom') {
+          await vi.waitFor(() => expect(spawnAgent).toHaveBeenCalledTimes(2))
+          const before = spawnAgent.mock.calls[0]![0]
+          const after = spawnAgent.mock.calls[1]![0]
+          expect(after).toMatchObject({ binary: before.binary, cwd: before.cwd, env: before.env })
+          if (agentId === 'claude') {
+            expect(before.args).toContain('--strict-mcp-config')
+            expect(after.args).not.toContain('--strict-mcp-config')
+            expect(after.args).toContain('selected-model')
+          } else {
+            expect(before.args).toContain('--variant')
+            expect(after.args).not.toContain('--variant')
+            expect(after.args).toContain('vendor/model#high')
+          }
+          second.stdout.emit(
+            'data',
+            Buffer.from(
+              agentId === 'opencode'
+                ? JSON.stringify({ type: 'text', part: { id: 'answer', text: 'Migration guide' } })
+                : 'Migration guide'
+            )
+          )
+          second.emit('close', 0)
+          await expect(request).resolves.toMatchObject({ success: true, name: 'Migration guide' })
+        } else {
+          await expect(request).resolves.toMatchObject({ success: false })
+          expect(spawnAgent).toHaveBeenCalledOnce()
+        }
+        expect(first.kill).not.toHaveBeenCalled()
+      }
+    }
+  )
+
+  it('settles safe no-process failures and never kills a classified closed supervisor', async () => {
+    for (const route of ['throw', 'no-pid', 'classified']) {
+      const child = Object.assign(createMockDiscoveryChild(), { supervised: true as const })
+      if (route === 'no-pid') {
+        Object.defineProperty(child, 'pid', { value: undefined })
+      }
+      const errors = vi.spyOn(console, 'error').mockImplementation(() => {})
+      try {
+        const request = generateConversationName({
+          context: { firstPrompt: 'Explain migrations' },
+          params: { agentId: 'custom', model: '', customAgentCommand: 'chosen-agent' },
+          target: { kind: 'local', cwd: '/failed' },
+          spawnAgent: () => {
+            if (route === 'throw') {
+              throw new Error('Spawn failed')
+            }
+            return child
+          },
+          shouldExecute: () => true
+        })
+        if (route === 'no-pid') {
+          child.emit('error', Object.assign(new Error('Missing'), { code: 'ENOENT' }))
+        }
+        if (route === 'classified') {
+          child.stderr.emit(
+            'data',
+            Buffer.from(
+              `[orca-provider-supervisor] spawn failed: ${JSON.stringify({ thrown: false, code: 'ENOENT', message: 'Missing' })}`
+            )
+          )
+          child.emit('close', 127)
+        }
+        await expect(request).resolves.toMatchObject({ success: false })
+        expect(child.kill).not.toHaveBeenCalled()
+      } finally {
+        errors.mockRestore()
+      }
+    }
   })
 })
 
@@ -235,9 +429,7 @@ describe.runIf(process.platform !== 'win32')(
         for (const pid of [agentPid, child.pid!]) {
           try {
             process.kill(pid, 'SIGKILL')
-          } catch {
-            // Already gone, as the test expects.
-          }
+          } catch {}
         }
       }
     })
@@ -252,7 +444,7 @@ describe.runIf(process.platform !== 'win32')(
         }
         const pidFile = join(folder, 'first-pid')
         const stoppedFile = join(folder, 'first-stopped')
-        // Ignores its stdin end, then takes a moment to stop on SIGTERM, as a CLI flushing state does.
+        // Model a CLI that ignores stdin EOF and flushes state before stopping on SIGTERM.
         const slowStop = join(folder, 'slow-stop.cjs')
         writeFileSync(
           slowStop,
@@ -319,7 +511,6 @@ require('node:fs').writeFileSync(${JSON.stringify(pidFile)}, String(process.pid)
       try {
         const pidFile = join(folder, 'agent-pid')
         const agent = join(folder, 'floods.cjs')
-        // Floods stdout past the limit, then waits on its never-answered request.
         writeFileSync(
           agent,
           `require('node:fs').writeFileSync(${JSON.stringify(pidFile)}, String(process.pid))
@@ -364,7 +555,6 @@ setInterval(() => {}, 60000)
         const home = join(folder, 'codex-home')
         const pidFile = join(folder, 'flood-pid')
         const floods = join(folder, 'floods.cjs')
-        // Floods stdout past the limit, then takes a moment to stop on SIGTERM.
         writeFileSync(
           floods,
           `require('node:fs').writeFileSync(${JSON.stringify(pidFile)}, String(process.pid))

@@ -1,5 +1,4 @@
-// launchAgentTerminal once read the host-blind `store.getRepo(worktree.repoId)`, so the same repo
-// id on two hosts built the launch for the wrong one (#11163).
+// #11163: colliding repo ids on two hosts once selected the wrong launch settings.
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('electron', () => ({
@@ -14,7 +13,7 @@ import { OrcaRuntimeService } from './orca-runtime'
 const REMOTE_PATH = '/srv/app-feature'
 
 type RuntimeInternals = {
-  resolveWorktreeSelector: (selector: string) => Promise<unknown>
+  resolveGitWorktreeSelector: (selector: string) => Promise<unknown>
   buildStartupForAgent: (repo: unknown, agent: unknown, prompt: string) => unknown
   createTerminal: (selector: string, opts: unknown) => Promise<unknown>
 }
@@ -28,7 +27,7 @@ function makeRuntime(repos: readonly Record<string, unknown>[], hostId?: string)
   }
   const runtime = new OrcaRuntimeService(store as never)
   const internals = runtime as unknown as RuntimeInternals
-  vi.spyOn(internals, 'resolveWorktreeSelector').mockResolvedValue({
+  vi.spyOn(internals, 'resolveGitWorktreeSelector').mockResolvedValue({
     id: 'repo-shared::/srv/app-feature',
     repoId: 'repo-shared',
     path: REMOTE_PATH,
@@ -48,7 +47,6 @@ describe('launchAgentTerminal execution host', () => {
   })
 
   it('builds the launch for the host the worktree names, not a rival row', async () => {
-    // Two SSH hosts publish the same repo id; the worktree is on m4air.
     const { runtime, buildStartup } = makeRuntime(
       [
         { id: 'repo-shared', path: '/home/me/app', connectionId: 'openclaw' },

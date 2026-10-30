@@ -4,9 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { build } from 'esbuild'
 
-// A stand-in agent CLI that, like `opencode serve` or a wedged Codex, ignores its stdin end. It
-// leaves a SIGTERM-ignoring grandchild in its group, so only a group SIGKILL ends everything, and
-// records its stdin end and a SIGTERM (exiting on the latter). `body` adds the caller's protocol.
+// The CLI ignores stdin EOF and exits on SIGTERM; its grandchild requires process-group SIGKILL.
 function standInSource(body: string): string {
   return String.raw`
 const { spawn } = require('node:child_process')
@@ -41,12 +39,9 @@ export type SupervisedProbeRig = {
   dir: string
   pidFile: string
   signalFile: string
-  /** When the stand-in saw its stdin end and its SIGTERM, by its own clock (this host's). */
   readEvents: () => Partial<Record<StandInEvent['event'], number>>
   env: Record<string, string>
-  /** An executable stand-in, run as `<path> <args>` like a real agent CLI. */
   writeStandIn: (name: string, body?: string) => string
-  /** Bundles a TypeScript owner entry, resolved from `resolveDir`, into one plain-Node file. */
   bundleOwner: (source: string, resolveDir: string) => Promise<string>
   launchOwner: (bundle: string, env?: Record<string, string>) => ChildProcess
   readPids: (timeoutMs?: number) => Promise<{ provider: number; grandchild: number }>
@@ -139,7 +134,6 @@ export function createSupervisedProbeRig(): SupervisedProbeRig {
       return pids
     },
     cleanup: () => {
-      // Only pids this rig recorded, so a failed run never leaves a stand-in behind.
       for (const pid of recordedPids) {
         if (alive(pid)) {
           process.kill(pid, 'SIGKILL')

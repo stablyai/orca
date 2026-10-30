@@ -14,6 +14,7 @@ import { replaceRuntimeEnvironmentRevisions } from './runtime-environment-revisi
 import { stubRuntimeEnvironmentBridge } from './runtime-environment-bridge-fixture'
 
 const mocks = vi.hoisted(() => ({
+  changedAgentPaneKeys: new Set<string>(),
   getState: vi.fn(),
   setState: vi.fn(),
   subscribe: vi.fn(),
@@ -57,9 +58,10 @@ vi.mock('./web-session-tabs-sync/tracking-decisions', () => ({
   decideWebSessionTabsSnapshot: mocks.decideWebSessionTabsSnapshot
 }))
 vi.mock('./web-session-tabs-sync/store-patch', () => ({
-  applyWebSessionTabsStorePatch: (buildPatch: (state: unknown) => unknown) => {
-    mocks.setState(buildPatch)
-    // The production caller invokes the returned settle receipt.
+  applyWebSessionTabsStorePatch: (
+    buildPatch: (state: unknown, changedAgentPaneKeys: Set<string>) => unknown
+  ) => {
+    mocks.setState((state: unknown) => buildPatch(state, mocks.changedAgentPaneKeys))
     return () => {}
   }
 }))
@@ -193,7 +195,14 @@ describe('refreshWebRuntimeSessionTabsSnapshot', () => {
         getCurrentState: expect.any(Function)
       }
     )
-    expect(mocks.applyWebSessionTabsSnapshot).toHaveBeenCalledWith(state, recovered, ENVIRONMENT_ID)
+    expect(mocks.applyWebSessionTabsSnapshot).toHaveBeenCalledWith(
+      state,
+      recovered,
+      ENVIRONMENT_ID,
+      undefined,
+      undefined,
+      mocks.changedAgentPaneKeys
+    )
   })
 })
 
@@ -254,7 +263,10 @@ describe('activateWebRuntimeSessionWorktree', () => {
     expect(mocks.applyWebSessionTabsSnapshot).toHaveBeenCalledWith(
       { state: 'before' },
       snapshot,
-      ENVIRONMENT_ID
+      ENVIRONMENT_ID,
+      undefined,
+      undefined,
+      mocks.changedAgentPaneKeys
     )
     expect(mocks.acceptReplayedWebSessionTabsSnapshot).toHaveBeenCalledWith(
       ENVIRONMENT_ID,

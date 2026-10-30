@@ -24,7 +24,6 @@ function session(tabs: { id: string; title?: string }[]): WorkspaceSessionState 
   ])
 }
 
-/** Checks a window save of `next` against main's `stored` partition. */
 function save(stored: WorkspaceSessionState, next: WorkspaceSessionState, hostId = 'local') {
   reportWindowSaveDrift(stored, next, hostId, 'session:set')
   return next
@@ -55,7 +54,7 @@ describe('reportWindowSaveDrift', () => {
     expect(warn).not.toHaveBeenCalled()
   })
 
-  it('reports a tab the save added, dropped, renamed or moved', () => {
+  it('reports tabs the save added or dropped and their group order', () => {
     const logPath = join(logDir!, 'divergence.jsonl')
 
     const next = session([{ id: 'tab-b', title: 'renamed' }, { id: 'tab-c' }])
@@ -152,7 +151,7 @@ describe('reportWindowSaveDrift', () => {
     )
   })
 
-  // Main writes these itself (spawn, its default-tabs and close commands, D1); a save lagging them asks for nothing.
+  // Main-owned fields may legitimately outrun renderer snapshots and must not report drift.
   it('stays quiet for records main keeps through its own writes', () => {
     const key = 'repo-1::/Users/dev/notes'
     const stored = session([{ id: 'tab-a' }])
@@ -298,7 +297,7 @@ describe('reportWindowSaveDrift', () => {
 
   it('logs the terminal each pane is bound to on both sides of a pane change', () => {
     const logPath = join(logDir!, 'divergence.jsonl')
-    // A daemon terminal id carries its worktree id, often longer than other ids.
+    // Daemon IDs embed paths that can exceed ordinary ID lengths.
     const mainPty = `${GIT_KEY}/${'nested/'.repeat(10)}@@a1b2c3d4`
     const stored = session([{ id: 'tab-a' }])
     stored.terminalLayoutsByTabId['tab-a'] = {

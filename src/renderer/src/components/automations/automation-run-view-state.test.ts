@@ -91,6 +91,21 @@ describe('automation run view state', () => {
     })
   })
 
+  it('keeps View run for a paired server run whose pane slept, which only the server can open', () => {
+    const slept = makeRun({ terminalPtyId: null })
+    expect(
+      getAutomationRunViewState({
+        run: slept,
+        workspaceExists: true,
+        terminalTargetExists: false,
+        terminalOnPairedServer: true
+      })
+    ).toMatchObject({ availability: 'terminal', actionLabel: 'View run', canOpen: true })
+    expect(
+      getAutomationRunViewState({ run: slept, workspaceExists: true, terminalTargetExists: false })
+    ).toMatchObject({ availability: 'workspace', actionLabel: 'Open workspace' })
+  })
+
   it('resumes the workspace only when there is no exact terminal identity', () => {
     expect(
       getAutomationRunViewState({
@@ -128,7 +143,7 @@ describe('automation run view state', () => {
     ).toMatchObject({ availability: 'metadata', actionLabel: 'View run', canOpen: false })
   })
 
-  it('keeps skipped or missing-workspace runs as metadata-only history', () => {
+  it('keeps runs without a workspace as metadata-only history', () => {
     expect(
       getAutomationRunViewState({
         run: makeRun({ workspaceId: null, terminalSessionId: null }),

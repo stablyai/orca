@@ -52,10 +52,7 @@ it('rebases a large group without rescanning tab order for every recent tab', ()
   })
 })
 
-// Why: the rebased session is the host-authoritative one, so a tab id the host no
-// longer has must not survive into it. `activeTabId` already failed closed; the
-// filtered `recentTabIds` used to be dropped when it emptied, letting the `...group`
-// spread put the unfiltered array back.
+// An empty filtered recentTabIds must remain explicit or the group spread restores stale host-dropped ids.
 it('drops tab ids the host no longer has from group membership, failing closed', () => {
   const buildSession = (
     activeTabId: string | null,
@@ -102,22 +99,18 @@ it('drops tab ids the host no longer has from group membership, failing closed',
     ][0]
   }
 
-  // Every recent id is stale: the array must empty, not revert to the stale one.
   expect(rebase('kept-b', ['closed-on-host'])).toMatchObject({
     tabOrder: ['kept-a', 'kept-b'],
     activeTabId: 'kept-b',
     recentTabIds: []
   })
-  // Mixed: only the host-known ids survive, in order.
   expect(rebase('kept-a', ['closed-on-host', 'kept-b', 'closed-on-host', 'kept-a'])).toMatchObject({
     recentTabIds: ['kept-b', 'kept-a']
   })
-  // A stale active tab falls back to the first surviving tab, never to the stale id.
   expect(rebase('closed-on-host', ['kept-a'])).toMatchObject({
     activeTabId: 'kept-a',
     recentTabIds: ['kept-a']
   })
   expect(rebase(null, undefined)).toMatchObject({ activeTabId: 'kept-a' })
-  // A group that never carried recentTabIds must not gain the key.
   expect(rebase('kept-a', undefined)).not.toHaveProperty('recentTabIds')
 })

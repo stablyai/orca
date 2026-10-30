@@ -1,4 +1,8 @@
-/** The production probes behind `WslOrcadLivenessSupervisor`; C7 supplies what is user-visible. */
+/** C7 supplies visible demand; these production probes serve the WSL liveness supervisor. */
+import {
+  probeThenWatchWslOrcadBridges,
+  type WslOrcadBridgeActivity
+} from './wsl-orcad-bridge-activity'
 import { pairedRuntimeConnectionFromOffer } from '../../shared/paired-runtime-connection'
 import { parsePairingCode } from '../../shared/pairing'
 import {
@@ -9,12 +13,14 @@ import { requestOrcadTerminalCensus } from '../ssh/orcad-terminal-census-client'
 import { subscribeSystemPowerLifecycle } from '../system-power-lifecycle'
 import {
   deferUntilWslDistroRunning,
-  readConfirmedRunningWslDistros
+  readSettledConfirmedRunningWslDistros
 } from '../wsl-background-distro-gate'
 import type { WslDistroHolder } from './wsl-distro-holder'
+import { wslDistroHolderKey } from './wsl-distro-holder-record'
 import { readWslGuestIdentity } from './wsl-guest-process-identity'
 import type { WslOrcadConnection, WslOrcadConnectionManager } from './wsl-orcad-connection'
 import { defaultWslOrcadEnvironmentId } from './wsl-orcad-deploy'
+import { confirmsRunning, EXIT_SETTLE_MS } from './wsl-orcad-liveness-evidence'
 import { WslOrcadLivenessSupervisor } from './wsl-orcad-liveness-supervisor'
 import { createWslOrcadHostTransport } from './wsl-orcad-host-transport'
 import { openWslOrcadWatch } from './wsl-orcad-watch'
@@ -35,22 +41,48 @@ function collectWslOrcadCensus(connection: WslOrcadConnection): Promise<OrcadTer
 
 export function createWslOrcadLivenessSupervisor(options: {
   manager: WslOrcadConnectionManager
+  bridgeActivity: WslOrcadBridgeActivity
   holder: WslDistroHolder
   hasUserVisibleWork: (distro: string) => boolean
 }): WslOrcadLivenessSupervisor {
   return new WslOrcadLivenessSupervisor({
     manager: options.manager,
-    readRunning: readConfirmedRunningWslDistros,
+    readRunning: ({ distro, exitedAt, probedAfter }) => {
+      const settled =
+        exitedAt === null || exitedAt === undefined ? undefined : exitedAt + EXIT_SETTLE_MS
+      return readSettledConfirmedRunningWslDistros(
+        distro,
+        probedAfter === undefined ? settled : Math.max(settled ?? -Infinity, probedAfter)
+      )
+    },
     readIdentity: (distro, orcadPid) => readWslGuestIdentity(transportFor(distro), orcadPid),
     openWatch: (connection) =>
-      openWslOrcadWatch(
-        transportFor(connection.distro, connection.environmentId),
-        connection.remotePort
+      probeThenWatchWslOrcadBridges(
+        () =>
+          openWslOrcadWatch(
+            transportFor(connection.distro, connection.environmentId),
+            connection.remotePort
+          ),
+        options.bridgeActivity,
+        connection.environmentId
       ),
     collectCensus: collectWslOrcadCensus,
     hasUserVisibleWork: options.hasUserVisibleWork,
     deferUntilRunning: deferUntilWslDistroRunning,
-    ensureHolder: (distro) => options.holder.ensureHeld(distro),
+    requireRunning: async (distro) =>
+      confirmsRunning(
+        await readSettledConfirmedRunningWslDistros(distro),
+        wslDistroHolderKey(distro)
+      ),
+    // Liveness is background work: the holder may re-spawn only into a distro that runs (E9).
+    ensureHolder: (distro) =>
+      options.holder.ensureHeld(distro, {
+        requireRunning: async () =>
+          confirmsRunning(
+            await readSettledConfirmedRunningWslDistros(distro),
+            wslDistroHolderKey(distro)
+          )
+      }),
     subscribePower: subscribeSystemPowerLifecycle
   })
 }

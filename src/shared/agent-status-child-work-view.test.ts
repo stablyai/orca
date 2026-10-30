@@ -66,7 +66,7 @@ function alias(
 }
 
 describe('projectAgentChildWorkViews', () => {
-  it('keeps Codex foreground commands in status records but out of all surface views', () => {
+  it('omits Codex foreground commands from projected child views', () => {
     const foreground = record('foreground', {
       provider: 'codex',
       kind: 'command',

@@ -4,7 +4,7 @@ import type { LinkActionRequest } from '@/components/link-actions/link-action-re
 import { openDetectedFilePath } from '@/components/terminal-pane/terminal-file-open-routing'
 import { isTerminalLinkActionActivation } from '@/components/terminal-pane/terminal-link-activation'
 import { useAppStore } from '../../store'
-import { routeNativeChatHref } from '../../../../shared/native-chat-href-routing'
+import { routeNativeChatHref } from '../../../../shared/native-chat/native-chat-href-routing'
 import { resolveNativeChatFileLink, type NativeChatFileLinkContext } from './native-chat-file-link'
 import { nativeChatPlainLinkClickBehavior } from './native-chat-link-click-behavior'
 import { showFileLinkUnresolvedToast } from './native-chat-file-link-toasts'
@@ -13,8 +13,7 @@ import {
   nativeChatFileOpenDeps
 } from './native-chat-link-target-actions'
 
-/** A plain click offers the terminal's file popover (when that is the user's link-click
- *  setting); a modifier click opens in Orca, and Shift opens the default app. */
+/** Honor terminal link-click settings: plain-click popover, modifier opens in Orca, Shift uses the default app. */
 export function useNativeChatFileLinkClick(
   context: NativeChatFileLinkContext | null,
   request?: (request: LinkActionRequest) => void,

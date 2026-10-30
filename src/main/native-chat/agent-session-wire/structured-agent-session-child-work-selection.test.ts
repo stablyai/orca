@@ -1,6 +1,3 @@
-// What the sidebar and the chat's strip list of a session's child records: running children only,
-// by one rule. A finished child is in the transcript, not in either list.
-
 import { describe, expect, it } from 'vitest'
 import type { AgentChildWorkView } from '../../../shared/agent-status-child-work-view'
 import { structuredRunningChildWork } from '../../../shared/agent-child-work-listing'
@@ -83,7 +80,6 @@ describe("the host's strip channel and summary list the same running children", 
     })
     expect(summaries.at(-1)).toEqual(['run', 'owner', 'shell'])
 
-    // Nothing runs: "none", even with no provider holding the session, so a reader drops its strip.
     records = [finished('done', 5), finished('run', 7)]
     expect(await strip()).toBeNull()
   })
@@ -115,7 +111,6 @@ describe('a session list reads the main agent apart from its subagents', () => {
       status: summary.status!,
       childWork: summary.children
     })
-    // Working for the subagent; the main agent, which the chat's Stop follows, is done.
     expect({ mainAgent: row.mainAgent.state, row: row.state }).toEqual({
       mainAgent: 'done',
       row: 'working'

@@ -10,25 +10,19 @@ import {
 } from './mobile-agent-history-operations'
 import type { RpcClient } from '../transport/rpc-client'
 import type { Worktree } from '../worktree/workspace-list-types'
-import type { MobileAiVaultResumeSettings } from '../session/ai-vault-resume-launch'
+import type { AiVaultResumeLaunchSettings } from '../../../src/shared/ai-vault-resume-startup'
 import { RESUME_RPC_TIMEOUT_MS } from '../session/ai-vault-resume-preparation'
-import type {
-  MobileAiVaultResumeRepo,
-  MobileAiVaultResumeFolderWorkspace,
-  MobileAiVaultResumeProjectGroup
-} from './agent-history-resume-target'
+import type { MobileAiVaultResumeCatalog } from './agent-history-resume-target'
 
-export async function loadMobileResumeMetadata(client: RpcClient): Promise<{
-  repos: MobileAiVaultResumeRepo[]
-  folderWorkspaces: MobileAiVaultResumeFolderWorkspace[]
-  projectGroups: MobileAiVaultResumeProjectGroup[]
-  settings: MobileAiVaultResumeSettings | null
-  worktrees: Worktree[] | null
-}> {
-  // Why: repo.list can enrich repo remote identities, so fetch resume-only
-  // metadata after explicit user intent instead of delaying history browsing.
-  // timeoutMs: without it a socket drop parks these on the reconnect waiter
-  // for minutes, pinning the resume spinner (see RESUME_RPC_TIMEOUT_MS).
+type ResumeRepos = MobileAiVaultResumeCatalog['repos']
+
+export async function loadMobileResumeMetadata(client: RpcClient): Promise<
+  MobileAiVaultResumeCatalog & {
+    settings: AiVaultResumeLaunchSettings | null
+    worktrees: Worktree[] | null
+  }
+> {
+  // Fetch repo-enriching metadata only on resume intent; RESUME_RPC_TIMEOUT_MS prevents dropped sockets parking spinner on multi-minute reconnect waiter.
   const [repoReply, folderWorkspaceReply, projectGroupReply, settingsReply, worktreeReply] =
     await Promise.all([
       resumeRepoListRead.request(client, undefined, { timeoutMs: RESUME_RPC_TIMEOUT_MS }),
@@ -56,12 +50,13 @@ export async function loadMobileResumeMetadata(client: RpcClient): Promise<{
   const settingsResult = settingsReply ? optionalSettingsRead.interpret(settingsReply) : null
   const settings = settingsResult?.accepted
     ? // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
-      (settingsResult.value as MobileAiVaultResumeSettings | null | undefined)
+      (settingsResult.value as AiVaultResumeLaunchSettings | null | undefined)
     : null
   const worktreeResult = worktreeReply && resumeWorktreeListRead.interpret(worktreeReply)
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
+  const repos = rpcPayloadMember(repoResult, 'repos') as ResumeRepos | undefined
   return {
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
-    repos: (rpcPayloadMember(repoResult, 'repos') as MobileAiVaultResumeRepo[] | undefined) ?? [],
+    repos: repos ?? [],
     folderWorkspaces: readAcceptedResumeList(folderWorkspaceResult, 'folderWorkspaces') ?? [],
     projectGroups: readAcceptedResumeList(projectGroupResult, 'groups') ?? [],
     settings: settings ?? null,

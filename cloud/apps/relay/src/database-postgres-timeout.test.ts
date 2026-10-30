@@ -123,9 +123,13 @@ describe('PostgreSQL relay deadlines', () => {
   it('applies the schema on the untimed pool, never on the serving one', async () => {
     fakes.query.mockClear()
     const ddl: string[] = []
+    const serving: string[] = []
     fakes.query.mockImplementation(async (sql: string) => {
       // Every statement issued before the serving pool exists is schema work.
       if (fakes.lifecycle.length === 1) ddl.push(sql)
+      else {
+        serving.push(sql)
+      }
       return { rows: [], rowCount: 0 }
     })
     const database = await openRelayDatabase({
@@ -153,6 +157,10 @@ describe('PostgreSQL relay deadlines', () => {
     ).toBe(true)
     // The backfill is DML, so it stays on the deadline-bearing serving pool.
     expect(ddl.some((statement) => statement.includes('INSERT INTO'))).toBe(false)
+    expect(serving.some((statement) => statement.includes('INSERT INTO'))).toBe(true)
+    expect(serving.some((statement) => /^(?:CREATE|ALTER|DROP)\b/i.test(body(statement)))).toBe(
+      false
+    )
     await database.close()
   })
 
@@ -200,10 +208,8 @@ describe('PostgreSQL relay deadlines', () => {
     ).toBe(5_000)
   })
 
-  // Why: a statement deadline that reaches the caller as a crash converts a
-  // transient stall into a failed assignment. It aborts the transaction exactly
-  // as a lock timeout does, so it belongs on the same bounded retry.
-  it('retries a statement timeout on a fresh client', async () => {
+  // Real 57014 aborts transactions like lock timeout; retry rather than fail assignments on transient stalls.
+  it('retries a transaction after a statement timeout', async () => {
     vi.spyOn(console, 'warn').mockImplementation(() => undefined)
     const database = await openRelayDatabase({
       databaseUrl: 'postgresql://relay:secret@127.0.0.1:5432/relay',
@@ -254,9 +260,7 @@ describe('PostgreSQL schema startup', () => {
   })
 
   it('fails the boot on a lock timeout instead of re-entering the lock queue', async () => {
-    // The catalog pre-check already answered that the object is missing, so a lock timeout means
-    // this boot lost the queue. Relation locks are granted in queue order, so each retry parks
-    // every writer behind it for another timeout.
+    // Catalog already proved missing: requeued DDL after lock timeout parks every writer behind it again.
     const errors: string[] = []
     vi.spyOn(console, 'error').mockImplementation((line: string) => {
       errors.push(line)

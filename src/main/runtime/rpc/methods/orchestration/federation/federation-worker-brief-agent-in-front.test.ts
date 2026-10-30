@@ -7,8 +7,7 @@ import { configureFederationWorkerRuntime } from './federation-runtime.test-supp
 
 const PTY_ID = 'pty_worker'
 
-// Why: a shell back at its prompt after the agent exits reads as ready too, so the worker host
-// must find the launched agent in front before it types the brief, or the shell runs the brief.
+// A returned shell also looks ready; prove the launched agent is in front before typing its brief.
 describe('a paired-server worker start writes its brief only into the agent it launched', () => {
   const databases: OrchestrationDb[] = []
 

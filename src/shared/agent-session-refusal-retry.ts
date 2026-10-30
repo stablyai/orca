@@ -29,12 +29,7 @@ export function agentSessionRefusalOperationState(
   }
 }
 
-/**
- * Whether a verdict lets a retry use a new operation id. A stored `exited` is final: nothing runs
- * the refused operation, so a new id cannot collide with it. Any other stored verdict is a floor:
- * the first operation may still land, so only a verdict re-derived from the current lease can prove
- * `exited`, and nothing lowers a stored `exited`.
- */
+/** Stored exited is final and permits a new operation ID. Other stored verdicts are floors: only current lease evidence can prove exit because the original effect may still land. */
 export function agentSessionOwnerVerdictAllowsFreshOperationId(
   stored: AgentSessionOwnerVerdict | undefined,
   current?: AgentSessionOwnerVerdict

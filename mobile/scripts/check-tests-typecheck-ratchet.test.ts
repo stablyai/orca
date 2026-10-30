@@ -1,16 +1,94 @@
+import { runProcessSync } from '@orca/process-host'
 import fs from 'node:fs'
+import os from 'node:os'
 import path from 'node:path'
-import { describe, expect, it } from 'vitest'
-// Only the pure functions are under test; the tsc spawn is proven end to end by CI.
+import { describe, expect, it, vi } from 'vitest'
+import { removeTreeSync } from '../../src/shared/windows-transient-lock-removal'
 import {
   diffBaseline,
   diffCensus,
   hasTsNocheckDirective,
+  main,
   parseBaseline,
   parseFailingFiles,
   parseProgramTestFiles,
   TESTS_OUTSIDE_PROGRAM
 } from './check-tests-typecheck-ratchet.mjs'
+
+vi.mock('@orca/process-host', () => ({ runProcessSync: vi.fn() }))
+vi.mock('./mobile-typecheck-compiler.mjs', () => ({
+  resolveMobileTypecheckCommand: (project: string, cwd: string) => ({
+    program: 'compiler',
+    args: ['--project', project],
+    cwd
+  })
+}))
+
+describe('ratchet failure diagnostics', () => {
+  it.each([
+    { name: 'new failure', baseline: '', failed: true, exit: 1, printsDiagnostics: true },
+    { name: 'clean pass', baseline: '', failed: false, exit: 0, printsDiagnostics: false },
+    {
+      name: 'grandfathered failure',
+      baseline: 'src/value.test.ts\n',
+      failed: true,
+      exit: 0,
+      printsDiagnostics: false
+    },
+    {
+      name: 'stale baseline',
+      baseline: 'src/value.test.ts\n',
+      failed: false,
+      exit: 1,
+      printsDiagnostics: false
+    }
+  ])('preserves $name outcome and baseline', ({ baseline, failed, exit, printsDiagnostics }) => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'orca-pr31180-ratchet-'))
+    const diagnostic = 'src/value.test.ts(1,2): error TS2322: Type number is not assignable.'
+    const stderrDiagnostic = 'src/value.test.ts(2,3): error TS2345: Argument type mismatch.'
+    const detail = '  Type number is not assignable to type string.'
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const logs = vi.spyOn(console, 'log').mockImplementation(() => {})
+    try {
+      for (const file of [...TESTS_OUTSIDE_PROGRAM.keys(), 'src/value.test.ts']) {
+        fs.mkdirSync(path.dirname(path.join(root, file)), { recursive: true })
+        fs.writeFileSync(path.join(root, file), 'export {}\n')
+      }
+      const baselineFile = path.join(root, 'tests-typecheck-baseline.txt')
+      fs.writeFileSync(baselineFile, baseline)
+      const programFile = path.join(fs.realpathSync(root), 'src/value.test.ts')
+      vi.mocked(runProcessSync).mockReturnValue({
+        code: failed ? 2 : 0,
+        signal: null,
+        timedOut: false,
+        stdout: `${programFile}\n${failed ? `${diagnostic}\n${detail}\n` : ''}`,
+        stderr: failed ? `${stderrDiagnostic}\n` : ''
+      })
+
+      expect(main(root)).toBe(exit)
+      expect(runProcessSync).toHaveBeenCalledExactlyOnceWith({
+        program: 'compiler',
+        args: ['--project', 'tsconfig.test.json', '--listFiles'],
+        cwd: root,
+        timeoutMs: null,
+        maxOutputBytes: 64 * 1024 * 1024
+      })
+      expect(errors.mock.calls.some(([message]) => message === diagnostic)).toBe(printsDiagnostics)
+      expect(errors.mock.calls.some(([message]) => message === stderrDiagnostic)).toBe(
+        printsDiagnostics
+      )
+      expect(
+        errors.mock.calls.some(([message]) => message === detail || message === programFile)
+      ).toBe(false)
+      expect(fs.readFileSync(baselineFile, 'utf8')).toBe(baseline)
+    } finally {
+      vi.mocked(runProcessSync).mockReset()
+      errors.mockRestore()
+      logs.mockRestore()
+      removeTreeSync(root)
+    }
+  })
+})
 
 describe('the failing-file parser', () => {
   it('names each file once however many errors it carries', () => {
@@ -22,8 +100,7 @@ describe('the failing-file parser', () => {
     expect(parseFailingFiles(output)).toEqual(['src/a.test.ts', 'src/b.test.tsx'])
   })
 
-  // tsc indents the "Overload 1 of 2, ..." detail under its error; counting those as files would
-  // put unparseable entries in the baseline and make the gate unprunable.
+  // Indented overload details are not diagnostic files; counting them makes baseline unprunable.
   it('ignores the indented detail lines tsc prints under an error', () => {
     const output = [
       'src/a.test.ts(12,5): error TS2769: No overload matches this call.',
@@ -33,8 +110,7 @@ describe('the failing-file parser', () => {
     expect(parseFailingFiles(output)).toEqual(['src/a.test.ts'])
   })
 
-  // tsc prints the host separator. Left as-is, a Windows run would read every baseline entry as
-  // both stale and added, and the gate would be unpassable rather than wrong in one direction.
+  // Normalize Windows separators or every baseline entry appears stale and added.
   it("normalises the Windows separators tsc prints to the baseline's POSIX ones", () => {
     const output = [
       'src\\session\\a.test.ts(12,5): error TS2345: Argument of type x.',
@@ -77,9 +153,7 @@ describe('the program census', () => {
     ).toEqual(['src/b.test.ts'])
   })
 
-  // A wildcard include keeps only the higher-priority extension, so a .tsx beside a .test.ts of the
-  // same basename leaves the program with no config change at all. This is the case that hid
-  // MobileHostCard.test.tsx.
+  // Higher-priority .tsx can shadow same-stem .test.ts through wildcard include without config changes (MobileHostCard case).
   it('names a .tsx shadowed by a .test.ts of the same basename', () => {
     expect(
       diffCensus(['src/Card.test.ts', 'src/Card.test.tsx'], ['src/Card.test.ts'], new Map()).missing
@@ -110,8 +184,7 @@ describe('the program census', () => {
     })
   })
 
-  // The allow-list and the tsconfig exclude are two lists of the same four files; drift between
-  // them would either break the build or re-open the hole silently.
+  // Pin allowlist/tsconfig exclusion parity so neither silently widens the other.
   it('matches tsconfig.test.json exclude entry for entry', () => {
     const root = path.join(import.meta.dirname, '..')
     const config = fs.readFileSync(path.join(root, 'tsconfig.test.json'), 'utf8')

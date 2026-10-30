@@ -1,17 +1,22 @@
-import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
+import {
+  existsSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync
+} from 'node:fs'
+import { tmpdir } from 'node:os'
 import { join, relative } from 'node:path'
 import { expect, it } from 'vitest'
 import { stripComments } from '../../shared/source-scan/source-tree-scan'
 
 const src = join(__dirname, '../..')
 
-/**
- * Every place a Claude login could be written from: accounts, usage, launch, hooks, the CLI, the
- * relay and the generated shell scripts. Plan §9 lists these; credential checks run on all of them.
- */
 const credentialRoots: readonly (string | { root: string; only: RegExp })[] = [
   'main/claude-accounts',
-  // Other providers there refresh their own logins; only Claude's usage is in scope.
+  // Other providers may refresh their own credentials.
   { root: 'main/rate-limits', only: /[\\/]claude[^\\/]*\.ts$/ },
   'main/claude',
   'main/native-chat',
@@ -24,10 +29,7 @@ const credentialRoots: readonly (string | { root: string; only: RegExp })[] = [
   'shared'
 ]
 
-/**
- * Only noncredential profile surfaces may persist bytes, and each only with the primitives it
- * uses today; a new primitive in one of them is a review, not a silent pass.
- */
+// New persistence primitives require explicit review, even in an allowed module.
 const fsAllowances: Record<string, readonly string[]> = {
   'claude-accounts/claude-profile-history.ts': [
     'mkdirSync',
@@ -36,12 +38,12 @@ const fsAllowances: Record<string, readonly string[]> = {
     'symlinkSync',
     'unlinkSync'
   ],
+  // Stores Claude config folder paths only.
+  'claude-accounts/claude-observed-config-dirs.ts': ['writeFileAtomically'],
   'claude-accounts/claude-profile-paths.ts': ['mkdirSync', 'writeFileAtomically'],
-  // The which-account file.
   'claude-accounts/claude-profile-router.ts': ['mkdirSync', 'rmSync', 'writeFileAtomically'],
-  // Removing an account deletes its folder, links first.
   'claude-accounts/claude-account-folder.ts': ['rmSync', 'rmdirSync', 'unlinkSync'],
-  // Not a file: a pasted sign-in code goes to the login process's stdin.
+  // This write targets process stdin, not a file.
   'claude-accounts/claude-command-process.ts': ['write'],
   'claude-accounts/claude-profile-prompt-history.ts': [
     'appendFileSync',
@@ -66,9 +68,9 @@ const fsAllowances: Record<string, readonly string[]> = {
     'unlinkSync',
     'writeFileAtomically'
   ],
-  // The BROWSER stand-in a hidden sign-in hands its link through; holds no login.
+  // The browser helper passes a sign-in link, not credentials.
   'claude-accounts/claude-sign-in-browser.ts': ['rm', 'writeFile'],
-  // The guest helper answers the host on stdout.
+  // This write targets stdout, not a file.
   'claude-accounts/claude-profile-wsl-entry.ts': ['write']
 }
 const mutation =
@@ -87,12 +89,12 @@ function persistencePrimitives(text: string): string[] {
 
 const WRITE_CALL =
   /\b(?:write\w*|append\w*|copy\w*|cp(?:Sync)?|rename\w*|link\w*|symlink\w*|createWriteStream)\s*\(/g
-// The one runner that takes `security` argv from its callers; each caller must spell the verb.
+// Only this runner may forward arbitrary security argv.
 const SECURITY_RUNNER = 'main/macos-keychain/generic-password.ts'
-// Removing an account deletes the Keychain items Claude made for its folder; nothing adds one.
+// Only account removal may delete Keychain items.
 const KEYCHAIN_DELETE_OWNER = 'main/claude-accounts/claude-account-folder.ts'
 
-/** Names bound, directly or through another such name, to the credentials file's path. */
+/** Follow aliases of credential file paths. */
 function credentialFileNames(text: string): Set<string> {
   const declarations: { name: string; init: string }[] = []
   const lines = text.split('\n')
@@ -128,11 +130,9 @@ function credentialFileNames(text: string): Set<string> {
   return names
 }
 
-/** Credential writes refused everywhere scanned, whatever form the call takes. */
 function credentialMutations(text: string, file = ''): string[] {
   const found: string[] = []
-  // A `security` launch whose verb is not spelled out could be a write, so only the runner may
-  // forward argv, and its callers must spell the verb.
+  // Computed security verbs could hide writes; require literal verbs outside the runner.
   if (
     (file !== SECURITY_RUNNER &&
       /\b(?:exec(?:File)?(?:Sync|Async)?|spawn(?:Sync)?|runProcess|spawnProcess)\s*\(\s*['"`]security['"`]\s*,\s*(?!\[\s*['"])/.test(
@@ -143,7 +143,6 @@ function credentialMutations(text: string, file = ''): string[] {
   ) {
     found.push('keychain command with a computed verb')
   }
-  // A name bound to the credentials file that reaches a write, anywhere in the same file.
   const names = credentialFileNames(text)
   for (const call of text.matchAll(WRITE_CALL)) {
     const args = text.slice(call.index + call[0].length, call.index + call[0].length + 300)
@@ -152,7 +151,6 @@ function credentialMutations(text: string, file = ''): string[] {
       break
     }
   }
-  // Argv (`['add-generic-password', …]`) and shell (`security add-generic-password`) forms.
   if (
     /add-generic-password/.test(text) ||
     (file !== KEYCHAIN_DELETE_OWNER && /delete-generic-password/.test(text))
@@ -165,8 +163,7 @@ function credentialMutations(text: string, file = ''): string[] {
   if (/oauth\/token|grant_type|\brefresh_token\b/.test(text)) {
     found.push('token refresh')
   }
-  // A statement that names the credentials file together with anything that writes, copies,
-  // moves or opens it for writing (TS calls and generated shell alike).
+  // Cover generated shell writes as well as TypeScript calls.
   for (const statement of text.split(/;|\n\s*\n/)) {
     if (
       statement.includes('.credentials.json') &&
@@ -191,11 +188,34 @@ function files(dir: string): string[] {
         ? []
         : files(file)
       : /\.(?:ts|tsx|mts|cts|js|mjs|cjs|sh)$/.test(entry.name) &&
-          !/\.test\.|\.spec\.|test-harness|harness\.ts|test-fixtures|test-utils/.test(entry.name)
+          !/\.test\.|\.spec\.|test-harness|harness\.ts|test-fixtures|test-utils|(?:^|-)test-constants\.ts$/.test(
+            entry.name
+          )
         ? [file]
         : []
   })
 }
+
+it('excludes test constants without hiding credential mutations in neighboring production files', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'orca-credential-scan-'))
+  const productionFiles = [
+    'credential-refresh.ts',
+    'pty-ipc-test-constants-reader.ts',
+    'contest-constants.ts'
+  ]
+  try {
+    for (const name of ['pty-ipc-test-constants.ts', ...productionFiles]) {
+      writeFileSync(join(dir, name), "fetch('/oauth/token', { body: 'refresh_token' })")
+    }
+    const scanned = files(dir)
+    expect(scanned.map((file) => relative(dir, file)).sort()).toEqual(productionFiles.sort())
+    for (const file of scanned) {
+      expect(credentialMutations(readFileSync(file, 'utf8'))).toEqual(['token refresh'])
+    }
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
 
 it('keeps every Claude credential writer removed, in every form and on every launch path', () => {
   const violations = credentialRoots

@@ -16,6 +16,7 @@ vi.mock('../../../agent-hooks/wsl-hook-relay-manager', () => ({
     ensureForDistro: vi.fn(),
     getGuestEndpointFilePath: () => '/guest/endpoint.json',
     getOpenCodeOverlayDir: () => join(fixture.userData, 'guest-overlay'),
+    getClaudeAgentView: () => null,
     getGuestAgentPath: () => null
   }
 }))
@@ -33,8 +34,7 @@ vi.mock('../../../codex/codex-hook-reconcile', () => ({
 
 import { buildPtyHostEnv } from './assembly'
 
-// Why this file: a codex typed in a native pane reads ~/.codex, so each native
-// spawn rechecks Orca's entry there; a WSL pane's Codex never reads it.
+// Typed Codex commands use native ~/.codex; reconcile on native spawns, never Windows-side for WSL panes.
 
 let root: string
 let options: BuildPtyHostEnvOptions

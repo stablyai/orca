@@ -17,11 +17,7 @@ export function artifactSearchHaystack(item: ArtifactListItem): string {
     .toLowerCase()
 }
 
-/**
- * Caps the controlled input value so a multi-MB paste cannot pin renderer memory.
- * Keeping maxBytes+1 code units is enough for the over-limit check while
- * discarding the rest of the paste.
- */
+/** Retain at most maxBytes+1 code units for the UTF-8 limit check; discard the rest before storing a multi-MB paste. */
 export function clampArtifactListSearchQuery(
   rawQuery: string,
   maxBytes = ARTIFACT_LIST_SEARCH_QUERY_MAX_BYTES

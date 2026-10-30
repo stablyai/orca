@@ -16,12 +16,7 @@ const NO_CAPABILITIES: readonly string[] = []
 const UNREACHABLE_SERVER_MESSAGE =
   "Your phone can't reach this workspace's server through this desktop."
 
-/**
- * A workspace route's server, read once from its `executionHost` param: every call made and every
- * route pushed below it stays on that server, and every feature gate below reads that server's own
- * status. Absent for the desktop's own workspaces; a server this phone can't reach (older desktop
- * or shell, unreadable status) gets one explicit dead end.
- */
+// Route calls, pushes and feature gates through executionHost; absent means the paired desktop. Unreachable servers get an explicit refusal after desktop status settles.
 export function WorkspaceRoute({ children }: { children: ReactNode }) {
   const params = useLocalSearchParams<{
     hostId?: string | string[]
@@ -37,7 +32,7 @@ export function WorkspaceRoute({ children }: { children: ReactNode }) {
     desktopCapabilities: desktopGates?.hostCapabilities ?? NO_CAPABILITIES,
     executionHost
   })
-  // Why: once the desktop has answered, a server it can't reach for this phone is a dead end, not a spinner.
+  // Settled desktop status cannot become reachable by keeping this spinner open.
   if (state === 'connected' && desktopGates && !desktopGates.statusPending && routeHost === null) {
     return <PageRouteUnavailableScreen hostId={hostId} message={UNREACHABLE_SERVER_MESSAGE} />
   }
@@ -57,7 +52,6 @@ export function WorkspaceRoute({ children }: { children: ReactNode }) {
   )
 }
 
-/** Wraps a workspace route's default export so everything under it knows the workspace's server. */
 export function withWorkspaceRoute(Screen: () => ReactNode): () => ReactNode {
   return function WorkspaceRouteScreen() {
     return (

@@ -6,8 +6,7 @@ export function LargeDiffLoadPrompt({
   sizeUnknown = false
 }: {
   onLoad: () => void
-  // Deferred rows split two ways: over the changed-line limit, or never counted
-  // at all. Claiming "large" for an uncounted 4 KB binary would be false.
+  // Uncounted deferred rows can be small binaries; do not label them large.
   sizeUnknown?: boolean
 }): React.JSX.Element {
   return (

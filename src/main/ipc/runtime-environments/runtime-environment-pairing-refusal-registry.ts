@@ -1,7 +1,4 @@
-/**
- * Who answers a server refusing this desktop's token, registered by the IPC layer so the status
- * owner and the shared control socket reach it without importing the SSH tunnel machinery.
- */
+/** Register recovery here to keep status owners and control sockets independent of SSH tunnel imports. */
 export type RefusedPairingRecovery = (environmentId: string) => Promise<'built' | 'repaired'> | null
 export type SharedControlRefusalHandler = (
   environmentId: string
@@ -21,7 +18,7 @@ export function setRefusedPairingHandlers(handlers: {
   connectRequested = handlers.connectRequested
 }
 
-/** An explicit Connect is the user asking again, so a recently failed re-pair must not answer it. */
+/** Explicit Connect must bypass a cached failed re-pair. */
 export function noteRuntimeEnvironmentConnectRequested(environmentId: string): void {
   connectRequested(environmentId)
 }

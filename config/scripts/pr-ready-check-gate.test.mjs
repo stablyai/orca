@@ -69,6 +69,12 @@ describe.skipIf(process.platform === 'win32')(
       for (const should_run of ['true', 'false', ...malformedSelectors]) {
         plans.push(aggregateNeeds('true', { should_run }))
       }
+      for (const needs of plans) {
+        const { static_analysis, typecheck } = needs.code_paths.outputs
+        expect(needs.preflight.result).toBe(
+          static_analysis === 'true' || typecheck === 'true' ? 'success' : 'skipped'
+        )
+      }
       expect(await verifyCases(plans.map(aggregateEnvironment), gate.run)).toEqual(
         plans.map(() => 0)
       )
@@ -100,10 +106,10 @@ describe.skipIf(process.platform === 'win32')(
       for (const job of aggregateSelectors) {
         for (const selected of malformedSelectors) {
           cases.push(aggregateEnvironment(aggregateNeeds('false', { [job]: selected })))
-          const missing = aggregateNeeds('false')
-          delete missing.code_paths.outputs[job]
-          cases.push(aggregateEnvironment(missing))
         }
+        const missing = aggregateNeeds('false')
+        delete missing.code_paths.outputs[job]
+        cases.push(aggregateEnvironment(missing))
       }
       expect(await verifyCases(cases, gate.run)).toEqual(cases.map(() => 1))
     })

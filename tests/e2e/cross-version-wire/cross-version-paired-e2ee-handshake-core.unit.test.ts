@@ -3,7 +3,7 @@ import { beforeAll, describe, expect, it, vi } from 'vitest'
 import { E2EEChannel as CurrentChannel } from '../../../src/main/runtime/rpc/e2ee-channel'
 import { createPairedE2EEClientHandshake } from '../../../src/shared/paired-e2ee-client-handshake'
 import { NODE_PAIRED_E2EE_PRIMITIVES } from '../../../src/shared/paired-e2ee-node-primitives'
-import { remoteRuntimeClientCapabilities } from '../../../src/shared/remote-runtime-client-capabilities'
+import { remoteRuntimeClientCapabilities } from '../../../src/shared/remote-runtime/remote-runtime-client-capabilities'
 import type { MOBILE_E2EE_LEGACY_FIXTURE } from '../../../src/shared/mobile-e2ee-legacy-fixtures'
 import {
   importReleaseCheckoutModule,
@@ -11,12 +11,7 @@ import {
   resolveBaselineReleaseRef
 } from './release-checkout'
 
-/**
- * Desktop, CLI, web and mobile clients now build their hello, ready check, auth frame and
- * sealed channel from one shared handshake core. Neither direction of version skew may notice:
- * the core must authenticate against the released host, and the released client must keep
- * authenticating against this host.
- */
+// Shared handshake-core refactoring must preserve authentication in both directions against real released peers.
 const SUITE_TIMEOUT_MS = 180_000
 
 type ChannelLike = {

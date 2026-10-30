@@ -1,11 +1,6 @@
-// Refresh tokens whose server-side fate is unknown: the POST left the client but
-// no status came back, so the server may already have rotated the token before
-// the reply was lost. Sending it again reads as reuse and revokes the whole
-// token family — on 2026-09-04 that turned one slow refresh endpoint into 21,605
-// sign-outs, because every caller's retry loop replayed the same stored token.
+// Lost refresh replies may have rotated the token; replay can revoke the entire token family.
 
-// A replay this soon after the ambiguous attempt is a retry loop, not a person
-// asking again; holding it back keeps one lost reply from becoming a storm.
+// Briefly block retry loops after ambiguous rotation to avoid replay storms.
 export const AMBIGUOUS_REFRESH_REPLAY_DELAY_MS = 30_000
 const AMBIGUOUS_REFRESH_ATTEMPTS_MAX_ENTRIES = 512
 
@@ -62,8 +57,7 @@ export function recordAmbiguousRefreshAttempt(
   pruneAmbiguousRefreshAttempts(now)
 }
 
-// Call once the token's fate is known: it rotated, or the session it belonged to
-// is gone. Leaving the record would mislabel a later, unrelated 401.
+// Forget resolved token fates so later unrelated 401s are not misclassified.
 export function forgetAmbiguousRefreshAttempt(key: string): void {
   ambiguousRefreshAttempts.delete(key)
   expiredAmbiguousRefreshAttempts.delete(key)
@@ -92,15 +86,13 @@ export function blocksAmbiguousRefreshReplay(
     return false
   }
   if (now - attempt.attemptedAt >= AMBIGUOUS_REFRESH_REPLAY_DELAY_MS) {
-    // Keep the evidence separate from the temporary block so a later 401 can
-    // still be classified as a possible replay after the window expires.
+    // Retain evidence after unblocking so later 401s can still be classified as possible replay.
     ambiguousRefreshAttempts.delete(key)
     expiredAmbiguousRefreshAttempts.set(key, attempt)
     pruneAmbiguousRefreshAttempts(now)
     return false
   }
   pruneAmbiguousRefreshAttempts(now, key)
-  // Why bounded rather than permanent: the token is only *possibly* spent. A
-  // permanent block would sign out every desktop whose refresh merely timed out.
+  // A permanent block would sign out users whose token was never spent.
   return now - attempt.attemptedAt < AMBIGUOUS_REFRESH_REPLAY_DELAY_MS
 }

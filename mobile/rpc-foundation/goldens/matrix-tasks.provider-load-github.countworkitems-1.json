@@ -228,46 +228,6 @@
         }
       ]
     },
-    "49c5fd241816": {
-      "status": "fulfilled",
-      "startedAt": 0,
-      "settledAt": 0,
-      "value": {
-        "failedCount": 0,
-        "items": [
-          {
-            "key": "github:repo-1:issue:9",
-            "provider": "github",
-            "source": {
-              "author": {
-                "$rpc": "null"
-              },
-              "id": "issue:9",
-              "labels": [],
-              "number": 9,
-              "repoId": "repo-1",
-              "repoName": "Repo",
-              "state": "open",
-              "title": "An issue",
-              "type": "issue",
-              "updatedAt": "2020-01-01T00:00:00.000Z",
-              "url": ""
-            },
-            "status": "Open",
-            "subtitle": "Repo #9",
-            "title": "An issue",
-            "updatedAt": "2020-01-01T00:00:00.000Z"
-          }
-        ],
-        "sourceErrors": [],
-        "sourceFallbacks": [],
-        "sourcesByRepoId": {
-          "repo-1": {
-            "issues": "upstream"
-          }
-        }
-      }
-    },
     "50982acf6b28": {
       "name": "github.countWorkItems#1",
       "ordinal": 14,
@@ -650,6 +610,47 @@
         }
       }
     },
+    "d0a974f0c6a1": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "errorTypes": [],
+        "failedCount": 0,
+        "items": [
+          {
+            "key": "github:repo-1:issue:9",
+            "provider": "github",
+            "source": {
+              "author": {
+                "$rpc": "null"
+              },
+              "id": "issue:9",
+              "labels": [],
+              "number": 9,
+              "repoId": "repo-1",
+              "repoName": "Repo",
+              "state": "open",
+              "title": "An issue",
+              "type": "issue",
+              "updatedAt": "2020-01-01T00:00:00.000Z",
+              "url": ""
+            },
+            "status": "Open",
+            "subtitle": "Repo #9",
+            "title": "An issue",
+            "updatedAt": "2020-01-01T00:00:00.000Z"
+          }
+        ],
+        "sourceErrors": [],
+        "sourceFallbacks": [],
+        "sourcesByRepoId": {
+          "repo-1": {
+            "issues": "upstream"
+          }
+        }
+      }
+    },
     "de7bfe07e04b": {
       "name": "github.countWorkItems#1",
       "ordinal": 14,
@@ -748,7 +749,7 @@
             "mount": "eb79a9b3682a",
             "linear-context-0": "eb79a9b3682a",
             "persist-teams-1": "eb79a9b3682a",
-            "github-page-2": "49c5fd241816"
+            "github-page-2": "d0a974f0c6a1"
           },
           "state": "67b5ebc67646",
           "effects": [
@@ -781,7 +782,7 @@
             "mount": "eb79a9b3682a",
             "linear-context-0": "eb79a9b3682a",
             "persist-teams-1": "eb79a9b3682a",
-            "github-page-2": "49c5fd241816",
+            "github-page-2": "d0a974f0c6a1",
             "github-count-3": "adcbf91f89c3"
           },
           "state": "67b5ebc67646",
@@ -815,7 +816,7 @@
             "mount": "eb79a9b3682a",
             "linear-context-0": "eb79a9b3682a",
             "persist-teams-1": "eb79a9b3682a",
-            "github-page-2": "49c5fd241816",
+            "github-page-2": "d0a974f0c6a1",
             "github-count-3": "1c97db0775ed"
           },
           "state": "67b5ebc67646",
@@ -849,7 +850,7 @@
             "mount": "eb79a9b3682a",
             "linear-context-0": "eb79a9b3682a",
             "persist-teams-1": "eb79a9b3682a",
-            "github-page-2": "49c5fd241816",
+            "github-page-2": "d0a974f0c6a1",
             "github-count-3": "1c97db0775ed"
           },
           "state": "67b5ebc67646",
@@ -883,7 +884,7 @@
             "mount": "eb79a9b3682a",
             "linear-context-0": "eb79a9b3682a",
             "persist-teams-1": "eb79a9b3682a",
-            "github-page-2": "49c5fd241816",
+            "github-page-2": "d0a974f0c6a1",
             "github-count-3": "1c97db0775ed"
           },
           "state": "67b5ebc67646",
@@ -917,7 +918,7 @@
             "mount": "eb79a9b3682a",
             "linear-context-0": "eb79a9b3682a",
             "persist-teams-1": "eb79a9b3682a",
-            "github-page-2": "49c5fd241816",
+            "github-page-2": "d0a974f0c6a1",
             "github-count-3": "1c97db0775ed"
           },
           "state": "67b5ebc67646",
@@ -951,7 +952,7 @@
             "mount": "eb79a9b3682a",
             "linear-context-0": "eb79a9b3682a",
             "persist-teams-1": "eb79a9b3682a",
-            "github-page-2": "49c5fd241816",
+            "github-page-2": "d0a974f0c6a1",
             "github-count-3": "1c97db0775ed"
           },
           "state": "67b5ebc67646",
@@ -985,7 +986,7 @@
             "mount": "eb79a9b3682a",
             "linear-context-0": "eb79a9b3682a",
             "persist-teams-1": "eb79a9b3682a",
-            "github-page-2": "49c5fd241816",
+            "github-page-2": "d0a974f0c6a1",
             "github-count-3": "1c97db0775ed"
           },
           "state": "67b5ebc67646",
@@ -1019,7 +1020,7 @@
             "mount": "eb79a9b3682a",
             "linear-context-0": "eb79a9b3682a",
             "persist-teams-1": "eb79a9b3682a",
-            "github-page-2": "49c5fd241816",
+            "github-page-2": "d0a974f0c6a1",
             "github-count-3": "1c97db0775ed"
           },
           "state": "67b5ebc67646",
@@ -1053,7 +1054,7 @@
             "mount": "eb79a9b3682a",
             "linear-context-0": "eb79a9b3682a",
             "persist-teams-1": "eb79a9b3682a",
-            "github-page-2": "49c5fd241816",
+            "github-page-2": "d0a974f0c6a1",
             "github-count-3": "1c97db0775ed"
           },
           "state": "67b5ebc67646",
@@ -1087,7 +1088,7 @@
             "mount": "eb79a9b3682a",
             "linear-context-0": "eb79a9b3682a",
             "persist-teams-1": "eb79a9b3682a",
-            "github-page-2": "49c5fd241816",
+            "github-page-2": "d0a974f0c6a1",
             "github-count-3": "1c97db0775ed"
           },
           "state": "67b5ebc67646",
@@ -1121,7 +1122,7 @@
             "mount": "eb79a9b3682a",
             "linear-context-0": "eb79a9b3682a",
             "persist-teams-1": "eb79a9b3682a",
-            "github-page-2": "49c5fd241816",
+            "github-page-2": "d0a974f0c6a1",
             "github-count-3": "1c97db0775ed"
           },
           "state": "67b5ebc67646",

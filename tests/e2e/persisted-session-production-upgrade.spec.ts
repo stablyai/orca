@@ -184,8 +184,7 @@ async function launchPackagedOldProfile(args: {
           }
           return false
         },
-        // Older packaged builds can spend longer in their first-run renderer bootstrap
-        // while the candidate daemon from the same test worker is shutting down.
+        // Allow old packaged builds extra first-run bootstrap time while the candidate daemon is shutting down.
         { timeout: 120_000 }
       )
       .toBe(true)

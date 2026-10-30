@@ -1,7 +1,5 @@
-// Why a WebSocket close reason and not a JSON field: every relay-hello and
-// director-resolve schema on the phone is zod `.strict()`, so an added key is a
-// hard parse failure on already-shipped phones. The close reason is a wire slot
-// old peers never read, which makes it the only additive channel here.
+// Shipped phones strictly parse relay-hello/director-resolve JSON; new fields break them. WebSocket close reasons
+// provide an additive slot older peers ignore.
 export const RELAY_HOST_CLOSE_REASON = {
   // The desktop lost its Orca Cloud session (cleared, or refused with 401).
   SIGNED_OUT: 'signed-out'

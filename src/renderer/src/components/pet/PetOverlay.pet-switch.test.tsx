@@ -11,8 +11,7 @@ const storeState = vi.hoisted(() => ({
   petSize: 180
 }))
 
-// Why: a mutable pet so a re-render can simulate switching between two cached
-// custom pets that both resolve the idle state to different rows.
+// Mutable cached metadata lets rerender switch both URL and idle row.
 const petUrlState = vi.hoisted(() => ({
   url: 'blob:pet-a',
   idleRow: 0
@@ -92,14 +91,11 @@ describe('PetOverlay pet switching', () => {
     const before = spriteDiv(container)
     expect(before).toBeDefined()
 
-    // Switch to a different cached pet whose idle maps to another row.
     petUrlState.url = 'blob:pet-b'
     petUrlState.idleRow = 2
     act(() => root?.render(<PetOverlay />))
 
-    // key={url} makes React replace the element rather than update it in place;
-    // a fresh element starts its CSS animation at frame 0 instead of carrying
-    // the prior pet's currentTime. Without the key it would be the same node.
+    // URL-keyed remounts restart animation at frame 0 instead of retaining the previous pet’s currentTime.
     const after = spriteDiv(container)
     expect(after).toBeDefined()
     expect(after).not.toBe(before)

@@ -14,6 +14,8 @@ import {
   cellFlagParser
 } from './cell-flags.js'
 import { startControlFlagChannel } from './relay-control-flag-channel.js'
+import { readCloudRunInstanceZone } from './cloud-run-instance-zone.js'
+import { readSandboxTcpCounters } from './sandbox-tcp-counters.js'
 import {
   reconcileCellAdmissionAtStartup,
   roleOwnsAssignmentMaintenance
@@ -50,6 +52,7 @@ const database = await openRelayDatabaseAtBoot({
   poolMax: config.databasePoolMax,
   applicationName: `orca-relay/${config.role}/${config.cellId}`,
   appliesPostgresSchema: config.role !== 'cell',
+  retiresSlowConnections: config.role !== 'cell',
   readTimeoutMarginOverrideMs: () => cellFlagsApplied?.().readTimeoutMarginMs
 })
 await reconcileCellAdmissionAtStartup(config, new RelayAssignmentStore(database))
@@ -76,9 +79,12 @@ const {
   cellIncarnation,
   shadowSeatPoller
 } = createRelayServer(config, database, { cellFlags: cellFlagChannel?.applied })
-// Same owner as the assignment sweep: the cleanup only expires credentials that every reader
-// already re-checks at read time, so running it in all 23 cells multiplied one table scan by 23
-// without changing any answer.
+// Cloud Run sets K_SERVICE; GCE cells and local runs skip the metadata read.
+if (process.env.K_SERVICE) {
+  void readCloudRunInstanceZone().then((zone) => observability.setInstanceZone(zone))
+  observability.setTcpCounterReader(() => readSandboxTcpCounters())
+}
+// Only assignment-maintenance owner reaps credentials; readers already enforce expiry, so cell-wide copies multiplied scans without changing answers.
 const cleanupTimer = roleOwnsAssignmentMaintenance(config.role)
   ? setInterval(
       () =>

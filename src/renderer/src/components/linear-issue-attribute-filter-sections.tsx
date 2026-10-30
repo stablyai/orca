@@ -12,7 +12,7 @@ import {
   LINEAR_ISSUE_ATTRIBUTE_FILTER_MAX_STATE_IDS,
   type LinearIssueAttributeFilter
 } from '../../../shared/linear/issue-attribute-filter'
-import { getLinearPriorityLabel } from './task-page-localized-options'
+import { getLinearPriorityLabel } from './task-page/task-page-localized-options'
 import { LinearFacetCoverageNotice } from './linear-issue-attribute-filter-coverage-notice'
 import {
   expandLinearMetadataGroupKeys,
@@ -252,7 +252,6 @@ export function LinearIssueFilterSectionDetail({
     )
   }
 
-  // Status and labels are the same grouped, cap-bounded picker over a different facet.
   if (section === 'status' || section === 'labels') {
     const isStatus = section === 'status'
     const options = isStatus ? statusOptions : labelOptions

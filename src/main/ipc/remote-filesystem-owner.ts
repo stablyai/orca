@@ -1,13 +1,6 @@
 import { parseExecutionHostId } from '../../shared/execution-host'
 
-/**
- * Whether another machine holds this row's files, so its path must not authorize local reads.
- *
- * Fails closed on a stamp the parser rejects — empty `ssh:`, a bad escape, an embedded `|` (refused
- * so an alias cannot be rebound), an unknown prefix. `getSshTargetIdForExecutionHost` answers null
- * for all of them, and in an allow-list "cannot place this owner" must not read as "this machine".
- * A `runtime:` stamp stays local: on a repo row it names the store's own runtime, never a peer.
- */
+/** Local reads require a placeable local owner; malformed stamps fail closed. Repo runtime: stamps identify this store, not peers. */
 export function hasRemoteFilesystemOwner(scope: {
   connectionId?: string | null
   executionHostId?: string | null

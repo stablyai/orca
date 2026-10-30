@@ -138,7 +138,6 @@ describe('overlay layer under the startup terminal hold', () => {
   it('fills the visible held tab slot, including a tab created under the hold, until the gate opens', () => {
     setTabs(['tab-a', 'tab-b'], 'tab-a')
     renderOverlay(NO_ADMITTED_TABS)
-    // Only the visible tab gets a placeholder; the hidden held tab renders nothing.
     expect(placeholders()).toHaveLength(1)
     expect(placeholders()[0].parentElement?.getAttribute('data-retained-pane-group-id')).toBe(
       GROUP_ID

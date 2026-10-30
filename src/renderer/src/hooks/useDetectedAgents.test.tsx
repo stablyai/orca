@@ -28,12 +28,14 @@ let latestHookResult: UseDetectedAgentsResult | null = null
 
 function HookProbe({
   target,
-  onResult
+  onResult,
+  inventory
 }: {
   target: AgentDetectionTarget | undefined
   onResult?: (result: UseDetectedAgentsResult) => void
+  inventory?: 'enabled' | 'all'
 }): null {
-  latestHookResult = useDetectedAgents(target)
+  latestHookResult = useDetectedAgents(target, inventory)
   onResult?.(latestHookResult)
   return null
 }
@@ -109,6 +111,35 @@ beforeEach(() => {
   } as unknown as Window['api']
 })
 
+it('loads complete Settings inventory even when the automatic inventory is already cached', async () => {
+  useAppStore.getState().clearLocalDetectedAgents()
+  detectLocalAgents.mockImplementation((args) =>
+    Promise.resolve(args?.enabledOnly ? ['claude'] : ['claude', 'kiro'])
+  )
+  await useAppStore.getState().ensureDetectedAgents()
+  const container = document.createElement('div')
+  document.body.appendChild(container)
+  const root = createRoot(container)
+  roots.push(root)
+  await act(async () => {
+    root.render(createElement(HookProbe, { target: { kind: 'local' }, inventory: 'all' }))
+  })
+  await flushEffects()
+  expect(latestHookResult?.detectedIds).toEqual(['claude', 'kiro'])
+  expect(useAppStore.getState().detectedAgentIds).toEqual(['claude'])
+  expect(detectLocalAgents.mock.calls.map(([args]) => args?.enabledOnly === true)).toEqual([
+    true,
+    false
+  ])
+  refreshLocalAgents.mockResolvedValueOnce({ agents: ['claude', 'codex', 'kiro'] })
+  await act(async () => {
+    await latestHookResult?.refresh()
+  })
+  expect(latestHookResult?.detectedIds).toEqual(['claude', 'codex', 'kiro'])
+  expect(refreshLocalAgents.mock.lastCall?.[0]?.enabledOnly).not.toBe(true)
+  expect(useAppStore.getState().detectedAgentIds).toEqual(['claude', 'codex', 'kiro'])
+})
+
 describe('Floating Workspace authority', () => {
   it('advertises native Windows agents beside an active WSL project', async () => {
     const activeResult: { current: UseDetectedAgentsResult | null } = { current: null }
@@ -171,7 +202,7 @@ describe('Floating Workspace authority', () => {
           runtime: expect.objectContaining({ kind: 'wsl', distro: 'Ubuntu' })
         })
       }),
-      undefined
+      { enabledOnly: true }
     ])
 
     refreshLocalAgents.mockResolvedValueOnce({
@@ -189,7 +220,7 @@ describe('Floating Workspace authority', () => {
     expect(activeResult.current?.detectedIds).toEqual(['claude'])
     expect(floatingResult.current?.detectedIds).toEqual(['codex'])
     expect(useAppStore.getState().detectedAgentIds).toEqual(['claude'])
-    expect(refreshLocalAgents).toHaveBeenLastCalledWith(undefined)
+    expect(refreshLocalAgents).toHaveBeenLastCalledWith({ enabledOnly: true, wakeWslDistro: true })
   })
 })
 
@@ -206,12 +237,10 @@ describe('useDetectedAgents (ssh call site)', () => {
   it('fires remote detection once on mount and does not thrash after an empty result', async () => {
     const root = await renderProbe({ kind: 'ssh', connectionId: 'ssh-1' })
 
-    // The effect fires detection once; an empty [] is stored (not null), so the
-    // detectedIds===null guard prevents a re-detect loop on the same surface.
+    // Empty detection is settled rather than null, preventing repeat probes on the same surface.
     expect(detectRemoteAgents).toHaveBeenCalledTimes(1)
     expect(useAppStore.getState().remoteDetectedAgentIds['ssh-1']).toEqual([])
 
-    // Re-rendering the same connection must not trigger another probe.
     await act(async () => {
       root.render(createElement(HookProbe, { target: { kind: 'ssh', connectionId: 'ssh-1' } }))
     })

@@ -29,9 +29,7 @@ function writeTextFileAtomic(filePath: string, content: string): void {
       if (readFileSync(filePath, 'utf-8') === content) {
         return
       }
-    } catch {
-      // Fall through to the atomic write path.
-    }
+    } catch {}
   }
 
   const tmpPath = join(dir, `.${Date.now()}-${randomUUID()}.tmp`)
@@ -42,9 +40,7 @@ function writeTextFileAtomic(filePath: string, content: string): void {
     if (existsSync(tmpPath)) {
       try {
         unlinkSync(tmpPath)
-      } catch {
-        // best effort
-      }
+      } catch {}
     }
   }
 }

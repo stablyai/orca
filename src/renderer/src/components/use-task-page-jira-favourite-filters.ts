@@ -4,8 +4,8 @@ import {
   jiraListFavouriteFiltersForTarget,
   type JiraFavouriteFiltersResult
 } from '@/runtime/runtime-jira-favourite-filters-client'
-import type { JiraFavouriteFilter } from '../../../shared/jira-favourite-filters'
-import type { TaskPageLinearViewStateModel } from './use-task-page-linear-view-state'
+import type { JiraFavouriteFilter } from '../../../shared/jira/jira-favourite-filters'
+import type { TaskPageLinearViewStateModel } from './task-page/linear/use-task-page-linear-view-state'
 import { translate } from '@/i18n/i18n'
 
 const EMPTY_FAVOURITES: readonly JiraFavouriteFilter[] = []

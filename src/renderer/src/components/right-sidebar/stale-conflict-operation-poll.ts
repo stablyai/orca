@@ -10,12 +10,7 @@ import { getWorktreeGitOwnerTarget } from './worktree-git-owner-target'
 
 const CONFLICT_POLL_INTERVAL_MS = 3000
 
-/**
- * Polls the conflict operation of non-active worktrees whose sidebar badge
- * still shows merge/rebase/cherry-pick, so the badge clears when the operation
- * finishes. This is a lightweight fs-only check (no git status), so it stays
- * cheap even with many worktrees.
- */
+/** Clear inactive-worktree conflict badges through cheap filesystem probes without Git status. */
 export function useStaleConflictOperationPolling(args: {
   enabled: boolean
   activeWorktreeId: string | null
@@ -36,8 +31,7 @@ export function useStaleConflictOperationPolling(args: {
     isConnectionReady,
     slowTaskBackoff
   } = args
-  // Why: only non-active worktrees with a known conflict operation need this
-  // probe — the full git status refresh already covers the active worktree.
+  // Active worktrees already receive full Git status refreshes.
   const staleConflictWorktrees = useMemo(() => {
     const result: { id: string; path: string }[] = []
     for (const [worktreeId, op] of Object.entries(conflictOperationByWorktree)) {
@@ -63,22 +57,18 @@ export function useStaleConflictOperationPolling(args: {
       return
     }
 
-    // Why: dispose() cannot interrupt an in-flight probe; without this guard a
-    // request resolving after cleanup would overwrite newer conflict state.
+    // dispose cannot interrupt in-flight probes; reject results after cleanup.
     let active = true
 
     const pollStale = async (): Promise<void> => {
-      // Why: a backoff-deferred run can fire long after the window hides; skip
-      // the probe instead of running SSH/RPC work nobody can see. The
-      // becoming-visible run catches up via the change-signal lane.
+      // Backoff may fire after hiding; skip invisible SSH/RPC work and catch up when visible.
       if (!isWindowVisible()) {
         return
       }
       for (const { id, path } of staleConflictWorktrees) {
         try {
           const connectionId = getConnectionId(id) ?? undefined
-          // Why: after explicit SSH disconnect the provider is intentionally
-          // gone; keep remote polling quiet until the target reconnects.
+          // Explicit SSH disconnect removes the provider; wait for reconnection before probing.
           const target = getWorktreeGitOwnerTarget(id)
           if (!isConnectionReady(connectionId) || !target) {
             continue
@@ -94,21 +84,16 @@ export function useStaleConflictOperationPolling(args: {
           }
           setConflictOperation(id, op)
         } catch {
-          // ignore — worktree may have been removed
+          // Worktrees may disappear during the probe.
         }
       }
     }
 
-    // Why: remote conflict probes can exceed the 3s interval. Keep one poll in
-    // flight, coalesce skipped ticks into one trailing pass, and back off after
-    // slow probe chains so stale badges catch up without stacking SSH/RPC work.
+    // Coalesce slow remote probes and back off to prevent overlapping SSH/RPC chains.
     const pollRunner = createCoalescedPollRunner(pollStale, {
       slowTaskBackoff
     })
-    // Why: conflict badges are visible sidebar state; keep them fresh in
-    // visible unfocused windows, but do not poll disconnected hidden windows.
-    // The becoming-visible run rides the short-backoff lane so badges catch
-    // up promptly after a hidden stretch.
+    // Refresh visible unfocused badges; visibility recovery uses the short-backoff lane.
     const stopVisiblePoll = installWindowVisibilityInterval({
       run: () => pollRunner.run(),
       runOnVisible: () => pollRunner.run({ changeSignal: true }),

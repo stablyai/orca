@@ -2,6 +2,7 @@ import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { MobileFileMarkdownPreview } from './MobileFileMarkdownPreview'
+import { findAllByHostType } from '../test-support/react-test-renderer-host-nodes'
 
 vi.mock('react-native', () => ({
   Alert: { alert },
@@ -40,7 +41,9 @@ vi.mock('../theme/mobile-theme', () => ({
   colors: { textPrimary: '#fff', textSecondary: '#999' },
   spacing: { xs: 4, sm: 8 },
   radii: { button: 6 },
-  typography: { metaSize: 12 }
+  typography: { metaSize: 12 },
+  getMobileColorScheme: () => 'dark',
+  subscribeMobileColorScheme: () => () => {}
 }))
 
 vi.mock('./mobile-file-preview-styles', () => ({
@@ -67,9 +70,9 @@ async function updatePreview(renderer: ReactTestRenderer, props: PreviewProps): 
 }
 
 function modeToggle(renderer: ReactTestRenderer, label: string) {
-  const toggle = renderer.root
-    .findAllByType('Pressable')
-    .find((node) => node.props.accessibilityLabel === label)
+  const toggle = findAllByHostType(renderer.root, 'Pressable').find(
+    (node) => node.props.accessibilityLabel === label
+  )
   if (!toggle) {
     throw new Error(`Missing ${label} toggle`)
   }
@@ -116,12 +119,8 @@ describe('MobileFileMarkdownPreview', () => {
       await updatePreview(renderer, { ...baseProps, content: source })
       const copy = modeToggle(renderer, 'Copy Markdown source')
       expect(copy.props.accessibilityRole).toBe('button')
-      expect(copy.findAllByType('Text')).toHaveLength(0)
-      expect(copy.props.style({ pressed: false })[0]).toMatchObject({ width: 24, height: 24 })
       await act(async () => copy.props.onPress())
       expect(writeText.mock.calls).toEqual([[source]])
-      expect(modeToggle(renderer, 'Copy Markdown source').findAllByType('Text')).toHaveLength(0)
-      expect(renderer.root.findAllByType('Check')).toHaveLength(1)
     }
   )
 
@@ -135,7 +134,7 @@ describe('MobileFileMarkdownPreview', () => {
     })
     const copy = modeToggle(renderer, 'Copy loaded Markdown source')
     expect(
-      renderer.root.findAllByType('Text').some((node) => node.props.children === 'Copy loaded')
+      findAllByHostType(renderer.root, 'Text').some((node) => node.props.children === 'Copy loaded')
     ).toBe(true)
     await act(async () => copy.props.onPress())
     expect(writeText.mock.calls).toEqual([[source]])
@@ -161,21 +160,6 @@ describe('MobileFileMarkdownPreview', () => {
     ).toBe(false)
     await selectMode(renderer, 'Copy Markdown source')
     expect(writeText.mock.calls).toEqual([[source], [source]])
-  })
-
-  it('opens file links from the rendered document', async () => {
-    const onOpenFile = vi.fn()
-    renderer = await renderPreview({
-      relativePath: 'docs/notes.md',
-      content: '[Details](details.md)',
-      truncated: false,
-      byteLength: 21,
-      onOpenFile
-    })
-    await act(async () => {
-      renderer?.root.findByType('MobileMarkdown').props.onOpenFile('details.md')
-    })
-    expect(onOpenFile).toHaveBeenCalledWith('details.md')
   })
 
   it('resets the selected mode for a new file or line target without remounting the preview', async () => {

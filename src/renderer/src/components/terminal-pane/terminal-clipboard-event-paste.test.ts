@@ -5,10 +5,21 @@ import {
   shouldUseClipboardEventPaste
 } from './terminal-clipboard-event-paste'
 
-function makeKeyEvent(
-  overrides: Partial<Pick<KeyboardEvent, 'key' | 'metaKey' | 'ctrlKey' | 'altKey' | 'shiftKey'>>
-): Pick<KeyboardEvent, 'key' | 'metaKey' | 'ctrlKey' | 'altKey' | 'shiftKey'> {
-  return { key: '', metaKey: false, ctrlKey: false, altKey: false, shiftKey: false, ...overrides }
+type KeyEventFields = Pick<
+  KeyboardEvent,
+  'key' | 'code' | 'metaKey' | 'ctrlKey' | 'altKey' | 'shiftKey'
+>
+
+function makeKeyEvent(overrides: Partial<KeyEventFields>): KeyEventFields {
+  return {
+    key: '',
+    code: '',
+    metaKey: false,
+    ctrlKey: false,
+    altKey: false,
+    shiftKey: false,
+    ...overrides
+  }
 }
 
 function makeClipboardEvent(text: string | null): ClipboardEvent {
@@ -69,9 +80,14 @@ describe('firesNativePasteEvent', () => {
     expect(firesNativePasteEvent(makeKeyEvent({ key: 'Insert', shiftKey: true }), false)).toBe(true)
   })
 
+  it('recognizes Ctrl+V on a non-Latin layout by its physical key', () => {
+    expect(
+      firesNativePasteEvent(makeKeyEvent({ key: 'м', code: 'KeyV', ctrlKey: true }), false)
+    ).toBe(true)
+  })
+
   it('does not treat a remapped non-clipboard chord as a native paste event', () => {
-    // A custom terminal.paste binding like Ctrl+Y fires no native paste event and
-    // must stay consumed so it is not encoded to the PTY as a control char.
+    // Remapped paste chords fire no native event and must stay consumed to avoid raw control characters.
     expect(firesNativePasteEvent(makeKeyEvent({ key: 'y', ctrlKey: true }), false)).toBe(false)
     expect(firesNativePasteEvent(makeKeyEvent({ key: 'd', ctrlKey: true }), false)).toBe(false)
     // Cmd+V does not fire a native paste event on Windows/Linux.

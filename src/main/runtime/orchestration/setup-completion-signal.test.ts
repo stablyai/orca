@@ -13,6 +13,8 @@ describe('orchestration setup completion signal', () => {
     expect(command).toContain('__ORCA_SETUP_COMPLETE__:token-posix:%s\\n')
     expect(command).toContain('"$status"')
     expect(command).toContain('exit "$status"')
+    // Pair-inserting line editors (zsh-autopair) corrupt typed brackets (#18059).
+    expect(command).not.toMatch(/[()[\]{}]/)
   })
 
   it('preserves a native Windows setup path and exit code without shell interpolation', () => {
@@ -65,8 +67,7 @@ describe('orchestration setup completion signal', () => {
   })
 
   it('keeps a batch runner on the Windows completion path from a Git Bash pane', () => {
-    // Regression (#6896): a Git Bash terminal with a batch setup script still gets a .cmd
-    // runner; observing it must not shell out to bash or type a bare `cmd.exe /c` switch.
+    // Batch setup still uses a .cmd runner under Git Bash; never type bare cmd.exe /c or observe it through bash (#6896).
     const runnerPath = 'C:\\repo\\.git\\orca\\setup-runner.cmd'
     const observed = buildObservedSetupCommand(runnerPath, 'windows', 'token-git-bash-cmd', {
       family: 'posix'

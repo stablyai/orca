@@ -24,6 +24,7 @@ function cell(kind: IpynbCell['kind'], source: string, outputs: IpynbOutput[] = 
 function renderSource(target: IpynbCell, onActivate = vi.fn()) {
   render(
     <IpynbCellSource
+      modelKey={null}
       cell={target}
       source={target.source}
       active={false}
@@ -171,7 +172,6 @@ describe('notebook outputs', () => {
     )
     const frame = screen.getByTitle('Notebook HTML output')
     const source = frame.getAttribute('srcdoc') ?? ''
-    // An empty sandbox keeps the frame an opaque origin with scripts off.
     expect(frame.getAttribute('sandbox')).toBe('')
     expect(source).toContain("default-src 'none'; img-src data:")
     expect(source).not.toContain('<script')

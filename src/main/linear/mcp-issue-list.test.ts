@@ -90,6 +90,8 @@ describe('MCP-compatible Linear issue listing', () => {
         orderBy: 'createdAt',
         includeArchived: true,
         filter: expect.objectContaining({
+          team: { or: [{ name: { eqIgnoreCase: 'ENG' } }, { key: { eqIgnoreCase: 'ENG' } }] },
+          labels: { some: { or: [{ name: { eqIgnoreCase: 'Bug' } }] } },
           searchableContent: { contains: 'auth' },
           priority: { eq: 2 },
           updatedAt: { gte: '-P7D' },
@@ -113,7 +115,6 @@ describe('MCP-compatible Linear issue listing', () => {
       hasMore: true,
       orderBy: 'createdAt'
     })
-    // Stops at the requested cap instead of walking on.
     expect(rawRequest).toHaveBeenCalledTimes(1)
     expect(result.meta.nextCursor).toMatch(/^orca\.linear\.v1\./)
     expect(result.issues[0]).toMatchObject({

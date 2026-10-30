@@ -1,7 +1,3 @@
-// Every draft-button press carries its own operation id, so a second press of
-// Send-now, Delete or Resume reaches the host as a new operation. The host
-// answers it from the draft's state: nothing sends twice and nothing refuses.
-
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
   createQueuedMessageTestRig,

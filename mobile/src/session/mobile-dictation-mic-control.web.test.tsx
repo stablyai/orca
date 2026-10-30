@@ -1,22 +1,11 @@
-/**
- * The mic control on the page, driven by the real seam over the real shell.
- *
- * Ruling 4's negative proof, now with something behind it: on a route the shell did not grant the
- * audio verbs the control has to report the refusal and come back, rather than crash or sit on
- * "Starting voice dictation" forever. On a route that was granted them it has to reach recording —
- * which is the whole of the item, observed where a user would see it.
- *
- * Mounted against `dictation-capture.web.ts` rather than the native sibling, because that is the
- * substitution the web build makes: the bundler resolves `.web.ts` first and vitest resolves the
- * native file. Everything else is real — the port pair, the verb table, the shell's ring.
- */
+// Drive real page capture/bridge/shell handlers to prove granted routes record and ungranted routes report refusal then recover.
 import { createElement, type ReactElement, type ReactNode } from 'react'
 import { act, create, type ReactTestInstance } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-// The renderer needs host elements, not the real platform: what this observes is the label the
-// control carries and the tap that reaches its handler, neither of which is native.
+// Use host elements to observe control labels and handlers without importing native runtime.
 vi.mock('react-native', () => ({
+  StyleSheet: { create: <T,>(styles: T) => styles },
   ActivityIndicator: (props: Record<string, unknown>) =>
     createElement('rn-activity-indicator', props),
   AppState: { currentState: 'active', addEventListener: () => ({ remove: () => {} }) },
@@ -29,14 +18,12 @@ vi.mock('lucide-react-native', () => ({
   Mic: (props: Record<string, unknown>) => createElement('lucide-mic', props)
 }))
 
-// The page's capture seam, which is what the web build resolves.
 vi.mock(
   '../platform/dictation-capture',
   async () => await import('../platform/dictation-capture.web')
 )
 
-// The provider module re-exports the screen hooks, and reaching the real ones imports the Expo
-// runtime this test does not have. Nothing below calls one.
+// Stub re-exported hooks to keep Expo out of this runtime.
 vi.mock('../transport/host-client-hooks', () => ({
   useDisconnectHostClient: () => () => {},
   useForceReconnect: () => null,
@@ -56,13 +43,10 @@ import { useMobileDictation } from '../hooks/use-mobile-dictation'
 import { MobileTerminalInputActions } from './MobileTerminalInputActions'
 import type { BridgeNativeVerb } from '../mobile-web-shell/bridge/bridge-native-verbs'
 
-/** Every message that reached the composer's own error handler, which is what it toasts. */
 const reported: string[] = []
 
-/** Every hold and release the shell's capture asked the device for, as `+` and `-`. */
 const screen: string[] = []
 
-/** The three verbs served by the real handlers over an engine that opens and produces no audio. */
 function createAudioShell(): (verb: BridgeNativeVerb, params: unknown) => Promise<unknown> {
   const engine: NativeAudioEngine = {
     requestPermission: async () => 'granted',
@@ -80,8 +64,7 @@ function createAudioShell(): (verb: BridgeNativeVerb, params: unknown) => Promis
   return (verb, params) => capture.serve(verb, params)
 }
 
-/** The hook the composer holds, for a case that has to act on a state the button does not offer:
- *  the cancel affordance only exists once a dictation is recording or processing. */
+// Expose starting-state cancel, which the rendered button cannot offer yet.
 const composer: { dictation: ReturnType<typeof useMobileDictation> | null } = { dictation: null }
 
 function Composer({ pair }: { pair: BridgePortPair }): ReactElement {
@@ -104,8 +87,7 @@ function Composer({ pair }: { pair: BridgePortPair }): ReactElement {
       onAttachImage={() => {}}
       onAttachFile={() => {}}
       onDictationToggle={() => {
-        // The composer's own handler, as `use-mobile-session-native-chat-dictation.ts` writes it: a
-        // refused start is a toast, never a throw into render.
+        // Use the composer’s catch path so bridge refusal becomes feedback rather than an unhandled rejection.
         void dictation.start().catch((error: unknown) => {
           reported.push(error instanceof Error ? error.message : String(error))
         })
@@ -119,8 +101,6 @@ function Composer({ pair }: { pair: BridgePortPair }): ReactElement {
   )
 }
 
-/** What the desktop answers a forwarded request with. `null` leaves it in flight for the case to
- *  settle later; the default is a plain success. */
 type DesktopReply = {
   id: string
   ok: boolean
@@ -131,17 +111,14 @@ type DesktopAnswer = (method: string) => DesktopReply | null
 
 const DESKTOP_OK: DesktopAnswer = () => ({ id: 'desktop', ok: true, result: {} })
 
-/** Requests a case left unanswered, in the order the page sent them. */
 const pending: { method: string; resolve: (reply: DesktopReply) => void }[] = []
 
 type MicControl = {
   readonly label: () => string
   readonly tap: (answer?: DesktopAnswer) => Promise<void>
-  /** Drives the bridge and the desktop without pressing anything, for a case acting on the hook. */
   readonly settle: (answer?: DesktopAnswer) => Promise<void>
 }
 
-/** The mic button, found by the label it carries in every state rather than by position. */
 function micOf(root: ReactTestInstance): ReactTestInstance {
   const found = root.findAll(
     (node) =>
@@ -170,7 +147,6 @@ async function mount(pair: BridgePortPair): Promise<MicControl> {
   if (rendered === null) {
     throw new Error('nothing mounted')
   }
-  // The tap crosses the bridge, the shell answers, and the desktop answers what was forwarded.
   async function settle(answer: DesktopAnswer = DESKTOP_OK): Promise<void> {
     for (let round = 0; round < 4; round += 1) {
       await act(async () => {
@@ -222,9 +198,7 @@ describe('the mic control on a page the shell did not grant audio', () => {
     const mic = await mount(pair)
     expect(mic.label()).toBe('Start voice dictation')
     await mic.tap()
-    // The refusal is what the composer toasts, naming the verb rather than a blank failure.
     expect(reported).toEqual(['this shell did not grant native.audio.start'])
-    // And the control is usable again: a page stuck on "Starting" has no way back to idle.
     expect(mic.label()).toBe('Start voice dictation')
   })
 
@@ -244,12 +218,7 @@ describe('the mic control on a page the shell did not grant audio', () => {
 })
 
 describe('a page whose desktop start fails after the microphone opened', () => {
-  /**
-   * The shell has the microphone open by the time the desktop refuses the session: `open()` is
-   * `native.audio.start`, and the page only asks the desktop for a session afterwards. Nothing on
-   * that path used to end the capture, so the screen the shell took stayed held until the user
-   * cancelled or the screen unmounted.
-   */
+  // The mic opens before desktop start; desktop refusal must close capture and release the shell wake lock.
   it('closes the shell capture and gives the screen back', async () => {
     const shell = createAudioShell()
     const verbs: string[] = []
@@ -266,10 +235,8 @@ describe('a page whose desktop start fails after the microphone opened', () => {
         : { id: 'desktop', ok: true, result: {} }
     )
     expect(verbs).toContain('native.audio.start')
-    // The microphone is closed and the screen is back, both because the capture ended.
     expect(verbs).toContain('native.audio.stop')
     expect(screen).toEqual(['+', '-'])
-    // And the user is told, rather than left looking at a live mic button.
     expect(reported).not.toEqual([])
     expect(mic.label()).toBe('Start voice dictation')
   })
@@ -295,10 +262,7 @@ describe('the mic control on a page the shell did grant audio', () => {
         frame.type === 'request' && frame.method.startsWith('native.') ? [frame.method] : []
       )
     expect(verbs).toContain('native.audio.start')
-    // Only the microphone: the screen it holds awake is the device's, and the page has no verb for
-    // it to ask through.
     expect(verbs.every((verb) => verb.startsWith('native.audio.'))).toBe(true)
-    // And the desktop was told, which is what makes the recording a session rather than a mic.
     expect(
       pair
         .readToShell()
@@ -318,13 +282,10 @@ describe('a stale page start whose refusal arrives after a newer one is recordin
       }
     })
     const mic = await mount(pair)
-    // A opens the shell's microphone and waits on the desktop.
     await mic.tap((method) => (method === 'speech.dictation.start' ? null : DESKTOP_OK(method)))
     expect(screen).toEqual(['+'])
     const first = pending.find((request) => request.method === 'speech.dictation.start')
     expect(first).toBeDefined()
-    // The user gives up on A while it is still starting, which is a state the button has no
-    // affordance for, and then starts B.
     await act(async () => {
       void composer.dictation?.cancel()
     })
@@ -333,7 +294,7 @@ describe('a stale page start whose refusal arrives after a newer one is recordin
     expect(mic.label()).toBe('Stop voice dictation')
     const verbsWhileRecording = [...verbs]
     const screenWhileRecording = [...screen]
-    // A's request finally fails. It owns nothing: the capture and the screen are B's.
+    // A’s late failure must not close B’s capture or wake lock.
     await act(async () => {
       first?.resolve({ id: 'desktop', ok: false, error: { code: 'refused', message: 'no model' } })
     })

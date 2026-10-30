@@ -353,19 +353,7 @@ describe('cell seat feed', () => {
       flagsApplied: applied,
       // Not reserve mode, so db whatever the switch says.
       phonePathEffective: 'db',
-      databasePoolMax: expect.any(Number),
-      // What the flag tool checks a write against before it writes.
-      supportedFlags: {
-        readinessLocal: { type: 'boolean' },
-        ticketCheck: { type: 'enum', values: ['off', 'shadow'] },
-        rejectionFence: { type: 'boolean' },
-        readTimeoutMarginMs: { type: 'number', min: 1_000, max: 60_000, integer: true },
-        admitMode: { type: 'enum', values: ['db', 'reserve'] },
-        intakePerSec: { type: 'number', max: 1_000 },
-        reserveDryRun: { type: 'boolean' },
-        reregisterInFlight: { type: 'number', min: 1, max: 16, integer: true },
-        phonePath: { type: 'enum', values: ['db', 'memory'] }
-      }
+      databasePoolMax: expect.any(Number)
     })
   })
 

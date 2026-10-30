@@ -97,7 +97,6 @@ describe('previewGhosttyImport theme references', () => {
 
     expect(result.diff).toEqual({
       terminalColorOverrides: {
-        // Why: config's palette index 1 and background win; theme keeps index 2.
         red: '#ff0000',
         green: '#b9ca4a',
         background: '#101010'

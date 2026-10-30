@@ -12,8 +12,7 @@ import {
   type MainSnapshot
 } from './pty-connection-test-hidden-restore-flood'
 
-// Unhide markers the in-flight snapshot cannot retire fall back to the deferred quiet repaint
-// or a retry, and must still recover without a loss banner.
+// Uncovered unhide markers require quiet repaint or retry that recovers without a loss banner.
 
 describe('hidden-output restore unhide repaint fallback (STA-4869)', () => {
   installHiddenRestoreFloodSuiteHooks()

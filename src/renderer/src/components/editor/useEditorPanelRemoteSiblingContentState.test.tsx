@@ -45,7 +45,8 @@ vi.mock('@/lib/runtime-workspace-file-route', () => ({
   findWorkspaceFileRoute: mocks.findWorkspaceFileRoute
 }))
 
-vi.mock('./migrate-restored-editor-file-owner', () => ({
+vi.mock(import('./migrate-restored-editor-file-owner'), async (importOriginal) => ({
+  ...(await importOriginal()),
   migrateRestoredEditorFileOwner: mocks.migrateRestoredEditorFileOwner
 }))
 

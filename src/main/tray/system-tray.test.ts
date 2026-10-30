@@ -142,8 +142,7 @@ function builtMenuItems(): MenuItem[] {
   return menuFromTemplateMock.mock.calls.at(-1)?.[0] as MenuItem[]
 }
 
-// Why: tray image/tooltip writes are deferred off the caller's stack to keep the
-// NSStatusItem scene update out of AppKit's dispatch; run the pending turn.
+// Flush the deferred native scene mutation after the AppKit caller stack returns.
 function flushTraySceneMutation(): void {
   vi.advanceTimersByTime(0)
 }
@@ -250,6 +249,34 @@ describe('createSystemTray', () => {
       expect(callback).toHaveBeenCalledOnce()
     }
   })
+
+  it.each(['win32', 'darwin'] as const)(
+    'offers Quit Completely directly above Quit on %s when a handler is supplied',
+    async (platform) => {
+      setPlatform(platform)
+      const { createSystemTray } = await loadModule()
+      const options = { ...createOptions(), onQuitAndStopAllSessions: vi.fn() }
+
+      createSystemTray(options)
+
+      expect(builtMenuItems().map((item) => item.label)).toEqual(
+        platform === 'darwin'
+          ? [
+              'Open Orca',
+              undefined,
+              'Settings',
+              'Check for Updates...',
+              undefined,
+              'Quit Completely...',
+              'Quit'
+            ]
+          : ['Open Orca', undefined, 'Quit Completely...', 'Quit']
+      )
+      builtMenuItems().at(-2)?.click?.()
+      expect(options.onQuitAndStopAllSessions).toHaveBeenCalledOnce()
+      expect(options.onQuit).not.toHaveBeenCalled()
+    }
+  )
 
   it('does not create a blank macOS item when the template asset fails to load', async () => {
     setPlatform('darwin')
@@ -419,8 +446,7 @@ describe('setTrayAttention', () => {
     flushTraySceneMutation()
     expect(tintTemplateMock).toHaveBeenCalledWith(baseMacImage, false)
     expect(composeAttentionMock).toHaveBeenCalledWith(tintedMacImage)
-    // Why: the attention image is rebuilt from 1x pixels, so the @2x
-    // representation must be re-added or the glyph blurs on Retina.
+    // Bitmap rebuild starts at 1x; re-add 2x or attention glyphs blur on Retina.
     expect(tintTemplateMock).toHaveBeenCalledWith(baseMacImage, false, 2)
     expect(attentionImage.addRepresentation).toHaveBeenCalledWith({
       scaleFactor: 2,
@@ -447,7 +473,7 @@ describe('setTrayAttention', () => {
     nativeThemeMock.shouldUseDarkColors = true
 
     themeState.updatedListener?.()
-    // Why: appearance changes arrive on an AppKit dispatch too, so the recompose defers.
+    // Appearance events also arrive from AppKit; defer their native writes.
     expect(tintTemplateMock).not.toHaveBeenCalled()
 
     flushTraySceneMutation()
@@ -485,8 +511,7 @@ describe('setTrayAttention', () => {
     created.setImage.mockClear()
     created.setToolTip.mockClear()
 
-    // Why: show/restore call this from AppKit's window-state dispatch; a scene
-    // update sent there self-deadlocks the main thread on macOS 26.
+    // Native scene writes inside AppKit window-state dispatch can deadlock main on macOS 26.
     setTrayAttention(true)
     expect(created.setImage).not.toHaveBeenCalled()
     expect(created.setToolTip).not.toHaveBeenCalled()
@@ -631,7 +656,7 @@ describe('language changes', () => {
       const { createSystemTray, rebuildSystemTrayMenu } = await loadModule()
       const { setMainUiLanguage } = await import('../i18n/main-i18n')
       await setMainUiLanguage('en')
-      const options = createOptions()
+      const options = { ...createOptions(), onQuitAndStopAllSessions: vi.fn() }
       createSystemTray(options)
       expect(builtMenuItems()[0].label).toBe('Open Orca')
 
@@ -643,10 +668,13 @@ describe('language changes', () => {
       expect(trayInstances).toHaveLength(1)
       expect(trayInstances[0].setContextMenu).toHaveBeenCalledTimes(2)
       expect(builtMenuItems()[0].label).toBe('Orca を開く')
+      expect(builtMenuItems().at(-2)?.label).toBe('完全に終了…')
       expect(builtMenuItems().at(-1)?.label).toBe('終了')
       builtMenuItems()[0].click?.()
+      builtMenuItems().at(-2)?.click?.()
       builtMenuItems().at(-1)?.click?.()
       expect(options.onOpen).toHaveBeenCalledOnce()
+      expect(options.onQuitAndStopAllSessions).toHaveBeenCalledOnce()
       expect(options.onQuit).toHaveBeenCalledOnce()
       if (platform === 'darwin') {
         expect(builtMenuItems()[2].label).toBe('設定')

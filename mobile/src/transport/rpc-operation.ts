@@ -79,14 +79,13 @@ export function defineRpcOperation<
   definition: LegacyResultRpcDefinition<Method, Acceptance, Variant, Value, Barrier>
 ): RpcOperation<Method, Acceptance, Variant, Value, Barrier>
 export function defineRpcOperation(definition: RpcOperationDefinitionInput): AnyRpcOperation {
-  // Why: frozen so no call site can swap the policy or the barrier on a shared descriptor.
+  // Prevent callers from changing a shared descriptor’s policy or barrier.
   return Object.freeze({
     name: definition.name,
     method: definition.method,
     acceptance: definition.acceptance,
     barrier: definition.barrier,
-    // Why: classifyRpcReply only ever hands a reader the payload its own policy admitted, so
-    // the object policy's narrower parameter is sound to store as unknown.
+    // Classification admits only this policy’s payload before invoking its narrower reader.
     read: definition.read as RpcCompatibleReader<unknown, string, unknown> | undefined
   })
 }
@@ -98,16 +97,12 @@ async function request(
   params: unknown,
   options?: SendRequestOptions
 ): Promise<RpcRequestOutcome<string, unknown>> {
-  // Why: no try/catch here. A transport failure must reach the caller as the original error
-  // object — isLogicalClientCutoverError and isRpcDeliveryUnknown both die on a wrapper —
-  // and an always-settled send would make Promise.all wait for a peer where today the group
-  // fails immediately, letting a later policy surface a different error.
+  // Preserve transport error identity for delivery/cutover detection and immediate Promise.all rejection.
   const response = await client.sendRequest(operation.method, params, options)
   return classifyRpcReply(operation, response)
 }
 
-// Applies the operation's declared acceptance policy. Private on purpose: there is no
-// free-standing callOrThrow, so no call site can pick a different rule for the same reply.
+// Keep interpretation private so callers cannot replace the descriptor’s acceptance rule.
 function interpretRpcOutcome(
   operation: AnyRpcOperation,
   settled: RpcRequestOutcome<string, unknown>
@@ -136,7 +131,7 @@ function interpretRpcOutcome(
       return settled.value
     case 'require-result-or-throw':
       if (settled.kind === 'outer-refused') {
-        // Reuses the policy so the thrown `code: message` text cannot drift from main's.
+        // Reuse acceptance’s coded refusal text.
         return requireRpcResultOrThrowCodedError(settled.raw)
       }
       if (settled.kind === 'incompatible') {
@@ -157,8 +152,7 @@ function interpretSettlement(
   settlement: RpcOperationSettlement<string, unknown>
 ): unknown {
   if (settlement.status === 'rejected') {
-    // Why: rethrow the original object — isRpcDeliveryUnknown is a WeakSet on identity and
-    // isLogicalClientCutoverError matches class or exact message; a wrapper loses both.
+    // Wrapping loses the delivery WeakSet mark and can break cutover matching.
     throw settlement.error
   }
   return interpretRpcOutcome(operation, settlement.outcome)
@@ -173,10 +167,7 @@ export async function runRpcOperation<
 >(
   client: UnvalidatedRpcRequestPort,
   operation: RpcOperation<Method, Acceptance, Variant, Value, 'on-settle'>,
-  // Shares the deferred sender's tuple so the two cannot disagree about what a params-less
-  // method may be called with: the catalog types those `void`, and an explicit `null` is the
-  // frame three of them go out with today (`notifications.testPush`,
-  // `notifications.unregisterPush`, `speech.models.list`), all through the deferred entry point.
+  // Use the shared argument tuple to preserve explicit null on shipped params-less requests.
   ...args: RpcSendArguments<Method>
 ): Promise<RpcVerdict<Acceptance, Value>> {
   const outcome = await request(client, operation, args[0], args[1])
@@ -184,8 +175,7 @@ export async function runRpcOperation<
   return interpretRpcOutcome(operation, outcome) as RpcVerdict<Acceptance, Value>
 }
 
-/** The named opt-in to all-settled semantics. Yields an outcome, never a verdict: the
- *  verdict still comes only from the declared policy, at the declared barrier. */
+// Opt into all-settled outcomes; interpretation still belongs to the declared policy and barrier.
 export async function captureRpcOperationSettlement<
   Method extends RpcMethodName,
   Acceptance extends RpcAcceptanceName,
@@ -241,23 +231,14 @@ type RpcBarrierVerdicts<Pending extends readonly PendingRpcOperation<AnyRpcOpera
 export async function interpretAtRpcBarrier<
   Pending extends readonly PendingRpcOperation<AnyRpcOperation>[]
 >(pending: Pending): Promise<RpcBarrierVerdicts<Pending>> {
-  // Why: interpreting as each request lands would let whichever peer failed first decide the
-  // error the user sees and how long the screen spins. Declared order makes that a property
-  // of the definition instead of a race.
+  // Interpret in declared order so response timing cannot choose the visible error.
   const settlements = await Promise.all(pending.map((entry) => entry.settlement))
   return pending.map((entry, index) =>
     interpretSettlement(entry.operation, settlements[index])
   ) as RpcBarrierVerdicts<Pending>
 }
 
-/**
- * Whether a sender may omit the params argument entirely.
- *
- * A params type with no required field may be omitted as well as `void`, because the raw port
- * always allowed it and several hosts' schemas are entirely optional (`preflight.check`). Forcing
- * `{}` there would put a new object on the wire where main sent no params at all. Shared by both
- * send helpers, so single-flight and direct sends cannot disagree about which methods that covers.
- */
+// Allow omitted params for all-optional schemas as well as void; forcing {} would change shipped wire frames.
 type RpcParamsOmittable<Method extends RpcMethodName> =
   void extends RpcSendParams<Method>
     ? true
@@ -265,13 +246,7 @@ type RpcParamsOmittable<Method extends RpcMethodName> =
       ? true
       : false
 
-/**
- * Preserves omitted sender arguments as well as explicit undefined and explicit null.
- *
- * `null` is admitted only where the catalog declares no params at all: several shipped senders put
- * an explicit `null` on the wire for those methods, and a JSON frame carrying `params: null` is not
- * the frame that omits the key. Narrowing them to omission would silently rewrite those bytes.
- */
+// Preserve omission, undefined and explicit null; allow null only for catalog methods with no params.
 type RpcSendArguments<Method extends RpcMethodName> =
   void extends RpcSendParams<Method>
     ? [params?: RpcSendParams<Method> | null, options?: SendRequestOptions]

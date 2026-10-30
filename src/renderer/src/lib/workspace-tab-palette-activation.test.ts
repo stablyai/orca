@@ -241,7 +241,7 @@ describe('activateWorkspaceTabPaletteResult', () => {
     expect(mocks.store.activateTab).not.toHaveBeenCalled()
   })
 
-  it('activates tabs in known folder or detected workspaces', () => {
+  it('activates a tab resolved by the known-workspace lookup when the repo catalog is empty', () => {
     mocks.store.worktreesByRepo = {}
     mocks.store.getKnownWorktreeById.mockReturnValue({ id: 'wt-1', repoId: 'repo-1' })
 

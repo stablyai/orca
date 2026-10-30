@@ -25,14 +25,12 @@ import {
 
 type Size = { width: number; height: number; dpr: number }
 
-// Owns the markup surface: document, active tool/style, the pending text box, and
-// the canvas paint effect. Committed shapes can be erased but not re-edited.
+// Own document, tool, pending text and paint state; committed shapes support erasure without re-editing.
 export function useMarkupEditor(busy: boolean, onCancel: () => void) {
   const rootRef = useRef<HTMLDivElement | null>(null)
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const textInputRef = useRef<HTMLInputElement | null>(null)
-  // Why: committed shapes are rasterized once into this offscreen layer; the live
-  // paint blits it instead of re-stroking every committed shape each pointermove.
+  // Cache committed raster ink so pointer moves do not re-stroke the document.
   const committedLayerRef = useRef<HTMLCanvasElement | null>(null)
   if (committedLayerRef.current === null) {
     committedLayerRef.current = document.createElement('canvas')
@@ -45,8 +43,7 @@ export function useMarkupEditor(busy: boolean, onCancel: () => void) {
   }))
   const drawing = gesture?.kind === 'draw' ? gesture.shape : null
   const erasedIds = gesture?.kind === 'erase' ? gesture.erasedIds : null
-  // Why: one list drives both the canvas and the export, so marks hidden by an
-  // in-flight erase can never end up in the copied PNG.
+  // Share visible ink with export so in-flight erasures cannot reappear in the copied PNG.
   const shapes = useMemo(
     () =>
       erasedIds && erasedIds.size > 0
@@ -69,8 +66,7 @@ export function useMarkupEditor(busy: boolean, onCancel: () => void) {
     const measure = () => {
       const rect = root.getBoundingClientRect()
       const dpr = window.devicePixelRatio || 1
-      // Why: bail on an unchanged measurement so an identical ResizeObserver/resize
-      // tick can't schedule a redundant repaint.
+      // Ignore identical measurements to avoid redundant paints.
       setSize((prev) =>
         prev.width === rect.width && prev.height === rect.height && prev.dpr === dpr
           ? prev
@@ -80,9 +76,7 @@ export function useMarkupEditor(busy: boolean, onCancel: () => void) {
     measure()
     const observer = new ResizeObserver(measure)
     observer.observe(root)
-    // Why: a monitor move changes devicePixelRatio without changing the element's
-    // CSS box, so ResizeObserver won't fire — window resize (which Chromium emits
-    // on dpr changes) re-measures the dpr so the canvas repaints at the new scale.
+    // Monitor DPR changes need window resize measurement; ResizeObserver sees only CSS size changes.
     window.addEventListener('resize', measure)
     return () => {
       observer.disconnect()
@@ -90,8 +84,7 @@ export function useMarkupEditor(busy: boolean, onCancel: () => void) {
     }
   }, [])
 
-  // Rasterize committed shapes into the offscreen layer only when they (or the
-  // size) change — not on every in-progress pointermove.
+  // Re-rasterize only for ink/size changes, independent of in-progress pointer moves.
   useEffect(() => {
     const layer = committedLayerRef.current
     if (!layer) {
@@ -100,8 +93,7 @@ export function useMarkupEditor(busy: boolean, onCancel: () => void) {
     renderCommittedLayer(layer, shapes, size.width, size.height, size.dpr)
   }, [shapes, size])
 
-  // Blit the cached layer + the in-progress shape, coalesced to one paint per
-  // frame so a burst of pointermove events can't queue redundant full repaints.
+  // Coalesce pointermove bursts into one cached blit per frame.
   useEffect(() => {
     const canvas = canvasRef.current
     const layer = committedLayerRef.current
@@ -126,8 +118,7 @@ export function useMarkupEditor(busy: boolean, onCancel: () => void) {
   const undo = useCallback(() => setState(undoMarkup), [])
   const redo = useCallback(() => setState(redoMarkup), [])
   const clear = useCallback(() => {
-    // Why: also drop any open text input so a clear leaves a truly clean slate —
-    // otherwise a pending input blur can re-add text.
+    // Drop pending text too; a later input blur must not restore it after Clear.
     setPendingText(null)
     setState((state) => applyDocumentCommand(state, clearShapes))
   }, [])

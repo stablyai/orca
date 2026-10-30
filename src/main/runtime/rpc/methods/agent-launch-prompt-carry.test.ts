@@ -1,8 +1,4 @@
-/**
- * Whether `agent.launch` pastes an argv agent's prompt is the runtime's report about the line it
- * typed, not the executor's guess: a carried prompt must not be pasted a second time, and an
- * uncarried one must not be left undelivered.
- */
+/** The runtime's typed-line carry report decides whether to paste: never duplicate a carried prompt or drop an uncarried one. */
 
 import { describe, expect, it, vi } from 'vitest'
 import {

@@ -3,7 +3,6 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createWorktreeWithNameRetry } from './worktree-create-retry'
-import type { RpcClient } from '../transport/rpc-client'
 import { markRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
 import { LogicalClientCutoverError } from '../transport/stable-logical-rpc-client'
 import {
@@ -26,6 +25,7 @@ import {
   launchAgentInExistingWorkspace,
   reserveMobileAgentLaunch
 } from '../session/mobile-existing-agent-launch'
+import { stubRpcClient } from '../transport/rpc-client-test-stub'
 
 const createStructuredSession = vi.fn()
 vi.mock('../../../src/main/runtime/rpc/methods/structured-agent-session-create', () => ({
@@ -70,8 +70,7 @@ function mobileLaunch(
   )
   const operationId = `${Date.now()}-000000000000000000000000000000aa`
   const attempts: unknown[] = []
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the mobile retry loop reaches only these transport members; requests use the real host dispatcher.
-  const client = {
+  const client = stubRpcClient({
     getState: () => 'connected',
     sendRequest: async (method: string, params: unknown) => {
       attempts.push(params)
@@ -92,7 +91,7 @@ function mobileLaunch(
       }
       return response
     }
-  } as unknown as RpcClient
+  })
   const result = createWorktreeWithNameRetry({
     client,
     baseName: 'otter',
@@ -181,8 +180,7 @@ describe('a + menu launch into an open workspace', () => {
       methods: AGENT_LAUNCH_METHODS
     })
     const attempts: unknown[] = []
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the replay loop reaches only these transport members; requests use the real host dispatcher.
-    const client = {
+    const client = stubRpcClient({
       getState: () => 'connected',
       sendRequest: async (method: string, params: unknown) => {
         attempts.push(params)
@@ -197,7 +195,7 @@ describe('a + menu launch into an open workspace', () => {
         }
         return response
       }
-    } as unknown as RpcClient
+    })
     const reservation = reserveMobileAgentLaunch('aider')
 
     const launched = await launchAgentInExistingWorkspace({
@@ -215,7 +213,6 @@ describe('a + menu launch into an open workspace', () => {
       kind: 'launched',
       result: { outcome: { kind: 'terminal', handle: 'term_1' } }
     })
-    // The replay carries the same ids, so the host answers it from its ledger.
     expect(attempts).toHaveLength(2)
     expect(attempts[1]).toEqual(attempts[0])
     expect(runtime.createTerminal).toHaveBeenCalledTimes(1)
@@ -233,12 +230,11 @@ describe('a + menu launch into an open workspace', () => {
       runtime: runtime as unknown as OrcaRuntimeService,
       methods: AGENT_LAUNCH_METHODS
     })
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the launch reaches only these transport members; requests use the real host dispatcher.
-    const client = {
+    const client = stubRpcClient({
       getState: () => 'connected',
       sendRequest: async (method: string, params: unknown) =>
         dispatcher.dispatch({ id: 'request-1', authToken: 'token', method, params })
-    } as unknown as RpcClient
+    })
     const reservation = reserveMobileAgentLaunch('claude')
 
     const launched = await launchAgentInExistingWorkspace({

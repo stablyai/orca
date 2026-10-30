@@ -1,6 +1,4 @@
-// Why: namespace resolution has to happen on the very session that transfers, and
-// only for the two relay-install writes — a leak into other transfers or into the
-// system-SSH/Windows branches would silently retarget unrelated file operations.
+// Map relay-install paths on the transferring session only; unrelated transfers and system-SSH/Windows paths must not be retargeted.
 
 import { EventEmitter } from 'node:events'
 import { mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
@@ -12,12 +10,15 @@ import type * as SystemSshFileBinaryTransfer from '../system-transport/system-ss
 import type * as SystemSshFileTransfer from '../system-transport/system-ssh-file-transfer'
 import type * as SshGConfigResolution from '../config/ssh-g-config-resolution'
 
-vi.mock('ssh2', () => ({
-  BaseAgent: class {},
-  Client: class {},
-  createAgent: vi.fn(),
-  utils: { parseKey: vi.fn() }
-}))
+vi.mock('../ssh2-module-load', () => {
+  const ssh2 = {
+    BaseAgent: class {},
+    Client: class {},
+    createAgent: vi.fn(),
+    utils: { parseKey: vi.fn() }
+  }
+  return { loadSsh2: () => ssh2 }
+})
 
 vi.mock('../system-transport/system-ssh-args', async (importOriginal) => ({
   ...(await importOriginal<typeof SystemSshArgs>()),
@@ -175,7 +176,7 @@ function connectedTo(
       cb(undefined, sftpSessions[handed++] ?? sftpSessions.at(-1))
     }
   }
-  // Why: the transfer branches are the unit under test; skip the connect handshake.
+  // Exercise transfer branches without a connect handshake.
   Object.assign(conn as unknown as Record<string, unknown>, {
     client,
     useSystemSshTransport: options?.useSystemSsh ?? false
@@ -192,7 +193,7 @@ describe('SshConnection SFTP namespace resolution', () => {
     vi.clearAllMocks()
     vi.spyOn(console, 'log').mockImplementation(() => {})
     vi.spyOn(console, 'warn').mockImplementation(() => {})
-    // realpath: macOS /var is a symlink and uploadDirectory rejects a root that resolves elsewhere.
+    // Canonicalize macOS /var symlinks before uploadDirectory checks its root.
     localDir = realpathSync(mkdtempSync(join(tmpdir(), 'orca-relay-')))
     writeFileSync(join(localDir, 'relay.js'), 'console.log(1)')
   })
@@ -278,7 +279,7 @@ describe('SshConnection SFTP namespace resolution', () => {
     )
   })
 
-  // Why: only the relay-install writes carry a marker; other transfers have no owner to verify.
+  // Only relay-install writes carry the ownership marker required for mapping.
   it('leaves writeBuffer and openFileUploadSession on the shell path', async () => {
     const sftp = createFakeSftp()
     const conn = connectedTo([sftp, sftp])
@@ -372,7 +373,7 @@ describe('SshConnection SFTP namespace resolution', () => {
     }
   })
 
-  // Why: relay deploy classifies MaxSessions to back off; wrapping it would hide the retry signal.
+  // Preserve MaxSessions errors so deployment can back off.
   it('preserves a session-limit channel-open error unchanged', async () => {
     const original = Object.assign(
       new Error('Channel open failure: open failed reason 4: MaxSessions'),

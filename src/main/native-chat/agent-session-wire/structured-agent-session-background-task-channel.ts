@@ -22,16 +22,13 @@ import type {
 } from './structured-agent-session-host-types'
 import { structuredAgentSessionConversationFence } from './structured-agent-session-provider-child'
 
-/** The chat strip's roster: the host's running child records for one session, the same selection
- *  the session list carries, with the legacy task rows an older client reads derived from them. No
- *  running child, and none the host failed to record, is `null`, and the strip hides. Each
- *  subscriber's frames carry it; see `agent-session-subscriber-frame-fields`. */
+/** Derive modern/legacy rosters from child records; null hides the strip only when no known/unlisted work remains. */
 export class StructuredAgentSessionBackgroundTaskChannel {
   constructor(
     private readonly deps: StructuredAgentSessionHostDeps,
     private readonly sessions: StructuredAgentSessionConversations,
     private readonly subscribers: AgentSessionSubscribers,
-    /** The host's accessor: opens a conversation at rest, and never starts an agent. */
+    /** Open at rest without starting an agent. */
     private readonly conversation: (
       sessionId: string
     ) => Promise<StructuredAgentSessionHostSession>,
@@ -39,10 +36,10 @@ export class StructuredAgentSessionBackgroundTaskChannel {
     private readonly childWorkIncomplete: (sessionId: string) => boolean = () => false
   ) {}
 
-  /** `scope` is for in-process readers; a wire request reads every agent's rows. */
   async history(
     request: AgentSessionHistoryRequest,
-    scope?: AgentSessionHistoryScope
+    scope?: AgentSessionHistoryScope,
+    replaceNormalizedHistory = true
   ): Promise<AgentSessionHistoryResult> {
     const journal = (await this.conversation(request.sessionId)).journal
     const work = hostStructuredAgentSessionCurrentWork(
@@ -51,9 +48,10 @@ export class StructuredAgentSessionBackgroundTaskChannel {
     )
     const result = readStructuredAgentSessionHistoryResult({
       journal,
-      record: this.deps.store.getRecord(request.sessionId),
+      record: this.deps.store.getConversation(request.sessionId),
       request,
       scope,
+      replaceNormalizedHistory,
       ...(work ? { work } : {})
     })
     const backgroundTasks = this.read(request.sessionId)
@@ -64,8 +62,7 @@ export class StructuredAgentSessionBackgroundTaskChannel {
       page: {
         ...result.page,
         hostNow,
-        // A stale history answer never replaces newer live subscription state;
-        // the client's reducer keeps live-over-history precedence.
+        // Client reducers give live state precedence over stale history replies.
         ...(queue !== undefined
           ? {
               queuedMessages: queue.queuedMessages,
@@ -90,7 +87,6 @@ export class StructuredAgentSessionBackgroundTaskChannel {
     return readCurrentRequestsPiece(work.requestProjection(request.sessionId), request)
   }
 
-  /** Resolves once the conversation is open and the subscriber holds its opening frame. */
   async subscribe(input: AgentSessionSubscribeInput): Promise<() => void> {
     const session = await this.conversation(input.sessionId)
     return this.subscribers.open({
@@ -100,7 +96,6 @@ export class StructuredAgentSessionBackgroundTaskChannel {
     })
   }
 
-  /** The session's child records changed; subscribers whose roster differs get the new one. */
   publish(sessionId: string): void {
     if (this.sessions.get(sessionId)) {
       this.subscribers.republishBackgroundTasks(
@@ -110,12 +105,11 @@ export class StructuredAgentSessionBackgroundTaskChannel {
     }
   }
 
-  /** Always an answer, never "unknown": the child records are the roster whether or not a provider
-   *  holds the session, and a parent row the store lacks has no children in it. */
+  /** Child records define the roster even after the provider releases the session. */
   read(sessionId: string): AgentSessionBackgroundTaskState | null {
     const session = this.sessions.get(sessionId)
     const views = structuredRunningChildWork((session && this.readChildWork(sessionId)) ?? [])
-    // Untracked work keeps the strip, and its Stop, even with nothing listed.
+    // Untracked work still needs a visible Stop.
     const incomplete = this.childWorkIncomplete(sessionId)
     if (!session || (views.length === 0 && !incomplete)) {
       return null
@@ -127,7 +121,6 @@ export class StructuredAgentSessionBackgroundTaskChannel {
       ...(tasks ? { tasks } : {}),
       ...(settledTasks ? { settledTasks } : {}),
       ...(stops?.supportsTaskStop ? { supportsTaskStop: true } : {}),
-      // A session no live provider holds has nothing a stop could reach.
       ...(stops?.supportsStopAll ? {} : { supportsStopAll: false }),
       children: views,
       ...(incomplete ? { incomplete: true } : {})

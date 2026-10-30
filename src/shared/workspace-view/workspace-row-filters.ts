@@ -6,7 +6,7 @@ import {
   type WorkspaceKindSwitches
 } from '../worktree/workspace-kinds'
 
-/** The Workspace options filters, under their persisted names. One value, shared by every surface. */
+/** Persisted Workspace options filters shared across surfaces. */
 export type WorkspaceRowFilters = WorkspaceKindSwitches & {
   hideSleepingWorkspaces: boolean
   /** Keeps each project's main workspace out of the "Hide sleeping" sweep. Absent means on (#8873). */
@@ -17,7 +17,7 @@ export type WorkspaceRowFilters = WorkspaceKindSwitches & {
   visibleHostIds: readonly ExecutionHostId[] | null
 }
 
-/** Each filter's PersistedUIState field; a filter added to WorkspaceRowFilters fails to compile until listed. */
+/** Exhaustive mapping from each filter to its PersistedUIState field. */
 export const WORKSPACE_ROW_FILTER_UI_FIELDS = {
   hideSleepingWorkspaces: 'hideSleepingWorkspaces',
   alwaysShowDefaultBranchWorkspace: 'alwaysShowDefaultBranchWorkspace',
@@ -48,11 +48,7 @@ export const NO_WORKSPACE_ROW_FILTERS: WorkspaceRowFilters = {
   visibleHostIds: null
 }
 
-/**
- * How one surface reads the facts the filters decide on from its own rows. The desktop derives
- * them from its worktrees and tabs; the phone reads what the host stamped on the rows it served,
- * so a fact an older host never sent reads false and the row stays visible.
- */
+/** Desktop derives facts from worktrees/tabs; mobile reads host-stamped facts. Missing older-host facts read false to keep rows visible. */
 export type WorkspaceRowFactReader<Row> = {
   isArchived: (row: Row) => boolean
   /** A folder workspace follows only the host and other-client filters (useSidebarHostVisibleScope). */
@@ -69,13 +65,7 @@ export type WorkspaceRowFactReader<Row> = {
   isSleeping: (row: Row) => boolean
 }
 
-/**
- * Whether "Hide sleeping" must keep this row (#8873).
- *
- * Why the main worktree and not the default-branch test: the project's primary checkout is its only
- * guaranteed entry point. Detached-HEAD and offline SSH mains fail the default-branch test yet often
- * have no sibling row, so sweeping them drops the whole project with no way back.
- */
+/** Exempt the main checkout from sleeping sweeps, including detached/offline mains that may be a project’s only entry point (#8873). */
 export function isSleepingSweepExempt(
   isMainWorktree: boolean,
   alwaysShowDefaultBranchWorkspace: boolean | undefined
@@ -83,8 +73,6 @@ export function isSleepingSweepExempt(
   return alwaysShowDefaultBranchWorkspace !== false && isMainWorktree
 }
 
-/** Whether a row survives the Workspace options filters; the sets are built once per call. */
-// How the evaluator asks each kind of a row; the switch for each kind comes from WORKSPACE_KIND_SWITCH.
 const KIND_READERS: Record<
   WorkspaceKind,
   <Row>(read: WorkspaceRowFactReader<Row>, row: Row) => boolean
@@ -95,6 +83,7 @@ const KIND_READERS: Record<
   detachedHead: (read, row) => read.isDetachedHead(row)
 }
 
+/** Build host/project sets once for the whole row filter pass. */
 function buildWorkspaceRowPredicate<Row>(
   filters: WorkspaceRowFilters,
   read: WorkspaceRowFactReader<Row>
@@ -123,7 +112,7 @@ function buildWorkspaceRowPredicate<Row>(
     if (repoIds && !repoIds.has(read.repoId(row))) {
       return false
     }
-    // Why the explicit hide above still wins: the exemption only shields a row from the sweep.
+    // Explicit hides still win; the exemption covers only the sleeping sweep.
     return (
       !filters.hideSleepingWorkspaces ||
       isSleepingSweepExempt(read.isMainWorktree(row), filters.alwaysShowDefaultBranchWorkspace) ||
@@ -141,10 +130,6 @@ export function filterWorkspaceRows<Row>(
   return rows.filter(buildWorkspaceRowPredicate(filters, read))
 }
 
-/**
- * The options button's badge: one per narrowing filter, plus one per selected project.
- * Why only known repos: a stale id left behind by a removed repo must not read as a filter.
- */
 /** The filters `target` sets differently from `current`; the exemption's absence means on. */
 export function changedWorkspaceRowFilters(
   current: WorkspaceRowFilters,
@@ -183,7 +168,6 @@ export function activeWorkspaceRowFilterKeys(
   )
 }
 
-/** The badge count: each active filter once, projects one per selected known project. */
 /** Pluralized "N filter(s)" for an options trigger's tooltip and accessibility label. */
 export function formatActiveFilterLabel(count: number): string {
   return `${count} ${count === 1 ? 'filter' : 'filters'}`
@@ -194,6 +178,7 @@ export function formatActiveFilterBadge(count: number): string {
   return count > 9 ? '9+' : String(count)
 }
 
+/** Count narrowing filters plus selected known projects; stale repo IDs do not inflate the badge. */
 export function countActiveWorkspaceFilters(
   filters: WorkspaceRowFilters,
   knownRepoIds: readonly string[]
@@ -201,7 +186,7 @@ export function countActiveWorkspaceFilters(
   const counted = activeWorkspaceRowFilterKeys(filters).filter(
     (key) =>
       key !== 'filterRepoIds' &&
-      // Why: the exemption only narrows the list while sleeping workspaces are swept.
+      // Disabling the exemption narrows only an active sleeping sweep.
       (key !== 'alwaysShowDefaultBranchWorkspace' || filters.hideSleepingWorkspaces)
   )
   const selectedRepoCount = knownRepoIds.filter((id) => filters.filterRepoIds.includes(id)).length

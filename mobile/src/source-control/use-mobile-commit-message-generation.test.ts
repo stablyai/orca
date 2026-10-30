@@ -1,7 +1,6 @@
 import { createElement, startTransition, Suspense, useRef, useState } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { RpcClient } from '../transport/rpc-client'
 import type { MobileGenerateCommitMessageResult } from './mobile-commit-message-ai'
 
 vi.mock('../platform/haptics', () => ({ triggerError: vi.fn(), triggerSuccess: vi.fn() }))
@@ -23,9 +22,9 @@ vi.mock('./mobile-commit-message-ai', () => ({
 }))
 
 import { useMobileCommitMessageGeneration } from './use-mobile-commit-message-generation'
+import { stubRpcClient } from '../transport/rpc-client-test-stub'
 
-// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the mocked request module never reaches the client.
-const client = {} as RpcClient
+const client = stubRpcClient()
 const view: {
   generating: boolean
   message: string

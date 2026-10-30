@@ -1,14 +1,11 @@
-// A saved Fast the launch leaves out beside the agent Arguments' own `--settings`, applied by the
-// message input once the child answers.
-
 import { expect, it, vi } from 'vitest'
 import {
   adapterFor,
   fakeClaude,
   identityFor,
-  claudeOpened,
   USER_MESSAGE
 } from './claude-structured-session-test-support'
+import { claudeOpened } from './claude-structured-startup-settled-test-support'
 
 it("applies a resumed conversation's saved Fast off before message input beside the Arguments' settings", async () => {
   let fastMode = true

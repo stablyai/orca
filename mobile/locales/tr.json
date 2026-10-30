@@ -1,0 +1,8 @@
+{
+  "ios": {
+    "NSCameraUsageDescription": "Orca'nın QR kodlarını taramak için kamerayı kullanmasına izin verin.",
+    "NSLocalNetworkUsageDescription": "Orca, yerel ağınızdaki masaüstü uygulamasına bağlanır.",
+    "NSMicrophoneUsageDescription": "Orca'nın sesli dikte için mikrofonunuzu kullanmasına izin verin. Ses kaydı, yazıya dönüştürülmek üzere eşleştirdiğiniz masaüstü bilgisayara gönderilir.",
+    "NSPhotoLibraryUsageDescription": "Orca'nın arşivinizdeki fotoğrafları eşleştirdiğiniz masaüstü bilgisayardaki bir terminal oturumuna eklemesine izin verin."
+  }
+}

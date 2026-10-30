@@ -41,12 +41,11 @@ export function clearLegacyViewerOnDisk(): void {
   try {
     unlinkSync(getLegacyViewerPath())
   } catch {
-    // File may not exist — safe to ignore.
+    // Legacy viewer cleanup is best-effort when storage is absent or unavailable.
   }
 }
 
-// Why: the viewer file is gone for good, so keep the cache "loaded" and empty
-// rather than re-reading a file we just deleted.
+// Keep the empty cache loaded so removal does not trigger another disk read.
 export function forgetLegacyViewer(): void {
   cachedLegacyViewer = null
   legacyViewerLoadedFromDisk = true

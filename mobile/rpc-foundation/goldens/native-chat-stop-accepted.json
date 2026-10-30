@@ -4,12 +4,18 @@
   "family": "session.native-chat-stop",
   "namedDeltas": [],
   "values": {
+    "3e2d28f3728b": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 1000,
+      "value": true
+    },
     "5cd1d4a9aed5": {
       "name": "terminal.send#1",
       "ordinal": 3,
       "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.send\",\"params\":{\"terminal\":\"terminal-1\",\"text\":\"\\u001b\",\"client\":{\"id\":\"device-token-1\",\"type\":\"mobile\"}}}"
     },
-    "650fdd02bab4": {
+    "5cd6e007c8ca": {
       "name": "terminal.send#2",
       "ordinal": 6,
       "args": [
@@ -32,14 +38,14 @@
           "name": "options",
           "value": {
             "budgetSpansConnect": true,
-            "timeoutMs": 14920
+            "timeoutMs": 14000
           }
         }
       ],
       "settlement": {
         "status": "fulfilled",
-        "startedAt": 80,
-        "settledAt": 120,
+        "startedAt": 1000,
+        "settledAt": 1000,
         "value": {
           "id": "frame-3",
           "ok": true,
@@ -55,6 +61,10 @@
       "name": "cancel-pending",
       "ordinal": 1,
       "value": {}
+    },
+    "9270aeb7d9c6": {
+      "status": "pending",
+      "startedAt": 0
     },
     "ab0f3d65723e": {
       "name": "terminal.send#1",
@@ -100,14 +110,6 @@
     },
     "debf84af8d66": {
       "errors": []
-    },
-    "eb79a9b3682a": {
-      "status": "fulfilled",
-      "startedAt": 0,
-      "settledAt": 0,
-      "value": {
-        "$rpc": "undefined"
-      }
     },
     "ef422fa31f61": {
       "name": "terminal.send#2",
@@ -165,7 +167,7 @@
           "sender": ["ab0f3d65723e", "fcdecc63b46e"],
           "payloads": ["5cd1d4a9aed5", "ef7005279d33"],
           "settlements": {
-            "stop": "eb79a9b3682a"
+            "stop": "9270aeb7d9c6"
           },
           "state": "debf84af8d66",
           "effects": ["75263c07c807"]
@@ -174,10 +176,10 @@
       {
         "id": "settled",
         "observation": {
-          "sender": ["ab0f3d65723e", "fcdecc63b46e", "650fdd02bab4"],
+          "sender": ["ab0f3d65723e", "fcdecc63b46e", "5cd6e007c8ca"],
           "payloads": ["5cd1d4a9aed5", "ef7005279d33", "ef422fa31f61"],
           "settlements": {
-            "stop": "eb79a9b3682a"
+            "stop": "3e2d28f3728b"
           },
           "state": "debf84af8d66",
           "effects": ["75263c07c807"]

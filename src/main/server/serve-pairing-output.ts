@@ -1,10 +1,9 @@
-/** Serve-readiness pieces shared by the desktop `--serve` host and orcad, so their stdout matches. */
+/** Keep desktop --serve and orcad readiness stdout consistent. */
 import { statSync } from 'node:fs'
 import { isAbsolute } from 'node:path'
 
 export async function renderServePairingQr(pairingUrl: string): Promise<string | null> {
-  // Why dynamic: qrcode is only reachable from mobile pairing, so launch should
-  // not parse it for the majority who never pair a device.
+  // Defer qrcode parsing until pairing is actually used.
   const QRCode = await import('qrcode')
   try {
     return await QRCode.toString(pairingUrl, { type: 'terminal', small: true })

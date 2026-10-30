@@ -1,4 +1,6 @@
+import type { RepoIconPickResult } from '../../shared/repo-icon-pick-failure-copy'
 import type { ExecutionHostId } from '../../shared/execution-host'
+import type { ShellPathExistence } from '../../shared/path-existence-batch'
 import type {
   ShellOpenExternalEditorRequest,
   ShellOpenExternalEditorResult,
@@ -24,15 +26,13 @@ export type ShellApi = {
   openUrl: (url: string) => Promise<void>
   openFilePath: (path: string, ownerHostId: ExecutionHostId) => Promise<boolean>
   openFileUri: (uri: string, ownerHostId: ExecutionHostId) => Promise<void>
-  pathsExist?: (paths: string[]) => Promise<boolean[]>
-  pathExists: (path: string) => Promise<boolean>
+  pathsExist?: (paths: string[]) => Promise<ShellPathExistence[]>
+  /** `wakeWslDistro`: a click, a user act that may start a stopped WSL distro. */
+  pathExists: (path: string, options?: { wakeWslDistro?: boolean }) => Promise<boolean>
   pickAttachment: () => Promise<string | null>
   pickAttachments: () => Promise<string[]>
   pickImage: () => Promise<string | null>
-  pickRepoIconImage: () => Promise<{
-    dataUrl: string
-    fileName: string
-  } | null>
+  pickRepoIconImage: () => Promise<RepoIconPickResult>
   pickAudio: () => Promise<string | null>
   pickDirectory: (args: { defaultPath?: string }) => Promise<string | null>
   copyFile: (args: { srcPath: string; destPath: string }) => Promise<void>

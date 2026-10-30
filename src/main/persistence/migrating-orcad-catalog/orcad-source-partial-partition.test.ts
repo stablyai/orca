@@ -17,7 +17,7 @@ const REPO: Repo = {
 const SOURCE = { sshTargetId: TARGET_ID, sshTargetGeneration: 2, targetLabel: 'B4' }
 const CATALOG = { repositories: [REPO], projectGroups: [], folderWorkspaces: [] }
 
-/** The real-host shape: renderer snapshots split per host leave out maps a host had no rows in. */
+// Renderer host splits omit maps with no rows.
 function partialPartitions() {
   const state = getDefaultPersistedState('/tmp/orcad-partial-partition')
   state.repos = [REPO]

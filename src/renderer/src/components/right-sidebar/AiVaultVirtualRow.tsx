@@ -1,4 +1,4 @@
-import type { AgentStatusState } from '../../../../shared/agent-status-types'
+import type { AgentDotState } from '@/components/AgentStateDot'
 import { isAntigravityReferenceSession } from '../../../../shared/antigravity-session-origin'
 import type { AiVaultScope, AiVaultSession } from '../../../../shared/ai-vault-types'
 import type { AiVaultResumeStartup } from '@/lib/ai-vault-resume-command'
@@ -81,7 +81,7 @@ export function AiVaultVirtualRow({
   buildResumeStartup: (session: AiVaultSession, worktreeId?: string | null) => AiVaultResumeStartup
   getOriginalPaneTarget: (session: AiVaultSession) => AiVaultOriginalPaneTarget | null
   isStructuredSessionOpen: (session: AiVaultSession) => boolean
-  getSessionLiveState: (session: AiVaultSession) => AgentStatusState | null
+  getSessionLiveState: (session: AiVaultSession) => AgentDotState | null
   getWorktreeInfo: (session: AiVaultSession) => AiVaultSessionWorktreeInfo | null
   getSessionResumeState: (session: AiVaultSession) => AiVaultSessionResumeState
   getSessionResumeActions: (session: AiVaultSession) => AiVaultSessionResumeActions
@@ -117,8 +117,7 @@ export function AiVaultVirtualRow({
   const originalPaneTarget = row.type === 'session' ? getOriginalPaneTarget(row.session) : null
   const structuredSessionOpen = row.type === 'session' && isStructuredSessionOpen(row.session)
   const worktreeInfo = row.type === 'session' ? getWorktreeInfo(row.session) : null
-  // Why: omit the jump affordance when the session already lives in the
-  // worktree on screen — jumping there is a no-op.
+  // Do not offer Jump for a session already in the on-screen workspace.
   const showJumpToWorktree = !isAiVaultSessionInCurrentWorktree(worktreeInfo)
   const worktreeJumpId =
     showJumpToWorktree && canJumpToAiVaultSessionWorktree(worktreeInfo)
@@ -132,8 +131,7 @@ export function AiVaultVirtualRow({
     canContinueAiVaultSessionInNewSession(row.session, resumeState?.worktreeId)
       ? resumeState?.worktreeId
       : null
-  // Gate resume on real content: a zero-turn transcript would resume into an
-  // empty conversation, so it is never offered as normally resumable.
+  // Zero-turn transcripts cannot resume meaningful conversation content.
   const resumeGating =
     row.type === 'session'
       ? aiVaultSessionRowResumeGating(row.session, resumeState)
@@ -165,9 +163,7 @@ export function AiVaultVirtualRow({
         }
   const canOpenLocalSessionPaths =
     row.type === 'session' && canUseLocalAiVaultSessionPathActions(row.session.executionHostId)
-  // Why: in-Orca View Log additionally withholds synthetic (SQLite/OpenCode)
-  // identities that have no single file to open, while Reveal/CWD stay on the
-  // existing local-path gate.
+  // File viewing needs a conversation resource; Reveal/CWD retain their own path semantics.
   const canOpenLogInOrca = row.type === 'session' && canOpenAiVaultSessionLogInOrca(row.session)
   const searchResumeAllowed = searchHit ? canResumeAiVaultSearchHit(searchHit) : true
   const searchPathAllowed = searchHit ? hasAiVaultSearchHitPath(searchHit) : true

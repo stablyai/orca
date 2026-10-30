@@ -29,6 +29,10 @@ class FakeClient implements RpcClient {
     return () => this.listeners.delete(listener)
   }
 
+  get listenerCount(): number {
+    return this.listeners.size
+  }
+
   publishState(state: ConnectionState): void {
     this.state = state
     for (const listener of this.listeners) {
@@ -51,9 +55,7 @@ describe('mobile direct endpoint probe', () => {
   })
 
   it('fails a whole dead LAN in seconds instead of holding the 12s bound', async () => {
-    // Incident 2026-09-04: foregrounding on a dead LAN produced an instant 1006 and
-    // the direct client's 500/1000/2000ms redials, while the probe sat on the
-    // 'connecting' phase and held the supervisor mutex for the whole 12s bound.
+    // A dead LAN can immediately close into client backoff; the probe must not hold the recovery mutex for its full outer bound.
     const clients: FakeClient[] = []
     const openDirect = vi.fn(() => {
       const client = new FakeClient('connecting')
@@ -69,44 +71,56 @@ describe('mobile direct endpoint probe', () => {
 
     expect(clients).toHaveLength(1)
     expect(clients[0]!.close).toHaveBeenCalledOnce()
-    // No 12s timer is left behind to fire into a settled probe.
     expect(vi.getTimerCount()).toBe(0)
   })
 
   it('rides out one access-point flap that the first redial recovers', async () => {
-    // 'reconnecting' is published on any socket close, so a single RST on the first
-    // dial must not book a direct failure and its 60s cooldown.
+    // Allow one redial so an access-point flap does not immediately incur direct-failure cooldown.
+    const client = new FakeClient('connecting')
     const openDirect = vi.fn(() => {
-      const client = new FakeClient('connecting')
       setTimeout(() => client.publishState('reconnecting'), 20)
       setTimeout(() => client.publishState('connected'), 600)
       return client
     })
 
     const probing = openAuthenticatedDirectEndpoint(openDirect, 12_000)
-    await vi.advanceTimersByTimeAsync(600)
-    const result = await probing
+    let settled = false
+    void probing.then(() => {
+      settled = true
+    })
+    await vi.advanceTimersByTimeAsync(599)
+    expect(settled).toBe(false)
+    await vi.advanceTimersByTimeAsync(1)
 
-    expect(result).not.toBeNull()
-    expect(result?.close).not.toHaveBeenCalled()
+    expect(await probing).toBe(client)
+    expect(client.close).not.toHaveBeenCalled()
+    expect(client.listenerCount).toBe(0)
+    expect(vi.getTimerCount()).toBe(0)
   })
 
   it('extends the grace once when the redial reaches a handshake', async () => {
-    // The redial fires at 500ms, but 'connected' waits on the Noise handshake and a
-    // capability RPC, so real work needs more than one grace window.
+    // Extend for handshake progress because connection also waits for capability RPC completion.
+    const client = new FakeClient('connecting')
     const openDirect = vi.fn(() => {
-      const client = new FakeClient('connecting')
       setTimeout(() => client.publishState('reconnecting'), 20)
       setTimeout(() => client.publishState('handshaking'), 1_500)
-      // Past the first grace window: only the re-arm keeps this probe alive.
       setTimeout(() => client.publishState('connected'), 3_000)
       return client
     })
 
     const probing = openAuthenticatedDirectEndpoint(openDirect, 12_000)
-    await vi.advanceTimersByTimeAsync(3_000)
+    let settled = false
+    void probing.then(() => {
+      settled = true
+    })
+    await vi.advanceTimersByTimeAsync(2_999)
+    expect(settled).toBe(false)
+    await vi.advanceTimersByTimeAsync(1)
 
-    expect(await probing).not.toBeNull()
+    expect(await probing).toBe(client)
+    expect(client.close).not.toHaveBeenCalled()
+    expect(client.listenerCount).toBe(0)
+    expect(vi.getTimerCount()).toBe(0)
   })
 
   it('fails a handshake that stalls, one grace after it started', async () => {
@@ -114,7 +128,6 @@ describe('mobile direct endpoint probe', () => {
       const client = new FakeClient('connecting')
       setTimeout(() => client.publishState('reconnecting'), 20)
       setTimeout(() => client.publishState('handshaking'), 1_500)
-      // A restarted handshake must not buy a second extension.
       setTimeout(() => client.publishState('handshaking'), 2_500)
       return client
     })

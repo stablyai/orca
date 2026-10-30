@@ -4,7 +4,7 @@ import type { AppState } from '@/store/types'
 import type {
   AgentProgramStatusUpdate,
   AgentProviderSessionUpdate
-} from '@/store/slices/agent-status'
+} from '@/store/slices/agent-status/agent-status-contract'
 import type {
   AgentStatusApplyResult,
   AgentStatusBatchContext,

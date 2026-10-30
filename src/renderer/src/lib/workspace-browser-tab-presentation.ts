@@ -2,9 +2,7 @@ import { translate } from '@/i18n/i18n'
 import { SEARCH_ENGINE_LABELS } from '../../../shared/browser-url'
 import type { WorkspaceBrowserTabIntent } from './workspace-browser-tab-open'
 
-// Why: concurrent URL tabs are indistinguishable under a shared "Open URL"
-// label until the page title loads; the query string stays out so a typed URL
-// does not park credentials or tokens in persisted tab state.
+// Differentiate concurrent URL tabs before titles load; omit queries so persisted labels cannot retain credentials/tokens.
 function urlTabTitle(url: string): string | null {
   try {
     // host, not hostname: localhost:3000 and localhost:5173 are different tabs.
@@ -45,8 +43,7 @@ export function intentPresentation(
   }
 }
 
-// Why: the UI string stays friendly and query-free, but the diagnosable reason
-// rides along as `cause` so a failed open is not indistinguishable in logs.
+// Keep friendly query-free messages and diagnostic causes, logging only the reason because callers surface message alone and cause could expose typed URLs/queries.
 export function openFailure(message: string, reason: string, cause?: unknown): Error {
   // Why: callers only surface `message`, so log the reason here or a failed open
   // leaves no trace at all. The reason alone — never `cause` — keeps the typed

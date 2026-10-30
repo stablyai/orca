@@ -1,3 +1,5 @@
+import { agentSessionRecordFixture } from '../agent-session-record-test-fixture'
+import { agentSessionConversationView } from '../../../shared/agent-session-conversation-view'
 import {
   joinHostModelListingWait,
   isHostModelListingWaitInFlight
@@ -17,8 +19,7 @@ import {
 } from './agent-model-catalog-store'
 
 function record(accountHomePath: string): AgentSessionRecord {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the service reads only provider, accountHome and location; the rest of the record is irrelevant here.
-  return {
+  return agentSessionRecordFixture({
     sessionId: 'session-1',
     provider: 'grok',
     accountHome: { variable: 'GROK_HOME', path: accountHomePath },
@@ -28,7 +29,7 @@ function record(accountHomePath: string): AgentSessionRecord {
       workspaceId: 'ws-1',
       workspaceKind: 'git-worktree'
     }
-  } as AgentSessionRecord
+  })
 }
 
 function listing(id: string): AgentModelCatalogSuccess {
@@ -47,6 +48,14 @@ function selectedHomeFingerprint(path: string): string {
   })
 }
 
+function discover(
+  service: ReturnType<typeof createAgentModelCatalogService>,
+  params: Parameters<typeof service.read>[0]
+) {
+  void service.demand(params)
+  return service.read(params)
+}
+
 const GROK_HOME = (path: string): { variable: 'GROK_HOME'; path: string } => ({
   variable: 'GROK_HOME',
   path
@@ -58,74 +67,87 @@ describe('agent model catalog service', () => {
     const probe = vi.fn(async (_home: AgentSessionAccountHome) => listing('gpt-a'))
     const service = createAgentModelCatalogService({
       store,
+      getConversation: () => agentSessionConversationView(record('/homes/a')),
       getRecord: () => record('/homes/a'),
       drivesRecord: () => true,
       resolveAccountHome: async () => GROK_HOME('/homes/selected'),
       probes: { grok: probe }
     })
-    expect(await service.read({ agent: 'grok', sessionId: 'session-1' })).toEqual({
+    expect(await discover(service, { agent: 'grok', sessionId: 'session-1' })).toEqual({
       origin: 'unknown',
       listingInProgress: true
     })
     // A second read while the probe is in flight must not start another, and a
     // record-scoped read probes the RECORD's pinned home, not the selection.
-    await service.read({ agent: 'grok', sessionId: 'session-1' })
-    expect(probe).toHaveBeenCalledTimes(1)
-    expect(probe).toHaveBeenCalledWith(GROK_HOME('/homes/a'), { signal: expect.any(AbortSignal) })
+    await service.read({ agent: 'grok', sessionId: 'session-1', waitForListing: true })
+    await vi.waitFor(() => expect(probe).toHaveBeenCalledTimes(1))
+    expect(probe).toHaveBeenCalledWith(
+      GROK_HOME('/homes/a'),
+      expect.objectContaining({ signal: expect.any(AbortSignal) })
+    )
     await vi.waitFor(async () => {
-      const result = await service.read({ agent: 'grok', sessionId: 'session-1' })
+      const result = await service.read({
+        agent: 'grok',
+        sessionId: 'session-1',
+        waitForListing: true
+      })
       expect(result.origin).toBe('probe')
     })
   })
 
-  it('probes as for no record when this build cannot start the record as it is pinned', async () => {
+  it('keeps an unsupported pinned record unknown without probing another account', async () => {
     const store = new AgentModelCatalogStore()
     const probe = vi.fn(async (_home: AgentSessionAccountHome) => listing('gpt-a'))
-    // A Codex record pinning Claude's variable: its path is not a Codex home to probe under.
+    // A foreign account-home variable cannot authorize a Codex probe.
     const pinned = { ...record('/x'), accountHome: { variable: 'CLAUDE_CONFIG_DIR', path: '/x' } }
     const drivesRecord = vi.fn(() => false)
     const service = createAgentModelCatalogService({
       store,
+      getConversation: () => agentSessionConversationView(pinned),
       getRecord: () => pinned,
       drivesRecord,
       resolveAccountHome: async () => GROK_HOME('/homes/selected'),
       probes: { grok: probe }
     })
 
-    await service.read({ agent: 'grok', sessionId: 'session-1' })
+    expect(
+      await service.read({ agent: 'grok', sessionId: 'session-1', waitForListing: true })
+    ).toEqual({ origin: 'unknown' })
 
-    expect(drivesRecord).toHaveBeenCalledWith(pinned)
-    expect(probe).toHaveBeenCalledExactlyOnceWith(GROK_HOME('/homes/selected'), {
-      signal: expect.any(AbortSignal)
-    })
+    expect(drivesRecord).toHaveBeenCalledWith(agentSessionConversationView(pinned))
+    expect(probe).not.toHaveBeenCalled()
+    service.stop()
   })
 
   it('an account switch with no record reads and prewarms the NEW account, never the old entry', async () => {
     const store = new AgentModelCatalogStore()
-    // The old account listed under its own fingerprint before the switch.
     const oldFingerprint = selectedHomeFingerprint('/homes/old')
     store.recordSuccess(oldFingerprint, 'grok', listing('gpt-old'), 'discovery')
     const probe = vi.fn(async () => listing('gpt-new'))
     const service = createAgentModelCatalogService({
       store,
+      getConversation: () => undefined,
       getRecord: () => undefined,
       drivesRecord: () => true,
       resolveAccountHome: async () => GROK_HOME('/homes/new'),
       probes: { grok: probe }
     })
     // The record-less read follows the CURRENT selection: unknown, never gpt-old.
-    expect(await service.read({ agent: 'grok' })).toEqual({
+    expect(await discover(service, { agent: 'grok' })).toEqual({
       origin: 'unknown',
       listingInProgress: true
     })
-    expect(probe).toHaveBeenCalledWith(GROK_HOME('/homes/new'), {
-      signal: expect.any(AbortSignal)
-    })
+    await vi.waitFor(() => expect(probe).toHaveBeenCalledOnce())
+    expect(probe).toHaveBeenCalledWith(
+      GROK_HOME('/homes/new'),
+      expect.objectContaining({
+        signal: expect.any(AbortSignal)
+      })
+    )
     await vi.waitFor(async () => {
-      const result = await service.read({ agent: 'grok' })
+      const result = await service.read({ agent: 'grok', waitForListing: true })
       expect(result.origin === 'unknown' ? null : result.models[0]!.id).toBe('gpt-new')
     })
-    // The new listing landed under the new selection's key; the old entry is untouched.
     expect(store.get(selectedHomeFingerprint('/homes/new'))!.models[0]!.id).toBe('gpt-new')
     expect(store.get(oldFingerprint)!.models[0]!.id).toBe('gpt-old')
   })
@@ -146,11 +168,12 @@ describe('agent model catalog service', () => {
     )
     const service = createAgentModelCatalogService({
       store,
+      getConversation: () => undefined,
       getRecord: () => undefined,
       drivesRecord: () => true,
       resolveAccountHome: async () => GROK_HOME('/homes/selected')
     })
-    const result = await service.read({ agent: 'grok' })
+    const result = await service.read({ agent: 'grok', waitForListing: true })
     expect(result.origin === 'unknown' ? null : result.models[0]!.id).toBe('gpt-mine')
   })
 
@@ -171,11 +194,16 @@ describe('agent model catalog service', () => {
     )
     const service = createAgentModelCatalogService({
       store,
+      getConversation: () => agentSessionConversationView(sessionRecord),
       getRecord: () => sessionRecord,
       drivesRecord: () => true,
       resolveAccountHome: async () => GROK_HOME('/homes/selected')
     })
-    const result = await service.read({ agent: 'grok', sessionId: 'session-1' })
+    const result = await service.read({
+      agent: 'grok',
+      sessionId: 'session-1',
+      waitForListing: true
+    })
     expect(result.origin === 'unknown' ? null : result.models[0]!.id).toBe('gpt-session')
   })
 
@@ -186,18 +214,21 @@ describe('agent model catalog service', () => {
     })
     const service = createAgentModelCatalogService({
       store,
+      getConversation: () => agentSessionConversationView(record('/homes/a')),
       getRecord: () => record('/homes/a'),
       drivesRecord: () => true,
       resolveAccountHome: async () => GROK_HOME('/homes/a'),
       probes: { grok: probe }
     })
-    expect(await service.read({ agent: 'grok', sessionId: 'session-1' })).toEqual({
+    expect(await discover(service, { agent: 'grok', sessionId: 'session-1' })).toEqual({
       origin: 'unknown',
       listingInProgress: true
     })
     await vi.waitFor(() => expect(probe).toHaveBeenCalledTimes(1))
     // Still a clean unknown — and the failure TTL suppresses a probe storm.
-    expect(await service.read({ agent: 'grok', sessionId: 'session-1' })).toEqual({
+    expect(
+      await service.read({ agent: 'grok', sessionId: 'session-1', waitForListing: true })
+    ).toEqual({
       origin: 'unknown'
     })
     expect(probe).toHaveBeenCalledTimes(1)
@@ -208,6 +239,7 @@ describe('agent model catalog service', () => {
     const probe = vi.fn(async () => listing('gpt-a'))
     const service = createAgentModelCatalogService({
       store,
+      getConversation: () => undefined,
       getRecord: () => undefined,
       drivesRecord: () => true,
       resolveAccountHome: async () => {
@@ -215,7 +247,9 @@ describe('agent model catalog service', () => {
       },
       probes: { grok: probe }
     })
-    expect(await service.read({ agent: 'grok' })).toEqual({ origin: 'unknown' })
+    expect(await service.read({ agent: 'grok', waitForListing: true })).toEqual({
+      origin: 'unknown'
+    })
     expect(probe).not.toHaveBeenCalled()
   })
 
@@ -236,7 +270,8 @@ describe('agent model catalog service', () => {
       const store = new AgentModelCatalogStore()
       const service = createAgentModelCatalogService({
         store,
-        getRecord: () => undefined,
+        getConversation: () => undefined,
+        getRecord: () => record('/homes/selected'),
         drivesRecord: () => true,
         resolveAccountHome: async () => GROK_HOME('/homes/selected'),
         probes: { grok: probe }
@@ -248,7 +283,7 @@ describe('agent model catalog service', () => {
       const pending = deferredListing()
       const probe = vi.fn(() => pending.promise)
       const { service } = coldService(probe)
-      expect(await service.read({ agent: 'grok' })).toEqual({
+      expect(await discover(service, { agent: 'grok' })).toEqual({
         origin: 'unknown',
         listingInProgress: true
       })
@@ -259,153 +294,27 @@ describe('agent model catalog service', () => {
       expect(probe).toHaveBeenCalledTimes(1)
     })
 
-    it("answers from a chat's listing already running instead of starting a probe", async () => {
-      const pending = deferredListing()
-      const probe = vi.fn(() => new Promise<AgentModelCatalogSuccess>(() => {}))
-      const { store, service } = coldService(probe)
-      const chat = {
-        store,
-        fingerprint: selectedHomeFingerprint('/homes/selected'),
-        accountHomePath: '/homes/selected'
+    it('publishes a real live listing beside a held probe and preserves probe failure', async () => {
+      const pendingProbe = deferredListing()
+      const { store, service } = coldService(() => pendingProbe.promise)
+      const fingerprint = selectedHomeFingerprint('/homes/selected')
+      try {
+        await discover(service, { agent: 'grok' })
+        await vi.waitFor(() => expect(store.isListing(fingerprint)).toBe(true))
+        const terminal = store.pendingListing(fingerprint, true, true)
+        const waited = service.read({ agent: 'grok', waitForListing: true })
+        service.recordLiveListing('session-1', { models: listing('gpt-chat').models })
+        expect(await waited).toMatchObject({ origin: 'live-session', models: [{ id: 'gpt-chat' }] })
+        expect(store.isListing(fingerprint)).toBe(true)
+        pendingProbe.reject(new Error('probe timed out'))
+        await terminal
+        expect(store.failureDetail(fingerprint)).toBe('probe timed out')
+        service.recordLiveListing('session-1', { models: listing('gpt-new-chat').models })
+        expect(store.get(fingerprint)?.models[0]?.id).toBe('gpt-new-chat')
+        expect(store.hasActiveFailure(fingerprint)).toBe(true)
+      } finally {
+        service.stop()
       }
-      void store.refresh(chat.fingerprint, 'grok', chat, () => pending.promise)
-      const waited = service.read({ agent: 'grok', waitForListing: true })
-      pending.resolve(listing('gpt-chat'))
-      const result = await waited
-      expect(result.origin === 'unknown' ? null : result.models[0]!.id).toBe('gpt-chat')
-      expect(probe).not.toHaveBeenCalled()
-    })
-
-    it('uses a chat listing that starts after the picker began waiting on a probe', async () => {
-      const pendingProbe = deferredListing()
-      const pendingChat = deferredListing()
-      const { store, service } = coldService(() => pendingProbe.promise)
-      expect(await service.read({ agent: 'grok' })).toEqual({
-        origin: 'unknown',
-        listingInProgress: true
-      })
-      const waited = service.read({ agent: 'grok', waitForListing: true })
-      await Promise.resolve()
-      const fingerprint = selectedHomeFingerprint('/homes/selected')
-      const chat = { store, fingerprint, accountHomePath: '/homes/selected' }
-      const chatListing = store.refresh(fingerprint, 'grok', chat, () => pendingChat.promise)
-      pendingChat.resolve(listing('gpt-chat'))
-      await chatListing
-      const result = await waited
-      expect(result.origin === 'unknown' ? null : result.models[0]!.id).toBe('gpt-chat')
-      pendingProbe.reject(new Error('probe timed out'))
-    })
-
-    it('continues waiting when the probe fails before a newly started chat finishes', async () => {
-      const pendingProbe = deferredListing()
-      const pendingChat = deferredListing()
-      const { store, service } = coldService(() => pendingProbe.promise)
-      await service.read({ agent: 'grok' })
-      const waited = service.read({ agent: 'grok', waitForListing: true })
-      await Promise.resolve()
-      const fingerprint = selectedHomeFingerprint('/homes/selected')
-      const chat = { store, fingerprint, accountHomePath: '/homes/selected' }
-      const chatListing = store.refresh(fingerprint, 'grok', chat, () => pendingChat.promise)
-      pendingProbe.reject(new Error('probe timed out'))
-      await vi.waitFor(() => expect(store.hasActiveFailure(fingerprint)).toBe(true))
-      let completed = false
-      void waited.then(() => (completed = true))
-      await Promise.resolve()
-      expect(completed).toBe(false)
-
-      pendingChat.resolve(listing('gpt-chat'))
-      await chatListing
-      const result = await waited
-      expect(result.origin === 'unknown' ? null : result.models[0]!.id).toBe('gpt-chat')
-    })
-
-    it('releases when a second chat succeeds while the first chat is still listing', async () => {
-      const pendingProbe = deferredListing()
-      const firstChat = deferredListing()
-      const secondChat = deferredListing()
-      const { store, service } = coldService(() => pendingProbe.promise)
-      await service.read({ agent: 'grok' })
-      const waited = service.read({ agent: 'grok', waitForListing: true })
-      await Promise.resolve()
-      const fingerprint = selectedHomeFingerprint('/homes/selected')
-      const first = store.refresh(
-        fingerprint,
-        'grok',
-        { store, fingerprint, accountHomePath: '/homes/selected' },
-        () => firstChat.promise
-      )
-      pendingProbe.reject(new Error('probe timed out'))
-      await vi.waitFor(() => expect(store.hasActiveFailure(fingerprint)).toBe(true))
-      const second = store.refresh(
-        fingerprint,
-        'grok',
-        { store, fingerprint, accountHomePath: '/homes/selected' },
-        () => secondChat.promise
-      )
-      secondChat.resolve(listing('gpt-second'))
-      await second
-      const result = await waited
-      expect(result.origin === 'unknown' ? null : result.models[0]!.id).toBe('gpt-second')
-      firstChat.reject(new Error('first chat timed out'))
-      await first
-    })
-
-    it('keeps waiting for a later chat after the first chat also fails', async () => {
-      const pendingProbe = deferredListing()
-      const firstChat = deferredListing()
-      const secondChat = deferredListing()
-      const { store, service } = coldService(() => pendingProbe.promise)
-      await service.read({ agent: 'grok' })
-      const waited = service.read({ agent: 'grok', waitForListing: true })
-      await Promise.resolve()
-      const fingerprint = selectedHomeFingerprint('/homes/selected')
-      const first = store.refresh(
-        fingerprint,
-        'grok',
-        { store, fingerprint, accountHomePath: '/homes/selected' },
-        () => firstChat.promise
-      )
-      pendingProbe.reject(new Error('probe timed out'))
-      await vi.waitFor(() => expect(store.hasActiveFailure(fingerprint)).toBe(true))
-      const second = store.refresh(
-        fingerprint,
-        'grok',
-        { store, fingerprint, accountHomePath: '/homes/selected' },
-        () => secondChat.promise
-      )
-      firstChat.reject(new Error('first chat timed out'))
-      await first
-      let completed = false
-      void waited.then(() => (completed = true))
-      await Promise.resolve()
-      expect(completed).toBe(false)
-
-      secondChat.resolve(listing('gpt-second'))
-      await second
-      const result = await waited
-      expect(result.origin === 'unknown' ? null : result.models[0]!.id).toBe('gpt-second')
-    })
-
-    it('waits for a running chat even while a failed probe is inside its TTL', async () => {
-      const pendingProbe = deferredListing()
-      const pendingChat = deferredListing()
-      const { store, service } = coldService(() => pendingProbe.promise)
-      await service.read({ agent: 'grok' })
-      const fingerprint = selectedHomeFingerprint('/homes/selected')
-      const chat = { store, fingerprint, accountHomePath: '/homes/selected' }
-      const chatListing = store.refresh(fingerprint, 'grok', chat, () => pendingChat.promise)
-      pendingProbe.reject(new Error('probe timed out'))
-      await vi.waitFor(() => expect(store.hasActiveFailure(fingerprint)).toBe(true))
-
-      const waited = service.read({ agent: 'grok', waitForListing: true })
-      let completed = false
-      void waited.then(() => (completed = true))
-      await Promise.resolve()
-      expect(completed).toBe(false)
-      pendingChat.resolve(listing('gpt-chat'))
-      await chatListing
-      const result = await waited
-      expect(result.origin === 'unknown' ? null : result.models[0]!.id).toBe('gpt-chat')
     })
 
     it('answers a plain unknown when the listing fails', async () => {
@@ -421,11 +330,15 @@ describe('agent model catalog service', () => {
         throw new Error('spawn failed')
       })
       const { store, service } = coldService(probe)
-      store.recordFailure(selectedHomeFingerprint('/homes/selected'), 'spawn failed')
+      await store.refresh(selectedHomeFingerprint('/homes/selected'), 'grok', () =>
+        Promise.reject(new Error('spawn failed'))
+      )
       expect(await service.read({ agent: 'grok', waitForListing: true })).toEqual({
         origin: 'unknown'
       })
-      expect(await service.read({ agent: 'grok' })).toEqual({ origin: 'unknown' })
+      expect(await service.read({ agent: 'grok', waitForListing: true })).toEqual({
+        origin: 'unknown'
+      })
       expect(probe).not.toHaveBeenCalled()
     })
 
@@ -433,6 +346,7 @@ describe('agent model catalog service', () => {
       const store = new AgentModelCatalogStore()
       const service = createAgentModelCatalogService({
         store,
+        getConversation: () => undefined,
         getRecord: () => undefined,
         drivesRecord: () => true,
         resolveAccountHome: async () => GROK_HOME('/homes/selected')
@@ -455,6 +369,7 @@ describe('agent model catalog service', () => {
       const probe = vi.fn(() => new Promise<AgentModelCatalogSuccess>(() => {}))
       const service = createAgentModelCatalogService({
         store,
+        getConversation: () => undefined,
         getRecord: () => undefined,
         drivesRecord: () => true,
         resolveAccountHome: async () => GROK_HOME('/homes/selected'),
@@ -478,6 +393,7 @@ describe('agent model catalog service', () => {
       const workspaceMayOverrideDefaultModel = vi.fn(async () => mayOverride)
       const service = createAgentModelCatalogService({
         store,
+        getConversation: () => undefined,
         getRecord: () => undefined,
         drivesRecord: () => true,
         resolveAccountHome: async () => GROK_HOME('/homes/selected'),
@@ -494,7 +410,11 @@ describe('agent model catalog service', () => {
 
     it('names no default when the workspace config could pick another model', async () => {
       const { service, workspaceMayOverrideDefaultModel } = serviceWith(true)
-      const result = await service.read({ agent: 'grok', workspacePath: '/repo/wt' })
+      const result = await service.read({
+        agent: 'grok',
+        waitForListing: true,
+        workspacePath: '/repo/wt'
+      })
       expect(defaults(result)).toEqual([false])
       expect(workspaceMayOverrideDefaultModel).toHaveBeenCalledWith({
         agent: 'grok',
@@ -505,20 +425,24 @@ describe('agent model catalog service', () => {
 
     it('keeps the listed default when nothing in the workspace can replace it', async () => {
       const { service } = serviceWith(false)
-      expect(defaults(await service.read({ agent: 'grok', workspacePath: '/repo/wt' }))).toEqual([
-        true
-      ])
+      expect(
+        defaults(
+          await service.read({ agent: 'grok', waitForListing: true, workspacePath: '/repo/wt' })
+        )
+      ).toEqual([true])
     })
 
     it('names no default for a workspace it could not place on this machine', async () => {
       const { service, workspaceMayOverrideDefaultModel } = serviceWith(false)
-      expect(defaults(await service.read({ agent: 'grok', workspacePath: null }))).toEqual([false])
+      expect(
+        defaults(await service.read({ agent: 'grok', waitForListing: true, workspacePath: null }))
+      ).toEqual([false])
       expect(workspaceMayOverrideDefaultModel).not.toHaveBeenCalled()
     })
 
     it('leaves a read that names no workspace as it was', async () => {
       const { service, workspaceMayOverrideDefaultModel } = serviceWith(true)
-      expect(defaults(await service.read({ agent: 'grok' }))).toEqual([true])
+      expect(defaults(await service.read({ agent: 'grok', waitForListing: true }))).toEqual([true])
       expect(workspaceMayOverrideDefaultModel).not.toHaveBeenCalled()
     })
   })
@@ -545,6 +469,7 @@ describe('agent model catalog service', () => {
       const probe = vi.fn(async (home: AgentSessionAccountHome) => listing(JSON.stringify(home)))
       const service = createAgentModelCatalogService({
         store,
+        getConversation: () => agentSessionConversationView(openCodeRecord(managed(PROFILE_A))),
         getRecord: () => openCodeRecord(managed(PROFILE_A)),
         drivesRecord: () => true,
         resolveAccountHome: async () => managed(PROFILE_B),
@@ -566,12 +491,16 @@ describe('agent model catalog service', () => {
       const probe = vi.fn(async () => listing('never'))
       const service = createAgentModelCatalogService({
         store: new AgentModelCatalogStore(),
+        getConversation: () =>
+          agentSessionConversationView(openCodeRecord(managed(PROFILE_A), 'Ubuntu')),
         getRecord: () => openCodeRecord(managed(PROFILE_A), 'Ubuntu'),
         drivesRecord: () => true,
         resolveAccountHome: async () => managed(PROFILE_B),
         probes: { opencode: probe }
       })
-      expect(await service.read({ agent: 'opencode', sessionId: 'session-1' })).toEqual({
+      expect(
+        await service.read({ agent: 'opencode', sessionId: 'session-1', waitForListing: true })
+      ).toEqual({
         origin: 'unknown'
       })
       expect(probe).not.toHaveBeenCalled()
@@ -579,8 +508,8 @@ describe('agent model catalog service', () => {
   })
 })
 
-it.each(['cold', 'warm', 'failure', 'stop'] as const)(
-  'delivers queued %s settlement after the 30s snapshot to joined readers',
+it.each(['cold', 'warm'] as const)(
+  'ends queued %s discovery within its original deadline and preserves existing observations',
   async (mode) => {
     vi.useFakeTimers()
     const store = new AgentModelCatalogStore()
@@ -614,13 +543,16 @@ it.each(['cold', 'warm', 'failure', 'stop'] as const)(
     )
     const service = createAgentModelCatalogService({
       store,
+      getConversation: () => undefined,
       getRecord: () => undefined,
       drivesRecord: () => true,
       resolveAccountHome: async () => ({ variable: 'CODEX_HOME', path: '/account' }),
       probes: { codex: run }
     })
     const read = (path: string, waitForListing = false) =>
-      service.read({ agent: 'codex', workspacePath: path, waitForListing })
+      waitForListing
+        ? service.read({ agent: 'codex', workspacePath: path, waitForListing })
+        : discover(service, { agent: 'codex', workspacePath: path })
     const replies: unknown[] = []
     let leave = () => {}
     try {
@@ -630,23 +562,23 @@ it.each(['cold', 'warm', 'failure', 'stop'] as const)(
         await initial
         await vi.advanceTimersByTimeAsync(120_001)
       }
-      failing = mode === 'failure'
+      failing = false
       await Promise.all(['/1', '/2', '/3', '/4', '/5'].map((path) => read(path)))
       const follow = vi.fn(() => read('/5', true))
       const owner = { close() {} }
       leave = joinHostModelListingWait('queued', follow, (reply) => replies.push(reply), owner)
       const second = joinHostModelListingWait('queued', follow, () => {}, owner)
       await vi.advanceTimersByTimeAsync(30_000)
-      expect(replies[0]).toMatchObject({ listingInProgress: true })
+      expect(replies[0]).not.toHaveProperty('listingInProgress')
       expect(follow).toHaveBeenCalledTimes(1)
-      if (mode === 'stop') {
-        service.stop()
-      }
+
       await vi.advanceTimersByTimeAsync(7_000)
       expect(replies.at(-1)).not.toHaveProperty('listingInProgress')
       expect(isHostModelListingWaitInFlight('queued', owner)).toBe(false)
-      if (mode === 'cold' || mode === 'warm') {
+      if (mode === 'warm') {
         expect(replies.at(-1)).toMatchObject({ models: [{ id: '/5' }] })
+      } else {
+        expect(replies.at(-1)).toEqual({ origin: 'unknown' })
       }
       expect(run).toHaveBeenCalledTimes(mode === 'warm' ? 6 : 5)
       second()
@@ -657,3 +589,108 @@ it.each(['cold', 'warm', 'failure', 'stop'] as const)(
     }
   }
 )
+
+it.each(['opencode', 'opencode2', 'omp'] as const)(
+  'keeps %s session-folder requests separate for explicit and historical readers',
+  async (agent) => {
+    const records = new Map(
+      ['w1', 'w2'].map((id) => [
+        id,
+        {
+          ...record('/same-account'),
+          sessionId: id,
+          provider: agent,
+          location: { ...record('/same-account').location, workspaceId: id }
+        }
+      ])
+    )
+    const store = new AgentModelCatalogStore()
+    const probe = vi.fn(
+      async (_home: AgentSessionAccountHome, options?: { workspacePath?: string }) =>
+        listing(options?.workspacePath ?? 'account')
+    )
+    const service = createAgentModelCatalogService({
+      store,
+      getConversation: (id) => {
+        const held = records.get(id)
+        return held ? agentSessionConversationView(held) : undefined
+      },
+      getRecord: (id) => records.get(id),
+      drivesRecord: () => true,
+      resolveAccountHome: async () => GROK_HOME('/same-account'),
+      recordWorkspacePath: async (row) => `/${row.location.workspaceId}`,
+      listsInChatFolder: new Set([agent]),
+      probes: { [agent]: probe }
+    })
+    try {
+      for (const inSessionWorkspace of [true, undefined] as const) {
+        const params = (sessionId: string) => ({
+          agent,
+          sessionId,
+          ...(inSessionWorkspace ? { inSessionWorkspace } : {})
+        })
+        await service.demand(params('w1'))
+        expect(service.snapshot(params('w1'))).toMatchObject({ models: [{ id: '/w1' }] })
+        if (inSessionWorkspace) {
+          expect(service.snapshot(params('w2'))).toEqual({ origin: 'unknown' })
+        } else {
+          expect(service.snapshot(params('w2'))).toMatchObject({ models: [{ id: '/w2' }] })
+        }
+        await service.prepareSaved(params('w2'))
+        await service.demand(params('w2'))
+        expect(service.snapshot(params('w2'))).toMatchObject({ models: [{ id: '/w2' }] })
+      }
+    } finally {
+      service.stop()
+    }
+  }
+)
+
+it('shares account rows while keeping workspace default provenance separate', async () => {
+  const store = new AgentModelCatalogStore()
+  const records = new Map(
+    ['w1', 'w2'].map((id) => [
+      id,
+      {
+        ...record('/same-account'),
+        sessionId: id,
+        provider: 'pi',
+        location: { ...record('/same-account').location, workspaceId: id }
+      }
+    ])
+  )
+  const first = records.get('w1')!
+  store.recordSuccess(
+    agentModelCatalogFingerprintForRecord(first),
+    'pi',
+    listing('account-default'),
+    'discovery'
+  )
+  const service = createAgentModelCatalogService({
+    store,
+    getConversation: (id) => {
+      const held = records.get(id)
+      return held ? agentSessionConversationView(held) : undefined
+    },
+    getRecord: (id) => records.get(id),
+    drivesRecord: () => true,
+    resolveAccountHome: async () => first.accountHome,
+    recordWorkspacePath: async (row) => `/${row.location.workspaceId}`,
+    agentReadsProjectModelConfig: () => true,
+    workspaceMayOverrideDefaultModel: async ({ workspacePath }) => workspacePath === '/w2'
+  })
+  try {
+    const one = { agent: 'pi', sessionId: 'w1', inSessionWorkspace: true as const }
+    const two = { ...one, sessionId: 'w2' }
+    expect(await service.prepareSaved(one)).toMatchObject({
+      models: [{ id: 'account-default', isDefault: true }]
+    })
+    expect(service.snapshot(two)).toEqual({ origin: 'unknown' })
+    expect(await service.prepareSaved(two)).toMatchObject({
+      models: [{ id: 'account-default', isDefault: false }]
+    })
+    expect(service.snapshot(one)).toMatchObject({ models: [{ isDefault: true }] })
+  } finally {
+    service.stop()
+  }
+})

@@ -63,15 +63,13 @@ export function LinearIssueMarkdownDescriptionEditor({
   const richMarkdownSpellcheckEnabled = useAppStore(
     (s) => s.settings?.richMarkdownSpellcheckEnabled ?? true
   )
-  // Why: changing language recreates Tiptap and re-registers tokenizers, so it
-  // must also receive a fresh private Marked registry instead of growing one.
+  // Recreate the private Marked registry with Tiptap on language changes to avoid accumulating tokenizers.
   const codec = useMemo(() => {
     void language
     return createRichMarkdownEditorCodec()
   }, [language])
   const linearIssueMarkdownExtensions = useMemo(() => {
-    // Why: Tiptap freezes extension options when the editor is created; the
-    // language value is the recreation key for translated extension options.
+    // Language keys editor recreation because Tiptap freezes translated extension options.
     void language
     return createLinearIssueMarkdownExtensions(codec)
   }, [codec, language])
@@ -87,7 +85,10 @@ export function LinearIssueMarkdownDescriptionEditor({
         attributes: {
           class: 'rich-markdown-editor',
           spellcheck: getRichMarkdownSpellcheckAttribute(richMarkdownSpellcheckEnabled),
-          'aria-label': 'Issue description'
+          'aria-label': translate(
+            'auto.components.LinearIssueWorkspace.issueDescriptionLabel',
+            'Issue description'
+          )
         },
         handleKeyDown: (_view, event) => {
           if (!isScreenSubmitShortcut(event)) {
@@ -143,8 +144,7 @@ export function LinearIssueMarkdownDescriptionEditor({
       return
     }
 
-    // Why: Linear remains the source of truth when the selected issue changes
-    // or an optimistic save is reverted; keep the rich view aligned with it.
+    // Follow Linear’s value on issue changes and optimistic rollback.
     editor.commands.setContent(encodeRawMarkdownHtmlForRichEditor(value, codec), {
       contentType: 'markdown',
       emitUpdate: false

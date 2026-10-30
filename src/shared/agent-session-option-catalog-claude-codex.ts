@@ -3,26 +3,12 @@ import type {
   CatalogModel,
   CatalogOption
 } from './agent-session-option-catalog-types'
-import { removeAgentArgOption } from './agent-session-option-agent-args'
+import { agentChoiceCliApply } from './agent-choice-cli-apply'
 import {
   CLAUDE_MODEL_LIST_ARGS,
   CLAUDE_MODEL_LIST_STDIN,
   parseClaudeModelList
 } from './claude-model-list-probe'
-
-// Why: Codex also reads any setting from a `-c key=value` config override.
-function removeCodexAgentArgs(
-  tokens: readonly string[],
-  flags: readonly string[],
-  configKey: string
-): string[] {
-  return removeAgentArgOption(
-    'codex',
-    removeAgentArgOption('codex', tokens, flags),
-    ['-c', '--config'],
-    (value) => value?.startsWith(`${configKey}=`) === true
-  )
-}
 
 const STANDARD_EFFORT_CHOICES = [
   { value: 'low', label: 'Low' },
@@ -53,8 +39,17 @@ function claudeEffortWithChoices(choices: typeof EXTENDED_EFFORT_CHOICES): Catal
         : (choices[0]?.value ?? 'high')
     },
     apply: {
-      launchArgs: (value) => ['--effort', String(value)],
-      removeAgentArgs: (tokens) => removeAgentArgOption('claude', tokens, ['--effort']),
+      ...agentChoiceCliApply(
+        'claude',
+        [
+          {
+            kind: 'value',
+            names: ['--effort'],
+            lift: 'separate-and-long-equals'
+          }
+        ],
+        '--effort'
+      ),
       midSession: { kind: 'command', build: (value) => `/effort ${String(value)}` }
     }
   }
@@ -97,11 +92,7 @@ const CLAUDE_FAST_MODE: CatalogOption = {
 
 export const CLAUDE_SESSION_OPTION_CATALOG: AgentSessionOptionCatalog = {
   supportsWorkerLaunchPreferences: true,
-  // Why: these ids are Claude CLI aliases that resolve to the newest model of
-  // each family on the host's CLI (`opus` is Opus 5 on current CLIs, older
-  // Opus on older CLIs), so pinned version labels lie on part of the fleet.
-  // Family labels also keep header scraping and /model echo detection working
-  // across CLI versions; listModels overlays exact per-host names below.
+  // Use CLI family aliases/labels across versions; pinned names mislabel older hosts and break header/model-echo matching. listModels supplies exact host names.
   models: [
     {
       id: 'fable',
@@ -130,14 +121,22 @@ export const CLAUDE_SESSION_OPTION_CATALOG: AgentSessionOptionCatalog = {
     }
   ],
   modelApply: {
-    launchArgs: (value) => ['--model', String(value)],
-    removeAgentArgs: (tokens) => removeAgentArgOption('claude', tokens, ['--model']),
+    ...agentChoiceCliApply(
+      'claude',
+      [
+        {
+          kind: 'value',
+          names: ['--model'],
+          lift: 'separate-and-long-equals'
+        }
+      ],
+      '--model'
+    ),
     midSession: {
       kind: 'command',
       build: (value) => `/model ${String(value)}`,
       pickerCommand: '/model',
-      // Why: Claude sometimes confirms a cached-history switch. Detect the
-      // actual prompt so ordinary model changes stay in native chat.
+      // Detect the actual cached-history confirmation prompt so ordinary model changes stay in native chat.
       detectAgentInteraction: 'claude-model-switch-confirmation'
     }
   },
@@ -171,9 +170,19 @@ function codexEffort(ceiling: 'xhigh' | 'max' | 'ultra'): CatalogOption {
       defaultValue: 'medium'
     },
     apply: {
-      launchArgs: (value) => ['-c', `model_reasoning_effort=${String(value)}`],
-      removeAgentArgs: (tokens) =>
-        removeCodexAgentArgs(tokens, ['--reasoning-effort'], 'model_reasoning_effort'),
+      ...agentChoiceCliApply(
+        'codex',
+        [
+          {
+            kind: 'config',
+            names: ['-c', '--config'],
+            key: 'model_reasoning_effort',
+            lift: 'codex-bare-string'
+          },
+          { kind: 'value', names: ['--reasoning-effort'], lift: 'never' }
+        ],
+        '-c'
+      ),
       midSession: { kind: 'agent-picker', command: '/model', delivery: 'type' }
     }
   }
@@ -182,8 +191,7 @@ function codexEffort(ceiling: 'xhigh' | 'max' | 'ultra'): CatalogOption {
 export const CODEX_SESSION_OPTION_CATALOG: AgentSessionOptionCatalog = {
   supportsWorkerLaunchPreferences: true,
   hostListingNamesConfiguredModel: true,
-  // Why: Codex model access depends on auth. Keep this seed short and allow
-  // unknown persisted ids to pass through instead of claiming a complete list.
+  // Auth scopes Codex access; keep a short seed and admit unknown persisted IDs.
   models: [
     { id: 'gpt-5.6-sol', label: 'GPT-5.6 Sol', options: [codexEffort('ultra')] },
     { id: 'gpt-5.6-terra', label: 'GPT-5.6 Terra', options: [codexEffort('ultra')] },
@@ -196,13 +204,21 @@ export const CODEX_SESSION_OPTION_CATALOG: AgentSessionOptionCatalog = {
     }
   ],
   modelApply: {
-    launchArgs: (value) => ['-m', String(value)],
-    removeAgentArgs: (tokens) => removeCodexAgentArgs(tokens, ['-m', '--model'], 'model'),
-    // Codex classifies multi-character writes as pasted prose; type the bare
-    // command and let its own picker apply the account-supported model.
+    ...agentChoiceCliApply(
+      'codex',
+      [
+        {
+          kind: 'value',
+          names: ['-m', '--model'],
+          lift: 'separate-and-long-equals'
+        },
+        { kind: 'config', names: ['-c', '--config'], key: 'model', lift: 'codex-bare-string' }
+      ],
+      '-m'
+    ),
+    // Codex treats multi-character writes as paste; type the command and let its picker select an account-supported model.
     midSession: { kind: 'agent-picker', command: '/model', delivery: 'type' }
   },
-  // Why: models newer than this seed often support max/ultra; Codex falls back
-  // to the model's default effort rather than failing on an unsupported one.
+  // New models may support max/ultra; unsupported efforts fall back to the model default instead of failing.
   unknownModelOptions: [codexEffort('ultra')]
 }

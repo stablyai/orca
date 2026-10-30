@@ -1,18 +1,13 @@
 import { findTextMatchRanges, isTextSearchQueryTooLarge } from './text-match-ranges'
 
-// Why: React owns the searched DOM. Injecting <mark> by splitting its text nodes
-// left React holding stale child pointers (NotFoundError on the next commit), so
-// matches are painted with the CSS Custom Highlight API, which highlights Ranges
-// without mutating the DOM.
+// Paint CSS Highlight Ranges without splitting React-owned text nodes, which would leave stale child pointers and cause commit-time NotFoundError.
 
 type HighlightApi = {
   registry: HighlightRegistry
   create: (ranges: readonly Range[]) => Highlight
 }
 
-// Degrades to a no-op where the API is absent (older Chromium, jsdom/happy-dom in
-// tests) — match counting and navigation still work off the returned Ranges; only
-// the paint is skipped.
+// Without CSS Highlight support, skip painting but retain range-based match counting/navigation.
 function getHighlightApi(): HighlightApi | null {
   if (
     typeof Highlight !== 'function' ||
@@ -24,9 +19,7 @@ function getHighlightApi(): HighlightApi | null {
   }
   return {
     registry: CSS.highlights,
-    // Why: build with .add() rather than new Highlight(...ranges). A big doc +
-    // short query yields 100k+ ranges, and spreading that many constructor
-    // args overflows V8's argument stack (RangeError).
+    // Add ranges individually: spreading 100k+ into the Highlight constructor overflows V8’s argument stack.
     create: (ranges) => {
       const highlight = new Highlight()
       for (const range of ranges) {
@@ -44,21 +37,18 @@ export type DomTextSearchInstance = {
   readonly [domTextSearchInstanceBrand]?: never
 }
 
-/** The ::highlight() names one kind of search surface paints into. */
 export type DomTextSearchHighlightNames = {
   readonly match: string
   readonly active: string
 }
 
 export type DomTextSearchHighlights = {
-  /** Replaces this instance's matches and drops its active match. */
   setMatches: (instance: DomTextSearchInstance, ranges: readonly Range[]) => void
   setActive: (instance: DomTextSearchInstance, range: Range | undefined) => void
   clear: (instance: DomTextSearchInstance) => void
 }
 
-// Avoid array spread when collecting union ranges — a large doc can produce
-// 100k+ ranges and create()/registry writes must not build variadic arg lists.
+// Avoid variadic range collection too; large-document unions can exceed 100k arguments.
 function paintUnion(api: HighlightApi, name: string, ranges: Iterable<Range>): void {
   const union: Range[] = []
   for (const range of ranges) {
@@ -77,12 +67,7 @@ function* flatten(groups: Iterable<readonly Range[]>): Iterable<Range> {
   }
 }
 
-/**
- * CSS.highlights is a document-global registry keyed by a static name, while several
- * surfaces of one kind can search at once (split panes, a floating window). Each
- * instance's ranges are tracked by its own token and the UNION is painted, so one
- * surface's find does not clobber another's.
- */
+/** CSS highlights are document-global; union per-instance ranges so split/floating searches cannot clobber another surface’s results. */
 export function createDomTextSearchHighlights(
   names: DomTextSearchHighlightNames
 ): DomTextSearchHighlights {
@@ -108,8 +93,7 @@ export function createDomTextSearchHighlights(
       } else {
         activeByInstance.delete(instance)
       }
-      // Only the active range changed — don't rebuild the (potentially 100k-range)
-      // match highlight on every Next/Prev navigation.
+      // Update active range alone; rebuilding 100k matches on every Next/Prev is unnecessary.
       const api = getHighlightApi()
       if (api) {
         paintActive(api)
@@ -132,8 +116,7 @@ export type DomTextSearchScope = {
   rejectElement?: (element: HTMLElement) => boolean
   /** Selector for elements whose text matches as one string (e.g. highlighted code split into spans). */
   joinedTextSelector?: string
-  /** The previous search's ranges, moved instead of allocated: every live Range slows the
-   *  document's own text writes until it is collected, which a per-frame search outpaces. */
+  /** Move previous ranges rather than allocating: live Ranges slow DOM writes until collection, which per-frame search outpaces. */
   reuse?: Range[]
 }
 
@@ -163,7 +146,6 @@ function appendTextSearchRanges(
   }
 }
 
-/** Case-insensitive matches of `query` in the text under `root`, in document order. */
 export function findDomTextSearchRanges(
   root: HTMLElement,
   query: string,

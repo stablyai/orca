@@ -63,8 +63,7 @@ const defaultDependencies: RecoveryDependencies = {
   platform: Platform.OS
 }
 
-// One full invite lifetime past expiry, so a momentary outage never discards a
-// journal that a later launch could still reconcile.
+// Allow another invite lifetime after expiry so brief outages do not discard recoverable journals.
 const ABANDON_GRACE_MS = 10 * 60 * 1000
 
 let recoveryPromise: Promise<MobileRelayPairingRecoveryResult> | null = null
@@ -82,8 +81,7 @@ export function recoverMobileRelayPairing(
   return recoveryPromise
 }
 
-// Waits at most timeoutMs for recovery and never throws: a new scan proceeds
-// either way, and a recovery still running only loses its stale journal.
+// Bound the wait without blocking a new scan; stale recovery loses journal ownership when superseded.
 export async function settleMobileRelayPairingRecovery(
   timeoutMs: number,
   overrides: Partial<RecoveryDependencies> = {}
@@ -122,9 +120,7 @@ async function runRecovery(
   }
 
   const credentials = recoveryCredentials(journal, bundle, dependencies.now())
-  // Why: publishCommitted runs inside the catch below, so a failed local write
-  // of an authoritatively committed install must not look like "nothing to
-  // reconcile" — that journal is the only record left to retry the write from.
+  // Track committed status separately so local publication failure cannot discard the only durable recovery record.
   let observedCommitted = false
   let rejectedCredentials = 0
   for (const credential of credentials) {
@@ -171,14 +167,8 @@ async function runRecovery(
       client?.close()
     }
   }
-  // Why: past invite expiry no credential can still establish what happened, so
-  // retaining the journal cannot reconcile anything — it only fails every later
-  // pairing with "recovery pending" forever. Re-pairing mints a fresh device and
-  // any uncommitted server-side install expires on its own. The extra invite
-  // lifetime of slack keeps a brief relay outage from discarding a journal whose
-  // resume credential would have reconciled it on the next launch.
-  // A relay that rejected every credential (desktop rotated the QR or revoked
-  // the device) is authoritative too: nothing can ever reconcile this journal.
+  // Abandon uncommitted journals only after all credentials are rejected or invite expiry plus outage grace.
+  // A known committed install must retain its journal for local persistence retry.
   if (
     !observedCommitted &&
     (rejectedCredentials === credentials.length ||
@@ -326,7 +316,6 @@ function assertCommitted(
   }
 }
 
-/** Test-only: clear the startup single-flight between cases. */
 export function resetMobileRelayPairingRecoveryForTests(): void {
   recoveryPromise = null
 }

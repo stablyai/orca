@@ -1,5 +1,4 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-// These transport fixtures never read abandoned-launch ownership from the app store.
 const appStore = vi.hoisted(() => ({
   getState: vi.fn(() => {
     throw new Error('These transport fixtures must not read app-store ownership')
@@ -22,12 +21,7 @@ import {
 } from '../../../../shared/terminal-stream-protocol'
 import { stubRuntimeEnvironmentBridge } from '../../runtime/runtime-environment-bridge-fixture'
 
-// Client-side wire regression for #7329: the daemon's pendingEscapeTailAnsi
-// rides the SnapshotStart JSON frame. This drives REAL binary frames through
-// the REAL multiplexer (decodeSnapshotInfo → onSnapshot meta) into the REAL
-// transport (processData → onReplayData meta). The server-side counterpart is
-// terminal-multiplex-escape-tail.test.ts; without this test the client half of
-// the chain could silently drop the field and every suite stayed green.
+// Drive real wire frames through multiplexer and transport so SnapshotStart’s pending escape reaches replay; server counterpart: terminal-multiplex-escape-tail.test.ts (#7329).
 
 describe('remote transport snapshot escape-tail threading (#7329)', () => {
   const runtimeCall = vi.fn()

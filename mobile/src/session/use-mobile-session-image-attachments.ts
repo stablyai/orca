@@ -1,17 +1,17 @@
 import type { RpcClient } from '../transport/rpc-client'
 import type { ConnectionState } from '../transport/types'
 import type { MobileImageSource } from './mobile-image-source-picker'
-import type { MobileNativeChatSendOutcome } from './mobile-native-chat-send'
+import type { MobileNativeChatSendOutcome } from './native-chat/mobile-native-chat-send'
 import type { StructuredMobileSendAttachment } from './use-mobile-structured-send-with-outcome'
 import { useMobileImageAttachment } from './use-mobile-image-attachment'
 import {
   useMobileNativeChatImageAttachments,
   type MobileNativeChatImageAttachments
-} from './use-mobile-native-chat-image-attachments'
+} from './native-chat/composer/use-mobile-native-chat-image-attachments'
 import {
   useMobileNativeChatFileAttachments,
   type MobileNativeChatFileAttachments
-} from './use-mobile-native-chat-file-attachments'
+} from './native-chat/composer/use-mobile-native-chat-file-attachments'
 
 type CurrentRef<T> = { readonly current: T }
 
@@ -23,15 +23,13 @@ type Args = {
   readonly canSend: boolean
   readonly connState: ConnectionState
   readonly deviceTokenRef: CurrentRef<string | null>
-  /** Active-tab identity (same key shape as the drafts hook) — native-chat chips
-   *  are scoped per tab so a switch can't ride an image into another terminal. */
   readonly nativeChatScopeKey: string | null
   readonly nativeChatInputLeaseReady: boolean
+  /** False when only memory names the agent: the pane may be a bare shell, so images never send. */
+  readonly nativeChatAgentConfirmed: boolean
   readonly getActiveWorktreeConnectionId: () => Promise<string | null>
   readonly beforeTerminalSend: (terminal: string) => Promise<boolean>
-  /** Outcome-preserving so an ambiguous ('unknown') delivery after an image
-   *  paste can mark the terminal input for healing (#10228). Takes the image
-   *  send's budget so the paste and this text body share one `sending` window. */
+  // Preserve unknown delivery for stale-input healing and share the image action’s deadline with its text send.
   readonly nativeChatBaseSend: (
     text: string,
     images?: string[],
@@ -39,25 +37,17 @@ type Args = {
     attachments?: readonly StructuredMobileSendAttachment[],
     sentAt?: number
   ) => Promise<MobileNativeChatSendOutcome>
-  /** Structured agent sessions do not have a terminal paste path. */
   readonly structuredNativeChat: boolean
-  /** The structured chat's session, which owns the files uploaded for it. */
   readonly nativeChatSessionId: string | null
-  /** Launch-context text parked on the agent's TUI input line, or null — sizes
-   *  the image paste's leading clear so a multi-line draft cannot ride along. */
+  // Size the leading clear from parked launch context so earlier multiline draft text cannot join images.
   readonly readSeededLaunchDraft: () => string | null
   readonly showToast: (message: string, durationMs?: number) => void
-  /** Native-chat send failures — rendered in the composer's inline banner. */
   readonly onNativeChatSendError: (message: string) => void
   readonly onSuccess: () => void
   readonly onError: () => void
 }
 
-/** A session exposes image attachment on two surfaces that share one upload
- *  pipeline and host wiring: the visible terminal input (immediate bracketed
- *  paste) and the native-chat composer (chips deferred to submit), plus a
- *  structured chat's files. Owning them here keeps the already-dense session
- *  route to a single wiring point. */
+// Share upload wiring across immediate terminal paste, deferred chat chips and host-owned structured files.
 export function useMobileSessionImageAttachments({
   client,
   agent,
@@ -68,6 +58,7 @@ export function useMobileSessionImageAttachments({
   deviceTokenRef,
   nativeChatScopeKey,
   nativeChatInputLeaseReady,
+  nativeChatAgentConfirmed,
   getActiveWorktreeConnectionId,
   beforeTerminalSend,
   nativeChatBaseSend,
@@ -112,7 +103,9 @@ export function useMobileSessionImageAttachments({
     getActiveWorktreeConnectionId,
     connState,
     scopeKey: nativeChatScopeKey,
-    enabled: structuredNativeChat ? connState === 'connected' : nativeChatInputLeaseReady,
+    enabled: structuredNativeChat
+      ? connState === 'connected'
+      : nativeChatInputLeaseReady && nativeChatAgentConfirmed,
     structuredNativeChat,
     files: nativeChatFiles.files,
     onFilesSent: nativeChatFiles.removeFiles,
