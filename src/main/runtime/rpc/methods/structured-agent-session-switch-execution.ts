@@ -54,6 +54,17 @@ export async function executeStructuredSessionSwitch(
   const deadline = agentSessionSwitchDeadline()
   let sessionId = params.sessionId
   let commandOwned = false
+  // A source kept on screen for a replace is settled when this switch settles, by its own result
+  // or the deadline, even while work it started is still running; a later proven stop settles then.
+  let switchSettled = false
+  let settleSource: (() => void) | undefined
+  const keepSource = (settle: () => void): void => {
+    if (switchSettled) {
+      settle()
+    } else {
+      settleSource = settle
+    }
+  }
   const operation = (async (): Promise<AgentSessionSwitchResult> => {
     const prepared = await prepareStructuredSessionSwitch(params, ctx, sessionId, deadline)
     const { host, execution, create, conversation } = prepared
@@ -75,7 +86,7 @@ export async function executeStructuredSessionSwitch(
             deadline
           )
         }
-        const result = await switchToChat(params, ctx, prepared, sessionId, deadline)
+        const result = await switchToChat(params, ctx, prepared, sessionId, deadline, keepSource)
         sessionId = result.sessionId
         return result
       },
@@ -103,6 +114,9 @@ export async function executeStructuredSessionSwitch(
     return await deadline.wait(operation)
   } catch (error) {
     return structuredSessionSwitchFailure(error, sessionId)
+  } finally {
+    switchSettled = true
+    settleSource?.()
   }
 }
 
@@ -111,7 +125,8 @@ async function switchToChat(
   ctx: RpcContext,
   prepared: Prepared,
   sessionId: string,
-  deadline: AgentSessionSwitchDeadline
+  deadline: AgentSessionSwitchDeadline,
+  keepSource: (settle: () => void) => void
 ): Promise<AgentSessionSwitchResult> {
   const {
     host,
@@ -123,6 +138,7 @@ async function switchToChat(
     conversation
   } = prepared
   deadline.check()
+  let replacedBy: string | undefined
   const source = 'source' in execution ? execution.source : undefined
   const close = source
     ? captureStructuredSwitchTerminalSource(
@@ -184,6 +200,9 @@ async function switchToChat(
     // Shutdown already accepted must finish even when the observing request expires.
     try {
       await host.trackSwitchPhysical(sessionId, close.stop(replacing))
+      // The window decides whether the stopped pane is still there; a chat that replaced it is
+      // named so the window waits for that replace's own pass.
+      keepSource(() => close.settleStoppedSource(replacedBy))
     } catch {
       host.deps.logger.warn('switch source exit was not confirmed', {
         scope: 'session-switch',
@@ -270,10 +289,12 @@ async function switchToChat(
     focusWindow: agentLaunchMovesHostWindow(ctx),
     ...(replaces ? { replaces } : sameWorkspace ? { placement: close.placement() } : {})
   })
+  replacedBy = replaces ? sessionId : undefined
   deadline.check()
   if (sameWorkspace) {
     // Whole tab: the layout owner's replace removed it (main's model, or the window applying the
-    // snapshot's hint). Split pane: the window retired it on exit, main's model closes it here.
+    // snapshot's hint). Split pane: the window retired it on exit, or shows it exited once this
+    // switch settles if the stop kept it; main's model closes it here.
     await close.retire(replaces !== undefined || !ORCA_LAYOUT_OWNER_IS_MAIN)
   }
   deadline.check()

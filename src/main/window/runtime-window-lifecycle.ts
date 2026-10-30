@@ -215,6 +215,7 @@ export function registerRuntimeWindowLifecycle(
       }),
     closeTerminal: (tabId) => send('ui:closeTerminal', { kind: 'tab', tabId }),
     closeTerminalPane: (tabId, leafId) => send('ui:closeTerminal', { kind: 'pane', tabId, leafId }),
+    settleStoppedSwitchSource: (source) => send('ui:stoppedSwitchSource', source),
     closeTerminalTab: (tabId, options) =>
       requestTerminalTabCloseFromRenderer(mainWindow, tabId, options),
     workspaceSleepChanged: (notice) => send('ui:workspaceSleep', notice),

@@ -499,3 +499,112 @@ it('re-issuing a switch whose first answer was lost adopts the terminal it start
       .sort()
   ).toEqual([TAB_ID, lost.tabId].sort())
 })
+
+/** A whole-tab terminal→chat switch whose stop keeps the pane for the replace; records main's settlements. */
+async function switchFromKeptTerminal(
+  options: {
+    afterStop?: (runtime: ReturnType<typeof setupMainOwnedWorkspace>['runtime']) => Promise<void>
+  } = {}
+) {
+  const { runtime } = setupMainOwnedWorkspace()
+  const incarnationId = '11111111-1111-4111-8111-111111111111'
+  runtime.registerPty(PTY_A, WORKTREE_ID, null, { tabId: TAB_ID, leafId: LEAF_A, incarnationId })
+  const source = runtime.resolveTerminalPane(`${TAB_ID}:${LEAF_A}`, WORKTREE_ID)
+  if (!source.presentation) {
+    throw new Error('missing captured source')
+  }
+  const settled = vi.fn()
+  runtime.setNotifier({
+    settleStoppedSwitchSource: settled,
+    closeTerminal: () => {},
+    worktreesChanged: () => {},
+    reposChanged: () => {},
+    activateWorktree: () => {},
+    createTerminal: () => {},
+    splitTerminal: () => {},
+    renameTerminal: () => {},
+    focusTerminal: () => {},
+    terminalFitOverrideChanged: () => {},
+    terminalDriverChanged: () => {}
+  })
+  runtime.setPtyController({
+    write: () => true,
+    kill: () => false,
+    stopAndWait: async () => {
+      await runtime.onPtyExit(PTY_A, 0, incarnationId, { hostExitConfirmed: true })
+      await options.afterStop?.(runtime)
+      return true
+    },
+    getForegroundProcess: async () => null
+  })
+  const result = await executeStructuredSessionSwitch(
+    {
+      sessionId: id,
+      execution: {
+        invocationId: 'kept-source',
+        source: {
+          terminal: source.handle,
+          expectedIncarnationId: incarnationId,
+          originalPresentation: source.presentation
+        }
+      }
+    },
+    { runtime },
+    'chat'
+  )
+  const stoppedSource = {
+    worktreeId: WORKTREE_ID,
+    tabId: TAB_ID,
+    leafId: LEAF_A,
+    ptyId: PTY_A,
+    incarnationId
+  }
+  return { result, settled, stoppedSource }
+}
+
+it('settles a kept source once when the switch fails after stopping it', async () => {
+  await savedTranscript()
+  const prepare = vi.mocked(cliTranscript.prepareStructuredChatCliTranscript)
+  const readable = await prepare.getMockImplementation()!(
+    undefined as never,
+    undefined as never,
+    false
+  )
+  prepare.mockReset()
+  prepare
+    .mockResolvedValueOnce(readable)
+    .mockResolvedValue({ useRealCodexHome: false, cliForkSource: undefined } as never)
+  const { result, settled, stoppedSource } = await switchFromKeptTerminal()
+  expect(result).toMatchObject({
+    status: 'refused',
+    refusal: { details: { reason: 'transcriptUnreadable' } }
+  })
+  expect(settled).toHaveBeenCalledExactlyOnceWith(stoppedSource)
+})
+
+it('settles a kept source once when its tab became a split after the stop', async () => {
+  await savedTranscript()
+  const { result, settled, stoppedSource } = await switchFromKeptTerminal({
+    afterStop: async (runtime) => {
+      expect(
+        await runtime.applyLayoutCommand({
+          type: 'splitPane',
+          workspace: WORKTREE_ID,
+          tabId: TAB_ID,
+          leafId: LEAF_A,
+          direction: 'vertical',
+          newLeafId: LEAF_B
+        })
+      ).toMatchObject({ ok: true })
+    }
+  })
+  expect(result).toEqual({ status: 'completed', sessionId: id })
+  expect(settled).toHaveBeenCalledExactlyOnceWith(stoppedSource)
+})
+
+it('settles a replaced source naming its chat, so the window waits for that replace', async () => {
+  await savedTranscript()
+  const { result, settled, stoppedSource } = await switchFromKeptTerminal()
+  expect(result).toEqual({ status: 'completed', sessionId: id })
+  expect(settled).toHaveBeenCalledExactlyOnceWith({ ...stoppedSource, replacedBySessionId: id })
+})

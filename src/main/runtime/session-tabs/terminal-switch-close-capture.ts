@@ -61,6 +61,9 @@ export abstract class OrcaRuntimeWithTerminalSwitchCloseCapture extends OrcaRunt
     const originalPlacement = readPlacement()
     const addressedPty = source.ptyId
     const rendererOwnsPresentation = windowListsTab(this, this.tabs, source.tabId)
+    // A `closing` stop keeps the pane's screen for a replace; it is owed one settlement.
+    let keptStopped = false
+    let stoppedSourceSettled = false
     const proof = {
       parentTabId: source.tabId,
       leafId: source.leafId,
@@ -102,6 +105,26 @@ export abstract class OrcaRuntimeWithTerminalSwitchCloseCapture extends OrcaRunt
         if (!stop.stopped) {
           throw new Error('terminal_close_unverifiable')
         }
+        keptStopped = closing
+      },
+      /**
+       * Settles a `closing` stop: the window shows that exact pane exited unless it is gone. Sent
+       * once, only after proof of the stop; a replace's chat names itself, so the window settles
+       * only once that chat is there and its replace has had its pass.
+       */
+      settleStoppedSource: (replacedBySessionId?: string) => {
+        if (!keptStopped || stoppedSourceSettled) {
+          return
+        }
+        stoppedSourceSettled = true
+        this.notifier?.settleStoppedSwitchSource?.({
+          worktreeId: source.worktreeId,
+          tabId: source.tabId,
+          leafId: source.leafId,
+          ptyId: addressedPty,
+          incarnationId: incarnation,
+          ...(replacedBySessionId ? { replacedBySessionId } : {})
+        })
       },
       /** Retires the pane's bookkeeping; its presentation too, unless a replace or its exit already did. */
       retire: async (presentationRetired = false) => {

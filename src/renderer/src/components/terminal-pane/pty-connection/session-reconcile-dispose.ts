@@ -149,6 +149,8 @@ export function installSessionReconcileDispose(session: ConnectPanePtySession): 
       session.spawnedFreshPtyId === ptyId && !Number.isFinite(session.lastTerminalInputAt),
     dispose() {
       session.disposed = true
+      // A pane parked before main settled its stopped process takes that settlement when shown.
+      session.stopWatchingStoppedSwitchSource?.()
       session.discardAgentPreReadyDraft?.()
       session.cleanupKittyFileReader()
       session.disposeSpawnDeferral()

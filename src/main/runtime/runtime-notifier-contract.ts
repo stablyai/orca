@@ -1,4 +1,5 @@
 import type { TerminalSurfaceCloseIdentity } from '../../shared/terminal-tab-close'
+import type { StoppedSwitchSource } from '../../shared/stopped-switch-source'
 import type {
   RuntimeEditorTabReveal,
   RuntimeFileOpenPosition
@@ -166,6 +167,8 @@ export type RuntimeNotifier = {
   closeTerminal(tabId: string): void
   /** Drops one split pane main already closed; never closes its tab. */
   closeTerminalPane?(tabId: string, leafId: string): void
+  /** A switch stopped this exact pane's process; the window shows it exited unless it is gone. */
+  settleStoppedSwitchSource?(source: StoppedSwitchSource): void
   closeTerminalTab?(
     tabId: string,
     options?: {

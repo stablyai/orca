@@ -20,6 +20,7 @@ import type { PtyPaneStartup } from '../pty-connection-types'
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
 import { isPtyExitReplacedByRestart } from '../pty-exit-delivery'
 import { armRestartReplacement } from './restart-replacement-on-show'
+import { holdClosingExit } from './stopped-switch-source-exit'
 import { noteHiddenAgentResumePtyEnded } from './hidden-agent-resume-deferral'
 import { expectExitedSplitPaneClose } from './exited-split-pane-close'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
@@ -232,6 +233,9 @@ export function installPtyExitHibernate(session: ConnectPanePtySession): void {
         // Nothing else will replace this process; the pane takes it back when shown.
         armRestartReplacement(session, ptyId)
         return
+      }
+      if (preserveRendererBinding && !reversibleExit) {
+        holdClosingExit(session, ptyId, exitCode)
       }
       const sleepingRecordEntry = session.getSleepingRecordForPane(useAppStore.getState())
       if (

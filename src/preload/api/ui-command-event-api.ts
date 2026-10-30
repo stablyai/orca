@@ -17,6 +17,7 @@ import type {
   AgentLaunchTabPublishRequest
 } from '../../shared/agent-launch-tab-publication'
 import type { AgentLaunchPaneVerdictEvent } from '../../shared/agent-launch-pane-verdict'
+import type { StoppedSwitchSource } from '../../shared/stopped-switch-source'
 import type { PaneLaunchRecipe } from '../../shared/terminal-attachment-launch-result'
 import type {
   TerminalPaneRevealReply,
@@ -285,6 +286,8 @@ export type UiCommandEventApi = {
     }) => void
   ) => () => void
   onCloseTerminal: (callback: (target: TerminalSurfaceCloseTarget) => void) => () => void
+  /** A switch stopped this pane's process and no replace removed it: show it exited. */
+  onStoppedSwitchSource?: (callback: (source: StoppedSwitchSource) => void) => () => void
   onTerminalTabCloseRequest: (callback: (request: TerminalTabCloseRequest) => void) => () => void
   respondTerminalTabClose: (response: TerminalTabCloseResponse) => void
   /** Follow main's workspace sleep even when another client requested it. */
