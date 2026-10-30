@@ -104,7 +104,15 @@ export class RuntimeMobileNotificationController {
         () => this.refreshForwardedEnvironments(),
         Math.max(1, snapshot.expiresAt - Date.now())
       )
-      this.expiryTimer.unref?.()
+      const timer: unknown = this.expiryTimer
+      if (
+        typeof timer === 'object' &&
+        timer !== null &&
+        'unref' in timer &&
+        typeof timer.unref === 'function'
+      ) {
+        timer.unref()
+      }
     }
   }
 
