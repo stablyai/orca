@@ -1,4 +1,3 @@
-import { readTerminalStartFailure } from '../../../../shared/terminal-start-failure'
 import {
   isNativeWindowsLocalPtySpawn,
   markNativeWindowsConptyPty
@@ -150,8 +149,7 @@ export async function completePaneAdoption(
           result: response,
           outcome: {
             kind: 'registration-exited' as const,
-            result: response,
-            terminalStartFailure: readTerminalStartFailure(error)
+            result: response
           },
           owner,
           materialized: true as const

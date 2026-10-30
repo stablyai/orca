@@ -1,4 +1,7 @@
-import { readTerminalStartFailure } from '../../../shared/terminal-start-failure'
+import {
+  markTerminalStartFailure,
+  readTerminalStartFailure
+} from '../../../shared/terminal-start-failure'
 import type { PtySpawnSizeSeed } from './spawn-options-assembly'
 import { isValidTerminalTabId } from '../../../shared/terminal-tab-id'
 import type { AgentSessionClaimedSpawnResult } from '../../../shared/agent-session-host-authority'
@@ -108,6 +111,17 @@ export type PtySpawnCommitInput = {
 
 /** The one commit for a freshly started process, run inside the prompt-intent wrapper. */
 export async function commitPtySpawn(input: PtySpawnCommitInput): Promise<PtySpawnOutcome> {
+  try {
+    return await commitPtySpawnImpl(input)
+  } catch (error) {
+    throw markTerminalStartFailure(
+      error,
+      input.adoptedAgentSession ? { isReattach: true } : input.state.result
+    )
+  }
+}
+
+async function commitPtySpawnImpl(input: PtySpawnCommitInput): Promise<PtySpawnOutcome> {
   const { state } = input
   const { result } = state
   const runtime = state.deps.runtime
@@ -169,7 +183,7 @@ export async function commitPtySpawn(input: PtySpawnCommitInput): Promise<PtySpa
         if (!(error instanceof Error) || error.message !== 'agent_session_exited_during_start') {
           throw error
         }
-        terminalStartFailure = readTerminalStartFailure(error)
+        terminalStartFailure = readTerminalStartFailure(markTerminalStartFailure(error, result))
       })
       runtime?.cancelPendingPtyRegistration?.(
         result.id,

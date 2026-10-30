@@ -4,7 +4,10 @@ import {
 } from '../../shared/terminal-exit-cause'
 import type { SessionOptions } from './session-options'
 
-export function createSessionInitialOutput(opts: SessionOptions) {
+export function createSessionInitialOutput({
+  sessionId,
+  reportReadinessEvent
+}: Pick<SessionOptions, 'sessionId' | 'reportReadinessEvent'>) {
   return {
     resolveExit(
       code: number,
@@ -14,8 +17,8 @@ export function createSessionInitialOutput(opts: SessionOptions) {
       const resolved = cause ?? resolveUnreportedExitCause(code)
       if (resolved.kind === 'exited' && resolved.initialOutputDiagnostic) {
         try {
-          opts.reportReadinessEvent?.('session-initial-output-diagnostic', {
-            sessionId: opts.sessionId,
+          reportReadinessEvent?.('session-initial-output-diagnostic', {
+            sessionId,
             incarnationId,
             code,
             diagnostic: resolved.initialOutputDiagnostic

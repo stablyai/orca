@@ -1,4 +1,7 @@
-import { readTerminalStartFailure } from '../../shared/terminal-start-failure'
+import {
+  markTerminalStartFailure,
+  readTerminalStartFailure
+} from '../../shared/terminal-start-failure'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { spawnWorktreeTarget } from '../../shared/worktree/host-qualified-identity'
 import {
@@ -168,7 +171,10 @@ describe('startup exit evidence incarnation', () => {
     try {
       runtime.assertPtyRegistrationAllowed(PTY, PREDECESSOR)
     } catch (error) {
-      expect(readTerminalStartFailure(error)).toMatchObject({ incarnationId: PREDECESSOR })
+      expect(readTerminalStartFailure(error)).toBeUndefined()
+      expect(readTerminalStartFailure(markTerminalStartFailure(error))).toMatchObject({
+        incarnationId: PREDECESSOR
+      })
     }
     runtime.onPtyExit(PTY, 1, 'other-incarnation', {
       providerExitObserved: true,

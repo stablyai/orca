@@ -1,4 +1,7 @@
-import { terminalStartError } from '../../../../shared/terminal-start-failure'
+import {
+  markTerminalStartFailure,
+  terminalExitError
+} from '../../../../shared/terminal-start-failure'
 import type { AgentSessionOwnerBinding } from '../../../../shared/agent-session-host-authority'
 import { ClaimedAgentPtyOwnerRegistry } from '../../../../shared/claimed-agent-pty-owner'
 import { isPtyIncarnationId } from '../../../../shared/pty-incarnation'
@@ -45,12 +48,13 @@ export function assertSpawnReplyWasLive(result: PtySpawnResult): void {
     return
   }
   // Lower layers may canonicalize IDs; controller-local pending identity cannot prove this exit.
-  throw Object.assign(
-    terminalStartError('agent_session_exited_during_start', result.exitCause, result.incarnationId),
+  const error = Object.assign(
+    terminalExitError('agent_session_exited_during_start', result.exitCause, result.incarnationId),
     {
       agentSessionOperationOutcome: 'unknown' as const
     }
   )
+  throw markTerminalStartFailure(error, result)
 }
 
 export async function reconcileAgentSessionOwnerListings(): Promise<void> {

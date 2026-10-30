@@ -1,4 +1,5 @@
 import type { PtySpawnResult } from '../../providers/pty-provider-contract'
+import { markTerminalStartFailure } from '../../../shared/terminal-start-failure'
 import { ptyIncarnationById } from './provider/ownership-state'
 import { ensureWslHookRelayForReattach } from '../../agent-hooks/wsl-hook-relay-reattach'
 import { noteWslDistroWoken, noteWslDistrosRunning } from '../../wsl-background-distro-gate'
@@ -261,7 +262,7 @@ export async function executePtySpawn(
     ctx.deps.runtime?.preparePtyExecutionContext?.(ctx.result.id, spawnedWslDistro)
     ctx.spawnTiming?.mark('provider_spawn')
   } catch (err) {
-    throw failPtySpawnExecute(ctx, err, {
+    throw failPtySpawnExecute(ctx, markTerminalStartFailure(err, ctx.result), {
       sessionId: facts.sessionId,
       ownsNewSession: ctx.ownsNewIncarnation,
       telemetry: args.telemetry,

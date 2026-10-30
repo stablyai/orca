@@ -51,14 +51,34 @@ export function terminalStartError(
   return Object.assign(new Error(message), { terminalStartFailure: { cause, incarnationId } })
 }
 
-export function terminalExitError(message: string, cause?: TerminalExitCause | null): Error {
-  return Object.assign(new Error(message), { terminalExitCause: cause })
+export function terminalExitError(
+  message: string,
+  cause?: TerminalExitCause | null,
+  incarnationId?: string
+): Error {
+  return Object.assign(new Error(message), {
+    terminalExitCause: cause,
+    ...(incarnationId ? { terminalExitIncarnationId: incarnationId } : {})
+  })
 }
 
 /** Promote only inside an operation already waiting for a fresh process to start. */
-export function markTerminalStartFailure(error: unknown): unknown {
+export function markTerminalStartFailure(
+  error: unknown,
+  result?: { isReattach?: boolean; agentSessionEnsure?: { disposition: string } }
+): unknown {
+  if (result?.isReattach || result?.agentSessionEnsure?.disposition === 'adopted') {
+    return error
+  }
   if (error instanceof Error && 'terminalExitCause' in error) {
-    Object.assign(error, { terminalStartFailure: { cause: error.terminalExitCause } })
+    Object.assign(error, {
+      terminalStartFailure: {
+        cause: error.terminalExitCause,
+        ...('terminalExitIncarnationId' in error
+          ? { incarnationId: error.terminalExitIncarnationId }
+          : {})
+      }
+    })
   }
   return error
 }

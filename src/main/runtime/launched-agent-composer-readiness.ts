@@ -127,12 +127,23 @@ export async function waitForWorkerAgentReady(
   args: { agent: TuiAgent | undefined; reusesTerminal: boolean; timeoutMs: number }
 ): Promise<RuntimeTerminalWait> {
   try {
-    return await (args.agent && !args.reusesTerminal
+    const result = await (args.agent && !args.reusesTerminal
       ? waitForWorkerStartComposer(runtime, handle, args.agent, args.timeoutMs)
       : runtime.waitForTerminal(handle, { condition: 'tui-idle', timeoutMs: args.timeoutMs }))
+    return args.reusesTerminal ? result : requireFreshReadiness(result)
   } catch (error) {
     throw args.reusesTerminal ? error : markTerminalStartFailure(error)
   }
+}
+
+function requireFreshReadiness(result: RuntimeTerminalWait): RuntimeTerminalWait {
+  if (result.status === 'exited') {
+    const error = terminalExitError('terminal_exited', result.exitCause)
+    if (readTerminalStartFailure(markTerminalStartFailure(error))) {
+      throw error
+    }
+  }
+  return result
 }
 
 /** Fall back from composer detection to tui-idle using only the remaining launch budget. */
@@ -175,7 +186,7 @@ export async function waitForLaunchedAgentComposer(
   ...args: Parameters<typeof waitForLaunchedAgentComposerImpl>
 ): Promise<RuntimeTerminalWait> {
   try {
-    return await waitForLaunchedAgentComposerImpl(...args)
+    return requireFreshReadiness(await waitForLaunchedAgentComposerImpl(...args))
   } catch (error) {
     throw markTerminalStartFailure(error)
   }

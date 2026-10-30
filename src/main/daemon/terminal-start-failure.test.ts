@@ -3,6 +3,7 @@ import { Socket } from 'node:net'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { TerminalHost } from './terminal-host'
 import { Session } from './session'
+import { createSessionInitialOutput } from './session-initial-output'
 import { DaemonTerminalAdmission } from './daemon-terminal-admission'
 import { DaemonPtySpawnPreparations } from './daemon-pty-spawn-preparations'
 import { answerDaemonControlRequest } from './daemon-control-request'
@@ -46,6 +47,33 @@ function subprocess(cause?: TerminalExitCause): SubprocessHandle {
 }
 
 describe('process-owned terminal startup failure', () => {
+  it('keeps the diagnostic callback independent of the consumed creation options', () => {
+    const report = vi.fn()
+    const options = { sessionId: 'restored-session', reportReadinessEvent: report }
+    const initialOutput = createSessionInitialOutput(options)
+    Object.defineProperty(options, 'sessionId', {
+      get: () => {
+        throw new Error('consumed options')
+      }
+    })
+    Object.defineProperty(options, 'reportReadinessEvent', {
+      get: () => {
+        throw new Error('consumed options')
+      }
+    })
+    initialOutput.resolveExit(
+      256,
+      { kind: 'exited', exitCode: 256, initialOutputDiagnostic: 'git-bash-console-capacity' },
+      'restored-incarnation'
+    )
+    expect(report).toHaveBeenCalledExactlyOnceWith('session-initial-output-diagnostic', {
+      sessionId: 'restored-session',
+      incarnationId: 'restored-incarnation',
+      code: 256,
+      diagnostic: 'git-bash-console-capacity'
+    })
+  })
+
   it('rejects constructor-time death through the real daemon error reply without publishing a phantom terminal', async () => {
     Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
     const events = vi.fn()

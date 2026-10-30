@@ -98,6 +98,10 @@ describe('TerminalHost agent-session claims', () => {
     }
     const first = createOrAttachClaimedAgentSession(args).catch((error: unknown) => error)
     const joined = createOrAttachClaimedAgentSession(args).catch((error: unknown) => error)
+    const originalOnExit = options.streamClient.onExit
+    options.streamClient.onExit = () => {
+      throw new Error('request callback was replaced')
+    }
     created.resolve({
       isNew: true,
       snapshot: null,
@@ -114,6 +118,11 @@ describe('TerminalHost agent-session claims', () => {
       })
     }
     expect(createOrAttach).toHaveBeenCalledOnce()
+    expect(originalOnExit).toHaveBeenCalledWith(
+      256,
+      'claimed-incarnation',
+      expect.objectContaining({ initialOutputDiagnostic: 'git-bash-console-capacity' })
+    )
   })
 
   it('adopts one claimed provider session across different requested daemon ids', async () => {

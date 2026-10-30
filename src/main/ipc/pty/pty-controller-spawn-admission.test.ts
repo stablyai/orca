@@ -66,50 +66,88 @@ describe('registerPtyHandlers', () => {
     registerAgentClaimController
   } = setupPtyIpcSuite()
 
-  it('rejects renderer persistence when a local PTY exits before spawn settles', async () => {
-    const ptyId = 'pty-renderer-early-exit'
-    const incarnationId = 'incarnation-renderer-early-exit'
-    const runtime = new OrcaRuntimeService()
-    const registerRuntimePty = vi.spyOn(runtime, 'registerPty')
-    const provider = createAgentClaimProvider({
-      spawn: vi.fn(async () => {
-        runtime.onPtySpawned(ptyId, incarnationId)
-        runtime.onPtyExit(ptyId, 0, incarnationId)
-        return { id: ptyId, incarnationId, exitedBeforeSpawnReply: true }
-      }),
-      authoritativeOwnerListings: false
-    })
-    const store = { persistPtyBinding: vi.fn() }
-    setLocalPtyProvider(provider as never)
-    registerPtyHandlers(
-      mainWindow as never,
-      runtime,
-      undefined,
-      undefined,
-      undefined,
-      store as never
-    )
-    const leafId = '44444444-4444-4444-8444-444444444444'
-
-    await expect(
-      handlers.get('pty:spawn')!(null, {
-        cols: 80,
-        rows: 24,
-        cwd: '/tmp/worktree',
-        worktreeId: 'repo::/tmp/worktree',
-        tabId: 'tab-renderer-early-exit',
-        leafId
+  it.each(['generic-fresh', 'capacity-fresh', 'capacity-reattach', 'capacity-adopted'] as const)(
+    'rejects renderer persistence when a local PTY exits before spawn settles (%s)',
+    async (context) => {
+      const ptyId = 'pty-renderer-early-exit'
+      const incarnationId = 'incarnation-renderer-early-exit'
+      const runtime = new OrcaRuntimeService()
+      const registerRuntimePty = vi.spyOn(runtime, 'registerPty')
+      const provider = createAgentClaimProvider({
+        spawn: vi.fn(async () => {
+          runtime.onPtySpawned(ptyId, incarnationId)
+          const exitCause =
+            context === 'generic-fresh'
+              ? { kind: 'exited' as const, exitCode: 0 }
+              : {
+                  kind: 'exited' as const,
+                  exitCode: 256,
+                  initialOutputDiagnostic: 'git-bash-console-capacity' as const
+                }
+          runtime.onPtyExit(ptyId, exitCause.exitCode, incarnationId, {
+            providerExitObserved: true,
+            cause: exitCause
+          })
+          return {
+            id: ptyId,
+            incarnationId,
+            exitedBeforeSpawnReply: true,
+            exitCause,
+            ...(context === 'capacity-reattach' ? { isReattach: true } : {}),
+            ...(context === 'capacity-adopted'
+              ? {
+                  agentSessionEnsure: {
+                    disposition: 'adopted' as const,
+                    owner: {
+                      claim: recoveredAgentClaim,
+                      generation: 'g1',
+                      phase: 'live' as const,
+                      ptyId,
+                      surface: recoveredAgentSurface
+                    }
+                  }
+                }
+              : {})
+          }
+        }),
+        authoritativeOwnerListings: false
       })
-    ).rejects.toThrow('agent_session_exited_during_start')
+      const store = { persistPtyBinding: vi.fn() }
+      setLocalPtyProvider(provider as never)
+      registerPtyHandlers(
+        mainWindow as never,
+        runtime,
+        undefined,
+        undefined,
+        undefined,
+        store as never
+      )
+      const leafId = '44444444-4444-4444-8444-444444444444'
 
-    expect(store.persistPtyBinding).not.toHaveBeenCalled()
-    expect(registerRuntimePty).not.toHaveBeenCalled()
-    const internals = runtime as unknown as {
-      pendingPtyRegistrationIncarnations: Map<string, string | null>
+      await expect(
+        handlers.get('pty:spawn')!(null, {
+          cols: 80,
+          rows: 24,
+          cwd: '/tmp/worktree',
+          worktreeId: 'repo::/tmp/worktree',
+          tabId: 'tab-renderer-early-exit',
+          leafId
+        })
+      ).rejects.toThrow(
+        context === 'capacity-fresh'
+          ? 'Close some Git Bash terminals'
+          : 'agent_session_exited_during_start'
+      )
+
+      expect(store.persistPtyBinding).not.toHaveBeenCalled()
+      expect(registerRuntimePty).not.toHaveBeenCalled()
+      const internals = runtime as unknown as {
+        pendingPtyRegistrationIncarnations: Map<string, string | null>
+      }
+      expect(internals.pendingPtyRegistrationIncarnations.size).toBe(0)
+      clearProviderPtyState(ptyId)
     }
-    expect(internals.pendingPtyRegistrationIncarnations.size).toBe(0)
-    clearProviderPtyState(ptyId)
-  })
+  )
   it('adopts a live controller-owned local fallback when listings cannot serialize claims', async () => {
     const sessions: {
       id: string
