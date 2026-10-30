@@ -118,6 +118,8 @@ export function useTerminalViewportRefit(options: TerminalViewportRefitOptions) 
             }
             const prev = viewportRef.current
             if (!forceRefit && prev && prev.cols === dims.cols && prev.rows === dims.rows) {
+              // A width change marked it unmeasured; the same grid still fits, so it is measured again.
+              viewportMeasuredRef.current = true
               return
             }
             viewportRef.current = dims
@@ -214,18 +216,11 @@ export function useTerminalViewportRefit(options: TerminalViewportRefitOptions) 
     scheduleViewportRefit()
   }, [textScale, viewportMeasuredRef, scheduleViewportRefit])
 
-  // Dock/sidebar changes alter width without window changes; ignore subpixel jitter if the current grid still fits.
+  // Dock/sidebar changes alter width without window changes; the refit keeps the grid if it still fits.
   const notifyTerminalFrameWidth = useCallback(() => {
     invalidateViewports()
     scheduleViewportRefit()
-  }, [
-    activeHandleRef,
-    terminalFrameRef,
-    terminalRefs,
-    viewportRef,
-    viewportMeasuredRef,
-    scheduleViewportRefit
-  ])
+  }, [invalidateViewports, scheduleViewportRefit])
 
   const notifyFrameHeightRefitEvent = useCallback(
     (event: TerminalFrameHeightRefitEvent) => {

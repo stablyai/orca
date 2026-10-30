@@ -234,6 +234,7 @@ export function createBridgePortPair<TRpc extends RpcClient>(
       pagePaints += 1
     },
     onPageBackClaim: (claimed) => backClaims.push(claimed),
+    onPageLocation: () => {},
     onTerminalKeyRailClaim: (claimed) => terminalKeyRailClaims.push(claimed),
     onRouteParamClear: (param, value) => routeParamClears.push({ param, value }),
     onRouteRefused: (issue) => routeRefusals.push(issue),

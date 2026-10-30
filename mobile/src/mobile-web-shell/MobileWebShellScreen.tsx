@@ -25,6 +25,7 @@ import { useNativeDeviceVerbs } from '../platform/use-native-device-verbs'
 import { useNativePdfViewer } from '../platform/native-pdf-view'
 import { useShellPageBack } from './use-shell-page-back'
 import { useShellStackPop } from './use-shell-stack-pop'
+import { usePageLocationOnFold } from './page-location-on-fold'
 import { useMobileWebShellSession } from './use-mobile-web-shell-session'
 import { useShellPageStorageRefresh } from './use-shell-page-storage-refresh'
 import { usePageHostSnapshot } from './use-page-host-snapshot'
@@ -147,6 +148,39 @@ export function MobileWebShellScreen({
     })
   }
 
+  // Push so Back reveals the mounted page without downloading or handshaking again, unless the page replaced itself.
+  const openPageRoute = (href: string, replace = false) => {
+    if (overlay) {
+      return void router.replace(href)
+    }
+    // Return to an existing screen rather than pushing a duplicate over the live one.
+    const rootState = navigationContainer.getRootState()
+    const onStack = rootState ? nativeStackReturn(rootState, href) : null
+    if (onStack === 'current') {
+      return
+    }
+    if (onStack) {
+      navigation.dispatch({
+        type: 'POP',
+        payload: { count: onStack.count },
+        target: onStack.target,
+        source: onStack.source
+      })
+      return
+    }
+    // Host exits preserve notice params and replace cold deep links at either width.
+    if (isHostRouteOf(href, hostId)) {
+      router.dismissTo(href)
+      return
+    }
+    return void (replace ? router.replace(href) : router.push(href))
+  }
+  const holdPageLocation = usePageLocationOnFold(
+    isWideLayout,
+    () => navigation.isFocused(),
+    openPageRoute
+  )
+
   const bridge = useMobileWebShellBridge({
     hostId,
     route,
@@ -181,6 +215,7 @@ export function MobileWebShellScreen({
     // Keep the cover until the page reports its own first frame.
     onPagePainted: reportPagePainted,
     onPageBackClaim: reportPageBackClaim,
+    onPageLocation: (href) => holdPageLocation(href, ownsHostArea),
     onTerminalKeyRailClaim: keyRail.reportClaim,
     onRouteParamClear: (param, value) => {
       onRouteParamClear?.(param, value)
@@ -190,33 +225,7 @@ export function MobileWebShellScreen({
       console.warn('[web-shell] refused to open this screen', issue)
       reportShellFailure('document-load-failed')
     },
-    // Push so Back reveals the mounted page without downloading or handshaking again, unless the page replaced itself.
-    onNavigate: (href: string, replace: boolean) => {
-      if (overlay) {
-        return void router.replace(href)
-      }
-      // Return to an existing screen rather than pushing a duplicate over the live one.
-      const rootState = navigationContainer.getRootState()
-      const onStack = rootState ? nativeStackReturn(rootState, href) : null
-      if (onStack === 'current') {
-        return
-      }
-      if (onStack) {
-        navigation.dispatch({
-          type: 'POP',
-          payload: { count: onStack.count },
-          target: onStack.target,
-          source: onStack.source
-        })
-        return
-      }
-      // Host exits preserve notice params and replace cold deep links at either width.
-      if (isHostRouteOf(href, hostId)) {
-        router.dismissTo(href)
-        return
-      }
-      return void (replace ? router.replace(href) : router.push(href))
-    },
+    onNavigate: openPageRoute,
     serveNativeVerb,
     onExternalLink: openUrlForPage,
     // Reuse the app’s platform haptics mapping; device failures are already swallowed there.

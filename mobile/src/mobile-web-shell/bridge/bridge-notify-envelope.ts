@@ -3,6 +3,7 @@ import { BridgeErrorCaptureSchema } from './bridge-error-capture'
 import { BRIDGE_HAPTICS_NOTIFY_FIELDS } from './bridge-haptics-notify'
 import { BRIDGE_LIVENESS_PROBE_NOTIFY_FIELDS } from './bridge-liveness-probe-notify'
 import { BRIDGE_BACK_CLAIM_NOTIFY } from './bridge-page-back'
+import { BRIDGE_PAGE_LOCATION } from './bridge-page-location'
 import { BRIDGE_PAGE_PAINTED } from './bridge-page-painted'
 import {
   BRIDGE_TERMINAL_KEY_RAIL_CLAIM_NOTIFY,
@@ -104,6 +105,13 @@ export const BridgeNotifySchema = z.discriminatedUnion('name', [
     type: z.literal('notify'),
     name: z.literal(BRIDGE_BACK_CLAIM_NOTIFY),
     claimed: z.boolean()
+  }),
+  // Pages from desktops released with #34484 navigate inside their own document and report where, so a fold can reopen it natively.
+  z.object({
+    v: versionSchema,
+    type: z.literal('notify'),
+    name: z.literal(BRIDGE_PAGE_LOCATION),
+    href: z.string().min(1).max(BRIDGE_MAX_ROUTE_HREF_CHARS).regex(BRIDGE_ROUTE_HREF_PATTERN)
   }),
   // Behind the `terminalKeyRail` grant, which is what keeps it off a shell that has no rail. Whole
   // state rather than a toggle, for the reason the Back claim is.

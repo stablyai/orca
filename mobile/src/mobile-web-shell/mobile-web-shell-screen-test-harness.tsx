@@ -48,6 +48,7 @@ export type ScreenDependencies = {
   backHandlers: Map<string, () => boolean>
   setScreenOptions: Mock
   backClaimed: boolean
+  ownsHostArea: boolean
   screenFocused: boolean
   platform: 'ios' | 'android'
   reportPageBackClaim: Mock
@@ -106,6 +107,7 @@ export function createScreenDependencies(): ScreenDependencies {
     backHandlers: new Map(),
     setScreenOptions: vi.fn(),
     backClaimed: false,
+    ownsHostArea: false,
     screenFocused: true,
     platform: 'ios',
     reportPageBackClaim: vi.fn(),
@@ -146,6 +148,7 @@ export function resetScreenDependencies(dependencies: ScreenDependencies): void 
   dependencies.setScreenOptions.mockReset()
   dependencies.reportPageBackClaim.mockReset()
   dependencies.backClaimed = false
+  dependencies.ownsHostArea = false
   dependencies.screenFocused = true
   dependencies.platform = 'ios'
   dependencies.sendBackDelivers = true

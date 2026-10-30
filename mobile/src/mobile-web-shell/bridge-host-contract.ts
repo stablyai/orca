@@ -114,6 +114,8 @@ export type BridgeHostOptions = {
   onPagePainted: () => void
   // Required for native interception: only a live claim owns Back. Document-ending paths publish false so callers need not infer staleness.
   onPageBackClaim: (claimed: boolean) => void
+  // Where a host-area page from an older desktop navigated inside its own document; the native route never moves for those hops.
+  onPageLocation: (href: string) => void
   /** The page shows a terminal with its key row, or stopped; false also arrives each time a
    *  document starts or ends, and the page claims again on the `init` that follows. */
   onTerminalKeyRailClaim?: (

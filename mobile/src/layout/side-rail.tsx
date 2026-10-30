@@ -129,15 +129,16 @@ export function useSideRailDirectionPadAvailable(): boolean {
 
 /** Draws `node` in the side strip while this screen is mounted; null draws nothing. */
 export function useSideRailContent(node: ReactNode | null): void {
-  const context = useContext(SideRailContext)
+  // The store outlives strip changes, which replace the context value; re-registering on them would flash the rail.
+  const store = useContext(SideRailContext)?.store
   const [owner] = useState(() => Symbol('side-rail-owner'))
   useEffect(() => {
-    if (!context || node === null) {
+    if (!store || node === null) {
       return
     }
-    context.store.show(owner, node)
-    return () => context.store.hide(owner)
-  }, [context, owner, node])
+    store.show(owner, node)
+    return () => store.hide(owner)
+  }, [store, owner, node])
 }
 
 const styles = StyleSheet.create({

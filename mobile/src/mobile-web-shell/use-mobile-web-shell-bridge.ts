@@ -104,6 +104,7 @@ export type MobileWebShellBridgeArgs = {
   onPagePainted: () => void
   // Document resets explicitly publish false so retired pages cannot retain Back.
   onPageBackClaim: (claimed: boolean) => void
+  onPageLocation: (href: string) => void
   /** The page shows a terminal with its key row, or stopped; false again on each new document. */
   onTerminalKeyRailClaim: (
     claimed: boolean,
@@ -195,6 +196,7 @@ export function useMobileWebShellBridge(args: MobileWebShellBridgeArgs): MobileW
       onPageReady: () => argsRef.current.onPageReady(),
       onPagePainted: () => argsRef.current.onPagePainted(),
       onPageBackClaim: (claimed) => argsRef.current.onPageBackClaim(claimed),
+      onPageLocation: (href) => argsRef.current.onPageLocation(href),
       onTerminalKeyRailClaim: (claimed, inputOwner, toolbar) =>
         argsRef.current.onTerminalKeyRailClaim(claimed, inputOwner, toolbar)
     })

@@ -1,4 +1,8 @@
-import type { BridgePageGeometry } from './bridge-page-geometry'
+import {
+  EMPTY_PAGE_GEOMETRY,
+  samePageGeometry,
+  type BridgePageGeometry
+} from './bridge-page-geometry'
 import { BRIDGE_MAX_PENDING_REQUESTS, BRIDGE_MAX_SUBSCRIPTIONS } from './bridge-caps'
 import { MOBILE_WEB_SHELL_GRANTS } from '../page-route-policy'
 import {
@@ -76,7 +80,14 @@ export function createBridgeInitFrame(args: {
     ...(args.keyboardInset === undefined || args.keyboardInset === 0
       ? {}
       : { keyboardInset: args.keyboardInset }),
-    ...(args.pageGeometry === undefined ? {} : { pageGeometry: args.pageGeometry }),
+    ...(args.pageGeometry === undefined || samePageGeometry(args.pageGeometry, EMPTY_PAGE_GEOMETRY)
+      ? {}
+      : {
+          pageGeometry: {
+            ...args.pageGeometry,
+            occlusions: args.pageGeometry.occlusions.map((rect) => ({ ...rect }))
+          }
+        }),
     ...(args.foldDivision === undefined || args.foldDivision === null
       ? {}
       : { foldDivision: { ...args.foldDivision } }),

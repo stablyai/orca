@@ -175,6 +175,7 @@ function Harness(props: {
       props.probe.paints += 1
     },
     onPageBackClaim: (claimed) => props.probe.backClaims.push(claimed),
+    onPageLocation: () => {},
     onTerminalKeyRailClaim: () => {}
   })
   props.probe.view = view
