@@ -2921,26 +2921,12 @@
       "unstageFile": "{{path}} 언스테이지"
     },
     "gitHistory": {
-      "days_one": "{{count}}일",
-      "days_other": "{{count}}일",
-      "hours_one": "{{count}}시간",
-      "hours_other": "{{count}}시간",
-      "justNow": "방금 전",
       "loadFailed": "커밋 기록을 로드하지 못했습니다.",
-      "minutes_one": "{{count}}분",
-      "minutes_other": "{{count}}분",
-      "months_one": "{{count}}개월",
-      "months_other": "{{count}}개월",
-      "noCommitMessage": "(커밋 메시지 없음)",
-      "years_one": "{{count}}년",
-      "years_other": "{{count}}년"
+      "noCommitMessage": "(커밋 메시지 없음)"
     },
     "gitHistoryList": {
       "loadFailed": "기록을 불러오지 못했습니다.",
-      "loadFilesFailed": "커밋 파일을 불러올 수 없습니다.",
       "noCommits": "커밋이 없습니다.",
-      "noFileChanges": "파일 변경 사항 없음",
-      "retryFiles": "커밋 파일 다시 불러오기",
       "waitingForDesktop": "데스크톱 응답 대기 중…"
     },
     "gitStatus": {
@@ -3032,7 +3018,8 @@
     },
     "panel": {
       "loadFailedTitle": "로드 실패",
-      "unavailableTitle": "소스 제어 사용 불가"
+      "unavailableTitle": "소스 제어 사용 불가",
+      "gitOnly": "소스 제어는 Git 리포지토리에서만 사용할 수 있습니다."
     },
     "prChip": {
       "createPr": "PR 생성",
@@ -3229,6 +3216,23 @@
       "branchUnavailable": "브랜치 상태를 확인할 수 없습니다.",
       "commitFailed": "커밋 실패",
       "waitingForDesktop": "데스크톱 연결 대기 중…"
+    },
+    "commitTimeline": {
+      "openChangesHint": "변경 사항을 엽니다",
+      "uncommitted": "커밋되지 않은 변경 사항",
+      "notPushed": "푸시되지 않음",
+      "onOrigin": "origin에 있음",
+      "branchedFrom": "분기 원본",
+      "baseCurrent": "{{base}} 기준 최신 상태",
+      "truncated": "최근 커밋 {{count}}개 표시 중",
+      "justNow": "지금",
+      "minutes": "{{count}}분",
+      "hours": "{{count}}시간",
+      "yesterday": "어제",
+      "files_one": "파일 {{count}}개",
+      "files_other": "파일 {{count}}개",
+      "baseAhead_one": "{{base}}에 새 커밋 {{count}}개",
+      "baseAhead_other": "{{base}}에 새 커밋 {{count}}개"
     }
   },
   "tasks": {

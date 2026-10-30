@@ -1,5 +1,6 @@
 import type { GitBranchCompareSummary } from '../../../../../../shared/git-diff-compare-types'
 import type { WorktreeGitIdentityDisplay } from '../../../../../../shared/worktree/git-identity-display'
+import { formatSourceControlRefLabel } from '../../../../../../shared/source-control-ref-label'
 import { translate } from '@/i18n/i18n'
 
 function formatAheadOfTitle(count: number, ref: string): string {
@@ -35,15 +36,6 @@ export function resolveSourceControlDisplayedBaseRef(
   }
   const configuredRef = compareBaseRef?.trim()
   return configuredRef || null
-}
-
-// Drop Git namespace prefixes but retain remote qualification to distinguish multi-remote bases.
-export function formatSourceControlRefLabel(ref: string): string {
-  return ref
-    .trim()
-    .replace(/^refs\/remotes\//, '')
-    .replace(/^refs\/heads\//, '')
-    .replace(/^refs\/tags\//, '')
 }
 
 // Require a displayable base, matching the row component's guard.

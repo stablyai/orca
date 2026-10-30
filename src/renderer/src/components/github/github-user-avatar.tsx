@@ -1,27 +1,9 @@
 import { useState } from 'react'
 import { cn } from '@/lib/utils'
+import { initialsFor } from '../../../../shared/user-initials'
 
 function githubAvatarUrl(login: string): string {
   return `https://github.com/${encodeURIComponent(login)}.png?size=64`
-}
-
-function initialsFor(login: string, name?: string | null): string {
-  const source = (name?.trim() || login).trim()
-  if (!source) {
-    return '?'
-  }
-  // Iterate Unicode code points and skip symbols so emoji cannot produce broken surrogate initials.
-  const alnum = (word: string): string[] => [...word].filter((ch) => /[\p{L}\p{N}]/u.test(ch))
-  const parts = source.split(/\s+/).filter(Boolean)
-  const letters =
-    parts.length >= 2
-      ? parts
-          .map((word) => alnum(word)[0])
-          .filter(Boolean)
-          .slice(0, 2)
-          .join('')
-      : alnum(source).slice(0, 2).join('')
-  return letters.toUpperCase() || '?'
 }
 
 /** Prefer API avatar URLs for GHES; blank API values/logins must not create bogus requests. */

@@ -35,6 +35,7 @@ const gitBranchCompareSummarySchema = z.looseObject({
   headOid: z.string().nullable().optional(),
   mergeBase: z.string().nullable().optional(),
   commitsAhead: salvagedOptional('commitsAhead', z.number()),
+  commitsBehind: salvagedOptional('commitsBehind', z.number()),
   errorMessage: salvagedOptional('errorMessage', z.string())
 })
 

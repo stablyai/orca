@@ -3016,31 +3016,12 @@
       "unstageFile": "Remover {{path}} do stage"
     },
     "gitHistory": {
-      "days_many": "{{count}}d",
-      "days_one": "{{count}}d",
-      "days_other": "{{count}}d",
-      "hours_many": "{{count}}h",
-      "hours_one": "{{count}}h",
-      "hours_other": "{{count}}h",
-      "justNow": "agora mesmo",
       "loadFailed": "Falha ao carregar o histórico de commits",
-      "minutes_many": "{{count}}m",
-      "minutes_one": "{{count}}m",
-      "minutes_other": "{{count}}m",
-      "months_many": "{{count}} meses",
-      "months_one": "{{count}} mês",
-      "months_other": "{{count}} meses",
-      "noCommitMessage": "(sem mensagem de commit)",
-      "years_many": "{{count}} anos",
-      "years_one": "{{count}} ano",
-      "years_other": "{{count}} anos"
+      "noCommitMessage": "(sem mensagem de commit)"
     },
     "gitHistoryList": {
       "loadFailed": "Falha ao carregar o histórico",
-      "loadFilesFailed": "Não foi possível carregar os arquivos do commit",
       "noCommits": "Nenhum commit.",
-      "noFileChanges": "Nenhuma alteração em arquivos",
-      "retryFiles": "Tentar carregar os arquivos do commit novamente",
       "waitingForDesktop": "Aguardando o desktop…"
     },
     "gitStatus": {
@@ -3132,7 +3113,8 @@
     },
     "panel": {
       "loadFailedTitle": "Não foi possível carregar",
-      "unavailableTitle": "Controle de Código-Fonte Indisponível"
+      "unavailableTitle": "Controle de Código-Fonte Indisponível",
+      "gitOnly": "O Controle de Versão está disponível somente para repositórios Git"
     },
     "prChip": {
       "createPr": "Criar pull request",
@@ -3330,6 +3312,25 @@
       "branchUnavailable": "Status da branch indisponível",
       "commitFailed": "Falha no commit",
       "waitingForDesktop": "Aguardando o desktop…"
+    },
+    "commitTimeline": {
+      "openChangesHint": "Abre Alterações",
+      "uncommitted": "Alterações não commitadas",
+      "notPushed": "Não enviado",
+      "onOrigin": "No origin",
+      "branchedFrom": "Criada a partir de",
+      "baseCurrent": "Atualizado com {{base}}",
+      "truncated": "Mostrando os {{count}} commits mais recentes",
+      "justNow": "agora",
+      "minutes": "{{count}} min",
+      "hours": "{{count}} h",
+      "yesterday": "Ontem",
+      "files_one": "{{count}} arquivo",
+      "files_many": "{{count}} arquivos",
+      "files_other": "{{count}} arquivos",
+      "baseAhead_one": "{{base}} tem 1 commit mais recente",
+      "baseAhead_many": "{{base}} tem {{count}} commits mais recentes",
+      "baseAhead_other": "{{base}} tem {{count}} commits mais recentes"
     }
   },
   "tasks": {

@@ -2925,26 +2925,12 @@
       "unstageFile": "{{path}} dosyasını stage'den çıkar"
     },
     "gitHistory": {
-      "days_one": "{{count}}g",
-      "days_other": "{{count}}g",
-      "hours_one": "{{count}}sa",
-      "hours_other": "{{count}}sa",
-      "justNow": "az önce",
       "loadFailed": "Commit geçmişi yüklenemedi",
-      "minutes_one": "{{count}}dk",
-      "minutes_other": "{{count}}dk",
-      "months_one": "{{count}}ay",
-      "months_other": "{{count}}ay",
-      "noCommitMessage": "(commit mesajı yok)",
-      "years_one": "{{count}}yıl",
-      "years_other": "{{count}}yıl"
+      "noCommitMessage": "(commit mesajı yok)"
     },
     "gitHistoryList": {
       "loadFailed": "Geçmiş yüklenemedi",
-      "loadFilesFailed": "Commit dosyaları yüklenemedi",
       "noCommits": "Commit yok.",
-      "noFileChanges": "Dosya değişikliği yok",
-      "retryFiles": "Commit dosyalarını yüklemeyi yeniden dene",
       "waitingForDesktop": "Masaüstü bekleniyor…"
     },
     "gitStatus": {
@@ -3036,7 +3022,8 @@
     },
     "panel": {
       "loadFailedTitle": "Yüklenemedi",
-      "unavailableTitle": "Kaynak Kontrolü Kullanılamıyor"
+      "unavailableTitle": "Kaynak Kontrolü Kullanılamıyor",
+      "gitOnly": "Source Control yalnızca Git repository'leri için kullanılabilir"
     },
     "prChip": {
       "createPr": "Pull request oluştur",
@@ -3233,6 +3220,23 @@
       "branchUnavailable": "Branch durumu alınamadı",
       "commitFailed": "Commit'lenemedi",
       "waitingForDesktop": "Masaüstü bekleniyor…"
+    },
+    "commitTimeline": {
+      "openChangesHint": "Değişiklikler'i açar",
+      "uncommitted": "Commit edilmemiş değişiklikler",
+      "notPushed": "Push edilmedi",
+      "onOrigin": "origin'de",
+      "branchedFrom": "Dallanma kaynağı",
+      "baseCurrent": "{{base}} ile güncel",
+      "truncated": "Son {{count}} commit gösteriliyor",
+      "justNow": "şimdi",
+      "minutes": "{{count}} dk",
+      "hours": "{{count}} sa",
+      "yesterday": "Dün",
+      "files_one": "{{count}} dosya",
+      "files_other": "{{count}} dosya",
+      "baseAhead_one": "{{base}} üzerinde 1 yeni commit var",
+      "baseAhead_other": "{{base}} üzerinde {{count}} yeni commit var"
     }
   },
   "tasks": {

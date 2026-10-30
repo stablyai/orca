@@ -4079,7 +4079,8 @@
           "complete": "git.history#1",
           "params": {
             "worktree": "id:repo42::/p",
-            "limit": 50
+            "limit": 50,
+            "baseRef": null
           },
           "reply": {
             "ok": true,
@@ -20679,79 +20680,6 @@
                   "status": "modified",
                   "added": 2,
                   "removed": 1
-                }
-              ]
-            }
-          }
-        },
-        {
-          "checkpoint": "settled"
-        }
-      ]
-    },
-    {
-      "id": "sc-history-commit-files",
-      "operation": "source-control.history-commit-files",
-      "family": "git.history-commit-files",
-      "sites": ["mobile/src/source-control/MobileGitHistoryList.tsx"],
-      "schedules": [],
-      "steps": [
-        {
-          "action": "mount",
-          "id": "mount"
-        },
-        {
-          "checkpoint": "history-pending"
-        },
-        {
-          "complete": "git.history#1",
-          "params": {
-            "worktree": "id:repo42::/p",
-            "limit": 50
-          },
-          "reply": {
-            "ok": true,
-            "result": {
-              "items": [
-                {
-                  "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-                  "displayId": "aaaaaaa",
-                  "subject": "first",
-                  "author": "dev",
-                  "parentIds": ["bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"],
-                  "timestamp": 1767222000000
-                }
-              ]
-            }
-          }
-        },
-        {
-          "action": "expand",
-          "id": "expand"
-        },
-        {
-          "checkpoint": "files-pending"
-        },
-        {
-          "complete": "git.commitCompare#1",
-          "params": {
-            "worktree": "id:repo42::/p",
-            "commitId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-          },
-          "reply": {
-            "ok": true,
-            "result": {
-              "entries": [
-                {
-                  "path": "src/app.ts",
-                  "added": 4,
-                  "removed": 1
-                },
-                {
-                  "path": "src/other.ts",
-                  "status": "added",
-                  "added": 9,
-                  "removed": 0
                 }
               ]
             }

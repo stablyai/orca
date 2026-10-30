@@ -1,16 +1,10 @@
 import React from 'react'
 import type { GitHistoryGraphColorId } from '../../../../../../shared/git-history'
-import {
-  getGitHistoryItemColor,
-  getGitHistoryItemLaneIndex,
-  getGitHistoryMergeParentLaneIndex,
-  type GitHistoryItemViewModel
-} from '../../../../../../shared/git-history-graph'
+import type { GitHistoryItemViewModel } from '../../../../../../shared/git-history-graph'
+import { layoutGitHistoryGraphRow } from '../../../../../../shared/git-history-graph-layout'
 
 const SWIMLANE_HEIGHT = 24
-const SWIMLANE_WIDTH = 11
-const SWIMLANE_CURVE_RADIUS = 5
-const SWIMLANE_NODE_Y = SWIMLANE_HEIGHT / 2
+const GRAPH_GEOMETRY = { laneWidth: 11, rowHeight: SWIMLANE_HEIGHT, curveRadius: 5 }
 const CIRCLE_RADIUS = 3.5
 const CIRCLE_STROKE_WIDTH = 1.5
 
@@ -44,114 +38,16 @@ export function GitHistoryGraphSvg({
   viewModel: GitHistoryItemViewModel
 }): React.JSX.Element {
   const historyItem = viewModel.historyItem
-  const inputSwimlanes = viewModel.inputSwimlanes
-  const outputSwimlanes = viewModel.outputSwimlanes
-  const inputIndex = inputSwimlanes.findIndex((node) => node.id === historyItem.id)
-  const circleIndex = getGitHistoryItemLaneIndex(viewModel)
-  const circleColor = getGitHistoryItemColor(viewModel)
-
-  const paths: React.JSX.Element[] = []
-  let outputSwimlaneIndex = 0
-
-  for (let index = 0; index < inputSwimlanes.length; index += 1) {
-    const color = inputSwimlanes[index]!.color
-    if (inputSwimlanes[index]!.id === historyItem.id) {
-      if (index !== circleIndex) {
-        paths.push(
-          <GraphPath
-            key={`base-${inputSwimlanes[index]!.id}`}
-            color={color}
-            d={[
-              `M ${SWIMLANE_WIDTH * (index + 1)} 0`,
-              `A ${SWIMLANE_WIDTH} ${SWIMLANE_WIDTH} 0 0 1 ${SWIMLANE_WIDTH * index} ${SWIMLANE_NODE_Y}`,
-              `H ${SWIMLANE_WIDTH * (circleIndex + 1)}`
-            ].join(' ')}
-          />
-        )
-      } else if (historyItem.parentIds.length > 0) {
-        outputSwimlaneIndex += 1
-      }
-      continue
-    }
-
-    if (
-      outputSwimlaneIndex < outputSwimlanes.length &&
-      inputSwimlanes[index]!.id === outputSwimlanes[outputSwimlaneIndex]!.id
-    ) {
-      if (index === outputSwimlaneIndex) {
-        paths.push(
-          <GraphPath
-            key={`vertical-${inputSwimlanes[index]!.id}`}
-            color={color}
-            d={`M ${SWIMLANE_WIDTH * (index + 1)} 0 V ${SWIMLANE_HEIGHT}`}
-          />
-        )
-      } else {
-        paths.push(
-          <GraphPath
-            key={`shift-${inputSwimlanes[index]!.id}-${outputSwimlanes[outputSwimlaneIndex]!.id}`}
-            color={color}
-            d={[
-              `M ${SWIMLANE_WIDTH * (index + 1)} 0`,
-              'V 6',
-              `A ${SWIMLANE_CURVE_RADIUS} ${SWIMLANE_CURVE_RADIUS} 0 0 1 ${
-                SWIMLANE_WIDTH * (index + 1) - SWIMLANE_CURVE_RADIUS
-              } ${SWIMLANE_HEIGHT / 2}`,
-              `H ${SWIMLANE_WIDTH * (outputSwimlaneIndex + 1) + SWIMLANE_CURVE_RADIUS}`,
-              `A ${SWIMLANE_CURVE_RADIUS} ${SWIMLANE_CURVE_RADIUS} 0 0 0 ${
-                SWIMLANE_WIDTH * (outputSwimlaneIndex + 1)
-              } ${SWIMLANE_HEIGHT / 2 + SWIMLANE_CURVE_RADIUS}`,
-              `V ${SWIMLANE_HEIGHT}`
-            ].join(' ')}
-          />
-        )
-      }
-      outputSwimlaneIndex += 1
-    }
-  }
-
-  for (let index = 1; index < historyItem.parentIds.length; index += 1) {
-    const parentId = historyItem.parentIds[index]!
-    const parentOutputIndex = getGitHistoryMergeParentLaneIndex(viewModel, parentId)
-    if (parentOutputIndex === -1) {
-      continue
-    }
-    paths.push(
-      <GraphPath
-        key={`merge-parent-${parentId}`}
-        color={outputSwimlanes[parentOutputIndex]!.color}
-        d={[
-          `M ${SWIMLANE_WIDTH * parentOutputIndex} ${SWIMLANE_HEIGHT / 2}`,
-          `A ${SWIMLANE_WIDTH} ${SWIMLANE_WIDTH} 0 0 1 ${SWIMLANE_WIDTH * (parentOutputIndex + 1)} ${SWIMLANE_HEIGHT}`,
-          `M ${SWIMLANE_WIDTH * parentOutputIndex} ${SWIMLANE_HEIGHT / 2}`,
-          `H ${SWIMLANE_WIDTH * (circleIndex + 1)}`
-        ].join(' ')}
-      />
-    )
-  }
-
-  if (inputIndex !== -1) {
-    paths.push(
-      <GraphPath
-        key="into-node"
-        color={inputSwimlanes[inputIndex]!.color}
-        d={`M ${SWIMLANE_WIDTH * (circleIndex + 1)} 0 V ${SWIMLANE_HEIGHT / 2}`}
-      />
-    )
-  }
-  if (historyItem.parentIds.length > 0) {
-    paths.push(
-      <GraphPath
-        key="out-of-node"
-        color={circleColor}
-        d={`M ${SWIMLANE_WIDTH * (circleIndex + 1)} ${SWIMLANE_HEIGHT / 2} V ${SWIMLANE_HEIGHT}`}
-      />
-    )
-  }
-
-  const cx = SWIMLANE_WIDTH * (circleIndex + 1)
-  const cy = SWIMLANE_NODE_Y
-  const width = SWIMLANE_WIDTH * (Math.max(inputSwimlanes.length, outputSwimlanes.length, 1) + 1)
+  const {
+    paths: layoutPaths,
+    cx,
+    cy,
+    width,
+    nodeColor: circleColor
+  } = layoutGitHistoryGraphRow(viewModel, GRAPH_GEOMETRY)
+  const paths = layoutPaths.map((path) => (
+    <GraphPath key={path.key} d={path.d} color={path.color} />
+  ))
   const isBoundaryNode =
     viewModel.kind === 'incoming-changes' || viewModel.kind === 'outgoing-changes'
   const isMergeNode = historyItem.parentIds.length > 1

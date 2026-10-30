@@ -22,11 +22,11 @@ vi.mock('./MobileSourceControlContent', () => ({ MobileSourceControlContent: () 
 vi.mock('./MobileSourceControlModals', () => ({ MobileSourceControlModals: () => null }))
 vi.mock('./MobileSourceControlSegments', () => ({ MobileSourceControlSegments: () => null }))
 vi.mock('./MobileSourceControlBranchCard', () => ({ MobileSourceControlBranchCard: () => null }))
-vi.mock('./MobileGitHistoryList', () => ({ MobileGitHistoryList: () => null }))
+vi.mock('./MobileCommitTimeline', () => ({ MobileCommitTimeline: () => null }))
 vi.mock('../components/pr-sidebar/MobilePrViewPanel', () => ({ MobilePrViewPanelBody: () => null }))
 vi.mock('../components/mobile-pr-url', () => ({ openMobilePrUrl: () => {} }))
 vi.mock('./use-mobile-source-control-action-sheet', () => ({
-  useMobileSourceControlActionSheet: () => ({})
+  useMobileSourceControlActionSheet: () => []
 }))
 vi.mock('../session/use-mobile-pr-sidebar-controller', () => ({
   useMobilePrSidebarController: () => ({
@@ -54,6 +54,7 @@ vi.mock('./use-mobile-source-control-state', () => ({
     loadStatus: doubles.loadStatus,
     status: null,
     branchCompareResult: null,
+    branchCompareState: { kind: 'idle' },
     branchLabel: '',
     syncLabel: '',
     unstagedCount: 0,
@@ -87,9 +88,9 @@ afterEach(() => {
   tree = null
 })
 
-function render(): ReactTestRenderer {
+function render(worktreeId = 'wt-1'): ReactTestRenderer {
   act(() => {
-    tree = create(createElement(MobileSourceControlPanel, { hostId: 'host-a', worktreeId: 'wt-1' }))
+    tree = create(createElement(MobileSourceControlPanel, { hostId: 'host-a', worktreeId }))
   })
   if (tree === null) {
     throw new Error('the panel did not render')
@@ -125,5 +126,18 @@ describe("source control's status Retry while the host is unreachable", () => {
       retry?.props.onPress()
     })
     expect(forceReconnect.mock.calls).toEqual([['host-a']])
+  })
+})
+
+describe('source control for a folder workspace', () => {
+  it('says Source Control needs Git, as desktop does, instead of a git error with Retry', () => {
+    doubles.forceReconnect = vi.fn(() => Promise.resolve())
+    const rendered = render('folder:project-notes')
+    expect(
+      rendered.root.findAll(
+        (node) => node.props.children === 'Source Control is only available for Git repositories'
+      )
+    ).not.toHaveLength(0)
+    expect(retryControls(rendered)).toHaveLength(0)
   })
 })

@@ -2925,26 +2925,12 @@
       "unstageFile": "Vormerkung für {{path}} aufheben"
     },
     "gitHistory": {
-      "days_one": "{{count}} T.",
-      "days_other": "{{count}} T.",
-      "hours_one": "{{count}} Std.",
-      "hours_other": "{{count}} Std.",
-      "justNow": "gerade eben",
       "loadFailed": "Commit-Verlauf konnte nicht geladen werden.",
-      "minutes_one": "{{count}} Min.",
-      "minutes_other": "{{count}} Min.",
-      "months_one": "{{count}} Mon.",
-      "months_other": "{{count}} Mon.",
-      "noCommitMessage": "(keine Commit-Nachricht)",
-      "years_one": "{{count}} J.",
-      "years_other": "{{count}} J."
+      "noCommitMessage": "(keine Commit-Nachricht)"
     },
     "gitHistoryList": {
       "loadFailed": "Verlauf konnte nicht geladen werden.",
-      "loadFilesFailed": "Commit-Dateien konnten nicht geladen werden.",
       "noCommits": "Keine Commits.",
-      "noFileChanges": "Keine Dateiänderungen",
-      "retryFiles": "Commit-Dateien erneut laden",
       "waitingForDesktop": "Warten auf Desktop…"
     },
     "gitStatus": {
@@ -3036,7 +3022,8 @@
     },
     "panel": {
       "loadFailedTitle": "Laden fehlgeschlagen",
-      "unavailableTitle": "Quellcodeverwaltung nicht verfügbar"
+      "unavailableTitle": "Quellcodeverwaltung nicht verfügbar",
+      "gitOnly": "Die Quellcodeverwaltung ist nur für Git-Repositorys verfügbar"
     },
     "prChip": {
       "createPr": "Pull Request erstellen",
@@ -3233,6 +3220,23 @@
       "branchUnavailable": "Branch-Status nicht verfügbar",
       "commitFailed": "Commit fehlgeschlagen",
       "waitingForDesktop": "Warten auf den Desktop…"
+    },
+    "commitTimeline": {
+      "openChangesHint": "Öffnet Änderungen",
+      "uncommitted": "Nicht committete Änderungen",
+      "notPushed": "Nicht gepusht",
+      "onOrigin": "Auf origin",
+      "branchedFrom": "Abgezweigt von",
+      "baseCurrent": "Auf dem Stand von {{base}}",
+      "truncated": "Die neuesten {{count}} Commits werden angezeigt",
+      "justNow": "jetzt",
+      "minutes": "{{count}} Min.",
+      "hours": "{{count}} Std.",
+      "yesterday": "Gestern",
+      "files_one": "{{count}} Datei",
+      "files_other": "{{count}} Dateien",
+      "baseAhead_one": "{{base}} hat 1 neueren Commit",
+      "baseAhead_other": "{{base}} hat {{count}} neuere Commits"
     }
   },
   "tasks": {

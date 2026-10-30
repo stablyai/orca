@@ -11,10 +11,10 @@ import { SourceControlHeaderIconButton } from './header-icon-button'
 import { SourceControlBranchLineTotalChip } from './branch-line-total-chip'
 import {
   buildSourceControlCompareBaseStats,
-  formatSourceControlRefLabel,
   resolveSourceControlDisplayedBaseRef,
   type SourceControlBranchContextStat
 } from './branch-context-stats'
+import { formatSourceControlRefLabel } from '../../../../../../shared/source-control-ref-label'
 import { openAppHttpLink } from '@/lib/app-http-link-open'
 
 function BaseRefButton({

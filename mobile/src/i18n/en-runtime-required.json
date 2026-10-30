@@ -241,6 +241,12 @@
       "files_one": "{{count}} file",
       "files_other": "{{count}} files"
     },
+    "commitTimeline": {
+      "baseAhead_one": "{{base}} has 1 newer commit",
+      "baseAhead_other": "{{base}} has {{count}} newer commits",
+      "files_one": "{{count}} file",
+      "files_other": "{{count}} files"
+    },
     "dropdownCounts": {
       "fastForwardCount_one": "Fast-forward {{count}} commit",
       "fastForwardCount_other": "Fast-forward {{count}} commits",
@@ -256,18 +262,6 @@
       "titleManualForcePush_other": "Force push {{count}} local commits with lease to update {{upstreamName}}.",
       "titleUnpublishedForcePushCount_one": "Force push {{count}} branch commit with lease and set an upstream if needed.",
       "titleUnpublishedForcePushCount_other": "Force push {{count}} branch commits with lease and set an upstream if needed."
-    },
-    "gitHistory": {
-      "days_one": "{{count}}d",
-      "days_other": "{{count}}d",
-      "hours_one": "{{count}}h",
-      "hours_other": "{{count}}h",
-      "minutes_one": "{{count}}m",
-      "minutes_other": "{{count}}m",
-      "months_one": "{{count}}mo",
-      "months_other": "{{count}}mo",
-      "years_one": "{{count}}y",
-      "years_other": "{{count}}y"
     },
     "prChip": {
       "openWithComments_one": "Pull request #{{number}}, {{state}}, {{checks}}, {{count}} unresolved comments. Open pull request.",

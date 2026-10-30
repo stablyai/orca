@@ -26,14 +26,14 @@ export function sourceControlMountAdapters(
       const history = modules.load<typeof import('../../../source-control/mobile-git-history')>(
         'mobile/src/source-control/mobile-git-history.ts'
       )
-      let rows: unknown = 'unloaded'
+      let page: unknown = 'unloaded'
       return {
         action: () =>
-          history.fetchMobileGitHistory(client, WORKTREE).then((result) => {
-            rows = history.mapMobileCommitRows(result, Date.now())
-            return rows
+          history.fetchMobileGitHistory(client, WORKTREE, null).then((result) => {
+            page = result
+            return result
           }),
-        state: () => ({ rows }),
+        state: () => ({ page }),
         dispose: () => {}
       }
     },

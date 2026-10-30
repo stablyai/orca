@@ -3107,36 +3107,12 @@
       "unstageFile": "Убрать {{path}} из индекса"
     },
     "gitHistory": {
-      "days_few": "{{count}} д",
-      "days_many": "{{count}} д",
-      "days_one": "{{count}} д",
-      "days_other": "{{count}} д",
-      "hours_few": "{{count}} ч",
-      "hours_many": "{{count}} ч",
-      "hours_one": "{{count}} ч",
-      "hours_other": "{{count}} ч",
-      "justNow": "только что",
       "loadFailed": "Не удалось загрузить историю коммитов",
-      "minutes_few": "{{count}} мин",
-      "minutes_many": "{{count}} мин",
-      "minutes_one": "{{count}} мин",
-      "minutes_other": "{{count}} мин",
-      "months_few": "{{count}} мес.",
-      "months_many": "{{count}} мес.",
-      "months_one": "{{count}} мес.",
-      "months_other": "{{count}} мес.",
-      "noCommitMessage": "(без сообщения коммита)",
-      "years_few": "{{count}} года",
-      "years_many": "{{count}} лет",
-      "years_one": "{{count}} год",
-      "years_other": "{{count}} года"
+      "noCommitMessage": "(без сообщения коммита)"
     },
     "gitHistoryList": {
       "loadFailed": "Не удалось загрузить историю",
-      "loadFilesFailed": "Не удалось загрузить файлы коммита",
       "noCommits": "Нет коммитов.",
-      "noFileChanges": "Нет изменений в файлах",
-      "retryFiles": "Повторить загрузку файлов коммита",
       "waitingForDesktop": "Ожидание ответа от компьютера…"
     },
     "gitStatus": {
@@ -3228,7 +3204,8 @@
     },
     "panel": {
       "loadFailedTitle": "Не удалось загрузить",
-      "unavailableTitle": "Управление версиями недоступно"
+      "unavailableTitle": "Управление версиями недоступно",
+      "gitOnly": "Управление версиями доступно только для репозиториев Git"
     },
     "prChip": {
       "createPr": "Создать пул-реквест",
@@ -3427,6 +3404,27 @@
       "branchUnavailable": "Состояние ветки недоступно",
       "commitFailed": "Не удалось создать коммит",
       "waitingForDesktop": "Ожидание подключения к компьютеру…"
+    },
+    "commitTimeline": {
+      "openChangesHint": "Открывает изменения",
+      "uncommitted": "Незакоммиченные изменения",
+      "notPushed": "Не отправлен",
+      "onOrigin": "В origin",
+      "branchedFrom": "Ответвлена от",
+      "baseCurrent": "Актуально относительно {{base}}",
+      "truncated": "Показаны последние коммиты: {{count}}",
+      "justNow": "сейчас",
+      "minutes": "{{count}} мин",
+      "hours": "{{count}} ч",
+      "yesterday": "Вчера",
+      "files_one": "{{count}} файл",
+      "files_few": "{{count}} файла",
+      "files_many": "{{count}} файлов",
+      "files_other": "{{count}} файла",
+      "baseAhead_one": "В {{base}} {{count}} новый коммит",
+      "baseAhead_few": "В {{base}} {{count}} новых коммита",
+      "baseAhead_many": "В {{base}} {{count}} новых коммитов",
+      "baseAhead_other": "В {{base}} {{count}} новых коммита"
     }
   },
   "tasks": {

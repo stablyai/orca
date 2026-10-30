@@ -1,11 +1,8 @@
-import { createElement } from 'react'
 import { hookMount, performHookAction } from '../hook-mount'
-import { projectMountedScreen, renderedElementProps, screenMount } from '../mounted-screen-tree'
 import { mountFixture } from '../recorder-fixture-shape'
-import { hostClientContextExposure, loadHostClientContext } from '../host-client-context-exposure'
+import { hostClientContextExposure } from '../host-client-context-exposure'
 import type { OperationExposure, operationModuleLoader } from '../operation-module-loader'
 import type { MountAdapter } from '../recording-scenario'
-import type { RpcClientContextValue } from '../../../transport/rpc-client-context-contract'
 import type {
   MobileBranchCompareState,
   MobileBranchDiffPreviewState
@@ -67,58 +64,6 @@ export function sourceControlScreenReadMountAdapters(
           branchCompareState: loaders?.branchCompareState ?? 'unmounted'
         }),
         dispose: hook.unmount
-      }
-    },
-    'source-control.history-commit-files': ({ client, effect }) => {
-      const List = modules.load<typeof import('../../../source-control/MobileGitHistoryList')>(
-        'mobile/src/source-control/MobileGitHistoryList.tsx'
-      ).MobileGitHistoryList
-      const hostClientContext = loadHostClientContext(modules)
-      const context = mountFixture<RpcClientContextValue>({
-        acquire: () => client,
-        release: () => {},
-        getAllClients: () => [{ hostId: HOST, client }],
-        subscribeHostState: () => () => {},
-        forceReconnect: (hostId) => {
-          effect('host-client.force-reconnect', { hostId })
-          return Promise.resolve()
-        }
-      })
-      const screen = screenMount(
-        () =>
-          createElement(
-            hostClientContext.Provider,
-            { value: context },
-            createElement(List, {
-              client,
-              connState: 'connected',
-              worktreeId: WORKTREE,
-              hostId: HOST,
-              bottomInset: 34
-            })
-          ),
-        effect
-      )
-      return {
-        action(name) {
-          if (name === 'mount' || name === 'remount') {
-            return screen.mount()
-          }
-          if (name === 'unmount') {
-            return screen.unmount()
-          }
-          if (name === 'expand') {
-            // The inert FlatList never renders rows; invoke the handler from the screen’s own renderItem.
-            return performHookAction(() => pressFirstCommit(screen.tree()))
-          }
-          throw new Error(`Unknown history commit action: ${name}`)
-        },
-        state: () => ({
-          ...projectMountedScreen(screen),
-          // Render the first row to observe its otherwise-hidden commit file list.
-          commitRow: projectFirstCommitRow(screen.tree())
-        }),
-        dispose: screen.unmount
       }
     },
     'source-control.branch-diff-preview': ({ client, effect }) => {
@@ -210,76 +155,4 @@ function projectBranchDiffPreview(preview: MobileBranchDiffPreviewState | null):
   return preview.kind === 'error'
     ? { kind: 'error', message: preview.message }
     : { kind: preview.kind }
-}
-
-type RenderedRow = { props?: { onPress?: () => void; children?: unknown } }
-type CommitList = { data?: unknown; renderItem?: (row: { item: unknown }) => unknown }
-
-function projectFirstCommitRow(tree: unknown): unknown {
-  const row = renderFirstCommit(tree)
-  if (!row) {
-    return 'unrendered'
-  }
-  const text: string[] = []
-  collectElementText(row, text)
-  return text
-}
-
-function pressFirstCommit(tree: unknown): void {
-  const press = findPressHandler(renderFirstCommit(tree))
-  if (!press) {
-    throw new Error('The history list rendered no commit to expand')
-  }
-  press()
-}
-
-// The inert FlatList never calls renderItem; build the row to read its copy or invoke its handler.
-function renderFirstCommit(tree: unknown): unknown {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: both members are read back optionally and guarded below; FlatList props are whatever the screen passed.
-  const list = renderedElementProps(tree, 'FlatList')[0] as CommitList | undefined
-  const rows = Array.isArray(list?.data) ? list.data : []
-  const render = list?.renderItem
-  return typeof render === 'function' && rows.length > 0 ? render({ item: rows[0] }) : null
-}
-
-function collectElementText(node: unknown, text: string[]): void {
-  if (typeof node === 'string') {
-    text.push(node)
-    return
-  }
-  if (typeof node === 'number') {
-    text.push(String(node))
-    return
-  }
-  if (Array.isArray(node)) {
-    for (const child of node) {
-      collectElementText(child, text)
-    }
-    return
-  }
-  if (!node || typeof node !== 'object' || !('props' in node)) {
-    return
-  }
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a React element's children are read back optionally and every shape is handled above.
-  collectElementText((node as RenderedRow).props?.children, text)
-}
-
-function findPressHandler(node: unknown): (() => void) | null {
-  if (Array.isArray(node)) {
-    for (const child of node) {
-      const found = findPressHandler(child)
-      if (found) {
-        return found
-      }
-    }
-    return null
-  }
-  if (!node || typeof node !== 'object' || !('props' in node)) {
-    return null
-  }
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a React element's props are read back optionally and the handler is typeof-checked.
-  const element = node as RenderedRow
-  return typeof element.props?.onPress === 'function'
-    ? element.props.onPress
-    : findPressHandler(element.props?.children)
 }

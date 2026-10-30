@@ -1,18 +1,16 @@
-import type { MobileCommitRow } from './mobile-git-history'
-
-export type MobileHistoryScreenView =
+export type MobileHistoryScreenView<TRow> =
   | { kind: 'error'; message: string }
   | { kind: 'waiting' }
   | { kind: 'loading' }
   | { kind: 'empty' }
-  | { kind: 'rows'; rows: MobileCommitRow[] }
+  | { kind: 'rows'; rows: TRow[] }
 
 // Disconnected cold loads need Retry; keep previously loaded rows visible through outages.
-export function resolveMobileHistoryScreenView(input: {
+export function resolveMobileHistoryScreenView<TRow>(input: {
   connected: boolean
-  rows: MobileCommitRow[] | null
+  rows: TRow[] | null
   error: string | null
-}): MobileHistoryScreenView {
+}): MobileHistoryScreenView<TRow> {
   const { connected, rows, error } = input
   if (error) {
     return { kind: 'error', message: error }

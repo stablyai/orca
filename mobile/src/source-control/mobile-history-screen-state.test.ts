@@ -1,15 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { resolveMobileHistoryScreenView } from './mobile-history-screen-state'
-import type { MobileCommitRow } from './mobile-git-history'
-
-const row: MobileCommitRow = {
-  id: 'abc123',
-  shortId: 'abc123',
-  subject: 'commit',
-  author: 'author',
-  parentId: null,
-  relativeTime: '1m'
-}
+const row = { key: 'abc123' }
 
 describe('resolveMobileHistoryScreenView', () => {
   it('shows waiting (not an endless spinner) when disconnected with nothing loaded', () => {

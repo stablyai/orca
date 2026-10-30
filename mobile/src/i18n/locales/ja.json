@@ -2921,26 +2921,12 @@
       "unstageFile": "{{path}} のステージを解除"
     },
     "gitHistory": {
-      "days_one": "{{count}}日",
-      "days_other": "{{count}}日",
-      "hours_one": "{{count}}時間",
-      "hours_other": "{{count}}時間",
-      "justNow": "たった今",
       "loadFailed": "コミット履歴の読み込みに失敗しました。",
-      "minutes_one": "{{count}}分",
-      "minutes_other": "{{count}}分",
-      "months_one": "{{count}}か月",
-      "months_other": "{{count}}か月",
-      "noCommitMessage": "（コミットメッセージなし）",
-      "years_one": "{{count}}年",
-      "years_other": "{{count}}年"
+      "noCommitMessage": "（コミットメッセージなし）"
     },
     "gitHistoryList": {
       "loadFailed": "履歴の読み込みに失敗しました。",
-      "loadFilesFailed": "コミット内のファイルを読み込めません。",
       "noCommits": "コミットがありません。",
-      "noFileChanges": "ファイルの変更なし",
-      "retryFiles": "コミット内のファイルの読み込みを再試行",
       "waitingForDesktop": "デスクトップからの応答を待機中…"
     },
     "gitStatus": {
@@ -3032,7 +3018,8 @@
     },
     "panel": {
       "loadFailedTitle": "読み込めません",
-      "unavailableTitle": "ソース管理を利用できません"
+      "unavailableTitle": "ソース管理を利用できません",
+      "gitOnly": "ソース管理は Git リポジトリでのみ使用できます"
     },
     "prChip": {
       "createPr": "PR を作成",
@@ -3229,6 +3216,23 @@
       "branchUnavailable": "ブランチの状態を確認できません。",
       "commitFailed": "コミットに失敗しました。",
       "waitingForDesktop": "デスクトップへの接続を待機中…"
+    },
+    "commitTimeline": {
+      "openChangesHint": "変更点を開きます",
+      "uncommitted": "未コミットの変更",
+      "notPushed": "未プッシュ",
+      "onOrigin": "origin 上",
+      "branchedFrom": "分岐元",
+      "baseCurrent": "{{base}} に対して最新",
+      "truncated": "最新の {{count}} 件のコミットを表示中",
+      "justNow": "今",
+      "minutes": "{{count}}分",
+      "hours": "{{count}}時間",
+      "yesterday": "昨日",
+      "files_one": "{{count}} 個のファイル",
+      "files_other": "{{count}} 個のファイル",
+      "baseAhead_one": "{{base}} に新しいコミットが {{count}} 件あります",
+      "baseAhead_other": "{{base}} に新しいコミットが {{count}} 件あります"
     }
   },
   "tasks": {

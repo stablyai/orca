@@ -10,7 +10,7 @@ import type { SourceControlTreeNode } from '../../../../../../shared/source-cont
 import type { SourceControlRowOpenEvent } from './split-open'
 import { BranchEntryRow } from './branch-entry-row'
 import { SectionHeader } from './section-header'
-import { formatSourceControlRefLabel } from '../panel/branch-context-stats'
+import { formatSourceControlRefLabel } from '../../../../../../shared/source-control-ref-label'
 import { SourceControlBranchTreeDirectoryRow } from './tree-directory-rows'
 import { VirtualizedList } from '../../../virtualized-list'
 

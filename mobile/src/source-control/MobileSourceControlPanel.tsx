@@ -16,7 +16,8 @@ import {
 import { MobileSourceControlModals } from './MobileSourceControlModals'
 import { MobileSourceControlSegments } from './MobileSourceControlSegments'
 import { MobileSourceControlBranchCard } from './MobileSourceControlBranchCard'
-import { MobileGitHistoryList } from './MobileGitHistoryList'
+import { MobileCommitTimeline } from './MobileCommitTimeline'
+import { useMobileCommitTimelineInputs } from './mobile-commit-timeline-inputs'
 import { styles } from './mobile-source-control-styles'
 import { hubStyles } from './mobile-source-control-hub-styles'
 import type { SourceControlHubTab } from './mobile-source-control-hub-tab'
@@ -27,6 +28,7 @@ import { useMobilePrSidebarController } from '../session/use-mobile-pr-sidebar-c
 import { prSidebarDetailsNeedFetch } from '../session/mobile-pr-sidebar-state'
 import { MobilePrViewPanelBody } from '../components/pr-sidebar/MobilePrViewPanel'
 import { openMobilePrUrl } from '../components/mobile-pr-url'
+import { isGitlessWorkspace } from '../../../src/shared/repo-kind'
 
 export type MobileSourceControlPanelProps = {
   hostId: string
@@ -161,6 +163,15 @@ export function MobileSourceControlPanel({
     () => buildMobileSourceControlPrimaryAction({ ...primaryActionArgs, review }),
     [primaryActionArgs, review, t]
   )
+  const showHistory = activeTab === 'history' || visitedTabs.has('history')
+  const timelineInputs = useMobileCommitTimelineInputs({
+    screenState,
+    branchCompareState: state.branchCompareState,
+    primaryActionArgs,
+    review,
+    actionSheetActions
+  })
+  const openChangesTab = useCallback(() => selectTab('changes'), [selectTab])
   const isHostedRepo = prController.prSidebarIsGithubRepo
   const prSidebarKind = prController.prSidebarState.kind
   const refetchPr = prController.refetchPRSidebar
@@ -281,27 +292,45 @@ export function MobileSourceControlPanel({
 
   // History needs only RPC; Changes and PR also need branch/file status.
   const showChanges = ready && (activeTab === 'changes' || visitedTabs.has('changes'))
-  const showHistory = activeTab === 'history' || visitedTabs.has('history')
   // Unmount inactive PR content to release Mermaid WebViews and avoid comment rerenders per keystroke.
   const showPrBody = ready && activeTab === 'pr'
   const conflictOperation = status?.conflictOperation ?? null
   const hasActiveConflict = conflictOperation != null && conflictOperation !== 'unknown'
   const conflictAborting = isMobileConflictAborting(busyAction, conflictOperation)
 
+  const headerChrome = embedded ? (
+    <View style={styles.header}>{header}</View>
+  ) : (
+    <SafeAreaView style={styles.header} edges={['top']}>
+      {header}
+    </SafeAreaView>
+  )
+
+  // Desktop's rule: folder workspaces have no Git, so the Git-only segments stand down.
+  if (isGitlessWorkspace(worktreeId, null)) {
+    return (
+      <View ref={setRootRef} style={styles.container}>
+        {headerChrome}
+        <View style={styles.state}>
+          <Text style={styles.stateText}>
+            {t(
+              'sourceControl.panel.gitOnly',
+              'Source Control is only available for Git repositories'
+            )}
+          </Text>
+        </View>
+      </View>
+    )
+  }
+
   return (
     <View ref={setRootRef} style={styles.container}>
-      {embedded ? (
-        <View style={styles.header}>{header}</View>
-      ) : (
-        <SafeAreaView style={styles.header} edges={['top']}>
-          {header}
-        </SafeAreaView>
-      )}
+      {headerChrome}
 
       <MobileSourceControlSegments active={activeTab} onSelect={selectTab} />
 
-      {/* Ready PRs duplicate the branch card; retain it only when needed to abort a conflict. */}
-      {ready && (activeTab !== 'pr' || hasActiveConflict) ? (
+      {/* PR and Commits carry their own branch context; retain the card there only to abort a conflict. */}
+      {ready && (activeTab === 'changes' || hasActiveConflict) ? (
         <MobileSourceControlBranchCard
           branchLabel={branchLabel}
           syncLabel={syncLabel}
@@ -356,13 +385,16 @@ export function MobileSourceControlPanel({
 
       {showHistory ? (
         <View style={activeTab === 'history' ? hubStyles.tabBody : hubStyles.tabBodyHidden}>
-          <MobileGitHistoryList
+          <MobileCommitTimeline
             client={client}
             connState={connState}
             worktreeId={worktreeId}
             hostId={hostId}
             bottomInset={insets.bottom}
             refreshNonce={historyRefreshNonce}
+            {...timelineInputs}
+            actionError={state.actionError}
+            onOpenChanges={openChangesTab}
           />
         </View>
       ) : null}

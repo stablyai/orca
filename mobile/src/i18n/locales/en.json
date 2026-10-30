@@ -3076,10 +3076,7 @@
     },
     "gitHistoryList": {
       "loadFailed": "Failed to load history",
-      "loadFilesFailed": "Unable to load commit files",
-      "retryFiles": "Retry commit files",
       "waitingForDesktop": "Waiting for desktop...",
-      "noFileChanges": "No file changes",
       "noCommits": "No commits."
     },
     "branchCard": {
@@ -3149,7 +3146,8 @@
     },
     "panel": {
       "unavailableTitle": "Source Control Unavailable",
-      "loadFailedTitle": "Unable to Load"
+      "loadFailedTitle": "Unable to Load",
+      "gitOnly": "Source Control is only available for Git repositories"
     },
     "prChip": {
       "loading": "Loading pull request…",
@@ -3190,17 +3188,6 @@
       "generateFailed": "Failed to generate commit message"
     },
     "gitHistory": {
-      "justNow": "just now",
-      "minutes_one": "{{count}}m",
-      "minutes_other": "{{count}}m",
-      "hours_one": "{{count}}h",
-      "hours_other": "{{count}}h",
-      "days_one": "{{count}}d",
-      "days_other": "{{count}}d",
-      "months_one": "{{count}}mo",
-      "months_other": "{{count}}mo",
-      "years_one": "{{count}}y",
-      "years_other": "{{count}}y",
       "noCommitMessage": "(no commit message)",
       "loadFailed": "Failed to load commit history"
     },
@@ -3378,6 +3365,23 @@
       "keepFile": "Keep file",
       "keepDeletion": "Keep deletion",
       "completeMergeFailed": "Complete merge failed"
+    },
+    "commitTimeline": {
+      "openChangesHint": "Opens Changes",
+      "uncommitted": "Uncommitted changes",
+      "files_one": "{{count}} file",
+      "files_other": "{{count}} files",
+      "notPushed": "Not pushed",
+      "onOrigin": "On origin",
+      "branchedFrom": "Branched from",
+      "baseCurrent": "Up to date with {{base}}",
+      "truncated": "Showing the latest {{count}} commits",
+      "justNow": "now",
+      "minutes": "{{count}} min",
+      "hours": "{{count}} hr",
+      "yesterday": "Yesterday",
+      "baseAhead_one": "{{base}} has 1 newer commit",
+      "baseAhead_other": "{{base}} has {{count}} newer commits"
     }
   },
   "newWorkspace": {

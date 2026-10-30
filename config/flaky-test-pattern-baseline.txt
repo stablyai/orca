@@ -757,7 +757,6 @@
 1 test-no-wall-clock:mobile/src/session/mobile-structured-send-new-action.test.ts
 2 test-no-wall-clock:mobile/src/session/native-chat/composer/use-mobile-native-chat-message-send-draft-lifetime.test.ts
 1 test-no-wall-clock:mobile/src/session/native-chat/transcript/use-mobile-native-chat-message-send.test.ts
-1 test-no-wall-clock:mobile/src/source-control/MobileGitHistoryList.test.tsx
 1 test-no-wall-clock:mobile/src/tasks/worktree-create-launch-operation.test.ts
 1 test-no-wall-clock:mobile/src/transport/host-store.test.ts
 1 test-no-wall-clock:mobile/src/transport/mobile-relay-invite-director.test.ts
@@ -1124,8 +1123,8 @@
 1 test-no-wall-clock:src/renderer/src/components/tab-bar/TabBarCreateEntry.history.test.tsx
 2 test-no-wall-clock:src/renderer/src/components/tab-bar/cli-chat-resume-run.test.ts
 1 test-no-wall-clock:src/renderer/src/components/tab-bar/open-tab-search.test.ts
-4 test-no-wall-clock:src/renderer/src/components/task-page/jira/task-page-jira-cache-selectors.test.ts
 1 test-no-wall-clock:src/renderer/src/components/task-page-jira-saved-filter-load-failure.test.tsx
+4 test-no-wall-clock:src/renderer/src/components/task-page/jira/task-page-jira-cache-selectors.test.ts
 1 test-no-wall-clock:src/renderer/src/components/terminal-pane/cache-timer-seeding.test.ts
 2 test-no-wall-clock:src/renderer/src/components/terminal-pane/fish-color-scheme-child-stdin.node-pty.test.ts
 2 test-no-wall-clock:src/renderer/src/components/terminal-pane/remote-snapshot-alt-screen-host-chain.test.ts

@@ -3016,31 +3016,12 @@
       "unstageFile": "Désindexer {{path}}"
     },
     "gitHistory": {
-      "days_many": "{{count}} j",
-      "days_one": "{{count}} j",
-      "days_other": "{{count}} j",
-      "hours_many": "{{count}} h",
-      "hours_one": "{{count}} h",
-      "hours_other": "{{count}} h",
-      "justNow": "à l'instant",
       "loadFailed": "Impossible de charger l'historique des commits",
-      "minutes_many": "{{count}} m",
-      "minutes_one": "{{count}} m",
-      "minutes_other": "{{count}} m",
-      "months_many": "{{count}} mois",
-      "months_one": "{{count}} mois",
-      "months_other": "{{count}} mois",
-      "noCommitMessage": "(aucun message de commit)",
-      "years_many": "{{count}} ans",
-      "years_one": "{{count}} an",
-      "years_other": "{{count}} ans"
+      "noCommitMessage": "(aucun message de commit)"
     },
     "gitHistoryList": {
       "loadFailed": "Échec du chargement de l'historique",
-      "loadFilesFailed": "Impossible de charger les fichiers du commit",
       "noCommits": "Aucun commit.",
-      "noFileChanges": "Aucun fichier modifié",
-      "retryFiles": "Réessayer de charger les fichiers du commit",
       "waitingForDesktop": "En attente de l'ordinateur…"
     },
     "gitStatus": {
@@ -3132,7 +3113,8 @@
     },
     "panel": {
       "loadFailedTitle": "Chargement impossible",
-      "unavailableTitle": "Contrôle de code source indisponible"
+      "unavailableTitle": "Contrôle de code source indisponible",
+      "gitOnly": "Le contrôle de code source n'est disponible que pour les dépôts Git"
     },
     "prChip": {
       "createPr": "Créer la pull request",
@@ -3330,6 +3312,25 @@
       "branchUnavailable": "État de la branche indisponible",
       "commitFailed": "Échec du commit",
       "waitingForDesktop": "En attente de l'ordinateur…"
+    },
+    "commitTimeline": {
+      "openChangesHint": "Ouvre les modifications",
+      "uncommitted": "Modifications non validées",
+      "notPushed": "Non poussé",
+      "onOrigin": "Sur origin",
+      "branchedFrom": "Créée à partir de",
+      "baseCurrent": "À jour avec {{base}}",
+      "truncated": "Affichage des {{count}} derniers commits",
+      "justNow": "maintenant",
+      "minutes": "{{count}} min",
+      "hours": "{{count}} h",
+      "yesterday": "Hier",
+      "files_one": "{{count}} fichier",
+      "files_many": "{{count}} fichiers",
+      "files_other": "{{count}} fichiers",
+      "baseAhead_one": "{{base}} a 1 commit plus récent",
+      "baseAhead_many": "{{base}} a {{count}} commits plus récents",
+      "baseAhead_other": "{{base}} a {{count}} commits plus récents"
     }
   },
   "tasks": {

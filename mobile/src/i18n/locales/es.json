@@ -3016,31 +3016,12 @@
       "unstageFile": "Quitar {{path}} del stage"
     },
     "gitHistory": {
-      "days_many": "{{count}} d",
-      "days_one": "{{count}} d",
-      "days_other": "{{count}} d",
-      "hours_many": "{{count}} h",
-      "hours_one": "{{count}} h",
-      "hours_other": "{{count}} h",
-      "justNow": "ahora mismo",
       "loadFailed": "No se pudo cargar el historial de commits",
-      "minutes_many": "{{count}} min",
-      "minutes_one": "{{count}} min",
-      "minutes_other": "{{count}} min",
-      "months_many": "{{count}} meses",
-      "months_one": "{{count}} mes",
-      "months_other": "{{count}} meses",
-      "noCommitMessage": "(sin mensaje de commit)",
-      "years_many": "{{count}} años",
-      "years_one": "{{count}} año",
-      "years_other": "{{count}} años"
+      "noCommitMessage": "(sin mensaje de commit)"
     },
     "gitHistoryList": {
       "loadFailed": "No se pudo cargar el historial",
-      "loadFilesFailed": "No se pudieron cargar los archivos del commit",
       "noCommits": "No hay commits.",
-      "noFileChanges": "No hay cambios en los archivos",
-      "retryFiles": "Reintentar la carga de los archivos del commit",
       "waitingForDesktop": "Esperando al escritorio…"
     },
     "gitStatus": {
@@ -3132,7 +3113,8 @@
     },
     "panel": {
       "loadFailedTitle": "No se pudo cargar",
-      "unavailableTitle": "Control de código fuente no disponible"
+      "unavailableTitle": "Control de código fuente no disponible",
+      "gitOnly": "Source Control sólo está disponible para repositorios Git"
     },
     "prChip": {
       "createPr": "Crear pull request",
@@ -3330,6 +3312,25 @@
       "branchUnavailable": "Estado de la rama no disponible",
       "commitFailed": "No se pudo hacer commit",
       "waitingForDesktop": "Esperando al escritorio…"
+    },
+    "commitTimeline": {
+      "openChangesHint": "Abre Cambios",
+      "uncommitted": "Cambios sin confirmar",
+      "notPushed": "Sin push",
+      "onOrigin": "En origin",
+      "branchedFrom": "Creada desde",
+      "baseCurrent": "Al día con {{base}}",
+      "truncated": "Se muestran los {{count}} commits más recientes",
+      "justNow": "ahora",
+      "minutes": "{{count}} min",
+      "hours": "{{count}} h",
+      "yesterday": "Ayer",
+      "files_one": "{{count}} archivo",
+      "files_many": "{{count}} archivos",
+      "files_other": "{{count}} archivos",
+      "baseAhead_one": "{{base}} tiene 1 commit más reciente",
+      "baseAhead_many": "{{base}} tiene {{count}} commits más recientes",
+      "baseAhead_other": "{{base}} tiene {{count}} commits más recientes"
     }
   },
   "tasks": {

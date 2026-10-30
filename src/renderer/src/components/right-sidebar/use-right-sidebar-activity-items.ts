@@ -2,7 +2,7 @@ import { useMemo } from 'react'
 import { Plug, Files, GitBranch, ListChecks, Workflow } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { useRepoById } from '@/store/selectors'
-import { isFolderRepo } from '../../../../shared/repo-kind'
+import { isGitlessWorkspace } from '../../../../shared/repo-kind'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import { getVisibleRightSidebarActivityItems } from './right-sidebar-activity-visibility'
 import { getPluginPanelActivityItems } from './plugin-panel-activity-items'
@@ -49,7 +49,7 @@ export function useRightSidebarActivityItems({
   const activeRepo = useRepoById(activeWorktree?.repoId ?? null)
   const activeWorkspaceScope = parseWorkspaceKey(activeWorktreeId ?? '')
   const isFolderWorkspace = activeWorkspaceScope?.type === 'folder'
-  const isFolder = isFolderWorkspace || (activeRepo ? isFolderRepo(activeRepo) : false)
+  const isFolder = isGitlessWorkspace(activeWorktreeId ?? '', activeRepo)
   // Why the owner: a managed server's workspace names its server, not an SSH connection.
   const hasSshHost = useAppStore((s) =>
     portsPanelReachesSshHost(

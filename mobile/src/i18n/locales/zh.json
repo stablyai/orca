@@ -2921,26 +2921,12 @@
       "unstageFile": "取消暂存 {{path}}"
     },
     "gitHistory": {
-      "days_one": "{{count}} 天",
-      "days_other": "{{count}} 天",
-      "hours_one": "{{count}} 小时",
-      "hours_other": "{{count}} 小时",
-      "justNow": "刚刚",
       "loadFailed": "加载提交历史失败",
-      "minutes_one": "{{count}} 分钟",
-      "minutes_other": "{{count}} 分钟",
-      "months_one": "{{count}} 个月",
-      "months_other": "{{count}} 个月",
-      "noCommitMessage": "（无提交信息）",
-      "years_one": "{{count}} 年",
-      "years_other": "{{count}} 年"
+      "noCommitMessage": "（无提交信息）"
     },
     "gitHistoryList": {
       "loadFailed": "加载历史记录失败",
-      "loadFilesFailed": "无法加载提交文件",
       "noCommits": "暂无提交。",
-      "noFileChanges": "无文件更改",
-      "retryFiles": "重试加载提交文件",
       "waitingForDesktop": "正在等待桌面…"
     },
     "gitStatus": {
@@ -3032,7 +3018,8 @@
     },
     "panel": {
       "loadFailedTitle": "无法加载",
-      "unavailableTitle": "源代码控制不可用"
+      "unavailableTitle": "源代码控制不可用",
+      "gitOnly": "源代码管理仅适用于 Git 仓库"
     },
     "prChip": {
       "createPr": "创建 PR",
@@ -3229,6 +3216,23 @@
       "branchUnavailable": "无法获取分支状态",
       "commitFailed": "提交失败",
       "waitingForDesktop": "正在等待桌面…"
+    },
+    "commitTimeline": {
+      "openChangesHint": "打开更改",
+      "uncommitted": "未提交的更改",
+      "notPushed": "未推送",
+      "onOrigin": "已在 origin",
+      "branchedFrom": "分支自",
+      "baseCurrent": "已与 {{base}} 同步",
+      "truncated": "显示最近 {{count}} 个提交",
+      "justNow": "现在",
+      "minutes": "{{count}} 分钟",
+      "hours": "{{count}} 小时",
+      "yesterday": "昨天",
+      "files_one": "{{count}} 个文件",
+      "files_other": "{{count}} 个文件",
+      "baseAhead_one": "{{base}} 有 {{count}} 个较新的提交",
+      "baseAhead_other": "{{base}} 有 {{count}} 个较新的提交"
     }
   },
   "tasks": {
