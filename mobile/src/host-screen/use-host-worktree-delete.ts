@@ -101,6 +101,12 @@ export function useHostWorktreeDelete(args: {
     setArchiveTrustRequestState(request)
   }, [])
   const [archiveHookFailure, setArchiveHookFailure] = useState<ArchiveHookFailure | null>(null)
+  // A prompt or failure belongs to the desktop it started on; after a host switch it is gone, never acted on.
+  const onThisDesktop = useCallback(
+    <Entry extends RowClients>(entry: Entry | null) =>
+      entry && client && entry.desktopClient === client ? entry : null,
+    [client]
+  )
 
   const hideRow = useCallback((item: Worktree) => {
     const removeFromList = (list: Worktree[]) => removeWorktreeRow(list, item)
@@ -173,7 +179,7 @@ export function useHostWorktreeDelete(args: {
         return
       }
       // One prompt at a time; a later delete waiting on trust is left undone.
-      if (archiveTrustRequestRef.current) {
+      if (onThisDesktop(archiveTrustRequestRef.current)) {
         restoreRow(item)
         return
       }
@@ -185,7 +191,15 @@ export function useHostWorktreeDelete(args: {
         waiver
       })
     },
-    [desktopRepos, hideRow, removeWorktree, restoreRow, serverWorkspaces, setArchiveTrustRequest]
+    [
+      desktopRepos,
+      hideRow,
+      onThisDesktop,
+      removeWorktree,
+      restoreRow,
+      serverWorkspaces,
+      setArchiveTrustRequest
+    ]
   )
 
   const handleDeleteWorktree = useCallback(
@@ -200,10 +214,10 @@ export function useHostWorktreeDelete(args: {
 
   // Taken synchronously so a second tap on the drawer finds nothing to act on.
   const takeArchiveTrustRequest = useCallback(() => {
-    const request = archiveTrustRequestRef.current
+    const request = onThisDesktop(archiveTrustRequestRef.current)
     setArchiveTrustRequest(null)
     return request
-  }, [setArchiveTrustRequest])
+  }, [onThisDesktop, setArchiveTrustRequest])
 
   const approveArchiveTrust = useCallback(
     async (alwaysTrust: boolean) => {
@@ -244,20 +258,22 @@ export function useHostWorktreeDelete(args: {
     }
   }, [restoreRow, takeArchiveTrustRequest])
 
+  const visibleFailure = onThisDesktop(archiveHookFailure)
+
   // Desktop's Delete Anyway: rerun the trusted hook with an explicit waiver for its failure.
   const deleteDespiteArchiveHookFailure = useCallback(() => {
-    if (archiveHookFailure) {
-      void deleteWithArchiveTrust(archiveHookFailure.item, archiveHookFailure, {
+    if (visibleFailure) {
+      void deleteWithArchiveTrust(visibleFailure.item, visibleFailure, {
         allowFailedArchiveHook: true
       })
     }
-  }, [archiveHookFailure, deleteWithArchiveTrust])
+  }, [visibleFailure, deleteWithArchiveTrust])
 
   const dismissArchiveHookFailure = useCallback(() => setArchiveHookFailure(null), [])
 
   return {
-    archiveHookFailure,
-    archiveTrustRequest,
+    archiveHookFailure: visibleFailure,
+    archiveTrustRequest: onThisDesktop(archiveTrustRequest),
     approveArchiveTrust,
     cancelArchiveTrust,
     deleteDespiteArchiveHookFailure,
