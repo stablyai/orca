@@ -98,7 +98,8 @@ export function buildWebSessionTabsFinalPatch(
         nextTerminalLayoutsByTabId,
         new Set(mirroredTerminalIds),
         environmentId,
-        worktreeId
+        worktreeId,
+        batchContext
       )
   const remirroredClosedTabLiftPatch = buildRemirroredClosedTabMarkerLiftPatch(
     retractedTabSweepPatch?.recentlyClosedAgentStatusTabIds ??

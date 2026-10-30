@@ -263,6 +263,7 @@ export type WebSessionTabsBatchRecordKey =
   | 'layoutByWorktree'
   | 'localOnlyScrollbackByTabId'
   | 'pendingStartupByTabId'
+  | 'paneForegroundAgentByPaneKey'
   | 'ptyIdsByTabId'
   | 'remoteBrowserPageHandlesByPageId'
   | 'tabBarOrderByWorktree'

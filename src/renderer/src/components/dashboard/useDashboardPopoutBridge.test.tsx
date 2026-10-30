@@ -3,6 +3,13 @@
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { buildDashboardSnapshot as SnapshotBuilder } from './build-dashboard-snapshot'
+import {
+  foregroundConsumerState,
+  FOREGROUND_TEST_NOW,
+  FOREGROUND_TEST_KEY
+} from './foreground-consumer-test-fixture'
+import { useLiveDashboardSnapshot } from './useLiveDashboardSnapshot'
 
 const mocks = vi.hoisted(() => ({
   acknowledgeAgents: vi.fn(),
@@ -14,10 +21,17 @@ const mocks = vi.hoisted(() => ({
   onSnapshotRequested: vi.fn(),
   getPopoutOpen: vi.fn(async () => false),
   publishSnapshot: vi.fn(async (_snapshot: DashboardSnapshot) => undefined),
-  buildDashboardSnapshot: vi.fn((_state: unknown, now: number): DashboardSnapshot => ({
-    generatedAt: now,
-    cards: []
-  })),
+  readSnapshotState: vi.fn(() => makeSnapshotWatchState()),
+  buildDashboardSnapshot: vi.fn(
+    (
+      _state: Parameters<typeof SnapshotBuilder>[0],
+      now: number,
+      _options?: Parameters<typeof SnapshotBuilder>[2]
+    ): DashboardSnapshot => ({
+      generatedAt: now,
+      cards: []
+    })
+  ),
   offRevealAgent: vi.fn(),
   offAckAgent: vi.fn(),
   offPopoutOpenChanged: vi.fn(),
@@ -27,19 +41,24 @@ const mocks = vi.hoisted(() => ({
 }))
 
 vi.mock('@/store', () => ({
-  useAppStore: {
-    getState: () => ({
-      ...makeSnapshotWatchState(),
-      acknowledgeAgents: mocks.acknowledgeAgents,
-      setActiveWorktree: mocks.setActiveWorktree
-    }),
-    subscribe: mocks.subscribeStore
-  }
+  useAppStore: Object.assign(
+    (selector: (state: DashboardSnapshotWatchState) => unknown) =>
+      selector(mocks.readSnapshotState()),
+    {
+      getState: () => ({
+        ...mocks.readSnapshotState(),
+        acknowledgeAgents: mocks.acknowledgeAgents,
+        setActiveWorktree: mocks.setActiveWorktree
+      }),
+      subscribe: mocks.subscribeStore
+    }
+  )
 }))
 
 vi.mock('@/runtime/structured-chat-name-observation', () => ({
   subscribeStructuredChatTabNames: () => () => {},
-  getStructuredChatTabNames: () => new Map()
+  getStructuredChatTabNames: () => new Map(),
+  useStructuredChatTabNames: () => new Map()
 }))
 
 vi.mock('@/lib/activate-tab-and-focus-pane', () => ({
@@ -129,6 +148,11 @@ describe('useDashboardPopoutBridge', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
+    mocks.readSnapshotState.mockImplementation(makeSnapshotWatchState)
+    mocks.buildDashboardSnapshot.mockImplementation((_state, now) => ({
+      generatedAt: now,
+      cards: []
+    }))
     installDashboardApi()
     container = document.createElement('div')
     root = createRoot(container)
@@ -136,6 +160,59 @@ describe('useDashboardPopoutBridge', () => {
 
   afterEach(async () => {
     await act(async () => root.unmount())
+    vi.restoreAllMocks()
+    vi.useRealTimers()
+  })
+
+  it('publishes actual passive/null/current snapshots matching the live board without private provenance', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(FOREGROUND_TEST_NOW)
+    vi.spyOn(Date, 'now').mockReturnValue(FOREGROUND_TEST_NOW)
+    const actual = await vi.importActual<{ buildDashboardSnapshot: typeof SnapshotBuilder }>(
+      './build-dashboard-snapshot'
+    )
+    mocks.buildDashboardSnapshot.mockImplementation(actual.buildDashboardSnapshot)
+    let current = { ...makeSnapshotWatchState(), ...foregroundConsumerState('process-admitted') }
+    mocks.readSnapshotState.mockReturnValue(current)
+    let live: DashboardSnapshot | undefined
+    function LiveHarness() {
+      live = useLiveDashboardSnapshot()
+      useDashboardPopoutBridge(true)
+      return null
+    }
+    await act(async () => root.render(<LiveHarness />))
+    await act(async () => mocks.onPopoutOpenChanged.mock.calls[0][0](true))
+    const published = () => mocks.publishSnapshot.mock.calls.at(-1)?.[0]
+    expect(published()?.cards).toEqual(live?.cards)
+    expect(published()?.cards.find((card) => card.paneKey === FOREGROUND_TEST_KEY)).toBeUndefined()
+    const neutral = published()?.cards
+    for (const evidence of [null, 'process-read', 'process-admitted'] as const) {
+      const previous = current
+      current = {
+        ...current,
+        paneForegroundAgentByPaneKey: foregroundConsumerState(evidence).paneForegroundAgentByPaneKey
+      }
+      mocks.readSnapshotState.mockReturnValue(current)
+      await act(async () => {
+        root.render(<LiveHarness />)
+        for (const [notify] of mocks.subscribeStore.mock.calls) {
+          notify(current, previous)
+        }
+        await vi.advanceTimersByTimeAsync(1000)
+      })
+      expect(published()?.cards).toEqual(live?.cards)
+      if (evidence === 'process-read') {
+        expect(
+          published()?.cards.find((card) => card.paneKey === FOREGROUND_TEST_KEY)?.agentType
+        ).toBe('codex')
+      } else {
+        expect(published()?.cards).toEqual(neutral)
+      }
+      expect(JSON.stringify(published())).not.toMatch(
+        /privateExecutionSentinel|process-admitted|incarnationId/
+      )
+    }
+    expect(mocks.publishSnapshot).toHaveBeenCalledTimes(4)
   })
 
   it('does not register dashboard or store subscriptions while disabled', async () => {

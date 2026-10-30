@@ -47,7 +47,15 @@ export function buildRetiredTerminalTabStateSweepPatch(
   state: RetiredTerminalTabSweepState,
   tabIds: readonly string[],
   worktreeId?: string | null,
-  opts?: { preserveActivityClearedState?: boolean; paneKeys?: ReadonlySet<string> }
+  opts?: {
+    preserveActivityClearedState?: boolean
+    paneKeys?: ReadonlySet<string>
+    foregroundPatch?: (
+      entries: RetiredTerminalTabSweepState['paneForegroundAgentByPaneKey'],
+      tabId: string,
+      paneKeys?: ReadonlySet<string>
+    ) => Pick<RetiredTerminalTabSweepState, 'paneForegroundAgentByPaneKey'> | null
+  }
 ): Partial<RetiredTerminalTabSweepState> | null {
   if (tabIds.length === 0) {
     return null
@@ -69,16 +77,18 @@ export function buildRetiredTerminalTabStateSweepPatch(
         ...(opts?.preserveActivityClearedState ? { preserveActivityClearedState: true } : {})
       }
     )
-    const foreground = opts?.paneKeys
-      ? {
-          paneForegroundAgentByPaneKey: removePaneKeys(
-            swept.paneForegroundAgentByPaneKey,
-            opts.paneKeys
-          )
-        }
-      : buildPaneForegroundAgentTabPrefixClearPatch(swept.paneForegroundAgentByPaneKey, [
-          `${tabId}:`
-        ])
+    const foreground = opts?.foregroundPatch
+      ? opts.foregroundPatch(swept.paneForegroundAgentByPaneKey, tabId, opts.paneKeys)
+      : opts?.paneKeys
+        ? {
+            paneForegroundAgentByPaneKey: removePaneKeys(
+              swept.paneForegroundAgentByPaneKey,
+              opts.paneKeys
+            )
+          }
+        : buildPaneForegroundAgentTabPrefixClearPatch(swept.paneForegroundAgentByPaneKey, [
+            `${tabId}:`
+          ])
     swept = { ...swept, ...patch, ...foreground }
     if (!opts?.paneKeys) {
       forgetAgentHibernationTabOutput(tabId)

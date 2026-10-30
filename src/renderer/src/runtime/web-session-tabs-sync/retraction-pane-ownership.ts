@@ -3,14 +3,15 @@ import { parsePaneKey } from '../../../../shared/stable-pane-id'
 import { batchAgentPaneKeysForTabs, isMirroredAgentStatusOwnedBy } from './agent-status-primitives'
 import { isMirroredTerminalSurfaceId } from './terminal-surfaces'
 import type { WebSessionTabsBatchContext, WebSessionTabsSyncState } from './state'
+import { writableWebSessionTabsRecord } from './state-equality-core'
 
-function recordPaneKeysForTabs(
+export function recordPaneKeysForTabs(
   record: Readonly<Record<string, unknown>> | undefined,
   tabIds: ReadonlySet<string>,
   batchContext?: WebSessionTabsBatchContext,
   paneKeyInValue = false
 ): string[] {
-  if (!record) {
+  if (!record || tabIds.size === 0) {
     return []
   }
   const indexes = batchContext
@@ -19,7 +20,8 @@ function recordPaneKeysForTabs(
   let index = indexes?.get(record)
   if (!index) {
     index = new Map<string, Set<string>>()
-    for (const [key, value] of Object.entries(record)) {
+    for (const key of Object.keys(record)) {
+      const value = paneKeyInValue ? record[key] : undefined
       const paneKey = paneKeyInValue
         ? typeof value === 'object' &&
           value !== null &&
@@ -39,6 +41,23 @@ function recordPaneKeysForTabs(
     indexes?.set(record, index)
   }
   return [...tabIds].flatMap((tabId) => [...(index.get(tabId) ?? [])])
+}
+
+export function forgetRetractionPaneKey(
+  record: object,
+  paneKey: string,
+  batchContext?: WebSessionTabsBatchContext
+): void {
+  const tabId = parsePaneKey(paneKey)?.tabId
+  const index = batchContext?.retractionPaneKeysByRecord?.get(record)
+  if (!tabId || !index) {
+    return
+  }
+  const keys = index.get(tabId)
+  keys?.delete(paneKey)
+  if (keys?.size === 0) {
+    index.delete(tabId)
+  }
 }
 
 /** Unknown pane ownership prevents tab-wide cleanup, only for the colliding tab. */
@@ -105,16 +124,41 @@ export function buildCurrentForegroundLeafRetractionPatch(
   layouts: WebSessionTabsSyncState['terminalLayoutsByTabId'],
   tabIds: ReadonlySet<string>,
   environmentId: string,
-  worktreeId: string
+  worktreeId: string,
+  batchContext?: WebSessionTabsBatchContext
 ) {
-  return buildForegroundLayoutRetractionPatch(entries ?? {}, layouts, tabIds, (entry, paneKey) => {
-    const context = entry.context
-    const row =
-      state.agentStatusByPaneKey[paneKey] ?? state.retainedAgentsByPaneKey?.[paneKey]?.entry
-    return (
-      context?.worktreeId === worktreeId &&
-      (context.environmentId ?? 'local') === environmentId &&
-      (!row || isMirroredAgentStatusOwnedBy(row, environmentId, worktreeId))
-    )
-  })
+  const current = entries ?? {}
+  const keys = recordPaneKeysForTabs(current, tabIds, batchContext)
+  const patch = buildForegroundLayoutRetractionPatch(
+    current,
+    layouts,
+    tabIds,
+    (entry, paneKey) => {
+      const context = entry.context
+      const row =
+        state.agentStatusByPaneKey[paneKey] ?? state.retainedAgentsByPaneKey?.[paneKey]?.entry
+      return (
+        context?.worktreeId === worktreeId &&
+        (context.environmentId ?? 'local') === environmentId &&
+        (!row || isMirroredAgentStatusOwnedBy(row, environmentId, worktreeId))
+      )
+    },
+    {
+      paneKeys: keys,
+      ...(batchContext
+        ? {
+            writable: () =>
+              writableWebSessionTabsRecord(state, 'paneForegroundAgentByPaneKey', batchContext)
+          }
+        : {})
+    }
+  )
+  if (patch) {
+    for (const key of keys) {
+      if (!(key in patch.paneForegroundAgentByPaneKey)) {
+        forgetRetractionPaneKey(patch.paneForegroundAgentByPaneKey, key, batchContext)
+      }
+    }
+  }
+  return patch
 }

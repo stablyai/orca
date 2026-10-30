@@ -3,6 +3,7 @@ import { isWebTerminalSurfaceTabId } from '../../../../shared/terminal-surface-i
 import type { WebSessionTabsBatchContext, WebSessionTabsSyncState } from './state'
 import { batchAgentPaneKeysForTabs } from './agent-status-primitives'
 import { hostSessionTabIdsByLocalTabForWorktree } from './tracking-mappings'
+import { recordPaneKeysForTabs } from './retraction-pane-ownership'
 
 /** Reuse the host mapping when a status row outlives this renderer's tab inventory. */
 export function collectUnhydratedMirroredTabRetractions(args: {
@@ -31,9 +32,14 @@ export function collectUnhydratedMirroredTabRetractions(args: {
   }
   const retracted = new Set<string>()
   const keys = new Set(batchAgentPaneKeysForTabs(args.state, candidates, args.batchContext))
-  for (const [paneKey, entry] of Object.entries(args.state.paneForegroundAgentByPaneKey ?? {})) {
+  for (const paneKey of recordPaneKeysForTabs(
+    args.state.paneForegroundAgentByPaneKey,
+    candidates,
+    args.batchContext
+  )) {
+    const entry = args.state.paneForegroundAgentByPaneKey?.[paneKey]
     if (
-      entry.context?.worktreeId === args.worktreeId &&
+      entry?.context?.worktreeId === args.worktreeId &&
       (entry.context.environmentId ?? 'local') === args.environmentId &&
       candidates.has(parsePaneKey(paneKey)?.tabId ?? '')
     ) {

@@ -86,6 +86,48 @@ afterEach(() => {
 })
 
 describe('mounted worktree agent row subscriptions', () => {
+  it('isolates unrelated and foreign foreground writes, while current local proof changes activity', () => {
+    patch({
+      agentStatusByPaneKey: {},
+      runtimePaneTitlesByTabId: { 'tab-a': { 0: 'project' } },
+      ptyIdsByTabId: { 'tab-a': ['pty-a'] },
+      terminalLayoutsByTabId: {
+        'tab-a': { root: { type: 'leaf', leafId: LEAF }, activeLeafId: LEAF, expandedLeafId: null }
+      }
+    })
+    act(() => root.render(<Probe />))
+    expect(rows).toEqual([])
+    const before = renders
+    const beforeRows = rows
+    act(() =>
+      useAppStore.getState().setPaneForegroundAgent(KEY_B, {
+        agent: 'codex',
+        agentEvidence: 'process-read',
+        shellForeground: false
+      })
+    )
+    patch({ activeWorktreeId: 'ssh-b' })
+    expect(rows).toBe(beforeRows)
+    expect(renders).toBe(before)
+    act(() =>
+      useAppStore.getState().setPaneForegroundAgent(KEY_A, {
+        agent: 'codex',
+        agentEvidence: 'process-read',
+        shellForeground: false
+      })
+    )
+    expect(rows[0]?.agentType).toBe('codex')
+    expect(renders).toBe(before + 1)
+    act(() =>
+      useAppStore.getState().setPaneForegroundAgent(KEY_A, {
+        agent: 'codex',
+        agentEvidence: 'process-admitted',
+        shellForeground: false
+      })
+    )
+    expect(rows).toEqual([])
+  })
+
   it('listens once while active and releases its listener while inactive', () => {
     const baseline = readStoreListenerCount() ?? 0
     act(() => root.render(<Probe />))

@@ -8,7 +8,8 @@ import type { TerminalSurface, WebSessionTabsBatchContext, WebSessionTabsSyncSta
 import type { RetiredTerminalTabSweepState } from '../../store/slices/retired-terminal-tab-state-sweep'
 import { buildRetiredTerminalTabStateSweepPatch } from '../../store/slices/retired-terminal-tab-state-sweep'
 import { isMirroredTerminalSurfaceId } from './terminal-surfaces'
-import { isAgentStatusFresh } from './state-equality-core'
+import { isAgentStatusFresh, writableWebSessionTabsRecord } from './state-equality-core'
+import { recordPaneKeysForTabs, forgetRetractionPaneKey } from './retraction-pane-ownership'
 
 export function isMirroredAgentStatusOwnedBy(
   entry: AgentStatusEntry,
@@ -188,11 +189,37 @@ export function buildRetractedMirroredTabSweepPatch(
   // Retraction may rekey live panes; retain activity cutoffs so republication cannot replay user-cleared activity (ssh-execution-boundary).
   const previousAgentStatuses = sweepState.agentStatusByPaneKey
   let sweep: Partial<RetiredTerminalTabSweepState> | null = null
+  const foregroundState = batchContext ? state : { ...state }
+  const foregroundBatch: WebSessionTabsBatchContext = batchContext ?? {
+    agentPaneKeysByTabId: null,
+    changedRecords: new Set(),
+    openFilesIndex: null
+  }
   for (const tabId of retractedTabIds) {
     const paneKeys = scopedPaneKeysByTabId.get(tabId)
     const patch = buildRetiredTerminalTabStateSweepPatch(sweepState, [tabId], undefined, {
       preserveActivityClearedState: true,
-      ...(paneKeys ? { paneKeys } : {})
+      ...(paneKeys ? { paneKeys } : {}),
+      foregroundPatch: (entries, removedTabId, scope) => {
+        let next: typeof entries | undefined
+        for (const key of recordPaneKeysForTabs(
+          entries,
+          new Set([removedTabId]),
+          foregroundBatch
+        )) {
+          if (!(key in entries) || (scope && !scope.has(key))) {
+            continue
+          }
+          next ??= writableWebSessionTabsRecord(
+            foregroundState,
+            'paneForegroundAgentByPaneKey',
+            foregroundBatch
+          )
+          delete next[key]
+          forgetRetractionPaneKey(next, key, foregroundBatch)
+        }
+        return next ? { paneForegroundAgentByPaneKey: next } : null
+      }
     })
     if (patch) {
       sweep ??= {}

@@ -1,3 +1,4 @@
+import '@/store'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { getDefaultWorkspaceSession } from '../../../../shared/constants'
@@ -6,6 +7,7 @@ import {
   resolveAgentPaneAuthorityKey
 } from './agent-pane-authority'
 import { createTestStore, makeTab, makeWorktree, seedStore } from './store-test-helpers'
+import type { PaneForegroundAgentEntry } from './pane-foreground-agent'
 
 const LEAF_1 = '11111111-1111-4111-8111-111111111111'
 const LEAF_2 = '22222222-2222-4222-8222-222222222222'
@@ -13,6 +15,79 @@ const LEAF_2 = '22222222-2222-4222-8222-222222222222'
 describe('setTabLayout PTY ownership', () => {
   beforeEach(() => {
     resetAgentPaneAuthorityAliasesForTests()
+  })
+
+  it('visits affected local leaves and pays only the standalone immutable copy at N and 10N', () => {
+    for (const size of [10, 100]) {
+      const store = createTestStore()
+      const target = makePaneKey('tab-1', LEAF_1)
+      const sibling = makePaneKey('tab-1', LEAF_2)
+      const layout = {
+        root: {
+          type: 'split' as const,
+          direction: 'vertical' as const,
+          first: { type: 'leaf' as const, leafId: LEAF_1 },
+          second: { type: 'leaf' as const, leafId: LEAF_2 }
+        },
+        activeLeafId: LEAF_2,
+        expandedLeafId: null,
+        ptyIdsByLeafId: { [LEAF_1]: 'old', [LEAF_2]: 'sibling' }
+      }
+      store.setState({ terminalLayoutsByTabId: { 'tab-1': layout } })
+      const value = {
+        agent: 'codex' as const,
+        agentEvidence: 'process-admitted' as const,
+        shellForeground: false
+      }
+      const entries: Record<string, PaneForegroundAgentEntry> = Object.fromEntries(
+        Array.from({ length: size }, (_, i) => [makePaneKey(`foreign-${i}`, LEAF_1), value])
+      )
+      entries[target] = {
+        ...value,
+        context: {
+          execution: {},
+          ptyId: 'old',
+          incarnationId: 'inc',
+          worktreeId: 'wt',
+          environmentId: null
+        }
+      }
+      entries[sibling] = value
+      let enumerations = 0,
+        reads = 0
+      const tracked = new Proxy(entries, {
+        ownKeys(record) {
+          enumerations++
+          return Reflect.ownKeys(record)
+        },
+        get(record, key, receiver) {
+          reads++
+          return Reflect.get(record, key, receiver)
+        }
+      })
+      store.setState({ paneForegroundAgentByPaneKey: tracked })
+      store.getState().replaceTerminalLayoutPanePtyId('tab-1', LEAF_1, 'new')
+      expect(enumerations).toBe(1)
+      expect(reads).toBeLessThanOrEqual(size + 4)
+      expect(store.getState().paneForegroundAgentByPaneKey[target]).toBeUndefined()
+      expect(store.getState().paneForegroundAgentByPaneKey[sibling]).toBe(value)
+      expect(store.getState().paneForegroundAgentByPaneKey[makePaneKey('foreign-0', LEAF_1)]).toBe(
+        value
+      )
+      const before = store.getState().paneForegroundAgentByPaneKey
+      store.getState().setTabLayout('tab-1', store.getState().terminalLayoutsByTabId['tab-1'])
+      expect(store.getState().paneForegroundAgentByPaneKey).toBe(before)
+      const retained = {
+        root: { type: 'leaf' as const, leafId: LEAF_1 },
+        activeLeafId: LEAF_1,
+        expandedLeafId: null
+      }
+      store.getState().setTabLayout('tab-1', retained)
+      expect(store.getState().paneForegroundAgentByPaneKey[sibling]).toBeUndefined()
+      expect(store.getState().paneForegroundAgentByPaneKey[makePaneKey('foreign-0', LEAF_1)]).toBe(
+        value
+      )
+    }
   })
 
   it('normalizes duplicate PTY surfaces at the renderer state boundary', () => {

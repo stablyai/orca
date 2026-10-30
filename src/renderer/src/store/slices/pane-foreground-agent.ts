@@ -135,13 +135,24 @@ export function buildForegroundLayoutRetractionPatch(
   entries: Record<string, PaneForegroundAgentEntry>,
   layouts: Record<string, TerminalLayoutSnapshot>,
   tabIds: ReadonlySet<string>,
-  owns: (entry: PaneForegroundAgentEntry, paneKey: string) => boolean = () => true
+  owns: (entry: PaneForegroundAgentEntry, paneKey: string) => boolean = () => true,
+  resources?: {
+    paneKeys: Iterable<string>
+    writable?: () => Record<string, PaneForegroundAgentEntry>
+  }
 ): Pick<PaneForegroundAgentSlice, 'paneForegroundAgentByPaneKey'> | null {
+  if (tabIds.size === 0) {
+    return null
+  }
   let next: typeof entries | undefined
   const leaves = new Map<string, Set<string>>()
-  for (const [key, entry] of Object.entries(entries)) {
+  for (const key of resources?.paneKeys ?? Object.keys(entries)) {
     const pane = parsePaneKey(key)
-    if (!pane || !tabIds.has(pane.tabId) || !owns(entry, key)) {
+    if (!pane || !tabIds.has(pane.tabId)) {
+      continue
+    }
+    const entry = entries[key]
+    if (!entry || !owns(entry, key)) {
       continue
     }
     const layout = layouts[pane.tabId]
@@ -157,7 +168,7 @@ export function buildForegroundLayoutRetractionPatch(
     if (retained.has(pane.leafId) && (!ptyId || !entry.context || entry.context.ptyId === ptyId)) {
       continue
     }
-    next ??= { ...entries }
+    next ??= resources?.writable?.() ?? { ...entries }
     delete next[key]
   }
   return next ? { paneForegroundAgentByPaneKey: next } : null

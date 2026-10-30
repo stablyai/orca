@@ -139,6 +139,14 @@ export function writableWebSessionTabsRecord<K extends WebSessionTabsBatchRecord
     return record
   }
   const next = { ...record } as NonNullable<WebSessionTabsSyncState[K]>
+  if (recordKey === 'paneForegroundAgentByPaneKey') {
+    const indexes = batchContext.retractionPaneKeysByRecord
+    const index = indexes?.get(record)
+    if (index) {
+      indexes?.delete(record)
+      indexes?.set(next, index)
+    }
+  }
   const mutableState = state as unknown as Record<
     WebSessionTabsBatchRecordKey,
     Record<string, unknown>
