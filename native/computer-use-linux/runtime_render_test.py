@@ -1,4 +1,4 @@
-from contextlib import ExitStack
+from contextlib import ExitStack, nullcontext
 import importlib.util
 import json
 import sys
@@ -430,6 +430,7 @@ class RuntimeRenderTest(unittest.TestCase):
                          get_window_stack=lambda: case.get("managed", [71, 72]))), create=True), \
                      patch.object(runtime, "GdkX11", types.SimpleNamespace(X11Window=types.SimpleNamespace(get_xid=int)), create=True), \
                      patch.object(runtime.shutil, "which", lambda _: "/usr/bin/xdotool"), \
+                     patch.object(runtime, "temporary_x11_keymap", lambda *_: nullcontext(None)), \
                      patch.object(runtime.subprocess, "run", native), \
                      patch.dict(runtime.os.environ, {"XDG_SESSION_TYPE": case.get("session", "x11")}):
                     request = {"tool": "press_key", "key": "x", "app": "Fixture", "windowIndex": 0,
@@ -495,7 +496,10 @@ class RuntimeRenderTest(unittest.TestCase):
                         if active:
                             fixture.root.get_state_set = lambda: FakeStateSet(FakeStateType.ACTIVE)
                             result = runtime.run_operation({"tool": tool, "app": "Fixture", "text": "x", "noScreenshot": True})
-                            (keys if tool == "type_text" else paste).assert_called_once_with("x")
+                            if tool == "type_text":
+                                keys.assert_called_once_with("x", fixture.root)
+                            else:
+                                paste.assert_called_once_with("x")
                             self.assertEqual(result["action"]["verification"]["state"], "unverified")
                         else:
                             with self.assertRaisesRegex(RuntimeError, "window_not_focused"):

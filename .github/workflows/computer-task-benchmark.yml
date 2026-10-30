@@ -66,7 +66,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends xvfb openbox dbus-x11 at-spi2-core python3-gi \
-            gir1.2-atspi-2.0 gir1.2-gtk-3.0 python3-tk xdotool xclip ripgrep libnss3 libgbm1 libasound2t64
+            gir1.2-atspi-2.0 gir1.2-gtk-3.0 python3-tk xdotool xclip x11-xserver-utils x11-xkb-utils ripgrep libnss3 libgbm1 libasound2t64
       - name: Download and verify pinned cua-driver
         env:
           GH_TOKEN: ${{ github.token }}
