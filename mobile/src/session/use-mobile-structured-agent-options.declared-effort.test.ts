@@ -1,4 +1,5 @@
 import { expect, it, vi } from 'vitest'
+import type { AcpDeclaredEffortFixtureModule } from '../../../src/shared/acp-declared-effort.test-fixture-contract'
 import {
   BASE,
   descriptorFor,
@@ -7,41 +8,33 @@ import {
 } from './use-mobile-structured-agent-options.test-fixture'
 
 it('renders trustworthy context through the phone consumer while capturing only accepted input', async () => {
-  for (const declaredDefaultEffort of ['low', null, undefined]) {
-    const row = {
-      id: 'grok-4.7',
-      label: 'Grok',
-      isDefault: false,
-      efforts: ['low', 'high'].map((value) => ({ value, label: value })),
-      defaultEffort: 'high',
-      ...(declaredDefaultEffort !== undefined ? { declaredDefaultEffort } : {})
-    }
-    const { client } = optionsClient(
-      async () => ({
-        models: [row],
-        listedModelIds: [row.id],
-        current: { model: row.id, defaulted: [], acceptedInputSources: { model: 'saved' } }
-      }),
-      async () => ({
-        origin: 'probe',
-        fetchedAt: 1,
-        models: [row],
-        listingNamesConfiguredModel: false
+  const { recordedEffortCase } = await vi.importActual<AcpDeclaredEffortFixtureModule>(
+    '../../../src/main/acp/acp-declared-effort.test-fixture'
+  )
+  for (const input of ['low', 'max', 'opencode', 'absent'] as const) {
+    const { agent, model, display, live, resting, catalog } = await recordedEffortCase(input)
+    for (const answer of [live, resting]) {
+      const { client } = optionsClient(
+        async () => answer,
+        async () => catalog
+      )
+      const harness = await mountOptions({
+        ...BASE,
+        sessionId: `declaration-${input}-${answer === live ? 'live' : 'rest'}`,
+        agent,
+        client,
+        mutate: vi.fn(),
+        sendSelection: true
       })
-    )
-    const harness = await mountOptions({
-      ...BASE,
-      sessionId: `declaration-${declaredDefaultEffort}`,
-      agent: 'grok',
-      client,
-      mutate: vi.fn(),
-      sendSelection: true
-    })
-    expect(descriptorFor(harness.current().optionSnapshot, 'effort')).toMatchObject({
-      valueSource: declaredDefaultEffort ? 'default' : 'unknown',
-      kind: { currentValue: declaredDefaultEffort ?? undefined }
-    })
-    expect(harness.current().sendSelection()).toEqual({ selection: { model: row.id } })
-    await harness.unmount()
+      const effort = descriptorFor(harness.current().optionSnapshot, 'effort')
+      if (answer.models.find((row) => row.id === model)!.efforts.length > 0) {
+        expect(effort?.valueSource).toBe(display ? 'default' : 'unknown')
+      } else {
+        expect(effort).toBeUndefined()
+      }
+      expect(effort?.kind.currentValue).toBe(display ?? undefined)
+      expect(harness.current().sendSelection()).toEqual({ selection: { model } })
+      await harness.unmount()
+    }
   }
 })

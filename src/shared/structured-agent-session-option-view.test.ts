@@ -217,7 +217,7 @@ describe('what a send carries', () => {
     (agent) => {
       const seed = structuredAgentSessionSeedCatalog(agent)
       const row = { ...SONNET, defaultEffort: 'high', declaredDefaultEffort: 'low' }
-      for (const listedModelIds of [['sonnet'], undefined]) {
+      for (const listedModelIds of [['sonnet'], ['other'], undefined]) {
         for (const declaration of ['low', null, undefined]) {
           const { declaredDefaultEffort: _observation, ...oldRow } = row
           const state = applyStructuredAgentSessionOptions(
@@ -234,9 +234,13 @@ describe('what a send carries', () => {
               current: { model: 'sonnet', defaulted: [], acceptedInputSources: { model: 'saved' } }
             }
           )
-          const expected = listedModelIds
-            ? (declaration ?? (declaration === undefined && agent === 'codex' ? 'high' : undefined))
-            : undefined
+          const excluded = listedModelIds !== undefined && !listedModelIds.includes('sonnet')
+          const expected = excluded
+            ? undefined
+            : (declaration ??
+              (declaration === undefined && agent === 'codex' && listedModelIds
+                ? 'high'
+                : undefined))
           const snapshot = structuredAgentSessionShownSnapshot(state)
           expect(snapshot.find((row) => row.id === 'effort')?.kind.currentValue).toBe(expected)
           expect(structuredAgentSessionMessageSelection(state)).toEqual({ model: 'sonnet' })
@@ -250,7 +254,7 @@ describe('what a send carries', () => {
           expect(
             structuredAgentSessionShownSnapshot(held).find((row) => row.id === 'effort')?.kind
               .currentValue
-          ).toBe(agent === 'pi' ? 'high' : 'max')
+          ).toBe(agent === 'pi' && !excluded ? 'high' : 'max')
           expect(structuredAgentSessionMessageSelection(held)).toEqual({
             model: 'sonnet',
             effort: 'max'

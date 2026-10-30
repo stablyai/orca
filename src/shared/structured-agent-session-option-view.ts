@@ -58,8 +58,7 @@ export function structuredAgentSessionShownSnapshot(
         descriptor.id === 'effort' &&
         descriptor.kind.type === 'select' &&
         descriptor.kind.currentValue === undefined
-    ) ||
-    !view.verifiedModelIds?.includes(model)
+    )
   ) {
     return snapshot
   }
@@ -69,7 +68,10 @@ export function structuredAgentSessionShownSnapshot(
   const fallback =
     declaration !== undefined
       ? declaration
-      : view.record.agent === 'codex' && effort?.type === 'select' && effort.defaultIsCliDefault
+      : view.record.agent === 'codex' &&
+          view.verifiedModelIds?.includes(model) &&
+          effort?.type === 'select' &&
+          effort.defaultIsCliDefault
         ? effort.defaultValue
         : undefined
   if (
@@ -79,7 +81,7 @@ export function structuredAgentSessionShownSnapshot(
   ) {
     return snapshot
   }
-  // A listed default supplies context only; both Send paths still read the canonical snapshot.
+  // A declared default supplies context only; both Send paths still read the canonical snapshot.
   return snapshot.map((descriptor) =>
     descriptor.id === 'effort' &&
     descriptor.kind.type === 'select' &&
