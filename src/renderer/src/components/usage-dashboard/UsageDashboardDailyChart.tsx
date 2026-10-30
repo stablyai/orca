@@ -13,6 +13,14 @@ type ChartSegment = {
   className: string
 }
 
+/** Locale-formatted day label. Builds from numeric parts: `new Date('YYYY-MM-DD')` parses as UTC. */
+function formatDayLabel(day: string): string {
+  const [year, month, date] = day.split('-').map(Number)
+  return new Intl.DateTimeFormat(getIntlLocale(), { month: 'short', day: 'numeric' }).format(
+    new Date(year, month - 1, date)
+  )
+}
+
 function getPointTotal(point: UsageDashboardDailyPoint): number {
   return point.inputTokens + point.outputTokens + point.cacheReadTokens + point.cacheWriteTokens
 }
@@ -191,7 +199,7 @@ export default function UsageDashboardDailyChart({
                       </div>
                       {/* Reserved label row keeps every baseline aligned; text thins out by step. */}
                       <span className="h-4 pt-0.5 text-center text-[10px] leading-none text-muted-foreground">
-                        {index % dateLabelStep === 0 ? point.day.slice(5) : ''}
+                        {index % dateLabelStep === 0 ? formatDayLabel(point.day) : ''}
                       </span>
                     </div>
                   )

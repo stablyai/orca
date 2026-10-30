@@ -58,9 +58,13 @@ export default function UsageDashboardDrawer({
           } as CSSProperties
         }
         data-usage-dashboard-sheet=""
-        onOpenAutoFocus={(event) => {
-          // Suppress default header focus, which reveals hover-style affordances without a pointer.
-          event.preventDefault()
+        onPointerDownOutside={(event) => {
+          // The sidebar toolbar trigger opens/closes this drawer; Radix would otherwise dismiss
+          // on its pointerdown and the button's click would reopen it (CodeRabbit #8).
+          const target = event.detail.originalEvent.target as HTMLElement | null
+          if (target?.closest('button[aria-label="Token usage"]')) {
+            event.preventDefault()
+          }
         }}
       >
         {/* Why: header chrome lives on a plain wrapper; SheetHeader/SheetTitle own their own spacing and type. */}

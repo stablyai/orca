@@ -149,3 +149,36 @@ export function createMuseProvider(input: UsageOverviewInput['muse']): UsageProv
     activeDays: countActiveDays(dailyActiveDays)
   }
 }
+
+export function createOmpProvider(
+  input: NonNullable<UsageOverviewInput['omp']>
+): UsageProviderOverview {
+  const summary = input.summary
+  const dailyActiveDays = input.daily
+    .filter((entry) => entry.totalTokens > 0)
+    .map((entry) => entry.day)
+  return {
+    id: 'omp',
+    label: translate('auto.components.usageDashboard.UsageDashboardModelTable.providerOmp', 'omp'),
+    enabled: input.scanState?.enabled ?? false,
+    isScanning: input.scanState?.isScanning ?? false,
+    hasData: summary?.hasAnyOmpData ?? input.scanState?.hasAnyOmpData ?? false,
+    lastScanCompletedAt: input.scanState?.lastScanCompletedAt ?? null,
+    lastScanError: input.scanState?.lastScanError ?? null,
+    sessions: summary?.sessions ?? 0,
+    activityLabel: 'sessions',
+    activityCount: summary?.sessions ?? 0,
+    totalTokens: summary?.totalTokens ?? 0,
+    // omp reports uncached input directly; cache reads and writes are separate lines.
+    newInputTokens: summary?.inputTokens ?? 0,
+    outputTokens: summary?.outputTokens ?? 0,
+    cacheTokens: (summary?.cacheReadTokens ?? 0) + (summary?.cacheWriteTokens ?? 0),
+    reasoningTokens: summary?.reasoningTokens ?? 0,
+    estimatedCostUsd: summary?.costUsd ?? null,
+    // omp precomputes per-message cost, so its total is always a real sum.
+    hasPartialCost: false,
+    topModel: summary?.topModel ?? null,
+    topProject: summary?.topProject ?? null,
+    activeDays: countActiveDays(dailyActiveDays)
+  }
+}

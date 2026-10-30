@@ -6,6 +6,7 @@ import {
   entriesToLaunchList,
   isLegacySingleAgentSubmit,
   resolveComposerAgentLaunchList,
+  resolveLegacySubmitAgent,
   type ComposerAgentEntry
 } from './composer-agent-entries'
 
@@ -187,5 +188,29 @@ describe('resolveComposerAgentLaunchList', () => {
         remote: false
       })
     ).toEqual(entriesToLaunchList([flaggedSecond[1]]))
+  })
+})
+
+describe('resolveLegacySubmitAgent', () => {
+  it('launches the bare remainder when row 0 is Blank Terminal (CodeRabbit #6)', () => {
+    const entries = [entryOf('codex'), entryOf('claude')]
+    // The user's added agent row must launch, not a blank terminal.
+    expect(resolveLegacySubmitAgent({ entries, locked: false, rowZeroAgent: null })).toBe('claude')
+  })
+
+  it('keeps the row-0 pick when it is a real agent', () => {
+    expect(
+      resolveLegacySubmitAgent({
+        entries: [entryOf('codex'), entryOf('claude')],
+        locked: false,
+        rowZeroAgent: 'codex'
+      })
+    ).toBe('codex')
+  })
+
+  it('returns null for a blank row 0 with no surviving remainder', () => {
+    expect(
+      resolveLegacySubmitAgent({ entries: [entryOf('codex')], locked: false, rowZeroAgent: null })
+    ).toBeNull()
   })
 })

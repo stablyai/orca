@@ -28,6 +28,10 @@ export default function AgentDashboardSidebarHost({
   useEffect(() => {
     if (drawerOpen) {
       closeWorkspaceBoard()
+      // The usage drawer shares the sidebar edge; never stack both (CodeRabbit #9).
+      if (useAppStore.getState().usageDrawerOpen) {
+        useAppStore.getState().setUsageDrawerOpen(false)
+      }
     }
   }, [closeWorkspaceBoard, drawerOpen])
   useEffect(() => {

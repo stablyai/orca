@@ -31,8 +31,19 @@ export default function UsageDashboardSidebarHost({
   useEffect(() => {
     if (drawerOpen) {
       closeWorkspaceBoard()
+      // The experimental Agent Dashboard drawer shares the sidebar edge; never stack both.
+      if (useAppStore.getState().agentDashboardDrawerOpen) {
+        useAppStore.getState().setAgentDashboardDrawerOpen(false)
+      }
     }
   }, [closeWorkspaceBoard, drawerOpen])
+  useEffect(() => {
+    // The reverse direction lives where the agent dashboard opens; mirror it here so opening
+    // that drawer also dismisses this one (CodeRabbit #9).
+    if (useAppStore.getState().agentDashboardDrawerOpen && drawerOpen) {
+      setDrawerOpen(false)
+    }
+  }, [setDrawerOpen, drawerOpen])
   useEffect(() => {
     if (workspaceBoardOpen) {
       setDrawerOpen(false)

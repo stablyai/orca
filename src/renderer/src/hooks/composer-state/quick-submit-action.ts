@@ -16,6 +16,7 @@ import { scheduleComposerCreateHandoff } from '@/lib/composer-create-handoff'
 import type { ComposerModel } from './composer-model'
 import {
   resolveComposerAgentLaunchList,
+  resolveLegacySubmitAgent,
   type ComposerAgentSubmitSelection
 } from './composer-agent-entries'
 
@@ -98,9 +99,10 @@ export function useQuickSubmitAction(input: QuickSubmitActionInput) {
         remote: selectedRepoIsRemote
       })
       // List entries have no single quick pick; the first row still qualifies the prompt preflight.
+      // A Blank Terminal row 0 with a bare remainder launches that remainder, not a blank shell.
       const previewAgent = agentLaunches
         ? (requestedAgent ?? agentLaunches[0]?.agent ?? null)
-        : requestedAgent
+        : (resolveLegacySubmitAgent(agents) ?? requestedAgent)
 
       const workspaceNameSeed = getWorkspaceSeedName({
         explicitName: name,

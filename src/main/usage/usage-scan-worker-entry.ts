@@ -144,7 +144,8 @@ async function runScan(
     }
     case 'omp': {
       // omp session files are JSONL transcripts; the scanner owns its own source-cache persistence.
-      const result = await scanOmpUsageFiles(request.worktrees, request.sourceCache)
+      // Progress reporting keeps the client's no-progress watchdog fed on large corpora.
+      const result = await scanOmpUsageFiles(request.worktrees, request.sourceCache, onFilesScanned)
       return {
         operation: 'scan',
         providerId: 'omp',

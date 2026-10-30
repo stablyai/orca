@@ -243,7 +243,18 @@ export function NewWorkspaceComposerAgentSection({
                 'Remove agent'
               )}
               className="size-7 shrink-0 rounded-sm text-muted-foreground hover:text-foreground"
-              onClick={() => onRemoveAgentEntry?.(entry.id)}
+              onClick={() => {
+                // Removing row 0 promotes the next row; the quick pick must follow it, or the
+                // combobox shows the old harness while the stored draft still launches the next
+                // row's agent with its flags (CodeRabbit #5).
+                if (index === 0) {
+                  const next = rows?.[1]
+                  if (next) {
+                    onQuickAgentChange(next.draft.agent)
+                  }
+                }
+                onRemoveAgentEntry?.(entry.id)
+              }}
             >
               <X className="size-3.5" />
             </Button>

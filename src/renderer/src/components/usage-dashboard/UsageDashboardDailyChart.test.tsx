@@ -69,8 +69,8 @@ describe('UsageDashboardDailyChart', () => {
     // The y-axis scale replaces per-column value labels, which collided in dense windows.
     expect(view.container.textContent).toContain('1.0k')
     // Date labels thin out so nothing renders clipped: first and last days stay labeled.
-    expect(screen.getByText('05-13')).toBeInTheDocument()
-    expect(screen.getByText('05-15')).toBeInTheDocument()
+    expect(screen.getByText('May 13')).toBeInTheDocument()
+    expect(screen.getByText('May 15')).toBeInTheDocument()
   })
   it('shows reasoning tokens in the tooltip detail when the day reports them', () => {
     render(

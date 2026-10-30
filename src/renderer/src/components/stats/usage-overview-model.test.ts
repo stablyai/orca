@@ -382,13 +382,18 @@ describe('usage overview model', () => {
 
     expect(overview.bestDay).toMatchObject({ day: '2026-05-14', totalTokens: 18, ompTokens: 18 })
     expect(overview.activeDays).toBe(2)
-    // The omp provider row stays deferred; only the daily series consumes its data.
+    // omp joins the provider rows so an omp-only setup counts as enabled with data, and the
+    // overview totals include its tokens (CodeRabbit #1).
     expect(overview.providers.map((provider) => provider.id)).toEqual([
       'claude',
       'codex',
       'opencode',
-      'muse'
+      'muse',
+      'omp'
     ])
+    const ompRow = overview.providers.find((provider) => provider.id === 'omp')
+    expect(ompRow).toMatchObject({ activityLabel: 'sessions', totalTokens: 0, sessions: 0 })
+    expect(overview.hasAnyEnabledProvider).toBe(false)
   })
 
   it('pads recent usage days with zero-token cells', () => {

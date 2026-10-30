@@ -80,10 +80,30 @@ export function resolveComposerAgentLaunchList(args: {
   if (!selection || selection.locked || !args.gitWorktree || args.remote) {
     return null
   }
-  // Resolution 3: Blank Terminal on row 0 has no launch entry of its own. The remaining rows
-  // decide, and a lone bare remainder stays on the legacy path like any single bare row.
-  const entries = selection.rowZeroAgent === null ? selection.entries.slice(1) : selection.entries
-  return entries.length === 0 || isLegacySingleAgentSubmit(entries)
-    ? null
-    : entriesToLaunchList(entries)
+  // Resolution 3: Blank Terminal on row 0 has no launch entry of its own; the remaining rows
+  // carry the launch. A lone bare remainder must not fall back to the legacy path with the
+  // Blank Terminal pick, or the user's extra agent is silently dropped (CodeRabbit #6): the
+  // remainder itself becomes the legacy agent.
+  const remainder = selection.rowZeroAgent === null ? selection.entries.slice(1) : selection.entries
+  if (remainder.length === 0) {
+    return null
+  }
+  return isLegacySingleAgentSubmit(remainder) ? null : entriesToLaunchList(remainder)
+}
+
+/** The agent the legacy submit path launches after the launch-list resolution: the row-0 pick,
+ * except when row 0 is Blank Terminal and a remainder row survives — then the remainder's own
+ * agent, so the agent row the user added still launches (CodeRabbit #6). */
+export function resolveLegacySubmitAgent(
+  selection: ComposerAgentSubmitSelection | undefined
+): TuiAgent | null {
+  if (!selection) {
+    return null
+  }
+  if (selection.rowZeroAgent !== null) {
+    return selection.rowZeroAgent
+  }
+  const remainder = selection.entries.slice(1)
+  const bareRemainder = remainder.length === 1 && isLegacySingleAgentSubmit(remainder)
+  return bareRemainder ? remainder[0].draft.agent : null
 }

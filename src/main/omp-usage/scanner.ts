@@ -123,7 +123,8 @@ async function scanOmpSessionFile(
 
 export async function scanOmpUsageFiles(
   worktrees: UsageScanWorktreeRef[],
-  sourceCache: UsageSourceCacheRef
+  sourceCache: UsageSourceCacheRef,
+  onFilesScanned?: (count: number) => void
 ): Promise<OmpUsageScanResult> {
   const files = await listOmpSessionFiles()
   const previousByPath = new Map(
@@ -143,6 +144,7 @@ export async function scanOmpUsageFiles(
       previousByPath.get(filePath),
       resolveWorktree
     )
+    onFilesScanned?.(1)
     if (processed) {
       processedFiles.push(processed)
       for (const session of processed.sessions) {

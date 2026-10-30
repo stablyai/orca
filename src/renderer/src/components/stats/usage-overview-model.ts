@@ -8,6 +8,7 @@ import {
   createClaudeProvider,
   createCodexProvider,
   createMuseProvider,
+  createOmpProvider,
   createOpenCodeProvider
 } from './usage-provider-normalization'
 import { getIntlLocale } from '@/i18n/i18n'
@@ -17,7 +18,9 @@ export function buildUsageOverview(input: UsageOverviewInput): UsageOverviewMode
     createClaudeProvider(input.claude),
     createCodexProvider(input.codex),
     createOpenCodeProvider(input.opencode),
-    createMuseProvider(input.muse)
+    createMuseProvider(input.muse),
+    // omp stays optional: the pane feeds it once fetched; without it the overview keeps its legacy shape.
+    ...(input.omp ? [createOmpProvider(input.omp)] : [])
   ]
   const daily = buildDailyOverview(input)
   const bestDay =

@@ -68,5 +68,6 @@ it('dispatches an omp scan to the omp scanner and returns its envelope', async (
       dailyAggregates
     }
   })
-  expect(scanOmpUsageFiles).toHaveBeenCalledWith(WORKTREES, SOURCE_CACHE)
+  // The third argument forwards the worker's progress reporter (fed one file at a time).
+  expect(scanOmpUsageFiles).toHaveBeenCalledWith(WORKTREES, SOURCE_CACHE, expect.any(Function))
 })

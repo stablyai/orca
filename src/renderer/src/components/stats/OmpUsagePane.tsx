@@ -204,7 +204,10 @@ export function OmpUsagePane(): React.JSX.Element {
     )
   }
 
-  const hasAnyData = summary?.hasAnyOmpData ?? scanState.hasAnyOmpData
+  // The corpus-wide daily series stays meaningful even when the scoped summary has no sessions,
+  // so the pane keeps its chart whenever either source has data (CodeRabbit #3).
+  const hasAnyData =
+    (summary?.hasAnyOmpData ?? scanState.hasAnyOmpData ?? false) || daily.length > 0
 
   return (
     <UsageTrackingPaneShell
@@ -316,8 +319,11 @@ export function OmpUsagePane(): React.JSX.Element {
         <CodexUsageDailyChart
           daily={daily.map((point) => ({
             day: point.day,
+            // omp's inputTokens is already uncached; codex's chart subtracts cachedInputTokens
+            // from inputTokens, so folding cache reads into that field would zero the input
+            // segment (CodeRabbit #2). Cache writes join the cached segment instead.
             inputTokens: point.inputTokens,
-            cachedInputTokens: point.cacheReadTokens,
+            cachedInputTokens: point.cacheReadTokens + point.cacheWriteTokens,
             outputTokens: point.outputTokens,
             // Resolution 8: reasoning stays out of the stack; the caption and cards carry it.
             reasoningOutputTokens: 0,
