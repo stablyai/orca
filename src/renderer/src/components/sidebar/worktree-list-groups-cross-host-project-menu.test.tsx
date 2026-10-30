@@ -9,6 +9,7 @@ import {
   type RepoHeaderProjectActions
 } from './worktree-list/rows/repo-header-project-actions'
 import { project } from './worktree-list-groups-test-fixtures'
+import { localizeProjectHeader } from '../../../../shared/sidebar-list/project-header-localization'
 import {
   localGroup,
   localRepo,
@@ -18,7 +19,12 @@ import {
   planRows,
   THIS_ORCA_ORDER
 } from './worktree-list-groups-cross-host-project-group.test-fixture'
+import {
+  getHeaderProjectGroupRepo,
+  type GroupHeaderRow
+} from '../../../../shared/sidebar-list/row-types'
 import type { ProjectGroup } from '../../../../shared/project-group-types'
+import type { Repo } from '../../../../shared/repo-types'
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
@@ -86,16 +92,28 @@ function actionsFixture(): RepoHeaderProjectActions {
   }
 }
 
-// This Orca anchors the header on its own ungrouped row; the paired row puts it in the group.
-function renderPlannedProjectMenu(actions: RepoHeaderProjectActions): HTMLDivElement {
-  const groups = [pairedGroup, otherPairedGroup, localGroup]
-  const header = planRows({ repoOrder: THIS_ORCA_ORDER, groups })
+const groups = [pairedGroup, otherPairedGroup, localGroup]
+
+function plannedProjectHeader(local?: Repo): GroupHeaderRow {
+  const header = planRows({ repoOrder: THIS_ORCA_ORDER, groups, local })
     .render(new Set())
     .find((row) => row.type === 'header' && row.key === `project:${project.id}`)
   if (header?.type !== 'header' || !header.repo) {
     throw new Error('expected the merged project header')
   }
-  const { repo, projectGroupRepo } = header
+  return header
+}
+
+// This Orca anchors the header on its own ungrouped row; the paired row puts it in the group.
+function renderPlannedProjectMenu(
+  actions: RepoHeaderProjectActions,
+  header: GroupHeaderRow = plannedProjectHeader()
+): HTMLDivElement {
+  const { repo } = header
+  if (!repo) {
+    throw new Error('expected a project header')
+  }
+  const projectGroupRepo = getHeaderProjectGroupRepo(header)
   const container = document.createElement('div')
   document.body.append(container)
   const root = createRoot(container)
@@ -154,6 +172,20 @@ describe('the project menu of a header drawn in a group through the paired host 
     act(() => menuItem(container, localGroup.name)?.click())
 
     expect(actions.onMoveProjectToGroup).toHaveBeenCalledWith(localRepo, localGroup.id)
+  })
+
+  it("keeps a paired host section's copy on this Orca's row that placed it in this Orca's group", () => {
+    const actions = actionsFixture()
+    const groupedLocal = { ...localRepo, projectGroupId: localGroup.id, projectGroupOrder: 0 }
+    const header = plannedProjectHeader(groupedLocal)
+    expect(header.repo).toEqual(groupedLocal)
+    expect(header.projectGroupRepo).toBeUndefined()
+    const container = renderPlannedProjectMenu(actions, localizeProjectHeader(header, pairedHostId))
+
+    expect(menuItem(container, localGroup.name)?.disabled).toBe(true)
+    act(() => menuItem(container, 'Remove from group')?.click())
+
+    expect(actions.onRemoveProjectFromGroup).toHaveBeenCalledWith(groupedLocal)
   })
 
   it("keeps the other project actions on this Orca's anchor row", () => {

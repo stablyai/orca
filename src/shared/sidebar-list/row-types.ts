@@ -143,3 +143,8 @@ export function isSingleHostProjectHeader(row: GroupHeaderRow): boolean {
     (row.hostId !== undefined || row.count > 0)
   )
 }
+
+/** The registration whose Project Group places this header; a host's copy keeps the merged header's. */
+export function getHeaderProjectGroupRepo(row: GroupHeaderRow): Repo | undefined {
+  return row.projectGroupRepo ?? row.anchorRepo
+}
