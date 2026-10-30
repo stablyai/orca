@@ -219,8 +219,8 @@ export const OPERATION_MUTATIONS = {
   // Send unmeasured viewport cells on auto toggles, replacing stored dimensions with null.
   'display-mode-unmeasured-viewport': {
     file: 'use-mobile-session-terminal-stream-display.ts',
-    before: `          ...(viewportRef.current && next === 'auto' ? { viewport: viewportRef.current } : {})`,
-    after: `          ...(next === 'auto' ? { viewport: viewportRef.current } : {})`
+    before: `          ...(viewport && next === 'auto' ? { viewport } : {})`,
+    after: `          ...(next === 'auto' ? { viewport } : {})`
   },
   // Send null instead of omitting afterTabId; only sessions without an active tab detect it.
   'create-after-tab-id-null': {

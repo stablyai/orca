@@ -23,6 +23,7 @@ class ScriptedPiConnection implements PiRpcConnection {
   closed = false
   rootVerdict: PiRpcConnection['rootVerdict'] = 'live'
   processless = false
+  spawnAbsence: PiRpcConnection['spawnAbsence'] = null
   lastCloseResult: PiRpcConnection['lastCloseResult'] = null
   readonly pid: number
   readonly file: string

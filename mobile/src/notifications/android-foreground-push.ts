@@ -3,6 +3,34 @@ import * as Notifications from 'expo-notifications'
 import { canPresentForegroundPush } from './push-receive'
 import { readOrcaPushPayload } from './push-payload'
 
+export async function presentForegroundPush(
+  identifier: string,
+  content: Pick<Notifications.NotificationContent, 'title' | 'body' | 'data' | 'sound'>,
+  prepare: () => boolean | Promise<boolean> = () => true,
+  isCurrent: () => boolean = () => true
+): Promise<void> {
+  const payload = readOrcaPushPayload(content.data)
+  if (
+    !payload ||
+    !(await prepare()) ||
+    !(await canPresentForegroundPush(payload)) ||
+    !isCurrent()
+  ) {
+    return
+  }
+  await Notifications.scheduleNotificationAsync({
+    identifier,
+    content: {
+      title: content.title,
+      body: content.body,
+      data: content.data,
+      sound: content.sound === 'default' ? 'default' : false
+    },
+    trigger:
+      typeof content.data?.channelId === 'string' ? { channelId: content.data.channelId } : null
+  })
+}
+
 export function startAndroidForegroundPushPresentation(): () => void {
   if (Platform.OS !== 'android') {
     return () => {}
@@ -24,26 +52,9 @@ export function startAndroidForegroundPushPresentation(): () => void {
       return
     }
 
-    void present().catch((error: unknown) => {
+    void presentForegroundPush(identifier, content).catch((error: unknown) => {
       console.warn('[push] Foreground notification presentation failed', error)
     })
-
-    async function present(): Promise<void> {
-      if (!payload || !(await canPresentForegroundPush(payload))) {
-        return
-      }
-      await Notifications.scheduleNotificationAsync({
-        identifier,
-        content: {
-          title: content.title,
-          body: content.body,
-          data: content.data,
-          sound: content.sound === 'default' ? 'default' : false
-        },
-        trigger:
-          typeof content.data?.channelId === 'string' ? { channelId: content.data.channelId } : null
-      })
-    }
   })
   return () => subscription.remove()
 }

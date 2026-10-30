@@ -203,6 +203,10 @@ export class AgentSessionJournal {
 
   item = (itemId: string): AgentJournalRenderItem | null => this.state.items.get(itemId) ?? null
 
+  /** Remember publication even after a rewind removes the row. */
+  hasRecordedItem = (itemId: string): boolean =>
+    this.state.items.has(itemId) || this.state.tombstones.has(itemId)
+
   visitItemsWithLinkage = (visit: JournalItemLinkageVisitor): void => {
     for (const item of this.state.items.values()) {
       visit(item.itemId, item.sequence, item.body, item)

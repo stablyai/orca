@@ -9,7 +9,8 @@ import {
   GitHubPrFileDiff
 } from './mobile-tasks-legacy-foundation'
 import {
-  TextInput,
+  MessageBox,
+  TextField,
   colors,
   Pressable,
   Text,
@@ -43,19 +44,16 @@ export function renderMobileTasksItemBodyEditor(model: ConnectionPresentationMod
         detailPayload.provider === 'gitlab' &&
         (actionItem.source.type === 'issue' || actionItem.source.type === 'mr'))) ? (
     <>
-      <TextInput
-        style={[styles.input, styles.bodyInput]}
+      <MessageBox
         value={itemBodyDraft}
         onChangeText={setItemBodyDraft}
         placeholder={translate('tasks.itemReviewSections.descriptionPlaceholder', 'Description')}
-        placeholderTextColor={colors.textMuted}
-        multiline
-        textAlignVertical="top"
-      />
-      <Pressable
-        style={styles.inlineSaveButton}
-        disabled={mutatingStatus || itemBodyDraft === detailPayload.body}
-        onPress={() => {
+        canSend={!mutatingStatus && itemBodyDraft !== detailPayload.body}
+        sendAccessibilityLabel={translate(
+          'tasks.itemReviewSections.saveDescription',
+          'Save description'
+        )}
+        onSend={() => {
           if (actionItem.provider === 'github' && actionItem.source.type === 'pr') {
             void updateGitHubPullRequestMetadata(actionItem, {
               body: itemBodyDraft
@@ -77,11 +75,7 @@ export function renderMobileTasksItemBodyEditor(model: ConnectionPresentationMod
             })
           }
         }}
-      >
-        <Text style={styles.inlineSaveText}>
-          {translate('tasks.itemReviewSections.saveDescription', 'Save description')}
-        </Text>
-      </Pressable>
+      />
       <MobileMarkdown
         content={itemBodyDraft}
         fallback={translate('tasks.itemReviewSections.noDescription', 'No description.')}
@@ -187,15 +181,13 @@ export function renderMobileTasksItemReviewPanel(model: ConnectionPresentationMo
           })}
         </View>
       )}
-      <TextInput
-        style={styles.input}
+      <TextField
         value={itemReviewersDraft}
         onChangeText={setItemReviewersDraft}
         placeholder={translate(
           'tasks.itemReviewSections.reviewersPlaceholder',
           'Request reviewers'
         )}
-        placeholderTextColor={colors.textMuted}
         autoCapitalize="none"
       />
       <Pressable
