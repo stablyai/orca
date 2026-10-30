@@ -168,13 +168,18 @@ export function useTerminalLiveInputCommit<TTabType extends string>({
   )
 
   // Clicks, Return and held-text controls leave the mirror’s assumed field; start a new editing session.
-  const endFieldSessionThenSend = useCallback(
-    (handle: string, bytes: string): Promise<boolean> => {
+  const endFieldSessionThenSend = useCallback<TerminalLiveInputSender>(
+    (handle, bytes, origin) => {
       advanceLiveInputInteractionGeneration()
       recordEndedSession(handle)
-      return endLiveInputSessionThenSend(handle, bytes)
+      return endLiveInputSessionThenSend(handle, bytes, origin)
     },
     [advanceLiveInputInteractionGeneration, endLiveInputSessionThenSend, recordEndedSession]
+  )
+
+  const sendLiveInputClick = useCallback(
+    (handle: string, bytes: string) => endFieldSessionThenSend(handle, bytes, 'pointer'),
+    [endFieldSessionThenSend]
   )
 
   // Ignore the cleared field’s native echo or it would retype old text at the new cursor.
@@ -318,6 +323,6 @@ export function useTerminalLiveInputCommit<TTabType extends string>({
     handleLiveInputChange,
     handleLiveInputKeyPress,
     handleLiveInputSubmit,
-    sendLiveInputClick: endFieldSessionThenSend
+    sendLiveInputClick
   }
 }

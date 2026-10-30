@@ -20,6 +20,10 @@ import {
   type PluginImageKind
 } from '../images/plugin-image-fields'
 import { formatPluginSchemaIssues } from '../manifest/plugin-schema-issues'
+import {
+  UNSAFE_PLUGIN_DISPLAY_TEXT_MESSAGE,
+  unsafePluginDisplayTextPaths
+} from '../manifest/plugin-display-text'
 
 /**
  * Strict checks for authors and catalog CI. The runtime reads catalogs tolerantly (skipping,
@@ -66,11 +70,13 @@ function validatePluginCatalog(raw: unknown, readCatalogFile?: PluginCatalogFile
   if (!parsed.success) {
     return [formatPluginSchemaIssues(parsed.error.issues, raw)]
   }
+  const errors = unsafePluginDisplayTextPaths(raw).map(
+    (path) => `${path}: ${UNSAFE_PLUGIN_DISPLAY_TEXT_MESSAGE}`
+  )
   const entries: unknown[] =
     typeof raw === 'object' && raw !== null && 'plugins' in raw && Array.isArray(raw.plugins)
       ? raw.plugins
       : []
-  const errors: string[] = []
   if (entries.length > PLUGIN_MARKETPLACE_ENTRY_LIMIT) {
     errors.push(`plugins: must be at most ${PLUGIN_MARKETPLACE_ENTRY_LIMIT} items`)
   }

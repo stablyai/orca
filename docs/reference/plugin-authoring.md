@@ -3,7 +3,8 @@
 From an empty folder to a plugin anyone can install from a catalog. The field-by-field rules
 live in the generated references: [manifest](plugin-manifest.md), [catalog](plugin-catalog.md),
 [host API](plugin-host-api.md), [themes](plugin-themes.md) and [theme tokens](plugin-theme-tokens.md),
-[syntaxes](plugin-syntax.md).
+[syntaxes](plugin-syntax.md). Listed plugins must follow the
+[plugin listing policy](plugin-listing-policy.md).
 
 ## 1. Write
 
@@ -146,7 +147,9 @@ owner of the `origin` remote. Run it in CI for the plugin and catalog repositori
 
 A catalog is a Git repository with `orca-catalog.json` at its root that lists plugins and pins
 each release to an exact commit and file hash, so Orca refuses bytes the catalog did not vouch
-for.
+for. Plugins in Orca's official and community catalogs must follow the
+[plugin listing policy](plugin-listing-policy.md): free to use, no donation links, and no URLs in
+the description.
 
 1. Commit the plugin and run `pnpm validate:plugin` on its directory. It prints the
    release entry for `HEAD`: version, full commit SHA, `contentHash`, execution profile, minimum

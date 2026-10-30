@@ -29,6 +29,7 @@ import { useImeEnterGestureOwnership } from '@/lib/ime-composition-keyboard-even
 import { useNativeChatComposerAppMenuSelection } from './use-native-chat-composer-app-menu-selection'
 import { useNativeChatComposerSubmit } from './use-native-chat-composer-submit'
 import { useNativeChatComposerCommandPicker } from './use-native-chat-composer-command-picker'
+import { useNotificationCardComposerClearance } from '@/lib/notification-card-composer-clearance'
 
 /** Send through the chat’s structured transport or verified PTY route, with agent-aware autocomplete and image handling. */
 export const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatComposerProps>(
@@ -192,6 +193,7 @@ export const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, Nativ
 
     const localHandle = useRef<NativeChatComposerHandle>(null)
     const root = useRef<HTMLDivElement>(null)
+    useNotificationCardComposerClearance(root, editSession === undefined)
     const handlePasteEvent = useNativeChatComposerHandle(localHandle, {
       attachmentScopeKey: draftScopeKey,
       textareaRef,

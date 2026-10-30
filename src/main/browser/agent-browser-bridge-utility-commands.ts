@@ -1,6 +1,13 @@
+import { mkdir } from 'node:fs/promises'
+import path from 'node:path'
 import { BrowserError } from './cdp-bridge'
 import { assertClipboardTextWriteWithinLimitWithYield } from '../../shared/clipboard-text'
-import { AGENT_BROWSER_CLIPBOARD_WRITE_MAX_BYTES } from './agent-browser-bridge-types'
+import { withTimeout } from '../../shared/promise-timeout-fallback'
+import {
+  AGENT_BROWSER_CLIPBOARD_WRITE_MAX_BYTES,
+  AGENT_DOWNLOAD_REPLY_DEADLINE_MS,
+  AGENT_DOWNLOAD_START_TIMEOUT_MS
+} from './agent-browser-bridge-types'
 import type { BrowserBackResult, BrowserReloadResult } from '../../shared/runtime-types'
 import { AgentBrowserBridgeMouseCommands } from './agent-browser-bridge-mouse-commands'
 
@@ -94,21 +101,67 @@ export abstract class AgentBrowserBridgeUtilityCommands extends AgentBrowserBrid
     })
   }
 
+  // Orca's will-download handler picks every save path, so agent-browser's own download
+  // (CDP download behavior + rename) never sees the file; claim the download here instead.
   async download(
     selector: string,
-    path: string,
+    savePath: string,
     worktreeId?: string,
     browserPageId?: string
-  ): Promise<unknown> {
-    return this.enqueueTargetedCommand(worktreeId, browserPageId, async (sessionName) => {
-      return await this.execAgentBrowser(sessionName, ['download', selector, path])
-    })
+  ): Promise<{ path: string }> {
+    if (!path.isAbsolute(savePath)) {
+      throw new BrowserError('invalid_argument', `--path must be an absolute path: ${savePath}`)
+    }
+    const replyDeadline = Date.now() + AGENT_DOWNLOAD_REPLY_DEADLINE_MS
+    return this.enqueueTargetedCommand(
+      worktreeId,
+      browserPageId,
+      async (sessionName, target) => {
+        await mkdir(path.dirname(savePath), { recursive: true })
+        const claim = this.browserManager.claimNextDownload(target.webContentsId, savePath)
+        try {
+          await this.execAgentBrowser(sessionName, ['click', selector])
+          if (!(await withTimeout(claim.started, AGENT_DOWNLOAD_START_TIMEOUT_MS, false))) {
+            throw new BrowserError(
+              'browser_download_not_started',
+              `Clicking ${selector} did not start a download within ${AGENT_DOWNLOAD_START_TIMEOUT_MS / 1000}s.`
+            )
+          }
+          const finished = await withTimeout(
+            claim.finished,
+            Math.max(0, replyDeadline - Date.now()),
+            null
+          )
+          if (!finished) {
+            throw new BrowserError(
+              'browser_download_in_progress',
+              `The download is still in progress and will be saved to ${savePath}.`
+            )
+          }
+          if (finished.status !== 'completed') {
+            throw new BrowserError(
+              'browser_download_failed',
+              finished.error ?? `The download was ${finished.status}.`
+            )
+          }
+          return { path: savePath }
+        } finally {
+          claim.release()
+        }
+      },
+      { elements: [selector] }
+    )
   }
 
   async highlight(selector: string, worktreeId?: string, browserPageId?: string): Promise<unknown> {
-    return this.enqueueTargetedCommand(worktreeId, browserPageId, async (sessionName) => {
-      return await this.execAgentBrowser(sessionName, ['highlight', selector])
-    })
+    return this.enqueueTargetedCommand(
+      worktreeId,
+      browserPageId,
+      async (sessionName) => {
+        return await this.execAgentBrowser(sessionName, ['highlight', selector])
+      },
+      { elements: [selector] }
+    )
   }
 
   async back(worktreeId?: string, browserPageId?: string): Promise<BrowserBackResult> {

@@ -210,11 +210,12 @@ describe('AgentBrowserBridge', () => {
     await expect(bridge.click('@e2')).resolves.toEqual({ clicked: '@e2' })
   })
 
-  it('reports a ref whose element is gone as stale', async () => {
-    // agent-browser 0.39.2+ wording when it cannot re-resolve a ref by role and name.
-    failWith(
-      'Stale ref for role=button name=Approve cannot be recovered: several elements now match. Run snapshot again and use a fresh ref.'
-    )
+  // agent-browser 0.39.2+ wording when it cannot re-resolve a ref by role and name.
+  it.each([
+    'Stale ref for role=button name=Approve cannot be recovered: several elements now match. Run snapshot again and use a fresh ref.',
+    'Could not locate element with role=link name=Back to basic'
+  ])('reports a ref whose element is gone as stale: %s', async (message) => {
+    failWith(message)
     await expect(bridge.click('@e2')).rejects.toMatchObject({ code: 'browser_stale_ref' })
   })
 

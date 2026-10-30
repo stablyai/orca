@@ -1,4 +1,6 @@
+import { withLiveCatalogListing } from '../native-chat/agent-model-catalog/agent-model-catalog-entry'
 import { z } from 'zod'
+import { PI_THINKING_LEVELS } from '../../shared/structured-agent-session-effective-effort'
 import { waitForPromiseWithSignal } from '../../shared/abort-signal-reason'
 import type {
   AgentSessionCommandsResult,
@@ -33,12 +35,6 @@ const commandsSchema = z.object({
   )
 })
 
-const THINKING_LEVELS = ['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'] as const
-/** The levels a reasoning model offers unless its thinking map removes one; the rest need a map entry. */
-export const PI_UNMAPPED_THINKING_LEVELS = THINKING_LEVELS.filter(
-  (level) => level !== 'xhigh' && level !== 'max'
-)
-
 export function piModelOptionId(provider: string, modelId: string): string {
   if (!provider || !modelId || provider.includes('/')) {
     throw new Error('Pi model requires an explicit provider and model ID')
@@ -54,19 +50,17 @@ export function parsePiModelOptionId(value: string): { provider: string; modelId
   return { provider: value.slice(0, slash), modelId: value.slice(slash + 1) }
 }
 
-export async function readPiRpcSessionOptions(
-  rpc: PiRpcRequester,
-  beforeStateRead?: () => void
-): Promise<AgentSessionOptionsResult> {
+/** Native inventory projection shared by running chats and the pre-session catalog. */
+export async function readPiRpcModelOptions(
+  rpc: PiRpcRequester
+): Promise<AgentSessionOptionsResult['models']> {
   const models = modelsSchema.parse(await rpc.request('get_available_models')).models
-  beforeStateRead?.()
-  const state = stateSchema.parse(await rpc.request('get_state'))
-  const listed = models.map((model) => {
+  return models.map((model) => {
     const id = piModelOptionId(model.provider, model.id)
     const efforts =
       model.reasoning !== true
         ? []
-        : THINKING_LEVELS.filter((level) => {
+        : PI_THINKING_LEVELS.filter((level) => {
             const mapped = model.thinkingLevelMap?.[level]
             return (
               mapped !== null && ((level !== 'xhigh' && level !== 'max') || mapped !== undefined)
@@ -79,6 +73,15 @@ export async function readPiRpcSessionOptions(
       efforts
     }
   })
+}
+
+export async function readPiRpcSessionOptions(
+  rpc: PiRpcRequester,
+  beforeStateRead?: () => void
+): Promise<AgentSessionOptionsResult> {
+  const listed = await readPiRpcModelOptions(rpc)
+  beforeStateRead?.()
+  const state = stateSchema.parse(await rpc.request('get_state'))
   return {
     models: listed,
     current: piRpcStateOptions(state)
@@ -107,6 +110,7 @@ export type PiRpcOptionProof = {
 export class PiRpcOptionObservations {
   private observed: AgentSessionOptionsResult = { models: [], current: {} }
   private writes = new Map<string, PiRpcOptionWrite>()
+  private consumed = new Map<string, string>()
   constructor(
     private readonly proof: PiRpcOptionProof,
     private readonly current: () => boolean
@@ -118,6 +122,7 @@ export class PiRpcOptionObservations {
 
   prepare(): (options: AgentSessionOptionsResult) => boolean {
     const writes = new Map(this.proof.writes)
+    const consumed = new Map(this.proof.current)
     return (options) => {
       if (!this.current()) {
         return false
@@ -130,6 +135,7 @@ export class PiRpcOptionObservations {
       }
       this.observed = options
       this.writes = writes
+      this.consumed = consumed
       return true
     }
   }
@@ -144,7 +150,7 @@ export class PiRpcOptionObservations {
     }
   }
 
-  read(): AgentSessionOptionsResult {
+  read() {
     const current = { ...this.observed.current }
     const confirmed = new Set(current.confirmed)
     for (const key of ['model', 'effort'] as const) {
@@ -156,7 +162,40 @@ export class PiRpcOptionObservations {
         confirmed.delete(key)
       }
     }
-    return { ...this.observed, current: { ...current, confirmed: [...confirmed] } }
+    const answer = { ...this.observed, current: { ...current, confirmed: [...confirmed] } }
+    const writes = this.writes
+    const consumed = this.consumed
+    return {
+      ...withLiveCatalogListing(answer),
+      projectCurrent: (saved: Readonly<Record<string, string>>) => {
+        const model = saved.model ?? answer.current.model
+        const unchanged =
+          this.current() &&
+          ['model', 'effort'].every(
+            (key) =>
+              !this.proof.writes.get(key)?.pending &&
+              this.proof.writes.get(key) === writes.get(key) &&
+              this.proof.current.get(key) === consumed.get(key)
+          )
+        const sameApplication =
+          unchanged &&
+          model === answer.current.model &&
+          model === consumed.get('model') &&
+          saved.effort === consumed.get('effort')
+        const useActual =
+          unchanged &&
+          model === answer.current.model &&
+          (saved.effort === undefined || sameApplication)
+        return {
+          ...answer.current,
+          // Unapplied intent stays raw in transport so later catalogs can rederive the display.
+          effort: useActual ? answer.current.effort : (saved.effort ?? answer.current.effort),
+          confirmed: answer.current.confirmed.filter(
+            (key) => unchanged && (key !== 'effort' || useActual)
+          )
+        }
+      }
+    }
   }
 }
 
@@ -176,7 +215,7 @@ export async function applyPiRpcSessionOption(
     command = 'set_model'
     params = model
   } else if (key === 'effort') {
-    if (!THINKING_LEVELS.some((level) => level === value)) {
+    if (!PI_THINKING_LEVELS.some((level) => level === value)) {
       throw new Error(`Unsupported Pi thinking level: ${value}`)
     }
     command = 'set_thinking_level'

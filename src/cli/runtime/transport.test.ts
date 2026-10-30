@@ -7,6 +7,7 @@ import type * as Net from 'node:net'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeMetadata } from '../../shared/runtime-bootstrap'
 import { MAX_TIMER_DELAY_MS } from '../../shared/timer-delay'
+import { formatCliError } from '../cli-error'
 import { sendRequest } from './transport'
 
 vi.mock('node:net', async (importOriginal) => {
@@ -70,6 +71,45 @@ describe('runtime transport timeout validation', () => {
 
 // These fixtures create Unix domain sockets rather than Windows named pipes.
 describe.skipIf(process.platform === 'win32')('runtime transport', () => {
+  it('rejects a responding replacement runtime with retry advice in human output', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-transport-'))
+    roots.push(userDataPath)
+    const endpoint = join(userDataPath, 'runtime.sock')
+    const server = createServer((socket) => {
+      sockets.add(socket)
+      socket.once('close', () => sockets.delete(socket))
+      socket.once('data', (data) => {
+        const request: { id: string } = JSON.parse(String(data).trim())
+        socket.end(
+          `${JSON.stringify({
+            id: request.id,
+            ok: true,
+            result: {},
+            _meta: { runtimeId: 'runtime-replacement' }
+          })}\n`
+        )
+      })
+    })
+    servers.add(server)
+    await new Promise<void>((resolve) => server.listen(endpoint, resolve))
+
+    const metadata: RuntimeMetadata = {
+      runtimeId: 'runtime-original',
+      pid: 123,
+      transports: [{ kind: 'unix', endpoint }],
+      authToken: 'token',
+      startedAt: 1
+    }
+    const error: unknown = await sendRequest(metadata, 'status.get', undefined, 1000).catch(
+      (error: unknown) => error
+    )
+
+    expect(error).toMatchObject({ code: 'runtime_unavailable' })
+    expect(formatCliError(error)).toBe(
+      'The Orca runtime changed while the request was in flight.\nNext step: Retry the command.'
+    )
+  })
+
   it('refreshes the per-call timeout when the runtime sends keepalive frames', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-transport-'))
     roots.push(userDataPath)
@@ -151,8 +191,7 @@ describe.skipIf(process.platform === 'win32')('runtime transport', () => {
     await vi.runAllTimersAsync()
     expect(await response).toMatchObject({
       code: 'runtime_unavailable',
-      message:
-        'The Orca runtime closed the connection before responding. Restart Orca and try again.'
+      message: 'Orca closed the connection before responding.'
     })
     expect(vi.getTimerCount()).toBe(0)
   })

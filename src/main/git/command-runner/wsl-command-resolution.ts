@@ -60,11 +60,16 @@ export function setDefaultWslDistroOverride(distro: string | null): void {
   defaultWslDistroOverride = distro
 }
 
+/** The distro a cwd-less gh/glab call falls back to when the host CLI is missing. */
+export function defaultWslCliDistro(): string | null {
+  return defaultWslDistroOverride ?? getDefaultWslDistro()
+}
+
 export function resolveDefaultWslCli(
   command: 'gh' | 'glab',
   args: string[]
 ): ResolvedCommand | null {
-  const distro = defaultWslDistroOverride ?? getDefaultWslDistro()
+  const distro = defaultWslCliDistro()
   return distro ? resolveCommand(command, args, undefined, distro) : null
 }
 

@@ -1,4 +1,9 @@
 import { z } from 'zod'
+import {
+  safePluginDisplayText,
+  UNSAFE_PLUGIN_DISPLAY_TEXT_MESSAGE,
+  unsafePluginDisplayTextPaths
+} from './plugin-display-text'
 import { pluginCapabilitySchema } from '../capabilities/plugin-capabilities'
 import { orcaEngineRangeSchema } from './plugin-manifest-engine-range'
 import {
@@ -43,11 +48,9 @@ const V1 = PLUGIN_SCHEMA_SINCE_V1
 const NEXT = PLUGIN_MANIFEST_V2_SINCE
 
 const authorFields = {
-  name: z
-    .string()
-    .min(1)
-    .max(256)
-    .meta(pluginFieldDoc('Author or organization name.', V1, ['Acme'])),
+  name: safePluginDisplayText(z.string().min(1).max(256)).meta(
+    pluginFieldDoc('Author or organization name.', V1, ['Acme'])
+  ),
   url: z
     .string()
     .max(2048)
@@ -86,18 +89,14 @@ const pluginManifestFields = {
       ['acme']
     )
   ),
-  name: z
-    .string()
-    .min(1)
-    .max(256)
-    .meta(pluginFieldDoc('Display name.', V1, ['Gleam'])),
+  name: safePluginDisplayText(z.string().min(1).max(256)).meta(
+    pluginFieldDoc('Display name.', V1, ['Gleam'])
+  ),
   version: z
     .string()
     .regex(SEMVER_RE, 'must be semver')
     .meta(pluginFieldDoc('Plugin version, semver.', V1, ['1.2.0'])),
-  description: z
-    .string()
-    .max(4096)
+  description: safePluginDisplayText(z.string().max(4096))
     .optional()
     .meta(pluginFieldDoc('One or two sentences shown in the plugin list.', V1)),
   author: z.object(authorFields).optional().meta(authorDoc),
@@ -250,7 +249,15 @@ function parseWith(schema: typeof pluginManifestSchema, raw: unknown): PluginMan
 
 /** Strict authoring check (`validate:plugin`, catalog CI, dev folders). */
 export function parsePluginManifest(raw: unknown): PluginManifestParseResult {
-  return parseWith(pluginManifestSchema, raw)
+  const parsed = parseWith(pluginManifestSchema, raw)
+  // Why only here: hosts strip these characters so installed plugins keep loading.
+  const unsafe = parsed.ok ? unsafePluginDisplayTextPaths(raw) : []
+  return unsafe.length > 0
+    ? {
+        ok: false,
+        error: unsafe.map((path) => `${path}: ${UNSAFE_PLUGIN_DISPLAY_TEXT_MESSAGE}`).join('; ')
+      }
+    : parsed
 }
 
 /** Runtime read for install, discovery and update. Callers must still check engines.orca

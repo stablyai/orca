@@ -160,7 +160,7 @@ function scanPendingAsks(messages: readonly NativeChatMessage[]): {
   // Two counters track pending’s FIFO depth without retaining a queue entry per call.
   let outstanding = 0
   let pendingDepth = -1
-  // Each async question stays open past its immediate result until the agent receives a message.
+  // Async questions await the person's message, not an orchestration notice from another agent.
   let asyncQuestions: AskQuestion[] = []
   const asyncCallIds = new Set<string>()
   for (const message of messages) {
@@ -171,7 +171,7 @@ function scanPendingAsks(messages: readonly NativeChatMessage[]): {
       outstanding = 0
       pendingDepth = -1
       pending = null
-      if (interrupted || reachedAgent(message)) {
+      if (interrupted || (reachedAgent(message) && message.from?.kind !== 'agent')) {
         asyncQuestions = []
         asyncCallIds.clear()
       }

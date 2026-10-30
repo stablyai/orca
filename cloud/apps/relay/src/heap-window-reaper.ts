@@ -80,6 +80,6 @@ async function heapPages(database: RelayDatabase, table: string): Promise<number
   return Number(row?.pages ?? 0)
 }
 
-function changes(rows: SqlRow[]): number {
+export function changes(rows: SqlRow[]): number {
   return Number(rows[0]?.changes ?? 0)
 }

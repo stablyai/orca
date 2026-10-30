@@ -55,9 +55,6 @@ export const COMPUTER_METHODS = [
     handler: async (params) => {
       const { openComputerUsePermissions } =
         await import('../../../computer/macos-computer-use-permissions')
-      const { computerUsePermissionStatusGate } =
-        await import('../../../computer/macos-computer-use-permission-status-gate')
-      computerUsePermissionStatusGate.invalidate()
       return openComputerUsePermissions(params.id)
     }
   }),

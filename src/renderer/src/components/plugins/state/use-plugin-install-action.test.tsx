@@ -60,12 +60,12 @@ const codePreview: PluginMarketplaceHostInstallPreview = {
   })
 }
 
-function setup() {
+function setup(isFromInstallLink?: (pluginKey: string) => boolean) {
   const onInstalled = vi.fn().mockResolvedValue(undefined)
   const fetchPreview = vi.fn().mockResolvedValue({ ok: true, preview })
   const hook: { current: ReturnType<typeof usePluginInstallAction> | null } = { current: null }
   function Probe(): null {
-    hook.current = usePluginInstallAction({ fetchPreview, onInstalled })
+    hook.current = usePluginInstallAction({ fetchPreview, onInstalled, isFromInstallLink })
     return null
   }
   act(() => createRoot(document.createElement('div')).render(<Probe />))
@@ -99,6 +99,19 @@ beforeEach(() => {
 })
 
 describe('usePluginInstallAction', () => {
+  it('labels an install from a page an install link opened, and only that one', async () => {
+    const { hook } = setup((pluginKey) => pluginKey === listing.pluginKey)
+    await act(async () => hook.current?.install(listing))
+    expect(window.api.plugins.installMarketplacePlugin).toHaveBeenCalledWith(
+      expect.objectContaining({ fromInstallLink: true })
+    )
+    const plain = setup()
+    await act(async () => plain.hook.current?.install(listing))
+    expect(window.api.plugins.installMarketplacePlugin).toHaveBeenLastCalledWith(
+      expect.not.objectContaining({ fromInstallLink: true })
+    )
+  })
+
   it('asks main to turn on a content-only release and leaves nothing pending after', async () => {
     const { hook, onInstalled } = setup()
     await act(async () => hook.current?.install(listing))

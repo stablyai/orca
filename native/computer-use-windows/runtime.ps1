@@ -77,7 +77,7 @@ public static class OrcaDesktopWin32 {
     [DllImport("user32.dll")]
     public static extern bool ScreenToClient(IntPtr hwnd, ref POINT point);
 
-    [DllImport("user32.dll")]
+    [DllImport("user32.dll", EntryPoint = "PostMessageW")]
     public static extern bool PostMessage(IntPtr hwnd, uint message, IntPtr wParam, IntPtr lParam);
 
     [DllImport("user32.dll")]

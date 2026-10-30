@@ -138,6 +138,10 @@ export class ExternalChromiumBrowserSession {
   }
 
   async selectPage(agentPageId: string): Promise<void> {
+    // Selecting any tab, even the active one, discards the refs of the last snapshot.
+    if ((await this.readTabs()).some((tab) => tab.tabId === agentPageId && tab.active)) {
+      return
+    }
     await this.run(['tab', agentPageId])
   }
 

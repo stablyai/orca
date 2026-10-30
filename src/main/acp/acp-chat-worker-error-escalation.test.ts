@@ -175,6 +175,7 @@ it.each([100, 1000])(
         throw new Error('Host did not create its ACP lane')
       }
       const samples: { at: number; visits: number }[] = []
+      const firstCheck = Promise.withResolvers<void>()
       let active: { at: number; visits: number } | null = null
       let otherReads = 0
       let clock = 0
@@ -204,6 +205,7 @@ it.each([100, 1000])(
         } finally {
           active = null
           samples.push(sample)
+          firstCheck.resolve()
         }
       })
       vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
@@ -230,6 +232,8 @@ it.each([100, 1000])(
         await r.rig.settle()
         expect(r.failure).toHaveBeenCalledTimes(1)
         expect(r.mail()).toHaveLength(0)
+        // The escalation's first check follows real async work; await it instead of a fixed number of turns.
+        await firstCheck.promise
         expect(samples).toHaveLength(1)
         otherReads = 0
         for (clock = 50; clock <= 2000; clock += 50) {
@@ -242,6 +246,7 @@ it.each([100, 1000])(
         expect(samples.map(({ visits }) => visits)).toEqual(Array(41).fill(n + 1))
         expect(samples.reduce((sum, sample) => sum + sample.visits, 0)).toBe(41 * (n + 1))
         expect(otherReads).toBe(112) // Eight existing backpressure retries inspect only the held first entry.
+        await Promise.all(deliveries)
         expect(r.mail()).toHaveLength(1)
         expect(r.mail()[0]?.body).toContain('Grok ended this turn with an error.')
         expect(r.mail()[0]?.body).not.toContain('queued A detail')

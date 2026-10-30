@@ -189,6 +189,8 @@ export type PluginsApi = {
       enableIfData?: true
       /** The preview's consentFingerprint; with it, main approves only those exact bytes. */
       expectedFingerprint?: string
+      /** The page was opened from an install link; only labels telemetry. */
+      fromInstallLink?: true
     }
   ) => Promise<PluginHostInstallResult>
   previewMarketplaceUpdate: (args: {

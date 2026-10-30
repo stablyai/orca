@@ -22,6 +22,11 @@ export abstract class BrowserManagerVisibility extends BrowserManagerState {
     return this.agentActivity.beginCommand(browserPageId)
   }
 
+  /** The page shows "An agent is using this page": a command is queued or one settled within the idle window. */
+  isAgentUsingPage(browserPageId: string): boolean {
+    return this.agentActivity.isActive(browserPageId)
+  }
+
   // Show the agent's pointer landing before the input it precedes reaches the page.
   showAgentPointer(guest: Electron.WebContents, input: AgentPointerInput): Promise<void> {
     return this.agentActivity.showPointer(guest, input)

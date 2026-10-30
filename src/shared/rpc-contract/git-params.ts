@@ -2,6 +2,7 @@ import { normalizeSourceControlAiActionDefaults } from '../source-control-ai-act
 import { z } from 'zod'
 import { OptionalGitAdmissionTier } from './git-admission-tier-params'
 import { OptionalTuiAgent } from './worktree-params'
+import { CONFLICT_RESOLUTIONS } from '../source-control-entry-actions'
 
 export const WorktreeSelector = z.object({
   worktree: z
@@ -44,6 +45,10 @@ export const GitFilePath = WorktreeSelector.extend({
     .unknown()
     .transform((v) => (typeof v === 'string' ? v : ''))
     .pipe(z.string().min(1, 'Missing file path'))
+})
+
+export const GitResolveConflict = GitFilePath.extend({
+  resolution: z.enum(CONFLICT_RESOLUTIONS)
 })
 
 export const GitDiff = GitFilePath.extend({

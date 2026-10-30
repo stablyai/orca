@@ -4,7 +4,15 @@ import {
   type NativeChatBlock,
   type NativeChatMessage
 } from '../../native-chat-types'
-import { extractPendingAsk, resolveNativeChatAsk } from './native-chat-ask'
+import {
+  readAgentMessageSource,
+  type AgentMessageSource
+} from '../../agent-session/agent-session-message-source'
+import {
+  extractPendingAsk,
+  extractPendingMessageReplyAsk,
+  resolveNativeChatAsk
+} from './native-chat-ask'
 
 function message(id: string, blocks: NativeChatBlock[]): NativeChatMessage {
   return { id, role: 'assistant', blocks, timestamp: 1, source: 'transcript' }
@@ -133,7 +141,7 @@ describe('async questions', () => {
     type: 'tool-call',
     name: 'request_user_input_async',
     callId,
-    input: JSON.stringify({ questions: [{ title }] })
+    input: JSON.stringify({ questions: [{ title, options: ['Yes', 'No'] }] })
   })
   const userRow = (id: string, flags: Partial<NativeChatMessage> = {}): NativeChatMessage => ({
     ...message(id, [{ type: 'text', text: 'hi' }]),
@@ -151,11 +159,51 @@ describe('async questions', () => {
     ])
   })
 
-  it('stays open until a user message reaches the agent', () => {
+  it.each(['queued', 'unsent', 'stoppedBeforeStart', 'awaitsRetry', 'sentWhileStopping'] as const)(
+    'stays open while a human row is marked %s',
+    (flag) => {
+      const asked = message('a', [asyncCall('call-a', 'A?'), result()])
+      expect(titles([asked, userRow('waiting', { [flag]: true })])).toEqual(['A?'])
+      expect(extractPendingAsk([asked, userRow('sent')])).toBeNull()
+    }
+  )
+
+  it('keeps async controls across agent notices and replay until human input or interruption', () => {
     const asked = message('a', [asyncCall('call-a', 'A?'), result()])
-    expect(titles([asked, userRow('q', { queued: true }), userRow('u', { unsent: true })])).toEqual(
-      ['A?']
-    )
-    expect(extractPendingAsk([asked, userRow('sent')])).toBeNull()
+    const from: AgentMessageSource = {
+      kind: 'agent',
+      senders: [
+        {
+          party: { address: 'term_a', terminalHandle: 'term_a', orcaSessionId: null },
+          name: 'Coder'
+        }
+      ],
+      orchestration: {
+        message: 'mail-notice',
+        mailbox: 'term_b',
+        dispatchId: null,
+        messages: [{ messageId: 'mail-1', runId: 'run-1', from: 'term_a' }]
+      }
+    }
+    for (const source of [
+      from,
+      { ...from, orchestration: null },
+      { ...from, senders: [], orchestration: { message: 'future-notice' } }
+    ]) {
+      const notice = userRow('notice', {
+        from: readAgentMessageSource(source),
+        blocks: [{ type: 'text', text: 'You have 1 orchestration message.' }]
+      })
+      expect(notice.from?.kind).toBe('agent')
+      const history = [asked, notice]
+      for (const extract of [extractPendingAsk, extractPendingMessageReplyAsk]) {
+        const expected = extract([asked])
+        expect(expected?.questions[0]?.options).toEqual([{ label: 'Yes' }, { label: 'No' }])
+        expect(extract(history)).toEqual(expected)
+        expect(extract([...history])).toEqual(expected)
+        expect(extract([...history, userRow('human-answer')])).toBeNull()
+        expect(extract([...history, interrupted('stop')])).toBeNull()
+      }
+    }
   })
 })

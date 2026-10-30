@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { PushGatewayClient } from './push-gateway-client'
-import { mapPushAgentState, PushDispatcher } from './push-dispatcher'
+import { PushDispatcher } from './push-dispatcher'
+import { mapPushAgentState } from '../../../shared/mobile-push-alert'
 import {
   createHarness,
   flush,

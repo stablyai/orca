@@ -35,6 +35,12 @@ except (ImportError, ValueError):
     GdkPixbuf = None
 from gi.repository import Atspi
 
+try:
+    gi.require_version("GdkX11", "3.0")
+    from gi.repository import GdkX11
+except (ImportError, ValueError):
+    GdkX11 = None
+
 MAX_NODES = 1200
 MAX_DEPTH = 64
 TEXT_LIMIT = 500
@@ -182,19 +188,40 @@ def choose_window(app, window_id=None, window_index=None):
 
 
 def restore_window(app, window=None):
-    target = window if window is not None else app
+    target = window if window is not None else choose_window(app)[1]
+    if has_state(target, Atspi.StateType.ACTIVE):
+        return
     component = attempt(target.get_component_iface)
-    if component is not None and attempt(lambda: Atspi.Component.grab_focus(component), False):
+    if component is not None:
+        attempt(lambda: Atspi.Component.grab_focus(component), False)
+    if wait_window_focused(target):
+        return
+    if os.environ.get("XDG_SESSION_TYPE", "").lower() == "wayland":
+        return
+    windows = windows_for(app)
+    if len(windows) != 1 or windows[0][1] != target:
         return
     pid = pid_of(app)
-    if not pid or not shutil.which("xdotool"):
+    xdotool = shutil.which("xdotool")
+    if not pid or not xdotool:
         return
-    subprocess.run(
-        ["xdotool", "search", "--pid", str(pid), "windowactivate", "--sync"],
-        check=False,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-    )
+    try:
+        result = subprocess.run([xdotool, "search", "--pid", str(pid)],
+                                check=False, capture_output=True, text=True, timeout=2)
+        ids = result.stdout.split()
+        if result.returncode != 0 or any(not value.isdigit() or int(value) <= 0 for value in ids):
+            return
+        managed_ids = attempt(lambda: {str(GdkX11.X11Window.get_xid(item))
+                                      for item in Gdk.Screen.get_default().get_window_stack()})
+        if managed_ids is None or any(not value.isdigit() or int(value) <= 0 for value in managed_ids):
+            return
+        ids = [value for value in ids if value in managed_ids]
+        if len(ids) != 1:
+            return
+        subprocess.run([xdotool, "windowactivate", "--sync", ids[0]], check=False,
+                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=2)
+    except (OSError, subprocess.TimeoutExpired):
+        return
 
 
 def wait_window_focused(window):

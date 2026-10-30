@@ -37,6 +37,8 @@ orca computer click --app com.spotify.client --element-index 42 --json
 
 Element indexes are scoped to the latest `get-app-state` result and may be **sparse**. In `--json` output, read the tree from `result.snapshot.treeText`. Do not invent indexes from `elementCount`. Refresh state after navigation, focus changes, scrolling, or any app re-render before reusing an index.
 
+Action results return only the accessibility-tree lines that changed since the last state for that window (`~` changed, `+` added, `-` removed), marked by `snapshot.treeDiff`; pass `--full-tree` to get the whole tree. To find one control in a large window, `get-app-state --query <text>` prints only matching elements and their ancestors, and `--max-elements <n>` caps the output.
+
 ## Multi-window apps
 
 ```bash

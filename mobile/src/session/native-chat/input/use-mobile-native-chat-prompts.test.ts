@@ -145,27 +145,69 @@ describe('useMobileNativeChatPrompts in a structured chat', () => {
         timestamp: null,
         source: 'transcript'
       }
+      const notice: NativeChatMessage = {
+        id: 'mail',
+        role: 'user',
+        blocks: [{ type: 'text', text: 'You have 1 orchestration message.' }],
+        timestamp: 2,
+        source: 'transcript',
+        from: {
+          kind: 'agent',
+          senders: [
+            {
+              party: { address: 'term_a', terminalHandle: 'term_a', orcaSessionId: null },
+              name: 'Coder'
+            }
+          ],
+          orchestration: {
+            message: 'mail-notice',
+            mailbox: 'term_b',
+            dispatchId: null,
+            messages: [{ messageId: 'mail-1', runId: 'run-1', from: 'term_a' }]
+          }
+        }
+      }
+      let messages = [message]
       let captured: ReturnType<typeof useMobileNativeChatPrompts> | undefined
       function Probe(): null {
         captured = useMobileNativeChatPrompts({
           enabled: true,
           structured: { permission: null, question: null, sendWithOutcome },
           status: null,
-          messages: [message],
+          messages,
           transcriptLoading: false
         })
         return null
       }
+      let renderer: ReactTestRenderer
       TestRenderer.act(() => {
-        renderers.push(TestRenderer.create(createElement(Probe)))
+        renderer = TestRenderer.create(createElement(Probe))
+        renderers.push(renderer)
       })
+      const initialAsk = captured?.ask
+      expect(initialAsk?.questions[0]?.question).toBe('Which color?')
+      messages = [message, notice]
+      TestRenderer.act(() => renderer.update(createElement(Probe)))
 
       const ask = captured?.ask
-      expect(ask?.questions[0]?.question).toBe('Which color?')
+      expect(ask).toEqual(initialAsk)
+      expect(ask?.questions[0]?.options.map((option) => option.label)).toEqual(['Red', 'Blue'])
       await expect(ask && captured?.structuredAnswer?.(ask, [{ indices: [1] }])).resolves.toBe(
         accepted
       )
       expect(sendWithOutcome).toHaveBeenCalledWith('> Which color?\n\nBlue')
+      messages = [
+        ...messages,
+        {
+          id: 'human-answer',
+          role: 'user',
+          blocks: [{ type: 'text', text: 'Blue' }],
+          timestamp: 3,
+          source: 'transcript'
+        }
+      ]
+      TestRenderer.act(() => renderer.update(createElement(Probe)))
+      expect(captured?.ask).toBeNull()
     }
   )
 })

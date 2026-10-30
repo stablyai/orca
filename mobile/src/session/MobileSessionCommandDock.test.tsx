@@ -33,8 +33,33 @@ vi.mock('react-native', async () => {
     StyleSheet: { create: (styles: unknown) => styles, hairlineWidth: 1 }
   }
 })
-vi.mock('lucide-react-native', () => ({ ArrowUp: () => null }))
-vi.mock('./MobileTerminalInputActions', () => ({ MobileTerminalInputActions: () => null }))
+vi.mock('./MobileTerminalInputActions', () => ({
+  MobileTerminalInputActions: () => null,
+  MobileTerminalAttachButton: () => null,
+  MobileTerminalDictationButton: () => null
+}))
+vi.mock('../components/composer-input/MessageBox', async () => {
+  const React = await import('react')
+  const { TextInput } = await import('react-native')
+  const Input: React.ElementType = TextInput
+  return {
+    MessageBox: ({
+      inputRef,
+      placeholder,
+      tabIndex
+    }: {
+      inputRef: React.Ref<unknown>
+      placeholder?: string
+      tabIndex?: number
+    }) => React.createElement(Input, { ref: inputRef, placeholder, tabIndex })
+  }
+})
+vi.mock('../components/composer-input/ComposerSendButton', () => ({
+  ComposerSendButton: () => null
+}))
+vi.mock('./native-chat/input/MobileNativeChatStopButton', () => ({
+  MobileNativeChatStopButton: () => null
+}))
 vi.mock('./MobileTerminalLiveInputStatus', () => ({ MobileTerminalLiveInputStatus: () => null }))
 vi.mock('./MobileTerminalCommandDictationPreview', () => ({
   MobileTerminalCommandDictationPreview: () => null
@@ -81,10 +106,11 @@ function Harness({ handle, liveInputEnabled }: Selection) {
     dictation: { meter: null },
     commandFieldAnchorRef: { current: null },
     activeHandle: handle,
+    activeSessionTab: null,
+    dockKeys: { interceptTypedCharacter: () => false },
     keyboardLift: 0,
-    bindCommandField: (field: TextInput | null) => {
-      commandInputRef.current = field
-    },
+    liveInputRef,
+    commandInputRef,
     bindLiveInputField: (field: TextInput | null) => {
       liveInputRef.current = field
     }
@@ -116,7 +142,7 @@ it.each(['terminal selection', 'preference hydration'] as const)(
         )
       )
     render(false)
-    const command = container.querySelector('input[placeholder="Type a command…"]')
+    const command = container.querySelector('input[placeholder="Write a command, then send"]')
     const live = container.querySelector('input[aria-label="Live terminal input"]')
     if (!(command instanceof HTMLInputElement) || !(live instanceof HTMLInputElement)) {
       throw new Error('Both dock fields must be mounted')

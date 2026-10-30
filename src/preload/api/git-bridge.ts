@@ -1,6 +1,7 @@
 import { ipcRenderer } from 'electron'
 import type { GitForkSyncExpectedUpstream, GitForkSyncResult } from '../../shared/git-fork-sync'
 import type { GitStagingArea, GitUpstreamStatus } from '../../shared/git-status-types'
+import type { ConflictResolution } from '../../shared/source-control-entry-actions'
 import type { GitPushTarget } from '../../shared/worktree/types'
 import type { GitStageWorktreeScope } from '../../shared/git-stage-worktree-scope'
 import type { GitHistoryOptions, GitHistoryResult } from '../../shared/git-history'
@@ -132,6 +133,11 @@ export const gitApi = {
     message: string
     connectionId?: string
   }): Promise<{ success: boolean; error?: string }> => ipcRenderer.invoke('git:commit', args),
+  completeMerge: (args: {
+    worktreePath: string
+    connectionId?: string
+  }): Promise<{ success: boolean; error?: string }> =>
+    ipcRenderer.invoke('git:completeMerge', args),
   generateCommitMessage: (args: {
     worktreePath: string
     worktreeId?: string
@@ -171,6 +177,12 @@ export const gitApi = {
   }): Promise<void> => ipcRenderer.invoke('git:cancelGeneratePullRequestFields', args),
   stage: (args: { worktreePath: string; filePath: string; connectionId?: string }): Promise<void> =>
     ipcRenderer.invoke('git:stage', args),
+  resolveConflict: (args: {
+    worktreePath: string
+    filePath: string
+    resolution: ConflictResolution
+    connectionId?: string
+  }): Promise<void> => ipcRenderer.invoke('git:resolveConflict', args),
   bulkStage: (args: {
     worktreePath: string
     filePaths: string[]

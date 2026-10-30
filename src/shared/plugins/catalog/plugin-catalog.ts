@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { safePluginDisplayText } from '../manifest/plugin-display-text'
 import { pluginCatalogReleaseSchema, type PluginCatalogRelease } from './plugin-catalog-release'
 import { satisfiesOrcaEngineRange } from '../manifest/plugin-manifest-engine-range'
 import {
@@ -39,10 +40,7 @@ export const pluginCatalogEntrySchema = z
   .object({
     id: marketplaceEntryFields.id,
     source: catalogV2GitSourceSchema,
-    description: z
-      .string()
-      .min(1)
-      .max(4_096)
+    description: safePluginDisplayText(z.string().min(1).max(4_096))
       .optional()
       .catch(undefined)
       .meta(pluginFieldDoc('Listing text shown in the catalog.', NEXT)),

@@ -12,7 +12,7 @@ import {
   getTaskPageJiraStatusOrderScopeKey,
   getTaskPageJiraStatusOrderRuntimeScopeKey,
   loadTaskPageJiraProjectStatusOrder
-} from '@/components/task-page-jira-status-order'
+} from '@/components/task-page/jira/task-page-jira-status-order'
 import { createTaskPageJiraLoadFailureState } from '@/components/task-page/jira/task-page-jira-load-state'
 import { searchTaskPageJiraIssues } from '@/components/task-page/jira/task-page-jira-search'
 import { JIRA_ITEM_LIMIT } from './task-page/task-page-source-context'

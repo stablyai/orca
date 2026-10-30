@@ -74,6 +74,11 @@ describe('CLI remote WebSocket transport', () => {
     })
     const client = new RuntimeClient('/tmp/unused', 5_000, pairingUrl)
     const response = await client.call<{ runtimeId: string }>('status.get')
+    expect(await client.getOfflineRuntimeAdmission()).toEqual({
+      reachable: true,
+      legacyPidRunning: false,
+      pid: null
+    })
 
     expect(response.ok).toBe(true)
     expect(response.result.runtimeId).toBe('runtime-ws-1')

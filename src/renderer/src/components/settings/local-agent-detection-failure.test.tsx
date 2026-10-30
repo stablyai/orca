@@ -2,6 +2,7 @@
 import { act, cleanup, fireEvent, render, renderHook, within } from '@testing-library/react'
 import { makeDetectedResult } from '@/store/slices/worktrees-detected-listing-fixtures'
 import type { AppState } from '@/store/types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { type ComponentProps, Profiler, useState } from 'react'
 import * as runtime from '../../../../shared/project-execution-runtime'
 import { useLocalAgentPreflightContext } from '@/hooks/useLocalAgentPreflightContext'
@@ -15,7 +16,6 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { FLOATING_TERMINAL_WORKTREE_ID, getDefaultSettings } from '../../../../shared/constants'
 import { projectAgentLaunchSettings } from '../../../../shared/agent-launch-settings'
 import { useAppStore } from '@/store'
-import { NativeChatProvidersSetting } from './NativeChatProvidersSetting'
 import { AgentLaunchSettingsCatalog } from './AgentLaunchSettingsCatalog'
 import { OrchestrationSkillAgentCoverage } from './OrchestrationSkillAgentCoverage'
 import { useSourceControlActionAgent } from './use-source-control-action-agent'
@@ -24,6 +24,10 @@ import { getDefaultSourceControlAiSettings } from '../../../../shared/source-con
 import { makeWorktree, TEST_REPO } from '@/store/slices/worktrees-slice-test-fixtures'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { AgentStep } from '../onboarding/AgentStep'
+import {
+  exerciseNativeInventoryRetryWhileProviderSavePending,
+  exerciseQueuedNativeProviderSave
+} from './native-agent-provider-save.test-fixture'
 
 vi.mock('@/lib/host-chat-program-acquisition', () => ({ useChatProgramFacts: () => {} }))
 vi.mock('@/runtime/use-managed-runtime-install', () => ({
@@ -62,68 +66,276 @@ afterEach(() => {
 })
 
 it('shows a native failure and retries the native host even with a global WSL default', async () => {
+  let settings: GlobalSettings = {
+    ...getDefaultSettings('/tmp'),
+    experimentalNativeChat: true,
+    localWindowsRuntimeDefault: { kind: 'wsl', distro: 'Ubuntu' }
+  }
+  const owned: Promise<unknown>[] = []
+  const save = Promise.withResolvers<void>()
+  const reply =
+    Promise.withResolvers<Awaited<ReturnType<Window['api']['preflight']['refreshAgents']>>>()
+  const originalEnsure = useAppStore.getState().ensureAllDetectedAgents
+  const originalRefresh = useAppStore.getState().refreshDetectedAgents
+  const ensureAll: AppState['ensureAllDetectedAgents'] = (...args) => {
+    const pending = originalEnsure(...args)
+    owned.push(pending)
+    return pending
+  }
+  const refreshNative: AppState['refreshDetectedAgents'] = (...args) => {
+    const pending = originalRefresh(...args)
+    owned.push(pending)
+    return pending
+  }
+  const update = vi.fn((updates: Partial<GlobalSettings>) => {
+    const pending = save.promise.then(() => {
+      settings = { ...settings, ...updates }
+      useAppStore.setState({ settings })
+    })
+    owned.push(pending)
+    return pending
+  })
   useAppStore.setState({
-    settings: {
-      ...getDefaultSettings('/tmp'),
-      localWindowsRuntimeDefault: { kind: 'wsl', distro: 'Ubuntu' }
+    settings,
+    ensureAllDetectedAgents: ensureAll,
+    refreshDetectedAgents: refreshNative
+  })
+  const native = useAppStore.getState().ensureNativeDetectedAgents()
+  owned.push(native)
+  let view: ReturnType<typeof render> | undefined
+  let scheduled = 0
+  try {
+    await native
+    expect(useAppStore.getState().readLocalAgentInventory(FLOATING_TERMINAL_WORKTREE_ID)).toEqual({
+      ids: null,
+      state: 'failed'
+    })
+    view = render(
+      <AgentLaunchSettingsCatalog
+        settings={projectAgentLaunchSettings(settings)}
+        mutate={vi.fn(async () => {})}
+        detectionTarget={{ kind: 'local' }}
+        hostName={null}
+        renderPermissions={() => null}
+        local={{ settings, updateSettings: update, saveEnvironment: vi.fn(async () => {}) }}
+      />,
+      { wrapper: TooltipProvider }
+    )
+    await act(async () => {
+      await Promise.allSettled(owned)
+    })
+    const targetKey = 'local-project:wsl:Ubuntu\u0000all-agents'
+    const targetBefore = useAppStore.getState().readLocalAgentInventoryByKey(targetKey)
+    expect(targetBefore).toEqual({ ids: null, state: 'failed' })
+    expect(
+      view.queryAllByText(/Couldn't check which agents are installed on this computer/)
+    ).toHaveLength(2)
+    expect(view.queryAllByRole('button', { name: 'Retry' })).toHaveLength(2)
+    expect(
+      view.getByText("Couldn't check which agents are installed on this computer. Try again.")
+    ).toBeTruthy()
+    expect(detectAgents.mock.calls).toEqual([
+      [{ enabledOnly: true }],
+      [
+        {
+          wslDistro: 'Ubuntu',
+          projectRuntime: {
+            status: 'resolved',
+            runtime: {
+              kind: 'wsl',
+              hostPlatform: 'wsl',
+              projectId: 'local-project',
+              distro: 'Ubuntu',
+              reason: 'global-default',
+              cacheKey: 'local-project:wsl:Ubuntu'
+            }
+          }
+        }
+      ]
+    ])
+    expect(view.queryByText('Not installed')).toBeNull()
+    const claude = view.getByRole('radiogroup', { name: 'Open Claude as' })
+    const codex = view.getByRole('radiogroup', { name: 'Open Codex as' })
+    const grok = view.getByRole('radiogroup', { name: 'Open Grok as' })
+    expect(
+      within(claude).getByRole('radio', { name: 'Chat' }).getAttribute('aria-disabled')
+    ).not.toBe('true')
+    expect(within(codex).getByRole('radio', { name: 'Chat' }).getAttribute('aria-checked')).toBe(
+      'true'
+    )
+    expect(
+      within(codex).getByRole('radio', { name: 'Chat' }).getAttribute('aria-disabled')
+    ).not.toBe('true')
+    expect(within(grok).getByRole('radio', { name: 'Chat' }).getAttribute('aria-checked')).toBe(
+      'true'
+    )
+    expect(update).not.toHaveBeenCalled()
+    expect(settings.nativeChatProviders).toBeUndefined()
+    scheduled++
+    fireEvent.click(within(codex).getByRole('radio', { name: 'CLI' }))
+    await vi.waitFor(() => expect(update).toHaveBeenCalledOnce())
+    expect(settings.nativeChatProviders).toBeUndefined()
+    refreshAgents.mockImplementationOnce(() => reply.promise)
+    const notice = view.getByText(/Couldn't check which agents are installed on this computer.*·/)
+    await act(async () => {
+      fireEvent.click(within(notice).getByRole('button', { name: 'Retry' }))
+    })
+    expect(useAppStore.getState().isRefreshingLocalAgentsByContext.host).toBe(true)
+    expect(
+      view.queryByText(/Couldn't check which agents are installed on this computer.*·/)
+    ).toBeNull()
+    expect(useAppStore.getState().readLocalAgentInventoryByKey(targetKey)).toEqual(targetBefore)
+    expect(
+      view.queryAllByText(/Couldn't check which agents are installed on this computer/)
+    ).toHaveLength(1)
+    expect(view.queryAllByRole('button', { name: 'Retry' })).toHaveLength(1)
+    expect(
+      view.getByText("Couldn't check which agents are installed on this computer. Try again.")
+    ).toBeTruthy()
+    await act(async () => {
+      reply.reject(new Error('retry still unavailable'))
+      await Promise.allSettled(owned.filter((pending) => pending !== update.mock.results[0].value))
+    })
+    const retryNotice = view.getByText(
+      /Couldn't check which agents are installed on this computer.*·/
+    )
+    expect(
+      view.queryAllByText(/Couldn't check which agents are installed on this computer/)
+    ).toHaveLength(2)
+    expect(view.queryAllByRole('button', { name: 'Retry' })).toHaveLength(2)
+    expect(
+      view.getByText("Couldn't check which agents are installed on this computer. Try again.")
+    ).toBeTruthy()
+    expect(settings.nativeChatProviders).toBeUndefined()
+    expect(detectAgents).toHaveBeenCalledTimes(2)
+    await act(async () => {
+      fireEvent.click(within(retryNotice).getByRole('button', { name: 'Retry' }))
+      await Promise.allSettled(owned.filter((pending) => pending !== update.mock.results[0].value))
+    })
+    expect(refreshAgents.mock.calls).toEqual([[{ enabledOnly: true }], [{ enabledOnly: true }]])
+    expect(useAppStore.getState().readLocalAgentInventory(FLOATING_TERMINAL_WORKTREE_ID)).toEqual({
+      ids: ['claude'],
+      state: 'successful'
+    })
+    expect(
+      view.queryByText(/Couldn't check which agents are installed on this computer.*·/)
+    ).toBeNull()
+    expect(useAppStore.getState().readLocalAgentInventoryByKey(targetKey)).toEqual(targetBefore)
+    expect(
+      view.queryAllByText(/Couldn't check which agents are installed on this computer/)
+    ).toHaveLength(1)
+    expect(view.queryAllByRole('button', { name: 'Retry' })).toHaveLength(1)
+    expect(
+      view.getByText("Couldn't check which agents are installed on this computer. Try again.")
+    ).toBeTruthy()
+    expect(settings.nativeChatProviders).toBeUndefined()
+    await act(async () => {
+      save.resolve()
+      await Promise.allSettled(owned)
+    })
+    expect(settings.nativeChatProviders).toEqual({ codex: false })
+    expect(useAppStore.getState().settings?.nativeChatProviders).toEqual({ codex: false })
+  } finally {
+    view?.unmount()
+    save.resolve()
+    reply.reject(new Error('native reply released during teardown'))
+    try {
+      await act(async () => {
+        await vi.waitFor(() => expect(update).toHaveBeenCalledTimes(scheduled))
+        await Promise.allSettled(owned)
+      })
+    } finally {
+      useAppStore.getState().clearLocalDetectedAgents()
+      useAppStore.setState({
+        ensureAllDetectedAgents: originalEnsure,
+        refreshDetectedAgents: originalRefresh
+      })
     }
-  })
-  await useAppStore.getState().ensureNativeDetectedAgents()
-  const view = render(
-    <NativeChatProvidersSetting settings={getDefaultSettings('/tmp')} updateSettings={vi.fn()} />
-  )
-  expect(view.queryByText('Not installed')).toBeNull()
-  expect(
-    view.getAllByText(/Couldn't check which agents are installed on this computer/).length
-  ).toBeGreaterThan(0)
-  expect(view.getByRole('switch', { name: 'Open Claude as a chat' }).hasAttribute('disabled')).toBe(
-    false
-  )
-  expect(
-    view.getByRole('switch', { name: 'Open Codex as a chat' }).getAttribute('aria-checked')
-  ).toBe('true')
-  expect(view.getByRole('switch', { name: 'Open Codex as a chat' }).hasAttribute('disabled')).toBe(
-    false
-  )
-  expect(view.getByRole('switch', { name: 'Open Grok as a chat' }).hasAttribute('disabled')).toBe(
-    true
-  )
-  refreshAgents.mockRejectedValueOnce(new Error('retry still unavailable'))
-  await act(async () => {
-    fireEvent.click(view.getAllByRole('button', { name: 'Retry' })[0])
-  })
-  expect(view.getAllByText(/Couldn't check which agents/).length).toBeGreaterThan(0)
-  expect(detectAgents).toHaveBeenCalledTimes(1)
-  refreshAgents.mockClear()
-  await act(async () => {
-    fireEvent.click(view.getAllByRole('button', { name: 'Retry' })[0])
-  })
-  expect(refreshAgents).toHaveBeenCalledExactlyOnceWith({ enabledOnly: true })
-  expect(useAppStore.getState().readLocalAgentInventory(FLOATING_TERMINAL_WORKTREE_ID)).toEqual({
-    ids: ['claude'],
-    state: 'successful'
-  })
+  }
+})
+
+it('shows one native inventory failure while provider saves and all-mode Retry settle', async () => {
+  await exerciseNativeInventoryRetryWhileProviderSavePending(refreshAgents)
 })
 
 it.each([true, false])(
   'keeps an explicit provider choice %s operable after detection fails',
   async (choice) => {
-    await useAppStore.getState().ensureNativeDetectedAgents()
-    const settings = { ...getDefaultSettings('/tmp'), nativeChatProviders: { grok: choice } }
-    Object.assign(window.api, { settings: { get: vi.fn(async () => settings) } })
-    useAppStore.setState({ settings: null, hydrateRuntimeEnvironmentStatuses: vi.fn() })
-    await useAppStore.getState().fetchSettings()
-    expect(useAppStore.getState().settings?.nativeChatProviders).toEqual({ grok: choice })
-    const update = vi.fn()
-    const view = render(<NativeChatProvidersSetting settings={settings} updateSettings={update} />)
-    const control = view.getByRole('switch', { name: 'Open Grok as a chat' })
-    expect(control.getAttribute('aria-checked')).toBe(String(choice))
-    expect(control.hasAttribute('disabled')).toBe(false)
-    await act(async () => {
-      fireEvent.click(control)
+    const owned: Promise<unknown>[] = []
+    const originalEnsure = useAppStore.getState().ensureAllDetectedAgents
+    const originalApi = window.api
+    const native = useAppStore.getState().ensureNativeDetectedAgents()
+    owned.push(native)
+    const settings = {
+      ...getDefaultSettings('/tmp'),
+      experimentalNativeChat: true,
+      nativeChatProviders: { grok: choice }
+    }
+    Object.assign(window, {
+      api: { ...window.api, settings: { get: vi.fn(async () => settings) } }
     })
-    expect(update).toHaveBeenCalledWith({ nativeChatProviders: { grok: !choice } })
+    const ensureAll: AppState['ensureAllDetectedAgents'] = (...args) => {
+      const pending = originalEnsure(...args)
+      owned.push(pending)
+      return pending
+    }
+    useAppStore.setState({
+      settings: null,
+      hydrateRuntimeEnvironmentStatuses: vi.fn(),
+      ensureAllDetectedAgents: ensureAll
+    })
+    let view: ReturnType<typeof render> | undefined
+    try {
+      await native
+      const fetched = useAppStore.getState().fetchSettings()
+      owned.push(fetched)
+      await fetched
+      expect(useAppStore.getState().settings?.nativeChatProviders).toEqual({ grok: choice })
+      const update = vi.fn((updates: Partial<GlobalSettings>) => {
+        const pending = Promise.resolve().then(() => {
+          useAppStore.setState({ settings: { ...settings, ...updates } })
+        })
+        owned.push(pending)
+        return pending
+      })
+      view = render(
+        <AgentLaunchSettingsCatalog
+          settings={projectAgentLaunchSettings(settings)}
+          mutate={vi.fn(async () => {})}
+          detectionTarget={{ kind: 'local' }}
+          hostName={null}
+          renderPermissions={() => null}
+          local={{ settings, updateSettings: update, saveEnvironment: vi.fn(async () => {}) }}
+        />,
+        { wrapper: TooltipProvider }
+      )
+      await act(async () => {
+        await Promise.allSettled(owned)
+      })
+      const control = view.getByRole('radiogroup', { name: 'Open Grok as' })
+      const chosen = within(control).getByRole('radio', { name: choice ? 'Chat' : 'CLI' })
+      expect(chosen.getAttribute('aria-checked')).toBe('true')
+      expect(chosen.getAttribute('aria-disabled')).not.toBe('true')
+      await act(async () => {
+        fireEvent.click(within(control).getByRole('radio', { name: choice ? 'CLI' : 'Chat' }))
+      })
+      expect(update).toHaveBeenCalledWith({ nativeChatProviders: { grok: !choice } })
+      expect(useAppStore.getState().settings?.nativeChatProviders).toEqual({ grok: !choice })
+    } finally {
+      view?.unmount()
+      await act(async () => {
+        await Promise.allSettled(owned)
+      })
+      useAppStore.getState().clearLocalDetectedAgents()
+      useAppStore.setState({ ensureAllDetectedAgents: originalEnsure })
+      Object.assign(window, { api: originalApi })
+    }
   }
+)
+
+it(
+  'preserves clicked provider choices while queued saves and inventory changes settle',
+  exerciseQueuedNativeProviderSave
 )
 
 it('settles Source Control arguments after an unknown native inventory fails', async () => {

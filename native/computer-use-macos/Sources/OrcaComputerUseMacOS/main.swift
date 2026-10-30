@@ -157,8 +157,16 @@ struct Snapshot {
     let screenshotScale: CGSize
     let screenshotEngine: String?
     let elements: [Int: ElementRecord]
+    let elementOrder: [Int]
+    let nextFreshElementIndex: Int
     let truncated: Bool
     let maxDepthReached: Bool
+    /// On-screen windows of the app (menus and sheets included), so a new or closed window counts as a change.
+    let appWindowIds: [CGWindowID]
+
+    func showsSameState(as other: Snapshot) -> Bool {
+        treeText == other.treeText && windowBounds == other.windowBounds && appWindowIds == other.appWindowIds
+    }
 
     func withoutScreenshotPayload() -> Snapshot {
         Snapshot(
@@ -175,8 +183,11 @@ struct Snapshot {
             screenshotScale: CGSize(width: 1, height: 1),
             screenshotEngine: nil,
             elements: elements,
+            elementOrder: elementOrder,
+            nextFreshElementIndex: nextFreshElementIndex,
             truncated: truncated,
-            maxDepthReached: maxDepthReached
+            maxDepthReached: maxDepthReached,
+            appWindowIds: appWindowIds
         )
     }
 }
@@ -208,6 +219,11 @@ private struct CachedSnapshotEntry {
 final class Provider {
     private var snapshots: [String: Snapshot] = [:]
     private var snapshotEntries: [CachedSnapshotEntry] = []
+
+    init() {
+        // Why: the system-wide element sets the wait for every AX call in this process, so a hung app costs one bounded timeout whatever the macOS default.
+        _ = AXUIElementSetMessagingTimeout(AXUIElementCreateSystemWide(), AccessibilityMessaging.timeoutSeconds)
+    }
 
     func handle(method: String, params: [String: JSONValue]) throws -> Any {
         switch method {
@@ -246,8 +262,21 @@ final class Provider {
         var action = try runAction()
         // Why: only --restore-window activates the app or posts to the HID tap; every other route leaves the user's desktop alone.
         action["delivery"] = isForegroundRequest(params) ? "foreground" : "background"
+        // Why: the action's currentSnapshot just cached this target's tree from before the action.
+        let before = action["path"] as? String == "accessibility" && action["verification"] == nil
+            ? try? cachedSnapshot(params: params)
+            : nil
         do {
-            return try renderActionResult(action: action, snapshot: observe(params: params))
+            let after = try observe(params: params)
+            guard let before, after.showsSameState(as: before) else {
+                return renderActionResult(action: action, snapshot: after)
+            }
+            if let changed = try observeLateChange(before: before, params: params) {
+                return renderActionResult(action: action, snapshot: changed)
+            }
+            // Why: an AX call can succeed and do nothing, as AXPress does on many web controls (#31758).
+            action["verification"] = unverifiedAction(reason: "suspected_noop")
+            return renderActionResult(action: action, snapshot: after)
         } catch let error as ProviderError where (error.code == "window_not_found" || error.code == "window_stale") && hasRequestedWindowSelector(params) {
             var fallbackParams = params
             fallbackParams.removeValue(forKey: "windowId")
@@ -259,6 +288,23 @@ final class Provider {
         }
     }
 
+    /// Re-reads the target for about a second, since apps often apply an action on a later run-loop turn.
+    /// Returns the observation to report once something changed, or nil if nothing did.
+    private func observeLateChange(before: Snapshot, params: [String: JSONValue]) throws -> Snapshot? {
+        let settleParams = params.merging(["restoreWindow": .bool(false)]) { _, replacement in replacement }
+        let quietParams = settleParams.merging(["noScreenshot": .bool(true)]) { _, replacement in replacement }
+        let deadline = Date().addingTimeInterval(1)
+        while Date() < deadline {
+            Thread.sleep(forTimeInterval: 0.2)
+            let polled = try observe(params: quietParams)
+            if !polled.showsSameState(as: before) {
+                if params["noScreenshot"]?.bool == true { return polled }
+                return try observe(params: settleParams)
+            }
+        }
+        return nil
+    }
+
     private func observe(params: [String: JSONValue]) throws -> Snapshot {
         let query = try requiredString(params, "app")
         let windowId = try requestedWindowId(params)
@@ -267,12 +313,19 @@ final class Provider {
         if params["restoreWindow"]?.bool == true {
             recoverWindow(app)
         }
+        let namespace = snapshotNamespace(params)
+        pruneSnapshotCache()
         let snapshot = try buildSnapshot(
             app: app,
             includeScreenshot: params["noScreenshot"]?.bool != true,
             windowId: windowId,
             windowIndex: windowIndex,
-            restoreWindow: params["restoreWindow"]?.bool == true
+            restoreWindow: params["restoreWindow"]?.bool == true,
+            previousSnapshot: { [snapshots] resolvedWindowId in
+                // Why: indexes carry over from this caller's own last view of exactly this window.
+                snapshots[namespacedSnapshotKey(namespace, snapshotCanonicalWindowIdKey(resolvedWindowId))]
+                    .flatMap { $0.app.pid == app.pid ? $0 : nil }
+            }
         )
         // Why: cached snapshots only validate element identity for follow-up
         // actions; retaining MB-scale screenshot base64 in the long-lived agent grows memory.
@@ -603,7 +656,8 @@ final class Provider {
         includeScreenshot: Bool,
         windowId: CGWindowID?,
         windowIndex: Int?,
-        restoreWindow: Bool
+        restoreWindow: Bool,
+        previousSnapshot: (CGWindowID) -> Snapshot?
     ) throws -> Snapshot {
         guard accessibilityTrustedSettled() else {
             // Why: agents retry failed observations. Only the explicit setup flow
@@ -614,6 +668,12 @@ final class Provider {
             )
         }
         let appElement = AXUIElementCreateApplication(app.pid)
+        var role: CFTypeRef?
+        let probeStart = CFAbsoluteTimeGetCurrent()
+        // Why: a hung app costs one timeout per AX read; walking it anyway held the request lock for every agent until the 60 s RPC timeout.
+        if AccessibilityMessaging.timedOut(AXUIElementCopyAttributeValue(appElement, kAXRoleAttribute as CFString, &role), since: probeStart) {
+            throw AccessibilityMessaging.appNotResponding(app.name)
+        }
         enableManualAccessibilityIfNeeded(appElement, app: app)
         let windowCandidates = WindowCapture.candidates(pid: app.pid)
         let focused = try focusedWindow(
@@ -643,6 +703,10 @@ final class Provider {
             compactBrowserTabs: app.isKnownBrowser
         )
         renderer.render(window)
+        if renderer.appStoppedResponding {
+            throw AccessibilityMessaging.appNotResponding(app.name)
+        }
+        let indexes = renderer.carryOverIndexes(from: previousSnapshot(capture.windowId))
         let screenshot = includeScreenshot ? capture.screenshotPayload() : nil
         let screenshotStatus: ScreenshotStatus = if screenshot != nil {
             .captured
@@ -667,8 +731,11 @@ final class Provider {
             screenshotScale: screenshotScale(screenshot: screenshot, bounds: capture.bounds),
             screenshotEngine: capture.image?.engine,
             elements: renderer.records,
+            elementOrder: indexes.order,
+            nextFreshElementIndex: indexes.nextFreshIndex,
             truncated: renderer.truncated,
-            maxDepthReached: renderer.maxDepthReached
+            maxDepthReached: renderer.maxDepthReached,
+            appWindowIds: windowCandidates.map(\.windowId).sorted()
         )
     }
 
@@ -775,10 +842,10 @@ final class Provider {
 
     private func performClickAction(record: ElementRecord, mouseButton: MouseButtonSelection) throws -> String? {
         if mouseButton == .right {
-            return performAction(record.element, "AXShowMenu") ? "AXShowMenu" : nil
+            return try performAction(record.element, "AXShowMenu") ? "AXShowMenu" : nil
         }
         for action in ["AXPress", "AXConfirm", "AXOpen"] {
-            if performAction(record.element, action) {
+            if try performAction(record.element, action) {
                 return action
             }
         }
@@ -793,7 +860,7 @@ final class Provider {
         guard let action else {
             throw ProviderError.coded("action_not_supported", "'\(requested)' is not a valid secondary action for element \(record.index)")
         }
-        guard performAction(record.element, action) else {
+        guard try performAction(record.element, action) else {
             throw ProviderError.coded("accessibility_error", "AXUIElementPerformAction(\(action)) failed")
         }
         return actionMetadata(path: "accessibility", actionName: action)
@@ -809,6 +876,7 @@ final class Provider {
         let current = rawAttributeValue(record.element, kAXValueAttribute as String)
         let coercion = AttributeValueCoercion(existingValue: current, requested: expected)
         let result: AXError
+        let writeStart = CFAbsoluteTimeGetCurrent()
         switch coercion.writeValue {
         case .string:
             result = AXUIElementSetAttributeValue(record.element, kAXValueAttribute as CFString, expected as CFString)
@@ -818,6 +886,9 @@ final class Provider {
             result = AXUIElementSetAttributeValue(record.element, kAXValueAttribute as CFString, NSNumber(value: value))
         case let .boolean(value):
             result = AXUIElementSetAttributeValue(record.element, kAXValueAttribute as CFString, value ? kCFBooleanTrue : kCFBooleanFalse)
+        }
+        if AccessibilityMessaging.timedOut(result, since: writeStart) {
+            throw AccessibilityMessaging.unanswered("the value write")
         }
         guard result == .success else {
             throw ProviderError.coded("accessibility_error", "AXUIElementSetAttributeValue failed with \(result.rawValue)")
@@ -837,7 +908,7 @@ final class Provider {
     private func typeText(params: [String: JSONValue]) throws -> [String: Any] {
         let snapshot = try currentKeyboardSnapshot(params: params)
         let text = try requiredString(params, "text")
-        if let focused = focusedRecord(snapshot), let verification = TextInput.replaceSelection(focused.element, with: text) {
+        if let focused = focusedRecord(snapshot), let verification = try TextInput.replaceSelection(focused.element, with: text) {
             return actionMetadata(path: "accessibility", actionName: "AXReplaceSelection", verification: verification)
         }
         try deliverKeys(try withTransportErrors { try BackgroundInputTransport.textEvents(text) }, snapshot: snapshot, params: params)
@@ -879,7 +950,7 @@ final class Provider {
     private func pasteText(params: [String: JSONValue]) throws -> [String: Any] {
         let snapshot = try currentKeyboardSnapshot(params: params)
         let text = try requiredString(params, "text")
-        if let focused = focusedRecord(snapshot), let verification = TextInput.replaceSelection(focused.element, with: text) {
+        if let focused = focusedRecord(snapshot), let verification = try TextInput.replaceSelection(focused.element, with: text) {
             return actionMetadata(path: "accessibility", actionName: "AXReplaceSelection", verification: verification)
         }
         let pasteKeys = try Input.keyEvents("cmd+v")
@@ -903,7 +974,7 @@ final class Provider {
             if pages.rounded() == pages, let pageCount = boundedInteger(pages, as: Int.self),
                record.actions.contains(action) {
                 for _ in 0..<max(1, pageCount) {
-                    _ = performAction(record.element, action)
+                    _ = try performAction(record.element, action)
                 }
                 return actionMetadata(path: "accessibility", actionName: action)
             }
@@ -1166,17 +1237,10 @@ private func focusedSystemWindow(systemWide: AXUIElement, app: AppDescriptor) ->
 }
 
 private func isTargetWindowFocused(_ snapshot: Snapshot) -> Bool {
-    guard let focusedWindow = focusedSystemWindow(systemWide: AXUIElementCreateSystemWide(), app: snapshot.app) else {
-        return false
-    }
-    if windowNumber(focusedWindow) == snapshot.windowId {
-        return true
-    }
-    guard let frame = absoluteFrame(focusedWindow) else {
-        return false
-    }
-    let intersection = frame.intersection(snapshot.windowBounds)
-    return !intersection.isNull && intersection.area >= min(frame.area, snapshot.windowBounds.area) * 0.75
+    focusedSyntheticClickRecipient(
+        targetPID: snapshot.app.pid,
+        targetCandidates: { WindowCapture.candidates(pid: snapshot.app.pid) }
+    ) == .focused(syntheticClickRecipient(pid: snapshot.app.pid, windowId: snapshot.windowId))
 }
 
 private enum AXElementProbe {
@@ -1260,19 +1324,8 @@ private func focusedSyntheticClickRecipient(
         return .unavailable
     }
 
-    if let windowId = windowNumber(focusedWindow) {
-        return .focused(syntheticClickRecipient(pid: ownerPID, windowId: windowId))
-    }
-    guard ownerPID == targetPID else { return .unavailable }
-    guard let frame = absoluteFrame(focusedWindow),
-          let candidate = SyntheticMouseClickDelivery.uniqueWindowCandidate(
-            from: targetCandidates(),
-            matching: {
-              windowFramesMatch($0.bounds, frame)
-            }
-          )
-    else { return .unavailable }
-    return .focused(syntheticClickRecipient(pid: ownerPID, windowId: candidate.windowId))
+    guard pidAttribute(focusedWindow) == ownerPID else { return .unavailable }
+    return pointerRecipient(of: focusedWindow, targetPID: targetPID, targetCandidates: targetCandidates)
 }
 
 private func hitTestSyntheticClickRecipient(
@@ -1308,13 +1361,13 @@ private func pointerRecipient(
     guard let ownerPID = pidAttribute(element), let window = containingWindow(element) else {
         return .unavailable
     }
-    var numberValue: CFTypeRef?
-    let numberStatus = AXUIElementCopyAttributeValue(window, "AXWindowNumber" as CFString, &numberValue)
-    if numberStatus == .success {
-        guard let number = numberValue as? NSNumber else { return .unavailable }
-        return .focused(syntheticClickRecipient(pid: ownerPID, windowId: CGWindowID(number.uint32Value)))
+    do {
+        if let windowID = try AccessibilityWindowIdentity.windowID(of: window) {
+            return .focused(syntheticClickRecipient(pid: ownerPID, windowId: windowID))
+        }
+    } catch {
+        return .unavailable
     }
-    guard numberStatus == .attributeUnsupported || numberStatus == .noValue else { return .unavailable }
     guard ownerPID == targetPID, let frame = absoluteFrame(window),
           let windows = copyArray(AXUIElementCreateApplication(ownerPID), kAXWindowsAttribute as String)
     else { return .unavailable }
@@ -1723,10 +1776,7 @@ private func numberAttribute(_ element: AXUIElement, _ attribute: String) -> NSN
 }
 
 private func windowNumber(_ element: AXUIElement) -> CGWindowID? {
-    guard let number = numberAttribute(element, "AXWindowNumber") else {
-        return nil
-    }
-    return CGWindowID(number.uint32Value)
+    try? AccessibilityWindowIdentity.windowID(of: element)
 }
 
 private func absoluteFrame(_ element: AXUIElement) -> CGRect? {
@@ -1763,9 +1813,44 @@ private func actions(_ element: AXUIElement) -> [String] {
     return value as? [String] ?? []
 }
 
-private func performAction(_ element: AXUIElement, _ action: String) -> Bool {
-    actions(element).contains(where: { $0.caseInsensitiveCompare(action) == .orderedSame }) &&
-        AXUIElementPerformAction(element, action as CFString) == .success
+private enum AccessibilityMessaging {
+    static let timeoutSeconds: Float = 3
+
+    /// Why: AX also returns cannotComplete at once for some attributes; only a call that waited out the timeout means the app is not answering.
+    static func timedOut(_ result: AXError, since start: CFAbsoluteTime) -> Bool {
+        result == .cannotComplete && CFAbsoluteTimeGetCurrent() - start >= Double(timeoutSeconds) * 0.9
+    }
+
+    static func appNotResponding(_ appName: String?) -> ProviderError {
+        .coded("action_timeout", "\(appName.map { "'\($0)'" } ?? "The app") is not answering accessibility requests (no reply within \(timeoutSeconds) s); it may be busy or hung. Wait until it responds, then retry.")
+    }
+
+    /// The request reached the app, which went quiet while handling it, so the effect may have happened.
+    static func unanswered(_ request: String) -> ProviderError {
+        .coded("action_timeout", "the app did not answer \(request) within \(timeoutSeconds) s; it may be busy or showing a dialog, and the action may already have taken effect. Run get-app-state to check before retrying.")
+    }
+}
+
+private func performAction(_ element: AXUIElement, _ action: String) throws -> Bool {
+    var names: CFArray?
+    let start = CFAbsoluteTimeGetCurrent()
+    let namesResult = AXUIElementCopyActionNames(element, &names)
+    if AccessibilityMessaging.timedOut(namesResult, since: start) {
+        throw AccessibilityMessaging.appNotResponding(nil)
+    }
+    guard namesResult == .success,
+          let names = names as? [String],
+          names.contains(where: { $0.caseInsensitiveCompare(action) == .orderedSame })
+    else {
+        return false
+    }
+    let pressStart = CFAbsoluteTimeGetCurrent()
+    let result = AXUIElementPerformAction(element, action as CFString)
+    // Why: falling through to another route after a delivered but unanswered press ran the action twice.
+    if AccessibilityMessaging.timedOut(result, since: pressStart) {
+        throw AccessibilityMessaging.unanswered(action)
+    }
+    return result == .success
 }
 
 private func isSettable(_ element: AXUIElement, _ attribute: String) -> Bool {
@@ -1889,6 +1974,8 @@ private final class TreeRenderer {
     static let maxNodes = 1200
     static let maxDepth = 64
 
+    var appStoppedResponding: Bool { reader.appStoppedResponding }
+
     init(windowBounds: CGRect, focused: AXUIElement?, compactBrowserTabs: Bool) {
         self.windowBounds = windowBounds
         self.focused = focused
@@ -1896,6 +1983,7 @@ private final class TreeRenderer {
     }
 
     func render(_ element: AXUIElement, depth: Int = 0, ancestors: [AXUIElement] = []) {
+        guard !reader.appStoppedResponding else { return }
         guard nextIndex < Self.maxNodes else {
             truncated = true
             return
@@ -2045,6 +2133,28 @@ private final class TreeRenderer {
     }
 }
 
+extension TreeRenderer {
+    /// Swaps the walk-order indexes for ones carried over from the previous snapshot of this window.
+    func carryOverIndexes(from previous: Snapshot?) -> (order: [Int], nextFreshIndex: Int) {
+        let walked = records.values.sorted { $0.index < $1.index }
+        let assignment = StableElementIndexes.assign(
+            current: walked.map(\.element),
+            previous: previous?.elementOrder.compactMap { index in
+                previous?.elements[index].map { (key: $0.element, index: index) }
+            } ?? [],
+            previousNextFreshIndex: previous?.nextFreshElementIndex ?? 0
+        )
+        let renumbered = Dictionary(uniqueKeysWithValues: zip(walked.map(\.index), assignment.indexes))
+        records = Dictionary(uniqueKeysWithValues: zip(walked, assignment.indexes).map { record, index in
+            (index, ElementRecord(index: index, element: record.element, localFrame: record.localFrame, actions: record.actions, signature: record.signature))
+        })
+        lines = lines.map { StableElementIndexes.renumber(line: $0, indexes: renumbered) }
+        focusedElementId = focusedElementId.flatMap { renumbered[$0] }
+        focusedSummary = focusedSummary.map { StableElementIndexes.renumber(line: $0, indexes: renumbered) }
+        return (assignment.indexes, assignment.nextFreshIndex)
+    }
+}
+
 private final class AXSnapshotReader {
     private enum CachedAttribute {
         case missing
@@ -2096,7 +2206,7 @@ private final class AXSnapshotReader {
             return actions
         }
         var value: CFArray?
-        let actions = AXUIElementCopyActionNames(element, &value) == .success ? value as? [String] ?? [] : []
+        let actions = answered { AXUIElementCopyActionNames(element, &value) } == .success ? value as? [String] ?? [] : []
         cache.actions = actions
         return actions
     }
@@ -2107,9 +2217,22 @@ private final class AXSnapshotReader {
             return cached
         }
         var settable = DarwinBoolean(false)
-        let value = AXUIElementIsAttributeSettable(element, attribute as CFString, &settable) == .success && settable.boolValue
+        let value = answered { AXUIElementIsAttributeSettable(element, attribute as CFString, &settable) } == .success && settable.boolValue
         cache.settable[attribute] = value
         return value
+    }
+
+    /// Set once the app waits out a messaging timeout; later reads return nothing instead of each waiting it out again.
+    private(set) var appStoppedResponding = false
+
+    private func answered(_ call: () -> AXError) -> AXError? {
+        guard !appStoppedResponding else { return nil }
+        let start = CFAbsoluteTimeGetCurrent()
+        let result = call()
+        if AccessibilityMessaging.timedOut(result, since: start) {
+            appStoppedResponding = true
+        }
+        return result
     }
 
     func frame(_ element: AXUIElement, windowBounds: CGRect) -> CGRect? {
@@ -2238,7 +2361,7 @@ private final class AXSnapshotReader {
             return nil
         }
         var value: CFTypeRef?
-        guard AXUIElementCopyAttributeValue(element, attribute as CFString, &value) == .success, let value else {
+        guard answered({ AXUIElementCopyAttributeValue(element, attribute as CFString, &value) }) == .success, let value else {
             cache.attributes[attribute] = .missing
             return nil
         }
@@ -2252,7 +2375,7 @@ private final class AXSnapshotReader {
         }
         cache.loadedAttributeNames = true
         var value: CFArray?
-        guard AXUIElementCopyAttributeNames(cache.element, &value) == .success, let attributes = value as? [String] else {
+        guard answered({ AXUIElementCopyAttributeNames(cache.element, &value) }) == .success, let attributes = value as? [String] else {
             return nil
         }
         cache.advertisedAttributes = Set(attributes)
@@ -2813,7 +2936,7 @@ private enum Input {
 }
 
 private enum TextInput {
-    static func replaceSelection(_ element: AXUIElement, with text: String) -> [String: Any]? {
+    static func replaceSelection(_ element: AXUIElement, with text: String) throws -> [String: Any]? {
         guard isSettable(element, kAXValueAttribute as String),
               let current = rawStringAttribute(element, kAXValueAttribute as String)
         else {
@@ -2825,7 +2948,13 @@ private enum TextInput {
         let start = String.Index(utf16Offset: startOffset, in: current)
         let end = String.Index(utf16Offset: endOffset, in: current)
         let next = String(current[..<start]) + text + String(current[end...])
-        guard AXUIElementSetAttributeValue(element, kAXValueAttribute as CFString, next as CFString) == .success else {
+        let writeStart = CFAbsoluteTimeGetCurrent()
+        let result = AXUIElementSetAttributeValue(element, kAXValueAttribute as CFString, next as CFString)
+        // Why: typing the text as keys after an unanswered write could enter it twice.
+        if AccessibilityMessaging.timedOut(result, since: writeStart) {
+            throw AccessibilityMessaging.unanswered("the text write")
+        }
+        guard result == .success else {
             return nil
         }
         setSelectedTextRange(element, CFRange(location: startOffset + text.utf16.count, length: 0))

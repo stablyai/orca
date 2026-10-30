@@ -34,6 +34,9 @@ const ARTIFACT_PARSERS = {
 const { parsePluginLanguagePackArtifact } = loadPluginSchemaModule(
   'artifacts/plugin-language-pack-artifact.ts'
 )
+const { parsePluginLanguageConfiguration } = loadPluginSchemaModule(
+  'artifacts/plugin-syntax-artifact.ts'
+)
 
 // Why strict here: Orca skips unknown theme tokens and icon slots at runtime, so authors only
 // learn about a typo from this check.
@@ -65,6 +68,26 @@ function languagePackErrors(pluginDir, manifest) {
     return parsed.ok
       ? []
       : [`contributes.languagePacks "${pack.locale}" (${pack.path}): ${parsed.error}`]
+  })
+}
+
+// Why: Orca drops an unsafe auto-closing pair or comment marker at load instead of failing.
+function syntaxConfigurationErrors(pluginDir, manifest) {
+  return manifest.contributes.syntaxes.flatMap((syntax) => {
+    if (!syntax.configuration) {
+      return []
+    }
+    let text = ''
+    try {
+      text = readFileSync(path.join(pluginDir, ...syntax.configuration.split('/')), 'utf8')
+      parsePluginLanguageConfiguration(text, 'strict')
+      return []
+    } catch (error) {
+      const detail = error.issues
+        ? formatPluginSchemaIssues(error.issues, JSON.parse(text))
+        : error.message
+      return [`contributes.syntaxes "${syntax.id}" (${syntax.configuration}): ${detail}`]
+    }
   })
 }
 
@@ -181,7 +204,11 @@ for (const target of targets) {
     const errors = validatePluginFile(path.basename(file), raw, readCatalogFile)
     if (errors.length === 0 && path.basename(file) === 'orca-plugin.json') {
       const { manifest } = parsePluginManifest(raw)
-      errors.push(...artifactErrors(root, manifest), ...languagePackErrors(root, manifest))
+      errors.push(
+        ...artifactErrors(root, manifest),
+        ...languagePackErrors(root, manifest),
+        ...syntaxConfigurationErrors(root, manifest)
+      )
     }
     for (const error of errors) {
       console.error(`${file}: ${error}`)

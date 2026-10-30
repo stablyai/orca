@@ -9,9 +9,14 @@ import {
   orchestrationMigrationData
 } from '../../shared/orchestration-rpc-contract'
 import type { PairedRuntimeConnection } from '../../shared/paired-runtime-connection'
-import { launchOrcaApp } from './launch'
+import { openLocalOrca } from './open-local-orca'
 import { getDefaultUserDataPath, readMetadata } from './metadata'
-import { getCliStatus, projectRemoteAppStatus } from './status'
+import {
+  getCliStatus,
+  getOfflineRuntimeAdmission,
+  type OfflineRuntimeAdmission,
+  projectRemoteAppStatus
+} from './status'
 import { sendRequest } from './transport'
 import { RuntimeClientError, RuntimeRpcFailureError, type RuntimeRpcSuccess } from './types'
 import {
@@ -249,6 +254,18 @@ export class RuntimeClient {
     return getCliStatus(this.userDataPath)
   }
 
+  async getOfflineRuntimeAdmission(): Promise<OfflineRuntimeAdmission> {
+    if (this.remote) {
+      const status = await this.getCliStatus()
+      return {
+        reachable: status.result.runtime.reachable,
+        legacyPidRunning: status.result.app.running,
+        pid: status.result.app.pid ?? null
+      }
+    }
+    return getOfflineRuntimeAdmission(this.userDataPath)
+  }
+
   private async ensureOrchestrationContractCompatible(timeoutMs: number): Promise<void> {
     if (!this.orchestrationContractCheck) {
       this.orchestrationContractCheck = this.checkOrchestrationContractCompatibility(
@@ -277,44 +294,6 @@ export class RuntimeClient {
   }
 
   async openOrca(timeoutMs = 15_000): Promise<RuntimeRpcSuccess<CliStatusResult>> {
-    const initial = await this.getCliStatus()
-    if (this.remote) {
-      return initial
-    }
-
-    // A blocked runtime cannot open a window; a second app would only hit its instance lock.
-    if (initial.result.app.desktopWindowStatus === 'blocked') {
-      throwDesktopActivationBlocked()
-    }
-    launchOrcaApp()
-    if (initial.result.app.desktopWindowStatus === 'available') {
-      return initial
-    }
-
-    const startedAt = Date.now()
-    while (Date.now() - startedAt < timeoutMs) {
-      const status = await this.getCliStatus()
-      if (status.result.app.desktopWindowStatus === 'blocked') {
-        throwDesktopActivationBlocked()
-      }
-      if (status.result.app.desktopWindowStatus === 'available') {
-        return status
-      }
-      await delay(250)
-    }
-
-    throw new RuntimeClientError(
-      'runtime_open_timeout',
-      'Timed out waiting for an Orca desktop window. The runtime may still be running headlessly.'
-    )
+    return this.remote ? this.getCliStatus() : openLocalOrca(() => this.getCliStatus(), timeoutMs)
   }
 }
-
-function throwDesktopActivationBlocked(): never {
-  throw new RuntimeClientError(
-    'desktop_activation_blocked',
-    'Orca is running headlessly, but it cannot open a desktop window safely because the persistent terminal provider is unavailable. Quit Orca normally and start the app again; do not use open -n.'
-  )
-}
-
-const delay = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms))

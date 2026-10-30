@@ -17,7 +17,8 @@ export async function sendRequest<TResult>(
   timeoutMs: number,
   envelope?: RuntimeOrchestrationEnvelope,
   // Federation forwards envelopes; the runtime fence must stay local.
-  expectedRuntimeSource?: ExpectedRuntimeSource
+  expectedRuntimeSource?: ExpectedRuntimeSource,
+  classifySocketError: (error: Error) => RuntimeClientError | null = runtimeAccessDeniedError
 ): Promise<RuntimeRpcResponse<TResult>> {
   if (!isSafeTimerDelayMs(timeoutMs)) {
     throw new RuntimeClientError(
@@ -79,10 +80,11 @@ export async function sendRequest<TResult>(
         ok: false,
         // Access denial does not establish that the app is dead.
         error:
-          runtimeAccessDeniedError(error, metadata.pid) ??
+          classifySocketError(error) ??
           new RuntimeClientError(
             'runtime_unavailable',
-            'Could not connect to the running Orca app. Restart Orca and try again.'
+            'This terminal could not connect to Orca.',
+            { nextSteps: ['Check that Orca is open and that this terminal can access it.'] }
           )
       })
     })
@@ -92,7 +94,8 @@ export async function sendRequest<TResult>(
         ok: false,
         error: new RuntimeClientError(
           'runtime_unavailable',
-          'The Orca runtime closed the connection before responding. Restart Orca and try again.'
+          'Orca closed the connection before responding.',
+          { nextSteps: ['Check that Orca is open and that this terminal can access it.'] }
         )
       })
     })
@@ -171,7 +174,8 @@ export async function sendRequest<TResult>(
             ok: false,
             error: new RuntimeClientError(
               'runtime_unavailable',
-              'The Orca runtime changed while the request was in flight. Retry the command.'
+              'The Orca runtime changed while the request was in flight.',
+              { nextSteps: ['Retry the command.'] }
             )
           })
           return

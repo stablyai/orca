@@ -8,6 +8,7 @@ import { terminalDocumentDouble } from './document-terminal-double.test-support'
 import type { TerminalDocumentTerminal } from './document-terminal-shape'
 import { handleMsg } from './host-message-router'
 import { afterWritesDrained } from './write-queue'
+import { startEdgeScroll } from './selection-overlay'
 
 const scopes: TerminalDocumentScope[] = []
 
@@ -130,6 +131,7 @@ afterEach(() => {
     stopTerminalDocument(scope)
   }
   vi.unstubAllGlobals()
+  vi.useRealTimers()
 })
 
 describe('mobile terminal replay reading position', () => {
@@ -165,4 +167,47 @@ describe('mobile terminal replay reading position', () => {
     expect(buffer.type).toBe('normal')
     expect(buffer.viewportY).toBe(buffer.baseY)
   })
+})
+
+it('returns to the prompt during a replay and keeps it there when ready', async () => {
+  const harness = createReplayHarness()
+  harness.replay(false, 80)
+  await harness.drain()
+  const visible = harness.terminals[0]
+  if (!visible) {
+    throw new Error('Missing visible terminal')
+  }
+  visible.scrollToLine(40)
+  harness.holdReplays(true)
+  harness.replay(true, 81)
+  await harness.parse()
+  handleMsg(harness.scope, { type: 'scroll-to-bottom' })
+  expect(visible.buffer.active.viewportY).toBe(visible.buffer.active.baseY)
+  harness.releaseHeldReplays()
+  await harness.drain()
+  const ready = harness.scope.committedTerm
+  expect(ready?.buffer.active.viewportY).toBe(ready?.buffer.active.baseY)
+})
+
+it('keeps the prompt visible after interrupting selection edge scrolling', async () => {
+  const harness = createReplayHarness()
+  harness.replay(false, 80)
+  await harness.drain()
+  const terminal = harness.terminals[0]
+  if (!terminal) {
+    throw new Error('Missing terminal')
+  }
+  terminal.scrollToLine(40)
+  vi.useFakeTimers()
+  startEdgeScroll(harness.scope, -1)
+  vi.advanceTimersByTime(120)
+  expect(terminal.buffer.active.viewportY).toBe(38)
+
+  handleMsg(harness.scope, { type: 'scroll-to-bottom' })
+  vi.advanceTimersByTime(180)
+  expect(terminal.buffer.active.viewportY).toBe(terminal.buffer.active.baseY)
+
+  startEdgeScroll(harness.scope, -1)
+  vi.advanceTimersByTime(60)
+  expect(terminal.buffer.active.viewportY).toBe(terminal.buffer.active.baseY - 1)
 })

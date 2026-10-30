@@ -200,7 +200,7 @@ export class PluginAutoUpdater {
       // Why at the last await: the user may turn auto-update off while this pass waits.
       install: async () =>
         this.options.isEnabled()
-          ? installer.install(preview, { requireInstalled: true })
+          ? installer.install(preview, { requireInstalled: true, trigger: 'auto_update' })
           : { ok: false, error: 'automatic updates were turned off' },
       approve: this.options.approve
     })

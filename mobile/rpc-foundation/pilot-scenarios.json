@@ -20081,7 +20081,12 @@
       "sites": ["mobile/src/settings/notification-display-test.tsx"],
       "schedules": [],
       "deviceStore": {
+        "orca:pushServiceNotificationsEnabled": "true",
         "orca:hosts": "[{\"id\":\"host-1\",\"name\":\"Desk\",\"endpoint\":\"ws://desk.local:7777\",\"publicKeyB64\":\"AAAA\",\"lastConnected\":1700000000000}]"
+      },
+      "deviceState": {
+        "notificationPermissions": { "status": "granted", "canAskAgain": true },
+        "pushToken": { "type": "ios", "data": "fixture-apns-token" }
       },
       "steps": [
         {
@@ -20120,7 +20125,12 @@
       "sites": ["mobile/src/settings/notification-display-test.tsx"],
       "schedules": [],
       "deviceStore": {
+        "orca:pushServiceNotificationsEnabled": "true",
         "orca:hosts": "[{\"id\":\"host-1\",\"name\":\"Desk\",\"endpoint\":\"ws://desk.local:7777\",\"publicKeyB64\":\"AAAA\",\"lastConnected\":1700000000000}]"
+      },
+      "deviceState": {
+        "notificationPermissions": { "status": "granted", "canAskAgain": true },
+        "pushToken": { "type": "ios", "data": "fixture-apns-token" }
       },
       "steps": [
         {
@@ -20160,7 +20170,12 @@
       "sites": ["mobile/src/settings/notification-display-test.tsx"],
       "schedules": [],
       "deviceStore": {
+        "orca:pushServiceNotificationsEnabled": "true",
         "orca:hosts": "[{\"id\":\"host-1\",\"name\":\"Desk\",\"endpoint\":\"ws://desk.local:7777\",\"publicKeyB64\":\"AAAA\",\"lastConnected\":1700000000000}]"
+      },
+      "deviceState": {
+        "notificationPermissions": { "status": "granted", "canAskAgain": true },
+        "pushToken": { "type": "ios", "data": "fixture-apns-token" }
       },
       "steps": [
         {
@@ -20200,7 +20215,12 @@
       "sites": ["mobile/src/settings/notification-display-test.tsx"],
       "schedules": [],
       "deviceStore": {
+        "orca:pushServiceNotificationsEnabled": "true",
         "orca:hosts": "[{\"id\":\"host-1\",\"name\":\"Desk\",\"endpoint\":\"ws://desk.local:7777\",\"publicKeyB64\":\"AAAA\",\"lastConnected\":1700000000000}]"
+      },
+      "deviceState": {
+        "notificationPermissions": { "status": "granted", "canAskAgain": true },
+        "pushToken": { "type": "ios", "data": "fixture-apns-token" }
       },
       "steps": [
         {

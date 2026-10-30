@@ -34,7 +34,17 @@ function withoutDaemonLifecycle(envelope: AgentBrowserEnvelope): AgentBrowserEnv
   return { ...envelope, data: rest }
 }
 
-/** "Unknown ref" for a ref never issued; 0.39+ also says "Stale ref for role=…" once its element is gone. */
+/** Every snapshot form (plain, --full, --delta) answers with `snapshot`; annotated screenshots with `annotations`. */
+export function agentBrowserResultMintsRefs(data: unknown): boolean {
+  if (!data || typeof data !== 'object') {
+    return false
+  }
+  return 'snapshot' in data || ('annotations' in data && Array.isArray(data.annotations))
+}
+
+/** "Unknown ref" for a ref never issued; 0.39+ says "Stale ref for role=…" or "Could not locate element with role=…" once its element is gone. */
 export function isAgentBrowserStaleRefError(message: string): boolean {
-  return /unknown ref|stale ref|ref not found|element not found: @e/i.test(message)
+  return /unknown ref|stale ref|ref not found|element not found: @e|could not locate element with role=/i.test(
+    message
+  )
 }

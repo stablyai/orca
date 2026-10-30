@@ -10,12 +10,8 @@ export type {
 } from './agent-menu-observation-types'
 import { useSyncExternalStore } from 'react'
 import { useShallow } from 'zustand/react/shallow'
-import {
-  STRUCTURED_AGENT_SESSION_AVAILABILITY_RUNTIME_CAPABILITY as AVAILABILITY,
-  STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY as CATALOG
-} from '../../../../shared/protocol-version'
+import { STRUCTURED_AGENT_SESSION_AVAILABILITY_RUNTIME_CAPABILITY as AVAILABILITY } from '../../../../shared/protocol-version'
 import { LOCAL_EXECUTION_HOST_ID, parseExecutionHostId } from '../../../../shared/execution-host'
-import { isTuiAgent } from '../../../../shared/tui-agent-config'
 import { isNativeChatEnabled } from '../../../../shared/structured-native-chat-launch-route'
 import { useAppStore } from '@/store'
 import { useAgentPickerRefusedWake } from './use-agent-picker-refused-wake'
@@ -27,15 +23,13 @@ import {
 } from '@/lib/agent-launch-route-input'
 import { useHostStructuredAgentsVersion } from '@/lib/chat-provider-agents'
 import { structuredAgentSessionTargetForHost } from '@/runtime/structured-agent-session-owner'
-import {
-  readHostStructuredAgents,
-  readHostStructuredAgentsForRuntime,
-  hostStructuredAgentsReadFailed
-} from '@/runtime/host-structured-agents'
+import { readHostStructuredAgents } from '@/runtime/host-structured-agents'
 import { useHostStructuredAgentAvailability } from '@/runtime/use-host-structured-agent-availability'
 import {
   buildNewTabAgentMenuRows,
   hostChatAnswer,
+  hostChatCatalogUnlearned,
+  agentMenuChatAgents,
   type HostChatAnswer
 } from '@/lib/new-tab-agent-menu-rows'
 import {
@@ -52,19 +46,6 @@ import { resolveAgentMenuSelection } from '@/lib/agent-menu-selection'
 import { useHostAgentMenuSettings } from '@/components/settings/use-host-agent-launch-preferences'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { AgentLaunchSurface } from '@/lib/agent-session-launch-plan'
-
-function catalogUnlearned(
-  host: string,
-  runtimeId: string | null | undefined,
-  capabilities: readonly string[] | null | undefined
-): boolean {
-  return (
-    runtimeId !== undefined &&
-    capabilities?.includes(CATALOG) === true &&
-    !readHostStructuredAgentsForRuntime(host, runtimeId) &&
-    !hostStructuredAgentsReadFailed(host, runtimeId)
-  )
-}
 
 /** `detectionTarget` is the workspace's agent-inventory host, resolved by the caller. */
 export function useNewTabAgentMenuRows(
@@ -125,7 +106,21 @@ export function useAgentMenuObservation(
     readLocalRuntimeCapabilityObservation,
     readLocalRuntimeCapabilityObservation
   )
-  const desktopSettings = useAppStore((state) => state.settings)
+  useAppStore(
+    useShallow((state) => [
+      state.settings?.defaultTuiAgent,
+      state.settings?.disabledTuiAgents,
+      state.settings?.experimentalNativeChat,
+      state.settings?.nativeChatProviders,
+      state.settings?.agentDefaultArgs,
+      state.settings?.agentPermissionDefault,
+      state.settings?.agentPermissionOverrides,
+      state.settings?.nativeChatSessionOptions,
+      state.settings?.nativeChatPermissionMode
+    ])
+  )
+  // The observation owns these settings; picker consumers reuse its snapshot.
+  const desktopSettings = useAppStore.getState().settings
   const workspace =
     typeof target === 'string'
       ? { kind: workspaceKindForWorktreeId(target), worktreeId: target }
@@ -171,17 +166,7 @@ export function useAgentMenuObservation(
     readHostStructuredAgents(facts.executionHostId, state.runtimeStatusByEnvironmentId)?.map(
       ({ agent }) => agent
     )
-  const chatAgents = [
-    ...new Set([
-      'claude',
-      'codex',
-      ...(localCatalog ?? []),
-      ...(hostCatalog ?? []),
-      ...Object.keys(settings?.nativeChatProviders ?? {})
-        .filter(isTuiAgent)
-        .filter((agent) => settings?.nativeChatProviders?.[agent] === true)
-    ])
-  ].filter(isTuiAgent)
+  const chatAgents = agentMenuChatAgents(settings, localCatalog, hostCatalog)
   const inventoryFailed =
     detection.detectedIds === null && (detection.detectionFailed || detection.needsServerUpdate)
   const localAcquiring = ['unlearned', 'pending'].includes(localCapabilities.state)
@@ -190,10 +175,10 @@ export function useAgentMenuObservation(
   const hostCatalogPending =
     !roster &&
     availability?.state !== 'pending' &&
-    catalogUnlearned(facts.executionHostId, facts.runtimeId, input.hostCapabilities)
+    hostChatCatalogUnlearned(facts.executionHostId, facts.runtimeId, input.hostCapabilities)
   const localCatalogPending =
     !local &&
-    catalogUnlearned(
+    hostChatCatalogUnlearned(
       LOCAL_EXECUTION_HOST_ID,
       null,
       localCapabilities.state === 'known' ? localCapabilities.capabilities : null
@@ -264,7 +249,20 @@ export function useAgentMenuObservation(
         state: 'loading',
         placeholderCount: Math.max(chatAgents.length, detection.detectedIds?.length ?? 0, 2)
       }
-    : { state: 'settled', rows, detection, defaultTuiAgent: settings?.defaultTuiAgent }
+    : {
+        state: 'settled',
+        rows,
+        detection,
+        defaultTuiAgent: settings?.defaultTuiAgent,
+        pickerContext: {
+          workspace,
+          executionHostId: facts.executionHostId,
+          pairingRevision: facts.pairingRevision,
+          runtimeId: facts.runtimeId,
+          settings,
+          key: JSON.stringify([workspace, launchCwd, facts])
+        }
+      }
   const { defaultTuiAgent, disabledTuiAgents } = settings ?? {}
   return {
     model,

@@ -40,12 +40,9 @@ export abstract class AgentBrowserBridgeQueue extends AgentBrowserBridgeShutdown
         )
       }
       const [tabId, wcId] = liveEntries[switchedIndex]
-      this.activeWebContentsId = wcId
       const owningWorktreeId = worktreeId ?? this.browserManager.getWorktreeIdForTab(tabId)
       // Page-only switches must also update the owning workspace for later scoped commands.
-      if (owningWorktreeId) {
-        this.activeWebContentsPerWorktree.set(owningWorktreeId, wcId)
-      }
+      this.pointAgentAt(wcId, owningWorktreeId ?? undefined)
       this.options.onTabsChanged?.(owningWorktreeId ?? undefined)
       return { switched: switchedIndex, browserPageId: tabId }
     })
@@ -73,6 +70,9 @@ export abstract class AgentBrowserBridgeQueue extends AgentBrowserBridgeShutdown
       browserPageId,
       options.requireScopedTarget
     )
+    if (!browserPageId && options.elements) {
+      this.assertRefsFromPage(pageId, options.elements)
+    }
     const sessionName = `${ORCA_TAB_SESSION_PREFIX}${pageId}`
     const agentCommand = this.browserManager.beginAgentCommand(pageId)
 

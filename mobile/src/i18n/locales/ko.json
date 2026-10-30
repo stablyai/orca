@@ -957,9 +957,7 @@
       "empty": "아직 설정된 맞춤 단축키가 없습니다.",
       "removeShortcut": "{{label}} 제거",
       "resetDefaults": "기본값 복원",
-      "resetDescription": "모든 기본 단축키를 원래 순서로 표시",
-      "shortcutBar": "단축키 바",
-      "shortcutBarDescription": "키를 켜거나 꺼서 표시 여부를 설정하고, 손잡이를 누른 채 드래그하여 터미널 단축키 바의 키를 원하는 순서로 배치하세요."
+      "resetDescription": "모든 기본 단축키를 원래 순서로 표시"
     },
     "useCodexResetCreditAction": {
       "confirmTitle": "사용량 한도를 재설정하시겠습니까?",
@@ -1000,6 +998,11 @@
       "folder": "폴더",
       "project": "프로젝트 {{repo}}",
       "remoteHost": "원격 호스트"
+    },
+    "nativeScreenRecovery": {
+      "title": "문제가 발생했습니다",
+      "tryAgain": "다시 시도",
+      "home": "홈"
     }
   },
   "connection": {
@@ -1093,7 +1096,8 @@
       "checkTailnet": "데스크톱이 절전 모드가 아니며 tailnet에 연결된 상태로 표시되는지 확인하세요.",
       "desktopTitle": "데스크톱 앱이 실행되지 않음",
       "disableVpn": "해당 VPN을 끄거나 분할 터널링 / \"LAN 허용\"을 켜세요.",
-      "firewallTitle": "방화벽에서 포트 6768 차단",
+      "firewallTitle": "방화벽에서 포트 {{port}} 차단",
+      "linuxFirewall": "Linux: sudo ufw allow {{port}}",
       "keepTailscaleOn": "100.x.x.x나 *.ts.net 같은 호스트 주소는 Tailscale을 통해 연결되므로 Tailscale을 켜 두세요.",
       "macosFirewall": "macOS: 시스템 설정 → 네트워크 → 방화벽에서 Orca를 허용하세요.",
       "notificationNetwork": "모바일 데이터나 다른 Wi-Fi 네트워크를 사용해 보세요. 전환 후 알림이 도착한다면 기존 네트워크에서 알림 전달이 지연되고 있을 수 있습니다.",
@@ -1830,16 +1834,8 @@
   },
   "session": {
     "accessoryKeys": {
-      "addCustomShortcut": "사용자 지정 단축키 추가",
       "dismissKeyboard": "키보드 닫기",
-      "dismissKeyboardHint": "소프트웨어 키보드를 숨기고 현재 터미널 세션을 열린 상태로 유지합니다.",
-      "paste": "붙여넣기",
-      "pasteFromClipboard": "클립보드에서 붙여넣기",
-      "sendKey": "{{label}} 보내기",
-      "switchToBufferedInput": "버퍼링된 명령 입력으로 전환",
-      "switchToDesktopMode": "데스크톱 모드로 전환",
-      "switchToLiveInput": "실시간 터미널 입력으로 전환",
-      "switchToPhoneMode": "휴대폰 모드로 전환"
+      "sendKey": "{{label}} 보내기"
     },
     "activeContent": {
       "createTab": "탭 만들기",
@@ -1949,21 +1945,12 @@
       "titleRight": "오른쪽 탭을 닫을까요?"
     },
     "commandDock": {
-      "commandPlaceholder": "명령을 입력하세요…",
       "liveInputHint": "입력한 텍스트가 활성 터미널로 바로 전송됩니다.",
       "liveInputLabel": "실시간 터미널 입력",
       "sendCommand": "명령 보내기"
     },
     "contentRow": {
       "dismissCreationWarning": "워크스페이스 생성 경고 닫기"
-    },
-    "diffCommentLineRow": {
-      "addNote": "{{line}}행에 메모 추가",
-      "deleteNote": "{{line}}행 메모 삭제",
-      "diffLine": "{{title}} 차이점 {{line}}행",
-      "line": "{{line}}행",
-      "placeholder": "리뷰 메모 추가",
-      "saveNote": "메모 저장"
     },
     "diffLineRow": {
       "addNoteLabel": "{{line}}행에 메모 추가",
@@ -2708,19 +2695,26 @@
     "notificationDisplayTest": {
       "accepted": "Orca 푸시 서비스에서 요청을 접수했습니다. 알림이 도착했는지 확인하세요.",
       "connectDesktop": "데스크톱에 연결한 후 다시 시도하세요.",
-      "description": "Orca 푸시 서비스를 통해 테스트 알림을 보내세요.",
+      "description": "푸시 알림 전달을 테스트하거나, 푸시를 사용할 수 없으면 로컬 알림을 테스트합니다.",
       "desktopUnreachable": "데스크톱에 연결하지 못했습니다. 다시 시도하세요.",
       "loadFailed": "페어링된 데스크톱 목록을 불러오지 못했습니다.",
       "pairDesktop": "데스크톱을 페어링한 후 다시 시도하세요.",
       "pushServiceFailed": "Orca 푸시 서비스를 통해 전송하지 못했습니다. 다시 시도하세요.",
       "rateLimited": "알림이 너무 많습니다. 나중에 다시 시도하세요.",
-      "reconnectPhone": "이 휴대폰을 알림 수신 기기로 등록하려면 다시 연결하세요.",
       "sendButton": "테스트 알림 보내기",
       "sendFailed": "테스트 푸시 알림을 전송하지 못했습니다.",
       "sending": "전송 중…",
       "troubleReceivingAlerts": "알림 수신에 문제가 있나요?",
       "troubleshooting": "문제 해결",
-      "updateDesktop": "이 테스트를 실행하려면 데스크톱을 업데이트하세요."
+      "localTitle": "테스트 알림",
+      "localBody": "이 휴대전화의 로컬 알림 테스트입니다.",
+      "localScheduled": "{{reason}} 로컬 테스트를 예약했습니다. 알림을 확인하세요. 이 테스트는 표시만 확인하며 Agent 알림 전달은 확인하지 않습니다.",
+      "disabled": "Orca에서 알림이 꺼져 있습니다. 알림을 켜고 다시 시도하세요.",
+      "osDisabled": "시스템 설정에서 알림이 꺼져 있습니다. 알림을 허용하고 다시 시도하세요.",
+      "noToken": "이 휴대전화에서 사용할 수 있는 푸시 토큰이 없습니다.",
+      "unsupportedHost": "이 데스크톱은 푸시 알림을 지원하지 않습니다. 푸시를 받으려면 업데이트하세요.",
+      "registrationPending": "이 데스크톱의 푸시 등록이 아직 준비되지 않았습니다. 잠시 후 다시 시도하세요.",
+      "liveFallbackScheduled": "{{reason}} 로컬 테스트를 예약했습니다. 알림을 확인하세요. Orca가 실행 중이고 연결되어 있는 동안 실시간 알림을 받을 수 있습니다."
     },
     "notificationSettingsScreen": {
       "description": "에이전트가 입력을 요청하거나 작업을 완료하면 이 기기에서 알림을 받으세요.",
