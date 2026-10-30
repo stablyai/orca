@@ -2,9 +2,10 @@ import { z } from 'zod'
 import type { SqliteRow } from '../../sqlite/sqlite-statement'
 import type { JournalReducerState } from './journal-reducer'
 import type { JournalEntryChange } from './journal-transition-collections'
-import { fields, scalarsV2 } from './journal-state-schema'
 import { journalEntryJson, journalStateScalars } from './journal-state-layout'
-import { JOURNAL_STATE_CODEC_VERSION, startJournalStateDecode } from './journal-state-codec'
+import { validateOutcomeFormat1 } from './journal-outcome-format-1'
+import { startOutcomeFormat1Decode } from './journal-outcome-format-1-decode'
+import { AgentSessionJournalError } from './journal-write-guards'
 
 export type JournalOutcome = {
   seq: number
@@ -14,11 +15,13 @@ export type JournalOutcome = {
   json: string
   deleted: boolean
 }
-const scalarSchemas = new Map<string, z.ZodType>(Object.entries(scalarsV2.shape))
-const collectionSchemas = new Map<string, z.ZodType>([
-  ...Object.entries(fields).filter(([, schema]) => schema instanceof z.ZodArray),
-  ['queue.cards', fields.queue.shape.cards]
-])
+
+/** Stored outcome content this build rejects; storage errors never become this, so they stay
+ * retryable, as main's replay keeps them. */
+export class JournalOutcomeDecodeError extends Error {
+  override readonly name = 'JournalOutcomeDecodeError'
+}
+
 const scalars = (state: JournalReducerState): Record<string, unknown> =>
   z.record(z.string(), z.unknown()).parse(JSON.parse(journalStateScalars(state)))
 
@@ -52,7 +55,10 @@ export function encodeJournalOutcomes(
     }
   }
   for (const value of values) {
-    validateOutcome(value)
+    // A reducer field format 1 has no home for needs a new outcome format, never a silent change.
+    if (validateOutcomeFormat1(value) === 'unknown') {
+      throw new Error(`journal outcome format 1 does not store ${value.field} ${value.key}`)
+    }
   }
   return { values, scalars: next }
 }
@@ -62,67 +68,47 @@ export function journalOutcomeScalars(state: JournalReducerState): Record<string
 }
 
 export function decodeJournalOutcome(row: SqliteRow): JournalOutcome {
-  if (
-    typeof row.seq !== 'number' ||
-    !Number.isSafeInteger(row.seq) ||
-    row.seq < 1 ||
-    typeof row.field !== 'string' ||
-    typeof row.entry_key !== 'string' ||
-    typeof row.ordinal !== 'string' ||
-    !/^s\d{16}:\d{16}$/.test(row.ordinal) ||
-    typeof row.value_json !== 'string' ||
-    (row.deleted !== 0 && row.deleted !== 1)
-  ) {
-    throw new Error('invalid journal outcome')
-  }
-  const value = {
-    seq: row.seq,
-    field: row.field,
-    key: row.entry_key,
-    ordinal: row.ordinal,
-    json: row.value_json,
-    deleted: row.deleted === 1
-  }
-  validateOutcome(value)
-  return value
+  return decodingOutcome(() => {
+    if (
+      typeof row.seq !== 'number' ||
+      !Number.isSafeInteger(row.seq) ||
+      row.seq < 1 ||
+      typeof row.field !== 'string' ||
+      typeof row.entry_key !== 'string' ||
+      typeof row.ordinal !== 'string' ||
+      !/^s\d{16}:\d{16}$/.test(row.ordinal) ||
+      typeof row.value_json !== 'string' ||
+      (row.deleted !== 0 && row.deleted !== 1)
+    ) {
+      throw new Error('invalid journal outcome')
+    }
+    const value = {
+      seq: row.seq,
+      field: row.field,
+      key: row.entry_key,
+      ordinal: row.ordinal,
+      json: row.value_json,
+      deleted: row.deleted === 1
+    }
+    if (validateOutcomeFormat1(value) === 'unknown') {
+      throw new AgentSessionJournalError(
+        'journal_read_only',
+        'the chat holds a newer outcome field'
+      )
+    }
+    return value
+  })
 }
 
-function validateOutcome(value: Omit<JournalOutcome, 'ordinal'>): void {
-  const key: unknown = JSON.parse(value.key)
-  if (value.field === '$') {
-    const schema = typeof key === 'string' ? scalarSchemas.get(key) : undefined
-    if (!schema || value.deleted) {
-      throw new Error('invalid journal scalar outcome')
+/** A pure decode: a newer writer's field is refused as newer, anything else it throws is damage. */
+export function decodingOutcome<T>(decode: () => T): T {
+  try {
+    return decode()
+  } catch (error) {
+    if (error instanceof AgentSessionJournalError || error instanceof JournalOutcomeDecodeError) {
+      throw error
     }
-    schema.parse(JSON.parse(value.json))
-    return
-  }
-  const schema = collectionSchemas.get(value.field)
-  if (!schema || (typeof key !== 'string' && typeof key !== 'number')) {
-    throw new Error('invalid journal collection outcome')
-  }
-  if (!value.deleted) {
-    const decoded: unknown = JSON.parse(value.json)
-    if (value.field === 'items') {
-      const item = fields.items.element.parse(decoded)
-      if (item.itemId !== key) {
-        throw new Error('mismatched journal item outcome')
-      }
-    } else if (value.field === 'itemEchoes') {
-      const echo = fields.itemEchoes.element.parse(decoded)
-      if (JSON.stringify(echo[0]) !== value.key) {
-        throw new Error('mismatched journal echo outcome')
-      }
-    } else {
-      const tuple = z.array(z.unknown()).parse(decoded)
-      const set = ['removedTurnIds', 'appliedSettlementIds', 'normalizedHandOffs'].includes(
-        value.field
-      )
-      schema.parse([set ? tuple[0] : tuple])
-      if (JSON.stringify(tuple[0]) !== value.key) {
-        throw new Error('mismatched journal keyed outcome')
-      }
-    }
+    throw new JournalOutcomeDecodeError('invalid journal outcome', { cause: error })
   }
 }
 
@@ -141,34 +127,35 @@ export class JournalOutcomeFold {
       field.set(value.key, value)
     }
   }
+
+  /** journalOutcomeSource admits only format 1, so every fold decodes as format 1. */
   *finishPages(
     sessionId: string,
     epoch: string,
     through: number
   ): Generator<void, JournalReducerState> {
-    const scalar = Object.fromEntries(
-      [...(this.values.get('$')?.values() ?? [])].map((value) => [
-        JSON.parse(value.key),
-        JSON.parse(value.json)
-      ])
+    const decode = decodingOutcome(() =>
+      startOutcomeFormat1Decode(
+        Object.fromEntries(
+          [...(this.values.get('$')?.values() ?? [])].map((value) => [
+            JSON.parse(value.key),
+            JSON.parse(value.json)
+          ])
+        )
+      )
     )
-    const decode = startJournalStateDecode(JOURNAL_STATE_CODEC_VERSION, JSON.stringify(scalar))
-    if (!decode) {
-      throw new Error('unsupported journal outcome state')
-    }
     let bytes = 0
     let count = 0
     for (const [field, entries] of this.values) {
       if (field === '$') {
         continue
       }
-      const ordered = [...entries.values()].sort((a, b) => a.ordinal.localeCompare(b.ordinal))
+      // Canonical ordinals compare bytewise, as SQLite's BINARY collation orders them.
+      const ordered = [...entries.values()].sort((a, b) => (a.ordinal < b.ordinal ? -1 : 1))
       for (const value of ordered) {
-        if (field === 'items') {
-          decode.item(value.json)
-        } else {
-          decode.entry(field, value.json)
-        }
+        decodingOutcome(() =>
+          field === 'items' ? decode.item(value.json) : decode.entry(field, value.json)
+        )
         bytes += Buffer.byteLength(value.json)
         count += 1
         if (count >= 32 || bytes >= 1 << 20) {
@@ -180,8 +167,17 @@ export class JournalOutcomeFold {
     }
     const state = decode.finish()
     if (state.sessionId !== sessionId || state.epoch !== epoch || state.lastSequence !== through) {
-      throw new Error('invalid journal outcome coverage')
+      throw new JournalOutcomeDecodeError('invalid journal outcome coverage')
     }
     return state
+  }
+
+  finish(sessionId: string, epoch: string, through: number): JournalReducerState {
+    const pages = this.finishPages(sessionId, epoch, through)
+    let step = pages.next()
+    while (!step.done) {
+      step = pages.next()
+    }
+    return step.value
   }
 }
