@@ -58,7 +58,7 @@ type NoticeEnglish = (parts: unknown[]) => string
 type IsFinal = (refusal: AgentSessionRefusalReference | undefined) => boolean
 
 let directory: string
-const journals = createTrackedJournalOpener()
+const journals = createTrackedJournalOpener({ legacyInputs: true })
 
 beforeAll(() => {
   directory = mkdtempSync(join(tmpdir(), 'orca-newer-chat-xv-'))

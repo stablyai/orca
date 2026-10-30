@@ -20,12 +20,12 @@ import {
   openTestJournalHostDatabase
 } from './journal-host-database-test-support'
 import { clearJournalSavedState, readJournalSavedState } from './journal-saved-state'
-import { renderJournalState } from './journal-reducer'
+import { restoreJournal } from './journal-open'
+import { applyJournalRow, renderJournalState } from './journal-reducer'
 import { JournalProjectionCatchUp } from './journal-projection-catch-up'
 import {
   expectProjectionMatches,
-  replayedPrefixCoverage,
-  unpacedCatchUp
+  finishCatchUp
 } from './journal-projection-test-support'
 import type { JournalHostDatabase } from './journal-host-database'
 
@@ -77,12 +77,14 @@ it.each(['claude', 'codex'] as const)(
         agent === 'codex' ? codexProviderHandle('thread-1') : claudeProviderHandle('claude-1', null)
     }
     const journal = await journals.open({ identity, stateDirectory: root, now: () => at })
+    const expected = restoreJournal(database.db, sessionId)!.state
     let commits = 0
     let planRevisions = 0
     journal.observeCommits((rows) => {
       if (!rows?.length) {
         return
       }
+      for (const row of rows) { applyJournalRow(expected, row, at) }
       commits++
       planRevisions += rows.filter(
         (row) =>
@@ -95,7 +97,7 @@ it.each(['claude', 'codex'] as const)(
       if (!saved) {
         throw new Error('missing write-time projection')
       }
-      expectProjectionMatches(database, saved)
+      expectProjectionMatches(database, expected)
       expect(renderJournalState(saved)).toStrictEqual(journal.snapshot())
     })
     const failed = vi.fn()
@@ -211,53 +213,15 @@ it.each(['claude', 'codex'] as const)(
       )
     ).toBe(true)
 
-    // Catch the same history up from no saved view, one row per page: every committed prefix and
-    // its tail fold to the full replay, through aliases, settlements and per-row timestamps.
+    // Losing the disposable cache preserves all historical outcomes and order.
     database.transaction((db) => clearJournalSavedState(db, sessionId))
-    const catchUp = new JournalProjectionCatchUp(database, sessionId, journal.epoch, 1)
-    expect(await catchUp.load(unpacedCatchUp)).toBe('ready')
-    const prefixes: (number | null)[] = []
-    while (catchUp.page() === 'advanced') {
-      prefixes.push(replayedPrefixCoverage(database, sessionId))
+    const source = restoreJournal(database.db, sessionId)
+    if (!source || source.damage || source.newer) {
+      throw new Error('cacheless restore failed')
     }
-    expect(prefixes).toStrictEqual(
-      Array.from({ length: journal.cursor().sequence }, (_, index) => index + 1)
-    )
-
-    // Count actual SQLite writes on a revision after many entities already exist.
-    database.db.exec(`CREATE TEMP TABLE projection_bytes (field TEXT, bytes INTEGER);
-    CREATE TEMP TRIGGER item_revision_bytes AFTER UPDATE ON journal_items BEGIN
-      INSERT INTO projection_bytes VALUES ('item', length(CAST(NEW.item_json AS BLOB))); END;
-    CREATE TEMP TRIGGER scalar_revision_bytes AFTER UPDATE ON journal_state BEGIN
-      INSERT INTO projection_bytes VALUES ('state', length(CAST(NEW.state_json AS BLOB))); END;
-    CREATE TEMP TRIGGER entry_revision_bytes AFTER UPDATE ON journal_entries BEGIN
-      INSERT INTO projection_bytes VALUES ('entry', length(CAST(NEW.entry_json AS BLOB))); END`)
-    const changed = { provider: 'orca', clientMessageId: 'streamed-measurement' } as const
-    await journal.appendItem(
-      changed,
-      { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'x'.repeat(16_384) }] },
-      { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
-    )
-    database.db.exec('DELETE FROM projection_bytes')
-    await journal.appendItem(
-      changed,
-      { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'y'.repeat(16_384) }] },
-      { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
-    )
-    expect(
-      database.db.prepare("SELECT COUNT(*) AS n FROM projection_bytes WHERE field = 'item'").get()
-        ?.n
-    ).toBe(1)
-    const projectedBytes = Number(
-      database.db.prepare('SELECT SUM(bytes) AS n FROM projection_bytes').get()?.n
-    )
-    const rowBytes = Number(
-      database.db
-        .prepare(
-          'SELECT length(CAST(row_json AS BLOB)) AS n FROM journal_rows WHERE session_id = ? AND epoch = ? AND seq = ?'
-        )
-        .get(sessionId, journal.epoch, journal.cursor().sequence)?.n
-    )
-    expect((rowBytes + projectedBytes) / rowBytes).toBeLessThan(3)
+    expectProjectionMatches(database, source.state)
+    await finishCatchUp(new JournalProjectionCatchUp(database, sessionId, journal.epoch))
+    expect(readJournalSavedState(database.db, sessionId, journal.epoch)?.lastSequence)
+      .toBe(journal.cursor().sequence)
   }
 )

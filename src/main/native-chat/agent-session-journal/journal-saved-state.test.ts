@@ -14,8 +14,6 @@ import {
 import { agentSessionSendBodyFingerprint } from '../../../shared/structured-agent-session-send-mutation'
 import { SQLITE_TABLE_DISPOSITIONS } from '../../../shared/wsl-move/wsl-move-storage-dispositions'
 import {
-  applyJournalRow,
-  createJournalReducerState,
   MAX_JOURNAL_APPLIED_SETTLEMENT_IDS,
   renderJournalState,
   type JournalReducerState
@@ -23,11 +21,13 @@ import {
 import {
   createTrackedJournalOpener,
   openTestJournalHostDatabase,
-  publishTestJournalEpoch,
-  insertTestJournalRow,
-  liveTestJournalRows,
-  saveTestJournalState
+  publishTestJournalEpoch
 } from './journal-host-database-test-support'
+import { publishJournalOutcomeEpoch } from './journal-outcome-write'
+import { journalOutcomeSource } from './journal-outcome-format'
+import { rebuildJournalOutcomes } from './journal-outcome-table'
+import { clearJournalSavedState } from './journal-saved-state'
+import { restoreJournal } from './journal-open'
 import { readJournalSavedState, readJournalSavedStatePages } from './journal-saved-state'
 import type { JournalRow } from './journal-row-schema'
 import type { JournalHostDatabase } from './journal-host-database'
@@ -66,15 +66,11 @@ afterEach(async () => {
 })
 
 function write(rows: readonly JournalRow[]): JournalReducerState {
-  const state = createJournalReducerState(identity.sessionId, epoch)
-  database.transaction((db) => {
+  const result = database.transaction((db) => {
     publishTestJournalEpoch(db, identity.sessionId, epoch)
-    for (const row of rows) {
-      insertTestJournalRow(db, identity.sessionId, row)
-      applyJournalRow(state, row)
-    }
+    return publishJournalOutcomeEpoch(db, identity.sessionId, epoch, rows)
   })
-  return state
+  return result.adopt()
 }
 
 function requireState(state: JournalReducerState | null | undefined): JournalReducerState {
@@ -114,7 +110,11 @@ it('round trips the complete replayed reducer, including insertion order and und
     'journal_items',
     'journal_entries',
     'journal_rows',
-    'journal_sessions'
+    'journal_sessions',
+    'journal_outcomes',
+    'journal_outcome_epochs',
+    'journal_outcome_attempts',
+    'journal_cache_stamp'
   ]) {
     expect(
       database.db
@@ -244,13 +244,16 @@ it('round trips the complete replayed reducer, including insertion order and und
   expect(state.itemEchoes.get(itemId(2))).toBeUndefined()
   expect([...state.appliedSettlementIds][0]).toBe('settlement-2')
   expect(state.derivedTurnScope.snapshot()).toBe(itemId(5))
-  saveTestJournalState(database, state)
+  const source = journalOutcomeSource(database.db, identity.sessionId, epoch)
+  if (!source) { throw new Error('missing outcomes') }
+  expectSameState(rebuildJournalOutcomes(database.db, identity.sessionId, epoch,
+    source.generation, source.through), state)
   const restored = requireState(readJournalSavedState(database.db, identity.sessionId, epoch))
   expectSameState(restored, state)
   // A paced reader decodes the same state one stored row per page.
   const pages = readJournalSavedStatePages(() => database.db, identity.sessionId, epoch, {
     rows: 1,
-    chars: Number.POSITIVE_INFINITY
+    bytes: Number.POSITIVE_INFINITY
   })
   let page = pages.next()
   let rests = 0
@@ -265,10 +268,6 @@ it('round trips the complete replayed reducer, including insertion order and und
     kind: 'turn',
     turnItemId: itemId(5)
   })
-  expect(liveTestJournalRows(database.db, identity.sessionId)).toHaveLength(rows.length)
-  // An unreleased whole-state layout used version 1; its chats replay instead of decoding it.
-  database.db
-    .prepare('UPDATE journal_state SET version = 1 WHERE session_id = ?')
-    .run(identity.sessionId)
-  expect(readJournalSavedState(database.db, identity.sessionId, epoch)).toBeNull()
+  database.transaction((db) => clearJournalSavedState(db, identity.sessionId))
+  expectSameState(requireState(restoreJournal(database.db, identity.sessionId)?.state), state)
 })

@@ -1,11 +1,10 @@
 import { isDeepStrictEqual } from 'node:util'
 import type Database from '../../sqlite/sync-database'
 import type { JournalHostDatabase } from './journal-host-database'
-import { applyJournalRow, type JournalReducerState } from './journal-reducer'
+import type { JournalReducerState } from './journal-reducer'
 import type { JournalRow } from './journal-row-schema'
 import type { JournalWriteQueue } from './journal-write-queue'
-import { isolateJournalTransition } from './journal-reducer-transition'
-import { writeJournalProjection } from './journal-projection-table'
+import { prepareJournalOutcomeWrite } from './journal-outcome-write'
 import { encodeJournalState } from './journal-state-codec'
 import { restoreJournal } from './journal-open'
 import {
@@ -15,8 +14,7 @@ import {
 } from './journal-projection-catch-up'
 import {
   logJournalProjectionFailure,
-  unrefJournalProjectionTimer,
-  writeJournalProjectionSavepoint
+  unrefJournalProjectionTimer
 } from './journal-saved-state'
 
 // Each failed page or savepoint quadruples the wait, so a full disk is not retried on a short fixed
@@ -35,6 +33,7 @@ export class JournalWriteProjection {
   private verifiedAt = Number.NEGATIVE_INFINITY
   private timer: ReturnType<typeof setTimeout> | null = null
   private closed = false
+  private parked: string | null = null
   private catchUp: JournalProjectionCatchUp | null = null
   private catchingUp: Promise<void> | null = null
 
@@ -50,7 +49,9 @@ export class JournalWriteProjection {
   opened(through: number): void {
     this.through = through
     this.failures = 0
+    this.catchUp?.close()
     this.catchUp = null
+    this.parked = null
     this.clearTimer()
     this.schedule()
   }
@@ -58,15 +59,12 @@ export class JournalWriteProjection {
   /** The callback is invoked only after the outer transaction has committed. */
   prepare(db: Database.Database, rows: readonly JournalRow[], savedAt: number): () => void {
     const live = this.deps.state()
-    const transition = isolateJournalTransition(live, (draft) => {
-      for (const row of rows) {
-        applyJournalRow(draft, row, savedAt)
-      }
-    })
     const attempted = this.through === live.lastSequence && this.through > 0
-    const projected = attempted && this.write(db, transition)
+    const transition = prepareJournalOutcomeWrite(db, live, rows, savedAt, attempted)
+    const projected = transition.cached
     return () => {
       this.deps.adopt(transition.adopt())
+      this.parked = null
       if (projected) {
         this.through = this.deps.state().lastSequence
         this.failures = 0
@@ -80,7 +78,7 @@ export class JournalWriteProjection {
   /** Timer and background requests join the one catch-up in flight. */
   repair = (): Promise<void> => {
     // A closing chat's next open repairs it.
-    if (this.closed) {
+    if (this.closed || this.parked === this.position()) {
       return Promise.resolve()
     }
     this.catchingUp ??= this.catchUpPages().finally(() => {
@@ -109,6 +107,7 @@ export class JournalWriteProjection {
         // Coverage reached the tip: the private prefix is no longer needed, and later lag derives
         // a new one from durable coverage.
         if (this.through === live.lastSequence) {
+          this.catchUp?.close()
           this.catchUp = null
           return
         }
@@ -119,14 +118,20 @@ export class JournalWriteProjection {
         this.catchUp = catchUp
         const loaded = await catchUp.load(pacing)
         if (loaded === 'stopped') {
+          catchUp.close()
+          this.catchUp = null
           return
         }
         const step =
           loaded === 'parked'
             ? 'parked'
             : await this.deps.queue.serialize(() => pace.work(() => this.page(catchUp)))
-        // A failed or parked page keeps the private prefix for its retry.
         if (step === 'failed' || step === 'parked') {
+          catchUp.close()
+          this.catchUp = null
+          if (step === 'parked') {
+            this.parked = this.position()
+          }
           this.failures += 1
           return
         }
@@ -137,6 +142,8 @@ export class JournalWriteProjection {
         await pace.rest()
       }
     } catch (error) {
+      this.catchUp?.close()
+      this.catchUp = null
       if (!this.closed) {
         this.failures += 1
         logJournalProjectionFailure(this.deps.state().sessionId, error)
@@ -185,6 +192,7 @@ export class JournalWriteProjection {
 
   close(): void {
     this.closed = true
+    this.catchUp?.close()
     this.catchUp = null
     this.clearTimer()
   }
@@ -199,8 +207,13 @@ export class JournalWriteProjection {
       loaded.newer ||
       !isDeepStrictEqual(encodeJournalState(loaded.state), encodeJournalState(live))
     ) {
-      throw new Error('journal projection and contiguous tail differ from live state')
+      throw new Error('journal outcome cache differs from live state')
     }
+  }
+
+  private position(): string {
+    const state = this.deps.state()
+    return `${state.epoch}\n${state.lastSequence}`
   }
 
   private clearTimer(): void {
@@ -213,6 +226,7 @@ export class JournalWriteProjection {
   private schedule(): void {
     if (
       this.closed ||
+      this.parked === this.position() ||
       this.timer ||
       this.catchingUp ||
       this.through === this.deps.state().lastSequence
@@ -227,12 +241,4 @@ export class JournalWriteProjection {
     unrefJournalProjectionTimer(this.timer)
   }
 
-  private write(
-    db: Database.Database,
-    transition: ReturnType<typeof isolateJournalTransition>
-  ): boolean {
-    return writeJournalProjectionSavepoint(db, transition.state.sessionId, () =>
-      writeJournalProjection(db, transition.state, transition.changes())
-    )
-  }
 }

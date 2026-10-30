@@ -88,7 +88,7 @@ export function readJournalRowsAfter(
   )
 }
 
-/** Reads up to `limit` rows, stopping after the row whose text reaches `maxChars` (UTF-16 units);
+/** Reads up to `limit` rows, stopping after the row whose UTF-8 text reaches `maxBytes`;
  * the cursor stops there, so later rows are never fetched for this page. */
 export function readJournalRowsWithin(
   db: Database.Database,
@@ -96,10 +96,10 @@ export function readJournalRowsWithin(
   epoch: string,
   afterSeq: number,
   limit: number,
-  maxChars: number
+  maxBytes: number
 ): JournalStoredRow[] {
   const rows: JournalStoredRow[] = []
-  let chars = 0
+  let bytes = 0
   for (const row of db
     .prepare(SELECT_ROWS_AFTER_LIMITED)
     .iterate(sessionId, epoch, afterSeq, limit)) {
@@ -109,9 +109,9 @@ export function readJournalRowsWithin(
       typeof row.row_json === 'string'
     ) {
       rows.push({ epoch, seq: row.seq, ts: row.ts, rowJson: row.row_json })
-      chars += row.row_json.length
+      bytes += Buffer.byteLength(row.row_json, 'utf8')
     }
-    if (chars >= maxChars) {
+    if (bytes >= maxBytes) {
       break
     }
   }

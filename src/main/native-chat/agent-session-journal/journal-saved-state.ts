@@ -3,24 +3,8 @@ import type { SqliteBindings, SqliteRow, SqliteStatement } from '../../sqlite/sq
 import type { JournalHostDatabase } from './journal-host-database'
 import type { JournalReducerState } from './journal-reducer'
 import { startJournalStateDecode } from './journal-state-codec'
-import { clearJournalSavedState, publishJournalProjection } from './journal-projection-table'
 
 export { ensureJournalSavedStateTables, clearJournalSavedState } from './journal-projection-table'
-
-/** The saved row a projection delta is computed from; null when the chat has none. */
-export type JournalSavedStamp = { epoch: string; through: number; version: number } | null
-
-export function readJournalSavedStamp(db: Database.Database, sessionId: string): JournalSavedStamp {
-  const row = db
-    .prepare('SELECT epoch, through_seq, version FROM journal_state WHERE session_id = ?')
-    .get(sessionId)
-  return row &&
-    typeof row.epoch === 'string' &&
-    typeof row.through_seq === 'number' &&
-    typeof row.version === 'number'
-    ? { epoch: row.epoch, through: row.through_seq, version: row.version }
-    : null
-}
 
 export function readJournalSavedState(
   db: Database.Database,
@@ -43,8 +27,8 @@ export function readJournalSavedState(
 /** A decoded view, none for this epoch, or a present view this build cannot read. */
 export type JournalSavedView = JournalReducerState | 'absent' | 'unreadable'
 
-/** Rows per page and the stored text (UTF-16 units) after which a page stops; at least one row. */
-export type JournalSavedPage = { rows: number; chars: number }
+/** Rows per page and the stored UTF-8 bytes after which a page stops; at least one row. */
+export type JournalSavedPage = { rows: number; bytes: number }
 
 /** Decodes the view in storage-order pages, yielding between them; the default reads each table at
  * once. Content this codec rejects is unreadable; storage errors throw, so they are never absent. */
@@ -52,7 +36,7 @@ export function* readJournalSavedStatePages(
   database: () => Database.Database,
   sessionId: string,
   epoch: string,
-  page: JournalSavedPage = { rows: -1, chars: Number.POSITIVE_INFINITY }
+  page: JournalSavedPage = { rows: -1, bytes: Number.POSITIVE_INFINITY }
 ): Generator<void, JournalSavedView> {
   const row = database()
     .prepare(`SELECT through_seq, version, state_json FROM journal_state
@@ -70,7 +54,7 @@ export function* readJournalSavedStatePages(
   if (decode === 'unreadable') {
     return 'unreadable'
   }
-  let ordinal = -1
+  let ordinal: number | string = -1
   for (let more = true; more;) {
     const items = readTextPage(
       database().prepare(`SELECT ordinal, item_json FROM journal_items
@@ -81,7 +65,7 @@ export function* readJournalSavedStatePages(
     )
     for (const item of items.rows) {
       const next = decoding(sessionId, () => {
-        if (typeof item.ordinal !== 'number' || typeof item.item_json !== 'string') {
+        if ((typeof item.ordinal !== 'number' && typeof item.ordinal !== 'string') || typeof item.item_json !== 'string') {
           throw new Error('invalid saved journal item')
         }
         decode.item(item.item_json)
@@ -112,7 +96,7 @@ export function* readJournalSavedStatePages(
       const next = decoding(sessionId, () => {
         if (
           typeof entry.field !== 'string' ||
-          typeof entry.ordinal !== 'number' ||
+          (typeof entry.ordinal !== 'number' && typeof entry.ordinal !== 'string') ||
           typeof entry.entry_json !== 'string'
         ) {
           throw new Error('invalid saved journal entry')
@@ -162,32 +146,31 @@ function readTextPage(
   page: JournalSavedPage
 ): { rows: SqliteRow[]; more: boolean } {
   const rows: SqliteRow[] = []
-  let chars = 0
+  let bytes = 0
   for (const row of statement.iterate(...parameters, page.rows)) {
     rows.push(row)
     const text = row[column]
-    chars += typeof text === 'string' ? text.length : 0
-    if (chars >= page.chars) {
+    bytes += typeof text === 'string' ? Buffer.byteLength(text) : 0
+    if (bytes >= page.bytes) {
       return { rows, more: true }
     }
   }
   return { rows, more: page.rows >= 0 && rows.length === page.rows }
 }
 
-/** Items and entries are written only beside their session's state row, so orphans are found from
- * one row per chat; the deletes use each session's key prefix. */
-export function sweepJournalSavedState(database: JournalHostDatabase): void {
-  database.transaction((db) => {
-    const orphans = db
-      .prepare(`SELECT c.session_id FROM journal_state c
-      LEFT JOIN journal_sessions s ON s.session_id = c.session_id AND s.epoch = c.epoch
-      WHERE s.session_id IS NULL`)
-      .all()
-    for (const { session_id: sessionId } of orphans) {
-      if (typeof sessionId === 'string') {
-        clearJournalSavedState(db, sessionId)
+/** Old epochs leave only disposable rows; retire one bounded page between maintenance rests. */
+export function sweepJournalSavedState(database: JournalHostDatabase): boolean {
+  return database.transaction((db) => {
+    for (const table of ['journal_items', 'journal_entries', 'journal_cache_stamp', 'journal_state']) {
+      const removed = db.prepare(`DELETE FROM ${table} WHERE rowid IN (
+        SELECT c.rowid FROM ${table} c LEFT JOIN journal_sessions s
+        ON s.session_id = c.session_id AND s.epoch = c.epoch
+        WHERE s.session_id IS NULL LIMIT 32)`).run()
+      if (removed.changes > 0) {
+        return true
       }
     }
+    return false
   })
 }
 
@@ -216,20 +199,12 @@ export function writeJournalProjectionSavepoint(
   return true
 }
 
-/** Epoch publishers write the new epoch's saved state with its rows; returns the coverage. */
-export function publishJournalEpochState(
-  db: Database.Database,
-  state: JournalReducerState
-): number {
-  return writeJournalProjectionSavepoint(db, state.sessionId, () =>
-    publishJournalProjection(db, state)
-  )
-    ? state.lastSequence
-    : 0
-}
-
 export function logJournalProjectionFailure(sessionId: string, error: unknown): void {
-  console.warn('[agent-session-journal] could not save chat state', { sessionId, error })
+  try {
+    console.warn('[agent-session-journal] could not save chat state', { sessionId, error })
+  } catch {
+    // Diagnostics cannot turn recovered cache failures into rejected sends.
+  }
 }
 
 /** Mobile test programs type global timers as numbers; Node timers may release the event loop. */

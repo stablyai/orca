@@ -1,5 +1,6 @@
 // Read user_version before persistent pragmas/DDL: even enabling WAL mutates newer databases.
 
+import { ensureJournalOutcomeTables } from './journal-outcome-format'
 import { ensureJournalSavedStateTables } from './journal-saved-state'
 import Database from '../../sqlite/sync-database'
 import { hardenSqliteDatabaseFiles } from '../../sqlite/harden-database-files'
@@ -74,6 +75,7 @@ export function openJournalDatabase(dbPath: string): OpenJournalDatabase {
     ensureQueuedMessagesTable(probe)
     ensureCommandReceiptsTable(probe)
     ensureJournalSavedStateTables(probe)
+    ensureJournalOutcomeTables(probe)
     ensureAgentSessionAttachmentClaimTables(probe)
     hardenSqliteDatabaseFiles(dbPath)
     transferred = true

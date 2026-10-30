@@ -35,7 +35,7 @@ const UNLOADABLE = {
 
 let root: string
 let clock = 1_000
-const journals = createTrackedJournalOpener()
+const journals = createTrackedJournalOpener({ legacyInputs: true })
 
 function item(ordinal: number): AgentJournalItemIdentity {
   return { provider: 'codex', threadId: 'thread-1', turnId: 'turn-1', ordinal }

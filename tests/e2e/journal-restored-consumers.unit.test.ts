@@ -36,9 +36,10 @@ import {
 } from '../../src/shared/structured-agent-session-reducer'
 import { selectStructuredAgentSettledTurns } from '../../src/shared/structured-agent-session-turn-timing'
 import {
-  insertTestJournalRow,
   openTestJournalHostDatabase
 } from '../../src/main/native-chat/agent-session-journal/journal-host-database-test-support'
+import { prepareJournalOutcomeWrite } from '../../src/main/native-chat/agent-session-journal/journal-outcome-write'
+import type { JournalRow } from '../../src/main/native-chat/agent-session-journal/journal-row-schema'
 import { readJournalSavedState } from '../../src/main/native-chat/agent-session-journal/journal-saved-state'
 import { hostTestAttachParams } from '../../src/main/native-chat/agent-session-wire/structured-agent-session-host-test-data'
 import {
@@ -289,8 +290,9 @@ it.each(clients)(
     const prefix = { epoch: saved.epoch, sequence: saved.lastSequence }
     expect(prefix.sequence).toBeGreaterThanOrEqual(resumeCursor.sequence)
     database.transaction((db) => {
+      const rows: JournalRow[] = []
       for (let offset = 1; offset <= AGENT_SESSION_HISTORY_MAX_LIMIT; offset += 1) {
-        insertTestJournalRow(db, SESSION, {
+        rows.push({
           v: AGENT_SESSION_JOURNAL_SCHEMA_VERSION,
           epoch: prefix.epoch,
           seq: prefix.sequence + offset,
@@ -305,7 +307,7 @@ it.each(clients)(
           turnScope
         })
       }
-      insertTestJournalRow(db, SESSION, {
+      rows.push({
         v: AGENT_SESSION_JOURNAL_SCHEMA_VERSION,
         epoch: prefix.epoch,
         seq: prefix.sequence + AGENT_SESSION_HISTORY_MAX_LIMIT + 1,
@@ -315,7 +317,8 @@ it.each(clients)(
         itemId: disposable.itemId,
         revision: disposable.revision + 1
       })
-    })
+      return prepareJournalOutcomeWrite(db, saved, rows, active.clock.now)
+    }, false, (result) => { result.adopt() })
     const restoredPage = await history({ direction: 'tail' })
     expect(restoredPage.liveCursor?.sequence).toBeGreaterThan(prefix.sequence)
     expect(active.adapter.acquire).toHaveBeenCalledTimes(1)

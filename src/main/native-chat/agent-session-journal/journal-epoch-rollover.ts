@@ -1,6 +1,8 @@
 // Delete and replace epochs atomically; retaining superseded rows would grow history without bound.
 
-import { clearJournalSavedState, publishJournalEpochState } from './journal-saved-state'
+import { clearJournalSavedState } from './journal-saved-state'
+import { journalOutcomeSource } from './journal-outcome-format'
+import { publishJournalOutcomeEpoch } from './journal-outcome-write'
 import { journalRowSchemaVersion } from '../../../shared/agent-session-journal-types'
 import type { AgentSessionJournalIdentity } from '../../../shared/agent-session-journal-types'
 import { agentSessionJournalProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
@@ -11,7 +13,6 @@ import { buildJournalQueueRow } from './journal-queue-events'
 import type { JournalQueueRestatement } from './journal-queued-messages'
 import {
   deleteJournalEpochRows,
-  insertJournalRow,
   publishJournalSessionEpoch,
   readJournalSessionEpoch
 } from './journal-row-table'
@@ -33,7 +34,6 @@ export function publishNewEpoch(input: {
     kind: 'epoch',
     reason: input.reason,
     providerHandle: agentSessionJournalProviderHandle(input.identity),
-    // Body-free epoch rows must remain readable by older hosts.
     v: journalRowSchemaVersion([]),
     epoch: input.epoch,
     seq: 1,
@@ -53,22 +53,22 @@ export function publishNewEpoch(input: {
     }
   }
   state.oldestSequence = 1
-  let projectionThrough = 0
   input.database.transaction((db) => {
-    clearJournalSavedState(db, sessionId)
     const retired = readJournalSessionEpoch(db, sessionId)
+    if (retired !== null) {
+      journalOutcomeSource(db, sessionId, retired)
+    }
+    clearJournalSavedState(db, sessionId)
     if (retired !== null) {
       deleteJournalEpochRows(db, sessionId, retired)
     }
-    for (const each of rows) {
-      insertJournalRow(db, sessionId, each)
-    }
     input.queue.receipt.write(db)
     publishJournalSessionEpoch(db, input.identity, input.epoch)
-    projectionThrough = publishJournalEpochState(db, state)
+    return publishJournalOutcomeEpoch(db, sessionId, state.epoch, rows)
+  }, false, (publication) => {
+    input.onPublished({ state: publication.adopt(), newer: null, damage: null,
+      projectionThrough: publication.through })
   })
 
-  // Adopt committed state before fallible work can leave writers targeting the deleted epoch.
   input.queue.receipt.committed()
-  input.onPublished({ state, newer: null, damage: null, projectionThrough })
 }

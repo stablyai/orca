@@ -20,6 +20,8 @@ export class JournalDraftMap<K, V> extends Map<K, V> {
   private readonly removed = new Set<K>()
   private readonly inserted = new Set<K>()
   private readonly touched = new Set<K>()
+  private readonly pending = new Set<K>()
+  private readonly recreated = new Set<K>()
 
   constructor(
     private readonly source: Map<K, V>,
@@ -45,6 +47,7 @@ export class JournalDraftMap<K, V> extends Map<K, V> {
   override set(key: K, value: V): this {
     if (!this.has(key)) {
       this.inserted.add(key)
+      this.recreated.add(key)
       this.touched.delete(key)
     }
     this.access.assign(value)
@@ -61,6 +64,7 @@ export class JournalDraftMap<K, V> extends Map<K, V> {
       this.removed.add(key)
     }
     this.inserted.delete(key)
+    this.recreated.delete(key)
     this.writes.delete(key)
     this.touch(key)
     return true
@@ -103,14 +107,19 @@ export class JournalDraftMap<K, V> extends Map<K, V> {
     }
   }
 
-  changes(): JournalEntryChange[] {
-    return [...this.touched].map((key) => ({
+  changes(reset = false): JournalEntryChange[] {
+    const changes = [...this.pending].map((key) => ({
       path: this.path,
       key,
       deleted: !this.has(key),
-      reinsert: this.inserted.has(key),
+      reinsert: this.recreated.has(key),
       value: this.get(key)
     }))
+    if (reset) {
+      this.pending.clear()
+      this.recreated.clear()
+    }
+    return changes
   }
 
   finish(): Map<K, V> {
@@ -141,6 +150,7 @@ export class JournalDraftMap<K, V> extends Map<K, V> {
 
   private touch(key: K): void {
     this.touched.add(key)
+    this.pending.add(key)
     this.changed()
   }
 }
@@ -149,6 +159,8 @@ export class JournalDraftSet<T> extends Set<T> {
   private readonly removed = new Set<T>()
   private readonly inserted = new Set<T>()
   private readonly touched = new Set<T>()
+  private readonly pending = new Set<T>()
+  private readonly recreated = new Set<T>()
 
   constructor(
     private readonly source: Set<T>,
@@ -168,6 +180,8 @@ export class JournalDraftSet<T> extends Set<T> {
   override add(value: T): this {
     if (!this.has(value)) {
       this.inserted.add(value)
+      this.recreated.add(value)
+      this.pending.add(value)
       this.touched.delete(value)
       this.touched.add(value)
       this.changed()
@@ -182,6 +196,8 @@ export class JournalDraftSet<T> extends Set<T> {
       this.removed.add(value)
     }
     this.inserted.delete(value)
+    this.recreated.delete(value)
+    this.pending.add(value)
     this.touched.add(value)
     this.changed()
     return true
@@ -215,14 +231,19 @@ export class JournalDraftSet<T> extends Set<T> {
       callback.call(thisArg, value, value, this)
     }
   }
-  changes(): JournalEntryChange[] {
-    return [...this.touched].map((key) => ({
+  changes(reset = false): JournalEntryChange[] {
+    const changes = [...this.pending].map((key) => ({
       path: this.path,
       key,
       deleted: !this.has(key),
-      reinsert: this.inserted.has(key),
+      reinsert: this.recreated.has(key),
       value: key
     }))
+    if (reset) {
+      this.pending.clear()
+      this.recreated.clear()
+    }
+    return changes
   }
   finish(): Set<T> {
     const changes = [...this.touched].map((value) => ({

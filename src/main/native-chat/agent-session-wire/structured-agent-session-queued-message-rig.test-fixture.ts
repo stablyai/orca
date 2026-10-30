@@ -28,8 +28,9 @@ import {
 } from './structured-agent-session-host-test-data'
 import {
   closeTestJournalHostDatabase,
-  openTestJournalHostDatabase
+  openTestJournalHostDatabase, pinTestJournalInputMode
 } from '../agent-session-journal/journal-host-database-test-support'
+import { seedQueuedRigLegacyJournal } from './structured-agent-session-queued-legacy-journal.test-fixture'
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
 import {
   createQueuedRigProvider,
@@ -53,6 +54,7 @@ export type QueuedMessageTestRig = Awaited<ReturnType<typeof createQueuedMessage
 export async function createQueuedMessageTestRig(
   options: QueuedRigProviderOptions & {
     sessionId?: string
+    legacyInputs?: true
     idleSweep?: { idleMs: number; intervalMs: number }
     now?: () => number
     /** Teardown records its restart offers, which `restartOffers` lists. */
@@ -100,7 +102,9 @@ export async function createQueuedMessageTestRig(
         } as const)
       : {})
   })
+  if (options.legacyInputs) { seedQueuedRigLegacyJournal(root, SESSION, options.agent) }
   expect(await host.attach(QUEUED_RIG_CALLER, firstAttach)).toMatchObject({ ok: true })
+  if (options.legacyInputs) { pinTestJournalInputMode(host.collaboratorsForTests().sessions.get(SESSION)!.journal) }
 
   function envelope(
     fields: Record<string, unknown>,

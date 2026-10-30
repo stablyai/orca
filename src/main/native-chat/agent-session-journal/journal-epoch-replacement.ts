@@ -1,4 +1,6 @@
-import { clearJournalSavedState, publishJournalEpochState } from './journal-saved-state'
+import { clearJournalSavedState } from './journal-saved-state'
+import { journalOutcomeSource } from './journal-outcome-format'
+import { publishJournalOutcomeEpoch } from './journal-outcome-write'
 import {
   journalItemEchoFields,
   journalItemEchoRestatement,
@@ -44,7 +46,6 @@ import {
 import type { JournalQueuePauseRestatement } from './queued-message-pause'
 import {
   deleteJournalEpochRows,
-  insertJournalRow,
   publishJournalSessionEpoch,
   readJournalSessionEpoch
 } from './journal-row-table'
@@ -194,15 +195,16 @@ export function replaceJournalEpoch(input: {
   const receipt = input.receipt?.({ epoch, sequence: state.lastSequence })
   const claimsCommitted: (() => void)[] = []
   state.oldestSequence = 1
-  let projectionThrough = 0
   input.database.transaction((db) => {
-    clearJournalSavedState(db, sessionId)
     const retired = readJournalSessionEpoch(db, sessionId)
+    if (retired !== null) {
+      journalOutcomeSource(db, sessionId, retired)
+    }
+    clearJournalSavedState(db, sessionId)
     if (retired !== null) {
       deleteJournalEpochRows(db, sessionId, retired)
     }
     for (const row of rows) {
-      insertJournalRow(db, sessionId, row)
       const body = row.kind === 'item' || row.kind === 'submission' ? row.body : null
       if (
         body?.kind === 'message' &&
@@ -218,12 +220,13 @@ export function replaceJournalEpoch(input: {
     input.queue.receipt.write(db)
     publishJournalSessionEpoch(db, input.identity, epoch)
     receipt?.write(db)
-    projectionThrough = publishJournalEpochState(db, state)
+    return publishJournalOutcomeEpoch(db, sessionId, state.epoch, rows)
+  }, false, (publication) => {
+    input.onPublished({ state: publication.adopt(), newer: null, damage: null,
+      projectionThrough: publication.through })
   })
   claimsCommitted.forEach((commit) => commit())
   input.queue.receipt.committed()
 
-  // Adopt the committed epoch immediately; later failures must not leave writers targeting deleted rows.
-  input.onPublished({ state, newer: null, damage: null, projectionThrough })
   receipt?.committed()
 }

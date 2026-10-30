@@ -46,12 +46,20 @@ class JournalDraft {
     this.nodes += 1
     const listeners = new Set<() => void>()
     let dirty = false
+    let notifying = false
     const mark = (): void => {
-      if (!dirty) {
-        dirty = true
+      dirty = true
+      if (notifying) {
+        return
+      }
+      // A batch consumes changes after each row; later mutations must notify again.
+      notifying = true
+      try {
         for (const notify of listeners) {
           notify()
         }
+      } finally {
+        notifying = false
       }
     }
     const listen = (notify: () => void): void => {
@@ -160,8 +168,8 @@ class JournalDraft {
     return node
   }
 
-  changes(): JournalEntryChange[] {
-    return this.collections.flatMap((collection) => collection.changes())
+  changes(reset = false): JournalEntryChange[] {
+    return this.collections.flatMap((collection) => collection.changes(reset))
   }
 
   adopt<T>(value: T): T {
@@ -223,7 +231,7 @@ export function isolateJournalTransition<T>(
 ): {
   state: JournalReducerState
   result: T
-  changes: () => JournalEntryChange[]
+  changes: (reset?: boolean) => JournalEntryChange[]
   adopt: () => JournalReducerState
   tracked: () => number
 } {
@@ -233,7 +241,7 @@ export function isolateJournalTransition<T>(
   return {
     state: candidate,
     result,
-    changes: () => draft.changes(),
+    changes: (reset) => draft.changes(reset),
     adopt: () => draft.adopt(candidate),
     tracked: () => draft.nodes
   }

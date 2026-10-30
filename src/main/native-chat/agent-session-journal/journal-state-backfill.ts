@@ -1,5 +1,6 @@
 // Closed chats catch up page by page between rests; an open chat takes over at a page boundary.
 
+import { sweepJournalOutcomePage } from './journal-outcome-cleanup'
 import type { JournalHostDatabase } from './journal-host-database'
 import { journalCatchUpPace, JournalProjectionCatchUp } from './journal-projection-catch-up'
 import {
@@ -36,18 +37,24 @@ export async function backfillJournalState(run: JournalStateBackfillRun): Promis
   if (!database) {
     return
   }
-  pace.work(() => sweepJournalSavedState(database))
+  while (current() && pace.work(() => sweepJournalOutcomePage(database))) {
+    await pace.rest()
+  }
+  while (current() && pace.work(() => sweepJournalSavedState(database))) {
+    await pace.rest()
+  }
   const sessions = pace.work(() =>
     database.db
       .prepare(`SELECT s.session_id, s.epoch,
-      (SELECT MAX(r.seq) FROM journal_rows r
-        WHERE r.session_id = s.session_id AND r.epoch = s.epoch) AS last_seq
+      COALESCE(e.through_seq, (SELECT MAX(r.seq) FROM journal_rows r
+        WHERE r.session_id = s.session_id AND r.epoch = s.epoch)) AS last_seq
     FROM journal_sessions s
+    LEFT JOIN journal_outcome_epochs e ON e.session_id = s.session_id AND e.epoch = s.epoch
     LEFT JOIN journal_state c ON c.session_id = s.session_id AND c.epoch = s.epoch
-    WHERE c.through_seq IS NULL OR c.through_seq < (
-      SELECT MAX(r.seq) FROM journal_rows r
-        WHERE r.session_id = s.session_id AND r.epoch = s.epoch
-    ) ORDER BY s.session_id`)
+    LEFT JOIN journal_cache_stamp k ON k.session_id = s.session_id AND k.epoch = s.epoch
+    WHERE e.session_id IS NULL OR c.through_seq IS NULL OR k.through_seq IS NULL
+      OR k.generation != e.generation OR c.through_seq < e.through_seq
+      OR k.through_seq < e.through_seq ORDER BY s.session_id`)
       .all()
   )
   for (const session of sessions) {
@@ -65,25 +72,29 @@ export async function backfillJournalState(run: JournalStateBackfillRun): Promis
     }
     try {
       const catchUp = new JournalProjectionCatchUp(database, sessionId, epoch)
-      for (;;) {
-        if (!(await pacing.rest())) {
-          return
+      try {
+        for (;;) {
+          if (!(await pacing.rest())) {
+            return
+          }
+          // An open chat owns its lane and continues from the last committed page.
+          if (await run.repairOpen(sessionId)) {
+            break
+          }
+          const loaded = await catchUp.load(pacing)
+          if (loaded === 'stopped' || !current()) {
+            return
+          }
+          const step = loaded === 'parked' ? 'parked' : pace.work(() => catchUp.page())
+          if (step === 'parked') {
+            run.unpublishable?.set(sessionId, attempt)
+          }
+          if (step !== 'advanced' && step !== 'stale') {
+            break
+          }
         }
-        // An open chat owns its lane and continues from the last committed page.
-        if (await run.repairOpen(sessionId)) {
-          break
-        }
-        const loaded = await catchUp.load(pacing)
-        if (loaded === 'stopped' || !current()) {
-          return
-        }
-        const step = loaded === 'parked' ? 'parked' : pace.work(() => catchUp.page())
-        if (step === 'parked') {
-          run.unpublishable?.set(sessionId, attempt)
-        }
-        if (step !== 'advanced' && step !== 'stale') {
-          break
-        }
+      } finally {
+        catchUp.close()
       }
     } catch (error) {
       logJournalProjectionFailure(sessionId, error)

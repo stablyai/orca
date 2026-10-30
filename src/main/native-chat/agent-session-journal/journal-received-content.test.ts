@@ -134,13 +134,11 @@ it.each(['claude', 'codex'] as const)(
     if (!replay.ok) {
       throw new Error('Expected the held writes to remain replayable')
     }
-    expect(replay.rows[0]).toMatchObject({ kind: 'item', body: { kind: 'status', text: 'before' } })
-    expect(
-      replay.rows.findIndex(
-        (row) =>
-          row.kind === 'item' && row.body.kind === 'tool-call' && row.body.state === 'completed'
-      )
-    ).toBeGreaterThan(0)
+    expect(replay.rows[0]).toMatchObject({ kind: 'outcome' })
+    const durable = reopened.snapshot().items.filter((item) => item.sequence > cursor.sequence)
+    expect(durable[0]?.body).toMatchObject({ kind: 'status', text: 'before' })
+    expect(durable.findIndex((item) => item.body.kind === 'tool-call' && item.body.state === 'completed'))
+      .toBeGreaterThan(0)
     expect(
       reopened.snapshot().items.flatMap(({ body }) => (body.kind === 'tool-call' ? [body] : []))
     ).toContainEqual(
@@ -211,13 +209,11 @@ it('hands an ACP omitted-field completion to SQLite before root exit with a bloc
   if (!replay.ok) {
     throw new Error('Expected the held writes to remain replayable')
   }
-  expect(replay.rows[0]).toMatchObject({ kind: 'item', body: { kind: 'status', text: 'before' } })
-  expect(
-    replay.rows.findIndex(
-      (row) =>
-        row.kind === 'item' && row.body.kind === 'tool-call' && row.body.state === 'completed'
-    )
-  ).toBeGreaterThan(0)
+  expect(replay.rows[0]).toMatchObject({ kind: 'outcome' })
+  const durable = reopened.snapshot().items.filter((item) => item.sequence > cursor.sequence)
+  expect(durable[0]?.body).toMatchObject({ kind: 'status', text: 'before' })
+  expect(durable.findIndex((item) => item.body.kind === 'tool-call' && item.body.state === 'completed'))
+    .toBeGreaterThan(0)
   expect(
     reopened.snapshot().items.flatMap(({ body }) => (body.kind === 'tool-call' ? [body] : []))
   ).toContainEqual(

@@ -5,7 +5,7 @@ import type {
   AgentJournalResetReason
 } from '../../../shared/agent-session-journal-types'
 import type { JournalReadSince } from './journal-store-contracts'
-import type { JournalRow } from './journal-row-schema'
+import type { JournalReadRow } from './journal-read-row'
 
 export type JournalCursorRange = {
   epoch: string
@@ -70,7 +70,7 @@ export function findSequenceGap(
 export function readJournalSince(
   source: {
     state: { epoch: string; lastSequence: number; oldestSequence: number }
-    rowsAfter: (afterSequence: number) => JournalRow[]
+    rowsAfter: (afterSequence: number) => JournalReadRow[]
   },
   cursor: AgentJournalCursor,
   currentCursor: () => AgentJournalCursor

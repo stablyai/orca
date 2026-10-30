@@ -63,7 +63,7 @@ test.each(['v1.4.219', 'v1.4.220', WRITABLE_BASELINE_REF])(
   '%s replays current raw rows with the unconfirmed failure intact',
   async (ref) => {
     const directory = mkdtempSync(join(tmpdir(), 'orca-stop-note-raw-skew-'))
-    const journals = createTrackedJournalOpener()
+    const journals = createTrackedJournalOpener({ legacyInputs: true })
     try {
       const journal = await journals.open({ identity: IDENTITY, stateDirectory: directory })
       const turn = { provider: 'orca', clientMessageId: 'turn-raw-skew' } as const
@@ -137,7 +137,7 @@ type OldReplay = {
 // Both downgrade probes load real old builds, including cold extraction and transforms.
 test("an older build keeps every row around a Stop's event, a Resume and a reopen mark, and folds the rows after them", async () => {
   const directory = mkdtempSync(join(tmpdir(), 'orca-stop-event-downgrade-'))
-  const journals = createTrackedJournalOpener()
+  const journals = createTrackedJournalOpener({ legacyInputs: true })
   try {
     // This build: history, a person's Stop, a Resume, then more history.
     const journal = await journals.open({ identity: IDENTITY, stateDirectory: directory })
@@ -253,7 +253,7 @@ function storedRows(directory: string): string[] {
 
 test("an older build opens this build's journal writable and appends to it; the pause survives the round trip", async () => {
   const directory = mkdtempSync(join(tmpdir(), 'orca-stop-event-writable-downgrade-'))
-  const journals = createTrackedJournalOpener()
+  const journals = createTrackedJournalOpener({ legacyInputs: true })
   const itemIds = (journal: Pick<OlderJournal, 'snapshot'>) =>
     journal.snapshot().items.map((entry) => entry.itemId)
   try {
@@ -301,7 +301,7 @@ test("an older build opens this build's journal writable and appends to it; the 
 // Move the pinned baseline once a released reader preserves them.
 test("this build keeps a newer build's row kind and refuses the load; a build before it deletes it", async () => {
   const directory = mkdtempSync(join(tmpdir(), 'orca-newer-kind-downgrade-'))
-  const journals = createTrackedJournalOpener()
+  const journals = createTrackedJournalOpener({ legacyInputs: true })
   const newerKinds = () => storedRows(directory).filter((row) => row.includes('"future-mark"'))
   try {
     const scope = { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
