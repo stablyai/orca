@@ -7,13 +7,13 @@ import { expect, it, vi } from 'vitest'
 import {
   createOwnerBridge,
   ownerCleanup,
-  integrationRows as rows,
   integrationDeadline as deadline
 } from './push-owner-bridge.test-fixture'
 import {
   desktopActors,
   settleOwnerDelivery,
-  expectOwnerEnrollment
+  expectOwnerEnrollment,
+  ownerCapacityPhase
 } from './push-owner-desktop.test-fixture'
 import {
   httpResult,
@@ -30,8 +30,6 @@ it('keeps T2 through late/lost actual replies and recovers bounded source failur
   const closed = new Set<string>()
   let clock = 1_700_000_000_000
   vi.spyOn(Date, 'now').mockImplementation(() => clock)
-  const heldCap = Promise.withResolvers<void>()
-  let capPending = false
   const heldRoute = Promise.withResolvers<void>()
   const heldA = Promise.withResolvers<void>()
   const droppedA = Promise.withResolvers<void>()
@@ -49,18 +47,12 @@ it('keeps T2 through late/lost actual replies and recovers bounded source failur
     deadline(bridge.call('cloud', op, data), `cloud ${op}`)
   const mobile = (op: string, data: Record<string, unknown> = {}) =>
     deadline(bridge.call('mobile', op, data), `mobile ${op}`)
+  const capacity = ownerCapacityPhase({ mobile, cloud, event: bridge.event, wait: bridge.wait })
   const gateway = async (value: Record<string, unknown>) => {
     if (text(value.url).endsWith('/v1/routes')) {
       routeAttempts++
     }
-    if (
-      capPending &&
-      text(value.url).endsWith('/v1/routes') &&
-      record(JSON.parse(text(value.body))).action === 'replace'
-    ) {
-      bridge.event('cap replace pending before commit')
-      await heldCap.promise
-    }
+    await capacity.before(value)
     const result = await cloud('http', value)
     const response = httpResult(result)
     const url = text(value.url)
@@ -71,9 +63,7 @@ it('keeps T2 through late/lost actual replies and recovers bounded source failur
     ) {
       expect(record(await response.clone().json()).status).toBe('accepted')
       const declaration = record(JSON.parse(text(value.body)))
-      if (Array.isArray(declaration.hosts)) {
-        bridge.event(`capacity:${declaration.hosts.length}`, declaration)
-      }
+      capacity.accepted(declaration)
       if (declaration.token === T1 && !t1RouteHeld) {
         t1RouteHeld = true
         bridge.event('T1 route committed')
@@ -266,49 +256,14 @@ it('keeps T2 through late/lost actual replies and recovers bounded source failur
     const prior = accepted
     await mobile('restart')
     await deadline(bridge.wait(`accepted:${prior + 1}`), 'saved-state disconnected restart')
-    await mobile('restore-cap-catalog')
-    const prior100 = record(await deadline(bridge.wait('capacity:100'), 'actual signed prior P100'))
-    if (!Array.isArray(prior100.hosts)) {
-      throw new Error('Missing actual P100')
-    }
-    expect(new Set(prior100.hosts).size).toBe(100)
-    capPending = true
-    const mutations = mobile('mutate-cap-catalog')
-    await deadline(
-      bridge.wait('cap replace pending before commit'),
-      'issued older capacity proposal'
-    )
-    await mutations // local metadata actions never await route acknowledgement
-    heldCap.resolve()
-    capPending = false
-    const retained99 = record(
-      await deadline(bridge.wait('capacity:99'), 'actual current retained99 replacement')
-    )
-    const members = retained99.hosts
-    if (!Array.isArray(members)) {
-      throw new Error('Missing actual retained set')
-    }
-    expect(actors.fingerprints.every((host) => members.includes(host))).toBe(true)
-    const capState = record(await cloud('snapshot'))
-    expect(
-      rows(capState.declarations).some(
-        (row) =>
-          row.version === retained99.version && JSON.parse(text(row.hosts_json)).length === 99
-      )
-    ).toBe(true)
+    await capacity.run(actors.fingerprints)
     await settle('cap-retained-provider', 9)
   } catch (error) {
     primary = { failed: true, error }
   }
   const cleanup = ownerCleanup(primary)
-  for (const barrier of [
-    heldCap,
-    heldA,
-    heldRoute,
-    droppedA,
-    refusalResponse,
-    registrationCommit
-  ]) {
+  await cleanup.run(() => capacity.release())
+  for (const barrier of [heldA, heldRoute, droppedA, refusalResponse, registrationCommit]) {
     await cleanup.run(() => barrier.resolve())
   }
   await cleanup.run(() => actors.stop())

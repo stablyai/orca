@@ -1,6 +1,9 @@
 import { createHash } from 'node:crypto'
 import { expect } from 'vitest'
-import { integrationRows as rows } from './push-owner-bridge.test-fixture'
+import {
+  integrationRows as rows,
+  integrationDeadline as deadline
+} from './push-owner-bridge.test-fixture'
 import { deriveRelayHostId } from '../mobile-cloud-relay/relay-http-client'
 import { join } from 'node:path'
 import { DeviceRegistry } from '../device-registry'
@@ -171,4 +174,66 @@ export function expectOwnerEnrollment(
     )
   ).toBe(true)
   expect(rows(snapshot.claims).every((claim) => claim.winner_route_key === routeKey)).toBe(true)
+}
+
+export function ownerCapacityPhase(ports: {
+  mobile(op: string): Promise<unknown>
+  cloud(op: string): Promise<unknown>
+  event(name: string, data?: unknown): void
+  wait(name: string): Promise<unknown>
+}) {
+  const held = Promise.withResolvers<void>()
+  let pending = false
+  return {
+    release: () => held.resolve(),
+    async before(value: Record<string, unknown>) {
+      if (
+        pending &&
+        text(value.url).endsWith('/v1/routes') &&
+        record(JSON.parse(text(value.body))).action === 'replace'
+      ) {
+        ports.event('cap replace pending before commit')
+        await held.promise
+      }
+    },
+    accepted(declaration: Record<string, unknown>) {
+      if (Array.isArray(declaration.hosts)) {
+        ports.event(`capacity:${declaration.hosts.length}`, declaration)
+      }
+    },
+    async run(fingerprints: readonly string[]) {
+      await ports.mobile('restore-cap-catalog')
+      const prior100 = record(
+        await deadline(ports.wait('capacity:100'), 'actual signed prior P100')
+      )
+      if (!Array.isArray(prior100.hosts)) {
+        throw new Error('Missing actual P100')
+      }
+      expect(new Set(prior100.hosts).size).toBe(100)
+      pending = true
+      const mutations = ports.mobile('mutate-cap-catalog')
+      await deadline(
+        ports.wait('cap replace pending before commit'),
+        'issued older capacity proposal'
+      )
+      await mutations // local metadata actions never await route acknowledgement
+      held.resolve()
+      pending = false
+      const retained99 = record(
+        await deadline(ports.wait('capacity:99'), 'actual current retained99 replacement')
+      )
+      const members = retained99.hosts
+      if (!Array.isArray(members)) {
+        throw new Error('Missing actual retained set')
+      }
+      expect(fingerprints.every((host) => members.includes(host))).toBe(true)
+      const snapshot = record(await ports.cloud('snapshot'))
+      expect(
+        rows(snapshot.declarations).some(
+          (row) =>
+            row.version === retained99.version && JSON.parse(text(row.hosts_json)).length === 99
+        )
+      ).toBe(true)
+    }
+  }
 }
