@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { StrictMode } from 'react'
 import { act, cleanup, render } from '@testing-library/react'
-import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import { afterEach, beforeAll, beforeEach, expect, it, vi } from 'vitest'
 import type {
   CrewSubscriptionAttemptArgs,
   CrewSubscriptionAttemptCallbacks
@@ -12,6 +12,8 @@ import { replaceRuntimeEnvironmentRevisions } from '@/runtime/runtime-environmen
 import { REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY } from '../../../../shared/protocol-version'
 import { useOrchestrationCrew } from './use-orchestration-crew'
 import { useAppStore } from '@/store'
+import type { OrchestrationCrewFrame } from '../../../../shared/orchestration-crew'
+import type { MountedCrewProducerModule } from '../../../../shared/orchestration-crew-mounted.test-fixture'
 
 const rig = vi.hoisted(() => {
   const streams: {
@@ -22,6 +24,7 @@ const rig = vi.hoisted(() => {
   }[] = []
   return {
     streams,
+    producers: new Map<string, (handlers: RuntimeRpcSubscriptionHandlers) => () => void>(),
     cancellations: new Map<string, () => void>(),
     listeners: new Set<() => void>(),
     state: {
@@ -59,7 +62,9 @@ vi.mock('@/runtime/runtime-rpc-subscribe', () => ({
       params: { party: string },
       handlers: RuntimeRpcSubscriptionHandlers
     ) => {
-      const stream = { target, party: params.party, handlers, unsubscribe: vi.fn() }
+      const key = `${target.kind === 'local' ? 'local' : target.environmentId}:${params.party}`
+      const stop = rig.producers.get(key)?.(handlers)
+      const stream = { target, party: params.party, handlers, unsubscribe: vi.fn(() => stop?.()) }
       rig.streams.push(stream)
       return { unsubscribe: stream.unsubscribe }
     }
@@ -133,6 +138,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup()
   rig.streams.length = 0
+  rig.producers.clear()
   rig.cancellations.clear()
   renderCounts.clear()
   vi.restoreAllMocks()
@@ -148,6 +154,10 @@ function Pane({ party, target = local }: { party: string; target?: RuntimeClient
     <>
       <output data-testid={party}>
         {crew.status === 'ok' ? crew.sections.managing.length : 'unknown'}
+      </output>
+      <output data-testid={`${party}-address`}>{crew.sections.talkingWith[0]?.sendAddress}</output>
+      <output data-testid={`${party}-latest`}>
+        {crew.sections.talkingWith[0]?.latest?.preview}
       </output>
       <output data-testid={`${party}-question`}>
         {crew.sections.managing[0]?.pendingQuestion?.preview}
@@ -428,4 +438,110 @@ it('retains one counted source after StrictMode re-entry and an additional mount
   view.unmount()
   expect(rig.listeners.size).toBe(0)
   expect(rig.streams.every((stream) => stream.unsubscribe.mock.calls.length === 1)).toBe(true)
+})
+
+let createMountedCrewProducer: MountedCrewProducerModule['createMountedCrewProducer']
+beforeAll(async () => {
+  const owner = await vi.importActual<MountedCrewProducerModule>(
+    '../../../../main/runtime/orchestration/crew/crew-mounted-render.test-fixture'
+  )
+  createMountedCrewProducer = owner.createMountedCrewProducer
+})
+
+it('publishes real no-mail Run/history address changes through CrewReadModel and subscribeCrew to only the selected mounted consumer', async () => {
+  const localProducer = createMountedCrewProducer()
+  const selectedProducer = createMountedCrewProducer()
+  const otherProducer = createMountedCrewProducer()
+  const parties = ['term_worker', 'term_helper', 'term_selected_address', 'term_other_address']
+  const counts = () => parties.map((party) => renderCounts.get(party) ?? 0)
+  const deliveries = new Map<string, OrchestrationCrewFrame[]>()
+  for (const [key, producer, party] of [
+    ['local:term_worker', localProducer, 'term_worker'],
+    ['local:term_helper', localProducer, 'term_helper'],
+    ['crew-host:term_selected_address', selectedProducer, 'term_worker'],
+    ['crew-other-host:term_other_address', otherProducer, 'term_worker']
+  ] as const) {
+    rig.producers.set(key, (handlers) =>
+      producer.subscribe(party, (frame) => {
+        const frames = deliveries.get(key) ?? []
+        frames.push(frame)
+        deliveries.set(key, frames)
+        handlers.onEvent(frame)
+      })
+    )
+  }
+  const otherHost = { kind: 'environment', environmentId: 'crew-other-host' } as const
+  const view = render(
+    <>
+      <Pane party="term_worker" />
+      <Pane party="term_helper" />
+      <Pane party="term_selected_address" target={remote} />
+      <Pane party="term_other_address" target={otherHost} />
+    </>
+  )
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(250)
+  })
+  expect(rig.streams).toHaveLength(4)
+  expect(view.getByTestId('term_worker-address').textContent).toBe(localProducer.address)
+  expect(view.getByTestId('term_selected_address-address').textContent).toBe(
+    selectedProducer.address
+  )
+  expect(view.getByTestId('term_other_address-address').textContent).toBe(otherProducer.address)
+  expect(view.getByTestId('term_worker-latest').textContent).toBe('Retained L')
+  const metrics = () =>
+    [localProducer, selectedProducer, otherProducer].map((p) => ({ ...p.metrics }))
+  const firstFrames = deliveries.get('local:term_worker')
+  expect(firstFrames?.map((frame) => frame.type)).toEqual(['begin', 'rows', 'complete'])
+  const firstRow = firstFrames?.find((frame) => frame.type === 'rows')
+  expect(firstRow?.rows[0].sendAddress).toBe(localProducer.address)
+  const initial = metrics()
+  // Each initial stream emits one atomic begin/rows/complete replacement.
+  expect(initial.map((m) => m.frames)).toEqual([6, 3, 3])
+  renderCounts.clear()
+  await act(async () => {
+    localProducer.removeAddress()
+    await vi.runAllTicks()
+  })
+  expect(view.getByTestId('term_worker-address').textContent).toBe('')
+  expect(view.getByTestId('term_worker-latest').textContent).toBe('Retained L')
+  expect(counts()).toEqual([1, 0, 0, 0])
+  renderCounts.clear()
+  await act(async () => {
+    localProducer.restoreAddress()
+    await vi.runAllTicks()
+  })
+  expect(view.getByTestId('term_worker-address').textContent).toBe(localProducer.address)
+  expect(counts()).toEqual([1, 0, 0, 0])
+  renderCounts.clear()
+  const beforeEqual = metrics()
+  await act(async () => {
+    localProducer.equalOwnerWake()
+    await vi.runAllTicks()
+  })
+  expect(counts()).toEqual([0, 0, 0, 0])
+  expect(localProducer.metrics.frames).toBe(beforeEqual[0].frames)
+  expect(localProducer.metrics.reads - beforeEqual[0].reads).toBe(2)
+  expect(localProducer.metrics.snapshotSerializations - beforeEqual[0].snapshotSerializations).toBe(
+    2
+  )
+  expect(localProducer.metrics.acquisitions - beforeEqual[0].acquisitions).toBe(1)
+  expect(metrics().slice(1)).toEqual(beforeEqual.slice(1))
+  renderCounts.clear()
+  await act(async () => {
+    otherProducer.removeAddress()
+    await vi.runAllTicks()
+  })
+  expect(view.getByTestId('term_other_address-address').textContent).toBe('')
+  expect(view.getByTestId('term_selected_address-address').textContent).toBe(
+    selectedProducer.address
+  )
+  expect(counts()).toEqual([0, 0, 0, 1])
+  view.unmount()
+  expect(rig.streams.every((stream) => stream.unsubscribe.mock.calls.length === 1)).toBe(true)
+  expect(metrics()).toEqual([
+    { reads: 8, acquisitions: 4, frames: 12, snapshotSerializations: 8 },
+    { reads: 1, acquisitions: 1, frames: 3, snapshotSerializations: 1 },
+    { reads: 2, acquisitions: 2, frames: 6, snapshotSerializations: 2 }
+  ])
 })

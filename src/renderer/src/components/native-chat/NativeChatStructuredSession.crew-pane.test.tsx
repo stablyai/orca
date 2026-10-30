@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import '@testing-library/jest-dom/vitest'
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
@@ -101,10 +101,14 @@ it('handles sibling-composer Escape at the actual native pane boundary and keeps
   await user.keyboard('{Escape}')
   expect(screen.queryByRole('menu')).not.toBeInTheDocument()
   expect(pane.getByRole('complementary', { name: 'Agent crew' })).toBeInTheDocument()
-  composer.focus()
+  await waitFor(() => expect(pane.getByRole('button', { name: 'More for Worker' })).toHaveFocus())
   await user.keyboard('{Escape}')
   expect(pane.queryByRole('complementary', { name: 'Agent crew' })).not.toBeInTheDocument()
   expect(pane.getByRole('button', { name: 'Show crew: 1 workers' })).toHaveFocus()
+  await user.click(pane.getByRole('button', { name: 'Show crew: 1 workers' }))
+  composer.focus()
+  await user.keyboard('{Escape}')
+  expect(pane.queryByRole('complementary')).not.toBeInTheDocument()
   expect(composer).toHaveValue('Keep this draft')
   expect(other.getByRole('complementary', { name: 'Agent crew' })).toBeInTheDocument()
   otherComposer.focus()

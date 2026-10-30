@@ -35,6 +35,7 @@ import { translate } from '@/i18n/i18n'
 import { hasVisibleOverlay } from '@/lib/visible-overlay'
 import { isImeOwnedKeyboardEvent } from '@/lib/ime-composition-keyboard-event'
 import { CrewRowDetails, CrewRowTime as Time } from './CrewRowDetails'
+import { useCrewMenuFocus } from './use-crew-menu-focus'
 
 function Avatar({ row, tooltip = false }: { row: OrchestrationCrewRow; tooltip?: boolean }) {
   const agent = isTuiAgent(row.agentKind) ? row.agentKind : null
@@ -104,7 +105,7 @@ export function OrchestrationCrewPanel(props: PanelProps): React.JSX.Element | n
   return <CrewPanelContent {...props} snapshot={snapshot} />
 }
 
-function CrewPanelContent({
+export function CrewPanelContent({
   target,
   snapshot
 }: PanelProps & { snapshot: OrchestrationCrewSnapshot }): React.JSX.Element | null {
@@ -189,7 +190,6 @@ function CrewPanelContent({
       data-pane-prevent-terminal-focus
       data-native-chat-typing-redirect-ignore="true"
       className="pointer-events-none absolute bottom-0 top-(--orca-pane-title-height) right-0 z-30 w-80 max-w-full text-foreground"
-      onPointerDown={(event) => event.stopPropagation()}
       onMouseDown={(event) => event.stopPropagation()}
       onKeyDown={(event) => {
         event.stopPropagation()
@@ -283,6 +283,7 @@ function CrewPanelContent({
 
 function CrewRowView({ row, target }: { row: OrchestrationCrewRow; target: RuntimeClientTarget }) {
   const [disclosure, setDisclosure] = useState<{ question?: string; expanded: boolean }>()
+  const menu = useCrewMenuFocus()
   const question = row.pendingQuestion?.at
   const expanded =
     disclosure?.question === question
@@ -332,11 +333,12 @@ function CrewRowView({ row, target }: { row: OrchestrationCrewRow; target: Runti
             >
               <ExternalLink />
             </IconButton>
-            <DropdownMenu modal={false}>
+            <DropdownMenu modal={false} open={menu.open} onOpenChange={menu.onOpenChange}>
               <DropdownMenuTrigger asChild>
                 <Button
                   variant="ghost"
                   size="icon-xs"
+                  ref={menu.triggerRef}
                   aria-label={translate('components.orchestrationCrew.more', 'More for {{name}}', {
                     name: row.label
                   })}
@@ -344,7 +346,12 @@ function CrewRowView({ row, target }: { row: OrchestrationCrewRow; target: Runti
                   <MoreHorizontal />
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" onCloseAutoFocus={(event) => event.preventDefault()}>
+              <DropdownMenuContent
+                ref={menu.contentRef}
+                align="end"
+                onPointerDownOutside={menu.onPointerDownOutside}
+                onCloseAutoFocus={menu.onCloseAutoFocus}
+              >
                 <DropdownMenuItem onSelect={open}>
                   {translate('components.orchestrationCrew.openChat', 'Open its chat')}
                 </DropdownMenuItem>
