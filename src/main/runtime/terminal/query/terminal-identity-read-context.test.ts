@@ -15,6 +15,12 @@ import { expect, it, vi } from 'vitest'
 import '../../orca-runtime-test-mocks.spec'
 import { TEST_WORKTREE_ID } from '../../orca-runtime-test-fixtures.spec'
 import type { TerminalIdentityReadContext } from './terminal-identity-read-context'
+import { createBoundRun } from '../../rpc/methods/orchestration/runs/runs'
+import { resolveOrchestrationCaller } from '../../rpc/methods/orchestration/runs/run-scope'
+import { formatOrcaSessionAddress } from '../../../../shared/orca-session-address'
+import { testOrcaSessionId } from '../../../../shared/orca-session-address-test-fixture'
+import type { RuntimeSyncWindowGraph } from '../../../../shared/runtime-types'
+import { meterIncarnationCandidates } from '../identity/terminal-incarnation-candidates.test-fixture'
 
 it('matches separate production runtimes across reverse repair, stale first mapping, adoption and dependent reads in either order', () => {
   for (const reverseOrder of [false, true]) {
@@ -251,6 +257,7 @@ it('keeps cold candidates coherent through real retained-handle invalidation and
     const leaf = f.owner.leaves.get(`tab-original::${LEAF}`)!
     f.owner.source.clearLeafBindings()
     f.owner.source.clearPtyBindings()
+    f.owner.source.setPtyIncarnationId(f.owner.ptysById.get('retained-pty')!, 'current-process')
     f.stamp('term_retained', 'retained-pty')
     f.owner.source.addSynthetic('term_retained')
     f.owner.source.setIncarnation('retained-pty', {
@@ -263,6 +270,7 @@ it('keeps cold candidates coherent through real retained-handle invalidation and
     const waiterRejected = vi.fn()
     f.owner.terminalWaiters.add({
       handle: 'term_retained',
+      ptyId: 'retained-pty',
       condition: 'exit',
       resolve: vi.fn(),
       reject: waiterRejected,
@@ -271,10 +279,7 @@ it('keeps cold candidates coherent through real retained-handle invalidation and
       abortCleanup: null
     })
     const handle = f.owner.issueHandle(leaf, context)
-    expect(waiterRejected).toHaveBeenCalledExactlyOnceWith(
-      expect.objectContaining({ message: 'terminal_handle_stale' })
-    )
-    expect(f.owner.terminalWaiters.get('term_retained')).toBeUndefined()
+    expect(waiterRejected).not.toHaveBeenCalled()
     expect(handle).not.toBe('term_retained')
     expect(f.owner.findHandleForPtyRecord('retained-pty', context)).toBeNull()
     expect(f.owner.handles.has('term_retained')).toBe(false)
@@ -282,6 +287,11 @@ it('keeps cold candidates coherent through real retained-handle invalidation and
     expect(f.owner.handleByLeafKey.get(`tab-original::${LEAF}`)).toBe(handle)
     expect(f.owner.handles.get(handle)?.ptyId).toBe('retained-pty')
     expect(f.owner.handleByPtyIncarnation.get('retained-pty')?.handle).toBe(handle)
+    f.runtime.onPtySpawned('retained-pty', 'replacement-process')
+    expect(waiterRejected).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ message: 'terminal_handle_stale' })
+    )
+    expect(f.owner.terminalWaiters.forPty('retained-pty')).toEqual([])
     expect(f.rejected).toHaveBeenCalledWith('term_retained', 'terminal_handle_stale')
     return {
       retainedRemoved: !f.owner.handles.has('term_retained'),
@@ -666,4 +676,139 @@ it('forwards finite context through actual live-pane nested-recipient reads with
   expect(samples[1].current.entries).toBeLessThanOrEqual(10 * samples[0].current.entries + 30)
   expect(samples[1].old.entries).toBeGreaterThan(20 * samples[0].old.entries)
   process.stdout.write(`nested live-pane ordered work ${JSON.stringify(samples)}\n`)
+})
+
+it('charges retained incarnation materialization through actual pending-pane Run producers and the complete Crew read', async () => {
+  vi.useFakeTimers({ now: new Date('2026-10-28T20:00:00Z') })
+  const measure = async (peers: number, inventory: number) => {
+    const indexed = meterIncarnationCandidates()
+    const f = fixture()
+    const db = new OrchestrationDb(':memory:')
+    f.runtime.setOrchestrationDb(db)
+    const graph: RuntimeSyncWindowGraph = {
+      tabs: [
+        {
+          tabId: 'tab-cost',
+          worktreeId: TEST_WORKTREE_ID,
+          title: 'Cost',
+          activeLeafId: null,
+          layout: null
+        }
+      ],
+      leaves: []
+    }
+    for (let i = 0; i < peers + inventory; i++) {
+      const leafId = `aaaaaaaa-aaaa-4aaa-8aaa-${String(i).padStart(12, '0')}`
+      const ptyId = i < peers ? null : `inventory-${i}`
+      graph.leaves.push({
+        tabId: 'tab-cost',
+        worktreeId: TEST_WORKTREE_ID,
+        leafId,
+        paneRuntimeId: i + 1,
+        ptyId
+      })
+      if (ptyId) {
+        f.runtime.registerPty(ptyId, TEST_WORKTREE_ID, null, {
+          incarnationId: `process-${i}`,
+          tabId: 'tab-cost',
+          leafId
+        })
+      }
+    }
+    f.runtime.attachWindow(1)
+    f.runtime.syncWindowGraph(1, graph)
+    for (const leaf of graph.leaves.slice(peers)) {
+      expect(f.runtime.getTerminalHandleForPaneKey(`tab-cost:${leaf.leafId}`)).toMatch(/^term_/)
+    }
+    const self = formatOrcaSessionAddress(testOrcaSessionId('eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee'))
+    const pendingHandles: string[] = []
+    for (const leaf of graph.leaves.slice(0, peers)) {
+      graph.tabs[0].activeLeafId = leaf.leafId
+      f.runtime.syncWindowGraph(1, graph)
+      const handle = await f.runtime.resolveActiveTerminal()
+      const caller = resolveOrchestrationCaller(f.runtime, {
+        callerTerminalHandle: handle,
+        callerSession: undefined,
+        requireStablePane: true
+      })
+      expect(caller.paneKey).toBe(`tab-cost:${leaf.leafId}`)
+      expect(f.owner.handles.get(handle)?.ptyId).toBeNull()
+      const run = createBoundRun(f.runtime, caller, handle, 'Pending coordinator')
+      db.insertMessage({
+        from: `run:${run.id}`,
+        to: self,
+        subject: 'Retained Run',
+        body: `peer-${pendingHandles.length}`
+      })
+      pendingHandles.push(handle)
+    }
+    expect(f.owner.handleByPtyIncarnation.size).toBe(inventory)
+    indexed.beginRead()
+    const counts = { invocations: 0, yielded: 0 }
+    const incarnations = f.owner.handleByPtyIncarnation
+    const iterate = incarnations[Symbol.iterator].bind(incarnations)
+    Object.defineProperty(incarnations, Symbol.iterator, {
+      configurable: true,
+      value: function* () {
+        counts.invocations++
+        for (const entry of iterate()) {
+          counts.yielded++
+          yield entry
+        }
+      }
+    })
+    const process = vi.spyOn(f.runtime, 'getTerminalProcessIncarnation')
+    const model = new CrewReadModel(
+      (previous) => readCrewRuntimeInputs(f.owner.crewReaders, db, true, 'cost-host', previous),
+      f.owner.crewChanges.subscribe
+    )
+    const stop = model.subscribe(() => {})
+    try {
+      const output = model.read(self)
+      expect(output.status).toBe('ok')
+      expect(output.sections.talkingWith).toHaveLength(peers)
+      for (const handle of pendingHandles) {
+        expect(process.mock.calls.some(([current]) => current === handle)).toBe(true)
+      }
+      const result = {
+        peers,
+        inventory,
+        processCalls: process.mock.calls.map(([handle]) => pendingHandles.indexOf(handle)),
+        ...counts,
+        indexed: {
+          maintenance: { ...indexed.maintenance },
+          preparationLookup: { ...indexed.preparationLookup },
+          lookup: { ...indexed.lookup }
+        },
+        publicRows: output.sections.talkingWith.length
+      }
+      globalThis.process.stdout.write(
+        `retained complete Crew materialization ${JSON.stringify(result)}\n`
+      )
+      expect(counts.yielded).toBeLessThanOrEqual(4 * inventory + 4 * peers)
+      expect(indexed.lookup.calls).toBe(peers)
+      expect(indexed.lookup.get).toBe(peers)
+      expect(indexed.lookup.candidates).toBe(0)
+      expect(indexed.maintenance.set).toBe(2 * inventory)
+      expect(indexed.maintenance.shifted).toBe(0)
+      return result
+    } finally {
+      indexed.close()
+      stop()
+      process.mockRestore()
+      db.close()
+    }
+  }
+  try {
+    for (const [peers, inventory] of [
+      [3, 3],
+      [3, 30],
+      [30, 3],
+      [30, 30]
+    ]) {
+      await measure(peers, inventory)
+    }
+  } finally {
+    vi.useRealTimers()
+  }
 })

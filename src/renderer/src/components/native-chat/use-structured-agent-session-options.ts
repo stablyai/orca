@@ -11,6 +11,7 @@ import {
   structuredAgentSessionOptionPicks
 } from '../../../../shared/structured-agent-session-options'
 import { encodeStructuredAgentSessionOptionValue } from '../../../../shared/structured-agent-session-option-codec'
+import { structuredAgentSessionShownSnapshot } from '../../../../shared/structured-agent-session-option-view'
 import { useHostModelCatalogUpgrade } from './use-host-model-catalog-upgrade'
 import { useStructuredAgentSessionOptionState } from './use-structured-agent-session-option-state'
 import { agentSessionWriteFailureText } from './agent-session-write-notice-text'
@@ -96,7 +97,7 @@ export function useStructuredAgentSessionOptions(args: StructuredAgentSessionOpt
     lockSnapshotRef.current = lockSnapshot
   })
   const optionSnapshot = lockSnapshot(
-    structuredAgentSessionOptionSnapshot(
+    structuredAgentSessionShownSnapshot(
       optionView(optionState, launchSeedOptions, launch?.explicitOptions)
     )
   )
@@ -188,7 +189,7 @@ export function useStructuredAgentSessionOptions(args: StructuredAgentSessionOpt
       await setStructuredOption(id, value)
       return {
         snapshot: lockSnapshotRef.current(
-          structuredAgentSessionOptionSnapshot(
+          structuredAgentSessionShownSnapshot(
             optionView(optionStateRef.current, launchSeedOptions, launch?.explicitOptions)
           )
         )

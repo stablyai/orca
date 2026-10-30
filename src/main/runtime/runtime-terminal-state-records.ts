@@ -125,6 +125,8 @@ export type RuntimePtyWorktreeRecord = RuntimeTerminalTailState & {
   /** The name a rename gave this terminal: display only, never title evidence (#20626). */
   manualTitle?: string | null
   lastOutputAt: number | null
+  /** When main began receiving a stream that had printed nothing yet; silence since then is measured quiet. */
+  outputObservedSince?: number | null
   /** See terminal-command-paint.ts; absent until the pane's first output, and again after a gap or a new process. */
   commandPaint?: TerminalCommandPaint
 }

@@ -12,7 +12,6 @@ import type {
   TerminalWaitPermissionInputs,
   TerminalWaitStatusEvidence
 } from './terminal-wait-permission'
-
 import type { AgentLaunchScope } from '../../session-tabs/structured-session-tab-restoration'
 import { withTimeout } from '../../runtime-async-boundaries'
 import { TERMINAL_INTERACTIVE_WAIT_PROBE_TIMEOUT_MS } from '../../orca-runtime-core'
@@ -33,9 +32,7 @@ import { resolveAgentLaunchRuntime } from '../../agent-launch-scope-runtime'
 import { parseWslUncPath } from '../../../../shared/wsl-paths'
 import { resolveAgentStartupPlanInputs } from '../../../../shared/agent-startup-plan-inputs'
 import { resolveOpenCodeModelLaunchRoute } from '../../../opencode/opencode-model-startup-plan'
-
 import type { RuntimePtyWorktreeRecord } from '../../runtime-terminal-state-records'
-
 import type { OrchestrationDb } from '../../orchestration/db/orchestration-db'
 
 export abstract class OrcaRuntimeWithGetTerminalInteractiveWait extends OrcaRuntimeWithAdoptTerminalOrphansFromInventory {
@@ -195,9 +192,6 @@ export abstract class OrcaRuntimeWithGetTerminalInteractiveWait extends OrcaRunt
         : (this.wslDistroByPtyId.get(ptyId) ?? pty?.wslDistro ?? undefined)
     } catch {
       // Exact worker validation rejects this in production; test/legacy providers may not expose PTY metadata.
-      connectionId = undefined
-      launchToken = undefined
-      wslDistro = undefined
     }
     return selectExactWorkerProviderSession({
       paneKey,

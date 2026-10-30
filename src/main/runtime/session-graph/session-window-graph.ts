@@ -300,19 +300,14 @@ export abstract class OrcaRuntimeWithSyncWindowGraph extends OrcaRuntimeWithAtta
     for (const leaf of this.leaves.values()) {
       this.adoptPreAllocatedHandle(leaf)
       const previousLeaf = previousLeaves.get(this.getLeafKey(leaf.tabId, leaf.leafId))
+      // A pane newly showing a terminal can bind it to the pane's Run or Dispatch mailbox.
       if (
         this._orchestrationDb &&
-        leaf.lastAgentStatus === 'idle' &&
-        leaf.lastAgentStatusObservedLive &&
-        this.checkDeliverySettledAndArmRecheck(leaf) &&
+        leaf.ptyId &&
         leaf.writable &&
-        (!graphWasReady ||
-          previousLeaf?.ptyId !== leaf.ptyId ||
-          !previousLeaf.writable ||
-          previousLeaf.lastAgentStatus !== 'idle' ||
-          !previousLeaf.lastAgentStatusObservedLive)
+        (!graphWasReady || previousLeaf?.ptyId !== leaf.ptyId || !previousLeaf.writable)
       ) {
-        this.deliverPendingMessagesForLeaf(leaf)
+        this.deliverPendingMessagesForPty(leaf.ptyId)
       }
     }
 

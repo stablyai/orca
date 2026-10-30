@@ -54,14 +54,15 @@ export abstract class OrcaRuntimeWithGetOrchestrationDispatchAuthority extends O
     }
     const live = this.getLivePtyForHandle(handle, context)
     const record = live?.record ?? this.handles.get(handle)
+    const ptyId = record?.ptyId
+    const pty = live?.pty ?? (ptyId ? this.ptysById.get(ptyId) : this.getRetainedHandlePty(handle))
+    if (pty?.incarnationId) {
+      return `${pty.ptyId}:${pty.incarnationId}`
+    }
     if (!record?.ptyId) {
       return (
         this.getOrchestrationCompatibilitySshTerminal(handle, context)?.processIncarnation ?? null
       )
-    }
-    const incarnationId = live?.pty.incarnationId ?? this.ptysById.get(record.ptyId)?.incarnationId
-    if (incarnationId) {
-      return `${record.ptyId}:${incarnationId}`
     }
     // Legacy providers retain the runtime/PTY/generation fence.
     return `${this.runtimeId}:${record.ptyId}:${record.ptyGeneration}`

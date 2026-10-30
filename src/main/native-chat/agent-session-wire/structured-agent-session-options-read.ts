@@ -84,8 +84,8 @@ export async function readStructuredAgentSessionOptions(
       options = listedModelIds ? { ...answer, listedModelIds } : answer
     }
   } else {
-    const { inventory: _inventory, fallback: _fallback, ...answer } = await atRest()
-    options = answer
+    const { inventory, fallback: _fallback, ...answer } = await atRest()
+    options = { ...answer, ...(inventory.origin === 'unknown' ? { modelsKnown: false } : {}) }
   }
   // Earlier reads may have closed/reopened the handle.
   const session = await context.conversation(sessionId)
@@ -167,7 +167,13 @@ export async function readStructuredAgentSessionOptions(
         ? live.fastModeSupport
         : undefined
     )
-    options = { ...options, ...view, listedModelIds, current }
+    options = {
+      ...options,
+      ...view,
+      ...(inventory.origin === 'unknown' ? { modelsKnown: false } : {}),
+      listedModelIds,
+      current
+    }
     const projected =
       live && (saved.serviceTier !== undefined || saved.fastMode !== undefined)
         ? adapter.projectOptions?.(sessionId, {

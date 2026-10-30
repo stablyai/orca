@@ -6,7 +6,10 @@ import type { AgentJournalSubmission } from '../../../shared/agent-session-journ
 import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
-import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
+import {
+  closeTestJournalHostDatabases,
+  openTestJournalHostDatabase
+} from '../agent-session-journal/journal-host-database-test-support'
 import type {
   AgentSessionAcquisition,
   StructuredAgentSessionAcquireInput,
@@ -164,6 +167,7 @@ export function registerStartupAttemptHostTests(): void {
   afterEach(async () => {
     try {
       await host.flushAllStreamedEvents()
+      await closeTestJournalHostDatabases()
       await rm(root, { recursive: true, force: true })
     } finally {
       vi.useRealTimers()

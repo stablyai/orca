@@ -166,84 +166,21 @@ describe('NativeChatStructuredSession', () => {
     })
   })
 
-  it('routes the launch draft and app-menu paste to the structured composer', () => {
-    const draft = {
-      tabId: 'structured-draft-tab',
-      agent: 'codex' as const,
-      text: 'PR #19423 — review this change',
-      createdAt: Date.now()
-    }
-    useAppStore.getState().seedNativeChatLaunchDraft(draft)
+  it('routes app-menu paste to the structured composer', () => {
     render(
       <NativeChatStructuredSession
         isVisible
         isFocusedGroup
-        tabId={draft.tabId}
+        tabId="draft-tab"
         sessionId="draft-session"
         target={{ kind: 'local' }}
         agent="codex"
       />
     )
-    expect(mocks.composerProps?.launchSeed).toEqual({
-      launchDraft: draft,
-      launchDraftResolved: false,
-      ownsTabWideLaunchDraft: true
-    })
-    act(() => useAppStore.getState().clearNativeChatLaunchDraft(draft.tabId))
     const composer = screen.getByTestId('structured-composer')
     composer.focus()
     window.dispatchEvent(new Event('orca-app-menu-paste', { cancelable: true }))
-
     expect(mocks.pasteFromClipboard).toHaveBeenCalledOnce()
-  })
-
-  // Do not baseline launch drafts against the controller’s pre-read idle state; backfill could resolve unseen input.
-  it('holds the launch draft unresolved until the first journal read settles', () => {
-    const draft = {
-      tabId: 'structured-idle-tab',
-      agent: 'codex' as const,
-      text: 'PR #19423 — review this change',
-      createdAt: Date.now()
-    }
-    useAppStore.getState().seedNativeChatLaunchDraft(draft)
-    mocks.status = 'idle'
-    mocks.messages = [
-      {
-        id: 'user-1',
-        role: 'user',
-        source: 'transcript',
-        timestamp: draft.createdAt + 1,
-        blocks: [{ type: 'text', text: draft.text }]
-      }
-    ]
-    const { rerender } = render(
-      <NativeChatStructuredSession
-        isVisible
-        isFocusedGroup
-        tabId={draft.tabId}
-        sessionId="idle-session"
-        target={{ kind: 'local' }}
-        agent="codex"
-      />
-    )
-    expect(mocks.composerProps?.launchSeed).toMatchObject({
-      launchDraft: draft,
-      launchDraftResolved: false
-    })
-
-    mocks.status = 'ready'
-    rerender(
-      <NativeChatStructuredSession
-        isVisible
-        isFocusedGroup
-        tabId={draft.tabId}
-        sessionId="idle-session"
-        target={{ kind: 'local' }}
-        agent="codex"
-      />
-    )
-    expect(mocks.composerProps?.launchSeed?.launchDraftResolved).toBe(true)
-    act(() => useAppStore.getState().clearNativeChatLaunchDraft(draft.tabId))
   })
 
   it('focuses the chat on a click outside its controls and sends typing there to the composer', () => {

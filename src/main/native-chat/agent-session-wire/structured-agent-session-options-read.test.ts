@@ -574,10 +574,11 @@ describe('a chat at rest, read by the host', () => {
         efforts: [{ value: 'high', label: 'High' }]
       }
     ]
-    for (const [reported, saved, shown] of [
-      ['claude-opus-current', {}, 'opus[1m]'],
-      ['unknown-model', {}, 'unknown-model'],
-      ['claude-opus-current', { model: 'claude-opus-current' }, 'claude-opus-current']
+    const currentModel = 'claude-opus-current'
+    for (const [reported, saved, shown, label] of [
+      [currentModel, {}, 'opus[1m]', 'Installed Opus'],
+      ['unknown-model', {}, 'unknown-model', 'Unknown Model'],
+      [currentModel, { model: currentModel }, currentModel, 'Claude Opus Current']
     ] as const) {
       const result = await readAtRest(
         { provider: 'claude', options: saved },
@@ -591,7 +592,7 @@ describe('a chat at rest, read by the host', () => {
       expect(result.models.find((row) => row.id === shown)).toMatchObject(
         shown === 'opus[1m]'
           ? { label: 'Installed Opus', efforts: installed[0]!.efforts }
-          : { label: shown, efforts: [] }
+          : { label, description: shown, efforts: [] }
       )
     }
   })

@@ -450,7 +450,8 @@ export function resolveMobileWebPageRoutes(routeKeys, declared = MOBILE_WEB_PAGE
     ...(route.optionalGrants === undefined || route.optionalGrants.length === 0
       ? {}
       : { optionalGrants: [...route.optionalGrants] }),
-    ...(route.canOwnHostArea === true ? { canOwnHostArea: true } : {})
+    ...(route.canOwnHostArea === true ? { canOwnHostArea: true } : {}),
+    ...(route.canOwnHostAreaAcrossLayouts === true ? { canOwnHostAreaAcrossLayouts: true } : {})
   }))
 }
 

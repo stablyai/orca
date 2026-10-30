@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { OMP_SESSION_OPTION_CATALOG } from './agent-session-option-catalog-omp'
+import { structuredAgentSessionSeedCatalog } from './structured-agent-session-seed-catalog'
 import {
   CODEX_SESSION_OPTION_CATALOG,
   CLAUDE_SESSION_OPTION_CATALOG
@@ -33,6 +34,71 @@ function viewModel(
 }
 
 describe('structured agent session options', () => {
+  it('accepts a later catalog after a live answer becomes unknown', () => {
+    const seed = structuredAgentSessionSeedCatalog('pi')
+    const unknown = { models: [], modelsKnown: false as const, current: { defaulted: [] } }
+    const models = [{ id: 'provider/model', label: 'Native label', isDefault: false, efforts: [] }]
+    const catalog = { origin: 'probe' as const, fetchedAt: 1, models }
+    const live = applyStructuredAgentSessionOptions(
+      createStructuredAgentSessionOptionState('pi', seed),
+      seed,
+      {
+        models,
+        current: { model: 'provider/model', confirmed: ['model'] }
+      }
+    )
+    const resting = applyStructuredAgentSessionOptions(live, seed, {
+      ...unknown,
+      current: {
+        model: 'provider/model',
+        effort: 'high',
+        permissionMode: 'ask',
+        acceptedInputSources: { model: 'saved', effort: 'saved' },
+        defaulted: []
+      }
+    })
+    expect(resting.catalog).toBe(live.catalog)
+    expect(resting.permissionMode).toBe('ask')
+    expect(structuredAgentSessionMessageSelection(resting)).toEqual({
+      model: 'provider/model',
+      effort: 'high'
+    })
+    const refreshed = applyStructuredAgentSessionModelCatalog(
+      resting,
+      seed,
+      {
+        ...catalog,
+        models: [...models, { ...models[0]!, id: 'provider/new' }]
+      },
+      { newLaunch: false }
+    )
+    expect(refreshed.catalog?.models.map(({ id }) => id)).toEqual([
+      'provider/model',
+      'provider/new'
+    ])
+  })
+
+  it('keeps old-host empty answers authoritative when the knowledge marker is absent', () => {
+    const seed = structuredAgentSessionSeedCatalog('pi')
+    const empty = applyStructuredAgentSessionOptions(
+      createStructuredAgentSessionOptionState('pi', seed),
+      seed,
+      { models: [], current: {} }
+    )
+    expect(
+      applyStructuredAgentSessionModelCatalog(
+        empty,
+        seed,
+        {
+          origin: 'probe',
+          fetchedAt: 1,
+          models: [{ id: 'later', label: 'Later', isDefault: false, efforts: [] }]
+        },
+        { newLaunch: false }
+      ).catalog?.models
+    ).toEqual([])
+  })
+
   it('keeps a missing model out of the picker and adopts a later report', () => {
     const state = applyStructuredAgentSessionOptions(
       createStructuredAgentSessionOptionState('omp'),
@@ -271,14 +337,16 @@ describe('structured agent session options', () => {
         valueSource: 'dispatched',
         kind: expect.objectContaining({
           currentValue: 'gpt-next',
-          choices: expect.arrayContaining([{ value: 'gpt-next', label: 'gpt-next' }])
+          choices: expect.arrayContaining([
+            { value: 'gpt-next', label: 'GPT Next', description: 'gpt-next' }
+          ])
         })
       })
     ])
-    // Before the host answers, and on the built-in list, no saved pick is named.
-    expect(viewModel(cold, seed, {})).toBeUndefined()
+    // Known saved input stays named before discovery and after unavailable discovery.
+    expect(viewModel(cold, seed, {})).toBe(seed.model)
     const settled = settleStructuredAgentSessionBuiltinCatalog(cold, false)
-    expect(viewModel(settled, seed, {})).toBeUndefined()
+    expect(viewModel(settled, seed, {})).toBe(seed.model)
     expect(settleStructuredAgentSessionBuiltinCatalog(settled, false)).toBe(settled)
     expect(
       settleStructuredAgentSessionBuiltinCatalog({ ...settled, listingInProgress: true }, false)

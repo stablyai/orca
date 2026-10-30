@@ -84,8 +84,9 @@ export function createCrewRecipientInputs(
       runs.get(row.key)!.push(row)
     }
   }
-  const currentRun = (key: Key) =>
-    runs.get(sourceKey(key))?.find((run) => runBoundToCoordinator(run, key))
+  const boundRuns = (key: Key) =>
+    runs.get(sourceKey(key))?.filter((run) => runBoundToCoordinator(run, key)) ?? []
+  const currentRun = (key: Key) => boundRuns(key)[0]
   const prepare = (ids: OrcaSessionId[], viewer?: Key) => {
     prepareIdentities(viewer?.orcaSessionId ? [...ids, viewer.orcaSessionId] : ids)
     const actual = viewer?.orcaSessionId ? keyFor(viewer.orcaSessionId) : viewer
@@ -199,7 +200,7 @@ export function createCrewRecipientInputs(
     return selectBareRecipientOwner({
       handle: key.address,
       senderRunId,
-      boundRun: () => currentRun(key),
+      boundRuns: () => boundRuns(key),
       dispatches: () => candidates(key),
       ownerRunIds: () => {
         const ids = new Set(owners.get(sourceKey(key))!)

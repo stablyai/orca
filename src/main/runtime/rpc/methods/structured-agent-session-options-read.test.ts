@@ -377,7 +377,14 @@ describe('agentSession.modelCatalog for a chat on a model its CLI stopped listin
   })
 
   it("lists the chat's own model, so an older client that replaces an unlisted one keeps it", async () => {
-    const own = { id: 'opus[1m]', label: 'opus[1m]', isDefault: false, efforts: [] }
+    const own = {
+      id: 'opus[1m]',
+      label: 'Opus (1M context)',
+      description: 'opus[1m]',
+      isDefault: false,
+      efforts: [],
+      effortsKnown: false
+    }
     const forChat = { agent: 'claude', sessionId: record.sessionId }
     expect(await call('agentSession.modelCatalog', forChat, OLD_STRUCTURED_CLIENT)).toMatchObject({
       ok: true,
