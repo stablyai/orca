@@ -181,7 +181,7 @@
       "tableSkipExample": "“Table skipped.”",
       "pauseAutoRead": "Pause auto-read",
       "pauseAutoReadOn": "Paused — new messages wait for Play. Resume here or in the notification",
-      "pauseAutoReadOff": "New messages wait instead of being read. Also in the notification; restarting Orca resumes",
+      "pauseAutoReadOff": "Off — new messages are read as they arrive. The notification can pause it too; restarting Orca resumes",
       "screenOff": "Keep reading with the screen off",
       "screenOffOn": "On — a notification keeps Orca awake (uses more battery)",
       "screenOffOff": "Off — auto-read stops when Orca leaves the screen",
@@ -4075,6 +4075,18 @@
     },
     "webviewReadyWatchdog": {
       "initializeFailed": "Terminal did not initialize - no ready signal from the terminal view"
+    }
+  },
+  "speech": {
+    "readerStatus": {
+      "paused": "Paused",
+      "interrupted": "Paused for a call or dictation",
+      "unplugged": "Paused until headphones are back",
+      "moreWaiting_one": "{{count}} more waiting",
+      "moreWaiting_other": "{{count}} more waiting",
+      "waiting_one": "{{count}} waiting",
+      "waiting_other": "{{count}} waiting",
+      "reading": "Reading"
     }
   }
 }

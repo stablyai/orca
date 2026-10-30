@@ -133,6 +133,9 @@ class OrcaReadAloudModule : Module() {
       ReadAloudTicker.listener = null
       ReadAloudSpeech.listener = null
       ReadAloudControls.listener = null
+      // Why: with no JS left to drive them, speech and the service's wake lock would only linger.
+      ReadAloudSpeech.stop()
+      appContext.reactContext?.let { ReadAloudService.stop(it) }
       ReadAloudOutput.unwatch()
       ReadAloudMediaSession.end()
     }

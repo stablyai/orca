@@ -1,3 +1,4 @@
+import { translate } from '../i18n/mobile-i18n'
 import type { ReaderState } from './voice-native-module'
 
 // Like a music player: Previous this soon after a start goes back a message, later it restarts.
@@ -24,10 +25,26 @@ export type Utterance = {
  */
 export type Hold = { reason: 'paused' | 'interrupted' | 'unplugged'; since: number }
 
-const HOLD_STATUS: Record<Hold['reason'], string> = {
-  paused: 'Paused',
-  interrupted: 'Paused for a call or dictation',
-  unplugged: 'Paused until headphones are back'
+function holdStatus(reason: Hold['reason']): string {
+  switch (reason) {
+    case 'paused':
+      return translate('speech.readerStatus.paused', 'Paused')
+    case 'interrupted':
+      return translate('speech.readerStatus.interrupted', 'Paused for a call or dictation')
+    case 'unplugged':
+      return translate('speech.readerStatus.unplugged', 'Paused until headphones are back')
+  }
+}
+
+function waitingStatus(count: number, afterCurrent: boolean): string {
+  if (afterCurrent) {
+    return count === 1
+      ? translate('speech.readerStatus.moreWaiting_one', '{{count}} more waiting', { count })
+      : translate('speech.readerStatus.moreWaiting_other', '{{count}} more waiting', { count })
+  }
+  return count === 1
+    ? translate('speech.readerStatus.waiting_one', '{{count}} waiting', { count })
+    : translate('speech.readerStatus.waiting_other', '{{count}} waiting', { count })
 }
 
 /**
@@ -43,12 +60,16 @@ export function readerStatus(
   if (state === 'idle') {
     return null
   }
-  const parts = hold ? [HOLD_STATUS[hold.reason]] : current ? ['Reading'] : []
+  const parts = hold
+    ? [holdStatus(hold.reason)]
+    : current
+      ? [translate('speech.readerStatus.reading', 'Reading')]
+      : []
   if (current?.title) {
     parts.push(current.title)
   }
   if (waiting > 0) {
-    parts.push(current ? `${waiting} more waiting` : `${waiting} waiting`)
+    parts.push(waitingStatus(waiting, current !== null))
   }
   return parts.join(' · ') || null
 }

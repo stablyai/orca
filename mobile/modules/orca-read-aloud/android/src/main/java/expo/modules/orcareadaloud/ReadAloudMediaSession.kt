@@ -17,6 +17,7 @@ internal object ReadAloudMediaSession {
 
   private val handler = Handler(Looper.getMainLooper())
   private var session: MediaSession? = null
+  private var lastState: String? = null
   private val releasePaused = Runnable { release() }
 
   private val callback = object : MediaSession.Callback() {
@@ -39,7 +40,10 @@ internal object ReadAloudMediaSession {
 
   /** Gives the buttons back, e.g. when the app's JS goes away. */
   fun end() {
-    handler.post { release() }
+    handler.post {
+      lastState = null
+      release()
+    }
   }
 
   private fun release() {
@@ -52,11 +56,17 @@ internal object ReadAloudMediaSession {
   }
 
   private fun apply(context: Context, state: String, title: String?, actions: Long) {
-    handler.removeCallbacks(releasePaused)
+    val previous = lastState
+    lastState = state
     if (state != "reading" && state != "paused") {
       release()
       return
     }
+    // Released after a long pause: only reading again takes the buttons back from the music app.
+    if (state == "paused" && previous == "paused" && session == null) return
+    // A paused status that only changed (a new message waiting) keeps the release timer running.
+    val stillPaused = state == "paused" && previous == "paused"
+    if (!stillPaused) handler.removeCallbacks(releasePaused)
     val existing = session
     val media = existing ?: MediaSession(context, "OrcaReadAloud").also {
       // Before Android 8 a session without these flags gets no headset buttons.
@@ -89,7 +99,7 @@ internal object ReadAloudMediaSession {
     )
     if (!media.isActive) media.isActive = true
     if (playing && !wasPlaying) claimButtons()
-    if (!playing) handler.postDelayed(releasePaused, RELEASE_PAUSED_AFTER_MS)
+    if (!playing && !stillPaused) handler.postDelayed(releasePaused, RELEASE_PAUSED_AFTER_MS)
   }
 
   // Android gives media buttons to the app that last played audio, and TTS plays in the engine's

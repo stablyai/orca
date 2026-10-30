@@ -274,6 +274,14 @@
       "openWithComments_other": "Pull request #{{number}}, {{state}}, {{checks}}, {{count}} unresolved comments. Open pull request."
     }
   },
+  "speech": {
+    "readerStatus": {
+      "moreWaiting_one": "{{count}} more waiting",
+      "moreWaiting_other": "{{count}} more waiting",
+      "waiting_one": "{{count}} waiting",
+      "waiting_other": "{{count}} waiting"
+    }
+  },
   "tasks": {
     "detailCommentRenderers": {
       "comments_one": "{{count}} comment",
