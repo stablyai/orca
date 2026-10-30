@@ -112,6 +112,19 @@ export class BrowserAgentActivity {
     }
   }
 
+  /** The agent continues on another page (a closed popup's opener), so its claim moves there. */
+  handOver(fromPageId: string, toPageId: string): void {
+    if (!this.pages.has(fromPageId) || this.pages.has(toPageId)) {
+      return
+    }
+    this.pages.set(toPageId, {
+      commands: 0,
+      executing: false,
+      idleTimer: setTimeout(() => this.end(toPageId), ACTIVITY_IDLE_MS)
+    })
+    this.publish(toPageId, true)
+  }
+
   isActive(browserPageId: string): boolean {
     return this.pages.has(browserPageId)
   }

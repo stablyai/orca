@@ -110,6 +110,18 @@ describe('BrowserAgentActivity', () => {
     expect(sent.at(-1)?.data).toEqual({ browserPageId: PAGE, worktreeId: 'wt-1', active: false })
   })
 
+  it('hands an agent claim to the page it continues on, which then idles out like any other', () => {
+    const { activity, agentCommand } = setup()
+    activity.handOver(PAGE, 'opener')
+    expect(activity.isActive('opener')).toBe(false)
+
+    agentCommand().end()
+    activity.handOver(PAGE, 'opener')
+    expect(activity.isActive('opener')).toBe(true)
+    vi.advanceTimersByTime(20_000)
+    expect(activity.isActive('opener')).toBe(false)
+  })
+
   it('holds a fresh move until the renderer reports the cursor landed', async () => {
     const { agentCommand, cursorEvents, arrive, show } = setup()
     let landed = false

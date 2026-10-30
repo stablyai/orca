@@ -248,6 +248,7 @@ describe('AgentBrowserBridge', () => {
       ['tab-b', 'wt-1']
     ])
     let popupPages = [{ browserPageId: 'popup-7', webContentsId: 7, openerBrowserPageId: 'tab-b' }]
+    const agentPages = new Set<string>()
     let closePopup = (): void => {}
     const popup = {
       ...mockWebContents(7, 'https://auth.example.com/', 'Sign in'),
@@ -266,7 +267,13 @@ describe('AgentBrowserBridge', () => {
     const b = new AgentBrowserBridge(
       mockBrowserManager(tabs, worktrees, {
         getPopupPages: () => popupPages,
-        getGuestWebContentsId: (tabId: string) => tabs.get(tabId) ?? null
+        getGuestWebContentsId: (tabId: string) => tabs.get(tabId) ?? null,
+        isAgentUsingPage: (pageId: string) => agentPages.has(pageId),
+        handOverAgentActivity: (from: string, to: string) => {
+          if (agentPages.has(from)) {
+            agentPages.add(to)
+          }
+        }
       })
     )
     b.setActiveTab(1, 'wt-1')
@@ -296,6 +303,9 @@ describe('AgentBrowserBridge', () => {
 
     await b.tabSwitch(undefined, 'wt-1', 'popup-7')
     expect(b.getActivePageId('wt-1')).toBe('popup-7')
+    agentPages.add('popup-7')
+    // The person's pick waits while the agent signs in, and keeps waiting once it is back on the opener.
+    b.onTabChanged(1, 'wt-1')
     await expect(b.click('@e2', 'wt-1')).resolves.toBeDefined()
 
     expect(b.getActivePageId('wt-1')).toBe('tab-b')

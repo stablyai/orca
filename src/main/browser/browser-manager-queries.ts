@@ -11,17 +11,7 @@ import {
   isBrowserRouteGuestPopup,
   listBrowserRouteGuestPopups
 } from './browser-route-guest-popup-ownership'
-
-// WebContents ids are never reused within a run, so a popup page id stays unique while it lives.
-const POPUP_PAGE_ID_PREFIX = 'popup-'
-
-function popupPageWebContentsId(browserPageId: string): number | null {
-  if (!browserPageId.startsWith(POPUP_PAGE_ID_PREFIX)) {
-    return null
-  }
-  const webContentsId = Number(browserPageId.slice(POPUP_PAGE_ID_PREFIX.length))
-  return Number.isInteger(webContentsId) && webContentsId > 0 ? webContentsId : null
-}
+import { browserPopupPageId, browserPopupPageWebContentsId } from './browser-popup-page-id'
 
 export abstract class BrowserManagerQueries extends BrowserManagerRegistration {
   getGuestWebContentsId(browserTabId: string): number | null {
@@ -51,9 +41,11 @@ export abstract class BrowserManagerQueries extends BrowserManagerRegistration {
     return ownerTabId ?? browserPageId
   }
 
+  // A tab created with a popup-shaped id keeps it; the popup goes unlisted rather than shadow it.
   private resolvePopupPageWebContentsId(browserPageId: string): number | null {
-    const webContentsId = popupPageWebContentsId(browserPageId)
+    const webContentsId = browserPopupPageWebContentsId(browserPageId)
     return webContentsId !== null &&
+      !this.webContentsIdByTabId.has(browserPageId) &&
       (this.popupOwnerContextByGuestId.has(webContentsId) ||
         isBrowserRouteGuestPopup(webContentsId))
       ? webContentsId
@@ -76,11 +68,17 @@ export abstract class BrowserManagerQueries extends BrowserManagerRegistration {
     ])
     const pages: BrowserPopupPage[] = []
     for (const webContentsId of popupWebContentsIds) {
+      const browserPageId = browserPopupPageId(webContentsId)
       const openerBrowserPageId = this.resolvePopupOwnerContext(webContentsId)?.browserTabId
       const popup = webContents.fromId(webContentsId)
-      if (openerBrowserPageId && popup && !popup.isDestroyed()) {
+      if (
+        openerBrowserPageId &&
+        !this.webContentsIdByTabId.has(browserPageId) &&
+        popup &&
+        !popup.isDestroyed()
+      ) {
         pages.push({
-          browserPageId: `${POPUP_PAGE_ID_PREFIX}${webContentsId}`,
+          browserPageId,
           webContentsId,
           openerBrowserPageId
         })

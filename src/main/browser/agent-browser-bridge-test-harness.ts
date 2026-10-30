@@ -45,6 +45,7 @@ export function mockBrowserManager(
     }),
     showAgentPointer: async () => {},
     isAgentUsingPage: () => false,
+    handOverAgentActivity: () => {},
     ...overrides
   } as unknown as BrowserManager
 }

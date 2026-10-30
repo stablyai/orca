@@ -84,13 +84,19 @@ export abstract class AgentBrowserBridgeLifecycle extends AgentBrowserBridgeRawP
         popup.openerBrowserPageId
       )
       if (openerWebContentsId !== null) {
-        if (this.activeWebContentsId === webContentsId) {
+        let handedBack = this.activeWebContentsId === webContentsId
+        if (handedBack) {
           this.activeWebContentsId = openerWebContentsId
         }
         for (const [worktreeId, routedWebContentsId] of this.activeWebContentsPerWorktree) {
           if (routedWebContentsId === webContentsId) {
             this.activeWebContentsPerWorktree.set(worktreeId, openerWebContentsId)
+            handedBack = true
           }
+        }
+        // A person's tab pick held while the agent drove the popup must keep waiting on the opener.
+        if (handedBack) {
+          this.browserManager.handOverAgentActivity(popup.browserPageId, popup.openerBrowserPageId)
         }
       }
       const closeSession = (): void => void this.onPageClosed(popup.browserPageId)
