@@ -153,7 +153,7 @@ export function MobileNativeChatComposer({
     setPicker({ page: request.id, refocus: false })
   }
   const files = structured?.files ?? NO_FILES
-  const autoSend = useDictationAutoSend(sendSurfaceId)
+  const autoSend = useDictationAutoSend()
   const menu = useMobileNativeChatComposerMenu({
     value,
     // Typing and every menu pick edit through here; dictation writes the draft from above.
@@ -267,7 +267,8 @@ export function MobileNativeChatComposer({
   }
 
   // A terminal-backed chat has only photos to add, so its + opens the library at once.
-  const attachPress = structured ? () => setAttachOpen(true) : onAttachImage
+  const openAttach = structured ? () => setAttachOpen(true) : onAttachImage
+  const attachPress = openAttach && autoSend.withdrawBefore(openAttach)
   const attachLabel = structured
     ? t('chat.composer.addToMessage', 'Add to message')
     : t('chat.composer.attachImage', 'Attach image')

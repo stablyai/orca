@@ -16,14 +16,14 @@ function useSurfaceAutoSend(sendSurfaceId: string): MobileDictationAutoSend | nu
   return sendSurfaceId.startsWith(MOBILE_QUEUED_EDIT_SCOPE_PREFIX) ? null : autoSend
 }
 
-// The composer's takeover gestures: each withdraws the pending send so the draft stays a draft.
-export function useDictationAutoSend(sendSurfaceId: string): {
+// The composer's takeover gestures, a queued-message edit's included, withdraw the chat's pending send.
+export function useDictationAutoSend(): {
   withdraw: () => void
   withdrawBefore: <Args extends unknown[], Result>(
     handler: (...args: Args) => Result
   ) => (...args: Args) => Result
 } {
-  const autoSend = useSurfaceAutoSend(sendSurfaceId)
+  const autoSend = useContext(MobileDictationAutoSendContext)
   const withdraw = (): void => autoSend?.withdraw()
   return {
     withdraw,

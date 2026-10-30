@@ -1,4 +1,4 @@
-import { createElement, useState, type ComponentProps, type ReactNode } from 'react'
+import { createElement, Fragment, useState, type ComponentProps, type ReactNode } from 'react'
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { AccessibilityInfo } from 'react-native'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -196,6 +196,7 @@ describe('MobileNativeChatComposer dictation auto-send', () => {
     ['tapping into the field', () => field().props.onTouchStart(), 'dictated words'],
     ['focusing the field without a touch', refocusField, 'dictated words'],
     ['tapping Cancel', () => pressable('Cancel sending').props.onPress(), 'dictated words'],
+    ['opening attachments', () => pressable('Attach image').props.onPress(), 'dictated words'],
     [
       'typing in the field',
       () => field().props.onChangeText('dictated words, edited'),
@@ -203,7 +204,7 @@ describe('MobileNativeChatComposer dictation auto-send', () => {
     ]
   ])('keeps the draft after %s', async (_name, takeOver, draft) => {
     const onSend = vi.fn().mockResolvedValue(true)
-    await renderControlled(onSend)
+    await renderControlled(onSend, 'dictated words', { onAttachImage: vi.fn() })
     await act(async () => field().props.onFocus())
     await startCountdown()
 
@@ -247,14 +248,33 @@ describe('MobileNativeChatComposer dictation auto-send', () => {
     expect(onSend).toHaveBeenCalledTimes(1)
   })
 
-  it('leaves a queued-message edit composer out of the countdown', async () => {
+  it('never counts down in a queued-message edit, and tapping into one withdraws the chat send', async () => {
     const onSend = vi.fn().mockResolvedValue(true)
-    await render({ onSend, sendSurfaceId: 'queued-edit:1' })
+    const onSaveEdit = vi.fn().mockResolvedValue(true)
+    await act(async () => {
+      renderer = create(
+        createElement(
+          Fragment,
+          null,
+          createElement(MobileNativeChatComposer, props({ onSend })),
+          createElement(
+            MobileNativeChatComposer,
+            props({ onSend: onSaveEdit, sendSurfaceId: 'queued-edit:1' })
+          )
+        )
+      )
+    })
     await startCountdown()
+    expect(
+      renderer!.root.findAllByProps({ testID: 'native-chat-dictation-auto-send' })
+    ).toHaveLength(1)
+
+    const editField = findAllByHostType(renderer!.root, 'TextInput')[1]
+    await act(async () => editField.props.onTouchStart())
     await advance(2000)
 
-    expect(countdownText()).toBeNull()
     expect(onSend).not.toHaveBeenCalled()
+    expect(onSaveEdit).not.toHaveBeenCalled()
   })
 
   it('stops when the chat surface changes', async () => {
