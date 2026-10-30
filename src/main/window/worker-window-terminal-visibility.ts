@@ -1,4 +1,4 @@
-import type { BrowserWindow } from 'electron'
+import type { BrowserWindow, WebContents, WebFrameMain } from 'electron'
 import type { DeviceEntry } from '../runtime/device-entry'
 
 export type WindowTerminalRuntime = {
@@ -74,10 +74,10 @@ export function trackTerminalWindow(runtime: WindowTerminalRuntime, window: Brow
 
 export function reportHostTerminalWindowLease(
   runtime: WindowTerminalRuntime | undefined,
-  sender: object,
+  sender: WebContents,
   ptyId: string,
   visible: boolean,
-  senderFrame: object | null
+  senderFrame: WebFrameMain | null
 ): void {
   if (!runtime) {
     return

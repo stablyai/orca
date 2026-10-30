@@ -110,15 +110,21 @@ describe('native worker terminal visibility identity and lifetime', () => {
     const worker = addWorker(2)
     reportWorkerTerminalWindowLease(runtime, worker.binding, PTY, 'worker:2', true)
     expect(grids.getPinnedGrid(PTY)).toEqual(GRID)
-    const oldFrame = host.webContents.mainFrame
+    const oldFrame = host.nativeWindow.webContents.mainFrame
     host.webContents.emit('did-start-navigation', {}, 'file:///replacement', false, true)
-    reportHostTerminalWindowLease(runtime, host.webContents, PTY, true, oldFrame)
+    reportHostTerminalWindowLease(runtime, host.nativeWindow.webContents, PTY, true, oldFrame)
     expect(grids.getPinnedGrid(PTY)).toBeNull()
     host.webContents.mainFrame = {}
     host.webContents.emit('dom-ready')
-    reportHostTerminalWindowLease(runtime, host.webContents, PTY, true, oldFrame)
+    reportHostTerminalWindowLease(runtime, host.nativeWindow.webContents, PTY, true, oldFrame)
     expect(grids.getPinnedGrid(PTY)).toBeNull()
-    reportHostTerminalWindowLease(runtime, host.webContents, PTY, true, host.webContents.mainFrame)
+    reportHostTerminalWindowLease(
+      runtime,
+      host.nativeWindow.webContents,
+      PTY,
+      true,
+      host.nativeWindow.webContents.mainFrame
+    )
     expect(grids.getPinnedGrid(PTY)).toEqual(GRID)
   })
 

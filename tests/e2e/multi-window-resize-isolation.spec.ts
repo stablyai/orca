@@ -238,6 +238,7 @@ test('pins a mirrored PTY through resize and focus, then releases it on navigati
   electronApp,
   registerPostElectronShutdownCleanup
 }, testInfo) => {
+  // Real PTY redraws and four workspace/owner handoffs need time on shared CI runners.
   test.setTimeout(180_000)
   const scratch = mkdtempSync(path.join(os.tmpdir(), 'orca-multi-window-grid-'))
   registerPostElectronShutdownCleanup(async () => rmSync(scratch, { recursive: true, force: true }))
@@ -436,6 +437,7 @@ test('different terminal tabs in one workspace retain independent PTY grids', as
   electronApp,
   registerPostElectronShutdownCleanup
 }) => {
+  // Two real PTY launches and paired-tab hydration must complete on shared CI runners.
   test.setTimeout(120_000)
   const scratch = mkdtempSync(path.join(os.tmpdir(), 'orca-multi-window-tab-grid-'))
   registerPostElectronShutdownCleanup(async () => rmSync(scratch, { recursive: true, force: true }))

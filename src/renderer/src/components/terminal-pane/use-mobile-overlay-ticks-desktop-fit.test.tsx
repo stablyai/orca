@@ -151,7 +151,7 @@ describe('useMobileOverlayTicks desktop-fit restore', () => {
     })
     pane.terminal.resize.mockImplementation((cols, rows) => terminal.resize(cols, rows))
     pane.fitAddon.proposeDimensions.mockReturnValue({ cols: 137, rows: 64 })
-    pane.fitAddon.fit.mockImplementation(() => pane.terminal.resize(137, 64))
+    pane.fitAddon.fit.mockImplementation(() => terminal.resize(137, 64))
     const binding = mountForPane(pane)
     try {
       act(() => setFitOverride('pty-1', 'remote-desktop-fit', 94, 56, true))
