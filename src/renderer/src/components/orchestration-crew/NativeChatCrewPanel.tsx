@@ -9,13 +9,15 @@ export function NativeChatCrewPanel({
   party: suppliedParty,
   sessionId,
   composerRef,
-  canMention
+  canMention,
+  isVisible = true
 }: {
   target: RuntimeClientTarget | null
   party?: string | null
   sessionId?: string
   composerRef: RefObject<NativeChatComposerHandle | null>
   canMention: boolean
+  isVisible?: boolean
 }): React.JSX.Element | null {
   const party =
     suppliedParty ??
@@ -28,6 +30,7 @@ export function NativeChatCrewPanel({
     <OrchestrationCrewPanel
       target={target}
       party={party}
+      isVisible={isVisible}
       canMention={canMention}
       mention={(rows) => {
         composerRef.current?.insertAgentReferences(

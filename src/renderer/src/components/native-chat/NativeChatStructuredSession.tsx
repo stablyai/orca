@@ -282,6 +282,7 @@ export function NativeChatStructuredSession(
       <div className="relative flex min-h-0 flex-1 flex-col">
         <NativeChatCrewPanel
           {...props}
+          isVisible={props.isVisible}
           composerRef={composerRef}
           canMention={composerShown && install.unavailableHint === undefined}
         />

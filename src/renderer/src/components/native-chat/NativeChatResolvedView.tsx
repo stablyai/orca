@@ -347,6 +347,7 @@ export function NativeChatResolvedView({
     >
       <NativeChatCrewPanel
         {...crew}
+        isVisible={isVisible}
         composerRef={composerRef}
         canMention={canSend && !shownPromptCard && targetPtyId !== null}
       />
