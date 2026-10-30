@@ -155,6 +155,7 @@ function defaultVerbAnswer(verb: BridgeNativeVerb): unknown {
     case 'native.audio.stop':
       return { stopped: true, base64: '', droppedBytes: 0 }
   }
+  return undefined
 }
 
 export function createBridgePortPair<TRpc extends RpcClient>(

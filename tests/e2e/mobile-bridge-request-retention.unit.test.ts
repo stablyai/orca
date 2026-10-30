@@ -40,7 +40,7 @@ it.each([1, 10])(
     const pair = createFakeBridgePortPair()
     await pair.flush()
     const survivor = pair.client.sendRequest('status.get')
-    const weak = []
+    const weak: WeakRef<{ bytes: Uint8Array }>[] = []
     try {
       for (let index = 0; index < count; index++) {
         weak.push(await abandonCaller(pair))
