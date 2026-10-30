@@ -28,6 +28,8 @@ const mocks = vi.hoisted(() => ({
 }))
 
 const choices: AgentLaunchChoices = {}
+const folderWorkspaces: FolderWorkspace[] = []
+const projectGroups: ProjectGroup[] = []
 const hostStatuses = new Map<
   string,
   { status: { hostPlatform: string; capabilities: string[]; runtimeId?: string } }
@@ -44,8 +46,8 @@ export const store = {
     activeRuntimeEnvironmentId: 'web-runtime' as string | null
   },
   projects: [{ id: 'repo-1', localWindowsRuntimePreference: { kind: 'inherit-global' as const } }],
-  folderWorkspaces: [] as FolderWorkspace[],
-  projectGroups: [] as ProjectGroup[],
+  folderWorkspaces,
+  projectGroups,
   // The client stamps a server's rows on arrival; focus alone never names the owner.
   repos: [
     { id: 'repo-1', connectionId: null, path: '/repo', executionHostId: 'runtime:web-runtime' }
