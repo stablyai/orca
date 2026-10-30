@@ -218,11 +218,20 @@ it('updates nominal toggle labels, including an unassigned binding', () => {
 })
 
 describe('useNativeChatContextMenu', () => {
+  const rangeClientRects = Object.getOwnPropertyDescriptor(Range.prototype, 'getClientRects')
   beforeEach(() => {
     items.list = []
+    // happy-dom lays out no text; selections sit in a box at the default menu point.
+    Object.defineProperty(Range.prototype, 'getClientRects', {
+      configurable: true,
+      value: () => [new DOMRect(0, 0, 20, 10)]
+    })
   })
 
   afterEach(() => {
+    if (rangeClientRects) {
+      Object.defineProperty(Range.prototype, 'getClientRects', rangeClientRects)
+    }
     cleanup()
     vi.restoreAllMocks()
     vi.unstubAllGlobals()
@@ -325,6 +334,23 @@ describe('useNativeChatContextMenu', () => {
       expect(fireEvent.pointerDown(screen.getByText('text'), init)).toBe(defaultRuns)
     }
   )
+
+  it.each([
+    ['on it', 5, 'text'],
+    ['away from it', 50, undefined]
+  ])('offers the selection only to a menu opened %s', (_where, clientX, copied) => {
+    const writeClipboardText = vi.fn().mockResolvedValue(undefined)
+    vi.stubGlobal('api', { ui: { writeClipboardText } })
+    render(<ImageHarness />)
+    const selection = window.getSelection()
+    selection?.selectAllChildren(screen.getByText('text'))
+    fireEvent.contextMenu(screen.getByText('text'), { clientX, clientY: 5 })
+
+    copyTextItem()?.onSelect?.()
+
+    expect(writeClipboardText.mock.calls[0]?.[0]).toBe(copied)
+    expect(selection?.isCollapsed).toBe(copied === undefined)
+  })
 
   it('offers no image copy when the right-click is not on an image', () => {
     render(<ImageHarness />)

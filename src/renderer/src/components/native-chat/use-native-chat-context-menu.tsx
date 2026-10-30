@@ -196,6 +196,7 @@ export function useNativeChatContextMenu({
         return
       }
       menuOpenedAtRef.current = Date.now()
+      dropSelectionAwayFromPoint(rootRef.current, event.clientX, event.clientY)
       setState({
         open: true,
         point: { x: event.clientX, y: event.clientY },
@@ -350,6 +351,31 @@ function keepSelectionThroughMenuPress(event: React.PointerEvent<HTMLElement>): 
   ) {
     event.preventDefault()
   }
+}
+
+// Native menus move the selection to what was pressed; a menu away from it must not offer it.
+// Editors own their selection state, so a composer selection is left to the composer.
+function dropSelectionAwayFromPoint(root: HTMLElement | null, x: number, y: number): void {
+  const selection = window.getSelection()
+  const anchor = selection?.anchorNode
+  if (
+    !root ||
+    !selection ||
+    selection.isCollapsed ||
+    !nodeBelongsToRoot(anchor ?? null, root) ||
+    !nodeBelongsToRoot(selection.focusNode, root) ||
+    isEditableTarget(anchor instanceof Element ? anchor : (anchor?.parentElement ?? null))
+  ) {
+    return
+  }
+  for (let index = 0; index < selection.rangeCount; index += 1) {
+    for (const rect of selection.getRangeAt(index).getClientRects()) {
+      if (x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom) {
+        return
+      }
+    }
+  }
+  selection.removeAllRanges()
 }
 
 // Why: only Chromium's own menu for a typing target carries the OS spellchecker's suggestions.
