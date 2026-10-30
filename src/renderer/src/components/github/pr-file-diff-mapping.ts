@@ -12,28 +12,12 @@ import type {
   GitHubPRFile,
   GitHubPRFileContents
 } from '../../../../shared/github/pull-request-types'
+import { mapPRFileStatus } from '../../../../shared/github/pull-request-file-state'
 
 export const PR_DIFF_OVERSCAN = 5
 
 // Why: overflow is a sentinel; force reported size past the render budget so downstream checks reliably pick fallback mode.
 const GITHUB_PR_RAW_CONTENT_OVERFLOW_CHARACTER_COUNT = MAX_RENDERED_DIFF_COMBINED_CHARACTERS + 1
-
-export function mapPRFileStatus(status: GitHubPRFile['status']): GitBranchChangeEntry['status'] {
-  switch (status) {
-    case 'added':
-      return 'added'
-    case 'removed':
-      return 'deleted'
-    case 'renamed':
-      return 'renamed'
-    case 'copied':
-      return 'copied'
-    case 'changed':
-    case 'modified':
-    case 'unchanged':
-      return 'modified'
-  }
-}
 
 export function getPRFileSectionKey(path: string): string {
   return `combined-commit:${path}`

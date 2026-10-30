@@ -11,7 +11,7 @@ import type { CombinedDiffFileTreeEntry } from '../../editor/combined-diff/resol
 import { useAppStore } from '@/store'
 import { useDocumentDarkTheme } from '@/hooks/use-document-dark-theme'
 import type { GitBranchChangeEntry } from '../../../../../shared/git-diff-compare-types'
-import { isPRFileViewed } from '@/components/github/pr-file-content-size'
+import { isPRFileViewed } from '../../../../../shared/github/pull-request-file-state'
 import {
   PR_DIFF_OVERSCAN,
   getPRFileSectionKey,

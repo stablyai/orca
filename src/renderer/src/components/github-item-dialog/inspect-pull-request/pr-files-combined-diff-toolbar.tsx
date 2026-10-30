@@ -3,7 +3,7 @@ import { PanelLeftOpen } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
-import { isPRFileViewed } from '@/components/github/pr-file-content-size'
+import { isPRFileViewed } from '../../../../../shared/github/pull-request-file-state'
 import type { GitHubPRFile } from '../../../../../shared/github/pull-request-types'
 
 export function PRFilesCombinedDiffToolbar({

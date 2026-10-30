@@ -17,7 +17,7 @@ import type { DiffSection } from '@/components/editor/diff-section-types'
 import { getCombinedDiffBranchEntriesInTreeOrder } from '../../editor/combined-diff/browse-files/combined-diff-file-tree-filter'
 import type { CombinedDiffFileTreeEntry } from '../../editor/combined-diff/resolve-changes/combined-diff-section-identity'
 import { PRViewedCheckbox } from '@/components/github/PRViewedCheckbox'
-import { isPRFileViewed } from '@/components/github/pr-file-content-size'
+import { isPRFileViewed } from '../../../../../shared/github/pull-request-file-state'
 import {
   PR_DIFF_OVERSCAN,
   getPRFileSectionKey,
