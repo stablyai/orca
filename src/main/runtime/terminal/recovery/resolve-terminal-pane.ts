@@ -1,6 +1,6 @@
 import { terminalLaunchFacts } from '../../../../shared/agent-session-resume'
 import type { OrcaRuntimeWithCreateTerminal } from '../launch/terminal-create'
-import { OrcaRuntimeWithRestoredHandlePaneStart } from '../surface/restored-handle-pane-start'
+import { OrcaRuntimeWithShellLifecycleObservation } from '../../runtime-shell-lifecycle-observation'
 import type {
   RuntimeTerminalRead,
   RuntimeTerminalResolvePane,
@@ -29,8 +29,7 @@ import { getTerminalState } from '../../terminal-wait-results'
 import { readStructuredWorkerTerminal } from '../../structured-worker-terminal-read'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 
-export abstract class OrcaRuntimeWithResolveTerminalPane extends OrcaRuntimeWithRestoredHandlePaneStart {
-  protected abstract assertLiveTerminalHandleTargetsPty(handle: string, expectedPtyId: string): void
+export abstract class OrcaRuntimeWithResolveTerminalPane extends OrcaRuntimeWithShellLifecycleObservation {
   abstract createTerminal(
     ...args: Parameters<OrcaRuntimeWithCreateTerminal['createTerminal']>
   ): ReturnType<OrcaRuntimeWithCreateTerminal['createTerminal']>
@@ -187,7 +186,10 @@ export abstract class OrcaRuntimeWithResolveTerminalPane extends OrcaRuntimeWith
     return recovery
   }
 
-  async showTerminal(handle: string): Promise<RuntimeTerminalShow> {
+  async showTerminal(
+    handle: string,
+    opts: { includeShellLifecycle?: boolean } = {}
+  ): Promise<RuntimeTerminalShow> {
     const pty = this.getLivePtyForHandle(handle)
     if (pty) {
       const worktreesById = await this.getResolvedWorktreeMap()
@@ -204,6 +206,9 @@ export abstract class OrcaRuntimeWithResolveTerminalPane extends OrcaRuntimeWith
         paneRuntimeId: -1,
         ptyId: pty.pty.ptyId,
         rendererGraphEpoch: this.rendererGraphEpoch,
+        ...(opts.includeShellLifecycle
+          ? { shellLifecycle: await this.shellLifecycleForTerminal(handle, summary) }
+          : {}),
         ...(agentWait !== undefined ? { agentWait } : {})
       }
     }
@@ -226,6 +231,9 @@ export abstract class OrcaRuntimeWithResolveTerminalPane extends OrcaRuntimeWith
       paneRuntimeId: leaf.paneRuntimeId,
       ptyId: leaf.ptyId,
       rendererGraphEpoch: this.rendererGraphEpoch,
+      ...(opts.includeShellLifecycle
+        ? { shellLifecycle: await this.shellLifecycleForTerminal(handle, summary) }
+        : {}),
       ...(agentWait !== undefined ? { agentWait } : {})
     }
   }

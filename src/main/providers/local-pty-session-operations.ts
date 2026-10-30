@@ -11,6 +11,7 @@ import {
   dataListeners,
   exitListeners,
   ptyIncarnations,
+  ptyShellLifecycles,
   ptyInitialCwd,
   ptyProcesses,
   getPtyShellName,
@@ -33,6 +34,7 @@ export function writeLocalPty(id: string, data: string): boolean {
   if (!proc) {
     return false
   }
+  ptyShellLifecycles.get(id)?.invalidateInput()
   proc.write(data)
   return true
 }

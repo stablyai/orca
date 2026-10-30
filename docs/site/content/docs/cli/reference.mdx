@@ -178,6 +178,7 @@ Mailboxes are `dispatch:<id>` or `orca_session_id:<id>`; a `run:<id>` addresses 
 ```bash
 orca terminal list --worktree active --json
 orca terminal show --terminal <handle> --json
+orca terminal show --terminal <handle> --shell-lifecycle --json
 orca terminal read --terminal <handle> --json
 orca terminal read --terminal <handle> --screen --json
 orca terminal read --terminal <handle> --cursor <cursor> --limit 1000 --json
@@ -193,6 +194,51 @@ orca terminal close --worktree active --all --json
 ```
 
 Omit `--terminal` to target the active terminal in the current worktree. Read before sending when you are not sure what the terminal is waiting for.
+
+### Shell lifecycle observation
+
+`terminal show --shell-lifecycle --json` adds `result.terminal.shellLifecycle`.
+This reports an observed phase with `confidence: cooperative`, not input readiness or permission to close a shell.
+The equivalent RPC is `terminal.show` with `{ terminal: handle, includeShellLifecycle: true }`.
+Ordinary `show` does not inspect the process tree or include this field.
+
+- `phase` is `prompt`, `running`, or `unknown`. Prompt requires a live, ordered signal from
+  Orca's managed Bash integration, matching live producer state on the execution host,
+  and a fresh complete process-tree observation with no children.
+  A childless builtin such as `read -e` is `running` or `unknown`, never prompt based on childlessness.
+- `runtimeId`, `executionHostId`, `ptyId`, `incarnationId` and `authorityGeneration` bind the
+  result to the selected runtime and execution owner. `generation` advances on lifecycle signals
+  and input invalidation; compare it only within the same binding. Never reuse an observation
+  after input, reconnection, PTY replacement or a change of runtime/host authority.
+- `signalAgeMs` is the age of the last live signal, not the age of the terminal's last output.
+  It conservatively includes both host receipt age and the age of the producer state file.
+  Queued output cannot refresh the producer timestamp.
+  Signals older than 30 seconds become `unknown`, including a quiet prompt. Reading does not
+  refresh a signal. Its age conservatively includes the runtime/host round trip. `observedAt` is the runtime's wall-clock response time. `source` and `reason`
+  identify evidence or explain why it could not be established. A bounded host inspection can time out.
+
+Initially, managed native POSIX Bash wrappers on Linux/macOS supply these signals, for both Git
+and folder workspaces. Existing/unwrapped shells, other shells, Windows/WSL, and SSH relays that
+do not implement this evidence return `unknown`. Paired runtimes can return their owning host's
+evidence when both sides support it. New clients talking to an old runtime report `old-runtime`;
+new runtimes talking to an old daemon/relay report `old-host`. For direct RPC consumers, an omitted
+field from an old runtime also means unknown. Old clients keep their existing behavior.
+
+This is cooperative integration evidence, not a security attestation against shell code running
+as the same user. Raw OSC 133, a recognized shell name, `agentWait: null`, retained terminal history,
+or quiet output cannot confirm a prompt. Input revokes an observed prompt. The execution host
+corroborates each phase against a private file that the managed shell updates before emitting events
+and before running user commands or DEBUG hooks. A queued older prompt cannot match a newer running
+state. Missing, partial, changed, unreadable or stale producer state yields `unknown`.
+
+This is a point-in-time observation, not acknowledgement that a particular stdin write was consumed.
+A new command can start after the snapshot. Revalidate after input or identity changes; neither phase
+nor generation is a causal stdin fence. The contract requires working managed hooks and local storage:
+hook removal, arbitrary shell code, or a storage failure that preserves older bytes can defeat that
+cooperation until later invalidation/expiry. Bash `functrace` is conservatively unknown; custom
+DEBUG/prompt hooks can degrade observations (see [#29159](https://github.com/stablyai/orca/issues/29159)).
+The read does not type, focus, create, recover or close terminals, and does not authorize terminal
+closure or worktree deletion. Agent-specific `tui-idle` waiting is unchanged.
 
 Close stops the process as part of removing the terminal. Use `--terminal <handle>` for one
 terminal, or `--worktree <selector> --all` to durably close every terminal in exactly that

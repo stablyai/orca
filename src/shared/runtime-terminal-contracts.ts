@@ -10,6 +10,7 @@ import type { TabGroupLayoutNode } from './tab-types'
 import type { TerminalExitCause } from './terminal-exit-cause'
 import type { TerminalPaneLayoutNode } from './terminal-tab-types'
 import type { TerminalAgent, TuiAgent } from './terminal-agent'
+import type { RuntimeTerminalShellLifecycle } from './terminal-shell-lifecycle'
 export type {
   RuntimeTerminalSend,
   RuntimeTerminalPromptStage,
@@ -184,6 +185,8 @@ export type RuntimeTerminalInteractiveWait = {
 }
 
 export type RuntimeTerminalShow = RuntimeTerminalSummary & {
+  /** Opt-in live observation; absent on older runtimes means unknown. */
+  shellLifecycle?: RuntimeTerminalShellLifecycle
   paneRuntimeId: number
   ptyId: string | null
   rendererGraphEpoch: number

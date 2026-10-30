@@ -5,12 +5,13 @@ import { SessionProducerPause } from './session-producer-pause'
 import { SessionShellReadyBarrier } from './session-shell-ready-barrier'
 import type { TerminalShellRecoveryBarrier } from './terminal-shell-recovery-barrier'
 import { SessionTerminationController } from './session-termination-controller'
-import type { ChildProcessVerdictRead, SubprocessHandle } from './session-subprocess-handle'
+import { SessionProcessInspection } from './session-process-inspection'
 import type { JobTerminationOutcome } from '../windows/windows-pty-job'
 import type { SessionOptions } from './session-options'
 import type { TuiAgent } from '../../shared/tui-agent'
 import { randomUUID } from 'node:crypto'
 import { PtyStartupIngress } from '../../shared/pty-startup-ingress'
+import { ManagedShellLifecycle } from '../managed-shell-lifecycle'
 
 import type {
   SessionState,
@@ -20,7 +21,7 @@ import type {
 } from './types'
 import type { TerminalExitCause } from '../../shared/terminal-exit-cause'
 
-export class Session {
+export class Session extends SessionProcessInspection {
   readonly sessionId: string
   readonly incarnationId = randomUUID()
   readonly terminalHandle: string | null
@@ -31,21 +32,25 @@ export class Session {
   private _state: SessionState = 'running'
   private _exitCode: number | null = null
   private _disposed = false
-  private subprocess: SubprocessHandle
   private readonly onSessionExit?: (code: number) => void
   private readonly output: SessionOutputPlane
   private readonly producerPause: SessionProducerPause
   private readonly shellReady: SessionShellReadyBarrier
   private readonly termination: SessionTerminationController
   readonly startupIngress: PtyStartupIngress
+  readonly shellLifecycle: ManagedShellLifecycle
   private readonly recoveryBarrier: TerminalShellRecoveryBarrier
 
   constructor(opts: SessionOptions) {
+    super(opts.subprocess)
     this.sessionId = opts.sessionId
+    this.shellLifecycle = new ManagedShellLifecycle(
+      opts.subprocess.shellLifecycleBinding,
+      opts.subprocess.shellLifecycleStatePath
+    )
     this.terminalHandle = opts.terminalHandle ?? null
     this.launchAgent = opts.launchAgent ?? null
     this.wslDistro = opts.wslDistro ?? null
-    this.subprocess = opts.subprocess
     this.processNameIsSpawnFile = opts.subprocess.processNameIsSpawnFile === true
     this.shellIsRootChild = opts.subprocess.shellIsRootChild === true
     this.onSessionExit = opts.onExit
@@ -70,7 +75,8 @@ export class Session {
       shellReadyTimeoutMs: opts.shellReadyTimeoutMs,
       installDeviceAttributesFilter: () => this.output.installDeviceAttributesFilter(),
       releaseDeviceAttributesFilter: () => this.output.releaseDeviceAttributesFilter(),
-      acceptStartupIngress: (data) => this.startupIngress.accept(data)
+      acceptStartupIngress: (data) => this.startupIngress.accept(data),
+      beforeCommandWrite: () => this.shellLifecycle.invalidateInput()
     })
 
     this.startupIngress = new PtyStartupIngress({
@@ -82,7 +88,7 @@ export class Session {
     try {
       this.subprocess.onData((data) => {
         if (!this._disposed) {
-          this.shellReady.ingestSubprocessData(data)
+          this.shellReady.ingestSubprocessData(this.shellLifecycle.accept(data))
         }
       })
       this.subprocess.onExit((code, cause) => this.handleSubprocessExit(code, cause))
@@ -132,10 +138,6 @@ export class Session {
     return this.termination.beginTermination()
   }
 
-  get pid(): number {
-    return this.subprocess.pid
-  }
-
   /** A PTY job result of unavailable does not prove child exit. */
   terminateOwnedTree(): JobTerminationOutcome {
     return this.subprocess.terminateOwnedTree()
@@ -144,12 +146,14 @@ export class Session {
   write(data: string): void {
     // Human input must reach rc-file readers while automatic startup commands wait for readiness.
     if (this.isAlive && !this._disposed && !this.startupIngress.answerLiveQueryReply(data)) {
+      this.shellLifecycle.invalidateInput()
       this.subprocess.write(data)
     }
   }
 
   /** Orca's own startup command: held by the shell-ready barrier until the shell can read it. */
   writeStartupCommand(data: string): void {
+    this.shellLifecycle.invalidateInput()
     if (this._state !== 'exited' && !this._disposed && !this.shellReady.tryEnqueue(data)) {
       this.subprocess.write(data)
     }
@@ -237,20 +241,6 @@ export class Session {
 
   getCwd(): string | null {
     return this.output.getCwd()
-  }
-
-  inspectChildProcesses(fresh?: boolean, ignoreDetached?: boolean): ChildProcessVerdictRead {
-    return this.subprocess.inspectChildProcesses?.(fresh, ignoreDetached) ?? 'unverifiable'
-  }
-
-  getForegroundProcess(options?: { rawFallback?: boolean; cachedOnly?: boolean }): string | null {
-    return this.subprocess.getForegroundProcess(options)
-  }
-
-  async confirmForegroundProcess(context?: { decision?: boolean }): Promise<string | null> {
-    return (
-      this.subprocess.confirmForegroundProcess?.(context) ?? this.subprocess.getForegroundProcess()
-    )
   }
 
   confirmShellForeground(): Promise<boolean> {

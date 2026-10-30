@@ -1,4 +1,5 @@
 import type { RemoteForegroundEvidence } from './foreground-process-evidence'
+import type { HostShellLifecycleObservation } from './terminal-shell-lifecycle'
 
 /** Keep unverifiable distinct from no-children; legacy booleans collapsed failed inspection and Windows relay defaults into false, bypassing close guards. */
 export type PtyChildProcessVerdict = 'children' | 'no-children' | 'unverifiable'
@@ -12,6 +13,7 @@ export type ClientOnlyUnverifiableReason =
 
 /** Forbid host identity on renderer-only verdicts so transport failures cannot masquerade as host observations. */
 export type ClientOnlyUnverifiableInspection = {
+  shellLifecycle?: never
   foregroundProcess: null
   hasChildProcesses: false
   verdict: 'unverifiable'
@@ -27,6 +29,7 @@ export type ClientOnlyUnverifiableInspection = {
 
 /** Compatibility-shaped host/local inspection returned by the inspect RPC. */
 export type HostProcessInspection = {
+  shellLifecycle?: HostShellLifecycleObservation
   foregroundProcess: string | null
   hasChildProcesses: boolean
   /** Optional on old hosts; the renderer treats an omitted field as old-host unverifiable. */

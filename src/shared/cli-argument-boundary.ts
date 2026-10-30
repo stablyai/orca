@@ -39,6 +39,7 @@ export const CLI_BOOLEAN_FLAGS = new Set([
   'mobile-pairing',
   'no-pairing',
   'screen',
+  'shell-lifecycle',
   'parent-current',
   'provision',
   'ready',

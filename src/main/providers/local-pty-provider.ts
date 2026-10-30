@@ -1,4 +1,10 @@
 import type * as pty from 'node-pty'
+import { randomUUID } from 'node:crypto'
+import {
+  getFreshProcessTableSnapshot,
+  withEvidenceBudget
+} from '../../shared/process-table-snapshot-reader'
+import { inspectSpawnFileChildProcessesFromRows } from '../daemon/pty-subprocess/spawn-file-child-processes'
 import type {
   IPtyProvider,
   PtyProcessInfo,
@@ -30,6 +36,7 @@ import {
   pendingLocalPtySpawns,
   ptyProcesses,
   ptyIncarnations,
+  ptyShellLifecycles,
   resetLoadGeneration,
   type DataCallback,
   type ExitCallback
@@ -56,6 +63,7 @@ import { cancelAllPendingLocalPtySpawns } from './local-pty-spawn-state'
 import { killAllLocalPtys, killOrphanedLocalPtys, shutdownLocalPty } from './local-pty-termination'
 
 export type { LocalPtyProviderOptions } from './local-pty-provider-types'
+const SHELL_LIFECYCLE_AUTHORITY = randomUUID()
 export {
   LOCAL_PTY_FORCE_KILL_RETRY_MS,
   LOCAL_PTY_GRACEFUL_FORCE_TIMEOUT_MS,
@@ -148,6 +156,8 @@ export class LocalPtyProvider implements IPtyProvider {
   ): Promise<PtyProcessInspection> {
     const proc = ptyProcesses.get(id)
     const incarnation = ptyIncarnations.get(id)
+    const lifecycle = ptyShellLifecycles.get(id)
+    const lifecycleGeneration = lifecycle?.generation
     if (
       !proc ||
       !incarnation ||
@@ -156,30 +166,80 @@ export class LocalPtyProvider implements IPtyProvider {
       return {
         foregroundProcess: null,
         hasChildProcesses: true,
-        childProcessEvidence: 'unverifiable'
+        childProcessEvidence: 'unverifiable',
+        ...(options?.includeShellLifecycle && incarnation && lifecycle
+          ? {
+              shellLifecycle: {
+                ...(await lifecycle.observe('unverifiable')),
+                phase: 'unknown' as const,
+                confidence: 'none' as const,
+                reason: 'incarnation-mismatch',
+                ptyIncarnationId: incarnation,
+                authorityGeneration: SHELL_LIFECYCLE_AUTHORITY
+              }
+            }
+          : {})
       }
     }
     const foregroundProcess = await (process.platform === 'win32' && options?.steadyState !== true
       ? confirmLocalPtyForegroundProcess(id, true)
       : getLocalPtyForegroundProcess(id))
     // A steady-state poll never decides adoption or close, so it may read the cached process table.
-    const childProcessEvidence = await inspectLocalPtyChildProcesses(
-      id,
-      options?.steadyState !== true,
-      options?.ignoreDetached === true
-    )
-    // Neither asynchronous inspection may publish a replacement pane's identity.
+    let childProcessEvidence
+    if (options?.includeShellLifecycle && process.platform !== 'win32') {
+      try {
+        childProcessEvidence = inspectSpawnFileChildProcessesFromRows(
+          await withEvidenceBudget(getFreshProcessTableSnapshot(true)),
+          proc.pid,
+          'bash'
+        )
+      } catch {
+        childProcessEvidence = 'unverifiable' as const
+      }
+    } else {
+      childProcessEvidence = await inspectLocalPtyChildProcesses(
+        id,
+        options?.steadyState !== true,
+        options?.ignoreDetached === true
+      )
+    }
+    const shellLifecycle =
+      options?.includeShellLifecycle && lifecycle
+        ? await lifecycle.observe(childProcessEvidence, lifecycleGeneration)
+        : undefined
+    // No asynchronous inspection may publish a replacement pane's identity.
     if (ptyProcesses.get(id) !== proc || ptyIncarnations.get(id) !== incarnation) {
       return {
         foregroundProcess: null,
         hasChildProcesses: true,
-        childProcessEvidence: 'unverifiable'
+        childProcessEvidence: 'unverifiable',
+        ...(shellLifecycle
+          ? {
+              shellLifecycle: {
+                ...shellLifecycle,
+                phase: 'unknown' as const,
+                confidence: 'none' as const,
+                reason: 'incarnation-changed',
+                ptyIncarnationId: incarnation,
+                authorityGeneration: SHELL_LIFECYCLE_AUTHORITY
+              }
+            }
+          : {})
       }
     }
     return {
       foregroundProcess,
       hasChildProcesses: childProcessEvidence !== 'no-children',
-      childProcessEvidence
+      childProcessEvidence,
+      ...(shellLifecycle
+        ? {
+            shellLifecycle: {
+              ...shellLifecycle,
+              ptyIncarnationId: incarnation,
+              authorityGeneration: SHELL_LIFECYCLE_AUTHORITY
+            }
+          }
+        : {})
     }
   }
 

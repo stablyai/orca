@@ -1,3 +1,7 @@
+import {
+  BASH_SHELL_LIFECYCLE_INIT,
+  BASH_SHELL_LIFECYCLE_EMITTER
+} from '../bash-shell-lifecycle-integration'
 import { getPosixOmpShellWrapper } from '../pty/omp-shell-wrapper'
 import { ORCA_CLI_POSIX_PATH_RESTORE } from '../../shared/orca-cli-shell-path'
 import { MANAGED_DATA_ACCOUNT_POSIX_RESTORE } from '../../shared/managed-data-account-shell'
@@ -10,6 +14,7 @@ export function getDaemonBashShellReadyRcfileContent(): string {
   return `# Orca daemon bash shell-ready wrapper
 ${BASH_FEATURE_CHANNEL_BLOCK}
 ${SHELL_STARTUP_IDENTITY_MARKER_BLOCK}
+${BASH_SHELL_LIFECYCLE_INIT}
 # Consume the feature channel before profiles so child processes cannot inherit the selection.
 __orca_ready_marker=""
 __orca_has_feature ready && __orca_ready_marker=1
@@ -50,6 +55,7 @@ ${getPosixOmpShellWrapper()}
 ${getPosixCodexShellLaunchPreflight() + getPosixClaudeShellFunction()}
 # OSC 133 C/D clears stale agent status when a CLI exits without a stop hook.
 __orca_initializing_wrapper=1
+${BASH_SHELL_LIFECYCLE_EMITTER}
 __orca_osc133_precmd() {
   local exit_code=$?
   __orca_in_prompt_command=1
@@ -94,6 +100,7 @@ __orca_osc133_preexec() {
     # The prefix is only special while bash-preexec prompt hooks run.
     __bp_*) [[ -n "\${__orca_in_prompt_command:-}" ]] && return 0 ;;
   esac
+  [[ -n "\${__orca_in_command:-}" ]] || __orca_osc133_observe running
   __orca_run_user_debug_trap
   # Chain the framework trap captured before each prompt's lifecycle re-arm.
   if [[ -n "\${__orca_chained_debug_trap:-}" ]]; then
@@ -110,6 +117,7 @@ __orca_osc133_epilogue() {
   unset __orca_in_prompt_command
   __orca_adopt_outer_debug_trap
   trap '__orca_osc133_preexec' DEBUG
+  __orca_osc133_observe prompt
   # Readline renders PS1 after entering raw mode; prompt hooks still run in cooked mode.
   if [[ -n "$__orca_ready_marker" ]]; then
     # Attached ble.sh (0.3+) discards Bash's own prompt output and owns the TTY, so print directly.

@@ -5,10 +5,15 @@ import { recognizeAgentProcess } from '../../shared/agent-process-recognition'
 import type { PtyChildProcessVerdict } from '../../shared/terminal-process-inspection'
 import type { RemoteForegroundEvidence } from '../../shared/foreground-process-evidence'
 import { getCheapProcessTableSnapshot } from '../../shared/cheap-process-table-snapshot-reader'
-import { getStrictProcessTableSnapshotWithAge } from '../../shared/process-table-snapshot-reader'
+import {
+  getStrictProcessTableSnapshotWithAge,
+  getFreshProcessTableSnapshot,
+  withEvidenceBudget
+} from '../../shared/process-table-snapshot-reader'
 import { resolveRemoteForegroundEvidence } from '../providers/agent-foreground-process'
 import { buildPaneProcessFingerprint } from '../providers/posix-pane-foreground-fingerprint'
 import type { Session } from './session'
+import type { HostShellLifecycleObservation } from '../../shared/terminal-shell-lifecycle'
 import { resolveSpawnFileForegroundFromRows } from './pty-subprocess/spawn-file-foreground-process'
 import { inspectSpawnFileChildProcessesFromRows } from './pty-subprocess/spawn-file-child-processes'
 import {
@@ -20,6 +25,7 @@ import { SessionNotFoundError } from './types'
 import type { PtyProcessInspectionOptions } from '../providers/pty-process-inspection'
 
 export type TerminalHostProcessInspection = {
+  shellLifecycle?: HostShellLifecycleObservation
   foregroundProcess: string | null
   hasChildProcesses: boolean
   childProcessEvidence?: PtyChildProcessVerdict
@@ -36,6 +42,7 @@ export async function inspectTerminalHostProcess(args: {
   session: Session | null
   currentSession?: () => Session | undefined
   expectedIncarnationId?: string
+  includeShellLifecycle?: boolean
   /** The caller is a self-correcting poll that only reads the process name, never evidence. */
   steadyState?: boolean
   ignoreDetached?: boolean
@@ -70,7 +77,8 @@ export async function inspectTerminalHostProcess(args: {
 
   const incarnationMatches =
     !expectedIncarnationId || expectedIncarnationId === session.incarnationId
-  if (args.steadyState === true && incarnationMatches) {
+  const lifecycleGeneration = session.shellLifecycle.generation
+  if (args.steadyState === true && incarnationMatches && !args.includeShellLifecycle) {
     const anchored = await readAnchoredForeground(session)
     if (anchored !== null) {
       args.onTier?.('cheap')
@@ -103,7 +111,20 @@ export async function inspectTerminalHostProcess(args: {
     evidence = unverifiableEvidence(args, session, 'windows_ssh_foreground_unavailable')
   } else {
     try {
-      const snapshot = await getStrictProcessTableSnapshotWithAge()
+      const started = Date.now()
+      const snapshot = args.includeShellLifecycle
+        ? {
+            rows: await withEvidenceBudget(getFreshProcessTableSnapshot(true)),
+            capturedAgeMs: Date.now() - started
+          }
+        : await getStrictProcessTableSnapshotWithAge()
+      if (args.includeShellLifecycle) {
+        childProcessEvidence = inspectSpawnFileChildProcessesFromRows(
+          snapshot.rows,
+          session.pid,
+          'bash'
+        )
+      }
       if (session.processNameIsSpawnFile) {
         const observed = resolveSpawnFileForegroundFromRows(snapshot.rows, session.pid)
         foregroundProcess = observed.available ? observed.processName : foregroundProcess
@@ -152,7 +173,37 @@ export async function inspectTerminalHostProcess(args: {
         ? nonShellForeground
         : childProcessEvidence !== 'no-children',
     ...(childProcessEvidence === undefined ? {} : { childProcessEvidence }),
-    foregroundProcessEvidence: evidence
+    foregroundProcessEvidence: evidence,
+    ...(args.includeShellLifecycle
+      ? {
+          shellLifecycle: {
+            ...(await session.shellLifecycle.observe(
+              incarnationMatches &&
+                session.isAlive &&
+                (!args.currentSession || args.currentSession() === session)
+                ? (childProcessEvidence ?? 'unverifiable')
+                : 'unverifiable',
+              lifecycleGeneration
+            )),
+            ptyIncarnationId: session.incarnationId,
+            authorityGeneration: args.authorityGeneration,
+            ...(!incarnationMatches
+              ? {
+                  phase: 'unknown' as const,
+                  confidence: 'none' as const,
+                  reason: 'incarnation-mismatch'
+                }
+              : {}),
+            ...(!session.isAlive || (args.currentSession && args.currentSession() !== session)
+              ? {
+                  phase: 'unknown' as const,
+                  confidence: 'none' as const,
+                  reason: 'session-changed'
+                }
+              : {})
+          }
+        }
+      : {})
   }
 }
 

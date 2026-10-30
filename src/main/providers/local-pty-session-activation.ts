@@ -1,4 +1,10 @@
 import type * as pty from 'node-pty'
+import { ManagedShellLifecycle, SHELL_LIFECYCLE_BINDING_ENV } from '../managed-shell-lifecycle'
+import {
+  SHELL_LIFECYCLE_STATE_ENV,
+  claimShellLifecycleStateFile,
+  releaseShellLifecycleStateFile
+} from '../managed-shell-lifecycle-state-file'
 import { isBracketedPasteSafeShell } from '../../shared/startup-command-submission'
 import {
   discardStagedStartupCommand,
@@ -24,6 +30,7 @@ import {
   ptyDisposables,
   ptyExitDisposables,
   ptyIncarnations,
+  ptyShellLifecycles,
   ptyInitialCwd,
   ptyLoadGeneration,
   ptyPhysicalExits,
@@ -77,6 +84,17 @@ export function activateLocalPtySession(args: {
   )
   ptyLoadGeneration.set(id, getLoadGeneration())
   ptyIncarnations.set(id, incarnationId)
+  const shellLifecycleStatePath = env[SHELL_LIFECYCLE_STATE_ENV]
+  if (shellLifecycleStatePath) {
+    void ptyPhysicalExits
+      .get(id)
+      ?.exitedPromise.then(() => releaseShellLifecycleStateFile(shellLifecycleStatePath))
+  }
+  const shellLifecycle = new ManagedShellLifecycle(
+    env[SHELL_LIFECYCLE_BINDING_ENV],
+    shellLifecycleStatePath
+  )
+  ptyShellLifecycles.set(id, shellLifecycle)
   getOptions().onSpawned?.(id, incarnationId)
 
   const emitIngressData = (emission: PtyIngressEmission): void => {
@@ -125,7 +143,7 @@ export function activateLocalPtySession(args: {
   })
   const disposables: { dispose: () => void }[] = []
   const onDataDisposable = proc.onData((rawData) => {
-    readiness.acceptData(rawData)
+    readiness.acceptData(shellLifecycle.accept(rawData))
   })
   if (onDataDisposable) {
     disposables.push(onDataDisposable)
@@ -136,6 +154,7 @@ export function activateLocalPtySession(args: {
   let staging: StartupCommandStaging | undefined
   const onExitDisposable = proc.onExit(({ exitCode, signal }) => {
     exitedBeforeSpawnReply = true
+    releaseShellLifecycleStateFile(shellLifecycleStatePath)
     discardStagedStartupCommand(staging)
     // node-pty may pair exitCode 0 with a fatal signal; classify while signal and spawn provenance are available.
     const cause = resolveProcessExitCause({
@@ -207,7 +226,8 @@ export function activateLocalPtySession(args: {
         readiness.setStartupCommandCleanup(cleanup)
       },
       {
-        bracketedPasteSafe
+        bracketedPasteSafe,
+        beforeWrite: () => shellLifecycle.invalidateInput()
       }
     )
   }
@@ -215,6 +235,7 @@ export function activateLocalPtySession(args: {
   // Memory collection needs a proven positive OS PID; node-pty can briefly publish zero during spawn.
   const rawPid = proc.pid
   const pid = typeof rawPid === 'number' && Number.isFinite(rawPid) && rawPid > 0 ? rawPid : null
+  claimShellLifecycleStateFile(shellLifecycleStatePath)
   return {
     id,
     incarnationId,

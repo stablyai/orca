@@ -26,6 +26,7 @@ export type SessionShellReadyBarrierDeps = {
   installDeviceAttributesFilter(): void
   releaseDeviceAttributesFilter(): void
   acceptStartupIngress(data: string): void
+  beforeCommandWrite?(): void
   /** Use an injected file-log sink because detached daemon stdio is ignored. */
   reportReadinessEvent?(event: string, details: Record<string, unknown>): void
 }
@@ -182,6 +183,7 @@ export class SessionShellReadyBarrier {
     const queued = this.preReadyStdinQueue
     this.preReadyStdinQueue = []
     for (const data of queued) {
+      this.deps.beforeCommandWrite?.()
       this.deps.subprocess.write(data)
     }
   }

@@ -108,6 +108,9 @@ export function formatTerminalShow(result: { terminal: RuntimeTerminalShow }): s
     `connected: ${terminal.connected}`,
     `writable: ${terminal.writable}`,
     `agentWait: ${formatAgentWait(terminal.agentWait)}`,
+    ...(terminal.shellLifecycle
+      ? [`shellLifecycle: ${terminal.shellLifecycle.phase} (${terminal.shellLifecycle.reason})`]
+      : []),
     `preview: ${terminal.preview || '<empty>'}`
   ].join('\n')
 }

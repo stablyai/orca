@@ -1,3 +1,4 @@
+import { prepareManagedShellLifecycle } from '../../managed-shell-lifecycle-launch'
 import { win32 as pathWin32 } from 'node:path'
 import { isWindowsGitBashShellPath, resolveWindowsGitBashShellPath } from '../../git-bash'
 import { isPwshAvailable } from '../../pwsh'
@@ -215,6 +216,7 @@ export function createPtyShellLaunchPlan(
     )
     Object.assign(env, shellLaunch.env)
     shellArgs = userShellArgs ?? shellLaunch.args ?? ['-l']
+    prepareManagedShellLifecycle(env, shellPath, shellArgs, shellLaunch.args)
   }
 
   seedPowerlevel10kWizardEnv(env, { envToDelete: opts.envToDelete })

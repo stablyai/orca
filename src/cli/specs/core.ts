@@ -182,8 +182,11 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
   {
     path: ['terminal', 'show'],
     summary: 'Show terminal metadata and preview',
-    usage: 'orca terminal show [--terminal <handle>] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'terminal']
+    usage: 'orca terminal show [--terminal <handle>] [--shell-lifecycle] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'terminal', 'shell-lifecycle'],
+    notes: [
+      '--shell-lifecycle adds read-only, incarnation-bound managed Bash prompt/running/unknown evidence. Missing, stale or unsupported integration stays unknown; this never authorizes cleanup.'
+    ]
   },
   {
     path: ['terminal', 'read'],

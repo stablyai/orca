@@ -52,6 +52,10 @@ export const TerminalClose = TerminalHandle.extend({
   originalPresentation: TerminalSurfaceCloseCapture.optional()
 })
 
+export const TerminalShow = TerminalHandle.extend({
+  includeShellLifecycle: z.boolean().optional()
+})
+
 export const TerminalReadKittyFile = TerminalHandle.extend({
   path: z
     .string()

@@ -4,6 +4,7 @@ import { remoteFileContentBudget } from '../files-remote-content-budget'
 import { remoteRpcResultExceedsContentBudget } from '../../../../../shared/remote-rpc-content-budget'
 import {
   TerminalHandle,
+  TerminalShow,
   TerminalInspectProcess,
   TerminalListParams,
   TerminalRead,
@@ -67,9 +68,11 @@ export const TERMINAL_QUERY_METHODS = [
   defineMethod({
     name: 'terminal.show',
     permission: 'workspace',
-    params: TerminalHandle,
+    params: TerminalShow,
     handler: async (params, { runtime }) => ({
-      terminal: await runtime.showTerminal(params.terminal)
+      terminal: params.includeShellLifecycle
+        ? await runtime.showTerminal(params.terminal, { includeShellLifecycle: true })
+        : await runtime.showTerminal(params.terminal)
     })
   }),
   defineMethod({

@@ -82,9 +82,28 @@ export const TERMINAL_HANDLERS: Record<string, CommandHandler> = {
     printResult(result, json, formatTerminalList)
   },
   'terminal show': async ({ flags, client, cwd, json }) => {
+    const includeShellLifecycle = flags.has('shell-lifecycle')
     const result = await client.call<{ terminal: RuntimeTerminalShow }>('terminal.show', {
-      terminal: await getTerminalHandle(flags, cwd, client)
+      terminal: await getTerminalHandle(flags, cwd, client),
+      ...(includeShellLifecycle ? { includeShellLifecycle: true } : {})
     })
+    if (includeShellLifecycle && result.result.terminal.shellLifecycle === undefined) {
+      const terminal = result.result.terminal
+      terminal.shellLifecycle = {
+        phase: 'unknown',
+        confidence: 'none',
+        source: 'none',
+        reason: 'old-runtime',
+        generation: null,
+        signalAgeMs: null,
+        runtimeId: result._meta?.runtimeId ?? null,
+        executionHostId: terminal.executionHostId ?? null,
+        ptyId: terminal.ptyId,
+        incarnationId: terminal.incarnationId ?? null,
+        authorityGeneration: null,
+        observedAt: Date.now()
+      }
+    }
     printResult(result, json, formatTerminalShow)
   },
   'terminal read': async ({ flags, client, cwd, json }) => {

@@ -46,6 +46,7 @@ export abstract class DaemonPtyProcessInspection extends DaemonPtyBufferSnapshot
     }
     return this.client.request<PtyProcessInspection>('inspectProcess', {
       sessionId: id,
+      ...(options?.includeShellLifecycle === true ? { includeShellLifecycle: true } : {}),
       ...(options?.expectedIncarnationId
         ? { expectedIncarnationId: options.expectedIncarnationId }
         : {}),

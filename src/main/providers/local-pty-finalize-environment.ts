@@ -1,3 +1,4 @@
+import { prepareManagedShellLifecycle } from '../managed-shell-lifecycle-launch'
 import { win32 as pathWin32 } from 'node:path'
 import { shouldUseShellReadyStartupDelivery } from '../../shared/codex-startup-delivery'
 import { expandWindowsPathEnvironmentVariables } from '../../shared/windows-environment-expansion'
@@ -133,6 +134,7 @@ export function finalizeLocalPtySpawnEnvironment(args: {
     Object.assign(env, shellLaunch.env)
     plan.shellArgs = userShellArgs ?? shellLaunch.args ?? plan.shellArgs
     plan.shellReadyLaunch = spawn.command ? shellLaunch : null
+    prepareManagedShellLifecycle(env, plan.shellPath, plan.shellArgs, shellLaunch.args)
   }
   return historyResult
 }

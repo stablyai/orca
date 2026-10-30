@@ -1,3 +1,7 @@
+import {
+  BASH_SHELL_LIFECYCLE_INIT,
+  BASH_SHELL_LIFECYCLE_EMITTER
+} from '../bash-shell-lifecycle-integration'
 /** Bash has one --rcfile wrapper, so login startup, OSC hooks and readiness share this file. */
 import { BASH_PROMPT_COMMAND_COMPOSITION_BLOCK } from '../bash-prompt-command-composition'
 import { ORCA_CLI_POSIX_PATH_RESTORE } from '../../shared/orca-cli-shell-path'
@@ -15,6 +19,7 @@ export function getBashShellReadyRcfileContent(): string {
   return `# Orca bash shell-ready wrapper
 ${BASH_FEATURE_CHANNEL_BLOCK}
 ${SHELL_STARTUP_IDENTITY_MARKER_BLOCK}
+${BASH_SHELL_LIFECYCLE_INIT}
 # Consume feature selection before startup files can inherit it into children.
 __orca_ready_marker=""
 __orca_has_feature ready && __orca_ready_marker=1
@@ -52,6 +57,7 @@ ${getPosixCodexShellLaunchPreflight() + getPosixClaudeShellFunction()}
 ${BASH_WSL_CWD_REPORT_BLOCK}
 # OSC 133 C/D clears agent status after interrupted CLIs exit without sending Stop/SessionEnd hooks.
 __orca_initializing_wrapper=1
+${BASH_SHELL_LIFECYCLE_EMITTER}
 __orca_osc133_precmd() {
   local exit_code=$?
   __orca_in_prompt_command=1
@@ -67,6 +73,7 @@ __orca_osc133_prompt_done() {
   unset __orca_in_prompt_command
   __orca_adopt_outer_debug_trap
   trap '__orca_osc133_preexec' DEBUG
+  __orca_osc133_observe prompt
 }
 __orca_osc133_preexec() {
   if [[ -n "\${__orca_prompt_status_capture_command:-}" && "$BASH_COMMAND" == "$__orca_prompt_status_capture_command" ]]; then
@@ -96,6 +103,7 @@ __orca_osc133_preexec() {
   fi
   case "\${FUNCNAME[1]:-}" in __orca_osc133_*|__orca_prompt_mark|__orca_restore_prompt_status) return 0 ;; esac
   case "$BASH_COMMAND" in __orca_osc133_precmd|__orca_osc133_prompt_done|__orca_prompt_mark) return 0 ;; esac
+  [[ -n "\${__orca_in_command:-}" ]] || __orca_osc133_observe running
   __orca_run_user_debug_trap
   [[ -z "\${__orca_in_prompt_command:-}" ]] || return 0
   [[ -z "\${__orca_in_command:-}" ]] || return 0

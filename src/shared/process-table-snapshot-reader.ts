@@ -279,8 +279,9 @@ export async function getProcessTableSnapshot(): Promise<ProcessTableRow[]> {
   return (await processTableReader.getSnapshot()).lenient()
 }
 
-export async function getFreshProcessTableSnapshot(): Promise<ProcessTableRow[]> {
-  return (await processTableReader.getFreshSnapshot()).lenient()
+export async function getFreshProcessTableSnapshot(strict = false): Promise<ProcessTableRow[]> {
+  const capture = await processTableReader.getFreshSnapshot()
+  return strict ? capture.strict() : capture.lenient()
 }
 
 export async function getStrictProcessTableSnapshot(): Promise<ProcessTableRow[]> {

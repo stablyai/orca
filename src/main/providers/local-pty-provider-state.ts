@@ -1,4 +1,5 @@
 import type * as pty from 'node-pty'
+import type { ManagedShellLifecycle } from '../managed-shell-lifecycle'
 import type { PhysicalExitTracker } from '../../shared/physical-exit-tracker'
 import type { PtyStartupIngress } from '../../shared/pty-startup-ingress'
 import type { IPtyProvider } from './pty-provider-contract'
@@ -45,6 +46,7 @@ export const ptyLastRecognizedForeground = new Map<
 export const ptyTerminalHandle = new Map<string, string>()
 export const ptyWorktreeId = new Map<string, string>()
 export const ptyInitialCwd = new Map<string, string>()
+export const ptyShellLifecycles = new Map<string, ManagedShellLifecycle>()
 // Why: reattach carries current settings, not the live process's launch context; keep the first creator's WSL/native identity.
 export const ptyWslDistroById = new Map<string, string | null>()
 // Why: node-pty callbacks dispose before env teardown, but onExit separately owns physical-exit proof during termination.
@@ -108,6 +110,7 @@ export function clearPtyState(id: string): void {
   disposePtyExitListener(id)
   ptyProcesses.delete(id)
   ptyIncarnations.delete(id)
+  ptyShellLifecycles.delete(id)
   ptyAgentSessionIds.delete(id)
   ptyShellPath.delete(id)
   ptyAgentForegroundContextPaths.delete(id)

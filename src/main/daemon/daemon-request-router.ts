@@ -124,6 +124,9 @@ export class DaemonRequestRouter {
         }
       case 'inspectProcess': {
         const options = {
+          ...(request.payload.includeShellLifecycle === true
+            ? { includeShellLifecycle: true }
+            : {}),
           ...(request.payload.expectedIncarnationId
             ? { expectedIncarnationId: request.payload.expectedIncarnationId }
             : {}),

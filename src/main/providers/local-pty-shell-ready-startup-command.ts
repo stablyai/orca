@@ -15,7 +15,7 @@ export function writeStartupCommandWhenShellReady(
   startupCommand: string,
   onExit: (cleanup: () => void) => void,
   // Only shells with active bracketed paste accept its escape wrapper without echoing it.
-  options: { bracketedPasteSafe?: boolean } = {}
+  options: { bracketedPasteSafe?: boolean; beforeWrite?: () => void } = {}
 ): void {
   let sent = false
   let postReadyTimer: ReturnType<typeof setTimeout> | null = null
@@ -43,6 +43,7 @@ export function writeStartupCommandWhenShellReady(
       postReadyTimer = null
     }
     // Keep the interactive shell alive after agent exit; write once past readiness to avoid incremental-paste drops.
+    options.beforeWrite?.()
     proc.write(
       buildStartupCommandSubmission(startupCommand, {
         bracketedPasteSafe: options.bracketedPasteSafe === true

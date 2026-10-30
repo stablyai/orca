@@ -188,6 +188,44 @@ describe('orca cli worktree awareness', () => {
     expect(process.exitCode).toBeUndefined()
   })
 
+  it('reports an explicit unknown when an old runtime ignores shell lifecycle observation', async () => {
+    queueFixtures(
+      callMock,
+      okFixture('req_show', {
+        terminal: {
+          handle: 'term_shell',
+          ptyId: 'pty-1',
+          incarnationId: 'inc-1',
+          connected: true,
+          executionHostId: 'local'
+        }
+      })
+    )
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    await main(
+      ['terminal', 'show', '--terminal', 'term_shell', '--shell-lifecycle', '--json'],
+      '/tmp'
+    )
+    const printed = JSON.parse(String(logSpy.mock.calls.at(-1)?.[0]))
+    expect(printed).toMatchObject({
+      result: {
+        terminal: {
+          shellLifecycle: {
+            phase: 'unknown',
+            reason: 'old-runtime',
+            authorityGeneration: null,
+            runtimeId: 'runtime-1',
+            incarnationId: 'inc-1'
+          }
+        }
+      }
+    })
+    expect(callMock).toHaveBeenCalledWith('terminal.show', {
+      terminal: 'term_shell',
+      includeShellLifecycle: true
+    })
+  })
+
   it('prints terminal.read fallback screen lines in json mode', async () => {
     queueFixtures(
       callMock,
