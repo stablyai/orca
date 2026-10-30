@@ -15,8 +15,8 @@ type StoredProgramStatus = {
   workingSince?: number
   /** A prompt hook claimed the latest working run. */
   promptClaimed?: boolean
-  /** The user typed during the run (e.g. Escape or Ctrl+C), so its rest may be an interrupt. */
-  inputDuringRun?: boolean
+  /** The user typed since the run began: an interrupt, or the next prompt, which the rest cannot be. */
+  inputSinceWorking?: boolean
   /** The agent the latest ordered state came from. */
   agentType?: string
 }
@@ -62,7 +62,7 @@ export class ProgramStatusFacetStore {
     if (state === 'working' && stored.working !== true) {
       stored.workingSince = at
       stored.promptClaimed = false
-      stored.inputDuringRun = false
+      stored.inputSinceWorking = false
     }
     stored.working = state === 'working'
     return stored.workingSince
@@ -81,9 +81,8 @@ export class ProgramStatusFacetStore {
 
   noteInput(paneKey: string): void {
     const stored = this.byPaneKey.get(paneKey)
-    // Typing after the run rested cannot have interrupted it.
-    if (stored?.workingSince !== undefined && !this.runRested(stored)) {
-      stored.inputDuringRun = true
+    if (stored?.workingSince !== undefined) {
+      stored.inputSinceWorking = true
     }
   }
 
@@ -92,14 +91,11 @@ export class ProgramStatusFacetStore {
     const stored = this.byPaneKey.get(paneKey)
     return (
       stored?.promptClaimed === true &&
-      stored.inputDuringRun !== true &&
+      stored.inputSinceWorking !== true &&
       stored.agentType === agentType &&
-      this.runRested(stored)
+      stored.working === false &&
+      stored.facet.state === 'idle'
     )
-  }
-
-  private runRested(stored: StoredProgramStatus): boolean {
-    return stored.working === false && stored.facet.state === 'idle'
   }
 
   delete(paneKey: string): void {
