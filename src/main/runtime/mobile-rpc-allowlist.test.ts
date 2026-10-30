@@ -3,6 +3,7 @@ import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import { ALL_RPC_METHODS } from './rpc/methods'
 import { MOBILE_RPC_METHOD_ALLOWLIST } from './runtime-rpc/runtime-rpc-mobile-method-allowlist'
+import { MOBILE_RPC_METHOD_ROUTES } from './runtime-rpc/runtime-rpc-mobile-method-routing'
 
 const MOBILE_DYNAMIC_RPC_METHODS = [
   // Computed sendRequest names evade the literal source scan.
@@ -115,6 +116,10 @@ function registeredRuntimeMethods(): Set<string> {
 }
 
 describe('mobile RPC allowlist', () => {
+  it('routes sender lookup to the execution host for phone cards', () => {
+    expect(MOBILE_RPC_METHOD_ROUTES.get('orchestration.partyLocation')).toBe('execution-host')
+  })
+
   it('grants Jira reads while keeping credentials, writes, and desktop site selection private', () => {
     const allowed = mobileRpcAllowlist()
     for (const method of [

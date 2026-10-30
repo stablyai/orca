@@ -1,6 +1,9 @@
-import { createElement, type ReactNode } from 'react'
+import './mobile-agent-message-renderer.test-fixture'
+import { stubRpcClient } from '../../../transport/rpc-client-test-stub'
+import { createElement } from 'react'
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { ORCA_DISPATCH_STATUS_PREAMBLE_PREFIX } from '../../../../../src/shared/orca-dispatch-status-prompt'
 import { projectStructuredItemToNativeChat } from '../../../../../src/shared/structured-agent-session-projection'
 import type { NativeChatMessage } from '../../../../../src/shared/native-chat-types'
 import { AGENT_SESSION_HOST_STATUS_COPY } from '../../../../../src/shared/agent-session-host-status-rows'
@@ -10,67 +13,12 @@ import { colors, typography } from '../../../theme/mobile-theme'
 import { ANSWERED_PROMPT_ITEMS } from '../input/mobile-native-chat-answered-prompts.test-fixture'
 import { MobileNativeChatRowOverlaysContext } from './mobile-native-chat-row-overlays'
 import { styles } from './mobile-native-chat-message-styles'
-import { stubRpcClient } from '../../../transport/rpc-client-test-stub'
-
-vi.mock('react-native', async () => {
-  const React = await import('react')
-  const Text = ({ children, ...props }: { children?: ReactNode }): unknown =>
-    React.createElement('Text', props, children)
-  return {
-    AppState: { currentState: 'active', addEventListener: () => ({ remove: () => {} }) },
-    ActivityIndicator: 'ActivityIndicator',
-    Animated: {
-      Text,
-      Value: class {
-        setValue(): void {}
-      },
-      loop: (animation: unknown) => animation,
-      sequence: () => ({ start: vi.fn(), stop: vi.fn() }),
-      timing: () => ({ start: vi.fn(), stop: vi.fn() })
-    },
-    Image: 'Image',
-    Platform: { OS: 'ios' },
-    Pressable: 'Pressable',
-    ScrollView: ({ children, ...props }: { children?: ReactNode }) =>
-      React.createElement('ScrollView', props, children),
-    Text,
-    View: ({ children, ...props }: { children?: ReactNode }) =>
-      React.createElement('View', props, children),
-    StyleSheet: { create: (styles: unknown) => styles, hairlineWidth: 1 },
-    useWindowDimensions: () => ({ width: 400, height: 800 })
-  }
-})
-vi.mock('expo-clipboard', () => ({ setStringAsync: vi.fn() }))
-vi.mock('lucide-react-native', () => ({
-  AlertCircle: 'AlertCircle',
-  AlertTriangle: 'AlertTriangle',
-  ArrowUp: 'ArrowUp',
-  Bot: 'Bot',
-  Brain: 'Brain',
-  Check: 'Check',
-  ChevronDown: 'ChevronDown',
-  ChevronRight: 'ChevronRight',
-  Copy: 'Copy',
-  Eye: 'Eye',
-  FileMinus2: 'FileMinus2',
-  FilePen: 'FilePen',
-  FilePlus2: 'FilePlus2',
-  Folder: 'Folder',
-  Globe: 'Globe',
-  Info: 'Info',
-  ListChecks: 'ListChecks',
-  MessageSquareMore: 'MessageSquareMore',
-  Pencil: 'Pencil',
-  Plug: 'Plug',
-  Search: 'Search',
-  SquareChevronRight: 'SquareChevronRight',
-  SquareTerminal: 'SquareTerminal',
-  Wrench: 'Wrench'
-}))
-vi.mock('../../../components/MobileMarkdown', () => ({ MobileMarkdown: 'MobileMarkdown' }))
-vi.mock('./MobileNativeChatMessageActionsSheet', () => ({
-  MobileNativeChatMessageActionsSheet: 'MessageActionsSheet'
-}))
+import { agentMessageTranscriptText } from '../../../../../src/shared/agent-session/agent-message-display-text'
+import {
+  agentMessageHeading,
+  agentMessageSenderLabel
+} from '../../../../../src/shared/agent-session/agent-message-presentation'
+import type { AgentMessageSource } from '../../../../../src/shared/agent-session/agent-session-message-source'
 
 import { MobileNativeChatMessage } from './MobileNativeChatMessage'
 import {
@@ -353,27 +301,84 @@ describe('MobileNativeChatMessage', () => {
     }
   )
 
-  it("names another agent's message and sets it apart from the person's bubble", () => {
-    const agentMessage: NativeChatMessage = {
-      ...userMessage([{ type: 'text', text: 'You have 1 orchestration message.' }]),
-      from: {
+  it.each(['started', 'task', 'coordinator', 'worker', 'generic'] as const)(
+    'uses the desktop shared heading, sender, text and fold rules for %s',
+    (kind) => {
+      const from: AgentMessageSource = {
         kind: 'agent',
         senders: [
           {
-            party: { address: 'term_a', terminalHandle: 'term_a', orcaSessionId: null },
-            name: 'Coder'
+            party: { address: 'term_sender', terminalHandle: 'term_sender', orcaSessionId: null },
+            name: 'Parser worker',
+            ...(kind === 'coordinator' || kind === 'worker' ? { relation: kind } : {})
           }
         ],
-        orchestration: null
+        orchestration:
+          kind === 'task'
+            ? { message: 'task', runId: 'r', taskId: 't', dispatchId: 'd' }
+            : { message: 'mail-notice', mailbox: 'term_recipient', dispatchId: null, messages: [] }
       }
+      const body = 'A short task fits without a disclosure.'
+      const raw =
+        kind === 'task'
+          ? `${ORCA_DISPATCH_STATUS_PREAMBLE_PREFIX}\r\nInstructions\r\n=== TASK ===\r\n${body}`
+          : body
+      const message: NativeChatMessage = {
+        ...userMessage([{ type: 'text', text: raw }]),
+        from,
+        ...(kind === 'started' ? ({ role: 'system', agentStart: true } as const) : {})
+      }
+      const tree = render(message)
+      const headings = {
+        started: 'Started worker',
+        task: 'Task from coordinator',
+        coordinator: 'Message from coordinator',
+        worker: 'Update from worker',
+        generic: 'Message from'
+      }
+      expect(textIn(tree.root).slice(0, 2)).toEqual([
+        headings[agentMessageHeading(from, message.agentStart === true)],
+        agentMessageSenderLabel({
+          localChat: false,
+          snapshotName: from.senders[0].name,
+          fallback: 'an agent'
+        })
+      ])
+      expect(markdownIn(tree.root)).toEqual([agentMessageTranscriptText(message.blocks, from)])
     }
-    const tree = render(agentMessage)
-    expect(textIn(tree.root)[0]).toBe('Message from Coder')
-    expect(tree.root.findAll((node) => String(node.type) === 'MobileMarkdown')).toHaveLength(1)
-    const rows = tree.root.findAll(
-      (node) => String(node.type) === 'View' && Array.isArray(node.props.style)
-    )
-    expect(rows.some((row) => row.props.style.includes(styles.rowUser))).toBe(false)
+  )
+
+  it('measures the natural layer, expands and refolds, and preserves old-server body', () => {
+    const from: AgentMessageSource = { kind: 'agent', orchestration: null, senders: [] }
+    const message = {
+      ...userMessage([
+        { type: 'text' as const, text: 'Long paragraph wrapped over many native lines.' }
+      ]),
+      from
+    }
+    const tree = render(message)
+    const measured = tree.root.findByProps({ testID: 'agent-message-body' })
+    const clip = tree.root.findByProps({ testID: 'agent-message-viewport' })
+    const folded = clip.props.style.height
+    expect(measured.props.style).toMatchObject({ position: 'absolute', left: 0, right: 0, top: 0 })
+    act(() => measured.props.onLayout({ nativeEvent: { layout: { height: folded } } }))
+    expect(textIn(tree.root)).not.toContain('Show more')
+    act(() => measured.props.onLayout({ nativeEvent: { layout: { height: folded * 4 } } }))
+    const toggle = () =>
+      findAllByHostType(tree.root, 'Pressable').find(
+        (node) => node.props.accessibilityState?.expanded !== undefined
+      )!
+    act(() => toggle().props.onPress())
+    expect(clip.props.style.height).toBe(folded * 4)
+    act(() => toggle().props.onPress())
+    expect(clip.props.style.height).toBe(folded)
+    expect(textIn(tree.root)).toContain('Show more')
+    act(() => tree.unmount())
+    const oldServer = render({ ...message, from: undefined })
+    expect(oldServer.root.findAllByProps({ testID: 'agent-message-card' })).toHaveLength(0)
+    expect(markdownIn(oldServer.root)).toEqual([
+      message.blocks[0].type === 'text' ? message.blocks[0].text : ''
+    ])
   })
 
   describe('a message the host recorded and did not deliver', () => {

@@ -2856,6 +2856,14 @@
       "ran_one": "Ran {{count}} subagent",
       "ran_other": "Ran {{count}} subagents",
       "tokens": "{{value0}} tokens"
+    },
+    "agentMessage": {
+      "startedWorker": "Started worker",
+      "taskFromCoordinator": "Task from coordinator",
+      "messageFromCoordinator": "Message from coordinator",
+      "updateFromWorker": "Update from worker",
+      "messageFrom": "Message from",
+      "showMore": "Show more"
     }
   },
   "sourceControl": {

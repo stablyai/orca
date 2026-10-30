@@ -1,9 +1,11 @@
-import { useMemo } from 'react'
+import { useCallback, useMemo } from 'react'
 import { Animated, View, Text, Pressable, ActivityIndicator } from 'react-native'
 import { saveTerminalTextScale } from '../storage/preferences'
 import { MobileBrowserPane } from '../browser/MobileBrowserPane'
 import { TerminalPaneView } from './TerminalPaneView'
 import { MobileNativeChatOverlay } from './MobileNativeChatOverlay'
+import { MobileAgentMessageProvider } from './native-chat/transcript/MobileAgentMessageProvider'
+import { useMobileAgentMessageNavigation } from './use-mobile-agent-message-navigation'
 import { MobileNativeChatDictationPreviewContext } from './native-chat/composer/mobile-native-chat-dictation-preview-context'
 import { MobileDictationMeterContext } from './mobile-dictation-meter-context'
 import { resolveMobileNativeChatSessionId } from './native-chat/mobile-native-chat-eligibility'
@@ -105,6 +107,22 @@ export function MobileSessionActiveContent({
   const nativeChatImageSource = useMemo(
     () => (client ? { client, worktreeId } : undefined),
     [client, worktreeId]
+  )
+  const navigateToSender = useCallback(
+    (senderWorktreeId: string, paneKey: string) => {
+      const execution = executionHost ? `&executionHost=${encodeURIComponent(executionHost)}` : ''
+      controller.router.push(
+        `/h/${encodeURIComponent(hostId)}/session/${encodeURIComponent(senderWorktreeId)}?paneKey=${encodeURIComponent(paneKey)}${execution}`
+      )
+    },
+    [controller.router, hostId, executionHost]
+  )
+  const openSender = useMobileAgentMessageNavigation(
+    client,
+    navigateToSender,
+    JSON.stringify([hostId, executionHost, worktreeId, controller.activeSessionTab?.id]),
+    controller.showToast,
+    controller
   )
   const content = showLoadingState ? (
     <View style={styles.emptyState}>
@@ -266,30 +284,38 @@ export function MobileSessionActiveContent({
       ))}
       <MobileNativeChatDictationPreviewContext.Provider value={chatDictationPreview}>
         <MobileDictationMeterContext.Provider value={dictation.meter}>
-          <MobileNativeChatOverlay
-            controller={nativeChatController}
-            imageSource={nativeChatImageSource}
-            activeSessionTabId={controller.activeSessionTab?.id}
-            onOpenFile={handleNativeChatFileTap}
-            images={nativeChatImages}
-            structuredComposer={nativeChatStructuredComposer}
-            onMicPress={dictationEnabled ? handleDictationToggle : undefined}
-            micActive={dictation.isStarting || dictation.isRecording}
-            micStarting={dictation.isStarting}
-            micProcessing={dictation.isProcessing}
-            dictationMode={dictationMode}
-            onMicPressIn={handleDictationPressIn}
-            onMicPressOut={handleDictationPressOut}
-            inputLockReason={nativeChatOverlayInputLockReason}
-            sendErrorMessage={nativeChatSendError.message}
-            onClearSendError={nativeChatSendError.clear}
-            sendSurfaceId={controller.nativeChatScopeKey ?? ''}
-            sessionId={resolveMobileNativeChatSessionId(controller.activeSessionTab)}
-            getSendCompletionGeneration={controller.getSendCompletionGeneration}
-            keyboardInset={keyboardLift}
-            // A workspace routed to another server stops with that server, whose name the phone lacks.
-            hostName={executionHost === undefined && hostProfile ? hostTitle : null}
-          />
+          <MobileAgentMessageProvider
+            key={JSON.stringify([hostId, executionHost, worktreeId])}
+            tabs={controller.sessionTabs}
+            terminals={controller.terminals}
+            scopeKey={nativeChatImageSource}
+            open={openSender}
+          >
+            <MobileNativeChatOverlay
+              controller={nativeChatController}
+              imageSource={nativeChatImageSource}
+              activeSessionTabId={controller.activeSessionTab?.id}
+              onOpenFile={handleNativeChatFileTap}
+              images={nativeChatImages}
+              structuredComposer={nativeChatStructuredComposer}
+              onMicPress={dictationEnabled ? handleDictationToggle : undefined}
+              micActive={dictation.isStarting || dictation.isRecording}
+              micStarting={dictation.isStarting}
+              micProcessing={dictation.isProcessing}
+              dictationMode={dictationMode}
+              onMicPressIn={handleDictationPressIn}
+              onMicPressOut={handleDictationPressOut}
+              inputLockReason={nativeChatOverlayInputLockReason}
+              sendErrorMessage={nativeChatSendError.message}
+              onClearSendError={nativeChatSendError.clear}
+              sendSurfaceId={controller.nativeChatScopeKey ?? ''}
+              sessionId={resolveMobileNativeChatSessionId(controller.activeSessionTab)}
+              getSendCompletionGeneration={controller.getSendCompletionGeneration}
+              keyboardInset={keyboardLift}
+              // A workspace routed to another server stops with that server, whose name the phone lacks.
+              hostName={executionHost === undefined && hostProfile ? hostTitle : null}
+            />
+          </MobileAgentMessageProvider>
         </MobileDictationMeterContext.Provider>
       </MobileNativeChatDictationPreviewContext.Provider>
       {toastMessage && (

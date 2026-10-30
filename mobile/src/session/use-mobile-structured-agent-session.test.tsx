@@ -285,7 +285,7 @@ describe('useMobileStructuredAgentSession', () => {
     )
   })
 
-  it('keeps creation facts out of the current phone conversation', async () => {
+  it('projects worker creation facts for phone cards alongside conversation messages', async () => {
     await act(async () => {
       renderer = create(createElement(Harness))
     })
@@ -324,8 +324,15 @@ describe('useMobileStructuredAgentSession', () => {
     await act(async () => listener?.(snapshotEvent(3, items)))
     expect(hook?.session.messages.map(({ blocks }) => blocks)).toEqual([
       [{ type: 'text', text: 'Coordinate' }],
+      [{ type: 'text', text: 'Worker assignment' }],
       [{ type: 'text', text: 'Answer' }]
     ])
+    expect(hook?.session.messages[1]).toMatchObject({
+      id: 'start',
+      role: 'system',
+      agentStart: true,
+      from: { kind: 'agent', senders: [{ name: 'Worker', party: { address: 'term_worker' } }] }
+    })
   })
 
   it('re-holds before resubscribing after a reconnect', async () => {
