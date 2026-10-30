@@ -8,6 +8,10 @@ import {
 } from '../pane-key-match'
 import type { OrchestrationDb } from '../orchestration-db'
 import { DISPATCH_CONTEXT_COLUMN_LIST } from '../row-column-lists'
+import {
+  activeDispatchMailboxBranch,
+  equivalentDispatchMailboxOwners
+} from '../dispatch-mailbox-selection'
 
 // Hoist explicit projections so graph-publish queries hit the statement cache.
 const ACTIVE_DISPATCH_BY_HANDLE_SQL =
@@ -173,28 +177,32 @@ export function getActiveDispatchMailboxOwners(
   handle: string,
   paneKey?: string
 ): DispatchContextRow[] {
-  const byHandle = this.db
+  const rawByHandle = this.db
     .prepare(
       `SELECT * FROM dispatch_contexts
        WHERE assignee_handle = ? AND status IN ('pending', 'dispatched')
        ORDER BY rowid DESC`
     )
-    .all(handle) as DispatchContextRow[]
-  if (byHandle.length > 0 || !paneKey) {
+    .all(handle)
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: SELECT * reads the schema-owned Dispatch row; the statement wrapper normalizes integer fields.
+  const byHandle = rawByHandle as DispatchContextRow[]
+  if (activeDispatchMailboxBranch(byHandle, paneKey) === 'handle') {
     return byHandle
   }
 
-  const byExactPane = this.db
+  const rawByExactPane = this.db
     .prepare(
       `SELECT * FROM dispatch_contexts
        WHERE assignee_pane_key = ? AND status IN ('pending', 'dispatched')
        ORDER BY rowid DESC`
     )
-    .all(paneKey) as DispatchContextRow[]
-  if (byExactPane.length > 0 || !parsePaneKey(paneKey)) {
+    .all(paneKey!)
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: SELECT * reads the schema-owned Dispatch row; the statement wrapper normalizes integer fields.
+  const byExactPane = rawByExactPane as DispatchContextRow[]
+  if (activeDispatchMailboxBranch(byHandle, paneKey, byExactPane) === 'pane') {
     return byExactPane
   }
-  return (
+  return equivalentDispatchMailboxOwners(
     this.db
       .prepare(
         `SELECT * FROM dispatch_contexts
@@ -203,11 +211,8 @@ export function getActiveDispatchMailboxOwners(
            AND ${DISPATCH_PANE_KEY_MATCH_SUFFIX_SQL} = ?
          ORDER BY rowid DESC`
       )
-      .all(paneKeyMatchSuffix(paneKey)) as DispatchContextRow[]
-  ).filter(
-    (dispatch) =>
-      dispatch.assignee_pane_key !== null &&
-      isEquivalentPaneKey(dispatch.assignee_pane_key, paneKey)
+      .all(paneKeyMatchSuffix(paneKey!)) as DispatchContextRow[],
+    paneKey!
   )
 }
 

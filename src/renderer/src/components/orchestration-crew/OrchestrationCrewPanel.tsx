@@ -34,6 +34,7 @@ import {
   CrewRowAvatar as Avatar,
   CrewRowStatusDot as CrewStatusIndicator
 } from './CrewRowDetails'
+import { useCrewMenuFocus } from './use-crew-menu-focus'
 
 function IconButton({
   label,
@@ -161,7 +162,6 @@ export function CrewPanelContent({
       data-pane-prevent-terminal-focus
       data-native-chat-typing-redirect-ignore="true"
       className="pointer-events-none absolute bottom-0 top-(--orca-pane-title-height) right-0 z-30 w-80 max-w-full text-foreground"
-      onPointerDown={(event) => event.stopPropagation()}
       onMouseDown={(event) => event.stopPropagation()}
       onKeyDown={(event) => {
         event.stopPropagation()
@@ -282,6 +282,7 @@ function CrewRowView({
   mention: () => void
 }) {
   const [disclosure, setDisclosure] = useState<{ question?: string; expanded: boolean }>()
+  const menu = useCrewMenuFocus()
   const question = row.pendingQuestion?.at
   const expanded =
     disclosure?.question === question
@@ -332,11 +333,12 @@ function CrewRowView({
             >
               <ExternalLink />
             </IconButton>
-            <DropdownMenu modal={false}>
+            <DropdownMenu modal={false} open={menu.open} onOpenChange={menu.onOpenChange}>
               <DropdownMenuTrigger asChild>
                 <Button
                   variant="ghost"
                   size="icon-xs"
+                  ref={menu.triggerRef}
                   aria-label={translate('components.orchestrationCrew.more', 'More for {{name}}', {
                     name: row.label
                   })}
@@ -344,7 +346,12 @@ function CrewRowView({
                   <MoreHorizontal />
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" onCloseAutoFocus={(event) => event.preventDefault()}>
+              <DropdownMenuContent
+                ref={menu.contentRef}
+                align="end"
+                onPointerDownOutside={menu.onPointerDownOutside}
+                onCloseAutoFocus={menu.onCloseAutoFocus}
+              >
                 <DropdownMenuItem disabled={!canMention || !row.sendAddress} onSelect={mention}>
                   {translate('components.orchestrationCrew.mentionInMessage', 'Mention in message')}
                 </DropdownMenuItem>

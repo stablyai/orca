@@ -223,7 +223,7 @@ export abstract class OrcaRuntimeWithAdoptTerminalOrphansFromInventory extends O
     )
   }
 
-  getLiveTerminalPaneKey(handle: string): string | null {
+  getLiveTerminalPaneKey(handle: string, context?: TerminalIdentityReadContext): string | null {
     const structured = resolveStructuredWorkerAuthority(
       handle,
       this.getOrchestrationDbIfAvailable?.() ?? null
@@ -232,17 +232,19 @@ export abstract class OrcaRuntimeWithAdoptTerminalOrphansFromInventory extends O
       // Runtime-owned structured workers accept direct mail even at rest; sending starts their agent.
       return structured.identity.paneKey
     }
-    const runtimePty = this.getLivePtyForHandle(handle)
+    const runtimePty = this.getLivePtyForHandle(handle, context)
     if (runtimePty) {
-      return runtimePty.pty.connected ? this.paneOfPty(runtimePty.pty).paneKey : null
+      return runtimePty.pty.connected
+        ? (context ? context.paneOf(runtimePty.pty) : this.paneOfPty(runtimePty.pty)).paneKey
+        : null
     }
     try {
-      const leaf = this.resolveLiveLeafForHandle(handle)
+      const leaf = this.resolveLiveLeafForHandle(handle, context)
       if (!leaf?.ptyId) {
-        return this.getOrchestrationCompatibilitySshTerminal(handle)?.paneKey ?? null
+        return this.getOrchestrationCompatibilitySshTerminal(handle, context)?.paneKey ?? null
       }
       const pty = this.ptysById.get(leaf.ptyId)
-      return pty?.connected === false ? null : this.getPaneKeyForTerminalHandle(handle)
+      return pty?.connected === false ? null : this.getPaneKeyForTerminalHandle(handle, context)
     } catch {
       return null
     }

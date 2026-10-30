@@ -210,7 +210,7 @@ it('reuses indexed attachment facts for reminted panes without per-peer queries 
       prepare.mockClear()
       expect(model.read('term_worker')).toEqual(snapshot)
       expect(prepare.mock.calls.length).toBeLessThan(cold)
-      expect(prepare.mock.calls.length).toBe(5)
+      expect(prepare.mock.calls.length).toBe(4)
       console.info('recipient route work', { population, cold, warm: prepare.mock.calls.length })
       lookup.mockRestore()
       prepare.mockRestore()

@@ -26,17 +26,22 @@ export function createCanonicalOrcaSessionResolver(
       clearedFrom.set(next, record.sessionId)
     }
   }
-  return (orcaSessionId) => {
-    // The visited set bounds corrupt chains; valid clear lineage is acyclic.
-    let root: string = orcaSessionId
-    const earlier = new Set([root])
-    let prior = clearedFrom.get(root)
-    while (prior && !earlier.has(prior)) {
-      earlier.add(prior)
-      root = prior
-      prior = clearedFrom.get(root)
-    }
-    // Record ids are minted as Orca session ids; one that is not cannot name the conversation.
-    return isOrcaSessionId(root) ? root : orcaSessionId
+  return (id) => canonicalOrcaSessionFromEdges(id, clearedFrom)
+}
+
+export function canonicalOrcaSessionFromEdges(
+  orcaSessionId: OrcaSessionId,
+  clearedFrom: ReadonlyMap<string, string>
+): OrcaSessionId {
+  // The visited set bounds corrupt chains; valid clear lineage is acyclic.
+  let root: string = orcaSessionId
+  const earlier = new Set([root])
+  let prior = clearedFrom.get(root)
+  while (prior && !earlier.has(prior)) {
+    earlier.add(prior)
+    root = prior
+    prior = clearedFrom.get(root)
   }
+  // Record ids are minted as Orca session ids; one that is not cannot name the conversation.
+  return isOrcaSessionId(root) ? root : orcaSessionId
 }

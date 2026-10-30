@@ -1,7 +1,9 @@
+import { canonicalOrcaSessionFromEdges } from '../canonical-orca-session-id'
 import type { AgentMessageSender } from '../../../../shared/agent-session/agent-session-message-source'
 import {
   formatOrcaSessionAddress,
   isOrcaSessionId,
+  type OrcaSessionId,
   parseOrcaSessionAddress
 } from '../../../../shared/orca-session-address'
 import { isPublicOrchestrationAddress } from '../../../../shared/orchestration-agent-reference'
@@ -16,11 +18,13 @@ export function createCrewPartyRegistry(deps: CrewReadDependencies) {
   const recordMap = new Map(recordList.map((record) => [record.sessionId, record]))
   const adjacent = new Map<string, Set<string>>()
   const incoming = new Map<string, number>()
+  const clearedFrom = new Map<string, string>()
   for (const record of recordList) {
     const next = clearedInto(record)
     if (!next) {
       continue
     }
+    clearedFrom.set(next, record.sessionId)
     incoming.set(next, (incoming.get(next) ?? 0) + 1)
     for (const [from, to] of [
       [record.sessionId, next],
@@ -152,6 +156,7 @@ export function createCrewPartyRegistry(deps: CrewReadDependencies) {
       alias,
       party,
       records,
+      commandCanonical: (id: OrcaSessionId) => canonicalOrcaSessionFromEdges(id, clearedFrom),
       fork: (identity?: CrewIdentityRead) => build(lookup, identity)
     }
   }
