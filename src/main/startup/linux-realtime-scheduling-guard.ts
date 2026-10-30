@@ -48,7 +48,7 @@ async function lowerRealtimePriorityToZero(pids: number[]): Promise<RtPrioOutcom
  * RLIMIT_RTTIME the first RT watchdog tick SIGKILLs that renderer/audio process. Zeroing RTPRIO
  * makes Chromium fall back to a nice value. Zygotes already exist and later renderers fork from
  * them, so the whole current tree is lowered; callers await this before the first window.
- * Never rejects.
+ * Only covers RTPRIO > 0; zero-RTTIME kills with RTPRIO 0 have another trigger. Never rejects.
  */
 export async function refuseRealtimeSchedulingUnderZeroRtTime(
   platform: NodeJS.Platform = process.platform,
