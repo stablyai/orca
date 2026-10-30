@@ -378,8 +378,11 @@ it('hands a closed chat to its open owner at a page boundary, then paces the nex
       insertTestJournalRow(db, other, row)
     }
   })
+  // The open runner's pace then charges nothing, so it never waits on a fake timer.
+  vi.spyOn(performance, 'now').mockReturnValue(0)
   const watched = watchJournalStatements(database)
   const opened: { journal?: AgentSessionJournal; reads?: number } = {}
+  const asked: string[] = []
   const rests: number[] = []
   let clock = 0
   await backfillJournalState({
@@ -398,6 +401,7 @@ it('hands a closed chat to its open owner at a page boundary, then paces the nex
     // As the conversation map does: an open chat catches up on its own lane, here taking ten
     // minutes of wall time.
     repairOpen: async (id) => {
+      asked.push(id)
       const journal = id === sessionId ? opened.journal : undefined
       if (!journal) {
         return false
@@ -414,6 +418,9 @@ it('hands a closed chat to its open owner at a page boundary, then paces the nex
   // After the takeover the pass pages nothing more here: the open runner reads the 68 rows after
   // the committed page once, and the next chat's 40 rows are read once.
   expect(watched.rowsRead() - opened.reads).toBe(68 + 40)
+  // Asked before page one (still closed) and once more at the handover, after which the pass
+  // leaves the chat; asking again would mean it kept paging an open chat.
+  expect(asked.filter((id) => id === sessionId)).toHaveLength(2)
   expect(coverage()).toBe(100)
   expect(coverage(other)).toBe(40)
   // The open chat's ten minutes are not charged to the pass's pace.
@@ -426,20 +433,31 @@ it('hands a closed chat to its open owner at a page boundary, then paces the nex
   expect(coverage()).toBe(101)
 })
 
-it('drops a catch-up that an epoch replacement retired, and keeps the replacement', async () => {
-  legacyChat(100)
+it('drops a catch-up whose epoch a replacement retired mid-load, without opening a transaction', async () => {
+  const rows = legacyRows(100)
+  seedProjectionRows(database, rows)
+  const prefix = createJournalReducerState(sessionId, epoch)
+  for (const row of rows.slice(0, 64)) {
+    applyJournalRow(prefix, row)
+  }
+  saveTestJournalState(database, prefix)
   restAfterEveryPage()
   const journal = journals.track(
     new AgentSessionJournal({ identity, database, mintEpoch: () => 'replaced' })
   )
   await journal.open()
+  // The catch-up decodes the first 32 of the view's 63 items, then rests before its first page.
   await vi.advanceTimersByTimeAsync(1_000)
-  expect(coverage()).toBe(32)
+  expect(coverage()).toBe(64)
   await journal.replaceEpochItems('legacy_import', 1, [
     { identity: nextItem(1), body: reply('Replacement'), ownerFence: 1 }
   ])
   const replaced = savedTables()
+  const exec = vi.spyOn(database.db, 'exec')
   await vi.advanceTimersByTimeAsync(60_000)
+  // The replacement retired the loaded runner, so its page is dropped on the lane before any
+  // transaction; the replacement's view stays as written.
+  expect(exec.mock.calls.filter(([sql]) => sql === 'BEGIN IMMEDIATE')).toEqual([])
   expect(savedTables()).toStrictEqual(replaced)
   expect(readJournalSavedState(database.db, sessionId, 'replaced')?.lastSequence).toBe(
     journal.cursor().sequence
