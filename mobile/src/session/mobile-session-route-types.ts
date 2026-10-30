@@ -3,16 +3,32 @@ import type { StructuredAgentId } from '../../../src/shared/agent-session-provid
 import type { DiffComment } from '../../../src/shared/diff-comment-types'
 import type { TuiAgent } from '../../../src/shared/tui-agent'
 import type { AgentStatusEntry } from '../../../src/shared/agent-status-types'
-import type { RuntimeMobileSessionAgentTabStatus } from '../../../src/shared/runtime-types'
+import type {
+  RuntimeMobileSessionAgentTabStatus,
+  RuntimeMobileTerminalTheme as MobileTerminalTheme
+} from '../../../src/shared/runtime-types'
+import type { BrowserLoadError } from '../../../src/shared/browser-workspace-types'
 import type { MirroredEvidenceReceipt } from '../../../src/shared/agent-status-observation'
-import type { MobileBrowserTab } from '../browser/MobileBrowserPane'
-import type { MobileTerminalTheme } from '../terminal/terminal-webview-contract'
 import type { MobileDiffLine } from './mobile-diff-lines'
 import type { MobileHighlightedDiffLine, MobileSyntaxSegment } from './mobile-file-syntax'
 import type { TerminalRecord } from './mobile-terminal-records'
 import type { MobileNativeChatIdentity } from './native-chat/mobile-native-chat-eligibility'
 
 export type Terminal = TerminalRecord
+
+export type MobileBrowserTab = {
+  type: 'browser'
+  id: string
+  title: string
+  browserWorkspaceId: string
+  browserPageId: string | null
+  url: string
+  loading: boolean
+  loadError?: BrowserLoadError | null
+  canGoBack: boolean
+  canGoForward: boolean
+  isActive: boolean
+}
 
 export type MobileSessionTabType = 'terminal' | 'markdown' | 'file' | 'browser' | 'agent-session'
 
