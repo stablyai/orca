@@ -197,13 +197,14 @@ describe('a second new chat after one that named no model', () => {
   })
 })
 
+const { recordedEffortCase } = await vi.importActual<AcpDeclaredEffortFixtureModule>(
+  '../../../../main/acp/acp-declared-effort.test-fixture'
+)
+
 describe('declared context at the desktop consumer', () => {
   it.each(['low', 'max', 'opencode', 'absent'] as const)(
     'keeps %s policy on first frame and actual live/rest context out of input',
     async (input) => {
-      const { recordedEffortCase } = await vi.importActual<AcpDeclaredEffortFixtureModule>(
-        '../../../../main/acp/acp-declared-effort.test-fixture'
-      )
       const { agent, model, policy, display, catalog, live, resting } =
         await recordedEffortCase(input)
       resetHostModelCatalogSnapshotsForTests()

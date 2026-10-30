@@ -7,10 +7,11 @@ import {
   optionsClient
 } from './use-mobile-structured-agent-options.test-fixture'
 
+const { recordedEffortCase } = await vi.importActual<AcpDeclaredEffortFixtureModule>(
+  '../../../src/main/acp/acp-declared-effort.test-fixture'
+)
+
 it('renders trustworthy context through the phone consumer while capturing only accepted input', async () => {
-  const { recordedEffortCase } = await vi.importActual<AcpDeclaredEffortFixtureModule>(
-    '../../../src/main/acp/acp-declared-effort.test-fixture'
-  )
   for (const input of ['low', 'max', 'opencode', 'absent'] as const) {
     const { agent, model, display, live, resting, catalog } = await recordedEffortCase(input)
     for (const answer of [live, resting]) {
