@@ -105,7 +105,12 @@ function FileExplorerFiles(): React.JSX.Element {
       ),
     [expanded, visibleFilesWorktreePath, displayRootPath, worktreePath]
   )
-  const tree = useFileExplorerTree(worktreePath, effectiveExpanded, activeWorktreeId)
+  const tree = useFileExplorerTree(
+    worktreePath,
+    effectiveExpanded,
+    activeWorktreeId,
+    displayRootPath
+  )
   const {
     nameFilterQuery,
     setNameFilterQuery,

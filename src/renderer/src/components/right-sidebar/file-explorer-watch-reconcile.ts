@@ -1,6 +1,7 @@
 import type { Dispatch, SetStateAction } from 'react'
 import type { FsChangedPayload } from '../../../../shared/filesystem-entry-types'
 import type { DirCache, TreeNode } from './file-explorer-types'
+import { findNormalizedFileExplorerChild } from './file-explorer-child-listing'
 import {
   isPathInsideOrEqual,
   normalizeRuntimePathForComparison
@@ -31,8 +32,6 @@ export type ProcessFileExplorerFsPayloadArgs = {
   refreshTree: () => void
 }
 
-const cachedChildPathIndexes = new WeakMap<readonly TreeNode[], ReadonlyMap<string, TreeNode>>()
-
 function cachedDirectoryChild(
   cache: Record<string, DirCache>,
   cachedDirPath: string,
@@ -42,14 +41,7 @@ function cachedDirectoryChild(
   if (!children) {
     return undefined
   }
-  let childPaths = cachedChildPathIndexes.get(children)
-  if (!childPaths) {
-    childPaths = new Map(
-      children.map((child) => [normalizeRuntimePathForComparison(child.path), child])
-    )
-    cachedChildPathIndexes.set(children, childPaths)
-  }
-  return childPaths.get(normalizeRuntimePathForComparison(childPath))
+  return findNormalizedFileExplorerChild(children, childPath)
 }
 
 function hasCachedDirectoryLink(

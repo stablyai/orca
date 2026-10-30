@@ -24,6 +24,7 @@ type UseFileExplorerInlineInputParams = {
   rowProjection: FileExplorerRowProjection
   scrollRef: React.RefObject<HTMLDivElement | null>
   refreshDir: (dirPath: string) => Promise<void>
+  requestDir?: (dirPath: string) => void
 }
 
 type UseFileExplorerInlineInputResult = {
@@ -43,7 +44,8 @@ export function useFileExplorerInlineInput({
   expanded,
   rowProjection,
   scrollRef,
-  refreshDir
+  refreshDir,
+  requestDir
 }: UseFileExplorerInlineInputParams): UseFileExplorerInlineInputResult {
   const toggleDir = useAppStore((s) => s.toggleDir)
   const openFile = useAppStore((s) => s.openFile)
@@ -80,6 +82,7 @@ export function useFileExplorerInlineInput({
       if (activeWorktreeId && parentPath !== displayRootPath && !expanded.has(parentPath)) {
         toggleDir(activeWorktreeId, parentPath)
       }
+      requestDir?.(parentPath)
       setInlineInput({
         parentPath,
         type,
@@ -87,7 +90,7 @@ export function useFileExplorerInlineInput({
         operationOwner: getFileExplorerOperationOwner(activeWorktreeId)
       })
     },
-    [activeWorktreeId, displayRootPath, expanded, toggleDir]
+    [activeWorktreeId, displayRootPath, expanded, toggleDir, requestDir]
   )
 
   const startRename = useCallback(

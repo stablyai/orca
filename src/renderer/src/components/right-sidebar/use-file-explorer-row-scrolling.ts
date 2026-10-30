@@ -3,7 +3,11 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useVirtualizer, type Virtualizer } from '@tanstack/react-virtual'
 import { useAppStore } from '@/store'
 import type { OpenFile } from '@/store/slices/editor'
-import type { DirCache } from './file-explorer-types'
+import type {
+  DirCache,
+  FileExplorerRevealAuthority,
+  FileExplorerRevealObservation
+} from './file-explorer-types'
 import type { FileExplorerRowProjection } from './file-explorer-row-projection'
 import { useFileExplorerAutoReveal } from './useFileExplorerAutoReveal'
 import { useFileExplorerReveal } from './useFileExplorerReveal'
@@ -21,7 +25,9 @@ type UseFileExplorerRowScrollingParams = {
   dirCache: Record<string, DirCache>
   loadingDirPaths: ReadonlySet<string>
   rootCache: DirCache | undefined
-  loadDir: (dirPath: string, depth: number, options?: { force?: boolean }) => Promise<boolean>
+  getRevealAuthority: FileExplorerRevealAuthority
+  loadRevision: number
+  observeDirForReveal: FileExplorerRevealObservation
   loadMoreDir?: (dirPath: string) => Promise<void>
   setSelectedPath: (path: string | null) => void
   activeFileId: string | null
@@ -50,8 +56,10 @@ export function useFileExplorerRowScrolling({
   dirCache,
   loadingDirPaths,
   rootCache,
-  loadDir,
   loadMoreDir,
+  observeDirForReveal,
+  getRevealAuthority,
+  loadRevision,
   setSelectedPath,
   activeFileId,
   openFiles
@@ -94,8 +102,10 @@ export function useFileExplorerRowScrolling({
     loadingDirPaths,
     rootCache: displayRootPath ? dirCache[displayRootPath] : rootCache,
     rowProjection,
-    loadDir,
     loadMoreDir,
+    observeDirForReveal,
+    getRevealAuthority,
+    loadRevision,
     setSelectedPath,
     setFlashingPath,
     flashTimeoutRef,

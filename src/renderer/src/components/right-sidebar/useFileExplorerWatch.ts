@@ -122,7 +122,6 @@ export function useFileExplorerWatch({
   refreshTreeRef.current = refreshTree
 
   const deferredRef = useRef(new FileWatchEventBuffer())
-  const resyncWatchKeysRef = useRef(new Set<string>())
   const activeResyncByWatchKeyRef = useRef(new Map<string, () => void>())
 
   // Bridge payload replay to the flush effect without resubscribing.
@@ -130,7 +129,7 @@ export function useFileExplorerWatch({
 
   // Keep setup atomic to prevent cleanup-order races dropping events on rapid switches.
   useEffect(() => {
-    // Null worktree keys strand resync state that correctly keyed subscriptions cannot consume.
+    // Wait until the visible tree has a resolved owner.
     if (!worktreePath || !activeWorktreeId || activeRuntimeEnvironmentId === undefined) {
       return
     }
@@ -138,7 +137,6 @@ export function useFileExplorerWatch({
     const currentWorktreePath = worktreePath
     const currentWorktreeId = activeWorktreeId
     const deferred = deferredRef.current
-    const resyncWatchKeys = resyncWatchKeysRef.current
     const activeResyncByWatchKey = activeResyncByWatchKeyRef.current
     const currentWatchKey = JSON.stringify([
       currentWorktreeId,
@@ -158,10 +156,6 @@ export function useFileExplorerWatch({
       dirConcurrency: fileExplorerRefreshConcurrency(owner)
     })
     activeResyncByWatchKey.set(currentWatchKey, scheduler.requestFullRefresh)
-
-    if (resyncWatchKeys.delete(currentWatchKey)) {
-      scheduler.requestFullRefresh()
-    }
 
     function processPayload(payload: FsChangedPayload): void {
       processFileExplorerFsPayload({
@@ -192,8 +186,6 @@ export function useFileExplorerWatch({
           const requestActiveResync = activeResyncByWatchKey.get(currentWatchKey)
           if (requestActiveResync) {
             requestActiveResync()
-          } else {
-            resyncWatchKeys.add(currentWatchKey)
           }
         }
         return
@@ -250,11 +242,7 @@ export function useFileExplorerWatch({
       if (activeResyncByWatchKey.get(currentWatchKey) === scheduler.requestFullRefresh) {
         activeResyncByWatchKey.delete(currentWatchKey)
       }
-      const hadDeferredEvents = deferred.size > 0
-      if (scheduler.cancel() || hadDeferredEvents) {
-        // The tree cache survives Files being hidden, so remember work canceled after receipt.
-        resyncWatchKeys.add(currentWatchKey)
-      }
+      scheduler.cancel()
       deferred.clear()
       processPayloadRef.current = null
     }

@@ -48,3 +48,43 @@ describe('createFileExplorerDirLoadTracker', () => {
     expect(tracker.isSessionCurrent(tracker.getSession())).toBe(true)
   })
 })
+
+it.each(['prepare', 'first-record', 'both'] as const)(
+  'configured reset completes all records/session after %s failure',
+  async (failureAt) => {
+    const first = new Error('first failure'),
+      second = new Error('record failure'),
+      stages: string[] = []
+    const tracker = createFileExplorerDirLoadTracker(() => {
+      stages.push('prepare')
+      if (failureAt !== 'first-record') {
+        throw first
+      }
+    })
+    const session = tracker.getSession()
+    const a = tracker.begin('/repo/a', () => {
+      stages.push('a')
+      if (failureAt !== 'prepare') {
+        throw second
+      }
+    })
+    const b = tracker.begin('/repo/b', () => {
+      stages.push('b')
+    })
+    const outcomes: string[] = []
+    void a.promise.then((outcome) => outcomes.push(outcome))
+    void b.promise.then((outcome) => outcomes.push(outcome))
+    expect(() => tracker.reset()).toThrow(failureAt === 'first-record' ? second : first)
+    expect(stages).toEqual(['prepare', 'a', 'b'])
+    expect(tracker.isSessionCurrent(session)).toBe(false)
+    await Promise.resolve()
+    expect(outcomes).toEqual(['superseded', 'superseded'])
+    expect(tracker.get('/repo/a')).toBeUndefined()
+    expect(tracker.get('/repo/b')).toBeUndefined()
+    const successor = tracker.begin('/repo/a')
+    tracker.finish(a, 'refreshed')
+    expect(tracker.isCurrent(successor)).toBe(true)
+    tracker.finish(successor, 'refreshed')
+    expect(await successor.promise).toBe('refreshed')
+  }
+)
