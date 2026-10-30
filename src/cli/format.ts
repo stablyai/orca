@@ -1,5 +1,6 @@
 import type { CliStatusCaller } from '../shared/orchestration-caller-status'
 import type { CliStatusResult } from '../shared/runtime-types'
+import { formatBrowserActionEffects } from './browser-format'
 import { prepareComputerCliJsonResult } from './computer-format'
 import type { RuntimeRpcSuccess } from './runtime-client'
 
@@ -13,7 +14,8 @@ export {
   formatTabListWithProfiles,
   formatTabProfileClone,
   formatTabProfileShow,
-  formatTabShow
+  formatTabShow,
+  saveBrowserScreenshot
 } from './browser-format'
 
 export {
@@ -75,7 +77,7 @@ export function printResult<TResult>(
     console.log(JSON.stringify(prepareComputerCliJsonResult(response), null, 2))
     return
   }
-  console.log(formatter(response.result))
+  console.log(formatter(response.result) + formatBrowserActionEffects(response.result))
 }
 
 export type HostListEntry = {

@@ -129,7 +129,7 @@ describe('CLI cwd resource frames, managed receipts and raw-path controls', () =
     setAgentLaunchRecordStore(null)
     for (const stateDirectory of [...childStateDirectories, directory]) {
       try {
-        closeTestJournalHostDatabase(stateDirectory)
+        await closeTestJournalHostDatabase(stateDirectory)
       } catch (error) {
         failures.push(error)
       }
@@ -387,7 +387,7 @@ describe('CLI cwd resource frames, managed receipts and raw-path controls', () =
             normalizedRowBytes
           })
         }
-        closeTestJournalHostDatabase(stateDirectory)
+        await closeTestJournalHostDatabase(stateDirectory)
         records = await openTestAgentSessionRecordStore(stateDirectory)
         const restarted = new OrcaRuntimeService(host.runtimeStore)
         vi.spyOn(restarted, 'openAgentSessionRecordStore').mockResolvedValue(records)
@@ -434,7 +434,7 @@ describe('CLI cwd resource frames, managed receipts and raw-path controls', () =
         expect(host.start).toHaveBeenCalledTimes(1)
         expect(host.create).toHaveBeenCalledTimes(2)
         await transport.stop()
-        closeTestJournalHostDatabase(stateDirectory)
+        await closeTestJournalHostDatabase(stateDirectory)
         lineage.mockRestore()
       }
       for (const valid of [true, false]) {

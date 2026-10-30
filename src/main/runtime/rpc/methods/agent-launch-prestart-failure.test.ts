@@ -1,3 +1,4 @@
+import { closeTestJournalHostDatabases } from '../../../native-chat/agent-session-journal/journal-host-database-test-support'
 import '../unused-default-rpc-methods.test-fixture'
 /** Pre-dispatch failures prove no effects and record the real cause; a lost reply after dispatch remains unknown. Explicitly unsupported chat is refused before creation. */
 
@@ -91,7 +92,7 @@ describe('a launch whose terminal fails', () => {
 
   afterEach(async () => {
     setAgentLaunchRecordStore(null)
-    closeTestJournalHostDatabase(directory)
+    await closeTestJournalHostDatabases()
     await rm(directory, { recursive: true, force: true })
   })
 
@@ -473,7 +474,7 @@ describe('a launch whose terminal fails', () => {
         target: { ...absent.target, create: { ...create, cwdParentWorktree: 'id:changed' } }
       })
     ).toMatchObject({ ok: false, error: { code: 'agent_session_operation_conflict' } })
-    closeTestJournalHostDatabase(directory)
+    await closeTestJournalHostDatabase(directory)
     store = await openTestAgentSessionRecordStore(directory)
     setAgentLaunchRecordStore(store)
     const restarted = runtimeStub({ settings: {} })
@@ -503,7 +504,7 @@ describe('a launch whose terminal fails', () => {
           )
         }
       })
-      closeTestJournalHostDatabase(directory)
+      await closeTestJournalHostDatabase(directory)
       store = await openTestAgentSessionRecordStore(directory)
       setAgentLaunchRecordStore(store)
       const restarted = runtimeStub({ settings: {} })

@@ -30,6 +30,7 @@ export function mockBrowserManager(
       return null
     },
     getWorktreeIdForTab: (tabId: string) => worktrees.get(tabId),
+    getPopupPages: () => [],
     getGuestWebContentsId: vi.fn(() => null),
     getSessionProfileIdForTab: vi.fn(() => null),
     getBrowserPageLoadError: vi.fn(() => null),
@@ -38,16 +39,18 @@ export function mockBrowserManager(
     holdPaintForCapture: () => () => {},
     holdGuestActive: () => () => {},
     beginAgentCommand: () => ({
+      agent: false,
       run: (execute: () => Promise<unknown>) => execute(),
       end: () => {}
     }),
     showAgentPointer: async () => {},
     isAgentUsingPage: () => false,
+    handOverAgentActivity: () => {},
     ...overrides
   } as unknown as BrowserManager
 }
 
-type MockEmitterListener = (...args: never[]) => void
+type MockEmitterListener = (...args: any[]) => void
 
 export type MockWebContentsDebugger = {
   isAttached: Mock<() => boolean>

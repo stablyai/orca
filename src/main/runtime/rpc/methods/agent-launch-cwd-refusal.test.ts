@@ -137,7 +137,7 @@ describe('CLI cwd refusal through production creation and durable failed receipt
   afterEach(async () => {
     await transport?.stop()
     setAgentLaunchRecordStore(null)
-    closeTestJournalHostDatabase(directory)
+    await closeTestJournalHostDatabase(directory)
     await rm(directory, { recursive: true, force: true })
     process.exitCode = prior
     vi.unstubAllEnvs()
@@ -345,7 +345,7 @@ describe('CLI cwd refusal through production creation and durable failed receipt
     expect(start).not.toHaveBeenCalled()
     expect(meta).not.toHaveBeenCalled()
     expect(publish).not.toHaveBeenCalled()
-    closeTestJournalHostDatabase(directory)
+    await closeTestJournalHostDatabase(directory)
     const reopened = await openTestAgentSessionRecordStore(directory)
     const restarted = new OrcaRuntimeService(runtimeStore)
     vi.spyOn(restarted, 'openAgentSessionRecordStore').mockResolvedValue(reopened)
@@ -407,7 +407,7 @@ describe('CLI cwd refusal through production creation and durable failed receipt
     expect(
       JSON.parse(await socketCall(endpoint, `${JSON.stringify(failedWriteRequest)}\n`)).error
     ).toEqual({ code: 'LINEAGE_PARENT_AMBIGUOUS', message })
-    closeTestJournalHostDatabase(directory)
+    await closeTestJournalHostDatabase(directory)
     const uncertainRecords = await openTestAgentSessionRecordStore(directory)
     const uncertainHost = new OrcaRuntimeService(runtimeStore)
     vi.spyOn(uncertainHost, 'openAgentSessionRecordStore').mockResolvedValue(uncertainRecords)
@@ -542,7 +542,7 @@ describe('CLI cwd refusal through production creation and durable failed receipt
       expect(outcomes.at(-1)).toEqual(outcomes[0])
       expect(settledExecution.at(-1)).toEqual(Array(8).fill(0))
     }
-    closeTestJournalHostDatabase(directory)
+    await closeTestJournalHostDatabase(directory)
     records = await openTestAgentSessionRecordStore(directory)
     const restarted = new OrcaRuntimeService(host.runtimeStore)
     vi.spyOn(restarted, 'openAgentSessionRecordStore').mockResolvedValue(records)
@@ -709,7 +709,7 @@ describe('CLI cwd refusal through production creation and durable failed receipt
       expect(
         (await incapable.send('agent.launchReplay', request(host.caller))).response
       ).toMatchObject({ ok: false, error: { code: 'agent_launch_replay_unsupported' } })
-      closeTestJournalHostDatabase(directory)
+      await closeTestJournalHostDatabase(directory)
       records = await openTestAgentSessionRecordStore(directory)
       const restarted = new OrcaRuntimeService(host.runtimeStore)
       vi.spyOn(restarted, 'openAgentSessionRecordStore').mockResolvedValue(records)

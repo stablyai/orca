@@ -201,7 +201,9 @@ describe('AgentBrowserBridge', () => {
     await destroyPromise
     await expect(nextSnapshot).resolves.toEqual({
       browserPageId: 'tab-1',
-      snapshot: 'after-destroy'
+      snapshot: 'after-destroy',
+      url: 'https://example.com',
+      title: 'Example'
     })
     expect(commandCalls.filter((command) => command.includes('close'))).toHaveLength(2)
   })
