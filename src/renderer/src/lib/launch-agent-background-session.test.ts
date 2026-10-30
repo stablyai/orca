@@ -530,7 +530,8 @@ describe('launchAgentBackgroundSession', () => {
       }
       // A primary and the captured persistent sidecar may both see the same physical exit.
       sidecar(0, { hadPrimary: true, exitOptions })
-      expect(onExit).toHaveBeenCalledExactlyOnceWith('pty-1', 0)
+      expect(onExit).toHaveBeenCalledExactlyOnceWith('pty-1', 0, exitOptions)
+      expect(onExit.mock.calls[0]?.[2]).toBe(exitOptions)
       expect(unsubscribeData).toHaveBeenCalledOnce()
       expect(unsubscribeExit).toHaveBeenCalledOnce()
       expect(store.getState().agentLaunchConfigByPaneKey[result.paneKey]).toBeUndefined()

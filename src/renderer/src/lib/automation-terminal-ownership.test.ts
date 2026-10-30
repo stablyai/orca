@@ -262,12 +262,14 @@ describe('automation terminal ownership', () => {
   })
 
   it('release consumes ownership without closing the terminal', async () => {
-    const { closeTab, store } = createStore()
+    const { closeTab, shutdownCompletedAgentPaneForHibernation, store } = createStore()
     const ownership = own(store)
 
     ownership.release()
 
     expect(await ownership.finalize({ preservePane: false })).toBeNull()
+    expect(await ownership.finalize({ preservePane: true })).toBeNull()
     expect(closeTab).not.toHaveBeenCalled()
+    expect(shutdownCompletedAgentPaneForHibernation).not.toHaveBeenCalled()
   })
 })

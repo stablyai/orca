@@ -351,8 +351,8 @@ describe('dispatcher → transport → onTitleChange for Pi spinner', () => {
     expect(() => exitDispatcherCallback?.({ id: 'pty-throwing-exit', code: 9 })).toThrow(
       'primary exit failed'
     )
-    expect(firstSidecar).toHaveBeenCalledWith(9, { hadPrimary: true })
-    expect(secondSidecar).toHaveBeenCalledWith(9, { hadPrimary: true })
+    expect(firstSidecar).toHaveBeenCalledWith(9, { hadPrimary: true, exitOptions: {} })
+    expect(secondSidecar).toHaveBeenCalledWith(9, { hadPrimary: true, exitOptions: {} })
 
     expect(() => exitDispatcherCallback?.({ id: 'pty-throwing-exit', code: 10 })).not.toThrow()
     expect(primary).toHaveBeenCalledTimes(1)

@@ -16,6 +16,7 @@ import {
 import type { Worktree } from '../../../shared/worktree/types'
 import { isProvenProcessExit } from '../../../shared/terminal-exit-cause'
 import type { AutomationTerminalOwnership } from '@/lib/automation-terminal-ownership'
+import type { PtyExitOptions } from '@/components/terminal-pane/pty-exit-delivery'
 
 type MarkDispatchResult = (result: AutomationDispatchResult) => Promise<void>
 
@@ -32,13 +33,21 @@ export function createAutomationDispatchCompletion(args: {
   const getOutputSnapshot = () =>
     selectAutomationRunOutputSnapshot(latestAssistantMessage, outputSnapshotBuffer.snapshot())
   let dispatchMarked = false
-  let pendingExitCode: number | null = null
+  let pendingExit: { code: number; options?: PtyExitOptions } | null = null
   let pendingDone = false
   let completionMarked = false
   let contactLost = false
   let unsubscribeAgentStatus = (): void => {}
   let unsubscribeSessionObserver = (): void => {}
   let releaseReuseDispatchTab = (): void => {}
+  const releaseRetainedTerminalOwnership = (options?: PtyExitOptions): void => {
+    if (
+      options?.preserveRendererBinding === true ||
+      options?.preserveRendererBinding === 'closing'
+    ) {
+      args.releaseTerminalOwnership()
+    }
+  }
   const cleanupRunObservers = (): void => {
     unsubscribeAgentStatus()
     unsubscribeSessionObserver()
@@ -147,12 +156,13 @@ export function createAutomationDispatchCompletion(args: {
     }
     settleLateResult(markCompletionResult())
   }
-  const handleExit = (code: number): void => {
+  const handleExit = (code: number, options?: PtyExitOptions): void => {
+    releaseRetainedTerminalOwnership(options)
     if (completionMarked) {
       return
     }
     if (!dispatchMarked) {
-      pendingExitCode = code
+      pendingExit = { code, options }
       return
     }
     settleLateResult(markExitResult(code))
@@ -235,10 +245,12 @@ export function createAutomationDispatchCompletion(args: {
     },
     settlePendingAfterDispatch: async () => {
       dispatchMarked = true
+      // An early exit can precede publication of the launch's retirement ownership.
+      releaseRetainedTerminalOwnership(pendingExit?.options)
       if (pendingDone) {
         await markCompletionResult()
-      } else if (pendingExitCode !== null) {
-        await markExitResult(pendingExitCode)
+      } else if (pendingExit !== null) {
+        await markExitResult(pendingExit.code)
       }
     }
   }

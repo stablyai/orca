@@ -125,7 +125,11 @@ export async function launchAgentBackgroundSession(
       settleTabPtyBinding(tab.id, exitPtyId, code, options)
     }
     useAppStore.getState().clearAgentLaunchConfig(paneKey)
-    onExit?.(exitPtyId, code)
+    if (options?.preserveRendererBinding) {
+      onExit?.(exitPtyId, code, options)
+    } else {
+      onExit?.(exitPtyId, code)
+    }
   }
   // Main owns local/SSH status scanning; runtime bytes still need renderer-side writes.
   const mainOwnsAgentStatusWrites = isMainTerminalSideEffectAuthorityForPty({

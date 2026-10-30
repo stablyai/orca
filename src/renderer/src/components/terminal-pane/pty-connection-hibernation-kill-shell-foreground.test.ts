@@ -213,7 +213,7 @@ describe('shell showing through a hibernation kill', () => {
       exitPty: () => {
         const onPtyExit = createdTransportOptions[0]?.onPtyExit
         if (typeof onPtyExit === 'function') {
-          onPtyExit(ptyId)
+          onPtyExit(ptyId, 0, { preserveRendererBinding: true })
         }
       }
     }

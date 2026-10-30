@@ -333,8 +333,8 @@ describe('window-tab producers: the pty:spawn request a real pane sends', () => 
         | ReturnType<typeof modules.layoutBindings.useTerminalPaneLayoutBindings>
         | undefined
       function LayoutBindings(): null {
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the binding hook reads only the supplied layout and expand/collapse controller fields, as in pending-split-close-test-fixture.
         layoutBindings = modules.layoutBindings.useTerminalPaneLayoutBindings(
+          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the binding hook reads only the supplied layout and expand/collapse controller fields, as in pending-split-close-test-fixture.
           controller as Parameters<typeof modules.layoutBindings.useTerminalPaneLayoutBindings>[0]
         )
         return null

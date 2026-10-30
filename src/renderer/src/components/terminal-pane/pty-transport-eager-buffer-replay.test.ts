@@ -103,7 +103,7 @@ describe('createIpcPtyTransport', () => {
     onExit?.({ id: 'pty-restored', code: 0 })
 
     expect(eagerExit).not.toHaveBeenCalled()
-    expect(sidecarExit).toHaveBeenCalledWith(0, { hadPrimary: true })
+    expect(sidecarExit).toHaveBeenCalledWith(0, { hadPrimary: true, exitOptions: {} })
   })
 
   it('bounds the eager buffer to its cap and keeps the most recent output', async () => {

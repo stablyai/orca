@@ -1,4 +1,4 @@
-import { writeFile } from 'node:fs/promises'
+import { mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { expect, vi } from 'vitest'
 import * as cliTranscript from '../../../src/main/ai-vault/structured-chat-cli-fork'
@@ -25,7 +25,10 @@ export async function prepareReadableSwitchSource(rig: RestTestRig, workspaceId:
   const record = rig.store.getRecord(HOST_TEST_SESSION)!
   const head = agentSessionProviderHandleChainHead(record.providerHandleChain)!
   const nativeId = head.handle.nativeId
-  const filePath = join(rig.root, 'readable.jsonl')
+  const codexHome = join(rig.root, 'codex-home')
+  const sessionsDir = join(codexHome, 'sessions')
+  await mkdir(sessionsDir, { recursive: true })
+  const filePath = join(sessionsDir, 'readable.jsonl')
   await writeFile(
     filePath,
     `${[
@@ -68,7 +71,7 @@ export async function prepareReadableSwitchSource(rig: RestTestRig, workspaceId:
       sessionId: nativeId,
       filePath,
       cwd: rig.root,
-      codexHome: null,
+      codexHome,
       executionHostPlatform: process.platform
     }
   })

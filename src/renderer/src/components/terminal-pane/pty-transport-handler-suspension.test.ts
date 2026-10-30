@@ -129,15 +129,17 @@ describe('createIpcPtyTransport', () => {
     expect(onPtyExit).toHaveBeenCalledWith('pty-1', -1)
   })
 
-  it('marks a host reversible-stop exit before delivering it to the pane', async () => {
+  it('delivers a host reversible-stop purpose to the pane callbacks', async () => {
     const { createIpcPtyTransport } = await import('./pty-transport')
-    const { consumeCommittedPtyShutdownExit } = await import('./pty-shutdown-exit-deferral')
-    const transport = createIpcPtyTransport()
-    await transport.connect({ url: '', callbacks: {} })
+    const onExitCallback = vi.fn()
+    const onPtyExit = vi.fn()
+    const transport = createIpcPtyTransport({ onPtyExit })
+    await transport.connect({ url: '', callbacks: { onExit: onExitCallback } })
 
     onExit?.({ id: 'pty-1', code: 0, preserveRendererBinding: true })
 
-    expect(consumeCommittedPtyShutdownExit('pty-1')).toBe(true)
+    expect(onExitCallback).toHaveBeenCalledExactlyOnceWith(0, { preserveRendererBinding: true })
+    expect(onPtyExit).toHaveBeenCalledExactlyOnceWith('pty-1', 0, { preserveRendererBinding: true })
   })
 
   it('restores data handlers when an intentional shutdown fails before exit', async () => {
