@@ -100,6 +100,11 @@ describe('armDictationAutoSend', () => {
     ],
     ['a paste', (editor: HTMLElement) => editor.dispatchEvent(new Event('paste'))],
     [
+      'a click in the editor',
+      (editor: HTMLElement) =>
+        editor.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }))
+    ],
+    [
       'focus leaving and coming back',
       (editor: HTMLElement) => {
         appendOtherButton().focus()
@@ -125,7 +130,11 @@ describe('armDictationAutoSend', () => {
       (editor: HTMLElement) => editor.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }))
     ],
     ['an edit', (editor: HTMLElement) => editor.dispatchEvent(new InputEvent('input'))],
-    ['focus leaving', () => appendOtherButton().focus()]
+    ['focus leaving', () => appendOtherButton().focus()],
+    [
+      'a suggestion click',
+      () => appendOtherButton().dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }))
+    ]
   ])('does not send after %s during the countdown', async (_name, interrupt) => {
     const editor = appendComposerEditor()
     const { onSettled } = arm(editor, Promise.resolve(true))

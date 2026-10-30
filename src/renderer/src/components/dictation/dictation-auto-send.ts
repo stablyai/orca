@@ -72,6 +72,7 @@ export function armDictationAutoSend(
     }
     window.removeEventListener('blur', handleAppLeave)
     document.removeEventListener('visibilitychange', handleAppLeave)
+    document.removeEventListener('pointerdown', settle, true)
     options.onSettled()
   }
   // Switching apps can keep the editor active without firing focusout.
@@ -111,6 +112,8 @@ export function armDictationAutoSend(
   }
   window.addEventListener('blur', handleAppLeave)
   document.addEventListener('visibilitychange', handleAppLeave)
+  // Caret moves, suggestion picks and clicks elsewhere fire none of the editor events above.
+  document.addEventListener('pointerdown', settle, true)
   void options.delivered.then((delivered) => {
     if (settled) {
       return
