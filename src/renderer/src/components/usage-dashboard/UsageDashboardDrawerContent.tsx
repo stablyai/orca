@@ -41,6 +41,8 @@ const RANGE_DAYS_BY_PERIOD: Record<DashboardPeriod, number> = { 7: 7, 14: 30, 30
 type DashboardData = {
   series: UsageDashboardDailyPoint[]
   modelRows: UsageDashboardModelRow[]
+  /** omp keeps a corpus-wide daily aggregate, so its chart cannot honor the orca scope. */
+  includesOmp: boolean
 }
 
 // Order mirrors the status-bar roster so quota rows do not reshuffle between surfaces.
@@ -105,6 +107,7 @@ export default function UsageDashboardDrawerContent(): React.JSX.Element {
           return
         }
         setData({
+          includesOmp: loaded.some((provider) => provider.id === 'omp'),
           series: buildUsageDashboardDailySeries(loaded, period),
           modelRows: buildUsageDashboardModelRows(
             loaded.map((provider) => ({ id: provider.id, rows: provider.models }))
@@ -283,6 +286,17 @@ export default function UsageDashboardDrawerContent(): React.JSX.Element {
       ) : hasUsage ? (
         <>
           <UsageDashboardDailyChart points={data.series} />
+          {scope === 'orca' && data.includesOmp ? (
+            <p
+              data-testid="usage-dashboard-omp-scope-caption"
+              className="px-1 text-xs text-muted-foreground"
+            >
+              {translate(
+                'auto.components.stats.OmpUsagePane.dailyScopeCaption',
+                'Daily totals cover all local omp usage; scope applies to sessions, breakdowns and recent sessions.'
+              )}
+            </p>
+          ) : null}
           <UsageDashboardModelTable rows={data.modelRows} rangeDays={rangeDays} />
         </>
       ) : (

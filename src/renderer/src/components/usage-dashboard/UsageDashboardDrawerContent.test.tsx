@@ -14,6 +14,7 @@ import type {
   CodexUsageBreakdownRow,
   CodexUsageDailyPoint
 } from '../../../../shared/codex-usage-types'
+import type { OmpUsageBreakdownRow, OmpUsageDailyPoint } from '../../../../shared/omp-usage-types'
 import UsageDashboardDrawerContent from './UsageDashboardDrawerContent'
 
 const mocks = vi.hoisted(() => ({
@@ -230,6 +231,55 @@ describe('UsageDashboardDrawerContent', () => {
     await waitFor(() =>
       expect(claude.getDaily).toHaveBeenLastCalledWith({ scope: 'orca', range: '30d' })
     )
+  })
+
+  it('explains that omp daily totals ignore the orca scope', async () => {
+    const ompDaily: OmpUsageDailyPoint[] = [
+      {
+        day: localDay(),
+        inputTokens: 10,
+        cacheReadTokens: 2,
+        cacheWriteTokens: 1,
+        outputTokens: 5,
+        reasoningTokens: 0,
+        totalTokens: 18,
+        costUsd: 0.2
+      }
+    ]
+    const ompModels: OmpUsageBreakdownRow[] = [
+      {
+        key: 'gpt-5.4',
+        label: 'gpt-5.4',
+        sessions: 1,
+        inputTokens: 10,
+        cacheReadTokens: 2,
+        cacheWriteTokens: 1,
+        outputTokens: 5,
+        reasoningTokens: 0,
+        totalTokens: 18,
+        costUsd: 0.2
+      }
+    ]
+    installApi({ ompUsage: providerApi(enabledScanState, ompDaily, ompModels).api })
+    render(<UsageDashboardDrawerContent />)
+
+    await waitFor(() =>
+      expect(screen.getByTestId('usage-dashboard-daily-chart')).toBeInTheDocument()
+    )
+    expect(
+      screen.queryByText(
+        'Daily totals cover all local omp usage; scope applies to sessions, breakdowns and recent sessions.'
+      )
+    ).toBeNull()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Orca worktrees only' }))
+
+    // omp keeps a corpus-wide daily aggregate, so the orca scope cannot narrow the chart.
+    expect(
+      await screen.findByText(
+        'Daily totals cover all local omp usage; scope applies to sessions, breakdowns and recent sessions.'
+      )
+    ).toBeInTheDocument()
   })
 
   it('renders an em dash for unpriced models instead of NaN', async () => {
