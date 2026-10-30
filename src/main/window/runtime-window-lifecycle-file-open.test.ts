@@ -1,3 +1,4 @@
+import { EventEmitter } from 'node:events'
 import { describe, expect, it, vi } from 'vitest'
 import type { BrowserWindow } from 'electron'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
@@ -18,23 +19,28 @@ import { registerRuntimeWindowLifecycle } from './runtime-window-lifecycle'
 function attachNotifier(): { notifier: RuntimeNotifier; send: ReturnType<typeof vi.fn> } {
   const send = vi.fn()
   const attached: { notifier: RuntimeNotifier | null } = { notifier: null }
-  const mainWindow = {
+  const mainWindow = Object.assign(new EventEmitter(), {
     id: 1,
     isDestroyed: () => false,
-    on: vi.fn(),
-    webContents: { isDestroyed: () => false, send, on: vi.fn() }
-  }
+    isVisible: () => true,
+    isMinimized: () => false,
+    webContents: Object.assign(new EventEmitter(), { isDestroyed: () => false, send })
+  })
   const runtime = {
     attachWindow: vi.fn(),
+    setLocalTerminalWindowVisible: vi.fn(),
+    removeLocalTerminalWindow: vi.fn(),
+    setLocalTerminalWindowLease: vi.fn(),
+    removeLocalTerminalWindowLease: vi.fn(),
     markGraphReloadFailed: vi.fn(),
     setNotifier: (next: RuntimeNotifier | null) => {
       attached.notifier = next
     }
   }
   registerRuntimeWindowLifecycle(
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: registration only reads id, isDestroyed, on and webContents.
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: registration uses this fixture's window identity, native visibility, lifecycle emitters and webContents notification methods.
     mainWindow as unknown as BrowserWindow,
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: registration only calls the stubbed runtime members.
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: registration calls the supplied runtime attachment, terminal visibility and notification members.
     runtime as unknown as OrcaRuntimeService
   )
   if (!attached.notifier) {

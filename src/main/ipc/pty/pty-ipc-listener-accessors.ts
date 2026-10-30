@@ -46,7 +46,7 @@ export function createPtyIpcListenerAccessors(ctx: {
   }
 
   function getPtySetRendererPtyVisibleListener(): (
-    event: unknown,
+    event: { sender: unknown },
     args: { id: string; visible: boolean }
   ) => void {
     const visibleCall = onMock.mock.calls.find(

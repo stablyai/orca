@@ -1,3 +1,4 @@
+import { EventEmitter } from 'node:events'
 import { describe, expect, it, vi } from 'vitest'
 import type { BrowserWindow } from 'electron'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
@@ -17,35 +18,51 @@ function attachWindow(id: number): {
   destroy: () => void
   notifier: RuntimeNotifier
   send: ReturnType<typeof vi.fn>
-  webContents: object
+  webContents: EventEmitter & { isDestroyed: () => boolean; send: ReturnType<typeof vi.fn> }
 } {
   let destroyed = false
   const send = vi.fn()
-  const webContents = { isDestroyed: () => false, send, on: vi.fn() }
+  const webContents = Object.assign(new EventEmitter(), { isDestroyed: () => false, send })
   const attached: { notifier: RuntimeNotifier | null } = { notifier: null }
-  const mainWindow = {
-    id,
-    isDestroyed: () => destroyed,
-    on: vi.fn(),
+  class FixtureWindow extends EventEmitter {
+    readonly id = id
+
+    isDestroyed(): boolean {
+      return destroyed
+    }
+
+    isVisible(): boolean {
+      return true
+    }
+
+    isMinimized(): boolean {
+      return false
+    }
+
     // Electron's BrowserWindow getter throws once the native window is gone.
-    get webContents() {
+    get webContents(): typeof webContents {
       if (destroyed) {
         throw new TypeError('Object has been destroyed')
       }
       return webContents
     }
   }
+  const mainWindow = new FixtureWindow()
   const runtime = {
     attachWindow: vi.fn(),
+    setLocalTerminalWindowVisible: vi.fn(),
+    removeLocalTerminalWindow: vi.fn(),
+    setLocalTerminalWindowLease: vi.fn(),
+    removeLocalTerminalWindowLease: vi.fn(),
     markGraphReloadFailed: vi.fn(),
     setNotifier: (next: RuntimeNotifier | null) => {
       attached.notifier = next
     }
   }
   registerRuntimeWindowLifecycle(
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: registration only reads id, isDestroyed, on and webContents.
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: registration uses this fixture's window identity, native visibility, lifecycle emitters and webContents notification methods.
     mainWindow as unknown as BrowserWindow,
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: registration only calls the stubbed runtime members.
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: registration calls the supplied runtime attachment, terminal visibility and notification members.
     runtime as unknown as OrcaRuntimeService
   )
   if (!attached.notifier) {

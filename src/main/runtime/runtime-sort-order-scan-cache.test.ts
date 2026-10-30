@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import { EventEmitter } from 'node:events'
 import { join } from 'node:path'
 import type { BrowserWindow } from 'electron'
 import './orca-runtime-test-lifecycle.spec'
@@ -85,13 +86,14 @@ describe('runtime sort-order saves', () => {
   it('publishes the changed order without rescanning Git through the desktop window notifier', async () => {
     const runtime = await createScannedRuntime()
     const send = vi.fn()
-    const mainWindow = {
+    const mainWindow = Object.assign(new EventEmitter(), {
       id: 1,
       isDestroyed: () => false,
-      on: vi.fn(),
-      webContents: { isDestroyed: () => false, send, on: vi.fn() }
-    }
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: registration only reads id, isDestroyed, on and webContents.
+      isVisible: () => true,
+      isMinimized: () => false,
+      webContents: Object.assign(new EventEmitter(), { isDestroyed: () => false, send })
+    })
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: registration uses this fixture's window identity, native visibility, lifecycle emitters and webContents notification methods.
     registerRuntimeWindowLifecycle(mainWindow as unknown as BrowserWindow, runtime)
 
     await expectOrderSaveSkipsGitScan(runtime)

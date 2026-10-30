@@ -121,8 +121,8 @@ describe('useIpcEvents agent status snapshot integration', () => {
     expect(hydrateDrivers).toHaveBeenCalledWith([])
     expect(hydrateBrowserDrivers).toHaveBeenCalledWith([])
     expect(setFitOverride).toHaveBeenCalledTimes(300)
-    expect(setFitOverride).toHaveBeenNthCalledWith(1, 'pty-50', 'mobile-fit', 80, 24)
-    expect(setFitOverride).toHaveBeenLastCalledWith('pty-349', 'mobile-fit', 80, 24)
+    expect(setFitOverride).toHaveBeenNthCalledWith(1, 'pty-50', 'mobile-fit', 80, 24, undefined)
+    expect(setFitOverride).toHaveBeenLastCalledWith('pty-349', 'mobile-fit', 80, 24, undefined)
   })
 
   it('clears pending mobile state events and ignores late hydration after cleanup', async () => {

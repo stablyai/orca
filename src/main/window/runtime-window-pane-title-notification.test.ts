@@ -1,3 +1,4 @@
+import { EventEmitter } from 'node:events'
 import { describe, expect, it, vi } from 'vitest'
 import type { BrowserWindow } from 'electron'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
@@ -20,23 +21,28 @@ function attachNotifier() {
   const markGraphReloadFailed = vi.fn()
   const attached: { notifier: RuntimeNotifier | null } = { notifier: null }
   const windowState = { destroyed: false }
-  const mainWindow = {
+  const mainWindow = Object.assign(new EventEmitter(), {
     id: 1,
     isDestroyed: () => windowState.destroyed,
-    on: vi.fn(),
-    webContents: { isDestroyed: () => false, send, on: vi.fn() }
-  }
+    isVisible: () => true,
+    isMinimized: () => false,
+    webContents: Object.assign(new EventEmitter(), { isDestroyed: () => false, send })
+  })
   const runtime = {
     attachWindow: vi.fn(),
+    setLocalTerminalWindowVisible: vi.fn(),
+    removeLocalTerminalWindow: vi.fn(),
+    setLocalTerminalWindowLease: vi.fn(),
+    removeLocalTerminalWindowLease: vi.fn(),
     markGraphReloadFailed,
     setNotifier: (next: RuntimeNotifier | null) => {
       attached.notifier = next
     }
   }
   registerRuntimeWindowLifecycle(
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: registration reads only the supplied window lifecycle and webContents members.
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: registration uses this fixture's window identity, native visibility, lifecycle emitters and webContents notification methods.
     mainWindow as unknown as BrowserWindow,
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: registration calls only the supplied runtime attachment and notification members.
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: registration calls the supplied runtime attachment, terminal visibility and notification members.
     runtime as unknown as OrcaRuntimeService
   )
   if (!attached.notifier?.setPaneTitle) {

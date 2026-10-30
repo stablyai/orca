@@ -85,7 +85,7 @@ describe('registerPtyHandlers', () => {
         sessionId: 'daemon-session'
       })) as { id: string }
 
-      getPtySetRendererPtyVisibleListener()(null, { id: result.id, visible: false })
+      getPtySetRendererPtyVisibleListener()(mainWindowIpcEvent, { id: result.id, visible: false })
       expect(daemon.setPtyBackgrounded).toHaveBeenLastCalledWith(result.id, true)
 
       daemon.setPtyBackgrounded.mockClear()
@@ -183,7 +183,7 @@ describe('registerPtyHandlers', () => {
         const setHidden = getPtySetHiddenRendererPtyListener()
         const setVisible = getPtySetRendererPtyVisibleListener()
 
-        setVisible(null, { id: result.id, visible: true })
+        setVisible(mainWindowIpcEvent, { id: result.id, visible: true })
         setHidden(null, { id: result.id, hidden: true })
         daemon.emitData(result.id, 'starved visible output')
         vi.advanceTimersByTime(50)
@@ -221,7 +221,7 @@ describe('registerPtyHandlers', () => {
         })) as { id: string }
         const setHidden = getPtySetHiddenRendererPtyListener()
         const setVisible = getPtySetRendererPtyVisibleListener()
-        setVisible(null, { id: result.id, visible: true })
+        setVisible(mainWindowIpcEvent, { id: result.id, visible: true })
         setHidden(null, { id: result.id, hidden: true })
         daemon.emitData(result.id, 'starved visible output')
         vi.advanceTimersByTime(50)

@@ -182,7 +182,7 @@ describe('registerPtyHandlers', () => {
       const resizePty = getPtyResizeListener()
       mainWindow.webContents.send.mockClear()
 
-      setRendererPtyVisible(null, { id: spawnResult.id, visible: false })
+      setRendererPtyVisible(mainWindowIpcEvent, { id: spawnResult.id, visible: false })
       setHidden(null, { id: spawnResult.id, hidden: true })
       resizePty(null, { id: spawnResult.id, cols: 72, rows: 24 })
       mockProc.emitData('\x1b[2Khidden-resize repaint')
@@ -193,7 +193,7 @@ describe('registerPtyHandlers', () => {
       )
 
       setHidden(null, { id: spawnResult.id, hidden: false })
-      setRendererPtyVisible(null, { id: spawnResult.id, visible: true })
+      setRendererPtyVisible(mainWindowIpcEvent, { id: spawnResult.id, visible: true })
       mainWindow.webContents.send.mockClear()
       // The app's post-reveal full repaint: a background tag makes the renderer drop it.
       mockProc.emitData('\x1b[2Kfull repaint')
@@ -224,9 +224,9 @@ describe('registerPtyHandlers', () => {
       const writePty = getPtyWriteListener()
       mainWindow.webContents.send.mockClear()
 
-      setRendererPtyVisible(null, { id: spawnResult.id, visible: false })
+      setRendererPtyVisible(mainWindowIpcEvent, { id: spawnResult.id, visible: false })
       resizePty(null, { id: spawnResult.id, cols: 72, rows: 24 })
-      setRendererPtyVisible(null, { id: spawnResult.id, visible: true })
+      setRendererPtyVisible(mainWindowIpcEvent, { id: spawnResult.id, visible: true })
       writePty(mainWindowIpcEvent, { id: spawnResult.id, data: 'x' })
       mockProc.emitData('x')
       vi.advanceTimersByTime(2)
