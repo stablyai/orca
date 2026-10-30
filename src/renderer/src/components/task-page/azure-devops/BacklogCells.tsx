@@ -28,6 +28,9 @@ export function formatBacklogCell(referenceName: string, value: unknown): string
     const date = new Date(value)
     return Number.isNaN(date.getTime()) ? value : date.toLocaleDateString(getIntlLocale())
   }
+  if (typeof value === 'number') {
+    return value.toLocaleString(getIntlLocale())
+  }
   return String(value)
 }
 

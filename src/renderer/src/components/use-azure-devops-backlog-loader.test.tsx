@@ -75,7 +75,10 @@ function page(levelId = requirement.id) {
 function render(
   args: {
     repo?: Repo | null
-    settings?: { azureDevOpsTeamSelection: Record<string, string> | null } | null
+    settings?: {
+      azureDevOpsTeamSelection: Record<string, string> | null
+      azureDevOpsViewSelection: Record<string, string> | null
+    } | null
     updateSettings?: (patch: unknown) => Promise<unknown>
   } = {}
 ) {
@@ -85,7 +88,10 @@ function render(
       useAzureDevOpsBacklogLoader({
         active: props.repo !== null,
         repo: props.repo,
-        settings: args.settings ?? { azureDevOpsTeamSelection: null },
+        settings: args.settings ?? {
+          azureDevOpsTeamSelection: null,
+          azureDevOpsViewSelection: null
+        },
         updateSettings
       }),
     { initialProps: { repo: args.repo === undefined ? repoA : args.repo } }
@@ -175,7 +181,10 @@ describe('useAzureDevOpsBacklogLoader', () => {
   it('applies the persisted team once per repo and never reverts a later user pick', async () => {
     const updateSettings = vi.fn(async () => undefined)
     const { result } = render({
-      settings: { azureDevOpsTeamSelection: { 'acme/Project': 'Mobile' } },
+      settings: {
+        azureDevOpsTeamSelection: { 'acme/Project': 'Mobile' },
+        azureDevOpsViewSelection: null
+      },
       updateSettings
     })
     await waitFor(() => expect(result.current.status).toBe('ready'))
@@ -260,6 +269,69 @@ describe('useAzureDevOpsBacklogLoader', () => {
     act(() => result.current.setLevelId(requirement.id))
     await waitFor(() => expect(result.current.status).toBe('ready'))
     expect(api.loadBacklog).toHaveBeenCalledTimes(2)
+  })
+
+  it('never loads the backlog when the Board view is the restored choice', async () => {
+    const { result } = render({
+      settings: {
+        azureDevOpsTeamSelection: null,
+        azureDevOpsViewSelection: {
+          'acme/Project::Platform::Microsoft.RequirementCategory': 'board'
+        }
+      }
+    })
+    await waitFor(() => expect(result.current.view).toBe('board'))
+    await act(async () => {
+      await Promise.resolve()
+    })
+    expect(api.loadBacklog).not.toHaveBeenCalled()
+    expect(result.current.status).toBe('ready')
+  })
+
+  it('does not request the backlog while the Board view is active', async () => {
+    const { result } = render()
+    await waitFor(() => expect(result.current.status).toBe('ready'))
+    expect(api.loadBacklog).toHaveBeenCalledTimes(1)
+
+    act(() => result.current.selectView('board'))
+    await waitFor(() => expect(result.current.view).toBe('board'))
+    act(() => result.current.refresh())
+    await act(async () => {
+      await Promise.resolve()
+    })
+    expect(api.loadBacklog).toHaveBeenCalledTimes(1)
+    expect(result.current.status).toBe('ready')
+  })
+
+  it('drops a backlog failure when the Board takes over, and reloads on the way back', async () => {
+    api.loadBacklog.mockRejectedValue(new Error('Azure DevOps request failed: HTTP 403'))
+    const { result } = render()
+    await waitFor(() => expect(result.current.status).toBe('error'))
+    expect(result.current.errorMessage).toContain('HTTP 403')
+
+    // Why: the page-level status is what Content shows; under Board it must not be the backlog's.
+    act(() => result.current.selectView('board'))
+    await waitFor(() => expect(result.current.status).toBe('ready'))
+    expect(result.current.errorMessage).toBeNull()
+
+    api.loadBacklog.mockResolvedValue(page())
+    act(() => result.current.selectView('backlog'))
+    await waitFor(() => expect(api.loadBacklog).toHaveBeenCalledTimes(2))
+    await waitFor(() => expect(result.current.status).toBe('ready'))
+    expect(result.current.page).not.toBeNull()
+  })
+
+  it('reuses a fresh cached backlog when switching back from the Board', async () => {
+    const { result } = render()
+    await waitFor(() => expect(result.current.status).toBe('ready'))
+    expect(api.loadBacklog).toHaveBeenCalledTimes(1)
+
+    act(() => result.current.selectView('board'))
+    await waitFor(() => expect(result.current.view).toBe('board'))
+    act(() => result.current.selectView('backlog'))
+    await waitFor(() => expect(result.current.status).toBe('ready'))
+    expect(api.loadBacklog).toHaveBeenCalledTimes(1)
+    expect(result.current.page).not.toBeNull()
   })
 
   it('ignores results that land after unmount', async () => {

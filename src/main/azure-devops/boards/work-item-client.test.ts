@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { getAzureDevOpsWorkItemDetail } from './work-item-client'
-import { CLOUD_REPO, installAzureDevOpsFetchFixture } from './test-fixtures'
+import { CLOUD_REPO, installAzureDevOpsFetchFixture, rawWorkItem } from './test-fixtures'
 
 const OLD_ENV = process.env
 const OLD_FETCH = globalThis.fetch
@@ -71,6 +71,64 @@ describe('getAzureDevOpsWorkItemDetail', () => {
       changedDate: '2026-09-01T00:00:00Z'
     })
     expect(calls[0].searchParams.get('$expand')).toBe('all')
+  })
+
+  it('hydrates the children the caller does not already hold', async () => {
+    const { calls } = installAzureDevOpsFetchFixture({
+      '/acme/Project/_apis/wit/workitems/288': {
+        id: 288,
+        rev: 1,
+        fields: {
+          'System.WorkItemType': 'Product Backlog Item',
+          'System.Title': 'Phase 2',
+          'System.State': 'Committed'
+        },
+        relations: [301, 302].map((childId) => ({
+          rel: 'System.LinkTypes.Hierarchy-Forward',
+          url: `https://dev.azure.com/acme/_apis/wit/workItems/${childId}`
+        }))
+      },
+      '/acme/Project/_apis/wit/workitems': (url: URL) => ({
+        value: (url.searchParams.get('ids') ?? '')
+          .split(',')
+          .map(Number)
+          .map((childId) =>
+            rawWorkItem(childId, {
+              'System.WorkItemType': 'Task',
+              'System.Title': `Task ${childId}`,
+              'System.State': 'To Do'
+            })
+          )
+      })
+    })
+    const detail = await getAzureDevOpsWorkItemDetail(CLOUD_REPO, 288, { cachedIds: [302] })
+    expect(detail?.childIds).toEqual([301, 302])
+    expect(detail?.children?.map((child) => child.id)).toEqual([301])
+    const batch = calls.find((c) => c.pathname === '/acme/Project/_apis/wit/workitems')
+    expect(batch?.searchParams.get('ids')).toBe('301')
+  })
+
+  it('asks for nothing when the caller already holds every child', async () => {
+    const { calls } = installAzureDevOpsFetchFixture({
+      '/acme/Project/_apis/wit/workitems/288': {
+        id: 288,
+        rev: 1,
+        fields: {
+          'System.WorkItemType': 'Product Backlog Item',
+          'System.Title': 'Phase 2',
+          'System.State': 'Committed'
+        },
+        relations: [
+          {
+            rel: 'System.LinkTypes.Hierarchy-Forward',
+            url: 'https://dev.azure.com/acme/_apis/wit/workItems/301'
+          }
+        ]
+      }
+    })
+    const detail = await getAzureDevOpsWorkItemDetail(CLOUD_REPO, 288, { cachedIds: [301] })
+    expect(detail?.children).toEqual([])
+    expect(calls.filter((c) => c.pathname === '/acme/Project/_apis/wit/workitems')).toHaveLength(0)
   })
 
   it('returns null when the item is missing', async () => {

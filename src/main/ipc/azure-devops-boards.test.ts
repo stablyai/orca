@@ -11,6 +11,7 @@ vi.mock('electron', () => ({
 const getAzureDevOpsRepoRef = vi.hoisted(() => vi.fn())
 const listAzureDevOpsTeams = vi.hoisted(() => vi.fn())
 const loadAzureDevOpsBacklogPage = vi.hoisted(() => vi.fn())
+const loadAzureDevOpsBoardPage = vi.hoisted(() => vi.fn())
 const getAzureDevOpsBacklogConfiguration = vi.hoisted(() => vi.fn(async () => null))
 const getAzureDevOpsBacklogViewSettings = vi.hoisted(() => vi.fn(async () => null))
 const isAzureDevOpsReviewCreationAuthenticated = vi.hoisted(() => vi.fn(async () => true))
@@ -21,6 +22,7 @@ vi.mock('../azure-devops/boards/team-resolution', () => ({
   listAzureDevOpsIterations: vi.fn(async () => [])
 }))
 vi.mock('../azure-devops/boards/backlog-client', () => ({ loadAzureDevOpsBacklogPage }))
+vi.mock('../azure-devops/boards/board-items-client', () => ({ loadAzureDevOpsBoardPage }))
 vi.mock('../azure-devops/boards/board-configuration-client', () => ({
   getAzureDevOpsBacklogConfiguration
 }))
@@ -62,6 +64,7 @@ describe('azure-devops boards ipc', () => {
     getAzureDevOpsRepoRef.mockReset()
     listAzureDevOpsTeams.mockReset()
     loadAzureDevOpsBacklogPage.mockReset()
+    loadAzureDevOpsBoardPage.mockReset()
     getAzureDevOpsBacklogConfiguration.mockReset()
     getAzureDevOpsBacklogConfiguration.mockResolvedValue(null)
     getAzureDevOpsBacklogViewSettings.mockReset()
@@ -113,6 +116,7 @@ describe('azure-devops boards ipc', () => {
       'azureDevOpsBoards:listTeams',
       'azureDevOpsBoards:getConfiguration',
       'azureDevOpsBoards:loadBacklog',
+      'azureDevOpsBoards:loadBoard',
       'azureDevOpsBoards:getWorkItem'
     ]) {
       await expect(
@@ -159,6 +163,35 @@ describe('azure-devops boards ipc', () => {
       { repoPath: '/repo', teamName: 'Mobile' }
     )
     expect(getAzureDevOpsBacklogConfiguration).toHaveBeenCalledWith(REPO, 'Mobile')
+  })
+
+  it('routes loadBoard through the repo ref and the team segment', async () => {
+    getAzureDevOpsRepoRef.mockResolvedValue(REPO)
+    const level = { id: 'Microsoft.RequirementCategory' }
+    loadAzureDevOpsBoardPage.mockResolvedValue(null)
+    await expect(
+      handlers.get('azureDevOpsBoards:loadBoard')!(
+        {},
+        { repoPath: '/repo', teamName: 'Mobile', teamId: 'team-guid', level }
+      )
+    ).resolves.toBeNull()
+    expect(loadAzureDevOpsBoardPage).toHaveBeenCalledWith(REPO, 'team-guid', level)
+    await handlers.get('azureDevOpsBoards:loadBoard')!(
+      {},
+      { repoPath: '/repo', teamName: 'Mobile', level }
+    )
+    expect(loadAzureDevOpsBoardPage).toHaveBeenLastCalledWith(REPO, 'Mobile', level)
+  })
+
+  it('lets a board load failure reject unchanged', async () => {
+    getAzureDevOpsRepoRef.mockResolvedValue(REPO)
+    loadAzureDevOpsBoardPage.mockRejectedValue(new Error('wiql failed'))
+    await expect(
+      handlers.get('azureDevOpsBoards:loadBoard')!(
+        {},
+        { repoPath: '/repo', teamName: 'Mobile', level: { id: 'x' } }
+      )
+    ).rejects.toThrow('wiql failed')
   })
 
   it('reads the per-user view settings only when the team id is known', async () => {

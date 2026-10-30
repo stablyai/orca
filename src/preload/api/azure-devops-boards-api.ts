@@ -1,6 +1,7 @@
 import type {
   AzureDevOpsBacklogLevel,
   AzureDevOpsBacklogPage,
+  AzureDevOpsBoardPage,
   AzureDevOpsTeam,
   AzureDevOpsTeamConfiguration,
   AzureDevOpsWorkItemDetail
@@ -24,7 +25,14 @@ export type AzureDevOpsBoardsApi = {
         columnFields?: string[]
       }
   ) => Promise<AzureDevOpsBacklogPage>
+  loadBoard: (
+    args: AzureDevOpsBoardsRepoArgs & AzureDevOpsTeamRoute & { level: AzureDevOpsBacklogLevel }
+  ) => Promise<AzureDevOpsBoardPage | null>
   getWorkItem: (
-    args: AzureDevOpsBoardsRepoArgs & { id: number }
+    args: AzureDevOpsBoardsRepoArgs & {
+      id: number
+      /** Ids the renderer already holds, so their children are not fetched again. */
+      cachedIds?: number[]
+    }
   ) => Promise<AzureDevOpsWorkItemDetail | null>
 }

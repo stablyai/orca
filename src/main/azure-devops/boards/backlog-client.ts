@@ -16,10 +16,16 @@ const HYDRATE_BATCH_SIZE = 200
 // Why: a large level plus children is several batched calls; the default 5s budget is per call, but keep headroom for slow tenants.
 const BACKLOG_TIMEOUT_MS = 15_000
 
+/**
+ * @param options.requireResponse Reject when a batch request itself fails. Items
+ *   the host omits from a successful response are still skipped: the caller
+ *   compares the returned length with `ids` to report the shortfall.
+ */
 export async function hydrateAzureDevOpsWorkItems(
   repo: AzureDevOpsRepoRef,
   ids: number[],
-  extraFields: string[]
+  extraFields: string[],
+  options: { requireResponse?: boolean } = {}
 ): Promise<AzureDevOpsWorkItem[]> {
   if (ids.length === 0) {
     return []
@@ -35,7 +41,8 @@ export async function hydrateAzureDevOpsWorkItems(
       {
         searchParams: { ids: batch.join(','), fields, errorPolicy: 'omit' },
         timeoutMs: BACKLOG_TIMEOUT_MS
-      }
+      },
+      options.requireResponse === true
     )
     for (const item of raw?.value ?? []) {
       const mapped = mapAzureDevOpsWorkItem(item, bases.workItemWebUrl)

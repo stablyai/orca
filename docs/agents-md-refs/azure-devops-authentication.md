@@ -61,7 +61,7 @@ under **Settings › Task Sources** to see it in the source picker.
 
 The Backlog view expands one level — a row shows its direct children, not the
 whole subtree — and the level picker lists the portfolio and requirement
-backlogs, as the Azure DevOps Backlogs hub does. A Board view is a follow-up.
+backlogs, as the Azure DevOps Backlogs hub does.
 
 The view mirrors the signed-in user's own Backlogs settings for the team, read
 from `Settings/WebTeam/{teamId}/Entries/me` at the collection root: the column
@@ -74,3 +74,20 @@ settings call fails (no permission, older on-prem servers) the process column
 defaults apply and the view still loads. Rollup columns (progress and count
 roll-ups) are not shown yet, and the work item type is never a text column: its
 icon leads the title, as in Azure DevOps.
+
+The Board view shows the same columns, swimlanes and cards as the team's board
+in Azure DevOps. To draw it, Orca reads the board definition (`work/boards`,
+`work/boards/{id}` and its `rows`), the card field and style settings
+(`cardsettings` and `cardrulesettings`), the team's area paths
+(`work/teamsettings/teamfieldvalues`), and the board's work items through a
+WIQL query (`POST wit/wiql`, which only reads). All of these calls are
+read-only: moving a card, editing a card or changing the board's settings in
+Orca never writes to Azure DevOps.
+
+A team whose board is scoped by a custom team field (projects migrated from
+TFS) is queried by that field, not by `System.AreaPath`. Where Orca cannot
+show the board exactly as Azure DevOps does, it says so above the grid instead
+of quietly differing: cards whose column value maps to no column are parked in
+the first in-progress column and flagged, and cards or parent items the server
+did not return are counted in a notice. Only a level that has no board at all
+falls back to the Backlog; a failed lookup is reported as a failure.

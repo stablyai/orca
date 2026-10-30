@@ -3,6 +3,7 @@ import { ipcMain } from 'electron'
 import type {
   AzureDevOpsBacklogLevel,
   AzureDevOpsBacklogPage,
+  AzureDevOpsBoardPage,
   AzureDevOpsTeam,
   AzureDevOpsTeamConfiguration,
   AzureDevOpsWorkItemDetail
@@ -16,6 +17,7 @@ import {
 } from '../../shared/azure-devops/boards-repo-resolution'
 import type { Repo } from '../../shared/repo-types'
 import { loadAzureDevOpsBacklogPage } from '../azure-devops/boards/backlog-client'
+import { loadAzureDevOpsBoardPage } from '../azure-devops/boards/board-items-client'
 import { getAzureDevOpsBacklogViewSettings } from '../azure-devops/boards/backlog-view-settings-client'
 import { getAzureDevOpsBacklogConfiguration } from '../azure-devops/boards/board-configuration-client'
 import {
@@ -133,13 +135,24 @@ export function registerAzureDevOpsBoardsHandlers(store: Store): void {
   )
 
   ipcMain.handle(
+    'azureDevOpsBoards:loadBoard',
+    async (
+      _event,
+      args: AzureDevOpsBoardsRepoArgs & AzureDevOpsTeamRoute & { level: AzureDevOpsBacklogLevel }
+    ): Promise<AzureDevOpsBoardPage | null> => {
+      const { repo } = await resolveRepo(store, args)
+      return loadAzureDevOpsBoardPage(repo, azureDevOpsTeamRouteSegment(args), args.level)
+    }
+  )
+
+  ipcMain.handle(
     'azureDevOpsBoards:getWorkItem',
     async (
       _event,
-      args: AzureDevOpsBoardsRepoArgs & { id: number }
+      args: AzureDevOpsBoardsRepoArgs & { id: number; cachedIds?: number[] }
     ): Promise<AzureDevOpsWorkItemDetail | null> => {
       const { repo } = await resolveRepo(store, args)
-      return getAzureDevOpsWorkItemDetail(repo, args.id)
+      return getAzureDevOpsWorkItemDetail(repo, args.id, { cachedIds: args.cachedIds ?? [] })
     }
   )
 }

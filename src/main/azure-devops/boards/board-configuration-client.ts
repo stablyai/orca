@@ -10,6 +10,7 @@ import type {
 import { requestAzureDevOpsJsonAtBase } from '../azure-devops-api-request'
 import type { AzureDevOpsRepoRef } from '../repository-ref'
 import { resolveAzureDevOpsApiBases } from './api-bases'
+import { parseStyleRules, parseTagColors, type RawCardRules } from './board-card-style-rules'
 
 const DEFAULT_ROW_ID = '00000000-0000-0000-0000-000000000000'
 
@@ -125,12 +126,6 @@ type RawBoard = {
 }
 type RawRow = { id?: string; name?: string; color?: string | null }
 type RawCardSetting = { displayType?: string; fieldIdentifier?: string; showEmptyFields?: string }
-type RawCardRules = {
-  rules?: {
-    tagStyle?: { isEnabled?: string; name?: string; settings?: { 'background-color'?: string } }[]
-  }
-}
-
 export async function getAzureDevOpsBoardConfiguration(
   repo: AzureDevOpsRepoRef,
   teamName: string,
@@ -172,13 +167,6 @@ export async function getAzureDevOpsBoardConfiguration(
     }
     cardFields[workItemType] = { fields, showEmptyFields }
   }
-  const tagColors: Record<string, string> = {}
-  for (const rule of rules?.rules?.tagStyle ?? []) {
-    const color = rule.settings?.['background-color']
-    if (rule.isEnabled === 'True' && rule.name && color) {
-      tagColors[rule.name] = color
-    }
-  }
   return {
     id: board.id,
     name: board.name,
@@ -207,6 +195,7 @@ export async function getAzureDevOpsBoardConfiguration(
     rowField,
     doneField,
     cardFields,
-    tagColors
+    tagColors: parseTagColors(rules),
+    styleRules: parseStyleRules(rules)
   }
 }

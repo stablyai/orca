@@ -2,6 +2,7 @@
 import { fireEvent, render, screen, cleanup } from '@testing-library/react'
 import { describe, expect, it, vi, afterEach } from 'vitest'
 import '@testing-library/jest-dom/vitest'
+import { getIntlLocale } from '@/i18n/i18n'
 import type { AzureDevOpsWorkItem } from '../../../shared/azure-devops/boards-types'
 import {
   AzureDevOpsBacklogTable,
@@ -68,6 +69,10 @@ describe('formatBacklogCell', () => {
   it('formats identities, numbers, dates and nulls', () => {
     expect(formatBacklogCell('System.AssignedTo', { displayName: 'Ada' })).toBe('Ada')
     expect(formatBacklogCell('Microsoft.VSTS.Scheduling.Effort', 3)).toBe('3')
+    expect(formatBacklogCell('Microsoft.VSTS.Scheduling.Effort', 1500)).toBe(
+      (1500).toLocaleString(getIntlLocale())
+    )
+    expect(formatBacklogCell('Microsoft.VSTS.Scheduling.Effort', 1500)).not.toBe('1500')
     expect(
       formatBacklogCell('Microsoft.VSTS.Scheduling.TargetDate', '2026-09-30T00:00:00Z')
     ).toMatch(/2026/)

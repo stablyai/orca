@@ -39,6 +39,55 @@ export type AzureDevOpsToolbarProps = {
   refreshing: boolean
 }
 
+function ShowParentsToggle(props: AzureDevOpsToolbarProps): React.JSX.Element {
+  return (
+    <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+      <Checkbox
+        aria-label={translate('auto.components.TaskPage.azureDevOps.showParents', 'Show parents')}
+        checked={props.showParents}
+        onCheckedChange={(checked) => props.onToggleShowParents(checked === true)}
+      />
+      {translate('auto.components.TaskPage.azureDevOps.showParents', 'Show parents')}
+    </label>
+  )
+}
+
+/** Backlog-only view options: neither the in-progress filter nor column widths touch the board. */
+function BacklogViewOptions(props: AzureDevOpsToolbarProps): React.JSX.Element {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button
+          variant="ghost"
+          size="sm"
+          aria-label={translate('auto.components.TaskPage.azureDevOps.viewOptions', 'View options')}
+        >
+          <SlidersHorizontal className="size-3.5" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        <DropdownMenuCheckboxItem
+          checked={props.showInProgress}
+          onCheckedChange={(checked) => props.onToggleShowInProgress(checked === true)}
+          onSelect={(event) => event.preventDefault()}
+        >
+          {translate('auto.components.TaskPage.azureDevOps.inProgressItems', 'In progress items')}
+        </DropdownMenuCheckboxItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem
+          disabled={props.onResetColumnWidths === null}
+          onSelect={() => props.onResetColumnWidths?.()}
+        >
+          {translate(
+            'auto.components.TaskPage.azureDevOps.resetColumnWidths',
+            'Reset column widths'
+          )}
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
+}
+
 export function AzureDevOpsToolbar(props: AzureDevOpsToolbarProps): React.JSX.Element {
   const selectedLevel = props.levels.find((l) => l.id === props.selectedLevelId) ?? null
   return (
@@ -84,17 +133,7 @@ export function AzureDevOpsToolbar(props: AzureDevOpsToolbarProps): React.JSX.El
       </DropdownMenu>
 
       <div className="ml-auto flex items-center gap-2">
-        <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
-          <Checkbox
-            aria-label={translate(
-              'auto.components.TaskPage.azureDevOps.showParents',
-              'Show parents'
-            )}
-            checked={props.showParents}
-            onCheckedChange={(checked) => props.onToggleShowParents(checked === true)}
-          />
-          {translate('auto.components.TaskPage.azureDevOps.showParents', 'Show parents')}
-        </label>
+        {props.view === 'backlog' ? <ShowParentsToggle {...props} /> : null}
         <ToggleGroup
           type="single"
           variant="outline"
@@ -110,47 +149,15 @@ export function AzureDevOpsToolbar(props: AzureDevOpsToolbarProps): React.JSX.El
             <List className="size-3.5" />
             {translate('auto.components.TaskPage.azureDevOps.backlogView', 'Backlog')}
           </ToggleGroupItem>
-          <ToggleGroupItem value="board" disabled={!props.boardAvailable}>
+          <ToggleGroupItem
+            value="board"
+            disabled={!props.boardAvailable || props.selectedLevelId === null}
+          >
             <LayoutGrid className="size-3.5" />
             {translate('auto.components.TaskPage.azureDevOps.boardView', 'Board')}
           </ToggleGroupItem>
         </ToggleGroup>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              variant="ghost"
-              size="sm"
-              aria-label={translate(
-                'auto.components.TaskPage.azureDevOps.viewOptions',
-                'View options'
-              )}
-            >
-              <SlidersHorizontal className="size-3.5" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuCheckboxItem
-              checked={props.showInProgress}
-              onCheckedChange={(checked) => props.onToggleShowInProgress(checked === true)}
-              onSelect={(event) => event.preventDefault()}
-            >
-              {translate(
-                'auto.components.TaskPage.azureDevOps.inProgressItems',
-                'In progress items'
-              )}
-            </DropdownMenuCheckboxItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem
-              disabled={props.onResetColumnWidths === null}
-              onSelect={() => props.onResetColumnWidths?.()}
-            >
-              {translate(
-                'auto.components.TaskPage.azureDevOps.resetColumnWidths',
-                'Reset column widths'
-              )}
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        {props.view === 'backlog' ? <BacklogViewOptions {...props} /> : null}
         <Button
           variant="ghost"
           size="sm"

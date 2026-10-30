@@ -65,6 +65,26 @@ describe('AzureDevOpsToolbar', () => {
     expect(screen.getByRole('radio', { name: 'Board' })).toBeDisabled()
   })
 
+  it('enables the Board toggle when a level is selected', () => {
+    const p = props({ boardAvailable: true })
+    const { unmount } = render(<AzureDevOpsToolbar {...p} />)
+    const board = screen.getByRole('radio', { name: 'Board' })
+    expect(board).toBeEnabled()
+    fireEvent.click(board)
+    expect(p.onSelectView).toHaveBeenCalledWith('board')
+    unmount()
+
+    render(<AzureDevOpsToolbar {...props({ boardAvailable: true, selectedLevelId: null })} />)
+    expect(screen.getByRole('radio', { name: 'Board' })).toBeDisabled()
+  })
+
+  it('hides the backlog-only controls while the Board view is active', () => {
+    render(<AzureDevOpsToolbar {...props({ view: 'board', boardAvailable: true })} />)
+    expect(screen.queryByRole('checkbox', { name: 'Show parents' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'View options' })).toBeNull()
+    expect(screen.getByRole('button', { name: 'Refresh' })).toBeInTheDocument()
+  })
+
   it('toggles In progress items from the view options menu', () => {
     const p = props()
     render(<AzureDevOpsToolbar {...p} />)

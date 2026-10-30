@@ -78,6 +78,11 @@ export type AzureDevOpsWorkItemDetail = AzureDevOpsWorkItem & {
   descriptionHtml: string | null
   acceptanceCriteriaHtml: string | null
   childIds: number[]
+  /**
+   * Children the host hydrated because the caller said it did not hold them, so
+   * the dialog can list them with no view loaded. Absent from older hosts.
+   */
+  children?: AzureDevOpsWorkItem[]
   pullRequestLinks: { id: number; url: string }[]
   createdDate: string | null
   changedDate: string | null
@@ -120,6 +125,22 @@ export type AzureDevOpsBoardRow = {
 
 export type AzureDevOpsBoardCardField = { referenceName: string; core: boolean }
 
+export type AzureDevOpsBoardStyleClause = {
+  fieldName: string
+  /** Raw ADO operator, lowercased: '=', '<>', '>', '<', '>=', '<=', 'contains', 'does not contain', 'in', 'not in', 'was ever'. */
+  operator: string
+  value: string
+  /** How this clause joins the PREVIOUS one; null on the first clause. */
+  logicalOperator: 'and' | 'or' | null
+}
+
+export type AzureDevOpsBoardStyleRule = {
+  name: string
+  clauses: AzureDevOpsBoardStyleClause[]
+  backgroundColor: string | null
+  titleColor: string | null
+}
+
 export type AzureDevOpsBoardConfiguration = {
   id: string
   name: string
@@ -130,9 +151,37 @@ export type AzureDevOpsBoardConfiguration = {
   doneField: string
   cardFields: Record<string, { fields: AzureDevOpsBoardCardField[]; showEmptyFields: boolean }>
   tagColors: Record<string, string>
+  styleRules: AzureDevOpsBoardStyleRule[]
 }
 
 export type AzureDevOpsBoardSummary = { id: string; name: string }
+
+export type AzureDevOpsTeamAreaPaths = {
+  /**
+   * The team field's reference name. `System.AreaPath` on stock processes, a
+   * custom field on projects migrated from TFS; null when the host omits it.
+   */
+  field: string | null
+  defaultValue: string
+  values: { value: string; includeChildren: boolean }[]
+}
+
+export type AzureDevOpsBoardPage = {
+  level: AzureDevOpsBacklogLevel
+  configuration: AzureDevOpsBoardConfiguration
+  /** Every item the query returned, hydrated with the board's own fields. */
+  items: AzureDevOpsWorkItem[]
+  /** Only parents that are not themselves on the board; look a parent up in `items` and `parents` together. */
+  parents: AzureDevOpsWorkItem[]
+  /**
+   * Ids the query returned that the batch fetch did not (deleted, moved to
+   * another project, or hidden by a field rule since the query). Absent from
+   * older hosts.
+   */
+  unhydratedItemCount?: number
+  /** Off-board parents that could not be fetched, so those cards show no Parent row. */
+  unhydratedParentCount?: number
+}
 
 /** A saved backlog filter as the signed-in user left it in ADO; plain arrays so it crosses IPC. */
 export type AzureDevOpsBacklogSavedFilter = {

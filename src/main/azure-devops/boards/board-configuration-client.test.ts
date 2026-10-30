@@ -84,8 +84,69 @@ const CARD_SETTINGS_RESPONSE = {
 }
 const CARD_RULES_RESPONSE = {
   rules: {
+    fill: [
+      {
+        name: 'Blocked',
+        isEnabled: 'true',
+        filter: "[System.Tags] contains 'blocked'",
+        clauses: [
+          {
+            fieldName: 'System.Tags',
+            index: 0,
+            logicalOperator: '',
+            operator: 'contains',
+            value: 'blocked'
+          }
+        ],
+        settings: { 'background-color': '#FBBC3D', 'title-color': '#000000' }
+      },
+      {
+        name: 'Lowercase enabled',
+        isEnabled: 'true',
+        clauses: [
+          {
+            fieldName: 'Microsoft.VSTS.Common.Priority',
+            index: 1,
+            logicalOperator: 'Or',
+            operator: '<=',
+            value: '2'
+          },
+          {
+            fieldName: 'System.State',
+            index: 0,
+            logicalOperator: '',
+            operator: 'Does Not Contain',
+            value: 'Done'
+          }
+        ],
+        settings: { 'background-color': '#E5F2FF' }
+      },
+      {
+        name: 'Disabled',
+        isEnabled: 'False',
+        clauses: [
+          { fieldName: 'System.State', index: 0, logicalOperator: '', operator: '=', value: 'New' }
+        ],
+        settings: { 'background-color': '#000000' }
+      },
+      {
+        name: 'No colour',
+        isEnabled: 'True',
+        clauses: [
+          { fieldName: 'System.State', index: 0, logicalOperator: '', operator: '=', value: 'New' }
+        ],
+        settings: {}
+      },
+      {
+        name: 'No clauses',
+        isEnabled: 'True',
+        clauses: [],
+        settings: { 'background-color': '#111111' }
+      }
+    ],
     tagStyle: [
       { isEnabled: 'True', name: 'triage', settings: { 'background-color': '#797775' } },
+      { isEnabled: 'true', name: 'ready', settings: { 'background-color': '#5FB65F' } },
       { isEnabled: 'False', name: 'ignored', settings: { 'background-color': '#000000' } }
     ]
   }
@@ -174,7 +235,41 @@ describe('board configuration client', () => {
         { referenceName: 'System.Title', core: false }
       ]
     })
-    expect(board?.tagColors).toEqual({ triage: '#797775' })
+    expect(board?.tagColors).toEqual({ triage: '#797775', ready: '#5FB65F' })
+    expect(board?.styleRules).toEqual([
+      {
+        name: 'Blocked',
+        clauses: [
+          {
+            fieldName: 'System.Tags',
+            operator: 'contains',
+            value: 'blocked',
+            logicalOperator: null
+          }
+        ],
+        backgroundColor: '#FBBC3D',
+        titleColor: '#000000'
+      },
+      {
+        name: 'Lowercase enabled',
+        clauses: [
+          {
+            fieldName: 'System.State',
+            operator: 'does not contain',
+            value: 'Done',
+            logicalOperator: null
+          },
+          {
+            fieldName: 'Microsoft.VSTS.Common.Priority',
+            operator: '<=',
+            value: '2',
+            logicalOperator: 'or'
+          }
+        ],
+        backgroundColor: '#E5F2FF',
+        titleColor: null
+      }
+    ])
   })
 
   it('returns null when the backlog configuration request fails', async () => {

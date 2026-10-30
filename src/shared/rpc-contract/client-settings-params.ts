@@ -120,6 +120,7 @@ export const SettingsUpdate = z
     defaultRepoSelection: z.array(z.string()).nullable().optional(),
     defaultLinearTeamSelection: z.array(z.string()).nullable().optional(),
     azureDevOpsTeamSelection: z.record(z.string(), z.string()).nullable().optional(),
+    azureDevOpsViewSelection: z.record(z.string(), z.string()).nullable().optional(),
     azureDevOpsBacklogColumnWidths: z
       .record(z.string(), z.record(z.string(), z.number()))
       .nullable()

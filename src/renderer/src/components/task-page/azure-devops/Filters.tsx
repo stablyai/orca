@@ -70,6 +70,23 @@ export function collectAzureDevOpsFilterOptions(
   }
 }
 
+/**
+ * Options describe what the active view shows: a board keeps the completed cards the
+ * backlog drops, so its `Done`/`Closed` states, tags and assignees only exist there.
+ */
+export function collectAzureDevOpsViewFilterOptions(args: {
+  view: 'backlog' | 'board'
+  /** Null until the board for the selected level is loaded. */
+  boardItems: AzureDevOpsWorkItem[] | null
+  backlogItems: AzureDevOpsWorkItem[]
+  iterations: AzureDevOpsIteration[]
+}): AzureDevOpsFilterOptions {
+  return collectAzureDevOpsFilterOptions(
+    args.view === 'board' && args.boardItems !== null ? args.boardItems : args.backlogItems,
+    args.iterations
+  )
+}
+
 function toggle(set: ReadonlySet<string>, value: string): Set<string> {
   const next = new Set(set)
   if (next.has(value)) {

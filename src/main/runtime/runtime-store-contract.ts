@@ -155,6 +155,7 @@ export type RuntimeStore = {
     defaultRepoSelection?: GlobalSettings['defaultRepoSelection']
     defaultLinearTeamSelection?: GlobalSettings['defaultLinearTeamSelection']
     azureDevOpsTeamSelection?: GlobalSettings['azureDevOpsTeamSelection']
+    azureDevOpsViewSelection?: GlobalSettings['azureDevOpsViewSelection']
     azureDevOpsBacklogColumnWidths?: GlobalSettings['azureDevOpsBacklogColumnWidths']
     githubProjects?: GlobalSettings['githubProjects']
     experimentalNewWorktreeCardStyle?: GlobalSettings['experimentalNewWorktreeCardStyle']

@@ -3,9 +3,14 @@ import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
 import {
+  azureDevOpsViewSelectionKey,
   persistAzureDevOpsTeamSelection,
-  type AzureDevOpsTeamSelectionSettings
+  type AzureDevOpsTaskView,
+  type AzureDevOpsTeamSelectionSettings,
+  type AzureDevOpsViewSelectionSettings
 } from './task-page-azure-devops-team-selection-persistence'
+import { useAzureDevOpsBoardViewSelection } from './use-azure-devops-board-view'
+import { useAzureDevOpsBacklogPageLoader } from './use-azure-devops-backlog-page-loader'
 import type {
   AzureDevOpsBacklogColumnField,
   AzureDevOpsBacklogLevel,
@@ -28,14 +33,25 @@ const EMPTY_TEAMS: AzureDevOpsTeam[] = []
 
 export type { AzureDevOpsTeamSelectionSettings }
 
+/**
+ * Team, level and Backlog/Board selection plus the backlog page itself. The view
+ * lives here because the backlog load must not run while the Board is shown, and
+ * the view key is only known once this hook has the team's configuration.
+ */
 // Why: split out of the top-level hook so team/config/backlog loading, and its
 // effects, don't push the orchestrating hook file over the line budget.
 export function useAzureDevOpsBacklogLoader(args: {
   active: boolean
   repo: Repo | null
-  settings: AzureDevOpsTeamSelectionSettings | null | undefined
-  updateSettings: (patch: AzureDevOpsTeamSelectionSettings) => Promise<unknown>
+  settings: (AzureDevOpsTeamSelectionSettings & AzureDevOpsViewSelectionSettings) | null | undefined
+  updateSettings: (
+    patch: AzureDevOpsTeamSelectionSettings | AzureDevOpsViewSelectionSettings
+  ) => Promise<unknown>
 }): {
+  view: AzureDevOpsTaskView
+  selectView: (view: AzureDevOpsTaskView) => void
+  boardAvailable: boolean
+  reportNoBoard: () => void
   status: AzureDevOpsViewsStatus
   errorMessage: string | null
   teams: AzureDevOpsTeam[]
@@ -58,16 +74,12 @@ export function useAzureDevOpsBacklogLoader(args: {
     azureDevOpsTeamsByRepo,
     loadAzureDevOpsTeams,
     loadAzureDevOpsConfiguration,
-    readAzureDevOpsBacklog,
-    loadAzureDevOpsBacklog,
     isAzureDevOpsAuthenticated
   } = useAppStore(
     useShallow((s) => ({
       azureDevOpsTeamsByRepo: s.azureDevOpsTeamsByRepo,
       loadAzureDevOpsTeams: s.loadAzureDevOpsTeams,
       loadAzureDevOpsConfiguration: s.loadAzureDevOpsConfiguration,
-      readAzureDevOpsBacklog: s.readAzureDevOpsBacklog,
-      loadAzureDevOpsBacklog: s.loadAzureDevOpsBacklog,
       isAzureDevOpsAuthenticated: s.isAzureDevOpsAuthenticated
     }))
   )
@@ -77,9 +89,7 @@ export function useAzureDevOpsBacklogLoader(args: {
   const [teamName, setTeamName] = useState<string | null>(null)
   const [configuration, setConfiguration] = useState<AzureDevOpsTeamConfiguration | null>(null)
   const [levelId, setLevelId] = useState<string | null>(null)
-  const [page, setPage] = useState<AzureDevOpsBacklogPage | null>(null)
   const [refreshNonce, setRefreshNonce] = useState(0)
-  const [refreshing, setRefreshing] = useState(false)
   // Why: the persisted team is applied once per repo; a later user pick must never be reverted.
   const persistedAppliedForRepoRef = useRef<string | null>(null)
   // Why: consumed by the load it triggered, so later level switches go back to the cache.
@@ -110,9 +120,7 @@ export function useAzureDevOpsBacklogLoader(args: {
     setTeamName(null)
     setConfiguration(null)
     setLevelId(null)
-    setPage(null)
     setErrorMessage(null)
-    setRefreshing(false)
     if (!active || !repo) {
       setStatus('idle')
       return
@@ -214,61 +222,28 @@ export function useAzureDevOpsBacklogLoader(args: {
     () => resolveAzureDevOpsBacklogColumns(level, configuration?.viewSettings),
     [level, configuration]
   )
+  const { view, selectView, boardAvailable, reportNoBoard } = useAzureDevOpsBoardViewSelection({
+    viewKey:
+      configuration && teamName && levelId
+        ? azureDevOpsViewSelectionKey(configuration.repo, teamName, levelId)
+        : null,
+    settings,
+    updateSettings
+  })
 
-  // Backlog page for the selected level: stale-while-revalidate over the slice cache.
-  useEffect(() => {
-    if (!active || !repo || !teamRoute || !level) {
-      return
-    }
-    let cancelled = false
-    const force = forceNextLoadRef.current
-    const cached = readAzureDevOpsBacklog(repo, teamRoute, level)
-    if (cached) {
-      setPage(cached.page)
-      setStatus('ready')
-      if (cached.fresh && !force) {
-        return
-      }
-    } else {
-      setStatus('loading')
-    }
-    setRefreshing(true)
-    void loadAzureDevOpsBacklog(repo, teamRoute, level, {
-      force: true,
-      columnFields: columns.map((c) => c.referenceName)
-    })
-      .then((loaded) => {
-        if (cancelled) {
-          return
-        }
-        setPage(loaded)
-        setStatus('ready')
-      })
-      .catch((error: unknown) => {
-        if (!cancelled) {
-          applyFailure(error)
-        }
-      })
-      .finally(() => {
-        if (!cancelled) {
-          forceNextLoadRef.current = false
-          setRefreshing(false)
-        }
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [
+  const { page, setPage, refreshing } = useAzureDevOpsBacklogPageLoader({
     active,
     repo,
     teamRoute,
     level,
     columns,
+    view,
     refreshNonce,
-    readAzureDevOpsBacklog,
-    loadAzureDevOpsBacklog,
+    forceNextLoadRef,
+    setStatus,
+    setErrorMessage,
     applyFailure
-  ])
+  })
 
   const refresh = useCallback(() => {
     forceNextLoadRef.current = true
@@ -292,10 +267,14 @@ export function useAzureDevOpsBacklogLoader(args: {
         })
       }
     },
-    [repo, configuration, updateSettings]
+    [repo, configuration, setPage, updateSettings]
   )
 
   return {
+    view,
+    selectView,
+    boardAvailable,
+    reportNoBoard,
     status,
     errorMessage,
     teams,

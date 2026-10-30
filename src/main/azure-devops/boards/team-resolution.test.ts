@@ -1,5 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { listAzureDevOpsIterations, listAzureDevOpsTeams } from './team-resolution'
+import {
+  listAzureDevOpsIterations,
+  listAzureDevOpsTeamAreaPaths,
+  listAzureDevOpsTeams
+} from './team-resolution'
 import {
   CLOUD_REPO,
   ITERATIONS_RESPONSE,
@@ -69,5 +73,75 @@ describe('team resolution', () => {
       { id: 'team-1', name: 'Platform', isDefault: false },
       { id: 'team-2', name: 'Mobile', isDefault: false }
     ])
+  })
+})
+
+describe('team area paths', () => {
+  beforeEach(() => {
+    process.env = { ...OLD_ENV, ORCA_AZURE_DEVOPS_TOKEN: 'pat-token' }
+    delete process.env.ORCA_AZURE_DEVOPS_API_BASE_URL
+  })
+  afterEach(() => {
+    process.env = OLD_ENV
+    globalThis.fetch = OLD_FETCH
+  })
+
+  it('reads the team default area and its configured values', async () => {
+    installAzureDevOpsFetchFixture({
+      '/acme/Project/Mobile/_apis/work/teamsettings/teamfieldvalues': {
+        field: { referenceName: 'System.AreaPath' },
+        defaultValue: 'Project',
+        values: [{ value: 'Project', includeChildren: true }]
+      }
+    })
+    await expect(listAzureDevOpsTeamAreaPaths(CLOUD_REPO, 'Mobile')).resolves.toEqual({
+      field: 'System.AreaPath',
+      defaultValue: 'Project',
+      values: [{ value: 'Project', includeChildren: true }]
+    })
+  })
+
+  it('carries a custom team field reference name', async () => {
+    installAzureDevOpsFetchFixture({
+      '/acme/Project/Mobile/_apis/work/teamsettings/teamfieldvalues': {
+        field: { referenceName: 'Custom.TeamField' },
+        defaultValue: 'Contoso',
+        values: [{ value: 'Contoso' }]
+      }
+    })
+    await expect(listAzureDevOpsTeamAreaPaths(CLOUD_REPO, 'Mobile')).resolves.toEqual({
+      field: 'Custom.TeamField',
+      defaultValue: 'Contoso',
+      values: [{ value: 'Contoso', includeChildren: false }]
+    })
+  })
+
+  it('throws when the response carries no values array', async () => {
+    installAzureDevOpsFetchFixture({
+      '/acme/Project/Mobile/_apis/work/teamsettings/teamfieldvalues': { defaultValue: 'Project' }
+    })
+    await expect(listAzureDevOpsTeamAreaPaths(CLOUD_REPO, 'Mobile')).rejects.toThrow(
+      'team field values unavailable'
+    )
+  })
+
+  it('throws when the lookup request fails', async () => {
+    installAzureDevOpsFetchFixture({})
+    await expect(listAzureDevOpsTeamAreaPaths(CLOUD_REPO, 'Mobile')).rejects.toThrow('HTTP 404')
+  })
+
+  it('keeps an empty values array, which is a team with no area', async () => {
+    installAzureDevOpsFetchFixture({
+      '/acme/Project/Mobile/_apis/work/teamsettings/teamfieldvalues': {
+        field: { referenceName: 'System.AreaPath' },
+        defaultValue: '',
+        values: []
+      }
+    })
+    await expect(listAzureDevOpsTeamAreaPaths(CLOUD_REPO, 'Mobile')).resolves.toEqual({
+      field: 'System.AreaPath',
+      defaultValue: '',
+      values: []
+    })
   })
 })

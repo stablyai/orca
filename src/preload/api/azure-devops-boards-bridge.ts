@@ -6,5 +6,6 @@ export const azureDevOpsBoardsApi = {
   listTeams: (args) => ipcRenderer.invoke('azureDevOpsBoards:listTeams', args),
   getConfiguration: (args) => ipcRenderer.invoke('azureDevOpsBoards:getConfiguration', args),
   loadBacklog: (args) => ipcRenderer.invoke('azureDevOpsBoards:loadBacklog', args),
+  loadBoard: (args) => ipcRenderer.invoke('azureDevOpsBoards:loadBoard', args),
   getWorkItem: (args) => ipcRenderer.invoke('azureDevOpsBoards:getWorkItem', args)
 } satisfies PreloadApi['azureDevOpsBoards']

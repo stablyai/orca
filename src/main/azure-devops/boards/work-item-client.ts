@@ -2,6 +2,7 @@ import type { AzureDevOpsWorkItemDetail } from '../../../shared/azure-devops/boa
 import { requestAzureDevOpsJsonAtBase } from '../azure-devops-api-request'
 import type { AzureDevOpsRepoRef } from '../repository-ref'
 import { resolveAzureDevOpsApiBases } from './api-bases'
+import { hydrateAzureDevOpsWorkItems } from './backlog-client'
 import {
   mapAzureDevOpsWorkItem,
   type RawAzureDevOpsWorkItem,
@@ -44,9 +45,15 @@ function htmlField(fields: Record<string, unknown>, name: string): string | null
   return typeof value === 'string' && value.trim() ? value : null
 }
 
+/**
+ * @param options.cachedIds Ids the caller already holds; their children are not
+ *   re-fetched. Everything else in `childIds` comes back in `children`, so the
+ *   dialog lists them even when the view that opened it never loaded them.
+ */
 export async function getAzureDevOpsWorkItemDetail(
   repo: AzureDevOpsRepoRef,
-  id: number
+  id: number,
+  options: { cachedIds?: readonly number[] } = {}
 ): Promise<AzureDevOpsWorkItemDetail | null> {
   const bases = resolveAzureDevOpsApiBases(repo)
   const raw = await requestAzureDevOpsJsonAtBase<RawAzureDevOpsWorkItem>(
@@ -65,14 +72,22 @@ export async function getAzureDevOpsWorkItemDetail(
   const relations = raw.relations ?? []
   const createdDate = fields['System.CreatedDate']
   const changedDate = fields['System.ChangedDate']
+  const childIds = relations
+    .filter((r) => r.rel === 'System.LinkTypes.Hierarchy-Forward')
+    .map(relatedWorkItemId)
+    .filter((childId): childId is number => childId !== null)
+  const cached = new Set(options.cachedIds ?? [])
+  const children = await hydrateAzureDevOpsWorkItems(
+    repo,
+    childIds.filter((childId) => !cached.has(childId)),
+    []
+  )
   return {
     ...base,
     descriptionHtml: htmlField(fields, 'System.Description'),
     acceptanceCriteriaHtml: htmlField(fields, 'Microsoft.VSTS.Common.AcceptanceCriteria'),
-    childIds: relations
-      .filter((r) => r.rel === 'System.LinkTypes.Hierarchy-Forward')
-      .map(relatedWorkItemId)
-      .filter((childId): childId is number => childId !== null),
+    childIds,
+    children,
     pullRequestLinks: relations
       .map(pullRequestArtifact)
       .filter((artifact): artifact is PullRequestArtifact => artifact !== null)

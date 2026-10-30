@@ -1,6 +1,7 @@
 import type {
   AzureDevOpsIteration,
-  AzureDevOpsTeam
+  AzureDevOpsTeam,
+  AzureDevOpsTeamAreaPaths
 } from '../../../shared/azure-devops/boards-types'
 import { requestAzureDevOpsJsonAtBase } from '../azure-devops-api-request'
 import type { AzureDevOpsRepoRef } from '../repository-ref'
@@ -66,4 +67,33 @@ export async function listAzureDevOpsIterations(
 
 function normalizeTimeFrame(value: unknown): AzureDevOpsIteration['timeFrame'] {
   return value === 'past' || value === 'current' || value === 'future' ? value : null
+}
+
+export async function listAzureDevOpsTeamAreaPaths(
+  repo: AzureDevOpsRepoRef,
+  teamName: string
+): Promise<AzureDevOpsTeamAreaPaths> {
+  const raw = await requestAzureDevOpsJsonAtBase<{
+    field?: { referenceName?: string } | null
+    defaultValue?: string
+    values?: { value?: string; includeChildren?: boolean }[]
+  }>(
+    resolveAzureDevOpsApiBases(repo).team(teamName),
+    '/_apis/work/teamsettings/teamfieldvalues',
+    {},
+    // Why: a failed lookup must not read as "no areas", which disables Board.
+    true
+  )
+  if (!raw?.values) {
+    // Why: a body with no `values` array is a 204 or shape drift, not a team without areas.
+    throw new Error(`Azure DevOps team field values unavailable for team "${teamName}"`)
+  }
+  const field = raw.field?.referenceName
+  return {
+    field: typeof field === 'string' && field.length > 0 ? field : null,
+    defaultValue: raw.defaultValue ?? '',
+    values: raw.values
+      .filter((v): v is { value: string; includeChildren?: boolean } => Boolean(v.value))
+      .map((v) => ({ value: v.value, includeChildren: v.includeChildren === true }))
+  }
 }

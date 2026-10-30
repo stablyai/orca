@@ -226,6 +226,8 @@ describe('Azure DevOps backlog flow integration', () => {
       id: 10,
       parentId: 70,
       childIds: [101],
+      // The caller named no cached ids, so the child comes back with the detail.
+      children: [expect.objectContaining({ id: 101 })],
       descriptionHtml: '<div>Do <b>it</b></div>',
       pullRequestLinks: [
         { id: 171, url: 'https://dev.azure.com/acme/proj-guid/_git/repo-guid/pullrequest/171' }
@@ -245,7 +247,8 @@ describe('Azure DevOps backlog flow integration', () => {
       `${WIT}/wiql`,
       `${WIT}/workitems`,
       `${WIT}/workitems`,
-      `${WIT}/workitems/10`
+      `${WIT}/workitems/10`,
+      `${WIT}/workitems`
     ])
   })
 

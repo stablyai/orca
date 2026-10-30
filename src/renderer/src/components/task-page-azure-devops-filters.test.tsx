@@ -6,7 +6,8 @@ import type { AzureDevOpsWorkItem } from '../../../shared/azure-devops/boards-ty
 import { EMPTY_BACKLOG_FILTERS } from './task-page-azure-devops-backlog-filters'
 import {
   TaskPageAzureDevOpsFilters,
-  collectAzureDevOpsFilterOptions
+  collectAzureDevOpsFilterOptions,
+  collectAzureDevOpsViewFilterOptions
 } from '@/components/task-page/azure-devops/Filters'
 
 afterEach(() => cleanup())
@@ -29,6 +30,49 @@ function item(id: number, overrides: Partial<AzureDevOpsWorkItem>): AzureDevOpsW
     ...overrides
   }
 }
+
+describe('collectAzureDevOpsViewFilterOptions', () => {
+  const backlogItems = [item(1, { state: 'Approved', tags: ['web'] })]
+  // The board keeps completed cards the backlog drops, so only it knows about Closed.
+  const boardItems = [
+    item(1, { state: 'Approved', tags: ['web'] }),
+    item(2, {
+      state: 'Closed',
+      tags: ['shipped'],
+      assignedTo: { displayName: 'Ada Lovelace', uniqueName: 'ada@contoso', imageUrl: null }
+    })
+  ]
+
+  it('offers the board items options while the Board view is active', () => {
+    const options = collectAzureDevOpsViewFilterOptions({
+      view: 'board',
+      boardItems,
+      backlogItems,
+      iterations: []
+    })
+    expect(options.states).toEqual(['Approved', 'Closed'])
+    expect(options.tags).toEqual(['shipped', 'web'])
+    expect(options.assignees.map((a) => a.key)).toEqual(['unassigned', 'ada@contoso'])
+  })
+
+  it('keeps the backlog options for the Backlog view, and until a board page is loaded', () => {
+    const backlog = collectAzureDevOpsViewFilterOptions({
+      view: 'backlog',
+      boardItems,
+      backlogItems,
+      iterations: []
+    })
+    expect(backlog.states).toEqual(['Approved'])
+    expect(backlog.tags).toEqual(['web'])
+    const loading = collectAzureDevOpsViewFilterOptions({
+      view: 'board',
+      boardItems: null,
+      backlogItems,
+      iterations: []
+    })
+    expect(loading.states).toEqual(['Approved'])
+  })
+})
 
 describe('collectAzureDevOpsFilterOptions', () => {
   it('collects distinct sorted option values, with Unassigned first', () => {

@@ -220,6 +220,7 @@ export function buildDefaultSettings(args: {
     defaultRepoSelection: null,
     defaultLinearTeamSelection: null,
     azureDevOpsTeamSelection: null,
+    azureDevOpsViewSelection: null,
     azureDevOpsBacklogColumnWidths: null,
     opencodeSessionCookie: '',
     opencodeWorkspaceId: '',

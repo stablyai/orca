@@ -21,12 +21,14 @@ import { buildBacklogRows } from './task-page-azure-devops-backlog-tree'
 import { azureDevOpsColumnWidthKey } from './task-page-azure-devops-backlog-columns'
 import type { AzureDevOpsToolbarProps } from '@/components/task-page/azure-devops/Toolbar'
 import type { AzureDevOpsBacklogTableProps } from '@/components/task-page/azure-devops/BacklogTable'
+import type { AzureDevOpsBoardProps } from '@/components/task-page/azure-devops/Board'
 import type { AzureDevOpsWorkItemDialogProps } from '@/components/task-page/azure-devops/WorkItemDialog'
 import {
-  collectAzureDevOpsFilterOptions,
+  collectAzureDevOpsViewFilterOptions,
   type TaskPageAzureDevOpsFiltersProps
 } from '@/components/task-page/azure-devops/Filters'
 import { buildAzureDevOpsContentProps } from './task-page-azure-devops-content-props'
+import { resolveAzureDevOpsDetailRelations } from './task-page-azure-devops-detail-relations'
 import {
   useAzureDevOpsBacklogLoader,
   type AzureDevOpsTeamSelectionSettings
@@ -35,6 +37,12 @@ import {
   useAzureDevOpsBacklogColumnWidths,
   type AzureDevOpsColumnWidthSettings
 } from './use-azure-devops-backlog-column-widths'
+import { useAzureDevOpsBoardView } from './use-azure-devops-board-view'
+import type { AzureDevOpsBoardErrorStatus } from './use-azure-devops-board-loader'
+import type {
+  AzureDevOpsTaskView,
+  AzureDevOpsViewSelectionSettings
+} from './task-page-azure-devops-team-selection-persistence'
 import { useAzureDevOpsViewStateSeeding } from './use-azure-devops-view-state-seeding'
 import { useAzureDevOpsWorkItemDetail } from './use-azure-devops-work-item-detail'
 import {
@@ -51,6 +59,12 @@ export type AzureDevOpsContentProps = {
   errorMessage: string | null
   /** `organization/project` once the configuration is known; feeds the source-context summary. */
   projectLabel: string | null
+  view: AzureDevOpsTaskView
+  /** Null until the board for the selected level is loaded, or when the backlog is shown. */
+  board: AzureDevOpsBoardProps | null
+  /** How the board load failed, so the page reuses the backlog's host notices. */
+  boardErrorStatus: AzureDevOpsBoardErrorStatus | null
+  boardErrorMessage: string | null
   toolbar: AzureDevOpsToolbarProps
   filters: TaskPageAzureDevOpsFiltersProps
   table: AzureDevOpsBacklogTableProps
@@ -58,7 +72,8 @@ export type AzureDevOpsContentProps = {
 }
 
 export type AzureDevOpsViewSettings = AzureDevOpsTeamSelectionSettings &
-  AzureDevOpsColumnWidthSettings
+  AzureDevOpsColumnWidthSettings &
+  AzureDevOpsViewSelectionSettings
 
 const EMPTY_PAGE_PARTS = { items: [], childrenByParent: {}, children: [], parents: [] }
 
@@ -68,6 +83,10 @@ export function useTaskPageAzureDevOpsState(model: TaskPageRuntimeHostsModel) {
   const repo = primaryRepo
 
   const {
+    view,
+    selectView,
+    boardAvailable,
+    reportNoBoard,
     status,
     errorMessage,
     teams,
@@ -94,8 +113,6 @@ export function useTaskPageAzureDevOpsState(model: TaskPageRuntimeHostsModel) {
   const [showInProgress, setShowInProgress] = useState(true)
   const [toggled, setToggled] = useState<ReadonlySet<number>>(new Set())
   const [filters, setFilters] = useState<BacklogFilters>(EMPTY_BACKLOG_FILTERS)
-  const { detailId, setDetailId, detail, detailLoading, detailError } =
-    useAzureDevOpsWorkItemDetail(repo)
 
   useAzureDevOpsViewStateSeeding({
     repo,
@@ -120,13 +137,33 @@ export function useTaskPageAzureDevOpsState(model: TaskPageRuntimeHostsModel) {
     updateSettings
   })
 
+  const teamRoute = useMemo(
+    () => (teamName ? { teamName, teamId: team?.id ?? null } : null),
+    [teamName, team]
+  )
+  const {
+    board,
+    boardStatus,
+    boardErrorStatus,
+    boardErrorMessage,
+    refreshBoard,
+    collapsedLaneIds,
+    toggleLane
+  } = useAzureDevOpsBoardView({ active, repo, teamRoute, level, view, reportNoBoard })
+
   const workItemTypes = useMemo(() => configuration?.workItemTypes ?? {}, [configuration])
   const allItems = useMemo(
-    () =>
-      page ? [...page.items, ...page.children, ...page.parents, ...(page.ancestors ?? [])] : [],
-    [page]
+    () => [
+      ...(page
+        ? [...page.items, ...page.children, ...page.parents, ...(page.ancestors ?? [])]
+        : []),
+      ...(board ? [...board.items, ...board.parents] : [])
+    ],
+    [page, board]
   )
   const itemById = useMemo(() => new Map(allItems.map((i) => [i.id, i])), [allItems])
+  const { detailId, setDetailId, detail, detailLoading, detailError } =
+    useAzureDevOpsWorkItemDetail(repo, itemById)
   const filteredPage = useMemo(() => {
     if (!page) {
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only reached with no page loaded, where no consumer reads the level; the row builder is given an empty item set.
@@ -201,19 +238,13 @@ export function useTaskPageAzureDevOpsState(model: TaskPageRuntimeHostsModel) {
   const projectLabel = configuration
     ? [configuration.repo.organization, configuration.repo.project].filter(Boolean).join('/')
     : null
-  const filterOptions = collectAzureDevOpsFilterOptions(
-    page ? [...page.items, ...page.children] : [],
-    configuration?.iterations ?? []
-  )
-  const parent =
-    detail?.parentId !== null && detail?.parentId !== undefined
-      ? (itemById.get(detail.parentId) ?? null)
-      : null
-  const childItems = detail
-    ? detail.childIds
-        .map((id) => itemById.get(id))
-        .filter((c): c is AzureDevOpsWorkItem => c !== undefined)
-    : []
+  const filterOptions = collectAzureDevOpsViewFilterOptions({
+    view,
+    boardItems: board?.items ?? null,
+    backlogItems: page ? [...page.items, ...page.children] : [],
+    iterations: configuration?.iterations ?? []
+  })
+  const { parent, childItems } = resolveAzureDevOpsDetailRelations({ detail, itemById })
 
   const azureDevOpsViews = buildAzureDevOpsContentProps({
     status,
@@ -232,14 +263,22 @@ export function useTaskPageAzureDevOpsState(model: TaskPageRuntimeHostsModel) {
     showInProgress,
     setShowInProgress,
     columnWidths,
-    refresh,
-    refreshing,
+    refresh: view === 'board' ? refreshBoard : refresh,
+    refreshing: view === 'board' ? boardStatus === 'loading' : refreshing,
     filters,
     setFilters,
     filterOptions,
     rows,
     itemById,
     workItemTypes,
+    view,
+    selectView,
+    boardAvailable,
+    boardPage: board,
+    boardErrorStatus,
+    boardErrorMessage,
+    collapsedLaneIds,
+    onToggleLane: toggleLane,
     detailId,
     setDetailId,
     detail,

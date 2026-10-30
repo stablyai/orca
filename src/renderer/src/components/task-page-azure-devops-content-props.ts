@@ -2,16 +2,58 @@ import type { Dispatch, SetStateAction } from 'react'
 import type {
   AzureDevOpsBacklogLevel,
   AzureDevOpsBacklogPage,
+  AzureDevOpsBoardPage,
   AzureDevOpsTeam,
   AzureDevOpsWorkItem,
   AzureDevOpsWorkItemDetail,
   AzureDevOpsWorkItemTypeMetadata
 } from '../../../shared/azure-devops/boards-types'
 import type { AzureDevOpsFilterOptions } from '@/components/task-page/azure-devops/Filters'
-import type { BacklogFilters } from './task-page-azure-devops-backlog-filters'
+import type { AzureDevOpsBoardProps } from '@/components/task-page/azure-devops/Board'
+import { buildAzureDevOpsBoardLayout } from './task-page-azure-devops-board-layout'
+import type { AzureDevOpsTaskView } from './task-page-azure-devops-team-selection-persistence'
+import {
+  matchesBacklogFilters,
+  type BacklogFilters
+} from './task-page-azure-devops-backlog-filters'
 import type { BacklogRow } from './task-page-azure-devops-backlog-tree'
 import type { useAzureDevOpsBacklogColumnWidths } from './use-azure-devops-backlog-column-widths'
 import type { AzureDevOpsContentProps } from './use-task-page-azure-devops-state'
+
+function buildBoardProps(args: {
+  page: AzureDevOpsBoardPage
+  filters: BacklogFilters
+  workItemTypes: Record<string, AzureDevOpsWorkItemTypeMetadata>
+  collapsedLaneIds: ReadonlySet<string>
+  onToggleLane: (laneId: string) => void
+  onOpenItem: (id: number) => void
+  onUseItem: (item: AzureDevOpsWorkItem) => void
+}): AzureDevOpsBoardProps {
+  // The board filters locally, like the backlog, so the WIP counters match what is on screen.
+  const items = args.page.items.filter((item) => matchesBacklogFilters(item, args.filters))
+  // `page.parents` omits parents that are on the board themselves; cards need both sources.
+  const parentsById: Record<number, AzureDevOpsWorkItem> = {}
+  for (const candidate of [...args.page.items, ...args.page.parents]) {
+    parentsById[candidate.id] = candidate
+  }
+  const workItemTypes = Object.values(args.workItemTypes)
+  return {
+    layout: buildAzureDevOpsBoardLayout({
+      configuration: args.page.configuration,
+      items,
+      workItemTypes
+    }),
+    configuration: args.page.configuration,
+    workItemTypes,
+    parentsById,
+    unhydratedItemCount: args.page.unhydratedItemCount ?? 0,
+    unhydratedParentCount: args.page.unhydratedParentCount ?? 0,
+    collapsedLaneIds: args.collapsedLaneIds,
+    onToggleLane: args.onToggleLane,
+    onOpenItem: args.onOpenItem,
+    onUseItem: args.onUseItem
+  }
+}
 
 // Why: pulled out of the hook so the hook body stays under the file line budget.
 export function buildAzureDevOpsContentProps(args: {
@@ -39,6 +81,14 @@ export function buildAzureDevOpsContentProps(args: {
   rows: BacklogRow[]
   itemById: ReadonlyMap<number, AzureDevOpsWorkItem>
   workItemTypes: Record<string, AzureDevOpsWorkItemTypeMetadata>
+  view: AzureDevOpsTaskView
+  selectView: (view: AzureDevOpsTaskView) => void
+  boardAvailable: boolean
+  boardPage: AzureDevOpsBoardPage | null
+  boardErrorStatus: AzureDevOpsContentProps['boardErrorStatus']
+  boardErrorMessage: string | null
+  collapsedLaneIds: ReadonlySet<string>
+  onToggleLane: (laneId: string) => void
   detailId: number | null
   setDetailId: Dispatch<SetStateAction<number | null>>
   detail: AzureDevOpsWorkItemDetail | null
@@ -52,6 +102,21 @@ export function buildAzureDevOpsContentProps(args: {
     status: args.status,
     errorMessage: args.errorMessage,
     projectLabel: args.projectLabel,
+    view: args.view,
+    boardErrorStatus: args.boardErrorStatus,
+    boardErrorMessage: args.boardErrorMessage,
+    board:
+      args.view === 'board' && args.boardPage
+        ? buildBoardProps({
+            page: args.boardPage,
+            filters: args.filters,
+            workItemTypes: args.workItemTypes,
+            collapsedLaneIds: args.collapsedLaneIds,
+            onToggleLane: args.onToggleLane,
+            onOpenItem: args.setDetailId,
+            onUseItem: (item) => args.useItem(item.id)
+          })
+        : null,
     toolbar: {
       teams: args.teams,
       selectedTeamName: args.teamName,
@@ -63,9 +128,9 @@ export function buildAzureDevOpsContentProps(args: {
         args.setPage(null)
         args.setToggled(new Set())
       },
-      view: 'backlog',
-      onSelectView: () => undefined,
-      boardAvailable: false,
+      view: args.view,
+      onSelectView: args.selectView,
+      boardAvailable: args.boardAvailable,
       showParents: args.showParents,
       onToggleShowParents: args.setShowParents,
       showInProgress: args.showInProgress,
