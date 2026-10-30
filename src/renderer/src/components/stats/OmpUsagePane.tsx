@@ -319,7 +319,8 @@ export function OmpUsagePane(): React.JSX.Element {
             inputTokens: point.inputTokens,
             cachedInputTokens: point.cacheReadTokens,
             outputTokens: point.outputTokens,
-            reasoningOutputTokens: point.reasoningTokens,
+            // Resolution 8: reasoning stays out of the stack; the caption and cards carry it.
+            reasoningOutputTokens: 0,
             totalTokens: point.totalTokens
           }))}
         />
