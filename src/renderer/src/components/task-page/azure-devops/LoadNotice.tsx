@@ -16,8 +16,9 @@ export function AzureDevOpsLoadNoticeLine({
   children: React.ReactNode
 }): React.JSX.Element {
   return (
-    <div data-board-notice={kind} className={NOTICE_CLASS}>
-      <AlertCircle className="size-3.5 shrink-0" />
+    // The notice appears after a load settles, so it has to announce itself like the app's other warnings.
+    <div role="alert" data-board-notice={kind} className={NOTICE_CLASS}>
+      <AlertCircle className="size-3.5 shrink-0" aria-hidden="true" />
       <span className="min-w-0">{children}</span>
     </div>
   )

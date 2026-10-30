@@ -92,6 +92,11 @@ describe('AzureDevOpsWorkItemsArea', () => {
     expect(screen.queryByText(/couldn’t be loaded/)).toBeNull()
   })
 
+  it('announces the notice to a screen reader rather than letting it appear silently', () => {
+    render(<AzureDevOpsWorkItemsArea {...area({ unhydratedItemCount: 2 })} />)
+    expect(screen.getByRole('alert').textContent).toMatch(/2 work items couldn’t be loaded/)
+  })
+
   it('shows the host-unreachable notice, not a raw message, when contact was lost', () => {
     render(
       <AzureDevOpsWorkItemsArea
