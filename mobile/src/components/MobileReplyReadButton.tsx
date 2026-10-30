@@ -1,5 +1,6 @@
 import { Pressable } from 'react-native'
 import { Volume2 } from 'lucide-react-native'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { useReplySpeech } from '../platform/reply-speech'
 import { colors, radii } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
@@ -16,6 +17,7 @@ export function MobileReplyReadButton({
   disabled?: boolean
 }): React.JSX.Element | null {
   useMobileColorScheme()
+  const t = useMobileTranslation()
   const speech = useReplySpeech()
   if (!speech.canSpeak || text.length === 0) {
     return null
@@ -29,7 +31,7 @@ export function MobileReplyReadButton({
       ]}
       hitSlop={10}
       accessibilityRole="button"
-      accessibilityLabel="Read reply aloud"
+      accessibilityLabel={t('components.mobileReplyReadButton.readReply', 'Read reply aloud')}
       accessibilityState={{ disabled }}
       disabled={disabled}
       onPress={() => speech.speak(id, text)}

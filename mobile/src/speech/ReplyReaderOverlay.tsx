@@ -1,6 +1,7 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Pause, Play, Square } from 'lucide-react-native'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { colors, spacing, typography } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
@@ -12,6 +13,7 @@ import { useAutoReadReplies } from './use-auto-read-replies'
 // cannot add controls to.
 export function ReplyReaderOverlay(): React.JSX.Element | null {
   useMobileColorScheme()
+  const t = useMobileTranslation()
   useAutoReadReplies()
   useReaderControls()
   const state = useReaderState()
@@ -24,7 +26,11 @@ export function ReplyReaderOverlay(): React.JSX.Element | null {
     <View pointerEvents="box-none" style={[styles.layer, { top: insets.top + spacing.xs }]}>
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel={paused ? 'Resume reading' : 'Pause reading'}
+        accessibilityLabel={
+          paused
+            ? t('components.replyReaderOverlay.resumeReading', 'Resume reading')
+            : t('components.replyReaderOverlay.pauseReading', 'Pause reading')
+        }
         hitSlop={8}
         style={styles.pill}
         onPress={() => (paused ? playReading('Resume pill') : pauseReading('Pause pill'))}
@@ -34,17 +40,21 @@ export function ReplyReaderOverlay(): React.JSX.Element | null {
         ) : (
           <Pause size={12} color={colors.textPrimary} />
         )}
-        <Text style={styles.label}>{paused ? 'Resume' : 'Pause'}</Text>
+        <Text style={styles.label}>
+          {paused
+            ? t('components.replyReaderOverlay.resume', 'Resume')
+            : t('components.replyReaderOverlay.pause', 'Pause')}
+        </Text>
       </Pressable>
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel="Stop reading reply"
+        accessibilityLabel={t('components.replyReaderOverlay.stopReading', 'Stop reading reply')}
         hitSlop={8}
         style={styles.pill}
         onPress={() => stopSpeaking('Stop button')}
       >
         <Square size={12} color={colors.textPrimary} />
-        <Text style={styles.label}>Stop</Text>
+        <Text style={styles.label}>{t('components.replyReaderOverlay.stop', 'Stop')}</Text>
       </Pressable>
     </View>
   )

@@ -1,4 +1,5 @@
 import type { PickerOption } from '../components/PickerModal'
+import type { Translate } from '../i18n/mobile-i18n'
 import type { NativeVoiceList } from './voice-native-module'
 
 /** Picker value for "whatever the phone's text-to-speech settings say". */
@@ -21,11 +22,15 @@ function rateLabel(rate: number): string {
   return `${Number(rate.toFixed(2))}×`
 }
 
-export function describeSpeed(rate: number | null, phoneRate: number): string {
+export function describeSpeed(t: Translate, rate: number | null, phoneRate: number): string {
   if (rate === null) {
-    return `Phone setting (${rateLabel(phoneRate)})`
+    return t('settings.readAloudVoiceSettings.phoneSpeed', 'Phone setting ({{rate}})', {
+      rate: rateLabel(phoneRate)
+    })
   }
-  return rate === 1 ? 'Normal (1×)' : rateLabel(rate)
+  return rate === 1
+    ? t('settings.readAloudVoiceSettings.normalSpeed', 'Normal (1×)')
+    : rateLabel(rate)
 }
 
 function primaryLanguage(tag: string): string {
@@ -44,7 +49,11 @@ export type VoiceChoice = { name: string; label: string; detail: string }
  * Numbered, as engine names (`pl-pl-x-oda-local`) mean nothing to a listener. Online voices are
  * left out unless chosen: they go quiet where the signal drops.
  */
-export function voiceChoices(list: NativeVoiceList, chosen: string | null): VoiceChoice[] {
+export function voiceChoices(
+  t: Translate,
+  list: NativeVoiceList,
+  chosen: string | null
+): VoiceChoice[] {
   const language = primaryLanguage(list.language)
   const voices = list.voices
     .filter(
@@ -56,22 +65,31 @@ export function voiceChoices(list: NativeVoiceList, chosen: string | null): Voic
   const variants = [...new Set(voices.map((voice) => variantOf(voice.name)))]
   return voices.map((voice) => ({
     name: voice.name,
-    label: `Voice ${variants.indexOf(variantOf(voice.name)) + 1}`,
+    label: t('settings.readAloudVoiceSettings.voiceNumber', 'Voice {{number}}', {
+      number: variants.indexOf(variantOf(voice.name)) + 1
+    }),
     detail: [
-      voice.needsInternet ? 'Needs internet' : null,
-      voice.name === list.defaultVoice ? 'Phone default' : null
+      voice.needsInternet
+        ? t('settings.readAloudVoiceSettings.needsInternet', 'Needs internet')
+        : null,
+      voice.name === list.defaultVoice
+        ? t('settings.readAloudVoiceSettings.phoneDefault', 'Phone default')
+        : null
     ]
       .filter((part) => part !== null)
       .join(' · ')
   }))
 }
 
-export function voicePickerOptions(choices: VoiceChoice[]): PickerOption[] {
+export function voicePickerOptions(t: Translate, choices: VoiceChoice[]): PickerOption[] {
   return [
     {
       value: PHONE_SETTING,
-      label: 'Phone setting',
-      subtitle: "The voice in the phone's text-to-speech settings"
+      label: t('settings.readAloudVoiceSettings.phoneVoice', 'Phone setting'),
+      subtitle: t(
+        'settings.readAloudVoiceSettings.phoneVoiceDescription',
+        "The voice in the phone's text-to-speech settings"
+      )
     },
     ...choices.map((choice) => ({
       value: choice.name,
@@ -81,9 +99,9 @@ export function voicePickerOptions(choices: VoiceChoice[]): PickerOption[] {
   ]
 }
 
-export function describeVoice(chosen: string | null, choices: VoiceChoice[]): string {
+export function describeVoice(t: Translate, chosen: string | null, choices: VoiceChoice[]): string {
   if (chosen === null) {
-    return 'Phone setting'
+    return t('settings.readAloudVoiceSettings.phoneVoice', 'Phone setting')
   }
   const choice = choices.find((c) => c.name === chosen)
   if (!choice) {

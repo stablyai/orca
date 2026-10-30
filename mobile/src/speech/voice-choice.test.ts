@@ -7,6 +7,7 @@ import {
   voiceChoices,
   voicePickerOptions
 } from './voice-choice'
+import { translate } from '../i18n/mobile-i18n'
 import type { NativeVoice, NativeVoiceList } from './voice-native-module'
 
 function voice(name: string, language: string, extra: Partial<NativeVoice> = {}): NativeVoice {
@@ -27,29 +28,29 @@ const LIST: NativeVoiceList = {
 
 describe('voiceChoices', () => {
   it('lists installed offline voices in the reading language', () => {
-    expect(voiceChoices(LIST, null)).toEqual([
+    expect(voiceChoices(translate, LIST, null)).toEqual([
       { name: 'pl-pl-x-bmg-local', label: 'Voice 1', detail: '' },
       { name: 'pl-pl-x-oda-local', label: 'Voice 2', detail: 'Phone default' }
     ])
   })
 
   it('keeps the chosen voice listed even when online or in another language', () => {
-    const online = voiceChoices(LIST, 'pl-pl-x-oda-network')
+    const online = voiceChoices(translate, LIST, 'pl-pl-x-oda-network')
     expect(online.find((c) => c.name === 'pl-pl-x-oda-network')).toEqual({
       name: 'pl-pl-x-oda-network',
       label: 'Voice 2',
       detail: 'Needs internet'
     })
-    const names = voiceChoices(LIST, 'en-us-x-iob-local').map((choice) => choice.name)
+    const names = voiceChoices(translate, LIST, 'en-us-x-iob-local').map((choice) => choice.name)
     expect(names).toContain('en-us-x-iob-local')
   })
 
   it('offers the phone setting first and describes the chosen voice', () => {
-    const choices = voiceChoices(LIST, null)
-    expect(voicePickerOptions(choices)[0]?.value).toBe(PHONE_SETTING)
-    expect(describeVoice('pl-pl-x-oda-local', choices)).toBe('Voice 2 · Phone default')
-    expect(describeVoice('pl-pl-x-bmg-local', choices)).toBe('Voice 1')
-    expect(describeVoice(null, choices)).toBe('Phone setting')
+    const choices = voiceChoices(translate, LIST, null)
+    expect(voicePickerOptions(translate, choices)[0]?.value).toBe(PHONE_SETTING)
+    expect(describeVoice(translate, 'pl-pl-x-oda-local', choices)).toBe('Voice 2 · Phone default')
+    expect(describeVoice(translate, 'pl-pl-x-bmg-local', choices)).toBe('Voice 1')
+    expect(describeVoice(translate, null, choices)).toBe('Phone setting')
   })
 })
 
@@ -67,8 +68,8 @@ describe('speed', () => {
   })
 
   it('describes the speed', () => {
-    expect(describeSpeed(null, 1)).toBe('Phone setting (1×)')
-    expect(describeSpeed(1.15, 1)).toBe('1.15×')
-    expect(describeSpeed(1, 1.3)).toBe('Normal (1×)')
+    expect(describeSpeed(translate, null, 1)).toBe('Phone setting (1×)')
+    expect(describeSpeed(translate, 1.15, 1)).toBe('1.15×')
+    expect(describeSpeed(translate, 1, 1.3)).toBe('Normal (1×)')
   })
 })

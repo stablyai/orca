@@ -92,6 +92,7 @@ vi.mock('../theme/mobile-appearance', () => ({ startMobileAppearance: async () =
 vi.mock('../i18n/use-follow-device-ui-locale', () => ({ useFollowDeviceUiLocale: () => {} }))
 vi.mock('../i18n/ui-language-preference', () => ({ startMobileUiLanguage: async () => {} }))
 vi.mock('../app-update/app-update-runtime', () => ({ appUpdateChecker: { start: () => () => {} } }))
+vi.mock('../speech/ReplyReaderOverlay', () => ({ ReplyReaderOverlay: () => null }))
 
 import RootLayout, { ErrorBoundary } from '../../app/_layout'
 
