@@ -3731,6 +3731,17 @@
             "vmProvisioningTitle": "Provisioning VM",
             "cancelProvisioning": "Cancel",
             "vmProvisioningLogEmpty": "Waiting for recipe output…"
+          },
+          "PendingNativeChatCreation": {
+            "sendBlockedFailed": "Retry creating the worktree to send",
+            "sendBlockedHeld": "Sends when the worktree is ready"
+          },
+          "WorktreeSetupSteps": {
+            "prepare": "Prepare workspace",
+            "fetch": "Fetch base branch",
+            "create": "Create worktree",
+            "setup": "Set up workspace",
+            "startAgent": "Start {{agent}}"
           }
         }
       },

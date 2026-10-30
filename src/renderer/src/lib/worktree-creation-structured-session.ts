@@ -2,7 +2,11 @@ import { useAppStore } from '@/store'
 import { activateAndRevealWorktree, type ActivateAndRevealResult } from '@/lib/worktree-activation'
 import { adoptAgentSessionLaunchVerdict } from '@/lib/agent-session-launch-plan'
 import type { AgentLaunchRoute } from '@/lib/agent-launch-routing'
-import type { WorktreeCreationRequest } from '@/lib/pending-worktree-creation'
+import {
+  pendingCreationChatDraftScopeKey,
+  withPendingChatInput,
+  type WorktreeCreationRequest
+} from '@/lib/pending-worktree-creation'
 import { beginStructuredAgentSessionProvisionalLaunch } from '@/lib/agent-session/structured-agent-session-provisional-tab'
 import type { StructuredLaunchTerminal } from '@/lib/structured-agent-session-launch-admission'
 import { buildWorktreeCreationStartupOpt } from '@/lib/worktree-creation-flow-startup'
@@ -75,14 +79,21 @@ export async function launchStructuredWorktreeSession(
   if (isCancelled()) {
     return { ...settled, cancelled: true, activation, primaryTabId }
   }
+  // Read at launch, not submit: the user may have written or sent in the chat while git worked.
+  const request = withPendingChatInput(
+    useAppStore.getState().pendingWorktreeCreations[args.creationId],
+    args.request
+  )
   // Reuse composer-fixed route/delivery through retries; later host changes must not re-resolve this create.
   const plan = adoptAgentSessionLaunchVerdict({
     route: args.agentLaunchRoute,
     // One create is one user action: a retry of it re-delivers the same request.
     requestId: args.creationId,
     agent,
-    prompt: args.request.launchDraftPrompt ?? args.request.quickPrompt,
-    ...(args.request.promptDelivery ? { promptDelivery: args.request.promptDelivery } : {})
+    prompt: request.launchDraftPrompt ?? request.quickPrompt,
+    ...(request.promptDelivery ? { promptDelivery: request.promptDelivery } : {}),
+    // What the user left unsent in the chat shown while the worktree was created.
+    draftFromScope: pendingCreationChatDraftScopeKey(args.creationId)
   })
   const abandoned = new AbortController()
   let ownershipTransferred = false
