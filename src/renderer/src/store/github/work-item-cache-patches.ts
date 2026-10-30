@@ -1,7 +1,6 @@
 import type { GitHubTaskDeliveryWrite } from './task-read-reconciliation'
-import { inheritScalarOrigins } from './work-item-patch-selectors'
-
 import {
+  inheritScalarOrigins,
   bucketMatchesPatch,
   rowMatchesPatch,
   type PatchRequest,

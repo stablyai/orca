@@ -1,7 +1,4 @@
 // @vitest-environment happy-dom
-import './github-task-refresh.test-fixture'
-import { parseTaskQuery } from '../../../shared/task-query'
-
 import {
   context,
   store,
@@ -13,6 +10,7 @@ import {
   harnessSetPages,
   container
 } from './github-task-refresh.test-fixture'
+import { parseTaskQuery } from '../../../shared/task-query'
 
 import {
   repo,
@@ -32,9 +30,7 @@ import type { useTaskPageGitHubWorkItemMutation } from '@/hooks/useTaskPageGitHu
 
 import { getTaskPageRepoSourceContext } from '@/lib/task-repo-source-context'
 
-import { getGitHubTaskObservation } from './github-task-observation'
-
-import { gitHubTaskFamilyOrigin } from './github-task-observation'
+import { getGitHubTaskObservation, gitHubTaskFamilyOrigin } from './github-task-observation'
 
 import { createTaskPageGitHubProjectionContext } from '@/components/task-page/github/task-page-github-work-item-mutation-pages'
 

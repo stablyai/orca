@@ -1,7 +1,4 @@
 // @vitest-environment happy-dom
-import './github-task-refresh.test-fixture'
-import { parseTaskQuery } from '../../../shared/task-query'
-
 import {
   context,
   store,
@@ -13,6 +10,7 @@ import {
   harnessSetPages,
   container
 } from './github-task-refresh.test-fixture'
+import { parseTaskQuery } from '../../../shared/task-query'
 
 import {
   repo,
@@ -32,20 +30,17 @@ import { useTaskPageGitHubWorkItemMutation } from '@/hooks/useTaskPageGitHubWork
 
 import { getTaskPageRepoSourceContext } from '@/lib/task-repo-source-context'
 
-import { getGitHubTaskObservation } from './github-task-observation'
-
-import { gitHubTaskFamilyOrigin } from './github-task-observation'
+import { getGitHubTaskObservation, gitHubTaskFamilyOrigin } from './github-task-observation'
 
 import { createTaskPageGitHubReviewerActions } from '@/components/task-page/github/task-page-github-reviewer-actions'
 
 import {
   createTaskPageGitHubProjectionContext,
-  materializeTaskPageItemList
+  materializeTaskPageItemList,
+  applyPendingTaskPageGitHubMutationsToItems
 } from '@/components/task-page/github/task-page-github-work-item-mutation-pages'
 
 import { reconcileTaskPagePagesWithWorkItemsCache } from '@/components/task-page/task-page-cache-selectors'
-
-import { applyPendingTaskPageGitHubMutationsToItems } from '@/components/task-page/github/task-page-github-work-item-mutation-pages'
 
 import { VisibleReaders } from './github-task-refresh-visible-readers.test-fixture'
 

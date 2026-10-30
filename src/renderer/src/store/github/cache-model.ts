@@ -1,8 +1,10 @@
 import type { ListComposition } from '@/components/task-page/github/task-page-github-work-item-mutation-registry'
 
-import type { GitHubTaskValueOrigin, GitHubTaskFamily } from '@/lib/github-task-observation'
-
-import type { GitHubTaskObservation } from '@/lib/github-task-observation'
+import type {
+  GitHubTaskValueOrigin,
+  GitHubTaskFamily,
+  GitHubTaskObservation
+} from '@/lib/github-task-observation'
 
 import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
 

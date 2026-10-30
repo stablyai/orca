@@ -1,6 +1,4 @@
 // @vitest-environment happy-dom
-import './github-task-refresh.test-fixture'
-
 import {
   context,
   store,
@@ -25,9 +23,7 @@ import { expect, it, vi } from 'vitest'
 
 import type { GitHubWorkItem } from '../../../shared/github/work-item-types'
 
-import { getGitHubTaskObservation } from './github-task-observation'
-
-import { gitHubTaskFamilyOrigin } from './github-task-observation'
+import { getGitHubTaskObservation, gitHubTaskFamilyOrigin } from './github-task-observation'
 
 it('keeps the accepted DIRECT title in the native smart row and its whole selection callback', async () => {
   const { click } = await import('./github-task-refresh.test-fixture')

@@ -1,4 +1,11 @@
-import { beginGitHubTaskRead } from './request-coordination'
+import {
+  beginGitHubTaskRead,
+  acquireProviderRequestSlot as acquireWorkItemSlot,
+  inflightProjectViewRequests,
+  nextProviderRequestId,
+  ownsInflightRequest,
+  releaseProviderRequestSlot as releaseWorkItemSlot
+} from './request-coordination'
 import { reconcileProjectTaskRead } from './project-task-content-actions'
 import { translate } from '@/i18n/i18n'
 import type { StateCreator } from 'zustand'
@@ -12,13 +19,7 @@ import {
   projectViewSourceScope
 } from './cache-identity'
 import { withBoundedCacheEntry, WORK_ITEMS_CACHE_TTL } from './cache-policy'
-import {
-  acquireProviderRequestSlot as acquireWorkItemSlot,
-  inflightProjectViewRequests,
-  nextProviderRequestId,
-  ownsInflightRequest,
-  releaseProviderRequestSlot as releaseWorkItemSlot
-} from './request-coordination'
+
 import { createProjectFieldActions } from './project-field-mutations'
 
 export const createProjectActions = (

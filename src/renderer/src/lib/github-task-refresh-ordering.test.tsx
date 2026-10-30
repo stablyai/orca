@@ -1,6 +1,21 @@
-import { confirmListForTest } from './github-task-refresh.test-fixture'
+import {
+  confirmListForTest,
+  context,
+  store,
+  fieldsRenders,
+  useItem,
+  container,
+  taskMutation,
+  direct,
+  update,
+  list,
+  projectRead,
+  postComment,
+  mount,
+  click,
+  draft
+} from './github-task-refresh.test-fixture'
 
-import './github-task-refresh.test-fixture'
 import { parseTaskQuery } from '../../../shared/task-query'
 
 import { createTaskPageGitHubMembershipProjection } from '@/components/task-page/github/task-page-github-work-item-mutation-composition'
@@ -23,22 +38,6 @@ import {
 } from './github-task-refresh-data.test-fixture'
 
 // @vitest-environment happy-dom
-import {
-  context,
-  store,
-  fieldsRenders,
-  useItem,
-  container,
-  taskMutation,
-  direct,
-  update,
-  list,
-  projectRead,
-  postComment,
-  mount,
-  click,
-  draft
-} from './github-task-refresh.test-fixture'
 
 import type * as ProjectViewModule from '@/components/github-project/ProjectViewWrapper'
 

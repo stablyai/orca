@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
-import './github-task-refresh.test-fixture'
 import { store, fixture } from './github-task-refresh.test-fixture'
+
 import { repo, source, key, user, returned } from './github-task-refresh-data.test-fixture'
 import { expect, it } from 'vitest'
 import { parseTaskQuery } from '../../../shared/task-query'

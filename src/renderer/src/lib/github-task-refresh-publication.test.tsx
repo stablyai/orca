@@ -48,13 +48,15 @@ import { expect, it, vi } from 'vitest'
 
 import type { GitHubWorkItem, GitHubWorkItemDetails } from '../../../shared/github/work-item-types'
 
-import { getTaskSourceCacheScope } from '../../../shared/task-source-context'
+import {
+  getTaskSourceCacheScope,
+  buildTaskSourceContextFromRepo
+} from '../../../shared/task-source-context'
 import { workItemsCacheKey, projectViewCacheKey } from '@/store/github/cache-identity'
 
 import { taskPageGitHubResumeCache } from '@/components/task-page/github/task-page-github-resume-cache'
 
 import { buildProjectWorkItem } from '@/components/github-project/project-work-item'
-import { buildTaskSourceContextFromRepo } from '../../../shared/task-source-context'
 
 import { runTaskPageGitHubQuietRefresh } from '@/components/task-page/github/task-page-github-quiet-refresh-run'
 import type { TaskPageGitHubQuietRefreshPreludeModel } from '@/components/task-page/github/use-task-page-github-quiet-refresh'

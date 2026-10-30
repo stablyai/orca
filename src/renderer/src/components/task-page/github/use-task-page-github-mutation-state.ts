@@ -4,11 +4,18 @@ import { transitionTaskPageGitHubMutationQuery } from './task-page-github-work-i
 
 import { prepareWorkItemPatches } from '@/store/github/work-item-cache-patches'
 
-import { listInput } from './task-page-github-work-item-mutation-registry'
+import {
+  listInput,
+  setTaskPageGitHubMembershipActivation,
+  getTaskPageGitHubConfirmedAuthorities
+} from './task-page-github-work-item-mutation-registry'
 
-import type { CurrentListInputResolver } from './task-page-github-work-item-mutation-types'
+import type {
+  CurrentListInputResolver,
+  TaskPageGitHubPatchWorkItem
+} from './task-page-github-work-item-mutation-types'
 
-import { parseGitHubIssueOrPRLink } from '../../../../../shared/github/links'
+import { parseGitHubIssueOrPRLink, buildGitHubRepoUrl } from '../../../../../shared/github/links'
 
 import { githubRepoIdentityKey } from '../../../../../shared/github/repository-identity-key'
 
@@ -22,8 +29,6 @@ import {
   createGitHubTaskObservationIndex
 } from '@/lib/github-task-observation'
 
-import { setTaskPageGitHubMembershipActivation } from './task-page-github-work-item-mutation-registry'
-
 import type { TaskPageLinearCreationStateModel } from '../linear/use-task-page-linear-creation-state'
 
 import { getGitHubTaskKind } from '../../../../../shared/task-github-search'
@@ -32,17 +37,11 @@ import { useMemo, useLayoutEffect, useEffect, useCallback, useRef } from 'react'
 
 import { parseTaskQuery } from '../../../../../shared/task-query'
 
-import { getTaskPageGitHubConfirmedAuthorities } from '@/components/task-page/github/task-page-github-work-item-mutation-registry'
-
 import { getOrCreateQuietRevalidateState } from '@/components/task-page/github/task-page-github-work-item-quiet-state'
-
-import type { TaskPageGitHubPatchWorkItem } from '@/components/task-page/github/task-page-github-work-item-mutation-types'
 
 import { useAppStore } from '@/store/index'
 
 import { useTaskPageGitHubWorkItemMutation } from '@/hooks/useTaskPageGitHubWorkItemMutation'
-
-import { buildGitHubRepoUrl } from '../../../../../shared/github/links'
 
 import { getTaskPageRepoSourceContext } from '../task-page-source-context'
 

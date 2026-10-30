@@ -1,8 +1,4 @@
 // @vitest-environment happy-dom
-import './github-task-refresh.test-fixture'
-
-import { getTaskPageGitHubMutationQueryKey } from '@/components/task-page/github/task-page-github-work-item-mutation-registry'
-import { parseTaskQuery } from '../../../shared/task-query'
 import {
   context,
   store,
@@ -14,6 +10,10 @@ import {
   harnessSetPages,
   container
 } from './github-task-refresh.test-fixture'
+
+import { getTaskPageGitHubMutationQueryKey } from '@/components/task-page/github/task-page-github-work-item-mutation-registry'
+import { parseTaskQuery } from '../../../shared/task-query'
+
 import { repo, source, seed, returned, user } from './github-task-refresh-data.test-fixture'
 import React, { act } from 'react'
 import { expect, it, vi } from 'vitest'

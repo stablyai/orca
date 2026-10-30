@@ -1,15 +1,16 @@
 import { beginGitHubTaskRead, type GitHubTaskRead } from '@/store/github/request-coordination'
-import { makeCmdJTaskSearchResult } from './cmd-j/task-search-results'
+import {
+  makeCmdJTaskSearchResult,
+  isCmdJTaskSearchQuery,
+  mergeCmdJTaskSearchResults,
+  type CmdJTaskSearchResult
+} from './cmd-j/task-search-results'
 import { useEffect, useEffectEvent, useLayoutEffect, useMemo, useState } from 'react'
 import { useAppStore } from '@/store'
 import { useShallow } from 'zustand/react/shallow'
 import { forEachWithConcurrency } from '../../../shared/map-with-concurrency'
 import { createCmdJTaskSearchRequests } from './cmd-j/task-search-requests'
-import {
-  isCmdJTaskSearchQuery,
-  mergeCmdJTaskSearchResults,
-  type CmdJTaskSearchResult
-} from './cmd-j/task-search-results'
+
 import type { WorktreeJumpPaletteStoreState } from './use-worktree-jump-palette-store-state'
 import type { WorktreeJumpPaletteLocalState } from './use-worktree-jump-palette-local-state'
 import type { WorktreeJumpPaletteFilter } from './use-worktree-jump-palette-filter'

@@ -1,4 +1,15 @@
 import {
+  publishListRetirements as publishBatchedListRetirements,
+  batchTaskPageGitHubMutationRegistry as batchMutationRegistryNotifications,
+  clearTaskPageGitHubMutationRegistryListenersForTests,
+  notifyTaskPageGitHubMutationRegistry
+} from './task-page-github-mutation-notifications'
+export {
+  notifyTaskPageGitHubMutationRegistry,
+  subscribeTaskPageGitHubMutationRegistry
+} from './task-page-github-mutation-notifications'
+
+import {
   getTaskPageGitHubListEntries,
   clearTaskPageGitHubListEntries,
   createListEntryRetirement,
@@ -60,54 +71,17 @@ import {
 
 import { clearTaskPageGitHubQuietStates } from './task-page-github-work-item-quiet-state'
 
-const listeners = new Set<() => void>()
 const pendingByKey = new Map<string, PendingOp>()
 const generations = new Map<string, number>()
 const membershipBases = new Map<string, TaskPageGitHubMembershipBasis>()
 let mutationQueryKey: string | null = null
 let activationKey: string | null = null
 
-export function subscribeTaskPageGitHubMutationRegistry(listener: () => void): () => void {
-  listeners.add(listener)
-  return () => {
-    listeners.delete(listener)
-  }
-}
-let notificationDepth = 0
-let notificationPending = false
-let batchRetirements: ListRetirement[] = []
 export function publishListRetirements(retirements: readonly ListRetirement[]): void {
-  if (notificationDepth) {
-    batchRetirements.push(...retirements)
-  } else {
-    markGitHubTaskListRetirements(retirements)
-  }
+  publishBatchedListRetirements(retirements, markGitHubTaskListRetirements)
 }
 export function batchTaskPageGitHubMutationRegistry<T>(operation: () => T): T {
-  notificationDepth++
-  try {
-    return operation()
-  } finally {
-    notificationDepth--
-    if (!notificationDepth && batchRetirements.length) {
-      const retirements = batchRetirements
-      batchRetirements = []
-      markGitHubTaskListRetirements(retirements)
-    }
-    if (!notificationDepth && notificationPending) {
-      notificationPending = false
-      notifyTaskPageGitHubMutationRegistry()
-    }
-  }
-}
-export function notifyTaskPageGitHubMutationRegistry(): void {
-  if (notificationDepth) {
-    notificationPending = true
-    return
-  }
-  for (const listener of listeners) {
-    listener()
-  }
+  return batchMutationRegistryNotifications(operation, markGitHubTaskListRetirements)
 }
 export function getTaskPageGitHubPendingEntries(): ReadonlyMap<string, PendingOp> {
   return pendingByKey
@@ -273,7 +247,7 @@ export function resetTaskPageGitHubMutationRegistryForTests(): void {
   clearTaskPageGitHubQuietStates()
   mutationQueryKey = null
   activationKey = null
-  listeners.clear()
+  clearTaskPageGitHubMutationRegistryListenersForTests()
 }
 
 export function setTaskPageGitHubMutationQueryKey(

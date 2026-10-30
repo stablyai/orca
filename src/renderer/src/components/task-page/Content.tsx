@@ -4,13 +4,15 @@ import { getTaskPageRepoSourceContext } from './task-page-source-context'
 
 import { areTaskSourceContextsEqual } from '../../../../shared/task-source-context'
 
-import { githubTaskContent, type GitHubTaskRefreshHandler } from '@/lib/github-task-target'
+import {
+  githubTaskContent,
+  type GitHubTaskRefreshHandler,
+  githubTaskSourceKey
+} from '@/lib/github-task-target'
 
 import { establishTaskPageGitHubMembership } from './github/task-page-github-work-item-mutation-composition'
 
 import { notifyTaskPageGitHubMutationRegistry } from './github/task-page-github-work-item-mutation-registry'
-
-import { githubTaskSourceKey } from '@/lib/github-task-target'
 
 import { shouldSkipLocalViewerQualifiers } from '@/hooks/useTaskPageGitHubWorkItemMutation'
 

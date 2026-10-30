@@ -1,7 +1,17 @@
-import { confirmListForTest } from './github-task-refresh.test-fixture'
+import {
+  confirmListForTest,
+  context,
+  store,
+  container,
+  direct,
+  list,
+  fixture,
+  mount,
+  click
+} from './github-task-refresh.test-fixture'
 
 // @vitest-environment happy-dom
-import './github-task-refresh.test-fixture'
+
 import {
   createTaskPageGitHubProjectionContext,
   materializeTaskPageItemList,
@@ -19,17 +29,6 @@ import { runTaskPageGitHubQuietRefresh } from '@/components/task-page/github/tas
 import { captureGitHubTaskObservation } from './github-task-observation'
 
 import { repo, source, key, user, returned } from './github-task-refresh-data.test-fixture'
-
-import {
-  context,
-  store,
-  container,
-  direct,
-  list,
-  fixture,
-  mount,
-  click
-} from './github-task-refresh.test-fixture'
 
 import React, { act } from 'react'
 

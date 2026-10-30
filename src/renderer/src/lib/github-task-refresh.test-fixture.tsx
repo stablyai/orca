@@ -1,32 +1,22 @@
-import {
-  Harness,
-  ProductionHarness,
-  holdPageUpdates,
-  flushPageUpdates,
-  resetPageUpdates
-} from './github-task-refresh-harness.test-fixture'
-
-import { createRepoUpdateActions } from '@/store/repos/repo-update'
+import { createTaskRefreshStore } from './github-task-refresh-store.test-fixture'
 
 import {
   createTaskRefreshApi,
   repo,
   source,
-  key,
   projectKey,
   seed,
-  oldDetails,
-  table
+  oldDetails
 } from './github-task-refresh-data.test-fixture'
 
 // @vitest-environment happy-dom
 import type * as I18nModule from '@/i18n/i18n'
 
-import React, { act, useLayoutEffect } from 'react'
+import React, { act, useLayoutEffect, useCallback, useRef, useState } from 'react'
 
 import { createRoot, type Root } from 'react-dom/client'
 
-import { createStore, useStore, type StoreApi } from 'zustand'
+import { useStore, type StoreApi } from 'zustand'
 
 import { afterEach, beforeEach, expect, vi } from 'vitest'
 
@@ -35,8 +25,6 @@ import type { AppState } from '@/store/types'
 import type { GitHubWorkItem } from '../../../shared/github/work-item-types'
 
 import type { GitHubProjectTable, GitHubProjectRow } from '../../../shared/github/project-types'
-
-import { createGitHubSlice } from '@/store/slices/github'
 
 import GitHubItemDialog from '@/components/github-item-dialog/open-dialog/github-item-dialog'
 
@@ -61,12 +49,12 @@ import { workItemDetailsCache } from '@/components/github-item-dialog/load-item-
 
 import { clearRuntimeCompatibilityCacheForTests } from '@/runtime/runtime-rpc-client'
 
-import type { useTaskPageGitHubWorkItemMutation } from '@/hooks/useTaskPageGitHubWorkItemMutation'
+import { useTaskPageGitHubWorkItemMutation } from '@/hooks/useTaskPageGitHubWorkItemMutation'
+import { useTaskPageGitHubMutationState } from '@/components/task-page/github/use-task-page-github-mutation-state'
+import type { TaskPageLinearCreationStateModel } from '@/components/task-page/linear/use-task-page-linear-creation-state'
+import type { ListComposition } from '@/components/task-page/github/task-page-github-work-item-mutation-registry'
 
-import {
-  createRuntimeStatusSlice,
-  clearRuntimeEnvironmentConnectionGenerationsForTests
-} from '@/store/slices/runtime-status'
+import { clearRuntimeEnvironmentConnectionGenerationsForTests } from '@/store/slices/runtime-status'
 
 let store: StoreApi<AppState>
 vi.mock('@/store', () => ({
@@ -180,46 +168,10 @@ const direct = vi.fn(),
   projectRead = vi.fn(),
   postComment = vi.fn()
 function fixture(n = 1) {
-  const others = Array.from({ length: n - 1 }, (_, i) => ({
-    ...seed,
-    id: `issue:${i + 10}`,
-    number: i + 10,
-    url: `https://github.com/o/r/issues/${i + 10}`
-  }))
-  const twin = {
-    ...seed,
-    id: 'issue:5',
-    url: 'https://github.com/upstream/r/issues/5',
-    title: 'Twin'
-  }
-  store = createStore<AppState>()(
-    (...args) =>
-      ({
-        ...createGitHubSlice(...args),
-        ...createRuntimeStatusSlice(...args),
-        ...createRepoUpdateActions(args[0], args[1]),
-        repos: [repo],
-        settings: null,
-        endpointProjects: [],
-        endpointProjectHostSetups: [],
-        projects: [],
-        projectHostSetups: [],
-        runtimeStatusByEnvironmentId: new Map(),
-        taskPageData: { openGitHubWorkItem: seed, openGitHubSourceContext: source },
-        githubTaskDrawerWorkItem: seed,
-        recordFeatureInteraction: vi.fn(),
-        recordFeatureInteractionOnce: vi.fn(),
-        workItemsCache: {
-          [key]: { data: [{ ...seed, id: 'issue:5' }, twin, ...others], fetchedAt: 10 }
-        },
-        projectViewCache: {
-          [projectKey]: { data: table, fetchedAt: 20 },
-          [projectKey.replace('view', 'view2')]: { data: table, fetchedAt: 30 }
-        }
-      }) as AppState
-  ) // SAFETY: only selected Task/Project fields and real GitHub slice actions are exercised.
-  pages = [null, null, [{ ...seed, id: 'issue:5' }, twin, ...others]]
-  return { others, twin }
+  const prepared = createTaskRefreshStore(n)
+  store = prepared.store
+  pages = prepared.pages
+  return { others: prepared.others, twin: prepared.twin }
 }
 export type OutputRenderer = (
   pages: (GitHubWorkItem[] | null)[],
@@ -287,6 +239,91 @@ export function HarnessView({
     </TooltipProvider>
   ) // SAFETY: this fixture deliberately renders only the issue branch with its production accepted callback.
 }
+type HarnessProps = { standalone?: boolean; outputs?: OutputRenderer; query?: string }
+export function Harness(props: HarnessProps) {
+  const [localPages, setPages] = useState(context.pages)
+  useStore(store, (state) => state.repos)
+  const mutation = useTaskPageGitHubWorkItemMutation({
+    queryKey: 'q',
+    query: parseTaskQuery(props.query ?? 'is:open'),
+    viewerLogin: 'alice',
+    patchWorkItem: store.getState().patchWorkItem
+  })
+  return <HarnessView {...props} localPages={localPages} setPages={setPages} mutation={mutation} />
+}
+let deferPageUpdates = false
+let deferredPageUpdates: React.SetStateAction<(GitHubWorkItem[] | null)[]>[] = []
+let commitPages: React.Dispatch<React.SetStateAction<(GitHubWorkItem[] | null)[]>>
+export function ProductionHarness(props: HarnessProps) {
+  const selectedRepos = useStore(store, (state) => state.repos)
+  const [localPages, setLocalPages] = useState(context.pages)
+  useLayoutEffect(() => {
+    commitPages = setLocalPages
+  }, [setLocalPages])
+  const setPages = useCallback<typeof setLocalPages>((change) => {
+    if (deferPageUpdates) {
+      deferredPageUpdates.push(change)
+    } else {
+      setLocalPages(change)
+    }
+  }, [])
+  const pagesRef = useRef(localPages)
+  pagesRef.current = localPages
+  const [viewer, setViewer] = useState<string | null>(null)
+  const [, setQuiet] = useState(0)
+  // SAFETY: the actual mutation owner reads only this declared slice; no lifecycle is mocked.
+  const input = {
+    selectedRepos,
+    taskSource: 'github',
+    githubMode: 'items',
+    appliedTaskSearch: props.query ?? 'is:open',
+    activeTaskPreset: null,
+    setQuietRefreshNonce: setQuiet,
+    githubViewerLogin: viewer,
+    setGitHubViewerLogin: setViewer,
+    pages: localPages,
+    pagesRef,
+    setPages,
+    perRepoSourceState: [],
+    patchTaskPageWorkItemRows: (
+      item: GitHubWorkItem,
+      patch: Partial<GitHubWorkItem>,
+      matches?: (row: GitHubWorkItem) => boolean,
+      listComposition?: readonly ListComposition[]
+    ) =>
+      setPages((current) =>
+        patchTaskPageGitHubWorkItemPages(current, item, patch, matches, listComposition)
+      )
+  } as TaskPageLinearCreationStateModel
+  const owner = useTaskPageGitHubMutationState(input)
+  return (
+    <HarnessView
+      {...props}
+      localPages={localPages}
+      setPages={setPages}
+      mutation={owner.githubWorkItemMutation}
+      queryKey={owner.githubWorkItemMutationQueryKey}
+      viewerLogin={viewer}
+    />
+  )
+}
+export function holdPageUpdates() {
+  deferPageUpdates = true
+}
+export function flushPageUpdates() {
+  deferPageUpdates = false
+  const queued = deferredPageUpdates
+  deferredPageUpdates = []
+  commitPages((current) =>
+    queued.reduce((rows, update) => (typeof update === 'function' ? update(rows) : update), current)
+  )
+}
+
+export function resetPageUpdates() {
+  deferPageUpdates = false
+  deferredPageUpdates = []
+}
+
 async function mount(
   standalone = false,
   outputs?: OutputRenderer,

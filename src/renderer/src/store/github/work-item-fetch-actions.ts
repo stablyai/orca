@@ -6,7 +6,14 @@ import {
   isGitHubTaskObservationCurrent
 } from '@/lib/github-task-observation'
 
-import { beginGitHubTaskRead } from './request-coordination'
+import {
+  beginGitHubTaskRead,
+  acquireProviderRequestSlot as acquireWorkItemSlot,
+  inflightWorkItemsRequests,
+  nextProviderRequestId,
+  ownsInflightRequest,
+  releaseProviderRequestSlot as releaseWorkItemSlot
+} from './request-coordination'
 
 import type { StateCreator } from 'zustand'
 
@@ -31,14 +38,6 @@ import { structuralValuesEqual } from '../../../../shared/structural-value-equal
 import { workItemsCacheKey, workItemsInflightRequestKey } from './cache-identity'
 
 import { isFresh, withBoundedCacheEntry, WORK_ITEMS_CACHE_TTL } from './cache-policy'
-
-import {
-  acquireProviderRequestSlot as acquireWorkItemSlot,
-  inflightWorkItemsRequests,
-  nextProviderRequestId,
-  ownsInflightRequest,
-  releaseProviderRequestSlot as releaseWorkItemSlot
-} from './request-coordination'
 
 import { findRepoForGitHubOwner } from './repository-routing'
 

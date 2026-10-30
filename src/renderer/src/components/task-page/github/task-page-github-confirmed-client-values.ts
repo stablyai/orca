@@ -1,4 +1,4 @@
-import { notifyTaskPageGitHubMutationRegistry } from './task-page-github-work-item-mutation-registry'
+import { notifyTaskPageGitHubMutationRegistry } from './task-page-github-mutation-notifications'
 import {
   sameGitHubTaskObservation,
   type GitHubTaskObservation

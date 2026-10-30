@@ -1,6 +1,11 @@
 import { captureGitHubTaskObservation, observeGitHubWorkItem } from '@/lib/github-task-observation'
 
-import { beginGitHubTaskRead } from './request-coordination'
+import {
+  beginGitHubTaskRead,
+  acquireProviderRequestSlot as acquireWorkItemSlot,
+  inflightWorkItemsRequests,
+  releaseProviderRequestSlot as releaseWorkItemSlot
+} from './request-coordination'
 
 import { getWorkItemPageErrorTypes } from '../../../../shared/github/work-item-page-errors'
 import type { StateCreator } from 'zustand'
@@ -25,12 +30,6 @@ import { isGitHubWorkItemsQueryTooLarge } from '../slices/github-work-items-quer
 import { workItemsCacheKey, workItemsInflightRequestKey } from './cache-identity'
 
 import { isFresh, WORK_ITEMS_CACHE_TTL } from './cache-policy'
-
-import {
-  acquireProviderRequestSlot as acquireWorkItemSlot,
-  inflightWorkItemsRequests,
-  releaseProviderRequestSlot as releaseWorkItemSlot
-} from './request-coordination'
 
 import { findRepoForGitHubOwner } from './repository-routing'
 

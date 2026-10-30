@@ -1,5 +1,4 @@
 // @vitest-environment happy-dom
-import './github-task-refresh.test-fixture'
 import {
   confirmListForTest,
   context,
@@ -11,6 +10,7 @@ import {
   mount,
   click
 } from './github-task-refresh.test-fixture'
+
 import { repo, source, key, user, returned } from './github-task-refresh-data.test-fixture'
 import React, { act } from 'react'
 import { createRoot } from 'react-dom/client'

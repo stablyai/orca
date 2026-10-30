@@ -6,7 +6,10 @@ import {
 
 import { parseGitHubIssueOrPRLink } from '../../../../../shared/github/links'
 
-import { taskPageGitHubMutationItemId } from './task-page-github-work-item-mutation-keys'
+import {
+  taskPageGitHubMutationItemId,
+  taskPageGitHubItemKey
+} from './task-page-github-work-item-mutation-keys'
 
 import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
 
@@ -36,8 +39,6 @@ import {
   setPendingTaskPageGitHubOp,
   setTaskPageGitHubMutationQueryKey
 } from './task-page-github-work-item-mutation-registry'
-
-import { taskPageGitHubItemKey } from './task-page-github-work-item-mutation-keys'
 
 import type {
   PendingOp,

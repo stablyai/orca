@@ -7,13 +7,15 @@ import {
   type ListAddress
 } from '@/components/task-page/github/task-page-github-work-item-mutation-registry'
 
-import { observeGitHubWorkItem, type GitHubTaskObservation } from './github-task-observation'
+import {
+  observeGitHubWorkItem,
+  type GitHubTaskObservation,
+  captureGitHubTaskObservation
+} from './github-task-observation'
 
 import type { GitHubAssignableUser } from '../../../shared/github/pull-request-types'
 
 import { vi } from 'vitest'
-
-import { captureGitHubTaskObservation } from './github-task-observation'
 
 // @vitest-environment happy-dom
 import type { Repo } from '../../../shared/repo-types'

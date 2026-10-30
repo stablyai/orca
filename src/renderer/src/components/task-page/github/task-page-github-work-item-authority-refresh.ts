@@ -1,12 +1,11 @@
-import { taskPageGitHubMutationItemId } from './task-page-github-work-item-mutation-keys'
-import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
-import { getGitHubTaskObservation } from '@/lib/github-task-observation'
-import type { GitHubTaskObservation } from '@/lib/github-task-observation'
-
 import {
+  taskPageGitHubMutationItemId,
   taskPageGitHubFamilyDirtyKey,
   taskPageGitHubOwnedItemKey
 } from './task-page-github-work-item-mutation-keys'
+import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
+import { getGitHubTaskObservation } from '@/lib/github-task-observation'
+import type { GitHubTaskObservation } from '@/lib/github-task-observation'
 
 import {
   createListEntryRetirement,

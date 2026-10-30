@@ -1,7 +1,4 @@
 // @vitest-environment happy-dom
-import './github-task-refresh.test-fixture'
-import { parseTaskQuery } from '../../../shared/task-query'
-
 import {
   context,
   store,
@@ -13,6 +10,7 @@ import {
   harnessSetPages,
   container
 } from './github-task-refresh.test-fixture'
+import { parseTaskQuery } from '../../../shared/task-query'
 
 import { repo, source, seed, returned, user } from './github-task-refresh-data.test-fixture'
 

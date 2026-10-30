@@ -2,7 +2,10 @@ import { translate } from '@/i18n/i18n'
 import { qualifyGitHubTaskLists } from '@/lib/github-task-observation'
 import { getTaskPageRepoSourceContext } from '@/components/task-page/task-page-source-context'
 import { runtimeEnvironmentSupportsCapability } from '@/runtime/runtime-rpc-client'
-import { getGitHubSourceRuntimeHost } from '@/lib/github-source-runtime-context'
+import {
+  getGitHubSourceRuntimeHost,
+  canUseGitHubRepoContext
+} from '@/lib/github-source-runtime-context'
 import { GITHUB_CANONICAL_DETAILS_RUNTIME_CAPABILITY } from '../../../../../shared/task-source-runtime-capabilities'
 import {
   githubTaskExecutionIdentity,
@@ -16,7 +19,6 @@ import { captureTaskPageGitHubRefreshMasks } from '@/components/task-page/github
 import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
 import { lookupGitHubWorkItemDetailsForSource } from '@/lib/github-work-item-source-lookup'
-import { canUseGitHubRepoContext } from '@/lib/github-source-runtime-context'
 
 import type { GitHubOwnerRepo } from '../../../../../shared/github/pull-request-types'
 import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'

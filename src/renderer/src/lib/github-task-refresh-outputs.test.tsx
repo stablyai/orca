@@ -1,15 +1,5 @@
 import type * as ListModule from '@/components/task-page/github/List'
 
-import './github-task-refresh.test-fixture'
-import { runTaskPageGitHubQuietRefresh } from '@/components/task-page/github/task-page-github-quiet-refresh-run'
-
-import { runTaskPageGitHubLandingRefresh } from '@/components/task-page/github/task-page-github-landing-refresh-run'
-
-import { getTaskPageGitHubMutationQueryKey } from '@/components/task-page/github/task-page-github-work-item-mutation-registry'
-
-import { parseTaskQuery } from '../../../shared/task-query'
-
-// @vitest-environment happy-dom
 import {
   context,
   store,
@@ -22,6 +12,15 @@ import {
   harnessSetPages,
   container
 } from './github-task-refresh.test-fixture'
+import { runTaskPageGitHubQuietRefresh } from '@/components/task-page/github/task-page-github-quiet-refresh-run'
+
+import { runTaskPageGitHubLandingRefresh } from '@/components/task-page/github/task-page-github-landing-refresh-run'
+
+import { getTaskPageGitHubMutationQueryKey } from '@/components/task-page/github/task-page-github-work-item-mutation-registry'
+
+import { parseTaskQuery } from '../../../shared/task-query'
+
+// @vitest-environment happy-dom
 
 import {
   repo,
@@ -35,7 +34,7 @@ import {
   user
 } from './github-task-refresh-data.test-fixture'
 
-import React, { act } from 'react'
+import React, { act, useRef, useState } from 'react'
 
 import { expect, it, vi } from 'vitest'
 
@@ -447,8 +446,6 @@ it('keeps independently exited page-N rows through real partial/quiet admission,
   expect(visible()).toEqual(['Ordinary reentry', 'Foreign retained exit']) // new remote-admitted query has no prior local eligibility
 })
 import { VisibleReaders } from './github-task-refresh-visible-readers.test-fixture'
-
-import { useRef, useState } from 'react'
 
 import { useTaskPageGitHubListProjection } from '@/components/task-page/github/use-task-page-github-list-projection'
 

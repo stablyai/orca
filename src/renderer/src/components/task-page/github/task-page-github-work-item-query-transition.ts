@@ -1,6 +1,9 @@
 import type { AppState } from '@/store/types'
 
-import { taskPageGitHubOwnedItemKey } from './task-page-github-work-item-mutation-keys'
+import {
+  taskPageGitHubOwnedItemKey,
+  taskPageGitHubMutationItemId
+} from './task-page-github-work-item-mutation-keys'
 
 import {
   listInput,
@@ -13,17 +16,16 @@ import {
 
 import { createTaskPageGitHubListCompositionProgram } from './task-page-github-work-item-mutation-composition'
 
-import { taskPageGitHubMutationItemId } from './task-page-github-work-item-mutation-keys'
-
 import { parseGitHubIssueOrPRLink } from '../../../../../shared/github/links'
 
 import { getTaskPageRepoSourceContext } from '../task-page-source-context'
 
-import { createGitHubTaskObservationIndex } from '@/lib/github-task-observation'
+import {
+  createGitHubTaskObservationIndex,
+  gitHubTaskFamilyOrigin
+} from '@/lib/github-task-observation'
 
 import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
-
-import { gitHubTaskFamilyOrigin } from '@/lib/github-task-observation'
 
 import type { GitHubWorkItemPatch } from '@/store/github/cache-model'
 

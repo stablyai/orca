@@ -1,7 +1,7 @@
-import './github-task-refresh.test-fixture'
+import { store } from './github-task-refresh.test-fixture'
 
 import { parseTaskQuery } from '../../../shared/task-query'
-import { store } from './github-task-refresh.test-fixture'
+
 import React from 'react'
 
 import { useStore } from 'zustand'
