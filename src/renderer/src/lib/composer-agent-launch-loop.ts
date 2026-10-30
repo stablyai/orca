@@ -1,5 +1,8 @@
 import { useAppStore } from '@/store'
-import { launchAgentInNewTab, type LaunchAgentInNewTabArgs } from '@/lib/launch-agent-in-new-tab'
+import {
+  launchAgentInNewTabWithOutcome,
+  type LaunchAgentInNewTabArgs
+} from '@/lib/launch-agent-in-new-tab'
 import { newAgentLaunchRequestId } from '@/lib/agent-launch-request-id'
 import {
   usesAgentLaunchList,
@@ -136,16 +139,18 @@ export function runComposerAgentLaunchLoop(
 
   for (const [index, entry] of entries.entries()) {
     try {
-      const result = launchAgentInNewTab(
+      // Notify: a refused command would otherwise be counted without ever reaching the user.
+      const result = launchAgentInNewTabWithOutcome(
         launchArgsForEntry({
           worktreeId: args.worktreeId,
           entry,
           prompt,
           promptDelivery,
           activate: canFocus && index === 0
-        })
+        }),
+        true
       )
-      if (result) {
+      if (result && !('refused' in result)) {
         launched += 1
       } else {
         failed += 1

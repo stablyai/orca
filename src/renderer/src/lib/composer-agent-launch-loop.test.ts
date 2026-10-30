@@ -1,11 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { LaunchAgentInNewTabArgs } from '@/lib/launch-agent-in-new-tab'
-import type { LaunchAgentInNewTabResult } from '@/lib/launch-agent-in-new-tab-host-agents'
+import type { AgentTabLaunchOutcome } from '@/lib/launch-agent-in-new-tab-host-agents'
 import type { AgentLaunchListEntry, WorktreeCreationRequest } from '@/lib/pending-worktree-creation'
 import { runComposerAgentLaunchLoop } from './composer-agent-launch-loop'
 
 const mocks = vi.hoisted(() => ({
-  launch: vi.fn<(args: LaunchAgentInNewTabArgs) => LaunchAgentInNewTabResult>(),
+  launch:
+    vi.fn<(args: LaunchAgentInNewTabArgs, notifyFailure?: boolean) => AgentTabLaunchOutcome>(),
   closeTab: vi.fn(),
   state: {
     tabsByWorktree: {} as Record<
@@ -28,7 +29,9 @@ vi.mock('@/store', () => ({
     getState: () => ({ ...mocks.state, closeTab: mocks.closeTab })
   }
 }))
-vi.mock('@/lib/launch-agent-in-new-tab', () => ({ launchAgentInNewTab: mocks.launch }))
+vi.mock('@/lib/launch-agent-in-new-tab', () => ({
+  launchAgentInNewTabWithOutcome: mocks.launch
+}))
 
 function creationRequest(
   overrides: Partial<WorktreeCreationRequest> = {}
@@ -191,6 +194,14 @@ describe('runComposerAgentLaunchLoop', () => {
 
     expect(run(creationRequest())).toEqual({ launched: 1, failed: 1 })
     expect(mocks.launch).toHaveBeenCalledTimes(2)
+  })
+
+  it('counts a refused launch and asks the launch stack to notify the failure', () => {
+    mocks.launch.mockReturnValueOnce({ refused: { delivered: false, failureNotified: true } })
+
+    expect(run(creationRequest())).toEqual({ launched: 1, failed: 1 })
+    // Second argument is `notifyFailure`: a refused command must surface, not vanish into the count.
+    expect(mocks.launch.mock.calls[0][1]).toBe(true)
   })
 
   it('keeps focus out of the workspace for sequential creates', () => {

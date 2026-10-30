@@ -1,10 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { WorktreeCreationRequest } from '@/lib/pending-worktree-creation'
 import type { LaunchAgentInNewTabArgs } from '@/lib/launch-agent-in-new-tab'
-import type { LaunchAgentInNewTabResult } from '@/lib/launch-agent-in-new-tab-host-agents'
+import type { AgentTabLaunchOutcome } from '@/lib/launch-agent-in-new-tab-host-agents'
 
 const mocks = vi.hoisted(() => ({
-  launch: vi.fn<(args: LaunchAgentInNewTabArgs) => LaunchAgentInNewTabResult>(),
+  launch:
+    vi.fn<(args: LaunchAgentInNewTabArgs, notifyFailure?: boolean) => AgentTabLaunchOutcome>(),
   closeTab: vi.fn<(tabId: string) => void>(),
   state: {
     // Only the slices the real tab close consults before applying its landing patch.
@@ -25,7 +26,9 @@ vi.mock('@/store', () => ({
     getState: () => ({ ...mocks.state, closeTab: mocks.closeTab })
   }
 }))
-vi.mock('@/lib/launch-agent-in-new-tab', () => ({ launchAgentInNewTab: mocks.launch }))
+vi.mock('@/lib/launch-agent-in-new-tab', () => ({
+  launchAgentInNewTabWithOutcome: mocks.launch
+}))
 vi.mock('@/lib/new-workspace', () => ({ ensureAgentStartupInTerminal: vi.fn() }))
 vi.mock('@/lib/worktree-creation-agent-seeds', () => ({
   seedAgentTabStateAfterWorktreeCreate: vi.fn()
