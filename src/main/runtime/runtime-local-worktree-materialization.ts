@@ -7,6 +7,7 @@ import type { Repo } from '../../shared/repo-types'
 import type { CreateWorktreeArgs } from '../../shared/worktree/create-types'
 import type { TuiAgent } from '../../shared/tui-agent'
 import { resolveWorktreeIncludePaths } from '../git/worktree-include-file'
+import { buildWorktreeShareSkipReport } from '../git/worktree-configured-path-skips'
 import { formatWorktreeIncludeCopyWarning } from '../ipc/worktree-include-copy-budget'
 import { getWorktreeCreationLayout } from '../ipc/worktree-logic'
 import { mergeWorktree } from '../ipc/worktree-metadata-merge'
@@ -17,6 +18,7 @@ import {
   createWorktreeSharedPaths
 } from '../ipc/worktree-symlinks'
 import { resolveWorktreeSharedDirectories } from '../git/worktree-shared-directories'
+import type { WorktreeShareSkipWarning } from '../../shared/worktree/create-types'
 import type { RuntimeManagedWorktreeCreateArgs } from './runtime-managed-worktree-create-types'
 import type { RemoteTrackingBase } from './runtime-remote-fetch-controller'
 import type { RuntimeStore } from './runtime-store-contract'
@@ -44,7 +46,12 @@ export async function materializeRuntimeLocalWorktree<T>(args: {
   localWorktreeGitOptions: LocalGitExecOptions
   onMetadataPersisted: (worktree: Worktree) => T
   timing: WorktreeCreateTimingRecorder
-}): Promise<{ worktree: Worktree; metadataResult: T; includeCopyWarning?: string }> {
+}): Promise<{
+  worktree: Worktree
+  metadataResult: T
+  includeCopyWarning?: string
+  skipWarnings: WorktreeShareSkipWarning[]
+}> {
   const {
     request,
     repo,
@@ -163,20 +170,30 @@ export async function materializeRuntimeLocalWorktree<T>(args: {
       resolveWorktreeIncludePaths(repo.path, localWorktreeGitOptions)
     )
   ])
-  if (sharedDirectories.length > 0) {
+  if (sharedDirectories.paths.length > 0) {
     await timing.time('create_shared_directories', () =>
-      createWorktreeSharedPaths(repo.path, created.path, sharedDirectories)
+      createWorktreeSharedPaths(repo.path, created.path, sharedDirectories.paths)
     )
   }
-  if (worktreeIncludePaths.length === 0) {
-    return { worktree, metadataResult }
+  const skippedIncludePaths =
+    worktreeIncludePaths.paths.length > 0
+      ? await timing.time('copy_worktreeinclude', () =>
+          createWorktreeCopiedPaths(repo.path, created.path, worktreeIncludePaths.paths)
+        )
+      : []
+  const skipReport = buildWorktreeShareSkipReport({
+    shareSkips: sharedDirectories.skipped,
+    includeSkips: worktreeIncludePaths.skipped,
+    copySkips: skippedIncludePaths,
+    copyWarning: formatWorktreeIncludeCopyWarning(skippedIncludePaths)
+  })
+  if (skipReport.warning) {
+    console.warn(`[worktree-include] ${skipReport.warning}`)
   }
-  const skippedIncludePaths = await timing.time('copy_worktreeinclude', () =>
-    createWorktreeCopiedPaths(repo.path, created.path, worktreeIncludePaths)
-  )
-  const includeCopyWarning = formatWorktreeIncludeCopyWarning(skippedIncludePaths)
-  if (includeCopyWarning) {
-    console.warn(`[worktree-include] ${includeCopyWarning}`)
+  return {
+    worktree,
+    metadataResult,
+    skipWarnings: skipReport.warnings,
+    ...(skipReport.warning ? { includeCopyWarning: skipReport.warning } : {})
   }
-  return { worktree, metadataResult, ...(includeCopyWarning ? { includeCopyWarning } : {}) }
 }
