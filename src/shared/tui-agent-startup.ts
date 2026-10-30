@@ -7,9 +7,10 @@ import {
   commandSeparator,
   quoteStartupArg,
   resolveStartupShell,
-  startupCommandEndsWithArg,
+  tokenizeStartupCommand,
   type AgentStartupShell
 } from './tui-agent-startup-shell'
+import { agentArgTerminatorIndex } from './agent-session-option-agent-args'
 import { TUI_AGENT_CONFIG } from './tui-agent-config'
 import type { StartupCommandDelivery } from './codex-startup-delivery'
 import { buildSleepingAgentLaunchConfig } from './sleeping-agent-launch-config'
@@ -112,8 +113,7 @@ export function buildAgentStartupPlan(args: {
 
   if (config.promptInjectionMode === 'argv') {
     const promptSeparator =
-      config.argvPromptSeparator &&
-      !startupCommandEndsWithArg(launchCommand, config.argvPromptSeparator, shell)
+      config.argvPromptSeparator && !launchCommandEndsOptions(agent, launchCommand, shell)
         ? ` ${config.argvPromptSeparator}`
         : ''
     return {
@@ -202,6 +202,16 @@ export function buildAgentStartupPlan(args: {
     ...appliedSessionOptionProps(baseCommand.appliedSessionOptions),
     ...(agentEnv ? { env: { ...agentEnv } } : {})
   }
+}
+
+/** Whether an override or agent args already end option parsing; a required option's `--` value does not. */
+function launchCommandEndsOptions(
+  agent: TuiAgent,
+  command: string,
+  shell: AgentStartupShell
+): boolean {
+  const parsed = tokenizeStartupCommand(command, shell)
+  return parsed.ok && agentArgTerminatorIndex(agent, parsed.tokens) < parsed.tokens.length
 }
 
 /** Predict the builder’s null-followupPrompt verdict before choosing a launch surface; derive from the same injection table and pin every agent in tui-agent-prompt-transport.spec.ts.

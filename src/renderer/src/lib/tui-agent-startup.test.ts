@@ -44,15 +44,19 @@ describe('buildAgentStartupPlan', () => {
     expect(recognizeAgentProcessFromCommandLine(processTableLine)?.agent).toBe('claude')
   })
 
-  it('reuses a trailing -- from a Claude command override instead of adding a second one', () => {
-    expect(
+  it('adds -- only when the Claude command does not already end option parsing', () => {
+    const launch = (claude: string) =>
       buildAgentStartupPlan({
         agent: 'claude',
         prompt: 'Fix the bug',
-        cmdOverrides: { claude: 'claude-wrapper --' },
+        cmdOverrides: { claude },
         platform: 'darwin'
       })?.launchCommand
-    ).toBe("claude-wrapper -- 'Fix the bug'")
+    expect(launch('claude-wrapper --')).toBe("claude-wrapper -- 'Fix the bug'")
+    // A required option's `--` value is not a terminator.
+    expect(launch("claude --system-prompt '--'")).toBe(
+      "claude --system-prompt '--' -- 'Fix the bug'"
+    )
   })
 
   // Native chat ignores a custom launch command; a terminal launch must still run it.
