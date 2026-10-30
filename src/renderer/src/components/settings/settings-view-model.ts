@@ -105,18 +105,9 @@ export function buildSettingsViewModel(
       sections: generalNavSections.filter((section) => section.group === group.id)
     }))
     .filter((group) => group.sections.length > 0 || group.id === 'setup')
-  const repoNavSections = navigation.visibleNavSections
-    .filter((section) => section.id.startsWith('repo-'))
-    .map((section) => {
-      const repo = model.repos.find((entry) => entry.id === section.id.replace('repo-', ''))
-      return {
-        ...section,
-        badgeColor: repo?.badgeColor,
-        isRemote: !!repo?.connectionId,
-        repoIcon: repo?.repoIcon,
-        upstream: repo?.upstream
-      }
-    })
+  const repoNavSections = navigation.visibleNavSections.filter((section) =>
+    section.id.startsWith('repo-')
+  )
   const isSectionMounted = (sectionId: string): boolean =>
     navigation.neededSectionIds.has(sectionId)
   const isFocusedShortcutsPane =
@@ -140,8 +131,7 @@ export type SettingsViewModel = ReturnType<typeof buildSettingsViewModel>
 
 export function useConcreteProjectContinuity(
   model: SettingsStoreModel,
-  interactions: SettingsInteractionController,
-  visibleSectionIds: ReadonlySet<string>
+  interactions: SettingsInteractionController
 ): SettingsStoreModel {
   const {
     activeSectionId: storedActiveSectionId,
@@ -161,11 +151,10 @@ export function useConcreteProjectContinuity(
     committed.setups === settingsProjectSetupSelection
       ? committed.anchor
       : null
-  const projected =
+  const selection =
     !interactions.pendingNavSectionRef.current && !model.settingsNavigationTarget
       ? projectSettingsConcreteSelection(settingsProjectList, storedActiveSectionId, anchor)
       : null
-  const selection = projected && visibleSectionIds.has(projected.sectionId) ? projected : null
   const selectedHostId = selection?.hostId
   const selectedSetupId = selection?.setupId
   const activeSectionId = selection?.sectionId ?? storedActiveSectionId
@@ -212,15 +201,14 @@ export function useConcreteProjectContinuity(
             selectedSetupId ?? explicit.setupId
           )
         : null
-    const next =
-      setup && visibleSectionIds.has(activeSectionId)
-        ? {
-            sectionId: activeSectionId,
-            repoId: setup.repoId,
-            hostId: setup.hostId,
-            setupId: setup.id
-          }
-        : null
+    const next = setup
+      ? {
+          sectionId: activeSectionId,
+          repoId: setup.repoId,
+          hostId: setup.hostId,
+          setupId: setup.id
+        }
+      : null
     setCommitted((previous) =>
       next
         ? previous &&
@@ -247,8 +235,7 @@ export function useConcreteProjectContinuity(
     setActiveSectionId,
     setSettingsProjectHostSelection,
     selectedHostId,
-    selectedSetupId,
-    visibleSectionIds
+    selectedSetupId
   ])
   return {
     ...model,

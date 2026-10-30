@@ -1,4 +1,8 @@
 // @vitest-environment happy-dom
+import { renderToStaticMarkup } from 'react-dom/server'
+import * as repoLookups from '@/lib/project-setup-repo-lookup'
+import { SettingsSidebar } from './SettingsSidebar'
+import { TooltipProvider } from '../ui/tooltip'
 import { act, useRef, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import { useShallow } from 'zustand/react/shallow'
@@ -13,6 +17,9 @@ import {
   buildRepoIdToRepresentative,
   buildSettingsProjectList
 } from './settings-project-list'
+import { buildSettingsNavigationMetadata } from '@/hooks/useSettingsNavigationMetadata'
+import { buildSettingsViewModel } from './settings-view-model'
+import type { SettingsNavigationModel } from './use-settings-navigation-model'
 import { renderProjectSettingsSections } from './settings-project-section-renderer'
 import { useSettingsPageEffects } from './use-settings-page-effects'
 import type { SettingsRenderContext } from './settings-render-context'
@@ -114,7 +121,7 @@ it.each(['host', 'folder'] as const)(
       scrollTarget = pendingScrollTargetRef.current
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this renderer reads only model, navigation, terminal capabilities and isSectionMounted.
       const context = {
-        model,
+        model: { ...model, activeSectionId: pendingNavSectionRef.current ?? model.activeSectionId },
         navigation: { getSectionSearchEntries: () => [] },
         terminal: { windowsTerminalCapabilities: {}, isWindowsTerminalHost: false },
         view: { isSectionMounted: (id: string) => mounted.has(id) }
@@ -148,3 +155,337 @@ it.each(['host', 'folder'] as const)(
     }
   }
 )
+
+it('forwards qualified first representative metadata through the shipping navigation and view builder', () => {
+  const icon = { type: 'emoji', emoji: '⚓' } as const
+  const first: Repo = {
+    id: 'same',
+    displayName: 'Harbor',
+    path: '/ssh/harbor',
+    connectionId: 'box',
+    badgeColor: '#123456',
+    addedAt: 0,
+    repoIcon: icon,
+    upstream: { owner: 'upstream', repo: 'harbor' }
+  }
+  const repos = [
+    first,
+    { ...first, path: '/duplicate', badgeColor: 'wrong' },
+    {
+      ...first,
+      connectionId: undefined,
+      executionHostId: 'runtime:other' as const,
+      badgeColor: 'foreign'
+    }
+  ]
+  const sections = buildSettingsNavigationMetadata({
+    isMac: false,
+    isWindows: false,
+    isWebClient: false,
+    repos
+  })
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: builder consumes these supplied fields only.
+  const model = { repos, settingsSearchQuery: '', activeSectionId: 'general' } as SettingsStoreModel
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: all builder inputs supplied.
+  const navigation = {
+    visibleNavSections: sections,
+    neededSectionIds: new Set(['general'])
+  } as SettingsNavigationModel
+  const rows = buildSettingsViewModel(model, navigation).repoNavSections
+  const ssh = rows.find((row) => row.description.includes('/ssh/harbor')) ?? rows[0]
+  expect(ssh).toMatchObject({
+    badgeColor: first.badgeColor,
+    repoIcon: icon,
+    upstream: first.upstream,
+    isRemote: true
+  })
+  const projection = projectHostSetupProjectionFromRepos([first])
+  const projectGrouping = { projects: projection.projects, projectHostSetups: projection.setups }
+  const duplicate = {
+    ...first,
+    badgeColor: 'second-exact',
+    repoIcon: { type: 'emoji', emoji: '②' } as const
+  }
+  const foreign = {
+    ...first,
+    connectionId: undefined,
+    executionHostId: 'runtime:other' as const,
+    badgeColor: 'foreign'
+  }
+  for (const catalog of [
+    [],
+    [foreign],
+    [first],
+    [duplicate, first],
+    [{ ...first, connectionId: undefined }]
+  ]) {
+    const sections = buildSettingsNavigationMetadata({
+      isMac: false,
+      isWindows: false,
+      isWebClient: false,
+      repos: catalog,
+      projectGrouping
+    })
+    const view = buildSettingsViewModel(
+      { ...model, repos: catalog },
+      { ...navigation, visibleNavSections: sections }
+    )
+    expect(view.repoNavSections).toHaveLength(1)
+    const row = view.repoNavSections[0]
+    expect(row.title).toBe('Harbor')
+    if (!catalog.length || catalog[0] === foreign) {
+      expect(row.repoIcon).toBeUndefined()
+      expect(row.badgeColor).toBeUndefined()
+      expect(row.upstream).toBeUndefined()
+      expect(row.isRemote).toBe(false)
+      expect(row.searchEntries.some((entry) => entry.description?.includes('/ssh/harbor'))).toBe(
+        true
+      )
+    } else {
+      expect(row.repoIcon).toBe(catalog[0].repoIcon)
+      expect(row.badgeColor).toBe(catalog[0].badgeColor)
+      expect(row.upstream).toBe(catalog[0].upstream)
+      expect(row.isRemote).toBe(Boolean(catalog[0].connectionId))
+    }
+  }
+})
+
+it('measures qualified preparation and actual view forwarding with independent catalog and section populations', () => {
+  const experiments = [
+    { name: 'R', r: 100, mode: 'repository', s: 100 },
+    { name: 'R', r: 1000, mode: 'repository', s: 100 },
+    { name: 'S', r: 1000, mode: 'repository', s: 100 },
+    { name: 'S', r: 1000, mode: 'folder', s: 1000 },
+    { name: 'diagonal', r: 100, mode: 'folder', s: 100 },
+    { name: 'diagonal', r: 1000, mode: 'folder', s: 1000 }
+  ] as const
+  for (const experiment of experiments) {
+    let phase = ''
+    const counters = {
+      catalogVisits: 0,
+      lookupPreparations: 0,
+      lookupQueries: 0,
+      sectionProjections: 0,
+      builderRawComparisons: 0,
+      builderIdReads: 0
+    }
+    const plain: Repo[] = Array.from({ length: experiment.r }, (_, i) => ({
+      id: `settings-${i}`,
+      displayName: `Settings ${i % 100}`,
+      path: `/settings/${i}`,
+      badgeColor: `color-${i}`,
+      repoIcon: { type: 'emoji', emoji: `icon-${i}` },
+      connectionId: 'box',
+      addedAt: 0,
+      upstream: { owner: 'upstream', repo: `repo-${i % 100}` },
+      gitRemoteIdentity: {
+        canonicalKey: `github.com/org/project-${i % 100}`,
+        remoteName: 'origin',
+        remoteUrl: `https://github.com/org/project-${i % 100}`
+      }
+    }))
+    const projection = projectHostSetupProjectionFromRepos(plain)
+    const grouping = {
+      projects: projection.projects,
+      projectHostSetups: projection.setups,
+      settings: { projectGroupingMode: experiment.mode }
+    }
+    const observed = plain.map(
+      (repo) =>
+        new Proxy(repo, {
+          get(target, key, receiver) {
+            if (phase === 'nav' && key === 'badgeColor') {
+              counters.sectionProjections++
+            }
+            return Reflect.get(target, key, receiver)
+          }
+        })
+    )
+    function observe(rows: Repo[]): Repo[] {
+      return new Proxy(rows, {
+        get(target, key, receiver) {
+          if (key === Symbol.iterator) {
+            return function* () {
+              for (const row of target) {
+                if (phase === 'lookup') {
+                  counters.catalogVisits++
+                }
+                yield row
+              }
+            }
+          }
+          if (key === 'find') {
+            return (predicate: (row: Repo) => boolean) =>
+              target.find((row) => {
+                if (phase === 'builder') {
+                  counters.builderRawComparisons++
+                }
+                return predicate(row)
+              })
+          }
+          return Reflect.get(target, key, receiver)
+        }
+      })
+    }
+    const repos = observe(observed)
+    const actualLookup = repoLookups.buildProjectSetupRepoLookup
+    const wrapped = new WeakSet<object>()
+    const querySpies: (() => void)[] = []
+    const lookupSpy = vi
+      .spyOn(repoLookups, 'buildProjectSetupRepoLookup')
+      .mockImplementation((rows) => {
+        phase = 'lookup'
+        const before = counters.catalogVisits
+        const lookup = actualLookup(rows)
+        if (counters.catalogVisits > before) {
+          counters.lookupPreparations++
+        }
+        phase = 'nav'
+        if (!wrapped.has(lookup)) {
+          wrapped.add(lookup)
+          const resolve = lookup.resolve
+          const spy = vi.spyOn(lookup, 'resolve').mockImplementation((setup) => {
+            counters.lookupQueries++
+            return resolve(setup)
+          })
+          querySpies.push(() => spy.mockRestore())
+        }
+        return lookup
+      })
+    try {
+      const run = (catalog: Repo[], query: string, pass: string) => {
+        const before = { ...counters }
+        phase = 'nav'
+        const sections = buildSettingsNavigationMetadata({
+          isMac: false,
+          isWindows: false,
+          isWebClient: false,
+          repos: catalog,
+          projectGrouping: grouping
+        })
+        phase = ''
+        const projectRows = sections.filter((row) => row.id.startsWith('repo-'))
+        expect(projectRows).toHaveLength(experiment.s)
+        const expected = buildSettingsProjectList(catalog, grouping)
+        for (let i = 0; i < projectRows.length; i++) {
+          const representative = catalog.find(
+            (repo) => repo.id === expected[i].representativeRepoId
+          )!
+          expect(projectRows[i]).toMatchObject({
+            repoIcon: representative.repoIcon,
+            badgeColor: representative.badgeColor,
+            upstream: representative.upstream,
+            isRemote: true
+          })
+        }
+        const visible = sections
+          .filter((row) => !query || row.title === query)
+          .map(
+            (row) =>
+              new Proxy(row, {
+                get(target, key, receiver) {
+                  if (phase === 'builder' && key === 'id') {
+                    counters.builderIdReads++
+                  }
+                  return Reflect.get(target, key, receiver)
+                }
+              })
+          )
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: builder's exact read fields supplied.
+        const model = {
+          repos: catalog,
+          settingsSearchQuery: query,
+          activeSectionId: 'general'
+        } as SettingsStoreModel
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: builder's exact read fields supplied.
+        const navigation = {
+          visibleNavSections: visible,
+          neededSectionIds: new Set(['general'])
+        } as SettingsNavigationModel
+        phase = 'builder'
+        const view = buildSettingsViewModel(model, navigation)
+        phase = ''
+        expect(view.repoNavSections.length).toBe(
+          query
+            ? expected.filter((row) => (row.checkoutLabel ?? row.project.displayName) === query)
+                .length
+            : experiment.s
+        )
+        for (const row of view.repoNavSections) {
+          expect(row.badgeColor).toBeTruthy()
+          expect(row.repoIcon).toBeTruthy()
+          expect(row.upstream).toBeTruthy()
+          expect(row.isRemote).toBe(true)
+        }
+        if (pass === 'cold' && experiment.r === 100) {
+          const html = renderToStaticMarkup(
+            <TooltipProvider>
+              <SettingsSidebar
+                activeSectionId="general"
+                settings={null}
+                generalGroups={view.generalNavGroups}
+                repoSections={view.repoNavSections}
+                hasRepos
+                onBack={() => {}}
+                onSelectSection={() => {}}
+              />
+            </TooltipProvider>
+          )
+          expect(html).toContain('icon-0')
+          expect(html).toContain('Fork of upstream/repo-0')
+          expect(html).toContain('SSH')
+        }
+        const counterNames = [
+          'catalogVisits',
+          'lookupPreparations',
+          'lookupQueries',
+          'sectionProjections',
+          'builderRawComparisons',
+          'builderIdReads'
+        ] as const
+        const delta = Object.fromEntries(
+          counterNames.map((key) => [key, counters[key] - before[key]])
+        )
+        expect(delta.lookupQueries).toBe(experiment.s)
+        expect(delta.sectionProjections).toBe(experiment.s)
+        expect(delta.builderRawComparisons).toBe(0)
+        expect(delta.builderIdReads).toBeGreaterThanOrEqual(view.repoNavSections.length)
+        expect(delta.catalogVisits).toBe(
+          pass === 'cold' || pass === 'replacement' ? experiment.r : 0
+        )
+        process.stdout.write(
+          `PG9 metadata operations ${JSON.stringify({ ...experiment, pass, query, ...delta, outputs: view.repoNavSections.length })}\n`
+        )
+      }
+      run(repos, '', 'cold')
+      run(repos, '', 'warm')
+      run(repos, 'Settings 0', 'search')
+      run(
+        observe(
+          observed.map((repo, i) =>
+            i === 0
+              ? new Proxy(
+                  { ...repo, badgeColor: 'replacement-color' },
+                  {
+                    get(target, key, receiver) {
+                      if (phase === 'nav' && key === 'badgeColor') {
+                        counters.sectionProjections++
+                      }
+                      return Reflect.get(target, key, receiver)
+                    }
+                  }
+                )
+              : repo
+          )
+        ),
+        '',
+        'replacement'
+      )
+    } finally {
+      lookupSpy.mockRestore()
+      for (const restore of querySpies) {
+        restore()
+      }
+    }
+  }
+})

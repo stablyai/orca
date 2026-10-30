@@ -102,6 +102,14 @@ function captureGolden(state: Partial<AppState>): string {
   const { result, unmount } = renderHook(() => useGoldenSidebarPipeline())
   const { visibleWorktrees, rowModel, selection } = result.current
   const statuses = useAppStore.getState().workspaceStatuses
+  for (const row of rowModel.sectionRows) {
+    if (
+      row.type === 'header' &&
+      ['project:repo:api', 'project:repo:shared', 'project:repo:r-angstrom'].includes(row.key)
+    ) {
+      expect(row.label).not.toBe('Unknown')
+    }
+  }
   const lines = [
     `visible: ${visibleWorktrees.map((worktree) => worktree.id).join(' ') || '-'}`,
     ...rowModel.sectionRows.map((row) => serializeSidebarRow(row, statuses))

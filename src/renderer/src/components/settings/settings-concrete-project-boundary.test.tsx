@@ -16,8 +16,10 @@ import { useSettingsTerminalModel } from './use-settings-terminal-model'
 import type { SettingsStoreModel } from './use-settings-store-model'
 import type { SettingsRenderContext } from './settings-render-context'
 import type { SettingsNavigationModel } from './use-settings-navigation-model'
+import type * as WindowsTerminalCapabilities from '@/lib/windows-terminal-capabilities'
 
-vi.mock('@/lib/windows-terminal-capabilities', () => ({
+vi.mock('@/lib/windows-terminal-capabilities', async (importOriginal) => ({
+  ...(await importOriginal<typeof WindowsTerminalCapabilities>()),
   isWindowsTerminalCapabilityHost: () => false,
   useWindowsTerminalCapabilities: () => ({}),
   useLocalWindowsTerminalCapabilities: () => ({})
@@ -78,6 +80,7 @@ it('keeps retained server Settings available without borrowing local hooks/path/
       repos,
       settings,
       settingsProjectList: entries,
+      activeSectionId: section,
       settingsProjectHostSelection: { [entry.selectionKey]: host },
       settingsProjectSetupSelection: {},
       settingsHostScope: { target: { kind: 'local' }, available: true },

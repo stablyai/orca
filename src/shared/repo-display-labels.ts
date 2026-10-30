@@ -38,19 +38,28 @@ function hasDuplicateLabels(labels: readonly string[]): boolean {
   return new Set(labels).size !== labels.length
 }
 
-export function getRepoDisplayLabelsByPath(
-  items: readonly RepoDisplayLabelItem[]
+export function getRepoDisplayLabelsByPath<T extends RepoDisplayLabelItem>(
+  items: readonly T[],
+  getResultKey: (item: T) => string = getRepoDisplayLabelKey
 ): Map<string, string> {
   const labels = new Map<string, string>()
-  const itemsByHostAndName = new Map<string, { item: RepoDisplayLabelItem; segments: string[] }[]>()
+  const itemsByHostAndName = new Map<
+    string,
+    { item: RepoDisplayLabelItem; segments: string[]; resultKey: string }[]
+  >()
 
   for (const item of items) {
     const displayName = item.displayName || item.path
-    labels.set(getRepoDisplayLabelKey(item), displayName)
+    const resultKey = getResultKey(item)
+    labels.set(resultKey, displayName)
     // Host labels already distinguish projects on different machines.
     const collisionKey = JSON.stringify([getRepoExecutionHostId(item), displayName])
     const colliding = itemsByHostAndName.get(collisionKey) ?? []
-    colliding.push({ item: { ...item, displayName }, segments: normalizePathSegments(item.path) })
+    colliding.push({
+      item: { ...item, displayName },
+      segments: normalizePathSegments(item.path),
+      resultKey
+    })
     itemsByHostAndName.set(collisionKey, colliding)
   }
 
@@ -81,8 +90,8 @@ export function getRepoDisplayLabelsByPath(
         )
       }
     }
-    collidingItems.forEach(({ item }, index) => {
-      labels.set(getRepoDisplayLabelKey(item), nextLabels[index] ?? item.displayName)
+    collidingItems.forEach(({ item, resultKey }, index) => {
+      labels.set(resultKey, nextLabels[index] ?? item.displayName)
     })
   }
 

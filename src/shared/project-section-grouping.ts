@@ -1,4 +1,9 @@
 import {
+  addItemToProjectSection,
+  ensureProjectSectionForRepo,
+  retainSectionDisplayRepo
+} from './project-section-collection'
+import {
   getProjectGroupingForRepo,
   getProjectSectionRepoLookup,
   type ProjectHeaderRevealTarget
@@ -72,6 +77,8 @@ export type ProjectSectionEntry<Item, R extends ProjectSectionRepo = Repo, Notic
   /** Owning-project activity, when display placement files rows under another project. */
   activityItems?: readonly Item[]
   repo?: R
+  /** Validated section-owned display source; raw ordering anchors never fill it. */
+  displayRepo?: R
   repoIds: Set<string>
 }
 
@@ -186,74 +193,6 @@ export function buildProjectOwnershipIndex<Item, R extends ProjectSectionRepo>(a
   return ownership
 }
 
-function addItemToProjectSection<Item, R extends ProjectSectionRepo>(
-  sections: Map<string, ProjectSectionEntry<Item, R>>,
-  item: Item,
-  repoId: string,
-  repoMap: ReadonlyMap<string, R>,
-  projectIndex: ProjectGroupingIndex | null,
-  hostId?: string,
-  repoByHost?: ReadonlyMap<string, R>
-): void {
-  const grouping = getProjectGroupingForRepo(repoId, repoMap, projectIndex, hostId, repoByHost)
-  let section = sections.get(grouping.key)
-  if (!section) {
-    section = { label: grouping.label, items: [], repo: grouping.repo, repoIds: new Set() }
-    sections.set(grouping.key, section)
-  }
-  section.items.push(item)
-  section.repoIds.add(repoId)
-}
-
-/** Open empty repo sections; requireRepo skips missing catalog IDs instead of showing Unknown. */
-function ensureProjectSectionForRepo<Item, R extends ProjectSectionRepo, Notice>(
-  sections: Map<string, ProjectSectionEntry<Item, R, Notice>>,
-  repoId: string,
-  repoMap: ReadonlyMap<string, R>,
-  projectIndex: ProjectGroupingIndex | null,
-  options: { requireRepo?: boolean; fallbackRepo?: R; repoByHost?: ReadonlyMap<string, R> } = {}
-): ProjectSectionEntry<Item, R, Notice> | undefined {
-  const grouping = getProjectGroupingForRepo(
-    repoId,
-    repoMap,
-    projectIndex,
-    options.fallbackRepo ? getRepoExecutionHostId(options.fallbackRepo) : undefined,
-    options.repoByHost
-  )
-  const separator = repoId.indexOf('\0')
-  const rawId = separator === -1 ? repoId : repoId.slice(separator + 1)
-  const hostId = options.fallbackRepo
-    ? getRepoExecutionHostId(options.fallbackRepo)
-    : separator !== -1
-      ? repoId.slice(0, separator)
-      : grouping.repo
-        ? getRepoExecutionHostId(grouping.repo)
-        : undefined
-  const owner = hostId
-    ? projectIndex?.groupByRepoHost.get(getRepoHostIdentityForParts(rawId, hostId))
-    : undefined
-  if (owner && owner.key !== grouping.key) {
-    return undefined
-  }
-  if (options.requireRepo && !grouping.repo) {
-    return
-  }
-  repoId = grouping.repo?.id ?? repoId.slice(repoId.indexOf('\0') + 1)
-  const section = sections.get(grouping.key)
-  if (section) {
-    section.repoIds.add(repoId)
-    return section
-  }
-  const created: ProjectSectionEntry<Item, R, Notice> = {
-    label: grouping.label,
-    items: [],
-    repo: grouping.repo ?? options.fallbackRepo,
-    repoIds: new Set([repoId])
-  }
-  sections.set(grouping.key, created)
-  return created
-}
-
 /** Build unlabelled sections: rows, placeholders, notice repos (with catalog fallback), then pending workspace repos.
  * Header order is applied here; withRepoSectionDisplayLabels supplies labels. */
 export function buildProjectSections<
@@ -287,21 +226,24 @@ export function buildProjectSections<
       repoMap,
       projectIndex,
       args.hostIdOf?.(item),
-      repoByHost
+      repoByHost,
+      args.repoOrder
     )
   }
   // Repos may precede scans; ignore stale placeholder IDs instead of rendering Unknown headers.
   for (const repoId of args.placeholderRepoIds) {
     ensureProjectSectionForRepo(sections, repoId, repoMap, projectIndex, {
       requireRepo: true,
-      repoByHost
+      repoByHost,
+      repoOrder: args.repoOrder
     })
   }
   // Pinned worktrees leave natural groups, but actionable notices still need project sections.
   for (const [repoId, fallbackRepo, ref] of args.noticeRepos ?? []) {
     const section = ensureProjectSectionForRepo(sections, repoId, repoMap, projectIndex, {
       fallbackRepo,
-      repoByHost
+      repoByHost,
+      repoOrder: args.repoOrder
     })
     if (section && ref !== undefined) {
       ;(section.noticeRefs ??= []).push(ref)
@@ -310,7 +252,8 @@ export function buildProjectSections<
   // Ensure a section for first-workspace creation so its pending row is not dropped.
   for (const repoId of args.pendingRepoIds ?? []) {
     const section = ensureProjectSectionForRepo(sections, repoId, repoMap, projectIndex, {
-      repoByHost
+      repoByHost,
+      repoOrder: args.repoOrder
     })
     if (section) {
       ;(section.pendingBucketRefs ??= []).push(repoId)
@@ -318,6 +261,13 @@ export function buildProjectSections<
   }
   for (const [key, section] of sections) {
     section.activityItems = ownership.get(key)?.items ?? []
+    for (const setup of projectIndex?.groupByKey.get(key)?.registrations ?? []) {
+      const raw = repoMap.get(setup.repoId)
+      const own =
+        repoByHost?.get(`${setup.hostId}\0${setup.repoId}`) ??
+        (raw && getRepoExecutionHostId(raw) === setup.hostId ? raw : undefined)
+      retainSectionDisplayRepo(section, own, args.repoOrder)
+    }
   }
   return orderProjectSections(sections, repoMap, args.repoOrder, args.projectOrderBy)
 }

@@ -1,8 +1,10 @@
 // @vitest-environment happy-dom
+import * as optionRanker from './palette-filter-option-list'
+import * as projectEdits from '../../../../shared/project-repo-filter-selection'
 import { useState } from 'react'
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, render, screen, fireEvent } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { afterEach, expect, it } from 'vitest'
+import { afterEach, expect, it, vi } from 'vitest'
 import { projectHostSetupProjectionFromRepos } from '../../../../shared/project-host-setup-projection'
 import type { Repo } from '../../../../shared/repo-types'
 import { worktree as worktreeBase } from '../sidebar/worktree-list-groups-test-fixtures'
@@ -250,3 +252,152 @@ it('dispatches the actual menu search/complete/select-all/Clear to the current p
   expect(getPaletteProjectSelection(offline, completed.repoIds).full.size).toBe(1)
   expect(completed.repoIds).toContain('unresolved')
 })
+
+it.each([
+  ['', 'a-0,a-1,a-2,b-0,b-1,notes-0', 2],
+  ['Harbor', 'a-0,a-1,a-2,b-0,b-1', 1],
+  ['Notes', 'a-0,a-1,a-2,notes-0', 1]
+])('completes initial partial selection directly for query %s', async (query, expected, count) => {
+  let current: PaletteFilterState = { hostIds: [], repoIds: ['local\0a', 'offline'] }
+  function Harness() {
+    const [filter, setFilter] = useState(current)
+    current = filter
+    const predicate = buildPaletteFilterPredicate(filter, model)
+    return (
+      <TooltipProvider>
+        <PaletteFilterMenu
+          model={model}
+          filter={filter}
+          onFilterChange={setFilter}
+          onRequestInputFocus={() => {}}
+          portalContainer={null}
+        />
+        <PaletteFilterChips model={model} filter={filter} onFilterChange={setFilter} />
+        <output>
+          {worktrees
+            .filter((row) => !predicate || predicate.matchesWorktree(row))
+            .map((row) => row.id)
+            .join(',')}
+        </output>
+      </TooltipProvider>
+    )
+  }
+  render(<Harness />)
+  const user = userEvent.setup()
+  await user.click(screen.getByRole('button', { name: 'Filter results' }))
+  if (query) {
+    await user.type(screen.getByRole('textbox', { name: 'Filter projects...' }), query)
+  }
+  await user.click(screen.getByRole('button', { name: `Select all matching (${count})` }))
+  expect(document.querySelector('output')!.textContent).toBe(expected)
+  expect(current.repoIds).toContain('offline')
+  expect(getPaletteProjectSelection(model, current.repoIds).partial.has(harbor)).toBe(
+    query === 'Notes'
+  )
+  if (query !== 'Notes') {
+    expect(screen.queryByText(/Harbor · Partial/)).toBeNull()
+  }
+})
+
+it.each([100, 1000])(
+  'counts actual menu completion ranking and one bulk member edit at %i options',
+  async (n) => {
+    const catalog = Array.from({ length: n }, (_, i) => ({
+      ...first,
+      id: `repo-${i}`,
+      displayName: `Project ${i}`,
+      path: `/local/${i}`,
+      gitRemoteIdentity: {
+        ...first.gitRemoteIdentity!,
+        canonicalKey: `github.com/org/project-${i}`,
+        remoteUrl: `https://github.com/org/project-${i}`
+      }
+    }))
+    const allRepos = [
+      ...catalog,
+      ...catalog.map((repo) => ({
+        ...repo,
+        executionHostId: 'runtime:server' as const,
+        path: `/remote/${repo.id}`
+      }))
+    ]
+    const projection = projectHostSetupProjectionFromRepos(allRepos)
+    const base = buildPaletteFilterModel({
+      repos: allRepos,
+      worktrees: [],
+      hostOptions: [],
+      projects: projection.projects,
+      projectHostSetups: projection.setups
+    })
+    let reads = 0
+    const model = {
+      ...base,
+      repositories: base.repositories.map(
+        (option) =>
+          new Proxy(option, {
+            get(target, key, receiver) {
+              if (key === 'searchText') {
+                reads++
+              }
+              return Reflect.get(target, key, receiver)
+            }
+          })
+      )
+    }
+    const actualRank = optionRanker.rankPaletteFilterOptions
+    const passes: number[] = []
+    const rankSpy = vi
+      .spyOn(optionRanker, 'rankPaletteFilterOptions')
+      .mockImplementation((args) => {
+        const before = reads
+        const result = actualRank(args)
+        if (args.query) {
+          passes.push(reads - before)
+        }
+        return result
+      })
+    const editSpy = vi.spyOn(projectEdits, 'editProjectFilter')
+    let current: PaletteFilterState = { hostIds: [], repoIds: ['local\0repo-0', 'offline'] }
+    function Harness() {
+      const [filter, setFilter] = useState(current)
+      current = filter
+      return (
+        <PaletteFilterMenu
+          model={model}
+          filter={filter}
+          onFilterChange={setFilter}
+          onRequestInputFocus={() => {}}
+          portalContainer={null}
+        />
+      )
+    }
+    try {
+      render(<Harness />)
+      const user = userEvent.setup()
+      await user.click(screen.getByRole('button', { name: 'Filter results' }))
+      fireEvent.change(screen.getByRole('textbox', { name: 'Filter projects...' }), {
+        target: { value: 'Project' }
+      })
+      await user.click(screen.getByRole('button', { name: `Select all matching (${n})` }))
+      expect(editSpy).toHaveBeenCalledTimes(1)
+      expect(current.repoIds).toContain('offline')
+      const predicate = buildPaletteFilterPredicate(current, model)!
+      expect(
+        allRepos.filter((repo) =>
+          predicate.matchesWorktree({ repoId: repo.id, hostId: repo.executionHostId ?? 'local' })
+        )
+      ).toHaveLength(2 * n)
+      expect(getPaletteProjectSelection(model, current.repoIds).full.size).toBe(n)
+      expect(getPaletteProjectSelection(model, current.repoIds).partial.size).toBe(0)
+      expect(passes.length).toBeGreaterThan(0)
+      expect(passes.every((count) => count === n)).toBe(true)
+      process.stdout.write(
+        `PG9 palette operations ${JSON.stringify({ n, registrations: 2 * n, rankPasses: passes.length, searchReadsByPass: passes, bulkEdits: editSpy.mock.calls.length, matchedOwners: 2 * n })}\n`
+      )
+    } finally {
+      cleanup()
+      rankSpy.mockRestore()
+      editSpy.mockRestore()
+    }
+  }
+)

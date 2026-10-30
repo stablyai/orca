@@ -1,11 +1,13 @@
+import type { RepoHookSettings } from '../../../../../shared/orca-yaml-hook-types'
+import {
+  RepositorySettingsSession,
+  type RepositorySettingsSessionState
+} from './RepositorySettingsSession'
+import { getRepoHostIdentity } from '../../../store/slices/repo-host-identity'
 import { ProjectGroupingSetting } from '../ProjectGroupingSetting'
-import type { GhAccountBinding } from '../../../../../shared/github/account-binding'
 import { useCallback, useRef, useState } from 'react'
-import type { OrcaHooks, RepoHookSettings } from '../../../../../shared/orca-yaml-hook-types'
-import type { Project, ProjectUpdateArgs } from '../../../../../shared/project-types'
-import type { Repo } from '../../../../../shared/repo-types'
 import { getRepoKindLabel, isFolderRepo } from '../../../../../shared/repo-kind'
-import { getRepoExecutionHostId, type ExecutionHostId } from '../../../../../shared/execution-host'
+import { getRepoExecutionHostId } from '../../../../../shared/execution-host'
 import { Label } from '../../ui/label'
 import { Separator } from '../../ui/separator'
 import { useShallow } from 'zustand/react/shallow'
@@ -19,7 +21,6 @@ import {
   getRemoveProjectDescription,
   RepositoryRemoveProjectButton
 } from './RepositoryRemoveProjectButton'
-import type { SettingsProjectRemovalScope } from '../settings-project-list'
 import { matchesSettingsSearch } from '../settings-search'
 import { useAppStore } from '@/store/index'
 import { getRepositoryIconSectionId } from './repository-settings-targets'
@@ -37,51 +38,35 @@ import { RepositoryJiraProjectSection } from './RepositoryJiraProjectSection'
 import { getProjectRuntimeSessionSummary } from './execution/repository-runtime-session-summary'
 import { getRepoOwnerWorktreeVisibilityDefaults } from '../../../store/worktree-visibility-defaults-by-host'
 
-type RepositoryPaneRepoUpdate = Omit<
-  Partial<Repo>,
-  'sourceControlAi' | 'externalWorktreeVisibility' | 'ghAccount'
-> & {
-  sourceControlAi?: Repo['sourceControlAi'] | null
-  externalWorktreeVisibility?: Repo['externalWorktreeVisibility'] | null
-  ghAccount?: GhAccountBinding | null
-}
+export type { RepositoryPaneRepoUpdate } from './repository-pane-types'
+import type { RepositoryPaneProps } from './repository-pane-types'
 
 const EMPTY_WSL_DISTROS: string[] = []
 
-type RepositoryPaneProps = {
-  repo: Repo
-  yamlHooks: OrcaHooks | null
-  hasHooksFile: boolean
-  hooksInspectionReady: boolean
-  mayNeedUpdate: boolean
-  updateRepo: (
-    repoId: string,
-    updates: RepositoryPaneRepoUpdate,
-    options?: { hostId?: ExecutionHostId }
-  ) => void | Promise<boolean>
-  removeProject: (repoId: string) => void
-  project?: Project | null
-  selectedProjectSetupId?: string
-  settingsSelectionKey?: string
-  settingsEntryRepoIds?: ReadonlySet<string>
-  removalScope?: SettingsProjectRemovalScope
-  isLocalWindowsProject?: boolean
-  wslAvailable?: boolean
-  wslDistros?: string[]
-  wslCapabilitiesLoading?: boolean
-  updateProject?: (
-    projectId: string,
-    updates: ProjectUpdateArgs['updates']
-  ) => void | Promise<unknown>
+export function RepositoryPane(props: RepositoryPaneProps): React.JSX.Element {
+  return props.session ? (
+    <RepositoryPaneView {...props} session={props.session} />
+  ) : (
+    <RepositorySettingsSession
+      key={getRepoHostIdentity(props.repo)}
+      repo={props.repo}
+      repoId={props.repo.id}
+      hostId={getRepoExecutionHostId(props.repo)}
+      isFolder={isFolderRepo(props.repo)}
+      updateRepo={props.updateRepo}
+    >
+      {(session) => <RepositoryPaneView {...props} session={session} />}
+    </RepositorySettingsSession>
+  )
 }
-
-export function RepositoryPane({
+function RepositoryPaneView({
+  session,
   repo,
   yamlHooks,
   hasHooksFile,
   hooksInspectionReady,
   mayNeedUpdate,
-  updateRepo,
+  updateRepo: _updateRepo,
   removeProject,
   project = null,
   selectedProjectSetupId,
@@ -93,15 +78,11 @@ export function RepositoryPane({
   wslDistros = EMPTY_WSL_DISTROS,
   wslCapabilitiesLoading = false,
   updateProject
-}: RepositoryPaneProps): React.JSX.Element {
+}: RepositoryPaneProps & { session: RepositorySettingsSessionState }): React.JSX.Element {
   const isFolder = isFolderRepo(repo)
   // Bind writes to the switcher-selected owner; same-ID/self-paired repos must not use focused-host fallback.
   const selectedHostId = getRepoExecutionHostId(repo)
-  const updateSelectedRepo = useCallback(
-    (repoId: string, updates: RepositoryPaneRepoUpdate) =>
-      updateRepo(repoId, updates, { hostId: selectedHostId }),
-    [updateRepo, selectedHostId]
-  )
+  const { updateSelectedRepo } = session
   const searchQuery = useAppStore((state) => state.settingsSearchQuery)
   const updateSettings = useAppStore((state) => state.updateSettings)
   const settings = useAppStore((state) => state.settings)
@@ -209,6 +190,7 @@ export function RepositoryPane({
   const hooksSection =
     !isFolder && (forceFullPaneForRepoMatch || matchesSettingsSearch(searchQuery, hooksEntries)) ? (
       <RepositoryHooksSection
+        controller={session.hooks}
         key="hooks"
         repo={repo}
         yamlHooks={yamlHooks}
@@ -275,6 +257,7 @@ export function RepositoryPane({
             {translate('auto.components.settings.RepositoryPane.c7ef4415de', 'Display Name')}
           </Label>
           <RepoSettingsDraftInput
+            controller={session.name}
             id={`repo-display-name-${repo.id}`}
             repoId={repo.id}
             storeValue={repo.displayName}
@@ -303,7 +286,11 @@ export function RepositoryPane({
           id={getRepositoryIconSectionId(repo.id)}
           forceVisible={forceFullPaneForRepoMatch}
         >
-          <RepositoryIconPicker repo={repo} updateRepo={updateSelectedRepo} />
+          <RepositoryIconPicker
+            websiteInput={session.websiteInput}
+            repo={repo}
+            updateRepo={updateSelectedRepo}
+          />
         </SearchableSetting>
 
         <RepositoryJiraProjectSection
@@ -363,6 +350,7 @@ export function RepositoryPane({
             />
 
             <RepositoryWorktreeDefaultsSection
+              locationInput={session.location}
               repo={repo}
               settings={repoOwnerSettings}
               updateRepo={updateSelectedRepo}
@@ -382,6 +370,7 @@ export function RepositoryPane({
     !isFolder &&
     (forceFullPaneForRepoMatch || matchesSettingsSearch(searchQuery, sourceControlAiEntries)) ? (
       <RepositorySourceControlAiSection
+        controller={session.ai}
         key="source-control-ai"
         repo={repo}
         updateRepo={updateSelectedRepo}
@@ -390,21 +379,32 @@ export function RepositoryPane({
     !isFolder &&
     !repo.connectionId &&
     (forceFullPaneForRepoMatch || matchesSettingsSearch(searchQuery, symlinkEntries)) ? (
-      <WorktreeSymlinksSection key="symlinks" repo={repo} updateRepo={updateSelectedRepo} />
+      <WorktreeSymlinksSection
+        input={session.symlinks}
+        key="symlinks"
+        repo={repo}
+        updateRepo={updateSelectedRepo}
+      />
     ) : null,
     !isFolder &&
     (forceFullPaneForRepoMatch || matchesSettingsSearch(searchQuery, sparsePresetEntries)) ? (
-      <SparsePresetSettingsSection key={`sparse-presets:${repo.id}`} repoId={repo.id} />
+      <SparsePresetSettingsSection
+        controller={session.sparse}
+        currentRepo={repo}
+        key={`sparse-presets:${repo.id}`}
+        repoId={repo.id}
+      />
     ) : null,
     !isFolder && (forceFullPaneForRepoMatch || matchesSettingsSearch(searchQuery, mcpEntries)) ? (
       <McpConfigSection key={`mcp-configs:${selectedHostId}:${repo.id}`} repo={repo} />
     ) : null
-  ].filter(Boolean)
+  ]
+  const renderedSections = visibleSections.filter((section) => section !== null)
 
   return (
     <div ref={setRepositoryPaneRootRef} className="space-y-8">
-      {visibleSections.map((section, index) => (
-        <div key={index} className="space-y-8">
+      {renderedSections.map((section, index) => (
+        <div key={section.key} className="space-y-8">
           {index > 0 ? <Separator /> : null}
           {section}
         </div>

@@ -3,6 +3,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { act, render, cleanup, fireEvent } from '@testing-library/react'
 import '../../__fixtures__/settings-persistence-test-fixture'
 import React from 'react'
+import * as agentRoute from '@/lib/agent-launch-route-input'
+import * as agentInventory from '@/lib/agent-detection-target-inventory'
+import type { Repo } from '../../../../../../shared/repo-types'
 import type { TuiAgent } from '../../../../../../shared/tui-agent'
 import { normalizeRepoSourceControlAiOverrides } from '../../../../../../shared/source-control-ai-repo-settings'
 import type { RepoSourceControlAiOverrides } from '../../../../../../shared/source-control-ai-types'
@@ -161,6 +164,7 @@ describe('RepositorySourceControlAiActionRows', () => {
           }),
           React.createElement(RepositorySourceControlAiActionRows, {
             repoId: 'repo-1',
+            repo: useAppStore.getState().repos[0],
             repoAi: { actionOverrides: { fixCommitFailure: recipe } },
             source,
             defaultTuiAgent: 'claude',
@@ -391,6 +395,7 @@ it.each([1, 10])(
     const edit = vi.fn()
     const props = {
       repoId: TEST_REPO.id,
+      repo: useAppStore.getState().repos[0],
       repoAi: { actionOverrides: actions },
       source: settings.sourceControlAi!,
       defaultTuiAgent: 'claude' as const,
@@ -475,6 +480,219 @@ it.each([1, 10])(
     } finally {
       view.unmount()
       vi.useRealTimers()
+    }
+  }
+)
+
+it.each(['ssh', 'runtime'] as const)(
+  'measures corrected %s twin selectors separately from real action-row renders and disposes their existing request',
+  async (kind) => {
+    const settings = useAppStore.getState().settings!
+    const local: Repo = { ...TEST_REPO, executionHostId: 'local' }
+    const exact: Repo =
+      kind === 'ssh'
+        ? { ...local, path: '/box/repo', connectionId: 'box', executionHostId: 'ssh:box' }
+        : { ...local, path: '/alpha/repo', executionHostId: 'runtime:alpha' }
+    const ownKey = kind === 'ssh' ? 'box' : getRuntimeAgentInventoryKey('alpha')
+    const otherKey = kind === 'ssh' ? 'other' : getRuntimeAgentInventoryKey('other')
+    let ownIds: TuiAgent[] = ['claude']
+    let ownReads = 0
+    let foreignReads = 0
+    const inventory = () =>
+      Object.defineProperties(
+        {},
+        {
+          [ownKey]: {
+            enumerable: true,
+            configurable: true,
+            get: () => {
+              ownReads++
+              return ownIds
+            }
+          },
+          [otherKey]: {
+            enumerable: true,
+            configurable: true,
+            get: () => {
+              foreignReads++
+              return ['goose']
+            }
+          }
+        }
+      )
+    const remoteRefresh = vi.fn().mockResolvedValue(['claude'])
+    const runtimeRefresh = vi.fn().mockResolvedValue(['claude'])
+    const host = projectAgentLaunchSettings({ defaultTuiAgent: 'codex' })
+    rpc.mockClear()
+    rpc.mockResolvedValue({ settings: host })
+    useAppStore.setState({
+      settings: { ...settings, experimentalNativeChat: false, defaultTuiAgent: 'codex' },
+      repos: [local, exact],
+      settingsSearchQuery: '',
+      detectedAgentIds: ['goose'],
+      remoteDetectedAgentIds: kind === 'ssh' ? inventory() : {},
+      runtimeDetectedAgentIds: kind === 'runtime' ? inventory() : {},
+      ensureNativeDetectedAgents: vi.fn(),
+      ensureRemoteDetectedAgents: vi.fn(),
+      ensureRuntimeDetectedAgents: vi.fn(),
+      refreshRemoteDetectedAgents: remoteRefresh,
+      refreshRuntimeDetectedAgents: runtimeRefresh
+    })
+    const route = vi.spyOn(agentRoute, 'buildAgentLaunchRouteInput')
+    const storedInventory = vi.spyOn(agentInventory, 'readDetectedAgentsForTarget')
+    const edit = vi.fn()
+    let commits = 0
+    const view = render(
+      React.createElement(
+        TooltipProvider,
+        null,
+        React.createElement(
+          React.Profiler,
+          {
+            id: 'actual-action-rows',
+            onRender: () => {
+              commits++
+            }
+          },
+          React.createElement(RepositorySourceControlAiActionRows, {
+            repoId: exact.id,
+            repo: exact,
+            repoAi: {},
+            source: settings.sourceControlAi!,
+            defaultTuiAgent: 'codex',
+            savingActionIds: {},
+            actionDirtyById: computeActionDirtyById({}, {}, {}),
+            onActionModeChange: edit,
+            onActionAgentChange: edit,
+            onActionLaunchPreferencesChange: edit,
+            onActionTemplateChange: edit,
+            onActionAgentArgsChange: edit,
+            onAppendVariable: edit,
+            onActionDiscard: edit,
+            onActionSave: edit
+          })
+        )
+      )
+    )
+    try {
+      await act(async () => {})
+      const permissions = (agent: string) =>
+        view.queryAllByRole('button', { name: `${agent} permissions` })
+      expect(permissions('Claude')).toHaveLength(5)
+      expect(permissions('Goose')).toHaveLength(0)
+      expect(kind === 'ssh' ? remoteRefresh : runtimeRefresh).toHaveBeenCalledWith(
+        kind === 'ssh' ? 'box' : 'alpha',
+        ...(kind === 'runtime' ? [undefined] : [])
+      )
+      expect(kind === 'ssh' ? runtimeRefresh : remoteRefresh).not.toHaveBeenCalled()
+      const expectedTarget =
+        kind === 'ssh'
+          ? { kind: 'ssh', connectionId: 'box' }
+          : { kind: 'runtime', environmentId: 'alpha' }
+      expect(storedInventory.mock.calls.length).toBeGreaterThan(0)
+      expect(
+        storedInventory.mock.calls.every(
+          ([, target]) => JSON.stringify(target) === JSON.stringify(expectedTarget)
+        )
+      ).toBe(true)
+      expect(
+        route.mock.calls.every(
+          ([, args]) => args.workspace.executionHostId === exact.executionHostId
+        )
+      ).toBe(true)
+      const gets = () => rpc.mock.calls.filter((call) => call[1] === 'settings.getAgentLaunch')
+      expect(gets()).toHaveLength(kind === 'runtime' ? 1 : 0)
+      async function measure(label: string, publish: () => void) {
+        commits = ownReads = foreignReads = 0
+        route.mockClear()
+        storedInventory.mockClear()
+        await act(async () => publish())
+        const record = {
+          kind,
+          act: label,
+          commits,
+          ownInventoryReads: ownReads,
+          foreignInventoryReads: foreignReads,
+          storedInventoryReads: storedInventory.mock.calls.length,
+          routePreparations: route.mock.calls.length,
+          hostRequests: gets().length
+        }
+        console.log('PG9 nested action selectors', JSON.stringify(record))
+        expect(record.ownInventoryReads).toBeGreaterThan(0)
+        expect(record.storedInventoryReads).toBeGreaterThan(0)
+        expect(record.routePreparations).toBeGreaterThan(0)
+        expect(record.foreignInventoryReads).toBe(0)
+        expect(
+          route.mock.calls.every(
+            ([, args]) => args.workspace.executionHostId === exact.executionHostId
+          )
+        ).toBe(true)
+        expect(gets()).toHaveLength(kind === 'runtime' ? 1 : 0)
+        return record
+      }
+      const unrelated = await measure('unrelated', () =>
+        useAppStore.setState({ settingsSearchInputQuery: 'unrelated notification' })
+      )
+      expect(unrelated.commits).toBe(0)
+      const font = await measure('font', () =>
+        useAppStore.setState(({ settings }) => ({
+          settings: settings && { ...settings, appFontFamily: 'monospace' }
+        }))
+      )
+      expect(font.commits).toBeGreaterThan(0)
+      const otherHost = await measure('other-host', () =>
+        useAppStore.setState(
+          kind === 'ssh'
+            ? {
+                remoteDetectedAgentIds: Object.defineProperty(inventory(), otherKey, {
+                  enumerable: true,
+                  configurable: true,
+                  value: ['codex']
+                })
+              }
+            : {
+                runtimeDetectedAgentIds: Object.defineProperty(inventory(), otherKey, {
+                  enumerable: true,
+                  configurable: true,
+                  value: ['codex']
+                })
+              }
+        )
+      )
+      expect(otherHost.commits).toBe(0)
+      const equalOverride = await measure('equal-override', () =>
+        useAppStore.setState(({ settings }) => ({
+          settings: settings && {
+            ...settings,
+            projectGroupingOverrides: { ...settings.projectGroupingOverrides }
+          }
+        }))
+      )
+      expect(equalOverride.commits).toBeGreaterThan(0)
+      expect(permissions('Claude')).toHaveLength(5)
+      const meaningful = await measure('same-owner-inventory', () => {
+        ownIds = ['codex']
+        useAppStore.setState(
+          kind === 'ssh'
+            ? { remoteDetectedAgentIds: inventory() }
+            : { runtimeDetectedAgentIds: inventory() }
+        )
+      })
+      expect(meaningful.commits).toBeGreaterThan(0)
+      expect(permissions('Codex')).toHaveLength(5)
+      expect(permissions('Claude')).toHaveLength(0)
+      expect(edit).not.toHaveBeenCalled()
+      view.unmount()
+      await act(async () => {})
+      const readsAfterUnmount = ownReads
+      const routesAfterUnmount = route.mock.calls.length
+      act(() => useAppStore.setState({ settingsSearchInputQuery: 'after retirement' }))
+      expect(ownReads).toBe(readsAfterUnmount)
+      expect(route).toHaveBeenCalledTimes(routesAfterUnmount)
+    } finally {
+      view.unmount()
+      route.mockRestore()
+      storedInventory.mockRestore()
     }
   }
 )

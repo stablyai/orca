@@ -121,56 +121,58 @@ export function renderSettingsPage(context: SettingsRenderContext): React.JSX.El
               view.isFocusedSetupGuidePane || view.isWidePluginsPane ? 'max-w-6xl' : 'max-w-4xl'
             )}
           >
-            {navigation.visibleNavSections.length === 0 ? (
-              <div className="flex min-h-[24rem] items-center justify-center rounded-2xl border border-dashed border-border/60 bg-card/30 text-sm text-muted-foreground">
-                {translate(
-                  'auto.components.settings.Settings.noSettingsFoundForQuery',
-                  'No settings found for "{{value0}}"',
-                  { value0: model.settingsSearchQuery.trim() }
+            <SettingsContentScrollElementProvider value={interactions.contentScrollElement}>
+              <ActiveSettingsSectionProvider value={model.activeSectionId}>
+                {navigation.visibleNavSections.length === 0 ? (
+                  <div className="flex min-h-[24rem] items-center justify-center rounded-2xl border border-dashed border-border/60 bg-card/30 text-sm text-muted-foreground">
+                    {translate(
+                      'auto.components.settings.Settings.noSettingsFoundForQuery',
+                      'No settings found for "{{value0}}"',
+                      { value0: model.settingsSearchQuery.trim() }
+                    )}
+                  </div>
+                ) : (
+                  <>
+                    {renderAgentsSettingsSection(context)}
+                    {renderAccountsSettingsSection(context)}
+                    {renderOrchestrationSettingsSection(context)}
+                    {renderLinearSettingsSection(context)}
+                    {renderDesktopCapabilitySettingsSections(context)}
+                    {renderOrcaAccountSettingsSection(context)}
+                    {renderSetupGuideSettingsSection(context)}
+                    {renderGeneralSettingsSection(context)}
+                    {renderIntegrationsSettingsSection(context)}
+                    {renderMobileSettingsSection(context)}
+                    {renderAutomationsSettingsSection(context)}
+                    {renderArtifactsSettingsSection(context)}
+                    {renderShareSkillsSettingsSection(context)}
+                    {renderSessionHistorySettingsSection(context)}
+                    {renderGitSettingsSection(context)}
+                    {renderTasksSettingsSection(context)}
+                    {renderTerminalSettingsSection(context)}
+                    {renderQuickCommandsSettingsSection(context)}
+                    {renderBrowserSettingsSection(context)}
+                    {renderMobileEmulatorSettingsSection(context)}
+                    {renderFloatingWorkspaceSettingsSection(context)}
+                    {renderAppearanceSettingsSection(context)}
+                    {renderChatSettingsSection(context)}
+                    {renderInputSettingsSection(context)}
+                    {renderNotificationsSettingsSection(context)}
+                    {renderShortcutsSettingsSection(context)}
+                    {renderStatsSettingsSection(context)}
+                    {renderServersSettingsSection(context)}
+                    {renderSshSettingsSection(context)}
+                    {renderDeveloperPermissionsSettingsSection(context)}
+                    {renderPrivacySettingsSection(context)}
+                    {renderAdvancedSettingsSection(context)}
+                    {renderDevSettingsSection(context)}
+                    {renderExperimentalSettingsSection(context)}
+                    {renderPluginsSettingsSection(context)}
+                  </>
                 )}
-              </div>
-            ) : (
-              <SettingsContentScrollElementProvider value={interactions.contentScrollElement}>
-                <ActiveSettingsSectionProvider value={model.activeSectionId}>
-                  {renderAgentsSettingsSection(context)}
-                  {renderAccountsSettingsSection(context)}
-                  {renderOrchestrationSettingsSection(context)}
-                  {renderLinearSettingsSection(context)}
-                  {renderDesktopCapabilitySettingsSections(context)}
-                  {renderOrcaAccountSettingsSection(context)}
-                  {renderSetupGuideSettingsSection(context)}
-                  {renderGeneralSettingsSection(context)}
-                  {renderIntegrationsSettingsSection(context)}
-                  {renderMobileSettingsSection(context)}
-                  {renderAutomationsSettingsSection(context)}
-                  {renderArtifactsSettingsSection(context)}
-                  {renderShareSkillsSettingsSection(context)}
-                  {renderSessionHistorySettingsSection(context)}
-                  {renderGitSettingsSection(context)}
-                  {renderTasksSettingsSection(context)}
-                  {renderTerminalSettingsSection(context)}
-                  {renderQuickCommandsSettingsSection(context)}
-                  {renderBrowserSettingsSection(context)}
-                  {renderMobileEmulatorSettingsSection(context)}
-                  {renderFloatingWorkspaceSettingsSection(context)}
-                  {renderAppearanceSettingsSection(context)}
-                  {renderChatSettingsSection(context)}
-                  {renderInputSettingsSection(context)}
-                  {renderNotificationsSettingsSection(context)}
-                  {renderShortcutsSettingsSection(context)}
-                  {renderStatsSettingsSection(context)}
-                  {renderServersSettingsSection(context)}
-                  {renderSshSettingsSection(context)}
-                  {renderDeveloperPermissionsSettingsSection(context)}
-                  {renderPrivacySettingsSection(context)}
-                  {renderAdvancedSettingsSection(context)}
-                  {renderDevSettingsSection(context)}
-                  {renderExperimentalSettingsSection(context)}
-                  {renderPluginsSettingsSection(context)}
-                  {renderProjectSettingsSections(context)}
-                </ActiveSettingsSectionProvider>
-              </SettingsContentScrollElementProvider>
-            )}
+                {renderProjectSettingsSections(context)}
+              </ActiveSettingsSectionProvider>
+            </SettingsContentScrollElementProvider>
           </div>
         </div>
       </div>

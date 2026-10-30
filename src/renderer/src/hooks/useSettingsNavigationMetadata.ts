@@ -76,12 +76,6 @@ export function buildSettingsNavigationMetadata({
   const runtimeEnvironmentsSearchEntry = isWebClient
     ? getWebRuntimeEnvironmentsSearchEntry()
     : getRuntimeEnvironmentsSearchEntry()
-  const reposById = new Map<string, Repo>()
-  for (const repo of repos) {
-    if (!reposById.has(repo.id)) {
-      reposById.set(repo.id, repo)
-    }
-  }
   const options: SettingsNavigationBuildOptions = {
     isMac,
     isWindows,
@@ -105,7 +99,7 @@ export function buildSettingsNavigationMetadata({
     ...buildSetupSettingsSections(options),
     ...buildWorkflowSettingsSections(options, terminalPaneSearchEntries),
     ...buildInterfaceSettingsSections(options),
-    ...buildRemoteSettingsSections(options, runtimeEnvironmentsSearchEntry, reposById)
+    ...buildRemoteSettingsSections(options, runtimeEnvironmentsSearchEntry)
   ]
 }
 

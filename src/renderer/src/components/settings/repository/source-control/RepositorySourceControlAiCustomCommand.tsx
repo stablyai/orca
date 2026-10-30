@@ -11,6 +11,7 @@ import {
 import { translate } from '@/i18n/i18n'
 
 type RepositorySourceControlAiCustomCommandProps = {
+  modeIntent?: { forceRepoMode: boolean; setForceRepoMode: (value: boolean) => void }
   value: string | undefined
   source: SourceControlAiSettings
   // onChange drafts the value locally (per keystroke); onCommit persists it (on blur / mode change).
@@ -22,14 +23,30 @@ function isRepoCommand(value: string | undefined): boolean {
   return typeof value === 'string' && value.trim().length > 0
 }
 
-export function RepositorySourceControlAiCustomCommand({
+export function RepositorySourceControlAiCustomCommand(
+  props: RepositorySourceControlAiCustomCommandProps
+): React.JSX.Element {
+  return props.modeIntent ? (
+    <CustomCommandView {...props} modeIntent={props.modeIntent} />
+  ) : (
+    <LocalCustomCommand {...props} />
+  )
+}
+function LocalCustomCommand(props: RepositorySourceControlAiCustomCommandProps): React.JSX.Element {
+  const [forceRepoMode, setForceRepoMode] = useState(false)
+  return <CustomCommandView {...props} modeIntent={{ forceRepoMode, setForceRepoMode }} />
+}
+function CustomCommandView({
+  modeIntent,
   value,
   source,
   onChange,
   onCommit
-}: RepositorySourceControlAiCustomCommandProps): React.JSX.Element {
+}: RepositorySourceControlAiCustomCommandProps & {
+  modeIntent: NonNullable<RepositorySourceControlAiCustomCommandProps['modeIntent']>
+}): React.JSX.Element {
   // Retain empty Repository command intent so selecting that mode cannot snap back before typing.
-  const [forceRepoMode, setForceRepoMode] = useState(false)
+  const { forceRepoMode, setForceRepoMode } = modeIntent
   const hasRepoCommand = isRepoCommand(value)
   const mode =
     hasRepoCommand || forceRepoMode ? CUSTOM_COMMAND_MODE_REPO : CUSTOM_COMMAND_MODE_INHERIT

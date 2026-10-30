@@ -156,7 +156,7 @@ export function useSettingsNavigationModel(
     () => new Set(visibleNavSections.map((section) => section.id)),
     [visibleNavSections]
   )
-  const currentModel = useConcreteProjectContinuity(model, interactions, visibleSectionIds)
+  const currentModel = useConcreteProjectContinuity(model, interactions)
   const neededSectionIds = useMemo(
     () =>
       deriveNeededSectionIds({

@@ -41,7 +41,7 @@ type HostedReviewDefaultKey = keyof NonNullable<RepoSourceControlAiOverrides['pr
 
 type UseRepositorySourceControlAiGlobalUxArgs = {
   repoId: string
-  persistedRepoAi: RepoSourceControlAiOverrides
+  persistedRepoAi: RepoSourceControlAiOverrides | null
   settings: GlobalSettings | null
   source: SourceControlAiSettings
   updateRepo: (repoId: string, updates: SourceControlAiRepoUpdate) => void | Promise<boolean>
@@ -57,17 +57,19 @@ export function useRepositorySourceControlAiGlobalUx({
 }: UseRepositorySourceControlAiGlobalUxArgs) {
   const mountedRef = useMountedRef()
   const persistedSerialized = useMemo(() => JSON.stringify(persistedRepoAi), [persistedRepoAi])
-  const persistedRef = useRef(persistedRepoAi)
+  const persistedRef = useRef(persistedRepoAi ?? {})
+  const currentSnapshotRef = useRef(persistedRepoAi)
+  currentSnapshotRef.current = persistedRepoAi
   const repoIdRef = useRef(repoId)
   const updateRepoRef = useRef(updateRepo)
   repoIdRef.current = repoId
   updateRepoRef.current = updateRepo
 
   const [saveError, setSaveError] = useState<string | null>(null)
-  const [immediateRepoAi, setImmediateRepoAi] = useState(persistedRepoAi)
+  const [immediateRepoAi, setImmediateRepoAi] = useState(persistedRepoAi ?? {})
   const immediateRepoAiRef = useRef(immediateRepoAi)
   immediateRepoAiRef.current = immediateRepoAi
-  const [baselineRepoAi, setBaselineRepoAi] = useState(persistedRepoAi)
+  const [baselineRepoAi, setBaselineRepoAi] = useState(persistedRepoAi ?? {})
   const setBaselineRepoAiRef = useRef(setBaselineRepoAi)
   setBaselineRepoAiRef.current = setBaselineRepoAi
   const [actionTextDrafts, setActionTextDrafts] = useState<
@@ -83,7 +85,7 @@ export function useRepositorySourceControlAiGlobalUx({
   const queueRef = useRef<ReturnType<typeof createRepoAiPersistQueue>>(undefined!)
   queueRef.current ??= createRepoAiPersistQueue({
     getRepoId: () => repoIdRef.current,
-    getPersisted: () => persistedRef.current,
+    getPersisted: () => (currentSnapshotRef.current === null ? null : persistedRef.current),
     setPersisted: (value) => {
       persistedRef.current = value
       if (mountedRef.current) {
@@ -100,6 +102,9 @@ export function useRepositorySourceControlAiGlobalUx({
   })
 
   useEffect(() => {
+    if (persistedRepoAi === null) {
+      return
+    }
     const repoChanged = lastSyncedRepoIdRef.current !== repoId
     lastSyncedRepoIdRef.current = repoId
     persistedRef.current = persistedRepoAi

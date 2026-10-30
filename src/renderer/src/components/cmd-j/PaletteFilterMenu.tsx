@@ -100,7 +100,8 @@ export default function PaletteFilterMenu({
         heading: translate('worktreeJumpPalette.filter.projects', 'Projects'),
         options: model.repositories,
         selected: [...projectSelection.matching, ...projectSelection.unresolved],
-        partial: projectSelection.partial
+        partial: projectSelection.partial,
+        full: projectSelection.full
       })
     }
     return entries

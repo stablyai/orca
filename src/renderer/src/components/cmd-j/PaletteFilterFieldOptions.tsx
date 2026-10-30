@@ -19,6 +19,7 @@ export type PaletteFilterGroup = {
   options: readonly PaletteFilterOption[]
   selected: readonly string[]
   partial?: ReadonlySet<string>
+  full?: ReadonlySet<string>
 }
 
 function FilterOptionRow({
@@ -93,10 +94,11 @@ export function PaletteFilterFieldOptions({
       rankPaletteFilterOptions({
         options: group.options,
         selectedIds: selected,
+        fullIds: group.full ?? selected,
         query: normalizedQuery,
         rankMode
       }),
-    [group.options, selected, normalizedQuery, rankMode]
+    [group.options, group.full, selected, normalizedQuery, rankMode]
   )
 
   // The scroller remounts after empty results; state reattaches the native wheel listener to its replacement.
@@ -207,7 +209,7 @@ export function PaletteFilterFieldOptions({
       ? translate('worktreeJumpPalette.filter.clearHosts', 'Clear hosts')
       : translate('worktreeJumpPalette.filter.clearProjects', 'Clear projects')
 
-  const canSelectAll = ranked.unselectedCount > 0
+  const canSelectAll = ranked.completionIds.length > 0
   const canClear = group.selected.length > 0
 
   return (
@@ -309,13 +311,13 @@ export function PaletteFilterFieldOptions({
           {canSelectAll ? (
             <button
               type="button"
-              onClick={() => onSelectAllMatching(ranked.unselectedIds)}
+              onClick={() => onSelectAllMatching(ranked.completionIds)}
               className="rounded-md px-1.5 py-0.5 text-[11px] text-muted-foreground hover:bg-accent hover:text-foreground"
             >
               {translate(
                 'worktreeJumpPalette.filter.selectAllMatching',
                 'Select all matching ({{value0}})',
-                { value0: ranked.unselectedCount }
+                { value0: ranked.completionIds.length }
               )}
             </button>
           ) : (

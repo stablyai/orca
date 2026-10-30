@@ -1,3 +1,4 @@
+import { projectHostSetupProjectionFromRepos } from '../../../src/shared/project-host-setup-projection'
 import { NO_WORKSPACE_ROW_FILTERS } from '../../../src/shared/workspace-view/workspace-row-filters'
 import { describe, expect, it } from 'vitest'
 import { getRepoExecutionHostId } from '../../../src/shared/execution-host'
@@ -80,11 +81,11 @@ describe('Project grouping on the phone', () => {
     )
 
     expect(headers(buildProjectSectionCatalog(null, desktopRepos, null, 'manual'))).toEqual([
-      { key: 'repo:m4-orca-two', label: 'orca' },
+      { key: 'repo:m4-orca-two', label: 'm4-orca-two' },
       { key: 'repo:win-orca', label: 'orca' },
       { key: 'repo:local-workspace', label: 'orca/orca' },
       { key: 'repo:local-stably', label: 'stably/orca' },
-      { key: 'repo:m4-orca', label: 'orca' },
+      { key: 'repo:m4-orca', label: 'm4-orca' },
       { key: 'repo:local-assets', label: 'design-assets' }
     ])
   })
@@ -143,4 +144,72 @@ describe('readServedProjectSections', () => {
     ).toEqual({ kind: 'kept' })
     expect(readServedProjectSections(null)).toEqual({ kind: 'kept' })
   })
+})
+
+it('keeps a local section label while an ordinary SSH raw twin has no exact Repo, then uses its late source', () => {
+  const local = {
+    id: 'shared',
+    displayName: 'shared',
+    path: '/local/shared',
+    badgeColor: '',
+    addedAt: 0
+  }
+  const ssh = { ...local, path: '/ssh/shared', connectionId: 'gpu-vm' }
+  const projection = projectHostSetupProjectionFromRepos([local])
+  const catalog = buildProjectSectionCatalog(
+    {
+      repos: [local],
+      projects: projection.projects,
+      setups: projection.setups,
+      projectOrderBy: 'manual'
+    },
+    [],
+    null,
+    null
+  )
+  const worktrees: Worktree[] = [
+    {
+      ...rows()[0],
+      worktreeId: 'local-shared',
+      repoId: 'shared',
+      repo: 'shared',
+      hostId: 'local',
+      path: '/local/shared-one'
+    },
+    {
+      ...rows()[0],
+      worktreeId: 'ssh-shared',
+      repoId: 'shared',
+      repo: 'shared',
+      hostId: 'ssh:gpu-vm',
+      path: '/ssh/shared-one'
+    }
+  ]
+  const sections = buildSections(
+    worktrees,
+    'recent',
+    { ...NO_WORKSPACE_ROW_FILTERS },
+    '',
+    'repo',
+    new Set(),
+    catalog
+  )
+  expect(sections.map((section) => [section.key, section.title])).toEqual([
+    ['project:repo:shared', 'shared'],
+    ['repo:shared', 'Unknown']
+  ])
+  expect(sections.flatMap((section) => section.data.map((row) => row.worktreeId)).sort()).toEqual([
+    'local-shared',
+    'ssh-shared'
+  ])
+  const current = buildSections(
+    worktrees,
+    'recent',
+    { ...NO_WORKSPACE_ROW_FILTERS },
+    '',
+    'repo',
+    new Set(),
+    { ...catalog, repos: [local, ssh] }
+  )
+  expect(current.every((section) => section.title === 'shared')).toBe(true)
 })
