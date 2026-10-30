@@ -6,6 +6,34 @@ import { getDefaultSettings } from '../../../../shared/constants'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { AGENT_SESSION_QUEUED_MESSAGES_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
 import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
+
+// Why: Radix Select needs pointer/layout APIs happy-dom lacks; a native select keeps value testable.
+vi.mock('../ui/select', () => ({
+  Select: ({
+    value,
+    onValueChange,
+    children
+  }: {
+    value: string
+    onValueChange: (value: string) => void
+    children: React.ReactNode
+  }) => (
+    <select
+      aria-label="While the agent works, Enter"
+      value={value}
+      onChange={(event) => onValueChange(event.currentTarget.value)}
+    >
+      {children}
+    </select>
+  ),
+  SelectTrigger: () => null,
+  SelectValue: () => null,
+  SelectContent: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+  SelectItem: ({ value, children }: { value: string; children: React.ReactNode }) => (
+    <option value={value}>{children}</option>
+  )
+}))
+
 import { ChatBehaviorSetting } from './ChatBehaviorSetting'
 import { TooltipProvider } from '../ui/tooltip'
 
@@ -146,20 +174,30 @@ describe('ChatBehaviorSetting shell environment', () => {
   })
 })
 
-describe('ChatBehaviorSetting queue follow-ups', () => {
-  const QUEUE_TOGGLE = '[aria-label="Toggle queue follow-ups"]'
+describe('ChatBehaviorSetting follow-up behavior', () => {
+  const FOLLOW_UP_SELECT = 'select[aria-label="While the agent works, Enter"]'
 
-  it('hides the switch until the host answers, then shows it', async () => {
+  it('hides the choice until the host answers, then shows it', async () => {
     setLocalRuntimeCapabilitiesForTests(null)
     let answer: (status: { capabilities: string[] }) => void = () => {}
     vi.stubGlobal('api', {
       runtime: { getStatus: () => new Promise((resolve) => (answer = resolve)) }
     })
     const { container } = renderSetting({})
-    expect(container.querySelector(QUEUE_TOGGLE)).toBeNull()
+    expect(container.querySelector(FOLLOW_UP_SELECT)).toBeNull()
     await act(async () =>
       answer({ capabilities: [AGENT_SESSION_QUEUED_MESSAGES_RUNTIME_CAPABILITY] })
     )
-    expect(container.querySelector(QUEUE_TOGGLE)).not.toBeNull()
+    expect(container.querySelector(FOLLOW_UP_SELECT)).not.toBeNull()
+  })
+
+  it('reads Steer by default and saves Queue through the follow-up key', () => {
+    setLocalRuntimeCapabilitiesForTests([AGENT_SESSION_QUEUED_MESSAGES_RUNTIME_CAPABILITY])
+    const updateSettings = vi.fn()
+    const { container } = renderSetting({}, updateSettings)
+    const select = container.querySelector<HTMLSelectElement>(FOLLOW_UP_SELECT)!
+    expect(select.value).toBe('steer')
+    fireEvent.change(select, { target: { value: 'queue' } })
+    expect(updateSettings).toHaveBeenCalledWith({ nativeChatFollowUpBehavior: 'queue' })
   })
 })

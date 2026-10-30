@@ -777,25 +777,26 @@ describe('NativeChatStructuredSession', () => {
         agent="claude"
       />
     )
-    const steerQueued = mocks.composerProps?.steerQueued
+    const steerHead = mocks.composerProps?.steerHead
     const onSubmitted = mocks.composerProps?.structuredTransport?.onSubmitted
-    if (!steerQueued || typeof onSubmitted !== 'function') {
+    if (!steerHead || typeof onSubmitted !== 'function') {
       throw new Error('Structured composer was not wired')
     }
     mocks.revealLatest.mockClear()
 
-    expect(steerQueued()).toBe(false)
+    expect(steerHead()).toBe(false)
     expect(mocks.revealLatest).not.toHaveBeenCalled()
 
     // The composer's sends reveal through its transport.
     onSubmitted()
     expect(mocks.revealLatest).toHaveBeenCalledOnce()
-    mocks.queuedSteerNewest.mockReturnValue(true)
-    expect(steerQueued()).toBe(true)
+    mocks.queuedSteerHead.mockReturnValue(true)
+    expect(steerHead()).toBe(true)
     expect(mocks.revealLatest).toHaveBeenCalledTimes(2)
   })
 
   it("brings the latest into view when a queued card's Steer sends it now", () => {
+    mocks.isWorking = true
     mocks.queuedCards = [
       { messageId: 'draft-1', position: 1, text: 'Also check SSH', state: 'waiting', hold: 'turn' }
     ]

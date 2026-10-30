@@ -135,7 +135,7 @@ export function buildDefaultSettings(args: {
     experimentalNativeChat: false,
     experimentalBrowserExtensions: false,
     nativeChatResumeWorkOnRestart: false,
-    nativeChatQueueFollowUps: true,
+    nativeChatFollowUpBehavior: 'steer',
     nativeChatInlineVisuals: true,
     nativeChatLinkPreviews: true,
     nativeChatInheritShellEnvironment: true,

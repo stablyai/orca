@@ -24,6 +24,7 @@ import { useNativeChatRootInputRouting } from './use-native-chat-root-input-rout
 import { useNativeChatFontSize } from './use-native-chat-font-size'
 import { useNativeChatFind } from './use-native-chat-find'
 import { NativeChatFindBar } from './NativeChatFindBar'
+import { nativeChatFollowUpBehavior } from '../../../../shared/native-chat-follow-up-behavior'
 import { LinkActionPopover } from '@/components/link-actions/LinkActionPopover'
 import { useNativeChatLinkActions } from './use-native-chat-link-actions'
 import { useNativeChatFileLinkContext } from './use-native-chat-file-link-context'
@@ -76,8 +77,10 @@ export function NativeChatStructuredSession(
   // The host's own word on whether the provider child has answered startup yet.
   const hostExecution = useStructuredAgentSessionHostExecution(props.sessionId, props.target)
   const paneKey = structuredAgentSessionPaneKey(props.tabId, props.sessionId)
-  // Chat-wide: absent means on; only an explicit off keeps mid-turn sends immediate.
-  const queueFollowUps = useAppStore((store) => store.settings?.nativeChatQueueFollowUps !== false)
+  // Chat-wide: Steer unless the person chose Queue.
+  const queueFollowUps = useAppStore(
+    (store) => nativeChatFollowUpBehavior(store.settings) === 'queue'
+  )
   const composerRef = useRef<NativeChatComposerHandle>(null)
   // Paste target while a question card replaces the composer.
   const questionAnswerInputRef = useRef<HTMLInputElement>(null)
@@ -389,7 +392,7 @@ export function NativeChatStructuredSession(
               agent={props.agent}
               {...stopControls.composer}
               unavailableHint={install.unavailableHint}
-              steerQueued={stopControls.stopping ? undefined : submits.queuedMessages.steerNewest}
+              steerHead={stopControls.stopping ? undefined : submits.queuedMessages.steerHead}
               structuredTransport={transport}
               notices={notices}
               recallSource={{ messages: session.messages, withoutImageMarkers: true }}

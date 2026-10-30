@@ -126,7 +126,7 @@ export function createStructuredSessionMocks() {
       isStopping?: boolean
       unavailableHint?: string
       afterStop?: 'queue' | 'send'
-      steerQueued?: () => boolean
+      steerHead?: () => boolean
       onStop?: () => void
       notices?: readonly NativeChatComposerNotice[]
     }>(),
@@ -164,7 +164,7 @@ export function createStructuredSessionMocks() {
     queuedSteer: vi.fn<(messageId: string) => Promise<void>>(async () => {}),
     queuedRemove: vi.fn<(messageId: string) => Promise<void>>(async () => {}),
     queuedEdit: vi.fn<(messageId: string) => Promise<void>>(async () => {}),
-    queuedSteerNewest: vi.fn<() => boolean>(() => false),
+    queuedSteerHead: vi.fn<() => boolean>(() => false),
     queueSendsNext: false,
     unavailable: nullable<AgentSessionUnavailable>(),
     revealLatest: vi.fn<() => void>()
@@ -247,7 +247,8 @@ export function createStructuredSessionMocks() {
               edit: mocks.queuedEdit,
               pending: () => null,
               queuePending: null,
-              steerNewest: mocks.queuedSteerNewest
+              steerHead: mocks.queuedSteerHead,
+              isWorking: mocks.isWorking
             },
             threadGoal: mocks.threadGoal,
             cancel: mocks.cancel,
@@ -403,8 +404,8 @@ export function createStructuredSessionMocks() {
     mocks.queuedEdit.mockClear()
     Object.assign(mocks, { queueSendsNext: false, unavailable: null })
     mocks.revealLatest.mockReset()
-    mocks.queuedSteerNewest.mockReset()
-    mocks.queuedSteerNewest.mockReturnValue(false)
+    mocks.queuedSteerHead.mockReset()
+    mocks.queuedSteerHead.mockReturnValue(false)
   }
 
   return { mocks, moduleFactories, resetStructuredSessionMocks }
