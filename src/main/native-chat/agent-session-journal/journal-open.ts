@@ -1,10 +1,10 @@
 // Replay live epochs without rewriting history; damage/newer rows fail load and remain on disk.
 
-import { readJournalSavedStatePages } from './journal-saved-state'
-import { journalOutcomeSource, type JournalOutcomeSource } from './journal-outcome-format'
+import { readJournalSavedView } from './journal-saved-state'
+import { journalOutcomeSource } from './journal-outcome-format'
 import { journalCacheMatches } from './journal-outcome-cache'
-import { rebuildJournalOutcomePages } from './journal-outcome-table'
-import { protectJournalOutcomeRead } from './journal-maintenance'
+import { rebuildJournalOutcomes } from './journal-outcome-table'
+import { JournalOutcomeDecodeError } from './journal-outcome-codec'
 import { readJournalOutcomeGroups, type JournalReadRow } from './journal-read-row'
 import { AgentSessionJournalError } from './journal-write-guards'
 import type Database from '../../sqlite/sync-database'
@@ -45,83 +45,37 @@ export function replayJournal(db: Database.Database, sessionId: string): Journal
   return foldJournalFromState(db, createJournalReducerState(sessionId, epoch))
 }
 
-/** The view is disposable; only validated outcomes can replace an unreadable cache. */
+/** The view is disposable; only validated outcomes can replace an unreadable cache. The read is
+ * synchronous, like main's replay: it blocks once for one chat's saved records (its cache, or else
+ * its outcome log), never sleeps behind maintenance, and nothing can interleave with it. */
 export function restoreJournal(db: Database.Database, sessionId: string): JournalLoad | null {
-  const pages = restoreJournalPages(() => db, sessionId)
-  let step = pages.next()
-  while (!step.done) {
-    step = pages.next()
-  }
-  return step.value
-}
-
-export function* restoreJournalPages(
-  database: () => Database.Database,
-  sessionId: string
-): Generator<void, JournalLoad | null> {
-  const epoch = readJournalSessionEpoch(database(), sessionId)
+  const epoch = readJournalSessionEpoch(db, sessionId)
   if (epoch === null) {
     return null
   }
   const empty = createJournalReducerState(sessionId, epoch)
-  let source: JournalOutcomeSource | null
   try {
-    source = journalOutcomeSource(database(), sessionId, epoch)
+    const source = journalOutcomeSource(db, sessionId, epoch)
+    if (!source) {
+      return foldJournalFromState(db, empty)
+    }
+    if (journalCacheMatches(db, sessionId, epoch, source)) {
+      const saved = readJournalSavedView(db, sessionId, epoch)
+      if (typeof saved !== 'string') {
+        return { state: saved, newer: null, damage: null, projectionThrough: source.through }
+      }
+    }
+    const state = rebuildJournalOutcomes(db, sessionId, epoch, source.generation, source.through)
+    return { state, newer: null, damage: null, projectionThrough: 0 }
   } catch (error) {
     if (error instanceof AgentSessionJournalError && error.code === 'journal_read_only') {
       return { state: empty, newer: { sequence: 1 }, damage: null }
     }
-    return { state: empty, newer: null, damage: { sequence: 1, cause: 'unparseable-row' } }
-  }
-  if (!source) {
-    return foldJournalFromState(database(), empty)
-  }
-  if (journalCacheMatches(database(), sessionId, epoch, source)) {
-    const saved = yield* readJournalSavedStatePages(database, sessionId, epoch, {
-      rows: 32,
-      bytes: 1 << 19
-    })
-    if (typeof saved !== 'string' && saved.lastSequence === source.through) {
-      // A paced read may have crossed an epoch publication. Never adopt a mixed generation.
-      if (readJournalSessionEpoch(database(), sessionId) !== epoch) {
-        return yield* restoreJournalPages(database, sessionId)
-      }
-      let current: JournalOutcomeSource | null
-      try {
-        current = journalOutcomeSource(database(), sessionId, epoch)
-      } catch {
-        return yield* restoreJournalPages(database, sessionId)
-      }
-      if (current?.generation === source.generation && current.through === source.through) {
-        return { state: saved, newer: null, damage: null, projectionThrough: source.through }
-      }
-      return yield* restoreJournalPages(database, sessionId)
+    // Only stored content this build rejects is damage; a storage error stays retryable, as on main.
+    if (error instanceof JournalOutcomeDecodeError) {
+      return { state: empty, newer: null, damage: { sequence: 1, cause: 'unparseable-row' } }
     }
-  }
-  const release = protectJournalOutcomeRead(database(), sessionId, epoch)
-  try {
-    const state = yield* rebuildJournalOutcomePages(
-      database,
-      sessionId,
-      epoch,
-      source.generation,
-      source.through
-    )
-    const current = journalOutcomeSource(database(), sessionId, epoch)
-    if (current?.generation !== source.generation || current.through !== source.through) {
-      return yield* restoreJournalPages(database, sessionId)
-    }
-    return { state, newer: null, damage: null, projectionThrough: 0 }
-  } catch (error) {
-    if (
-      readJournalSessionEpoch(database(), sessionId) !== epoch ||
-      (error instanceof AgentSessionJournalError && error.code === 'journal_read_only')
-    ) {
-      return yield* restoreJournalPages(database, sessionId)
-    }
-    return { state: empty, newer: null, damage: { sequence: 1, cause: 'unparseable-row' } }
-  } finally {
-    release()
+    throw error
   }
 }
 
@@ -222,7 +176,7 @@ export function readJournalRowsAfterCursor(
 ): JournalReadRow[] {
   const source = journalOutcomeSource(db, sessionId, epoch)
   if (source) {
-    return readJournalOutcomeGroups(db, sessionId, epoch, source, afterSequence, limit)
+    return readJournalOutcomeGroups(db, epoch, source, afterSequence, limit)
   }
   const rows: JournalRow[] = []
   for (const stored of readJournalRowsAfter(db, sessionId, epoch, afterSequence, limit)) {

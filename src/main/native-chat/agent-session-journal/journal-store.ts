@@ -94,7 +94,6 @@ export class AgentSessionJournal {
     this.projection = new JournalWriteProjection({
       database: this.database,
       state: () => this.state,
-      queue: this.queue,
       adopt: (state) => {
         this.state = state
       }
@@ -110,7 +109,7 @@ export class AgentSessionJournal {
       cursor: this.cursor,
       adopt: (loaded) => {
         this.state = loaded.state
-        this.projection.opened(loaded.projectionThrough ?? 0)
+        this.projection.opened(loaded.projectionThrough === loaded.state.lastSequence)
         this.onCommitted?.()
       },
       prepare: (db, rows, savedAt) => this.projection.prepare(db, rows, savedAt),
@@ -167,8 +166,6 @@ export class AgentSessionJournal {
     this.queue.markClosed()
     return this.queue.drain()
   }
-
-  repairProjection = (): Promise<void> => this.projection.repair()
 
   /** One nonthrowing listener; undefined rows mean adopted history, an empty array means metadata. */
   observeCommits(listener: (rows?: readonly JournalRow[]) => void): () => void {

@@ -1,7 +1,6 @@
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
 import type { JournalEpochController } from './journal-epoch-controller'
-import { restoreJournalPages } from './journal-open'
-import { journalCatchUpPace } from './journal-maintenance'
+import { restoreJournal } from './journal-open'
 import { journalOpenRefusalError } from './journal-open-failure'
 import type { JournalStoreHost } from './journal-store-collaborators'
 import { openJournalStoreState } from './journal-store-open'
@@ -20,18 +19,13 @@ export async function restoreJournalStore(
       )
     )
   }
-  const pace = journalCatchUpPace()
-  const pages = restoreJournalPages(() => database.db, host.identity.sessionId)
-  let step = pace.work(() => pages.next())
-  while (!step.done) {
-    await pace.rest()
-    step = pace.work(() => pages.next())
-  }
-  const loaded = step.value
+  // Unpaced and charged to no maintenance budget: background work alone pays its duty cycle.
+  const loaded = restoreJournal(database.db, host.identity.sessionId)
   return openJournalStoreState({
     sessionId: host.identity.sessionId,
     replay: () => loaded,
-    start: () => collaborators.epochController.start('session_created', 0),
+    start: () =>
+      collaborators.epochController.start('session_created', 0, loaded?.state.epoch ?? null),
     adopt: host.adopt,
     // Recovery revisions must not count as new provider output.
     appendItem: (identity, body, fence) =>
