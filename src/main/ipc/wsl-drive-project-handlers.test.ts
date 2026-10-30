@@ -46,7 +46,7 @@ afterEach(() => {
 
 describe('WSL drive project IPC', () => {
   it('refuses with the gate closed or off Windows, before reading anything', async () => {
-    vi.stubEnv(WSL_HOSTS_INTERNAL_GATE_ENV, '')
+    vi.stubEnv(WSL_HOSTS_INTERNAL_GATE_ENV, '0')
     await expect(invoke('wslDriveProject:preview', 'p1')).rejects.toThrow(
       'wsl_drive_project_unavailable'
     )

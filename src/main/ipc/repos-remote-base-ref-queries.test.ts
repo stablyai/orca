@@ -204,7 +204,7 @@ describe('base-ref queries on a drive project whose runtime is WSL', () => {
   })
 
   it('reads with host Git, as before, while WSL hosts are off', async () => {
-    vi.stubEnv(WSL_HOSTS_INTERNAL_GATE_ENV, '')
+    vi.stubEnv(WSL_HOSTS_INTERNAL_GATE_ENV, '0')
     await handlers.get('repos:getBaseRefDefault')!(null, { repoId: 'r1' })
     await handlers.get('repos:searchBaseRefDetails')!(null, { repoId: 'r1', query: 'main' })
 

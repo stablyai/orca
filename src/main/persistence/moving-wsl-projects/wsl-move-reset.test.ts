@@ -319,7 +319,7 @@ describe('recoverInterruptedWslMoves', () => {
 
   it('does nothing with the WSL hosts gate closed', async () => {
     seed('quiesced')
-    vi.stubEnv(WSL_HOSTS_INTERNAL_GATE_ENV, '')
+    vi.stubEnv(WSL_HOSTS_INTERNAL_GATE_ENV, '0')
     expect(await recoverInterruptedWslMoves(userDataPath, () => {})).toEqual({
       reset: [],
       waitingForHost: []

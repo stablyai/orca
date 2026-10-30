@@ -47,7 +47,7 @@ afterEach(() => {
 
 describe('WSL drive UNC conversion IPC', () => {
   it('refuses with the gate closed, before reading anything', async () => {
-    vi.stubEnv(WSL_HOSTS_INTERNAL_GATE_ENV, '')
+    vi.stubEnv(WSL_HOSTS_INTERNAL_GATE_ENV, '0')
     await expect(
       invoke('wslDriveUnc:convert', { distro: 'Ubuntu', repoIds: ['repo-a'] })
     ).rejects.toThrow('wsl_drive_unc_unavailable')

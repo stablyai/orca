@@ -259,7 +259,7 @@ describe('WSL move with the complete desktop rewrite registry', () => {
 
   it('changes nothing with the gate closed', async () => {
     seedWslMoveCutover(testState.dir, committedMove())
-    vi.stubEnv(WSL_HOSTS_INTERNAL_GATE_ENV, '')
+    vi.stubEnv(WSL_HOSTS_INTERNAL_GATE_ENV, '0')
     const ui = store.getUI()
     const session = store.getWorkspaceSession()
 

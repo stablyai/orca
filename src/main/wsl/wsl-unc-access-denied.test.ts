@@ -36,7 +36,7 @@ describe('describeWslUncAccessDenied', () => {
   })
 
   it('keeps the usual message, without listing the folder, while WSL hosts are off', async () => {
-    vi.stubEnv(WSL_HOSTS_INTERNAL_GATE_ENV, '')
+    vi.stubEnv(WSL_HOSTS_INTERNAL_GATE_ENV, '0')
     const list = vi.fn(failing('EPERM'))
     expect(await describeWslUncAccessDenied(DRIVE, list)).toBeNull()
     expect(list).not.toHaveBeenCalled()

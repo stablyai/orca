@@ -51,8 +51,8 @@ export async function launchDesktopWithFakeWsl(
     inheritedEnv: cleanEnv,
     launchEnv: {},
     extraEnv: {
-      // WSL hosts exist only behind this internal gate; the gated-off test leaves it closed.
-      ...(options.internalGate === false ? {} : { [WSL_HOSTS_INTERNAL_GATE_ENV]: '1' }),
+      // The gate is open by default; the gated-off test closes it with `0`.
+      [WSL_HOSTS_INTERNAL_GATE_ENV]: options.internalGate === false ? '0' : '1',
       ORCA_E2E_FAKE_WSL_HOSTS: JSON.stringify(fake)
     },
     userDataDir

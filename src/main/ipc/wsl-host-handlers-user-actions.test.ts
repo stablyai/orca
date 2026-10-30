@@ -85,7 +85,7 @@ describe('WSL host IPC: the user Add and Remove (D3a)', () => {
   })
 
   it('refuses an Add in serve-only and says so in its capability, keeping saved hosts usable', async () => {
-    vi.stubEnv('ORCA_INTERNAL_WSL_HOSTS', undefined)
+    vi.stubEnv('ORCA_INTERNAL_WSL_HOSTS', '0')
     register()
 
     expect(await handlers.get('wslHosts:add')?.({}, { distro: 'Ubuntu' })).toMatchObject({

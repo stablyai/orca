@@ -83,7 +83,7 @@ describe('bringWslMovedProjectBack', () => {
 
   it('does nothing with the WSL hosts gate closed', () => {
     seedWslMoveCutover(userDataPath, wslMoveCutoverFixture('move-1', 'retained'))
-    vi.stubEnv(WSL_HOSTS_INTERNAL_GATE_ENV, '')
+    vi.stubEnv(WSL_HOSTS_INTERNAL_GATE_ENV, '0')
     expect(bringWslMovedProjectBack(userDataPath, { repoId: 'repo-1' })).toEqual({
       released: false,
       reason: 'gated-off'

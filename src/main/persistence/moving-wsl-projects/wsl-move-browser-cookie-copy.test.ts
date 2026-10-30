@@ -366,7 +366,7 @@ describe('WSL move browser-cookies store', () => {
   })
 
   it('does nothing while the internal WSL hosts gate is closed', async () => {
-    vi.stubEnv(WSL_HOSTS_INTERNAL_GATE_ENV, '')
+    vi.stubEnv(WSL_HOSTS_INTERNAL_GATE_ENV, '0')
     const copyCookies = vi.fn()
     registerWslMoveBrowserCookieStore(dependencies({ copyCookies }))
     seedWslMoveCutover(userDataPath, cutover('move-1', 'destination-committed'))

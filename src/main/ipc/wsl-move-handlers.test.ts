@@ -92,7 +92,7 @@ describe('WSL move IPC', () => {
   })
 
   it('answers empty and refuses with the gate closed', () => {
-    vi.stubEnv(WSL_HOSTS_INTERNAL_GATE_ENV, '')
+    vi.stubEnv(WSL_HOSTS_INTERNAL_GATE_ENV, '0')
     expect(invoke('wslMove:listPendingRendererRewrites')).toEqual([])
     expect(
       invoke('wslMove:recordStoreRewritten', { migrationId: 'move-1', storeId: 'renderer-a' })
@@ -110,7 +110,7 @@ describe('WSL move IPC', () => {
     const open = invoke('wslMove:listUnfinished')
     expect(open).toEqual([expect.objectContaining({ migrationId: 'move-2' })])
     const pending = invoke('wslMove:listPendingRendererRewrites')
-    vi.stubEnv(WSL_HOSTS_INTERNAL_GATE_ENV, '')
+    vi.stubEnv(WSL_HOSTS_INTERNAL_GATE_ENV, '0')
     expect(invoke('wslMove:listUnfinished')).toEqual([])
 
     configureWslHostsGate({ hasSavedWslHost: () => false, hasWslMoveCutover: () => true })
@@ -262,7 +262,7 @@ describe('WSL move IPC', () => {
       reason: 'failed',
       detail: 'not-main-window'
     })
-    vi.stubEnv(WSL_HOSTS_INTERNAL_GATE_ENV, '')
+    vi.stubEnv(WSL_HOSTS_INTERNAL_GATE_ENV, '0')
     // Gate first: even malformed input from a non-main window gets the gated answer.
     expect(await handlers.get('wslMove:useProjectHereAgain')?.({}, null)).toEqual({
       released: false,
