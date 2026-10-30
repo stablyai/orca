@@ -108,7 +108,7 @@ export const ORCHESTRATION_QUESTION_HANDLER: Record<string, CommandHandler> = {
           ])
         : undefined
     if (flags.has('full')) {
-      printFullAskResult(result, json, waitedMs, resumeCommand)
+      printFullAskResult(result, json)
     } else {
       const fields = {
         ...(value.answer !== null ? { answer: value.answer } : {}),
@@ -158,15 +158,15 @@ export const ORCHESTRATION_QUESTION_HANDLER: Record<string, CommandHandler> = {
         compatibilityQuestionAck: JSON.stringify(answerAck)
       })
     }
+    // One stderr line in every mode; the resume command rides on it so --full stdout stays as before.
     if (value.timedOut) {
       reportOrchestrationFailure({
         code: 'ask_timeout',
         message: resumeCommand
-          ? `ask timeout after ${waitedMs}ms; question ${value.messageId} is still pending`
+          ? `ask timeout after ${waitedMs}ms; question ${value.messageId} is still pending. Resume waiting; do not ask again: ${resumeCommand}`
           : `ask timeout after ${waitedMs}ms; question identity was not returned, so it cannot be resumed safely.`
       })
-    }
-    if (value.cancelled) {
+    } else if (value.cancelled) {
       reportOrchestrationFailure({
         code: value.connectionLost ? 'ask_connection_closed' : 'ask_cancelled',
         message: `ask ${value.connectionLost ? 'connection closed' : 'cancelled'} (question ${value.messageId})`
@@ -189,12 +189,7 @@ type AskResult = {
   legacyCompatibility?: LegacyCompatibilityResult
 }
 
-function printFullAskResult(
-  result: RuntimeRpcSuccess<AskResult>,
-  json: boolean,
-  waitedMs: number,
-  resumeCommand: string | undefined
-): void {
+function printFullAskResult(result: RuntimeRpcSuccess<AskResult>, json: boolean): void {
   const value = result.result
   if (json) {
     printResult(result, true, () => '')
@@ -207,19 +202,5 @@ function printFullAskResult(
     console.log(`Resume with: ${value.legacyCompatibility.resumeCommand}`)
   } else if (value.answer !== null) {
     console.log(value.answer)
-  }
-  if (value.timedOut) {
-    console.error(
-      resumeCommand
-        ? `ask timeout after ${waitedMs}ms; question is still pending (messageId: ${value.messageId}). Resume waiting; do not ask again:\n${resumeCommand}`
-        : `ask timeout after ${waitedMs}ms; question identity was not returned, so it cannot be resumed safely.`
-    )
-  }
-  if (value.cancelled) {
-    console.error(
-      value.connectionLost
-        ? `ask connection closed (question ${value.messageId})`
-        : `ask cancelled (question ${value.messageId})`
-    )
   }
 }

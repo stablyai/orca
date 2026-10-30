@@ -215,4 +215,81 @@ describe('orchestration agent views', () => {
       ].join('\n')
     )
   })
+
+  it('fails an interrupted check and an unconfirmed worker inventory on stderr and the exit code', async () => {
+    const check = await run('check', [['run', 'run_1']], {
+      messages: [],
+      count: 0,
+      cancelled: true,
+      connectionLost: true
+    })
+    expect(check.stderr).toBe(
+      'error: check_connection_closed: Wait cancelled because the connection closed; no messages were consumed.'
+    )
+    expect(process.exitCode).toBe(1)
+
+    process.exitCode = undefined
+    const list = await run('worker-list', [['run', 'run_1']], {
+      workers: [],
+      counts: {},
+      partialHostErrors: [
+        { environmentId: 'env_1', name: 'linux', code: 'unreachable', dispatchIds: ['ctx_1'] }
+      ]
+    })
+    expect(list.stderr).toBe(
+      'error: worker_inventory_incomplete: worker observations from linux are incomplete (unreachable)'
+    )
+    expect(process.exitCode).toBe(1)
+  })
+
+  it('keeps --full stdout as before while a timed-out ask still fails on one stderr line', async () => {
+    callMock.mockImplementation(async (method: string) =>
+      method === 'status.get'
+        ? { result: { capabilities: [] } }
+        : {
+            result: {
+              answer: null,
+              messageId: 'msg_q',
+              threadId: 'msg_q',
+              timedOut: true,
+              timeoutMs: 1000
+            }
+          }
+    )
+    const log = vi
+      .spyOn(console, 'log')
+      .mockClear()
+      .mockImplementation(() => {})
+    const error = vi
+      .spyOn(console, 'error')
+      .mockClear()
+      .mockImplementation(() => {})
+    await ORCHESTRATION_HANDLERS['orchestration ask'](
+      orchestrationTestContext(
+        callMock,
+        new Map<string, string | boolean>([
+          ['question', 'Proceed?'],
+          ['from', 'term_worker'],
+          ['full', true]
+        ]),
+        false
+      )
+    )
+
+    expect(log).not.toHaveBeenCalled()
+    expect(error.mock.calls).toEqual([
+      [
+        'error: ask_timeout: ask timeout after 1000ms; question msg_q is still pending. Resume waiting; do not ask again: orca-dev orchestration ask --from term_worker --resume msg_q --timeout-ms 1000'
+      ]
+    ])
+    expect(process.exitCode).toBe(1)
+  })
+
+  it('keeps the old 100-Run page under --full', async () => {
+    await run('run-list', [['full', true]], { runs: [], nextCursor: null })
+    expect(callMock).toHaveBeenCalledWith('orchestration.runList', {
+      limit: 100,
+      cursor: undefined
+    })
+  })
 })

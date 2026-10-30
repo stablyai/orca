@@ -1,11 +1,5 @@
-import {
-  renderOrchestrationArgv,
-  resolveOrcaCommandsInText,
-  type OrchestrationAgentView,
-  type OrchestrationFailure
-} from './agent-view'
+import { renderOrchestrationArgv, type OrchestrationAgentView } from './agent-view'
 import { withReceiptNext } from './receipt-next-text'
-import { formatWorkerRelease, type WorkerReleaseReceipt } from './worker-output'
 import { formatWorkerListScope, type WorkerListRunScope } from './worker-list-run-scope'
 
 type WorkerProjection = {
@@ -127,7 +121,7 @@ export type WorkerListResult = {
     dispatchStatus: string
     agentTerminalHandle: string | null
     terminalState: string | null
-    resource: unknown
+    resource?: { worktreeId?: string | null; autoReleaseAt?: string | null } | null
     projection?: WorkerProjection
   }[]
   counts: Record<string, number>
@@ -187,10 +181,11 @@ export function workerListView(
             : undefined,
           terminal: worker.agentTerminalHandle ?? undefined,
           terminalState: worker.terminalState ?? undefined,
-          workspace: projection?.workspace?.id,
+          // Older runtimes send no projection; the terminal resource row still names both.
+          workspace: projection?.workspace?.id ?? worker.resource?.worktreeId ?? undefined,
           host: projection?.host.id,
           attention: nonEmpty(projection?.attention?.categories),
-          autoReleaseAt: projection?.autoReleaseAt,
+          autoReleaseAt: projection?.autoReleaseAt ?? worker.resource?.autoReleaseAt ?? undefined,
           next: projection ? renderOrchestrationArgv(projection.nextAction.argv) : undefined
         }
       }),
@@ -225,7 +220,17 @@ export function workerListView(
         ...(fields.warnings ?? []).map((warning) => `Warning: ${warning}`)
       ].join('\n')
     },
-    fullText
+    fullText,
+    // A host that did not answer leaves the inventory unconfirmed, not empty.
+    failure: (value) => {
+      const [first, ...rest] = value.partialHostErrors ?? []
+      return first
+        ? {
+            code: 'worker_inventory_incomplete',
+            message: `worker observations from ${[first, ...rest].map((error) => error.name).join(', ')} are incomplete (${first.code})`
+          }
+        : undefined
+    }
   }
 }
 
@@ -237,64 +242,6 @@ export function workerListWarnings(value: WorkerListResult): string[] {
         `worker observations from ${error.name} (${error.environmentId}) are incomplete: ${error.code}; dispatches=${error.dispatchIds.join(',') || 'none'}`
     )
   ]
-}
-
-type WorkerReleaseFields = {
-  dispatchId: string
-  state: string
-  reason?: string
-  processAction: string
-  archive?: string
-  lastError?: string
-  next?: string
-}
-
-export const WORKER_RELEASE_VIEW: OrchestrationAgentView<
-  WorkerReleaseReceipt,
-  WorkerReleaseFields
-> = {
-  fields: (value) => ({
-    dispatchId: value.dispatchId,
-    state: value.state,
-    reason: value.reason,
-    processAction: value.processAction,
-    archive: value.archive?.source
-      ? `${value.archive.source} [${value.archive.status ?? 'unknown'}]`
-      : undefined,
-    lastError: value.lastError,
-    next: value.recovery && resolveOrcaCommandsInText(value.recovery)
-  }),
-  text: (fields) =>
-    withReceiptNext(
-      [
-        `Worker ${fields.dispatchId} terminal [${fields.state}]${fields.reason ? ` reason=${fields.reason}` : ''} process=${fields.processAction}`,
-        ...(fields.archive ? [`archive ${fields.archive}`] : []),
-        ...(fields.lastError ? [fields.lastError] : [])
-      ].join('\n'),
-      fields
-    ),
-  fullText: formatWorkerRelease,
-  // Retained, pending, and already-released are settled outcomes; only release_unknown fails.
-  failure: (value) =>
-    value.state === 'release_unknown'
-      ? {
-          code: 'release_unknown',
-          message: value.lastError ?? `Release of ${value.dispatchId} is unconfirmed.`
-        }
-      : undefined
-}
-
-export function workerStopFailure(value: {
-  dispatchId: string
-  state: string
-  lastError?: string
-}): OrchestrationFailure | undefined {
-  return value.state === 'stop_unknown'
-    ? {
-        code: 'stop_unknown',
-        message: value.lastError ?? `Stop of ${value.dispatchId} is unconfirmed.`
-      }
-    : undefined
 }
 
 function nonEmpty<T>(values: T[] | undefined): T[] | undefined {

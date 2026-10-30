@@ -1,12 +1,7 @@
 import type { CommandHandler } from '../../dispatch'
 import { printOrchestrationReceipt, printOrchestrationResult } from './agent-view'
-import {
-  WORKER_RELEASE_VIEW,
-  workerListView,
-  workerListWarnings,
-  workerStopFailure,
-  type WorkerListResult
-} from './worker-agent-views'
+import { workerListView, workerListWarnings, type WorkerListResult } from './worker-agent-views'
+import { WORKER_RELEASE_VIEW, workerStopFailure } from './worker-release-agent-view'
 import {
   getOptionalPositiveIntegerFlag,
   getOptionalStringFlag,

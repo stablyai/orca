@@ -93,7 +93,7 @@ export function resolveOrcaCommandsInText(text: string): string {
     return text
   }
   const rendered = renderCommand([executable])
-  return text.replace(/(^|[\s`'"(])orca(?= orchestration )/g, (_, lead: string) => lead + rendered)
+  return text.replace(/(^|[\s`'"(])orca(?= orchestration )/gm, (_, lead: string) => lead + rendered)
 }
 
 export function renderOrchestrationArgv(argv: readonly string[]): string | undefined {

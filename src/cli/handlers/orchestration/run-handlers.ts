@@ -5,6 +5,7 @@ import {
   getOptionalStringFlag,
   getRequiredStringFlag
 } from '../../flags'
+import { ORCHESTRATION_RUN_PAGE_LIMIT } from '../../../shared/orchestration-run-pagination'
 import type { RunRemovedWork } from '../../../shared/orchestration-removed-work'
 import { callOrchestrationMutation } from './mutation-request'
 import { formatRemovedWorkListing, formatRunRemovedWorkLine } from './removed-work-format'
@@ -83,8 +84,10 @@ export const ORCHESTRATION_RUN_HANDLERS: Record<string, CommandHandler> = {
       runs: { id: string; objective: string; legacy: number }[]
       nextCursor: string | null
     }>('orchestration.runList', {
-      // An unbounded first page costs an agent thousands of tokens; recent Runs are the useful ones.
-      limit: getOptionalPositiveIntegerFlag(flags, 'limit') ?? RUN_LIST_DEFAULT_LIMIT,
+      // A 100-Run first page costs an agent thousands of tokens; --full keeps today's page.
+      limit:
+        getOptionalPositiveIntegerFlag(flags, 'limit') ??
+        (flags.has('full') ? ORCHESTRATION_RUN_PAGE_LIMIT : RUN_LIST_DEFAULT_LIMIT),
       cursor: getOptionalStringFlag(flags, 'cursor')
     })
     printOrchestrationResult(

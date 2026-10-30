@@ -44,7 +44,8 @@ export function toMessageView(
     ...(message.subject && !(type === 'question' && message.subject === 'Question')
       ? { subject: message.subject }
       : {}),
-    ...(message.body ? { body: message.body } : {}),
+    // Runtime-written reports name `orca`; show the executable this reader runs.
+    ...(message.body ? { body: resolveOrcaCommandsInText(message.body) } : {}),
     ...(message.priority && message.priority !== 'normal' ? { priority: message.priority } : {}),
     ...(isLegacyReadOnlyMessage(message, options.legacyCompatibilityActive)
       ? { readOnly: true as const }
@@ -182,14 +183,17 @@ export function checkView(
         connectionLost: value.connectionLost ? true : undefined,
         legacyCompatibility: value.legacyCompatibility,
         // --format asked for the agent-readable banners themselves.
-        formatted: value.formatted,
+        formatted: value.formatted && resolveOrcaCommandsInText(value.formatted),
         next: value.next && resolveOrcaCommandsInText(value.next)
       }
     },
     text: (fields, value) => {
       // Legacy and preformatted batches carry safety headers only the full formatter prints.
       if (fields.legacyCompatibility || value.formatted !== undefined || !fields.messages.length) {
-        return withReceiptNext(formatOrchestrationCheckText(value, checkedTerminal), fields)
+        return withReceiptNext(
+          resolveOrcaCommandsInText(formatOrchestrationCheckText(value, checkedTerminal)),
+          fields
+        )
       }
       const messages = fields.messages
         .map((view, index) =>
@@ -201,6 +205,16 @@ export function checkView(
         fields
       )
     },
-    fullText
+    fullText,
+    // An interrupted wait delivered nothing; the caller must not read it as an empty mailbox.
+    failure: (value) =>
+      value.cancelled || value.connectionLost
+        ? {
+            code: value.connectionLost ? 'check_connection_closed' : 'check_cancelled',
+            message: value.connectionLost
+              ? 'Wait cancelled because the connection closed; no messages were consumed.'
+              : 'Wait cancelled; no messages were consumed.'
+          }
+        : undefined
   }
 }

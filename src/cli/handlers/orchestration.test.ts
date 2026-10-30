@@ -624,7 +624,10 @@ describe('orchestration timeout flag validation', () => {
         '--resume msg_question --timeout-ms 30000'
     )
     expect(errorSpy).toHaveBeenCalledWith(
-      'error: ask_timeout: ask timeout after 30000ms; question msg_question is still pending'
+      'error: ask_timeout: ask timeout after 30000ms; question msg_question is still pending. ' +
+        'Resume waiting; do not ask again: ' +
+        'orca-dev orchestration ask --from term_worker --dispatch-capability dcap_secret ' +
+        '--resume msg_question --timeout-ms 30000'
     )
     expect(process.exitCode).toBe(1)
   })

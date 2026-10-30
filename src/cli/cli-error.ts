@@ -143,9 +143,12 @@ export function reportCliError(error: unknown, json: boolean, context: CliErrorC
       console.error(formatOrchestrationErrorLine(response.error.code, response.error.message))
     }
   } else if (orchestration) {
-    console.error(
-      `error: ${cliErrorCode(error) ?? 'runtime_error'}: ${formatCliError(error, context)}`
-    )
+    // Recovery detail goes to stdout so stderr stays the one-line failure.
+    const [first = '', ...detail] = formatCliError(error, context).split('\n')
+    if (detail.length > 0) {
+      console.log(detail.join('\n'))
+    }
+    console.error(formatOrchestrationErrorLine(cliErrorCode(error) ?? 'runtime_error', first))
   } else {
     console.error(formatCliError(error, context))
   }
