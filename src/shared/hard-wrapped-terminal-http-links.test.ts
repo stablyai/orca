@@ -169,8 +169,12 @@ describe('hard-wrapped terminal HTTP candidate bounds', () => {
       ['│ https://example.com/aaaaaaaaaa │', '│ README.md                      │']
     ],
     [
-      'a row with a filled cell right of it',
-      ['│ https://example.com/aaaaaaaaaa │ ok   │', '│ unrelated-value                │ todo │']
+      'rows with filled cells right of it',
+      [
+        '│ https://example.com/aaaaaaaaaa │ ok   │',
+        '│ src/renderer/terminal-pane.tsx │ todo │',
+        '│ README.md                      │ done │'
+      ]
     ],
     [
       'a row labelled further left',
@@ -178,11 +182,17 @@ describe('hard-wrapped terminal HTTP candidate bounds', () => {
         '│ 1 │ doc │ https://example.com/aaaaaaaaaa │',
         '│ 2 │     │ notes                          │'
       ]
+    ],
+    [
+      'an overlay over screen text',
+      ['todo  |http://example.com/aaaa|', '      |README.md              |']
     ]
-  ])('does not join a URL that fills its cell onto the next table row in %s', (_, rowTexts) => {
+  ])('does not join a URL that fills its cell onto the next rows in %s', (_, rowTexts) => {
     const rows = rowTexts.map(bufferLineWithCellColumns)
 
-    expect(buildHardWrappedHttpLogicalLineCandidates({ getLine: (y) => rows[y] }, 2)).toEqual([])
+    expect(
+      buildHardWrappedHttpLogicalLineCandidates({ getLine: (y) => rows[y] }, rows.length)
+    ).toEqual([])
   })
 
   it('does not join adjacent cells from a shared framed table', () => {

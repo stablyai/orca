@@ -142,20 +142,17 @@ function buildCandidateFromStart(
     const rightFrameOffset = layoutSuffix.search(VERTICAL_LAYOUT_FRAME_PATTERN)
     const currentRightFrameIndex = rightFrameOffset === -1 ? -1 : fragmentEnd + rightFrameOffset
     const currentRightFrameColumn = translated.columns[currentRightFrameIndex]
+    // Cells right of the URL may be filled on its first row only; below it they start a new table row.
+    const rowSuffix = rowY === startY ? layoutSuffix.slice(0, rightFrameOffset) : layoutSuffix
     if (
       currentRightFrameIndex === -1 ||
       currentRightFrameColumn === undefined ||
       (rightFrameColumn !== null && currentRightFrameColumn !== rightFrameColumn) ||
-      NON_LAYOUT_SUFFIX_PATTERN.test(layoutSuffix.slice(0, rightFrameOffset))
+      NON_LAYOUT_SUFFIX_PATTERN.test(rowSuffix)
     ) {
       break
     }
     rightFrameColumn ??= currentRightFrameColumn
-
-    const hasSiblingCellText =
-      NON_LAYOUT_SUFFIX_PATTERN.test(
-        translated.text.slice(0, fragmentStart - framedPrefix.length)
-      ) || NON_LAYOUT_SUFFIX_PATTERN.test(translated.text.slice(currentRightFrameIndex + 1))
 
     if (text.length + fragment.length > TERMINAL_HTTP_URL_MAX_LENGTH) {
       return null
@@ -175,11 +172,17 @@ function buildCandidateFromStart(
     const contentWidth = currentRightFrameColumn - fragmentStartColumn
     const fragmentWidth = translated.columns[fragmentEnd]! - fragmentStartColumn
     const fillsRow = contentWidth > 0 && fragmentWidth / contentWidth >= MIN_HARD_WRAP_FILL_RATIO
+    const leftCells = translated.text.slice(0, fragmentStart - framedPrefix.length)
     if (rowY === startY) {
+      const rightCells = translated.text.slice(currentRightFrameIndex + 1)
       startRowFilled = fillsRow
-      isWrappedTableCell = hasSiblingCellText
+      // Only framed cells count; screen text around an overlay is not a table row.
+      isWrappedTableCell =
+        (outerFrameColumn !== null && NON_LAYOUT_SUFFIX_PATTERN.test(leftCells)) ||
+        (VERTICAL_LAYOUT_FRAME_PATTERN.test(rightCells) &&
+          NON_LAYOUT_SUFFIX_PATTERN.test(rightCells))
     } else {
-      isWrappedTableCell &&= !hasSiblingCellText
+      isWrappedTableCell &&= !NON_LAYOUT_SUFFIX_PATTERN.test(leftCells)
     }
     previousRowCanContinue = HARD_WRAP_CONTINUATION_SUFFIX_PATTERN.test(fragment) || fillsRow
   }
