@@ -202,6 +202,21 @@ class SnapshotFixture(ExitStack):
 
 
 class RuntimeRenderTest(unittest.TestCase):
+    def test_focus_search_keeps_transient_accessible_wrappers_alive(self):
+        class TransientNode:
+            def __init__(self, depth):
+                self.depth = depth
+
+            def get_child_count(self):
+                return int(self.depth < 30)
+
+            def get_child_at_index(self, _):
+                return TransientNode(self.depth + 1)
+
+        focused = runtime.first_descendant(TransientNode(0), lambda node: node.depth == 30)
+        self.assertIsNotNone(focused)
+        self.assertEqual(focused.depth, 30)
+
     def test_snapshot_keeps_semantics_and_image_when_child_geometry_stalls(self):
         late = FakeAccessible("button", "Continue")
         root = FakeAccessible("frame", "Editor", children=[
