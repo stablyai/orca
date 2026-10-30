@@ -95,7 +95,7 @@ export async function importAdoptedTranscript(
 ): Promise<void> {
   if (options.uncommittedCreate) {
     // Rolled-back creates may leave unowned imported history.
-    if (prepared || attached.journal.cursor().sequence > 1) {
+    if (prepared || attached.journal.hasConversationHistory()) {
       await attached.journal.replaceEpochItems(
         params.adopt ? 'legacy_import' : 'session_created',
         record.lease.runtimeFence,
@@ -116,7 +116,7 @@ async function applyAdoptedTranscript(
 ): Promise<void> {
   const adopt = params.adopt
   // Preserve durable writes after the initial epoch row.
-  if (!adopt || attached.journal.cursor().sequence > 1) {
+  if (!adopt || attached.journal.hasConversationHistory()) {
     return
   }
   if (prepared) {

@@ -76,6 +76,81 @@ describe('Run binding during Dispatch checks', () => {
     return run
   }
 
+  it('keeps a notified worker check alive through real reservation and asynchronous inactive-mail routing, then retires it', async () => {
+    const mailbox = `dispatch:${dispatch.id}`
+    const routeInitial = state.db.getLatestUnreadDirectMessageSequenceForRun.bind(state.db)
+    const initialScopes: boolean[] = []
+    vi.spyOn(state.db, 'getLatestUnreadDirectMessageSequenceForRun').mockImplementation(
+      (...args) => {
+        initialScopes.push(state.runtime.messageWaitersByHandle.has(mailbox))
+        return routeInitial(...args)
+      }
+    )
+    const pending = check({ wait: true, timeoutMs: 10000 })
+    await vi.waitFor(() =>
+      expect(
+        [...(state.runtime.messageWaitersByHandle.get(mailbox) ?? [])].filter(
+          (waiter) => waiter.timeout !== null
+        )
+      ).toHaveLength(1)
+    )
+    expect(initialScopes.length).toBeGreaterThan(0)
+    expect(initialScopes.every(Boolean)).toBe(true)
+    const reserve = state.db.getOrCreateMailboxDelivery.bind(state.db)
+    const opportunities: boolean[] = []
+    vi.spyOn(state.db, 'getOrCreateMailboxDelivery').mockImplementation((input) => {
+      opportunities.push(
+        [...(state.runtime.messageWaitersByHandle.get(mailbox) ?? [])].some(
+          (waiter) => waiter.notified
+        )
+      )
+      return reserve(input)
+    })
+    const first = residual('consuming first')
+    const second = residual('consuming second')
+    state.runtime.notifyMessageArrived(mailbox, first.type)
+    const delivery = await pending
+    expect(delivery).toMatchObject({ count: 2, messages: [{ id: first.id }, { id: second.id }] })
+    expect(opportunities).toEqual([true])
+    expect(state.runtime.messageWaitersByHandle.has(mailbox)).toBe(false)
+    expect(await check()).toMatchObject({ deliveryId: deliveryId(delivery), replayed: true })
+    expect(await check({ ack: deliveryId(delivery) })).toMatchObject({ count: 0 })
+    expect([first, second].every((row) => state.db.getMessageById(row.id)?.read === 1)).toBe(true)
+    const inactive = check({ wait: true, timeoutMs: 10000 })
+    const rejected = expect(inactive).rejects.toMatchObject({ code: 'dispatch_inactive' })
+    await vi.waitFor(() =>
+      expect(
+        [...(state.runtime.messageWaitersByHandle.get(mailbox) ?? [])].filter(
+          (waiter) => waiter.timeout !== null
+        )
+      ).toHaveLength(1)
+    )
+    const routed: boolean[] = []
+    const route = state.db.routeUnreadDispatchMailboxToRunMailbox.bind(state.db)
+    vi.spyOn(state.db, 'routeUnreadDispatchMailboxToRunMailbox').mockImplementation((...args) => {
+      routed.push(
+        [...(state.runtime.messageWaitersByHandle.get(mailbox) ?? [])].some(
+          (waiter) => waiter.notified
+        )
+      )
+      return route(...args)
+    })
+    const tail = Array.from({ length: ORCHESTRATION_DELIVERY_BATCH_LIMIT + 1 }, (_, n) =>
+      residual(`routing ${n}`)
+    )
+    state.db.db
+      .prepare("UPDATE dispatch_contexts SET status = 'completed' WHERE id = ?")
+      .run(dispatch.id)
+    state.runtime.notifyMessageArrived(mailbox, 'status')
+    await rejected
+    expect(routed.length).toBeGreaterThan(1)
+    expect(routed.every(Boolean)).toBe(true)
+    expect(state.runtime.messageWaitersByHandle.has(mailbox)).toBe(false)
+    expect(
+      tail.every((row) => state.db.getMessageById(row.id)?.to_handle === `run:${dispatch.run_id}`)
+    ).toBe(true)
+  })
+
   describe.each(['runCreate', 'runUse'] as const)('%s', (method) => {
     it.each(['parked', 'recovering'] as const)(
       'cancels a %s Dispatch wait and preserves its ack',

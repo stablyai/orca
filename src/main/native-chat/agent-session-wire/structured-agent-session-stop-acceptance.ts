@@ -80,7 +80,12 @@ export async function acceptChatStop(
   const committedBefore = receipt.isCommitted()
   try {
     const accepted = await ctx.journal.stops.accept(
-      { ...input, liveTurnId: () => contextStructuredAgentSessionCurrentWork(ctx).activeTurnId() },
+      {
+        ...input,
+        captureMail: input.captureMail,
+        captureMailIntent: !committedBefore,
+        liveTurnId: () => contextStructuredAgentSessionCurrentWork(ctx).activeTurnId()
+      },
       committedBefore ? undefined : receipt
     )
     return { ok: true, value: { turnId: accepted.turnId, withdrawn: accepted.withdrawn } }

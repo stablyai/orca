@@ -400,6 +400,7 @@ describe('Resume', () => {
   })
 
   it('records a no-op Resume and replays it', async () => {
+    await rig.workingSend()
     const id = opId(FUTURE)
     expect(await rig.resume(id)).toMatchObject({
       ok: true,
@@ -436,6 +437,7 @@ describe('Resume', () => {
   })
 
   it('answers unknown, never success, when a no-op cannot be recorded, and records nothing', async () => {
+    await rig.workingSend()
     const id = opId()
     const restore = failReceiptWrites()
     expect(await rig.resume(id)).toMatchObject(UNKNOWN)

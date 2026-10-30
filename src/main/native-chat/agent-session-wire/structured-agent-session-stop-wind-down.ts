@@ -30,6 +30,12 @@ export type StructuredAgentSessionStopWindDown = {
   settled?: (failedOn?: JournalStopFailedOn) => void
 }
 
+export type StructuredAgentSessionChatStopWindDown = {
+  owed: StructuredAgentSessionStopWindDown
+  ctx: AgentSessionTurnContext
+  stopChild: () => Promise<void>
+}
+
 /** Queue in the Stop’s tick to exclude intervening input; failures revise its note.
  * Unproven closes retain the child, and later agent operations join that close. */
 export async function endStoppedStructuredAgentSession(

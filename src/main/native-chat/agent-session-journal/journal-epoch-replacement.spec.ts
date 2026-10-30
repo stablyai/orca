@@ -98,6 +98,19 @@ export function registerJournalEpochReplacementTests(): void {
   })
 
   describe('journal epoch replacement', () => {
+    it('keeps personal mail intent through actual epoch retirement and non-person Stop restatement', async () => {
+      const journal = await journals.open({ identity: IDENTITY, stateDirectory: root })
+      await journal.appendStopEvent({ reason: 'user-stop' }, 1)
+      const before = journal.mailBoundary()
+      await journal.rollEpoch('handle_forked', 1)
+      await journal.appendStopEvent({ reason: 'host-stop' }, 1)
+      expect(journal.mailBoundary()).toEqual(before)
+      await journal.replaceEpochItems('legacy_import', 1, [])
+      expect(journal.mailBoundary()).toEqual(before)
+      await journal.appendQueueResume(1)
+      expect(journal.mailBoundary()?.status).toBe('released')
+    })
+
     it('publishes one observable replacement', () => {
       const published: JournalLoad[] = []
 

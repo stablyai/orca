@@ -12,11 +12,7 @@ import type { RuntimeNotifier } from '../runtime-notifier-contract'
 import { RuntimeClientEventBus } from '../runtime-client-event-bus'
 import { RuntimeNativeChatDraftResolutions } from '../runtime-native-chat-draft-resolutions'
 import { RuntimeWorktreeLifecycleEvents } from '../runtime-worktree-lifecycle-events'
-import type {
-  RuntimeWorktreeLifecycleEvent,
-  RuntimeWorktreeScanCache,
-  RuntimeWorktreeScanInFlight
-} from '../orca-runtime-core'
+import type * as RuntimeCore from '../orca-runtime-core'
 import type { AgentBrowserBridge } from '../../browser/agent-browser-bridge'
 import type { BrowserBackend } from '../../browser/browser-backend'
 import type { EmulatorBridge } from '../../emulator/emulator-bridge'
@@ -35,8 +31,7 @@ import { OrchestrationMailboxOwner } from '../orchestration/mailbox-owner'
 import { OrchestrationMailboxDeliveryTarget } from '../orchestration/mailbox-delivery-target'
 import { OrchestrationMailboxPointerDelivery } from '../orchestration/mailbox-pointer-delivery'
 import { OrchestrationMailboxNotificationCoordinator } from '../orchestration/mailbox-notification-coordinator'
-import type { RuntimeMessageWaiter } from '../runtime-message-waiters'
-import { RuntimeMessageWaiters } from '../runtime-message-waiters'
+import { RuntimeMessageWaiters, type RuntimeMessageWaiter } from '../runtime-message-waiters'
 import type { RuntimeSkillCommands } from '../runtime-skill-command-surface'
 import { RuntimeTerminalStreamConsumers } from '../runtime-terminal-stream-consumers'
 import type { RecentPtyOutputBuffer } from '../recent-pty-output-buffer'
@@ -88,7 +83,7 @@ export abstract class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWith
   })
 
   protected readonly worktreeLifecycleEvents =
-    new RuntimeWorktreeLifecycleEvents<RuntimeWorktreeLifecycleEvent>()
+    new RuntimeWorktreeLifecycleEvents<RuntimeCore.RuntimeWorktreeLifecycleEvent>()
 
   protected agentBrowserBridge: AgentBrowserBridge | null = null
 
@@ -100,9 +95,9 @@ export abstract class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWith
 
   protected worktreeScanGenerations = new Map<string, number>()
 
-  protected worktreeScanCache = new Map<string, RuntimeWorktreeScanCache>()
+  protected worktreeScanCache = new Map<string, RuntimeCore.RuntimeWorktreeScanCache>()
 
-  protected worktreeScanInFlight = new Map<string, RuntimeWorktreeScanInFlight>()
+  protected worktreeScanInFlight = new Map<string, RuntimeCore.RuntimeWorktreeScanInFlight>()
 
   /** Bound abandoned Git-admin filesystem probes to one per repo. */
   protected worktreeAdminFingerprintProbes = new Set<string>()
@@ -246,8 +241,9 @@ export abstract class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWith
     getTerminalHandleForLeafKey: (leafKey) =>
       this.handleByLeafKey.get(leafKey) ?? this.getPtyLaneMailboxTarget(leafKey)?.handle,
     getTerminalProcessIncarnation: (handle) => this.getTerminalProcessIncarnation(handle),
-    onRoutedMessageTypes: (mailboxHandle, types) =>
-      this.messageWaiters.notifyRouted(mailboxHandle, types),
+    onRoutedMessageTypes: (mailboxHandle, types) => {
+      this.messageWaiters.notifyRouted(mailboxHandle, types)
+    },
     onForeignMailboxRouted: (mailboxHandle, messageType) =>
       this.notifyMessageArrived(mailboxHandle, messageType)
   })
@@ -292,7 +288,9 @@ export abstract class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWith
       getCliCommand: localOrchestrationCliCommand,
       senderName: (party, reportedDispatchId) =>
         this.orchestrationSenderNames.nameOf(party, reportedDispatchId),
-      host: createStructuredMailboxPointerHost()
+      host: createStructuredMailboxPointerHost(),
+      scheduleRetry: (mailbox) => this.mailPointerRepointScheduler.schedule(mailbox),
+      cancelRetry: (mailbox) => this.mailPointerRepointScheduler.cancel(mailbox)
     })
 
   readonly orchestrationSenderNames = new RuntimeOrchestrationSenderNames({
@@ -328,7 +326,11 @@ export abstract class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWith
       resolveMessageWaiter: (waiter) => this.messageWaiters.resolveNotified(waiter)
     })
 
-  protected readonly messageWaiters = new RuntimeMessageWaiters()
+  protected readonly messageWaiters = new RuntimeMessageWaiters((handle, types) => {
+    if (!this.orchestrationStructuredMailboxPointerDelivery.onConsumerChange(handle, types)) {
+      this.deliverPendingMessagesForHandle(handle)
+    }
+  })
 
   protected readonly skillCommands!: RuntimeSkillCommands
 

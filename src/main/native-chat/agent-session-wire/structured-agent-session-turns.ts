@@ -90,6 +90,7 @@ export async function performSend(
     body: AgentJournalMessageItem
     /** Absent on older callers. */
     origin?: 'client' | 'host'
+    humanRelease?: true
     /** Persist only source kind in the submission. */
     source?: AgentSessionMessageSource
     options?: Readonly<Record<string, string>>

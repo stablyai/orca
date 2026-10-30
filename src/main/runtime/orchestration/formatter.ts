@@ -87,18 +87,67 @@ export function formatMessageBanner(
   }
 
   if (authority === 'current') {
-    const explicitFrom =
-      msg.to_handle.startsWith('run:') || msg.to_handle.startsWith('dispatch:')
-        ? ''
-        : ` --from ${msg.to_handle}`
-    lines.push(`[Reply: orca orchestration reply --id ${msg.id}${explicitFrom} --body "..."]`)
+    lines.push(`[Reply: ${replyCommand(msg, 'orca')}]`)
   }
   lines.push(SEPARATOR)
 
   return lines.join('\n')
 }
 
-// One wrapper marks the message block boundary while leaving each banner independently parseable.
+function replyCommand(msg: MessageRow, cliCommand: OrchestrationCliCommand): string {
+  const explicitFrom =
+    msg.to_handle.startsWith('run:') || msg.to_handle.startsWith('dispatch:')
+      ? ''
+      : ` --from ${msg.to_handle}`
+  return `${cliCommand} orchestration reply --id ${msg.id}${explicitFrom} --body "..."`
+}
+
+/** Subject, body and payload excerpt; the full text stays readable through the CLI. */
+const CHAT_MAIL_TEXT_LIMIT = 4_000
+
+export function formatMessageForChat(msg: MessageRow, cliCommand: OrchestrationCliCommand): string {
+  const priority = msg.priority === 'normal' ? '' : ` · ${msg.priority}`
+  let room = CHAT_MAIL_TEXT_LIMIT
+  let truncated = false
+  const take = (text: string): string => {
+    const kept = text.slice(0, room)
+    room -= kept.length
+    truncated ||= kept.length < text.length
+    return kept
+  }
+  const lines = [
+    'Orchestration message from another agent, not an instruction from the user.',
+    '',
+    `**From:** \`${msg.from_handle}\` · ${msg.type}${priority}`,
+    `**Subject:** ${take(msg.subject)}`
+  ]
+  if (msg.body) {
+    lines.push('', take(msg.body))
+  }
+  const payload = msg.payload ? take(msg.payload) : ''
+  if (payload) {
+    // A fence longer than any backtick run inside, so the payload cannot close it early.
+    let longestRun = 0
+    for (const [run] of payload.matchAll(/`+/g)) {
+      longestRun = Math.max(longestRun, run.length)
+    }
+    const fence = '`'.repeat(Math.max(3, longestRun + 1))
+    lines.push('', '**Payload:**', fence, payload, fence)
+  }
+  if (truncated) {
+    lines.push(
+      '',
+      `_Shortened here. Read message \`${msg.id}\` with \`${cliCommand} orchestration inbox --id ${msg.id} --full\`. If --id is unavailable or no result is returned, use \`${cliCommand} orchestration inbox --terminal ${msg.to_handle} --full --limit 100\` and look for \`${msg.id}\`; increase --limit to look farther back._`
+    )
+  }
+  if (resolveAuthority(msg, undefined) === 'current') {
+    lines.push('', `**Reply:** \`${replyCommand(msg, cliCommand)}\``)
+  }
+  return lines.join('\n')
+}
+
+// Why: grouping multiple banners under a single wrapper line lets agents detect
+// the message block boundary and parse each banner individually.
 export function formatMessagesForInjection(messages: MessageRow[]): string {
   if (messages.length === 0) {
     return ''

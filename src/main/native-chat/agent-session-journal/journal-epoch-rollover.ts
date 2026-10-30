@@ -1,3 +1,4 @@
+import type { JournalMailBoundary } from './journal-mail-boundary'
 // Delete and replace epochs atomically; retaining superseded rows would grow history without bound.
 
 import { journalRowSchemaVersion } from '../../../shared/agent-session-journal-types'
@@ -20,6 +21,7 @@ export function publishNewEpoch(input: {
   database: JournalHostDatabase
   identity: AgentSessionJournalIdentity
   epoch: string
+  mailBoundary?: JournalMailBoundary
   reason: AgentJournalEpochReason
   fence: number
   now: number
@@ -31,6 +33,7 @@ export function publishNewEpoch(input: {
   const row: JournalRow = {
     kind: 'epoch',
     reason: input.reason,
+    ...(input.mailBoundary ? { mailBoundary: input.mailBoundary } : {}),
     providerHandle: agentSessionJournalProviderHandle(input.identity),
     // Body-free epoch rows must remain readable by older hosts.
     v: journalRowSchemaVersion([]),
@@ -50,6 +53,11 @@ export function publishNewEpoch(input: {
       applyJournalRow(state, card)
       rows.push(card)
     }
+  }
+  const last = rows.at(-1)
+  if (last && input.mailBoundary) {
+    last.mailBoundary = input.mailBoundary
+    state.mailBoundary = input.mailBoundary
   }
   input.database.transaction((db) => {
     const retired = readJournalSessionEpoch(db, sessionId)

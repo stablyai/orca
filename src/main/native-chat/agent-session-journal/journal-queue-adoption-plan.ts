@@ -8,7 +8,8 @@ import { journalAttachmentClaimsReceipt } from './journal-submission-hook'
 export function journalQueueAdoptionPlan(
   deps: JournalQueuedMessagesDeps,
   legacy: LegacyQueuedCards,
-  changes: readonly JournalQueueCardChange[]
+  changes: readonly JournalQueueCardChange[],
+  humanRelease?: true
 ): JournalQueuePlan {
   const rows: JournalQueuePlan['rows'] = []
   const adopted: string[] = []
@@ -18,11 +19,11 @@ export function journalQueueAdoptionPlan(
     const adoption = own ? null : legacy.adoption(messageId)
     if (adoption) {
       bodies.push(adoption.body)
-      rows.push(journalQueueRowBuilder(deps.state, messageId, adoption))
+      rows.push(journalQueueRowBuilder(deps.state, messageId, adoption, humanRelease))
       adopted.push(messageId)
     }
     if (change) {
-      rows.push(journalQueueRowBuilder(deps.state, messageId, change))
+      rows.push(journalQueueRowBuilder(deps.state, messageId, change, humanRelease))
     }
   }
   return {

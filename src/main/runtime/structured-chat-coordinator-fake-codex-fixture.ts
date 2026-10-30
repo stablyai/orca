@@ -15,7 +15,7 @@ export type FakeConnection = Omit<CodexAppServerConnection, 'closed'> & {
   threadId: string | null
   /** Every JSON-RPC method the adapter called, in order. */
   methods: string[]
-  turns: { clientUserMessageId: string; text: string }[]
+  turns: { turnId?: string; clientUserMessageId: string; text: string }[]
   /** Messages steered into a running turn, as Codex takes them. */
   steers: { expectedTurnId: string; clientUserMessageId: string; text: string }[]
 }
@@ -89,6 +89,7 @@ export function fakeCodex() {
           }
           turnCounter += 1
           connection.turns.push({
+            turnId: `turn-${turnCounter}`,
             clientUserMessageId: String(input.clientUserMessageId),
             text: JSON.stringify(input.input)
           })

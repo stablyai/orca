@@ -7,6 +7,7 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { MailPointerRepointScheduler } from '../../runtime/orchestration/mail-pointer-repoint-scheduler'
 import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
 import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 import { claudeAndCodexDeclared } from './structured-agent-session-adapter-router-test-support'
@@ -31,6 +32,12 @@ import {
 import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
 import { startsWhenPublished } from './structured-agent-session-instant-start.test-support'
+import { OrchestrationDb } from '../../runtime/orchestration/db'
+import { OrchestrationStructuredMailboxPointerDelivery } from '../../runtime/orchestration/structured-mailbox-pointer-delivery'
+import { createStructuredMailboxPointerHost } from '../../runtime/orchestration/structured-mailbox-pointer-host'
+import { setStructuredAgentSessionHost } from './structured-agent-session-registry'
+import { formatOrcaSessionAddress } from '../../../shared/orca-session-address'
+import { testOrcaSessionId } from '../../../shared/orca-session-address-test-fixture'
 
 const caller = { callerKey: 'desktop' }
 const KEPT = { provider: 'codex' as const, threadId: THREAD, turnId: 'kept', ordinal: 0 }
@@ -190,6 +197,110 @@ function sentTexts(items: readonly AgentJournalRenderItem[]): string[] {
 }
 
 describe('a rewind in doubt while its agent keeps running', () => {
+  it.each([100, 1000])(
+    'retires deleted live old-route debt across real preparation at N=%i',
+    async (count) => {
+      await rewindInDoubtWithLiveChild()
+      const db = new OrchestrationDb(':memory:')
+      const address = formatOrcaSessionAddress(testOrcaSessionId(SESSION))
+      let mailbox = ''
+      let release = () => {}
+      setStructuredAgentSessionHost(host)
+      const scheduler = new MailPointerRepointScheduler((handle) => bridge.retryForHandle(handle))
+      const bridge = new OrchestrationStructuredMailboxPointerDelivery({
+        getDb: () => db,
+        getMessageWaiters: () => undefined,
+        resolveStructuredTarget: (to) =>
+          to === address || to === mailbox ? { sessionId: SESSION, dispatchId: null } : null,
+        getCliCommand: () => 'orca',
+        senderName: () => null,
+        scheduleRetry: (handle) => scheduler.schedule(handle),
+        cancelRetry: (handle) => scheduler.cancel(handle),
+        host: createStructuredMailboxPointerHost()
+      })
+      const work = Reflect.get(bridge, 'work')
+      const interests = Reflect.get(bridge, 'interests')
+      try {
+        for (let n = 0; n < count; n++) {
+          const run = db.createRun({
+            objective: `routed deletion ${n}`,
+            coordinatorHandle: null,
+            coordinatorPaneKey: null
+          })
+          mailbox = `run:${run.id}`
+          recoverRewind.mockImplementationOnce(
+            () =>
+              new Promise((resolve) => {
+                release = () => resolve({ ok: false, reason: 'outcome-unknown' })
+              })
+          )
+          const before = recoverRewind.mock.calls.length
+          const source = db.insertMessage({
+            runId: run.id,
+            from: 'worker',
+            to: address,
+            subject: `retire-${n}`
+          })
+          await vi.waitFor(() => expect(recoverRewind.mock.calls.length).toBe(before + 1), {
+            interval: 1
+          })
+          const old = interests.get(address)
+          expect(old.deferred.has(source.id)).toBe(true)
+          expect(Reflect.get(work, 'attempts').size).toBe(1)
+          db.bindRun({ runId: run.id, coordinatorHandle: address, coordinatorPaneKey: null })
+          db.mailSourceMutations.flushCommitted()
+          expect(db.getMessageById(source.id)?.to_handle).toBe(mailbox)
+          db.resetMessages()
+          db.mailSourceMutations.flushCommitted()
+          expect(db.getMessageById(source.id)).toBeUndefined()
+          // The source reset kills the debt, not the still-live Interest or its actual provider await.
+          const deletedDebt = old.deferred.size
+          expect(interests.get(address)).toBe(old)
+          expect(Reflect.get(work, 'attempts').size).toBe(1)
+          release()
+          await vi.waitFor(() => expect(Reflect.get(work, 'attempts').size).toBe(0), {
+            interval: 1
+          })
+          expect(deletedDebt).toBe(0)
+          expect(old.deferred.size).toBe(0)
+          expect(Reflect.get(old.deferred, 'reasons').size).toBe(0)
+          expect(Reflect.get(work, 'scopes').size).toBe(0)
+          expect([...Reflect.get(work, 'mailboxes').values()].every((ids) => ids.size === 0)).toBe(
+            true
+          )
+          await vi.waitFor(() => expect(scheduler.pendingCount).toBe(0), { interval: 1 })
+        }
+        expect(dispatch).not.toHaveBeenCalled()
+        expect(store.getRecord(SESSION)?.rewind?.phase).toBe('prepared')
+        console.info(
+          'deleted-live-route',
+          JSON.stringify({
+            count,
+            interests: interests.size,
+            attempts: Reflect.get(work, 'attempts').size,
+            reverseSources: Reflect.get(work, 'scopes').size,
+            pendingContainers: Reflect.get(work, 'mailboxes').size,
+            reasonContainers: [...interests.values()].reduce(
+              (n, i) => n + Reflect.get(i.deferred, 'reasons').size,
+              0
+            ),
+            timers: scheduler.pendingCount,
+            pending: [...Reflect.get(work, 'mailboxes').values()].reduce(
+              (n, ids) => n + ids.size,
+              0
+            ),
+            deferred: [...interests.values()].reduce((n, i) => n + i.deferred.size, 0)
+          })
+        )
+      } finally {
+        release()
+        bridge.resetForDatabaseChange()
+        scheduler.clear()
+        setStructuredAgentSessionHost(null)
+        db.close()
+      }
+    }
+  )
   it('is settled by the next send, which is then delivered', async () => {
     await rewindInDoubtWithLiveChild()
     const before = acquires

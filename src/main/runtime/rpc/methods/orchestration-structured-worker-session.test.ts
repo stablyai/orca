@@ -14,12 +14,7 @@ import { codexDispatchRejection } from '../../../codex/codex-structured-turn-end
 
 type WorkerHost = Pick<
   StructuredAgentSessionHost,
-  | 'hasSession'
-  | 'getSessionTabId'
-  | 'notifySessionTabHidden'
-  | 'setSessionTabVisibility'
-  | 'close'
-  | 'observeJournalPublications'
+  'hasSession' | 'getSessionTabId' | 'notifySessionTabHidden' | 'setSessionTabVisibility' | 'close'
 > & {
   deps: {
     store: Pick<
@@ -56,8 +51,6 @@ function installHost(
 ) {
   const hidden = new Set<string>()
   const record = (sessionId: string) => agentSessionRecordFixture({ sessionId, location })
-  const dispose = vi.fn()
-  const observeJournalPublications = vi.fn(() => dispose)
   hostRef.current = {
     hasSession: () => false,
     getSessionTabId: (id: string) => (hidden.has(id) ? null : `agent-session:${id}`),
@@ -77,10 +70,8 @@ function installHost(
         getSessionTabId: (id: string) => (hidden.has(id) ? null : `agent-session:${id}`),
         isSessionTabRetired: (id: string) => hidden.has(id)
       }
-    },
-    observeJournalPublications
+    }
   } satisfies WorkerHost
-  return { observeJournalPublications, dispose }
 }
 
 describe('structured worker session', () => {
@@ -93,28 +84,19 @@ describe('structured worker session', () => {
     }))
   })
 
-  it('binds only a journal observer at start, and settlement drops it', async () => {
-    const { observeJournalPublications, dispose } = installHost()
+  it('registers one worker identity and retires it on settlement without a mail observer', async () => {
+    installHost()
     const created = await createStructuredWorkerSession({
       runtime: { ensureStructuredAgentSessionHost: async () => {} } as never,
       worktreeId: 'wt_1',
       agent: 'claude',
-      dispatchId: 'd1',
-      onJournalActivity: () => {}
+      dispatchId: 'd1'
     })
     // No hold: while the dispatch is open the idle sweep reads it from the orchestration database.
     expect(hostRef.current).not.toHaveProperty('hold')
-    expect(observeJournalPublications).toHaveBeenCalledWith(
-      created.identity.sessionId,
-      expect.any(Function)
-    )
-    expect(dispose).not.toHaveBeenCalled()
-
     releaseStructuredWorkerSession('d1')
-    expect(dispose).toHaveBeenCalledTimes(1)
     expect(structuredWorkerIdentities.get(created.identity.handle)).toBeNull()
     releaseStructuredWorkerSession('d1')
-    expect(dispose).toHaveBeenCalledTimes(1)
   })
 
   it('registers the identity BEFORE the session is created, so the child gets the handle', async () => {
@@ -129,8 +111,7 @@ describe('structured worker session', () => {
       runtime: { ensureStructuredAgentSessionHost: async () => {} } as never,
       worktreeId: 'wt_1',
       agent: 'claude',
-      dispatchId: 'd_spawn',
-      onJournalActivity: () => {}
+      dispatchId: 'd_spawn'
     })
     expect(envAtSpawn?.ORCA_TERMINAL_HANDLE).toBe(created.identity.handle)
     // This app's own launcher by absolute path, so a login shell's profile cannot swap in a global.
@@ -158,8 +139,7 @@ describe('structured worker session', () => {
         runtime: { ensureStructuredAgentSessionHost: async () => {} } as never,
         worktreeId: 'wt_1',
         agent: 'claude',
-        dispatchId: 'd_fail',
-        onJournalActivity: () => {}
+        dispatchId: 'd_fail'
       })
     ).rejects.toThrow(/local execution host outside WSL/)
     // Neither a live provider child nor a registry entry may outlive the failed start.
@@ -186,8 +166,7 @@ describe('structured worker session', () => {
         runtime: { ensureStructuredAgentSessionHost: async () => {} } as never,
         worktreeId: 'wt_1',
         agent: 'claude',
-        dispatchId: 'd_unknown',
-        onJournalActivity: () => {}
+        dispatchId: 'd_unknown'
       })
     ).rejects.toThrow(/was refused/)
     expect(closed).toHaveLength(1)
@@ -212,8 +191,7 @@ describe('structured worker session', () => {
         runtime: { ensureStructuredAgentSessionHost: async () => {} } as never,
         worktreeId: 'wt_1',
         agent: 'claude',
-        dispatchId: 'd_definitive',
-        onJournalActivity: () => {}
+        dispatchId: 'd_definitive'
       })
     ).rejects.toThrow(/was refused/)
     expect(closed).toEqual([])
@@ -225,8 +203,7 @@ describe('structured worker session', () => {
       runtime: { ensureStructuredAgentSessionHost: async () => {} } as never,
       worktreeId: 'wt_1',
       agent: 'codex',
-      dispatchId: 'd2',
-      onJournalActivity: () => {}
+      dispatchId: 'd2'
     })
     expect(created.identity.handle.startsWith('structworker_')).toBe(true)
     expect(created.identity.processIncarnation).toBe(`structured:${created.identity.sessionId}`)
@@ -242,8 +219,7 @@ describe('structured worker session', () => {
       runtime: { ensureStructuredAgentSessionHost: async () => {} } as never,
       worktreeId: 'wt_1',
       agent: 'claude',
-      dispatchId: 'd3',
-      onJournalActivity: () => {}
+      dispatchId: 'd3'
     })
     expect(createSpy.mock.calls[0]![0].activate).toBe(false)
     releaseStructuredWorkerSession('d3')
@@ -256,8 +232,7 @@ describe('structured worker session', () => {
         runtime: { ensureStructuredAgentSessionHost: async () => {} } as never,
         worktreeId: 'wt_1',
         agent: 'claude',
-        dispatchId: 'd4',
-        onJournalActivity: () => {}
+        dispatchId: 'd4'
       })
     ).rejects.toThrow(/local execution host/)
   })

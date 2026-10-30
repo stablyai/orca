@@ -1,14 +1,7 @@
 import { agentSessionConversationView } from '../../../shared/agent-session-conversation-view'
-import {
-  agentSessionLeaseFixture,
-  agentSessionRecordFixture
-} from '../../../shared/agent-session-record.test-fixture'
+import { agentSessionRecordFixture } from '../../../shared/agent-session-record.test-fixture'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type {
-  AgentJournalRenderItem,
-  AgentJournalSubmission
-} from '../../../shared/agent-session-journal-types'
-import type { AgentMessageSource } from '../../../shared/agent-session/agent-session-message-source'
+import type { AgentJournalRenderItem } from '../../../shared/agent-session-journal-types'
 
 const hostRef: { current: unknown } = { current: null }
 
@@ -16,12 +9,8 @@ vi.mock('../../native-chat/agent-session-wire/structured-agent-session-registry'
   getStructuredAgentSessionHost: () => hostRef.current
 }))
 
-const {
-  createStructuredMailboxPointerHost,
-  readStructuredSessionGateFacts,
-  structuredPointerCallerKey,
-  structuredSessionPointerCallerKey
-} = await import('./structured-mailbox-pointer-host')
+const { createStructuredMailboxPointerHost, readStructuredSessionGateFacts } =
+  await import('./structured-mailbox-pointer-host')
 
 function runningTurn(): AgentJournalRenderItem {
   return {
@@ -43,30 +32,6 @@ function transcript(count: number): AgentJournalRenderItem[] {
   )
 }
 
-function pointerSubmission(
-  clientMessageId: string,
-  fence: number,
-  acceptedSequence: number
-): AgentJournalSubmission {
-  return {
-    clientMessageId,
-    acceptedSequence,
-    submittedAt: 1_000,
-    fence,
-    payloadFingerprint: 'fp',
-    dispatchState: 'pending',
-    providerItemId: null,
-    reason: null,
-    resolvedAt: null
-  }
-}
-
-const NOTICE_SOURCE: AgentMessageSource = {
-  kind: 'agent',
-  senders: [],
-  orchestration: { message: 'mail-notice', mailbox: 'dispatch:d1', dispatchId: 'd1', messages: [] }
-}
-
 describe('structured mailbox pointer host', () => {
   beforeEach(() => {
     hostRef.current = null
@@ -85,227 +50,42 @@ describe('structured mailbox pointer host', () => {
     })
   })
 
-  it("reads what the session's sends settled as", async () => {
-    const submissions = [{ clientMessageId: 'op1', dispatchState: 'unknown' }]
-    hostRef.current = {
-      deps: { store: { getConversation: () => null } },
-      journalSnapshot: () => ({ items: [], submissions }),
-      currentWork: () => null
+  it('reads exact ordinary creation at its original authority across route/card/provider changes and refuses invalid callers', () => {
+    const record = agentSessionConversationView(agentSessionRecordFixture())
+    let receipt: unknown = {
+      operationId: 'op1',
+      sessionId: record.sessionId,
+      callerKey: 'trusted-local:orchestration:ordinary-mail',
+      method: 'agentSession.send',
+      status: 'accepted',
+      result: { kind: 'queued-draft', messageId: 'op1' }
     }
-    expect(await createStructuredMailboxPointerHost().readSessionFacts('s1')).toEqual({
-      submissions
-    })
-  })
-
-  it('scopes settlements to the record fence when the journal marker disagrees', async () => {
-    const items: AgentJournalRenderItem[] = [
-      {
-        itemId: 'clear-marker',
-        revision: 1,
-        sequence: 5,
-        observedAt: 1_000,
-        body: {
-          kind: 'status',
-          text: 'Context cleared',
-          contextClear: { operationId: 'clear-old', afterFence: 1, clearedAt: 1_000 }
-        }
-      }
-    ]
-    const current = pointerSubmission('current', 3, 4)
+    const read = vi.fn(() => ({ verdict: 'readable', receipt }))
     hostRef.current = {
       deps: {
         store: {
-          getConversation: () =>
-            agentSessionConversationView({
-              ...agentSessionRecordFixture(),
-              providerContextBoundary: { operationId: 'clear-1', afterFence: 2, clearedAt: 1_000 }
-            })
+          readCommandReceipt: read,
+          getConversation: (id: string) => (id === record.sessionId ? record : null),
+          listConversations: () => [record],
+          getVisibleSessionTabIndex: () => ({ present: false, sessionIds: [] })
         }
-      },
-      journalSnapshot: () => ({
-        items,
-        submissions: [pointerSubmission('earlier', 2, 6), current]
-      }),
-      currentWork: () => null
+      }
     }
     const host = createStructuredMailboxPointerHost()
-    expect(await host.readSessionFacts('s1')).toEqual({
-      submissions: [current]
-    })
-    expect(host.currentContextClearOperationId('s1')).toBe('clear-1')
-  })
-
-  it('keeps the record context when an older rewind removed its journal marker', async () => {
-    const current = pointerSubmission('current', 3, 1)
-    hostRef.current = {
-      deps: {
-        store: {
-          getConversation: () =>
-            agentSessionConversationView({
-              ...agentSessionRecordFixture(),
-              providerContextBoundary: { operationId: 'clear-1', afterFence: 2, clearedAt: 1_000 }
-            })
-        }
-      },
-      journalSnapshot: () => ({
-        items: [],
-        submissions: [pointerSubmission('earlier', 2, 2), current]
-      }),
-      currentWork: () => null
+    expect(host.readCreation('op1', record.sessionId)).toBe('accepted')
+    expect(read).toHaveBeenCalledWith({ kind: 'global' }, 'op1')
+    expect(host.readCreation('op1', 'unrelated')).toBe('accepted')
+    receipt = {
+      status: 'accepted',
+      method: 'agentSession.send',
+      sessionId: record.sessionId,
+      callerKey: 'other-client',
+      result: { kind: 'queued-draft', messageId: 'op1' }
     }
-    const host = createStructuredMailboxPointerHost()
-    expect(await host.readSessionFacts('s1')).toEqual({
-      submissions: [current]
-    })
-    expect(host.currentContextClearOperationId('s1')).toBe('clear-1')
-  })
-
-  it('answers null rather than nothing recorded when the session cannot be read', async () => {
-    // Unreadable sessions retain pointers; treating them as empty would authorize an unseen send.
-    expect(await createStructuredMailboxPointerHost().readSessionFacts('s1')).toBeNull()
-    hostRef.current = {
-      journalSnapshot: () => {
-        throw new Error('agent_session_ownership_unknown')
-      }
-    }
-    expect(await createStructuredMailboxPointerHost().readSessionFacts('s1')).toBeNull()
-  })
-
-  it('reports an unattached host rather than a rejection when nothing can be sent', async () => {
-    await expect(
-      createStructuredMailboxPointerHost().send({
-        sessionId: 's1',
-        dispatchId: 'd1',
-        operationId: 'op1',
-        expectedRuntimeFence: 1,
-        body: { kind: 'message', role: 'user', blocks: [] }
-      } as never)
-    ).resolves.toEqual({ kind: 'unattached' })
-  })
-
-  it.each([
-    ['accepted', 'accepted'],
-    ['rejected', 'rejected'],
-    // Only accepted consumes mail; pending and unknown must both retain the pointer.
-    ['pending', 'unknown'],
-    ['unknown', 'unknown']
-  ])('maps a %s submission to %s', async (dispatchState, expected) => {
-    const send = vi.fn(
-      async (_caller: { callerKey: string }, _payload: { retryUnknown?: boolean }) => ({
-        ok: true,
-        value: { submission: { dispatchState } }
-      })
-    )
-    hostRef.current = { send, waitForSendSettlement: async () => undefined }
-    await expect(
-      createStructuredMailboxPointerHost().send({
-        sessionId: 's1',
-        dispatchId: 'd1',
-        operationId: 'op1',
-        expectedRuntimeFence: 1,
-        body: { kind: 'message', role: 'user', blocks: [] }
-      } as never)
-    ).resolves.toEqual({ kind: 'sent', state: expected })
-    expect(send.mock.calls[0]![0]).toEqual({ callerKey: structuredPointerCallerKey('d1') })
-    expect(send.mock.calls[0]![1]!.retryUnknown).toBeUndefined()
-  })
-
-  it('sends the pointer as a plain send for every agent, with who it is from', async () => {
-    const send = vi.fn(
-      async (_caller: unknown, _payload: { delivery?: string; body?: unknown }) => ({
-        ok: true,
-        value: { clientMessageId: 'op1', submission: { dispatchState: 'accepted' } }
-      })
-    )
-    hostRef.current = { send }
-    await expect(
-      createStructuredMailboxPointerHost().send({
-        sessionId: 's1',
-        dispatchId: 'd1',
-        operationId: 'op1',
-        expectedRuntimeFence: 1,
-        body: { kind: 'message', role: 'user', blocks: [], from: NOTICE_SOURCE },
-        holdWhileWorking: false
-      })
-    ).resolves.toEqual({ kind: 'sent', state: 'accepted' })
-    expect(send.mock.calls[0]![1]).toMatchObject({ body: { from: NOTICE_SOURCE } })
-    expect(send.mock.calls[0]![1]!.delivery).toBeUndefined()
-  })
-
-  it('consumes mail once an accepted nudge is delivered while the worker starts (W10)', async () => {
-    hostRef.current = {
-      send: async () => ({
-        ok: true,
-        value: { clientMessageId: 'op1', submission: { dispatchState: 'pending' } }
-      }),
-      waitForSendSettlement: async () => ({
-        value: { clientMessageId: 'op1', submission: { dispatchState: 'accepted' } }
-      })
-    }
-    await expect(
-      createStructuredMailboxPointerHost().send({
-        sessionId: 's1',
-        dispatchId: 'd1',
-        operationId: 'op1',
-        expectedRuntimeFence: 1,
-        body: { kind: 'message', role: 'user', blocks: [] }
-      } as never)
-    ).resolves.toEqual({ kind: 'sent', state: 'accepted' })
-  })
-
-  it('scopes direct peer mail to the session when there is no dispatch to scope to', async () => {
-    // Direct mail has no Dispatch; a session-scoped key preserves its retry lane without changing existing Dispatch ledger keys.
-    const send = vi.fn(async (_caller: { callerKey: string }) => ({
-      ok: true,
-      value: { submission: { dispatchState: 'accepted' } }
-    }))
-    hostRef.current = { send }
-    await expect(
-      createStructuredMailboxPointerHost().send({
-        sessionId: 's1',
-        dispatchId: null,
-        operationId: 'op1',
-        expectedRuntimeFence: 1,
-        body: { kind: 'message', role: 'user', blocks: [] }
-      } as never)
-    ).resolves.toEqual({ kind: 'sent', state: 'accepted' })
-    expect(send.mock.calls[0]![0]).toEqual({
-      callerKey: structuredSessionPointerCallerKey('s1')
-    })
-    expect(structuredSessionPointerCallerKey('s1')).not.toBe(structuredPointerCallerKey('s1'))
-  })
-
-  it('separates a not-attached refusal from a real one', async () => {
-    for (const [code, expected] of [
-      ['agent_session_ownership_unknown', { kind: 'unattached' }],
-      ['agent_session_conflict', { kind: 'sent', state: 'rejected' }]
-    ] as const) {
-      hostRef.current = { send: async () => ({ ok: false, refusal: { code, message: 'no' } }) }
-      await expect(
-        createStructuredMailboxPointerHost().send({
-          sessionId: 's1',
-          dispatchId: 'd1',
-          operationId: 'op1',
-          expectedRuntimeFence: 1,
-          body: { kind: 'message', role: 'user', blocks: [] }
-        } as never)
-      ).resolves.toEqual(expected)
-    }
-  })
-
-  it('reads the runtime fence off the durable record', () => {
-    hostRef.current = {
-      deps: {
-        store: {
-          getConversation: () =>
-            agentSessionConversationView(
-              agentSessionRecordFixture(agentSessionLeaseFixture({ runtimeFence: 9 }))
-            )
-        }
-      }
-    }
-    expect(createStructuredMailboxPointerHost().currentFence('s1')).toBe(9)
-    hostRef.current = { deps: { store: { getConversation: () => null } } }
-    expect(createStructuredMailboxPointerHost().currentFence('s1')).toBeNull()
+    expect(host.readCreation('op1', record.sessionId)).toBe('unknown')
+    hostRef.current = { deps: { store: { readCommandReceipt: () => ({ verdict: 'unreadable' }) } } }
+    expect(host.readCreation('op1', record.sessionId)).toBe('unknown')
+    hostRef.current = null
+    expect(host.readCreation('op1', record.sessionId)).toBe('unknown')
   })
 })

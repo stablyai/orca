@@ -26,6 +26,7 @@ import { JournalGoalAttachmentInverse } from './journal-goal-attachment-inverse'
 import { isJournalStreamedTextRevision } from './journal-streamed-text-revision'
 
 export type JournalStoreHost = {
+  queueOrigin?: () => 'fresh' | undefined
   /** Notify readers of durable draft-only transactions that append no journal row. */
   notifyCommitted: () => void
   identity: AgentSessionJournalIdentity
@@ -83,9 +84,13 @@ export function createJournalStoreCollaborators(host: JournalStoreHost): Journal
     state: host.state,
     queuePauseRestatement: () =>
       journalQueuePauseRestatement(
-        host.state().queuePauseMarks,
-        host.state().latestAcceptedTurnSequence,
-        host.journal().queuedMessages.pauses()
+        {
+          ...host.state().queuePauseMarks,
+          latestStop: host.state().queuePauseMarks.personalStop ?? null
+        },
+        host.state().latestAcceptedPersonalTurnSequence,
+        host.journal().queuedMessages.pauses(),
+        host.state().mailBoundary
       ),
     queueRestatement: () => host.journal().queuedMessages.restatement(),
     cursor: host.cursor,
@@ -105,6 +110,7 @@ export function createJournalStoreCollaborators(host: JournalStoreHost): Journal
   const inputReceipt = (rows: readonly JournalRow[], receipt?: JournalOperationReceipt) =>
     journalInputClaimsReceipt(claimAttachments, (id) => goalAttachments.isLive(id), rows, receipt)
   const queuedMessages = new JournalQueuedMessages({
+    queueOrigin: host.queueOrigin,
     sessionId: host.identity.sessionId,
     serialize: host.serialize,
     database: host.database,
@@ -130,7 +136,11 @@ export function createJournalStoreCollaborators(host: JournalStoreHost): Journal
       writer: rowWriter,
       cards: queuedMessages
     }),
-    stops: new JournalStopAcceptor({ writer: rowWriter, state: host.state }),
+    stops: new JournalStopAcceptor({
+      writer: rowWriter,
+      state: host.state,
+      sessionId: host.identity.sessionId
+    }),
     // Import legacy cards once per open without failing the open.
     restore: () =>
       restoreJournalStore(host, { epochController }).then(() => queuedMessages.importAtOpen()),

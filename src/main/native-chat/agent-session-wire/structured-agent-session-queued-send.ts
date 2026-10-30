@@ -1,3 +1,4 @@
+import type { JournalMailSource } from '../agent-session-journal/journal-mail-boundary'
 import type { AgentSessionSendResult } from '../../../shared/agent-session-wire'
 import type { AgentJournalMessageItem } from '../../../shared/agent-session-journal-types'
 import type { StructuredAgentSessionMutationContext } from './structured-agent-session-host-mutations'
@@ -14,6 +15,9 @@ export async function runQueueableStructuredAgentSessionSend(
     queuedImageCards?: boolean
     options?: Readonly<Record<string, string>>
     userSend?: true
+    beforeRun?: () => void
+    queueAlways?: true
+    mailSource?: JournalMailSource
     personsMessage?: true
   },
   immediate: () => Promise<TurnOutcome<AgentSessionSendResult>>

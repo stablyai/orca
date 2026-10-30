@@ -1,3 +1,4 @@
+import type { JournalMailSource } from '../../native-chat/agent-session-journal/journal-mail-boundary'
 /** Use the composer's structured send/envelope/waiter or the terminal prompt writer; callers interpret the shared outcome. */
 
 import type {
@@ -31,6 +32,8 @@ export type StructuredSessionTurn = {
   operationId: string
   expectedRuntimeFence: number
   delivery: AgentTurnDelivery
+  queueAlways?: true
+  mailSource?: JournalMailSource
   /** Host-local admission for an automated send. */
   beforeRun?: () => void
 }
@@ -138,7 +141,12 @@ async function sendStructuredSessionTurn(
   })
   const result = await send.host.send(
     { callerKey: send.callerKey },
-    turn.beforeRun ? { ...message, beforeRun: turn.beforeRun } : message
+    {
+      ...message,
+      ...(turn.beforeRun ? { beforeRun: turn.beforeRun } : {}),
+      ...(turn.queueAlways ? { queueAlways: true } : {}),
+      ...(turn.mailSource ? { mailSource: turn.mailSource } : {})
+    }
   )
   if (!result.ok) {
     return { kind: 'refused', refusal: result.refusal }

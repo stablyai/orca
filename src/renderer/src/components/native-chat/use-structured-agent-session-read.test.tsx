@@ -1,6 +1,9 @@
 // @vitest-environment happy-dom
 
-import { act, cleanup, renderHook, waitFor } from '@testing-library/react'
+import { memo } from 'react'
+import { providerFrame } from './structured-agent-session-read-provider-frame.test-fixture'
+import * as queueReducer from '../../../../shared/structured-agent-session-reducer'
+import { act, cleanup, render, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type {
   AgentJournalSubmission,
@@ -10,6 +13,8 @@ import type {
 import {
   AGENT_SESSION_HISTORY_MAX_LIMIT,
   type AgentSessionHistoryPage,
+  type AgentSessionQueuedMessage,
+  type AgentSessionQueuePause,
   type AgentSessionSubscribeEvent
 } from '../../../../shared/agent-session-wire'
 
@@ -43,24 +48,6 @@ function message(id: string, sequence: number, role: 'user' | 'assistant'): Agen
     sequence,
     observedAt: sequence,
     body: { kind: 'message', role, blocks: [{ type: 'text', text: id }] }
-  }
-}
-
-function providerFrame(id: string, sequence: number): AgentJournalRenderItem {
-  return {
-    itemId: id,
-    revision: 1,
-    sequence,
-    observedAt: sequence,
-    body: {
-      kind: 'status',
-      text: id,
-      providerFrame: {
-        provider: 'codex',
-        kind: 'notification:item/commandExecution/outputDelta',
-        payload: { head: id, byteLength: id.length, digest: id, truncated: false }
-      }
-    }
   }
 }
 
@@ -708,6 +695,164 @@ describe('useStructuredAgentSessionRead stream failures', () => {
       await vi.advanceTimersByTimeAsync(STRUCTURED_AGENT_SESSION_CLIENT_COALESCE_MS)
       expect(visits).toBe(0)
       vi.useRealTimers()
+    }
+  )
+})
+
+describe('mounted queue publication consumers', () => {
+  afterEach(cleanup)
+  it.each([100, 1000])(
+    'measures parent/reducer and memo-child work for N=%i mounted desktop owners with populated and other-host controls',
+    async (count) => {
+      resetStructuredAgentSessionReadOwnersForTests()
+      vi.clearAllMocks()
+      const emits = new Map<string, (event: AgentSessionSubscribeEvent) => void>()
+      mocks.call.mockImplementation(async (_target, _method, params) => ({
+        ok: true,
+        page: { ...page('tail', [], false), sessionId: params.sessionId }
+      }))
+      mocks.subscribe.mockImplementation((_target, params, emit) => {
+        emits.set(params.sessionId, emit)
+        return Promise.resolve({ unsubscribe: vi.fn() })
+      })
+      const targets = {
+        'queue-a': LOCAL_TARGET,
+        'queue-b': { kind: 'environment', environmentId: 'host-b' }
+      } as const
+      const targetFor = (id: string) => (id === 'queue-a' ? targets['queue-a'] : targets['queue-b'])
+      const renders = new Map<string, number>()
+      const parents = new Map<string, number>()
+      const reduce = vi.spyOn(queueReducer, 'reduceStructuredAgentSession')
+      const Queue = memo(
+        ({
+          sessionId,
+          cards,
+          pause
+        }: {
+          sessionId: string
+          cards: readonly AgentSessionQueuedMessage[] | null
+          pause: AgentSessionQueuePause | null
+        }) => {
+          renders.set(sessionId, (renders.get(sessionId) ?? 0) + 1)
+          return (
+            <output>
+              {sessionId}:{cards?.length ?? 0}:{pause?.reason ?? 'running'}
+            </output>
+          )
+        }
+      )
+      function Reader({ sessionId }: { sessionId: string }) {
+        parents.set(sessionId, (parents.get(sessionId) ?? 0) + 1)
+        const { state } = useStructuredAgentSessionRead({
+          sessionId,
+          target: targetFor(sessionId),
+          isViewed: false
+        })
+        return <Queue sessionId={sessionId} cards={state.queuedMessages} pause={state.queuePause} />
+      }
+      const ids = [
+        'queue-a',
+        'queue-b',
+        ...Array.from({ length: count - 2 }, (_, i) => `idle-${i}`)
+      ]
+      const view = render(
+        <>
+          {ids.map((id) => (
+            <Reader key={id} sessionId={id} />
+          ))}
+        </>
+      )
+      await waitFor(() => expect(emits.size).toBe(count))
+      const cards: AgentSessionQueuedMessage[] = Array.from({ length: count }, (_, position) => ({
+        messageId: `report-${position}`,
+        position,
+        state: 'waiting',
+        body: {
+          kind: 'message',
+          role: 'user',
+          blocks: [],
+          from: { kind: 'agent', senders: [], orchestration: null }
+        }
+      }))
+      const frame = (sessionId: string, sequence: number): AgentSessionSubscribeEvent => ({
+        type: 'batch',
+        sessionId,
+        batch: {
+          cursor: { epoch: 'epoch-a', sequence },
+          items: [],
+          removedItemIds: [],
+          submissions: []
+        }
+      })
+      for (const sessionId of ['queue-a', 'queue-b']) {
+        await act(async () =>
+          emits.get(sessionId)?.({
+            ...frame(sessionId, 501),
+            queuedMessages: cards,
+            queuePause: { reason: 'stopped' }
+          })
+        )
+        await waitFor(() =>
+          expect(view.container.textContent).toContain(`${sessionId}:${count}:stopped`)
+        )
+      }
+      renders.clear()
+      const work: unknown[] = []
+      for (const sessionId of ['queue-a', 'queue-b']) {
+        parents.clear()
+        reduce.mockClear()
+        await act(async () =>
+          emits.get(sessionId)?.({
+            ...frame(sessionId, 502),
+            activity: { turnId: 'working', text: 'token-only' }
+          })
+        )
+        await waitFor(() =>
+          expect(
+            findStructuredAgentSessionReadOwner(sessionId, targetFor(sessionId))?.getSnapshot()
+              .state.activity?.text
+          ).toBe('token-only')
+        )
+        expect([...renders.values()].reduce((a, b) => a + b, 0)).toBe(0)
+        expect(ids.filter((id) => id !== sessionId).map((id) => parents.get(id) ?? 0)).toEqual(
+          Array(count - 1).fill(0)
+        )
+        expect(parents.get(sessionId)).toBeGreaterThan(0)
+        expect(reduce).toHaveBeenCalled()
+        work.push({
+          sessionId,
+          parents: Object.fromEntries(parents),
+          reductions: reduce.mock.calls.length
+        })
+      }
+      parents.clear()
+      await act(async () =>
+        emits.get('queue-a')?.({
+          ...frame('queue-a', 503),
+          queuedMessages: cards.slice(1),
+          queuePause: null
+        })
+      )
+      await waitFor(() =>
+        expect(view.container.textContent).toContain(`queue-a:${count - 1}:running`)
+      )
+      expect(renders.get('queue-a')).toBe(1)
+      expect(renders.get('queue-b') ?? 0).toBe(0)
+      expect(parents.get('queue-b') ?? 0).toBe(0)
+      expect(ids.slice(2).map((id) => parents.get(id) ?? 0)).toEqual(Array(count - 2).fill(0))
+      console.info(
+        'desktop-queue-consumer-work',
+        JSON.stringify({
+          count,
+          owners: count,
+          tokenFrames: work,
+          changedParents: Object.fromEntries(parents),
+          changedChildren: Object.fromEntries(renders)
+        })
+      )
+      reduce.mockRestore()
+      view.unmount()
+      resetStructuredAgentSessionReadOwnersForTests()
     }
   )
 })

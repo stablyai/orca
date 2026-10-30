@@ -22,6 +22,11 @@ describe('terminal federation acknowledgment recovery', () => {
       .spyOn(runtime, 'syncOrchestrationFederatedDispatch')
       .mockResolvedValue(undefined)
     runtime.setOrchestrationDb({
+      mailSourceMutations: {
+        subscribe: () => () => {},
+        flushCommitted: () => {},
+        dispose: () => {}
+      },
       listActiveFederatedDispatches: () => [],
       findNextTerminalFederatedDispatchPendingAcknowledgment: (afterRowId: number) =>
         candidates.find((candidate) => candidate.rowId > afterRowId)
@@ -57,6 +62,11 @@ describe('terminal federation acknowledgment recovery', () => {
       .spyOn(runtime, 'syncOrchestrationFederatedDispatch')
       .mockRejectedValue(new Error('worker unavailable'))
     runtime.setOrchestrationDb({
+      mailSourceMutations: {
+        subscribe: () => () => {},
+        flushCommitted: () => {},
+        dispose: () => {}
+      },
       listActiveFederatedDispatches: () => [],
       findNextTerminalFederatedDispatchPendingAcknowledgment: (afterRowId: number) =>
         candidates.find((candidate) => candidate.rowId > afterRowId)
@@ -85,6 +95,11 @@ describe('terminal federation acknowledgment recovery', () => {
     })
     const sync = vi.spyOn(runtime, 'syncOrchestrationFederatedDispatch').mockReturnValue(blocked)
     runtime.setOrchestrationDb({
+      mailSourceMutations: {
+        subscribe: () => () => {},
+        flushCommitted: () => {},
+        dispose: () => {}
+      },
       listActiveFederatedDispatches: () => [],
       findNextTerminalFederatedDispatchPendingAcknowledgment: () => ({
         dispatchId: 'dispatch_1',

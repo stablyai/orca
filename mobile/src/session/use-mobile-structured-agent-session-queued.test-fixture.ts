@@ -1,3 +1,10 @@
+import { act, create, type ReactTestRenderer } from 'react-test-renderer'
+import { createElement, Fragment, type ReactElement } from 'react'
+import type { RpcClient } from '../transport/rpc-client'
+import { expect, onTestFinished, vi } from 'vitest'
+import * as queueReducer from '../../../src/shared/structured-agent-session-reducer'
+import * as queueProjection from './mobile-structured-queued-message-cards'
+import { STRUCTURED_AGENT_SESSION_CLIENT_COALESCE_MS } from '../../../src/shared/structured-agent-session-coalescer'
 import type {
   AgentJournalRenderItem,
   AgentJournalSubmission
@@ -136,7 +143,7 @@ export function batchEvent(
   queuedMessages?: AgentSessionQueuedMessage[] | null,
   submissions: AgentJournalSubmission[] = [],
   queuePause?: AgentSessionQueuePause | null
-): AgentSessionSubscribeEvent {
+): Extract<AgentSessionSubscribeEvent, { type: 'batch' }> {
   return {
     type: 'batch',
     sessionId: SESSION_ID,
@@ -148,5 +155,133 @@ export function batchEvent(
     },
     ...(queuedMessages !== undefined ? { queuedMessages } : {}),
     ...(queuePause !== undefined ? { queuePause } : {})
+  }
+}
+
+export async function measurePhoneQueueConsumerFrames(input: {
+  count: number
+  cards: AgentSessionQueuedMessage[]
+  queueRender: ReturnType<typeof vi.fn>
+  parentRender: ReturnType<typeof vi.fn>
+  own: (event: AgentSessionSubscribeEvent) => void
+  other: (event: AgentSessionSubscribeEvent) => void
+  currentCards: () => readonly unknown[] | undefined
+}): Promise<void> {
+  const { count, cards, queueRender, parentRender } = input
+  const reduce = vi.spyOn(queueReducer, 'reduceStructuredAgentSession')
+  const project = vi.spyOn(queueProjection, 'mobileQueuedMessageCards')
+  await act(async () => {})
+  queueRender.mockClear()
+  parentRender.mockClear()
+  await act(async () =>
+    input.own({ ...batchEvent(), activity: { turnId: 'working', text: 'token' } })
+  )
+  await act(async () => {
+    await new Promise((resolve) =>
+      setTimeout(resolve, STRUCTURED_AGENT_SESSION_CLIENT_COALESCE_MS + 20)
+    )
+  })
+  expect(input.currentCards()).toHaveLength(count)
+  expect(queueRender).not.toHaveBeenCalled()
+  expect(parentRender.mock.calls.some(([scope]) => scope === 'host-a\0workspace-a')).toBe(true)
+  expect(parentRender.mock.calls.some(([scope]) => scope === 'host-b\0workspace-b')).toBe(false)
+  expect(parentRender.mock.calls.every(([scope]) => scope === 'host-a\0workspace-a')).toBe(true)
+  expect(reduce).toHaveBeenCalled()
+  expect(project).not.toHaveBeenCalled()
+  const ownToken = {
+    parents: parentRender.mock.calls.length,
+    reductions: reduce.mock.calls.length,
+    projections: project.mock.calls.length
+  }
+  parentRender.mockClear()
+  reduce.mockClear()
+  await act(async () =>
+    input.other({ ...batchEvent(), activity: { turnId: 'working', text: 'other-token' } })
+  )
+  await act(async () => {
+    await new Promise((resolve) =>
+      setTimeout(resolve, STRUCTURED_AGENT_SESSION_CLIENT_COALESCE_MS + 20)
+    )
+  })
+  expect(reduce).toHaveBeenCalled()
+  expect(parentRender.mock.calls.some(([scope]) => scope === 'host-b\0workspace-b')).toBe(true)
+  expect(parentRender.mock.calls.some(([scope]) => scope === 'host-a\0workspace-a')).toBe(false)
+  expect(parentRender.mock.calls.every(([scope]) => scope === 'host-b\0workspace-b')).toBe(true)
+  expect(queueRender).not.toHaveBeenCalled()
+  expect(project).not.toHaveBeenCalled()
+  const otherToken = {
+    parents: parentRender.mock.calls.length,
+    reductions: reduce.mock.calls.length,
+    projections: project.mock.calls.length
+  }
+  parentRender.mockClear()
+  await act(async () => input.own(batchEvent(cards.slice(1))))
+  await vi.waitFor(() => expect(input.currentCards()).toHaveLength(count - 1))
+  expect(queueRender).toHaveBeenCalledTimes(1)
+  expect(queueRender.mock.calls[0]?.[0]).toBe('host-a\0workspace-a')
+  expect(project).toHaveBeenCalledTimes(1)
+  expect(parentRender.mock.calls.every(([scope]) => scope === 'host-a\0workspace-a')).toBe(true)
+  console.info(
+    'phone-queue-consumer-work',
+    JSON.stringify({
+      count,
+      owners: count,
+      ownToken,
+      otherToken,
+      changedProjections: project.mock.calls.length,
+      changedChildren: queueRender.mock.calls.length
+    })
+  )
+  reduce.mockRestore()
+  project.mockRestore()
+}
+
+export async function mountPhoneQueuePopulation(
+  count: number,
+  client: RpcClient,
+  cards: AgentSessionQueuedMessage[],
+  render: (id: string, client: RpcClient, scope: string) => ReactElement
+) {
+  const listeners = new Map<string, (value: unknown) => void>()
+  const ids = [SESSION_ID, ...Array.from({ length: count - 2 }, (_, n) => `idle-${n}`)]
+  let view: ReactTestRenderer | undefined
+  const unmount = async () => {
+    await act(async () => {
+      view?.unmount()
+      view = undefined
+    })
+  }
+  onTestFinished(unmount)
+  await act(async () => {
+    view = create(
+      createElement(
+        Fragment,
+        null,
+        ids.map((id) =>
+          render(
+            id,
+            {
+              ...client,
+              subscribe: vi.fn((_method, _params, onData) => {
+                listeners.set(id, onData)
+                return vi.fn()
+              })
+            },
+            id === SESSION_ID ? 'host-b\0workspace-b' : `host-b\0${id}`
+          )
+        )
+      )
+    )
+  })
+  await vi.waitFor(() => expect(listeners.size).toBe(count - 1))
+  await act(async () => {
+    for (const [id, emit] of listeners) {
+      const event = snapshotEvent({ queuedMessages: id === SESSION_ID ? cards : [] })
+      emit({ ...event, sessionId: id, page: { ...event.page, sessionId: id } })
+    }
+  })
+  return {
+    other: (event: AgentSessionSubscribeEvent) => listeners.get(SESSION_ID)?.(event),
+    unmount
   }
 }

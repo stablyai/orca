@@ -2022,7 +2022,8 @@
       "oracle": "Inject adapter/RPC acknowledgement loss, caller replacement, logical-client close after response, auth recovery with a written request, missing host submissions, legacy pending rows, stale fences, expiry, mobile remount, and phone storage refusal. Assert at most one dispatch for repeated transmission of one operation. For a later phone Send, assert a fresh id and second delivery while the original host entry remains unknown; equal images use current uploaded paths and delivery fields follow current host capabilities.",
       "commands": [
         "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/shared/agent-session-operation-ledger.test.ts src/shared/structured-agent-session-send-evidence.test.ts src/main/runtime/agent-session/ownership/agent-session-operation-admission.test.ts src/main/native-chat/agent-session-wire/structured-agent-session-send-idempotency.test.ts src/main/native-chat/agent-session-wire/structured-agent-session-send.test.ts src/main/runtime/orchestration/structured-mailbox-pointer-delivery.test.ts src/main/runtime/orchestration/structured-mailbox-pointer-host.test.ts src/main/runtime/orchestration/structured-pointer-operation-id.test.ts src/renderer/src/components/native-chat/structured-agent-session-message-sender.test.ts src/renderer/src/components/native-chat/use-structured-agent-session.test.tsx src/renderer/src/lib/launch-structured-agent-session.test.ts",
-        "ORCA_BACKGROUND_LAUNCH=1 pnpm --dir mobile test ../mobile/src/session/mobile-structured-send-new-action.test.ts ../mobile/src/session/use-mobile-structured-agent-session-send.test.tsx ../mobile/src/session/use-mobile-structured-agent-session-queued.test.tsx ../mobile/src/session/mobile-structured-send-delivery.test.ts ../mobile/src/session/use-mobile-structured-agent-session-background-tasks.test.tsx ../mobile/src/session/use-mobile-structured-agent-session-newer-approval-send.test.tsx ../mobile/src/session/use-mobile-structured-agent-session-read-failure.test.tsx ../mobile/src/session/use-mobile-structured-agent-session.test.tsx ../mobile/src/session/use-mobile-structured-agent-session-prompt-cancel.test.tsx ../mobile/src/session/native-chat/composer/mobile-native-chat-image-attachment.test.ts ../mobile/src/session/native-chat/composer/use-mobile-native-chat-image-attachments.test.ts ../mobile/src/session/use-mobile-structured-native-chat-send-bridge.test.ts ../mobile/src/mobile-web-shell/page-storage-keys.test.ts ../mobile/src/mobile-web-shell/bridge/page-async-storage.test.ts ../mobile/src/mobile-web-shell/use-page-host-snapshot.test.tsx ../mobile/src/mobile-web-shell/bridge-host-init.test.ts ../mobile/src/transport/mobile-relay-rpc-session.test.ts ../mobile/src/transport/rpc-client-delivery-ambiguity.test.ts ../mobile/src/transport/stable-logical-rpc-client.test.ts --maxWorkers=2"
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm --dir mobile test ../mobile/src/session/mobile-structured-send-new-action.test.ts ../mobile/src/session/use-mobile-structured-agent-session-send.test.tsx ../mobile/src/session/use-mobile-structured-agent-session-queued.test.tsx ../mobile/src/session/mobile-structured-send-delivery.test.ts ../mobile/src/session/use-mobile-structured-agent-session-background-tasks.test.tsx ../mobile/src/session/use-mobile-structured-agent-session-newer-approval-send.test.tsx ../mobile/src/session/use-mobile-structured-agent-session-read-failure.test.tsx ../mobile/src/session/use-mobile-structured-agent-session.test.tsx ../mobile/src/session/use-mobile-structured-agent-session-prompt-cancel.test.tsx ../mobile/src/session/native-chat/composer/mobile-native-chat-image-attachment.test.ts ../mobile/src/session/native-chat/composer/use-mobile-native-chat-image-attachments.test.ts ../mobile/src/session/use-mobile-structured-native-chat-send-bridge.test.ts ../mobile/src/mobile-web-shell/page-storage-keys.test.ts ../mobile/src/mobile-web-shell/bridge/page-async-storage.test.ts ../mobile/src/mobile-web-shell/use-page-host-snapshot.test.tsx ../mobile/src/mobile-web-shell/bridge-host-init.test.ts ../mobile/src/transport/mobile-relay-rpc-session.test.ts ../mobile/src/transport/rpc-client-delivery-ambiguity.test.ts ../mobile/src/transport/stable-logical-rpc-client.test.ts --maxWorkers=2",
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/main/native-chat/agent-session-wire/structured-agent-session-mail-queue.test.ts src/main/native-chat/agent-session-wire/structured-agent-session-mail-creation-recovery.test.ts"
       ],
       "testFiles": [
         "src/shared/agent-session-operation-ledger.test.ts",
@@ -2033,6 +2034,8 @@
         "src/main/runtime/orchestration/structured-mailbox-pointer-delivery.test.ts",
         "src/main/runtime/orchestration/structured-mailbox-pointer-host.test.ts",
         "src/main/runtime/orchestration/structured-pointer-operation-id.test.ts",
+        "src/main/native-chat/agent-session-wire/structured-agent-session-mail-queue.test.ts",
+        "src/main/native-chat/agent-session-wire/structured-agent-session-mail-creation-recovery.test.ts",
         "src/renderer/src/components/native-chat/structured-agent-session-message-sender.test.ts",
         "src/renderer/src/components/native-chat/use-structured-agent-session.test.tsx",
         "src/renderer/src/lib/launch-structured-agent-session.test.ts",
@@ -2086,12 +2089,16 @@
           "assertions": ["reuses an option operation after a pending admission refusal"]
         },
         {
-          "file": "src/main/runtime/orchestration/structured-mailbox-pointer-delivery.test.ts",
-          "assertions": ["retries a rejected nudge on the next journal edge"]
+          "file": "src/main/native-chat/agent-session-wire/structured-agent-session-mail-queue.test.ts",
+          "assertions": [
+            "recovers only the original ordinary creation after ambiguous acceptance, a lost delivered stamp, edits, Move, Delete, epoch retirement, read and resetTasks"
+          ]
         },
         {
-          "file": "src/main/runtime/orchestration/structured-pointer-operation-id.test.ts",
-          "assertions": ["never re-mints an ambiguous batch after the host replay window expires"]
+          "file": "src/main/native-chat/agent-session-wire/structured-agent-session-mail-creation-recovery.test.ts",
+          "assertions": [
+            "reconciles a saved random multi-member batch after ordinary Delete and source/native restart without recreating either report"
+          ]
         },
         {
           "file": "mobile/src/transport/rpc-client-delivery-ambiguity.test.ts",
@@ -2129,7 +2136,8 @@
           "date": "2026-10-13",
           "runner": "local",
           "platform": "macos",
-          "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/shared/agent-session-operation-ledger.test.ts src/shared/structured-agent-session-send-evidence.test.ts src/main/runtime/agent-session/ownership/agent-session-operation-admission.test.ts src/main/native-chat/agent-session-wire/structured-agent-session-send-idempotency.test.ts src/main/native-chat/agent-session-wire/structured-agent-session-send.test.ts src/main/runtime/orchestration/structured-mailbox-pointer-delivery.test.ts src/main/runtime/orchestration/structured-mailbox-pointer-host.test.ts src/main/runtime/orchestration/structured-pointer-operation-id.test.ts src/renderer/src/components/native-chat/structured-agent-session-message-sender.test.ts src/renderer/src/components/native-chat/use-structured-agent-session.test.tsx src/renderer/src/lib/launch-structured-agent-session.test.ts",
+          "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/shared/agent-session-operation-ledger.test.ts src/shared/structured-agent-session-send-evidence.test.ts src/main/runtime/agent-session-operation-admission.test.ts src/main/native-chat/agent-session-wire/structured-agent-session-send-idempotency.test.ts src/main/native-chat/agent-session-wire/structured-agent-session-send.test.ts src/main/runtime/orchestration/structured-mailbox-pointer-delivery.test.ts src/main/runtime/orchestration/structured-mailbox-pointer-host.test.ts src/main/runtime/orchestration/structured-pointer-operation-id.test.ts src/renderer/src/components/native-chat/structured-agent-session-message-sender.test.ts src/renderer/src/components/native-chat/use-structured-agent-session.test.tsx src/renderer/src/lib/launch-structured-agent-session.test.ts",
+          "currentCommand": "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/shared/agent-session-operation-ledger.test.ts src/shared/structured-agent-session-send-evidence.test.ts src/main/runtime/agent-session/ownership/agent-session-operation-admission.test.ts src/main/native-chat/agent-session-wire/structured-agent-session-send-idempotency.test.ts src/main/native-chat/agent-session-wire/structured-agent-session-send.test.ts src/main/runtime/orchestration/structured-mailbox-pointer-delivery.test.ts src/main/runtime/orchestration/structured-mailbox-pointer-host.test.ts src/main/runtime/orchestration/structured-pointer-operation-id.test.ts src/renderer/src/components/native-chat/structured-agent-session-message-sender.test.ts src/renderer/src/components/native-chat/use-structured-agent-session.test.tsx src/renderer/src/lib/launch-structured-agent-session.test.ts",
           "result": "passed",
           "durationSeconds": 6.47,
           "summary": "Eleven focused host, shared, renderer and orchestration files passed 196 tests, including unknown send outcomes, reused message IDs and host replay without duplicate dispatch. The send-idempotency suite pins only that an unknown outcome is never resent; the removed refusal-retry matrix has no replacement here."

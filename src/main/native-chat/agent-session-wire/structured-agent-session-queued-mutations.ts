@@ -121,6 +121,8 @@ export function sendQueuedStructuredAgentMessage(
             clientMessageId: submissionId,
             // Personal handoffs return as cards on close/restart.
             origin: 'client',
+            humanRelease: true,
+            ...(row.body.from ? { source: { kind: 'agent' } } : { source: { kind: 'user' } }),
             payloadFingerprint: row.fingerprint,
             body: row.body,
             ...(row.options ? { options: row.options } : {}),

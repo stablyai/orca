@@ -61,8 +61,12 @@ const chat = { address: `orca_session_id:${ROOT}`, terminalHandle: null, orcaSes
 const terminal = { address: 'term_a', terminalHandle: 'term_a', orcaSessionId: null }
 const dispatch = { address: 'dispatch:d1', terminalHandle: 'dispatch:d1', orcaSessionId: null }
 
-/** A notice carrying mail from each party: m1 from the terminal, m2 from someone else. */
-function sourceFor(party: typeof chat | typeof terminal | typeof dispatch): AgentMessageSource {
+/** Mail m1 from the party: sent whole, or as an older host's notice that also carries m2 from
+ *  someone else. */
+function sourceFor(
+  party: typeof chat | typeof terminal | typeof dispatch,
+  singleSender = true
+): AgentMessageSource {
   return {
     kind: 'agent',
     senders: [{ party, name: 'Sender' }],
@@ -72,14 +76,14 @@ function sourceFor(party: typeof chat | typeof terminal | typeof dispatch): Agen
       dispatchId: null,
       messages: [
         { messageId: 'm1', runId: 'r1', from: party.address },
-        { messageId: 'm2', runId: 'r1', from: 'term_other' }
+        ...(!singleSender ? [{ messageId: 'm2', runId: 'r1', from: 'term_other' }] : [])
       ]
     }
   }
 }
 
-function open(party: typeof chat | typeof terminal | typeof dispatch) {
-  const source = sourceFor(party)
+function open(party: typeof chat | typeof terminal | typeof dispatch, singleSender?: boolean) {
+  const source = sourceFor(party, singleSender)
   return openAgentMessageSender(source, source.senders[0]!, 'wt-chat')
 }
 
@@ -108,18 +112,21 @@ beforeEach(() => {
 })
 
 describe("opening a message's sender", () => {
-  it("asks the chat's host where a terminal is, with the mail it sent, and focuses what it finds", async () => {
-    mocks.callRuntimeRpc.mockResolvedValue({ location: { kind: 'terminal', handle: 'term_now' } })
-    mocks.focusRenderer.mockReturnValue(true)
-    await open(terminal)
-    // The stored handle may be from an earlier run; only the host knows its live one.
-    expect(mocks.callRuntimeRpc).toHaveBeenCalledWith(HOST, 'orchestration.partyLocation', {
-      address: 'term_a',
-      messageIds: ['m1']
-    })
-    expect(mocks.focusRenderer).toHaveBeenCalledWith('term_now', 'env-host')
-    expect(mocks.focusRuntime).not.toHaveBeenCalled()
-  })
+  it.each([true, false])(
+    "asks the chat's host where a terminal is, with the %s it sent, and focuses what it finds",
+    async (singleSender) => {
+      mocks.callRuntimeRpc.mockResolvedValue({ location: { kind: 'terminal', handle: 'term_now' } })
+      mocks.focusRenderer.mockReturnValue(true)
+      await open(terminal, singleSender)
+      // The stored handle may be from an earlier run; only the host knows its live one.
+      expect(mocks.callRuntimeRpc).toHaveBeenCalledWith(HOST, 'orchestration.partyLocation', {
+        address: 'term_a',
+        messageIds: ['m1']
+      })
+      expect(mocks.focusRenderer).toHaveBeenCalledWith('term_now', 'env-host')
+      expect(mocks.focusRuntime).not.toHaveBeenCalled()
+    }
+  )
 
   it("opens a task's coordinator by its address alone: a task carries no mail", async () => {
     mocks.callRuntimeRpc.mockResolvedValue({ location: { kind: 'terminal', handle: 'term_now' } })

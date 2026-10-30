@@ -543,7 +543,7 @@ describe('edit leases and automatic delivery', () => {
       value: { status: 'updated' }
     })
     expect(published(id)?.body.blocks).toEqual([{ type: 'text', text: 'after clear' }])
-    expect(publication().queuePause).toBeNull()
+    expect(publication().queuePause).toEqual({ reason: 'stopped' })
     expect(journal().queuedMessages.get(id)?.state).toBe('waiting')
   })
 

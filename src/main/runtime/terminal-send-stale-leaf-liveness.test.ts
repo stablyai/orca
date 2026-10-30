@@ -418,6 +418,11 @@ function makeOrchestrationDbStub(toHandle: () => string) {
       })
     },
     db: {
+      mailSourceMutations: {
+        subscribe: () => () => {},
+        flushCommitted: () => {},
+        dispose: () => {}
+      },
       listSessionDispatchesForPresentation: () => [],
       // Mirrors the real query: `read = 0 AND delivered_at IS NULL`.
       getUndeliveredUnreadMessages: (handle: string) =>

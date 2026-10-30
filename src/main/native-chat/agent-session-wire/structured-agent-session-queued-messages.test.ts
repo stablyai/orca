@@ -566,7 +566,7 @@ describe('/clear', () => {
       { messageId: firstId, state: 'waiting' },
       { messageId: secondId, state: 'waiting' }
     ])
-    expect(await rig.queuePause(replacementId)).toBeNull()
+    expect(await rig.queuePause(replacementId)).toEqual({ reason: 'stopped' })
     // Hold the idle replacement before the first carried card arrives.
     await observationClock.observe(250)
     expect(
@@ -616,7 +616,7 @@ describe('/clear', () => {
     if (!replacementId) {
       throw new Error('expected clear to succeed')
     }
-    expect(await rig.queuePause(replacementId)).toBeNull()
+    expect(await rig.queuePause(replacementId)).toEqual({ reason: 'stopped' })
     const resumed = await host.queuedMessagesResume(CALLER, {
       envelope: rig.envelope(
         {},

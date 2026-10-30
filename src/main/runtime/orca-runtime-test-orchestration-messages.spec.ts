@@ -2,6 +2,12 @@ import type { MessagePriority, MessageRow, MessageType } from './orca-runtime-te
 
 // Test message semantics in memory to avoid unrelated SQLite native ABI failures.
 export class InMemoryOrchestrationMessages {
+  readonly mailSourceMutations = {
+    subscribe: () => () => {},
+    flushCommitted: () => {},
+    dispose: () => {}
+  }
+
   private sequence = 0
 
   private activeCoordinatorRun: { coordinator_handle: string } | null = null
@@ -345,5 +351,7 @@ export class InMemoryOrchestrationMessages {
     )
   }
 
-  close(): void {}
+  close(): void {
+    this.mailSourceMutations.dispose()
+  }
 }

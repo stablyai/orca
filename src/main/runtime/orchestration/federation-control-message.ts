@@ -90,6 +90,7 @@ export function importFederatedControlMessage(
   }
   db.insertMessage({
     id: params.messageId,
+    orderingOrigin: 'imported',
     runId: attachment.home_run_id,
     from: message.from,
     to: recipient,

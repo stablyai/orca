@@ -1,3 +1,4 @@
+import { MessageWaitScope } from '../runtime-message-waiters'
 import type { RpcRequest } from './core'
 import type { OrcaRuntimeService } from '../orca-runtime'
 import { OrchestrationError } from '../orchestration/orchestration-error'
@@ -21,115 +22,131 @@ export async function handleLegacyCheck(args: {
   params: LegacyCheckParams
   signal?: AbortSignal
 }): Promise<unknown> {
-  const { runtime, authority, request, params, signal } = args
-  if (params.run) {
-    return undefined
-  }
-  const typeFilter = parseLegacyTypes(params.types)
-  const principal = authority.resolveCheckPrincipal(request, params.terminal)
-  if (!principal) {
-    return undefined
-  }
-  const db = runtime.getOrchestrationDb()
-  if (params.compatibilityQuestionAck) {
-    const answer = parseLegacyQuestionAck(params.compatibilityQuestionAck)
-    const acknowledged = db.acknowledgeLegacyQuestionAnswer({
-      principalId: principal.id,
-      ...answer
-    })
-    return {
-      messages: [],
-      count: 0,
-      acknowledged: [answer.answerMessageId],
-      duplicate: acknowledged.duplicate,
-      legacyCompatibility: { acknowledged: true }
+  const waitScope = new MessageWaitScope()
+  try {
+    const { runtime, authority, request, params, signal } = args
+    if (params.run) {
+      return undefined
     }
-  }
-  if (params.compatibilityAck) {
-    const ack = parseLegacyMailAck(params.compatibilityAck)
-    const acknowledged = db.acknowledgeLegacyMail({
-      principalId: principal.id,
-      messageIds: ack.messageIds,
-      types: ack.types
-    })
-    return {
-      messages: [],
-      count: 0,
-      acknowledged: ack.messageIds,
-      duplicate: acknowledged.duplicate,
-      legacyCompatibility: { acknowledged: true }
+    const typeFilter = parseLegacyTypes(params.types)
+    const principal = authority.resolveCheckPrincipal(request, params.terminal)
+    if (!principal) {
+      return undefined
     }
-  }
-
-  const history = params.all || (params.unread === false && !params.peek)
-  const readOnly = Boolean(params.peek || history)
-  const read = () =>
-    history
-      ? db.getLegacyMailHistory({ principalId: principal.id, types: typeFilter })
-      : db.getLegacyMailPage({ principalId: principal.id, types: typeFilter })
-  let page = read()
-  const deadline =
-    Date.now() + Math.max(params.timeoutMs ?? ORCHESTRATION_MESSAGE_WAIT_DEFAULT_TIMEOUT_MS, 0)
-  while (page.messages.length === 0 && params.wait && !signal?.aborted && Date.now() < deadline) {
-    if (principal.role === 'coordinator' && db.hasPendingCurrentDelivery(principal.run_id)) {
-      break
-    }
-    await runtime.waitForMessage(
-      principal.role === 'worker'
-        ? `dispatch:${principal.dispatch_id as string}`
-        : principal.terminal_handle,
-      {
-        typeFilter,
-        timeoutMs: Math.min(1_000, Math.max(deadline - Date.now(), 1)),
-        signal
-      }
+    runtime.observeMessageCheck(
+      principal.role === 'worker' ? `dispatch:${principal.dispatch_id}` : principal.terminal_handle,
+      waitScope,
+      typeFilter
     )
-    page = read()
-  }
-
-  const consuming = !readOnly
-  const messageIds = consuming ? page.messages.map((message) => message.id) : []
-  const formattingAuthority = readOnly
-    ? 'legacy_read_only'
-    : page.recovery
-      ? 'legacy_recovery_replay'
-      : 'legacy_compatibility'
-  const formatted =
-    params.format || params.inject
-      ? page.messages
-          .map((message) =>
-            formatMessageBanner(message, {
-              authority: formattingAuthority,
-              supportedActionHints: readOnly
-                ? []
-                : supportedLegacyHints(message, principal, params.compatibilityCliCommand ?? 'orca')
-            })
-          )
-          .join('\n\n')
-      : undefined
-  const currentDelivery =
-    principal.role === 'coordinator' && db.hasPendingCurrentDelivery(principal.run_id)
-      ? {
-          runId: principal.run_id,
-          checkCommand: `${params.compatibilityCliCommand ?? 'orca'} orchestration check --run ${principal.run_id}`,
-          ackCommand: `${params.compatibilityCliCommand ?? 'orca'} orchestration check --run ${principal.run_id} --ack <delivery-id>`
-        }
-      : undefined
-  return {
-    runId: principal.run_id,
-    dispatchId: principal.dispatch_id,
-    messages: page.messages,
-    count: page.messages.length,
-    formatted,
-    timedOut: Boolean(params.wait && page.messages.length === 0 && !signal?.aborted),
-    cancelled: signal?.aborted === true,
-    connectionLost: signal?.aborted === true,
-    legacyCompatibility: {
-      recovery: page.recovery,
-      readOnly,
-      ackMessageIds: messageIds,
-      currentDelivery
+    runtime.observeMessageCheck(principal.terminal_handle, waitScope, typeFilter)
+    const db = runtime.getOrchestrationDb()
+    if (params.compatibilityQuestionAck) {
+      const answer = parseLegacyQuestionAck(params.compatibilityQuestionAck)
+      const acknowledged = db.acknowledgeLegacyQuestionAnswer({
+        principalId: principal.id,
+        ...answer
+      })
+      return {
+        messages: [],
+        count: 0,
+        acknowledged: [answer.answerMessageId],
+        duplicate: acknowledged.duplicate,
+        legacyCompatibility: { acknowledged: true }
+      }
     }
+    if (params.compatibilityAck) {
+      const ack = parseLegacyMailAck(params.compatibilityAck)
+      const acknowledged = db.acknowledgeLegacyMail({
+        principalId: principal.id,
+        messageIds: ack.messageIds,
+        types: ack.types
+      })
+      return {
+        messages: [],
+        count: 0,
+        acknowledged: ack.messageIds,
+        duplicate: acknowledged.duplicate,
+        legacyCompatibility: { acknowledged: true }
+      }
+    }
+
+    const history = params.all || (params.unread === false && !params.peek)
+    const readOnly = Boolean(params.peek || history)
+    const read = () =>
+      history
+        ? db.getLegacyMailHistory({ principalId: principal.id, types: typeFilter })
+        : db.getLegacyMailPage({ principalId: principal.id, types: typeFilter })
+    let page = read()
+    const deadline =
+      Date.now() + Math.max(params.timeoutMs ?? ORCHESTRATION_MESSAGE_WAIT_DEFAULT_TIMEOUT_MS, 0)
+    while (page.messages.length === 0 && params.wait && !signal?.aborted && Date.now() < deadline) {
+      if (principal.role === 'coordinator' && db.hasPendingCurrentDelivery(principal.run_id)) {
+        break
+      }
+      await runtime.waitForMessage(
+        principal.role === 'worker'
+          ? `dispatch:${principal.dispatch_id as string}`
+          : principal.terminal_handle,
+        {
+          scope: waitScope,
+          typeFilter,
+          timeoutMs: Math.min(1_000, Math.max(deadline - Date.now(), 1)),
+          signal
+        }
+      )
+      page = read()
+    }
+
+    const consuming = !readOnly
+    const messageIds = consuming ? page.messages.map((message) => message.id) : []
+    const formattingAuthority = readOnly
+      ? 'legacy_read_only'
+      : page.recovery
+        ? 'legacy_recovery_replay'
+        : 'legacy_compatibility'
+    const formatted =
+      params.format || params.inject
+        ? page.messages
+            .map((message) =>
+              formatMessageBanner(message, {
+                authority: formattingAuthority,
+                supportedActionHints: readOnly
+                  ? []
+                  : supportedLegacyHints(
+                      message,
+                      principal,
+                      params.compatibilityCliCommand ?? 'orca'
+                    )
+              })
+            )
+            .join('\n\n')
+        : undefined
+    const currentDelivery =
+      principal.role === 'coordinator' && db.hasPendingCurrentDelivery(principal.run_id)
+        ? {
+            runId: principal.run_id,
+            checkCommand: `${params.compatibilityCliCommand ?? 'orca'} orchestration check --run ${principal.run_id}`,
+            ackCommand: `${params.compatibilityCliCommand ?? 'orca'} orchestration check --run ${principal.run_id} --ack <delivery-id>`
+          }
+        : undefined
+    return {
+      runId: principal.run_id,
+      dispatchId: principal.dispatch_id,
+      messages: page.messages,
+      count: page.messages.length,
+      formatted,
+      timedOut: Boolean(params.wait && page.messages.length === 0 && !signal?.aborted),
+      cancelled: signal?.aborted === true,
+      connectionLost: signal?.aborted === true,
+      legacyCompatibility: {
+        recovery: page.recovery,
+        readOnly,
+        ackMessageIds: messageIds,
+        currentDelivery
+      }
+    }
+  } finally {
+    waitScope.complete()
   }
 }
 

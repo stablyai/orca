@@ -1,3 +1,4 @@
+import type { JournalMailBoundary } from './journal-mail-boundary'
 import type { JournalItemEcho } from './journal-item-echo'
 // Upcast on read; preserve unknown versions/kinds and fail load instead of skipping history.
 // New kinds need reader-first rollout or a version bump because older builds may delete them.
@@ -33,6 +34,7 @@ export type JournalRowBase = AgentJournalProducerLinkage & {
   /** Timestamp is observational; seq determines ordering. */
   ts: number
   recovered?: true
+  mailBoundary?: JournalMailBoundary
   /** Additive base field; absent legacy scopes are derived during replay. */
   turnScope?: AgentJournalTurnScope
 }

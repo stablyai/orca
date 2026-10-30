@@ -1,6 +1,6 @@
 // Test capability-gated queue writes with authoritative cards; Stop preserves host-held drafts and legacy Edit copies before deleting.
 
-import { createElement } from 'react'
+import { createElement, memo } from 'react'
 import { agentJournalSubmissionKey } from '../../../src/shared/agent-session-journal-item-key'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -22,6 +22,8 @@ vi.mock('../../../src/shared/agent-session-visible-failures', async (importOrigi
   }
 })
 import {
+  measurePhoneQueueConsumerFrames,
+  mountPhoneQueuePopulation,
   CAPABLE,
   LEGACY,
   SESSION_ID,
@@ -81,17 +83,33 @@ describe('mobile structured queued messages', () => {
     close: () => {}
   }
 
+  const queueRender = vi.fn()
+  const parentRender = vi.fn()
+  const QueueObserver = memo(
+    ({ cards, pause, scope }: { cards: unknown; pause: unknown; scope: string }) => {
+      queueRender(scope, cards, pause)
+      return null
+    }
+  )
+
   function Harness({
     hostSupport,
-    sessionId = SESSION_ID
+    sessionId = SESSION_ID,
+    transport = client,
+    sourceIdentity = 'host-a\0workspace-a',
+    observe
   }: {
     hostSupport: StructuredAgentSessionHostSupport
     sessionId?: string
-  }): null {
-    hook = useMobileStructuredAgentSession({
-      client,
+    transport?: RpcClient
+    sourceIdentity?: string
+    observe?: (value: ReturnType<typeof useMobileStructuredAgentSession>) => void
+  }) {
+    parentRender(sourceIdentity)
+    const value = useMobileStructuredAgentSession({
+      client: transport,
       sessionId,
-      sourceIdentity: 'host-a\0workspace-a',
+      sourceIdentity,
       enabled: true,
       connected: true,
       agent: 'claude',
@@ -99,7 +117,16 @@ describe('mobile structured queued messages', () => {
       appendComposerText: appendText,
       onSendError
     })
-    return null
+    if (observe) {
+      observe(value)
+    } else {
+      hook = value
+    }
+    return createElement(QueueObserver, {
+      cards: value.queued.cards,
+      pause: value.queued.pause,
+      scope: sourceIdentity
+    })
   }
 
   async function mountSession(
@@ -156,6 +183,40 @@ describe('mobile structured queued messages', () => {
     vi.useRealTimers()
     await unmountSession()
   })
+
+  it.each([100, 1000])(
+    'measures reducer/parent/projection/child work for N=%i mounted phone conversations across hosts',
+    async (count) => {
+      const cards = Array.from({ length: count }, (_, position) =>
+        queuedDraft({ messageId: `report-${position}`, position })
+      )
+      await mountSession(CAPABLE, snapshotEvent({ queuedMessages: cards }))
+      const population = await mountPhoneQueuePopulation(
+        count,
+        client,
+        cards,
+        (sessionId, transport, sourceIdentity) =>
+          createElement(Harness, {
+            key: sourceIdentity,
+            sessionId,
+            transport,
+            sourceIdentity,
+            hostSupport: CAPABLE,
+            observe: () => {}
+          })
+      )
+      await measurePhoneQueueConsumerFrames({
+        count,
+        cards,
+        queueRender,
+        parentRender,
+        own: (event) => listener?.(event),
+        other: population.other,
+        currentCards: () => hook?.queued.cards
+      })
+      await population.unmount()
+    }
+  )
 
   it('reverts an optimistic relative move when the host reports a changed queue', async () => {
     const mail = queuedDraft({
@@ -707,6 +768,50 @@ describe('mobile structured queued messages', () => {
         expect(await hook!.queued.resume()).toBe(false)
       })
       expect(onSendError).toHaveBeenCalledWith(expect.any(String))
+    })
+
+    it('uses existing Resume for report-only and returned-prefix worker queues and follows the released host state', async () => {
+      sendRequest.mockImplementation(async (method) =>
+        method === 'agentSession.queuedMessagesResume'
+          ? mutationOk({ resumed: true })
+          : method === 'agentSession.options'
+            ? ok({ models: [], current: {} })
+            : ok({})
+      )
+      const worker = queuedDraft({
+        messageId: 'worker',
+        position: 2,
+        body: {
+          kind: 'message',
+          role: 'user',
+          blocks: [],
+          from: {
+            kind: 'agent',
+            senders: [],
+            orchestration: {
+              message: 'mail-notice',
+              mailbox: 'run:r',
+              dispatchId: null,
+              messages: []
+            }
+          }
+        }
+      })
+      await mountSession(CAPABLE, snapshotEvent({ queuedMessages: [worker] }))
+      for (const cards of [
+        [worker],
+        [queuedDraft({ messageId: 'returned', state: 'returned', returnedReason: null }), worker]
+      ]) {
+        act(() => listener?.(batchEvent(cards, [], { reason: 'stopped' })))
+        expect(hook!.queued.pause).toEqual({ reason: 'stopped' })
+        expect(hook!.queued.cards.find((card) => card.messageId === 'worker')?.hold).toBe('turn')
+        await act(async () => expect(await hook!.queued.resume()).toBe(true))
+        expect(Object.keys(requestOf('agentSession.queuedMessagesResume').params)).toEqual([
+          'envelope'
+        ])
+        act(() => listener?.(batchEvent(cards, [], null)))
+        expect(hook!.queued.pause).toBeNull()
+      }
     })
 
     it('an incapable Stop is exactly today’s cancel', async () => {

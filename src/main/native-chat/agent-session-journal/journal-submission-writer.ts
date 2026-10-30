@@ -1,3 +1,4 @@
+import { releasedJournalMailBoundary } from './journal-mail-boundary'
 import type {
   AgentJournalCursor,
   AgentSessionJournalIdentity
@@ -8,7 +9,11 @@ import type { JournalAttachmentClaim } from './journal-submission-hook'
 import type { JournalReducerState } from './journal-reducer'
 import { journalDispatchRowBuilder, journalSubmissionRowBuilder } from './journal-row-builders'
 import type { JournalRow } from './journal-row-schema'
-import type { JournalOperationReceipt, JournalRowWriter } from './journal-row-writer'
+import {
+  finishJournalReceipt,
+  type JournalOperationReceipt,
+  type JournalRowWriter
+} from './journal-row-writer'
 import type {
   JournalSubmissionConsume,
   JournalSubmissionInput,
@@ -35,7 +40,15 @@ export class JournalSubmissionWriter {
     receipt?: JournalOperationReceipt
   ): Promise<AgentJournalCursor> {
     const { claimAttachments, identity, queuedMessages, rowWriter, state } = this.deps
-    const submission = journalSubmissionRowBuilder(state, identity, input, consume)
+    const build = journalSubmissionRowBuilder(state, identity, input, consume)
+    const submission = (seq: number, ts: number): JournalRow => ({
+      ...build(seq, ts),
+      ...(input.humanRelease
+        ? {
+            mailBoundary: releasedJournalMailBoundary(state().sessionId, state().epoch, seq)
+          }
+        : {})
+    })
     let claimsCommitted: (() => void) | void
     let card: JournalQueuePlan | undefined
     return rowWriter
@@ -63,6 +76,10 @@ export class JournalSubmissionWriter {
               input.origin === 'client' && !consume
             )
             receipt?.write(db, row)
+          },
+          finished: () => {
+            finishJournalReceipt(card?.receipt)
+            finishJournalReceipt(receipt)
           },
           committed: () => {
             claimsCommitted?.()

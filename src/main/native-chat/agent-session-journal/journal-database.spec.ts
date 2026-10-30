@@ -68,6 +68,37 @@ export function registerJournalDatabaseTests(): void {
   })
 
   describe('the host journal database open', () => {
+    it('retires only obsolete coverage triggers on writable open and preserves inert saved data', () => {
+      let database = openJournalDatabase(dbPath).db
+      expect(
+        database.prepare("SELECT 1 FROM sqlite_master WHERE name = 'mail_creation_authority'").get()
+      ).toBeUndefined()
+      database.exec(`CREATE TABLE mail_creation_authority (singleton INTEGER PRIMARY KEY, opaque_future_token TEXT);
+        INSERT INTO mail_creation_authority VALUES (1, 'untouched');
+        CREATE TRIGGER mail_creation_receipt_replace AFTER INSERT ON agent_session_command_receipts BEGIN SELECT 1; END;
+        CREATE TRIGGER mail_creation_receipt_delete AFTER DELETE ON agent_session_command_receipts BEGIN SELECT 1; END;
+        CREATE TRIGGER mail_creation_receipt_update AFTER UPDATE ON agent_session_command_receipts BEGIN SELECT 1; END;
+        CREATE TRIGGER unrelated_user_trigger AFTER INSERT ON agent_session_records BEGIN SELECT 1; END;`)
+      database.close()
+      database = openJournalDatabase(dbPath).db
+      expect(
+        database
+          .prepare(
+            "SELECT name FROM sqlite_master WHERE type = 'trigger' AND name LIKE 'mail_creation_receipt_%'"
+          )
+          .all()
+      ).toEqual([])
+      expect(
+        database.prepare('SELECT opaque_future_token FROM mail_creation_authority').get()
+      ).toEqual({ opaque_future_token: 'untouched' })
+      expect(
+        database
+          .prepare("SELECT name FROM sqlite_master WHERE name = 'unrelated_user_trigger'")
+          .get()
+      ).toBeDefined()
+      database.close()
+    })
+
     it('creates every table and reads back every load-bearing pragma', () => {
       const db = openJournalDatabase(dbPath).db
       try {
@@ -95,6 +126,36 @@ export function registerJournalDatabaseTests(): void {
         expect(journalPragmaNumber(db, 'user_version')).toBe(JOURNAL_DB_SCHEMA_VERSION)
       } finally {
         db.close()
+      }
+    })
+
+    it('keeps a saved v5 journal writable without deleting obsolete extension data or resetting its version', () => {
+      const seeded = openJournalDatabase(dbPath).db
+      publishJournalSessionEpoch(seeded, SESSION, 'epoch-1')
+      insertJournalRow(seeded, SESSION.sessionId, epochRow(1))
+      seeded.exec(
+        'CREATE TABLE agent_session_mail_holds (session_id TEXT PRIMARY KEY, intent_order INTEGER NOT NULL UNIQUE, state_json TEXT NOT NULL)'
+      )
+      seeded
+        .prepare('INSERT INTO agent_session_mail_holds VALUES (?, ?, ?)')
+        .run(SESSION.sessionId, 1, '{"legacy":true}')
+      seeded.pragma('user_version = 5')
+      seeded.close()
+      const opened = openJournalDatabase(dbPath)
+      try {
+        expect(opened.readOnly).toBe(false)
+        expect(journalPragmaNumber(opened.db, 'user_version')).toBe(5)
+        expect(
+          opened.db
+            .prepare('SELECT state_json FROM agent_session_mail_holds WHERE session_id = ?')
+            .get(SESSION.sessionId)?.state_json
+        ).toBe('{"legacy":true}')
+        insertJournalRow(opened.db, SESSION.sessionId, epochRow(2))
+        expect([...iterateJournalEpochRows(opened.db, SESSION.sessionId, 'epoch-1')]).toHaveLength(
+          2
+        )
+      } finally {
+        opened.db.close()
       }
     })
 

@@ -25,7 +25,7 @@ export function agentSessionNeverStarted({
 }
 
 export function agentSessionConversationView(record: ConversationFacts) {
-  const { lease, ...conversation } = record
+  const { lease, queueOrigin: _queueOrigin, ...conversation } = record
   const {
     claimStatus,
     handoffStage,

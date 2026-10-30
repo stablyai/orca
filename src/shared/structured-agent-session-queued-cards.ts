@@ -86,18 +86,20 @@ export function projectQueuedMessageCards(
     .filter((message) => message.state === 'returned' || !handedOff.has(message.messageId))
   let behindReturned = false
   return ordered.map((message) => {
+    const from = readAgentMessageSource(message.body.from)
     const hold: QueuedMessageCardHold =
       message.state === 'returned'
         ? 'returned'
         : message.paused
           ? 'paused'
-          : behindReturned
-            ? 'behind-returned'
-            : session.queuePaused
-              ? 'queue-paused'
-              : 'turn'
+          : from?.orchestration?.message === 'mail-notice'
+            ? 'turn'
+            : behindReturned
+              ? 'behind-returned'
+              : session.queuePaused
+                ? 'queue-paused'
+                : 'turn'
     behindReturned = behindReturned || message.state === 'returned'
-    const from = readAgentMessageSource(message.body.from)
     return {
       messageId: message.messageId,
       position: message.position,
@@ -162,7 +164,15 @@ export function queuedMessagesQueuePause(
   cards: readonly QueuedMessageCard[],
   queuePause: AgentSessionQueuePause | null
 ): AgentSessionQueuePause | null {
-  return cards.some((card) => card.hold === 'queue-paused') ? queuePause : null
+  return cards.some(
+    (card) =>
+      card.hold === 'queue-paused' ||
+      (card.state === 'waiting' &&
+        card.hold !== 'paused' &&
+        card.from?.orchestration?.message === 'mail-notice')
+  )
+    ? queuePause
+    : null
 }
 
 /** Steer moves turn-waiting cards mid-turn, even during queue pause; returned/individually held cards use Send, commands never steer. */

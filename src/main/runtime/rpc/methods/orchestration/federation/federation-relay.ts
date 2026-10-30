@@ -112,67 +112,74 @@ export const ORCHESTRATION_FEDERATION_RELAY_METHODS = [
         params.dispatchId,
         authenticatedCallerFingerprint
       )
-      let cursor = attachment.to_worker_imported_sequence
-      let imported = 0
-      for (const item of params.items) {
-        if (item.dispatch_id !== params.dispatchId || item.sequence > cursor + 1) {
-          throw new OrchestrationError(
-            'operation_unknown',
-            `Home relay for ${params.dispatchId} is not contiguous after sequence ${cursor}.`
-          )
-        }
-        if (item.sequence <= cursor) {
-          continue
-        }
-        const currentAttachment = requireHomeAttachment(
-          runtime,
-          params.dispatchId,
-          authenticatedCallerFingerprint
-        )
-        if (currentAttachment.state !== 'ready') {
-          throw new OrchestrationError(
-            'dispatch_inactive',
-            `Remote Dispatch ${params.dispatchId} is not active.`
-          )
-        }
-        if (item.kind === 'reply') {
-          const reply = parseFederatedReply(item.payload)
-          db.answerRemoteQuestion({
-            messageId: reply.questionId,
-            dispatchId: params.dispatchId,
-            answerMessageId: reply.answerMessageId,
-            body: reply.body
-          })
-          runtime.notifyMessageArrived(`dispatch:${params.dispatchId}`, 'status')
-        } else if (item.kind === 'control_message') {
-          if (
-            currentAttachment.protocol_version <
-            ORCHESTRATION_FEDERATION_CONTROL_MAIL_PROTOCOL_VERSION
-          ) {
+      const notifications: string[] = []
+      const result = db.commitWorkerDoneMessageMutation(() => {
+        let cursor = attachment.to_worker_imported_sequence
+        let imported = 0
+        for (const item of params.items) {
+          if (item.dispatch_id !== params.dispatchId || item.sequence > cursor + 1) {
             throw new OrchestrationError(
-              'capability_unsupported',
-              `Remote Dispatch ${params.dispatchId} does not support coordinator control mail.`
+              'operation_unknown',
+              `Home relay for ${params.dispatchId} is not contiguous after sequence ${cursor}.`
             )
           }
-          const controlMessage = importFederatedControlMessage(db, {
-            dispatchId: params.dispatchId,
-            messageId: item.message_id,
-            payload: item.payload
-          })
-          imported += controlMessage.imported ? 1 : 0
-          if (controlMessage.imported) {
-            runtime.notifyMessageArrived(`dispatch:${params.dispatchId}`, controlMessage.type)
+          if (item.sequence <= cursor) {
+            continue
           }
-        } else {
-          throw new OrchestrationError(
-            'invalid_argument',
-            `Federated worker relay kind ${item.kind} is not supported.`
+          const currentAttachment = requireHomeAttachment(
+            runtime,
+            params.dispatchId,
+            authenticatedCallerFingerprint
           )
+          if (currentAttachment.state !== 'ready') {
+            throw new OrchestrationError(
+              'dispatch_inactive',
+              `Remote Dispatch ${params.dispatchId} is not active.`
+            )
+          }
+          if (item.kind === 'reply') {
+            const reply = parseFederatedReply(item.payload)
+            db.answerRemoteQuestion({
+              messageId: reply.questionId,
+              dispatchId: params.dispatchId,
+              answerMessageId: reply.answerMessageId,
+              body: reply.body
+            })
+            notifications.push('status')
+          } else if (item.kind === 'control_message') {
+            if (
+              currentAttachment.protocol_version <
+              ORCHESTRATION_FEDERATION_CONTROL_MAIL_PROTOCOL_VERSION
+            ) {
+              throw new OrchestrationError(
+                'capability_unsupported',
+                `Remote Dispatch ${params.dispatchId} does not support coordinator control mail.`
+              )
+            }
+            const controlMessage = importFederatedControlMessage(db, {
+              dispatchId: params.dispatchId,
+              messageId: item.message_id,
+              payload: item.payload
+            })
+            imported += controlMessage.imported ? 1 : 0
+            if (controlMessage.imported) {
+              notifications.push(controlMessage.type)
+            }
+          } else {
+            throw new OrchestrationError(
+              'invalid_argument',
+              `Federated worker relay kind ${item.kind} is not supported.`
+            )
+          }
+          cursor = item.sequence
+          db.setRemoteWorkerImportSequence(params.dispatchId, cursor)
         }
-        cursor = item.sequence
-        db.setRemoteWorkerImportSequence(params.dispatchId, cursor)
+        return { dispatchId: params.dispatchId, acknowledgedThrough: cursor, imported }
+      })
+      for (const type of notifications) {
+        runtime.notifyMessageArrived(`dispatch:${params.dispatchId}`, type)
       }
-      return { dispatchId: params.dispatchId, acknowledgedThrough: cursor, imported }
+      return result
     }
   })
 ]

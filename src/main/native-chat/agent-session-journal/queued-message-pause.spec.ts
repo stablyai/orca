@@ -71,10 +71,16 @@ export function registerQueuedMessagePauseTests(): void {
     )
   }
 
-  async function turn(journal: AgentSessionJournal, id: string, accept = true): Promise<void> {
+  async function turn(
+    journal: AgentSessionJournal,
+    id: string,
+    humanRelease: boolean,
+    accept = true
+  ): Promise<void> {
     await journal.appendSubmission({
       clientMessageId: id,
       payloadFingerprint: `fp-${id}`,
+      ...(humanRelease ? { humanRelease: true as const } : {}),
       body: message(id),
       fence: 0,
       handoverRecorded: true
@@ -123,14 +129,14 @@ export function registerQueuedMessagePauseTests(): void {
     }
   }
 
-  function rewriteRows(keys: Record<number, [string, unknown]>): void {
+  function rewriteRows(keys: Record<number, Record<string, unknown>>): void {
     const db = new Database(journalDatabasePath(root))
     try {
       for (const stored of liveTestJournalRows(db, IDENTITY.sessionId)) {
         const rewrite = keys[stored.seq]
         if (rewrite) {
           const row: Record<string, unknown> = JSON.parse(stored.rowJson)
-          row[rewrite[0]] = rewrite[1]
+          Object.assign(row, rewrite)
           updateTestJournalRowJson(db, IDENTITY.sessionId, stored.seq, JSON.stringify(row))
         }
       }
@@ -172,23 +178,25 @@ export function registerQueuedMessagePauseTests(): void {
       expect(pauseTables()).toBe(0)
     })
 
-    it("any turn sent after the Stop and accepted lifts it, Orca's own mail included", async () => {
+    it('automatic acceptance cannot release Stop; a winning human Send can', async () => {
       const journal = await open()
-      await turn(journal, 'before-stop', false)
+      await turn(journal, 'before-stop', false, false)
       await userStop(journal)
       // Late acceptance of a pre-Stop send cannot lift the pause.
       await acceptTurn(journal, 'before-stop')
       expect(reason(journal)).toBe('stopped')
-      await turn(journal, 'mail', false)
+      await turn(journal, 'mail', false, false)
       expect(reason(journal)).toBe('stopped')
       await acceptTurn(journal, 'mail')
+      expect(reason(journal)).toBe('stopped')
+      await turn(journal, 'human-send', true, false)
       expect(reason(journal)).toBeNull()
     })
 
     it('a later Stop is the latest, and a Resume row lifts it', async () => {
       const journal = await open()
       await userStop(journal)
-      await turn(journal, 'typed')
+      await turn(journal, 'typed', true)
       expect(reason(journal)).toBeNull()
       await userStop(journal)
       expect(reason(journal)).toBe('stopped')
@@ -216,7 +224,7 @@ export function registerQueuedMessagePauseTests(): void {
       const journal = await open()
       await queueDraft(journal, 'carried')
       await clearContext(journal)
-      await turn(journal, 'launch', false)
+      await turn(journal, 'launch', false, false)
       expect(reason(journal)).toBe('cleared')
       await acceptTurn(journal, 'launch')
       expect(reason(journal)).toBeNull()
@@ -224,7 +232,7 @@ export function registerQueuedMessagePauseTests(): void {
 
     it('rides a tombstone of an id no item takes, so an older build reads it and changes nothing', async () => {
       const journal = await open()
-      await turn(journal, 'typed')
+      await turn(journal, 'typed', true)
       await journal.appendStopEvent(
         { reason: 'user-stop', turnId: 'turn-1', caller: 'client-1' },
         0
@@ -266,11 +274,14 @@ export function registerQueuedMessagePauseTests(): void {
       const corrupted = async (
         append: Promise<{ sequence: number }>,
         key: string,
-        value: unknown
+        value: unknown,
+        oldFormat = false
       ) => {
         const { sequence } = await append
         await journal.close()
-        rewriteRows({ [sequence]: [key, value] })
+        rewriteRows({
+          [sequence]: { [key]: value, ...(oldFormat ? { mailBoundary: undefined } : {}) }
+        })
         journal = await open()
       }
       const malformed = [null, 'stopped', { at: 1 }]
@@ -284,6 +295,9 @@ export function registerQueuedMessagePauseTests(): void {
         expect(reason(journal)).toBe('stopped')
       }
       await corrupted(journal.appendQueueResume(0), 'queueResume', 'yes')
+      expect(reason(journal)).toBeNull() // The independently valid v2 release survives.
+      await userStop(journal)
+      await corrupted(journal.appendQueueResume(0), 'queueResume', 'yes', true)
       expect(reason(journal)).toBe('stopped')
       expect(held(journal)).toEqual([['held', true]])
     })
@@ -319,7 +333,7 @@ export function registerQueuedMessagePauseTests(): void {
       await userStop(journal)
       await journal.replaceEpochItems('handle_forked', 0, [])
       expect(reason(journal)).toBe('stopped')
-      await turn(journal, 'typed')
+      await turn(journal, 'typed', true)
       await journal.replaceEpochItems('handle_forked', 0, [])
       expect(reason(journal)).toBeNull()
     })
@@ -335,15 +349,15 @@ export function registerQueuedMessagePauseTests(): void {
       expect(reason(journal)).toBeNull()
     })
 
-    it("a later Stop of any reason ends a person's Stop, without pausing itself", async () => {
+    it("a later nonhuman Stop preserves a person's Stop", async () => {
       const journal = await open()
       await queueDraft(journal, 'draft-1')
       for (const later of ['host-stop', 'evict', 'user-close'] as const) {
         await userStop(journal)
         expect(held(journal)).toEqual([['draft-1', true]])
         await journal.appendStopEvent({ reason: later }, 0)
-        expect(reason(journal)).toBeNull()
-        expect(held(journal)).toEqual([['draft-1', false]])
+        expect(reason(journal)).toBe('stopped')
+        expect(held(journal)).toEqual([['draft-1', true]])
       }
     })
 
@@ -368,7 +382,7 @@ export function registerQueuedMessagePauseTests(): void {
     })
 
     it.each([
-      ['an accepted turn', (journal: AgentSessionJournal) => turn(journal, 'typed')],
+      ['an accepted turn', (journal: AgentSessionJournal) => turn(journal, 'typed', true)],
       ['a Resume', (journal: AgentSessionJournal) => journal.appendQueueResume(0)]
     ])('a /clear pause %s already lifted stays lifted across a rewind', async (_name, lift) => {
       const journal = await open()
@@ -384,7 +398,7 @@ export function registerQueuedMessagePauseTests(): void {
       const journal = await open()
       await queueDraft(journal, 'carried')
       await clearContext(journal)
-      await turn(journal, 'typed')
+      await turn(journal, 'typed', true)
       await userStop(journal)
       await journal.replaceEpochItems('handle_forked', 0, [])
       expect(journal.queuedMessages.pauses().map((pause) => pause.reason)).toEqual(['stopped'])
@@ -507,7 +521,7 @@ export function registerQueuedMessagePauseTests(): void {
     })
 
     it.each([
-      ['an accepted turn', (journal: AgentSessionJournal) => turn(journal, 'carry-on')],
+      ['an accepted turn', (journal: AgentSessionJournal) => turn(journal, 'carry-on', false)],
       ['a Resume', (journal: AgentSessionJournal) => journal.appendQueueResume(0)]
     ])('%s after the reopen lifts it', async (_name, lift) => {
       let journal = await open()
@@ -521,7 +535,7 @@ export function registerQueuedMessagePauseTests(): void {
       let journal = await open()
       await queueDraft(journal, 'before')
       journal = await reopen(journal)
-      await turn(journal, 'carry-on', false)
+      await turn(journal, 'carry-on', false, false)
       expect(reason(journal)).toBe('restarted')
     })
 
@@ -554,7 +568,7 @@ export function registerQueuedMessagePauseTests(): void {
       const journal = await open()
       await queueDraft(journal, 'kept')
       const stopped = journal.cursor().sequence + 1
-      await turn(journal, 'later')
+      await turn(journal, 'later', false)
       await journal.markQueueReopen(0, stopped)
       expect(reason(journal)).toBeNull()
 
@@ -566,7 +580,7 @@ export function registerQueuedMessagePauseTests(): void {
 
     it('a reopen with no waiting card writes nothing', async () => {
       let journal = await open()
-      await turn(journal, 'earlier')
+      await turn(journal, 'earlier', false)
       const before = journal.cursor()
       journal = await reopen(journal)
       expect(journal.cursor()).toEqual(before)
@@ -580,7 +594,7 @@ export function registerQueuedMessagePauseTests(): void {
       journal = await reopen(journal)
       journal = await reopen(journal)
       expect(reason(journal)).toBe('restarted')
-      await turn(journal, 'carry-on')
+      await turn(journal, 'carry-on', false)
       expect(reason(journal)).toBeNull()
       journal = await reopen(journal)
       expect(reason(journal)).toBe('restarted')
@@ -591,7 +605,7 @@ export function registerQueuedMessagePauseTests(): void {
       await queueDraft(journal, 'before')
       journal = await reopen(journal, true)
       expect(held(journal)).toEqual([['before', true]])
-      await turn(journal, 'carry-on')
+      await turn(journal, 'carry-on', false)
       expect(reason(journal)).toBeNull()
     })
 

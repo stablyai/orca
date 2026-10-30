@@ -1,9 +1,12 @@
+import type { JournalMailBoundary } from './journal-mail-boundary'
+import type { JournalReducerState } from './journal-reducer'
 // Derive pauses from journal state: personal Stop, cleared IDs and cards predating reopen.
 // Later accepted turns/Resume lift pauses; per-card holds still require their own action.
 
 import type {
   AgentJournalCursor,
-  AgentJournalSubmission
+  AgentJournalSubmission,
+  AgentJournalMessageItem
 } from '../../../shared/agent-session-journal-types'
 import type { JournalStopEvent, JournalTombstoneRow } from './journal-row-schema'
 
@@ -20,6 +23,7 @@ export type JournalStopFailedOn = { turnId: string } | { openedAfter: number }
 
 export type JournalQueuePauseMarks = {
   cleared?: { sequence: number; operationId: string; messageIds: readonly string[]; lifted?: true }
+  personalStop?: { sequence: number; event: JournalStopEvent }
   latestStop: { sequence: number; event: JournalStopEvent; settle?: JournalStopSettle } | null
   /** Zero means absent. */
   resumedSequence: number
@@ -38,6 +42,7 @@ type QueueCard = {
   messageId?: string
   state: string
   holdReason: string | null
+  body?: AgentJournalMessageItem
   queuedAt: AgentJournalCursor | null
 }
 
@@ -63,6 +68,9 @@ export function foldJournalQueuePauseMark(
 ): void {
   if (isReadableStopEvent(row.stopEvent)) {
     marks.latestStop = { sequence: row.seq, event: row.stopEvent }
+    if (row.stopEvent.reason === 'user-stop') {
+      marks.personalStop = marks.latestStop
+    }
   } else if (row.queueResume === true) {
     marks.resumedSequence = row.seq
   } else if (row.queueReopen === true) {
@@ -120,11 +128,17 @@ export type JournalQueuePauseRestatement = {
 export function journalQueuePauseRestatement(
   marks: JournalQueuePauseMarks,
   latestAcceptedTurnSequence: number,
-  pauses: readonly DerivedQueuePause[]
+  pauses: readonly DerivedQueuePause[],
+  boundary?: JournalMailBoundary
 ): JournalQueuePauseRestatement {
   return {
     lifted: latestAcceptedTurnSequence > 0 || marks.resumedSequence > 0,
-    liveStop: journalUserStopInForce(marks, latestAcceptedTurnSequence)?.event ?? null,
+    liveStop:
+      boundary?.status === 'released'
+        ? null
+        : boundary?.status === 'held' && boundary.stop
+          ? (marks.personalStop?.event ?? null)
+          : (journalUserStopInForce(marks, latestAcceptedTurnSequence)?.event ?? null),
     reopened: pauses.some((pause) => pause.reason === 'restarted'),
     ...(marks.cleared
       ? {
@@ -226,19 +240,36 @@ export function queuePauseHolding(
   return pauses.find((pause) => queuedBefore(pause, card))
 }
 
-/** Preserve queue order: returned, paused or edited cards block later cards; per-card holds are skipped. */
+export function isQueuedMailReport(card: QueueCard): boolean {
+  return card.body?.from?.orchestration?.message === 'mail-notice'
+}
+
+/** Personal FIFO remains blocked; independently eligible reports can pass that paused prefix. */
 export function nextSendableQueuedCard<T extends QueueCard & { messageId: string }>(
   pauses: readonly DerivedQueuePause[],
   cards: readonly T[],
-  editHeld: ReadonlySet<string> = new Set()
+  editHeld: ReadonlySet<string> = new Set(),
+  mailEligible: (card: T) => boolean = () => false
 ): T | null {
+  let personalBlocked = false
   for (const card of cards) {
-    if (card.state === 'returned' || queuePauseHolding(pauses, card)) {
-      return null
+    const report = isQueuedMailReport(card)
+    const eligible = report && mailEligible(card)
+    const holding = queuePauseHolding(pauses, card)
+    const paused = holding && !(report && eligible && holding.reason !== 'cleared')
+    if (report) {
+      if (!eligible || paused || card.state !== 'waiting' || card.holdReason !== null) {
+        continue
+      }
+    } else {
+      if (card.state === 'returned' || paused) {
+        personalBlocked = true
+      }
+      if (personalBlocked || card.state !== 'waiting' || card.holdReason !== null) {
+        continue
+      }
     }
-    if (card.state === 'waiting' && card.holdReason === null) {
-      return editHeld.has(card.messageId) ? null : card
-    }
+    return editHeld.has(card.messageId) ? null : card
   }
   return null
 }
@@ -263,11 +294,37 @@ export function resumableQueuePause(
 /** Hide pauses while a later send awaits acceptance; rejection reveals them again. */
 export function queuePauseLiftOnItsWay(
   pause: DerivedQueuePause,
-  submissions: readonly Pick<AgentJournalSubmission, 'dispatchState' | 'acceptedSequence'>[]
+  submissions: readonly Pick<
+    AgentJournalSubmission,
+    'dispatchState' | 'acceptedSequence' | 'source' | 'clientMessageId'
+  >[],
+  personalQueuedSend: (clientMessageId: string) => boolean = () => false
 ): boolean {
   const anchor = pause.since?.sequence ?? 0
   return submissions.some(
     (submission) =>
-      submission.dispatchState === 'pending' && (submission.acceptedSequence ?? 0) > anchor
+      (submission.source?.kind !== 'agent' || personalQueuedSend(submission.clientMessageId)) &&
+      submission.dispatchState === 'pending' &&
+      (submission.acceptedSequence ?? 0) > anchor
   )
+}
+
+export function journalQueueSelectionKey(
+  state: JournalReducerState,
+  revision: string,
+  editLeaseRevision: number,
+  reopenFloor: AgentJournalCursor | null
+): string {
+  const marks = state.queuePauseMarks
+  return JSON.stringify([
+    revision,
+    editLeaseRevision,
+    state.latestAcceptedTurnSequence,
+    state.latestAcceptedPersonalTurnSequence,
+    marks.latestStop?.sequence,
+    marks.resumedSequence,
+    marks.reopenedSequence,
+    marks.cleared?.sequence,
+    reopenFloor
+  ])
 }

@@ -515,7 +515,7 @@ describe('a /compact that waits in line', () => {
     expect(
       rig.host.collaboratorsForTests().sessions.get(SESSION)!.journal.queuedMessages.get(compactId)
     ).toMatchObject({ state: 'withdrawn' })
-    expect(await rig.queuePause()).toBeNull()
+    expect(await rig.queuePause()).toEqual({ reason: 'stopped' })
     expect(
       rig.host.collaboratorsForTests().sessions.get(SESSION)!.journal.queuedMessages.pauses()
     ).toContainEqual(

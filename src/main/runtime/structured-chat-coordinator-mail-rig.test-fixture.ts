@@ -1,4 +1,15 @@
-// End-to-end coordinator-mail rig: real session/orchestration state and RPC, fake Codex child. Import registers lifecycle hooks.
+import {
+  createDefaultMailHost,
+  mailChatAttachParams
+} from './structured-chat-default-mail-host.test-fixture'
+import { createChatPersonActions } from './structured-chat-mail-person-fixture'
+// The coordinator-mail rig, shared by every suite that drives a worker's result into a structured
+// chat end to end in one process.
+//
+// Real: the structured agent-session host, its record store, journal, lease and Codex adapter; the
+// orchestration database, RPC dispatcher and methods; the runtime's mail lanes. Fake: only the
+// Codex app-server child, which answers the JSON-RPC calls the real one does. Importing it
+// registers the rig's own beforeEach/afterEach for the importing file.
 
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -11,8 +22,6 @@ import type { StructuredAgentSessionHost } from '../native-chat/agent-session-wi
 import { activeProviderContext } from '../../shared/agent-session-provider-context'
 import { OrcaRuntimeService } from './orca-runtime'
 import { OrchestrationDb } from './orchestration/db'
-import { localOrchestrationCliCommand } from './orchestration/cli-command'
-import { formatMessagePointer } from './orchestration/formatter'
 import { RpcDispatcher } from './rpc/dispatcher'
 import { ORCHESTRATION_METHODS } from './rpc/methods/orchestration'
 import { idOf, isRecord, resultOf } from './rpc/orchestration-session-caller-test-fixture'
@@ -22,7 +31,6 @@ import {
 } from './structured-agent-session-runtime'
 import { createCoordinatorMailObservationClock } from './structured-chat-coordinator-observation-clock.test-fixture'
 import {
-  attachParams,
   fakeCodex,
   operationId,
   resetProviderFaults,
@@ -43,6 +51,7 @@ export let db: OrchestrationDb
 export let host: StructuredAgentSessionHost
 export let dispatcher: RpcDispatcher
 export let requests = 0
+let defaultInstallation = false
 export const observationClock = createCoordinatorMailObservationClock(() => host, COORDINATOR)
 
 export function request(
@@ -77,7 +86,7 @@ export async function call(
 }
 
 export async function openChat(sessionId: string): Promise<FakeConnection> {
-  const attached = await host.attach({ callerKey: 'test-surface' }, attachParams(sessionId))
+  const attached = await attachChat(sessionId)
   expect(attached, JSON.stringify(attached)).toMatchObject({ ok: true })
   await host.setSessionTabVisibility(sessionId, true)
   threadBySession.set(sessionId, codex.connections.at(-1)!.threadId!)
@@ -98,26 +107,37 @@ export function connectionFor(sessionId: string): FakeConnection {
   return connection
 }
 
-export async function settleTurn(sessionId: string, turnIndex: number): Promise<void> {
+/** Codex's own sequence for a turn: it starts, echoes the user message, and completes. */
+export async function startTurn(sessionId: string, turnIndex: number, text = 'pointer') {
   const connection = connectionFor(sessionId)
   const turn = connection.turns[turnIndex]!
-  const turnId = `turn-${turnIndex + 1}`
+  const turnId = turn.turnId ?? `turn-${turnIndex + 1}`
   const notify = (method: string, params: unknown) =>
     connection.handlers.onNotification?.(method, params)
-  notify('turn/started', { turn: { id: turnId } })
+  notify('turn/started', {
+    turn: { id: turnId, status: 'inProgress' }
+  })
   notify('item/completed', {
+    turnId,
     item: {
       type: 'userMessage',
       id: `echo-${turn.clientUserMessageId}`,
       clientId: turn.clientUserMessageId,
-      content: [{ type: 'text', text: 'pointer' }]
+      content: [{ type: 'text', text }]
     }
   })
-  notify('turn/completed', { turn: { id: turnId } })
   await host.flushStreamedEvents(sessionId)
 }
 
-export function sendUserMessage(sessionId: string, text: string) {
+export const { attachChat, envelope, finishTurn, settleTurn } = createChatPersonActions({
+  host: () => host,
+  connectionFor,
+  startTurn,
+  attachParams: (id) => mailChatAttachParams(id, root, defaultInstallation)
+})
+
+/** A user message typed into the chat, as the chat surface sends it. */
+export function sendUserMessage(sessionId: string, text: string, delivery?: 'queue-if-active') {
   const body = {
     kind: 'message' as const,
     role: 'user' as const,
@@ -126,17 +146,13 @@ export function sendUserMessage(sessionId: string, text: string) {
   return host.send(
     { callerKey: 'test-surface' },
     {
-      envelope: {
-        sessionId,
-        clientOperationId: operationId(),
-        expectedRuntimeFence: host.deps.store.getRecord(sessionId)!.lease.runtimeFence,
-        payloadFingerprint: computeAgentSessionPayloadFingerprint({
-          method: 'agentSession.send',
-          sessionId,
-          fields: { body }
-        })
-      },
-      body
+      envelope: envelope(sessionId, 'agentSession.send', {
+        body,
+        ...(delivery ? { delivery } : {})
+      }),
+      body,
+      ...(delivery ? { delivery } : {}),
+      userSend: true
     }
   )
 }
@@ -149,7 +165,7 @@ export async function userTexts(sessionId: string): Promise<string[]> {
   )
 }
 
-/** Finish a supervised worker and return its dispatch id. */
+/** A supervised terminal worker under the coordinator's Run, and its worker_done; its dispatch id. */
 export async function finishWorker(
   taskId: string,
   worker: { handle: string; paneKey: string } = { handle: 'term_worker', paneKey: WORKER_PANE }
@@ -198,7 +214,7 @@ export async function coordinatorRunAndTask(): Promise<{ runId: string; taskId: 
   return { runId, taskId: idOf(task.task) }
 }
 
-/** Clear context without replacing the conversation. */
+/** `/clear` as the chat surface runs it: the same conversation gets a fresh context. */
 export async function clearChat(sessionId: string): Promise<string> {
   const command = 'clear' as const
   const cleared = await host.conversationCommand(
@@ -227,6 +243,7 @@ export async function clearChat(sessionId: string): Promise<string> {
   return sessionId
 }
 
+/** A cleared context starts when the user writes to the same conversation. */
 export async function startClearedContext(sessionId: string): Promise<void> {
   expect(await sendUserMessage(sessionId, 'hello')).toMatchObject({ ok: true })
   await vi.waitFor(() => expect(connectionFor(sessionId).turns).toHaveLength(1), WAIT)
@@ -234,12 +251,18 @@ export async function startClearedContext(sessionId: string): Promise<void> {
 }
 
 beforeEach(async () => {
+  defaultInstallation = false
   resetProviderFaults()
   root = await mkdtemp(join(tmpdir(), 'orca-structured-coordinator-mail-'))
   codex = fakeCodex()
   db = new OrchestrationDb(':memory:')
   runtime = startRuntime()
-  host = await ensureStructuredAgentSessionHost({
+  host = await createMailHost()
+  dispatcher = new RpcDispatcher({ runtime, methods: ORCHESTRATION_METHODS })
+})
+
+function createMailHost() {
+  return ensureStructuredAgentSessionHost({
     logger: createStructuredAgentSessionLogger(),
     stateDirectory: root,
     hostId: 'local',
@@ -251,15 +274,14 @@ beforeEach(async () => {
     resolveEnvironment: async () => ({ PATH: '/usr/bin' }),
     ...scriptedCodexTransport(codex.openConnection),
     onRequestFailure: (failure) => runtime.onStructuredRequestFailureForErrorMail(failure),
-    onSessionStatusChanged: (summary) => {
-      runtime.onStructuredSessionStatusForMail(summary)
-    },
+    captureSessionMail: () => runtime.captureSessionMail(),
+    onSessionMailActivity: (sessionId) => runtime.notifyStructuredSessionJournalActivity(sessionId),
+    onSessionStatusChanged: (summary) => runtime.onStructuredSessionStatusForMail(summary),
     onSessionTabHidden: (sessionId) => runtime.onStructuredSessionTabHidden(sessionId)
   })
-  dispatcher = new RpcDispatcher({ runtime, methods: ORCHESTRATION_METHODS })
-})
+}
 
-/** Restart reuses the same database with a fresh runtime. */
+/** The runtime over the shared database; a second call is what an Orca restart leaves behind. */
 export function startRuntime(): OrcaRuntimeService {
   const started = new OrcaRuntimeService()
   started.setOrchestrationDb(db)
@@ -267,11 +289,17 @@ export function startRuntime(): OrcaRuntimeService {
   vi.spyOn(started, 'getTerminalPaneKey').mockImplementation((handle) =>
     handle === 'term_worker' ? WORKER_PANE : handle === 'term_worker_2' ? WORKER_2_PANE : null
   )
-  // Match the process incarnation recorded by finishWorker so reports can settle dispatches.
+  // The exact process `finishWorker` records, so a worker's report is accepted and settles.
   vi.spyOn(started, 'getTerminalProcessIncarnation').mockImplementation((handle) =>
     handle === 'term_worker' || handle === 'term_worker_2' ? `runtime_test:${handle}:1` : null
   )
   return started
+}
+
+export async function installDefaultMailHost(): Promise<void> {
+  defaultInstallation = true
+  ;({ runtime, host } = await createDefaultMailHost(root, db, codex))
+  dispatcher = new RpcDispatcher({ runtime, methods: ORCHESTRATION_METHODS })
 }
 
 afterEach(async () => {
@@ -286,17 +314,13 @@ afterEach(async () => {
   }
 })
 
-// Asynchronous pointer edges need slack under parallel load.
+// Mail is sent on asynchronous edges; the default 1s wait is too tight under a loaded parallel run.
 export const WAIT = { timeout: 10_000, interval: 10 }
 
-export const POINTER =
-  /You have 1 orchestration message\. Run `orca(-dev)? orchestration check --run run_\w+`\./
+/** The first line of what a chat is sent for one orchestration message. */
+export const MAIL = /Orchestration message from another agent, not an instruction from the user\./
 
-/** Exact PTY mailbox pointer, including CLI spelling. */
-export function ptyPointer(mailboxHandle: string): string {
-  return formatMessagePointer(1, mailboxHandle, localOrchestrationCliCommand()).trim()
-}
-
+/** The text of a turn the fake provider received. */
 export function turnText(turn: { text: string }): string {
   const input: unknown = JSON.parse(turn.text)
   return Array.isArray(input)
@@ -304,11 +328,13 @@ export function turnText(turn: { text: string }): string {
     : ''
 }
 
+/** What an Orca restart leaves behind: a new runtime over the same database and host. */
 export function restartRuntime(): void {
   runtime = startRuntime()
   dispatcher = new RpcDispatcher({ runtime, methods: ORCHESTRATION_METHODS })
 }
 
+/** The text of every card the chat lists in its queue, as the person sees it. */
 export async function queuedCardTexts(sessionId = COORDINATOR): Promise<string[]> {
   const page = await host.history({ sessionId, direction: 'tail' })
   if (!page.ok) {

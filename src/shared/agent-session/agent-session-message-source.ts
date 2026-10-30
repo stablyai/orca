@@ -17,8 +17,7 @@ export type AgentMessageSender = Readonly<{
 /** One orchestration message a notice points at: its record, and its sender's `senders` address. */
 export type OrchestrationMailMessage = Readonly<{ messageId: string; runId: string; from: string }>
 
-/** "You have N orchestration messages": the pointer a terminal agent is typed, for a mailbox's
- *  unread mail, which the agent reads with `check`. */
+/** Mail identity, shared by legacy notices and chats carrying each message whole. */
 export type OrchestrationMailNotice = Readonly<{
   message: 'mail-notice'
   mailbox: string

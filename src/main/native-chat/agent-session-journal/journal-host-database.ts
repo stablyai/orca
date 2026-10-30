@@ -21,6 +21,11 @@ export class JournalHostDatabase {
   private connection: Database.Database | null
   readonly readOnly: boolean
   private stranded = false
+  private readonly closeListeners = new Set<() => void>()
+
+  onClose(listener: () => void): void {
+    this.closeListeners.add(listener)
+  }
 
   private constructor(
     opened: OpenJournalDatabase,
@@ -78,6 +83,10 @@ export class JournalHostDatabase {
   close(): void {
     this.connection?.close()
     this.connection = null
+    for (const listener of this.closeListeners) {
+      listener()
+    }
+    this.closeListeners.clear()
   }
 
   /** Retry stranded ROLLBACK before every use; uncommitted shared state must never reach another chat. */

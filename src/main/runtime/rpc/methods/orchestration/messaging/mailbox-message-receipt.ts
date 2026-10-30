@@ -4,10 +4,13 @@ import type { MessageRow } from '../../../../orchestration/types'
 const INTERNAL_MESSAGE_COLUMNS = [
   'read',
   'sequence',
+  'ordering_origin',
   'sender_pane_key',
   'pointer_enter_pending',
   'pointer_pty_id',
-  'pointer_process_incarnation'
+  'pointer_process_incarnation',
+  'handoff',
+  'recovery_used'
 ] as const
 
 export type MailboxMessageReceipt = Omit<MessageRow, (typeof INTERNAL_MESSAGE_COLUMNS)[number]>
@@ -20,7 +23,7 @@ export function exposeMessages(messages: MessageRow[]): MailboxMessageReceipt[] 
   return messages.map((message) => {
     const exposed: Partial<MessageRow> = { ...message }
     for (const column of INTERNAL_MESSAGE_COLUMNS) {
-      delete exposed[column]
+      Reflect.deleteProperty(exposed, column)
     }
     return exposed as MailboxMessageReceipt
   })

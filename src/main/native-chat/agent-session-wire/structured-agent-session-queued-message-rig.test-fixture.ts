@@ -8,15 +8,11 @@ import { agentSessionFailureWords } from '../../../shared/agent-session-failure-
 import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
 import type { AgentJournalSubmission } from '../../../shared/agent-session-journal-types'
 import type { AgentSessionQueuePause } from '../../../shared/agent-session-wire'
-import type { AgentSessionExecutionLocation } from '../../../shared/agent-session-record'
 import type { AgentMessageSource } from '../../../shared/agent-session/agent-session-message-source'
 import { agentSessionMessagePayload } from '../../../shared/structured-agent-session-send-mutation'
 import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
 import { AgentSessionRecoveryCapsule } from '../../runtime/agent-session-recovery-capsule'
-import {
-  StructuredAgentSessionHost,
-  type StructuredAgentSessionHostDeps
-} from './structured-agent-session-host'
+import { StructuredAgentSessionHost } from './structured-agent-session-host'
 import {
   HOST_TEST_NOW as NOW,
   HOST_TEST_SESSION as DEFAULT_SESSION,
@@ -33,7 +29,7 @@ import {
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
 import {
   createQueuedRigProvider,
-  type QueuedRigProviderOptions
+  type QueuedMessageTestRigOptions
 } from './structured-agent-session-queued-message-rig-provider.test-fixture'
 import { claudeAndCodexDeclared } from './structured-agent-session-adapter-router-test-support'
 
@@ -50,23 +46,16 @@ export function eventually(assertion: () => void | Promise<void>): Promise<void>
 
 export type QueuedMessageTestRig = Awaited<ReturnType<typeof createQueuedMessageTestRig>>
 
-export async function createQueuedMessageTestRig(
-  options: QueuedRigProviderOptions & {
-    sessionId?: string
-    idleSweep?: { idleMs: number; intervalMs: number }
-    now?: () => number
-    /** Teardown records its restart offers, which `restartOffers` lists. */
-    recoveryCapsule?: true
-    location?: AgentSessionExecutionLocation
-    /** Defaults to indeterminate. */
-    probeOwner?: StructuredAgentSessionHostDeps['probeOwner']
-  } = {}
-) {
+export async function createQueuedMessageTestRig(options: QueuedMessageTestRigOptions = {}) {
   const SESSION = options.sessionId ?? DEFAULT_SESSION
   const root = await mkdtemp(join(tmpdir(), 'orca-queued-messages-'))
   resetHostTestOperationIds()
-  const store = await openTestAgentSessionRecordStore(root)
-  const provider = createQueuedRigProvider(store, options, () => host)
+  let store = await openTestAgentSessionRecordStore(root)
+  const provider = createQueuedRigProvider(
+    { getRecord: (id) => store.getRecord(id) },
+    options,
+    () => host
+  )
   const { dispatch, compact, cancelTurn, closeSession, setOption } = provider
   const makeHost = () =>
     new StructuredAgentSessionHost({
@@ -111,7 +100,7 @@ export async function createQueuedMessageTestRig(
     return {
       sessionId,
       clientOperationId,
-      expectedRuntimeFence: 1,
+      expectedRuntimeFence: store.getConversation(sessionId)?.currentFence ?? 1,
       payloadFingerprint: computeAgentSessionPayloadFingerprint({ method, sessionId, fields })
     }
   }
@@ -252,6 +241,19 @@ export async function createQueuedMessageTestRig(
     crashRestartHostProcess()
   }
 
+  async function coldReopenNativeDatabase(): Promise<void> {
+    await host.flushAllStreamedEvents()
+    for (const session of host.collaboratorsForTests().sessions.values()) {
+      await session.journal.close()
+    }
+    const previous = host.deps.journalDatabase
+    closeTestJournalHostDatabase(root)
+    expect(previous.isClosed).toBe(true)
+    store = await openTestAgentSessionRecordStore(root)
+    host = makeHost()
+    expect(host.deps.journalDatabase).not.toBe(previous)
+  }
+
   async function queuePause(sessionId = SESSION): Promise<AgentSessionQueuePause | null> {
     const page = await host.history({ sessionId, direction: 'tail' })
     if (!page.ok) {
@@ -290,7 +292,9 @@ export async function createQueuedMessageTestRig(
 
   return {
     root,
-    store,
+    get store() {
+      return store
+    },
     get host() {
       return host
     },
@@ -319,6 +323,7 @@ export async function createQueuedMessageTestRig(
     restartHostProcess,
     crashRestartHostProcess,
     quitRestartHostProcess,
+    coldReopenNativeDatabase,
     queuePause,
     restartOffers,
     resume,

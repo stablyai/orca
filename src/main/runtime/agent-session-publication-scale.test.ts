@@ -216,11 +216,11 @@ describe('real-store status and queue publications', () => {
           subscribers.publish(id, session.journal)
         }
       }
-      // Each publish derives queue pauses twice and checks current work independently.
+      // Stable selected keys skip list population; current-work checks still run.
       expect(counts).toEqual({
         ...warm,
-        lists: warm.lists + 12 * n,
-        listRows: warm.listRows + 12 * n * cards,
+        lists: warm.lists,
+        listRows: warm.listRows,
         submissions: warm.submissions + 12 * n,
         submissionRows: warm.submissionRows + 12 * n * sends
       })

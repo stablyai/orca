@@ -42,6 +42,7 @@ export class JournalEpochController {
       identity: this.deps.identity,
       epoch: this.deps.mintEpoch(),
       reason,
+      mailBoundary: this.deps.state().mailBoundary,
       fence,
       now: this.deps.now(),
       queue: this.deps.queueRestatement(),

@@ -105,6 +105,7 @@ async function open(hostId = 'local'): Promise<AgentSessionRecordStore> {
   return openTestAgentSessionRecordStore(directory, { hostId })
 }
 
+/** Reserve, observe the spawn, prove the handle — the full path to an admitted writer. */
 async function establishOwner(
   store: AgentSessionRecordStore,
   overrides: Partial<AgentSessionReserveRequest> = {}
@@ -126,7 +127,8 @@ async function establishOwner(
   })
 }
 
-/** Seed the retired unshipped conflict-marker shape for compatibility. */
+/** The shape the removed conflict marker wrote, as it decodes. No shipped build called it; a record
+ *  may carry it. */
 async function markLegacyConflicted(
   store: AgentSessionRecordStore,
   lease: Partial<AgentSessionLease> = {}
@@ -166,6 +168,7 @@ describe('acquisition path', () => {
       reservedSpawnToken: 'spawn-a'
     })
 
+    // Proving before the spawn is observed is refused.
     await expect(
       store.proveOwner({ sessionId: 'session-alpha', fence: 1, link: handleLink(), now: NOW })
     ).rejects.toThrow('agent_session_ownership_unknown')
@@ -376,7 +379,7 @@ describe('concurrent claims', () => {
     await establishOwner(store)
     const before = store.getRecord('session-alpha')
     const persistedBefore = await readPersistedTestAgentSessionStore(directory)
-    // Fail the record update inside commit, like full-disk/I/O failure.
+    // The row write fails inside the commit, as a full disk or an I/O error would.
     openTestJournalHostDatabase(directory).db.exec(
       "CREATE TRIGGER fail_record_write BEFORE UPDATE ON agent_session_records BEGIN SELECT RAISE(ABORT, 'disk I/O error'); END"
     )
@@ -411,6 +414,7 @@ describe('expiry is not eviction', () => {
     }
     expect(store.getRecord('session-alpha')?.lease.runtimeFence).toBe(1)
 
+    // Only proof of death moves it.
     const evicted = await store.evictProvenDeadOwner({
       sessionId: 'session-alpha',
       expectedFence: 1,
@@ -468,6 +472,7 @@ describe('restart reconciliation', () => {
       variable: 'CLAUDE_CONFIG_DIR',
       path: '/home/dev/.claude-work'
     })
+    // Every mutating path is closed while unreconciled.
     await expect(
       reopened.renewLease({ sessionId: 'session-alpha', fence: 1, childProbe: MATCHED, now: NOW })
     ).rejects.toThrow('execution_owner_reconciling')
@@ -618,7 +623,8 @@ describe('restart reconciliation', () => {
   })
 
   it('releases a conflict whose named owner is proven gone at restart', async () => {
-    // Present-time exit proof releases old conflict records; without it users could never reopen these sessions.
+    // A conflict with no exit is a session the user can never open again; present-time proof that
+    // the process the conflict names has exited leaves no claimant left to protect.
     const first = await open()
     await establishOwner(first)
     await markLegacyConflicted(first)
@@ -798,7 +804,7 @@ describe('claim keys and unreadable rows', () => {
     expect(store.isClaimKeyVerifiable('key-unknown', NOW)).toBe(true)
   })
 
-  // Pending provider proof can be valid; a live proof naming no link is corrupt.
+  // No proof yet is a live owner whose provider has not answered; a proof naming no link is not.
   it('quarantines a record with a live proof naming no handle', async () => {
     const first = await open()
     await establishOwner(first)
@@ -810,7 +816,7 @@ describe('claim keys and unreadable rows', () => {
     expect((await open()).isSessionUnreadable('session-alpha')).toBe(true)
   })
 
-  // Retired checkpoints no longer affect record readability.
+  // Nothing reads the checkpoint any more, so even one this build could never have parsed loads.
   it.each([null, { epoch: 3, sequence: 0 }, { epoch: 'bad', sequence: 1 }])(
     "loads a record carrying an older build's journal checkpoint %o, and drops it on the next write",
     async (journalCheckpoint) => {
@@ -843,7 +849,7 @@ describe('claim keys and unreadable rows', () => {
     })
     const reopened = await open()
     expect(reopened.isSessionUnreadable('session-alpha')).toBe(true)
-    // Unrelated writes must leave unreadable rows intact.
+    // Another chat's write must carry the set-aside row through untouched.
     await establishOwner(reopened, { sessionId: 'session-beta', claimKeyId: 'key-2' })
     expect((await open()).isSessionUnreadable('session-alpha')).toBe(true)
     expect((await readPersistedTestAgentSessionStore(directory)).records['session-alpha']).toEqual(

@@ -1,3 +1,4 @@
+import { captureSessionMailAtStop } from '../../orchestration/session-mail-stop-inventory'
 import type { AutomationsChangedPayload } from '../../../../shared/runtime-client-events'
 import type { ResolvedWorktree } from '../../runtime-worktree-path-identity'
 import { OrcaRuntimeWithPtyForegroundProcessReads } from '../../client/runtime-client-state'
@@ -152,6 +153,7 @@ export abstract class OrcaRuntimeWithAutomationOperations extends OrcaRuntimeWit
   getOrchestrationDb(): OrchestrationDb {
     if (!this._orchestrationDb) {
       this._orchestrationDb = new OrchestrationDb(this.orchestrationDbPath())
+      this.orchestrationStructuredMailboxPointerDelivery.attachDatabase(this._orchestrationDb)
       this.bindMailHandBack(this._orchestrationDb)
       this.ensureOrchestrationFederationRelay()
       this.scheduleRestoredMessageRepoints()
@@ -166,14 +168,34 @@ export abstract class OrcaRuntimeWithAutomationOperations extends OrcaRuntimeWit
       : null
   }
 
+  captureSessionMail = () =>
+    captureSessionMailAtStop(this._orchestrationDb, (db) => {
+      if (this._orchestrationDb !== db) {
+        return
+      }
+      this.messageWaiters.dispose()
+      this.orchestrationStructuredMailboxPointerDelivery.resetForDatabaseChange()
+      this.orchestrationFederation.resetForDatabaseChange()
+      this.mailPointerRepointScheduler.clear()
+      this._orchestrationDb = null
+      try {
+        db.close()
+      } catch (error) {
+        console.warn('[mail] retiring source connection failed', error)
+      }
+    })
+
   private orchestrationDbPath(): string {
     return orchestrationDbFile(getAppEnvironment().getPath('userData'))
   }
 
   setOrchestrationDb(db: OrchestrationDb): void {
+    this.messageWaiters.dispose()
+    this.orchestrationStructuredMailboxPointerDelivery.resetForDatabaseChange()
     this.orchestrationFederation.resetForDatabaseChange()
     this.mailPointerRepointScheduler.clear()
     this._orchestrationDb = db
+    this.orchestrationStructuredMailboxPointerDelivery.attachDatabase(db)
     this.bindMailHandBack(db)
     this.ensureOrchestrationFederationRelay()
     this.scheduleRestoredMessageRepoints()
@@ -194,6 +216,10 @@ export abstract class OrcaRuntimeWithAutomationOperations extends OrcaRuntimeWit
         this.mailPointerRepointScheduler.schedule(handBack.mailbox)
         return
       }
+      this.orchestrationStructuredMailboxPointerDelivery.nominateSources(
+        handBack.mailbox,
+        handBack.messageIds
+      )
       // Re-read committed rows so rolled-back settlements wake nobody.
       for (const type of committedHandBackTypes(db, handBack)) {
         this.notifyMessageArrived(handBack.mailbox, type)

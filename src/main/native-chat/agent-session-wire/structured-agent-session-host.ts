@@ -325,8 +325,6 @@ export class StructuredAgentSessionHost {
   readCurrentRequests: BackgroundTasks['currentRequests'] = (...args) =>
     this.backgroundTasks.currentRequests(...args)
 
-  observeJournalPublications = this.clientDelivery.observeJournalPublications
-
   subscribe = (input: AgentSessionSubscribeInput) => this.backgroundTasks.subscribe(input)
 
   settleLateDispatch = this.mutations.settleLateDispatch
@@ -347,6 +345,8 @@ export class StructuredAgentSessionHost {
   /** Live-only completion/prompt events; missed events are never replayed. */
   subscribeTurnCompletions = this.clientDelivery.subscribeTurnCompletions
   readStatusSummary = this.clientDelivery.readStatusSummary
+
+  queuedMailJournal = (sessionId: string) => this.sessions.get(sessionId)?.journal
 
   collaboratorsForTests = () => ({
     sessions: this.sessions,

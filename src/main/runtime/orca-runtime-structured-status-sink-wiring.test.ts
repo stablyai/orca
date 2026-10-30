@@ -9,6 +9,12 @@ const installed = vi.hoisted(() => {
   return state
 })
 
+vi.mock('../node-runtime/pinned-zip-members', () => ({
+  extractPinnedZipMembers: () => {
+    throw new Error('Mail fixtures must not install a runtime')
+  }
+}))
+
 vi.mock('electron', () => ({
   BrowserWindow: { fromId: vi.fn(() => null) },
   webContents: { fromId: vi.fn(() => null) },
@@ -45,6 +51,21 @@ describe('structured status sink wiring', () => {
     await runtime.ensureStructuredAgentSessionHost()
 
     expect(installed.deps?.['statusSink']).toBe(sink)
+    const capture = vi.spyOn(runtime, 'captureSessionMail').mockImplementation(function (
+      this: OrcaRuntimeService
+    ) {
+      expect(this).toBe(runtime)
+      return {}
+    })
+    const installedDeps = (): Record<string, unknown> | null => installed.deps
+    const installedCapture = installedDeps()?.['captureSessionMail']
+    if (typeof installedCapture !== 'function') {
+      throw new Error('missing Stop capture installer')
+    }
+    installedCapture()
+    installedCapture()
+    expect(capture.mock.calls).toEqual([[], []])
+    expect(capture).toHaveBeenCalledTimes(2)
   })
 
   it('hands the host the trace-file logger', async () => {
@@ -85,7 +106,7 @@ describe('structured status sink wiring', () => {
 describe('mail dispatch through the current runtime', () => {
   afterEach(() => vi.restoreAllMocks())
 
-  it('uses runtime journal and delivery overrides on the idle edge', () => {
+  it('uses runtime overrides for the selected queue callback and actual idle edge, never descriptive repeats', async () => {
     const target = new OrcaRuntimeService()
     vi.spyOn(structuredMailTarget, 'structuredSessionIdleEdgeMailboxes').mockReturnValue([
       'term_mailbox'
@@ -108,11 +129,18 @@ describe('mail dispatch through the current runtime', () => {
       }
     })
 
-    target.onStructuredSessionStatusForMail({ sessionId: 'session-mailbox', status: 'working' })
+    await target.ensureStructuredAgentSessionHost()
+    installed.deps?.onSessionMailActivity?.('session-mailbox')
     expect(events).toEqual(['journal:session-mailbox'])
     events.length = 0
+    target.onStructuredSessionStatusForMail({ sessionId: 'session-mailbox', status: 'working' })
+    expect(events).toEqual([])
+    events.length = 0
     target.onStructuredSessionStatusForMail({ sessionId: 'session-mailbox', status: 'idle' })
-    expect(events).toEqual(['journal:session-mailbox', 'delivery:term_mailbox'])
+    expect(events).toEqual(['delivery:term_mailbox'])
+    events.length = 0
+    target.onStructuredSessionStatusForMail({ sessionId: 'session-mailbox', status: 'idle' })
+    expect(events).toEqual([])
   })
 
   it('uses the runtime delivery override during repoint repair', () => {

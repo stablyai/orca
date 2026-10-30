@@ -256,6 +256,7 @@ function createAgentSessionRecord(
 ): AgentSessionRecord {
   return {
     ...agentSessionRecordIdentityFields(request, request.now),
+    ...(!request.adoptedHandleLink ? { queueOrigin: 'fresh' as const } : {}),
     // Adopted head links must carry the first reservation's fence.
     providerHandleChain: request.adoptedHandleLink ? [request.adoptedHandleLink] : [],
     lease: {

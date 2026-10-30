@@ -21,7 +21,8 @@ import {
   handleLessCoordinatorSessionId,
   structuredSessionAddressTarget,
   structuredSessionMailTarget,
-  structuredSessionIdleEdgeMailboxes
+  structuredSessionIdleEdgeMailboxes,
+  restoredSessionMailboxes
 } from './structured-session-mail-target'
 import { exitedChatDispatchesForSession } from './chat-assignee'
 import { OPERATOR_CLOSE_EXIT_CAUSE } from '../../../shared/terminal-exit-cause'
@@ -182,21 +183,21 @@ export abstract class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeW
     this.orchestrationStructuredMailboxPointerDelivery.onJournalActivity(sessionId)
   }
 
-  /** Retry parked mail on working/idle edges; at idle re-derive owned mailboxes for workers and chats. */
+  private readonly mailIdle = new Map<string, boolean>()
+
+  /** Discover on actual idle transitions; descriptive status changes are not mail changes. */
   onStructuredSessionStatusForMail(summary: {
     sessionId: string
     status: 'working' | 'attention' | 'idle' | null
   }): void {
-    if (summary.status === 'attention') {
+    const idle = summary.status === 'idle' || summary.status === null
+    const prior = this.mailIdle.get(summary.sessionId)
+    this.mailIdle.set(summary.sessionId, idle)
+    if (!idle || prior === true) {
       return
     }
     // Log failures without blocking the later first-turn workspace rename.
     try {
-      // A working edge can follow a human answer, unblocking parked mail too.
-      this.notifyStructuredSessionJournalActivity(summary.sessionId)
-      if (summary.status === 'working') {
-        return
-      }
       const openDb = () => this.getExistingOrchestrationDb()
       const deliver = (mailbox: string) => this.deliverPendingMessagesForHandle(mailbox)
       structuredSessionIdleEdgeMailboxes(summary.sessionId, openDb).forEach(deliver)
@@ -225,6 +226,7 @@ export abstract class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeW
 
   /** Settlement drops anything parked for the session; nothing will ever redrive it again. */
   forgetStructuredSessionMail(sessionId: string): void {
+    this.mailIdle.delete(sessionId)
     this.orchestrationStructuredMailboxPointerDelivery.forgetSession(sessionId)
   }
 
@@ -296,12 +298,7 @@ export abstract class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeW
   protected scheduleRestoredMessageRepoints(): void {
     let handles: Set<string>
     try {
-      const db = this._orchestrationDb
-      // Pointer-phase rows are excluded from the undelivered scan, so they need their own.
-      handles = new Set([
-        ...(db?.getUndeliveredUnreadMailboxHandles?.() ?? []),
-        ...(db?.getPendingMailboxPointerHandles?.() ?? [])
-      ])
+      handles = restoredSessionMailboxes(this._orchestrationDb)
     } catch (error) {
       console.warn('[orchestration] failed to scan restored mailboxes', error)
       return
@@ -328,6 +325,7 @@ export abstract class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeW
 
   protected repointPendingMessagesForHandle(handle: string): void {
     try {
+      this.orchestrationStructuredMailboxPointerDelivery.retryForHandle(handle)
       this.deliverPendingMessagesForHandle(handle)
     } catch {
       // The unref'd repair can outlive a test/runtime-owned database during shutdown.

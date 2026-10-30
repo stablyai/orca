@@ -21,6 +21,11 @@ export function createIdleSyncHarness(initialSequence = 2, protocolVersion?: 1 |
   }
   const createDb = () =>
     ({
+      mailSourceMutations: {
+        subscribe: () => () => {},
+        flushCommitted: () => {},
+        dispose: () => {}
+      },
       getFederatedDispatch: () => federated,
       getDispatchContextById: () => ({ run_id: 'run_home', task_id: 'task_home' }),
       getWorkerDispatch: () => ({ state: 'ready' }),

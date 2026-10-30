@@ -100,6 +100,7 @@ export function replaceJournalEpoch(input: {
         ? 'session_created'
         : input.reason,
     providerHandle,
+    ...(input.previous?.mailBoundary ? { mailBoundary: input.previous.mailBoundary } : {}),
     ...(restate ? { historyOrigin: previousOrigin.raw } : {}),
     ...journalRowBase(epoch, 1, input.fence, input.now())
   }
@@ -187,6 +188,13 @@ export function replaceJournalEpoch(input: {
     const row = buildJournalQueueClearRow({ ...place(), clear: input.queuePause.cleared })
     applyJournalRow(state, row)
     rows.push(row)
+  }
+
+  // Pause restatements are not new personal actions.
+  const last = rows.at(-1)
+  if (last && input.previous?.mailBoundary) {
+    last.mailBoundary = input.previous.mailBoundary
+    state.mailBoundary = input.previous.mailBoundary
   }
 
   const { sessionId } = input.identity

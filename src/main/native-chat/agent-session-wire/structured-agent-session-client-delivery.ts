@@ -42,7 +42,6 @@ export class StructuredAgentSessionClientDelivery {
   private readonly turnCompletionFeed
   readonly requestFailures
   private readonly sendSettlement
-  private readonly journalObservers = new Map<string, Set<() => void>>()
 
   constructor(
     private readonly sessions: Map<string, StructuredAgentSessionHostSession>,
@@ -244,19 +243,6 @@ export class StructuredAgentSessionClientDelivery {
     this.turnCompletionFeed.observe(sessionId, undefined, { historical: true })
   }
 
-  /** Observe every journal publication, including row-free wakes, without opening a client stream. */
-  observeJournalPublications = (sessionId: string, observer: () => void): (() => void) => {
-    const observers = this.journalObservers.get(sessionId) ?? new Set<() => void>()
-    observers.add(observer)
-    this.journalObservers.set(sessionId, observers)
-    return () => {
-      observers.delete(observer)
-      if (observers.size === 0 && this.journalObservers.get(sessionId) === observers) {
-        this.journalObservers.delete(sessionId)
-      }
-    }
-  }
-
   subscribeStatus = (subscriber: StructuredAgentSessionStatusSubscriber): (() => void) =>
     this.statusFeed.subscribe(subscriber)
   forgetStatus = (sessionId: string): void => this.statusFeed.forget(sessionId)
@@ -271,6 +257,7 @@ export class StructuredAgentSessionClientDelivery {
   /** Closing handles retains session-list rows; agent-status retains them only while tabs need them. */
   closeSession(sessionId: string, options: { listed: boolean }): void {
     this.requestFailures.forget(sessionId)
+    this.mailQueueKeys.delete(sessionId)
     this.sendSettlement.closeSession(sessionId)
     if (options.listed) {
       this.statusFeed.revokeLive(sessionId)
@@ -286,8 +273,10 @@ export class StructuredAgentSessionClientDelivery {
     this.requestFailures.clear()
     this.stopAtRestCommandUpdates()
     this.sendSettlement.closeAll()
-    this.journalObservers.clear()
+    this.mailQueueKeys.clear()
   }
+
+  private readonly mailQueueKeys = new Map<string, string>()
 
   private publishJournal(sessionId: string, journal: AgentSessionJournal, activity = true): void {
     this.statusFeed.publish(sessionId, journal)
@@ -295,12 +284,19 @@ export class StructuredAgentSessionClientDelivery {
     // Observe completion after status projection updates, even without subscribers for background chats.
     this.turnCompletionFeed.observe(sessionId, journal)
     this.queue.onJournalActivity(sessionId, activity)
-    for (const observer of this.journalObservers.get(sessionId) ?? []) {
+    const queueKey = JSON.stringify([
+      journal.queuedMessages.selectionRevision(),
+      journal.mailBoundary(),
+      this.deps().store.getRecord(sessionId)?.queueOrigin
+    ])
+    if (this.mailQueueKeys.get(sessionId) !== queueKey) {
       try {
-        observer()
+        this.deps().onSessionMailActivity?.(sessionId)
+        this.mailQueueKeys.set(sessionId, queueKey)
       } catch (error) {
-        this.deps().logger.warn('observing a journal publication failed', {
-          scope: 'journal-delivery',
+        this.mailQueueKeys.delete(sessionId)
+        this.deps().logger.warn('notifying ordinary mail discovery failed', {
+          scope: 'queue-source-notification',
           sessionId,
           error
         })

@@ -6,6 +6,9 @@ vi.mock('../format', () => ({ printResult: vi.fn() }))
 vi.mock('../selectors', () => ({ getTerminalHandle: vi.fn() }))
 
 import { printResult } from '../format'
+import { parseArgs, validateCommandAndFlags } from '../args'
+import { COMMAND_SPECS } from '../specs'
+import { RuntimeClient } from '../runtime-client'
 import { ORCHESTRATION_HANDLERS } from './orchestration'
 
 beforeEach(() => {
@@ -14,6 +17,33 @@ beforeEach(() => {
 })
 
 describe('legacy orchestration CLI inspection', () => {
+  it('filters exact-id results from an older host before printing', async () => {
+    callMock.mockResolvedValue({ result: { messages: [{ id: 'unrelated' }], count: 1 } })
+    const parsed = parseArgs(
+      'orchestration inbox --id old_report --terminal term_coord --full'.split(' ')
+    )
+    validateCommandAndFlags(COMMAND_SPECS, parsed)
+    const client = new RuntimeClient('/tmp/orca-pr-28567-cli-test', 60_000, null, null)
+    client.call = callMock
+    await ORCHESTRATION_HANDLERS['orchestration inbox']({
+      flags: parsed.flags,
+      client,
+      cwd: '/repo',
+      json: true
+    })
+    const printed = vi.mocked(printResult).mock.calls[0]
+    expect(callMock).toHaveBeenCalledWith(
+      'orchestration.inbox',
+      expect.objectContaining({ id: 'old_report' })
+    )
+    expect(printed?.[0].result).toEqual({ messages: [], count: 0 })
+    const guidance = printed?.[2]({ messages: [], count: 0 })
+    expect(guidance).toContain(
+      'same inbox command without --id, keeping its terminal and execution profile'
+    )
+    expect(guidance).toContain('--full --limit 100')
+    expect(guidance).toContain('increase --limit')
+  })
   it('labels legacy rows in plain check output', async () => {
     const result = {
       messages: [

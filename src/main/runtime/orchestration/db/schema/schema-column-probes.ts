@@ -21,6 +21,8 @@ export function createMailboxDeliveryIndexesIfPossible(this: OrchestrationDb): v
   const hasDeliveredAt = this.hasColumn('messages', 'delivered_at')
   if (hasDeliveredAt) {
     this.db.exec(`
+      CREATE INDEX IF NOT EXISTS idx_messages_undelivered_source
+        ON messages(to_handle, sequence) WHERE delivered_at IS NULL;
       CREATE INDEX IF NOT EXISTS idx_messages_undelivered_inbox
         ON messages(to_handle, read, delivered_at, sequence)
     `)

@@ -23,6 +23,7 @@ import type { JournalAttachmentClaim } from './journal-submission-hook'
 import type { JournalWriteBody } from './journal-write-queue'
 
 export type AgentSessionJournalOptions = {
+  queueOrigin?: () => 'fresh' | undefined
   identity: AgentSessionJournalIdentity
   database: JournalHostDatabase
   now?: () => number
@@ -114,6 +115,7 @@ export type JournalResolvedLifecycleBatchInput = Omit<
 }
 
 export type JournalSubmissionInput = {
+  humanRelease?: true
   clientMessageId: string
   payloadFingerprint: string
   body: AgentJournalMessageItem
@@ -143,6 +145,7 @@ export type JournalItemAppendInput = {
 }
 
 export type JournalQueuedMessagesDeps = {
+  queueOrigin?: () => 'fresh' | undefined
   sessionId: string
   serialize: <T>(run: JournalWriteBody<T>) => Promise<T>
   database: () => JournalHostDatabase

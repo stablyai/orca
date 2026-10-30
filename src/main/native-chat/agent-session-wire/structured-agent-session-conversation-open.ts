@@ -90,7 +90,11 @@ export async function openStructuredAgentSessionConversationJournal(
     expectedRuntimeFence: fence
   })
   const identity = journalIdentityFor(record, params)
-  const journal = await openAgentSessionJournal({ identity, database: deps.journalDatabase })
+  const journal = await openAgentSessionJournal({
+    identity,
+    database: deps.journalDatabase,
+    queueOrigin: () => deps.store?.getRecord(record.sessionId)?.queueOrigin
+  })
   try {
     // A handed-over row found here stays doubt: it reads as sent, and nothing narrows it later.
     await journal.markPendingSubmissionsUnknown(fence)

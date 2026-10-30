@@ -452,6 +452,11 @@ describe('STA-4604 worker PTY exit escalation reaches the coordinator', () => {
       type: 'escalation'
     }))
     runtime.setOrchestrationDb({
+      mailSourceMutations: {
+        subscribe: () => () => {},
+        flushCommitted: () => {},
+        dispose: () => {}
+      },
       getActiveDispatchForTerminal: (handle: string) =>
         handle === workerHandle
           ? { id: 'ctx-orphan', run_id: 'run-that-no-longer-exists', task_id: 'task-orphan' }
@@ -525,6 +530,11 @@ describe('STA-4604 worker PTY exit escalation reaches the coordinator', () => {
     const failDispatch = vi.fn()
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     runtime.setOrchestrationDb({
+      mailSourceMutations: {
+        subscribe: () => () => {},
+        flushCommitted: () => {},
+        dispose: () => {}
+      },
       getActiveDispatchForTerminal: (handle: string) =>
         handle === workerHandle ? { id: 'ctx-1', run_id: 'run-1', task_id: 'task-1' } : undefined,
       failDispatch,

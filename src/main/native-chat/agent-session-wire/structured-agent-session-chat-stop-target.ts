@@ -67,7 +67,9 @@ export function captureChatStopTarget(
     !child ||
     (turnId === undefined && !input.stoppedSend && !isMainAgentWorking(ctx) && !canHaveGoal)
   ) {
-    return queued || input.stoppedPrePrompt ? { ...target, reach: 'withdraw', marks: true } : null
+    return queued || input.stoppedPrePrompt || turnId === undefined
+      ? { ...target, reach: 'withdraw', marks: true }
+      : null
   }
   // Repeated Stop must not pause cards queued after the first press.
   return { ...target, reach: 'interrupt', marks: queued || reached === 'unrecorded' }

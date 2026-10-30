@@ -211,16 +211,14 @@ describe("a Stop's queue pause", () => {
     catalog.stop()
   })
 
-  it('outlives a user send the provider accepts and then refuses; a later send that starts lifts it', async () => {
+  it('a winning human Send releases Stop even when its later provider request is refused', async () => {
     const draftId = await stoppedDraft()
     const refused = await handedOverUserSend('the start fails')
-    // Hide pause during the lifting send, restoring it if refused.
     expect(await rig.queuePause()).toBeNull()
+    expect(derivedPauses()).toEqual([])
     await rig.settleRejected(refused, 'turn/start refused')
-    await expectPaused(draftId)
-    const started = await handedOverUserSend('this one starts')
-    await rig.settleAccepted(started, 'started')
-    await eventually(async () => expect(await rig.handoff(draftId)).toBeDefined())
+    await handedOver(draftId)
+    expect(derivedPauses()).toEqual([])
   })
 
   it('a Stop after the user send supersedes it: that send starting its turn lifts nothing', async () => {
@@ -231,15 +229,15 @@ describe("a Stop's queue pause", () => {
     await expectPaused(draftId)
   })
 
-  it('survives a restart, and a send made after the Stop still ends it when its turn starts there', async () => {
+  it('a winning Send releases Stop before restart, while restart still needs its own later turn', async () => {
     const draftId = await stoppedDraft()
     const inFlight = await handedOverUserSend('sent before the restart')
-    // Crash without close; persisted journal state must still derive both pauses.
+    // Crash without close; the committed human release survives independently of restart.
     rig.crashRestartHostProcess()
     expect(await rig.queuePause()).toBeNull()
-    expect(derivedPauses()).toEqual(['stopped', 'restarted'])
+    expect(derivedPauses()).toEqual(['restarted'])
     await rig.settleAccepted(inFlight, 'after-restart')
-    // Pre-restart acceptance lifts Stop only; restart still needs a later turn.
+    // A late provider reply cannot release the restart hold.
     await eventually(async () => expect(derivedPauses()).toEqual(['restarted']))
     expect(await rig.queuePause()).toBeNull()
     expect(await rig.handoff(draftId)).toBeUndefined()
@@ -249,7 +247,7 @@ describe("a Stop's queue pause", () => {
     await eventually(async () => expect(await rig.handoff(draftId)).toBeDefined())
   })
 
-  it("a draft typed after the Stop waits with the rest: the pause is the queue's", async () => {
+  it('cards released by a later human Send still wait for the active request and ordinary queue order', async () => {
     await rig.workingSend()
     const olderId = await queuedDraft('paused by the stop')
     await rig.stop()
@@ -258,14 +256,14 @@ describe("a Stop's queue pause", () => {
     const refused = await handedOverUserSend('sent after the stop')
     const typedId = await queuedDraft('typed while that send waits')
     await rig.settleRejected(refused, 'turn/start refused')
-    await expectPaused(olderId, typedId)
-    expect(await rig.drafts()).toEqual([
-      { messageId: olderId, state: 'waiting' },
-      { messageId: typedId, state: 'waiting' }
-    ])
+    await handedOver(olderId)
+    expect(await rig.handoff(typedId)).toBeUndefined()
+    expect(derivedPauses()).toEqual([])
+    await rig.settleAccepted(await rig.handoffId(olderId), 'oldest')
+    await handedOver(typedId)
   })
 
-  it('Send-now sends only its own card; the rest stay paused until that turn starts, then drain after it', async () => {
+  it('Send-now releases Stop and sends only its selected card; the rest wait for its request to settle', async () => {
     const working = await rig.workingSend()
     const sentId = await queuedDraft('sent now')
     const heldId = await queuedDraft('held until that turn starts')
@@ -276,17 +274,17 @@ describe("a Stop's queue pause", () => {
       value: { submission: { queuedMessageId: sentId } }
     })
     await handedOver(sentId)
-    // Only the selected card leaves; hidden pause still holds the rest.
+    // The selected request owns the turn after the human release.
     await observationClock.observe(250)
     expect(await rig.handoff(heldId)).toBeUndefined()
-    expect(derivedPauses()).toEqual(['stopped'])
+    expect(derivedPauses()).toEqual([])
     expect(await rig.queuePause()).toBeNull()
     expect(await rig.drafts()).toEqual([{ messageId: heldId, state: 'waiting' }])
     await rig.settleAccepted(await rig.handoffId(sentId), 'sent-now')
     await eventually(async () => expect(await rig.handoff(heldId)).toBeDefined())
   })
 
-  it('a card sent now that the provider refuses lifts nothing', async () => {
+  it('a winning card Send releases Stop even if the selected provider request is refused', async () => {
     const working = await rig.workingSend()
     // Put waiting work ahead of the returned card so Resume has actionable work.
     const heldId = await queuedDraft('held by the stop')
@@ -296,7 +294,9 @@ describe("a Stop's queue pause", () => {
     await rig.sendNow(sentId)
     await handedOver(sentId)
     await rig.settleRejected(await rig.handoffId(sentId), 'turn/start refused')
-    await expectPaused(heldId)
+    await handedOver(heldId)
+    expect(derivedPauses()).toEqual([])
+    expect(await rig.drafts()).toContainEqual({ messageId: sentId, state: 'returned' })
   })
 
   it('an old send answered again after its receipt is gone lifts nothing from a later Stop', async () => {
@@ -333,7 +333,7 @@ describe("a Stop's queue pause", () => {
 describe('the pause read', () => {
   installRigLifecycleHooks()
 
-  it('costs no scan of the submissions: the reducer keeps the latest accepted turn', async () => {
+  it('costs no scan of submissions and reflects the accepted human command before the provider reply', async () => {
     const draftId = await stoppedDraft()
     const journal = rig.host.collaboratorsForTests().sessions.get(HOST_TEST_SESSION)?.journal
     if (!journal) {
@@ -344,9 +344,9 @@ describe('the pause read', () => {
     expect(structuredQueuePauses(journal)).toMatchObject([{ reason: 'stopped' }])
     expect(scan).not.toHaveBeenCalled()
     scan.mockRestore()
-    const mail = rig.send('coordinator mail')
+    const mail = rig.send('human continuation')
     await mail.result
-    expect(structuredQueuePauses(journal)).toMatchObject([{ reason: 'stopped' }])
+    expect(structuredQueuePauses(journal)).toEqual([])
     await rig.settleAccepted(mail.id, 'mail')
     expect(structuredQueuePauses(journal)).toEqual([])
     await eventually(async () => expect(await rig.handoff(draftId)).toBeDefined())
@@ -388,7 +388,7 @@ describe('a card queued after a Stop is a new instruction', () => {
     expect(derivedPauses()).toEqual([])
   })
 
-  it("deleting the last paused card hides the pause; a person's next turn is what ends it", async () => {
+  it("deleting the last paused card hides the pause; a person's next accepted Send ends it", async () => {
     const working = await rig.workingSend()
     const only = await queuedDraft('paused, then deleted')
     await rig.stop()
@@ -404,7 +404,7 @@ describe('a card queued after a Stop is a new instruction', () => {
     expect(structuredQueuePauses(journal)).toMatchObject([{ reason: 'stopped' }])
     const next = await rig.workingSend()
     const later = await queuedDraft('typed during the next turn')
-    expect(structuredQueuePauses(journal)).toMatchObject([{ reason: 'stopped' }])
+    expect(structuredQueuePauses(journal)).toEqual([])
     await rig.settleAccepted(next, 'next')
     expect(structuredQueuePauses(journal)).toEqual([])
     await eventually(async () => expect(await rig.handoff(later)).toBeDefined())
@@ -462,11 +462,10 @@ describe('a pause only over cards Resume could send', () => {
   it('a restart over only a card held by its own failed send publishes no pause', async () => {
     const working = await rig.workingSend()
     const draftId = await queuedDraft('conversion fails once')
-    const append = vi
-      .spyOn(AgentSessionJournal.prototype, 'appendSubmission')
-      .mockImplementationOnce(async () => {
-        throw new Error('disk full')
-      })
+    const journal = rig.host.collaboratorsForTests().sessions.get(HOST_TEST_SESSION)!.journal
+    const append = vi.spyOn(journal, 'appendSubmission').mockImplementationOnce(async () => {
+      throw new Error('disk full')
+    })
     try {
       await rig.settleAccepted(working, 'a')
       await eventually(async () =>
@@ -650,5 +649,25 @@ describe('a failed Stop', () => {
       warned.mockRestore()
     }
     await expectPaused(draftId)
+  })
+})
+
+describe('mail permission follows actual personal acceptance', () => {
+  installRigLifecycleHooks()
+  it('releases on the accepting personal write, while a later provider echo cannot release a newer Stop', async () => {
+    const working = await rig.workingSend()
+    const journal = rig.host.collaboratorsForTests().sessions.get(HOST_TEST_SESSION)!.journal
+    expect(journal.mailHoldFacts().held).toBe(false)
+    await rig.stop()
+    expect(journal.mailHoldFacts().held).toBe(true)
+    await rig.settleAccepted(working, 'stopped')
+    expect(journal.mailHoldFacts().held).toBe(true)
+    const { id, result } = rig.send('personal intent')
+    expect(await result).toMatchObject({ ok: true })
+    expect(journal.mailHoldFacts().held).toBe(false)
+    await rig.stop()
+    expect(journal.mailHoldFacts().held).toBe(true)
+    await rig.settleAccepted(id, 'started')
+    expect(journal.mailHoldFacts().held).toBe(true)
   })
 })

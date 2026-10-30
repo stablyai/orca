@@ -1,3 +1,4 @@
+import type { MailboxMessagePageOptions } from './mailbox-routing-page'
 import type { MessageType, MessageRow } from '../../types'
 import { exposeMessageTimestamps, exposeMessageListTimestamps } from '../utc-timestamp'
 import { addLifecycleRejectionMarker } from '../lifecycle-rejection-marker'
@@ -92,7 +93,7 @@ export function getUndeliveredUnreadMessages(
   this: OrchestrationDb,
   toHandle: string,
   types?: MessageType[],
-  options?: { excludeTypes?: readonly string[]; excludeIds?: readonly string[]; limit?: number }
+  options?: MailboxMessagePageOptions
 ): MessageRow[] {
   const conditions = [
     'to_handle = ?',
@@ -102,6 +103,10 @@ export function getUndeliveredUnreadMessages(
     "delivery_contract = 'current_delivery'"
   ]
   const params: (string | number)[] = [toHandle]
+  if (options?.afterSequence !== undefined) {
+    conditions.push('sequence > ?')
+    params.push(options.afterSequence)
+  }
   if (types?.length) {
     conditions.push(`type IN (${types.map(() => '?').join(',')})`)
     params.push(...types)
@@ -134,7 +139,7 @@ export function getUndeliveredUnreadMailboxHandles(this: OrchestrationDb): strin
     this.db
       .prepare(
         `SELECT DISTINCT to_handle FROM messages
-         WHERE read = 0 AND delivered_at IS NULL
+         WHERE delivered_at IS NULL
            AND pointer_enter_pending = 0
            AND delivery_contract = 'current_delivery'`
       )

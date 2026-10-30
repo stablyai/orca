@@ -37,13 +37,14 @@ export function retainedQueueFacts(
 }
 
 export function queuedChangeOf(
-  card: Pick<QueuedMessageRow, 'body' | 'position' | 'queuedAt' | 'options'>
+  card: Pick<QueuedMessageRow, 'body' | 'position' | 'queuedAt' | 'options' | 'mailSource'>
 ): JournalQueuedChange {
   return {
     op: 'queued',
     body: card.body,
     position: card.position,
     queuedAt: card.queuedAt,
+    ...(card.mailSource ? { mailSource: card.mailSource } : {}),
     ...(card.options ? { options: card.options } : {})
   }
 }

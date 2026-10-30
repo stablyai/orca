@@ -10,6 +10,15 @@ import type { JournalWriteBody } from './journal-write-queue'
 export type JournalOperationReceipt = {
   write: (db: Database.Database, row?: JournalRow) => void
   committed: () => void
+  finished?: () => void
+}
+
+export function finishJournalReceipt(receipt?: JournalOperationReceipt): void {
+  try {
+    receipt?.finished?.()
+  } catch (error) {
+    console.warn('[mail] transaction cleanup failed', error)
+  }
 }
 
 export type JournalReceiptPreparation =
@@ -21,7 +30,8 @@ export function composeJournalOperationReceipts(
 ): JournalOperationReceipt {
   return {
     write: (db, row) => receipts.forEach((receipt) => receipt.write(db, row)),
-    committed: () => receipts.forEach((receipt) => receipt.committed())
+    committed: () => receipts.forEach((receipt) => receipt.committed()),
+    finished: () => receipts.forEach((receipt) => finishJournalReceipt(receipt))
   }
 }
 
@@ -65,13 +75,17 @@ export class JournalRowWriter {
       const row = build(this.deps.nextSequence(), savedAt)
       assertJournalFence(row.fence, this.deps.highestFence())
       const receipt = typeof prepareReceipt === 'function' ? prepareReceipt([row]) : prepareReceipt
-      this.deps.database().transaction(
-        (db) => {
-          insertJournalRow(db, this.deps.sessionId, row, savedAt)
-          receipt?.write(db, row)
-        },
-        !receipt && this.streamed([row])
-      )
+      try {
+        this.deps.database().transaction(
+          (db) => {
+            insertJournalRow(db, this.deps.sessionId, row, savedAt)
+            receipt?.write(db, row)
+          },
+          !receipt && this.streamed([row])
+        )
+      } finally {
+        finishJournalReceipt(receipt)
+      }
       // Adopt durable sequence state before fallible work: nonthrowing receipt ledger, then fold.
       receipt?.committed()
       this.deps.commit([row], savedAt)
@@ -105,15 +119,19 @@ export class JournalRowWriter {
       assertJournalFence(row.fence, this.deps.highestFence())
     }
     const receipt = typeof prepareReceipt === 'function' ? prepareReceipt(rows) : prepareReceipt
-    this.deps.database().transaction(
-      (db) => {
-        for (const row of rows) {
-          insertJournalRow(db, this.deps.sessionId, row, ts)
-        }
-        receipt?.write(db, receiptRow?.(rows))
-      },
-      !receipt && this.streamed(rows)
-    )
+    try {
+      this.deps.database().transaction(
+        (db) => {
+          for (const row of rows) {
+            insertJournalRow(db, this.deps.sessionId, row, ts)
+          }
+          receipt?.write(db, receiptRow?.(rows))
+        },
+        !receipt && this.streamed(rows)
+      )
+    } finally {
+      finishJournalReceipt(receipt)
+    }
     receipt?.committed()
     this.deps.commit(rows, ts)
     return rows

@@ -157,6 +157,11 @@ describe("a dead generation's leftovers, its settlement refused and its lease re
     expect(view.chat().working).toBe(false)
     expect(runningStructuredAgentSessionTurnId(view.chat())).toBeNull()
     expect(view.answerable()).toBe(false)
+    const original = work.diedTurn()
+    if (!original) {
+      throw new Error('Missing exact died root')
+    }
+    expect(work.diedTurn()).toEqual(original)
   })
 
   it('gives Stop nothing to stop: the dead turn is not touched', async () => {

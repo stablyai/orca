@@ -28,7 +28,7 @@ import {
 import { STOP_NOTE_CANCELLATION_REQUESTED } from './structured-agent-session-turn-stop-notes'
 import {
   endStoppedStructuredAgentSession,
-  type StructuredAgentSessionStopWindDown
+  type StructuredAgentSessionChatStopWindDown
 } from './structured-agent-session-stop-wind-down'
 import { performCancel, type AcceptedChatStop } from './structured-agent-session-turns-cancel'
 import { contextStructuredAgentSessionCurrentWork } from './structured-agent-session-current-work'
@@ -62,13 +62,7 @@ export function mutateWithChatStop<TValue>(
   const { envelope, turnId } = params
   const { sessionId } = envelope
   // Replayed Stops owe no second wind-down.
-  let windDown:
-    | {
-        owed: StructuredAgentSessionStopWindDown
-        ctx: AgentSessionTurnContext
-        stopChild: () => Promise<void>
-      }
-    | undefined
+  let windDown: StructuredAgentSessionChatStopWindDown | undefined
   let reached = params.stoppedPrePrompt === true
   const named = turnId !== undefined ? { turnId } : {}
   const logChildEnd = (error: unknown) =>
@@ -99,6 +93,7 @@ export function mutateWithChatStop<TValue>(
           (sinceStop === undefined || (entry.submittedSequence ?? -1) > sinceStop)
       )
     const accepted = await acceptChatStop(ctx, {
+      captureMail: context.deps.captureSessionMail,
       event: {
         reason: 'user-stop',
         caller: caller.callerKey,

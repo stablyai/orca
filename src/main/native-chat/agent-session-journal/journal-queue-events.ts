@@ -1,3 +1,4 @@
+import { releasedJournalMailBoundary, type JournalMailSource } from './journal-mail-boundary'
 // Queue facts share the chat journal/reducer; no second stored copy may drift behind dispatch state.
 
 import type { UnreadAgentSessionFailureFact } from '../../../shared/agent-session-failure'
@@ -24,6 +25,7 @@ export type JournalQueueChange =
       queuedAt: AgentJournalCursor | null
       holdReason?: string
       options?: AgentSessionExecutionOptions
+      mailSource?: JournalMailSource
       attempt?: string
       /** Retain refusal facts only when their original handoff rows are gone. */
       returned?: { reason: string | null; rejection?: UnreadAgentSessionFailureFact }
@@ -48,9 +50,18 @@ export type JournalQueueCardChange = { messageId: string; change?: JournalQueueC
 export function journalQueueRowBuilder(
   state: () => JournalReducerState,
   messageId: string,
-  change: JournalQueueChange
+  change: JournalQueueChange,
+  humanRelease?: true
 ): (seq: number, ts: number) => JournalQueueRow {
-  return (seq, ts) => buildJournalQueueRow(state(), messageId, change, seq, ts)
+  return (seq, ts) => {
+    const current = state()
+    return {
+      ...buildJournalQueueRow(current, messageId, change, seq, ts),
+      ...(humanRelease
+        ? { mailBoundary: releasedJournalMailBoundary(current.sessionId, current.epoch, seq) }
+        : {})
+    }
+  }
 }
 
 export function buildJournalQueueRow(

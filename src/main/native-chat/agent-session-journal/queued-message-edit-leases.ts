@@ -18,6 +18,11 @@ export class QueuedMessageEditLeases {
   private timerAt: number | null = null
   private wake: (() => void) | undefined
   private disposed = false
+  private generation = 0
+
+  revision(): number {
+    return this.generation
+  }
 
   constructor(
     private readonly rows: () => readonly QueuedMessageRow[],
@@ -42,6 +47,7 @@ export class QueuedMessageEditLeases {
       lapsed ||= lease.until <= now
       if (lease.until <= now || !row || !leaseMatchesRow(lease, row)) {
         this.leases.delete(key)
+        this.generation++
       }
     }
     this.schedule()
@@ -79,6 +85,7 @@ export class QueuedMessageEditLeases {
       until: this.now() + QUEUED_MESSAGE_EDIT_LEASE_MS
     }
     this.leases.set(leaseKey(key), lease)
+    this.generation++
     this.schedule()
     return this.answer(lease)
   }
@@ -99,6 +106,7 @@ export class QueuedMessageEditLeases {
   release(key: EditLeaseKey, messageId: string): void {
     if (this.leases.get(leaseKey(key))?.messageId === messageId) {
       this.leases.delete(leaseKey(key))
+      this.generation++
       this.schedule()
     }
   }
@@ -107,6 +115,7 @@ export class QueuedMessageEditLeases {
     for (const [key, lease] of this.leases) {
       if (lease.messageId === messageId) {
         this.leases.delete(key)
+        this.generation++
       }
     }
     this.schedule()
@@ -115,6 +124,7 @@ export class QueuedMessageEditLeases {
   dispose(): void {
     this.disposed = true
     this.leases.clear()
+    this.generation++
     this.schedule()
   }
 
@@ -147,6 +157,7 @@ export class QueuedMessageEditLeases {
         for (const [key, lease] of this.leases) {
           if (lease.until <= now) {
             this.leases.delete(key)
+            this.generation++
           }
         }
         this.schedule()

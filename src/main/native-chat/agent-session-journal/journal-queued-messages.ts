@@ -1,3 +1,5 @@
+import { journalQueueSelection } from './journal-queue-selection'
+import type { JournalMailSource } from './journal-mail-boundary'
 import { journalQueueAdoptionPlan } from './journal-queue-adoption-plan'
 import {
   journalAttachmentClaimReceipt,
@@ -18,7 +20,6 @@ import { retainedQueueFacts } from './journal-queue-retention'
 import { composeJournalOperationReceipts, type JournalOperationReceipt } from './journal-row-writer'
 import type { JournalQueuedMessagesDeps, JournalSubmissionConsume } from './journal-store-contracts'
 import {
-  deriveQueuePauses,
   journalUserStopInForce,
   nextSendableQueuedCard,
   type DerivedQueuePause,
@@ -52,6 +53,7 @@ export class JournalQueuedMessages {
 
   constructor(private readonly deps: JournalQueuedMessagesDeps) {
     this.legacy = new LegacyQueuedCards(deps)
+    this.selection = journalQueueSelection(deps)
   }
 
   get sessionId(): string {
@@ -66,6 +68,10 @@ export class JournalQueuedMessages {
     const { epoch, queue } = this.deps.state()
     return `${epoch}:${queue.revision}:${this.legacy.key()}`
   }
+
+  private readonly selection: ReturnType<typeof journalQueueSelection>
+  mailEligible = (card: QueuedMessageRow) => this.selection.mailEligible(card)
+  selectionRevision = () => this.selection.revision(this.revision(), this.editLeases.revision())
 
   list(): readonly QueuedMessageRow[] {
     const key = this.revision()
@@ -90,6 +96,9 @@ export class JournalQueuedMessages {
       messageId: string
       body: AgentJournalMessageItem
       requireAttachments?: true
+      beforeInsert?: () => void
+      humanRelease?: true
+      mailSource?: JournalMailSource
       holdReason?: QueuedMessageHoldReason
       options?: AgentSessionExecutionOptions
     },
@@ -105,10 +114,12 @@ export class JournalQueuedMessages {
         if (this.get(messageId)) {
           return { changes: [], result: undefined }
         }
+        input.beforeInsert?.()
         const { epoch, lastSequence } = this.deps.state()
         const position = Math.max(0, ...this.list().map((card) => card.position)) + 1
         const change = {
           op: 'queued' as const,
+          ...(input.mailSource ? { mailSource: input.mailSource } : {}),
           body,
           position,
           queuedAt: { epoch, sequence: lastSequence },
@@ -117,7 +128,8 @@ export class JournalQueuedMessages {
         }
         return { changes: [{ messageId, change }], result: undefined }
       },
-      composeJournalOperationReceipts(claims, ...(receipt ? [receipt] : []))
+      composeJournalOperationReceipts(claims, ...(receipt ? [receipt] : [])),
+      input.humanRelease
     ).then(() => {
       const card = this.get(messageId)
       if (!card) {
@@ -195,8 +207,8 @@ export class JournalQueuedMessages {
   }
 
   /** Plan on the journal lane; adopt/delete legacy cards in the same transaction before changing them. */
-  plan(changes: readonly JournalQueueCardChange[]): JournalQueuePlan {
-    return journalQueueAdoptionPlan(this.deps, this.legacy, changes)
+  plan(changes: readonly JournalQueueCardChange[], humanRelease?: true): JournalQueuePlan {
+    return journalQueueAdoptionPlan(this.deps, this.legacy, changes, humanRelease)
   }
 
   /** Validate the acted-on card on the lane; automatic drain must still own the next queued card. */
@@ -212,7 +224,12 @@ export class JournalQueuedMessages {
     if (consumable && input.yieldsToPause) {
       const cards = this.list()
       const held = this.editLeases.heldIds(cards)
-      const next = nextSendableQueuedCard(this.derivePauses(cards), cards, held)
+      const next = nextSendableQueuedCard(
+        this.selection.pauses(cards),
+        cards,
+        held,
+        this.mailEligible
+      )
       if (next?.messageId === input.messageId) {
         return
       }
@@ -247,7 +264,7 @@ export class JournalQueuedMessages {
   }
 
   pauses(): DerivedQueuePause[] {
-    return this.derivePauses(this.list())
+    return this.selection.pauses(this.list())
   }
 
   awaitReopenMark(): boolean {
@@ -271,28 +288,18 @@ export class JournalQueuedMessages {
     return journalUserStopInForce(state.queuePauseMarks, state.latestAcceptedTurnSequence)
   }
 
-  private derivePauses(cards: readonly QueuedMessageRow[]): DerivedQueuePause[] {
-    const state = this.deps.state()
-    return deriveQueuePauses({
-      epoch: state.epoch,
-      marks: state.queuePauseMarks,
-      latestAcceptedTurnSequence: state.latestAcceptedTurnSequence,
-      cards,
-      reopenFloor: this.deps.reopenFloor()
-    })
-  }
-
   /** Resolve after preceding writes; commit receipts with changed rows and skip empty plans. */
   private write<T>(
     plan: () => { changes: readonly JournalQueueCardChange[]; result: T },
-    receipt?: JournalOperationReceipt
+    receipt?: JournalOperationReceipt,
+    humanRelease?: true
   ): Promise<T> {
     let planned: { result: T; plan: JournalQueuePlan } | undefined
     return this.deps.writer
       .enqueueRows(
         () => {
           const next = plan()
-          planned = { result: next.result, plan: this.plan(next.changes) }
+          planned = { result: next.result, plan: this.plan(next.changes, humanRelease) }
           return planned.plan.rows
         },
         {

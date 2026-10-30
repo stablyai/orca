@@ -1,344 +1,306 @@
-/** Structured workers and coordinators need chat sends and journal retry edges; share PTY batch/text policy without requiring PTY input. */
-
-import type { AgentJournalMessageItem } from '../../../shared/agent-session-journal-types'
+import { MailHistorySources } from './structured-mail-history-sources'
 import type { OrchestrationDb } from './db'
-import type { OrchestrationCliCommand } from './cli-command'
-import {
-  selectOrchestrationPointerBatch,
-  type OrchestrationMessageWaiter,
-  type OrchestrationPointerBatch
-} from './mailbox-pointer-eligibility'
-import {
-  resolveStructuredPointerOperation,
-  type StructuredPointerSubmission
-} from './structured-pointer-operation-id'
-import { structuredMailNotice } from './structured-mail-source'
-import type { SenderNameResolver } from './agent-message-sender'
-import {
-  retainReasonForDispatch,
-  structuredDispatchDelivered,
-  type StructuredDispatchState,
-  type StructuredPointerRetainReason
-} from './structured-session-pointer-delivery'
+import type { OrchestrationMessageWaiter } from './mailbox-pointer-eligibility'
+import type { MailDeliveryDependencies } from './structured-mail-creation-contract'
+export { ordinaryMailCreationId } from './structured-mail-creation-contract'
+export type {
+  StructuredPointerTarget,
+  StructuredPointerSendOutcome,
+  StructuredMailboxPointerHost,
+  MailDeliveryDependencies
+} from './structured-mail-creation-contract'
+import { offerMailSource } from './structured-mail-source-offer'
+import { MailSourceWork } from './structured-mail-source-work'
+import { discoverMailSources, MailDebts, type Interest } from './structured-mail-source-discovery'
+export type { MailAdmission } from './structured-mail-source-discovery'
+/** Disposable finite discovery only; the ordinary queue is the sole executor. */
+export class OrchestrationStructuredMailboxPointerDelivery<T extends OrchestrationMessageWaiter> {
+  private readonly interests = new Map<string, Interest>()
+  private unsubscribe: (() => void) | undefined
+  private readonly work = new MailSourceWork()
+  private readonly history: MailHistorySources
+  private sourceDb: OrchestrationDb | null = null
+  constructor(private readonly deps: MailDeliveryDependencies<T>) {
+    this.history = new MailHistorySources(deps, (mailbox, ids) =>
+      this.nominateSources(mailbox, ids)
+    )
+    const db = deps.getDb()
+    if (db) {
+      this.attachDatabase(db)
+    }
+  }
 
-export type StructuredPointerTarget = {
-  sessionId: string
-  /** Direct peer mail has no Dispatch; that absence must not prevent worker nudges. */
-  dispatchId: string | null
-}
+  attachDatabase(db: OrchestrationDb): void {
+    if (this.sourceDb === db) {
+      return
+    }
+    this.resetForDatabaseChange()
+    this.sourceDb = db
+    this.unsubscribe = db.mailSourceMutations.subscribe(
+      (mutations) => {
+        if (this.sourceDb !== db || this.deps.getDb() !== db) {
+          return
+        }
+        const wake = new Set<string>()
+        for (const mutation of mutations) {
+          if (mutation.state === null) {
+            this.work.forget(mutation.id, (mailbox) =>
+              this.interests.get(mailbox)?.deferred.delete(mutation.id)
+            )
+            for (const mailbox of new Set([
+              ...mutation.previousMailboxes,
+              mutation.previousMailbox
+            ])) {
+              if (mailbox) {
+                this.interests.get(mailbox)?.deferred.delete(mutation.id)
+              }
+            }
+            continue
+          }
+          const classified =
+            mutation.mailbox && this.interests.get(mutation.mailbox)?.deferred.get(mutation.id)
+          if (!mutation.forced && classified && classified.state === mutation.state) {
+            continue
+          }
+          for (const mailbox of new Set([
+            ...mutation.previousMailboxes,
+            mutation.previousMailbox,
+            mutation.mailbox
+          ])) {
+            if (!mailbox) {
+              continue
+            }
+            const ids = this.work.pending(mailbox)
+            ids.nominate(mutation.id)
+            wake.add(mailbox)
+          }
+        }
+        for (const mailbox of wake) {
+          this.deliverForHandle(mailbox)
+        }
+      },
+      (mailboxes) => {
+        if (this.sourceDb !== db || this.deps.getDb() !== db) {
+          return
+        }
+        for (const mailbox of mailboxes) {
+          this.deps.scheduleRetry?.(mailbox)
+        }
+      }
+    )
+  }
 
-type ParkedPointerDelivery = {
-  sessionId: string
-  reservedTypes: ReadonlySet<string> | undefined
-}
-
-export type StructuredPointerSendOutcome =
-  | { kind: 'sent'; state: StructuredDispatchState }
-  | { kind: 'held' }
-  /** The chat's queue took it, as it takes a person's message. */
-  | { kind: 'queued' }
-  | { kind: 'unattached' }
-
-export type StructuredPointerSessionFacts = {
-  /** Current-context sends, oldest first: what the lane's own sends settled as. */
-  submissions: readonly StructuredPointerSubmission[]
-}
-
-export type StructuredMailboxPointerHost = {
-  /** `null` when the session cannot be read. */
-  readSessionFacts: (sessionId: string) => Promise<StructuredPointerSessionFacts | null>
-  hasActionablePromptNow: (sessionId: string) => boolean | null
-  /** False for a conversation the idle sweep closed: it runs no turn. */
-  isWorkingNow: (sessionId: string) => boolean
-  send: (input: {
-    sessionId: string
-    dispatchId: string | null
-    operationId: string
-    expectedRuntimeFence: number
-    /** Names its senders as `from`. */
-    body: AgentJournalMessageItem
-    /** Hold rather than steer when a turn is running at admission. */
-    holdWhileWorking: boolean
-  }) => Promise<StructuredPointerSendOutcome>
-  /** Current lease fence; `null` when no record backs the session any more. */
-  currentFence: (sessionId: string) => number | null
-  currentContextClearOperationId: (sessionId: string) => string | undefined
-}
-
-type StructuredPointerDeliveryDependencies<TWaiter extends OrchestrationMessageWaiter> = {
-  getDb: () => OrchestrationDb | null
-  getMessageWaiters: (mailboxHandle: string) => ReadonlySet<TWaiter> | undefined
-  /** Resolve dispatch or direct-worker mail to its session; null delegates to the PTY lane. */
-  resolveStructuredTarget: (mailboxHandle: string) => StructuredPointerTarget | null
-  /** The CLI name the PTY lane types for a local agent, so both lanes send the same pointer. */
-  getCliCommand: () => OrchestrationCliCommand
-  /** What Orca calls a sender now, snapshotted onto the message; null when it has no name. */
-  senderName: SenderNameResolver
-  host: StructuredMailboxPointerHost
-  onRetain?: (input: {
-    mailboxHandle: string
-    sessionId: string
-    reason: StructuredPointerRetainReason
-  }) => void
-}
-
-export class OrchestrationStructuredMailboxPointerDelivery<
-  TWaiter extends OrchestrationMessageWaiter
-> {
-  private readonly inFlight = new Set<string>()
-  /** Retain the parked session id: transient resolution failure must not erase unrelated workers' retry edges. */
-  private readonly parkedUntilJournalEdge = new Map<string, ParkedPointerDelivery>()
-  /** Track process-owned send ids explicitly so clock changes cannot impersonate ownership. */
-  private readonly sentOperationIds = new Map<string, string>()
-
-  constructor(private readonly deps: StructuredPointerDeliveryDependencies<TWaiter>) {}
-
-  deliverForHandle(mailboxHandle: string, reservedTypes?: ReadonlySet<string>): boolean {
-    const target = this.deps.resolveStructuredTarget(mailboxHandle)
+  deliverForHandle(mailbox: string, _notificationTypes?: ReadonlySet<string>): boolean {
+    const db = this.deps.getDb()
+    if (db && this.sourceDb !== db) {
+      this.attachDatabase(db)
+    }
+    const target = this.deps.resolveStructuredTarget(mailbox)
     if (!target) {
+      this.detach(mailbox)
       return false
     }
-    void this.deliver(mailboxHandle, target, reservedTypes).catch(() => {
-      // Durable mail stays available to an explicit check or the next settle edge.
-    })
-    return true
-  }
-
-  /** Retry mail parked on this session's settlement or reattach journal edge. */
-  onJournalActivity(sessionId: string): void {
-    for (const [mailboxHandle, parked] of Array.from(this.parkedUntilJournalEdge)) {
-      if (parked.sessionId !== sessionId) {
-        continue
-      }
-      this.parkedUntilJournalEdge.delete(mailboxHandle)
-      const target = this.deps.resolveStructuredTarget(mailboxHandle)
-      if (target?.sessionId !== sessionId) {
-        // This journal cannot wake a mailbox moved elsewhere or currently unresolved; retain its own retry edge.
-        continue
-      }
-      void this.deliver(mailboxHandle, target, parked.reservedTypes).catch(() => undefined)
-    }
-  }
-
-  /** Prune only this recorded session; settlement removes resolver identity and transient nulls also affect siblings. */
-  forgetSession(sessionId: string): void {
-    for (const [mailboxHandle, parked] of Array.from(this.parkedUntilJournalEdge)) {
-      if (parked.sessionId === sessionId) {
-        this.parkedUntilJournalEdge.delete(mailboxHandle)
-      }
-    }
-  }
-
-  private async deliver(
-    mailboxHandle: string,
-    target: StructuredPointerTarget,
-    reservedTypes?: ReadonlySet<string>,
-    attemptedContexts = new Set<string>()
-  ): Promise<void> {
-    if (this.inFlight.has(mailboxHandle)) {
-      return
-    }
-    this.inFlight.add(mailboxHandle)
-    let current = target
-    let currentReservedTypes = reservedTypes
-    let contextKey: string | undefined
-    let progressed = false
-    try {
-      for (;;) {
-        const db = this.deps.getDb()
-        if (!db) {
-          return
-        }
-        const batch = selectOrchestrationPointerBatch({
-          db,
-          mailboxHandle,
-          waiters: this.deps.getMessageWaiters(mailboxHandle),
-          reservedTypes: currentReservedTypes
-        })
-        if (batch.messages.length === 0) {
-          return
-        }
-        // A mid-turn steer stamps delivered_at, so one an unacked turn ignores would spend this
-        // mail's only nudge; the send's admission rechecks this, as a turn can start meanwhile.
-        if (batch.heldDeliveryId && this.deps.host.isWorkingNow(current.sessionId)) {
-          this.retain(mailboxHandle, current.sessionId, 'turn-unsettled', currentReservedTypes)
-          return
-        }
-        this.parkedUntilJournalEdge.set(mailboxHandle, {
-          sessionId: current.sessionId,
-          reservedTypes: currentReservedTypes
-        })
-        const session = await this.deps.host.readSessionFacts(current.sessionId)
-        const contextClearOperationId = this.deps.host.currentContextClearOperationId(
-          current.sessionId
-        )
-        contextKey = JSON.stringify([current.sessionId, contextClearOperationId])
-        if (!progressed && attemptedContexts.has(contextKey)) {
-          return
-        }
-        attemptedContexts.add(contextKey)
-        let attempt = await this.attempt(
-          db,
-          mailboxHandle,
-          current,
-          batch,
-          currentReservedTypes,
-          session,
-          contextClearOperationId
-        )
-        while (
-          attempt === 'held' &&
-          this.deps.host.hasActionablePromptNow(current.sessionId) === false &&
-          !(batch.heldDeliveryId && this.deps.host.isWorkingNow(current.sessionId))
-        ) {
-          attempt = await this.attempt(
-            db,
-            mailboxHandle,
-            current,
-            batch,
-            currentReservedTypes,
-            session,
-            contextClearOperationId
-          )
-        }
-        if (attempt === 'held') {
-          this.retain(mailboxHandle, current.sessionId, 'turn-unsettled', currentReservedTypes)
-          return
-        }
-        progressed = attempt
-        if (!progressed) {
-          return
-        }
-        // The arrival snapshot protects its first handoff; successors derive live waiter ownership.
-        currentReservedTypes = undefined
-        // After acceptance, release the old snapshot and reselect any newer mail.
-        this.parkedUntilJournalEdge.delete(mailboxHandle)
-        const next = this.deps.resolveStructuredTarget(mailboxHandle)
-        if (!next) {
-          return
-        }
-        current = next
-      }
-    } finally {
-      this.inFlight.delete(mailboxHandle)
-      // A thrown attempt follows too; its own failure is what still propagates.
-      if (contextKey !== undefined) {
-        await this.followChangedContext(
-          mailboxHandle,
-          current,
-          currentReservedTypes,
-          attemptedContexts
-        ).catch(() => undefined)
-      }
-    }
-  }
-
-  /** Clear's idle edge can land during a send; retry only a changed context, once per context. */
-  private async followChangedContext(
-    mailboxHandle: string,
-    attempted: StructuredPointerTarget,
-    reservedTypes: ReadonlySet<string> | undefined,
-    attemptedContexts: Set<string>
-  ): Promise<void> {
-    const current = this.deps.resolveStructuredTarget(mailboxHandle)
-    if (
-      !current ||
-      attemptedContexts.has(
-        JSON.stringify([
-          current.sessionId,
-          this.deps.host.currentContextClearOperationId(current.sessionId)
-        ])
-      )
-    ) {
-      return
-    }
-    if (this.parkedUntilJournalEdge.get(mailboxHandle)?.sessionId === attempted.sessionId) {
-      this.parkedUntilJournalEdge.delete(mailboxHandle)
-    }
-    await this.deliver(mailboxHandle, current, reservedTypes, attemptedContexts)
-  }
-
-  // A session whose agent is not running needs nothing first: an accepted send starts it.
-  private async attempt(
-    db: OrchestrationDb,
-    mailboxHandle: string,
-    target: StructuredPointerTarget,
-    batch: OrchestrationPointerBatch,
-    reservedTypes: ReadonlySet<string> | undefined,
-    session: StructuredPointerSessionFacts | null,
-    contextClearOperationId: string | undefined
-  ): Promise<boolean | 'held'> {
-    const sessionId = target.sessionId
-    const fence = this.deps.host.currentFence(sessionId)
-    if (!session || fence === null) {
-      this.retain(mailboxHandle, sessionId, 'session-not-attached', reservedTypes)
-      return false
-    }
-    const body = structuredMailNotice({
-      db,
-      mailboxHandle,
-      dispatchId: target.dispatchId,
-      batch,
-      cliCommand: this.deps.getCliCommand(),
-      senderName: this.deps.senderName
-    })
-    const staged = batch.messages.map((message) => message.id)
-    const operation = resolveStructuredPointerOperation({
-      db,
-      mailboxHandle,
-      sessionId,
-      messageIds: staged,
-      submissions: session.submissions,
-      contextClearOperationId,
-      sentByThisProcess: this.sentOperationIds.get(mailboxHandle)
-    })
-    if (operation.kind === 'stamp') {
-      // A send this lane gave up waiting on ran after all.
-      db.markAsDelivered(staged, mailboxHandle)
-      db.deleteStructuredPointerOperation(mailboxHandle)
-      this.sentOperationIds.delete(mailboxHandle)
+    const interest = this.interest(mailbox)
+    if (!interest) {
       return true
     }
-    if (operation.kind === 'park') {
-      this.retain(mailboxHandle, sessionId, 'turn-unsettled', reservedTypes)
-      return false
+    interest.pending = true
+    if (!interest.running) {
+      interest.running = true
+      void discoverMailSources({
+        mailbox,
+        interest,
+        current: () => this.current(mailbox, interest),
+        admission: () => this.deps.host.admission(interest.target.sessionId),
+        offer: (source) =>
+          this.work.run({
+            mailbox,
+            interest,
+            source,
+            current: () => this.current(mailbox, interest),
+            offer: (current, capture, retire) => {
+              return offerMailSource({
+                mailbox,
+                interest,
+                source,
+                deps: this.deps,
+                current,
+                capture,
+                retire
+              })
+            },
+            retire: (id) => this.retire(interest, id),
+            interestFor: (scope) => this.interests.get(scope),
+            wake: (scope) => {
+              if (this.sourceDb === interest.db) {
+                const next = this.interests.get(scope)
+                if (next) {
+                  next.pending = true
+                }
+                this.deliverForHandle(scope)
+              }
+            }
+          }),
+        retire: (id) => this.retire(interest, id),
+        finished: () => {
+          this.deps.cancelRetry?.(mailbox)
+        }
+      })
+        .catch((error) => {
+          console.warn('[orchestration] ordinary mail creation failed', { mailbox, error })
+          interest.retry = true
+          this.deps.scheduleRetry?.(mailbox)
+        })
+        .finally(() => {
+          interest.running = false
+          if (
+            this.interests.get(mailbox) === interest &&
+            (interest.pending || !this.current(mailbox, interest))
+          ) {
+            queueMicrotask(() => this.deliverForHandle(mailbox))
+          }
+        })
     }
-    this.sentOperationIds.set(mailboxHandle, operation.operationId)
-    const outcome = await this.deps.host.send({
-      sessionId,
-      dispatchId: target.dispatchId,
-      operationId: operation.operationId,
-      expectedRuntimeFence: fence,
-      body,
-      holdWhileWorking: batch.heldDeliveryId !== undefined
-    })
-    if (outcome.kind === 'held') {
-      return 'held'
-    }
-    if (outcome.kind === 'unattached') {
-      this.retain(mailboxHandle, sessionId, 'session-not-attached', reservedTypes)
-      return false
-    }
-    // A queued pointer belongs to the chat queue; it must not be sent again.
-    if (outcome.kind === 'sent' && !structuredDispatchDelivered(outcome.state)) {
-      // The row stays: resending under its id replays this verdict and starts nothing.
-      this.retain(mailboxHandle, sessionId, retainReasonForDispatch(outcome.state), reservedTypes)
-      return false
-    }
-    db.markAsDelivered(staged, mailboxHandle)
-    db.deleteStructuredPointerOperation(mailboxHandle)
-    this.sentOperationIds.delete(mailboxHandle)
     return true
   }
 
-  /** Mark delivered only after accepted dispatch or queue ownership; park every refusal/unknown for a journal edge to avoid duplicate nudges. */
-  private retain(
-    mailboxHandle: string,
-    sessionId: string,
-    reason: StructuredPointerRetainReason,
-    reservedTypes: ReadonlySet<string> | undefined
-  ): void {
-    this.deps.onRetain?.({ mailboxHandle, sessionId, reason })
-    this.parkedUntilJournalEdge.set(mailboxHandle, { sessionId, reservedTypes })
+  onConsumerChange(mailbox: string, types?: readonly string[]): boolean {
+    const interest = this.interests.get(mailbox)
+    if (interest) {
+      if (!interest.consumersChanged || (interest.consumerTypes && types)) {
+        interest.consumerTypes = types
+          ? new Set([...(interest.consumerTypes ?? []), ...types])
+          : undefined
+      }
+      interest.consumersChanged = true
+    }
+    return this.deliverForHandle(mailbox)
+  }
+  nominateSources(mailbox: string, ids: readonly string[]): void {
+    const pending = this.work.pending(mailbox)
+    for (const id of ids) {
+      pending.nominate(id)
+    }
+    this.deliverForHandle(mailbox)
+  }
+  retryForHandle(mailbox: string): void {
+    this.sourceDb?.mailSourceMutations.flushCommitted()
+    const interest = this.interests.get(mailbox)
+    if (interest) {
+      interest.retry = true
+    }
+    this.deliverForHandle(mailbox)
+  }
+  resetForDatabaseChange(): void {
+    this.history.reset()
+    this.unsubscribe?.()
+    this.unsubscribe = undefined
+    this.work.clear()
+    this.sourceDb = null
+    for (const mailbox of this.interests.keys()) {
+      this.deps.cancelRetry?.(mailbox)
+    }
+    this.interests.clear()
+  }
+  onJournalActivity(sessionId: string): void {
+    for (const [mailbox, interest] of this.interests) {
+      if (interest.target.sessionId === sessionId) {
+        try {
+          const now = this.deps.host.admission(sessionId)
+          if (
+            now?.owner === interest.authority.owner &&
+            now.generation === interest.authority.generation
+          ) {
+            interest.capacityImproved ||= now.queuedBytes < interest.authority.queuedBytes
+            interest.authority = now
+          }
+          this.deliverForHandle(mailbox)
+        } catch (error) {
+          interest.retry = true
+          this.deps.scheduleRetry?.(mailbox)
+          console.warn('[orchestration] unfinished semantic mail notification', { mailbox, error })
+        }
+      }
+    }
+  }
+  forgetSession(sessionId: string): void {
+    for (const [mailbox, interest] of this.interests) {
+      if (interest.target.sessionId === sessionId) {
+        this.detach(mailbox)
+      }
+    }
+  }
+
+  private interest(mailbox: string): Interest | null {
+    const db = this.deps.getDb()
+    const target = this.deps.resolveStructuredTarget(mailbox)
+    const authority = target && this.deps.host.admission(target.sessionId)
+    if (!db || !target || !authority) {
+      this.detach(mailbox)
+      return null
+    }
+    this.history.observe(db, authority.owner)
+    let interest = this.interests.get(mailbox)
+    if (!interest || interest.db !== db) {
+      interest = {
+        db,
+        target,
+        authority,
+        frontier: 0,
+        deferred: new MailDebts(),
+        dirty: this.work.pending(mailbox),
+        running: false,
+        pending: false,
+        consumersChanged: false,
+        capacityImproved: false,
+        retry: false,
+        authorityChanged: false
+      }
+      this.interests.set(mailbox, interest)
+    } else if (
+      interest.target.sessionId !== target.sessionId ||
+      interest.authority.owner !== authority.owner ||
+      interest.authority.generation !== authority.generation
+    ) {
+      interest = {
+        ...interest,
+        target,
+        authority,
+        running: false,
+        pending: true,
+        authorityChanged: true,
+        dirty: this.work.pending(mailbox),
+        capacityImproved:
+          interest.capacityImproved ||
+          authority.queuedBytes < interest.authority.queuedBytes ||
+          interest.target.sessionId !== target.sessionId
+      }
+      this.interests.set(mailbox, interest)
+    }
+    return interest
+  }
+  private current(mailbox: string, interest: Interest): boolean {
+    if (
+      this.deps.getDb() !== interest.db ||
+      this.interests.get(mailbox) !== interest ||
+      this.deps.resolveStructuredTarget(mailbox)?.sessionId !== interest.target.sessionId
+    ) {
+      return false
+    }
+    const authority = this.deps.host.admission(interest.target.sessionId)
+    return (
+      authority?.owner === interest.authority.owner &&
+      authority.generation === interest.authority.generation
+    )
+  }
+
+  private retire(interest: Interest, id: string): void {
+    interest.deferred.delete(id)
+    interest.dirty.delete(id)
+  }
+  private detach(mailbox: string): void {
+    this.interests.delete(mailbox)
+    this.deps.cancelRetry?.(mailbox)
+    this.work.detach(mailbox)
   }
 }

@@ -114,7 +114,7 @@ function attachParams(
   }
 }
 
-function adapter(): StructuredAgentSessionAdapter {
+function adapter(origin: 'created' | 'resumed' = 'resumed'): StructuredAgentSessionAdapter {
   return {
     open: async () => ({
       reportedOptions: { model: '' }
@@ -127,7 +127,7 @@ function adapter(): StructuredAgentSessionAdapter {
         link: {
           linkId: 'resumed-link',
           handle: codexProviderHandle(THREAD),
-          origin: 'resumed',
+          origin,
           mintedAtFence: fence,
           observedAt: NOW
         }
@@ -169,19 +169,26 @@ async function attach(
 }
 
 describe('adopting a provider conversation on create', () => {
-  it('seeds the chain from the adopted handle and fills the journal from its transcript', async () => {
-    root = await mkdtemp(join(tmpdir(), 'orca-adopt-import-'))
-    const transcriptPath = join(root, 'rollout.jsonl')
-    await writeCodexRollout(transcriptPath, 'token ORCA-ADOPT-1')
-    const sessionAdapter = adapter()
-
-    const result = await attach(transcriptPath, sessionAdapter)
-
-    expect(result).toMatchObject({ ok: true })
-    // The seeded chain must resume the adopted conversation.
-    const page = (result as { value: { page: { items: unknown[] } } }).value.page
-    expect(JSON.stringify(page.items)).toContain('ORCA-ADOPT-1')
-  })
+  it.each([false, true])(
+    'does not seed fresh mail permission for import or providerHandle without adopt (%s)',
+    async (providerOnly) => {
+      root = await mkdtemp(join(tmpdir(), 'orca-adopt-import-'))
+      const transcriptPath = join(root, 'rollout.jsonl')
+      await writeCodexRollout(transcriptPath, 'token ORCA-ADOPT-1')
+      const sessionAdapter = adapter(providerOnly ? 'created' : 'resumed')
+      const providerHandle = { kind: 'codex', threadId: THREAD } as const
+      const params = providerOnly
+        ? attachParams(undefined, { adopt: undefined, providerHandle })
+        : attachParams(transcriptPath)
+      const result = await attach(transcriptPath, sessionAdapter, undefined, params)
+      expect(result).toMatchObject({ ok: true })
+      // The seeded chain must resume the adopted conversation.
+      const page = (result as { value: { page: { items: unknown[] } } }).value.page
+      if (!providerOnly) {
+        expect(JSON.stringify(page.items)).toContain('ORCA-ADOPT-1')
+      }
+    }
+  )
 
   it.each([
     {
@@ -408,4 +415,52 @@ describe('adopting a provider conversation on create', () => {
     expect(JSON.stringify(result.value.page.items)).toContain('prepared before acquiring')
     expect(prepare).toHaveBeenCalledTimes(1)
   })
+})
+
+it('actual attach imports prepared history over only the exact saved bookkeeping baseline', async () => {
+  root = await mkdtemp(join(tmpdir(), 'orca-q-baseline-attach-'))
+  const transcriptPath = join(root, 'rollout.jsonl')
+  await writeCodexRollout(transcriptPath, 'retained adopted transcript')
+  const database = openTestJournalHostDatabase(root)
+  const journal = new AgentSessionJournal({
+    database,
+    identity: {
+      sessionId: SESSION,
+      workspaceId: 'workspace-1',
+      hostId: 'local',
+      agent: 'codex',
+      providerHandle: null
+    }
+  })
+  await journal.open()
+  const { epoch } = journal.cursor()
+  const { agentJournalItemKey } = await import('../../../shared/agent-session-journal-item-key')
+  database.db
+    .prepare(
+      'INSERT INTO journal_rows (session_id, epoch, seq, ts, row_json) VALUES (?, ?, ?, ?, ?)'
+    )
+    .run(
+      SESSION,
+      epoch,
+      2,
+      NOW,
+      JSON.stringify({
+        v: 1,
+        epoch,
+        seq: 2,
+        fence: 0,
+        ts: NOW,
+        kind: 'tombstone',
+        itemId: agentJournalItemKey({ provider: 'orca', clientMessageId: 'mail-boundary' }),
+        revision: 1,
+        mailBoundary: { status: 'held', stop: null, cuts: [], members: [], ambiguous: true }
+      })
+    )
+  await journal.close()
+  const result = await attach(transcriptPath, adapter())
+  expect(result).toMatchObject({ ok: true })
+  if (!result.ok) {
+    throw new Error('attach failed')
+  }
+  expect(JSON.stringify(result.value.page.items)).toContain('retained adopted transcript')
 })

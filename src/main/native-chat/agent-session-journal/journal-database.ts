@@ -73,6 +73,13 @@ export function openJournalDatabase(dbPath: string): OpenJournalDatabase {
     ensureQueuedMessagesTable(probe)
     ensureCommandReceiptsTable(probe)
     ensureAgentSessionAttachmentClaimTables(probe)
+    try {
+      probe.exec(`DROP TRIGGER IF EXISTS mail_creation_receipt_replace;
+        DROP TRIGGER IF EXISTS mail_creation_receipt_delete;
+        DROP TRIGGER IF EXISTS mail_creation_receipt_update;`)
+    } catch (error) {
+      console.warn('[agent-session-journal] obsolete mail trigger cleanup pending', error)
+    }
     hardenSqliteDatabaseFiles(dbPath)
     transferred = true
     return { db: probe, readOnly: false }

@@ -1,3 +1,4 @@
+import { readJournalMailSource } from './journal-mail-boundary'
 // Latch handoff outcomes before rewind can retire their rows; requeue only proven-undelivered sends.
 
 import type {
@@ -62,6 +63,7 @@ export function queuedCardFromChange(
   change: JournalQueuedChange
 ): QueuedMessageRow {
   const options = readAgentSessionExecutionOptions(change.options)
+  const mailSource = readJournalMailSource(change.mailSource)
   const card: QueuedMessageRow = {
     messageId,
     position: change.position,
@@ -73,6 +75,7 @@ export function queuedCardFromChange(
     returnedRejection: null,
     consumedAs: null,
     queuedAt: readQueuedAt(change.queuedAt),
+    ...(mailSource ? { mailSource } : {}),
     ...(options ? { options } : {})
   }
   const attempt =

@@ -35,13 +35,11 @@ import {
   structuredWorkerProcessIncarnation,
   type StructuredWorkerIdentity
 } from '../../structured-worker-identity'
-import { createKeyedTrailingEdgeCoalescer } from '../../keyed-trailing-edge-coalescer'
 import { createStructuredAgentSessionForWorktree } from './structured-agent-session-create'
 
 type StructuredWorkerBinding = {
   sessionId: string
   handle: string
-  disposeSubscription: () => void
 }
 
 const bindingsByDispatchId = new Map<string, StructuredWorkerBinding>()
@@ -55,7 +53,6 @@ export function releaseStructuredWorkerSession(
   const binding = bindingsByDispatchId.get(dispatchId)
   if (binding) {
     bindingsByDispatchId.delete(dispatchId)
-    binding.disposeSubscription()
     structuredWorkerIdentities.forget(binding.handle)
   }
   const rootSessionId = binding?.sessionId ?? workerSessionId
@@ -74,8 +71,6 @@ export async function createStructuredWorkerSession(args: {
   dispatchId: string
   /** The dispatch's own `--model`/`--effort`, already narrowed to the seedable string subset. */
   options?: Readonly<Record<string, string>>
-  /** Retried whenever the session's journal moves, which is the structured idle edge. */
-  onJournalActivity: (sessionId: string) => void
 }): Promise<{
   identity: StructuredWorkerIdentity
   host: StructuredAgentSessionHost
@@ -110,6 +105,7 @@ export async function createStructuredWorkerSession(args: {
         // prepare supplies the host attach fingerprint; this in-process id has no replayed RPC create intent.
         payloadFingerprint: ''
       },
+      newRoot: true,
       worktree: `id:${args.worktreeId}`,
       agent: args.agent,
       // Absent, the host seeds the user's saved selection — the same fallback a chat gets.
@@ -132,11 +128,9 @@ export async function createStructuredWorkerSession(args: {
         'A structured worker must run on the local execution host outside WSL.'
       )
     }
-    const disposeSubscription = await subscribeForRedrive(host, sessionId, args.onJournalActivity)
     bindingsByDispatchId.set(args.dispatchId, {
       sessionId,
-      handle: identity.handle,
-      disposeSubscription
+      handle: identity.handle
     })
     return { identity, host, fence: created.value.fence }
   } catch (error) {
@@ -276,37 +270,4 @@ function requireInstalledHost(): StructuredAgentSessionHost {
     )
   }
   return host
-}
-
-/** Coalesce streaming batches until quiet; settled turns stop emitting, so the final nudge still lands promptly. */
-const REDRIVE_FLUSH_MS = 300
-
-/** A turn that streams without pause still gets re-evaluated this often. */
-const REDRIVE_MAX_WAIT_MS = 2_000
-
-/** Any journal batch can carry a tombstoned turn settlement; coalesce expensive parked-mail gate checks.
- * Pointers count waiting messages, so batches may combine safely. Fresh mail still uses deliverForHandle immediately. */
-async function subscribeForRedrive(
-  host: StructuredAgentSessionHost,
-  sessionId: string,
-  onJournalActivity: (sessionId: string) => void
-): Promise<() => void> {
-  const coalescer = createKeyedTrailingEdgeCoalescer(onJournalActivity, {
-    flushMs: REDRIVE_FLUSH_MS,
-    maxWaitMs: REDRIVE_MAX_WAIT_MS
-  })
-  try {
-    const unsubscribe = host.observeJournalPublications(sessionId, () => {
-      coalescer.schedule(sessionId)
-    })
-    // Discard pending redrive on settlement so it cannot nudge a session no dispatch owns.
-    return () => {
-      coalescer.dispose()
-      unsubscribe()
-    }
-  } catch (error) {
-    console.warn('[orchestration] structured worker redrive subscription failed', sessionId, error)
-    coalescer.dispose()
-    return () => {}
-  }
 }

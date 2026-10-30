@@ -85,12 +85,7 @@ async function openSender(
   host: RuntimeClientTarget
 ): Promise<void> {
   const environmentId = host.kind === 'environment' ? host.environmentId : null
-  // Mail identifies senders beyond old terminal handles; tasks carry no mail and resolve coordinators by address.
-  const mail = source.orchestration?.message === 'mail-notice' ? source.orchestration.messages : []
-  const messageIds = mail
-    .filter((message) => message.from === party.address)
-    .map((message) => message.messageId)
-  const found = await lookUpSender(party, messageIds, host)
+  const found = await lookUpSender(party, mailFromSender(source, party.address), host)
   if (typeof found === 'string') {
     showLookupFailure(found)
     return
@@ -120,6 +115,21 @@ async function openSender(
     return
   }
   await focusTerminal(location.handle, environmentId)
+}
+
+/** The mail it carried from this sender, whose pane outlives a handle from an earlier run. A task
+ *  carries no mail, so its coordinator is found by address alone. */
+function mailFromSender(source: AgentMessageSource, address: string): string[] {
+  const orchestration = source.orchestration
+  switch (orchestration?.message) {
+    case 'mail-notice':
+      return orchestration.messages
+        .filter((message) => message.from === address)
+        .map((message) => message.messageId)
+    case 'task':
+    case undefined:
+      return []
+  }
 }
 
 async function focusTerminal(handle: string, environmentId: string | null): Promise<void> {

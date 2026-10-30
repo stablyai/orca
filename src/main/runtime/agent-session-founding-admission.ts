@@ -66,7 +66,7 @@ export function commitAgentSessionFounding(
   const founded = foundAgentSessionRecord(request, request)
   const record = request.adoptedHandleLink
     ? { ...founded, providerHandleChain: [request.adoptedHandleLink] }
-    : founded
+    : { ...founded, queueOrigin: 'fresh' as const }
   const operationRow = {
     ...decision.row,
     outcome: { status: 'succeeded' as const, sessionId: request.sessionId }

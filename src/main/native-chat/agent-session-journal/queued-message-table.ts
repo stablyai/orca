@@ -1,3 +1,4 @@
+import type { JournalMailSource } from './journal-mail-boundary'
 // Derive cards from journal rows; read the legacy table only for import. Handoff outcomes return
 // refusals, requeue proven non-delivery, and spend uncertain or accepted sends.
 
@@ -37,5 +38,6 @@ export type QueuedMessageRow = {
   consumedAs: string | null
   /** Legacy null predates any Stop; otherwise compare enqueue cursor against the pause. */
   queuedAt: AgentJournalCursor | null
+  mailSource?: JournalMailSource
   options?: AgentSessionExecutionOptions
 }

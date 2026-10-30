@@ -204,6 +204,27 @@ describe('orchestration federation control mail', () => {
   })
 
   it('accepts a repeated import after a lost acknowledgment without duplicating mail', async () => {
+    const notify = workerRuntime.notifyMessageArrived.bind(workerRuntime)
+    const observations: { transaction: boolean; cursor: number | undefined }[] = []
+    const notified = vi
+      .spyOn(workerRuntime, 'notifyMessageArrived')
+      .mockImplementation((...args) => {
+        observations.push({
+          transaction: workerDb.db.isTransaction,
+          cursor: workerDb.getRemoteDispatchAttachment(dispatchId)?.to_worker_imported_sequence
+        })
+        notify(...args)
+      })
+    const save = vi.spyOn(workerDb, 'setRemoteWorkerImportSequence').mockImplementationOnce(() => {
+      throw new Error('cursor write fails after source INSERT')
+    })
+    expect(await dispatchImport(importRequest('failed-import', 1, 'relay-control'))).toMatchObject({
+      ok: false
+    })
+    expect(workerDb.getMessageById('relay-control')).toBeUndefined()
+    expect(workerDb.getRemoteDispatchAttachment(dispatchId)?.to_worker_imported_sequence).toBe(0)
+    expect(notified).not.toHaveBeenCalled()
+    save.mockRestore()
     const first = await dispatchImport(importRequest('first-import', 1, 'relay-control'))
     const repeated = await dispatchImport(
       importRequest('repeated-import', 1, 'different-message-id')
@@ -212,6 +233,9 @@ describe('orchestration federation control mail', () => {
     expect(first).toMatchObject({ ok: true, result: { imported: 1 } })
     expect(repeated).toMatchObject({ ok: true, result: { imported: 0 } })
     expect(workerDb.getUnreadMessages(`dispatch:${dispatchId}`)).toHaveLength(1)
+    expect(observations).toEqual([{ transaction: false, cursor: 1 }])
+    expect(workerDb.getMessageById('relay-control')).not.toHaveProperty('creation_proof')
+    notified.mockRestore()
   })
 
   it('does not deliver pending control mail after worker completion', async () => {

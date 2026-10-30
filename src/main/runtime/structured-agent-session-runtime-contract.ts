@@ -58,6 +58,8 @@ export type StructuredAgentSessionRuntimeDeps = StructuredAgentSessionTransportO
   logger: StructuredAgentSessionLogger
   /** Every structured-session status projection, for host-side reactions such as the first-work
    *  workspace rename that CLI agents get from their hooks. */
+  captureSessionMail?: StructuredAgentSessionHostDeps['captureSessionMail']
+  onSessionMailActivity?: StructuredAgentSessionHostDeps['onSessionMailActivity']
   onSessionStatusChanged?: StructuredAgentSessionHostDeps['onSessionStatusChanged']
   conversationNaming?: StructuredAgentSessionHostDeps['conversationNaming']
   /** See `StructuredAgentSessionHostDeps.hasOpenDispatch`. */

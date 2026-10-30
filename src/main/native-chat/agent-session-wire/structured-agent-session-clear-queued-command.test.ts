@@ -100,7 +100,9 @@ it('clear removes command cards from history and connected and reconnecting clie
   })
   const expected = [first.id, last.id].map((messageId) => ({ messageId, state: 'waiting' }))
   expect(await rig.drafts()).toEqual(expected)
-  expect(await rig.queuePause()).toBeNull()
+  expect(await rig.queuePause()).toEqual({ reason: 'stopped' })
+  expect(await rig.handoff(first.id)).toBeUndefined()
+  expect(await rig.handoff(last.id)).toBeUndefined()
   expect(
     rig.host.collaboratorsForTests().sessions.get(SESSION)!.journal.queuedMessages.pauses()
   ).toContainEqual(expect.objectContaining({ reason: 'cleared', messageIds: [first.id, last.id] }))

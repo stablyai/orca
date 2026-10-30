@@ -150,9 +150,21 @@ export function acceptSubmissionFromProviderItem(
 /** Any provider-accepted turn may lift queue pauses. */
 export function noteTurnAccepted(
   state: JournalReducerState,
-  submission: Pick<AgentJournalSubmission, 'acceptedSequence'>
+  submission: Pick<AgentJournalSubmission, 'acceptedSequence' | 'origin'>
 ): void {
   if (submission.acceptedSequence !== undefined) {
+    const release = state.mailBoundary
+    if (
+      submission.origin === 'client' ||
+      (release?.status === 'released' &&
+        release.at.epoch === state.epoch &&
+        release.at.sequence === submission.acceptedSequence)
+    ) {
+      state.latestAcceptedPersonalTurnSequence = Math.max(
+        state.latestAcceptedPersonalTurnSequence,
+        submission.acceptedSequence
+      )
+    }
     state.latestAcceptedTurnSequence = Math.max(
       state.latestAcceptedTurnSequence,
       submission.acceptedSequence

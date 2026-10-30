@@ -237,6 +237,7 @@ export type FederationRelayItemRow = {
 }
 
 export type MessageRow = {
+  ordering_origin?: 'local' | 'imported' | null
   id: string
   run_id: string
   delivery_contract?: MessageDeliveryContract

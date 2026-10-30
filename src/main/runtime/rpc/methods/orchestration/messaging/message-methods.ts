@@ -10,18 +10,12 @@ import {
   stripMutationReplayNudge
 } from '../../../orchestration-mutation-receipt'
 import { exposeMessage } from './mailbox-message-receipt'
-import { resolveOrchestrationParty } from '../../../../orchestration/orchestration-party'
+import { orchestrationInboxMethod } from './inbox-method'
 import { recordReceiptBeforeNudge, replayMutationNudge } from './mutation-replay-nudge'
 import { resolveReplyRecipient } from './recipient-routing'
 import { helperQuestionAnswerer } from './helper-question-answerer'
 import { replyToRemoteRunHome } from './reply-remote'
-import {
-  ReplyParams,
-  InboxParams,
-  TaskCreateParams,
-  TaskListParams,
-  TaskUpdateParams
-} from '../schemas'
+import { ReplyParams, TaskCreateParams, TaskListParams, TaskUpdateParams } from '../schemas'
 
 export const ORCHESTRATION_MESSAGE_METHODS = [
   defineMethod({
@@ -166,22 +160,7 @@ export const ORCHESTRATION_MESSAGE_METHODS = [
     }
   }),
 
-  defineMethod({
-    name: 'orchestration.inbox',
-    permission: 'workspace',
-    params: InboxParams,
-    handler: (params, { runtime }) => {
-      const db = runtime.getOrchestrationDb()
-      // Return empty for stale/unknown handles because historical mail outlives handle deletion (design doc §3.3).
-      const messages = params.terminal
-        ? db.getAllMessagesForHandle(
-            resolveOrchestrationParty(params.terminal, db).address,
-            params.limit
-          )
-        : db.getInbox(params.limit)
-      return { messages, count: messages.length }
-    }
-  }),
+  orchestrationInboxMethod,
 
   defineMethod({
     name: 'orchestration.taskCreate',
