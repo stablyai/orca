@@ -79,6 +79,7 @@ export type MobileSessionTab =
       language?: string
       mode?: 'edit' | 'diff'
       diffSource?: 'staged' | 'unstaged' | 'branch' | 'commit'
+      oldPath?: string
       isDirty: boolean
       isActive: boolean
     }

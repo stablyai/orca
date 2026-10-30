@@ -1,3 +1,4 @@
+import { useLayoutEffect } from 'react'
 import { useMobileStructuredSessionOpening } from './use-mobile-structured-session-opening'
 import { useNotificationPaneNavigation } from './use-notification-pane-navigation'
 import { useMobileSessionFoundation } from './use-mobile-session-foundation'
@@ -47,6 +48,16 @@ export function useMobileSessionController() {
     feedbackCapabilities,
     useMobileSessionNativeChatDictation(feedbackCapabilities, sendLiveTerminalInput)
   )
+  // Chat covers a split, so only its own terminal stays visible; this is the ref's one writer per commit.
+  if (nativeChatDictation.showNativeChat) {
+    nativeChatDictation.visibleTerminalHandles = nativeChatDictation.activeHandle
+      ? [nativeChatDictation.activeHandle]
+      : []
+  }
+  const { visibleTerminalHandles, visibleTerminalHandlesRef } = nativeChatDictation
+  useLayoutEffect(() => {
+    visibleTerminalHandlesRef.current = visibleTerminalHandles
+  })
   const subscriptionFoundation = Object.assign(
     nativeChatDictation,
     useMobileSessionTerminalSubscriptionFoundation(nativeChatDictation)
