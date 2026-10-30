@@ -262,12 +262,16 @@ export async function executePtySpawn(
     ctx.deps.runtime?.preparePtyExecutionContext?.(ctx.result.id, spawnedWslDistro)
     ctx.spawnTiming?.mark('provider_spawn')
   } catch (err) {
-    throw failPtySpawnExecute(ctx, markTerminalStartFailure(err, ctx.result), {
-      sessionId: facts.sessionId,
-      ownsNewSession: ctx.ownsNewIncarnation,
-      telemetry: args.telemetry,
-      joinedAnotherStart: awaitingAnotherStart
-    })
+    throw failPtySpawnExecute(
+      ctx,
+      markTerminalStartFailure(err, ctx.rejectedRegistrationCandidate ?? ctx.result),
+      {
+        sessionId: facts.sessionId,
+        ownsNewSession: ctx.ownsNewIncarnation,
+        telemetry: args.telemetry,
+        joinedAnotherStart: awaitingAnotherStart
+      }
+    )
   } finally {
     if (facts.preAllocatedHandle) {
       ctx.deps.trustedTerminalHandleEnv.delete(facts.preAllocatedHandle)

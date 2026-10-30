@@ -11,6 +11,8 @@ import { registerPtyHandlers } from './register-handlers'
 import { clearProviderPtyState } from './provider/state-cleanup'
 import { setLocalPtyProvider } from './provider/registry'
 import { isCurrentPtyExit, restorePtyIncarnation } from './provider/ownership-state'
+import { formatTerminalStartFailure } from '../../../shared/terminal-start-failure'
+import { agentSessionOwners } from './pane/agent-session-owners'
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
 vi.mock('fs', () => import('./pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
@@ -145,6 +147,74 @@ describe('registerPtyHandlers', () => {
         pendingPtyRegistrationIncarnations: Map<string, string | null>
       }
       expect(internals.pendingPtyRegistrationIncarnations.size).toBe(0)
+      clearProviderPtyState(ptyId)
+    }
+  )
+  it.each(['fresh', 'reattach', 'adopted'] as const)(
+    'preserves claimed early-exit provenance and cleanup (%s)',
+    async (context) => {
+      const ptyId = 'pty-claimed-early-exit'
+      const incarnationId = 'incarnation-claimed-early-exit'
+      const provider = createAgentClaimProvider({
+        spawn: vi.fn(async () => ({
+          id: ptyId,
+          incarnationId,
+          exitedBeforeSpawnReply: true,
+          exitCause: {
+            kind: 'exited' as const,
+            exitCode: 256,
+            initialOutputDiagnostic: 'git-bash-console-capacity' as const
+          },
+          ...(context === 'reattach' ? { isReattach: true } : {}),
+          ...(context === 'adopted'
+            ? {
+                agentSessionEnsure: {
+                  disposition: 'adopted' as const,
+                  owner: {
+                    claim: recoveredAgentClaim,
+                    generation: 'claimed-owner-generation',
+                    phase: 'live' as const,
+                    ptyId,
+                    surface: recoveredAgentSurface
+                  }
+                }
+              }
+            : {})
+        })),
+        authoritativeOwnerListings: false
+      })
+      setLocalPtyProvider(provider as never)
+      const registrationClaim = { incarnationId: null, exitedIncarnations: new Set() }
+      const cancelPendingPtyRegistration = vi.fn()
+      const registerPty = vi.fn()
+      const controller = registerAgentClaimController({
+        beginPtyRegistration: vi.fn(() => registrationClaim),
+        cancelPendingPtyRegistration,
+        registerPty
+      })
+      const error = await controller
+        .spawn({
+          cols: 80,
+          rows: 24,
+          sessionId: ptyId,
+          agentSessionEnsure: { claim: recoveredAgentClaim, surface: recoveredAgentSurface }
+        })
+        .catch((caught: unknown) => caught)
+
+      expect(error).toMatchObject({
+        message: 'agent_session_exited_during_start',
+        agentSessionOperationOutcome: 'unknown',
+        terminalExitIncarnationId: incarnationId
+      })
+      expect(formatTerminalStartFailure(error) !== undefined).toBe(context === 'fresh')
+      expect(provider.spawn).toHaveBeenCalledOnce()
+      expect(cancelPendingPtyRegistration).toHaveBeenCalledWith(
+        ptyId,
+        incarnationId,
+        registrationClaim
+      )
+      expect(registerPty).not.toHaveBeenCalled()
+      expect(agentSessionOwners.find(recoveredAgentClaim)).toBeNull()
       clearProviderPtyState(ptyId)
     }
   )
