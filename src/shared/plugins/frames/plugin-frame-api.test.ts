@@ -192,6 +192,26 @@ describe('window.orca.panel', () => {
     expect(posted()).toHaveLength(sent)
   })
 
+  it('refuses what JSON cannot carry and sends the JSON form of the rest', async () => {
+    const { orca, posted } = mountShell()
+    const cyclic: Record<string, unknown> = {}
+    cyclic.self = cyclic
+    const sent = posted().length
+    for (const message of [1n, cyclic, undefined]) {
+      await expect(orca.panel!.postMessage(message)).rejects.toMatchObject({
+        code: 'invalid_params'
+      })
+    }
+    expect(posted()).toHaveLength(sent)
+
+    void orca.panel!.postMessage({ at: new Date(0), skipped: undefined, kept: 1 })
+    expect(posted().at(-1)).toMatchObject({
+      method: 'panel.postMessage',
+      params: { at: '1970-01-01T00:00:00.000Z', kept: 1 }
+    })
+    expect(posted().at(-1)).not.toHaveProperty('params.skipped')
+  })
+
   it('cancels through an AbortSignal like host calls', async () => {
     const { orca, posted } = mountShell()
     const controller = new AbortController()
