@@ -492,15 +492,9 @@
       },
       "providers": {
         "title": "Sağlayıcılar",
-        "description": "Hangi ajanların sohbet olarak açılacağını seçin. Bu seçenek kapalıysa yüklü ajan terminalde açılır.",
         "searchAgents": "ajanlar",
         "searchCli": "CLI",
         "searchTerminal": "terminal",
-        "agentDisabled": "Ajan ayarlarında kapalı",
-        "installed": "Yüklü",
-        "notInstalled": "Yüklü değil",
-        "install": "Yükle",
-        "toggleLabel": "{{value0}} öğesini sohbet olarak aç",
         "antigravityDescription": "Antigravity sohbetleri, Orca'nın bu ana makineye indirdiği ve agy CLI'dan ayrı olan bir sunucuyu çalıştırır.",
         "antigravityNotSignedIn": "Oturum açılmadı. Sohbetler için agy terminal hesabınızdan ayrı bir Antigravity oturumu gerekir.",
         "antigravityAccount": "Hesap",
@@ -749,7 +743,6 @@
       "defaultOpensAs": "{{value0}} açılış biçimi",
       "defaultOpensAsChat": "Sohbet",
       "defaultOpensAsCli": "CLI",
-      "defaultOpensAsScope": "Eşleştirilmiş sunuculardakiler dahil, bu bilgisayardan başlatılan yeni {{value0}} oturumları için geçerlidir. Sağlayıcılar bölümündeki seçimiyle eşleşir.",
       "save": "Kaydet",
       "clearDefault": "Varsayılan ajanı temizle",
       "autoUnsupported": "Otomatik modu için bu ana makinede daha yeni bir Orca sürümü gerekir.",
@@ -799,7 +792,11 @@
         "description": "Her Codex hesabının ve kendi ~/.codex dizininin, diğerlerinde başlatılan konuşmaları sürdürmesine izin verir. Her hesabın geçmişini ayrı tutmak için kapatın. Kapatmak, zaten paylaşılmış hiçbir şeyi kaldırmaz.",
         "unsupported": "Bu ayarı orada değiştirmek için {{host}} üzerindeki Orca'yı güncelleyin.",
         "updateFailed": "{{host}} üzerindeki ayar güncellenemedi."
-      }
+      },
+      "installCliForTerminal": "Terminalde açmak için {{value0}} CLI'ını yükleyin.",
+      "chatRuntime": "Sohbet çalışma ortamı",
+      "chatChoiceTitle": "Sohbet veya CLI olarak aç",
+      "chatChoiceDescription": "Her ajanın sohbet olarak mı yoksa kendi CLI'ında mı açılacağını seçin."
     },
     "followSymlinkedDirectoriesKeywords": {
       "symlink": "sembolik bağlantı",
@@ -1298,6 +1295,10 @@
             }
           }
         }
+      },
+      "pluginNewFile": {
+        "unavailable": "{{value0}} artık kullanılamıyor. Eklentisini yeniden açın.",
+        "failed": "Dosya oluşturulamadı."
       }
     },
     "lib": {
@@ -11861,7 +11862,9 @@
             "secrets": "Eklentinin kendi şifreli kasasında gizli bilgileri saklar ve okur",
             "settingsOwn": "Eklentinin kendi ayarlarını okur ve değiştirir"
           },
-          "decisionFailed": "İzin kararı kaydedilemedi. Tekrar deneyin."
+          "decisionFailed": "İzin kararı kaydedilemedi. Tekrar deneyin.",
+          "fullAccessWarning": "Tam erişim: normal bir program gibi çalışır; dosyalarınızı okuyabilir, ağı kullanabilir ve başka programlar çalıştırabilir.",
+          "uiWarning": "Görünümünü çizmek için yayımcının kodunu Orca içinde çalıştırır. Orca neye erişebildiğini gösterir ve etkinleştirmeden önce sorar."
         },
         "PluginConsentProvenance": {
           "official": "Resmi",
@@ -12953,6 +12956,178 @@
               "windowsFailureDescription": "Windows Settings bölümünde Orca için bildirimleri etkinleştirin."
             }
           }
+        },
+        "PluginUpdateAllDialog": {
+          "review": "İncele"
+        },
+        "PluginUpdateReview": {
+          "title": "{{value0}} güncellemesini incele",
+          "back": "Geri",
+          "approve": "Onayla ve güncelle",
+          "explain": "Bu güncelleme, onayladığınız sürümden daha fazlasını istiyor. Yalnızca burada onaylarsanız yüklenir.",
+          "before": "Önce",
+          "after": "Sonra"
+        },
+        "PluginNotOfficialWarning": {
+          "unknownPublisher": "yayıncı",
+          "install": "Yüklemeden önce {{value0}} tarafına güvendiğinizden emin olun. Bu eklenti, yayıncının kodunu Orca içinde çalıştırır.",
+          "update": "Güncellemeden önce {{value0}} tarafına güvendiğinizden emin olun. Bu eklenti, yayıncının kodunu Orca içinde çalıştırır.",
+          "installed": "{{value0}} tarafına güvendiğinizden emin olun. Bu eklenti, yayıncının kodunu Orca içinde çalıştırır.",
+          "label": "Resmi bir eklenti değil:",
+          "translations": "Çeviriler Orca içindeki her metni değiştirebilir. {{value0}} tarafına güvendiğinizden emin olun."
+        },
+        "PluginCardAction": {
+          "installed": "Yüklendi",
+          "installing": "Yükleniyor…",
+          "reviewLabel": "{{value0}} eklentisini incele ve yükle",
+          "review": "İncele ve yükle",
+          "retry": "Tekrar dene"
+        },
+        "PluginContributionActionLanguage": {
+          "switch": "Dili değiştir",
+          "switchTo": "Dili {{value0}} olarak değiştir",
+          "switchBack": "Geri dön",
+          "switchBackFrom": "{{value0}} dilinden geri dön",
+          "failed": "Dil değiştirilemedi"
+        },
+        "PluginContributionActionPanel": {
+          "open": "Paneli aç",
+          "openName": "Paneli aç: {{value0}}"
+        },
+        "PluginContributionActionSyntax": {
+          "openExtension": "Herhangi bir {{value0}} dosyası aç",
+          "openFilename": "{{value0}} dosyasını aç"
+        },
+        "PluginDetailInfo": {
+          "previous": "Önceki",
+          "updated": "Güncellendi",
+          "license": "Lisans",
+          "whatsNew": "Yenilikler"
+        },
+        "PluginDetailPage": {
+          "back": "Eklentiler",
+          "info": "Bilgi",
+          "version": "Sürüm",
+          "latest": "En son",
+          "requires": "Gereksinim",
+          "requiresValue": "Orca {{value0}} veya üstü",
+          "categories": "Kategoriler",
+          "pluginId": "Eklenti kimliği",
+          "repository": "Depo"
+        },
+        "PluginDetailSections": {
+          "typeLanguagePack": "Arayüz dili",
+          "typeAppTheme": "Uygulama teması",
+          "typeTerminalTheme": "Terminal teması",
+          "typeIconTheme": "Dosya simgesi teması",
+          "typeSyntax": "Söz dizimi vurgulama",
+          "typeInstructions": "Ajan talimatları",
+          "typePanel": "Kenar çubuğu paneli",
+          "typeWorker": "Arka plan kodu",
+          "adds": "Orca'ya ekledikleri",
+          "replaces": "{{value0}} için kısayolunuzun yerini alır",
+          "changeShortcuts": "Kısayollar bölümünden değiştir",
+          "command": "Komut",
+          "access": "Erişebildikleri",
+          "accessLoading": "Eklenti okunuyor…",
+          "accessFailed": "Erişim bilgisi okunamadı",
+          "retry": "Tekrar dene",
+          "customEditor": "Düzenleyici"
+        },
+        "PluginFilterPopover": {
+          "kind": "Kategori",
+          "catalog": "Katalog",
+          "clear": "Filtreleri temizle",
+          "themes": "Temalar",
+          "languages": "Diller",
+          "icons": "Simgeler",
+          "commands": "Komutlar ve paneller",
+          "catalogLabel": "Kataloğa göre filtrele",
+          "editors": "Düzenleyiciler",
+          "remoteVms": "Uzak/VM",
+          "games": "Oyunlar",
+          "agents": "Ajanlar",
+          "integrations": "Entegrasyonlar"
+        },
+        "PluginInUseAction": {
+          "inUseDark": "Kullanımda · Koyu",
+          "inUseLight": "Kullanımda · Açık",
+          "inUse": "Kullanımda",
+          "useName": "{{value0}} kullan",
+          "use": "Kullan"
+        },
+        "PluginInstallConsent": {
+          "noOtherAccess": "Başka erişim yok",
+          "replacesShortcut": "{{value0}} ({{value1}}), {{value2}} için kısayolunuzun yerini alır.",
+          "updatesKeepApproval": "Güncellemeler yalnızca yeni erişim için tekrar sorar",
+          "fullAccessUpdates": "Güncellemeler kodunu sormadan değiştirebilir",
+          "editsFileTypes": "Orca'da {{value0}} dosyalarını açar ve düzenler. Açtığı dosyaları okuyabilir."
+        },
+        "PluginListEmptyStates": {
+          "noFilterMatches": "Bu filtrelerle eşleşen eklenti yok",
+          "clearBoth": "Aramayı ve filtreleri temizle",
+          "pageGone": "Bu eklenti artık yüklü değil veya listelenmiyor."
+        },
+        "PluginManager": {
+          "retry": "Tekrar dene",
+          "installed": "Yüklü",
+          "installedFailedTitle": "Yüklü eklentileriniz okunamadı.",
+          "updatesTitle": "Güncellemeler",
+          "refreshLabel": "Katalogları yenile",
+          "noResultsTitle": "“{{value0}}” ile eşleşen eklenti yok",
+          "noneInstalledTitle": "Yüklü eklenti yok",
+          "browseAll": "Tüm eklentilere göz at",
+          "resultCount": "{{value0}} eklenti eşleşiyor",
+          "resultCountOne": "1 eklenti eşleşiyor",
+          "updateAll": "Tümünü güncelle…",
+          "notFromCatalog": "katalog dışı",
+          "allInstalledTitle": "Katalogdaki tüm eklentiler yüklü",
+          "showInstalled": "Yüklü eklentileri göster"
+        },
+        "PluginManagerRows": {
+          "reinstall": "Yeniden yükle",
+          "crashedCount": "Art arda {{value0}} kez çöktü",
+          "crashed": "Başlatılırken çöktü",
+          "remove": "Kaldır…",
+          "review": "İncele",
+          "restart": "Yeniden başlat",
+          "viewError": "Hatayı görüntüle",
+          "copyId": "Eklenti kimliğini kopyala",
+          "checkUpdate": "Güncellemeyi denetle",
+          "bundledWithOrca": "Orca ile birlikte gelir",
+          "installName": "{{value0}} eklentisini yükle",
+          "crashedOnce": "Bir kez çöktü",
+          "updateLabel": "{{value0}} eklentisini {{value1}} sürümüne güncelle",
+          "update": "{{value0}} sürümüne güncelle",
+          "needsOrca": "Orca {{value0}} gerekli",
+          "rollbackTo": "{{value0}} sürümüne geri al…",
+          "copyContentHash": "İçerik karmasını kopyala",
+          "reviewUpdate": "Güncellemeyi incele",
+          "dataLoadFailed": "Dosyaları yüklenemedi"
+        },
+        "pluginInstallAction": {
+          "installed": "{{value0}} yüklendi",
+          "tryIt": "Dene",
+          "mismatch": "İndirilen dosya katalogla eşleşmedi. Hiçbir şey yüklenmedi.",
+          "catalogChanged": "Katalog değişti. Yenileyip tekrar deneyin.",
+          "blocked": "Orca'nın güvenlik listesi bu eklentiyi engelliyor.",
+          "downloadFailed": "İndirilemedi. Bağlantınızı kontrol edin."
+        },
+        "pluginThemeApply": {
+          "nowUsing": "Şu an kullanılan: {{value0}}",
+          "switchBack": "Geri dön"
+        },
+        "pluginConsentCopy": {
+          "addsCommands": "Komut ekler",
+          "addsPanel": "Panel ekler",
+          "contentOnly": "Yalnızca içerik",
+          "fullAccess": "Tam erişim",
+          "addsVmRecipes": "VM tarifleri ekler",
+          "opensAndEditsFiles": "Dosyaları açar ve düzenler",
+          "runsPluginCode": "Eklenti kodu çalıştırır"
+        },
+        "pluginTryAction": {
+          "incompleteLanguage": "Bu dil paketi geçiş yapılamayacak kadar eksik."
         }
       },
       "right": {
@@ -18004,7 +18179,13 @@
           "all": "Tümü",
           "installed": "Yüklü",
           "searchLabel": "Eklentileri ara",
-          "searchPlaceholder": "Eklentileri, kategorileri veya yayıncıları ara"
+          "searchPlaceholder": "Eklentileri, kategorileri veya yayıncıları ara",
+          "updates": "Güncellemeler",
+          "clearSearch": "Aramayı temizle",
+          "notInstalled": "Yüklü değil"
+        },
+        "PluginListRow": {
+          "official": "Resmi"
         }
       },
       "terminalPane": {
@@ -18202,6 +18383,13 @@
           "password": "Parola",
           "confirm": "Oturum aç",
           "cancel": "İptal"
+        },
+        "javaScriptDialog": {
+          "title": "{{origin}} diyor ki",
+          "anonymousTitle": "Bu sayfa diyor ki",
+          "confirm": "Tamam",
+          "cancel": "İptal",
+          "answer": "Yanıt"
         },
         "sitePermission": {
           "label": {
@@ -20017,7 +20205,7 @@
       "heroBody": "Bir defaya mahsus {{size}} MB indirilir. Bu sohbeti çalıştıran bilgisayardaki {{agent}} sohbetleri tarafından ortak kullanılır.",
       "heroBodyNoSize": "Bir defaya mahsus indirilir. Bu sohbeti çalıştıran bilgisayardaki {{agent}} sohbetleri tarafından ortak kullanılır.",
       "stripSize": "Bu sohbeti çalıştıran bilgisayara {{size}} MB indirilir",
-      "settingsHint": "Ayarlar › Sohbet › Sağlayıcılar bölümünden de erişilebilir",
+      "settingsHint": "Ayarlar › Ajanlar bölümünden de erişilebilir",
       "installShort": "Yükle",
       "tryAgain": "Yeniden dene",
       "cancelShort": "İptal",
@@ -22562,5 +22750,9 @@
       "needsPermission": "Ajan için izin gerekiyor",
       "statusStale": "Ajan durumu güncel değil"
     }
+  },
+  "wslDistroHold": {
+    "terminalStopped": "WSL dağıtımı {{distro}} durdurulduğu için Orca bu terminali başlatmadı. Dağıtımı başlatıp yeniden deneyin.",
+    "terminalUnverifiable": "Orca, WSL dağıtımı {{distro}} öğesinin çalışıp çalışmadığını denetleyemediği için bu terminali başlatmadı. Dağıtımı başlatıp yeniden deneyin."
   }
 }

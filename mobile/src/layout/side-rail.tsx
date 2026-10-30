@@ -2,129 +2,145 @@ import {
   createContext,
   useContext,
   useEffect,
-  useId,
   useMemo,
   useState,
   useSyncExternalStore,
   type ReactNode
 } from 'react'
-import { StyleSheet, View } from 'react-native'
+import { StyleSheet, useWindowDimensions, View } from 'react-native'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { useReservedRegions } from './reserved-regions'
+import { useKeyboardOcclusion } from '../platform/keyboard-occlusion'
+import {
+  getSideRailStrip,
+  hasTerminalDirectionPadSpace,
+  sideRailStripAboveKeyboard,
+  type SideRailStrip
+} from './side-rail-strip'
 
-export type SideRailEdge = 'left' | 'right'
+/** One screen's claim on the strip; each screen holds its own. */
+type SideRailOwner = symbol
 
-// Only a vertical status bar (iPhone Duo: 84pt) is this wide; landscape Dynamic Island insets stop at 62pt.
-const SIDE_RAIL_MIN_INSET = 72
-// Clears the clock and signal cluster at the top of the bar (it ends near 97pt unfolded and 147pt on the cover).
-const SIDE_RAIL_TOP_CLEARANCE = 156
+type RailContent = { owner: SideRailOwner; node: ReactNode }
 
-export function sideRailEdge(insets: { left: number; right: number }): SideRailEdge | null {
-  if (insets.right >= SIDE_RAIL_MIN_INSET) {
-    return 'right'
-  }
-  return insets.left >= SIDE_RAIL_MIN_INSET ? 'left' : null
-}
-
-type Claim = { id: string; node: ReactNode }
-
-// Latest claim wins; screens claim only while focused, so a covered screen never shows through.
-function createSideRailStore() {
-  let claims: Claim[] = []
+function createRailStore() {
+  let content: RailContent | null = null
   const listeners = new Set<() => void>()
-  const emit = () => listeners.forEach((listener) => listener())
+  const notify = () => {
+    for (const listener of listeners) {
+      listener()
+    }
+  }
   return {
+    read: () => content,
     subscribe: (listener: () => void) => {
       listeners.add(listener)
-      return () => listeners.delete(listener)
+      return () => {
+        listeners.delete(listener)
+      }
     },
-    top: () => claims.at(-1)?.node ?? null,
-    set: (id: string, node: ReactNode) => {
-      const index = claims.findIndex((claim) => claim.id === id)
-      claims =
-        index === -1
-          ? [...claims, { id, node }]
-          : claims.map((claim, i) => (i === index ? { id, node } : claim))
-      emit()
+    show: (owner: SideRailOwner, node: ReactNode) => {
+      content = { owner, node }
+      notify()
     },
-    release: (id: string) => {
-      claims = claims.filter((claim) => claim.id !== id)
-      emit()
+    // Only the screen that showed it takes it down, so a screen leaving never hides its successor's.
+    hide: (owner: SideRailOwner) => {
+      if (content?.owner === owner) {
+        content = null
+        notify()
+      }
     }
   }
 }
 
-type SideRailStore = ReturnType<typeof createSideRailStore>
+type RailStore = ReturnType<typeof createRailStore>
 
-const SideRailContext = createContext<{ edge: SideRailEdge | null; store: SideRailStore } | null>(
-  null
-)
+const SideRailContext = createContext<{
+  strip: SideRailStrip | null
+  directionPadAvailable: boolean
+  store: RailStore
+} | null>(null)
 
-// False for a screen a stack keeps mounted beneath the top one; its claim must not show over the screen on top.
-export const SideRailOnTopContext = createContext(true)
-
-// Which edge has a rail this screen may fill, or null when the window has none.
-export function useSideRailEdge(): SideRailEdge | null {
-  return useContext(SideRailContext)?.edge ?? null
-}
-
-// Show node in the rail while it is non-null and its screen is on top; pass null when there is nothing for it.
-export function useSideRailClaim(node: ReactNode | null): void {
-  const rail = useContext(SideRailContext)
-  const onTop = useContext(SideRailOnTopContext)
-  const id = useId()
-  const store = rail?.edge && onTop ? rail.store : null
-  const claiming = store !== null && node !== null
-  // Update in place so a re-render keeps the claim's position; release only when the claim ends.
-  useEffect(() => {
-    if (store !== null && node !== null) {
-      store.set(id, node)
-    }
-  }, [store, id, node])
-  useEffect(() => {
-    if (store === null || !claiming) {
-      return
-    }
-    return () => store.release(id)
-  }, [store, id, claiming])
-}
-
-// Owned by SideSafeArea: it already pads the rail edge, so the rail is that padding.
-export function SideRailProvider({
-  edge,
-  width,
-  bottom,
-  children
-}: {
-  edge: SideRailEdge | null
-  width: number
-  bottom: number
-  children: ReactNode
-}) {
-  const [store] = useState(createSideRailStore)
-  const value = useMemo(() => ({ edge, store }), [edge, store])
+/**
+ * Lets one screen draw controls in a side inset strip the screens are laid out clear of, such as
+ * the iPhone Duo's status column. Sits outside `SideSafeArea`, which pads every screen out of it.
+ */
+export function SideRailProvider({ children }: { children: ReactNode }) {
+  const [store] = useState(createRailStore)
+  const { width, height } = useWindowDimensions()
+  const insets = useSafeAreaInsets()
+  const { occlusions, hasFoldDivision } = useReservedRegions()
+  // Landscape, the keyboard covers the strip's bottom; the rail then holds fewer keys, not hidden ones.
+  const keyboard = Math.max(0, useKeyboardOcclusion())
+  const unoccludedStrip = useMemo(
+    () => getSideRailStrip({ windowWidth: width, windowHeight: height, insets, occlusions }),
+    [width, height, insets, occlusions]
+  )
+  const strip = useMemo(
+    () => sideRailStripAboveKeyboard(unoccludedStrip, keyboard),
+    [unoccludedStrip, keyboard]
+  )
+  // Keyboard clipping changes what fits now, not this device's shortcut defaults.
+  const directionPadAvailable =
+    hasFoldDivision === true || hasTerminalDirectionPadSpace(unoccludedStrip)
+  const value = useMemo(
+    () => ({ strip, directionPadAvailable, store }),
+    [strip, directionPadAvailable, store]
+  )
   return (
     <SideRailContext.Provider value={value}>
       {children}
-      {edge ? (
-        <View
-          style={[styles.rail, { [edge]: 0, width, paddingBottom: bottom }]}
-          pointerEvents="box-none"
-        >
-          <SideRailSlot store={store} />
-        </View>
-      ) : null}
+      <SideRailOutlet />
     </SideRailContext.Provider>
   )
 }
 
-function SideRailSlot({ store }: { store: SideRailStore }) {
-  const node = useSyncExternalStore(store.subscribe, store.top, store.top)
-  return node
+function SideRailOutlet() {
+  const context = useContext(SideRailContext)
+  const content = useSyncExternalStore(
+    context?.store.subscribe ?? (() => () => undefined),
+    () => context?.store.read() ?? null
+  )
+  const strip = context?.strip
+  if (!strip || !content) {
+    return null
+  }
+  return (
+    <View
+      style={[
+        styles.outlet,
+        { width: strip.width, top: strip.top, bottom: strip.bottom },
+        strip.side === 'right' ? { right: 0 } : { left: 0 }
+      ]}
+    >
+      {content.node}
+    </View>
+  )
+}
+
+/** The side strip this window has to draw in; null for a window without one. */
+export function useSideRailStrip(): SideRailStrip | null {
+  return useContext(SideRailContext)?.strip ?? null
+}
+
+export function useSideRailDirectionPadAvailable(): boolean {
+  return useContext(SideRailContext)?.directionPadAvailable ?? false
+}
+
+/** Draws `node` in the side strip while this screen is mounted; null draws nothing. */
+export function useSideRailContent(node: ReactNode | null): void {
+  // The store outlives strip changes, which replace the context value; re-registering on them would flash the rail.
+  const store = useContext(SideRailContext)?.store
+  const [owner] = useState(() => Symbol('side-rail-owner'))
+  useEffect(() => {
+    if (!store || node === null) {
+      return
+    }
+    store.show(owner, node)
+    return () => store.hide(owner)
+  }, [store, owner, node])
 }
 
 const styles = StyleSheet.create({
-  rail: {
-    position: 'absolute',
-    top: SIDE_RAIL_TOP_CLEARANCE,
-    bottom: 0
-  }
+  outlet: { position: 'absolute' }
 })

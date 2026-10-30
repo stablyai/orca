@@ -25,6 +25,7 @@ import {
   structuredAgentSessionMessageSelection
 } from '../../shared/structured-agent-session-option-view'
 import { readPiRpcModelOptions } from '../pi/rpc-options'
+import type { AgentModelCatalogLiveListing } from '../native-chat/agent-model-catalog/agent-model-catalog-entry'
 import { piScriptedChild } from '../pi/pi-scripted-child.test-fixture'
 import { peekOpenedAgentSessionRecordStore } from './agent-session-record-store-slot'
 import {
@@ -52,6 +53,7 @@ async function setup(
     catalog?: AgentSessionModelOption[]
     create?: true
     firstMessage?: string
+    initialCatalogListing?: AgentModelCatalogLiveListing
   } = {}
 ) {
   directory = await mkdtemp(join(tmpdir(), 'orca-pi-startup-'))
@@ -76,6 +78,16 @@ async function setup(
       : {}),
     ...script.deps
   })
+  const publication = host.deps.modelCatalog
+    ? vi.spyOn(host.deps.modelCatalog, 'recordLiveListing')
+    : null
+  if (options.initialCatalogListing) {
+    const open = host.deps.adapter.open
+    vi.spyOn(host.deps.adapter, 'open').mockImplementation(async (input) => ({
+      ...(await open(input)),
+      catalogListing: options.initialCatalogListing
+    }))
+  }
   if (options.catalog) {
     vi.spyOn(host.deps.modelCatalog!, 'read').mockResolvedValue({
       origin: 'probe',
@@ -136,7 +148,7 @@ async function setup(
   if (!attached.ok) {
     throw new Error(JSON.stringify(attached.refusal))
   }
-  return { script, host, caller, params: preparedParams, fence: attached.value.fence }
+  return { script, host, caller, publication, params: preparedParams, fence: attached.value.fence }
 }
 
 function envelope(method: string, fields: Record<string, unknown>) {
@@ -545,3 +557,72 @@ it('displays native gapped support and dispatches raw medium for seed and existi
     stateInputs(h.script).filter(({ command }) => command === 'set_thinking_level')
   ).toHaveLength(1)
 })
+
+it.each([false, true])(
+  'keeps project-only native menus editable without initial/delayed account promotion (initial=%s)',
+  async (initial) => {
+    const native = {
+      provider: 'project',
+      id: 'only',
+      reasoning: true,
+      thinkingLevelMap: { medium: null, high: null, xhigh: 'xhigh' }
+    }
+    const models = await readPiRpcModelOptions({ request: async () => ({ models: [native] }) })
+    const home = [
+      {
+        id: 'home/model',
+        label: 'Home',
+        isDefault: false,
+        efforts: [{ value: 'high', label: 'High' }]
+      }
+    ]
+    const h = await setup({
+      seed: { model: 'project/only', effort: 'medium' },
+      catalog: home,
+      native: { model: native, appliedEfforts: { medium: 'xhigh' } },
+      ...(initial
+        ? {
+            initialCatalogListing: {
+              models,
+              configuredDefault: {
+                modelId: 'project/only',
+                effort: 'xhigh'
+              }
+            }
+          }
+        : {})
+    })
+    h.script.releaseHandshake()
+    await vi.waitFor(() =>
+      expect(h.publication!.mock.calls.length).toBeGreaterThanOrEqual(initial ? 2 : 1)
+    )
+    expect(h.host.deps.modelCatalog!.peek(HOST_TEST_SESSION)).toBeNull()
+    const answer = await h.host.readOptions(HOST_TEST_SESSION)
+    expect(answer.models).toEqual(models)
+    expect(displayed(answer)).toMatchObject({ settable: true, kind: { currentValue: 'xhigh' } })
+    const seed = structuredAgentSessionSeedCatalog('pi')
+    const state = applyStructuredAgentSessionOptions(
+      createStructuredAgentSessionOptionState('pi', seed),
+      seed,
+      answer
+    )
+    expect(structuredAgentSessionMessageSelection(state)).toEqual({
+      model: 'project/only',
+      effort: 'medium'
+    })
+    const requests = h.script
+      .wire()
+      .filter((command) => command === 'get_state' || command === 'get_available_models')
+    await h.host.readOptions(HOST_TEST_SESSION)
+    await h.host.readOptions(HOST_TEST_SESSION)
+    expect(
+      h.script
+        .wire()
+        .filter((command) => command === 'get_state' || command === 'get_available_models')
+    ).toEqual(requests)
+    expect(peekOpenedAgentSessionRecordStore()!.getRecord(HOST_TEST_SESSION)?.options).toEqual({
+      model: 'project/only',
+      effort: 'medium'
+    })
+  }
+)

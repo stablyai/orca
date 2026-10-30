@@ -1,5 +1,6 @@
 import type { AgentSessionOptionCatalog, CatalogModel } from './agent-session-option-catalog'
 import { discoveredModel } from './structured-agent-session-discovered-model'
+import type { AgentType } from './agent-status-types'
 import {
   createStructuredAgentSessionOptionRecord,
   replaceStructuredAgentSessionAnsweredValues,
@@ -31,10 +32,11 @@ export {
 
 export function structuredAgentSessionOptionCatalog(
   seed: AgentSessionOptionCatalog,
-  result: AgentSessionOptionsResult
+  result: AgentSessionOptionsResult,
+  agent?: AgentType
 ): AgentSessionOptionCatalog {
   const models: CatalogModel[] = result.models.map((model) =>
-    discoveredModel(model, result.fastModeSupport?.supported === true)
+    discoveredModel(model, result.fastModeSupport?.supported === true, agent)
   )
   if (result.current.model && !models.some((model) => model.id === result.current.model)) {
     models.push({
@@ -140,7 +142,7 @@ export function applyStructuredAgentSessionModelCatalog(
     catalog.origin === 'unknown'
       ? []
       : catalog.models.map((model) =>
-          discoveredModel(model, catalog.fastModeSupport?.supported === true)
+          discoveredModel(model, catalog.fastModeSupport?.supported === true, state.record.agent)
         )
   if (catalog.origin === 'unknown' || (!installed && models.length === 0)) {
     return settleStructuredAgentSessionBuiltinCatalog(state)
@@ -205,7 +207,9 @@ export function applyStructuredAgentSessionOptions(
     ...state,
     optionsAnswerPresent: true,
     reportedEffort: state.record.agent === 'pi' ? current.reportedEffort : undefined,
-    catalog: installed ? state.catalog : structuredAgentSessionOptionCatalog(seed, result),
+    catalog: installed
+      ? state.catalog
+      : structuredAgentSessionOptionCatalog(seed, result, state.record.agent),
     fastModeRestricted:
       installed &&
       result.fastModeSupport?.supported === false &&

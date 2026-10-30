@@ -70,7 +70,7 @@ export function createProjectFieldActions(
               { ...args, value },
               { timeoutMs: 30_000 }
             )
-          : await window.api.gh.updateProjectItemField({ ...args, value })
+          : await window.api.gh.updateProjectItemField({ ...args, value, wakeWslDistro: true })
         : target.kind === 'environment'
           ? await callRuntimeRpc<GitHubProjectMutationResult>(
               target,
@@ -78,7 +78,7 @@ export function createProjectFieldActions(
               args,
               { timeoutMs: 30_000 }
             )
-          : await window.api.gh.clearProjectItemField(args)
+          : await window.api.gh.clearProjectItemField({ ...args, wakeWslDistro: true })
     } catch (error) {
       result = {
         ok: false,

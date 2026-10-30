@@ -2,6 +2,7 @@ import { memo, useRef } from 'react'
 import type { NativeChatRewindSurface } from './use-native-chat-rewind'
 import type { CommentMarkdownLinkClickHandler } from '@/components/sidebar/CommentMarkdown'
 import { NativeChatUserMessageRow } from './NativeChatUserMessageRow'
+import { NativeChatAgentMessageCard } from './NativeChatAgentMessageCard'
 import { NativeChatAssistantMessageRow } from './NativeChatAssistantMessageRow'
 import type {
   NativeChatMessage,
@@ -102,8 +103,23 @@ export const MessageRow = memo(function MessageRow(
   const { scrollToTop, returnToView } = useNativeChatRowNavigation(rowRef, onScrollMessageToTop)
 
   // Return after all hooks to preserve hook order when content disappears.
-  if (run === undefined && !rowHasContent(content)) {
+  if (run === undefined && !rowHasContent(content) && !message.agentStart) {
     return null
+  }
+
+  if (message.agentStart && message.from) {
+    return (
+      <div ref={rowRef} data-native-chat-message-id={message.id}>
+        <NativeChatAgentMessageCard
+          message={message}
+          from={message.from}
+          runtimeContext={runtimeContext}
+          onLinkClick={onLinkClick}
+          allowFileUriLinks={allowFileUriLinks}
+          onRefolded={returnToView}
+        />
+      </div>
+    )
   }
 
   const notice = isSystem ? nativeChatNoticeBlock(blocks) : undefined

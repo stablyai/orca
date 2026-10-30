@@ -1,6 +1,8 @@
-import { View, Text, TextInput, Pressable } from 'react-native'
+import { View, Text, Pressable } from 'react-native'
 import { MessageSquare, Plus, X } from 'lucide-react-native'
 import { MobileSyntaxSegments } from '../components/MobileSyntaxSegments'
+import { MessageBox } from '../components/composer-input/MessageBox'
+import { composerInputStyles } from '../components/composer-input/composer-input-styles'
 import { colors } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
@@ -128,44 +130,35 @@ export function DiffLineRow({
         </View>
       ) : null}
       {isCommenting ? (
-        <View style={styles.diffCommentComposer}>
-          <TextInput
-            style={[styles.textInput, styles.diffCommentInput]}
-            value={commentDraft}
-            onChangeText={onDraftChange}
-            placeholder={t('session.diffLineRow.notePlaceholder', 'Add review note')}
-            placeholderTextColor={colors.textMuted}
-            editable={!commentsBusy}
-            multiline
-            textAlignVertical="top"
-            autoFocus
-          />
-          <View style={styles.diffCommentComposerActions}>
+        <MessageBox
+          style={styles.diffCommentComposer}
+          value={commentDraft}
+          onChangeText={onDraftChange}
+          placeholder={t('session.diffLineRow.notePlaceholder', 'Add review note')}
+          editable={!commentsBusy}
+          autoFocus
+          onSend={() => {
+            if (commentLine !== undefined) {
+              onSubmitComment(commentLine)
+            }
+          }}
+          canSend={commentDraft.trim().length > 0 && !commentsBusy}
+          sendAccessibilityLabel={t('session.diffLineRow.saveNote', 'Save note')}
+          leading={
             <Pressable
-              style={styles.diffCommentSecondaryAction}
+              style={({ pressed }) => [
+                composerInputStyles.ghostButton,
+                pressed && composerInputStyles.pressed
+              ]}
               disabled={commentsBusy}
               onPress={onCancelComment}
+              accessibilityRole="button"
+              accessibilityLabel={t('common.cancel', 'Cancel')}
             >
-              <Text style={styles.diffCommentSecondaryText}>{t('common.cancel', 'Cancel')}</Text>
+              <X size={19} color={colors.textSecondary} strokeWidth={2} />
             </Pressable>
-            <Pressable
-              style={[
-                styles.diffCommentPrimaryAction,
-                (!commentDraft.trim() || commentsBusy) && styles.diffCommentButtonDisabled
-              ]}
-              disabled={!commentDraft.trim() || commentsBusy}
-              onPress={() => {
-                if (commentLine !== undefined) {
-                  onSubmitComment(commentLine)
-                }
-              }}
-            >
-              <Text style={styles.diffCommentPrimaryText}>
-                {t('session.diffLineRow.saveNote', 'Save note')}
-              </Text>
-            </Pressable>
-          </View>
-        </View>
+          }
+        />
       ) : null}
     </View>
   )

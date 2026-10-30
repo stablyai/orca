@@ -32,6 +32,7 @@ vi.mock('react-native', async () => {
   }
 })
 vi.mock('lucide-react-native', () => ({
+  ArrowUp: 'ArrowUp',
   Copy: 'Copy',
   MessageSquare: 'MessageSquare',
   Send: 'Send',

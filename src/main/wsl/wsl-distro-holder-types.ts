@@ -57,7 +57,7 @@ export type WslDistroHolder = {
   ): Promise<WslDistroHolderEnsureResult>
   /** Startup: keep holders a previous Orca left running, drop records that are provably stale. */
   adoptHolders(): Promise<WslDistroHolderAdoption[]>
-  /** Explicit stop only; the distro then idles out on WSL's own schedule. */
+  /** Explicit stop only; the distro then stops on WSL's schedule once nothing else runs in it. */
   release(distro: string): Promise<WslDistroHolderState>
   /** Every recorded holder (uninstall, hosts turned off); kills only verified holders. */
   releaseAll(options?: WslDistroHolderReleaseOptions): Promise<WslDistroHolderAdoption[]>

@@ -172,7 +172,9 @@ export function resolveAgentLaunchCommand(args: {
     command: withArgs(render(launchTokens), launchHead),
     resumeLaunch: {
       agentCommand: withArgs(resumeArgs),
-      ...(keptTokens.length !== rawTokens.length || resolvedOptions.permissionArgs
+      ...(keptTokens.length !== rawTokens.length ||
+      keptTokens.some((token, index) => token !== rawTokens[index]) ||
+      resolvedOptions.permissionArgs
         ? { agentArgs: resumeArgs }
         : {})
     },

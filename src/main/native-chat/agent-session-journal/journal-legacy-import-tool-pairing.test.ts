@@ -286,6 +286,7 @@ describe('legacy import tool identity', () => {
   ])('pairs Codex singleton %s and %s import records', async (callType, outputType) => {
     const { pairs } = await importRows(
       [
+        { type: 'session_meta', payload: { history_mode: 'paginated' } },
         {
           type: 'response_item',
           payload: {

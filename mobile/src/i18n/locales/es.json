@@ -1003,9 +1003,7 @@
       "empty": "Aún no hay atajos personalizados definidos.",
       "removeShortcut": "Eliminar {{label}}",
       "resetDefaults": "Restablecer valores predeterminados",
-      "resetDescription": "Mostrar todas las teclas de atajo integradas en su orden original",
-      "shortcutBar": "BARRA DE ATAJOS",
-      "shortcutBarDescription": "Activa o desactiva las teclas para mostrarlas u ocultarlas y mantén pulsado el control de arrastre para colocarlas en el orden que quieras en la barra de atajos de la terminal."
+      "resetDescription": "Mostrar todas las teclas de atajo integradas en su orden original"
     },
     "useCodexResetCreditAction": {
       "confirmTitle": "¿Usar un restablecimiento de límites de uso?",
@@ -1436,14 +1434,6 @@
     },
     "hostPendingCreationRow": {
       "creatingWorkspace": "Creando espacio de trabajo…"
-    },
-    "hostRailActions": {
-      "accounts": "Cuentas",
-      "closeSearch": "Cerrar búsqueda",
-      "floatingWorkspace": "Espacio de trabajo flotante",
-      "newWorkspace": "Nuevo espacio de trabajo",
-      "searchWorkspaces": "Buscar espacios de trabajo",
-      "tasks": "Tareas"
     },
     "hostScreenHeader": {
       "accounts": "Cuentas",
@@ -1897,16 +1887,8 @@
   },
   "session": {
     "accessoryKeys": {
-      "addCustomShortcut": "Agregar atajo personalizado",
       "dismissKeyboard": "Ocultar teclado",
-      "dismissKeyboardHint": "Oculta el teclado en pantalla y mantiene abierta la sesión de terminal actual.",
-      "paste": "Pegar",
-      "pasteFromClipboard": "Pegar desde el portapapeles",
-      "sendKey": "Enviar {{label}}",
-      "switchToBufferedInput": "Cambiar a la entrada de comandos en búfer",
-      "switchToDesktopMode": "Cambiar al modo de escritorio",
-      "switchToLiveInput": "Cambiar a la entrada directa en la terminal",
-      "switchToPhoneMode": "Cambiar al modo teléfono"
+      "sendKey": "Enviar {{label}}"
     },
     "activeContent": {
       "createTab": "Crear pestaña",
@@ -2032,21 +2014,12 @@
       "titleRight": "¿Cerrar las pestañas de la derecha?"
     },
     "commandDock": {
-      "commandPlaceholder": "Escribe un comando…",
       "liveInputHint": "El texto que escribes se envía directamente a la terminal activa.",
       "liveInputLabel": "Entrada al terminal en tiempo real",
       "sendCommand": "Enviar comando"
     },
     "contentRow": {
       "dismissCreationWarning": "Descartar la advertencia de creación del espacio de trabajo"
-    },
-    "diffCommentLineRow": {
-      "addNote": "Agregar nota en la línea {{line}}",
-      "deleteNote": "Eliminar nota de la línea {{line}}",
-      "diffLine": "{{title}}, línea {{line}} del diff",
-      "line": "Línea {{line}}",
-      "placeholder": "Agregar nota de revisión",
-      "saveNote": "Guardar nota"
     },
     "diffLineRow": {
       "addNoteLabel": "Agregar nota en la línea {{line}}",
@@ -2427,9 +2400,6 @@
       "unsavedMarkdown": "Cambios en Markdown sin guardar",
       "urlPrompt": "Introduce una URL o deja el campo en blanco para abrir una pestaña nueva."
     },
-    "sideRail": {
-      "backToWorktrees": "Volver a los worktrees"
-    },
     "sourceControlLaunchAgent": {
       "noEnabledAgent": "No se detectó ningún agente de IA habilitado en este host de espacio de trabajo.",
       "savedAgentUnavailable": "El agente guardado para esta acción no está disponible en el host de este espacio de trabajo."
@@ -2797,19 +2767,26 @@
     "notificationDisplayTest": {
       "accepted": "Prueba aceptada por el servicio de notificaciones push de Orca. Comprueba si recibes la notificación.",
       "connectDesktop": "Conéctate a un escritorio y vuelve a intentarlo.",
-      "description": "Envía una prueba a través del servicio de notificaciones push de Orca.",
+      "description": "Prueba la entrega de notificaciones push, o una notificación local si push no está disponible.",
       "desktopUnreachable": "No se pudo conectar con el escritorio. Vuelve a intentarlo.",
       "loadFailed": "No se pudieron cargar los escritorios emparejados.",
       "pairDesktop": "Empareja un escritorio y vuelve a intentarlo.",
       "pushServiceFailed": "No se pudo enviar a través del servicio de notificaciones push de Orca. Vuelve a intentarlo.",
       "rateLimited": "Demasiadas notificaciones. Vuelve a intentarlo más tarde.",
-      "reconnectPhone": "Vuelve a conectarte para registrar este teléfono para recibir notificaciones.",
       "sendButton": "Enviar notificación de prueba",
       "sendFailed": "No se pudo enviar la notificación push de prueba.",
       "sending": "Enviando…",
       "troubleReceivingAlerts": "¿Tienes problemas para recibir alertas?",
       "troubleshooting": "Solución de problemas",
-      "updateDesktop": "Actualiza tu escritorio para realizar esta prueba."
+      "localTitle": "Notificación de prueba",
+      "localBody": "Prueba de notificación local desde este teléfono.",
+      "localScheduled": "{{reason}} Prueba local programada. Comprueba si aparece la notificación. Esto solo comprueba la visualización, no la entrega de alertas de agentes.",
+      "disabled": "Las notificaciones están desactivadas en Orca. Actívalas e inténtalo de nuevo.",
+      "osDisabled": "Las notificaciones están desactivadas en los ajustes del sistema. Permítelas e inténtalo de nuevo.",
+      "noToken": "No hay ningún token push disponible en este teléfono.",
+      "unsupportedHost": "Este ordenador no admite notificaciones push. Actualízalo para recibirlas.",
+      "registrationPending": "El registro push aún no está listo en este ordenador. Inténtalo de nuevo en breve.",
+      "liveFallbackScheduled": "{{reason}} Prueba local programada. Comprueba si aparece la notificación. Las alertas en directo están disponibles mientras Orca está en ejecución y conectado."
     },
     "notificationSettingsScreen": {
       "description": "Recibe notificaciones en este dispositivo cuando un agente necesite tu intervención o termine una tarea.",

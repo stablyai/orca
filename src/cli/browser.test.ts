@@ -1,3 +1,6 @@
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const callMock = vi.fn()
@@ -65,6 +68,85 @@ describe('orca cli browser page targeting', () => {
 
     expect(callMock).toHaveBeenCalledTimes(1)
     expect(callMock).toHaveBeenCalledWith('browser.snapshot', { page: 'page-1' })
+  })
+
+  it('sends snapshot flags to the host and prints delta changes against the last tree', async () => {
+    queueFixtures(
+      callMock,
+      okFixture('req_snapshot', {
+        browserPageId: 'page-1',
+        snapshot: {
+          kind: 'delta',
+          revision: 3,
+          baseRevision: 2,
+          treeChange: { startLine: 4, deleteCount: 2, lines: ['- button "Save" [ref=e9]'] }
+        },
+        url: 'https://example.com',
+        title: 'Example'
+      })
+    )
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(
+      [
+        'snapshot',
+        '--page',
+        'page-1',
+        '--interactive',
+        '--depth',
+        '3',
+        '--selector',
+        'form',
+        '--delta'
+      ],
+      '/tmp/not-an-orca-worktree'
+    )
+
+    expect(callMock).toHaveBeenCalledWith('browser.snapshot', {
+      page: 'page-1',
+      interactive: true,
+      depth: 3,
+      selector: 'form',
+      delta: true
+    })
+    expect(log).toHaveBeenCalledWith(
+      [
+        'page: page-1',
+        'Example — https://example.com',
+        'revision 3: changes to revision 2; replace lines 5-6 with:',
+        '- button "Save" [ref=e9]'
+      ].join('\n')
+    )
+  })
+
+  it('saves screenshots where the CLI runs and prints the path instead of base64', async () => {
+    const screenshotDir = mkdtempSync(join(tmpdir(), 'orca-browser-shot-'))
+    vi.stubEnv('ORCA_BROWSER_SCREENSHOT_TMPDIR', screenshotDir)
+    queueFixtures(
+      callMock,
+      okFixture('req_shot', { data: Buffer.from('png-bytes').toString('base64'), format: 'png' }),
+      okFixture('req_unchanged', { data: '', format: 'png', changed: false })
+    )
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    try {
+      await main(['screenshot', '--page', 'page-1', '--json'], '/tmp/not-an-orca-worktree')
+      await main(['screenshot', '--page', 'page-1', '--if-changed'], '/tmp/not-an-orca-worktree')
+
+      const saved = JSON.parse(String(log.mock.calls[0][0])).result
+      expect(saved.data).toBeUndefined()
+      expect(saved.path).toBe(join(screenshotDir, 'req_shot-screenshot.png'))
+      expect(readFileSync(saved.path, 'utf8')).toBe('png-bytes')
+      expect(callMock).toHaveBeenLastCalledWith('browser.screenshot', {
+        page: 'page-1',
+        ifChanged: true
+      })
+      expect(log).toHaveBeenLastCalledWith(
+        'Screenshot unchanged since the last --if-changed capture; nothing saved'
+      )
+    } finally {
+      rmSync(screenshotDir, { recursive: true, force: true })
+    }
   })
 
   it('resolves current worktree only when --page is combined with --worktree current', async () => {

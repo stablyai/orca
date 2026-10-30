@@ -9,7 +9,9 @@ import path from 'node:path'
 import process from 'node:process'
 import { loadPluginSchemaModule } from './plugin-schema-module-loader.mjs'
 
-const { validatePluginFile } = loadPluginSchemaModule('installation/plugin-file-validation.ts')
+const { validatePluginFile, pluginManifestWarnings } = loadPluginSchemaModule(
+  'installation/plugin-file-validation.ts'
+)
 const { parsePluginManifest } = loadPluginSchemaModule('manifest/plugin-manifest.ts')
 const { pluginCatalogReleaseEntry } = loadPluginSchemaModule('catalog/plugin-catalog-release.ts')
 // Why the install code itself: the printed contentHash must be what Orca computes at install.
@@ -18,54 +20,21 @@ const { materializePluginGitTree } = loadPluginSchemaModule(
 )
 const { hashPluginTree } = loadPluginSchemaModule('../../main/plugins/plugin-content-hash.ts')
 const { gitExecFileAsync } = loadPluginSchemaModule('../../main/git/runner.ts')
-const { formatPluginSchemaIssues } = loadPluginSchemaModule('manifest/plugin-schema-issues.ts')
 const { isPluginRepositoryPath } = loadPluginSchemaModule('installation/plugin-path-safety.ts')
 const { parseGitRepositoryIdentity } = loadPluginSchemaModule('catalog/plugin-marketplace.ts')
 const { catalogImagesFromManifest } = loadPluginSchemaModule(
   'images/plugin-manifest-catalog-images.ts'
 )
-const ARTIFACT_PARSERS = {
-  themes: loadPluginSchemaModule('artifacts/plugin-theme-artifact.ts').parsePluginAppThemeArtifact,
-  terminalThemes: loadPluginSchemaModule('artifacts/plugin-terminal-theme-artifact.ts')
-    .parsePluginTerminalThemeArtifact,
-  iconThemes: loadPluginSchemaModule('artifacts/plugin-icon-theme-artifact.ts')
-    .parsePluginIconThemeArtifact
-}
-const { parsePluginLanguagePackArtifact } = loadPluginSchemaModule(
-  'artifacts/plugin-language-pack-artifact.ts'
+// Why shared: `orca plugin validate` runs these same strict artifact checks.
+const { strictPluginArtifactErrors } = loadPluginSchemaModule(
+  'authoring/plugin-strict-artifact-checks.ts'
 )
 
-// Why strict here: Orca skips unknown theme tokens and icon slots at runtime, so authors only
-// learn about a typo from this check.
-function artifactErrors(pluginDir, manifest) {
-  return Object.entries(ARTIFACT_PARSERS).flatMap(([point, parse]) =>
-    manifest.contributes[point].flatMap((contribution) => {
-      let text = ''
-      try {
-        text = readFileSync(path.join(pluginDir, ...contribution.path.split('/')), 'utf8')
-        parse(text, 'strict')
-        return []
-      } catch (error) {
-        const detail = error.issues
-          ? formatPluginSchemaIssues(error.issues, JSON.parse(text))
-          : error.message
-        return [`contributes.${point} "${contribution.id}" (${contribution.path}): ${detail}`]
-      }
-    })
-  )
-}
-
-// Why: Orca drops protected security copy from a pack at load, which authors would never notice.
-function languagePackErrors(pluginDir, manifest) {
-  return manifest.contributes.languagePacks.flatMap((pack) => {
-    const file = path.join(pluginDir, ...pack.path.split('/'))
-    const parsed = existsSync(file)
-      ? parsePluginLanguagePackArtifact(readFileSync(file, 'utf8'), 'strict')
-      : { ok: false, error: 'file not found' }
-    return parsed.ok
-      ? []
-      : [`contributes.languagePacks "${pack.locale}" (${pack.path}): ${parsed.error}`]
-  })
+function readPluginText(pluginDir) {
+  return (manifestPath) => {
+    const file = path.join(pluginDir, ...manifestPath.split('/'))
+    return existsSync(file) ? readFileSync(file, 'utf8') : null
+  }
 }
 
 async function git(cwd, args) {
@@ -130,13 +99,13 @@ async function catalogReleaseEntry(pluginDir) {
     rmSync(tree, { recursive: true, force: true })
   }
 }
-// Why a warning: only the official and community catalogs require it; a private catalog may not.
+// Why a warning: Orca derives the publisher from the owner; older Orca refuses a declared one that differs.
 async function publisherOwnerWarning(pluginDir) {
   const remote = await git(pluginDir, ['remote', 'get-url', 'origin']).catch(() => '')
   const owner = parseGitRepositoryIdentity(remote)?.owner
   const { publisher } = JSON.parse(readFileSync(path.join(pluginDir, 'orca-plugin.json'), 'utf8'))
-  return owner && owner.toLowerCase() !== publisher.toLowerCase()
-    ? `warning: the official and community catalogs require publisher to match the repository owner "${owner}" (publisher is "${publisher}")`
+  return owner && typeof publisher === 'string' && owner.toLowerCase() !== publisher.toLowerCase()
+    ? `warning: Orca lists this plugin under the repository owner "${owner.toLowerCase()}", and older Orca refuses it because publisher is "${publisher}"; remove publisher or set it to "${owner.toLowerCase()}"`
     : null
 }
 
@@ -181,10 +150,15 @@ for (const target of targets) {
     const errors = validatePluginFile(path.basename(file), raw, readCatalogFile)
     if (errors.length === 0 && path.basename(file) === 'orca-plugin.json') {
       const { manifest } = parsePluginManifest(raw)
-      errors.push(...artifactErrors(root, manifest), ...languagePackErrors(root, manifest))
+      errors.push(...strictPluginArtifactErrors(manifest, readPluginText(root)))
     }
     for (const error of errors) {
       console.error(`${file}: ${error}`)
+    }
+    if (errors.length === 0 && path.basename(file) === 'orca-plugin.json') {
+      for (const warning of pluginManifestWarnings(raw)) {
+        console.warn(`${file}: warning: ${warning}`)
+      }
     }
     failed ||= errors.length > 0
     if (errors.length === 0) {

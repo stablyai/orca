@@ -68,7 +68,8 @@ export function projectAgentLaunchProfile(
   const kept = removeOverriddenAgentSessionArgs(agent, values, parsed.tokens)
   const launch = resolveAgentSessionOptionLaunch(agent, values, [], false, parsed.tokens)
   const raw =
-    kept.length === parsed.tokens.length
+    kept.length === parsed.tokens.length &&
+    kept.every((token, index) => token === parsed.tokens[index])
       ? userArgs
       : kept.map((token) => quoteStartupArg(token, shell)).join(' ')
   if (input.target === 'structured') {
