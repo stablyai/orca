@@ -1,3 +1,4 @@
+import { concentricRadius } from '../theme/mobile-theme'
 import { themedStyleSheet, colors, radii, spacing, typography } from './mobile-tasks-dependencies'
 
 export const mobileTasksComposerActionStyles = themedStyleSheet(() => ({
@@ -39,7 +40,7 @@ export const mobileTasksComposerActionStyles = themedStyleSheet(() => ({
     borderWidth: 1,
     borderColor: colors.borderSubtle,
     backgroundColor: colors.bgPanel,
-    borderRadius: radii.input,
+    borderRadius: radii.control,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm + 2
   },
@@ -51,7 +52,7 @@ export const mobileTasksComposerActionStyles = themedStyleSheet(() => ({
   issueSourceBox: {
     borderWidth: 1,
     borderColor: colors.borderSubtle,
-    borderRadius: radii.card,
+    borderRadius: radii.surface,
     backgroundColor: colors.bgPanel,
     padding: spacing.sm,
     gap: spacing.xs
@@ -64,14 +65,14 @@ export const mobileTasksComposerActionStyles = themedStyleSheet(() => ({
     flexDirection: 'row',
     borderWidth: 1,
     borderColor: colors.borderSubtle,
-    borderRadius: radii.input,
+    borderRadius: radii.control,
     backgroundColor: colors.bgBase,
     padding: 2,
     gap: 2
   },
   issueSourceSegmentButton: {
     flex: 1,
-    borderRadius: radii.input - 2,
+    borderRadius: concentricRadius(radii.control, 2),
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.xs
   },
@@ -101,7 +102,7 @@ export const mobileTasksComposerActionStyles = themedStyleSheet(() => ({
   inlineSaveButton: {
     alignSelf: 'flex-start',
     marginTop: spacing.sm,
-    borderRadius: radii.button,
+    borderRadius: radii.control,
     borderWidth: 1,
     borderColor: colors.borderSubtle,
     paddingHorizontal: spacing.md,
@@ -109,7 +110,7 @@ export const mobileTasksComposerActionStyles = themedStyleSheet(() => ({
   },
   inlineSaveButtonCompact: {
     alignSelf: 'flex-start',
-    borderRadius: radii.button,
+    borderRadius: radii.control,
     borderWidth: 1,
     borderColor: colors.borderSubtle,
     paddingHorizontal: spacing.sm,
@@ -136,7 +137,7 @@ export const mobileTasksComposerActionStyles = themedStyleSheet(() => ({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: radii.button,
+    borderRadius: radii.control,
     borderWidth: 1,
     borderColor: colors.borderSubtle,
     paddingVertical: spacing.sm
@@ -152,7 +153,7 @@ export const mobileTasksComposerActionStyles = themedStyleSheet(() => ({
     alignItems: 'center',
     justifyContent: 'center',
     gap: spacing.xs,
-    borderRadius: radii.button,
+    borderRadius: radii.control,
     backgroundColor: colors.textPrimary,
     paddingVertical: spacing.sm
   },
@@ -169,7 +170,7 @@ export const mobileTasksComposerActionStyles = themedStyleSheet(() => ({
   createButton: {
     marginTop: spacing.sm,
     backgroundColor: colors.textPrimary,
-    borderRadius: radii.button,
+    borderRadius: radii.control,
     paddingVertical: spacing.sm + 2,
     alignItems: 'center'
   },

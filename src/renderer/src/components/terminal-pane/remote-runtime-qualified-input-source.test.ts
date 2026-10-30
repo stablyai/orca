@@ -163,6 +163,7 @@ it.each(['same', 'replace'] as const)(
       inferIntentFromExactTerminalInput: () => null,
       pendingTerminalInputIntentFor: () => null,
       markAcceptedTerminalInputSent: vi.fn(),
+      noteTerminalInputForPty: vi.fn(),
       observeAcceptedShellCommandInput: vi.fn(),
       observeAcceptedTerminalInput: vi.fn(),
       observeSentTerminalInputIntent: vi.fn(),

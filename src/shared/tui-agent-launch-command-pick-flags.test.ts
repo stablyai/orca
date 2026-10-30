@@ -190,3 +190,29 @@ it('retains same-token-count Claude settings rewrites in projection and Restart'
   })
   expect(conflict).toMatchObject({ ok: false, error: expect.stringContaining('conflicts') })
 })
+
+it('lowers supplied independent Fast in complete known/opaque context without injecting it when absent', () => {
+  for (const model of ['sonnet', 'host-private']) {
+    for (const fastMode of [true, false]) {
+      const result = launch({
+        agentArgs: `--settings '{"theme":"light"}' --add-dir docs`,
+        sessionOptions: { model, fastMode },
+        sessionOptionsOverrideAgentArgs: true
+      })
+      const parsed = tokenizeStartupCommand(result.command, 'posix')
+      expect(parsed.ok).toBe(true)
+      if (!parsed.ok) {
+        throw new Error('unparseable terminal plan')
+      }
+      expect(parsed.tokens.filter((token) => token === '--model')).toHaveLength(1)
+      expect(parsed.tokens[parsed.tokens.indexOf('--model') + 1]).toBe(model)
+      const settings = parsed.tokens[parsed.tokens.lastIndexOf('--settings') + 1]
+      expect(JSON.parse(settings)).toEqual({ theme: 'light', fastMode })
+      expect(parsed.tokens[parsed.tokens.indexOf('--add-dir') + 1]).toBe('docs')
+      expect(result.appliedSessionOptions).toMatchObject({ model, fastMode })
+    }
+  }
+  const absent = launch({ agentArgs: '--add-dir docs', sessionOptions: { model: 'sonnet' } })
+  expect(absent.command).not.toContain('--settings')
+  expect(absent.appliedSessionOptions).not.toHaveProperty('fastMode')
+})

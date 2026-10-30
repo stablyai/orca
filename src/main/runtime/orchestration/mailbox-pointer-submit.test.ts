@@ -23,23 +23,20 @@ describe('orchestration mailbox pointer submit', () => {
     const ptyId = 'pty-reused'
     const oldReservation = { ptyId, processIncarnation: 'inc-old' }
     const replacementReservation = { ptyId, processIncarnation: 'inc-new' }
-    const leaf = {
-      tabId: 'tab-1',
-      leafId: 'leaf-1',
+    const terminal = {
       ptyId,
-      writable: true,
+      handle: 'term-reused',
+      paneKeys: ['tab-1:leaf-1'],
       lastAgentStatus: 'idle' as const,
-      lastAgentStatusObservedLive: true,
-      lastOscTitle: 'Codex done'
+      lastAgentStatusObservedLive: true
     }
     const expectedTarget = {
-      leaf,
-      terminalHandle: 'term-reused',
+      terminal,
       processIncarnation: oldReservation.processIncarnation
     }
     const state = new OrchestrationMailboxPointerState()
     const oldFlight = state.beginFlight(ptyId)
-    state.setWatermark('run:run-1', 1, ptyId, 'tab-1:leaf-1')
+    state.setWatermark('run:run-1', 1, ptyId)
     expect(db.stageMailboxPointerEnter([message.id], oldReservation)).toBe(true)
     expect(db.markMailboxPointerWriteAttempted([message.id], oldReservation)).toBe(true)
     let resolveWrite!: (settlement: WriteSettlement) => void
@@ -62,7 +59,6 @@ describe('orchestration mailbox pointer submit', () => {
         redrive: vi.fn()
       },
       {
-        leaf,
         mailboxHandle: 'run:run-1',
         messages: [{ id: message.id, type: 'status' }],
         newestSequence: 1,
@@ -125,18 +121,16 @@ describe('orchestration mailbox pointer submit', () => {
   it('submits a staged pointer while its live PTY is cold parked', async () => {
     const ptyId = 'pty-parked'
     const mailboxHandle = 'run:run-1'
-    const leaf = {
-      tabId: 'tab-1',
-      leafId: 'leaf-1',
+    const terminal = {
       ptyId,
-      writable: true,
+      handle: 'term-parked',
+      paneKeys: ['tab-1:leaf-1'],
       lastAgentStatus: 'idle' as const,
-      lastAgentStatusObservedLive: true,
-      lastOscTitle: 'Codex done'
+      lastAgentStatusObservedLive: true
     }
     const state = new OrchestrationMailboxPointerState()
     const flight = state.beginFlight(ptyId)
-    state.setWatermark(mailboxHandle, 1, ptyId, 'tab-1:leaf-1')
+    state.setWatermark(mailboxHandle, 1, ptyId)
     const writePty = vi.fn(settledWriteStub())
     const markMailboxPointerEnterAttempted = vi.fn(() => true)
     const resolveMailbox = vi.fn(() => mailboxHandle)
@@ -144,8 +138,7 @@ describe('orchestration mailbox pointer submit', () => {
       state.settleFlight(ptyId, flight)
     })
     const target = {
-      leaf,
-      terminalHandle: 'term-parked',
+      terminal,
       processIncarnation: 'inc-parked'
     }
 
@@ -168,7 +161,6 @@ describe('orchestration mailbox pointer submit', () => {
         redrive: vi.fn()
       },
       {
-        leaf,
         mailboxHandle,
         messages: [{ id: 'msg-1', type: 'status' }],
         newestSequence: 1,
@@ -181,9 +173,7 @@ describe('orchestration mailbox pointer submit', () => {
     await vi.waitFor(() => expect(settle).toHaveBeenCalledOnce())
     expect(writePty).toHaveBeenCalledOnce()
     expect(writePty).toHaveBeenCalledWith(ptyId, '\r')
-    expect(resolveMailbox).toHaveBeenCalledWith(leaf, undefined, {
-      terminalHandle: 'term-parked'
-    })
+    expect(resolveMailbox).toHaveBeenCalledWith(terminal, mailboxHandle)
     expect(markMailboxPointerEnterAttempted.mock.invocationCallOrder[0]).toBeLessThan(
       writePty.mock.invocationCallOrder[0]!
     )
@@ -192,19 +182,17 @@ describe('orchestration mailbox pointer submit', () => {
   it('holds the Enter while a dialog is open and submits once the agent is idle again', async () => {
     const ptyId = 'pty-question'
     const mailboxHandle = 'run:run-1'
-    const leaf = {
-      tabId: 'tab-1',
-      leafId: 'leaf-1',
+    const terminal = {
       ptyId,
-      writable: true,
+      handle: 'term-question',
+      paneKeys: ['tab-1:leaf-1'],
       lastAgentStatus: 'idle' as const,
-      lastAgentStatusObservedLive: true,
-      lastOscTitle: '✳ Claude Code'
+      lastAgentStatusObservedLive: true
     }
-    const target = { leaf, terminalHandle: 'term-question', processIncarnation: 'inc-question' }
+    const target = { terminal, processIncarnation: 'inc-question' }
     const state = new OrchestrationMailboxPointerState()
     const flight = state.beginFlight(ptyId)
-    state.setWatermark(mailboxHandle, 1, ptyId, 'tab-1:leaf-1')
+    state.setWatermark(mailboxHandle, 1, ptyId)
     let dialogOpen = true
     const writePty = vi.fn(settledWriteStub())
     const markMailboxPointerEnterAttempted = vi.fn(() => true)
@@ -230,7 +218,6 @@ describe('orchestration mailbox pointer submit', () => {
         redrive: vi.fn()
       },
       {
-        leaf,
         mailboxHandle,
         messages: [{ id: 'msg-1', type: 'status' }],
         newestSequence: 1,
@@ -266,26 +253,23 @@ describe('orchestration mailbox pointer submit', () => {
   ])('handles a parked target that becomes %s', async (_name, targetOverride, shouldSubmit) => {
     const ptyId = 'pty-parked'
     const mailboxHandle = 'run:run-1'
-    const leaf = {
-      tabId: 'tab-1',
-      leafId: 'leaf-1',
+    const terminal = {
       ptyId,
-      writable: true,
+      handle: 'term-parked',
+      paneKeys: ['tab-1:leaf-1'],
       lastAgentStatus: 'idle' as const,
-      lastAgentStatusObservedLive: true,
-      lastOscTitle: 'Codex done'
+      lastAgentStatusObservedLive: true
     }
     const expectedTarget = {
-      leaf,
-      terminalHandle: 'term-parked',
+      terminal,
       processIncarnation: 'inc-parked'
     }
     const currentTarget = targetOverride
-      ? { ...expectedTarget, leaf: { ...leaf, ...targetOverride } }
+      ? { ...expectedTarget, terminal: { ...terminal, ...targetOverride } }
       : null
     const state = new OrchestrationMailboxPointerState()
     const flight = state.beginFlight(ptyId)
-    state.setWatermark(mailboxHandle, 1, ptyId, 'tab-1:leaf-1')
+    state.setWatermark(mailboxHandle, 1, ptyId)
     const releaseMailboxPointerEnter = vi.fn()
     const writePty = vi.fn(settledWriteStub())
     const settle = vi.fn(() => state.settleFlight(ptyId, flight))
@@ -313,7 +297,6 @@ describe('orchestration mailbox pointer submit', () => {
         redrive
       },
       {
-        leaf,
         mailboxHandle,
         messages: [{ id: 'msg-1', type: 'status' }],
         newestSequence: 1,
@@ -373,23 +356,21 @@ describe('orchestration mailbox pointer submit', () => {
       }
     ]
 
+    const current = {
+      ptyId: 'pty-current',
+      handle: 'term-current',
+      paneKeys: ['tab:leaf'],
+      lastAgentStatus: 'idle' as const,
+      lastAgentStatusObservedLive: true
+    }
     const resumed = resumePendingOrchestrationMailboxPointer({
       deps: {
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: resume calls only releaseMailboxPointerEnter here.
         getDb: () => ({ releaseMailboxPointerEnter }) as never,
-        resolveSubmitTarget: () => ({
-          leaf: {} as never,
-          terminalHandle: 'term-current',
-          processIncarnation: 'inc-current'
-        })
-      } as never,
-      state: new OrchestrationMailboxPointerState(),
-      leaf: { ptyId: 'pty-current' } as never,
-      mailboxHandle: 'run:run-1',
-      messages,
-      enterDelayMs: 0,
-      leafKey: 'tab:leaf',
-      settle: vi.fn(),
-      redrive: vi.fn()
+        resolveSubmitTarget: () => ({ terminal: current, processIncarnation: 'inc-current' })
+      },
+      terminal: current,
+      messages
     })
 
     expect(resumed).toBe(false)
@@ -409,23 +390,20 @@ describe('orchestration mailbox pointer submit', () => {
   it('does not submit after the parked PTY incarnation is replaced', async () => {
     const ptyId = 'pty-parked'
     const mailboxHandle = 'run:run-1'
-    const leaf = {
-      tabId: 'tab-1',
-      leafId: 'leaf-1',
+    const terminal = {
       ptyId,
-      writable: true,
+      handle: 'term-parked',
+      paneKeys: ['tab-1:leaf-1'],
       lastAgentStatus: 'idle' as const,
-      lastAgentStatusObservedLive: true,
-      lastOscTitle: 'Codex done'
+      lastAgentStatusObservedLive: true
     }
     const expectedTarget = {
-      leaf,
-      terminalHandle: 'term-parked',
+      terminal,
       processIncarnation: 'inc-original'
     }
     const state = new OrchestrationMailboxPointerState()
     const flight = state.beginFlight(ptyId)
-    state.setWatermark(mailboxHandle, 1, ptyId, 'tab-1:leaf-1')
+    state.setWatermark(mailboxHandle, 1, ptyId)
     const releaseMailboxPointerEnter = vi.fn()
     const writePty = vi.fn(settledWriteStub())
     const settle = vi.fn(() => state.settleFlight(ptyId, flight))
@@ -444,7 +422,6 @@ describe('orchestration mailbox pointer submit', () => {
         redrive: vi.fn()
       },
       {
-        leaf,
         mailboxHandle,
         messages: [{ id: 'msg-1', type: 'status' }],
         newestSequence: 1,
@@ -466,23 +443,20 @@ describe('orchestration mailbox pointer submit', () => {
   it('settles without redriving when teardown closes the database before rollback', async () => {
     const ptyId = 'pty-teardown'
     const mailboxHandle = 'run:run-teardown'
-    const leaf = {
-      tabId: 'tab-teardown',
-      leafId: 'leaf-teardown',
+    const terminal = {
       ptyId,
-      writable: true,
+      handle: 'term-teardown',
+      paneKeys: ['tab-teardown:leaf-teardown'],
       lastAgentStatus: 'idle' as const,
-      lastAgentStatusObservedLive: true,
-      lastOscTitle: 'Codex done'
+      lastAgentStatusObservedLive: true
     }
     const expectedTarget = {
-      leaf,
-      terminalHandle: 'term-teardown',
+      terminal,
       processIncarnation: 'inc-teardown'
     }
     const state = new OrchestrationMailboxPointerState()
     const flight = state.beginFlight(ptyId)
-    state.setWatermark(mailboxHandle, 1, ptyId, 'tab-teardown:leaf-teardown')
+    state.setWatermark(mailboxHandle, 1, ptyId)
     const settle = vi.fn(() => state.settleFlight(ptyId, flight))
     const redrive = vi.fn()
 
@@ -506,7 +480,6 @@ describe('orchestration mailbox pointer submit', () => {
         redrive
       },
       {
-        leaf,
         mailboxHandle,
         messages: [{ id: 'msg-teardown', type: 'status' }],
         newestSequence: 1,
@@ -525,34 +498,25 @@ describe('orchestration mailbox pointer submit', () => {
     ['Enter acceptance', MAILBOX_POINTER_ENTER_ATTEMPTED]
   ])('fails closed after restart following %s before durable settlement', (_boundary, phase) => {
     const ptyId = 'pty-surviving'
-    const mailboxHandle = 'run:run-surviving'
-    const leaf = {
-      tabId: 'tab-surviving',
-      leafId: 'leaf-surviving',
+    const terminal = {
       ptyId,
-      writable: true,
+      handle: 'term-surviving',
+      paneKeys: ['tab-surviving:leaf-surviving'],
       lastAgentStatus: 'idle' as const,
-      lastAgentStatusObservedLive: true,
-      lastOscTitle: 'Codex done'
+      lastAgentStatusObservedLive: true
     }
     const target = {
-      leaf,
-      terminalHandle: 'term-surviving',
+      terminal,
       processIncarnation: 'inc-surviving'
     }
     const settleMailboxPointerEnter = vi.fn()
     const releaseMailboxPointerEnter = vi.fn()
-    const writePty = vi.fn(settledWriteStub())
-
     const resumed = resumePendingOrchestrationMailboxPointer({
       deps: {
         getDb: () => ({ settleMailboxPointerEnter, releaseMailboxPointerEnter }) as never,
-        resolveSubmitTarget: () => target,
-        writePty
-      } as never,
-      state: new OrchestrationMailboxPointerState(),
-      leaf,
-      mailboxHandle,
+        resolveSubmitTarget: () => target
+      },
+      terminal,
       messages: [
         {
           id: 'msg-surviving',
@@ -562,11 +526,7 @@ describe('orchestration mailbox pointer submit', () => {
           pointer_pty_id: ptyId,
           pointer_process_incarnation: target.processIncarnation
         }
-      ],
-      enterDelayMs: 0,
-      leafKey: 'tab-surviving:leaf-surviving',
-      settle: vi.fn(),
-      redrive: vi.fn()
+      ]
     })
 
     expect(resumed).toBe(true)
@@ -576,6 +536,5 @@ describe('orchestration mailbox pointer submit', () => {
       [MAILBOX_POINTER_WRITE_ATTEMPTED, MAILBOX_POINTER_ENTER_ATTEMPTED]
     )
     expect(releaseMailboxPointerEnter).not.toHaveBeenCalled()
-    expect(writePty).not.toHaveBeenCalled()
   })
 })

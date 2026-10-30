@@ -12,11 +12,12 @@ import {
 } from '../../../shared/orchestration-check-output'
 import { callOrchestrationMutation } from './mutation-request'
 import { resolveOrchestrationTerminalHandle } from './terminal-identity'
+import { withReceiptNext } from './receipt-next-text'
 
 export const ORCHESTRATION_INBOX_HANDLERS: Record<string, CommandHandler> = {
   'orchestration reply': async ({ flags, client, cwd, json }) => {
     const from = await resolveOrchestrationTerminalHandle(flags, cwd, client, 'from')
-    const result = await callOrchestrationMutation<{ message: { id: string } }>(
+    const result = await callOrchestrationMutation<{ message: { id: string }; next?: string }>(
       client,
       flags,
       'orchestration.reply',
@@ -27,7 +28,7 @@ export const ORCHESTRATION_INBOX_HANDLERS: Record<string, CommandHandler> = {
         from
       }
     )
-    printResult(result, json, (value) => `Replied ${value.message.id}`)
+    printResult(result, json, (value) => withReceiptNext(`Replied ${value.message.id}`, value))
   },
 
   'orchestration inbox': async ({ flags, client, json }) => {

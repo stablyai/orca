@@ -180,23 +180,25 @@ export function resolveRunScope(runtime: OrcaRuntimeService, params: RunScopePar
       'The coordinator terminal has no stable pane identity.'
     )
   }
-  const current = db.getCurrentRunForCoordinator(caller)
+  const run = explicit
+    ? db.getCoordinatedRun(caller, explicit.id)
+    : db.getCurrentRunForCoordinator(caller)
+  if (run) {
+    return run
+  }
   // A worker naming its own or ancestor Run needs its Dispatch mailbox, not a binding change.
-  const workerRefusal =
-    explicit && current?.id !== explicit.id
-      ? workerRunBindingRefusal(db, caller, explicit.id, { takeover: false, bind: false })
-      : null
+  const workerRefusal = explicit
+    ? workerRunBindingRefusal(db, caller, explicit.id, { takeover: false, bind: false })
+    : null
   if (workerRefusal) {
     throw workerRefusal
   }
-  if (!current) {
+  const current = explicit ? db.getCurrentRunForCoordinator(caller) : undefined
+  if (!explicit || !current) {
     throw unboundCallerError(db, caller, explicit)
   }
-  if (explicit && current.id !== explicit.id) {
-    throw new OrchestrationError(
-      'consumer_fenced',
-      `This caller is bound to Run ${current.id}, not Run ${explicit.id}. Nothing changed.`
-    )
-  }
-  return current
+  throw new OrchestrationError(
+    'consumer_fenced',
+    `This caller is bound to Run ${current.id}, not Run ${explicit.id}. Nothing changed.`
+  )
 }

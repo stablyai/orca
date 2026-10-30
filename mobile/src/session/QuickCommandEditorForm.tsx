@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { View, Text, Pressable, Switch } from 'react-native'
 import { ChevronDown, ChevronRight } from 'lucide-react-native'
-import { colors, spacing, radii, typography } from '../theme/mobile-theme'
+import { colors, concentricRadius, radii, spacing, typography } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { MobileAgentIcon } from '../components/MobileAgentIcon'
 import { MessageBox } from '../components/composer-input/MessageBox'
@@ -326,7 +326,7 @@ const styles = themedStyleSheet(() => ({
   toggleItem: {
     flex: 1,
     height: 40,
-    borderRadius: 8,
+    borderRadius: concentricRadius(radii.control, 2),
     borderWidth: 1,
     borderColor: colors.borderSubtle,
     backgroundColor: colors.bgPanel,
@@ -342,7 +342,7 @@ const styles = themedStyleSheet(() => ({
     alignItems: 'center',
     justifyContent: 'space-between',
     backgroundColor: colors.bgPanel,
-    borderRadius: radii.input,
+    borderRadius: radii.control,
     borderWidth: 1,
     borderColor: colors.borderSubtle,
     paddingHorizontal: spacing.md,
@@ -370,7 +370,12 @@ const styles = themedStyleSheet(() => ({
   switchTitle: { fontSize: 14, color: colors.textPrimary },
   switchDesc: { fontSize: 12, color: colors.textMuted, marginTop: 1 },
   footer: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.sm },
-  button: { flex: 1, borderRadius: 8, paddingVertical: spacing.md, alignItems: 'center' },
+  button: {
+    flex: 1,
+    borderRadius: radii.control,
+    paddingVertical: spacing.md,
+    alignItems: 'center'
+  },
   cancelButton: { borderWidth: 1, borderColor: colors.borderSubtle },
   cancelText: { fontSize: 14, fontWeight: '600', color: colors.textPrimary },
   saveButton: { backgroundColor: colors.textPrimary },

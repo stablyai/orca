@@ -64,9 +64,6 @@ function fixture(title = 'Terminal', imagePath = '/tmp/orca-image.png', launchAg
         }
         return ok({ send: { accepted: true } })
       }
-      if (method === 'orchestration.workerTerminalUserInput') {
-        return ok({ changed: 1 })
-      }
       throw new Error(`unexpected request: ${method}`)
     }),
     subscribe: () => () => {},

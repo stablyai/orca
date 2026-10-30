@@ -115,12 +115,12 @@ async function journalWithNewerRow(
     newer,
     2_000
   )
-  return { rows: storedRows(), newer }
+  return { rows: await storedRows(), newer }
 }
 
-function storedRows(): string[] {
+async function storedRows(): Promise<string[]> {
   const rows = liveTestJournalRows(openTestJournalHostDatabase(directory).db, IDENTITY.sessionId)
-  closeTestJournalHostDatabase(directory)
+  await closeTestJournalHostDatabase(directory)
   return rows.map((row) => row.rowJson)
 }
 
@@ -204,7 +204,7 @@ describe('a chat a newer Orca saved, across versions', () => {
       const reopened = await journals.open({ identity: IDENTITY, stateDirectory: directory })
       expect(reopened.snapshot().items).toHaveLength(3)
       await journals.closeAll()
-      expect(storedRows()).toEqual(rows)
+      expect(await storedRows()).toEqual(rows)
 
       const checkout = await materializeReleaseCheckout(WRITABLE_BASELINE_REF)
       const support = await importReleaseCheckoutModule(
@@ -225,7 +225,7 @@ describe('a chat a newer Orca saved, across versions', () => {
       } finally {
         await older.closeAll()
       }
-      expect(storedRows()).not.toContain(newer)
+      expect(await storedRows()).not.toContain(newer)
     },
     SUITE_TIMEOUT_MS
   )

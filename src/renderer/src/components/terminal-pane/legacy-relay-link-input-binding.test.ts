@@ -168,6 +168,7 @@ it.each(['managed', 'unserved', 'recovered-inner'])(
       inferIntentFromExactTerminalInput: () => null,
       claimViewportForUserActivity: vi.fn(),
       markAcceptedTerminalInputSent: vi.fn(),
+      noteTerminalInputForPty: vi.fn(),
       observeAcceptedShellCommandInput: vi.fn(),
       observeAcceptedTerminalInput: vi.fn(),
       observeSentTerminalInputIntent: vi.fn(),

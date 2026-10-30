@@ -1,3 +1,4 @@
+import { withGitHubRepoExecution } from './github-repository-identity'
 import type { GitHubPRFile, GitHubPRFileContents } from '../../shared/github/pull-request-types'
 import { acquire, ghExecFileAsync, ghRepoExecOptions, githubRepoContext, release } from './gh-utils'
 import type { LocalGitExecOptions } from './gh-utils'
@@ -69,63 +70,70 @@ export async function getPRFileContents(args: {
   headSha: string
   baseSha: string
 }): Promise<GitHubPRFileContents> {
-  const { ownerRepo } = await resolveGitHubRepoExecution(
+  return withGitHubRepoExecution(
     args.repoPath,
-    args.prRepo,
     args.connectionId,
-    args.localGitOptions
-  )
-  if (!ownerRepo) {
-    return {
-      original: '',
-      modified: '',
-      originalIsBinary: false,
-      modifiedIsBinary: false
-    }
-  }
+    args.localGitOptions ?? {},
+    async () => {
+      const { ownerRepo } = await resolveGitHubRepoExecution(
+        args.repoPath,
+        args.prRepo,
+        args.connectionId,
+        args.localGitOptions
+      )
+      if (!ownerRepo) {
+        return {
+          original: '',
+          modified: '',
+          originalIsBinary: false,
+          modifiedIsBinary: false
+        }
+      }
 
-  await acquire()
-  try {
-    const needsOriginal = args.status !== 'added'
-    const needsModified = args.status !== 'removed'
-    const originalPath = args.oldPath ?? args.path
-    const [original, modified] = await Promise.all([
-      needsOriginal
-        ? fetchContentAtRef({
-            repoPath: args.repoPath,
-            connectionId: args.connectionId,
-            localGitOptions: args.localGitOptions,
-            ownerRepo,
-            path: originalPath,
-            ref: args.baseSha
-          })
-        : Promise.resolve<{ content: string; isBinary: boolean; tooLarge?: boolean }>({
-            content: '',
-            isBinary: false
-          }),
-      needsModified
-        ? fetchContentAtRef({
-            repoPath: args.repoPath,
-            connectionId: args.connectionId,
-            localGitOptions: args.localGitOptions,
-            ownerRepo,
-            path: args.path,
-            ref: args.headSha
-          })
-        : Promise.resolve<{ content: string; isBinary: boolean; tooLarge?: boolean }>({
-            content: '',
-            isBinary: false
-          })
-    ])
-    return {
-      original: original.content,
-      modified: modified.content,
-      originalIsBinary: original.isBinary,
-      modifiedIsBinary: modified.isBinary,
-      originalTooLarge: original.tooLarge,
-      modifiedTooLarge: modified.tooLarge
+      await acquire()
+      try {
+        const needsOriginal = args.status !== 'added'
+        const needsModified = args.status !== 'removed'
+        const originalPath = args.oldPath ?? args.path
+        const [original, modified] = await Promise.all([
+          needsOriginal
+            ? fetchContentAtRef({
+                repoPath: args.repoPath,
+                connectionId: args.connectionId,
+                localGitOptions: args.localGitOptions,
+                ownerRepo,
+                path: originalPath,
+                ref: args.baseSha
+              })
+            : Promise.resolve<{ content: string; isBinary: boolean; tooLarge?: boolean }>({
+                content: '',
+                isBinary: false
+              }),
+          needsModified
+            ? fetchContentAtRef({
+                repoPath: args.repoPath,
+                connectionId: args.connectionId,
+                localGitOptions: args.localGitOptions,
+                ownerRepo,
+                path: args.path,
+                ref: args.headSha
+              })
+            : Promise.resolve<{ content: string; isBinary: boolean; tooLarge?: boolean }>({
+                content: '',
+                isBinary: false
+              })
+        ])
+        return {
+          original: original.content,
+          modified: modified.content,
+          originalIsBinary: original.isBinary,
+          modifiedIsBinary: modified.isBinary,
+          originalTooLarge: original.tooLarge,
+          modifiedTooLarge: modified.tooLarge
+        }
+      } finally {
+        release()
+      }
     }
-  } finally {
-    release()
-  }
+  )
 }

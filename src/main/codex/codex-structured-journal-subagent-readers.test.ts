@@ -15,7 +15,10 @@ import type { AgentSessionJournal } from '../native-chat/agent-session-journal/j
 import { createDeferredStructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import { createCodexJournalTranslator } from './codex-structured-journal-translation'
 import type { CodexThreadItem } from './codex-thread-item-identity'
-import { openTestJournalHostDatabase } from '../native-chat/agent-session-journal/journal-host-database-test-support'
+import {
+  closeTestJournalHostDatabases,
+  openTestJournalHostDatabase
+} from '../native-chat/agent-session-journal/journal-host-database-test-support'
 import { testEventSinkLogging } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
 import { codexProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
 
@@ -63,6 +66,7 @@ async function session() {
   cleanups.push(async () => {
     deferred.close()
     await journal.close()
+    await closeTestJournalHostDatabases()
     await rm(root, { recursive: true, force: true })
   })
   const translator = createCodexJournalTranslator({

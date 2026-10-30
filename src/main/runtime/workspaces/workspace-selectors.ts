@@ -19,8 +19,6 @@ import type {
 } from '../runtime-worktree-lineage-resolution'
 import type { OrchestrationDb } from '../orchestration/db/orchestration-db'
 import { resolveNestedWorkerMaxDepth } from '../../../shared/nested-worker-depth'
-import { resolveOrchestrationHeartbeatMinutes } from '../../../shared/orchestration-heartbeat'
-import { chatWorkerErrorEscalationEnabled } from '../orchestration/chat-worker-error-escalation'
 import type { WorkspaceLineage, WorktreeLineage } from '../../../shared/worktree/lineage-types'
 import type { WorkspaceKey } from '../../../shared/folder-workspace-types'
 import type { Repo } from '../../../shared/repo-types'
@@ -152,18 +150,10 @@ export abstract class RuntimeWorkspaceSelectors extends OrcaRuntimeWithResolveBr
     return this._orchestrationDb
   }
 
-  isChatWorkerErrorEscalationEnabled(): boolean {
-    return chatWorkerErrorEscalationEnabled(this.store?.getSettings?.())
-  }
-
   getNestedWorkerMaxDepth(): number {
     return resolveNestedWorkerMaxDepth({
       nestedWorkerMaxDepth: this.store?.getSettings?.()?.nestedWorkerMaxDepth
     })
-  }
-
-  getOrchestrationHeartbeatMinutes(): number | null {
-    return resolveOrchestrationHeartbeatMinutes(this.store?.getSettings?.())
   }
 
   hydrateInferredWorktreeLineage(): Promise<void> {

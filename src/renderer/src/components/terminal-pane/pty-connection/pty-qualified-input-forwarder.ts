@@ -1,6 +1,7 @@
 import type { PtyInputSource } from '../pty-input-source'
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
 import { useAppStore } from '@/store'
+import { isPassiveTerminalInputReport } from '../terminal-passive-input-report'
 import { isTerminalQueryReply } from '../../../../../shared/terminal-query-reply'
 import { isPtyLocked } from '@/lib/pane-manager/mobile-driver-state'
 import { isPaneReplaying } from '../replay-guard'
@@ -21,6 +22,7 @@ export type QualifiedPtyInputSession = Pick<
   | 'interruptStatusBaselineSequence'
   | 'isNativeWindowsConpty'
   | 'markAcceptedTerminalInputSent'
+  | 'noteTerminalInputForPty'
   | 'observeAcceptedShellCommandInput'
   | 'observeAcceptedTerminalInput'
   | 'observeSentTerminalInputIntent'
@@ -105,6 +107,9 @@ export function createQualifiedPtyInputForwarder(
     if (isTerminalQueryReply(data)) {
       session.sendDesktopQueryReplyImmediate(data)
       return
+    }
+    if (!wasUserInput && !isPassiveTerminalInputReport(data)) {
+      session.noteTerminalInputForPty(source?.ptyId ?? session.transport.getPtyId())
     }
     // Why xterm's provenance: its own focus reports reach onData too, and no person typed them.
     const inputKind = wasUserInput ? 'driving' : 'query-reply'

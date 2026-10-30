@@ -132,7 +132,8 @@ async function resolveAuthenticatedGitHubHost(
   localGitOptions: LocalGitExecOptions = {}
 ): Promise<string | null | undefined> {
   const normalizedHost = normalizeGitHubHost(host)?.authority ?? host.trim().toLowerCase()
-  const cacheKey = `${runtimeCacheKey(repoPath, connectionId, localGitOptions.wslDistro)}\0${normalizedHost}\0${githubReadExecutionScope({ ghAccount: localGitOptions.ghAccount })}`
+  const execOptions = ghRepoExecOptions(githubRepoContext(repoPath, connectionId, localGitOptions))
+  const cacheKey = `${runtimeCacheKey(repoPath, connectionId, localGitOptions.wslDistro)}\0${normalizedHost}\0${githubReadExecutionScope(execOptions)}`
   const now = Date.now()
   pruneHostAuthCache(now)
   const cached = hostAuthCache.get(cacheKey)
@@ -144,9 +145,6 @@ async function resolveAuthenticatedGitHubHost(
     return inFlight
   }
   const probe = (async () => {
-    const execOptions = {
-      ...ghRepoExecOptions(githubRepoContext(repoPath, connectionId, localGitOptions))
-    }
     let authenticatedHost: string | null
     try {
       const { stdout, stderr } = await ghExecFileAsync(['auth', 'status'], execOptions)

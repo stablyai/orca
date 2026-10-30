@@ -180,12 +180,12 @@ patchedDependencies:
   '@xterm/addon-ligatures@0.11.0-beta.301': 47405b9994b5acf1b4e90b49250358c1ca03649854d59560e7732b72fe336920
   '@xterm/addon-search@0.17.0-beta.301': eee5338dd2621ece46e79c61ec06766cd7fadaf79ffdb24e2a8ab68e97ef31f0
   '@xterm/addon-serialize@0.15.0-beta.301': b35533fe252e7e45433150170348889f4e08a6c17f7017ac34ea694d831fec7f
-  '@xterm/addon-webgl@0.20.0-beta.300': 5349718f2c19d9319a81552580bf9618ded9b00f3707a5c6cdbbae1910849cd9
+  '@xterm/addon-webgl@0.20.0-beta.300': ee614886cda080fc29c66cdc3f6971748a78c01af2eaaa45eb08e9933c5f1df9
   '@xterm/xterm@6.1.0-beta.304': 6a96a556cb32825d4084043f7e18fe16203686d8352affd2f01613c0b464a6ed
   i18next-cli@1.74.2: 2ee32eef742615cd133e1a6940f027deb3723a8430bb7953bba3a6769b0aac47
   lint-staged@16.4.0: 7333b3837f80a7fbd045964db6d76ba4fc118e49134bdbabb00585b6b7b60673
   monaco-editor@0.55.1: 53b71f7d8a7c00b76ffdb73ce83d18e31692f193f5fafa6a390e48f5b3fdd636
-  node-pty@1.1.0: f81acb44ac52265a6053af59e60128471f4655de39e64f8c47c916e0dc8c9416
+  node-pty@1.1.0: 98dadd30788d9235a1a28c4596078918f5936bd92804ca529ab1958f1a0fc278
   oxlint-plugin-anti-slop@0.1.2: c10c871702365a0c2c59e9f1c5fb92df97cae5755d534c0a3d83c6368f6feafe
   pdfjs-dist@6.3.289: 424fde648e16c965ce45c55bdda49ecb3a4aa992c856900714c841c3f13f8415
   sprintf-js@1.1.3: 05316a8b01f155fe19a1e0cb4042c81d43d798a76755c407684e1199a18b1e08
@@ -234,7 +234,7 @@ importers:
         version: 3.3.1
       node-pty:
         specifier: ^1.1.0
-        version: 1.1.0(patch_hash=f81acb44ac52265a6053af59e60128471f4655de39e64f8c47c916e0dc8c9416)
+        version: 1.1.0(patch_hash=98dadd30788d9235a1a28c4596078918f5936bd92804ca529ab1958f1a0fc278)
       posthog-node:
         specifier: ^5.52.5
         version: 5.52.5
@@ -430,7 +430,7 @@ importers:
         version: 0.13.0-beta.301(@xterm/xterm@6.1.0-beta.304(patch_hash=6a96a556cb32825d4084043f7e18fe16203686d8352affd2f01613c0b464a6ed))
       '@xterm/addon-webgl':
         specifier: 0.20.0-beta.300
-        version: 0.20.0-beta.300(patch_hash=5349718f2c19d9319a81552580bf9618ded9b00f3707a5c6cdbbae1910849cd9)(@xterm/xterm@6.1.0-beta.304(patch_hash=6a96a556cb32825d4084043f7e18fe16203686d8352affd2f01613c0b464a6ed))
+        version: 0.20.0-beta.300(patch_hash=ee614886cda080fc29c66cdc3f6971748a78c01af2eaaa45eb08e9933c5f1df9)(@xterm/xterm@6.1.0-beta.304(patch_hash=6a96a556cb32825d4084043f7e18fe16203686d8352affd2f01613c0b464a6ed))
       '@xterm/xterm':
         specifier: 6.1.0-beta.304
         version: 6.1.0-beta.304(patch_hash=6a96a556cb32825d4084043f7e18fe16203686d8352affd2f01613c0b464a6ed)
@@ -11121,7 +11121,7 @@ snapshots:
     dependencies:
       '@xterm/xterm': 6.1.0-beta.304(patch_hash=6a96a556cb32825d4084043f7e18fe16203686d8352affd2f01613c0b464a6ed)
 
-  '@xterm/addon-webgl@0.20.0-beta.300(patch_hash=5349718f2c19d9319a81552580bf9618ded9b00f3707a5c6cdbbae1910849cd9)(@xterm/xterm@6.1.0-beta.304(patch_hash=6a96a556cb32825d4084043f7e18fe16203686d8352affd2f01613c0b464a6ed))':
+  '@xterm/addon-webgl@0.20.0-beta.300(patch_hash=ee614886cda080fc29c66cdc3f6971748a78c01af2eaaa45eb08e9933c5f1df9)(@xterm/xterm@6.1.0-beta.304(patch_hash=6a96a556cb32825d4084043f7e18fe16203686d8352affd2f01613c0b464a6ed))':
     dependencies:
       '@xterm/xterm': 6.1.0-beta.304(patch_hash=6a96a556cb32825d4084043f7e18fe16203686d8352affd2f01613c0b464a6ed)
 
@@ -13756,7 +13756,7 @@ snapshots:
 
   node-int64@0.4.0: {}
 
-  node-pty@1.1.0(patch_hash=f81acb44ac52265a6053af59e60128471f4655de39e64f8c47c916e0dc8c9416):
+  node-pty@1.1.0(patch_hash=98dadd30788d9235a1a28c4596078918f5936bd92804ca529ab1958f1a0fc278):
     dependencies:
       node-addon-api: 7.1.1
 

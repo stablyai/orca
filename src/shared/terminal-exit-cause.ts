@@ -6,7 +6,11 @@ export type TerminalExitCause =
   /** The host reported a signal. The agent did not choose to stop. */
   | { kind: 'signaled'; signal: number }
   /** The process ended on its own and the host vouched for the status. */
-  | { kind: 'exited'; exitCode: number }
+  | {
+      kind: 'exited'
+      exitCode: number
+      initialOutputDiagnostic?: 'git-bash-console-capacity'
+    }
   /** Nothing here is provable. Never narrow this by guessing. */
   | { kind: 'unknown'; reason: TerminalExitUnknownReason }
 

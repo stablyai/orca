@@ -10,6 +10,7 @@ import {
   type TerminalLinkActionContext,
   type TerminalLinkActionRequest
 } from './terminal-link-action-request'
+import { isTerminalLinkDirectActivation } from './terminal-link-activation'
 import { handleOscLink } from './terminal-osc-link-routing'
 import { handleTerminalHttpLink } from './terminal-url-link-hit-testing'
 
@@ -73,24 +74,33 @@ describe('terminal link action routing', () => {
     expect(closeTerminalLinkActionRequest(first, first)).toBeNull()
   })
 
-  it('requests contextmenu actions with plain clicks disabled but still honors PTY claim refusal', () => {
-    const event = plainEvent()
-    Object.defineProperty(event, 'type', { value: 'contextmenu' })
-    const request = vi.fn()
-    const context = actionContext(request)
-    context.plainClickBehavior = 'none'
-    context.pointerGesture.canRequestAction = () => false
-    const details = {
-      destination: 'https://example.com',
-      kind: 'url' as const,
-      primary: { label: 'Open', run: vi.fn() }
+  it.each([
+    ['Macintosh', 'metaKey'],
+    ['Windows', 'ctrlKey']
+  ] as const)(
+    'requests %s contextmenu actions with its modifier and still honors PTY claim refusal',
+    (platform, modifier) => {
+      vi.stubGlobal('navigator', { userAgent: platform })
+      const event = plainEvent()
+      Object.defineProperty(event, 'type', { value: 'contextmenu' })
+      Object.defineProperty(event, modifier, { value: true })
+      expect(isTerminalLinkDirectActivation(event)).toBe(false)
+      const request = vi.fn()
+      const context = actionContext(request)
+      context.plainClickBehavior = 'none'
+      context.pointerGesture.canRequestAction = () => false
+      const details = {
+        destination: 'https://example.com',
+        kind: 'url' as const,
+        primary: { label: 'Open', run: vi.fn() }
+      }
+      expect(requestTerminalLinkAction(event, context, details)).toBe(true)
+      expect(request).toHaveBeenCalledOnce()
+      context.commit = () => false
+      expect(requestTerminalLinkAction(event, context, details)).toBe(false)
+      expect(request).toHaveBeenCalledOnce()
     }
-    expect(requestTerminalLinkAction(event, context, details)).toBe(true)
-    expect(request).toHaveBeenCalledOnce()
-    context.commit = () => false
-    expect(requestTerminalLinkAction(event, context, details)).toBe(false)
-    expect(request).toHaveBeenCalledOnce()
-  })
+  )
 
   it('claims PTY mouse ownership only after the pointer gesture is eligible', () => {
     const commit = vi.fn(commitPreparedLinkForRoutingTest)
