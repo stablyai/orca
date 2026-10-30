@@ -2,7 +2,7 @@ import { execFile, type ChildProcess } from 'node:child_process'
 import { BrowserError } from './cdp-bridge'
 import { classifyErrorCode } from './agent-browser-bridge-process'
 import { parseAgentBrowserJsonOutput } from './agent-browser-batch-command'
-import { AgentBrowserBridgeExecution } from './agent-browser-bridge-execution'
+import { AgentBrowserBridgeElementCalls } from './agent-browser-bridge-element-calls'
 import {
   AGENT_BROWSER_EXIT_DRAIN_MS,
   CONSECUTIVE_TIMEOUT_LIMIT,
@@ -10,7 +10,7 @@ import {
   type AgentBrowserExecOptions
 } from './agent-browser-bridge-types'
 
-export abstract class AgentBrowserBridgeRawProcess extends AgentBrowserBridgeExecution {
+export abstract class AgentBrowserBridgeRawProcess extends AgentBrowserBridgeElementCalls {
   protected abstract destroySession(
     sessionName: string,
     options?: { closeTimeoutMs?: number }

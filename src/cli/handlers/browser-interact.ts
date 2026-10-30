@@ -133,7 +133,12 @@ export const BROWSER_INTERACT_HANDLERS: Record<string, CommandHandler> = {
       files,
       ...target
     })
-    printResult(result, json, (v) => `Uploaded ${v.uploaded} file(s)`)
+    printResult(
+      result,
+      json,
+      (v) =>
+        `Uploaded ${v.uploaded} file(s)${v.frameUrl ? ` to a file input in ${v.frameUrl}` : ''}`
+    )
   },
   scrollintoview: async ({ flags, client, cwd, json }) => {
     const element = getRequiredStringFlag(flags, 'element')

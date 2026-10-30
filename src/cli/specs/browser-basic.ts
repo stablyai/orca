@@ -190,7 +190,7 @@ export const BROWSER_BASIC_COMMAND_SPECS: CommandSpec[] = withBrowserPageTarget(
   },
   {
     path: ['upload'],
-    summary: 'Upload files to a file input element',
+    summary: 'Upload files to a file input, or to the one a picker button opens',
     usage: 'orca upload --element <ref> --files <path,...> [--worktree <selector>] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'element', 'files', 'worktree']
   },

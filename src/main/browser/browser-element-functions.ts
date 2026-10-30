@@ -75,7 +75,14 @@ export const SELECT_OPTION_TARGET_FUNCTION = `function () {
   return this.matches(':disabled') ? 'it is disabled' : null;
 }`
 
-export const FILE_INPUT_TARGET_FUNCTION = `function () {
-  if (this.localName !== 'input' || this.type !== 'file') return 'it is not a file input';
-  return this.matches(':disabled') ? 'it is disabled' : null;
+// Returns true for a file input; anything else is clicked so the picker it opens can be caught.
+export const FILE_UPLOAD_TARGET_FUNCTION = `function () {
+  if (this.matches(':disabled')) return 'it is disabled';
+  if (this.localName === 'input' && this.type === 'file') return true;
+  this.click();
+  return false;
+}`
+
+export const FILE_INPUT_FRAME_URL_FUNCTION = `function () {
+  return this.ownerDocument.URL;
 }`

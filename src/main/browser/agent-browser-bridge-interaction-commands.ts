@@ -11,11 +11,14 @@ import type {
 } from '../../shared/runtime-types'
 import { BrowserError } from './cdp-bridge'
 import {
-  FILE_INPUT_TARGET_FUNCTION,
+  FILE_INPUT_FRAME_URL_FUNCTION,
+  FILE_UPLOAD_TARGET_FUNCTION,
   FILL_ELEMENT_FUNCTION,
   SELECT_ALL_ELEMENT_FUNCTION
 } from './browser-element-functions'
 import { assertUploadFilesExist } from './browser-upload-files'
+import { interceptFileChooser } from './guest-file-chooser'
+import { readRecord, readString } from './guest-frame-input-sessions'
 import {
   agentBrowserWaitArguments,
   type AgentBrowserWaitOptions
@@ -67,12 +70,71 @@ export abstract class AgentBrowserBridgeInteractionCommands extends AgentBrowser
       browserPageId,
       async (sessionName) => {
         await assertUploadFilesExist(filePaths)
-        await this.actOnElement(sessionName, element, 'upload to', FILE_INPUT_TARGET_FUNCTION)
-        return (await this.execAgentBrowser(sessionName, [
-          'upload',
-          element,
-          ...filePaths
-        ])) as BrowserUploadResult
+        const target = await this.captureElement(sessionName, element)
+        const { wc, captured } = target
+        // A picker button opens its input in its own frame or a same-process child of it.
+        const chooser = await interceptFileChooser(wc, captured.sessionId)
+        try {
+          const isFileInput = await this.callElementFunction(
+            sessionName,
+            target,
+            element,
+            'upload to',
+            FILE_UPLOAD_TARGET_FUNCTION,
+            [],
+            true
+          )
+          let input = { objectId: captured.objectId, sessionId: captured.sessionId }
+          if (isFileInput !== true) {
+            const opened = await chooser.next()
+            if (!opened?.backendNodeId) {
+              throw new BrowserError(
+                'browser_element_not_interactable',
+                `Cannot upload to ${element}: ${opened ? 'its file picker has no file input' : 'clicking it opened no file picker'}`
+              )
+            }
+            const resolved = await this.sendElementCdpCommand(
+              sessionName,
+              wc,
+              'DOM.resolveNode',
+              { backendNodeId: opened.backendNodeId },
+              opened.sessionId
+            )
+            const objectId = readString(readRecord(resolved, 'object'), 'objectId')
+            if (!objectId) {
+              throw new BrowserError(
+                'browser_error',
+                `Could not resolve the file input ${element} opened`
+              )
+            }
+            input = { objectId, sessionId: opened.sessionId }
+          }
+          const frame = await this.sendElementCdpCommand(
+            sessionName,
+            wc,
+            'Runtime.callFunctionOn',
+            {
+              objectId: input.objectId,
+              functionDeclaration: FILE_INPUT_FRAME_URL_FUNCTION,
+              returnByValue: true
+            },
+            input.sessionId
+          )
+          const frameUrl = readRecord(frame, 'result')?.value
+          await this.sendElementCdpCommand(
+            sessionName,
+            wc,
+            'DOM.setFileInputFiles',
+            { files: filePaths, objectId: input.objectId },
+            input.sessionId
+          )
+          return {
+            uploaded: filePaths.length,
+            ...(typeof frameUrl === 'string' ? { frameUrl } : {})
+          }
+        } finally {
+          await chooser.release()
+        }
       },
       { elements: [element] }
     )
