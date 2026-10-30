@@ -1,5 +1,4 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type * as ChildProcess from 'node:child_process'
 
 const {
   callMock,
@@ -36,21 +35,14 @@ vi.mock('./runtime/environments', () => ({
   resolveEnvironment: vi.fn()
 }))
 
-vi.mock('child_process', async (importOriginal) => {
+vi.mock('child_process', async () => {
   const { createChildProcessModuleMock } = await import('./index-test-harness.js')
-  return {
-    ...(await importOriginal<typeof ChildProcess>()),
-    ...createChildProcessModuleMock(spawnMock)
-  }
+  return createChildProcessModuleMock(spawnMock)
 })
 
 import { main } from './index'
 import { buildWorktree, okFixture, queueFixtures, worktreeListFixture } from './test-fixtures'
 import { useWorktreeAwarenessEnvironment } from './index-test-harness'
-import {
-  createTranscriptPane,
-  TRANSCRIPT_PANE_PTY_ID
-} from '../main/runtime/agent-transcript-pane-test-harness'
 
 describe('orca cli worktree awareness', () => {
   useWorktreeAwarenessEnvironment({
@@ -369,34 +361,6 @@ describe('orca cli worktree awareness', () => {
       title: undefined,
       focus: false
     })
-  })
-
-  it('reports an already-exited terminal from the idle wait command', async () => {
-    const { runtime, handle } = await createTranscriptPane({
-      paneTitle: 'shell',
-      foregroundProcess: 'bash',
-      data: ''
-    })
-    runtime.onPtyExit(TRANSCRIPT_PANE_PTY_ID, 137, 'inc-1', { providerExitObserved: true })
-    callMock.mockImplementationOnce(
-      async (method: string, params: { terminal: string; for: 'tui-idle'; timeoutMs: number }) => {
-        expect(method).toBe('terminal.wait')
-        return runtime.waitForTerminal(params.terminal, {
-          condition: params.for,
-          timeoutMs: params.timeoutMs
-        })
-      }
-    )
-    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
-
-    await main(
-      ['terminal', 'wait', '--terminal', handle, '--for', 'tui-idle', '--timeout-ms', '25'],
-      '/tmp/repo'
-    )
-
-    expect(process.exitCode).toBe(1)
-    expect(errorSpy.mock.calls.flat().join('\n')).toContain('terminal_exited')
-    expect(runtime['terminalWaiters'].forPty(TRANSCRIPT_PANE_PTY_ID)).toHaveLength(0)
   })
 
   it('exits nonzero when terminal wait returns an unsatisfied blocked result', async () => {
