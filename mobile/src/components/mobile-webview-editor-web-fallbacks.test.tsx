@@ -139,6 +139,34 @@ describe('the rich markdown editor on the page', () => {
     })
     expect(onChange.mock.calls).toEqual([['accepted']])
   })
+
+  it('hands workspace links to the host and keeps web links on the link handler', () => {
+    const host = document.createElement('div')
+    const onOpenLink = vi.fn()
+    const onOpenWorkspaceFile = vi.fn()
+    render(
+      createElement(MobileRichMarkdownEditor, {
+        content: 'body',
+        editable: true,
+        onChange: vi.fn(),
+        onOpenLink,
+        onOpenWorkspaceFile
+      }),
+      host
+    )
+    const surface = host.querySelector<HTMLElement>('#editor')!
+
+    act(() => {
+      surface.innerHTML =
+        '<p><a href="images/photo.png">photo</a> <a href="https://example.com/a">site</a></p>'
+      surface.querySelectorAll('a').forEach((link) => {
+        link.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
+      })
+    })
+
+    expect(onOpenWorkspaceFile.mock.calls).toEqual([['images/photo.png']])
+    expect(onOpenLink.mock.calls).toEqual([['https://example.com/a']])
+  })
 })
 
 describe('the html preview on the page', () => {
