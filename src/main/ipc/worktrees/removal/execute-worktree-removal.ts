@@ -23,6 +23,7 @@ import { assertNestedWorktreeRemovalApproval } from '../../../nested-worktree-re
 import { removeStaleLocalWorktreeRegistration } from '../../../local-worktree-removal-recovery'
 import { resolveWorktreeRemovalHomeForHost } from '../../../worktree-removal-execution-host-route'
 import { getEffectiveHooks, runHook } from '../../../hooks'
+import { assertWorktreeRemoveHookApproval } from '../../../worktree-remove-hook-gate'
 import type { ArchiveHookOverride } from '../../../../shared/worktree/archive-hook-removal-gate'
 import { gateWorktreeRemovalOnArchiveHook } from '../../../worktree-archive-hook-gate'
 import { withWorktreeRemoveStageSpan } from '../../../observability/instrumentation'
@@ -163,6 +164,7 @@ export async function executeWorktreeRemoval(
   }
 
   const hooks = getEffectiveHooks(repo)
+  assertWorktreeRemoveHookApproval(repo, args.removeHookHash)
 
   const archiveScript = hooks?.scripts.archive
 
@@ -170,6 +172,7 @@ export async function executeWorktreeRemoval(
   let archiveHookOverride: ArchiveHookOverride | undefined
   if (
     archiveScript &&
+    !hooks?.scripts.remove &&
     !args.skipArchive &&
     !(await nativeWindowsMarkerMissing(canonicalWorktreePath, localWorktreeGitOptions))
   ) {

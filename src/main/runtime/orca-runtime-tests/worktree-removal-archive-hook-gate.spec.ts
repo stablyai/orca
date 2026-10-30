@@ -54,6 +54,50 @@ describe('archive hook removal gate', () => {
     vi.mocked(runHook).mockResolvedValue({ success: true, output: '' })
   })
 
+  it.each([
+    { success: false, output: 'unconfirmed', exitCode: 23 },
+    { success: false, output: 'observation lost' }
+  ])(
+    'requires the remove hook even without runHooks and refuses unconfirmed disposal',
+    async (outcome) => {
+      const { runtimeStore, removeWorktreeMeta } = createStaleRuntimeWorktreeStore(TEST_WORKTREE_ID)
+      const runtime = createWorktreeRemovalRuntime(runtimeStore)
+      vi.mocked(getEffectiveHooks).mockReturnValue({
+        scripts: { archive: 'stop', remove: 'dispose' }
+      })
+      vi.mocked(runHook).mockResolvedValue(outcome)
+      await expect(
+        runtime.removeManagedWorktree(TEST_WORKTREE_ID, {
+          force: true,
+          runHooks: false,
+          allowFailedArchiveHook: true,
+          removeHookHash: '4a299b459fdefa259987e40b38e523e3a69ed42ec789f26f7a652d48d7eb8316'
+        })
+      ).rejects.toMatchObject({ code: 'worktree_remove_hook_failed' })
+      expect(vi.mocked(runHook).mock.calls.map(([kind]) => kind)).toEqual(['remove'])
+      expect(removeWorktree).not.toHaveBeenCalled()
+      expect(removeWorktreeMeta).not.toHaveBeenCalled()
+    }
+  )
+
+  it('runs removal after the checkout preflight without also running archive', async () => {
+    const runtime = createWorktreeRemovalRuntime()
+    vi.mocked(getEffectiveHooks).mockReturnValue({
+      scripts: { archive: 'stop', remove: 'dispose' }
+    })
+    vi.mocked(runHook).mockResolvedValue({ success: true, output: '' })
+    await runtime.removeManagedWorktree(TEST_WORKTREE_ID, {
+      removeHookHash: '4a299b459fdefa259987e40b38e523e3a69ed42ec789f26f7a652d48d7eb8316'
+    })
+    expect(vi.mocked(runHook).mock.calls.map(([kind]) => kind)).toEqual(['remove'])
+    expect(vi.mocked(assertWorktreeCleanForRemoval).mock.invocationCallOrder[0]).toBeLessThan(
+      vi.mocked(runHook).mock.invocationCallOrder[0]
+    )
+    expect(vi.mocked(runHook).mock.invocationCallOrder[0]).toBeLessThan(
+      vi.mocked(removeWorktree).mock.invocationCallOrder[0]
+    )
+  })
+
   it('refuses removal and mutates nothing when the archive hook exits 23', async () => {
     const { runtimeStore, removeWorktreeMeta } = createStaleRuntimeWorktreeStore(TEST_WORKTREE_ID)
     const runtime = createWorktreeRemovalRuntime(runtimeStore)

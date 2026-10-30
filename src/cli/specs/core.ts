@@ -141,19 +141,23 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
     destructive: true,
     summary: 'Remove a Git worktree or a folder workspace entry from Orca',
     usage:
-      'orca worktree rm --worktree <selector> [--force] [--delete-branch] [--run-hooks] [--allow-failed-archive-hook] [--json]',
+      'orca worktree rm --worktree <selector> [--force] [--delete-branch] [--run-hooks] [--allow-failed-archive-hook] [--remove-hook-hash <sha256>] [--json]',
     allowedFlags: [
       ...GLOBAL_FLAGS,
       'worktree',
       'force',
       'delete-branch',
       'run-hooks',
-      'allow-failed-archive-hook'
+      'allow-failed-archive-hook',
+      'remove-hook-hash'
     ],
     notes: [
       'For a non-root folder workspace, removes its Orca entry and stops its sessions without deleting the folder or touching Git. The folder project root cannot be removed with this command.',
       'Use --worktree "id:<full-instance-id>" with the full id from orca worktree list --json to select one folder workspace; several entries can share the same path.',
-      'Repo-defined orca.yaml archive hooks are skipped unless --run-hooks is passed.',
+      'When scripts.remove is configured, first removal refuses without changes and returns the script and SHA256 digest for review. Repeat with --remove-hook-hash <digest> to authorize that exact cleanup and checkout deletion. Old clients and archive waivers cannot grant this consent.',
+      'Permanent removal always runs a configured scripts.remove hook, including resource and retained-data cleanup. The hook must succeed; --force, --run-hooks and archive waivers cannot bypass it. Remove replaces archive for deletion.',
+      'Repo-defined orca.yaml archive hooks are skipped unless --run-hooks is passed, when no remove hook is configured.',
+      'The workspace host must support required removal hooks. Update older hosts before removal.',
       'With --run-hooks, a failed archive hook blocks the removal: nothing is stopped, deleted or deregistered, and the command exits non-zero with error code worktree_archive_hook_failed. --force does not waive this.',
       'Pass --allow-failed-archive-hook to delete anyway after the hook has run and failed; the waived failure is reported back on result.archiveHookOverride. It requires --run-hooks and is rejected without it, because with no hook running there is no failure to waive.',
       'On newer hosts with branch-choice support, Git worktree removal keeps the local branch, including with --force. Pass --delete-branch to attempt safe branch deletion, including branches that predated the worktree. Branches whose changes Orca cannot prove are already merged are retained. Older hosts keep their existing branch policy and print a warning; keep-by-default and --delete-branch do not apply there. A removal result without branch evidence does not confirm branch deletion.'

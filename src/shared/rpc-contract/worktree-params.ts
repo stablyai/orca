@@ -194,6 +194,10 @@ export const WorktreeSet = WorktreeSelector.extend({
 })
 
 export const WorktreeRemove = WorktreeSelector.extend({
+  removeHookHash: z
+    .string()
+    .regex(/^[a-f0-9]{64}$/)
+    .optional(),
   // Omission retains legacy/UI metadata policy; explicit CLI intent overrides it.
   deleteBranch: OptionalBoolean,
   hostId: OptionalExecutionHostId,

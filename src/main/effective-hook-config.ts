@@ -9,6 +9,11 @@ import type { Repo } from '../shared/repo-types'
 import type { SetupDecision } from '../shared/worktree/create-types'
 import type { WorktreeDefaultTabsLaunch } from '../shared/worktree/launch-types'
 
+export type EffectiveOrcaHooks = OrcaHooks & {
+  removeCommands?: readonly string[]
+  archiveCommands?: readonly string[]
+}
+
 function getEffectiveHookScript(
   yamlScript: string | undefined,
   localScript: string | undefined,
@@ -31,9 +36,10 @@ function getEffectiveHookScript(
 export function getEffectiveHooksFromConfig(
   repo: Repo,
   yamlHooks: OrcaHooks | null
-): OrcaHooks | null {
+): EffectiveOrcaHooks | null {
   const localSetup = repo.hookSettings?.scripts.setup
   const localArchive = repo.hookSettings?.scripts.archive
+  const localRemove = repo.hookSettings?.scripts.remove
   const rawPolicy = repo.hookSettings?.commandSourcePolicy
   const setupPolicy = resolveHookCommandSourcePolicy(rawPolicy, {
     hasLocalScript: Boolean(localSetup?.trim())
@@ -43,16 +49,27 @@ export function getEffectiveHooksFromConfig(
   })
   const setup = getEffectiveHookScript(yamlHooks?.scripts.setup, localSetup, setupPolicy)
   const archive = getEffectiveHookScript(yamlHooks?.scripts.archive, localArchive, archivePolicy)
+  const removePolicy = resolveHookCommandSourcePolicy(rawPolicy, {
+    hasLocalScript: Boolean(localRemove?.trim())
+  })
+  const remove = getEffectiveHookScript(yamlHooks?.scripts.remove, localRemove, removePolicy)
 
-  if (!setup && !archive) {
+  if (!setup && !archive && !remove) {
     return null
   }
 
   // The source policy arbitrates between committed orca.yaml and local Settings.
   return {
+    ...(archivePolicy === 'run-both' && yamlHooks?.scripts.archive?.trim() && localArchive?.trim()
+      ? { archiveCommands: [yamlHooks.scripts.archive.trim(), localArchive.trim()] }
+      : {}),
+    ...(removePolicy === 'run-both' && yamlHooks?.scripts.remove?.trim() && localRemove?.trim()
+      ? { removeCommands: [yamlHooks.scripts.remove.trim(), localRemove.trim()] }
+      : {}),
     scripts: {
       ...(setup ? { setup } : {}),
-      ...(archive ? { archive } : {})
+      ...(archive ? { archive } : {}),
+      ...(remove ? { remove } : {})
     }
   }
 }

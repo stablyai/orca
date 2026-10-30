@@ -32,6 +32,15 @@ export function createUpdateWorktreesMeta(
   get: WorktreeSliceGet
 ): WorktreeSlice['updateWorktreesMeta'] {
   const update: WorktreeSlice['updateWorktreesMeta'] = async (updates) => {
+    for (const entry of updates.filter((entry) => entry.updates.isArchived !== undefined)) {
+      const result = await get().updateWorktreeMeta(entry.worktreeId, entry.updates, {
+        executionHostId: entry.executionHostId
+      })
+      if (!result.ok) {
+        throw new Error(result.error)
+      }
+    }
+    updates = updates.filter((entry) => entry.updates.isArchived === undefined)
     if (updates.length === 0) {
       return
     }
@@ -130,11 +139,13 @@ export function createUpdateWorktreesMeta(
   return (updates) =>
     withPendingSidebarRowWrites(
       () =>
-        updates.map((entry) => ({
-          ...entry,
-          executionHostId:
-            entry.executionHostId ?? findKnownWorktreeById(get(), entry.worktreeId)?.hostId
-        })),
+        updates
+          .filter((entry) => entry.updates.isArchived === undefined)
+          .map((entry) => ({
+            ...entry,
+            executionHostId:
+              entry.executionHostId ?? findKnownWorktreeById(get(), entry.worktreeId)?.hostId
+          })),
       () => update(updates)
     )
 }

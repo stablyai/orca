@@ -5,7 +5,9 @@ import {
   removeHandlerMock,
   listWorktreesMock,
   getPullRequestPushTargetMock,
-  gitExecFileAsyncMock
+  gitExecFileAsyncMock,
+  getEffectiveHooksMock,
+  runHookMock
 } from './worktrees-test-module-mocks'
 import { handlers, harnessRepo, setupWorktreeHandlers, store } from './worktrees-test-harness'
 import { mergeWorktreeMetaForWrite } from '../persistence/loading-store/worktree-meta-write-normalization'
@@ -200,6 +202,43 @@ describe('registerWorktreeHandlers', () => {
       orderedIds: [firstId, secondId]
     })
 
+    expect(store.setWorktreeMeta).not.toHaveBeenCalled()
+  })
+
+  it('refuses retained archive before metadata changes when its stop hook fails', async () => {
+    store.getWorktreeMeta.mockReturnValue(
+      makeWorktreeMeta({ instanceId: 'archive-instance', isArchived: false })
+    )
+    getEffectiveHooksMock.mockReturnValue({ scripts: { archive: 'stop environment' } })
+    runHookMock.mockResolvedValue({ success: false, exitCode: 23, output: 'stop unconfirmed' })
+    await expect(
+      Promise.resolve(
+        handlers['worktrees:updateMeta'](null, {
+          worktreeId: 'repo-1::/workspace/feature-wt',
+          expectedInstanceId: 'archive-instance',
+          updates: { isArchived: true }
+        })
+      )
+    ).rejects.toThrow(/archive/i)
+    expect(runHookMock).toHaveBeenCalled()
+    expect(store.setWorktreeMeta).not.toHaveBeenCalled()
+  })
+
+  it('does not archive a different local instance than the one the caller selected', async () => {
+    store.getWorktreeMeta.mockReturnValue(
+      makeWorktreeMeta({ instanceId: 'replacement', isArchived: false })
+    )
+    getEffectiveHooksMock.mockReturnValue({ scripts: { archive: 'stop environment' } })
+    await expect(
+      Promise.resolve(
+        handlers['worktrees:updateMeta'](null, {
+          worktreeId: 'repo-1::/workspace/feature-wt',
+          expectedInstanceId: 'old-instance',
+          updates: { isArchived: true }
+        })
+      )
+    ).rejects.toThrow(/changed/i)
+    expect(runHookMock).not.toHaveBeenCalled()
     expect(store.setWorktreeMeta).not.toHaveBeenCalled()
   })
 

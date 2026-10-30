@@ -52,7 +52,11 @@ describe.each(['local', 'runtime:env-1'] as const)('consent on %s', (hostId) => 
       terminalHandle: local ? undefined : 'remote:env-1@@pty'
     })
     store.setState({ agentStatusByPaneKey: { [entry.paneKey]: entry } })
-    gate.resolve(local ? { hasHooks: false } : createCompatibleRuntimeStatusResponse())
+    gate.resolve(
+      local
+        ? { hasHooks: false, supportsRemoveHook: true, effectiveRemoveScript: '' }
+        : createCompatibleRuntimeStatusResponse()
+    )
     expect((await removal).ok).toBe(approved)
     const destructive = local ? mockApi.worktrees.remove : runtimeEnvironmentCall
     expect(destructive).toHaveBeenCalledTimes(approved ? 1 : 0)

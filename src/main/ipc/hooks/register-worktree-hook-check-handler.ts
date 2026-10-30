@@ -1,3 +1,4 @@
+import { getWorktreeRemoveHookReview } from '../../worktree-remove-hook-gate'
 import { ipcMain } from 'electron'
 import { getRepoDialableSshTargetId, type ExecutionHostId } from '../../../shared/execution-host'
 import { isFolderRepo } from '../../../shared/repo-kind'
@@ -56,11 +57,15 @@ export function registerWorktreeHookCheckHandler(context: WorktreeIpcContext): v
       const hooks = has ? loadHooks(repo.path) : null
       // Well-formed unknown keys may come from a newer Orca; suggest updating instead of parse repair.
       const mayNeedUpdate = has && !hooks && hasUnrecognizedOrcaYamlKeys(repo.path)
+      const removal = getWorktreeRemoveHookReview(repo)
       return {
         status: 'ok',
         hasHooks: has,
         hooks,
-        mayNeedUpdate
+        mayNeedUpdate,
+        supportsRemoveHook: true,
+        effectiveRemoveScript: removal.script,
+        effectiveRemoveHookHash: removal.removeHookHash
       }
     }
   )

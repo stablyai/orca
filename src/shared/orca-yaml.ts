@@ -188,9 +188,20 @@ function normalizeVmRecipes(value: unknown): VmRecipeParseResult {
   return { recipes, diagnostics }
 }
 
-export function parseOrcaYaml(content: string): OrcaHooks | null {
-  if (!isOrcaYamlTextWithinLimit(content)) {
+export function parseOrcaYaml(
+  content: string,
+  options: { strictRemoval?: boolean; strictArchive?: boolean } = {}
+): OrcaHooks | null {
+  const invalid = (): null => {
+    if (options.strictRemoval || options.strictArchive) {
+      throw new Error(
+        'Cannot verify lifecycle hook configuration: orca.yaml is malformed or exceeds its limits.'
+      )
+    }
     return null
+  }
+  if (!isOrcaYamlTextWithinLimit(content)) {
+    return invalid()
   }
 
   let root: unknown
@@ -203,21 +214,37 @@ export function parseOrcaYaml(content: string): OrcaHooks | null {
       uniqueKeys: true
     })
     if (document.errors.length > 0 || !isOrcaYamlConversionWithinLimit(document)) {
-      return null
+      return invalid()
     }
     root = document.toJS({ maxAliasCount: MAX_ORCA_YAML_ALIAS_COUNT })
   } catch {
-    return null
+    return invalid()
   }
 
   const record = asRecord(root)
   if (!record) {
-    return null
+    return invalid()
   }
 
   const scriptsRecord = asRecord(record.scripts)
+  if (
+    (options.strictRemoval || options.strictArchive) &&
+    record.scripts !== undefined &&
+    !scriptsRecord
+  ) {
+    return invalid()
+  }
+  const requiredScript = scriptsRecord?.[options.strictArchive ? 'archive' : 'remove']
+  if (
+    (options.strictRemoval || options.strictArchive) &&
+    requiredScript !== undefined &&
+    (typeof requiredScript !== 'string' || !isOrcaYamlFieldWithinLimit(requiredScript))
+  ) {
+    return invalid()
+  }
   const setup = scriptsRecord ? asTrimmedString(scriptsRecord.setup) : undefined
   const archive = scriptsRecord ? asTrimmedString(scriptsRecord.archive) : undefined
+  const remove = scriptsRecord ? asTrimmedString(scriptsRecord.remove) : undefined
   const setupAgentStartupPolicy =
     record.setupAgentStartupPolicy === 'start-immediately' ||
     record.setupAgentStartupPolicy === 'wait-for-setup'
@@ -236,6 +263,7 @@ export function parseOrcaYaml(content: string): OrcaHooks | null {
   if (
     !setup &&
     !archive &&
+    !remove &&
     !issueCommand &&
     !setupAgentStartupPolicy &&
     defaultTabs.length === 0 &&
@@ -249,7 +277,8 @@ export function parseOrcaYaml(content: string): OrcaHooks | null {
   return {
     scripts: {
       ...(setup ? { setup } : {}),
-      ...(archive ? { archive } : {})
+      ...(archive ? { archive } : {}),
+      ...(remove ? { remove } : {})
     },
     ...(setupAgentStartupPolicy ? { setupAgentStartupPolicy } : {}),
     ...(issueCommand ? { issueCommand } : {}),

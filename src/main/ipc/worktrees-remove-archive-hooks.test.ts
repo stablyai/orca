@@ -122,6 +122,89 @@ describe('registerWorktreeHandlers', () => {
     runtimeStub = setupWorktreeHandlers()
   })
 
+  it('requires the remove hook despite skipped archive and refuses before deletion', async () => {
+    mockKnownFeatureWorktree()
+    getEffectiveHooksMock.mockReturnValue({ scripts: { archive: 'stop', remove: 'dispose' } })
+    runHookMock.mockResolvedValue({ success: false, output: 'disposal unconfirmed', exitCode: 23 })
+
+    await expect(
+      removeWorktreeViaIpc({
+        worktreeId: 'repo-1::/workspace/feature-wt',
+        skipArchive: true,
+        removeHookHash: '4a299b459fdefa259987e40b38e523e3a69ed42ec789f26f7a652d48d7eb8316',
+        force: true,
+        allowFailedArchiveHook: true
+      })
+    ).rejects.toMatchObject({ code: 'worktree_remove_hook_failed' })
+    expect(runHookMock.mock.calls.map(([kind]) => kind)).toEqual(['remove'])
+    expect(removeWorktreeMock).not.toHaveBeenCalled()
+    expect(store.removeWorktreeMeta).not.toHaveBeenCalled()
+  })
+
+  it('requires new destructive cleanup consent from legacy removal callers', async () => {
+    mockKnownFeatureWorktree()
+    getEffectiveHooksMock.mockReturnValue({ scripts: { remove: 'dispose' } })
+    await expect(
+      removeWorktreeViaIpc({
+        worktreeId: 'repo-1::/workspace/feature-wt',
+        force: true,
+        allowFailedArchiveHook: true
+      })
+    ).rejects.toMatchObject({ code: 'worktree_remove_hook_confirmation_required' })
+    expect(runHookMock).not.toHaveBeenCalled()
+    expect(removeWorktreeMock).not.toHaveBeenCalled()
+  })
+
+  it('checks dirty checkout safety before a destructive remove hook', async () => {
+    mockKnownFeatureWorktree()
+    getEffectiveHooksMock.mockReturnValue({ scripts: { remove: 'dispose' } })
+    assertWorktreeCleanForRemovalMock.mockRejectedValueOnce(
+      new Error('Worktree has uncommitted or untracked changes')
+    )
+
+    await expect(
+      removeWorktreeViaIpc({
+        worktreeId: 'repo-1::/workspace/feature-wt',
+        removeHookHash: '4a299b459fdefa259987e40b38e523e3a69ed42ec789f26f7a652d48d7eb8316'
+      })
+    ).rejects.toThrow('uncommitted')
+    expect(runHookMock).not.toHaveBeenCalled()
+    expect(removeWorktreeMock).not.toHaveBeenCalled()
+  })
+
+  it('refuses changed removal instructions before running any lifecycle script', async () => {
+    mockKnownFeatureWorktree()
+    getEffectiveHooksMock.mockReturnValue({
+      scripts: { archive: 'stop', remove: 'changed disposal' }
+    })
+    await expect(
+      removeWorktreeViaIpc({
+        worktreeId: 'repo-1::/workspace/feature-wt',
+        removeHookHash: '0'.repeat(64)
+      })
+    ).rejects.toMatchObject({ code: 'worktree_remove_hook_changed' })
+    expect(runHookMock).not.toHaveBeenCalled()
+    expect(removeWorktreeMock).not.toHaveBeenCalled()
+  })
+
+  it('replaces archive with successful removal after the checkout preflight', async () => {
+    mockKnownFeatureWorktree()
+    getEffectiveHooksMock.mockReturnValue({ scripts: { archive: 'stop', remove: 'dispose' } })
+    runHookMock.mockResolvedValue({ success: true, output: '' })
+    await removeWorktreeViaIpc({
+      worktreeId: 'repo-1::/workspace/feature-wt',
+      removeHookHash: '4a299b459fdefa259987e40b38e523e3a69ed42ec789f26f7a652d48d7eb8316'
+    })
+
+    expect(runHookMock.mock.calls.map(([kind]) => kind)).toEqual(['remove'])
+    expect(assertWorktreeCleanForRemovalMock.mock.invocationCallOrder[0]).toBeLessThan(
+      runHookMock.mock.invocationCallOrder[0]
+    )
+    expect(runHookMock.mock.invocationCallOrder[0]).toBeLessThan(
+      removeWorktreeMock.mock.invocationCallOrder[0]
+    )
+  })
+
   it('runs the archive hook on remove when skipArchive is not set', async () => {
     mockKnownFeatureWorktree()
     removeWorktreeMock.mockResolvedValue(undefined)

@@ -18,6 +18,7 @@ export async function dispatchWorktreeRemoval(args: {
   hostId: ExecutionHostId | undefined
   force: boolean | undefined
   skipArchive: boolean
+  removeHookHash?: string
   get: WorktreeSliceGet
   target: RuntimeClientTarget
   options: RemoveWorktreeOptions | undefined
@@ -69,6 +70,7 @@ async function requestWorktreeRemoval(
       allowUnverifiedPtyStop: options?.allowUnverifiedPtyStop === true,
       allowFailedArchiveHook: options?.allowFailedArchiveHook === true,
       skipArchive,
+      ...(args.removeHookHash ? { removeHookHash: args.removeHookHash } : {}),
       ...snapshotPruneBatch
     })
   }
@@ -89,12 +91,13 @@ async function requestWorktreeRemoval(
       allowUnverifiedPtyStop: options?.allowUnverifiedPtyStop === true,
       // Send waiver only when true; older hosts silently strip unknown params at this version boundary.
       ...(options?.allowFailedArchiveHook === true ? { allowFailedArchiveHook: true } : {}),
-      runHooks: !skipArchive
+      runHooks: !skipArchive,
+      ...(args.removeHookHash ? { removeHookHash: args.removeHookHash } : {})
     },
     {
       // Why (#19334): the host may run an archive hook before it decides anything, then waits for
       // Git's delete before it replies; outlast both when a hook can run.
-      timeoutMs: worktreeRemovalReplyTimeoutMs(!skipArchive),
+      timeoutMs: worktreeRemovalReplyTimeoutMs(true),
       beforeSend
     }
   )

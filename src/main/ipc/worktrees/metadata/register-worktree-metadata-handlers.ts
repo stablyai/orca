@@ -1,4 +1,5 @@
 import { ipcMain } from 'electron'
+import { writeWorktreeArchiveTransition } from '../../../worktree-archive-transition'
 import type { WorktreeMeta } from '../../../../shared/worktree/meta-types'
 import { displayNameUpdatePinsLabel } from '../../../../shared/worktree/display-name-provenance'
 import { parseExecutionHostId } from '../../../../shared/execution-host'
@@ -32,6 +33,7 @@ export function registerWorktreeMetadataHandlers(context: WorktreeIpcContext): v
       args: {
         worktreeId: string
         executionHostId?: string
+        expectedInstanceId?: string
         updates: Partial<WorktreeMeta>
       }
     ) => {
@@ -73,6 +75,18 @@ export function registerWorktreeMetadataHandlers(context: WorktreeIpcContext): v
         : resolveWorktreeMetaOwner(store, args.worktreeId)
       if (!target) {
         return null
+      }
+      if (sanitizedUpdates.isArchived !== undefined) {
+        return writeWorktreeArchiveTransition({
+          store,
+          target,
+          isArchived: sanitizedUpdates.isArchived,
+          expectedInstanceId: args.expectedInstanceId,
+          write: () => store.setWorktreeMeta(target, sanitizedUpdates)
+        }).then((meta) => {
+          notifyWorktreesChanged(mainWindow, getRepoIdFromWorktreeId(args.worktreeId))
+          return meta
+        })
       }
       const meta = store.setWorktreeMeta(target, sanitizedUpdates)
       // Local optimistic state is current; notifying it would re-sort the sidebar (#209).

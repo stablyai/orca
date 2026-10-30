@@ -163,13 +163,14 @@ export function queueWorkspaceDelete<T>(
   selector: string,
   hostId: string | undefined,
   requested: Partial<Record<RemovalFlag, boolean>> &
-    Pick<RemoveManagedWorktreeOptions, 'deleteBranch'>,
+    Pick<RemoveManagedWorktreeOptions, 'deleteBranch' | 'removeHookHash'>,
   run: (
     removal: Record<RemovalFlag, boolean> &
-      Pick<RemoveManagedWorktreeOptions, 'hostId' | 'deleteBranch'>
+      Pick<RemoveManagedWorktreeOptions, 'hostId' | 'deleteBranch' | 'removeHookHash'>
   ) => Promise<T>
 ): Promise<T> {
   const removal = {
+    ...(requested.removeHookHash !== undefined ? { removeHookHash: requested.removeHookHash } : {}),
     ...(requested.deleteBranch !== undefined ? { deleteBranch: requested.deleteBranch } : {}),
     force: requested.force === true,
     runHooks: requested.runHooks === true,

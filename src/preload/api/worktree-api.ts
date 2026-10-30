@@ -108,6 +108,7 @@ export type WorktreeApi = {
     // Only explicit Force Delete waives PTY-stop proof; force merely skips dirty-file prompts.
     allowUnverifiedPtyStop?: boolean
     skipArchive?: boolean
+    removeHookHash?: string
     // Waives a failed hook, unlike skipArchive; force does not imply this approval.
     allowFailedArchiveHook?: boolean
     snapshotPruneBatchId?: string
@@ -127,6 +128,7 @@ export type WorktreeApi = {
   updateMeta: (args: {
     worktreeId: string
     executionHostId?: ExecutionHostId
+    expectedInstanceId?: string
     updates: Partial<WorktreeMeta>
   }) => Promise<Worktree | null>
   listLineage: () => Promise<{

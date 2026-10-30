@@ -19,6 +19,7 @@ import {
   wslMoveProjectRefForWorkspace
 } from '../persistence/moving-wsl-projects/wsl-move-scope-guard'
 import { RuntimeLineageError } from './runtime-worktree-lineage-resolution'
+import { writeWorktreeArchiveTransition } from '../worktree-archive-transition'
 import type { ResolvedWorktree } from './runtime-worktree-path-identity'
 
 type Updates = Omit<Partial<WorktreeMeta>, 'pushTarget'> & {
@@ -132,7 +133,17 @@ export async function updateRuntimeManagedWorktreeMetadata(args: {
   if (isRemovedFolderWorkspaceInstance(args.store, worktree.id, executionHostId)) {
     throw new Error('selector_not_found')
   }
-  args.store.setWorktreeMeta(target, metadataUpdates)
+  if (metadataUpdates.isArchived !== undefined) {
+    await writeWorktreeArchiveTransition({
+      store: args.store,
+      target,
+      isArchived: metadataUpdates.isArchived,
+      expectedInstanceId: args.selector.startsWith('identity:') ? worktree.instanceId : undefined,
+      write: () => args.store.setWorktreeMeta(target, metadataUpdates)
+    })
+  } else {
+    args.store.setWorktreeMeta(target, metadataUpdates)
+  }
   // Push explicitly for CLI mutations outside renderer optimistic updates.
   args.ports.invalidateResolved()
   args.ports.notifyChanged(worktree.repoId)

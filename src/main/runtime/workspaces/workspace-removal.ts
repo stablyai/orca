@@ -105,13 +105,7 @@ export abstract class OrcaRuntimeWithRemoveManagedWorktree extends OrcaRuntimeWi
       worktreeId: removalTarget.id,
       hostId: cleanupHostId
     })
-    const optionsKey = getRuntimeWorktreeRemovalOptionsKey({
-      force,
-      runHooks,
-      allowUnverifiedPtyStop,
-      allowFailedArchiveHook,
-      deleteBranch: options.deleteBranch
-    })
+    const optionsKey = getRuntimeWorktreeRemovalOptionsKey(options)
     const inFlightRemoval = this.removeManagedWorktreeInFlight.get(
       cleanupScopeKey,
       removalTarget.id,
@@ -248,6 +242,7 @@ export abstract class OrcaRuntimeWithRemoveManagedWorktree extends OrcaRuntimeWi
           return removalResult ?? {}
         }
         return removeRuntimeRegisteredLocalWorktree({
+          removeHookHash: options.removeHookHash,
           repo: repo!,
           target: removalTarget,
           registeredWorktree,

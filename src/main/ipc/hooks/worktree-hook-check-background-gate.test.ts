@@ -15,6 +15,7 @@ vi.mock('electron', () => ({
   }
 }))
 vi.mock('../../hooks', () => ({
+  getEffectiveHooks: () => null,
   hasHooksFile: mocks.hasHooksFile,
   loadHooks: () => null,
   hasUnrecognizedOrcaYamlKeys: () => false

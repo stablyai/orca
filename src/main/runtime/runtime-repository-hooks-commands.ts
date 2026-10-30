@@ -1,3 +1,4 @@
+import { getWorktreeRemoveHookReview } from '../worktree-remove-hook-gate'
 import { getRepoDialableSshTargetId } from '../../shared/execution-host'
 import { createHash } from 'node:crypto'
 import { windowsFsPath } from '../wsl/wsl-unc-drive-fs-path'
@@ -75,10 +76,14 @@ export class RuntimeRepositoryHooksCommands {
     }
     const has = hasHooksFile(repo.path)
     const hooks = has ? loadHooks(repo.path) : null
+    const removal = getWorktreeRemoveHookReview(repo)
     return {
       status: 'ok' as const,
       hasHooks: has,
       hooks,
+      supportsRemoveHook: true,
+      effectiveRemoveScript: removal.script,
+      effectiveRemoveHookHash: removal.removeHookHash,
       mayNeedUpdate: has && !hooks && hasUnrecognizedOrcaYamlKeys(repo.path)
     }
   }

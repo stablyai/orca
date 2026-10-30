@@ -131,6 +131,31 @@ export class RepoUpdatePersistenceOperations {
     assertKindChangeKeepsFolderWorkspaces(repo, updates.kind, this.state.worktreeMeta)
     const previousGhAccount = repo.ghAccount
     const sanitizedUpdates = sanitizeRepoUpdatesForPersistence(updates)
+    const savedRemove = repo.hookSettings?.scripts?.remove
+    if (savedRemove !== undefined && 'hookSettings' in sanitizedUpdates) {
+      const incoming = sanitizedUpdates.hookSettings
+      if (incoming === undefined) {
+        delete sanitizedUpdates.hookSettings
+      } else if (incoming.scripts?.remove === undefined) {
+        if (
+          savedRemove.trim() &&
+          incoming.commandSourcePolicy !== undefined &&
+          incoming.commandSourcePolicy !== repo.hookSettings?.commandSourcePolicy
+        ) {
+          throw new Error(
+            'This settings draft omits the required removal script. Refresh or update Orca and review the hook fields before changing their command source.'
+          )
+        }
+        sanitizedUpdates.hookSettings = {
+          ...incoming,
+          ...(incoming.commandSourcePolicy === undefined &&
+          repo.hookSettings?.commandSourcePolicy !== undefined
+            ? { commandSourcePolicy: repo.hookSettings.commandSourcePolicy }
+            : {}),
+          scripts: { ...repo.hookSettings?.scripts, ...incoming.scripts, remove: savedRemove }
+        }
+      }
+    }
     if (
       'executionHostId' in updates &&
       getRepoExecutionHostId({ ...repo, ...updates }) !== getRepoExecutionHostId(repo)

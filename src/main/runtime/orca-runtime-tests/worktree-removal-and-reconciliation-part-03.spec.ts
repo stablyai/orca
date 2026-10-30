@@ -8,6 +8,7 @@ import {
   deleteWorktreeHistoryDirMock,
   forceDeleteLocalBranchMock,
   gitRunner,
+  getEffectiveHooks,
   invalidateAuthorizedRootsCacheMock,
   join,
   listWorktrees,
@@ -301,6 +302,15 @@ describe('OrcaRuntimeService', () => {
     try {
       vi.mocked(listWorktrees).mockResolvedValue([])
 
+      vi.mocked(getEffectiveHooks).mockReturnValue({ scripts: { remove: 'dispose' } })
+      await expect(runtime.removeManagedWorktree(worktreeId, { force: true })).rejects.toThrow(
+        'no longer a registered Git worktree'
+      )
+      expect((await lstat(orphanPath)).isDirectory()).toBe(true)
+      expect(removeWorktreeMeta).not.toHaveBeenCalled()
+      expect(runHook).not.toHaveBeenCalled()
+      vi.mocked(getEffectiveHooks).mockReturnValue(null)
+
       await expect(runtime.removeManagedWorktree(worktreeId, { force: true })).resolves.toEqual({})
 
       await expect(lstat(orphanPath)).rejects.toMatchObject({ code: 'ENOENT' })
@@ -316,6 +326,7 @@ describe('OrcaRuntimeService', () => {
       expect(invalidateAuthorizedRootsCacheMock).toHaveBeenCalled()
       expect(notifier.worktreesChanged).toHaveBeenCalledWith(TEST_REPO_ID)
     } finally {
+      vi.mocked(getEffectiveHooks).mockReturnValue(null)
       // Why: Windows can keep a just-inspected git admin dir busy briefly.
       await rm(parentDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 })
     }

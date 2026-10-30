@@ -1,4 +1,5 @@
 import { removeWorktree } from '../../../git/worktree-removal'
+import { assertUnregisteredRemovalHasNoRequiredHook } from '../../../worktree-remove-hook-gate'
 import { usesNativeWindowsRemoval } from '../../../git/windows-worktree-removal'
 import type { Repo } from '../../../../shared/repo-types'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
@@ -67,6 +68,7 @@ export async function removeUnregisteredWorktree(
   }
   const native = usesNativeWindowsRemoval(worktreePath, localWorktreeGitOptions)
   if (canCleanOrphanedDirectory || (native && removedMeta)) {
+    assertUnregisteredRemovalHasNoRequiredHook(repo)
     assertWorktreeDoesNotContainRegisteredWorktree(worktreePath, registeredWorktrees)
     if (canCleanOrphanedDirectory && !args.force) {
       throw new Error(ORPHANED_WORKTREE_DIRECTORY_MESSAGE)

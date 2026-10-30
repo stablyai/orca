@@ -25,6 +25,7 @@ export type RemoveWorktreeArgs = {
   /** Explicit Force Delete only — `force` alone is set by the ordinary confirmation (#11960). */
   allowUnverifiedPtyStop?: boolean
   skipArchive?: boolean
+  removeHookHash?: string
   /** Explicit failed-archive waiver; skipArchive bypasses execution, and force grants neither permission. */
   allowFailedArchiveHook?: boolean
   snapshotPruneBatchId?: string

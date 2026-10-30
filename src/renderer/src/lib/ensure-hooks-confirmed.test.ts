@@ -1,3 +1,4 @@
+import { confirmWorktreeRemovalHooks } from './confirm-worktree-removal-hooks'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AppState } from '@/store/types'
 import type { PersistedTrustedOrcaHooks } from '../../../shared/orca-yaml-hook-types'
@@ -90,6 +91,69 @@ describe('ensureHooksConfirmed', () => {
 
     expect(decision).toBe('run')
     expect(pending).toHaveLength(0)
+  })
+
+  it('requires removal consent even for a local script in an always-trusted repository', async () => {
+    const { state, pending } = createTestState({
+      trustedOrcaHooks: { 'repo-1': { all: { approvedAt: 1 } } },
+      repos: [
+        {
+          id: 'repo-1',
+          path: '/repo',
+          displayName: 'Repo One',
+          badgeColor: '#000',
+          addedAt: 0,
+          hookSettings: {
+            mode: 'auto',
+            commandSourcePolicy: 'local-only',
+            scripts: { setup: '', archive: '', remove: 'dispose' }
+          }
+        }
+      ]
+    })
+    hooksCheckMock.mockResolvedValue({
+      status: 'ok',
+      hasHooks: false,
+      hooks: null,
+      mayNeedUpdate: false,
+      supportsRemoveHook: true,
+      effectiveRemoveScript: 'dispose',
+      effectiveRemoveHookHash: '4a299b459fdefa259987e40b38e523e3a69ed42ec789f26f7a652d48d7eb8316'
+    })
+    const promise = ensureHooksConfirmed(state, 'repo-1', 'remove')
+    await vi.waitFor(() => expect(pending).toHaveLength(1))
+    expect(pending[0].data.scriptContent).toBe('dispose')
+    pending[0].resolve('skip')
+    await expect(promise).resolves.toBe('skip')
+  })
+
+  it('cancels deletion when required removal consent is dismissed', async () => {
+    const { state, pending } = createTestState()
+    hooksCheckMock.mockResolvedValue({
+      status: 'ok',
+      hasHooks: true,
+      hooks: null,
+      mayNeedUpdate: false,
+      supportsRemoveHook: true,
+      effectiveRemoveScript: 'dispose',
+      effectiveRemoveHookHash: '4a299b459fdefa259987e40b38e523e3a69ed42ec789f26f7a652d48d7eb8316'
+    })
+    const promise = confirmWorktreeRemovalHooks(() => state, 'repo-1')
+    const refusal = expect(promise).rejects.toThrow('cancelled')
+    await vi.waitFor(() => expect(pending).toHaveLength(1))
+    pending[0].resolve('skip')
+    await refusal
+  })
+
+  it('refuses an older host instead of interpreting absent removal support as no cleanup', async () => {
+    const { state } = createTestState()
+    hooksCheckMock.mockResolvedValue({
+      status: 'ok',
+      hasHooks: false,
+      hooks: null,
+      mayNeedUpdate: false
+    })
+    await expect(confirmWorktreeRemovalHooks(() => state, 'repo-1')).rejects.toThrow('Update Orca')
   })
 
   it('re-prompts when the script content differs from the persisted hash', async () => {

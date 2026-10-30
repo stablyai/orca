@@ -271,12 +271,12 @@ describe('CLI remote WebSocket transport', () => {
     })
   })
 
-  it.each(['status', 'capable-mutation', 'legacy-mutation'] as const)(
+  it.each(['status', 'capable-mutation'] as const)(
     'reports paired timeout at %s without replay',
     async (phase) => {
       const received = Promise.withResolvers<void>()
       const status: Parameters<typeof startTestRuntime>[1] = {
-        capabilities: ['worktree.remove-branch-policy.v1']
+        capabilities: ['worktree.remove-branch-policy.v1', 'worktree.required-remove-hook.v1']
       }
       const runtime = await startTestRuntime('timeout', status)
       servers.push(runtime)
@@ -292,9 +292,6 @@ describe('CLI remote WebSocket transport', () => {
       )
       await client.getCliStatus()
       status.hold = phase === 'status' ? 'status.get' : 'worktree.rm'
-      if (phase === 'legacy-mutation') {
-        status.capabilities = undefined
-      }
       status.onRequest = (method) => {
         if (method === status.hold) {
           received.resolve()
@@ -321,7 +318,7 @@ describe('CLI remote WebSocket transport', () => {
             ? ['status.get', 'status.get']
             : ['status.get', 'status.get', 'worktree.rm']
         )
-        expect(warning.mock.calls).toHaveLength(phase === 'legacy-mutation' ? 1 : 0)
+        expect(warning.mock.calls).toHaveLength(0)
         expect(getRemoteRuntimeRequestAdmissionEvidence()).toEqual({
           pendingRequestCount: 0,
           retainedBytes: 0
@@ -375,7 +372,7 @@ describe('CLI remote WebSocket transport', () => {
     'preflights branch intent on the mutation socket after cached compatibility: %s',
     async (mode) => {
       const status: NonNullable<Parameters<typeof startTestRuntime>[1]> = {
-        capabilities: ['worktree.remove-branch-policy.v1'],
+        capabilities: ['worktree.remove-branch-policy.v1', 'worktree.required-remove-hook.v1'],
         malformed: false,
         failure: false,
         disconnect: false,
@@ -406,7 +403,7 @@ describe('CLI remote WebSocket transport', () => {
         status.capabilities = ['future.capability']
       }
       status.malformed = mode === 'malformed'
-      const successful = ['capable', 'absent', 'empty', 'unrelated'].includes(mode)
+      const successful = mode === 'capable'
       const warning = vi.spyOn(console, 'error').mockImplementation(() => {})
       status.failure = mode === 'failed'
       status.disconnect = mode === 'disconnect'

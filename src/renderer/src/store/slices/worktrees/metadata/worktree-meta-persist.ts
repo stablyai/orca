@@ -1,4 +1,5 @@
 import { assertWorkspaceAttachmentWriteCapability } from '../../../../runtime/runtime-workspace-attachment-capabilities'
+import { WORKTREE_ARCHIVE_TRANSITION_RUNTIME_CAPABILITY } from '../../../../../../shared/worktree-runtime-capabilities'
 import type { WorkspaceAttachmentMutation } from '../../../../../../shared/workspace-attachment-mutation'
 import { getLegacyWorkspaceReviewSelectionUpdates } from '../../../../../../shared/workspace-attachment-legacy'
 import { WORKTREE_LINKED_ITEMS_RUNTIME_CAPABILITY } from '../../../../../../shared/workspace-attachment-capabilities'
@@ -23,6 +24,25 @@ import { encodePushTargetClearForRuntimeRpc } from './hosted-review-link-mutatio
 type PendingDisplayNameWrite = {
   worktreeId: string
   executionHostId?: ExecutionHostId
+}
+
+type ArchiveMetadataEvidence = Partial<Pick<WorktreeMeta, 'isArchived' | 'instanceId'>>
+
+function assertConfirmedArchiveState(
+  updates: Partial<WorktreeMeta>,
+  expectedInstanceId: string | undefined,
+  saved: ArchiveMetadataEvidence | null | undefined
+): void {
+  if (
+    updates.isArchived !== undefined &&
+    (!saved ||
+      saved.isArchived !== updates.isArchived ||
+      (expectedInstanceId !== undefined && saved.instanceId !== expectedInstanceId))
+  ) {
+    throw new Error(
+      'The host did not confirm this workspace instance’s archive state. Refresh and retry.'
+    )
+  }
 }
 
 const pendingDisplayNameWrites = new Set<PendingDisplayNameWrite>()
@@ -57,14 +77,16 @@ export function persistWorktreeMeta(
   worktreeId: string,
   updates: Partial<WorktreeMeta> & WorkspaceAttachmentMutation,
   executionHostId?: ExecutionHostId,
-  identityKey?: string
+  identityKey?: string,
+  expectedInstanceId?: string
 ): Promise<void> {
   const operation = persistWorktreeMetaUntracked(
     target,
     worktreeId,
     updates,
     executionHostId,
-    identityKey
+    identityKey,
+    expectedInstanceId
   )
   if (!('displayName' in updates)) {
     return operation
@@ -86,17 +108,27 @@ async function persistWorktreeMetaUntracked(
   worktreeId: string,
   updates: Partial<WorktreeMeta> & WorkspaceAttachmentMutation,
   executionHostId?: ExecutionHostId,
-  identityKey?: string
+  identityKey?: string,
+  expectedInstanceId?: string
 ): Promise<void> {
   if (target.kind === 'local') {
-    await window.api.worktrees.updateMeta({
+    const saved = await window.api.worktrees.updateMeta({
       worktreeId,
       ...(executionHostId ? { executionHostId } : {}),
+      ...(updates.isArchived !== undefined && expectedInstanceId ? { expectedInstanceId } : {}),
       updates: updates
     })
+    assertConfirmedArchiveState(updates, expectedInstanceId, saved)
     return
   }
   await assertWorkspaceAttachmentWriteCapability(target, updates)
+  if (updates.isArchived === true) {
+    await assertRuntimeEnvironmentCapability(
+      target.environmentId,
+      WORKTREE_ARCHIVE_TRANSITION_RUNTIME_CAPABILITY,
+      'Update Orca on the workspace host before archiving; this host cannot confirm stopped execution.'
+    )
+  }
   if (updates.firstAgentMessageRenameError === null && updates.displayName === undefined) {
     await assertRuntimeEnvironmentCapability(
       target.environmentId,
@@ -167,13 +199,14 @@ async function persistWorktreeMetaUntracked(
       compatibleUpdates = olderHostUpdates
     }
   }
-  await callRuntimeRpc(
+  const saved = await callRuntimeRpc<{ worktree?: ArchiveMetadataEvidence }>(
     target,
     'worktree.set',
     {
       worktree: identityKey ? `identity:${identityKey}` : toRuntimeWorktreeSelector(worktreeId),
       ...encodePushTargetClearForRuntimeRpc(compatibleUpdates)
     },
-    { timeoutMs: 15_000 }
+    { timeoutMs: updates.isArchived === true ? 180_000 : 15_000 }
   )
+  assertConfirmedArchiveState(updates, expectedInstanceId, saved?.worktree)
 }

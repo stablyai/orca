@@ -89,4 +89,31 @@ describe('OrcaYamlTrustDialog', () => {
     expect(text).not.toContain('Always trustorca.yaml')
     expect(text).not.toContain('inorca')
   })
+
+  it('identifies the selected workspace and checkout in permanent removal consent', async () => {
+    mocks.state.modalData = {
+      ...mocks.state.modalData,
+      scriptKind: 'remove',
+      workspaceName: 'Selected task',
+      workspacePath: '/workspaces/example/selected-task'
+    }
+    const { default: OrcaYamlTrustDialog } = await import('./OrcaYamlTrustDialog')
+    const text = decodeHtml(renderToStaticMarkup(<OrcaYamlTrustDialog />)).replace(/<[^>]+>/g, '')
+    expect(text).toContain('Selected task')
+    expect(text).toContain('/workspaces/example/selected-task')
+  })
+
+  it.each([false, true])(
+    'explains archive execution for first and repeated trust: %s',
+    async (previouslyApproved) => {
+      mocks.state.modalData = {
+        ...mocks.state.modalData,
+        scriptKind: 'archive',
+        previouslyApproved
+      }
+      const { default: OrcaYamlTrustDialog } = await import('./OrcaYamlTrustDialog')
+      const text = decodeHtml(renderToStaticMarkup(<OrcaYamlTrustDialog />)).replace(/<[^>]+>/g, '')
+      expect(text).toContain('archived or removed')
+    }
+  )
 })

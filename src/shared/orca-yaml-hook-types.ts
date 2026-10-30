@@ -6,6 +6,7 @@ export type OrcaHooks = {
   scripts: {
     setup?: string // Runs after worktree is created
     archive?: string // Runs before worktree is archived
+    remove?: string // Required before permanently deleting a Git worktree
   }
   setupAgentStartupPolicy?: SetupAgentStartupPolicy
   issueCommand?: string // Shared default command for linked GitHub issues
@@ -55,6 +56,7 @@ export type RepoHookSettings = {
   scripts: {
     setup: string
     archive: string
+    remove?: string
   }
 }
 
@@ -69,6 +71,7 @@ export type PersistedTrustedOrcaHookRepo = {
   }
   setup?: PersistedTrustedOrcaHookEntry
   archive?: PersistedTrustedOrcaHookEntry
+  remove?: PersistedTrustedOrcaHookEntry
   issueCommand?: PersistedTrustedOrcaHookEntry
   vmRecipe?: PersistedTrustedOrcaHookEntry
 }

@@ -137,6 +137,25 @@ describe('getLocalCommandSourcePolicyNotice', () => {
 })
 
 describe('RepositoryHooksSection setup startup policy', () => {
+  it('exposes permanent removal separately and retains its saved script through a policy edit', () => {
+    const updates: NonNullable<Repo['hookSettings']>[] = []
+    rendered = renderRepositoryHooksSection({
+      repo: {
+        ...repo,
+        hookSettings: { mode: 'auto', scripts: { setup: '', archive: 'stop', remove: 'dispose' } }
+      },
+      onUpdateHookSettings: (settings) => updates.push(settings)
+    })
+    const removal = Array.from(rendered.container.querySelectorAll('textarea')).find(
+      (input) => input.value === 'dispose'
+    )
+    expect(removal).toBeTruthy()
+    const waitSwitch = rendered.container.querySelector<HTMLElement>(
+      '[role="switch"][aria-label="Wait for setup to complete before starting agent"]'
+    )
+    act(() => waitSwitch?.click())
+    expect(updates.at(-1)?.scripts).toMatchObject({ archive: 'stop', remove: 'dispose' })
+  })
   it('persists wait-for-setup when the repository toggle is checked', () => {
     const updates: NonNullable<Repo['hookSettings']>[] = []
     rendered = renderRepositoryHooksSection({

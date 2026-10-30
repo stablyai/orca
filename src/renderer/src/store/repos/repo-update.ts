@@ -10,7 +10,11 @@ import {
   getRepoHostIdentityForParts,
   repoMatchesHostIdentity
 } from '../slices/repo-host-identity'
-import { callRuntimeRpc } from '../../runtime/runtime-rpc-client'
+import {
+  assertRuntimeEnvironmentCapability,
+  callRuntimeRpc
+} from '../../runtime/runtime-rpc-client'
+import { WORKTREE_REQUIRED_REMOVE_HOOK_RUNTIME_CAPABILITY } from '../../../../shared/worktree-runtime-capabilities'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import {
   normalizeCustomWorktreeVisibilitySources,
@@ -128,6 +132,16 @@ export function createRepoUpdateActions(
         try {
           const sanitizedUpdates = sanitizeRepoUpdate(updates)
           const target = ownerTarget
+          if (
+            target.kind === 'environment' &&
+            sanitizedUpdates.hookSettings?.scripts.remove?.trim()
+          ) {
+            await assertRuntimeEnvironmentCapability(
+              target.environmentId,
+              WORKTREE_REQUIRED_REMOVE_HOOK_RUNTIME_CAPABILITY,
+              'Update Orca on the workspace host before configuring a required removal script.'
+            )
+          }
           const updatedRepo =
             target.kind === 'local'
               ? await window.api.repos.update({

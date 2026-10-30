@@ -8,7 +8,7 @@ import type {
 } from '../../shared/runtime-types'
 import type { CommandHandler } from '../dispatch'
 import { printHookWarning, printPreservedBranchWarning } from './worktree-removal-warnings'
-import { requestWorktreeRemoval } from './worktree-removal-request'
+import { readRemoveHookHash, requestWorktreeRemoval } from './worktree-removal-request'
 import { formatWorktreeList, formatWorktreePs, formatWorktreeShow, printResult } from '../format'
 import {
   annotateOmittedHostScope,
@@ -278,15 +278,17 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
     if (flags.get('allow-failed-archive-hook') === true && flags.get('run-hooks') !== true) {
       throw new RuntimeClientError(
         'invalid_argument',
-        '--allow-failed-archive-hook waives a FAILED archive hook, but without --run-hooks no hook runs at all. Pass --run-hooks too, or drop the waiver.'
+        '--allow-failed-archive-hook waives a FAILED archive hook, but without --run-hooks no archive hook runs. Pass --run-hooks too, or drop the waiver.'
       )
     }
+    const removeHookHash = readRemoveHookHash(flags)
     const result = await requestWorktreeRemoval(client, {
       worktree,
       hostId,
       force: flags.get('force') === true,
       deleteBranch: flags.get('delete-branch') === true,
       runHooks: flags.get('run-hooks') === true,
+      ...(removeHookHash !== undefined ? { removeHookHash } : {}),
       // Archive failure waivers protect user data separately from --force's PTY-stop waiver.
       allowFailedArchiveHook: flags.get('allow-failed-archive-hook') === true
     })

@@ -37,6 +37,7 @@ import { runtimeTargetForWorktreeOwner } from '../listing/worktree-owner-target'
 import { runtimeTargetForWorkspaceOwner } from '@/lib/resolve-owner'
 
 import { findRepoForHost } from '../../repo-host-identity'
+import { ensureHooksConfirmed } from '@/lib/ensure-hooks-confirmed'
 export function createUpdateWorktreeMeta(
   set: WorktreeSliceSet,
   get: WorktreeSliceGet
@@ -172,8 +173,9 @@ export function createUpdateWorktreeMeta(
 
     // A failed save must leave the error visible even when the recovery fetch also fails.
     const deferUpdate =
-      mutationUpdates.firstAgentMessageRenameError === null &&
-      mutationUpdates.displayName === undefined
+      mutationUpdates.isArchived !== undefined ||
+      (mutationUpdates.firstAgentMessageRenameError === null &&
+        mutationUpdates.displayName === undefined)
     let didApply = false
     const buildUpdate = (s: ReturnType<WorktreeSliceGet>) => {
       if (
@@ -202,12 +204,26 @@ export function createUpdateWorktreeMeta(
     }
 
     try {
+      if (mutationUpdates.isArchived === true && !worktreeForUpdate?.isArchived) {
+        const owner = runtimeTargetForWorktreeOwner(get(), worktreeId, executionHostId)
+        const consent = await ensureHooksConfirmed(
+          get,
+          getRepoIdFromWorktreeId(worktreeId),
+          'archive',
+          executionHostId,
+          owner.kind === 'environment' ? owner.environmentId : undefined
+        )
+        if (consent !== 'run') {
+          return { ok: false, error: 'Archive cancelled; the stop script was not approved.' }
+        }
+      }
       await persistWorktreeMeta(
         runtimeTargetForWorktreeOwner(get(), worktreeId, executionHostId),
         worktreeId,
         getWorkspaceReviewPersistenceUpdates(mutationUpdates, enriched),
         executionHostId ?? existingWorktree?.hostId,
-        worktreeForUpdate?.identity?.key
+        worktreeForUpdate?.identity?.key,
+        worktreeForUpdate?.instanceId ?? worktreeForUpdate?.identity?.instanceId
       )
       if (deferUpdate) {
         set(buildUpdate)
@@ -246,7 +262,7 @@ export function createUpdateWorktreeMeta(
   }
   // A conditional write may not apply, so only an unconditional one shows ahead of main.
   return (worktreeId, updates, options) =>
-    options?.shouldApply
+    options?.shouldApply || updates.isArchived !== undefined
       ? update(worktreeId, updates, options)
       : withPendingSidebarRowWrites(
           () => [

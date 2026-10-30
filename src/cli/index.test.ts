@@ -254,7 +254,7 @@ describe('command aliases dispatch to the canonical handler', () => {
         ok: false,
         error: {
           code: 'invalid_argument',
-          message: expect.stringContaining('without --run-hooks no hook runs at all')
+          message: expect.stringContaining('without --run-hooks no archive hook runs')
         }
       })
     } finally {

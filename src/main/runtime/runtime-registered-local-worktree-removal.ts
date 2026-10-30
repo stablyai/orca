@@ -8,6 +8,10 @@ import { pruneGitWorktrees } from '../git/worktree-prune-guard'
 import type { RemoveWorktreeResult } from '../../shared/worktree/create-types'
 import type { ArchiveHookOverride } from '../../shared/worktree/archive-hook-removal-gate'
 import { gateWorktreeRemovalOnArchiveHook } from '../worktree-archive-hook-gate'
+import {
+  assertWorktreeRemoveHookApproval,
+  runRequiredWorktreeRemoveHook
+} from '../worktree-remove-hook-gate'
 import type { Repo } from '../../shared/repo-types'
 import { assertWorktreeUnlockedForRemoval } from '../../shared/worktree/removal'
 import type { LocalProjectWorktreeGitOptions } from '../project-runtime-git-options'
@@ -62,6 +66,7 @@ async function acceptRuntimeRegisteredLocalWorktreeRemoval(args: {
   hasLocalOptions: boolean
   force: boolean
   runHooks: boolean
+  removeHookHash?: string
   /** Explicit waiver for a FAILED archive hook. Never implied by `force` — see #19334. */
   allowFailedArchiveHook: boolean
   allowUnverifiedPtyStop: boolean
@@ -88,11 +93,13 @@ async function acceptRuntimeRegisteredLocalWorktreeRemoval(args: {
   const { repo, registeredWorktree, localOptions } = args
   const canonicalPath = registeredWorktree.path
   const hooks = getEffectiveHooks(repo)
+  assertWorktreeRemoveHookApproval(repo, args.removeHookHash)
   let warning: string | undefined
   // Archive refusal precedes refresh, preflights, PTY stop and Git deletion; failure must leave them untouched (#19334).
   let archiveHookOverride: ArchiveHookOverride | undefined
   if (
     hooks?.scripts.archive &&
+    !hooks.scripts.remove &&
     args.runHooks &&
     !(await nativeWindowsMarkerMissing(canonicalPath, localOptions))
   ) {
@@ -108,7 +115,7 @@ async function acceptRuntimeRegisteredLocalWorktreeRemoval(args: {
       result,
       allowFailure: args.allowFailedArchiveHook
     })
-  } else if (hooks?.scripts.archive) {
+  } else if (hooks?.scripts.archive && !hooks.scripts.remove) {
     warning = `orca.yaml archive hook skipped for ${canonicalPath}; pass --run-hooks to run it.`
     console.warn(`[hooks] ${warning}`)
   }
@@ -167,6 +174,10 @@ async function acceptRuntimeRegisteredLocalWorktreeRemoval(args: {
     if (!isOrphanCompatiblePreflightError(error)) {
       throw new Error(formatWorktreeRemovalError(error, canonicalPath, args.force))
     }
+  }
+
+  if (!markerMissing) {
+    await runRequiredWorktreeRemoveHook(repo, canonicalPath, localOptions, args.removeHookHash)
   }
 
   const gate = await args.acquireWatcherRemoval(canonicalPath)

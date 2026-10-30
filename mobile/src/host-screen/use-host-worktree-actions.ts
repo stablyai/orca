@@ -192,14 +192,23 @@ export function useHostWorktreeActions(args: {
         if (!worktreeRemove.interpret(reply).accepted) {
           setWorktrees((prev) => [...prev, item])
           setLastKnownWorktrees((prev) => [...prev, item])
+          setActionError(
+            'Workspace removal was refused. Review required cleanup and the host error in the desktop app or CLI before retrying.'
+          )
+          return
         }
         void fetchWorktrees()
-      } catch {
+      } catch (error) {
         setWorktrees((prev) => [...prev, item])
         setLastKnownWorktrees((prev) => [...prev, item])
+        setActionError(
+          error instanceof Error
+            ? error.message
+            : 'Could not confirm workspace removal. Check the desktop app or CLI before retrying.'
+        )
       }
     },
-    [clientForRow, fetchWorktrees]
+    [clientForRow, fetchWorktrees, setActionError]
   )
 
   const handleRemoveHost = useCallback(async () => {

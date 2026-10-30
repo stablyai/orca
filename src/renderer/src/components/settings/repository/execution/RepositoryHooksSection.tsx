@@ -85,9 +85,13 @@ export function RepositoryHooksSection({
   const sharedArchiveScript = yamlHooks?.scripts.archive
   const hasSharedSetupScript = Boolean(sharedSetupScript?.trim())
   const hasSharedArchiveScript = Boolean(sharedArchiveScript?.trim())
-  const hasSharedScript = hasSharedSetupScript || hasSharedArchiveScript
+  const sharedRemoveScript = yamlHooks?.scripts.remove
+  const hasSharedRemoveScript = Boolean(sharedRemoveScript?.trim())
+  const hasSharedScript = hasSharedSetupScript || hasSharedArchiveScript || hasSharedRemoveScript
   const hasLocalScript = Boolean(
-    hookSettingsDraft.scripts.setup?.trim() || hookSettingsDraft.scripts.archive?.trim()
+    hookSettingsDraft.scripts.setup?.trim() ||
+    hookSettingsDraft.scripts.archive?.trim() ||
+    hookSettingsDraft.scripts.remove?.trim()
   )
   const selectedCommandSourcePolicy: HookCommandSourcePolicy = resolveHookCommandSourcePolicy(
     hookSettingsDraft.commandSourcePolicy,
@@ -98,6 +102,7 @@ export function RepositoryHooksSection({
     currentPolicy: selectedCommandSourcePolicy,
     setupScript: hookSettingsDraft.scripts.setup,
     archiveScript: hookSettingsDraft.scripts.archive,
+    removeScript: hookSettingsDraft.scripts.remove,
     hasSharedScript
   })
   const [isAdvancedOpen, setIsAdvancedOpen] = useState(false)
@@ -114,7 +119,7 @@ export function RepositoryHooksSection({
         <p className="text-xs text-muted-foreground">
           {translate(
             'auto.components.settings.RepositoryHooksSection.8567127a40',
-            'Scripts that run when worktrees are created or archived. Local scripts are stored on this machine; `orca.yaml` scripts are shared with your team.'
+            'Scripts that run when worktrees are created, archived or permanently removed. Local scripts are stored on this machine; `orca.yaml` scripts are shared with your team.'
           )}
         </p>
       </div>
@@ -199,6 +204,25 @@ export function RepositoryHooksSection({
           hasShared={hasSharedArchiveScript}
           sharedScript={sharedArchiveScript}
           onChange={(next) => updateScriptDraft('archive', next)}
+          onCommit={commitScriptDraft}
+        />
+      </SearchableSetting>
+      <SearchableSetting
+        title={translate('repositoryHooks.removeLabel', 'Remove Script')}
+        description={translate(
+          'repositoryHooks.removeSummary',
+          'Required cleanup before permanent workspace deletion.'
+        )}
+        forceVisible={forceVisible}
+        keywords={['remove', 'delete', 'dispose', 'data', 'resources', 'hook']}
+      >
+        <RepositoryHookScriptSetting
+          key={`${repo.id}:remove`}
+          field={localHookFields[2]}
+          value={hookSettingsDraft.scripts.remove ?? ''}
+          hasShared={hasSharedRemoveScript}
+          sharedScript={sharedRemoveScript}
+          onChange={(next) => updateScriptDraft('remove', next)}
           onCommit={commitScriptDraft}
         />
       </SearchableSetting>

@@ -16,6 +16,7 @@ export function getWorktreeRemovalOptionsKey(
     | 'allowFailedArchiveHook'
     | 'approvedNestedWorktrees'
     | 'expectedCheckout'
+    | 'removeHookHash'
   >
 ): string {
   const forceKey = args.force === true ? 'force' : 'normal'
@@ -29,7 +30,7 @@ export function getWorktreeRemovalOptionsKey(
     args.approvedNestedWorktrees || args.expectedCheckout
       ? `:${JSON.stringify([args.approvedNestedWorktrees, args.expectedCheckout])}`
       : ''
-  return `${forceKey}:${archiveKey}:${ptyKey}:${archiveFailureKey}${checkoutKey}`
+  return `${forceKey}:${archiveKey}:${ptyKey}:${archiveFailureKey}${checkoutKey}:${args.removeHookHash ?? ''}`
 }
 
 export function getWorktreeRemovalInFlightKey(

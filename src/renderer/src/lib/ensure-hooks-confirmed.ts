@@ -17,6 +17,7 @@ import {
 } from '../../../shared/execution-host'
 
 export type HookScriptKind = OrcaHookScriptKind
+export type HookWorkspaceTarget = { name: string; path: string }
 
 const NEVER_CANCEL_TRUST_CHECK = (): boolean => false
 
@@ -55,14 +56,14 @@ function getVmRecipeTrustContent(yamlHooks: OrcaHooks | null): string {
     .join('\n\n')
 }
 
-function findHookRepo(state: AppState, repoId: string, hostId?: ExecutionHostId) {
+export function findHookRepo(state: AppState, repoId: string, hostId?: ExecutionHostId) {
   return hostId
     ? state.repos.find((repo) => repo.id === repoId && getRepoExecutionHostId(repo) === hostId)
     : state.repos.find((repo) => repo.id === repoId)
 }
 
 /** Inspect on the captured runtime owner, then explicit host, then repo owner; never substitute focused host, including server-owned SSH repos. */
-function hookRepoOwnerHostId(
+export function hookRepoOwnerHostId(
   state: AppState,
   repoId: string,
   hostId?: ExecutionHostId,
@@ -91,12 +92,16 @@ async function confirmScriptContent(
   scriptKind: HookScriptKind,
   scriptContent: string,
   hostId?: ExecutionHostId,
-  isCancelled: () => boolean = NEVER_CANCEL_TRUST_CHECK
+  isCancelled: () => boolean = NEVER_CANCEL_TRUST_CHECK,
+  workspace?: HookWorkspaceTarget
 ): Promise<'run' | 'skip'> {
   if (isCancelled()) {
     return 'skip'
   }
-  if (canUseRepoWideTrust(state.trustedOrcaHooks, state.repos, repoId) || !scriptContent) {
+  if (
+    (scriptKind !== 'remove' && canUseRepoWideTrust(state.trustedOrcaHooks, state.repos, repoId)) ||
+    !scriptContent
+  ) {
     return 'run'
   }
 
@@ -105,7 +110,7 @@ async function confirmScriptContent(
     return 'skip'
   }
   const existingHash = state.trustedOrcaHooks[repoId]?.[scriptKind]?.contentHash
-  if (existingHash === contentHash) {
+  if (scriptKind !== 'remove' && existingHash === contentHash) {
     return 'run'
   }
 
@@ -129,6 +134,7 @@ async function confirmScriptContent(
       scriptContent,
       contentHash,
       previouslyApproved,
+      ...(workspace ? { workspaceName: workspace.name, workspacePath: workspace.path } : {}),
       onResolve: settle,
       // Why: eviction must fail closed without stranding the singleton trust queue.
       [MODAL_DISMISSED_KEY]: () => settle('skip')
@@ -231,13 +237,29 @@ export async function ensureHooksConfirmed(
       return 'skip'
     }
     const state = typeof stateOrGetter === 'function' ? stateOrGetter() : stateOrGetter
-    if (canUseRepoWideTrust(state.trustedOrcaHooks, state.repos, repoId)) {
+    if (
+      scriptKind !== 'remove' &&
+      canUseRepoWideTrust(state.trustedOrcaHooks, state.repos, repoId)
+    ) {
       return 'run'
     }
 
     let scriptContent = ''
     try {
-      if (scriptKind === 'issueCommand') {
+      if (scriptKind === 'remove') {
+        const result = await checkRuntimeHooks(
+          hookRepoOwnerHostId(state, repoId, hostId, runtimeOwnerEnvironmentId),
+          repoId
+        )
+        if (
+          result.status === 'error' ||
+          result.supportsRemoveHook !== true ||
+          typeof result.effectiveRemoveScript !== 'string'
+        ) {
+          return 'skip'
+        }
+        scriptContent = result.effectiveRemoveScript
+      } else if (scriptKind === 'issueCommand') {
         // Only shared orca.yaml needs repo trust; user-owned overrides do not. Pass hostId to disambiguate same-ID repos, as checkRuntimeHooks does.
         // A launch is a user act: it may start the repo's stopped WSL distro.
         const result = await readRuntimeIssueCommand(
@@ -289,4 +311,17 @@ export async function ensureHooksConfirmed(
 
     return confirmScriptContent(state, repoId, scriptKind, scriptContent, hostId, isCancelled)
   })
+}
+
+export function confirmInspectedHookScript(
+  get: () => AppState,
+  repoId: string,
+  kind: HookScriptKind,
+  script: string,
+  hostId?: ExecutionHostId,
+  workspace?: HookWorkspaceTarget
+): Promise<'run' | 'skip'> {
+  return enqueueTrustPrompt(() =>
+    confirmScriptContent(get(), repoId, kind, script, hostId, NEVER_CANCEL_TRUST_CHECK, workspace)
+  )
 }

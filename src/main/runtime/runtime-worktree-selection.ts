@@ -19,6 +19,7 @@ export type RemoveManagedWorktreeOptions = {
   force?: boolean
   deleteBranch?: boolean
   runHooks?: boolean
+  removeHookHash?: string
   /** Waives proof that every PTY stopped (#11960). Set by explicit Force Delete only. */
   allowUnverifiedPtyStop?: boolean
   /** Waives a FAILED archive hook (#19334). Never implied by `force`, never by `runHooks`. */
@@ -31,7 +32,12 @@ export type RemoveManagedWorktreeOptions = {
 export function getRuntimeWorktreeRemovalOptionsKey(
   options: Pick<
     RemoveManagedWorktreeOptions,
-    'force' | 'runHooks' | 'allowUnverifiedPtyStop' | 'allowFailedArchiveHook' | 'deleteBranch'
+    | 'force'
+    | 'runHooks'
+    | 'allowUnverifiedPtyStop'
+    | 'allowFailedArchiveHook'
+    | 'deleteBranch'
+    | 'removeHookHash'
   >
 ): string {
   // Forced retries must not coalesce onto an attempt refusing unverified PTY stop.
@@ -45,7 +51,7 @@ export function getRuntimeWorktreeRemovalOptionsKey(
       : options.deleteBranch
         ? 'delete-branch'
         : 'keep-branch'
-  return `${options.force ? 'force' : 'normal'}:${hooksKey}:${ptyKey}:${archiveKey}:${branchKey}`
+  return `${options.force ? 'force' : 'normal'}:${hooksKey}:${ptyKey}:${archiveKey}:${branchKey}:${options.removeHookHash ?? ''}`
 }
 
 // Null host is host-unaware; unstamped legacy rows are adoptable, but either explicit host spelling must match exactly.

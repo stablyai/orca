@@ -24,6 +24,7 @@ export function getSetupEnvVars(repo: Repo, worktreePath: string): Record<string
 export function getSetupRunnerEnvVars(repo: Repo, worktreePath: string): Record<string, string> {
   return {
     ...getSetupEnvVars(repo, worktreePath),
+    ORCA_HOOK_TYPE: 'setup',
     // Unattended setup always needs credential protection, regardless of user opt-out.
     [TERMINAL_GIT_CREDENTIAL_GUARD_POLICY_ENV]: 'guard'
   }

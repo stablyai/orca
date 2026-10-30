@@ -92,7 +92,13 @@ export const mockApi = {
     kill: stubMock().mockResolvedValue(undefined)
   },
   hooks: {
-    check: stubMock().mockResolvedValue({ hasHooks: false, hooks: null, mayNeedUpdate: false })
+    check: stubMock().mockResolvedValue({
+      hasHooks: false,
+      hooks: null,
+      mayNeedUpdate: false,
+      supportsRemoveHook: true,
+      effectiveRemoveScript: ''
+    })
   },
   workspaceCleanup: {
     recordRemovalSnapshotPrune: stubMock().mockResolvedValue(undefined)
@@ -123,6 +129,21 @@ export function resetRemoteRuntimeMocks() {
   runtimeEnvironmentCall.mockReset()
   runtimeEnvironmentTransportCall.mockReset()
   runtimeEnvironmentTransportCall.mockImplementation((args: RuntimeEnvironmentCallRequest) => {
+    if (args.method === 'repo.hooksCheck') {
+      return {
+        id: 'hooks',
+        ok: true,
+        result: {
+          status: 'ok',
+          hasHooks: false,
+          hooks: null,
+          mayNeedUpdate: false,
+          supportsRemoveHook: true,
+          effectiveRemoveScript: ''
+        },
+        _meta: { runtimeId: 'runtime-remote' }
+      }
+    }
     return createCompatibleRuntimeStatusResponseIfNeeded(args) ?? runtimeEnvironmentCall(args)
   })
 }

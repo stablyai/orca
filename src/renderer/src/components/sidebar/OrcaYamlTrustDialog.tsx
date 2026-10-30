@@ -18,6 +18,13 @@ type ScriptKind = OrcaHookScriptKind
 
 function getTitle(kind: ScriptKind, repoName: string, previouslyApproved: boolean): string {
   const repo = { repo: repoName }
+  if (kind === 'remove') {
+    return translate(
+      'removeHook.confirmTitle',
+      'Permanently remove workspace resources for {{repo}}?',
+      repo
+    )
+  }
   if (previouslyApproved) {
     switch (kind) {
       case 'setup':
@@ -76,6 +83,12 @@ function getTitle(kind: ScriptKind, repoName: string, previouslyApproved: boolea
 
 // Templates embed <code>orca.yaml</code> and a <repo/> slot filled by the component.
 function getDescription(kind: ScriptKind, previouslyApproved: boolean): string {
+  if (kind === 'remove') {
+    return translate(
+      'removeHook.confirmBody',
+      'This configured removal script runs on the workspace host before its checkout is deleted. It may permanently delete associated resources and retained application data. Cancel keeps the workspace. A failed script blocks checkout deletion; cleanup may already have begun.'
+    )
+  }
   if (previouslyApproved) {
     switch (kind) {
       case 'setup':
@@ -85,8 +98,8 @@ function getDescription(kind: ScriptKind, previouslyApproved: boolean): string {
         )
       case 'archive':
         return translate(
-          'auto.components.sidebar.OrcaYamlTrustDialog.archiveChangedBody',
-          '<code>orca.yaml</code> changed since you last approved. Re-review before it runs when this workspace is removed.'
+          'archiveHook.changedBody',
+          '<code>orca.yaml</code> changed since you last approved. Re-review before it runs when this workspace is archived or removed.'
         )
       case 'issueCommand':
         return translate(
@@ -108,8 +121,8 @@ function getDescription(kind: ScriptKind, previouslyApproved: boolean): string {
       )
     case 'archive':
       return translate(
-        'auto.components.sidebar.OrcaYamlTrustDialog.archiveRunBody',
-        "This repository's <code>orca.yaml</code> runs on your machine when this workspace is removed. Only run if you trust <repo/>."
+        'archiveHook.confirmBody',
+        "This repository's <code>orca.yaml</code> runs on the workspace host before this workspace is archived or removed. Only run if you trust <repo/>."
       )
     case 'issueCommand':
       return translate(
@@ -125,6 +138,9 @@ function getDescription(kind: ScriptKind, previouslyApproved: boolean): string {
 }
 
 function getScriptHeading(kind: ScriptKind, previouslyApproved: boolean): string {
+  if (kind === 'remove') {
+    return translate('removeHook.scriptHeading', 'Required removal script')
+  }
   switch (kind) {
     case 'setup':
       return previouslyApproved
@@ -183,14 +199,18 @@ const OrcaYamlTrustDialog = React.memo(function OrcaYamlTrustDialog() {
       ? modalData.repoName
       : translate('auto.components.sidebar.OrcaYamlTrustDialog.thisRepository', 'this repository')
   const scriptKind: ScriptKind =
-    modalData.scriptKind === 'archive'
-      ? 'archive'
-      : modalData.scriptKind === 'issueCommand'
-        ? 'issueCommand'
-        : modalData.scriptKind === 'vmRecipe'
-          ? 'vmRecipe'
-          : 'setup'
+    modalData.scriptKind === 'remove'
+      ? 'remove'
+      : modalData.scriptKind === 'archive'
+        ? 'archive'
+        : modalData.scriptKind === 'issueCommand'
+          ? 'issueCommand'
+          : modalData.scriptKind === 'vmRecipe'
+            ? 'vmRecipe'
+            : 'setup'
   const scriptContent = typeof modalData.scriptContent === 'string' ? modalData.scriptContent : ''
+  const workspaceName = typeof modalData.workspaceName === 'string' ? modalData.workspaceName : ''
+  const workspacePath = typeof modalData.workspacePath === 'string' ? modalData.workspacePath : ''
   const contentHash = typeof modalData.contentHash === 'string' ? modalData.contentHash : ''
   const previouslyApproved = modalData.previouslyApproved === true
   const onResolve =
@@ -238,6 +258,12 @@ const OrcaYamlTrustDialog = React.memo(function OrcaYamlTrustDialog() {
           <DialogTitle className="text-sm">
             {getTitle(scriptKind, repoName, previouslyApproved)}
           </DialogTitle>
+          {scriptKind === 'remove' && workspacePath && (
+            <div className="min-w-0 space-y-1">
+              <p className="break-words text-xs font-semibold text-foreground">{workspaceName}</p>
+              <p className="break-all font-mono text-xs text-muted-foreground">{workspacePath}</p>
+            </div>
+          )}
           <DialogDescription className="text-xs">
             <Trans
               i18n={i18n}
@@ -258,37 +284,46 @@ const OrcaYamlTrustDialog = React.memo(function OrcaYamlTrustDialog() {
           </div>
         )}
 
-        <label
-          className={`flex cursor-pointer items-center gap-2.5 rounded-md border px-3 py-2 transition-colors ${
-            alwaysTrust
-              ? 'border-primary/60 bg-primary/5'
-              : 'border-border/70 bg-muted/25 hover:border-border hover:bg-muted/40'
-          }`}
-        >
-          <input
-            type="checkbox"
-            className="h-4 w-4 accent-primary"
-            checked={alwaysTrust}
-            onChange={(event) => setAlwaysTrust(event.target.checked)}
-          />
-          <span className="text-xs font-medium text-foreground">
-            <Trans
-              i18n={i18n}
-              defaults={translate(
-                'auto.components.sidebar.OrcaYamlTrustDialog.alwaysTrustRepo',
-                'Always trust <code>orca.yaml</code> in <repo/>'
-              )}
-              components={{ code: <code />, repo: <>{repoName}</> }}
+        {scriptKind !== 'remove' && (
+          <label
+            className={`flex cursor-pointer items-center gap-2.5 rounded-md border px-3 py-2 transition-colors ${
+              alwaysTrust
+                ? 'border-primary/60 bg-primary/5'
+                : 'border-border/70 bg-muted/25 hover:border-border hover:bg-muted/40'
+            }`}
+          >
+            <input
+              type="checkbox"
+              className="h-4 w-4 accent-primary"
+              checked={alwaysTrust}
+              onChange={(event) => setAlwaysTrust(event.target.checked)}
             />
-          </span>
-        </label>
+            <span className="text-xs font-medium text-foreground">
+              <Trans
+                i18n={i18n}
+                defaults={translate(
+                  'auto.components.sidebar.OrcaYamlTrustDialog.alwaysTrustRepo',
+                  'Always trust <code>orca.yaml</code> in <repo/>'
+                )}
+                components={{ code: <code />, repo: <>{repoName}</> }}
+              />
+            </span>
+          </label>
+        )}
 
         <DialogFooter>
-          <Button variant="outline" onClick={() => resolveAndClose('skip')}>
-            {translate('auto.components.sidebar.OrcaYamlTrustDialog.43b7bec4cd', "Don't run")}
+          <Button variant="ghost" onClick={() => resolveAndClose('skip')}>
+            {scriptKind === 'remove'
+              ? translate('removeHook.cancel', 'Cancel removal')
+              : translate('auto.components.sidebar.OrcaYamlTrustDialog.43b7bec4cd', "Don't run")}
           </Button>
-          <Button onClick={() => resolveAndClose('run')}>
-            {translate('auto.components.sidebar.OrcaYamlTrustDialog.f3e2b868fb', 'Run hooks')}
+          <Button
+            variant={scriptKind === 'remove' ? 'destructive' : 'default'}
+            onClick={() => resolveAndClose('run')}
+          >
+            {scriptKind === 'remove'
+              ? translate('removeHook.confirm', 'Run cleanup and delete workspace')
+              : translate('auto.components.sidebar.OrcaYamlTrustDialog.f3e2b868fb', 'Run hooks')}
           </Button>
         </DialogFooter>
       </DialogContent>

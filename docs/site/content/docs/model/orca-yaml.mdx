@@ -37,6 +37,7 @@ All keys are optional. Script, title, command, and path values must be strings; 
 | ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
 | `scripts.setup`              | Nonempty script string, including a YAML block scalar (`\|`). Runs in the new worktree when setup is enabled.                                                                                         | No project setup script.                                                      |
 | `scripts.archive`            | Nonempty script string. Runs in the worktree before archive/removal when hooks are enabled.                                                                                                           | No project archive script.                                                    |
+| `scripts.remove`             | Nonempty script string. Required cleanup before permanently deleting a registered Git worktree. May dispose associated resources and retained data. Replaces archive for deletion.                    | Legacy archive behavior.                                                      |
 | `setupAgentStartupPolicy`    | Exactly `start-immediately` or `wait-for-setup`.                                                                                                                                                      | `start-immediately`; a local **wait** setting still takes precedence.         |
 | `issueCommand`               | Nonempty command template for linked GitHub/GitLab items in the create composer.                                                                                                                      | No project template; the composer can still supply its built-in agent prompt. |
 | `defaultTabs`                | List of mappings with optional `title`, `command`, and `color`. At least one valid field is required per entry. `color` accepts `#RGB` or `#RRGGBB`.                                                  | Normal initial terminal behavior.                                             |
@@ -67,7 +68,7 @@ The **primary checkout** is the repository folder registered in Orca. It may be 
 | Setup script, setup startup policy, and `defaultTabs` | The **new worktree's** `orca.yaml`.                                                          |
 | Shared directory rules and their source directories   | The **primary checkout's** `orca.yaml` and filesystem.                                       |
 | Copy rules and their source files                     | The **primary checkout's** `.worktreeinclude` and filesystem.                                |
-| Archive script                                        | The **primary checkout's** `orca.yaml`, executed with the worktree as its working directory. |
+| Archive and remove scripts                            | The **primary checkout's** `orca.yaml`, executed with the worktree as its working directory. |
 | Issue command                                         | The **primary checkout's** `.orca/issue-command`, then its `orca.yaml`.                      |
 
 Changing a feature branch's `.worktreeinclude` or shared-directory list does not update the primary checkout. Before creating another worktree, make sure the primary checkout has the intended rules and the ignored source paths. Setup and tab defaults instead follow the revision checked out in the new worktree. These defaults are applied during creation; they do not synchronize existing tabs or files.
@@ -76,7 +77,7 @@ Changing a feature branch's `.worktreeinclude` or shared-directory list does not
 
 In **Settings → Repository**, setup can run automatically, ask each time, or be skipped by default. A new repository defaults to running setup. The [CLI](/docs/cli/reference#worktrees) accepts `--setup run|skip|inherit`; `inherit` follows that Settings policy. A valid file does not bypass Orca's command approval.
 
-**Command source & orca.yaml** controls setup and archive scripts:
+**Command source & orca.yaml** controls setup, archive and remove scripts:
 
 | Settings choice                    | Scripts used                                    |
 | ---------------------------------- | ----------------------------------------------- |
@@ -88,18 +89,33 @@ When no source choice is saved, a nonempty local hook selects **Local only** for
 
 Setup runs in a **Setup** terminal. On macOS/Linux, Orca writes a Bash runner with `set -e`; supported shell options on a leading `#!` line are replayed. On native Windows, the runner uses `.cmd` syntax and calls each nonempty line, stopping on failure. A leading POSIX-shell `#!` line opts into Bash only when Git Bash is configured and available; otherwise the `.cmd` runner refuses the script before running any commands. Choosing PowerShell as the terminal does not turn a setup script into PowerShell code.
 
-The setup runner receives:
+Lifecycle scripts receive:
 
-| Variable                                  | Value                                                             |
-| ----------------------------------------- | ----------------------------------------------------------------- |
-| `ORCA_ROOT_PATH`                          | Primary checkout path.                                            |
-| `ORCA_WORKTREE_PATH`                      | New worktree path.                                                |
-| `ORCA_WORKSPACE_NAME`                     | Worktree directory basename, rather than a renamed display title. |
-| `CONDUCTOR_ROOT_PATH`, `GHOSTX_ROOT_PATH` | Compatibility aliases for `ORCA_ROOT_PATH`.                       |
+| Variable                                  | Value                                                                              |
+| ----------------------------------------- | ---------------------------------------------------------------------------------- |
+| `ORCA_HOOK_TYPE`                          | `setup`, `archive` or `remove`; a permanent-disposal command can require `remove`. |
+| `ORCA_ROOT_PATH`                          | Primary checkout path.                                                             |
+| `ORCA_WORKTREE_PATH`                      | New worktree path.                                                                 |
+| `ORCA_WORKSPACE_NAME`                     | Worktree directory basename, rather than a renamed display title.                  |
+| `CONDUCTOR_ROOT_PATH`, `GHOSTX_ROOT_PATH` | Compatibility aliases for `ORCA_ROOT_PATH`.                                        |
 
-Paths and shell syntax differ by platform. Use `$ORCA_WORKTREE_PATH` in Bash and `%ORCA_WORKTREE_PATH%` in `.cmd` scripts. `wait-for-setup` waits for successful setup before agent startup; either the YAML or local wait setting enables it. This controls startup order, not whether setup runs.
+Paths and shell syntax differ by platform. Use `$ORCA_WORKTREE_PATH` in Bash and `%ORCA_WORKTREE_PATH%` in `.cmd` scripts. `wait-for-setup` waits for successful setup before agent startup; either the YAML or local wait setting enables it. This controls startup order, not whether setup runs. The same gate applies to terminal and chat agents: setup can remain pending for up to two hours; a failed, timed-out or unverifiable completion retains the workspace and declines agent startup. It never becomes success merely because sixty seconds passed.
 
-Archive hooks run before local removal; the CLI requires `--run-hooks` to enable them. A failed archive hook blocks removal unless the caller explicitly accepts that failure.
+Without a remove script, archive hooks retain their existing behavior: the CLI requires `--run-hooks`, and a failed archive hook blocks removal unless explicitly waived. On an explicit transition from active to archived, a configured archive script must confirm success before Orca saves the archived state. Failed or unverified stop retains the previous state and checkout. Duplicate archive requests do not run the script twice; changing an archived workspace back to active does not rerun archive. This transition is separate from Sleep, which manages sessions. Archive scripts must retain application data.
+
+### Permanent removal
+
+Configure `scripts.remove` in the primary checkout or **Settings → Repository → Remove Script** for cleanup that must finish before the checkout disappears. It runs after checkout ownership, lock and dirty-file checks and before checkout deletion. A nonzero exit, timeout or unverified completion keeps the checkout for recovery. Cleanup may have partially completed, so the script must support retry safely. Neither `--force`, skipped archive, nor `--allow-failed-archive-hook` can bypass required removal or authorize data disposal. Successful remove does not also run archive. Under **Run both**, shared and local removal commands execute in separate shells, in that order; each must succeed. The returned digest covers command boundaries and order as well as text.
+
+The desktop displays the effective removal script and its resource/data effect for every removal, including locally configured scripts and repositories with saved trust or skipped ordinary delete confirmations. Cancelling cancels deletion. The host checks the approved script digest again before running it; changed instructions require another review.
+
+For CLI use, a first `orca worktree rm --worktree <selector> --json` refuses without changes when a remove script is configured and returns its script and `removeHookHash`. Review it, then repeat with `--remove-hook-hash <sha256>` to authorize that exact cleanup and checkout deletion. The digest is separate from archive waivers. Older clients cannot authorize a configured remove script; updated clients refuse hosts that lack the removal contract.
+
+Malformed or unreadable shared hook configuration blocks removal while shared commands are enabled. Invalid private command-source settings also block removal. **Local only** continues to ignore shared YAML, and a missing YAML file remains a valid no-shared-hooks case.
+
+Mobile clients retain the workspace when required cleanup needs consent and show an actionable refusal. Review and authorize that removal in the desktop app or CLI.
+
+Remove scripts are not invoked for folder workspace entries, metadata-only forgetting, or cleanup of an already-missing checkout. An existing orphan directory with a required remove script is retained until its Git registration is restored, so forced orphan cleanup cannot bypass resource disposal.
 
 ### Terminal defaults and issue commands
 

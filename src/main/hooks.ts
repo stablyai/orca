@@ -1,8 +1,9 @@
+import { loadRequiredLifecycleHooks } from './worktree-lifecycle-hook-config'
 import { readFileSync, existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { parseOrcaYaml } from '../shared/orca-yaml'
 import { resolveHookCommandSourcePolicy } from '../shared/hook-command-source-policy'
-import { getEffectiveHooksFromConfig } from './effective-hook-config'
+import { getEffectiveHooksFromConfig, type EffectiveOrcaHooks } from './effective-hook-config'
 import { getHookRuntimeTarget, getHookWslContext } from './hook-runtime-target'
 import { getSetupEnvVars } from './setup-hook-env-vars'
 import { iterateLfScriptLines } from './setup-runner-script-text'
@@ -148,8 +149,15 @@ export function hasUnrecognizedOrcaYamlKeys(repoPath: string): boolean {
   }
 }
 
-export function getEffectiveHooks(repo: Repo, worktreePath?: string): OrcaHooks | null {
+export function getEffectiveHooks(
+  repo: Repo,
+  worktreePath?: string,
+  options: { strictRemoval?: boolean; strictArchive?: boolean } = {}
+): EffectiveOrcaHooks | null {
   const hooksRoot = worktreePath ?? repo.path
+  if (options.strictRemoval || options.strictArchive) {
+    return loadRequiredLifecycleHooks(repo, hooksRoot, options.strictArchive ? 'archive' : 'remove')
+  }
   return getEffectiveHooksFromConfig(repo, loadHooks(hooksRoot))
 }
 
@@ -182,16 +190,17 @@ export function getSetupCommandSource(
 }
 
 export function runHook(
-  hookName: 'setup' | 'archive',
+  hookName: 'setup' | 'archive' | 'remove',
   cwd: string,
   repo: Repo,
   hooksPath?: string,
   projectRuntime?: ProjectExecutionRuntimeResolution | HookRuntimeTarget,
-  timeoutMs: number = HOOK_TIMEOUT
+  timeoutMs: number = HOOK_TIMEOUT,
+  approvedScript?: string
   // Failed hooks without an observed exit are unverifiable to the removal gate (#19334).
 ): Promise<{ success: boolean; output: string; exitCode?: number }> {
   const hooks = getEffectiveHooks(repo, hooksPath)
-  const script = hooks?.scripts[hookName]
+  const script = approvedScript ?? hooks?.scripts[hookName]
 
   if (!script) {
     return Promise.resolve({ success: true, output: '' })
@@ -207,6 +216,7 @@ export function runHook(
     for (const [key, value] of Object.entries(envVars)) {
       wslEnv[key] = toLinuxPath(value)
     }
+    wslEnv.ORCA_HOOK_TYPE = hookName
     // Forward unattended Git flags and indexed config to WSL; keep host askpass out of the guest.
     const guardedEnv = promptGuardShellEnv(wslEnv)
     const guestEnv: Record<string, string> = { ...wslEnv }
@@ -235,7 +245,11 @@ export function runHook(
       .catch((error: unknown) => hookSpawnFailure(error, { hookName, cwd }))
   }
 
-  const shellHookEnv: NodeJS.ProcessEnv = { ...process.env, ...getSetupEnvVars(repo, cwd) }
+  const shellHookEnv: NodeJS.ProcessEnv = {
+    ...process.env,
+    ...getSetupEnvVars(repo, cwd),
+    ORCA_HOOK_TYPE: hookName
+  }
   dropIncoherentCondaActivationEnv(shellHookEnv)
 
   return new Promise<HookProcessOutcome>((resolve) => {

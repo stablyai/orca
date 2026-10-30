@@ -1,5 +1,9 @@
+import { getOptionalStringFlag } from '../flags'
 import { z } from 'zod'
-import { WORKTREE_REMOVE_BRANCH_POLICY_RUNTIME_CAPABILITY } from '../../shared/worktree-runtime-capabilities'
+import {
+  WORKTREE_REQUIRED_REMOVE_HOOK_RUNTIME_CAPABILITY,
+  WORKTREE_REMOVE_BRANCH_POLICY_RUNTIME_CAPABILITY
+} from '../../shared/worktree-runtime-capabilities'
 import type { RuntimeWorktreeRemoveResult } from '../../shared/runtime-types'
 import { worktreeRemovalReplyTimeoutMs } from '../../shared/worktree/archive-hook-removal-gate'
 import { RuntimeClientError, type RuntimeClient, type RuntimeRpcSuccess } from '../runtime-client'
@@ -11,6 +15,7 @@ export type WorktreeRemovalRequest = {
   deleteBranch?: boolean
   runHooks: boolean
   allowFailedArchiveHook: boolean
+  removeHookHash?: string
 }
 
 /** Callers act on the exit status, so ask the host for Git's outcome rather than acceptance. */
@@ -28,7 +33,7 @@ export async function requestWorktreeRemoval(
   }
   try {
     return await client.call<RuntimeWorktreeRemoveResult>('worktree.rm', legacy, {
-      timeoutMs: worktreeRemovalReplyTimeoutMs(request.runHooks),
+      timeoutMs: worktreeRemovalReplyTimeoutMs(true),
       requestSelection: {
         paramsForStatus: (raw) => {
           const parsed = BranchPolicyStatus.safeParse(raw)
@@ -36,6 +41,14 @@ export async function requestWorktreeRemoval(
             throw new RuntimeClientError(
               'invalid_runtime_response',
               'The Orca host returned an invalid status response.'
+            )
+          }
+          if (
+            !parsed.data.capabilities?.includes(WORKTREE_REQUIRED_REMOVE_HOOK_RUNTIME_CAPABILITY)
+          ) {
+            throw new RuntimeClientError(
+              'worktree_remove_hook_unsupported',
+              'Update Orca on the workspace host before removing this checkout; it cannot confirm required cleanup support.'
             )
           }
           if (
@@ -66,3 +79,14 @@ export async function requestWorktreeRemoval(
 }
 
 const BranchPolicyStatus = z.object({ capabilities: z.array(z.string()).optional() })
+
+export function readRemoveHookHash(flags: Map<string, string | boolean>): string | undefined {
+  const hash = getOptionalStringFlag(flags, 'remove-hook-hash')
+  if (hash !== undefined && !/^[a-f0-9]{64}$/.test(hash)) {
+    throw new RuntimeClientError(
+      'invalid_argument',
+      '--remove-hook-hash must be the SHA256 digest returned with the reviewed removal action.'
+    )
+  }
+  return hash
+}

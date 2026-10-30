@@ -132,7 +132,12 @@ describe.skipIf(process.platform === 'win32')('runtime transport', () => {
               `${JSON.stringify({
                 id: request.id,
                 ok: true,
-                result: { capabilities: ['worktree.remove-branch-policy.v1'] },
+                result: {
+                  capabilities: [
+                    'worktree.remove-branch-policy.v1',
+                    'worktree.required-remove-hook.v1'
+                  ]
+                },
                 _meta: { runtimeId: 'timeout' }
               })}\n`
             )
@@ -211,8 +216,13 @@ describe.skipIf(process.platform === 'win32')('runtime transport', () => {
                   result:
                     request.method === 'worktree.rm'
                       ? { removed: true }
-                      : mode === 'capable'
-                        ? { capabilities: ['worktree.remove-branch-policy.v1'] }
+                      : mode === 'capable' || mode === 'after-send'
+                        ? {
+                            capabilities: [
+                              'worktree.remove-branch-policy.v1',
+                              'worktree.required-remove-hook.v1'
+                            ]
+                          }
                         : mode === 'empty'
                           ? { capabilities: [] }
                           : mode === 'unrelated'
@@ -272,11 +282,11 @@ describe.skipIf(process.platform === 'win32')('runtime transport', () => {
           ...selected,
           deleteBranch: false
         })
-        await (['capable', 'absent', 'empty', 'unrelated'].includes(mode)
+        await (mode === 'capable'
           ? expect(promise).resolves.toMatchObject({ result: { removed: true } })
           : expect(promise).rejects.toBeInstanceOf(Error))
       }
-      const sent = ['capable', 'absent', 'empty', 'unrelated', 'after-send'].includes(mode)
+      const sent = ['capable', 'after-send'].includes(mode)
       expect(requests.map((request) => request.method)).toEqual(
         sent ? ['status.get', 'worktree.rm'] : ['status.get']
       )
@@ -285,12 +295,10 @@ describe.skipIf(process.platform === 'win32')('runtime transport', () => {
           ...selected,
           allowUnverifiedPtyStop: false,
           waitForBackgroundRemoval: true,
-          ...(mode === 'capable' ? { deleteBranch: false } : {})
+          ...(['capable', 'after-send'].includes(mode) ? { deleteBranch: false } : {})
         })
       }
-      expect(warning.mock.calls).toHaveLength(
-        ['absent', 'empty', 'unrelated', 'after-send'].includes(mode) ? 1 : 0
-      )
+      expect(warning.mock.calls).toHaveLength(0)
     } finally {
       warning.mockRestore()
     }

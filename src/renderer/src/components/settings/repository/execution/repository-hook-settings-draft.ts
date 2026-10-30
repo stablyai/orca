@@ -7,7 +7,7 @@ import type { Repo } from '../../../../../../shared/repo-types'
 import { DEFAULT_REPO_HOOK_SETTINGS } from '../../SettingsConstants'
 import { translate } from '@/i18n/i18n'
 
-export type LocalHookName = 'setup' | 'archive'
+export type LocalHookName = 'setup' | 'archive' | 'remove'
 export type LocalHookField = {
   name: LocalHookName
   label: string
@@ -18,7 +18,7 @@ export type HookSettingsPolicyDraft = Partial<
   Pick<RepoHookSettings, 'setupRunPolicy' | 'setupAgentStartupPolicy' | 'commandSourcePolicy'>
 >
 
-export function getLocalHookFields(): readonly [LocalHookField, LocalHookField] {
+export function getLocalHookFields(): readonly [LocalHookField, LocalHookField, LocalHookField] {
   return [
     {
       name: 'setup',
@@ -49,6 +49,18 @@ export function getLocalHookFields(): readonly [LocalHookField, LocalHookField] 
         'auto.components.settings.RepositoryHooksSection.9b821fa19d',
         '# e.g. echo "Cleaning up $ORCA_WORKSPACE_NAME"'
       )
+    },
+    {
+      name: 'remove',
+      label: translate('repositoryHooks.removeLabel', 'Remove Script'),
+      description: translate(
+        'repositoryHooks.removeDescription',
+        'Required before permanently deleting a Git worktree. May dispose retained resources and data. Replaces archive for deletion; failure keeps the checkout.'
+      ),
+      placeholder: translate(
+        'repositoryHooks.removePlaceholder',
+        '# Remove only this workspace’s resources and data'
+      )
     }
   ]
 }
@@ -71,7 +83,8 @@ export function areHookSettingsDraftsEqual(a: RepoHookSettings, b: RepoHookSetti
     a.setupAgentStartupPolicy === b.setupAgentStartupPolicy &&
     a.commandSourcePolicy === b.commandSourcePolicy &&
     a.scripts.setup === b.scripts.setup &&
-    a.scripts.archive === b.scripts.archive
+    a.scripts.archive === b.scripts.archive &&
+    a.scripts.remove === b.scripts.remove
   )
 }
 
@@ -84,15 +97,20 @@ export function getLocalCommandSourcePolicyNotice({
   currentPolicy,
   setupScript,
   archiveScript,
+  removeScript,
   hasSharedScript
 }: {
   hooksInspectionReady: boolean
   currentPolicy: HookCommandSourcePolicy
   setupScript: string | undefined
   archiveScript: string | undefined
+  removeScript?: string
   hasSharedScript: boolean
 }): LocalCommandSourcePolicyNotice | null {
-  if ((!setupScript?.trim() && !archiveScript?.trim()) || currentPolicy !== 'shared-only') {
+  if (
+    (!setupScript?.trim() && !archiveScript?.trim() && !removeScript?.trim()) ||
+    currentPolicy !== 'shared-only'
+  ) {
     return null
   }
   if (!hooksInspectionReady) {
@@ -120,5 +138,5 @@ export function renderYamlScriptPreview(hooks: OrcaHooks | null): string {
   const issueCommand = hooks?.issueCommand
     ? `\nissueCommand: |\n${hooks.issueCommand.replace(/^/gm, '  ')}`
     : ''
-  return `scripts:${formatScript('setup', hooks?.scripts.setup)}${formatScript('archive', hooks?.scripts.archive)}${issueCommand}`
+  return `scripts:${formatScript('setup', hooks?.scripts.setup)}${formatScript('archive', hooks?.scripts.archive)}${formatScript('remove', hooks?.scripts.remove)}${issueCommand}`
 }
