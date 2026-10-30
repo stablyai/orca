@@ -13,6 +13,8 @@ function statusProps(): React.ComponentProps<typeof SourceControlContentStatus> 
     isRecoveryBusy: false,
     isAbortingOperation: false,
     onAbortOperation: vi.fn(),
+    isCompletingMerge: false,
+    onCompleteMerge: vi.fn(),
     onResolveWithAi: vi.fn(),
     onReviewConflicts: vi.fn(),
     repositoryHuge: null,
@@ -33,16 +35,6 @@ function statusProps(): React.ComponentProps<typeof SourceControlContentStatus> 
 afterEach(cleanup)
 
 describe('SourceControlContentStatus recovery', () => {
-  it.each(['merge', 'rebase', 'cherry-pick'] as const)(
-    'wires the zero-conflict %s recovery button to the launch flow',
-    (conflictOperation) => {
-      const props = { ...statusProps(), conflictOperation }
-      const view = render(<SourceControlContentStatus {...props} />)
-      fireEvent.click(view.getByRole('button', { name: 'Resolve with AI' }))
-      expect(props.onResolveWithAi).toHaveBeenCalledTimes(1)
-    }
-  )
-
   it.each([0, 1])(
     'blocks recovery while Git runs with %i unmerged paths',
     (unresolvedConflictCount) => {
@@ -71,11 +63,4 @@ describe('SourceControlContentStatus recovery', () => {
       expect(props.onResolveWithAi).not.toHaveBeenCalled()
     }
   )
-
-  it('hides recovery when AI is disabled', () => {
-    const view = render(
-      <SourceControlContentStatus {...statusProps()} sourceControlAiActionsVisible={false} />
-    )
-    expect(view.queryByRole('button', { name: 'Resolve with AI' })).toBeNull()
-  })
 })

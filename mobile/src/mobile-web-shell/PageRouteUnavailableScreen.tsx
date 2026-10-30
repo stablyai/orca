@@ -1,7 +1,9 @@
-import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { Pressable, Text, View } from 'react-native'
 import { hostStackHostRoute } from '../navigation/host-stack-navigation'
 import { useRouteHandoff } from '../navigation/route-handoff'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 
 // Catch-all routes have no renderer on either side; show an escape screen instead of Expo’s unusable sitemap.
 // Replace this dead end via route handoff so page navigation reaches the shell. Encode host ids with hostStackHostRoute; missing ids return to app root because /h/ has no child screen.
@@ -12,6 +14,7 @@ export function PageRouteUnavailableScreen({
   hostId: string
   message?: string
 }) {
+  useMobileColorScheme()
   const router = useRouteHandoff()
   const target = hostId === '' ? '/' : hostStackHostRoute(hostId)
   const label = hostId === '' ? 'Back to hosts' : 'Back to workspaces'
@@ -30,7 +33,7 @@ export function PageRouteUnavailableScreen({
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   root: {
     flex: 1,
     alignItems: 'center',
@@ -48,7 +51,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.bgRaised,
     paddingVertical: spacing.sm + 2,
     paddingHorizontal: spacing.lg,
-    borderRadius: radii.button
+    borderRadius: radii.control
   },
   buttonLabel: {
     fontSize: typography.bodySize,
@@ -58,4 +61,4 @@ const styles = StyleSheet.create({
   pressed: {
     opacity: 0.7
   }
-})
+}))

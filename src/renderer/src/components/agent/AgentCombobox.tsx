@@ -12,11 +12,7 @@ import {
 } from '@/lib/agent-picker-search'
 import { cn } from '@/lib/utils'
 import type { TuiAgent } from '../../../../shared/tui-agent'
-import {
-  createAgentComboboxCommandState,
-  resolveAgentComboboxCommandState,
-  updateAgentComboboxCommandValue
-} from './agent-combobox-command-state'
+import * as state from './agent-combobox-command-state'
 import {
   AgentDefaultContextMenu,
   AgentIconLabel,
@@ -85,7 +81,7 @@ export default function AgentCombobox({
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
   // Control cmdk selection so hovering the external footer clears the last highlighted agent.
-  const [commandState, setCommandState] = useState(() => createAgentComboboxCommandState(''))
+  const [commandState, setCommandState] = useState(() => state.createAgentComboboxCommandState(''))
   const triggerRef = React.useRef<HTMLButtonElement | null>(null)
   const inputRef = React.useRef<HTMLInputElement | null>(null)
   const focusFrameRef = React.useRef<number | null>(null)
@@ -119,14 +115,18 @@ export default function AgentCombobox({
         rawQuery: query
       })
   const activeCommandValue = selectionCleared && !query ? '' : pickedCommandValue
-  const resolvedCommandState = resolveAgentComboboxCommandState(
+  const resolvedCommandState = state.resolveAgentComboboxCommandState(
     commandState,
-    open,
+    open && !disabled,
     activeCommandValue
   )
   if (resolvedCommandState !== commandState) {
     // Reconcile query/results before paint without replacing manual hover until the candidate changes.
     setCommandState(resolvedCommandState)
+  }
+  if (disabled && open) {
+    setOpen(false)
+    setQuery('')
   }
   const commandValue = resolvedCommandState.commandValue
 
@@ -148,7 +148,7 @@ export default function AgentCombobox({
   )
 
   const setCommandValue = useCallback((nextCommandValue: string): void => {
-    setCommandState((current) => updateAgentComboboxCommandValue(current, nextCommandValue))
+    setCommandState((current) => state.updateAgentComboboxCommandValue(current, nextCommandValue))
   }, [])
 
   const focusSearchInput = useCallback(() => {
@@ -168,15 +168,15 @@ export default function AgentCombobox({
 
   const handleOpenChange = useCallback(
     (nextOpen: boolean) => {
-      setOpen(nextOpen)
-      if (nextOpen) {
-        setCommandState(createAgentComboboxCommandState(openCommandValue))
+      setOpen(nextOpen && !disabled)
+      if (nextOpen && !disabled) {
+        setCommandState(state.createAgentComboboxCommandState(openCommandValue))
         return
       }
       cancelFocusFrame()
       setQuery('')
     },
-    [cancelFocusFrame, openCommandValue]
+    [cancelFocusFrame, disabled, openCommandValue]
   )
 
   const closePicker = useCallback(() => {
@@ -209,7 +209,7 @@ export default function AgentCombobox({
   // Match RepoCombobox: plain focus confirms the selection; arrows open unfiltered, printable non-whitespace keys open and seed a new query.
   const handleTriggerKeyDown = useCallback(
     (event: React.KeyboardEvent<HTMLButtonElement>) => {
-      if (open) {
+      if (disabled || open) {
         return
       }
       if (
@@ -226,7 +226,7 @@ export default function AgentCombobox({
       }
       if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
         event.preventDefault()
-        setCommandState(createAgentComboboxCommandState(openCommandValue))
+        setCommandState(state.createAgentComboboxCommandState(openCommandValue))
         setOpen(true)
         return
       }
@@ -235,18 +235,18 @@ export default function AgentCombobox({
       }
       if (event.key.length === 1 && /\S/.test(event.key)) {
         event.preventDefault()
-        setCommandState(createAgentComboboxCommandState(openCommandValue))
+        setCommandState(state.createAgentComboboxCommandState(openCommandValue))
         setQuery(event.key)
         setOpen(true)
       }
     },
-    [open, onTriggerEnter, openCommandValue]
+    [disabled, open, onTriggerEnter, openCommandValue]
   )
 
   return (
     // Allow full-width form rows to shrink within their dialog column.
     <div className="relative min-w-0 w-full">
-      <Popover open={open} onOpenChange={handleOpenChange}>
+      <Popover open={open && !disabled} onOpenChange={handleOpenChange}>
         <AgentDefaultContextMenu
           isDefault={
             selectedDefaultPreference !== null && defaultAgent === selectedDefaultPreference
@@ -404,6 +404,7 @@ export default function AgentCombobox({
               type="button"
               variant="ghost"
               size="icon-xs"
+              disabled={disabled}
               className="absolute right-8 top-1/2 -translate-y-1/2"
               aria-label={translate(
                 'components.agentCombobox.clearSelection',

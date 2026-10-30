@@ -297,6 +297,8 @@ describe('orchestration worker-start prompt contract', () => {
         result: { state: 'ready', stage: 'settled', workerOutcome: outcome }
       })
       expect(response.ok && response.result).not.toHaveProperty('lastError')
+      // Its report is already mail to act on, so the receipt does not say to stop.
+      expect(response.ok && response.result).not.toHaveProperty('next')
       expect(teardown).not.toHaveBeenCalled()
       expect(harness.db.getTask(harness.taskId)?.status).toBe(
         outcome === 'succeeded' ? 'completed' : 'failed'
@@ -390,8 +392,10 @@ describe('orchestration worker-start prompt contract', () => {
     expect(persisted.getWorkerDispatch(dispatchId)).toMatchObject({
       state: 'start_unknown',
       stage: 'turn_start_unobserved',
-      last_error: expect.stringContaining('turn start could not be verified')
+      last_error: expect.stringContaining('turn start was not observed')
     })
+    // A swallowed Enter leaves the prompt in the composer, so the receipt must not claim submission.
+    expect(persisted.getWorkerDispatch(dispatchId)?.last_error).not.toMatch(/submitted/i)
     const persistedEffects = JSON.parse(
       persisted.getWorkerDispatch(dispatchId)?.effects ?? '[]'
     ) as { kind?: string; state?: string }[]

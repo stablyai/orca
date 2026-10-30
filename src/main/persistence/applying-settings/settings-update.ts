@@ -1,15 +1,16 @@
+import { publishSettingsUpdate } from './settings-update-effects'
 import { legacyChatPermissionWrite } from './legacy-chat-permission-write'
-import { normalizeNativeChatAppearanceSettings } from '../../../shared/native-chat-appearance-settings'
+import { stampDefaultOnMigrationGuards } from './default-on-migration-guards'
+import { normalizeNativeChatAppearanceSettings } from '../../../shared/native-chat/native-chat-appearance-settings'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
-import { retireAtRestCommandSettings } from '../../native-chat/agent-session-wire/at-rest-command-context'
 import { normalizeDisabledTuiAgents } from '../../../shared/tui-agent-selection'
 import { normalizeNativeChatProviderChoices } from '../../../shared/native-chat/native-chat-providers'
 import { resolveNestedWorkerMaxDepth } from '../../../shared/nested-worker-depth'
-import { resolveOrchestrationHeartbeatInterval } from '../../../shared/orchestration-heartbeat'
 import { sanitizeAgentLaunchProfileUpdates } from '../../../shared/tui-agent-launch-defaults'
 import { normalizeTerminalQuickCommands } from '../../../shared/terminal-quick-commands'
 import { assertTerminalQuickCommandsStorable } from '../../../shared/terminal-quick-command-prompt-limit'
 import { normalizeTerminalCustomThemes } from '../../../shared/terminal-custom-themes'
+import { normalizePluginOwnedSettings } from '../../../shared/plugins/capabilities/plugin-owned-settings'
 import { normalizeTerminalDefaultShell } from '../../../shared/terminal-default-shell'
 import { normalizeTerminalCursorStyleDefault } from '../../../shared/terminal-cursor-style-settings'
 import { normalizeDesktopTerminalScrollbackRows } from '../../../shared/terminal-scrollback-policy'
@@ -34,14 +35,12 @@ import {
   normalizeSourceControlAiSettings,
   projectSourceControlAiToLegacyCommitMessageAi
 } from '../../../shared/source-control-ai'
-import {
-  PROTECTED_SECRET_SLOT,
-  type ProtectedSecretPersistence
-} from '../../protected-secret-persistence'
+import type { ProtectedSecretPersistence } from '../../protected-secret-persistence'
 import { normalizeNotificationSettings } from './onboarding-normalization'
 import { retireLegacyInstructionsForClearedTextActionRecipes } from './source-control-settings'
 import {
   buildWorkspaceDirHistoryForUpdate,
+  expandWorkspaceDirHome,
   stripRetiredGlobalSettings
 } from './terminal-settings-migrations'
 
@@ -58,7 +57,7 @@ export function updateSettings(
   updates: Partial<GlobalSettings>,
   options: { notifyListeners?: boolean; originWebContentsId?: number } = {}
 ): GlobalSettings {
-  const sanitizedUpdates = stripRetiredGlobalSettings(updates)
+  const sanitizedUpdates = expandWorkspaceDirHome(stripRetiredGlobalSettings(updates))
   const linkBehavior = updates.terminalLinkClickBehavior
   if (linkBehavior === 'actions' || linkBehavior === 'open' || linkBehavior === 'none') {
     // Loaded defaults are ambiguous; synchronize the legacy switch only on an explicit write.
@@ -80,11 +79,6 @@ export function updateSettings(
   if ('nestedWorkerMaxDepth' in updates) {
     sanitizedUpdates.nestedWorkerMaxDepth = resolveNestedWorkerMaxDepth({
       nestedWorkerMaxDepth: updates.nestedWorkerMaxDepth
-    })
-  }
-  if ('orchestrationHeartbeatIntervalMinutes' in updates) {
-    sanitizedUpdates.orchestrationHeartbeatIntervalMinutes = resolveOrchestrationHeartbeatInterval({
-      orchestrationHeartbeatIntervalMinutes: updates.orchestrationHeartbeatIntervalMinutes
     })
   }
   if ('nativeChatAppearance' in updates) {
@@ -130,6 +124,7 @@ export function updateSettings(
       updates.terminalCustomThemes
     )
   }
+  Object.assign(sanitizedUpdates, normalizePluginOwnedSettings(updates))
   if ('terminalCursorStyle' in updates) {
     Object.assign(
       sanitizedUpdates,
@@ -150,12 +145,6 @@ export function updateSettings(
       updates.terminalMinimumContrastRatio
     )
   }
-  if (
-    'terminalTuiScrollSensitivity' in updates ||
-    'terminalTuiScrollSensitivityDefaultedToOne' in updates
-  ) {
-    sanitizedUpdates.terminalTuiScrollSensitivityDefaultedToOne = true
-  }
   if ('visibleTaskProviders' in updates || 'defaultTaskSource' in updates) {
     const taskProviderSettings = normalizeTaskProviderSettings({
       visibleTaskProviders:
@@ -173,9 +162,7 @@ export function updateSettings(
       sanitizedUpdates.visibleTaskProvidersDefaultedForJira = true
     }
   }
-  if ('autoRenameBranchFromWork' in updates || 'autoRenameBranchFromWorkDefaultedOn' in updates) {
-    sanitizedUpdates.autoRenameBranchFromWorkDefaultedOn = true
-  }
+  stampDefaultOnMigrationGuards(updates, sanitizedUpdates)
   if ('openInApplications' in updates) {
     sanitizedUpdates.openInApplications = normalizeOpenInApplications(updates.openInApplications)
   }
@@ -272,32 +259,6 @@ export function updateSettings(
     }),
     ...(mergedTelemetry !== undefined ? { telemetry: mergedTelemetry } : {})
   }
-  if ('opencodeSessionCookie' in updates && !updates.opencodeSessionCookie) {
-    operations.removeRetainedBlob(PROTECTED_SECRET_SLOT.opencodeSessionCookie)
-  }
-  if ('httpProxyUrl' in updates && !updates.httpProxyUrl) {
-    operations.removeRetainedBlob(PROTECTED_SECRET_SLOT.httpProxyUrl)
-  }
-  if (
-    !Object.is(
-      previousSettings.localWindowsRuntimeDefault,
-      operations.state.settings.localWindowsRuntimeDefault
-    )
-  ) {
-    for (const repoId of new Set(operations.state.repos.map(({ id }) => id))) {
-      operations.bumpLocalWorktreeScanGeneration(repoId)
-    }
-  }
-  operations.scheduleSave()
-  const changedUpdates = {} as Partial<GlobalSettings> & Record<string, unknown>
-  for (const key of Object.keys(sanitizedUpdates) as (keyof GlobalSettings)[]) {
-    if (!Object.is(previousSettings[key], operations.state.settings[key])) {
-      changedUpdates[String(key)] = operations.state.settings[key]
-    }
-  }
-  retireAtRestCommandSettings(Object.keys(changedUpdates))
-  if (options.notifyListeners === true && Object.keys(changedUpdates).length > 0) {
-    operations.notifySettingsChanged(changedUpdates, options.originWebContentsId)
-  }
+  publishSettingsUpdate(operations, updates, sanitizedUpdates, previousSettings, options)
   return operations.state.settings
 }

@@ -18,6 +18,13 @@ import { prepareLocalWorktreeRootForRepo } from '../worktree-root-preparation'
 import type { RuntimeStore } from './runtime-store-contract'
 import { runtimePathsEqual } from './runtime-worktree-path-identity'
 import { runtimeRepoIsRegistrationCandidate } from './runtime-worktree-selection'
+import { refuseWslHostWindowsDrivePath } from './wsl-host-windows-drive-guard'
+import {
+  WslHostWindowsDriveRefusalError,
+  type WslHostWindowsDriveRefusal
+} from '../../shared/wsl-host-windows-drive-refusal'
+import { describeWslUncAccessDenied } from '../wsl/wsl-unc-access-denied'
+import { repoCreateFailure, type RepoCreateFailure } from '../../shared/repo-create-failure-copy'
 
 type RuntimeRepositoryRegistrationDependencies = {
   getStore: () => RuntimeStore | null
@@ -39,35 +46,28 @@ export class RuntimeRepositoryRegistrationController {
     if (!isAbsolute(path)) {
       throw new Error('Project path must be an absolute path')
     }
+    await refuseWslHostWindowsDrivePath(path)
     if (kind === 'git') {
       await awaitWindowsHostGitEnvironmentReady({ cwd: path })
     }
     const gitInfo = kind === 'git' ? await inspectGitRepoForRegistrationAsync(path) : null
     if (gitInfo && !gitInfo.isRepo) {
-      throw new Error(`Not a valid git repository: ${path}`)
+      throw new Error(
+        (await describeWslUncAccessDenied(path)) ?? `Not a valid git repository: ${path}`
+      )
     }
     // Store Git's resolved toplevel; symlink aliases/subfolders hide the main checkout as external.
     const repoPath = gitInfo?.rootPath ?? path
-    const sameHostRepos = store
-      .getRepos()
-      .filter((repo) => runtimeRepoIsRegistrationCandidate(repo, executionHostId))
+    const sameHostRepos = (): Repo[] =>
+      store.getRepos().filter((repo) => runtimeRepoIsRegistrationCandidate(repo, executionHostId))
     // Resolved toplevel lets symlink aliases find existing registrations.
-    const existing =
-      sameHostRepos.find(
+    const findAtPath = (): Repo | undefined =>
+      sameHostRepos().find(
         (repo) => runtimePathsEqual(repo.path, path) || runtimePathsEqual(repo.path, repoPath)
-      ) ?? (await findProjectAtSameRealPath(sameHostRepos, repoPath))
+      )
+    const existing = findAtPath() ?? (await findProjectAtSameRealPath(sameHostRepos(), repoPath))
     if (existing) {
-      if (
-        existing.executionHostId == null &&
-        parseExecutionHostId(executionHostId)?.kind === 'runtime'
-      ) {
-        const adopted =
-          store.updateRepo(existing, { executionHostId }) ??
-          ({ ...existing, executionHostId } as Repo)
-        this.invalidate(existing.id)
-        return adopted
-      }
-      return existing
+      return this.reuseExisting(store, existing, executionHostId)
     }
     // This controller validated/read the path locally; runtime: is the paired-client address, not another machine.
     const detected = await detectRepoIconAndUpstream({
@@ -75,6 +75,11 @@ export class RuntimeRepositoryRegistrationController {
       kind,
       executionHostId: LOCAL_EXECUTION_HOST_ID
     })
+    // A concurrent add of the same folder can finish while the awaits above are pending.
+    const raceWinner = findAtPath()
+    if (raceWinner) {
+      return this.reuseExisting(store, raceWinner, executionHostId)
+    }
     const repo: Repo = {
       id: randomUUID(),
       path: repoPath,
@@ -92,26 +97,54 @@ export class RuntimeRepositoryRegistrationController {
     return store.getRepo(repo.id) ?? repo
   }
 
+  private reuseExisting(
+    store: RuntimeStore,
+    existing: Repo,
+    executionHostId: ExecutionHostId | null | undefined
+  ): Repo {
+    if (
+      existing.executionHostId == null &&
+      parseExecutionHostId(executionHostId)?.kind === 'runtime'
+    ) {
+      const adopted =
+        store.updateRepo(existing, { executionHostId }) ??
+        ({ ...existing, executionHostId } as Repo)
+      this.invalidate(existing.id)
+      return adopted
+    }
+    return existing
+  }
+
   async create(
     parentPath: string,
     name: string,
     kind: 'git' | 'folder' = 'git'
-  ): Promise<{ repo: Repo } | { error: string }> {
+  ): Promise<
+    { repo: Repo } | (RepoCreateFailure & { windowsDriveRefusal?: WslHostWindowsDriveRefusal })
+  > {
     const store = this.requireStore()
     const trimmedName = name.trim()
     const trimmedParentPath = parentPath.trim()
     const repoKind: 'git' | 'folder' = kind === 'folder' ? 'folder' : 'git'
     if (!trimmedName) {
-      return { error: 'Name cannot be empty' }
+      return repoCreateFailure('nameEmpty')
     }
     if (/[\\/]/.test(trimmedName) || trimmedName === '.' || trimmedName === '..') {
-      return { error: 'Name cannot contain slashes or be "." / ".."' }
+      return repoCreateFailure('nameInvalid')
     }
     if (!trimmedParentPath) {
-      return { error: 'Parent directory is required' }
+      return repoCreateFailure('parentRequired')
     }
     if (!isAbsolute(trimmedParentPath)) {
-      return { error: 'Parent directory must be an absolute path' }
+      return repoCreateFailure('parentNotAbsolute')
+    }
+    try {
+      await refuseWslHostWindowsDrivePath(trimmedParentPath)
+    } catch (error) {
+      // An optional field: older clients read only `error`.
+      return error instanceof WslHostWindowsDriveRefusalError
+        ? { error: error.message, windowsDriveRefusal: error.data }
+        : { error: error instanceof Error ? error.message : String(error) }
     }
     const targetPath = join(trimmedParentPath, trimmedName)
     // Qualify by host: identical SSH paths name another machine's directory.
@@ -138,10 +171,10 @@ export class RuntimeRepositoryRegistrationController {
       })
       if (existingStat) {
         if (!existingStat.isDirectory()) {
-          return { error: `"${trimmedName}" already exists at this location and is not a folder.` }
+          return repoCreateFailure('targetNotFolder', { name: trimmedName })
         }
         if ((await readdir(targetPath)).length > 0) {
-          return { error: `"${trimmedName}" already exists at this location and is not empty.` }
+          return repoCreateFailure('targetNotEmpty', { name: trimmedName })
         }
       } else {
         await mkdir(targetPath, { recursive: false })
@@ -149,13 +182,13 @@ export class RuntimeRepositoryRegistrationController {
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
-      return { error: `Failed to prepare directory: ${message}` }
+      return repoCreateFailure('prepareDirectoryFailed', { detail: message })
     }
 
     if (repoKind === 'git') {
-      const error = await this.initializeGitRepo(targetPath, createdDir)
-      if (error) {
-        return { error }
+      const failure = await this.initializeGitRepo(targetPath, createdDir)
+      if (failure) {
+        return failure
       }
     }
     const raceWinner = findLocalAtTarget()
@@ -184,28 +217,37 @@ export class RuntimeRepositoryRegistrationController {
     return { repo: store.getRepo(repo.id) ?? repo }
   }
 
-  private async initializeGitRepo(targetPath: string, createdDir: boolean): Promise<string | null> {
+  private async initializeGitRepo(
+    targetPath: string,
+    createdDir: boolean
+  ): Promise<RepoCreateFailure | null> {
     let step: 'init' | 'commit' = 'init'
     try {
-      await gitExecFileAsync(['init'], { cwd: targetPath })
+      // Host Git on purpose: the new repo has no project yet, even inside one.
+      await gitExecFileAsync(['init'], { cwd: targetPath, hostGit: true })
       step = 'commit'
       await gitExecFileAsync(['commit', '--allow-empty', '-m', 'Initial commit'], {
-        cwd: targetPath
+        cwd: targetPath,
+        // Host Git on purpose: the new repo has no project yet, even inside one.
+        hostGit: true
       })
       return null
     } catch (error) {
       if (createdDir) {
         await rm(targetPath, { recursive: true, force: true }).catch(() => {})
       } else if (step === 'commit') {
-        await rm(join(targetPath, '.git'), { recursive: true, force: true }).catch(() => {})
+        await rm(join(targetPath, '.git'), {
+          recursive: true,
+          force: true
+        }).catch(() => {})
       }
       const message = error instanceof Error ? error.message : String(error)
       if (step === 'commit' && /Please tell me who you are|user\.name|user\.email/i.test(message)) {
-        return 'Git author identity is not configured. Run `git config --global user.name "Your Name"` and `git config --global user.email "you@example.com"`, then try again.'
+        return repoCreateFailure('gitIdentityMissing')
       }
-      const label =
-        step === 'init' ? 'Failed to initialize git repository' : 'Failed to create initial commit'
-      return `${label}: ${message}`
+      return repoCreateFailure(step === 'init' ? 'gitInitFailed' : 'initialCommitFailed', {
+        detail: message
+      })
     }
   }
 

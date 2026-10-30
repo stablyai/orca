@@ -1,5 +1,5 @@
 import { Smartphone, Trash2 } from 'lucide-react'
-import { translate } from '@/i18n/i18n'
+import { getIntlLocale, translate } from '@/i18n/i18n'
 import type { PairedMobileDevice } from './paired-mobile-devices'
 
 export type PairedDevice = PairedMobileDevice
@@ -47,7 +47,7 @@ export function HeroPaired({
                 <div className="mp-paired-name">{device.name}</div>
                 <div className="mp-paired-meta">
                   {translate('auto.components.mobile.MobileHero.94829abdb1', 'Paired')}{' '}
-                  {new Date(device.pairedAt).toLocaleDateString()}
+                  {new Date(device.pairedAt).toLocaleDateString(getIntlLocale())}
                 </div>
               </div>
               <button

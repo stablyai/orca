@@ -50,9 +50,6 @@ export function RemoteFileBrowserEntryList({
       ?.scrollIntoView?.({ block: 'nearest' })
   }, [activeIndex, displayEntries])
 
-  const displayEmptyDirCopy = isPreviewActive
-    ? `${preview!.resolvedPath} is empty`
-    : 'Empty directory'
   const noMatchesFilter = isPreviewActive ? preview!.filter : filter
   const displayNoMatchesCopy = isRemoteFileBrowserPathResolveTextTooLarge(noMatchesFilter)
     ? translate(
@@ -90,7 +87,13 @@ export function RemoteFileBrowserEntryList({
           !preview!.error &&
           !preview!.loading ? (
           <div className="flex items-center justify-center h-full">
-            <p className="text-xs text-muted-foreground">{displayEmptyDirCopy}</p>
+            <p className="text-xs text-muted-foreground">
+              {translate(
+                'auto.components.sidebar.RemoteFileBrowserEntryList.pathEmpty',
+                '{{path}} is empty',
+                { path: preview!.resolvedPath }
+              )}
+            </p>
           </div>
         ) : !isPreviewActive && entries.length === 0 ? (
           <div className="flex items-center justify-center h-full">

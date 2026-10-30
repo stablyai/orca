@@ -1,7 +1,8 @@
 import { Platform, StyleSheet } from 'react-native'
-import { colors, spacing } from '../theme/mobile-theme'
+import { colors, radii, spacing } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
 
-export const bottomDrawerStyles = StyleSheet.create({
+export const bottomDrawerStyles = themedStyleSheet(() => ({
   overlay: {
     ...StyleSheet.absoluteFillObject,
     zIndex: 1000
@@ -25,8 +26,8 @@ export const bottomDrawerStyles = StyleSheet.create({
   },
   drawer: {
     backgroundColor: colors.bgBase,
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
+    borderTopLeftRadius: radii.surface,
+    borderTopRightRadius: radii.surface,
     paddingHorizontal: spacing.md,
     ...Platform.select({
       ios: {
@@ -75,4 +76,4 @@ export const bottomDrawerStyles = StyleSheet.create({
     height: 500,
     backgroundColor: colors.bgBase
   }
-})
+}))

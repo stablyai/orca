@@ -6,7 +6,7 @@ import {
   hasAskAnswer
 } from '../../../../../src/shared/native-chat-ask-answer'
 import type { AskAnswerSelection } from '../../../../../src/shared/native-chat-ask-answer'
-import type { AskPrompt } from '../../../../../src/shared/native-chat-ask-types'
+import type { AskPrompt } from '../../../../../src/shared/native-chat/input/native-chat-ask-types'
 import type { RpcClient } from '../../../transport/rpc-client'
 import { MOBILE_NATIVE_CHAT_QUESTION_STEP_MS } from './mobile-native-chat-answer-stepping'
 import {
@@ -29,11 +29,6 @@ export type MobileNativeChatAnswerSend = {
   answerAsk: (prompt: AskPrompt, selections: AskAnswerSelection[]) => Promise<boolean>
   /** Cancel unsent groups; an already-issued write may still settle. */
   cancelPending: () => void
-}
-
-// Collapse newlines in raw free-text keys so they cannot submit Claude’s input early.
-function sanitizeAskFreeText(text: string): string {
-  return text.replace(/[\r\n]+/g, ' ')
 }
 
 // Pace existing terminal.send key groups for legacy selectors; cancellation stops future groups but preserves already-issued writes’ delivery verdicts.
@@ -229,7 +224,7 @@ export function useMobileNativeChatAnswerSend(args: {
             return false
           }
           const group = groups[index]!
-          const body = 'raw' in group ? group.raw : sanitizeAskFreeText(group.text)
+          const body = 'raw' in group ? group.raw : buildNativeChatPasteBytes(group.text)
           if (!(await sendTerminal(body, false))) {
             return fail()
           }

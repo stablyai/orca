@@ -1,5 +1,12 @@
 import { afterEach, describe, expect, it, vi, type Mock } from 'vitest'
 import path from 'node:path'
+import { PrioritySemaphore } from '../../shared/priority-semaphore'
+import type * as FsPromises from 'node:fs/promises'
+import { mkdir, mkdtemp, realpath, rm, symlink } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import * as platformScanner from './local-workspace-platform-port-scanner'
+import { AdvertisedUrlWatcher } from './advertised-url-watcher'
+import { killWorkspacePort } from './workspace-port-ownership'
 import { scanWorkspacePorts } from './local-workspace-port-scanner'
 import { attributePortToWorkspace, isContainerProcess } from './local-workspace-port-attribution'
 import {
@@ -23,6 +30,11 @@ vi.mock('./port-scan-command-client', () => ({
       : runPortScanCommandMock(command, args, operation),
   isPortScanWorkerUnavailableError: () => false
 }))
+
+vi.mock('node:fs/promises', async (importOriginal) => {
+  const actual = await importOriginal<typeof FsPromises>()
+  return { ...actual, realpath: vi.fn(actual.realpath) }
+})
 
 const LSOF_LISTEN_OUTPUT = ['p123', 'cnode', 'd0x1', 'n127.0.0.1:5173'].join('\n')
 
@@ -220,7 +232,81 @@ describe('scanWorkspacePorts attribution work', () => {
   afterEach(() => {
     resetWorkspacePortScanTimeoutBackoffForTests()
     vi.restoreAllMocks()
+    vi.mocked(realpath).mockReset()
     runPortScanCommandMock.mockReset()
+  })
+
+  it.each([10, 100])('bounds %i roots, preserving URLs and fresh Stop', async (count) => {
+    const root = await realpath(await mkdtemp(path.join(tmpdir(), 'orca-port-alias-')))
+    const target = path.join(root, 'project'),
+      alias = path.join(root, 'linked')
+    const probe = { ...worktrees[0], path: alias }
+    const probes = Array.from({ length: count }, (_, index) =>
+      index === 0 ? probe : { ...probe, path: `${root}/extra-${index}` }
+    )
+    const watcher = new AdvertisedUrlWatcher()
+    const lookup = vi.mocked(realpath)
+    const finish = async <T>(result: Promise<T>, ms = 1000): Promise<T> => {
+      await vi.advanceTimersByTimeAsync(ms)
+      return result
+    }
+    vi.spyOn(process, 'kill').mockReturnValue(true)
+    vi.spyOn(platformScanner, 'scanPlatformListeningPorts').mockResolvedValue({
+      ports: parseLsofListeningOutput(LSOF_LISTEN_OUTPUT).map((port) => ({ ...port, cwd: target })),
+      metadataAvailable: true
+    })
+    const scan = () => scanWorkspacePorts([...probes, ...probes], watcher)
+    const stop = () => killWorkspacePort([probe], { pid: 123, port: 5173 })
+    const pending = Promise.withResolvers<string>()
+    const admission = vi.spyOn(PrioritySemaphore.prototype, 'acquire')
+    try {
+      await mkdir(target)
+      await symlink(target, alias, process.platform === 'win32' ? 'junction' : 'dir')
+      watcher.bindPty('pty', probe.id)
+      watcher.ingest('pty', 'https://localhost:5173/\n')
+      expect((await scan()).ports).toMatchObject([{ owner: { worktreeId: probe.id, path: alias } }])
+      expect(realpath).toHaveBeenCalledTimes(count + 1)
+      vi.useFakeTimers()
+      admission.mockClear()
+      lookup.mockClear().mockReturnValue(pending.promise)
+      expect((await finish(scan())).ports).toMatchObject([{ kind: 'external' }])
+      expect(admission).toHaveBeenCalledTimes(2)
+      probes.slice(1).forEach((probe) => {
+        probe.path += '/gone'
+      })
+      await finish(Promise.all(Array.from({ length: 30 }, scan)))
+      expect(await finish(stop())).toMatchObject({ ok: false })
+      pending.resolve(target)
+      await vi.advanceTimersByTimeAsync(0)
+      expect(realpath).toHaveBeenCalledTimes(2)
+      lookup.mockImplementation(
+        // ast-grep-ignore: test-no-real-time-wait -- Fake time drives this mock's delay.
+        () => new Promise((resolve) => setTimeout(() => resolve(target), 300))
+      )
+      const recovered = await finish(scanWorkspacePorts([probe], watcher), 300)
+      expect(
+        recovered.ports.map((port) => (port.kind === 'workspace' ? port.advertisedUrl : undefined))
+      ).toEqual(['https://localhost:5173'])
+      expect(await finish(stop(), 300)).toEqual({ ok: true })
+      lookup.mockImplementationOnce(
+        // ast-grep-ignore: test-no-real-time-wait -- Fake time drives this mock's delay.
+        () => new Promise((resolve) => setTimeout(() => resolve(target), 300))
+      )
+      const older = scanWorkspacePorts([probe], watcher)
+      await vi.advanceTimersByTimeAsync(0)
+      lookup.mockReset()
+      await rm(alias)
+      await mkdir(`${target}-other`)
+      await symlink(`${target}-other`, alias, process.platform === 'win32' ? 'junction' : 'dir')
+      const stopping = stop()
+      await vi.advanceTimersByTimeAsync(300)
+      expect((await older).ports[0]?.kind).toBe('workspace')
+      expect(await stopping).toMatchObject({ ok: false })
+    } finally {
+      pending.resolve(target)
+      vi.useRealTimers()
+      await rm(root, { recursive: true, force: true })
+    }
   })
 
   it('normalizes worktree paths once per scan instead of once per port phase', async () => {

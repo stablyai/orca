@@ -1,3 +1,4 @@
+import { canonicalOrchestrationForRow } from '@/runtime/visible-agent-orchestration'
 import type { RetainedAgentEntry } from './agent-status-contract'
 import type { AgentStatusSlice } from './agent-status-slice-contract'
 import type { AgentStatusRuntime } from './agent-status-runtime'
@@ -34,7 +35,7 @@ export function createAgentStatusRetentionActions(
         }
         const next = { ...s.retainedAgentsByPaneKey }
         for (const retained of entries) {
-          const runtimeOrchestration = s.runtimeAgentOrchestrationByPaneKey[retained.entry.paneKey]
+          const runtimeOrchestration = canonicalOrchestrationForRow(s, retained.entry.paneKey)
           const mergedOrchestration = runtimeOrchestration
             ? mergeCurrentOrchestrationContext(retained.entry.orchestration, runtimeOrchestration)
             : retained.entry.orchestration

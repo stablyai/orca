@@ -1,9 +1,10 @@
 import { StyleSheet } from 'react-native'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { themedStyleSheet, themedStyles } from '../theme/themed-styles'
 import { diffStyles } from './mobile-source-control-diff-styles'
 import { listStyles } from './mobile-source-control-list-styles'
 
-const baseStyles = StyleSheet.create({
+const baseStyles = themedStyleSheet(() => ({
   container: {
     flex: 1,
     backgroundColor: colors.bgBase
@@ -22,7 +23,7 @@ const baseStyles = StyleSheet.create({
   backButton: {
     width: 36,
     height: 36,
-    borderRadius: 18,
+    borderRadius: radii.control,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: spacing.xs
@@ -47,7 +48,7 @@ const baseStyles = StyleSheet.create({
   refreshButton: {
     width: 36,
     height: 36,
-    borderRadius: radii.button,
+    borderRadius: radii.control,
     alignItems: 'center',
     justifyContent: 'center',
     marginLeft: spacing.xs
@@ -62,7 +63,7 @@ const baseStyles = StyleSheet.create({
     margin: spacing.lg,
     marginBottom: spacing.sm,
     padding: spacing.md,
-    borderRadius: radii.card,
+    borderRadius: radii.surface,
     backgroundColor: colors.bgPanel,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.borderSubtle
@@ -119,13 +120,28 @@ const baseStyles = StyleSheet.create({
     minHeight: 32,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.xs,
-    borderRadius: radii.button,
+    borderRadius: radii.control,
     borderWidth: 1,
     borderColor: colors.statusAmber,
     backgroundColor: colors.bgRaised,
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0
+  },
+  completeMergeButton: {
+    minHeight: 32,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    borderRadius: radii.control,
+    backgroundColor: colors.textPrimary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0
+  },
+  completeMergeText: {
+    color: colors.bgBase,
+    fontSize: typography.bodySize,
+    fontWeight: '600'
   },
   abortPressed: {
     opacity: 0.75
@@ -148,7 +164,7 @@ const baseStyles = StyleSheet.create({
     marginBottom: -spacing.sm,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
-    borderRadius: radii.button,
+    borderRadius: radii.surface,
     backgroundColor: colors.bgRaised,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.statusAmber
@@ -161,7 +177,7 @@ const baseStyles = StyleSheet.create({
     marginTop: spacing.sm,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
-    borderRadius: radii.button,
+    borderRadius: radii.surface,
     backgroundColor: colors.bgRaised,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.statusRed
@@ -179,7 +195,7 @@ const baseStyles = StyleSheet.create({
   bulkButton: {
     flex: 1,
     minHeight: 36,
-    borderRadius: radii.button,
+    borderRadius: radii.control,
     backgroundColor: colors.bgRaised,
     alignItems: 'center',
     justifyContent: 'center',
@@ -189,7 +205,7 @@ const baseStyles = StyleSheet.create({
   bulkMenuButton: {
     width: 42,
     minHeight: 36,
-    borderRadius: radii.button,
+    borderRadius: radii.control,
     backgroundColor: colors.bgRaised,
     alignItems: 'center',
     justifyContent: 'center'
@@ -210,7 +226,7 @@ const baseStyles = StyleSheet.create({
   },
   createPrButton: {
     height: 42,
-    borderRadius: radii.button,
+    borderRadius: radii.control,
     backgroundColor: colors.textPrimary,
     alignItems: 'center',
     justifyContent: 'center',
@@ -241,6 +257,6 @@ const baseStyles = StyleSheet.create({
     textAlign: 'center',
     flexShrink: 1
   }
-})
+}))
 
-export const styles = { ...baseStyles, ...listStyles, ...diffStyles }
+export const styles = themedStyles(() => ({ ...baseStyles, ...listStyles, ...diffStyles }))

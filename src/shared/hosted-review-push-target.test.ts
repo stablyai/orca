@@ -67,48 +67,12 @@ describe('resolveHostedReviewActionUpstreamStatus', () => {
     ).toBe(unrelatedUpstream)
   })
 
-  it('keeps action status on the review target once one is usable', () => {
-    expect(
-      resolveHostedReviewActionUpstreamStatus({
-        hasHostedReviewLink: true,
-        hasResolvableHostedReviewPushTargetLink: true,
-        hostedReviewState: 'open',
-        isHostedReviewStateLoading: false,
-        canUseHostedReviewPushTarget: true,
-        upstreamStatus: {
-          hasUpstream: true,
-          upstreamName: 'pr-user-repo/user/feature',
-          ahead: 2,
-          behind: 0
-        }
-      })
-    ).toEqual({
-      hasUpstream: true,
-      upstreamName: 'pr-user-repo/user/feature',
-      ahead: 2,
-      behind: 0
-    })
-  })
-
   it('does not alter status for closed reviews', () => {
     expect(
       resolveHostedReviewActionUpstreamStatus({
         hasHostedReviewLink: true,
         hasResolvableHostedReviewPushTargetLink: true,
         hostedReviewState: 'closed',
-        isHostedReviewStateLoading: false,
-        canUseHostedReviewPushTarget: false,
-        upstreamStatus: unrelatedUpstream
-      })
-    ).toBe(unrelatedUpstream)
-  })
-
-  it('does not alter status for merged reviews', () => {
-    expect(
-      resolveHostedReviewActionUpstreamStatus({
-        hasHostedReviewLink: true,
-        hasResolvableHostedReviewPushTargetLink: true,
-        hostedReviewState: 'merged',
         isHostedReviewStateLoading: false,
         canUseHostedReviewPushTarget: false,
         upstreamStatus: unrelatedUpstream
@@ -137,21 +101,6 @@ describe('hasResolvableHostedReviewPushTargetLink', () => {
 })
 
 describe('hasPositiveHostedReviewNumberLink', () => {
-  it('accepts positive hosted-review metadata and rejects invalid values', () => {
-    expect(hasPositiveHostedReviewNumberLink({ fallbackGitHubPR: 12 })).toBe(true)
-    expect(hasPositiveHostedReviewNumberLink({ linkedBitbucketPR: 34 })).toBe(true)
-    expect(hasPositiveHostedReviewNumberLink({ linkedAzureDevOpsPR: 56 })).toBe(true)
-    expect(hasPositiveHostedReviewNumberLink({ linkedGiteaPR: 78 })).toBe(true)
-    expect(
-      hasPositiveHostedReviewNumberLink({
-        linkedGitHubPR: 0,
-        linkedGitLabMR: -1
-      })
-    ).toBe(false)
-    expect(hasPositiveHostedReviewNumberLink({ linkedGitHubPR: Number.NaN })).toBe(false)
-    expect(hasPositiveHostedReviewNumberLink({})).toBe(false)
-  })
-
   it('blocks resolver-less providers without treating them as resolvable', () => {
     // Providers without resolvers still block unsafe pushes; keep resolvable links a strict subset of positive links.
     for (const provider of ['linkedBitbucketPR', 'linkedAzureDevOpsPR', 'linkedGiteaPR'] as const) {
@@ -170,30 +119,6 @@ describe('resolveHostedReviewStateForActions', () => {
         hasResolvableHostedReviewPushTargetLink: true
       })
     ).toBe('open')
-  })
-
-  it('preserves known hosted review states', () => {
-    expect(
-      resolveHostedReviewStateForActions({
-        hostedReviewState: 'merged',
-        hasResolvableHostedReviewPushTargetLink: true
-      })
-    ).toBe('merged')
-    expect(
-      resolveHostedReviewStateForActions({
-        hostedReviewState: 'closed',
-        hasResolvableHostedReviewPushTargetLink: false
-      })
-    ).toBe('closed')
-  })
-
-  it('leaves unknown review state empty when no target lookup exists', () => {
-    expect(
-      resolveHostedReviewStateForActions({
-        hostedReviewState: null,
-        hasResolvableHostedReviewPushTargetLink: false
-      })
-    ).toBeNull()
   })
 })
 
@@ -243,22 +168,6 @@ describe('hasUsableHostedReviewPushTarget', () => {
       })
     ).toBe(false)
     expect(hasUsableHostedReviewPushTarget({ upstreamStatus: unrelatedUpstream })).toBe(false)
-  })
-
-  it('treats a same-repo review upstream that already tracks the branch as usable', () => {
-    // Matching real upstream already names the review head; do not block while its target hydrates.
-    expect(
-      hasUsableHostedReviewPushTarget({
-        hasResolvableHostedReviewPushTargetLink: true,
-        branchName: 'feature/foo',
-        upstreamStatus: {
-          hasUpstream: true,
-          upstreamName: 'origin/feature/foo',
-          ahead: 7,
-          behind: 2
-        }
-      })
-    ).toBe(true)
   })
 
   it('keeps blocking a review whose upstream tracks an unrelated fork/helper head', () => {

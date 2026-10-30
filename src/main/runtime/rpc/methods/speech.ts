@@ -42,29 +42,28 @@ export const SPEECH_METHODS = [
     name: 'speech.dictation.start',
     permission: 'workspace',
     params: DictationStart,
-    handler: async (params, { runtime, clientId, connectionId }) =>
-      runtime.startMobileDictation({ ...params, clientId, connectionId })
+    handler: async (params, { runtime, clientId }) =>
+      runtime.startMobileDictation({ ...params, clientId })
   }),
   defineMethod({
     name: 'speech.dictation.chunk',
     permission: 'workspace',
     params: DictationChunk,
-    handler: (params, { runtime, clientId, connectionId }) =>
-      runtime.feedMobileDictation({ ...params, clientId, connectionId })
+    handler: (params, { runtime, clientId }) => runtime.feedMobileDictation({ ...params, clientId })
   }),
   defineMethod({
     name: 'speech.dictation.finish',
     permission: 'workspace',
     params: DictationHandle,
-    handler: async (params, { runtime, clientId, connectionId }) =>
-      runtime.finishMobileDictation({ ...params, clientId, connectionId })
+    handler: async (params, { runtime, clientId }) =>
+      runtime.finishMobileDictation({ ...params, clientId })
   }),
   defineMethod({
     name: 'speech.dictation.cancel',
     permission: 'workspace',
     params: DictationHandle,
-    handler: async (params, { runtime, clientId, connectionId }) =>
-      runtime.cancelMobileDictation({ ...params, clientId, connectionId })
+    handler: async (params, { runtime, clientId }) =>
+      runtime.cancelMobileDictation({ ...params, clientId })
   }),
   defineMethod({
     name: 'speech.openAiKey.status',

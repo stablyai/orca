@@ -6,6 +6,10 @@ import { useWorktreeMap } from '../store/selectors'
 import { getResolvedExecutionHostIdForWorktree } from '@/lib/resolved-worktree-execution-host'
 import type { WorktreeTabBucketProjection } from '@/lib/worktree-tab-bucket-projection'
 import { projectWorkspaceSurfaces } from './workspace-surface-projection'
+import {
+  parseWslMovedSurfacesKey,
+  selectWslMovedSurfacesKey
+} from '@/store/repos/wsl-moved-projects'
 import { useReusedArrayIdentity } from './sidebar/worktree-list/listing/use-reused-array-identity'
 import { usePairedRuntimeParkingEnvironmentIds } from '@/store/use-runtime-status-view'
 import { createTerminalWorktreeTopologyProjection } from './terminal-pane/terminal-hidden-worktree-retention'
@@ -39,16 +43,24 @@ export function useTerminalWorkspaceFoundation() {
       : null
   // Without a resolved host, active workspace cannot affect projection; omit it to avoid rebuilding every surface on switches.
   const activeFolderSurfaceId = activeFolderSurfaceHostId ? renderedActiveWorktreeId : null
-  const workspaceSurfaces = useMemo(
-    () =>
-      projectWorkspaceSurfaces({
-        worktreesById,
-        folderWorkspaces,
-        activeWorkspaceId: activeFolderSurfaceId,
-        activeWorkspaceResolvedHostId: activeFolderSurfaceHostId
-      }),
-    [worktreesById, folderWorkspaces, activeFolderSurfaceId, activeFolderSurfaceHostId]
-  )
+  const wslMovedSurfacesKey = useAppStore(selectWslMovedSurfacesKey)
+  const workspaceSurfaces = useMemo(() => {
+    const surfaces = projectWorkspaceSurfaces({
+      worktreesById,
+      folderWorkspaces,
+      activeWorkspaceId: activeFolderSurfaceId,
+      activeWorkspaceResolvedHostId: activeFolderSurfaceHostId
+    })
+    // A WSL-moved project's chats mount beside the catalog; it lists none of its workspaces.
+    const moved = parseWslMovedSurfacesKey(wslMovedSurfacesKey)
+    return moved.length > 0 ? [...surfaces, ...moved] : surfaces
+  }, [
+    worktreesById,
+    folderWorkspaces,
+    activeFolderSurfaceId,
+    activeFolderSurfaceHostId,
+    wslMovedSurfacesKey
+  ])
   // Reuse equal ID arrays across worktree row replacements to avoid restarting mount/park effects and rebuilding their Sets.
   const workspaceSurfaceIds = useReusedArrayIdentity(
     useMemo(() => workspaceSurfaces.map((workspace) => workspace.id), [workspaceSurfaces])

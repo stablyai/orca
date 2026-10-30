@@ -5,6 +5,9 @@ export type HomeWorktreeSummary = {
   displayName: string
   liveTerminalCount: number
   status?: 'working' | 'active' | 'permission' | 'done' | 'inactive'
+  hasHostSidebarActivity?: boolean
+  unread?: boolean
+  isArchived?: boolean
   isActive?: boolean
   lastOutputAt?: number
 }

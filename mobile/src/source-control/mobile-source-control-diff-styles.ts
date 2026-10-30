@@ -1,7 +1,8 @@
 import { StyleSheet } from 'react-native'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
 
-export const diffStyles = StyleSheet.create({
+export const diffStyles = themedStyleSheet(() => ({
   state: {
     flex: 1,
     alignItems: 'center',
@@ -24,7 +25,7 @@ export const diffStyles = StyleSheet.create({
     marginTop: spacing.md,
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.sm,
-    borderRadius: radii.button,
+    borderRadius: radii.control,
     backgroundColor: colors.bgRaised
   },
   retryText: {
@@ -57,7 +58,7 @@ export const diffStyles = StyleSheet.create({
   diffCloseButton: {
     width: 34,
     height: 34,
-    borderRadius: radii.button,
+    borderRadius: radii.control,
     alignItems: 'center',
     justifyContent: 'center'
   },
@@ -109,4 +110,4 @@ export const diffStyles = StyleSheet.create({
     fontSize: typography.metaSize,
     lineHeight: 17
   }
-})
+}))

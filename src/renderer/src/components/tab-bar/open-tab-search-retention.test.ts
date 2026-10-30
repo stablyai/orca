@@ -6,7 +6,7 @@ import {
   buildSearchableBrowserPageDocument,
   type SearchableBrowserPage
 } from '@/lib/browser-palette-search'
-import { buildPaletteTabDocument } from '@/lib/palette-match/tab-document'
+import { buildPaletteTabDocument } from '../../../../shared/palette-match/tab-document'
 import type { SearchableWorkspaceTab } from '@/lib/workspace-tab-palette-search'
 import { TERMINAL_TYPE_SEARCH_ALIASES } from '@/lib/workspace-tab-palette-search'
 import { searchOpenTabs } from './open-tab-search'

@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 
-import { Editor } from '@tiptap/react'
+import { Editor, type JSONContent } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { handleRichMarkdownEditorClick } from './rich-markdown-editor-click-routing'
@@ -54,9 +54,6 @@ beforeEach(() => {
     }
   })
   registerHttpLinkStoreAccessor(() => ({
-    repos: [],
-    endpointProjects: [],
-    endpointProjectHostSetups: [],
     settings: routing.settings,
     setActiveWorktree: vi.fn(),
     createBrowserTab
@@ -74,26 +71,40 @@ function clickLink({
   isMac = true,
   shiftKey = true,
   modKey = true,
-  href = 'https://example.com/docs'
+  href = 'https://example.com/docs',
+  content,
+  pos = 2,
+  targetSelector = 'a'
 }: {
   sourceOwner?: HttpLinkSourceOwner
   isMac?: boolean
   shiftKey?: boolean
   modKey?: boolean
   href?: string
+  content?: string | JSONContent
+  pos?: number
+  targetSelector?: string
 } = {}): boolean {
   editor = new Editor({
     extensions: [StarterKit],
-    content: `<p><a href="${href}">example</a></p>`
+    content: content ?? `<p><a href="${href}">example</a></p>`
   })
+  const event = new MouseEvent('click', {
+    metaKey: isMac && modKey,
+    ctrlKey: !isMac && modKey,
+    shiftKey,
+    cancelable: true
+  })
+  event.preventDefault()
+  const target = editor.view.dom.querySelector(targetSelector)
+  if (!target) {
+    throw new Error(`Missing click target: ${targetSelector}`)
+  }
+  target.dispatchEvent(event)
   return handleRichMarkdownEditorClick({
     activateMarkdownLink,
     editorRef: { current: editor },
-    event: new MouseEvent('click', {
-      metaKey: isMac && modKey,
-      ctrlKey: !isMac && modKey,
-      shiftKey
-    }),
+    event,
     filePath: '/repo/docs/README.md',
     isMac,
     htmlSuperscriptLinkContext: createRichMarkdownHtmlSuperscriptLinkContext({
@@ -105,7 +116,7 @@ function clickLink({
     markdownCommentsRef: { current: [] },
     markdownSourceLineOffsetRef: { current: 0 },
     onOpenDocLinkRef: { current: undefined },
-    pos: 2,
+    pos,
     rootRef: { current: null },
     scrollRichMarkdownReviewNoteCardIntoView: vi.fn(),
     view: editor.view,
@@ -198,6 +209,10 @@ describe('rich Markdown alternate browser click', () => {
     await vi.waitFor(() =>
       expect(openFileUri).toHaveBeenCalledWith('file:///repo/docs/child.md', 'local')
     )
+    // The click is a user act, so its existence check may start a stopped WSL distro (E9).
+    expect(window.api.shell.pathExists).toHaveBeenCalledWith('/repo/docs/child.md', {
+      wakeWslDistro: true
+    })
     expect(activateMarkdownLink).not.toHaveBeenCalled()
     expect(createBrowserTab).not.toHaveBeenCalled()
   })
@@ -221,4 +236,76 @@ describe('rich Markdown alternate browser click', () => {
     await new Promise((resolve) => setTimeout(resolve, 0))
     expect(openFileUri).not.toHaveBeenCalled()
   })
+})
+
+describe('rich Markdown link click targets', () => {
+  it('opens the first character after plain text', () => {
+    expect(
+      clickLink({
+        shiftKey: false,
+        content: '<p>plain <a href="child.md">X</a> tail</p>',
+        pos: 7
+      })
+    ).toBe(true)
+    expect(activateMarkdownLink).toHaveBeenCalledWith('child.md', expect.any(Object))
+  })
+
+  it('opens the clicked adjacent link at their shared text position', () => {
+    expect(
+      clickLink({
+        shiftKey: false,
+        content: '<p><a href="first.md">A</a><a href="second.md">B</a></p>',
+        targetSelector: 'a:last-child',
+        pos: 2
+      })
+    ).toBe(true)
+    expect(activateMarkdownLink).toHaveBeenCalledWith('second.md', expect.any(Object))
+  })
+
+  it('opens a link from nested formatting at its leading boundary', () => {
+    expect(
+      clickLink({
+        shiftKey: false,
+        content: '<p>plain <a href="child.md"><strong>X</strong></a></p>',
+        targetSelector: 'strong',
+        pos: 7
+      })
+    ).toBe(true)
+    expect(activateMarkdownLink).toHaveBeenCalledWith('child.md', expect.any(Object))
+  })
+
+  it('keeps neighboring prose inert even when its caret position has a link mark', () => {
+    expect(
+      clickLink({
+        shiftKey: false,
+        content: '<p><a href="child.md">X</a><em>tail</em></p>',
+        targetSelector: 'em',
+        pos: 2
+      })
+    ).toBe(false)
+    expect(activateMarkdownLink).not.toHaveBeenCalled()
+  })
+
+  it.each(['file:///repo/docs/child.md', 'C:\\repo\\docs\\child.md'])(
+    'opens %s even though the rendered anchor drops its href',
+    (href) => {
+      expect(
+        clickLink({
+          shiftKey: false,
+          content: {
+            type: 'doc',
+            content: [
+              {
+                type: 'paragraph',
+                content: [
+                  { type: 'text', text: 'example', marks: [{ type: 'link', attrs: { href } }] }
+                ]
+              }
+            ]
+          }
+        })
+      ).toBe(true)
+      expect(activateMarkdownLink).toHaveBeenCalledWith(href, expect.any(Object))
+    }
+  )
 })

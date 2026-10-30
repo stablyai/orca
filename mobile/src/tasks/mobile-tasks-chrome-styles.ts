@@ -1,6 +1,14 @@
-import { StyleSheet, colors, radii, spacing, typography } from './mobile-tasks-dependencies'
+import { concentricRadius } from '../theme/mobile-theme'
+import {
+  StyleSheet,
+  themedStyleSheet,
+  colors,
+  radii,
+  spacing,
+  typography
+} from './mobile-tasks-dependencies'
 
-export const mobileTasksChromeStyles = StyleSheet.create({
+export const mobileTasksChromeStyles = themedStyleSheet(() => ({
   container: {
     flex: 1,
     backgroundColor: colors.bgBase
@@ -62,7 +70,7 @@ export const mobileTasksChromeStyles = StyleSheet.create({
     gap: spacing.xs,
     borderWidth: 1,
     borderColor: colors.borderSubtle,
-    borderRadius: radii.button,
+    borderRadius: concentricRadius(radii.control, 2),
     paddingHorizontal: spacing.sm + 2,
     paddingVertical: spacing.xs
   },
@@ -73,7 +81,7 @@ export const mobileTasksChromeStyles = StyleSheet.create({
     justifyContent: 'center',
     borderWidth: 1,
     borderColor: colors.borderSubtle,
-    borderRadius: radii.button
+    borderRadius: concentricRadius(radii.control, 2)
   },
   segmentCountPill: {
     minWidth: 32,
@@ -82,13 +90,13 @@ export const mobileTasksChromeStyles = StyleSheet.create({
     justifyContent: 'center',
     borderWidth: 1,
     borderColor: colors.borderSubtle,
-    borderRadius: radii.button,
+    borderRadius: radii.pill,
     paddingHorizontal: spacing.sm
   },
   segmentRepoDot: {
     width: 8,
     height: 8,
-    borderRadius: 4
+    borderRadius: radii.pill
   },
   segmentButtonText: {
     fontSize: 12,
@@ -150,7 +158,7 @@ export const mobileTasksChromeStyles = StyleSheet.create({
   sourceErrorRetry: {
     borderWidth: 1,
     borderColor: colors.borderSubtle,
-    borderRadius: radii.button,
+    borderRadius: radii.control,
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.xs
   },
@@ -206,7 +214,7 @@ export const mobileTasksChromeStyles = StyleSheet.create({
   repoSectionDot: {
     width: 8,
     height: 8,
-    borderRadius: 4
+    borderRadius: radii.pill
   },
   repoSectionTitle: {
     flex: 1,
@@ -223,4 +231,4 @@ export const mobileTasksChromeStyles = StyleSheet.create({
     marginLeft: spacing.lg + 26,
     marginRight: spacing.lg
   }
-})
+}))

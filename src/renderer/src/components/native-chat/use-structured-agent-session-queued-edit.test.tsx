@@ -1,144 +1,58 @@
 // @vitest-environment happy-dom
-
-// Exercise real edit lifecycle with a scripted host: preserve dirty text on departure and keep lease failures from blocking typing/Save/Cancel.
-
-import { act, cleanup, renderHook, waitFor } from '@testing-library/react'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import {
+  script,
+  rpc,
+  HELD,
+  BASE,
+  SESSION,
+  SCOPE,
+  message,
+  harness,
+  begin,
+  holdCalls,
+  done,
+  withText,
+  submittedAs,
+  requestedFingerprint,
+  writeSpy,
+  write,
+  type Outcome
+} from './structured-queued-edit.test-fixture'
+import { act, render, renderHook, waitFor, within } from '@testing-library/react'
+import { createRef } from 'react'
+import { NativeChatPromptEditor } from './NativeChatPromptEditor'
+import type { NativeChatComposerInput } from './native-chat-composer-input'
+import { promptEditor } from './native-chat-prompt-editor.test-support'
+import { promptSkillRefs } from './native-chat-prompt-document'
+import { beforeAll, describe, expect, it, vi } from 'vitest'
 import { toast } from 'sonner'
-import type { AgentJournalSubmission } from '../../../../shared/agent-session-journal-types'
+import type { QueuedEditHostFixtureModule } from '../../../../shared/queued-edit-host.test-fixture'
+import { agentSessionSendBodyFingerprint } from '../../../../shared/structured-agent-session-send-mutation'
 import type {
   AgentSessionQueuedMessage,
-  AgentSessionQueuedMessageEditHoldParams,
-  AgentSessionQueuedMessageEditHoldResult,
-  AgentSessionQueuedMessageUpdateResult
+  AgentSessionQueuedMessageEditHoldResult
 } from '../../../../shared/agent-session-wire'
-import { agentSessionSendBodyFingerprint } from '../../../../shared/structured-agent-session-send-mutation'
+import { captureInsertionTarget, insertText } from '../dictation/dictation-insertion-target'
 import { useStructuredAgentSessionQueuedEdit } from './use-structured-agent-session-queued-edit'
-import { projectQueuedMessageCards } from './structured-agent-session-queued-cards'
+import { projectQueuedMessageCards } from '../../../../shared/structured-agent-session-queued-cards'
+import { useNativeChatComposerEditSession } from './use-native-chat-composer-edit-session'
 import {
-  clearNativeChatDraftCacheForTests,
+  readNativeChatComposerDraft,
+  updateNativeChatComposerDraft
+} from './native-chat-composer-draft-store'
+import {
+  appendNativeChatAttachmentCache,
   readNativeChatDraftCache,
   writeNativeChatDraftCache
 } from './native-chat-draft-cache'
-import {
-  createMemoryNativeChatComposerDraftStorage,
-  setNativeChatComposerDraftStorageForTests
-} from './native-chat-composer-draft-storage'
-import type {
-  StructuredAgentSessionWrite,
-  StructuredAgentSessionWriteOutcome
-} from './use-structured-agent-session-mutate'
-
-const HELD: AgentSessionQueuedMessageEditHoldResult = {
-  status: 'held',
-  fingerprint: 'f'.repeat(64),
-  leaseDurationMs: 120_000,
-  remainingMs: 120_000
-}
-const rpc = vi.hoisted(() =>
-  vi.fn(
-    async (
-      _target: unknown,
-      _method: string,
-      params: AgentSessionQueuedMessageEditHoldParams
-    ): Promise<AgentSessionQueuedMessageEditHoldResult> =>
-      params.action === 'release' ? { status: 'released' } : HELD
+let queuedMessageUpdateDecision: QueuedEditHostFixtureModule['queuedMessageUpdateDecision']
+beforeAll(async () => {
+  const fixtures = await vi.importActual<QueuedEditHostFixtureModule>(
+    '../../../../main/native-chat/agent-session-journal/queued-edit-host.test-fixture'
   )
-)
-vi.mock('@/runtime/structured-agent-session-client', () => ({ callStructuredAgentSession: rpc }))
+  queuedMessageUpdateDecision = fixtures.queuedMessageUpdateDecision
+})
 vi.mock('sonner', () => ({ toast: { error: vi.fn() } }))
-vi.mock('@/i18n/i18n', () => ({ translate: (_key: string, fallback: string) => fallback }))
-
-const SESSION = 'folder-session'
-const SCOPE = 'pane-draft'
-const message: AgentSessionQueuedMessage = {
-  messageId: 'card',
-  position: 2,
-  state: 'waiting',
-  body: {
-    kind: 'message',
-    role: 'user',
-    blocks: [{ type: 'text', text: 'original' }],
-    from: { kind: 'agent', senders: [], orchestration: null }
-  }
-}
-const BASE = agentSessionSendBodyFingerprint(SESSION, message.body)
-
-type Outcome = StructuredAgentSessionWriteOutcome<AgentSessionQueuedMessageUpdateResult>
-let answer: () => Promise<Outcome>
-const writeSpy = vi.fn(async (..._args: unknown[]) => answer())
-// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this harness answers only queuedMessageUpdate, with that method's scripted outcome.
-const write = writeSpy as StructuredAgentSessionWrite
-
-type Props = {
-  messages: AgentSessionQueuedMessage[] | null
-  sessionId?: string
-  submissions?: AgentJournalSubmission[]
-  imagesCapable?: boolean
-  promptOpen?: boolean
-}
-function harness(capable = true, initial: Props = { messages: [message] }) {
-  return renderHook(
-    (props: Props) => {
-      const submissions = props.submissions ?? []
-      return useStructuredAgentSessionQueuedEdit({
-        transport: {
-          target: { kind: 'environment', environmentId: 'remote-host' },
-          sessionId: props.sessionId ?? SESSION,
-          capable,
-          imagesCapable: props.imagesCapable,
-          write
-        },
-        messages: props.messages,
-        cards: projectQueuedMessageCards(props.messages, submissions, {}),
-        submissions,
-        composerScopeKey: SCOPE,
-        promptOpen: props.promptOpen ?? false
-      })
-    },
-    { initialProps: initial }
-  )
-}
-type Hook = ReturnType<typeof harness>
-async function begin(hook: Hook) {
-  await act(() => hook.result.current.begin('card'))
-}
-function holdCalls(action: string) {
-  return rpc.mock.calls.filter((call) => call[2].action === action)
-}
-function done(value: AgentSessionQueuedMessageUpdateResult): () => Promise<Outcome> {
-  return async () => ({ kind: 'done', value })
-}
-function withText(text: string): AgentSessionQueuedMessage {
-  return { ...message, body: { ...message.body, blocks: [{ type: 'text', text }] } }
-}
-function submittedAs(text: string): AgentJournalSubmission {
-  return {
-    clientMessageId: 'submission',
-    queuedMessageId: 'card',
-    payloadFingerprint: agentSessionSendBodyFingerprint(SESSION, withText(text).body),
-    fence: 3,
-    dispatchState: 'pending',
-    providerItemId: null,
-    reason: null,
-    submittedAt: 1,
-    resolvedAt: null
-  }
-}
-
-beforeEach(() => {
-  rpc.mockClear()
-  writeSpy.mockClear()
-  vi.mocked(toast.error).mockClear()
-  clearNativeChatDraftCacheForTests()
-  setNativeChatComposerDraftStorageForTests(createMemoryNativeChatComposerDraftStorage())
-  answer = done({ status: 'updated', messageId: 'card', fingerprint: 'a'.repeat(64) })
-})
-afterEach(() => {
-  cleanup()
-  vi.useRealTimers()
-})
-
 describe('inline queued editor', () => {
   it('holds the card on its host, saves against the full body, and leaves the chat box alone', async () => {
     writeNativeChatDraftCache(SCOPE, 'existing composer')
@@ -192,6 +106,86 @@ describe('inline queued editor', () => {
     expect(writeSpy).not.toHaveBeenCalled()
   })
 
+  it.each(['/model old', '$review old'])(
+    'stock Undo restores accepted %s and clean Save; a changed pill uses its actual file',
+    async (text) => {
+      const skills = text.startsWith('$')
+        ? [
+            { name: 'review', path: '/A/SKILL.md' },
+            { name: 'review', path: '/B/SKILL.md' }
+          ]
+        : undefined
+      const accepted = {
+        ...message,
+        body: {
+          ...message.body,
+          blocks: [{ type: 'text' as const, text }],
+          ...(skills ? { skills } : {})
+        }
+      }
+      const hook = harness(true, { messages: [accepted], skillsCapable: true })
+      const mount = () => {
+        const edit = hook.result.current.editor!
+        const inputRef = createRef<NativeChatComposerInput>()
+        const view = render(
+          <NativeChatPromptEditor
+            inputRef={inputRef}
+            scopeKey={edit.draftScopeKey}
+            initialValue={edit.text}
+            disabled={false}
+            placeholder="Edit message"
+            onChange={() => {}}
+            onSelect={() => {}}
+          />
+        )
+        return {
+          ...view,
+          input: inputRef.current!,
+          editor: promptEditor(within(view.container).getByRole('textbox'))
+        }
+      }
+      await begin(hook)
+      const field = mount()
+      act(() => {
+        field.input.setSelectionRange(0, text.indexOf(' '))
+        expect(field.editor.commands.deleteSelection()).toBe(true)
+      })
+      expect(field.input.value).toBe(' old')
+      await act(async () => {
+        expect(field.editor.commands.undo()).toBe(true)
+      })
+      expect(field.input.value).toBe(text)
+      expect(promptSkillRefs(field.editor.getJSON())).toEqual(skills?.slice(0, 1) ?? [])
+      act(() => hook.result.current.editor!.save())
+      expect(hook.result.current.editor).toBeUndefined()
+      expect(writeSpy).not.toHaveBeenCalled()
+      field.unmount()
+      if (!skills) {
+        return
+      }
+
+      await begin(hook)
+      const changed = mount()
+      act(() => {
+        changed.input.setSelectionRange(text.length, text.length)
+        changed.input.insertText!(' changed')
+      })
+      act(() => hook.result.current.editor!.save())
+      await waitFor(() => expect(hook.result.current.editor).toBeUndefined())
+      expect(writeSpy).toHaveBeenCalledExactlyOnceWith(
+        'agentSession.queuedMessageUpdate',
+        'agentSession.queuedMessageUpdate',
+        {
+          messageId: 'card',
+          expectedBodyFingerprint: agentSessionSendBodyFingerprint(SESSION, accepted.body),
+          text: '$review old changed',
+          skills: skills.slice(0, 1)
+        }
+      )
+      expect(toast.error).not.toHaveBeenCalled()
+    }
+  )
+
   it('Cancel during a slow acquire closes at once and releases that edit after it lands', async () => {
     let finish: (value: AgentSessionQueuedMessageEditHoldResult) => void = () => {}
     rpc.mockImplementationOnce(
@@ -242,7 +236,7 @@ describe('inline queued editor', () => {
     await begin(hook)
     act(() => hook.result.current.editor?.change('see [Image #1] not [Image #2]'))
     hook.rerender({ messages: [] })
-    expect(readNativeChatDraftCache(SCOPE)).toBe('see  not [Image #2]')
+    expect(readNativeChatDraftCache(SCOPE)).toBe('see not [Image #2]')
   })
 
   it('a clean edit whose card leaves just closes; an unloaded list proves nothing', async () => {
@@ -260,7 +254,7 @@ describe('inline queued editor', () => {
 
   it('changed puts the typing in the chat box and reopens on the newer text once it shows', async () => {
     writeNativeChatDraftCache(SCOPE, 'existing')
-    answer = done({ status: 'changed', messageId: 'card' })
+    script.answer = done({ status: 'changed', messageId: 'card' })
     const hook = harness()
     await begin(hook)
     act(() => hook.result.current.editor?.change('local'))
@@ -284,7 +278,7 @@ describe('inline queued editor', () => {
   })
 
   it('while a question holds the chat box, the notice says when the edit will be there', async () => {
-    answer = done({ status: 'gone', messageId: 'card', disposition: 'dispatched' })
+    script.answer = done({ status: 'gone', messageId: 'card', disposition: 'dispatched' })
     const hook = harness(true, { messages: [message], promptOpen: true })
     await begin(hook)
     act(() => hook.result.current.editor?.change('unsaved'))
@@ -296,8 +290,34 @@ describe('inline queued editor', () => {
     expect(readNativeChatDraftCache(SCOPE)).toBe('unsaved')
   })
 
+  it('rebases delayed plain proof without trimming the newer replacement', async () => {
+    const hook = harness()
+    await begin(hook)
+    act(() => hook.result.current.editor!.change('saved'))
+    script.answer = async () => ({
+      kind: 'not-done',
+      notice: 'lost',
+      failure: { kind: 'unconfirmed' }
+    })
+    act(() => hook.result.current.editor!.save())
+    await waitFor(() => expect(hook.result.current.editor!.saving).toBe(false))
+    act(() => hook.result.current.editor!.change('saved plus unsaved'))
+    hook.rerender({ messages: [withText('saved')] })
+    expect(hook.result.current.editor).toMatchObject({
+      text: 'saved plus unsaved',
+      acquiring: false,
+      saving: false
+    })
+    expect(readNativeChatDraftCache(SCOPE)).toBe('')
+    hook.rerender({ messages: [withText('saved')] })
+    expect(hook.result.current.editor!.text).toBe('saved plus unsaved')
+    expect(holdCalls('acquire').at(-1)![2]).toMatchObject({
+      expectedBodyFingerprint: agentSessionSendBodyFingerprint(SESSION, withText('saved').body)
+    })
+  })
+
   it('a refused Save says why once and keeps the editor', async () => {
-    answer = async () => ({
+    script.answer = async () => ({
       kind: 'not-done',
       notice: 'Too much text is waiting in the queue.',
       failure: { kind: 'failed' }
@@ -312,8 +332,8 @@ describe('inline queued editor', () => {
     expect(hook.result.current.editor).toMatchObject({ text: 'long', saving: false })
   })
 
-  it('Save answering gone puts the typing in the chat box; another chat keeps it there quietly', async () => {
-    answer = done({ status: 'gone', messageId: 'card', disposition: 'dispatched' })
+  it('Save answering gone puts the typing in the chat box; another chat keeps it there once', async () => {
+    script.answer = done({ status: 'gone', messageId: 'card', disposition: 'dispatched' })
     const hook = harness()
     await begin(hook)
     act(() => hook.result.current.editor?.change('unsaved'))
@@ -326,11 +346,11 @@ describe('inline queued editor', () => {
     hook.rerender({ messages: [message], sessionId: 'another-session' })
     expect(hook.result.current.editor).toBeUndefined()
     expect(readNativeChatDraftCache(SCOPE)).toBe('unsaved\n\nanother draft')
-    expect(toast.error).toHaveBeenCalledOnce()
+    expect(toast.error).toHaveBeenCalledTimes(2)
     await waitFor(() => expect(holdCalls('release')).toHaveLength(2))
   })
 
-  it('closing the pane keeps unsaved typing in the chat box, quietly; clean edits leave nothing', async () => {
+  it('closing the pane keeps unsaved typing in the chat box; clean edits leave nothing', async () => {
     const dirty = harness()
     await begin(dirty)
     act(() => dirty.result.current.editor?.change('unsaved'))
@@ -340,7 +360,7 @@ describe('inline queued editor', () => {
     await begin(clean)
     clean.unmount()
     expect(readNativeChatDraftCache(SCOPE)).toBe('unsaved')
-    expect(toast.error).not.toHaveBeenCalled()
+    expect(toast.error).toHaveBeenCalledOnce()
     await waitFor(() => expect(holdCalls('release')).toHaveLength(2))
   })
 
@@ -355,15 +375,19 @@ describe('inline queued editor', () => {
     expect(readNativeChatDraftCache(SCOPE)).toBe('existing\n\nunsaved')
     hook.unmount()
     expect(readNativeChatDraftCache(SCOPE)).toBe('existing\n\nunsaved')
-    expect(toast.error).not.toHaveBeenCalled()
+    expect(toast.error).toHaveBeenCalledOnce()
     await waitFor(() => expect(holdCalls('release')).toHaveLength(1))
   })
 
   describe('a Save whose answer this pane cannot read reads the published card', () => {
-    const dropped: () => Promise<Outcome> = async () => ({ kind: 'dropped' })
+    const dropped: () => Promise<Outcome> = async () => ({
+      kind: 'not-done',
+      notice: 'lost',
+      failure: { kind: 'unconfirmed' }
+    })
     function deferred() {
       let finish: (outcome: Outcome) => void = () => {}
-      answer = () =>
+      script.answer = () =>
         new Promise((resolve) => {
           finish = resolve
         })
@@ -377,7 +401,7 @@ describe('inline queued editor', () => {
       act(() => hook.result.current.editor?.change('saved'))
       act(() => hook.result.current.editor?.save())
       hook.rerender({ messages: [withText('saved')] })
-      await finish({ kind: 'dropped' })
+      await finish({ kind: 'not-done', notice: 'lost', failure: { kind: 'unconfirmed' } })
       expect(hook.result.current.editor).toBeUndefined()
       expect(toast.error).not.toHaveBeenCalled()
       expect(readNativeChatDraftCache(SCOPE)).toBe('')
@@ -387,9 +411,13 @@ describe('inline queued editor', () => {
       const finish = deferred()
       const hook = harness(true, { messages: [message], imagesCapable: true })
       await begin(hook)
-      act(() => hook.result.current.editor?.images?.intake.append(['/tmp/new.png']))
+      act(() =>
+        appendNativeChatAttachmentCache(hook.result.current.editor!.draftScopeKey, [
+          { id: 'new', path: '/tmp/new.png' }
+        ])
+      )
       act(() => hook.result.current.editor?.save())
-      const saved = withText('original [Image #1]')
+      const saved = withText('original')
       saved.body.blocks.push({ type: 'image-ref', path: '/tmp/new.png' })
       hook.rerender({ messages: [saved], imagesCapable: true })
       await finish({ kind: 'not-done', notice: 'lost', failure: { kind: 'unconfirmed' } })
@@ -398,7 +426,7 @@ describe('inline queued editor', () => {
     })
 
     it('the card still shows other text: the editor stays as it was, quietly', async () => {
-      answer = dropped
+      script.answer = dropped
       const hook = harness()
       await begin(hook)
       act(() => hook.result.current.editor?.change('typed'))
@@ -409,7 +437,7 @@ describe('inline queued editor', () => {
     })
 
     it('an answer that beats its own publication closes once the card shows the saved text, before it drains', async () => {
-      answer = dropped
+      script.answer = dropped
       const hook = harness()
       await begin(hook)
       act(() => hook.result.current.editor?.change('saved text'))
@@ -424,7 +452,7 @@ describe('inline queued editor', () => {
     })
 
     it('a card that drains with exactly the typed text, unseen, closes quietly too', async () => {
-      answer = dropped
+      script.answer = dropped
       const hook = harness()
       await begin(hook)
       act(() => hook.result.current.editor?.change('saved text'))
@@ -444,7 +472,7 @@ describe('inline queued editor', () => {
       act(() => hook.result.current.editor?.save())
       hook.rerender({ messages: [] })
       expect(hook.result.current.editor?.saving).toBe(true)
-      await finish({ kind: 'dropped' })
+      await finish({ kind: 'not-done', notice: 'lost', failure: { kind: 'unconfirmed' } })
       expect(hook.result.current.editor).toBeUndefined()
       expect(readNativeChatDraftCache(SCOPE)).toBe('typed')
       expect(toast.error).toHaveBeenCalledOnce()
@@ -453,7 +481,7 @@ describe('inline queued editor', () => {
 
   it('a Save that lands and then drains reads as success, even with its answer lost', async () => {
     let finish: (outcome: Outcome) => void = () => {}
-    answer = () =>
+    script.answer = () =>
       new Promise((resolve) => {
         finish = resolve
       })
@@ -517,3 +545,199 @@ describe('inline queued editor', () => {
     expect(toast.error).not.toHaveBeenCalled()
   })
 })
+
+it.each(['updated', 'not-editable', 'clean-gone', 'cancel'] as const)(
+  'routes captured real dictation registration across %s',
+  async (outcome) => {
+    const root = document.createElement('div')
+    const field = document.createElement('textarea')
+    root.append(field)
+    document.body.append(root)
+    const hook = renderHook(() => {
+      const queued = useStructuredAgentSessionQueuedEdit({
+        transport: {
+          target: { kind: 'environment', environmentId: 'remote-host' },
+          sessionId: SESSION,
+          capable: true,
+          write
+        },
+        messages: [message],
+        cards: projectQueuedMessageCards([message], [], {}),
+        submissions: [],
+        composerScopeKey: SCOPE,
+        promptOpen: true
+      })
+      const editor = queued.editor
+      useNativeChatComposerEditSession({
+        editSession: editor
+          ? { save: editor.save, cancel: editor.cancel, canSave: editor.canSave }
+          : undefined,
+        root: { current: root },
+        handle: {
+          current: {
+            focus: () => true,
+            acceptsText: () => !editor?.saving,
+            insertTypedText: (text) => {
+              if (!editor || editor.saving) {
+                return false
+              }
+              updateNativeChatComposerDraft(
+                editor.draftScopeKey,
+                { text: readNativeChatComposerDraft(editor.draftScopeKey).text + text },
+                'immediate'
+              )
+              return true
+            },
+            appendText: () => {},
+            contains: () => true,
+            handlePasteEvent: () => {},
+            pasteFromClipboard: () => {}
+          }
+        },
+        draftScopeKey: editor?.draftScopeKey ?? SCOPE,
+        agent: 'codex',
+        structuredTransport: undefined,
+        sendStructured: () => {},
+        ptyCommandRouting: {
+          agent: 'codex',
+          disabled: false,
+          isDispatchingSessionOption: false,
+          resolveTarget: () => null,
+          sessionOptionsSurface: null,
+          trackPendingSend: () => {},
+          setDraft: () => {},
+          setCaret: () => {},
+          setActiveSuggestion: () => {},
+          clearSkillOrigin: () => {},
+          clearImageAttachments: () => {},
+          setNotice: () => {}
+        },
+        setNotice: () => {},
+        disabled: editor?.saving ?? false,
+        sendHeld: false,
+        sendMessage: () => {},
+        completeItem: () => {}
+      })
+      return queued
+    })
+    await act(() => hook.result.current.begin('card'))
+    field.focus()
+    const captured = captureInsertionTarget()
+    expect(captured?.kind).toBe('composer')
+    if (!captured) {
+      throw new Error('missing dictation target')
+    }
+    if (outcome === 'clean-gone') {
+      hook.unmount()
+    } else if (outcome === 'cancel') {
+      act(() => hook.result.current.editor!.cancel())
+    } else {
+      let reply: ((value: Outcome) => void) | undefined
+      script.answer = () =>
+        new Promise((resolve) => {
+          reply = resolve
+        })
+      act(() => hook.result.current.editor!.change('submitted'))
+      act(() => hook.result.current.editor!.save())
+      act(() => insertText('speech', captured))
+      await act(async () =>
+        reply!({
+          kind: 'done',
+          value:
+            outcome === 'updated'
+              ? { status: outcome, messageId: 'card', fingerprint: requestedFingerprint() }
+              : { status: outcome, messageId: 'card' }
+        })
+      )
+      if (outcome === 'not-editable') {
+        expect(hook.result.current.editor!.text).toContain('speech')
+      }
+    }
+    act(() => insertText('later', captured))
+    if (outcome === 'cancel') {
+      expect(readNativeChatDraftCache(SCOPE)).toBe('')
+    } else if (outcome === 'clean-gone') {
+      expect(readNativeChatDraftCache(SCOPE)).toContain('later')
+      expect(readNativeChatDraftCache(SCOPE)).not.toContain('submitted')
+    } else {
+      expect(hook.result.current.editor!.text).toContain('later')
+      expect(readNativeChatDraftCache(SCOPE)).toBe('')
+    }
+    if (outcome !== 'clean-gone') {
+      hook.unmount()
+    }
+    root.remove()
+  }
+)
+
+// Real host preflight decides restored-seed CAS; hooks own the resulting action lifetime.
+it.each(['refused', 'unknown-committed', 'unknown-refused-unchanged'] as const)(
+  'restoring the seed after %s preserves the real uncertainty boundary',
+  async (mode) => {
+    writeNativeChatDraftCache(SCOPE, 'occupied')
+    const hook = harness()
+    await begin(hook)
+    script.answer =
+      mode === 'refused'
+        ? done({ status: 'not-editable', messageId: 'card' })
+        : async () => ({
+            kind: 'not-done',
+            notice: 'Unconfirmed',
+            failure: { kind: 'unconfirmed' }
+          })
+    act(() => hook.result.current.editor!.change('attempt'))
+    await act(async () => hook.result.current.editor!.save())
+    if (mode === 'unknown-refused-unchanged') {
+      script.answer = done({ status: 'not-editable', messageId: 'card' })
+      act(() => hook.result.current.editor!.change('later refused'))
+      await act(async () => hook.result.current.editor!.save())
+    }
+    act(() => hook.result.current.editor!.change('original'))
+    const before = writeSpy.mock.calls.length
+    vi.mocked(toast.error).mockClear()
+    script.answer = async () => {
+      const body = mode === 'unknown-committed' ? withText('attempt').body : message.body
+      const result = queuedMessageUpdateDecision(
+        {
+          messageId: 'card',
+          position: 2,
+          body,
+          fingerprint: agentSessionSendBodyFingerprint(SESSION, body),
+          state: 'waiting',
+          holdReason: null,
+          returnedReason: null,
+          returnedRejection: null,
+          consumedAs: null,
+          queuedAt: null
+        },
+        SESSION,
+        { messageId: 'card', expectedBodyFingerprint: BASE, text: 'original' }
+      )
+      if (result.status === 'ready') {
+        throw new Error('unexpected ready')
+      }
+      return { kind: 'done', value: result }
+    }
+    await act(async () => hook.result.current.editor!.save())
+    expect(writeSpy).toHaveBeenCalledTimes(before + (mode === 'refused' ? 0 : 1))
+    if (mode === 'unknown-refused-unchanged') {
+      expect(hook.result.current.editor).toMatchObject({
+        text: 'original',
+        saving: false,
+        canSave: true
+      })
+      hook.rerender({ messages: [{ ...message }] })
+      expect(hook.result.current.editor).toBeDefined()
+      expect(readNativeChatDraftCache(SCOPE)).toBe('occupied')
+      expect(toast.error).not.toHaveBeenCalled()
+    } else if (mode === 'refused') {
+      expect(hook.result.current.editor).toBeUndefined()
+      expect(readNativeChatDraftCache(SCOPE)).toBe('occupied')
+      expect(toast.error).not.toHaveBeenCalled()
+    } else {
+      expect(hook.result.current.editor).toBeUndefined()
+      expect(readNativeChatDraftCache(SCOPE)).toBe('occupied\n\noriginal')
+      expect(toast.error).toHaveBeenCalledOnce()
+    }
+  }
+)

@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { isNativeChatVisualFileName } from '../native-chat-visual-directive'
+import { isNativeChatVisualFileName } from '../native-chat/native-chat-visual-directive'
 import { SessionId } from './structured-agent-session-identifiers'
 
 // Read visuals on their owning host; accept bare filenames, never another host’s paths.

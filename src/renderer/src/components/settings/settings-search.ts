@@ -60,8 +60,13 @@ export function isSettingsSearchQueryTooLarge(
   return isClipboardTextByteLengthOverLimit(query, maxBytes)
 }
 
+// Turkish İ lowercases to i + U+0307; drop the dot so plain-i queries still match.
+function foldSettingsSearchText(value: string): string {
+  return value.toLowerCase().replaceAll('\u0307', '')
+}
+
 export function normalizeSettingsSearchQuery(query: string): string {
-  return query.trim().toLowerCase()
+  return foldSettingsSearchText(query.trim())
 }
 
 function scoreSettingsSearchText(
@@ -72,7 +77,7 @@ function scoreSettingsSearchText(
   if (!value) {
     return SETTINGS_SEARCH_NO_MATCH_SCORE
   }
-  const normalizedValue = value.toLowerCase()
+  const normalizedValue = foldSettingsSearchText(value)
   if (normalizedValue === normalizedQuery) {
     return tier.exact
   }

@@ -2,6 +2,7 @@ import { memo, useRef } from 'react'
 import type { NativeChatRewindSurface } from './use-native-chat-rewind'
 import type { CommentMarkdownLinkClickHandler } from '@/components/sidebar/CommentMarkdown'
 import { NativeChatUserMessageRow } from './NativeChatUserMessageRow'
+import { NativeChatAgentMessageCard } from './NativeChatAgentMessageCard'
 import { NativeChatAssistantMessageRow } from './NativeChatAssistantMessageRow'
 import type {
   NativeChatMessage,
@@ -10,8 +11,9 @@ import type {
 import { deriveNativeChatRowContent } from '../../../../shared/native-chat-row-content'
 import { NativeChatReasoningRow } from './NativeChatReasoningRow'
 import { NativeChatNoticeRow } from './NativeChatNoticeRow'
-import { nativeChatNoticeBlock } from '../../../../shared/native-chat-notice'
-import { nativeChatBlocksInOwnWords } from './native-chat-stopped-before-start-row'
+import { nativeChatNoticeBlock } from '../../../../shared/native-chat/native-chat-notice'
+import { nativeChatStoppedBeforeStartLabel } from './native-chat-stopped-before-start-row'
+import { nativeChatBlocksInOwnWords } from '../../../../shared/native-chat/native-chat-stopped-before-start'
 import { ProviderFrameRow } from './NativeChatTranscriptChrome'
 import type { NativeChatDiffReveal } from './native-chat-turn-diffs'
 import type {
@@ -83,7 +85,7 @@ export const MessageRow = memo(function MessageRow(
     workRun
   } = props
   const rowRef = useRef<HTMLDivElement | null>(null)
-  const blocks = nativeChatBlocksInOwnWords(message.blocks)
+  const blocks = nativeChatBlocksInOwnWords(message.blocks, nativeChatStoppedBeforeStartLabel())
   // Share content derivation with slot selection so invisible rows cannot reserve transcript gaps.
   const content = deriveNativeChatRowContent(blocks)
   const { markdown, prose } = content
@@ -101,8 +103,23 @@ export const MessageRow = memo(function MessageRow(
   const { scrollToTop, returnToView } = useNativeChatRowNavigation(rowRef, onScrollMessageToTop)
 
   // Return after all hooks to preserve hook order when content disappears.
-  if (run === undefined && !rowHasContent(content)) {
+  if (run === undefined && !rowHasContent(content) && !message.agentStart) {
     return null
+  }
+
+  if (message.agentStart && message.from) {
+    return (
+      <div ref={rowRef} data-native-chat-message-id={message.id}>
+        <NativeChatAgentMessageCard
+          message={message}
+          from={message.from}
+          runtimeContext={runtimeContext}
+          onLinkClick={onLinkClick}
+          allowFileUriLinks={allowFileUriLinks}
+          onRefolded={returnToView}
+        />
+      </div>
+    )
   }
 
   const notice = isSystem ? nativeChatNoticeBlock(blocks) : undefined

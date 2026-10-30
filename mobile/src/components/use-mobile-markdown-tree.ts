@@ -1,6 +1,6 @@
 import type { Root } from 'mdast'
 import { useMemo } from 'react'
-import type { NativeChatVisualDirective } from '../../../src/shared/native-chat-visual-directive'
+import type { NativeChatVisualDirective } from '../../../src/shared/native-chat/native-chat-visual-directive'
 import { parseMobileMarkdownTree } from './mobile-markdown-tree'
 import { protectMobileMarkdownVisualLines } from './mobile-markdown-visual-lines'
 

@@ -1,4 +1,3 @@
-import { reportWorkerTerminalUserInput } from '../../terminal/worker-terminal-takeover-report'
 import type { RpcClient } from '../../transport/rpc-client'
 import { isRpcDeliveryUnknown } from '../../transport/rpc-delivery-ambiguity'
 import { isLogicalClientCutoverError } from '../../transport/stable-logical-rpc-client'
@@ -74,7 +73,6 @@ export async function sendMobileNativeChatMessageWithOutcome(
     if (nativeChatTerminalWrite.interpret(response) !== true) {
       return 'rejected'
     }
-    reportWorkerTerminalUserInput(args.client, args.terminal)
     return 'accepted'
   } catch (error) {
     // Cutover cannot prove whether the desktop received the frame; report unknown and never retry automatically.
@@ -97,7 +95,6 @@ export async function typeMobileNativeChatCommandWithOutcome(args: {
   resolvedLaunchDraft?: { text: string; createdAt: number }
   mobileClient?: MobileTerminalClient
   deadline?: number
-  requireWriteSettlement?: true
 }): Promise<MobileNativeChatWriteOutcome> {
   let writeIndex = 0
   return typeAgentTuiCommand({
@@ -110,7 +107,6 @@ export async function typeMobileNativeChatCommandWithOutcome(args: {
         terminal: args.terminal,
         text: key,
         enter: false,
-        ...(args.requireWriteSettlement ? { requireWriteSettlement: true as const } : {}),
         ...(isSubmit && args.resolvedLaunchDraft
           ? { resolvedLaunchDraft: args.resolvedLaunchDraft }
           : {}),

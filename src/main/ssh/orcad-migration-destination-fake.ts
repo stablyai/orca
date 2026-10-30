@@ -14,7 +14,8 @@ export type FakeOrcadMigrationDestination = { commits: number } & {
 /** Model idempotent stage and receipt-keyed commit with separate catalog state for each migration, including later deltas. */
 export function fakeOrcadMigrationDestination(): FakeOrcadMigrationDestination {
   const states = new Map<string, 'absent' | 'staged' | 'committed'>()
-  const stateOf = (manifest: OrcadMigrationManifest) => states.get(manifest.migrationId) ?? 'absent'
+  const stateOf = (manifest: Pick<OrcadMigrationManifest, 'migrationId'>) =>
+    states.get(manifest.migrationId) ?? 'absent'
   const view = (manifest: OrcadMigrationManifest): OrcadMigrationCatalogState => {
     const state = stateOf(manifest)
     const base = { migrationId: manifest.migrationId, manifestSha256: manifest.manifestSha256 }

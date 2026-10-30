@@ -1,6 +1,6 @@
-import { StyleSheet, colors, radii, spacing, typography } from './mobile-tasks-dependencies'
+import { themedStyleSheet, colors, radii, spacing, typography } from './mobile-tasks-dependencies'
 
-export const mobileTasksWorkspaceReviewStyles = StyleSheet.create({
+export const mobileTasksWorkspaceReviewStyles = themedStyleSheet(() => ({
   workspaceCreateForm: {
     gap: 0
   },
@@ -40,7 +40,7 @@ export const mobileTasksWorkspaceReviewStyles = StyleSheet.create({
   },
   sshConnectCard: {
     backgroundColor: colors.bgRaised,
-    borderRadius: radii.input,
+    borderRadius: radii.surface,
     borderWidth: 1,
     borderColor: colors.borderSubtle,
     paddingHorizontal: spacing.md,
@@ -55,7 +55,7 @@ export const mobileTasksWorkspaceReviewStyles = StyleSheet.create({
   sshStatusDot: {
     width: 8,
     height: 8,
-    borderRadius: 999
+    borderRadius: radii.pill
   },
   sshStatusDotConnected: {
     backgroundColor: colors.statusGreen
@@ -81,14 +81,14 @@ export const mobileTasksWorkspaceReviewStyles = StyleSheet.create({
     gap: spacing.sm,
     borderWidth: 1,
     borderColor: colors.borderSubtle,
-    borderRadius: radii.card,
+    borderRadius: radii.surface,
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.xs
   },
   reviewerAvatar: {
     width: 24,
     height: 24,
-    borderRadius: 12,
+    borderRadius: radii.pill,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.bgRaised
@@ -119,7 +119,7 @@ export const mobileTasksWorkspaceReviewStyles = StyleSheet.create({
   projectFieldCard: {
     borderWidth: 1,
     borderColor: colors.borderSubtle,
-    borderRadius: radii.card,
+    borderRadius: radii.surface,
     padding: spacing.sm,
     gap: spacing.xs
   },
@@ -158,7 +158,7 @@ export const mobileTasksWorkspaceReviewStyles = StyleSheet.create({
   fileCard: {
     borderWidth: 1,
     borderColor: colors.borderSubtle,
-    borderRadius: radii.card,
+    borderRadius: radii.surface,
     padding: spacing.sm,
     gap: spacing.xs
   },
@@ -166,7 +166,7 @@ export const mobileTasksWorkspaceReviewStyles = StyleSheet.create({
     flexShrink: 0,
     borderWidth: 1,
     borderColor: colors.borderSubtle,
-    borderRadius: 999,
+    borderRadius: radii.pill,
     backgroundColor: colors.bgRaised,
     paddingHorizontal: spacing.sm,
     paddingVertical: 2
@@ -189,4 +189,4 @@ export const mobileTasksWorkspaceReviewStyles = StyleSheet.create({
     fontWeight: '600',
     textTransform: 'uppercase'
   }
-})
+}))

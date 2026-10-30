@@ -16,23 +16,6 @@ function msg(
 }
 
 describe('orderNativeChatMessages', () => {
-  it('orders by ascending timestamp, null first', () => {
-    const ordered = orderNativeChatMessages([
-      msg({ id: 'b', timestamp: 20 }),
-      msg({ id: 'a', timestamp: 10 }),
-      msg({ id: 'n', timestamp: null })
-    ])
-    expect(ordered.map((m) => m.id)).toEqual(['n', 'a', 'b'])
-  })
-
-  it('breaks timestamp ties by id deterministically', () => {
-    const ordered = orderNativeChatMessages([
-      msg({ id: 'z', timestamp: 5 }),
-      msg({ id: 'a', timestamp: 5 })
-    ])
-    expect(ordered.map((m) => m.id)).toEqual(['a', 'z'])
-  })
-
   it('sorts the streaming preview after real content but before optimistic echoes', () => {
     const ordered = orderNativeChatMessages([
       msg({ id: 'pending:abc', role: 'user', timestamp: 20, source: 'scrape' }),

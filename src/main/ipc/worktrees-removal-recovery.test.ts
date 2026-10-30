@@ -1,4 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { execFile } from 'node:child_process'
+import { promisify } from 'node:util'
+import * as diskFs from 'node:fs/promises'
+import * as gitRunner from '../git/runner'
+import { removeWorktree } from '../git/worktree'
+import { removeWorktree as removeNativeWorktree } from '../git/worktree-removal'
+import { readTranslatedWorktreeGraph } from '../git/worktree-list-reader'
+import { toHostFilesystemPath } from '../host-tree-removal'
+import { removeTree } from '../../shared/windows-transient-lock-removal'
 import * as scopedRootsInvalidation from './registered-worktree-roots-scoped-invalidation'
 import * as authorizedRootsCache from './registered-worktree-roots-cache'
 import * as localWorktreeFilesystem from '../local-worktree-filesystem'
@@ -45,9 +54,10 @@ vi.mock('electron', async () =>
 vi.mock('../git/worktree', async () =>
   (await import('./worktrees-test-module-mocks')).gitWorktreeModuleMock()
 )
-vi.mock('../git/runner', async () =>
-  (await import('./worktrees-test-module-mocks')).gitRunnerModuleMock()
-)
+vi.mock('../git/runner', async (importOriginal) => ({
+  ...(await importOriginal<typeof gitRunner>()),
+  ...(await import('./worktrees-test-module-mocks')).gitRunnerModuleMock()
+}))
 vi.mock('../git/repo', async () =>
   (await import('./worktrees-test-module-mocks')).gitRepoModuleMock()
 )
@@ -116,6 +126,7 @@ vi.mock('./pty/provider/state-cleanup', async () =>
   (await import('./worktrees-test-module-mocks')).ptyStateCleanupModuleMock()
 )
 
+const actualGitRunner = await vi.importActual<typeof gitRunner>('../git/runner')
 const anyCatalogVersion = { epoch: expect.any(String), sequence: expect.any(Number) }
 
 describe('registerWorktreeHandlers', () => {
@@ -416,166 +427,63 @@ describe('registerWorktreeHandlers', () => {
     }
   )
 
-  it('recovers forced Windows long-path worktree removal through local deletion and prune', async () => {
-    setPlatform('win32')
-    const parentDir = await mkdtemp(join(tmpdir(), 'orca-ipc-long-path-'))
-    const repoPath = join(parentDir, 'repo')
-    const worktreePath = join(parentDir, 'feature-wt')
-    await mkdir(worktreePath, { recursive: true })
-    await writeFile(join(worktreePath, 'scratch.txt'), 'delete me')
-    const registeredWorktrees = mockKnownFeatureWorktree(worktreePath, repoPath)
-    listWorktreesMock
-      .mockResolvedValueOnce(registeredWorktrees)
-      .mockResolvedValueOnce(registeredWorktrees)
-      .mockResolvedValue([])
-    store.getWorktreeMeta.mockReturnValue(makeWorktreeMeta())
-    const longPathError = Object.assign(new Error('git worktree remove failed'), {
-      stderr: 'error: failed to delete deep/file.txt: Filename too long'
-    })
-    removeWorktreeMock.mockRejectedValue(longPathError)
-    const worktreeId = `repo-1::${worktreePath}`
+  it.skipIf(ORIGINAL_PLATFORM !== 'win32')(
+    'force-deletes a real registered Windows long-path checkout through desktop Delete',
+    async () => {
+      const parentDir = await diskFs.realpath(await mkdtemp(join(tmpdir(), 'orca-ipc-long-path-')))
+      const repoPath = join(parentDir, 'repo')
+      const worktreePath = join(parentDir, 'feature-wt')
+      const worktreeId = `repo-1::${worktreePath}`
+      const git = async (args: string[]) =>
+        (await promisify(execFile)('git', args, { cwd: repoPath })).stdout
+      try {
+        await mkdir(repoPath)
+        await git(['init', '-q', '-b', 'main'])
+        await git(['config', 'user.email', 'removal@example.invalid'])
+        await git(['config', 'user.name', 'Worktree Removal'])
+        await git(['config', 'maintenance.auto', 'false'])
+        await git(['config', 'gc.auto', '0'])
+        await git(['commit', '--allow-empty', '-qm', 'seed'])
+        await git(['worktree', 'add', '-q', '-b', 'feature', worktreePath])
+        const deep = join(worktreePath, ...Array.from({ length: 6 }, () => 'deep-'.repeat(10)))
+        await mkdir(toHostFilesystemPath(deep), { recursive: true })
+        await writeFile(toHostFilesystemPath(join(deep, 'scratch.txt')), 'delete me')
+        expect(join(deep, 'scratch.txt').length).toBeGreaterThan(260)
+        expect((await lstat(join(worktreePath, '.git'))).isFile()).toBe(true)
+        const admin = (await diskFs.readFile(join(worktreePath, '.git'), 'utf8')).trim().slice(8)
+        vi.mocked(gitRunner.gitExecFileAsync).mockImplementation(actualGitRunner.gitExecFileAsync)
+        listWorktreesMock.mockImplementation((repo) => readTranslatedWorktreeGraph(repo))
+        vi.mocked(removeWorktree).mockImplementation(removeNativeWorktree)
+        store.getRepo.mockReturnValue({ ...harnessRepo, path: repoPath, worktreeBaseRef: null })
+        store.getRepos.mockReturnValue([{ ...harnessRepo, path: repoPath }])
+        store.getWorktreeMeta.mockReturnValue(makeWorktreeMeta())
+        store.removeWorktreeMeta.mockImplementation(() =>
+          store.getWorktreeMeta.mockReturnValue(undefined)
+        )
+        expect(await readTranslatedWorktreeGraph(repoPath)).toHaveLength(2)
+        const head = (await git(['rev-parse', 'feature'])).trim()
 
-    try {
-      const result = await handlers['worktrees:remove'](null, {
-        worktreeId,
-        force: true
-      })
+        const result = await handlers['worktrees:remove'](null, { worktreeId, force: true })
 
-      expect(result).toEqual({
-        preservedBranch: { branchName: 'feature', head: 'feature' },
-        catalogVersion: anyCatalogVersion
-      })
-      if (ORIGINAL_PLATFORM === 'win32') {
+        expect(result).toEqual({ catalogVersion: anyCatalogVersion })
         await expect(lstat(worktreePath)).rejects.toMatchObject({ code: 'ENOENT' })
+        await expect(lstat(admin)).rejects.toMatchObject({ code: 'ENOENT' })
+        expect(await readTranslatedWorktreeGraph(repoPath)).toHaveLength(1)
+        expect(await git(['branch', '--list', 'feature'])).toBe('')
+        expect(store.removeWorktreeMeta).toHaveBeenCalledWith(
+          hostWorktreeTarget({ id: worktreeId, hostId: 'local' })
+        )
+        expect(store.getWorktreeMeta(worktreeId)).toBeUndefined()
+        await expect(
+          handlers['worktrees:forceDeletePreservedBranch'](null, {
+            worktreeId,
+            branchName: 'feature',
+            expectedHead: head
+          })
+        ).rejects.toThrow('No preserved branch cleanup is pending')
+      } finally {
+        await removeTree(toHostFilesystemPath(parentDir))
       }
-      expect(gitExecFileAsyncMock).toHaveBeenCalledWith(['worktree', 'prune'], {
-        cwd: '/workspace/repo'
-      })
-      expect(store.removeWorktreeMeta).toHaveBeenCalledWith(
-        hostWorktreeTarget({ id: worktreeId, hostId: 'local' })
-      )
-      expect(mainWindow.webContents.send).toHaveBeenCalledWith('worktrees:changed', {
-        repoId: 'repo-1'
-      })
-    } finally {
-      await rm(parentDir, { recursive: true, force: true })
-    }
-  })
-
-  it('does not create a preserved-branch target when long-path recovery preserves branch by policy', async () => {
-    setPlatform('win32')
-    const registeredWorktrees = mockKnownFeatureWorktree()
-    listWorktreesMock
-      .mockResolvedValueOnce(registeredWorktrees)
-      .mockResolvedValueOnce(registeredWorktrees)
-      .mockResolvedValue([])
-    store.getWorktreeMeta.mockReturnValue(makeWorktreeMeta({ preserveBranchOnDelete: true }))
-    removeWorktreeMock.mockRejectedValue(
-      Object.assign(new Error('git worktree remove failed'), {
-        stderr: 'error: failed to delete deep/file.txt: Filename too long'
-      })
-    )
-
-    const result = await handlers['worktrees:remove'](null, {
-      worktreeId: 'repo-1::/workspace/feature-wt',
-      force: true
-    })
-
-    expect(result).toEqual({ catalogVersion: anyCatalogVersion })
-    await expect(
-      handlers['worktrees:forceDeletePreservedBranch'](null, {
-        worktreeId: 'repo-1::/workspace/feature-wt',
-        branchName: 'feature',
-        expectedHead: 'feature'
-      })
-    ).rejects.toThrow('No preserved branch cleanup is pending')
-  })
-
-  it('does not recover Windows long-path worktree removal without force', async () => {
-    setPlatform('win32')
-    mockKnownFeatureWorktree()
-    const longPathError = Object.assign(new Error('git worktree remove failed'), {
-      stderr: 'error: failed to delete deep/file.txt: Filename too long'
-    })
-    removeWorktreeMock.mockRejectedValue(longPathError)
-
-    await expect(
-      handlers['worktrees:remove'](null, {
-        worktreeId: 'repo-1::/workspace/feature-wt'
-      })
-    ).rejects.toThrow('Failed to delete worktree at /workspace/feature-wt.')
-
-    expect(store.removeWorktreeMeta).not.toHaveBeenCalled()
-  })
-
-  it('refuses Windows recovery while Git still reports the row and keeps metadata', async () => {
-    setPlatform('win32')
-    mockKnownFeatureWorktree()
-    store.getWorktreeMeta.mockReturnValue(makeWorktreeMeta())
-    const removePathSpy = vi
-      .spyOn(localWorktreeFilesystem, 'removeLocalWorktreePath')
-      .mockResolvedValue(undefined)
-    removeWorktreeMock.mockRejectedValue(
-      Object.assign(new Error('git worktree remove failed'), {
-        stderr: 'error: failed to delete deep/file.txt: Filename too long'
-      })
-    )
-
-    try {
-      await expect(
-        handlers['worktrees:remove'](null, {
-          worktreeId: 'repo-1::/workspace/feature-wt',
-          force: true
-        })
-      ).rejects.toThrow(
-        'Failed to force delete worktree at /workspace/feature-wt. error: failed to delete deep/file.txt: Filename too long'
-      )
-
-      expect(removePathSpy).not.toHaveBeenCalled()
-      expect(gitExecFileAsyncMock).not.toHaveBeenCalledWith(
-        ['worktree', 'prune'],
-        expect.anything()
-      )
-      expect(store.removeWorktreeMeta).not.toHaveBeenCalled()
-    } finally {
-      removePathSpy.mockRestore()
-    }
-  })
-
-  it.each([false, true])(
-    'retries missing registration cleanup (prunable marker: %s)',
-    async (prunableMarker) => {
-      setPlatform('win32')
-      const missingWorktreePath = prunableMarker
-        ? 'C:\\workspace\\already-removed\\.git'
-        : 'C:\\workspace\\already-removed'
-      const worktreeId = `repo-1::${missingWorktreePath}`
-      const registeredWorktrees = mockKnownFeatureWorktree(missingWorktreePath).map((row) =>
-        prunableMarker && row.path === missingWorktreePath
-          ? { ...row, branch: 'refs/heads/feature', prunable: true }
-          : row
-      )
-      listWorktreesMock.mockResolvedValueOnce(registeredWorktrees).mockResolvedValue([])
-      store.getWorktreeMeta.mockReturnValue(makeWorktreeMeta())
-
-      const result = await handlers['worktrees:remove'](null, {
-        worktreeId,
-        force: true
-      })
-
-      expect(result).toEqual({
-        preservedBranch: { branchName: 'feature', head: 'feature' },
-        catalogVersion: anyCatalogVersion
-      })
-      expect(runHookMock).not.toHaveBeenCalled()
-      expect(killAllProcessesForWorktreeMock).not.toHaveBeenCalled()
-      expect(removeWorktreeMock).not.toHaveBeenCalled()
-      expect(gitExecFileAsyncMock).toHaveBeenCalledWith(['worktree', 'prune'], {
-        cwd: '/workspace/repo'
-      })
-      expect(store.removeWorktreeMeta).toHaveBeenCalledWith(
-        hostWorktreeTarget({ id: worktreeId, hostId: 'local' })
-      )
     }
   )
 

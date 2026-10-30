@@ -49,7 +49,8 @@ export function RemoteBrowserPageViewport({
   handleRemotePointerDown,
   handleRemotePointerUp,
   handleRemoteContextMenu,
-  handleRemoteScreenshotKeyDown
+  handleRemoteScreenshotKeyDown,
+  handleRemoteScreenshotPaste
 }: {
   remoteViewportRef: React.RefObject<HTMLDivElement | null>
   imageRef: React.RefObject<HTMLImageElement | null>
@@ -76,6 +77,7 @@ export function RemoteBrowserPageViewport({
   handleRemotePointerUp: (event: React.PointerEvent<HTMLImageElement>) => void
   handleRemoteContextMenu: (event: React.MouseEvent<HTMLImageElement>) => void
   handleRemoteScreenshotKeyDown: (event: React.KeyboardEvent<HTMLImageElement>) => void
+  handleRemoteScreenshotPaste: (event: React.ClipboardEvent<HTMLImageElement>) => void
 }): React.JSX.Element {
   const remoteFrameStyle = useMemo(() => getRemoteBrowserFrameStyle(frameMetadata), [frameMetadata])
   // Why: hosts clear the error when a re-attempt starts; hold it until this pane's command settles.
@@ -123,6 +125,7 @@ export function RemoteBrowserPageViewport({
           onPointerUp={handleRemotePointerUp}
           onContextMenu={handleRemoteContextMenu}
           onKeyDown={handleRemoteScreenshotKeyDown}
+          onPaste={handleRemoteScreenshotPaste}
           draggable={false}
         />
       ) : (

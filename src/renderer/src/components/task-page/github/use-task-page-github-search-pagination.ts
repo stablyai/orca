@@ -12,10 +12,9 @@ import { taskPageToGitHubApiPage } from '../../../../../shared/work-items'
 
 import {
   resolveEmptyPageOutcome,
-  applyWindowPageLimit,
-  applyEmptyPageClamp
-} from '@/components/task-page/task-page-work-item-pagination'
-
+  applyEmptyPageClamp,
+  applyWindowPageLimit
+} from '../../../../../shared/work-item-empty-page'
 import { toast } from 'sonner'
 
 import { translate } from '@/i18n/i18n'

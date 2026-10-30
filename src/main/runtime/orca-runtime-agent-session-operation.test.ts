@@ -47,15 +47,18 @@ function createRuntime(
   provider?: Pick<
     IPtyProvider,
     'supportsAgentSessionClaims' | 'supportsAgentSessionCreateOperations'
-  >
+  >,
+  settings: Record<string, unknown> = {}
 ) {
   const runtime = new OrcaRuntimeService(
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this operation fixture supplies only getSettings; terminal scope and PTY dependencies are installed below.
     {
       getSettings: () => ({
         disabledTuiAgents: [],
         agentCmdOverrides: {},
         agentDefaultArgs: {},
-        agentDefaultEnv: {}
+        agentDefaultEnv: {},
+        ...settings
       })
     } as never,
     undefined,
@@ -142,6 +145,34 @@ describe('agent-session execution namespace', () => {
     )
   })
 
+  it.each(['claude', 'codex'] as const)(
+    'ensures existing %s with raw fallback and genuine picks, excluding fresh map',
+    async (agent) => {
+      const runtime = createRuntime(undefined, {
+        agentPermissionDefault: 'own',
+        agentLaunchChoices: { [agent]: { model: 'fresh-only', options: { effort: 'high' } } },
+        agentDefaultArgs: { [agent]: '--model literal' },
+        agentDefaultEnv: { [agent]: { KEEP: 'yes' } }
+      })
+      const create = vi.spyOn(runtime, 'createTerminal').mockResolvedValue(terminal())
+      for (const launchPreferences of [undefined, { model: 'picked', effort: 'low' }]) {
+        await runtime.ensureAgentSession({
+          kind: 'explicit',
+          worktree: 'id:worktree-1',
+          agent,
+          providerSession: { key: 'session_id', id: 'continuing' },
+          ...(launchPreferences ? { launchPreferences } : {})
+        })
+        const applied = create.mock.calls.at(-1)?.[1]
+        expect(applied?.command).toContain('continuing')
+        expect(applied?.command).toContain(launchPreferences ? 'picked' : 'literal')
+        expect(applied?.command).not.toContain('fresh-only')
+        expect(applied?.command).not.toContain('high')
+        expect(applied?.env).toMatchObject({ KEEP: 'yes' })
+      }
+    }
+  )
+
   it('retains compiled policy through args-only host reconstruction and repeated recorded resume', async () => {
     const launch = buildAgentStartupPlan({
       agent: 'codex',
@@ -187,7 +218,14 @@ describe('agent-session execution namespace', () => {
     const host = createTerminal.mock.calls[0]?.[1]
     expect(tokenizeStartupCommand(host?.command ?? '', 'posix')).toMatchObject({
       ok: true,
-      tokens: [...policyTokens, 'resume', providerSession.id]
+      tokens: [
+        policyTokens[0],
+        '-c',
+        'disable_paste_burst=true',
+        ...policyTokens.slice(1),
+        'resume',
+        providerSession.id
+      ]
     })
     expect(host?.launchConfig).toEqual(launch?.launchConfig)
     const resumeInputs = {
@@ -201,7 +239,7 @@ describe('agent-session execution namespace', () => {
     expect(resumedAgain?.launchConfig).toEqual(launch?.launchConfig)
     expect(tokenizeStartupCommand(resumedAgain?.launchCommand ?? '', 'posix')).toMatchObject({
       ok: true,
-      tokens: [...policyTokens, 'resume', providerSession.id]
+      tokens: [...policyTokens, '-c', 'disable_paste_burst=true', 'resume', providerSession.id]
     })
   })
 
@@ -249,6 +287,21 @@ describe('agent-session execution namespace', () => {
 })
 
 describe('agent-session create operation ledger', () => {
+  it.each(['auto-submit', 'draft', undefined] as const)(
+    'suppresses startup updates only for auto-submitted launches: %s',
+    async (promptDelivery) => {
+      const runtime = createRuntime()
+      const createTerminal = vi.spyOn(runtime, 'createTerminal').mockResolvedValue(terminal())
+      await runtime.createAgentSession(
+        request(operationId(), { prompt: undefined, promptDelivery })
+      )
+      expect(createTerminal).toHaveBeenCalledWith(
+        'id:worktree-1',
+        expect.objectContaining({ suppressStartupUpdatePrompt: promptDelivery === 'auto-submit' })
+      )
+    }
+  )
+
   it.each([true, false, undefined])(
     'forwards renderer keyboard support on create and resume: %s',
     async (terminalKittyKeyboardProtocol) => {

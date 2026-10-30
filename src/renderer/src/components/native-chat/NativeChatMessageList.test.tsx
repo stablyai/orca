@@ -2,7 +2,8 @@
 
 import '@testing-library/jest-dom/vitest'
 
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, screen } from '@testing-library/react'
+import { render } from './native-chat-tooltip-test-harness'
 
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 
@@ -26,7 +27,7 @@ afterEach(() => {
   expect(unusedChatLeaves.openSender).not.toHaveBeenCalled()
 })
 
-import { subagentGroupFallbackText } from '../../../../shared/native-chat-subagent-summary'
+import { subagentGroupFallbackText } from '../../../../shared/native-chat/transcript/native-chat-subagent-summary'
 
 import type {
   NativeChatMessage,

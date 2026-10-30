@@ -1,26 +1,22 @@
 // @vitest-environment happy-dom
 
-import { act, renderHook, waitFor } from '@testing-library/react'
+import { act, render, renderHook, screen, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+import { createElement } from 'react'
+import { TooltipProvider } from '@/components/ui/tooltip'
+import { NewWorkspaceComposerNameSection } from '@/components/new-workspace/NewWorkspaceComposerNameSection'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
-import type * as NewWorkspace from '@/lib/new-workspace'
-import { getDefaultSettings } from '../../../shared/constants'
-import type { GlobalSettings } from '../../../shared/global-settings-types'
-import type { AppState } from '@/store/types'
-
-vi.mock('@/lib/new-workspace', async (importOriginal) => ({
-  ...(await importOriginal<typeof NewWorkspace>()),
-  CLIENT_PLATFORM: 'win32'
-}))
 import { EMPTY_RETIRED_NAME_REGISTRY } from '../../../shared/worktree/retired-name-registry'
-import { makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
 import type { CreateWorktreeResult } from '../../../shared/worktree/create-types'
+import { makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
 import type { Repo } from '../../../shared/repo-types'
 import { projectHostSetupProjectionFromRepos } from '../../../shared/project-host-setup-projection'
 import { normalizeTaskSourceContext } from '../../../shared/task-source-context'
 import { useComposerState } from './useComposerState'
 import * as publicComposerDecisions from './useComposerState'
 import * as composerDecisions from './composer-state/composer-decisions'
+import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
 
 let originalApiDescriptor: PropertyDescriptor | undefined
 
@@ -95,8 +91,8 @@ describe('useComposerState integrated lifecycle', () => {
     const projection = projectHostSetupProjectionFromRepos([localRepo, runtimeRepo])
     useAppStore.setState({
       repos: [localRepo, runtimeRepo],
-      endpointProjects: [...projection.projects],
-      endpointProjectHostSetups: projection.setups.map((setup) => ({
+      projects: [...projection.projects],
+      projectHostSetups: projection.setups.map((setup) => ({
         ...setup,
         id: `${setup.hostId}:setup`
       })),
@@ -134,205 +130,100 @@ describe('useComposerState integrated lifecycle', () => {
     composer.unmount()
   })
 
-  it('creates in concrete B after a normal composer reads old shared endpoint metadata', async () => {
+  it('preserves new-branch intent through name edits and submission in the real composer', async () => {
     const original = useAppStore.getState()
-    useAppStore.setState(useAppStore.getInitialState(), true)
-    const repos: Repo[] = ['a', 'b'].map((id, index) => ({
-      id,
-      path: `/${id}`,
-      displayName: id,
-      badgeColor: '',
-      addedAt: index + 1,
-      upstream: { owner: 'acme', repo: 'app' }
-    }))
-    const projection = projectHostSetupProjectionFromRepos(repos)
-    const projectId = projection.setups[0].projectId
-    const endpointProjects = [{ ...projection.projects[0], sourceRepoIds: ['a', 'b'] }]
-    const endpointProjectHostSetups = projection.setups.map((setup) => ({ ...setup, projectId }))
     const response = Promise.withResolvers<CreateWorktreeResult>()
     const create = vi.fn<Window['api']['worktrees']['create']>().mockReturnValue(response.promise)
+    const gh = {
+      repoSlug: vi.fn<Window['api']['gh']['repoSlug']>().mockResolvedValue(null),
+      listWorkItems: vi.fn<Window['api']['gh']['listWorkItems']>().mockResolvedValue({
+        items: [],
+        sources: { issues: null, prs: null, originCandidate: null, upstreamCandidate: null }
+      })
+    } satisfies Pick<Window['api']['gh'], 'repoSlug' | 'listWorkItems'>
     Object.defineProperty(window, 'api', {
       configurable: true,
-      value: {
-        ...window.api,
-        gh: { repoSlug: vi.fn().mockResolvedValue(null) },
-        worktrees: { ...window.api.worktrees, create }
-      }
+      value: { ...window.api, gh, worktrees: { ...window.api.worktrees, create } }
     })
-    useAppStore.setState({ repos, endpointProjects, endpointProjectHostSetups })
-    const composer = renderHook(() =>
-      useComposerState({ initialRepoId: 'b', initialName: 'topic', persistDraft: false })
-    )
-    try {
-      expect(composer.result.current.cardProps.projectOptions.map((project) => project.id)).toEqual(
-        expect.arrayContaining([projectId, 'repo:b'])
-      )
-      expect(composer.result.current.cardProps.selectedProjectId).toBe('repo:b')
-      act(() => composer.result.current.cardProps.onProjectChange(projectId))
-      act(() => composer.result.current.cardProps.onProjectChange('repo:b'))
-      expect(composer.result.current.cardProps.selectedRepoPath).toBe('/b')
-      expect(composer.result.current.cardProps.selectedRepoExecutionHostId).toBe('local')
-      expect(useAppStore.getState().endpointProjects).toBe(endpointProjects)
-      expect(useAppStore.getState().endpointProjectHostSetups).toBe(endpointProjectHostSetups)
-      await act(async () => composer.result.current.submitQuick(null))
-      await waitFor(() => expect(create).toHaveBeenCalledOnce())
-      expect(create).toHaveBeenCalledWith(expect.objectContaining({ repoId: 'b' }))
-      const pending = Object.values(useAppStore.getState().pendingWorktreeCreations)[0]
-      expect(pending.request.workspaceRunContext).toMatchObject({
-        repoId: 'b',
-        hostId: 'local',
-        path: '/b',
-        projectId: 'repo:b'
+    useAppStore.setState(useAppStore.getInitialState(), true)
+    const repo: Repo = {
+      id: 'branch-repo',
+      path: '/branch-repo',
+      displayName: 'Branch repo',
+      badgeColor: '',
+      addedAt: 0
+    }
+    const projection = projectHostSetupProjectionFromRepos([repo])
+    useAppStore.setState({
+      repos: [repo],
+      projects: [...projection.projects],
+      projectHostSetups: [...projection.setups],
+      sparsePresetsByRepo: { [repo.id]: [] }
+    })
+    const holder: { composer?: ReturnType<typeof useComposerState> } = {}
+    function BranchEditor() {
+      const composer = useComposerState({ initialRepoId: repo.id, persistDraft: false })
+      holder.composer = composer
+      return createElement(NewWorkspaceComposerNameSection, {
+        ...composer.cardProps,
+        nameInputRef: composer.nameInputRef,
+        onNamePlainEnter: () => {}
       })
-      act(() => useAppStore.getState().removePendingWorktreeCreation(pending.creationId))
-      await act(async () =>
-        response.resolve({
-          worktree: makeWorktree({ id: 'b::topic', repoId: 'b', path: '/b-topic' })
+    }
+    const user = userEvent.setup()
+    let view: ReturnType<typeof render> | undefined
+    setLocalRuntimeCapabilitiesForTests(['worktree.open-existing-branch.v2'])
+    try {
+      view = render(createElement(TooltipProvider, null, createElement(BranchEditor)))
+      act(() => holder.composer?.cardProps.onSmartBranchSelect('feature/source', 'feature/source'))
+      await user.click(screen.getByRole('radio', { name: 'New branch' }))
+      const input = screen.getByRole<HTMLInputElement>('textbox', { name: 'New branch name' })
+      await user.type(input, 'feature/my-review')
+      expect(screen.getByRole('textbox', { name: 'New branch name' })).toBe(input)
+      expect(input.value).toBe('feature/my-review')
+      expect(document.activeElement).toBe(input)
+      expect(holder.composer?.cardProps.baseBranch).toBe('feature/source')
+      await user.clear(input)
+      await user.type(input, 'feature/source')
+      expect(input.value).toBe('feature/source')
+      await act(async () => holder.composer?.submitQuick(null))
+      await waitFor(() => expect(create).toHaveBeenCalledOnce())
+      expect(create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          branchIntent: 'create-new',
+          baseBranch: 'feature/source',
+          branchNameOverride: 'feature/source'
         })
       )
-      await waitFor(() => expect(useAppStore.getState().worktreesByRepo.b[0].id).toBe('b::topic'))
+      await act(async () =>
+        response.resolve({
+          worktree: makeWorktree({
+            id: 'branch-repo::feature-source',
+            repoId: repo.id,
+            path: '/branch-repo-source'
+          })
+        })
+      )
+      await waitFor(() =>
+        expect(useAppStore.getState().worktreesByRepo[repo.id]?.[0].id).toBe(
+          'branch-repo::feature-source'
+        )
+      )
+      await user.click(screen.getByRole('radio', { name: 'Existing branch' }))
+      expect(screen.queryByRole('textbox', { name: 'New branch name' })).toBeNull()
     } finally {
-      composer.unmount()
+      view?.unmount()
+      setLocalRuntimeCapabilitiesForTests(null)
       useAppStore.setState(original, true)
     }
   })
 
-  it.each(['claude', 'codex'] as const)(
-    'uses the live Project runtime for the %s quick-create startup request',
-    async (agent) => {
-      const original = useAppStore.getState()
-      useAppStore.setState(useAppStore.getInitialState(), true)
-      const repo: Repo = { id: 'b', path: 'C:/app-b', displayName: 'B', badgeColor: '', addedAt: 1 }
-      const catalog = projectHostSetupProjectionFromRepos([repo])
-      const settings: GlobalSettings = {
-        ...getDefaultSettings('/tmp'),
-        terminalWindowsShell: 'powershell.exe',
-        localWindowsRuntimeDefault: { kind: 'windows-host' as const },
-        agentDefaultArgs: { claude: '', codex: '' },
-        agentPermissionDefault: 'own',
-        agentDefaultEnv: { claude: {}, codex: {} }
-      }
-      useAppStore.setState({
-        repos: [repo],
-        endpointProjects: catalog.projects.map((project) => ({
-          ...project,
-          localWindowsRuntimePreference: { kind: 'wsl', distro: 'Ubuntu' }
-        })),
-        endpointProjectHostSetups: [...catalog.setups],
-        settings,
-        sparsePresetsByRepo: { b: [] }
-      })
-      const responses: ReturnType<typeof Promise.withResolvers<CreateWorktreeResult>>[] = []
-      const create = vi.fn<Window['api']['worktrees']['create']>().mockImplementation(() => {
-        const response = Promise.withResolvers<CreateWorktreeResult>()
-        responses.push(response)
-        return response.promise
-      })
-      Object.defineProperty(window, 'api', {
-        configurable: true,
-        value: {
-          ...window.api,
-          gh: { repoSlug: vi.fn().mockResolvedValue(null) },
-          worktrees: {
-            ...window.api.worktrees,
-            create,
-            updateMeta: vi.fn().mockResolvedValue(undefined)
-          }
-        }
-      })
-      const composer = renderHook(() =>
-        useComposerState({
-          initialRepoId: 'b',
-          initialName: 'topic',
-          persistDraft: false,
-          initialLinkedWorkItem: {
-            provider: 'linear',
-            type: 'issue',
-            number: 0,
-            title: 'Linked task',
-            url: 'https://linear.app/acme/issue/ENG-123',
-            linearIdentifier: 'ENG-123'
-          }
-        })
-      )
-      try {
-        act(() => composer.result.current.cardProps.onNoteChange(`fix it's "quoted" $HOME`))
-        for (const windows of [false, true]) {
-          if (windows) {
-            act(() =>
-              useAppStore.setState((state): Partial<AppState> => ({
-                endpointProjects: state.endpointProjects.map((project) => ({
-                  ...project,
-                  localWindowsRuntimePreference: { kind: 'windows-host' }
-                })),
-                endpointProjectHostSetups: state.endpointProjectHostSetups.map((setup) => ({
-                  ...setup,
-                  updatedAt: setup.updatedAt + 1
-                })),
-                settings: {
-                  ...settings,
-                  localWindowsRuntimeDefault: { kind: 'wsl', distro: 'Ubuntu' }
-                }
-              }))
-            )
-          }
-          expect(composer.result.current.cardProps.selectedRepo).toBe(repo)
-          expect(composer.result.current.cardProps.selectedProjectId).toBe('repo:b')
-          expect(composer.result.current.cardProps.selectedRepoExecutionHostId).toBe('local')
-          expect(composer.result.current.cardProps.selectedRepoPath).toBe('C:/app-b')
-          await act(async () => composer.result.current.submitQuick(agent))
-          await waitFor(() => expect(create).toHaveBeenCalledTimes(windows ? 2 : 1))
-          const pending = Object.values(useAppStore.getState().pendingWorktreeCreations)[0]
-          expect(pending.request.workspaceRunContext).toMatchObject({
-            repoId: 'b',
-            projectId: 'repo:b',
-            projectHostSetupId: catalog.setups[0].id,
-            hostId: 'local',
-            path: 'C:/app-b'
-          })
-          const draft = `fix it's "quoted" $HOME\n\nLinked Linear issue: ENG-123\nhttps://linear.app/acme/issue/ENG-123\n`
-          if (agent === 'claude') {
-            const quoted = windows
-              ? '"fix it\'s `"quoted`" `$HOME`n`nLinked Linear issue: ENG-123`nhttps://linear.app/acme/issue/ENG-123"'
-              : `'${draft.trim().replaceAll("'", "'\"'\"'")}'`
-            expect(pending.request.startup?.command).toBe(`claude --prefill ${quoted}`)
-            expect(pending.request.startupPlan?.draftPrompt).toBeUndefined()
-          } else {
-            expect(pending.request.startup).toBeUndefined()
-            expect(pending.request.startupPlan?.launchCommand).toBe('codex')
-            expect(pending.request.startupPlan?.draftPrompt).toBe(draft)
-          }
-          act(() => useAppStore.getState().removePendingWorktreeCreation(pending.creationId))
-          await act(async () =>
-            responses[windows ? 1 : 0].resolve({
-              worktree: makeWorktree({
-                id: `b::topic-${windows}`,
-                repoId: 'b',
-                path: 'C:/app-b-topic'
-              })
-            })
-          )
-        }
-      } finally {
-        composer.unmount()
-        await act(async () => {
-          for (const response of responses) {
-            response.resolve({
-              worktree: makeWorktree({ id: 'b::cleanup', repoId: 'b', path: 'C:/app-b-topic' })
-            })
-          }
-        })
-        useAppStore.setState(original, true)
-      }
-    }
-  )
-
   it('composes two live composers and exposes the parent-worktree control state', () => {
     useAppStore.setState({
       repos: [],
-      endpointProjects: [],
+      projects: [],
       projectGroups: [],
-      endpointProjectHostSetups: [],
+      projectHostSetups: [],
       newWorkspaceDraft: null,
       worktreesByRepo: {},
       sparsePresetsByRepo: {}

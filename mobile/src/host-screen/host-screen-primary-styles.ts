@@ -1,7 +1,8 @@
 import { StyleSheet } from 'react-native'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
 
-export const hostScreenPrimaryStyles = StyleSheet.create({
+export const hostScreenPrimaryStyles = themedStyleSheet(() => ({
   container: {
     flex: 1,
     backgroundColor: colors.bgBase
@@ -34,7 +35,7 @@ export const hostScreenPrimaryStyles = StyleSheet.create({
     height: 24,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: radii.button,
+    borderRadius: radii.control,
     marginLeft: spacing.xs
   },
   hostIdentity: {
@@ -58,7 +59,7 @@ export const hostScreenPrimaryStyles = StyleSheet.create({
   reconnectButton: {
     paddingVertical: 4,
     paddingHorizontal: spacing.sm,
-    borderRadius: radii.button,
+    borderRadius: radii.control,
     backgroundColor: colors.bgPanel,
     borderWidth: 1,
     borderColor: colors.borderSubtle
@@ -103,7 +104,7 @@ export const hostScreenPrimaryStyles = StyleSheet.create({
     gap: 4,
     paddingHorizontal: spacing.sm + 2,
     paddingVertical: spacing.xs,
-    borderRadius: 12,
+    borderRadius: radii.pill,
     borderWidth: 1,
     borderColor: colors.borderSubtle
   },
@@ -133,7 +134,7 @@ export const hostScreenPrimaryStyles = StyleSheet.create({
     height: 28,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: radii.button
+    borderRadius: radii.control
   },
   toolbarIconDisabled: {
     opacity: 0.6
@@ -157,4 +158,4 @@ export const hostScreenPrimaryStyles = StyleSheet.create({
     color: colors.textSecondary,
     fontSize: typography.bodySize
   }
-})
+}))

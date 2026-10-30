@@ -19,6 +19,7 @@ export function useComposerSourceState(
   const sourceIdentityActions = useSourceIdentityActions({
     applyLinkedWorkItem: external.githubSourceApplication.applyLinkedWorkItem,
     branchAutoNameRef: target.asyncComposerState.branchAutoNameRef,
+    branchIntent: target.workspaceIdentityState.branchIntent,
     branchNameOverride: target.workspaceIdentityState.branchNameOverride,
     branchNameOverridePreservesNameEdits:
       target.workspaceIdentityState.branchNameOverridePreservesNameEdits,
@@ -28,6 +29,7 @@ export function useComposerSourceState(
     name: target.sourceContextState.name,
     pushTarget: target.workspaceIdentityState.pushTarget,
     setBranchNameOverride: target.workspaceIdentityState.setBranchNameOverride,
+    setBranchIntent: target.workspaceIdentityState.setBranchIntent,
     setBranchNameOverridePreservesNameEdits:
       target.workspaceIdentityState.setBranchNameOverridePreservesNameEdits,
     setCreateError: target.asyncComposerState.setCreateError,
@@ -44,7 +46,6 @@ export function useComposerSourceState(
     setLinkedWorkItem: target.sourceContextState.setLinkedWorkItem,
     setName: target.sourceContextState.setName,
     setPushTarget: target.workspaceIdentityState.setPushTarget,
-    setReuseEligibleBranch: target.workspaceIdentityState.setReuseEligibleBranch,
     setReuseSelectedBranch: target.workspaceIdentityState.setReuseSelectedBranch,
     smartSourceSelectionRef: target.asyncComposerState.smartSourceSelectionRef
   })

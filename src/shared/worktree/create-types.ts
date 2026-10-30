@@ -97,8 +97,8 @@ export type CreateWorktreeArgs = {
   compareBaseRef?: string
   /** Existing local branches may contain slashes that the filesystem-safe worktree name cannot. */
   branchNameOverride?: string
-  /** Only an explicit existing-branch pick opts out of new-branch allocation. */
-  branchIntent?: 'open-existing'
+  /** V1 open-existing retains legacy tip/collision policy; V2 pins explicit reuse regardless of remote divergence. */
+  branchIntent?: 'open-existing' | 'open-existing-v2' | 'create-new'
   setupDecision?: SetupDecision
   /** Per-create choice; omitted callers use the execution host's saved default. */
   setupOnly?: boolean

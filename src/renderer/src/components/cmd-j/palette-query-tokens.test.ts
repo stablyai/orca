@@ -5,8 +5,8 @@ import {
   normalizeCmdJPaletteQuery,
   tokenizeCmdJPaletteQuery
 } from './palette-query-tokens'
-import { normalizePaletteText } from '@/lib/palette-match/normalized-text'
-import { PALETTE_QUERY_MAX_TOKENS } from '@/lib/palette-match/palette-query'
+import { normalizePaletteText } from '../../../../shared/palette-match/normalized-text'
+import { PALETTE_QUERY_MAX_TOKENS } from '../../../../shared/palette-match/palette-query'
 
 describe('Cmd+J palette query normalization', () => {
   it('lowercases supplementary-plane characters as whole code points', () => {

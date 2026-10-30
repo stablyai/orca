@@ -1,7 +1,9 @@
 import type { ReactNode } from 'react'
 import { View, Text, Pressable, StyleSheet } from 'react-native'
 import { Check } from 'lucide-react-native'
-import { colors, spacing, typography } from '../theme/mobile-theme'
+import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { BottomDrawer } from './BottomDrawer'
 
 export type PickerOption<T extends string = string> = {
@@ -42,6 +44,7 @@ export function PickerModal<T extends string = string>({
   onAfterClose,
   zIndex
 }: Props<T>) {
+  useMobileColorScheme()
   return (
     <BottomDrawer visible={visible} onClose={onClose} onAfterClose={onAfterClose} zIndex={zIndex}>
       <View style={styles.header}>
@@ -67,6 +70,7 @@ function PickerModalContent<T extends string = string>({
   onLongSelect,
   onClose
 }: PickerModalContentProps<T>) {
+  useMobileColorScheme()
   // Put option rows in shown child; closed BottomDrawer returns null, avoiding hidden-content rebuilds on parent renders.
   return (
     <View style={styles.group}>
@@ -122,7 +126,7 @@ function PickerModalContent<T extends string = string>({
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   header: {
     paddingHorizontal: spacing.xs,
     paddingBottom: spacing.sm
@@ -139,7 +143,7 @@ const styles = StyleSheet.create({
   },
   group: {
     backgroundColor: colors.bgPanel,
-    borderRadius: 12,
+    borderRadius: radii.surface,
     overflow: 'hidden'
   },
   separator: {
@@ -180,4 +184,4 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     marginTop: 1
   }
-})
+}))

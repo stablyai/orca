@@ -3,7 +3,6 @@ import type { GitBranchChangeEntry } from '../../../../../../shared/git-diff-com
 import type { GitStatusEntry } from '../../../../../../shared/git-status-types'
 import type { SourceControlViewMode } from '../../../../../../shared/ui-chrome-types'
 import { compareFileNames } from '../../../../../../shared/file-name-sort'
-import { compareGitStatusEntries } from '../../source-control-status-sort'
 import {
   filterSourceControlPathEntries,
   getSourceControlFileFilterState,
@@ -17,15 +16,15 @@ import {
   flattenSourceControlTree,
   namespaceSourceControlTreeDirectoryKeys,
   type SourceControlTreeNode
-} from '../../source-control-tree'
+} from '../../../../../../shared/source-control-tree'
 import {
   buildSourceControlDisplaySections,
-  SOURCE_CONTROL_AREAS,
+  groupSourceControlEntries,
   type SourceControlDisplaySection,
   type SourceControlDisplaySectionId,
   type SourceControlEntryGroups,
   type SourceControlDisplaySectionArea
-} from './section-order'
+} from '../../../../../../shared/source-control-section-order'
 import {
   collectListSelectionEntries,
   injectExpandedSubmoduleEntries,
@@ -36,7 +35,8 @@ import {
 } from './submodule-expansion'
 import type { FlatEntry } from './use-selection'
 import type { GitStatusSourceControlTreeNode } from './directory-action-paths'
-import { SUBMODULE_EMPTY_LABEL, SUBMODULE_LOADING_LABEL } from './row-layout'
+import { getSubmoduleEmptyLabel, getSubmoduleLoadingLabel } from './row-layout'
+import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 
 export type SourceControlFileProjection = {
   grouped: SourceControlEntryGroups
@@ -99,20 +99,7 @@ export function useSourceControlFileProjection({
   sourceControlViewMode: SourceControlViewMode
   collapsedSections: Set<string>
 }): SourceControlFileProjection {
-  const grouped = useMemo(() => {
-    const groups: SourceControlEntryGroups = {
-      staged: [],
-      unstaged: [],
-      untracked: []
-    }
-    for (const entry of entries) {
-      groups[entry.area].push(entry)
-    }
-    for (const area of SOURCE_CONTROL_AREAS) {
-      groups[area].sort(compareGitStatusEntries)
-    }
-    return groups
-  }, [entries])
+  const grouped = useMemo(() => groupSourceControlEntries(entries), [entries])
 
   const fileFilterState = useMemo(() => getSourceControlFileFilterState(filterQuery), [filterQuery])
   const normalizedFilter = fileFilterState.normalizedFilter
@@ -170,6 +157,7 @@ export function useSourceControlFileProjection({
     return roots
   }, [displaySections, sourceControlViewMode])
 
+  const languageRevision = useUiLanguageRevision()
   const visibleTreeRowsBySection = useMemo(() => {
     if (sourceControlViewMode !== 'tree') {
       return EMPTY_TREE_ROWS_BY_SECTION
@@ -180,18 +168,20 @@ export function useSourceControlFileProjection({
         flattenSourceControlTree(treeRootsBySection[section.id] ?? [], collapsedTreeDirs),
         expandedSubmoduleKeys,
         submoduleStatusByKey,
-        SUBMODULE_LOADING_LABEL,
-        SUBMODULE_EMPTY_LABEL
+        getSubmoduleLoadingLabel(),
+        getSubmoduleEmptyLabel()
       )
     }
     return rows
+    // oxlint-disable-next-line react-hooks/exhaustive-deps -- placeholder labels read the UI language.
   }, [
     collapsedTreeDirs,
     displaySections,
     treeRootsBySection,
     expandedSubmoduleKeys,
     sourceControlViewMode,
-    submoduleStatusByKey
+    submoduleStatusByKey,
+    languageRevision
   ])
 
   // List view needs the same lazy submodule expansion as tree view, spliced into the flat entry list.
@@ -205,12 +195,19 @@ export function useSourceControlFileProjection({
         section.items,
         expandedSubmoduleKeys,
         submoduleStatusByKey,
-        SUBMODULE_LOADING_LABEL,
-        SUBMODULE_EMPTY_LABEL
+        getSubmoduleLoadingLabel(),
+        getSubmoduleEmptyLabel()
       )
     }
     return rows
-  }, [displaySections, expandedSubmoduleKeys, sourceControlViewMode, submoduleStatusByKey])
+    // oxlint-disable-next-line react-hooks/exhaustive-deps -- placeholder labels read the UI language.
+  }, [
+    displaySections,
+    expandedSubmoduleKeys,
+    sourceControlViewMode,
+    submoduleStatusByKey,
+    languageRevision
+  ])
 
   const branchTreeRoots = useMemo(
     () =>

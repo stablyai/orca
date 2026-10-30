@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { salvagedOptional } from '../../../../src/shared/zod-salvage'
+import { SUPPORTED_UI_LOCALES } from '../../../../src/shared/ui-locale'
 import { NODE_PLATFORM_NAMES } from '../../transport/mobile-runtime-host-platform'
 import { RpcEnvelopeFieldsSchema } from '../../transport/rpc-envelope-fields'
 import { isRpcResponse } from '../../transport/rpc-response-shape'
@@ -9,8 +10,15 @@ import { BridgeInitRouteSchema, type BridgeInitRoute } from './bridge-init-route
 import { BridgePageRouteGrantsSchema } from './bridge-page-route-grants'
 import { BridgeSafeAreaInsetsSchema } from './bridge-safe-area-insets'
 import { BridgeKeyboardInsetSchema } from './bridge-keyboard-inset'
+import { BridgePageGeometrySchema } from './bridge-page-geometry'
+import { BridgeFoldDivisionSchema } from './bridge-fold-division'
 import { BridgeNotifySchema } from './bridge-notify-envelope'
 import { BRIDGE_BACK_FRAME } from './bridge-page-back'
+import {
+  BRIDGE_TERMINAL_KEY_FRAME,
+  BridgeTerminalKeyIdSchema,
+  BridgeTerminalKeyRailSchema
+} from './bridge-terminal-key'
 import { BRIDGE_ID_PATTERN, idSchema, methodSchema, versionSchema } from './bridge-frame-fields'
 
 export {
@@ -96,6 +104,16 @@ export const BridgeInitHostSchema = z.object({
 
 export type BridgeInitHost = z.infer<typeof BridgeInitHostSchema>
 
+// The app's resolved light/dark scheme, so the page paints the same palette as the native chrome around it.
+export const BridgeColorSchemeSchema = z.enum(['light', 'dark'])
+
+export type BridgeColorScheme = z.infer<typeof BridgeColorSchemeSchema>
+
+// The app's resolved UI language, so page chrome matches the native chrome and the in-app override.
+export const BridgeUiLocaleSchema = z.enum(SUPPORTED_UI_LOCALES)
+
+export type BridgeUiLocale = z.infer<typeof BridgeUiLocaleSchema>
+
 export const BridgeInitStorageSchema = z
   .record(
     z.string().min(1).max(PAGE_STORAGE_MAX_KEY_CHARS).refine(isPageStorageKey),
@@ -137,7 +155,14 @@ const replyPartSchema = z.object({
 const BridgeClientMessageSchema = z.discriminatedUnion('type', [
   z.object({
     v: versionSchema,
-    type: z.literal('ready')
+    type: z.literal('ready'),
+    // Negotiated keys this page's `init` reader accepts. A malformed list reads as none, so the
+    // page gets the legacy keys rather than no session.
+    storageKeys: z
+      .array(z.string().min(1).max(PAGE_STORAGE_MAX_KEY_CHARS))
+      .max(PAGE_STORAGE_MAX_ENTRIES)
+      .optional()
+      .catch(undefined)
   }),
   z.object({
     v: versionSchema,
@@ -217,6 +242,13 @@ const BridgeHostMessageSchema = z.union([
   }),
   // Back names no destination; only the native stack knows what screen lies beneath.
   z.object({ v: versionSchema, type: z.literal(BRIDGE_BACK_FRAME) }),
+  // One press on the shell's key rail. Sent only to a page granted the rail, which knows the frame.
+  z.object({
+    v: versionSchema,
+    type: z.literal(BRIDGE_TERMINAL_KEY_FRAME),
+    key: BridgeTerminalKeyIdSchema,
+    inputOwner: z.string().min(1).max(128).optional()
+  }),
   z.object({
     v: versionSchema,
     type: z.literal('end'),
@@ -239,9 +271,32 @@ const BridgeHostMessageSchema = z.union([
     route: BridgeInitRouteSchema.optional(),
     safeAreaInsets: BridgeSafeAreaInsetsSchema.optional(),
     keyboardInset: BridgeKeyboardInsetSchema.optional(),
+    // Older pages strip this key; salvage an unknown future scheme so it cannot invalidate the whole init.
+    colorScheme: salvagedOptional('colorScheme', BridgeColorSchemeSchema).optional(),
+    /** The fold splitting the page on a partially folded device; absent reads as none. Salvaged so a
+     *  value this page cannot read drops the field, not `init`. */
+    pageGeometry: salvagedOptional('pageGeometry', BridgePageGeometrySchema).optional(),
+    foldDivision: salvagedOptional('foldDivision', BridgeFoldDivisionSchema).optional(),
+    /** The keys the shell's rail shows beside this page, which then drops them from its own row.
+     *  Absent reads as no rail. */
+    terminalKeyRail: salvagedOptional('terminalKeyRail', BridgeTerminalKeyRailSchema).optional(),
+    // Older pages strip this key; a locale this page does not ship is salvaged rather than refusing init.
+    uiLocale: salvagedOptional('uiLocale', BridgeUiLocaleSchema).optional(),
     host: BridgeInitHostSchema.optional(),
     storage: BridgeInitStorageSchema.optional(),
-    // Advisory page fast path for oversized keys; the shell independently refuses writes because older pages ignore this additive field (ruling 33.6).
+    refreshTerminalShortcuts: salvagedOptional('refreshTerminalShortcuts', z.boolean()).optional(),
+    /**
+     * The allowlisted keys the shell holds a value for that `storage` could not carry, because the
+     * app's value is over the page's own cap (ruling 33.6).
+     *
+     * Advisory, not the enforcement. The shell refuses a write to one of these on its own side
+     * too, because a page served from an older desktop bundle ignores this field entirely and
+     * would still replace what the device holds; this is the page's fast path, so a write it can
+     * refuse locally rejects without a round trip and reaches its caller as `too-large`.
+     *
+     * Optional and additive: an older shell sends none and an older page ignores it. Bounded by
+     * the same count as the storage record, since it names a subset of the same keys.
+     */
     storageOversize: z
       .array(z.string().min(1).max(PAGE_STORAGE_MAX_KEY_CHARS).refine(isPageStorageKey))
       .max(PAGE_STORAGE_MAX_ENTRIES)

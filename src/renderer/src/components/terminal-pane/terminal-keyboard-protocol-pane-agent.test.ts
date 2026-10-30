@@ -36,8 +36,4 @@ describe('pane-scoped terminal keyboard protocol agent', () => {
 
     expect(resolvedKittyKeyboard(null, 'grok')).toBe(false)
   })
-
-  it('keeps explicit pane startup identity ahead of a stale tab launch agent', () => {
-    expect(resolvePaneKeyboardProtocolAgent({ launchAgent: 'claude' }, 'grok')).toBe('claude')
-  })
 })

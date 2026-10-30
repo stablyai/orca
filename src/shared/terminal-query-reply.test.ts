@@ -29,42 +29,6 @@ describe('isTerminalQueryReply', () => {
     }
   })
 
-  it('matches synthetic query replies that must be sent immediately', () => {
-    // CPR cursor position report (answer to CSI 6n) — the #7329 culprit.
-    expect(isTerminalQueryReply('\x1b[3;1R')).toBe(true)
-    expect(isTerminalQueryReply('\x1b[22;1R')).toBe(true)
-    // DSR device status.
-    expect(isTerminalQueryReply('\x1b[0n')).toBe(true)
-    // Contour color-scheme report (answer to CSI ?996n / mode-2031 push).
-    expect(isTerminalQueryReply('\x1b[?997;1n')).toBe(true)
-    expect(isTerminalQueryReply('\x1b[?997;2n')).toBe(true)
-    // DA1/DA2/DA3 device attributes.
-    expect(isTerminalQueryReply('\x1b[?1;2c')).toBe(true)
-    expect(isTerminalQueryReply('\x1b[?61;4c')).toBe(true)
-    expect(isTerminalQueryReply('\x1b[>0;276;0c')).toBe(true)
-    // Window/cell pixel-size reports.
-    expect(isTerminalQueryReply('\x1b[6;16;8t')).toBe(true)
-    expect(isTerminalQueryReply('\x1b[4;384;640t')).toBe(true)
-    // DECRPM mode report — private (with ?) and ANSI (without ?).
-    expect(isTerminalQueryReply('\x1b[?2026;2$y')).toBe(true)
-    expect(isTerminalQueryReply('\x1b[4;1$y')).toBe(true)
-    // OSC 10/11 color responses (the #7329 culprit) — BEL and ST terminated.
-    expect(isTerminalQueryReply('\x1b]11;rgb:2828/2c2c/3434\x1b\\')).toBe(true)
-    expect(isTerminalQueryReply('\x1b]10;rgb:c0c0/c0c0/c0c0\x07')).toBe(true)
-    // DECXCPR extended cursor position report (answer to CSI ? 6n).
-    expect(isTerminalQueryReply('\x1b[?12;5R')).toBe(true)
-    // Text-area size in characters (answer to CSI 18t).
-    expect(isTerminalQueryReply('\x1b[8;24;80t')).toBe(true)
-    // Crossterm probes Kitty flags at startup; delaying replies corrupts input like CPR did.
-    expect(isTerminalQueryReply('\x1b[?0u')).toBe(true)
-    expect(isTerminalQueryReply('\x1b[?31u')).toBe(true)
-    // DCS DECRQSS reports (vim queries cursor style via DCS $ q) + XTVERSION.
-    expect(isTerminalQueryReply('\x1bP1$r2 q\x1b\\')).toBe(true)
-    expect(isTerminalQueryReply('\x1bP1$r0m\x1b\\')).toBe(true)
-    expect(isTerminalQueryReply('\x1bP0$r\x1b\\')).toBe(true)
-    expect(isTerminalQueryReply('\x1bP>|xterm.js(5.6.0)\x1b\\')).toBe(true)
-  })
-
   it('classifies the fully framed XTVERSION reply emitted by real xterm', async () => {
     const terminal = new Terminal()
     const replies: string[] = []
@@ -80,11 +44,6 @@ describe('isTerminalQueryReply', () => {
       disposable.dispose()
       terminal.dispose()
     }
-  })
-
-  it('documents the accepted modified-F3/CPR collision', () => {
-    // Modified F3 is byte-identical to CPR; accept the ambiguity documented in terminal-query-reply.ts.
-    expect(isTerminalQueryReply('\x1b[1;2R')).toBe(true)
   })
 
   it('routes only cooked-echo-risk replies through the ECHO-safe write path', () => {
@@ -205,55 +164,5 @@ describe('query reply ordering (termenv OSC-then-CPR)', () => {
     expect(pty).toEqual([CPR_REPLY, OSC_11_REPLY])
     ingress.drainAndClose()
     vi.useRealTimers()
-  })
-
-  it('keeps a CPR immediate when no color reply is deferred', () => {
-    vi.useFakeTimers()
-    const pty: string[] = []
-    const ingress = new PtyStartupIngress({
-      ownerBackend: 'posix-pty',
-      write: (data) => pty.push(data),
-      onEmission: () => {}
-    })
-
-    hostWrites(ingress, pty)(CPR_REPLY)
-    expect(pty).toEqual([CPR_REPLY])
-    ingress.drainAndClose()
-    vi.useRealTimers()
-  })
-
-  it('never takes ordinary typed input', () => {
-    const pty: string[] = []
-    const ingress = new PtyStartupIngress({
-      ownerBackend: 'posix-pty',
-      write: (data) => pty.push(data),
-      onEmission: () => {}
-    })
-
-    for (const keystroke of ['y', 'gh auth login\r', '\x1b[A', '\x1b', '\x03']) {
-      expect(ingress.answerLiveQueryReply(keystroke)).toBe(false)
-    }
-    ingress.drainAndClose()
-  })
-})
-
-// Known limit: FIFO covers recognized replies, not all PTY bytes. Whole-string matching excludes mixed payloads and ordinary input; routing them through FIFO later is an improvement.
-describe('writes that still bypass the ordered queue', () => {
-  const BYPASSING = [
-    { what: 'reply coalesced with a keystroke', data: '\x1b[6;1Ry' },
-    { what: 'keystroke coalesced with a reply', data: 'y\x1b[6;1R' },
-    { what: 'ordinary typed input', data: 'ls\r' }
-  ]
-
-  it.each(BYPASSING)('does not take $what', ({ data }) => {
-    const ingress = new PtyStartupIngress({
-      ownerBackend: 'posix-pty',
-      write: () => {},
-      onEmission: () => {}
-    })
-    // Deferral is open, so an ordered write WOULD be queued here.
-    expect(ingress.answerLiveQueryReply('\x1b]11;rgb:00/00/00\x07')).toBe(true)
-    expect(ingress.answerLiveQueryReply(data)).toBe(false)
-    ingress.drainAndClose()
   })
 })

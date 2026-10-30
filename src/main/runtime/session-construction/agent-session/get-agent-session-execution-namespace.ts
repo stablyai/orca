@@ -17,8 +17,9 @@ import { buildAgentResumeStartupPlan } from '../../../../shared/tui-agent-startu
 import { agentLaunchQuotingShell } from '../../../../shared/agent-launch-runtime'
 import { OrchestrationError } from '../../orchestration/orchestration-error'
 import { withAgentSessionAccountEnv } from '../../agent-session-account-env'
+import { resolveWslHostAgentResumeInputs } from '../../wsl-host-agent-terminal-launch'
 import {
-  resolveTuiAgentLaunchArgs,
+  resolveTuiAgentLaunchRawArgs,
   resolveTuiAgentLaunchEnv
 } from '../../../../shared/tui-agent-launch-defaults'
 
@@ -105,7 +106,10 @@ export abstract class OrcaRuntimeWithGetAgentSessionExecutionNamespace extends O
     if (!this.store) {
       throw new Error('runtime_unavailable')
     }
-    const workspace = await this.resolveTerminalWorkspaceLaunchScope(request.worktree)
+    // An explicit ensure is the caller's own act (automatic is refused above), as its spawn below.
+    const workspace = await this.resolveTerminalWorkspaceLaunchScope(request.worktree, undefined, {
+      wslUserAct: true
+    })
     const namespace = this.getAgentSessionExecutionNamespace(workspace, request.agent)
     if (
       !namespace ||
@@ -130,22 +134,24 @@ export abstract class OrcaRuntimeWithGetAgentSessionExecutionNamespace extends O
     const shell = agentLaunchQuotingShell(launchRuntime)
     // Use the resolved PTY route, not display repo metadata that may belong to another host.
     const isRemote = Boolean(workspace.connectionId)
-    const startup = buildAgentResumeStartupPlan({
-      agent: request.agent,
-      providerSession: identity.providerSession,
-      cmdOverrides: settings.agentCmdOverrides ?? {},
-      agentArgs:
-        request.agentArgs !== undefined
-          ? request.agentArgs
-          : resolveTuiAgentLaunchArgs(request.agent, settings),
-      agentEnv: resolveTuiAgentLaunchEnv(request.agent, settings),
-      ompResumeFilePath: request.ompResumeFilePath,
-      sessionOptions: this.toAgentSessionOptions(request.launchPreferences),
-      sessionOptionsOverrideAgentArgs: Boolean(request.launchPreferences),
-      platform,
-      shell,
-      isRemote
-    })
+    const startup = buildAgentResumeStartupPlan(
+      resolveWslHostAgentResumeInputs({
+        agent: request.agent,
+        providerSession: identity.providerSession,
+        cmdOverrides: settings.agentCmdOverrides ?? {},
+        agentArgs:
+          request.agentArgs !== undefined
+            ? request.agentArgs
+            : resolveTuiAgentLaunchRawArgs(request.agent, settings, undefined, shell),
+        agentEnv: resolveTuiAgentLaunchEnv(request.agent, settings),
+        ompResumeFilePath: request.ompResumeFilePath,
+        sessionOptions: this.toAgentSessionOptions(request.launchPreferences),
+        sessionOptionsOverrideAgentArgs: Boolean(request.launchPreferences),
+        platform,
+        shell,
+        isRemote
+      })
+    )
     if (!startup) {
       throw new Error('agent_session_identity_required')
     }
@@ -153,6 +159,8 @@ export abstract class OrcaRuntimeWithGetAgentSessionExecutionNamespace extends O
       throw new Error('client_disconnected')
     }
     const terminal = await this.createTerminal(`id:${workspace.id}`, {
+      // Only the agent-session RPC reaches here: the caller's own act.
+      wslUserAct: true,
       command: startup.launchCommand,
       env: withAgentSessionAccountEnv(startup.env, request.accountEnv),
       launchConfig: startup.launchConfig,

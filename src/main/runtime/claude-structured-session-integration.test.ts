@@ -11,7 +11,7 @@ import {
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
 } from '../../shared/protocol-version'
 import { fakeClaude } from './claude-structured-fake-connection-test-fixture'
-import { claudeSessionIdForOrcaSession } from '../claude/claude-structured-launch-resolution'
+import { claudeSessionIdForOrcaSession } from '../claude/structured/claude-structured-session-id'
 import { ORCA_AGENT_SESSION_SPAWN_TOKEN_ENV } from '../../shared/agent-session-caller-env'
 import { attachFingerprintFields } from '../native-chat/agent-session-wire/structured-agent-session-attach'
 import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
@@ -21,7 +21,7 @@ import type { OrcaRuntimeService } from './orca-runtime'
 import type { RpcRequest, RpcResponse } from './rpc/core'
 import type { ClaudeStructuredAuthPolicy } from '../claude-accounts/claude-structured-auth-policy'
 import { RpcDispatcher } from './rpc/dispatcher'
-import type { NativeChatShellEnvironmentPolicy } from '../../shared/native-chat-shell-environment'
+import type { NativeChatShellEnvironmentPolicy } from '../../shared/native-chat/native-chat-shell-environment'
 import { STRUCTURED_AGENT_SESSION_METHODS } from './rpc/methods/structured-agent-session'
 import {
   ensureStructuredAgentSessionHost,
@@ -237,8 +237,8 @@ beforeEach(async () => {
         hostId: 'local',
         claimKeyId: 'key-1',
         resolveWorkspacePath: async (workspaceId) => `/repos/${workspaceId}`,
-        resolveCodexCommand: () => '/usr/local/bin/codex',
-        resolveClaudeCommand: () => '/usr/local/bin/claude',
+        resolveCodexCommand: () => ({ command: '/usr/local/bin/codex', prefixArgs: [] }),
+        resolveClaudeCommand: () => ({ command: '/usr/local/bin/claude', prefixArgs: [] }),
         readProcessStartTime: async (pid: number) => pid * 10,
         resolveAgentLaunchEnv: (agent) => (agent === 'claude' ? claudeLaunchEnv : {}),
         // Never consult the developer's login shell.
@@ -248,7 +248,8 @@ beforeEach(async () => {
         resolveClaudeAuthPolicy: () => claudeAuthPolicy,
         openClaudeConnection: claude.openConnection,
         claudeCliFlags: {
-          supports: async (flag) => flag.option === '--thinking-display',
+          check: async (flag) =>
+            flag.option === '--thinking-display' ? 'supported' : 'unsupported',
           prewarm: () => {},
           observeExit: () => {}
         },

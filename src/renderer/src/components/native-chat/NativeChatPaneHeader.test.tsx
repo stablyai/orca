@@ -19,7 +19,7 @@ vi.mock('../tab-bar/native-chat-cli-fork-run', () => ({
   useNativeChatCliForkPending: () => false
 }))
 
-import { NativeChatPaneHeader } from './NativeChatPaneHeader'
+import { NativeChatPaneHeader, type NativeChatHeaderHandOff } from './NativeChatPaneHeader'
 
 const fullRequest = vi.spyOn(historyRequest, 'resolveAiVaultPanelSessionListRequest')
 const testWindow = window
@@ -35,7 +35,7 @@ beforeEach(() => {
   })
 })
 
-function renderHeader() {
+function renderHeader(handOff?: NativeChatHeaderHandOff, focused = true) {
   const source = useAppStore.getState().createUnifiedTab('folder:workspace', 'agent-session', {
     agentSessionAgent: 'codex',
     executionHostId: 'runtime:remote-host'
@@ -47,13 +47,32 @@ function renderHeader() {
         worktreeId={source.worktreeId}
         groupId={source.groupId}
         nativeChat={{ sessionId: source.entityId, agent: 'codex' }}
-        focused
+        focused={focused}
         colorScheme="dark"
+        handOff={handOff}
       />
     </TooltipProvider>
   )
   return source
 }
+
+it('puts Hand Off first like the terminal header, only on the focused pane, and blocks a second open', () => {
+  const open = vi.fn()
+  renderHeader({ open, disabled: false })
+  expect(screen.getAllByRole('button')[0].getAttribute('aria-label')).toBe(
+    'Hand Off to Another Agent'
+  )
+  fireEvent.click(screen.getByRole('button', { name: 'Hand Off to Another Agent' }))
+  expect(open).toHaveBeenCalledTimes(1)
+  cleanup()
+  renderHeader({ open, disabled: true })
+  expect(
+    screen.getByRole('button', { name: 'Hand Off to Another Agent' }).hasAttribute('disabled')
+  ).toBe(true)
+  cleanup()
+  renderHeader({ open, disabled: false }, false)
+  expect(screen.queryByRole('button', { name: 'Hand Off to Another Agent' })).toBeNull()
+})
 
 it('offers the terminal header action order and targets Resume and Close at the displayed chat', () => {
   const source = renderHeader()

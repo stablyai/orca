@@ -33,6 +33,7 @@ function cellWith(background: Background): TerminalDocumentCell {
 function rowOf(backgrounds: Background[]): TerminalDocumentLine {
   return {
     length: backgrounds.length,
+    isWrapped: false,
     translateToString: () => '',
     getCell: (x) => cellWith(backgrounds[x])
   }

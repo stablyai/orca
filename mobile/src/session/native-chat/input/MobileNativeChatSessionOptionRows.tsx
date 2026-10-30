@@ -1,14 +1,24 @@
 import { Pressable, StyleSheet, Switch, Text, View } from 'react-native'
 import { Check, ChevronRight, ShieldAlert, type LucideIcon } from 'lucide-react-native'
-import { colors, radii, spacing, typography } from '../../../theme/mobile-theme'
+import { colors, concentricRadius, radii, spacing, typography } from '../../../theme/mobile-theme'
+import { themedStyleSheet } from '../../../theme/themed-styles'
+import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
+import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import {
   sessionOptionValueMarker,
   type SessionOptionDescriptor,
   type SessionOptionValueMarker,
   type SessionOptionValue
-} from '../../../../../src/shared/native-chat-session-options'
+} from '../../../../../src/shared/native-chat/input/native-chat-session-options'
+import {
+  nativeChatSessionChoiceLabel,
+  nativeChatSessionOptionActionLabel,
+  nativeChatSessionOptionLabel
+} from '../../../../../src/shared/native-chat-session-option-labels'
+import { sayMobileNativeChatSessionOption as say } from './native-chat-session-option-copy'
 
 export function SessionOptionCaption({ children }: { children: string }): React.JSX.Element {
+  useMobileColorScheme()
   return <Text style={styles.caption}>{children}</Text>
 }
 
@@ -29,6 +39,7 @@ export function ModelPill({
   disabled: boolean
   onPress: () => void
 }): React.JSX.Element {
+  useMobileColorScheme()
   const PillIcon = Icon ?? (warning ? ShieldAlert : undefined)
   return (
     <Pressable
@@ -76,6 +87,7 @@ function ChoiceRow({
   onPress: () => void
   labelColor?: string
 }): React.JSX.Element {
+  useMobileColorScheme()
   return (
     <Pressable
       accessibilityRole="radio"
@@ -125,13 +137,19 @@ function ToggleRow({
   grouped: boolean
   onToggle: (next: boolean) => void
 }): React.JSX.Element {
+  useMobileColorScheme()
+  const t = useMobileTranslation()
   return (
     <View style={[styles.row, grouped && styles.rowGrouped]}>
       <View style={styles.rowBody}>
         <Text style={[styles.rowLabel, disabled && styles.labelDisabled]}>{label}</Text>
       </View>
       {marker ? (
-        <Text style={styles.rowMarker}>{marker === 'default' ? 'Default' : 'Not reported'}</Text>
+        <Text style={styles.rowMarker}>
+          {marker === 'default'
+            ? t('chat.sessionOptionRows.defaultMarker', 'Default')
+            : t('chat.sessionOptionRows.notReportedMarker', 'Not reported')}
+        </Text>
       ) : null}
       <Switch
         accessibilityLabel={label}
@@ -156,6 +174,7 @@ function ActionRow({
   grouped: boolean
   onPress: () => void
 }): React.JSX.Element {
+  useMobileColorScheme()
   return (
     <Pressable
       accessibilityRole="button"
@@ -186,6 +205,7 @@ export function SessionOptionSummaryRow({
   divided: boolean
   onPress?: () => void
 }): React.JSX.Element {
+  useMobileColorScheme()
   if (!onPress) {
     return (
       <View
@@ -240,23 +260,13 @@ export function DescriptorRows({
   onInvokeAction: () => void
   choiceLabelColor?: (value: string) => string | undefined
 }): React.JSX.Element {
+  useMobileTranslation()
   const locked = disabled || !descriptor.settable
-  // Why: flip-only without a baseline is an action — never claim On/Off.
-  if (descriptor.action?.type === 'toggle-command') {
+  // Why: flip-only and agent-picker options are actions, not values or radio choices.
+  if (descriptor.action) {
     return (
       <ActionRow
-        label={`Toggle ${descriptor.label.toLowerCase()}`}
-        disabled={locked}
-        grouped={grouped}
-        onPress={onInvokeAction}
-      />
-    )
-  }
-  // Why: agent-picker opens the TUI; it is not a set of radio choices.
-  if (descriptor.action?.type === 'agent-picker') {
-    return (
-      <ActionRow
-        label="Choose in agent picker…"
+        label={nativeChatSessionOptionActionLabel(descriptor, say)}
         disabled={locked}
         grouped={grouped}
         onPress={onInvokeAction}
@@ -267,7 +277,7 @@ export function DescriptorRows({
   if (descriptor.kind.type === 'boolean') {
     return (
       <ToggleRow
-        label={descriptor.label}
+        label={nativeChatSessionOptionLabel(descriptor, say)}
         checked={descriptor.kind.currentValue}
         marker={sessionOptionValueMarker(descriptor)}
         disabled={locked}
@@ -282,7 +292,7 @@ export function DescriptorRows({
       {choices.map((choice, index) => (
         <ChoiceRow
           key={choice.value}
-          label={choice.label}
+          label={nativeChatSessionChoiceLabel(choice, say, descriptor.id)}
           description={choice.description}
           selected={choice.value === currentValue}
           disabled={locked}
@@ -296,14 +306,14 @@ export function DescriptorRows({
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   pill: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
     height: 38,
     paddingHorizontal: 14,
-    borderRadius: 19,
+    borderRadius: radii.pill,
     backgroundColor: colors.composerControl
   },
   pillText: {
@@ -340,7 +350,7 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm,
     minHeight: 50,
     alignItems: 'center',
-    borderRadius: radii.card,
+    borderRadius: concentricRadius(radii.surface, spacing.xs),
     backgroundColor: colors.bgRaised,
     borderWidth: 1,
     borderColor: colors.borderSubtle,
@@ -395,4 +405,4 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     fontSize: typography.bodySize
   }
-})
+}))

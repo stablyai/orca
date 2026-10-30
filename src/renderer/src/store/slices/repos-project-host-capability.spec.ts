@@ -76,7 +76,7 @@ export function registerReposProjectHostCapabilityTests(): void {
 
       await store.getState().fetchRepos(catalogOwner(store))
 
-      expect(store.getState().endpointProjectHostSetups).toEqual([
+      expect(store.getState().projectHostSetups).toEqual([
         expect.objectContaining({ id: 'remote-repo', hostId: 'runtime:env-1' })
       ])
       expect(runtimeEnvironmentCall).toHaveBeenCalledTimes(1)

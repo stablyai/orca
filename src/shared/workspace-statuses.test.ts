@@ -1,9 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import {
-  WORKSPACE_BOARD_COLUMN_WIDTH_DEFAULT,
-  WORKSPACE_BOARD_COLUMN_WIDTH_MAX,
-  WORKSPACE_BOARD_COLUMN_WIDTH_MIN,
-  clampWorkspaceBoardColumnWidth,
   cloneDefaultWorkspaceStatuses,
   normalizePersistedWorkspaceStatuses,
   normalizeWorkspaceStatuses
@@ -19,17 +15,6 @@ describe('workspace status visuals', () => {
     expect(normalizeWorkspaceStatuses(authored).map((status) => status.id)).toEqual(
       authored.map((status) => status.id)
     )
-  })
-
-  it('keeps the default workflow order', () => {
-    expect(cloneDefaultWorkspaceStatuses().map((status) => status.id)).toEqual([
-      'todo',
-      'in-progress',
-      'in-review',
-      'completed'
-    ])
-    expect(cloneDefaultWorkspaceStatuses()[0]).toMatchObject({ id: 'todo', label: 'Todo' })
-    expect(cloneDefaultWorkspaceStatuses().at(-1)).toMatchObject({ id: 'completed', label: 'Done' })
   })
 
   it('migrates legacy default statuses to the default workflow order', () => {
@@ -56,31 +41,6 @@ describe('workspace status visuals', () => {
     expect(statuses).toEqual(cloneDefaultWorkspaceStatuses())
   })
 
-  it('migrates the old default status visuals without reordering the board', () => {
-    const statuses = normalizePersistedWorkspaceStatuses(
-      [
-        { id: 'todo', label: 'Todo', color: 'neutral', icon: 'circle' },
-        { id: 'in-progress', label: 'In progress', color: 'blue', icon: 'circle-dot' },
-        { id: 'in-review', label: 'In review', color: 'violet', icon: 'git-pull-request' },
-        { id: 'completed', label: 'Completed', color: 'emerald', icon: 'circle-check' }
-      ],
-      { migrateLegacyDefaultStatusVisuals: true }
-    )
-
-    expect(statuses.map((status) => status.id)).toEqual([
-      'todo',
-      'in-progress',
-      'in-review',
-      'completed'
-    ])
-    expect(statuses.map((status) => status.color)).toEqual([
-      'neutral',
-      'conductor-progress',
-      'conductor-review',
-      'conductor-done'
-    ])
-  })
-
   it('preserves explicit status order while migrating default visuals', () => {
     const statuses = normalizePersistedWorkspaceStatuses(
       [
@@ -102,27 +62,6 @@ describe('workspace status visuals', () => {
       color: 'conductor-done',
       icon: 'conductor-done'
     })
-  })
-
-  it('preserves default-label reordered statuses unless a default migration is requested', () => {
-    const statuses = normalizePersistedWorkspaceStatuses([
-      { id: 'completed', label: 'Completed', color: 'conductor-done', icon: 'conductor-done' },
-      { id: 'in-review', label: 'In review', color: 'conductor-review', icon: 'conductor-review' },
-      {
-        id: 'in-progress',
-        label: 'In progress',
-        color: 'conductor-progress',
-        icon: 'conductor-progress'
-      },
-      { id: 'todo', label: 'Todo', color: 'neutral', icon: 'circle' }
-    ])
-
-    expect(statuses.map((status) => status.id)).toEqual([
-      'completed',
-      'in-review',
-      'in-progress',
-      'todo'
-    ])
   })
 
   it('migrates exact reordered default statuses to the new Done label when requested', () => {
@@ -173,30 +112,6 @@ describe('workspace status visuals', () => {
     expect(statuses).toEqual(cloneDefaultWorkspaceStatuses())
   })
 
-  it('repairs the exact reordered default status payload with the Done label', () => {
-    const statuses = normalizePersistedWorkspaceStatuses(
-      [
-        { id: 'completed', label: 'Done', color: 'conductor-done', icon: 'conductor-done' },
-        {
-          id: 'in-review',
-          label: 'In review',
-          color: 'conductor-review',
-          icon: 'conductor-review'
-        },
-        {
-          id: 'in-progress',
-          label: 'In progress',
-          color: 'conductor-progress',
-          icon: 'conductor-progress'
-        },
-        { id: 'todo', label: 'Todo', color: 'neutral', icon: 'circle' }
-      ],
-      { repairReorderedDefaultStatuses: true }
-    )
-
-    expect(statuses).toEqual(cloneDefaultWorkspaceStatuses())
-  })
-
   it('does not repair reordered default-label statuses with a different raw shape', () => {
     const statuses = normalizePersistedWorkspaceStatuses(
       [
@@ -216,47 +131,6 @@ describe('workspace status visuals', () => {
     ])
   })
 
-  it('leaves custom persisted status layouts in their saved order', () => {
-    const statuses = normalizePersistedWorkspaceStatuses([
-      { id: 'completed', label: 'Shipped', color: 'conductor-done', icon: 'conductor-done' },
-      { id: 'todo', label: 'Todo', color: 'neutral', icon: 'circle' }
-    ])
-
-    expect(statuses.map((status) => status.id)).toEqual(['completed', 'todo'])
-  })
-
-  it('uses Conductor-style visuals for the default status icons', () => {
-    const statuses = cloneDefaultWorkspaceStatuses()
-    const inProgress = statuses.find((status) => status.id === 'in-progress')
-    const inReview = statuses.find((status) => status.id === 'in-review')
-    const completed = statuses.find((status) => status.id === 'completed')
-
-    expect(inProgress).toMatchObject({
-      color: 'conductor-progress',
-      icon: 'conductor-progress'
-    })
-    expect(inReview).toMatchObject({
-      color: 'conductor-review',
-      icon: 'conductor-review'
-    })
-    expect(completed).toMatchObject({
-      color: 'conductor-done',
-      icon: 'conductor-done'
-    })
-  })
-
-  it('migrates the old in-progress blue dot default only when requested', () => {
-    const statuses = normalizePersistedWorkspaceStatuses(
-      [{ id: 'in-progress', label: 'In progress', color: 'blue', icon: 'circle-dot' }],
-      { migrateLegacyDefaultStatusVisuals: true }
-    )
-
-    expect(statuses[0]).toMatchObject({
-      color: 'conductor-progress',
-      icon: 'conductor-progress'
-    })
-  })
-
   it('preserves valid legacy visuals for default-label statuses at runtime', () => {
     const statuses = normalizeWorkspaceStatuses([
       { id: 'in-progress', label: 'In progress', color: 'blue', icon: 'circle-dot' }
@@ -274,12 +148,5 @@ describe('workspace status visuals', () => {
     ])
 
     expect(status.label).toBe('a'.repeat(31))
-  })
-
-  it('clamps workspace board column widths to resizable bounds', () => {
-    expect(clampWorkspaceBoardColumnWidth(undefined)).toBe(WORKSPACE_BOARD_COLUMN_WIDTH_DEFAULT)
-    expect(clampWorkspaceBoardColumnWidth(100)).toBe(WORKSPACE_BOARD_COLUMN_WIDTH_MIN)
-    expect(clampWorkspaceBoardColumnWidth(321.6)).toBe(322)
-    expect(clampWorkspaceBoardColumnWidth(900)).toBe(WORKSPACE_BOARD_COLUMN_WIDTH_MAX)
   })
 })

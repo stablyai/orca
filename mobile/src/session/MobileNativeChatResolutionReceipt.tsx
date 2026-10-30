@@ -1,16 +1,19 @@
 import { StyleSheet, Text, View } from 'react-native'
 import {
-  NATIVE_CHAT_RECEIPT_COPY,
   nativeChatReceiptAnswerHeading,
   nativeChatReceiptAnswers,
   nativeChatReceiptSubject,
   type NativeChatResolvedPrompt
 } from '../../../src/shared/native-chat-resolution-receipt'
+import { nativeChatReceiptCopy } from './native-chat-receipt-copy'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { INLINE_TEXT_SELECTION } from '../components/inline-text-selection'
 import { colors, spacing, typography } from '../theme/mobile-theme'
-import { MobileNativeChatAwaitingInputRow } from './MobileNativeChatAwaitingInputRow'
-import { scaledType } from './mobile-native-chat-message-styles'
-import { MobileNativeChatMessageTime } from './MobileNativeChatMessageTime'
+import { MobileNativeChatAwaitingInputRow } from './native-chat/transcript/MobileNativeChatAwaitingInputRow'
+import { scaledType } from './native-chat/transcript/mobile-native-chat-message-styles'
+import { MobileNativeChatMessageTime } from './native-chat/transcript/MobileNativeChatMessageTime'
+import { themedStyleSheet } from '../theme/themed-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 
 export function MobileNativeChatResolutionReceipt({
   body,
@@ -22,6 +25,8 @@ export function MobileNativeChatResolutionReceipt({
   awaiting?: boolean
   fontScale: number
 }): React.JSX.Element | null {
+  useMobileColorScheme()
+  const t = useMobileTranslation()
   const subject = nativeChatReceiptSubject(body)
   if (body.resolution.state === 'pending') {
     return body.kind === 'question' ? (
@@ -35,16 +40,12 @@ export function MobileNativeChatResolutionReceipt({
     ) : null
   }
   const { resolution } = body
+  const copy = nativeChatReceiptCopy(t, resolution.resolvedBy ?? undefined)
   const cancelled = resolution.state === 'cancelled'
   const answers = nativeChatReceiptAnswers(body)
   const outcome = [
-    cancelled ? NATIVE_CHAT_RECEIPT_COPY.cancelled : NATIVE_CHAT_RECEIPT_COPY.resolved,
-    resolution.resolvedBy
-      ? (cancelled
-          ? NATIVE_CHAT_RECEIPT_COPY.cancelledBy
-          : NATIVE_CHAT_RECEIPT_COPY.resolver
-        ).replace('{{device}}', resolution.resolvedBy)
-      : null
+    cancelled ? copy.cancelled : copy.resolved,
+    resolution.resolvedBy ? (cancelled ? copy.cancelledBy : copy.resolver) : null
   ]
   const text = [styles.text, scaledType(typography.metaSize, fontScale, 5)]
   return (
@@ -74,9 +75,7 @@ export function MobileNativeChatResolutionReceipt({
           >
             {heading ? <Text style={text}>{heading}</Text> : null}
             <Text selectable={INLINE_TEXT_SELECTION} style={text} numberOfLines={3}>
-              {answer.answer === ''
-                ? NATIVE_CHAT_RECEIPT_COPY.emptyAnswer
-                : (answer.answer ?? NATIVE_CHAT_RECEIPT_COPY.unavailable)}
+              {answer.answer === '' ? copy.emptyAnswer : (answer.answer ?? copy.unavailable)}
             </Text>
           </View>
         )
@@ -89,7 +88,7 @@ export function MobileNativeChatResolutionReceipt({
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   receipt: {
     gap: spacing.xs,
     paddingLeft: spacing.md,
@@ -108,4 +107,4 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.sm
   }
-})
+}))

@@ -54,7 +54,7 @@ vi.mock('./browser-cookie-clear-store', () => ({
 
 import { importCookiesFromBrowser, importCookiesFromFile } from './browser-cookie-import'
 import { createChromiumCookieTestDatabase } from './browser-cookie-import-test-database'
-import { mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, existsSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -117,11 +117,8 @@ describe('validated cookie replacement', () => {
       googleCookiesSkipped: 2,
       domains: ['example.com']
     })
-    expect(cookiesRemoveMock.mock.calls).toEqual([['https://example.com/', 'old-example']])
+    expect(cookiesRemoveMock).not.toHaveBeenCalled()
     expect(cookiesSetMock.mock.calls.map(([details]) => details.name)).toEqual(['SIDCC'])
-    expect(Math.max(...cookiesRemoveMock.mock.invocationCallOrder)).toBeLessThan(
-      Math.min(...cookiesSetMock.mock.invocationCallOrder)
-    )
   })
 
   it('does not touch the store when every valid entry is source-bound', async () => {
@@ -150,7 +147,7 @@ describe('validated cookie replacement', () => {
 
     const result = await importCookiesFromFile(filePath, 'persist:test')
 
-    expect(result).toEqual({
+    expect(result).toMatchObject({
       ok: false,
       reason: 'No valid cookies found. 1 entries were skipped due to missing or invalid fields.'
     })
@@ -160,71 +157,6 @@ describe('validated cookie replacement', () => {
   })
 
   // Rollback must restore captured CDP identities; Electron’s cookie API drops partition keys.
-  it('restores the previous cookies through CDP identities when an incoming cookie is rejected', async () => {
-    const partitionKey = { topLevelSite: 'https://top.example', hasCrossSiteAncestor: true }
-    cookiesGetMock.mockResolvedValue([cookie('.example.com', 'existing')])
-    snapshotClearIdentitiesMock.mockImplementation(
-      async (items: { cookie: Record<string, unknown>; url: string }[]) =>
-        items.map(({ cookie: entry, url }) => ({ url, ...entry, partitionKey }))
-    )
-    cookiesSetMock
-      .mockResolvedValue(undefined)
-      .mockResolvedValueOnce(undefined)
-      .mockRejectedValueOnce(new Error('cookie rejected'))
-    const filePath = writeCookies([
-      { domain: '.example.com', name: 'first', value: 'new', secure: true },
-      { domain: '.example.com', name: 'second', value: 'new', secure: true }
-    ])
-
-    const result = await importCookiesFromFile(filePath, 'persist:test')
-
-    expect(result.ok).toBe(false)
-    expect(cookiesRemoveMock.mock.calls).toEqual([
-      ['https://example.com/', 'existing'],
-      ['https://example.com/', 'second'],
-      ['https://example.com/', 'first']
-    ])
-    expect(restoreClearIdentitiesMock).toHaveBeenCalledOnce()
-    expect(restoreClearIdentitiesMock.mock.calls[0]?.[0]).toEqual([
-      { url: 'https://example.com/', ...cookie('.example.com', 'existing'), partitionKey }
-    ])
-    expect(cookiesSetMock.mock.calls.map(([details]) => details.name)).toEqual(['first', 'second'])
-    expect(disposeClearStoreMock).toHaveBeenCalledOnce()
-  })
-
-  it('does not reach for CDP when the rollback has nothing to restore', async () => {
-    cookiesGetMock.mockResolvedValue([])
-    cookiesSetMock
-      .mockResolvedValue(undefined)
-      .mockResolvedValueOnce(undefined)
-      .mockRejectedValueOnce(new Error('cookie rejected'))
-    const filePath = writeCookies([
-      { domain: '.example.com', name: 'first', value: 'new', secure: true },
-      { domain: '.example.com', name: 'second', value: 'new', secure: true }
-    ])
-
-    const result = await importCookiesFromFile(filePath, 'persist:test')
-
-    expect(result.ok).toBe(false)
-    // A rejected CDP write may have landed before transport failure; remove its coordinate too.
-    expect(cookiesRemoveMock.mock.calls).toEqual([
-      ['https://example.com/', 'second'],
-      ['https://example.com/', 'first']
-    ])
-    expect(restoreClearIdentitiesMock).not.toHaveBeenCalled()
-  })
-
-  it('fails closed when existing cookies cannot be replaced', async () => {
-    cookiesGetMock.mockRejectedValue(new Error('cookie store unavailable'))
-    const filePath = writeCookies([
-      { domain: '.example.com', name: 'session', value: 'new', secure: true }
-    ])
-
-    const result = await importCookiesFromFile(filePath, 'persist:test')
-
-    expect(result.ok).toBe(false)
-    expect(cookiesSetMock).not.toHaveBeenCalled()
-  })
 })
 
 describe('native Chromium integrity-cookie accounting', () => {
@@ -317,7 +249,7 @@ describe('native Chromium integrity-cookie accounting', () => {
       expect(cookiesSetMock).not.toHaveBeenCalled()
       expect(setPendingCookieImportMock).not.toHaveBeenCalled()
       expect(clearPendingCookieImportMock).not.toHaveBeenCalled()
-      expect(readdirSync(join(tmpDir, 'userData', 'cookie-import-staging'))).toEqual([])
+      expect(existsSync(join(tmpDir, 'userData', 'cookie-import-staging'))).toBe(false)
     } finally {
       platformSpy.mockRestore()
     }

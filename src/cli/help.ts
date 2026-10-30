@@ -34,7 +34,7 @@ export function formatCommandHelp(spec: CommandSpec): string {
   const displayedFlags =
     spec.argumentMode === 'passthrough'
       ? []
-      : supportsBrowserPageFlag(spec.path)
+      : supportsBrowserPageFlag(spec)
         ? [...spec.allowedFlags, 'page']
         : spec.allowedFlags
 

@@ -20,6 +20,7 @@ type RegisteredWindowListener = {
 }
 
 function makeTerminal(writeCallbacks: Array<() => void>, writes: string[]) {
+  const dimensions = { css: { cell: { width: 8, height: 15 } } }
   const terminal = {
     cols: 80,
     rows: 24,
@@ -27,7 +28,16 @@ function makeTerminal(writeCallbacks: Array<() => void>, writes: string[]) {
     modes: {},
     element: null as HTMLElement | null,
     disposed: false,
-    _core: { _renderService: { dimensions: { css: { cell: { width: 8, height: 15 } } } } },
+    _core: {
+      _renderService: {
+        get dimensions(): typeof dimensions {
+          if (terminal.disposed) {
+            throw new Error('Renderer dimensions are unavailable after terminal disposal')
+          }
+          return dimensions
+        }
+      }
+    },
     buffer: {
       active: {
         viewportY: 0,

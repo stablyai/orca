@@ -34,16 +34,14 @@ import {
 import { clearTaskPageGitHubAuthorityThroughGeneration } from '@/components/task-page/github/task-page-github-work-item-authority-refresh'
 
 import { getOrCreateQuietRevalidateState } from '@/components/task-page/github/task-page-github-work-item-quiet-state'
-
-import { resolveEmptyPageOutcome } from '@/components/task-page/task-page-work-item-pagination'
-
+import { resolveEmptyPageOutcome } from '../../../../../shared/work-item-empty-page'
 import {
   deriveTaskPageGitHubWorkItemsFetchOptions,
   shouldReplaceTaskPageItemsAfterRefresh,
   shouldResetTaskPagePaginationAfterLandingRefresh,
   reconcileTaskPagePagesAfterLandingRefresh
 } from '@/components/task-page/task-page-cache-selectors'
-
+import { taskPageGitHubLoadError } from './task-page-github-load-error'
 export function runTaskPageGitHubLandingRefresh(model: TaskPageGitHubSearchPaginationModel) {
   const {
     fetchWorkItemsAcrossRepos,
@@ -192,6 +190,12 @@ export function runTaskPageGitHubLandingRefresh(model: TaskPageGitHubSearchPagin
     workItemsInvalidationNonce !== lastFetchedInvalidationNonceRef.current
   lastFetchedInvalidationNonceRef.current = workItemsInvalidationNonce
   const forcedFetch = (forceRefresh && taskRefreshNonce > 0) || preferenceInvalidated
+  // A Refresh, Retry or search in Tasks, or Tasks opened on one repo, is a user act that may start
+  // that repo's stopped WSL distro; opening a multi-repo fan-out is not (E9).
+  const wake =
+    (forceRefresh && taskRefreshNonce > 0) || selectedRepos.length === 1
+      ? { wakeWslDistro: true }
+      : {}
   if (forcedFetch) {
     hardRefreshEpochRef.current += 1
   }
@@ -226,7 +230,7 @@ export function runTaskPageGitHubLandingRefresh(model: TaskPageGitHubSearchPagin
       githubPageSize,
       q,
       taskPageToGitHubApiPage(targetPage),
-      { taskRead: restoredRead }
+      { ...wake, taskRead: restoredRead }
     )
       .then(({ items, failedCount, errorTypes }) => {
         if (cancelled || paginationGenerationRef.current !== requestGeneration) {
@@ -293,6 +297,7 @@ export function runTaskPageGitHubLandingRefresh(model: TaskPageGitHubSearchPagin
   void fetchWorkItemsAcrossRepos(repoArgs, githubPerRepoPageLimit, githubPageSize, q, {
     taskRead: landingRead,
     ...deriveTaskPageGitHubWorkItemsFetchOptions(forcedFetch, shouldProbeOnLanding),
+    ...wake,
     ...(forcedFetch
       ? {
           requireComplete: true
@@ -390,7 +395,7 @@ export function runTaskPageGitHubLandingRefresh(model: TaskPageGitHubSearchPagin
         return
       }
       landingRead.dispose()
-      setTasksError(err instanceof Error ? err.message : 'Failed to load GitHub work.')
+      setTasksError(taskPageGitHubLoadError(err))
       setFailedCount(0) // the per-repo banner would be misleading next to tasksError
       setGithubUnavailable(false)
       if (targetPage === 0 || cachedTargetPage) {
@@ -403,12 +408,17 @@ export function runTaskPageGitHubLandingRefresh(model: TaskPageGitHubSearchPagin
       landingRead.finish(() => reads.delete(landingRead))
     })
 
-  countTaskPageGitHubLandingPages(model, q, ({ totalPages: countedPages }) => {
-    if (!cancelled) {
-      countedTotalPagesRef.current = countedPages
-      setCountedTotalPages(countedPages)
-    }
-  })
+  countTaskPageGitHubLandingPages(
+    model,
+    q,
+    ({ totalPages: countedPages }) => {
+      if (!cancelled) {
+        countedTotalPagesRef.current = countedPages
+        setCountedTotalPages(countedPages)
+      }
+    },
+    wake
+  )
   return () => {
     cancelled = true
     for (const read of reads) {

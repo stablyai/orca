@@ -244,9 +244,9 @@ describe('the orca.yaml hooks require nothing', () => {
     expect(parsed.success && parsed.data).toMatchObject({ setupTrust: null })
   })
 
-  it('keeps a setupRunPolicy this build has never heard of on the skip arm', () => {
+  it('reads a setupRunPolicy this build has never heard of as skip-by-default', () => {
     const parsed = repoSetupHooksSchema.safeParse({ setupRunPolicy: 'prompt-twice' })
-    expect(parsed.success && parsed.data).toMatchObject({ setupRunPolicy: 'prompt-twice' })
+    expect(parsed.success && parsed.data).toMatchObject({ setupRunPolicy: 'skip-by-default' })
   })
 
   it('keeps the untrimmed setup script the representative reply carries', () => {

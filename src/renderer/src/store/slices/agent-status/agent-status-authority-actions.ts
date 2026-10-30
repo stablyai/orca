@@ -56,8 +56,11 @@ export function createAgentStatusAuthorityActions(
       }
       let hadLive = false
       settleAttentionRemovedBy(set, get, () =>
-        set((s) => {
+        set((s, changedPaneKeys) => {
           const retiredLivePaneKeys = retiredPaneKeys.filter((key) => key in s.agentStatusByPaneKey)
+          for (const key of retiredLivePaneKeys) {
+            changedPaneKeys.add(key)
+          }
           hadLive = retiredLivePaneKeys.length > 0
           let nextRetentionSuppressedPaneKeys = removePaneKeys(
             s.retentionSuppressedPaneKeys,
@@ -74,6 +77,10 @@ export function createAgentStatusAuthorityActions(
           }
           return {
             agentStatusByPaneKey: removePaneKeys(s.agentStatusByPaneKey, retiredPaneKeySet),
+            agentConversationsByPaneKey: removePaneKeys(
+              s.agentConversationsByPaneKey,
+              retiredPaneKeySet
+            ),
             runtimeAgentOrchestrationByPaneKey: removePaneKeys(
               s.runtimeAgentOrchestrationByPaneKey,
               retiredPaneKeySet
@@ -180,55 +187,77 @@ export function createAgentStatusAuthorityActions(
       rendererAgentStatusObservations.rebind(to)
       const targetTabId = getTabIdFromPaneKey(to) ?? undefined
       const targetLeafId = getLeafIdFromPaneKey(to) ?? undefined
-      set((s) => ({
-        agentStatusByPaneKey: movePaneKeyedRecord(s.agentStatusByPaneKey, from, to, (entry) => ({
-          ...entry,
-          paneKey: to,
-          tabId: targetTabId
-        })),
-        // Bump epoch on live pane-key moves so retention/sidebar consumers observe the remap.
-        ...(from in s.agentStatusByPaneKey
-          ? { agentStatusEpoch: s.agentStatusEpoch + 1, sortEpoch: s.sortEpoch + 1 }
-          : {}),
-        runtimeAgentOrchestrationByPaneKey: movePaneKeyedRecord(
-          s.runtimeAgentOrchestrationByPaneKey,
-          from,
-          to
-        ),
-        retainedAgentsByPaneKey: movePaneKeyedRecord(
-          s.retainedAgentsByPaneKey,
-          from,
-          to,
-          (retained) => ({
-            ...retained,
-            entry: { ...retained.entry, paneKey: to, tabId: targetTabId },
-            tab: targetTabId ? { ...retained.tab, id: targetTabId } : retained.tab
-          })
-        ),
-        sleepingAgentSessionsByPaneKey: movePaneKeyedRecord(
-          s.sleepingAgentSessionsByPaneKey,
-          from,
-          to,
-          (record) => ({ ...record, paneKey: to, tabId: targetTabId })
-        ),
-        agentLaunchConfigByPaneKey: movePaneKeyedRecord(
-          s.agentLaunchConfigByPaneKey,
-          from,
-          to,
-          (entry) => ({
+      set((s, changedPaneKeys) => {
+        changedPaneKeys.add(from)
+        changedPaneKeys.add(to)
+        return {
+          agentStatusByPaneKey: movePaneKeyedRecord(s.agentStatusByPaneKey, from, to, (entry) => ({
             ...entry,
-            identity: { ...entry.identity, tabId: targetTabId, leafId: targetLeafId }
-          })
-        ),
-        acknowledgedAgentsByPaneKey: movePaneKeyedRecord(s.acknowledgedAgentsByPaneKey, from, to),
-        activityClearedAtByPaneKey: movePaneKeyedRecord(s.activityClearedAtByPaneKey, from, to),
-        manuallyUnreadTurnsByPaneKey: movePaneKeyedRecord(s.manuallyUnreadTurnsByPaneKey, from, to),
-        paneForegroundAgentByPaneKey: movePaneKeyedRecord(s.paneForegroundAgentByPaneKey, from, to),
-        ...movePaneAttention(s, from, to),
-        lastTerminalInputAtByPaneKey: movePaneKeyedRecord(s.lastTerminalInputAtByPaneKey, from, to),
-        cacheTimerByKey: movePaneKeyedRecord(s.cacheTimerByKey, from, to),
-        retentionSuppressedPaneKeys: movePaneKeyedRecord(s.retentionSuppressedPaneKeys, from, to)
-      }))
+            paneKey: to,
+            tabId: targetTabId
+          })),
+          agentConversationsByPaneKey: movePaneKeyedRecord(
+            s.agentConversationsByPaneKey,
+            from,
+            to,
+            (identity) => ({ ...identity, paneKey: to })
+          ),
+          // Bump epoch on live pane-key moves so retention/sidebar consumers observe the remap.
+          ...(from in s.agentStatusByPaneKey
+            ? { agentStatusEpoch: s.agentStatusEpoch + 1, sortEpoch: s.sortEpoch + 1 }
+            : {}),
+          runtimeAgentOrchestrationByPaneKey: movePaneKeyedRecord(
+            s.runtimeAgentOrchestrationByPaneKey,
+            from,
+            to
+          ),
+          retainedAgentsByPaneKey: movePaneKeyedRecord(
+            s.retainedAgentsByPaneKey,
+            from,
+            to,
+            (retained) => ({
+              ...retained,
+              entry: { ...retained.entry, paneKey: to, tabId: targetTabId },
+              tab: targetTabId ? { ...retained.tab, id: targetTabId } : retained.tab
+            })
+          ),
+          sleepingAgentSessionsByPaneKey: movePaneKeyedRecord(
+            s.sleepingAgentSessionsByPaneKey,
+            from,
+            to,
+            (record) => ({ ...record, paneKey: to, tabId: targetTabId })
+          ),
+          agentLaunchConfigByPaneKey: movePaneKeyedRecord(
+            s.agentLaunchConfigByPaneKey,
+            from,
+            to,
+            (entry) => ({
+              ...entry,
+              identity: { ...entry.identity, tabId: targetTabId, leafId: targetLeafId }
+            })
+          ),
+          acknowledgedAgentsByPaneKey: movePaneKeyedRecord(s.acknowledgedAgentsByPaneKey, from, to),
+          activityClearedAtByPaneKey: movePaneKeyedRecord(s.activityClearedAtByPaneKey, from, to),
+          manuallyUnreadTurnsByPaneKey: movePaneKeyedRecord(
+            s.manuallyUnreadTurnsByPaneKey,
+            from,
+            to
+          ),
+          paneForegroundAgentByPaneKey: movePaneKeyedRecord(
+            s.paneForegroundAgentByPaneKey,
+            from,
+            to
+          ),
+          ...movePaneAttention(s, from, to),
+          lastTerminalInputAtByPaneKey: movePaneKeyedRecord(
+            s.lastTerminalInputAtByPaneKey,
+            from,
+            to
+          ),
+          cacheTimerByKey: movePaneKeyedRecord(s.cacheTimerByKey, from, to),
+          retentionSuppressedPaneKeys: movePaneKeyedRecord(s.retentionSuppressedPaneKeys, from, to)
+        }
+      })
       if (typeof window !== 'undefined') {
         window.api?.agentStatus?.transferPaneAuthority?.({
           fromPaneKey: from,

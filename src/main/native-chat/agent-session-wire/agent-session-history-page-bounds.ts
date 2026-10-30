@@ -9,7 +9,10 @@ import type {
 import { REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES } from '../../../shared/remote-runtime/remote-runtime-memory-limits'
 import { MOBILE_BRIDGE_MAX_FRAME_BYTES } from '../../../shared/mobile-bridge-frame-bytes'
 import { agentSessionHostStatusBody } from '../../../shared/agent-session-host-status-rows'
-import { subagentFoldKey, subagentItemBlock } from '../../../shared/native-chat-subagent-items'
+import {
+  subagentFoldKey,
+  subagentItemBlock
+} from '../../../shared/native-chat/transcript/native-chat-subagent-items'
 
 export const AGENT_SESSION_HISTORY_MAX_PAGE_BYTES = REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES / 2
 

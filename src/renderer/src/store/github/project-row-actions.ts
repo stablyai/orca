@@ -129,7 +129,7 @@ export const createProjectRowActions = (
               args,
               { timeoutMs: 30_000 }
             )
-          : await window.api.gh.updatePullRequestBySlug(args)
+          : await window.api.gh.updatePullRequestBySlug({ ...args, wakeWslDistro: true })
       if (!prRes.ok) {
         envelope = prRes
       }
@@ -165,7 +165,7 @@ export const createProjectRowActions = (
               args,
               { timeoutMs: 30_000 }
             )
-          : await window.api.gh.updateIssueBySlug(args)
+          : await window.api.gh.updateIssueBySlug({ ...args, wakeWslDistro: true })
       if (!issueRes.ok) {
         envelope = issueRes
       }
@@ -251,7 +251,7 @@ export const createProjectRowActions = (
             args,
             { timeoutMs: 30_000 }
           )
-        : await window.api.gh.updateIssueTypeBySlug(args)
+        : await window.api.gh.updateIssueTypeBySlug({ ...args, wakeWslDistro: true })
     if (!res.ok) {
       rollbackRowIfPresent(set, get, cacheKey, rowId, previousRow)
     }

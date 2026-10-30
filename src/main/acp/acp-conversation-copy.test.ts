@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { acpLaunchSpecFor } from './acp-launch-specs'
 import { copyAcpConversation } from './acp-conversation-copy'
+import { closeProviderTimelineRigs } from '../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
+import { OpenCodeCopyServerRouteError } from '../../shared/opencode-launch-command'
 import {
   FakeAcpChild,
   openAcpAdapterRig,
@@ -26,12 +28,24 @@ const input = {
 const rigs: AcpAdapterRig[] = []
 afterEach(async () => {
   await Promise.all(rigs.splice(0).map((rig) => rig.adapter.closeAll()))
+  await closeProviderTimelineRigs()
 })
 
 async function open(agent: 'omp' | 'opencode' = 'omp') {
   const rig = await openAcpAdapterRig({
     spec: acpLaunchSpecFor(agent)!,
     initialize: FORKS,
+    deps: { resolveLaunchArgs: () => ['--', '--server', 'literal-operand'] },
+    launch: {
+      command: 'launcher',
+      prefixArgs: ['run', '--', agent],
+      args: [
+        'run',
+        '--',
+        agent,
+        ...acpLaunchSpecFor(agent)!.args({ fullAccess: false, pluginDir: null })
+      ]
+    },
     script: (agent) =>
       agent.on('session/fork', (frame) => agent.reply(frame, { sessionId: 'copy-1' }))
   })
@@ -114,6 +128,7 @@ describe('copying a chat conversation for the CLI', () => {
         readLaunch: async () => ({
           spec,
           command: 'fake',
+          prefixArgs: [],
           args: [],
           cwd: '/repo',
           env: {},
@@ -159,26 +174,47 @@ describe('copying a chat conversation for the CLI', () => {
     async (agent) => {
       const spec = acpLaunchSpecFor(agent)!
       const connect = vi.fn()
-      await expect(
-        copyAcpConversation(
-          {
+      for (const [prefixArgs, args, launchReads] of [
+        [[], ['--server', 'https://other-host:4096'], 0],
+        [['run', '--', 'opencode'], ['--server', 'https://other-host:4096'], 0],
+        [['run', '--', 'opencode', '--server=https://prefix-host:4096'], [], 1]
+      ] as const) {
+        const readLaunch = vi.fn(async () => {
+          if (launchReads === 0) {
+            throw new Error('launch preparation failed')
+          }
+          return {
             spec,
-            dataDirectory: '/orca-data',
-            resolveLaunchArgs: () => ['--server', 'https://other-host:4096'],
-            readLaunch: async () => {
-              throw new Error('not reached')
+            command: 'launcher',
+            prefixArgs: [...prefixArgs],
+            args: [],
+            cwd: '/workspace',
+            env: {},
+            envToDelete: [],
+            fullAccess: true,
+            resume: null
+          }
+        })
+        await expect(
+          copyAcpConversation(
+            {
+              spec,
+              dataDirectory: '/orca-data',
+              resolveLaunchArgs: () => [...args],
+              readLaunch,
+              connect
             },
-            connect
-          },
-          {
-            ...input,
-            identity: { ...input.identity, agent },
-            accountHome: { kind: 'opencode', locator: { kind: 'unmanaged' } }
-          },
-          { track: () => {} }
-        )
-      ).rejects.toThrow('--server')
-      expect(connect).not.toHaveBeenCalled()
+            {
+              ...input,
+              identity: { ...input.identity, agent },
+              accountHome: { kind: 'opencode', locator: { kind: 'unmanaged' } }
+            },
+            { track: () => {} }
+          )
+        ).rejects.toBeInstanceOf(OpenCodeCopyServerRouteError)
+        expect(readLaunch).toHaveBeenCalledTimes(launchReads)
+        expect(connect).not.toHaveBeenCalled()
+      }
     }
   )
 })

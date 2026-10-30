@@ -1,3 +1,5 @@
+import { collectSavedStructuredAgentSessionIds } from '../saved-structured-agent-session-restoration'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 import type {
   RuntimeConstructionBindings,
   RuntimeConstructionDependencies
@@ -17,6 +19,7 @@ import type { ProjectExecutionRuntimeResolution } from '../../../shared/project-
 import { OrcaRuntimeWithLinearCommands } from '../integrations/linear/linear-commands'
 
 import type { RuntimeStore } from '../runtime-store-contract'
+import { installGitHubProjectAccounts } from '../../github/github-project-account'
 import type { WorkspaceSleepPlatform } from '../workspaces/workspace-sleep-platform'
 import type { StatsCollector } from '../../stats/collector'
 
@@ -43,6 +46,7 @@ import { registerConptyDa1OverrideInstaller } from '../terminal-model-query-auth
 import { registerTerminalViewAttributesApplier } from '../terminal-view-attribute-store'
 import { RuntimeMachineName } from '../runtime-machine-name'
 import { setPRConflictSummaryRemoteFetches } from '../../github/conflict-summary'
+import { DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT } from '../../../shared/terminal-scrollback-policy'
 
 // oxlint-disable-next-line typescript/no-unsafe-declaration-merging -- SAFETY: The constructor installs every checked canonical surface.
 export abstract class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCommands {
@@ -73,6 +77,7 @@ export abstract class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCo
   declare protected readonly getPairedDeviceNameFn: HostServices['getPairedDeviceNameFn']
   declare protected readonly buildAgentHookPtyEnv: HostServices['buildAgentHookPtyEnv']
   declare protected readonly getDesktopWindowStatusFn: HostServices['getDesktopWindowStatusFn']
+  protected readonly headlessTerminalScrollbackRows: number
   declare protected readonly prepareAiVaultSessionResumeFn: HostServices['prepareAiVaultSessionResumeFn']
   declare protected readonly prepareCodexStructuredLaunchFn: HostServices['prepareCodexStructuredLaunchFn']
   declare protected readonly resolveCodexStructuredLaunchHomeFn: HostServices['resolveCodexStructuredLaunchHomeFn']
@@ -93,6 +98,8 @@ export abstract class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCo
   ): ProjectExecutionRuntimeResolution | undefined
   protected abstract ensureNativeWindowsConptyDa1Override(ptyId: string): void
 
+  readonly getSetupTerminalTitle: () => string
+
   protected readonly prepareClaudeAuth?: PrepareClaudeAuth
 
   readonly workspaceSleepPlatform: WorkspaceSleepPlatform | null
@@ -112,9 +119,18 @@ export abstract class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCo
   ) {
     super()
     this.store = store
+    installGitHubProjectAccounts(store, () => this.resolvedWorktrees.peek()?.worktrees ?? [])
+    this.legacyStructuredSessionTabIds = Object.freeze(
+      collectSavedStructuredAgentSessionIds(
+        store?.getWorkspaceSession?.(LOCAL_EXECUTION_HOST_ID) ?? null
+      )
+    )
     this.machineName.start()
+    this.getSetupTerminalTitle = deps?.getSetupTerminalTitle ?? (() => 'Setup')
     this.prepareClaudeAuth = deps?.prepareClaudeAuth
     installRuntimeFileCommandSurface(this, this.fileCommands)
+    // Host start: drop what a crashed run's staged saves left in the staging folder.
+    this.fileCommands.stagedFileSaves.sweepOrphans()
     installRuntimeGitCommandSurface(this, this.gitCommands)
     installRuntimeRepositoryCommandSurface(this, {
       projectHostSetups: this.projectHostSetups,
@@ -229,14 +245,11 @@ export abstract class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCo
     this.dropAgentStatusForRemovedWorktreeFn = deps?.dropAgentStatusForRemovedWorktree ?? null
     this.canRecoverPersistentLocalPtysFn = deps?.canRecoverPersistentLocalPtys ?? (() => true)
     this.getPairedDeviceNameFn = deps?.getPairedDeviceName ?? (() => null)
-    // Why: configure the shared AiVault scan cache from a serve-mode-reachable
-    // seam so the aiVault.listSessions RPC includes managed-Codex + WSL sessions
-    // even on headless `orca serve` hosts where registerCoreHandlers never runs.
-    configureAiVaultSessionSources({
-      getProjectOwnershipCatalog: deps?.getProjectOwnershipCatalog,
-      getAdditionalCodexHomePaths: deps?.getAdditionalAiVaultCodexHomePaths
-    })
+    // Headless serve skips registerCoreHandlers but still needs managed-Codex/WSL AiVault sources.
     if (deps?.getAdditionalAiVaultCodexHomePaths) {
+      configureAiVaultSessionSources({
+        getAdditionalCodexHomePaths: deps.getAdditionalAiVaultCodexHomePaths
+      })
       configureHostReadableTranscriptPathSources({
         getAdditionalCodexHomePaths: deps.getAdditionalAiVaultCodexHomePaths
       })
@@ -249,6 +262,8 @@ export abstract class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCo
     this.onClaudeTerminalEvidence = deps?.onClaudeTerminalEvidence ?? null
     this.buildAgentHookPtyEnv = deps?.buildAgentHookPtyEnv ?? null
     this.getDesktopWindowStatusFn = deps?.getDesktopWindowStatus ?? (() => 'openable')
+    this.headlessTerminalScrollbackRows =
+      deps?.headlessTerminalScrollbackRows ?? DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT
     this.prepareAiVaultSessionResumeFn = deps?.prepareAiVaultSessionResume ?? null
     this.prepareCodexStructuredLaunchFn = deps?.prepareCodexStructuredLaunch ?? null
     this.resolveCodexStructuredLaunchHomeFn = deps?.resolveCodexStructuredLaunchHome ?? null

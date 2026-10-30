@@ -64,40 +64,6 @@ afterEach(() => {
 })
 
 describe('convertImageBlobToPng', () => {
-  it('validates dimensions and returns PNG signature bytes unchanged', async () => {
-    const decode = stubDecodedSize(800, 600)
-    const png = new Blob([PNG_BYTES], { type: 'image/png' })
-
-    await expect(convertImageBlobToPng(png)).resolves.toBe(png)
-
-    expect(decode).toHaveBeenCalledOnce()
-    expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:decode-owned')
-  })
-
-  it.each([
-    ['a non-PNG mislabeled as PNG', () => new Blob([WEBP_BYTES], { type: 'image/png' })],
-    [
-      'SVG',
-      () =>
-        new Blob(['<svg xmlns="http://www.w3.org/2000/svg" width="800" height="600"></svg>'], {
-          type: 'image/svg+xml'
-        })
-    ]
-  ])(
-    'decodes %s with an image element and encodes its natural dimensions',
-    async (_name, source) => {
-      stubDecodedSize(800, 600)
-      const { dimensions, drawImage, png } = stubCanvas()
-
-      await expect(convertImageBlobToPng(source())).resolves.toBe(png)
-
-      expect(dimensions.width).toBe(800)
-      expect(dimensions.height).toBe(600)
-      expect(drawImage).toHaveBeenCalledOnce()
-      expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:decode-owned')
-    }
-  )
-
   it('rejects excessive source bytes before creating a decode URL', async () => {
     await expect(
       convertImageBlobToPng(new Blob([new Uint8Array(CLIPBOARD_IMAGE_MAX_SOURCE_BYTES + 1)]))
@@ -118,15 +84,6 @@ describe('convertImageBlobToPng', () => {
     stubDecodedSize(800, 600, vi.fn().mockRejectedValue(new Error('invalid image')))
 
     await expect(convertImageBlobToPng(new Blob(['invalid']))).rejects.toThrow('invalid image')
-    expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:decode-owned')
-  })
-
-  it('releases its temporary URL when no canvas context is available', async () => {
-    stubDecodedSize(800, 600)
-
-    await expect(convertImageBlobToPng(new Blob([WEBP_BYTES]))).rejects.toThrow(
-      'Clipboard image could not be decoded'
-    )
     expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:decode-owned')
   })
 

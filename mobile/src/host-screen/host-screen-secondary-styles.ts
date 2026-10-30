@@ -1,7 +1,8 @@
 import { StyleSheet } from 'react-native'
-import { colors, spacing, typography } from '../theme/mobile-theme'
+import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
 
-export const hostScreenSecondaryStyles = StyleSheet.create({
+export const hostScreenSecondaryStyles = themedStyleSheet(() => ({
   errorText: {
     color: colors.statusRed,
     fontSize: typography.bodySize
@@ -84,7 +85,7 @@ export const hostScreenSecondaryStyles = StyleSheet.create({
   },
   filterGroup: {
     backgroundColor: colors.bgPanel,
-    borderRadius: 12,
+    borderRadius: radii.surface,
     overflow: 'hidden',
     marginBottom: spacing.md
   },
@@ -152,7 +153,7 @@ export const hostScreenSecondaryStyles = StyleSheet.create({
   filterRepoDot: {
     width: 8,
     height: 8,
-    borderRadius: 4
+    borderRadius: radii.pill
   },
   confirmContent: {
     paddingBottom: spacing.lg
@@ -175,7 +176,7 @@ export const hostScreenSecondaryStyles = StyleSheet.create({
   confirmBtn: {
     flex: 1,
     paddingVertical: spacing.sm + 2,
-    borderRadius: 10,
+    borderRadius: radii.control,
     alignItems: 'center'
   },
   confirmBtnCancel: {
@@ -197,4 +198,4 @@ export const hostScreenSecondaryStyles = StyleSheet.create({
     fontWeight: '600',
     color: '#fff'
   }
-})
+}))

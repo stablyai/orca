@@ -1,7 +1,8 @@
 // Slash-command feedback and transcript boundaries stay separate from optimistic user-send pruning.
 
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'
-import { setBoundedScopeCacheEntry } from '../../../../shared/native-chat-scope-cache'
+import { setBoundedScopeCacheEntry } from '../../../../shared/native-chat/native-chat-scope-cache'
+import { translate } from '@/i18n/i18n'
 
 /** Local slash-command feedback replaces user-turn echoes for commands dispatched into the TUI. */
 export type NativeChatCommandMarker = {
@@ -94,7 +95,16 @@ export function commandMarkersAsMessages(
     id: `command:${marker.id}`,
     role: 'system' as const,
     // Why: a host answer is one sentence, so it reads as the aside it replaces, not a grid.
-    blocks: [{ type: 'text' as const, text: marker.output ?? `Ran ${marker.command}` }],
+    blocks: [
+      {
+        type: 'text' as const,
+        text:
+          marker.output ??
+          translate('components.native-chat.commandMarker.ran', 'Ran {{command}}', {
+            command: marker.command
+          })
+      }
+    ],
     timestamp: marker.sentAt,
     source: 'scrape' as const
   }))

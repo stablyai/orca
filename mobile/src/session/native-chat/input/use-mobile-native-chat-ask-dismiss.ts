@@ -1,15 +1,16 @@
 import { useMemo } from 'react'
-import { nativeChatAskDismissKey } from '../../../../../src/shared/native-chat-ask-dismiss-key'
-import type { AskPrompt } from '../../../../../src/shared/native-chat-ask-types'
+import type { AskPrompt } from '../../../../../src/shared/native-chat/input/native-chat-ask-types'
 import { useMobileNativeChatPromptDismiss } from './use-mobile-native-chat-prompt-dismiss'
 
 // Keep answered/collapsed asks across view toggles and remounts until an observed prompt supersedes them.
 export function useMobileNativeChatAskDismiss(args: {
   ask: AskPrompt | null
-  detectedAsk: AskPrompt | null
+  /** The host wait's start for a status-backed ask; null for a transcript-only one. */
+  startedAt: number | null
   scopeKey: string | null
   sessionKey: string | null
   observing: boolean
+  dismissAsync?: () => void
 }): {
   askKey: string | null
   showAsk: boolean
@@ -18,25 +19,22 @@ export function useMobileNativeChatAskDismiss(args: {
   dismissAsk: () => void
   collapseAsk: () => void
 } {
-  const askKey = useMemo(() => nativeChatAskDismissKey(args.ask), [args.ask])
-  const detectedPromptKey = useMemo(
-    () => nativeChatAskDismissKey(args.detectedAsk),
-    [args.detectedAsk]
+  const card = useMemo(
+    () => (args.ask ? { kind: 'question' as const, prompt: args.ask } : null),
+    [args.ask]
   )
-  const dismiss = useMobileNativeChatPromptDismiss({
-    ...args,
-    kind: 'ask',
-    promptKey: askKey,
-    detectedPromptKey
-  })
+  const dismiss = useMobileNativeChatPromptDismiss({ ...args, kind: 'ask', card })
   return {
-    askKey,
+    askKey: args.ask?.replyAsMessage
+      ? JSON.stringify([args.scopeKey, args.sessionKey, dismiss.content])
+      : dismiss.content,
     showAsk: dismiss.showPrompt,
     collapsedAsk:
       dismiss.collapsed && args.ask
         ? { title: args.ask.questions[0]?.question ?? '', expand: dismiss.expandPrompt }
         : null,
-    dismissAsk: dismiss.dismissPrompt,
+    dismissAsk:
+      args.ask?.replyAsMessage && args.dismissAsync ? args.dismissAsync : dismiss.dismissPrompt,
     collapseAsk: dismiss.collapsePrompt
   }
 }

@@ -7,10 +7,8 @@ import { parseLegacyNumericPaneKey, parsePaneKey } from '../../shared/stable-pan
 import { agentVerdictFields } from '../../shared/agent-main-agent-verdict'
 import { isLocalHookConnectionId } from '../../shared/wsl-hook-relay-contract'
 import type { AgentSessionStatusSummary } from '../../shared/agent-session-wire'
-import {
-  structuredAgentSessionPaneKey,
-  structuredAgentSessionTabId
-} from '../../shared/structured-agent-session-projection'
+import { structuredAgentSessionPaneKey } from '../../shared/structured-agent-session-projection'
+import { structuredAgentSessionIdFromTabId } from '../../shared/structured-agent-session-tab-id'
 import type { RuntimeWorktreeAgentSource } from './runtime-worktree-agent-source'
 
 export type ConnectedPtyEvidence = {
@@ -25,12 +23,11 @@ function publishedStructuredChildren(
   entry: AgentStatusIpcPayload,
   read: ((sessionId: string) => AgentSessionStatusSummary | undefined) | undefined
 ) {
-  const prefix = structuredAgentSessionTabId('')
   const tabId = entry.tabId
-  if (!read || !entry.structuredHost || entry.connectionId !== null || !tabId?.startsWith(prefix)) {
+  const sessionId = tabId ? structuredAgentSessionIdFromTabId(tabId) : null
+  if (!read || !entry.structuredHost || entry.connectionId !== null || !tabId || !sessionId) {
     return undefined
   }
-  const sessionId = tabId.slice(prefix.length)
   if (entry.paneKey !== structuredAgentSessionPaneKey(tabId, sessionId)) {
     return undefined
   }
@@ -60,6 +57,7 @@ export function collectRuntimeWorktreePtyAgentSources(args: {
       ptyId: entry.terminalHandle
         ? args.connectedPtyEvidence.ptyIdByTerminalHandle.get(entry.terminalHandle)
         : undefined,
+      terminalHandle: entry.terminalHandle,
       tabId: entry.tabId,
       worktreeId: entry.worktreeId,
       connectionId: entry.connectionId,
@@ -67,6 +65,7 @@ export function collectRuntimeWorktreePtyAgentSources(args: {
       state: entry.state,
       ...(entry.workingMode ? { workingMode: entry.workingMode } : {}),
       agentType: entry.agentType ?? null,
+      ...(entry.providerSession?.id ? { providerSessionId: entry.providerSession.id } : {}),
       prompt: entry.prompt,
       lastAssistantMessage: entry.lastAssistantMessage ?? null,
       toolName: entry.toolName ?? null,
@@ -89,21 +88,23 @@ export function collectRuntimeWorktreePtyAgentSources(args: {
       parsePaneKey(source.paneKey)?.tabId ??
       parseLegacyNumericPaneKey(source.paneKey)?.tabId
     const mirroredWorktreeId = tabId ? args.mirroredWorktreeIdByTabId.get(tabId) : undefined
+    const hasLivePty =
+      // Resolved only from a connected PTY's handle, so its presence is the liveness evidence.
+      source.ptyId !== undefined ||
+      args.connectedPtyEvidence.paneKeys.has(source.paneKey) ||
+      (tabId !== undefined && args.connectedPtyEvidence.tabIds.has(tabId))
     // Structured rows have no PTY; their host removes them on close, so roster membership proves liveness.
     if (
       source.structuredHost === undefined &&
       tabId !== undefined &&
       mirroredWorktreeId === undefined &&
       isLocalHookConnectionId(source.connectionId) &&
-      !args.connectedPtyEvidence.tabIds.has(tabId) &&
-      !args.connectedPtyEvidence.paneKeys.has(source.paneKey) &&
-      // Resolved only from a connected PTY's handle, so its presence is the liveness evidence.
-      source.ptyId === undefined
+      !hasLivePty
     ) {
       continue
     }
     const worktreeId = mirroredWorktreeId ?? source.worktreeId
-    sources.push({ ...source, tabId, worktreeId })
+    sources.push({ ...source, tabId, worktreeId, ...(hasLivePty ? { hasLivePty: true } : {}) })
   }
   return sources
 }

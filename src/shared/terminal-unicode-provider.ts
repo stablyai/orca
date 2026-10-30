@@ -1,12 +1,14 @@
 import type { IUnicodeHandling, IUnicodeVersionProvider } from '@xterm/xterm'
 
+export type XtermUnicodeServiceCore = {
+  unicodeService?: {
+    _providers?: Record<string, IUnicodeVersionProvider>
+  }
+}
+
 type XtermTerminalWithUnicodeCore = {
   unicode: IUnicodeHandling
-  _core?: {
-    unicodeService?: {
-      _providers?: Record<string, IUnicodeVersionProvider>
-    }
-  }
+  _core?: XtermUnicodeServiceCore
 }
 
 const ORCA_UNICODE_VERSION = 'orca-11-zwj'

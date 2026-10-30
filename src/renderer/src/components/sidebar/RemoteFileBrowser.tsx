@@ -27,7 +27,6 @@ type RemoteFileBrowserProps = (
 
 const FILE_HINT_MS = 2000
 const NO_ENTRIES: readonly DirEntry[] = []
-const FILE_HINT_TEXT = "Files can't be opened as a project"
 
 export function RemoteFileBrowser({
   targetId,
@@ -345,7 +344,10 @@ export function RemoteFileBrowser({
         title={fileHint ? undefined : resolvedPath}
       >
         {fileHint
-          ? FILE_HINT_TEXT
+          ? translate(
+              'auto.components.sidebar.RemoteFileBrowser.fileHint',
+              "Files can't be opened as a project"
+            )
           : translate(
               'auto.components.sidebar.RemoteFileBrowser.971d85cc84',
               'Opens as a project on this host · {{value0}}',

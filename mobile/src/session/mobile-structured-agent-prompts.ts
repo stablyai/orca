@@ -3,13 +3,9 @@ import {
   agentSessionPromptQuestions,
   type AgentSessionQuestionAnswer
 } from '../../../src/shared/agent-session-question-answer'
+import { chatApprovalFromJournal } from '../../../src/shared/native-chat-interactive-prompt'
 import type { MobileChatPermission } from './native-chat/input/mobile-native-chat-permission'
 import type { MobileChatQuestion } from './native-chat/input/mobile-native-chat-question'
-import {
-  groupedQuestionPromptKey,
-  projectGroupedQuestion,
-  type GroupedQuestionDraft
-} from './mobile-structured-grouped-question'
 
 export type StructuredApprovalItem = AgentJournalRenderItem & {
   body: Extract<AgentJournalRenderItem['body'], { kind: 'approval' }>
@@ -53,18 +49,6 @@ type PromptTokenPayload =
     }
 
 const STRUCTURED_PROMPT_TOKEN_PREFIX = 'structured-agent-prompt:'
-
-export function pendingStructuredApproval(
-  item: AgentJournalRenderItem
-): item is StructuredApprovalItem {
-  return item.body.kind === 'approval' && item.body.resolution.state === 'pending'
-}
-
-export function pendingStructuredQuestion(
-  item: AgentJournalRenderItem
-): item is StructuredQuestionItem {
-  return item.body.kind === 'question' && item.body.resolution.state === 'pending'
-}
 
 function encodePromptToken(payload: PromptTokenPayload): string {
   return `${STRUCTURED_PROMPT_TOKEN_PREFIX}${encodeURIComponent(JSON.stringify(payload))}`
@@ -145,14 +129,8 @@ export function projectStructuredPermission(
     return null
   }
   return {
-    title: prompt.body.title,
+    ...chatApprovalFromJournal(prompt.body),
     prompt: { itemId: prompt.itemId, expectedRevision: prompt.revision },
-    ...(prompt.body.displayName ? { displayName: prompt.body.displayName } : {}),
-    ...(prompt.body.description ? { description: prompt.body.description } : {}),
-    ...(prompt.body.decisionReason ? { decisionReason: prompt.body.decisionReason } : {}),
-    ...(prompt.body.blockedPath ? { blockedPath: prompt.body.blockedPath } : {}),
-    ...(prompt.body.subject ? { subject: prompt.body.subject } : {}),
-    ...(prompt.body.detail ? { detail: prompt.body.detail } : {}),
     options: prompt.body.options.map((option) => ({
       label: option.label,
       send: encodePromptToken({
@@ -166,19 +144,20 @@ export function projectStructuredPermission(
 }
 
 export function projectStructuredQuestion(
-  prompt: StructuredQuestionItem | null,
-  groupedDraft: GroupedQuestionDraft | null = null
+  prompt: StructuredQuestionItem | null
 ): MobileChatQuestion | null {
   if (prompt?.body.kind !== 'question') {
     return null
   }
   if (prompt.body.questions) {
-    return projectGroupedQuestion(
-      prompt.body.questions,
-      groupedDraft,
-      groupedQuestionPromptKey(prompt.itemId, prompt.revision),
-      { itemId: prompt.itemId, expectedRevision: prompt.revision }
-    )
+    return {
+      question: prompt.body.question,
+      prompt: { itemId: prompt.itemId, expectedRevision: prompt.revision },
+      options: [],
+      multiSelect: false,
+      optionTokens: [],
+      questions: prompt.body.questions
+    }
   }
   const [question] = agentSessionPromptQuestions(prompt.body)
   if (!question) {

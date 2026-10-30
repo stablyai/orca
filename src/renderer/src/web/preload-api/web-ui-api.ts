@@ -204,10 +204,14 @@ export function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
     },
     isMaximized: () => Promise.resolve(false),
     onOpenSettings: () => noopUnsubscribe,
-    // Why: the web client has no native tray/menu bar, so there's never a queued open-settings intent to consume.
+    // Why: the web client has no native tray/menu bar, so it never queues an open-settings or quit request.
     consumePendingOpenSettings: () => Promise.resolve(false),
+    onQuitAndStopAllSessions: () => noopUnsubscribe,
+    consumePendingQuitAndStopAllSessions: () => Promise.resolve(false),
     onOpenSkillShare: () => noopUnsubscribe,
     consumePendingSkillShare: () => Promise.resolve(null),
+    onOpenPluginInstallLink: () => noopUnsubscribe,
+    consumePendingPluginInstallLink: () => Promise.resolve(null),
     // Why: the web client has no OS shell handing it files, so there is never a queued open.
     onOpenMarkdownFiles: () => noopUnsubscribe,
     consumePendingMarkdownFileOpens: () => Promise.resolve([]),
@@ -233,6 +237,7 @@ export function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
     onWorktreeHistoryNavigate: () => noopUnsubscribe,
     onRequestTabCreate: () => noopUnsubscribe,
     replyTabCreate: () => {},
+    browserTabRequestsReady: () => {},
     onRequestRemoteCliBrowserScope: () => noopUnsubscribe,
     replyRemoteCliBrowserScope: () => {},
     onRequestTabSetProfile: () => noopUnsubscribe,

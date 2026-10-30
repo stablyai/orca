@@ -3,7 +3,7 @@ import { terminalImageViewerSupported } from '../../terminal-image-viewer-env'
  * The executor selects surface and prompt delivery; this factory supplies the wire-shaped runtime calls. */
 
 import { randomUUID } from 'node:crypto'
-import { narrowStructuredLaunchSeedOptions } from '../../../../shared/native-chat-session-option-defaults'
+import { narrowStructuredLaunchSeedOptions } from '../../../../shared/native-chat/input/native-chat-session-option-defaults'
 import { createStructuredAgentSessionOperationId } from '../../../../shared/structured-agent-session-mutation'
 import { structuredAgentSessionTabId } from '../../../../shared/structured-agent-session-projection'
 import {
@@ -140,6 +140,8 @@ export function agentLaunchSurfaceFactory(
         terminalSpawn.rethrow(new AgentLaunchTabClosedError())
       }
       const created = context.runtime.createTerminal(`id:${worktreeId}`, {
+        // An agent launch the caller asked for (CLI, window or paired client) is the user's act.
+        wslUserAct: true,
         // Let the runtime build the configured launcher: agent ids are not commands (cursor uses cursor-agent).
         startupAgent: agent,
         terminalImageViewerSupported: terminalImageViewerSupported(context),

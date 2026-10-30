@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { PROCESS_BOUNDARY_GROUND } from '../../shared/terminal-mode-reset-profiles'
+import { coldRestorePayloadFromInfo } from './cold-restore-payload-cache'
 import { buildDurableCheckpointSnapshot } from './daemon-durable-history-snapshot'
 import { DAEMON_RESTORE_SCROLLBACK_ROWS } from './daemon-restore-scrollback-depth'
 import { DAEMON_SESSION_SCROLLBACK_ROWS } from './daemon-session-scrollback-window'
@@ -101,6 +102,28 @@ describe('process boundary ground at a cold restore', () => {
 
     expect(checkpoint.snapshotAnsi).not.toContain('\x1b[?1004h')
     expect(checkpoint.snapshotAnsi).not.toContain('\x1b[?66h')
+  })
+
+  it("keeps the dead process's title off the new process", async () => {
+    const dead = emulator(DAEMON_RESTORE_SCROLLBACK_ROWS)
+    write(dead, 'OLD_OUTPUT\r\n$ \x1b]0;\u2733 Claude Code\x07')
+    const restoreInfo: ColdRestoreInfo = { ...dead.getSnapshot(), cwd: '/tmp' }
+    expect(restoreInfo.lastTitle).toBe('\u2733 Claude Code')
+    const liveSnapshot = seededLive(restoreInfo).getSnapshot()
+
+    expect(coldRestorePayloadFromInfo(restoreInfo)).not.toHaveProperty('lastTitle')
+    // First fold rebuilds from records; a later idle fold may reuse the agreeing disk copy.
+    for (const fold of [
+      { pendingRecords: [{ kind: 'output' as const, data: 'fresh$ ' }], isFirstTake: true },
+      { pendingRecords: [], isFirstTake: false }
+    ]) {
+      const checkpoint = await buildDurableCheckpointSnapshot({
+        liveSnapshot,
+        restoreInfo,
+        ...fold
+      })
+      expect(checkpoint.lastTitle).toBeUndefined()
+    }
   })
 
   it('grounds without moving the cursor', () => {

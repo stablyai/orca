@@ -48,6 +48,8 @@ export type GitHubSlice = {
   issueCache: Record<string, CacheEntry<IssueInfo>>
   checksCache: Record<string, CacheEntry<PRCheckDetail[]>>
   commentsCache: Record<string, CacheEntry<PRComment[]>>
+  /** Resolve/unresolve requests in flight: comments cacheKey + threadId -> threadId. */
+  reviewThreadResolutionsInFlight: Record<string, string>
   prRefreshSequences: Record<string, number>
   prRefreshStates: Record<string, PRRefreshState>
   prVisibleRefreshGeneration: number
@@ -78,7 +80,11 @@ export type GitHubSlice = {
     branch?: string,
     headSha?: string,
     prRepo?: GitHubOwnerRepo | null,
-    options?: RepoScopedFetchOptions & { throwOnError?: boolean }
+    options?: RepoScopedFetchOptions & {
+      throwOnError?: boolean
+      /** Refresh or a check action: a user act that may start a stopped WSL distro. */
+      wakeWslDistro?: boolean
+    }
   ) => Promise<PRCheckDetail[]>
   fetchPRCheckDetails: (
     repoPath: string,
@@ -208,7 +214,7 @@ export type GitHubSlice = {
     displayLimit: number,
     query: string,
     page: number,
-    options?: Pick<FetchOptions, 'noCache' | 'requireComplete' | 'taskRead'>
+    options?: Pick<FetchOptions, 'noCache' | 'requireComplete' | 'taskRead' | 'wakeWslDistro'>
   ) => Promise<{
     items: GitHubWorkItem[]
     failedCount: number
@@ -223,7 +229,8 @@ export type GitHubSlice = {
       sourceContext?: TaskSourceContext | null
     }[],
     query: string,
-    perRepoLimit: number
+    perRepoLimit: number,
+    options?: Pick<FetchOptions, 'wakeWslDistro'>
   ) => Promise<{ totalCount: number; totalPages: number }>
   /** Fire-and-forget prefetch to warm the cache before the page mounts (hover/focus of the "new workspace" buttons). */
   prefetchWorkItems: (

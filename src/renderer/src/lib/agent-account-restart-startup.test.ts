@@ -10,7 +10,12 @@ import {
   type ProjectExecutionRuntimeResolution
 } from '../../../shared/project-execution-runtime'
 import type * as localPreflightContext from '@/lib/local-preflight-context'
-import { makeTerminalTab, makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
+import { resolveAgentResumeLaunchTarget } from '@/lib/agent-resume-launch-target'
+import {
+  makeTerminalTab,
+  makeWorktree,
+  TEST_REPO
+} from '@/store/slices/worktrees-slice-test-fixtures'
 import {
   buildPaneAccountRestartStartup,
   resolveAgentAccountRestartResumeStartup,
@@ -18,6 +23,8 @@ import {
 } from './agent-account-restart-startup'
 
 let projectRuntimeContext: ProjectExecutionRuntimeResolution | undefined
+
+vi.mock('@/lib/agent-resume-launch-target', { spy: true })
 
 vi.mock('@/lib/local-preflight-context', async (importOriginal) => ({
   ...(await importOriginal<typeof localPreflightContext>()),
@@ -175,7 +182,7 @@ describe('buildPaneAccountRestartStartup for Codex', () => {
       providerSession: { key: 'session_id', id: SESSION_ID }
     })
 
-    expect(build().command).toBe('codex')
+    expect(build().command).toBe("codex '-c' 'disable_paste_burst=true'")
   })
   it('does not resume another agent’s sleeping session when Codex has no session yet', () => {
     seedAgentStatus({ agentType: 'codex' })
@@ -306,6 +313,60 @@ describe('buildPaneAccountRestartStartup for Claude', () => {
     )
   })
 
+  it.each([
+    ['workspace folder', undefined, "cd '/recorded/session' && "],
+    ['saved tab folder', '/recorded/session', '']
+  ] as const)('uses the selected host and respects the %s on resume', (_, startupCwd, prefix) => {
+    const original = useAppStore.getState()
+    try {
+      seedAgentStatus({
+        agentType: 'claude',
+        state: 'done',
+        providerSession: { key: 'session_id', id: SESSION_ID, cwd: '/recorded/session' }
+      })
+      useAppStore.setState({
+        repos: [
+          TEST_REPO,
+          { ...TEST_REPO, executionHostId: 'runtime:remote-host', connectionId: 'selected-ssh' }
+        ],
+        worktreesByRepo: {
+          [TEST_REPO.id]: [
+            makeWorktree({
+              id: WORKTREE_ID,
+              repoId: TEST_REPO.id,
+              path: '/recorded/session',
+              hostId: 'local'
+            }),
+            makeWorktree({
+              id: WORKTREE_ID,
+              repoId: TEST_REPO.id,
+              path: '/remote/workspace',
+              hostId: 'runtime:remote-host'
+            })
+          ]
+        },
+        detectedWorktreesByRepo: {},
+        activeWorktreeId: WORKTREE_ID,
+        activeWorkspaceExecutionHostId: 'runtime:remote-host',
+        tabsByWorktree: {
+          [WORKTREE_ID]: [makeTerminalTab({ id: TAB_ID, worktreeId: WORKTREE_ID, startupCwd })]
+        }
+      })
+
+      expect(buildPaneAccountRestartStartup('claude', pane)?.command).toBe(
+        `${prefix}claude '--resume' '${SESSION_ID}'`
+      )
+      expect(resolveAgentResumeLaunchTarget).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          executionHostId: 'runtime:remote-host',
+          connectionId: 'selected-ssh'
+        })
+      )
+    } finally {
+      useAppStore.setState(original)
+    }
+  })
+
   it('reports no resume when the Claude pane has no session id', () => {
     seedAgentStatus({ agentType: 'claude', state: 'done' })
 
@@ -364,3 +425,36 @@ describe('buildPaneAccountRestartStartup for Claude', () => {
     }
   )
 })
+
+it.each(['claude', 'codex'] as const)(
+  'does not seed a continuing %s account restart from the authored map',
+  (agent) => {
+    projectRuntimeContext = undefined
+    seedAgentStatus({
+      agentType: agent,
+      state: 'done',
+      providerSession: { key: 'session_id', id: SESSION_ID }
+    })
+    useAppStore.setState({
+      settings: {
+        ...getDefaultSettings('/test'),
+        agentPermissionDefault: 'own',
+        agentLaunchChoices: { [agent]: { model: 'fresh-only', options: { effort: 'high' } } },
+        agentDefaultArgs: { [agent]: '--model literal' },
+        agentDefaultEnv: { [agent]: { KEEP: 'yes' } }
+      }
+    })
+    const pane = { tabId: TAB_ID, leafId: LEAF_ID, worktreeId: WORKTREE_ID }
+    const startup = buildPaneAccountRestartStartup(agent, pane)
+    expect(startup?.command).toContain(SESSION_ID)
+    expect(startup?.command).not.toContain('fresh-only')
+    expect(startup?.command).not.toContain('high')
+    // The established hand-started Claude path has no configured fallback; Codex retains it.
+    expect(startup?.command.includes('literal')).toBe(agent === 'codex')
+    useAppStore.getState().registerAgentLaunchConfig(makePaneKey(TAB_ID, LEAF_ID), {
+      agentArgs: '--model recorded',
+      agentEnv: { RECORDED: 'yes' }
+    })
+    expect(buildPaneAccountRestartStartup(agent, pane)?.command).toContain('recorded')
+  }
+)

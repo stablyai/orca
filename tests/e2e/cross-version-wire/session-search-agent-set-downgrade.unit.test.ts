@@ -105,7 +105,7 @@ test('agent-list negotiation takes precedence over the old flag and tolerates fu
     expect.objectContaining({
       cursor: 'page-2',
       within,
-      filters: { agents: ['codex', 'jcode'], since: '2026-08-01T00:00:00Z', sort: 'newest' },
+      filters: { agents: ['codex', 'jcode'], since: '2026-08-01T00:00:00.000Z', sort: 'newest' },
       supportedAgents: [...AI_VAULT_AGENTS]
     })
   )

@@ -1,7 +1,8 @@
 import { StyleSheet } from 'react-native'
 import { colors, spacing, typography, radii } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
 
-export const styles = StyleSheet.create({
+export const styles = themedStyleSheet(() => ({
   container: {
     flex: 1,
     backgroundColor: colors.bgBase
@@ -17,14 +18,14 @@ export const styles = StyleSheet.create({
   backButton: {
     width: 36,
     height: 36,
-    borderRadius: 18,
+    borderRadius: radii.control,
     alignItems: 'center',
     justifyContent: 'center'
   },
   iconButton: {
     width: 36,
     height: 36,
-    borderRadius: 18,
+    borderRadius: radii.control,
     alignItems: 'center',
     justifyContent: 'center'
   },
@@ -63,7 +64,7 @@ export const styles = StyleSheet.create({
   },
   card: {
     backgroundColor: colors.bgPanel,
-    borderRadius: radii.card,
+    borderRadius: radii.surface,
     overflow: 'hidden'
   },
   row: {
@@ -131,4 +132,4 @@ export const styles = StyleSheet.create({
     color: colors.textMuted,
     lineHeight: 18
   }
-})
+}))

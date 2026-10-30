@@ -15,25 +15,6 @@ import {
   resetWorktreeSliceModuleMemory
 } from './worktrees-slice-test-harness'
 
-function makeOrphanedSetup(): AppState['endpointProjectHostSetups'][number] {
-  const row = {
-    id: '',
-    projectId: '',
-    repoId: '',
-    hostId: 'local' as const,
-    path: '',
-    displayName: '',
-    setupState: 'ready' as const,
-    setupMethod: 'legacy-repo' as const,
-    createdAt: 0,
-    updatedAt: 0
-  }
-  for (const property of Object.keys(row)) {
-    Reflect.deleteProperty(row, property)
-  }
-  return row
-}
-
 const requestWorktreeBaseFallbackNotice = vi.hoisted(() => vi.fn())
 
 vi.mock('sonner', () => ({
@@ -193,18 +174,34 @@ describe('removeWorktree state cleanup', () => {
   it('purges the orphaned project that pointed at a destroyed runtime-owned SSH target', async () => {
     const store = createTestStore()
     const wt = makeWorktree({ id: 'repo1::/path/wt1', repoId: 'repo1', path: '/path/wt1' })
-    const orphanedSetup = Object.assign(makeOrphanedSetup(), {
+    const orphanedSetup: AppState['projectHostSetups'][number] = {
       id: 'setup-runtime-ssh',
-      hostId: 'ssh:runtime-ssh-orca-1'
-    })
-    const userSshSetup = Object.assign(makeOrphanedSetup(), {
+      hostId: 'ssh:runtime-ssh-orca-1',
+      projectId: 'project-runtime-ssh',
+      repoId: 'repo-runtime-ssh',
+      path: '/runtime/repo',
+      displayName: 'Runtime repo',
+      setupState: 'ready',
+      setupMethod: 'legacy-repo',
+      createdAt: 1,
+      updatedAt: 1
+    }
+    const userSshSetup: AppState['projectHostSetups'][number] = {
       id: 'setup-user-ssh',
-      hostId: 'ssh:my-server'
-    })
+      hostId: 'ssh:my-server',
+      projectId: 'project-user-ssh',
+      repoId: 'repo-user-ssh',
+      path: '/user/repo',
+      displayName: 'User repo',
+      setupState: 'ready',
+      setupMethod: 'legacy-repo',
+      createdAt: 1,
+      updatedAt: 1
+    }
     const deleteProjectHostSetup = vi.fn().mockResolvedValue(null)
     store.setState({
       worktreesByRepo: { repo1: [wt] },
-      endpointProjectHostSetups: [orphanedSetup, userSshSetup],
+      projectHostSetups: [orphanedSetup, userSshSetup],
       deleteProjectHostSetup
     })
     mockApi.ephemeralVm.listRuntimes.mockResolvedValueOnce([

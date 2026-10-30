@@ -5,6 +5,11 @@ import type {
 } from './run-completion-watcher'
 import type { AutomationRun, AutomationRunOutputSnapshot } from '../../shared/automations-types'
 import {
+  AUTOMATION_RUN_FAILURE_COPY,
+  automationRunFailure,
+  type AutomationRunFailure
+} from '../../shared/automation-run-failure-copy'
+import {
   hasHeldRunTurnDone,
   judgeIdleRun,
   type AutomationRunAgentEvidence
@@ -144,6 +149,14 @@ async function waitForAgentStart(
   return false
 }
 
+export const AGENT_HOOKS_REVIEW_BLOCKED_ERROR = AUTOMATION_RUN_FAILURE_COPY.hooksReviewBlocked
+
+function describeBlockedAgent(blockedReason: string): AutomationRunFailure {
+  return blockedReason === 'agent-hooks-review-prompt'
+    ? automationRunFailure('hooksReviewBlocked')
+    : { error: `Automation agent is blocked: ${blockedReason}.` }
+}
+
 async function readTerminalSnapshot(
   runtime: AutomationRunTerminalHost,
   handle: string
@@ -170,21 +183,21 @@ async function buildObservation(
   return {
     status: 'dispatch_failed',
     outputSnapshot,
-    error: wait.blockedReason
-      ? `Automation agent is blocked: ${wait.blockedReason}.`
-      : 'Automation agent did not report completion.'
+    ...(wait.blockedReason
+      ? describeBlockedAgent(wait.blockedReason)
+      : automationRunFailure('agentNoCompletion'))
   }
 }
 
 async function buildUnobservedObservation(
   runtime: AutomationRunTerminalHost,
   handle: string,
-  error: string
+  failure: AutomationRunFailure
 ): Promise<AutomationRunCompletionObservation> {
   return {
     status: 'dispatch_failed',
     outputSnapshot: await readTerminalSnapshot(runtime, handle),
-    error
+    ...failure
   }
 }
 
@@ -212,7 +225,7 @@ export function createRuntimeAutomationRunTerminalObserver(
           return await buildUnobservedObservation(
             runtime,
             handle,
-            'Automation agent never started after the prompt was submitted.'
+            automationRunFailure('agentNeverStarted')
           )
         }
       }
@@ -264,7 +277,7 @@ export function createRuntimeAutomationRunTerminalObserver(
       return await buildUnobservedObservation(
         runtime,
         handle,
-        'Orca stopped watching this run after 6h without a completion signal.'
+        automationRunFailure('watchTimedOut')
       )
     }
   }

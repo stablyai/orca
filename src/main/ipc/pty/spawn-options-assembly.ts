@@ -117,20 +117,6 @@ export async function assemblePtySpawnLaunchOptions(input: PtySpawnLaunchOptions
   const { args } = input
   const connectionId = args.connectionId ?? undefined
   const launchAgent = isTuiAgent(args.launchAgent) ? args.launchAgent : undefined
-  const openCodeLaunch = await prepareOpenCodePtyLaunch({
-    command: input.launchCommand,
-    agent: launchAgent,
-    env: input.env,
-    envToDelete: input.envToDelete,
-    cwd: input.cwd,
-    connectionId,
-    isFreshLaunch: !input.preAdoptedStablePane && input.launchCommand !== undefined,
-    ...(input.codexRuntime === 'wsl'
-      ? { wsl: { distro: input.expectedWslDistro ?? undefined } }
-      : {})
-  })
-  const env = openCodeLaunch.env
-  const pluginDir = !connectionId ? env?.ORCA_CLAUDE_AGENT_VIEW_PLUGIN_DIR : undefined
   const shell = resolveStartupShell(
     input.codexRuntime === 'wsl' ? 'linux' : process.platform,
     resolveLocalWindowsAgentStartupShell({
@@ -139,6 +125,21 @@ export async function assemblePtySpawnLaunchOptions(input: PtySpawnLaunchOptions
       terminalWindowsShell: input.shellOverride ?? input.getSettings?.()?.terminalWindowsShell
     })
   )
+  const openCodeLaunch = await prepareOpenCodePtyLaunch({
+    command: input.launchCommand,
+    agent: launchAgent,
+    env: input.env,
+    envToDelete: input.envToDelete,
+    cwd: input.cwd,
+    connectionId,
+    isFreshLaunch: !input.preAdoptedStablePane && input.launchCommand !== undefined,
+    shell,
+    ...(input.codexRuntime === 'wsl'
+      ? { wsl: { distro: input.expectedWslDistro ?? undefined } }
+      : {})
+  })
+  const env = openCodeLaunch.env
+  const pluginDir = !connectionId ? env?.ORCA_CLAUDE_AGENT_VIEW_PLUGIN_DIR : undefined
   const launchCommand =
     pluginDir && openCodeLaunch.command
       ? withClaudeAgentViewPlugin(openCodeLaunch.command, pluginDir, shell)

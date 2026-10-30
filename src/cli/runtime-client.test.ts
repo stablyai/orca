@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import { ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY } from '../shared/protocol-version'
 import { RuntimeClient, RuntimeClientError, RuntimeRpcFailureError } from './runtime-client'
 import { launchOrcaApp } from './runtime/launch'
+import { formatCliError } from './cli-error'
 
 vi.mock('./runtime/launch', () => ({
   launchOrcaApp: vi.fn()
@@ -235,15 +236,16 @@ describe.skipIf(process.platform === 'win32')('RuntimeClient', () => {
     })
   })
 
-  it('reports stale_bootstrap when bootstrap artifacts exist but no runtime is reachable', async () => {
+  it('reports an unavailable endpoint and lets explicit open recover from it', async () => {
     const userDataPath = makeRuntimeClientFixture()
     writeMetadata(userDataPath, join(userDataPath, 'missing.sock'), 'token', findUnusedPid())
-
     const client = new RuntimeClient(userDataPath, 100)
-    const status = await client.getCliStatus()
 
-    expect(status.result.runtime.state).toBe('stale_bootstrap')
-    expect(status.result.runtime.reachable).toBe(false)
+    await expect(client.getCliStatus()).rejects.toMatchObject({ code: 'runtime_unavailable' })
+    const error = await client.getCliStatus().catch((failure: unknown) => failure)
+    expect(formatCliError(error)).not.toContain('Orca is not running')
+    await expect(client.openOrca(1)).rejects.toMatchObject({ code: 'runtime_open_timeout' })
+    expect(launchOrcaApp).toHaveBeenCalledTimes(1)
   })
 
   it('reports graph_not_ready when the runtime is reachable but graph is unavailable', async () => {
@@ -424,12 +426,12 @@ describe.skipIf(process.platform === 'win32')('RuntimeClient', () => {
   it('preserves a dropped read-only orchestration failure exactly', async () => {
     const userDataPath = makeRuntimeClientFixture()
     const endpoint = join(userDataPath, 'runtime.sock')
-    let request: Record<string, unknown> | undefined
+    let request: unknown
     const server = createServer((socket) => {
       sockets.add(socket)
       socket.once('close', () => sockets.delete(socket))
       socket.once('data', (data) => {
-        request = JSON.parse(String(data).trim()) as Record<string, unknown>
+        request = JSON.parse(String(data).trim())
         socket.end()
       })
     })
@@ -443,10 +445,13 @@ describe.skipIf(process.platform === 'win32')('RuntimeClient', () => {
       .catch((error: unknown) => error)
 
     expect(failure).toBeInstanceOf(RuntimeClientError)
-    expect((failure as RuntimeClientError).message).toBe(
-      'The Orca runtime closed the connection before responding. Restart Orca and try again.'
-    )
-    expect((failure as RuntimeClientError).data).toBeUndefined()
+    if (!(failure instanceof RuntimeClientError)) {
+      throw new Error('Expected a runtime client error', { cause: failure })
+    }
+    expect(failure.message).toBe('Orca closed the connection before responding.')
+    expect(failure.data).toEqual({
+      nextSteps: ['Check that Orca is open and that this terminal can access it.']
+    })
     expect(request).toMatchObject({ method: 'orchestration.workerShow' })
     expect(request).not.toHaveProperty('orchestrationRequestId')
   })

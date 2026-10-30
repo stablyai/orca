@@ -3,6 +3,8 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { openExternalLink } from '../../platform/external-link'
 import { ChevronDown, ChevronRight } from 'lucide-react-native'
 import { colors, radii, spacing, typography } from '../../theme/mobile-theme'
+import { themedStyleSheet } from '../../theme/themed-styles'
+import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import { MermaidDiagram } from './MermaidDiagram'
 import { isAllowedMarkdownLinkUrl } from './markdown-link-scheme'
 import {
@@ -21,6 +23,7 @@ type Props = {
 
 // Use small themed block parser with plain-text fallback: prior third-party renderer hung JS thread on mount; parse failure must not crash comment list.
 export function CommentMarkdown({ content, variant = 'comment' }: Props) {
+  useMobileColorScheme()
   const base = variant === 'document' ? typography.bodySize : 13
   const blocks = useMemo<MarkdownBlock[] | null>(() => {
     try {
@@ -54,6 +57,7 @@ function DetailsBlock({
   body: MarkdownBlock[]
   base: number
 }) {
+  useMobileColorScheme()
   const [open, setOpen] = useState(false)
   const Chevron = open ? ChevronDown : ChevronRight
   return (
@@ -78,6 +82,7 @@ function DetailsBlock({
 }
 
 function BlockView({ block, base }: { block: MarkdownBlock; base: number }) {
+  useMobileColorScheme()
   switch (block.kind) {
     case 'details':
       return <DetailsBlock summary={block.summary} body={block.body} base={base} />
@@ -164,6 +169,7 @@ function TableBlock({
   block: Extract<MarkdownBlock, { kind: 'table' }>
   base: number
 }) {
+  useMobileColorScheme()
   const columnCount = Math.max(block.headers.length, ...block.rows.map((r) => r.length), 1)
   const columns = Array.from({ length: columnCount }, (_, c) => c)
   return (
@@ -200,6 +206,7 @@ function TableBlock({
 }
 
 function Inline({ text, base }: { text: string; base: number }) {
+  useMobileColorScheme()
   const tokens = useMemo<InlineToken[]>(() => {
     try {
       return parseInline(text)
@@ -244,7 +251,7 @@ function Inline({ text, base }: { text: string; base: number }) {
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   paragraph: { color: colors.textPrimary, marginBottom: spacing.sm },
   heading: { color: colors.textPrimary, fontWeight: '700', marginBottom: spacing.xs },
   bold: { fontWeight: '700' },
@@ -259,7 +266,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.bgRaised,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.borderSubtle,
-    borderRadius: radii.row,
+    borderRadius: radii.surface,
     padding: spacing.sm,
     marginBottom: spacing.sm
   },
@@ -280,7 +287,7 @@ const styles = StyleSheet.create({
   details: {
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.borderSubtle,
-    borderRadius: radii.row,
+    borderRadius: radii.surface,
     marginBottom: spacing.sm,
     overflow: 'hidden'
   },
@@ -298,7 +305,7 @@ const styles = StyleSheet.create({
   table: {
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.borderSubtle,
-    borderRadius: radii.row,
+    borderRadius: radii.surface,
     overflow: 'hidden'
   },
   tableRow: {
@@ -316,4 +323,4 @@ const styles = StyleSheet.create({
   },
   tableHeaderText: { color: colors.textPrimary, fontWeight: '700' },
   tableCellText: { color: colors.textPrimary }
-})
+}))

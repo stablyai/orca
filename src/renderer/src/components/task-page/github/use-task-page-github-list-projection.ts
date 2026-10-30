@@ -2,12 +2,12 @@ import { createTaskPageGitHubMembershipProjection } from './task-page-github-wor
 import { createGitHubTaskObservationIndex } from '@/lib/github-task-observation'
 import { githubTaskSourceKey } from '@/lib/github-task-target'
 import { shouldSkipLocalViewerQualifiers } from '@/hooks/useTaskPageGitHubWorkItemMutation'
-import type { TaskPageJiraCreationMetadataModel } from '../../use-task-page-jira-creation-metadata'
+import type { TaskPageJiraCreationMetadataModel } from '../jira/use-task-page-jira-creation-metadata'
 import { getWorkItemRepo } from '@/lib/work-item-repo-row'
 import { useCallback, useMemo, useEffect } from 'react'
 import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
 import { deriveTaskPagePRCheckSummary } from '../task-page-pr-check-summary'
-import { deriveAdvertisedTotalPages } from '@/components/task-page/task-page-work-item-pagination'
+import { deriveAdvertisedTotalPages } from '../../../../../shared/work-item-empty-page'
 import {
   GITHUB_PR_TASK_GRID_CLASS,
   GITHUB_TASK_GRID_CLASS,

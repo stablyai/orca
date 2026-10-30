@@ -2,6 +2,7 @@ import { captureGitHubTaskObservation, observeGitHubWorkItem } from '@/lib/githu
 
 import { beginGitHubTaskRead } from './request-coordination'
 
+import { getWorkItemPageErrorTypes } from '../../../../shared/github/work-item-page-errors'
 import type { StateCreator } from 'zustand'
 
 import type { AppState } from '../types'
@@ -20,12 +21,7 @@ import {
 } from '../../../../shared/work-items'
 
 import { getTaskSourceCacheScope } from '../../../../shared/task-source-context'
-
-import {
-  GITHUB_SEARCH_RESULT_WINDOW_ERROR_PATTERN,
-  isGitHubWorkItemsQueryTooLarge
-} from '../slices/github-work-items-query-bounds'
-
+import { isGitHubWorkItemsQueryTooLarge } from '../slices/github-work-items-query-bounds'
 import { workItemsCacheKey, workItemsInflightRequestKey } from './cache-identity'
 
 import { isFresh, WORK_ITEMS_CACHE_TTL } from './cache-policy'
@@ -164,27 +160,18 @@ export const createWorkItemAggregateActions = (
             limit: perRepoLimit,
             query: query || undefined,
             page,
-            ...(options?.noCache ? { noCache: true } : {})
+            ...(options?.noCache ? { noCache: true } : {}),
+            ...(options?.wakeWslDistro ? { wakeWslDistro: true } : {})
           })
+          errorTypes.push(...getWorkItemPageErrorTypes(envelope.errors))
           // Page-N errors bypass initial-fetch banners; log them to expose silent truncation (design §6).
           if (envelope.errors?.issues) {
-            const { type, message } = envelope.errors.issues
-            // Only 1000-result-window 422 implies unreachable clamp; classify other validation errors as failures.
-            errorTypes.push(
-              type === 'validation_error' &&
-                !GITHUB_SEARCH_RESULT_WINDOW_ERROR_PATTERN.test(message)
-                ? 'unknown'
-                : type
-            )
             console.warn(
               `[workItems] next page ${r.repoId} issues-side partial failure:`,
               envelope.errors.issues
             )
           }
           if (envelope.errors?.prs) {
-            // Window 422 applies only to issues; PR validation failures never imply unreachable.
-            const { type } = envelope.errors.prs
-            errorTypes.push(type === 'validation_error' ? 'unknown' : type)
             console.warn(
               `[workItems] next page ${r.repoId} prs-side partial failure:`,
               envelope.errors.prs
@@ -243,7 +230,7 @@ export const createWorkItemAggregateActions = (
       })
   },
 
-  countWorkItemsAcrossRepos: async (repos, query, perRepoLimit) => {
+  countWorkItemsAcrossRepos: async (repos, query, perRepoLimit, options) => {
     if (isGitHubWorkItemsQueryTooLarge(query)) {
       return { totalCount: 0, totalPages: 0 }
     }
@@ -261,7 +248,10 @@ export const createWorkItemAggregateActions = (
         )
         await acquireWorkItemSlot()
         try {
-          return await countGitHubWorkItemsForRepo(requestContext, { query: query || undefined })
+          return await countGitHubWorkItemsForRepo(requestContext, {
+            query: query || undefined,
+            ...(options?.wakeWslDistro ? { wakeWslDistro: true } : {})
+          })
         } catch {
           return 0
         } finally {

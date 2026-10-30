@@ -33,7 +33,10 @@ export async function updateIssueTypeBySlug(
   }
   const issueId = lookup.data.repository?.issue?.id
   if (!issueId) {
-    return { ok: false, error: { type: 'not_found', message: 'Issue not found.' } }
+    return {
+      ok: false,
+      error: { type: 'not_found', message: 'Issue not found.', reason: 'issue_not_found' }
+    }
   }
   const query = args.issueTypeId
     ? `mutation($issueId:ID!, $issueTypeId:ID!) {

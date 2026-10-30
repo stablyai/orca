@@ -197,6 +197,19 @@ describe('fetchAntigravityRateLimits', () => {
     expect(result.error).toContain('Sign in with `agy`')
   })
 
+  it('reports a login with no quota groups as unavailable, not a failed refresh', async () => {
+    const stdout = JSON.stringify({
+      status: 'SUCCESS',
+      num_turns: 0,
+      command: { name: 'usage', data: { groups: [] } }
+    })
+    const result = await harness({ result: processResult({ stdout }) }).fetch()
+
+    expect(result.status).toBe('unavailable')
+    expect(result.usageMetadata?.failureKind).toBe('usage-unavailable')
+    expect(result.error).toContain('no quota for this account')
+  })
+
   it('does not classify non-auth stderr as signed-out on non-zero exit', async () => {
     // Incidental auth-like words must not trigger credential guidance.
     const result = await harness({
@@ -219,7 +232,7 @@ describe('fetchAntigravityRateLimits', () => {
     expect(result.error).toContain('did not answer in time')
   })
 
-  it('cools down a read that reached agy\u2019s browser sign-in', async () => {
+  it('holds automated reads after agy\u2019s browser sign-in', async () => {
     // Why pinned: agy 1.4.2 opens this OAuth page and waits 60 s, so Orca's 30 s kill lands first (#26484).
     const result = await harness({
       result: processResult({
@@ -231,7 +244,7 @@ describe('fetchAntigravityRateLimits', () => {
 
     expect(result.status).toBe('unavailable')
     expect(result.usageMetadata?.failureKind).toBe('missing-credentials')
-    expect(result.usageMetadata?.retryAtMs).toBe(1_700_000_000_000 + 60 * 60 * 1000)
+    expect(result.usageMetadata?.retryAtMs).toBe(Number.MAX_SAFE_INTEGER)
   })
 
   it('keeps the reading when the browser sign-in completes within the read', async () => {

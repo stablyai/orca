@@ -182,24 +182,28 @@ describe('Muse captured workspace readiness', () => {
   })
 
   describe('Muse readiness from captured terminal bytes', () => {
-    it('recognizes a ready folder workspace without a skills summary', async () => {
-      const data = readFileSync(
-        join(__dirname, '__fixtures__', 'muse-empty-folder-ready.txt'),
-        'utf8'
-      )
-      expect(data).toContain(String.fromCharCode(27))
-      expect(data).not.toContain('Skills:')
-      const { runtime, handle } = await createTranscriptPane({
-        paneTitle: 'muse-first-class-workspace',
-        foregroundProcess: 'muse-bin-1.3.0-R3401.1',
-        launchAgent: 'muse',
-        data
-      })
-      await runtime.readTerminal(handle, { screen: true })
-      await expect(waitForTranscriptIdle({ runtime, handle }, 10_000)).resolves.toMatchObject({
-        satisfied: true
-      })
-    }, 15_000)
+    it.each([
+      ['folder workspace without a skills summary', 'muse-empty-folder-ready'],
+      ['composer without the voice-input label (#25005)', 'muse-no-voice-footer-ready']
+    ])(
+      'recognizes a ready %s',
+      async (_what, fixture) => {
+        const data = readFileSync(join(__dirname, '__fixtures__', `${fixture}.txt`), 'utf8')
+        expect(data).toContain(String.fromCharCode(27))
+        expect(data).not.toContain('Skills:')
+        const { runtime, handle } = await createTranscriptPane({
+          paneTitle: 'muse-first-class-workspace',
+          foregroundProcess: 'muse-bin-1.3.0-R3401.1',
+          launchAgent: 'muse',
+          data
+        })
+        await runtime.readTerminal(handle, { screen: true })
+        await expect(waitForTranscriptIdle({ runtime, handle }, 10_000)).resolves.toMatchObject({
+          satisfied: true
+        })
+      },
+      15_000
+    )
   })
 })
 
@@ -331,7 +335,11 @@ describe('ZCode captured composer readiness', () => {
       expect(getSyntheticAgentTerminalTitle('zcode', 'waiting')).toBe('ZCode - action required')
       expect(shouldDriveSyntheticAgentTitleFromHook('zcode', 'working')).toBe(true)
       expect(
-        hasExplicitIdleTitle({ lastAgentStatus: 'idle', lastOutputAt: Date.now() }, 'ZCode ready')
+        hasExplicitIdleTitle({
+          lastAgentStatus: 'idle',
+          lastOutputAt: Date.now(),
+          lastOscTitle: 'ZCode ready'
+        })
       ).toBe(true)
     })
 

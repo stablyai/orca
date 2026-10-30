@@ -1,3 +1,8 @@
+import { ensureAgentLaunchPreferences } from '@/components/settings/use-host-agent-launch-preferences'
+import {
+  resolveAgentStartupPlanInputs,
+  type AgentStartupSettings
+} from '../../../../shared/agent-startup-plan-inputs'
 import { ensureAgentStartupInTerminal, type LinkedWorkItemSummary } from '@/lib/new-workspace'
 import { seedNativeChatLaunchDraftForAgentTab } from '@/lib/agent-launch-prompt-delivery'
 import { createBrowserUuid } from '@/lib/browser-uuid'
@@ -36,6 +41,7 @@ export {
   getFolderWorkspaceAgentLaunchFact,
   resolveFolderWorkspaceLaunchDraft
 } from './folder-workspace-agent-startup'
+import { translate } from '@/i18n/i18n'
 
 type FolderWorkspaceCreateInput = {
   projectGroupId: string
@@ -57,6 +63,7 @@ type SubmitFolderWorkspaceCreateParams = {
   quickAgent: TuiAgent | null
   launchChoice?: AgentLaunchChoice
   autoRenameBranchFromWork: boolean | undefined
+  settings?: AgentStartupSettings
   agentCmdOverrides: Record<string, string> | undefined
   agentArgs?: string | null
   agentEnv?: Record<string, string>
@@ -78,6 +85,7 @@ export async function submitFolderWorkspaceCreate({
   quickAgent,
   launchChoice,
   autoRenameBranchFromWork,
+  settings,
   agentCmdOverrides,
   agentArgs,
   agentEnv,
@@ -96,7 +104,13 @@ export async function submitFolderWorkspaceCreate({
   const workspaceName =
     nameIsAutoManaged && linkedName
       ? linkedName
-      : name.trim() || linkedName || `${projectGroup.name} workspace`
+      : name.trim() ||
+        linkedName ||
+        translate(
+          'auto.components.sidebar.folderWorkspaceComposer.defaultWorkspaceName',
+          '{{name}} workspace',
+          { name: projectGroup.name }
+        )
   const launchHost = getFolderWorkspaceAgentLaunchFact(useAppStore.getState(), projectGroup)
   if (quickAgent && launchHost.kind === 'withheld') {
     throw new Error(launchHost.reason)
@@ -105,10 +119,25 @@ export async function submitFolderWorkspaceCreate({
   // SSH folders use the plain orca relay shim; keep the Linux-only local executable rename out of remote launches.
   const launchIsRemote = Boolean(projectGroup.connectionId)
   const launchShell = resolveExecutionHostAgentStartupShell(launchHost, terminalWindowsShell)
+  const preferences =
+    quickAgent && settings
+      ? await ensureAgentLaunchPreferences(useAppStore.getState(), {
+          kind: 'folder',
+          runtimeEnvironmentId,
+          executionHostId: getNewWorkspaceProjectGroupHostId(projectGroup)
+        })
+      : undefined
+  const effectiveSettings = settings
+    ? {
+        ...settings,
+        agentLaunchChoices: preferences?.agentLaunchChoices ?? settings.agentLaunchChoices
+      }
+    : settings
   const startupPlan =
     quickAgent && launchPlatform && linkedWorkItem
       ? buildFolderWorkspaceLinkedStartupPlan({
           agent: quickAgent,
+          settings: effectiveSettings,
           linkedWorkItem,
           note,
           agentCmdOverrides,
@@ -120,14 +149,16 @@ export async function submitFolderWorkspaceCreate({
         })
       : quickAgent && launchPlatform
         ? buildAgentStartupPlan({
-            agent: quickAgent,
+            ...resolveAgentStartupPlanInputs({
+              agent: quickAgent,
+              settings: effectiveSettings ?? { agentCmdOverrides },
+              agentArgs: settings ? agentArgs : (agentArgs ?? null),
+              platform: launchPlatform,
+              shell: launchShell,
+              isRemote: launchIsRemote
+            }),
+            ...(agentEnv ? { agentEnv } : {}),
             prompt: note,
-            cmdOverrides: agentCmdOverrides ?? {},
-            agentArgs,
-            agentEnv,
-            platform: launchPlatform,
-            shell: launchShell,
-            isRemote: launchIsRemote,
             allowEmptyPromptLaunch: true
           })
         : null

@@ -4,9 +4,12 @@ import { afterEach, describe, expect, it } from 'vitest'
 import type { NativeChatMessage } from '../../../../../src/shared/native-chat-types'
 import { projectStructuredAgentSessionMessages } from '../../../../../src/shared/structured-agent-session-message-projection'
 import { useMobileNativeChatDrafts } from './use-mobile-native-chat-drafts'
-import { resetMobileNativeChatDraftStoreForTests } from './mobile-native-chat-draft-store'
+import {
+  resetMobileNativeChatDraftStoreForTests,
+  useMobileNativeChatDraft
+} from './mobile-native-chat-draft-store'
 
-type DraftState = ReturnType<typeof useMobileNativeChatDrafts>
+type DraftState = ReturnType<typeof useMobileNativeChatDrafts> & { composerText: string }
 
 function userTextMessage(id: string, text: string): NativeChatMessage {
   return {
@@ -48,7 +51,7 @@ describe('useMobileNativeChatDrafts launch draft', () => {
     transcriptLoading?: boolean
     transcriptSettled?: boolean
   }): null {
-    state = useMobileNativeChatDrafts({
+    const drafts = useMobileNativeChatDrafts({
       hostId: 'host',
       worktreeId: 'worktree',
       tabId,
@@ -60,6 +63,7 @@ describe('useMobileNativeChatDrafts launch draft', () => {
       transcriptLoading,
       transcriptSettled
     })
+    state = { ...drafts, composerText: useMobileNativeChatDraft(drafts.draftKey) }
     return null
   }
 
@@ -113,7 +117,35 @@ describe('useMobileNativeChatDrafts launch draft', () => {
       )
     )
 
-    expect(state?.readSeededLaunchDraftSeed()).toEqual({ text: 'issue link', createdAt: 7 })
+    expect(state?.readSeededLaunchDraftSeed()).toMatchObject({ text: 'issue link', createdAt: 7 })
+  })
+
+  it('prefills over user turns older than the launch draft, retiring once a new turn lands', async () => {
+    const older = { ...userTextMessage('m1', 'earlier prompt'), timestamp: 1_000 }
+    await mount('a')
+    await act(async () =>
+      renderer?.update(
+        createElement(Harness, {
+          tabId: 'a',
+          messages: [older],
+          launchDraft: 'issue link',
+          launchDraftCreatedAt: 100_000
+        })
+      )
+    )
+    expect(state?.composerText).toBe('issue link')
+
+    await act(async () =>
+      renderer?.update(
+        createElement(Harness, {
+          tabId: 'a',
+          messages: [older, { ...userTextMessage('m2', 'sent from the TUI'), timestamp: 2_000 }],
+          launchDraft: 'issue link',
+          launchDraftCreatedAt: 100_000
+        })
+      )
+    )
+    expect(state?.composerText).toBe('')
   })
 
   it('does not overwrite typed composer text with a launch draft', async () => {

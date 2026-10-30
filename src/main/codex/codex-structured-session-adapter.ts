@@ -15,10 +15,12 @@ import { supportsCodexStructuredLocation } from './codex-structured-location-sup
 import { CodexStructuredSessionTeardown } from './codex-structured-session-teardown'
 import {
   applyCodexStructuredSessionOption,
-  prepareLiveCodexSessionOptions,
   readLiveCodexSessionOptions
 } from './codex-structured-session-options'
-import { prepareCodexMessageDispatch } from './codex-structured-message-options'
+import {
+  prepareCodexMessageDispatch,
+  readCodexAppliedInputOptions
+} from './codex-structured-message-options'
 import {
   CodexAcquisitionRegistry,
   requireLiveCodexSession,
@@ -308,11 +310,12 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
   readOptions = (input: { sessionId: string; fence: number }) =>
     readLiveCodexSessionOptions(this.session(input.sessionId), this.deps.requestTimeoutMs)
 
+  readAppliedInputOptions: NonNullable<StructuredAgentSessionAdapter['readAppliedInputOptions']> = (
+    input
+  ) => readCodexAppliedInputOptions(this.sessions.get(input.sessionId), input)
+
   projectOptions = (sessionId: string, options: Readonly<Record<string, string>>) =>
     projectCodexSessionOptions(this.sessions.get(sessionId), options)
-
-  prepareReadOptions = (input: { sessionId: string; fence: number }) =>
-    prepareLiveCodexSessionOptions(this.session(input.sessionId), this.deps.requestTimeoutMs)
 
   closeSession: NonNullable<StructuredAgentSessionAdapter['closeSession']> = (...args) =>
     this.teardown.close(...args)

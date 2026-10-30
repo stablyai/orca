@@ -1,14 +1,38 @@
 import { Monitor, MoreVertical } from 'lucide-react-native'
-import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { Pressable, Text, View } from 'react-native'
+import type { Translate } from '../i18n/mobile-i18n'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import type { ConnectionVerdict } from '../transport/connection-health'
 import { verdictDisplayLabel } from '../transport/connection-health'
-import { mobileConnectionPathLabel } from '../transport/mobile-connection-path-label'
+import {
+  mobileConnectionPathAccessibilityLabel,
+  mobileConnectionPathLabel
+} from '../transport/mobile-connection-path-label'
 import { useHostDisplay } from '../transport/use-host-display'
 import type { MobileConnectionPath } from '../transport/stable-logical-rpc-client'
 import type { ConnectionState, HostCatalogEntry, HostProfile } from '../transport/types'
 import { colors, radii, spacing } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { homeHostWorktreeSummary, type HostWorktreeInfo } from '../worktree/home-worktree-info'
 import { StatusDot } from './StatusDot'
+
+function hostCardWorktreeSummaries(info: HostWorktreeInfo | undefined, t: Translate) {
+  const now = Date.now()
+  const visual = homeHostWorktreeSummary(info, now)
+  const accessibility =
+    info && info.activeCount > 0 && (!info.catalogUnavailable || info.staleCounts)
+      ? t(
+          'components.hostCard.worktreeAccessibilitySummary',
+          '{{summary}}, {{activeCount}} active',
+          {
+            summary: homeHostWorktreeSummary({ ...info, activeCount: 0 }, now),
+            activeCount: info.activeCount
+          }
+        )
+      : visual
+  return { visual, accessibility }
+}
 
 export function MobileHostCard(props: {
   host: HostProfile | HostCatalogEntry
@@ -22,22 +46,24 @@ export function MobileHostCard(props: {
   onLongPress: () => void
   onOpenActions: () => void
 }) {
+  const t = useMobileTranslation()
+  useMobileColorScheme()
   const credentialUnavailable = props.credentialStatus === 'temporarily-unavailable'
   const credentialMissing = props.credentialStatus === 'missing'
   const connected = props.state === 'connected' && !credentialUnavailable && !credentialMissing
   const isError =
     credentialMissing || ['warning', 'unreachable', 'auth-failed'].includes(props.verdict.kind)
   const statusLabel = credentialMissing
-    ? 'Pairing invalid'
+    ? t('components.hostCard.pairingInvalid', 'Pairing invalid')
     : credentialUnavailable
-      ? 'Pairing temporarily unavailable'
+      ? t('components.hostCard.pairingTemporarilyUnavailable', 'Pairing temporarily unavailable')
       : verdictDisplayLabel(props.verdict)
   const statusVerdict: ConnectionVerdict = credentialMissing
     ? { kind: 'auth-failed', label: statusLabel }
     : credentialUnavailable
       ? { kind: 'warning', label: statusLabel }
       : props.verdict
-  const worktreeSummary = homeHostWorktreeSummary(props.worktreeInfo)
+  const worktreeSummary = hostCardWorktreeSummaries(props.worktreeInfo, t)
   const display = useHostDisplay(props.host)
   const descriptorText = display.descriptorLine
   const connectionPathLabel =
@@ -46,22 +72,25 @@ export function MobileHostCard(props: {
       : null
   const discoveryHint =
     props.verdict.kind === 'unreachable' && !props.host.relay
-      ? 'Update desktop Orca and sign in to connect from anywhere'
+      ? t(
+          'components.hostCard.updateDesktopHint',
+          'Update desktop Orca and sign in to connect from anywhere'
+        )
       : null
   const credentialHint = credentialMissing
-    ? 'Tap to re-pair with your desktop'
+    ? t('components.hostCard.repairHint', 'Tap to re-pair with your desktop')
     : credentialUnavailable
-      ? 'Unlock your phone, then tap to retry'
+      ? t('components.hostCard.unlockHint', 'Unlock your phone, then tap to retry')
       : null
   // The verdict's own second line (what to check on the desktop); credential copy wins.
   const verdictDetail =
     credentialHint === null && 'detail' in props.verdict ? (props.verdict.detail ?? null) : null
   const accessibilityLabel = [
-    `Open ${display.title}`,
+    t('components.hostCard.openHost', 'Open {{title}}', { title: display.title }),
     descriptorText,
     statusLabel,
-    connectionPathLabel?.replace(' · ', ' via '),
-    connected ? worktreeSummary?.replace(' · ', ', ') : null,
+    connectionPathLabel ? mobileConnectionPathAccessibilityLabel(props.path) : null,
+    connected ? worktreeSummary.accessibility : null,
     discoveryHint,
     credentialHint,
     verdictDetail
@@ -107,9 +136,9 @@ export function MobileHostCard(props: {
               {connectionPathLabel ? ` · ${connectionPathLabel}` : ''}
             </Text>
           </View>
-          {connected && worktreeSummary ? (
+          {connected && worktreeSummary.visual ? (
             <Text style={styles.worktreeMetaText} numberOfLines={1}>
-              {worktreeSummary}
+              {worktreeSummary.visual}
             </Text>
           ) : null}
           {discoveryHint ? (
@@ -131,7 +160,9 @@ export function MobileHostCard(props: {
       </Pressable>
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel={`Actions for ${display.title}`}
+        accessibilityLabel={t('components.hostCard.hostActions', 'Actions for {{title}}', {
+          title: display.title
+        })}
         hitSlop={8}
         style={({ pressed }) => [styles.actionButton, pressed && styles.actionButtonPressed]}
         onPress={props.onOpenActions}
@@ -142,11 +173,11 @@ export function MobileHostCard(props: {
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   card: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: radii.card,
+    borderRadius: radii.surface,
     backgroundColor: colors.bgPanel,
     borderWidth: 1,
     borderColor: colors.borderSubtle,
@@ -164,7 +195,7 @@ const styles = StyleSheet.create({
   icon: {
     width: 46,
     height: 46,
-    borderRadius: 13,
+    borderRadius: radii.tile,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.bgRaised,
@@ -190,11 +221,11 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     marginHorizontal: spacing.xs,
-    borderRadius: radii.row,
+    borderRadius: radii.control,
     alignItems: 'center',
     justifyContent: 'center'
   },
   actionButtonPressed: {
     backgroundColor: colors.bgRaised
   }
-})
+}))

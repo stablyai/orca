@@ -1,8 +1,9 @@
 import { app } from 'electron'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
-import { sessionSearchScopeCatalogFromStore } from '../../ai-vault-search/session-search-store-scope-catalog'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import { registerAppHandlers } from '../app'
+import { registerWslMoveWiring } from '../wsl-move-driver-wiring'
+import { registerWslDriveProjectHandlers } from '../wsl-drive-project-handlers'
+import { installProjectRuntimeGitRouter } from '../../project-runtime-git-router'
 import { registerCliHandlers } from '../cli'
 import { registerPreflightHandlers } from '../preflight'
 import type { Store } from '../../persistence/loading-store/store'
@@ -31,7 +32,6 @@ import {
   registerRuntimeEnvironmentHandlers
 } from '../runtime-environments/runtime-environments'
 import { registerWslHostHandlers } from '../wsl-host-handlers'
-import { registerWslMoveHandlers } from '../wsl-move-handlers'
 import { registerEphemeralVmHandlers } from '../ephemeral-vm'
 import { registerAiVaultHandlers } from '../ai-vault'
 import { registerAiVaultSearchHandlers } from '../ai-vault-search'
@@ -53,6 +53,7 @@ import { registerSkillsHandlers } from '../skills'
 import { registerSkillDeleteIpcHandlers } from '../skill-delete/handlers'
 import { registerWorkspaceSpaceHandlers } from '../workspace-space'
 import { registerWorkspacePortHandlers } from '../workspace-ports'
+import { registerLinkPreviewHandlers } from '../link-preview'
 import { registerLocalhostWorktreeLabelHandlers } from '../localhost-worktree-labels'
 import { registerAutomationHandlers } from '../automations'
 import { registerKeybindingHandlers } from '../keybindings'
@@ -104,16 +105,14 @@ import {
   resolveRuntimeAiVaultSessionTitles,
   scanRuntimeAiVaultSessions
 } from '../../ai-vault/runtime-session-scanner'
-import {
-  callRuntimeSessionSearch,
-  bindRuntimeSessionSearch
-} from '../../ai-vault/runtime-session-search-call'
+import { callRuntimeSessionSearch } from '../../ai-vault/runtime-session-search-call'
 import { configureRuntimeAiVaultSessionDelete } from '../ai-vault-delete'
 import { ensureStructuredAgentSessionHostUnlessRefused } from '../../runtime/structured-agent-session-host-refusal'
 import { getAgentSessionAttachmentStore } from '../../native-chat/agent-session-attachments/agent-session-attachment-store-registry'
 import type { PluginService } from '../../plugins/plugin-service'
 import type { PluginMarketplaceHandlerServices } from '../plugin-marketplaces'
 import { settleWithinMs } from '../../quit-teardown-deadline'
+import { getRuntimeEnvironmentRegistryRoot } from '../runtime-environments/runtime-environment-registry-root'
 
 let registered = false
 // Same cap as the restart path's auth preservation: bookkeeping must not hold Restart on a stalled disk.
@@ -186,7 +185,7 @@ export function registerCoreHandlers(
     onBeforeRelaunchExit: () => closeNotificationDismissalsBeforeRelaunch(runtime)
   })
   registerCliHandlers()
-  registerPreflightHandlers()
+  registerPreflightHandlers(store)
   registerUsageProviderHandlers({ claudeUsage, codexUsage, openCodeUsage, museUsage })
   registerCodexAccountHandlers(codexAccounts, () => store.getSettings())
   registerAgentHookHandlers(runtime, { getPtyIdForPaneKey })
@@ -253,12 +252,9 @@ export function registerCoreHandlers(
   registerEmulatorVideoStreamHandlers()
   registerWorkspaceSpaceHandlers(store)
   registerWorkspacePortHandlers(store)
+  registerLinkPreviewHandlers()
   registerLocalhostWorktreeLabelHandlers(store)
-  if (commitMessageAgentEnv) {
-    registerFilesystemHandlers(store, commitMessageAgentEnv)
-  } else {
-    registerFilesystemHandlers(store)
-  }
+  registerFilesystemHandlers(store, commitMessageAgentEnv)
   registerFilesystemWatcherHandlers()
   registerRuntimeHandlers(runtime)
   registerRuntimeEnvironmentHandlers(store)
@@ -267,41 +263,41 @@ export function registerCoreHandlers(
     getUserDataPath: () => app.getPath('userData'),
     invalidateTransport: invalidateRuntimeEnvironmentTransport
   })
-  registerWslMoveHandlers(() => app.getPath('userData'))
+  registerWslMoveWiring(store, runtime)
+  registerWslDriveProjectHandlers(store, runtime)
+  installProjectRuntimeGitRouter(store)
   registerEphemeralVmHandlers(store, pluginService)
   // Session history and terminal resume are not chats; a refused host leaves nothing to check.
   const ensureStructuredSessionOwnership = () =>
     ensureStructuredAgentSessionHostUnlessRefused(() => runtime.ensureStructuredAgentSessionHost())
   registerAiVaultSearchHandlers({
     callRuntimeSearch: (environmentId, method, params) =>
-      callRuntimeSessionSearch(app.getPath('userData'), environmentId, method, params),
-    bindRuntimeSearch: (environmentId) =>
-      bindRuntimeSessionSearch(app.getPath('userData'), environmentId),
+      callRuntimeSessionSearch(getRuntimeEnvironmentRegistryRoot(), environmentId, method, params),
     ensureStructuredSessionOwnership
   })
   registerAiVaultHandlers({
     getUserDataPath: () => app.getPath('userData'),
     ensureStructuredSessionOwnership,
-    getProjectOwnershipCatalog: () =>
-      sessionSearchScopeCatalogFromStore(store, LOCAL_EXECUTION_HOST_ID),
     getAdditionalCodexHomePaths: lifecycleOptions.getAdditionalAiVaultCodexHomePaths,
     prepareSessionResume: lifecycleOptions.prepareAiVaultSessionResume,
     getActiveRuntimeAiVaultHostInfos: () =>
-      getSavedRuntimeAiVaultHostInfos(app.getPath('userData')),
+      getSavedRuntimeAiVaultHostInfos(getRuntimeEnvironmentRegistryRoot()),
     scanRuntimeAiVaultSessions: async (environmentId, args, options) =>
-      scanRuntimeAiVaultSessions(app.getPath('userData'), environmentId, args, options),
+      scanRuntimeAiVaultSessions(getRuntimeEnvironmentRegistryRoot(), environmentId, args, options),
     resolveRuntimeAiVaultSessionTitles: async (environmentId, args) =>
-      resolveRuntimeAiVaultSessionTitles(app.getPath('userData'), environmentId, args),
+      resolveRuntimeAiVaultSessionTitles(getRuntimeEnvironmentRegistryRoot(), environmentId, args),
     prepareRuntimeSessionResume: async (environmentId, args) =>
-      prepareRuntimeAiVaultSessionResume(app.getPath('userData'), environmentId, args)
+      prepareRuntimeAiVaultSessionResume(getRuntimeEnvironmentRegistryRoot(), environmentId, args)
   })
   configureRuntimeAiVaultSessionDelete((environmentId, args) =>
-    deleteRuntimeAiVaultSession(app.getPath('userData'), environmentId, args)
+    deleteRuntimeAiVaultSession(getRuntimeEnvironmentRegistryRoot(), environmentId, args)
   )
   registerNativeChatHandlers()
   registerClipboardHandlers(store, {
     localChatAttachmentStore: async () => {
-      await ensureStructuredSessionOwnership()
+      await ensureStructuredAgentSessionHostUnlessRefused(() =>
+        runtime.ensureStructuredAgentSessionHost()
+      )
       return getAgentSessionAttachmentStore()
     }
   })

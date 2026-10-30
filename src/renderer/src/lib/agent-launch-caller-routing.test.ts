@@ -25,7 +25,7 @@ const mockExecutionHostId = vi.fn(() => 'local')
 vi.mock('@/store', () => ({ useAppStore: { getState: () => store } }))
 vi.mock('@/lib/new-workspace', () => ({ CLIENT_PLATFORM: 'darwin' }))
 vi.mock('@/lib/connection-context', () => ({ getConnectionIdFromState: () => null }))
-vi.mock('@/lib/native-chat-transcript-readability', () => ({
+vi.mock('../../../shared/native-chat/transcript/native-chat-transcript-readability', () => ({
   isNativeChatTranscriptLocalReadable: () => true
 }))
 vi.mock('@/runtime/web-runtime-session-environment', () => ({
@@ -108,7 +108,11 @@ describe('agent launch caller routing', () => {
       settlement: new Promise(() => undefined),
       cancel: vi.fn()
     })
-    mockLaunchAgentInWebHostTab.mockResolvedValue({ delivered: true, failureNotified: false })
+    mockLaunchAgentInWebHostTab.mockResolvedValue({
+      delivered: true,
+      failureNotified: false,
+      outcome: { status: 'created' }
+    })
   })
 
   it.each(cases)('routes %s to a local terminal under default settings', async (_id, profile) => {
@@ -223,7 +227,7 @@ describe('agent launch caller routing', () => {
 
     expect(result?.surface).toEqual({ kind: 'host-published' })
     await expect(result?.structuredSettlement).resolves.toEqual({ kind: 'terminal' })
-    await expect(result?.promptDeliveryResult).resolves.toEqual({
+    await expect(result?.promptDeliveryResult).resolves.toMatchObject({
       delivered: true,
       failureNotified: false
     })

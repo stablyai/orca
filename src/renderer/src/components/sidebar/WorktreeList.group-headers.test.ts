@@ -58,6 +58,7 @@ function setProjectGroupWithoutWorktreeRowsState(
 
   mockStore.state = {
     ...makeFolderWorkspacePathStatusMockState(),
+    startupWorktreeRefreshCompleted: true,
     activeModal: '',
     activeView: 'terminal',
     activeWorktreeId: null,
@@ -82,8 +83,6 @@ function setProjectGroupWithoutWorktreeRowsState(
     reorderRepos: vi.fn(),
     reportVisibleGitHubPRRefreshCandidates: vi.fn(),
     retainedAgentsByPaneKey: {},
-    endpointProjects: [],
-    endpointProjectHostSetups: [],
     repos: [repo],
     runtimePaneTitlesByTabId: {},
     setFilterRepoIds: vi.fn(),

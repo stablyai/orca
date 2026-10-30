@@ -1,14 +1,27 @@
-import { Store } from '../persistence/loading-store/store'
+import { structuredLaunchSeedOptions } from '../../shared/native-chat/input/native-chat-session-option-defaults'
 import {
+  adoptClaudeStructuredSpawnOptions,
+  claudeStructuredSpawnOptions
+} from '../claude/claude-structured-spawn-options'
+import { applyClaudeMessageOptions } from '../claude/claude-structured-message-options'
+import { sessionFor } from '../claude/claude-structured-dispatch-test-support'
+import { fakeClaude } from '../claude/claude-structured-session-test-support'
+import { readAgentSessionExecutionOptions } from '../../shared/agent-session-execution-options'
+import { resolveAgentLaunchCommand } from '../../shared/tui-agent-launch-command'
+import { quoteStartupArg, tokenizeStartupCommand } from '../../shared/tui-agent-startup-shell'
+import type { GlobalSettings } from '../../shared/global-settings-types'
+import {
+  DEFAULT_TUI_AGENT_ARGS,
+  DEFAULT_TUI_AGENT_ENV,
   resolveTuiAgentLaunchArgs,
   resolveTuiAgentLaunchEnv
 } from '../../shared/tui-agent-launch-defaults'
 import { newChatPermissionModeForSettings } from '../../shared/agent-chat-permission-mode'
-import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import {
   deferred,
-  fixture
+  fixture,
+  withReopenedProfileStore
 } from '../persistence/loading-store/profile-state-delayed-authority-fixture'
 import { RuntimeClientSettingsController } from './runtime-client-settings'
 import { createCodexAtRestSkillCatalog } from '../codex/codex-at-rest-skills-probe'
@@ -29,6 +42,34 @@ vi.mock('../ssh/config/ssh-config-parser', () => ({
 vi.mock('../agent-hooks/managed-agent-hook-controls', () => ({
   applyAgentStatusHooksEnabled: hooks.apply
 }))
+
+const emptyLoadedArgs = Object.fromEntries(
+  Object.keys(DEFAULT_TUI_AGENT_ARGS).map((id) => [id, ''])
+)
+const emptyLoadedEnv = Object.fromEntries(Object.keys(DEFAULT_TUI_AGENT_ENV).map((id) => [id, {}]))
+
+function legacyLaunchEditor(
+  controller: RuntimeClientSettingsController,
+  target: 'arguments' | 'user-arguments' | 'whole-map',
+  wholeMapSettings: Partial<GlobalSettings> = {}
+) {
+  const publication = controller.getAgentLaunch()
+  const text =
+    target === 'user-arguments'
+      ? publication.agentPermission?.userArgs.claude
+      : publication.agentDefaultArgs.claude
+  if (!text) {
+    throw new Error('missing legacy publication')
+  }
+  const edit = (value: string) =>
+    target === 'whole-map'
+      ? controller.update({
+          ...wholeMapSettings,
+          agentDefaultArgs: { ...controller.get().agentDefaultArgs, claude: value }
+        })
+      : controller.mutateAgentLaunch({ type: target, agent: 'claude', value })
+  return { text, edit }
+}
 
 describe('durable execution-host launch settings', () => {
   it('maps an old dropdown without clearing agent choices, persists it and publishes typed precedence', async () => {
@@ -54,18 +95,12 @@ describe('durable execution-host launch settings', () => {
     await store.flushPendingOrThrowAsync()
     const saved = readState()
     expect(saved.settings.agentPermissionDefault).toBe('own')
-    const reloaded = new Store({
-      serializedState: JSON.stringify(saved),
-      dataFile: join(saved.settings.workspaceDir, 'legacy-permission-reload.json')
-    })
-    try {
+    await withReopenedProfileStore(saved, 'legacy-permission-reload.json', (reloaded) => {
       expect(new RuntimeClientSettingsController(reloaded).get().nativeChatPermissionMode).toBe(
         'ask'
       )
       expect(newChatPermissionModeForSettings('claude', reloaded.getSettings())).toBe('full-access')
-    } finally {
-      await reloaded.freezeWritesAsync()
-    }
+    })
   })
 
   it('persists host carrier edits and reloads the same terminal and new-chat intent', async () => {
@@ -93,11 +128,7 @@ describe('durable execution-host launch settings', () => {
     })
     await store.flushPendingOrThrowAsync()
     const saved = readState()
-    const reloaded = new Store({
-      serializedState: JSON.stringify(saved),
-      dataFile: join(saved.settings.workspaceDir, 'permission-reload.json')
-    })
-    try {
+    await withReopenedProfileStore(saved, 'permission-reload.json', (reloaded) => {
       const settings = reloaded.getSettings()
       expect(resolveTuiAgentLaunchArgs('claude', settings)).toBe(
         '--permission-mode auto --append-system-prompt --dangerously-skip-permissions'
@@ -111,9 +142,7 @@ describe('durable execution-host launch settings', () => {
         expect(newChatPermissionModeForSettings(agent, reloaded.getSettings())).toBe('ask')
         expect(resolveTuiAgentLaunchArgs(agent, reloaded.getSettings())).toBe('')
       }
-    } finally {
-      await reloaded.freezeWritesAsync()
-    }
+    })
   })
 
   it('replaces legacy maps, preserving absent carriers and clearing omitted user values', async () => {
@@ -130,7 +159,8 @@ describe('durable execution-host launch settings', () => {
     const controller = new RuntimeClientSettingsController(store)
     await controller.update({ agentDefaultArgs: { codex: '--model new' } })
     expect(store.getSettings()).toMatchObject({
-      agentDefaultArgs: { codex: '--model new' },
+      agentDefaultArgs: { codex: '' },
+      agentLaunchChoices: { codex: { model: 'new' } },
       agentDefaultEnv: {
         claude: { ANTHROPIC_BASE_URL: 'http://old-proxy' },
         goose: { KEEP: 'custom' }
@@ -140,7 +170,8 @@ describe('durable execution-host launch settings', () => {
     expect(store.getSettings().agentDefaultArgs).not.toHaveProperty('claude')
     await controller.update({ agentDefaultEnv: { goose: { GOOSE_MODE: 'auto', KEEP: 'new' } } })
     expect(store.getSettings().agentDefaultEnv).toEqual({ goose: { KEEP: 'new' } })
-    expect(store.getSettings().agentDefaultArgs).toEqual({ codex: '--model new' })
+    expect(store.getSettings().agentDefaultArgs).toEqual({ codex: '' })
+    expect(controller.get().agentDefaultArgs?.codex).toBe('-m new')
     expect(resolveTuiAgentLaunchEnv('goose', store.getSettings())).toEqual({
       GOOSE_MODE: 'auto',
       KEEP: 'new'
@@ -148,6 +179,7 @@ describe('durable execution-host launch settings', () => {
     await controller.update({ agentDefaultArgs: {}, agentDefaultEnv: {} })
     await store.flushPendingOrThrowAsync()
     const saved = readState().settings
+    expect(saved.agentLaunchChoices).toEqual({})
     expect(saved.agentDefaultArgs).toEqual({})
     expect(saved.agentDefaultEnv).toEqual({})
     expect(saved.agentPermissionOverrides).toMatchObject({
@@ -158,6 +190,14 @@ describe('durable execution-host launch settings', () => {
     expect(controller.get().agentDefaultArgs?.claude).toBe('')
     expect(controller.get().agentDefaultEnv?.goose).toEqual({})
     expect(newChatPermissionModeForSettings('opencode', store.getSettings())).toBe('ask')
+    await withReopenedProfileStore(readState(), 'cleared-launch-records.json', (reloaded) => {
+      expect(reloaded.getSettings().agentLaunchChoices).toEqual({})
+      expect(reloaded.getSettings().agentDefaultArgs).toEqual(emptyLoadedArgs)
+      expect(reloaded.getSettings().agentDefaultEnv).toEqual(emptyLoadedEnv)
+      const published = new RuntimeClientSettingsController(reloaded).get()
+      expect(published.agentDefaultArgs?.codex).toBe('')
+      expect(published.agentDefaultEnv?.goose).toEqual({})
+    })
   })
 
   it('withdraws cached plugin skills when saved launch arguments disable plugins', async () => {
@@ -167,8 +207,8 @@ describe('durable execution-host launch settings', () => {
     const calls: CodexAppServerInvocation[] = []
     const obsolete = deferred<void>()
     const catalog = createCodexAtRestSkillCatalog({
-      resolveWorkspacePath: async () => '/fixture/work',
-      resolveCommand: () => '/fixture/codex',
+      resolveWorkspacePath: async () => process.cwd(),
+      resolveCommand: () => ({ command: '/fixture/codex', prefixArgs: [] }),
       resolveLaunchArgs: () => structuredAgentConfiguredArgs('codex', store.getSettings()),
       resolveEnvironment: async () => ({ PATH: '/fixture/bin' }),
       sleep: async () => {},
@@ -340,30 +380,35 @@ describe('durable execution-host launch settings', () => {
     })
   })
 
-  it('rejects a failed disk write, rolls back its settings, and allows an explicit retry', async () => {
+  it('rolls back a failed coupled launch choice and persists an explicit retry', async () => {
     const { store, authority, readState } = await fixture()
     const controller = new RuntimeClientSettingsController(store)
-    const before = store.getSettings().agentDefaultArgs?.claude
+    const before = store.getSettings()
+    const mutation = {
+      type: 'launch-choices',
+      agent: 'claude',
+      patch: { model: 'sonnet', options: { effort: 'high' }, permissionMode: 'ask' },
+      userArgs: '--model sonnet --effort high --verbose'
+    } as const
     authority.failNextWrite()
     try {
-      await expect(
-        controller.mutateAgentLaunch({
-          type: 'arguments',
-          agent: 'claude',
-          value: '--retry-marker'
-        })
-      ).rejects.toThrow('profile_state_write_failed')
+      await expect(controller.mutateAgentLaunch(mutation)).rejects.toThrow(
+        'profile_state_write_failed'
+      )
     } finally {
       await store.flushPendingOrThrowAsync().catch(() => {})
     }
-    expect(store.getSettings().agentDefaultArgs?.claude).toBe(before)
-    expect(readState().settings.agentDefaultArgs.claude).toBe(before)
-    await controller.mutateAgentLaunch({
-      type: 'arguments',
-      agent: 'claude',
-      value: '--retry-marker'
+    for (const settings of [store.getSettings(), readState().settings]) {
+      expect(settings.agentDefaultArgs?.claude).toBe(before.agentDefaultArgs?.claude)
+      expect(settings.agentLaunchChoices).toEqual(before.agentLaunchChoices)
+      expect(settings.agentPermissionOverrides).toEqual(before.agentPermissionOverrides)
+    }
+    await controller.mutateAgentLaunch(mutation)
+    expect(readState().settings).toMatchObject({
+      agentDefaultArgs: { claude: '--verbose' },
+      agentLaunchChoices: { claude: { model: 'sonnet', options: { effort: 'high' } } }
     })
-    expect(readState().settings.agentDefaultArgs.claude).toBe('--retry-marker')
+    expect(newChatPermissionModeForSettings('claude', store.getSettings())).toBe('ask')
   })
 
   it('rolls back the new-chat default with a failed permission preset', async () => {
@@ -522,3 +567,251 @@ describe('durable execution-host launch settings', () => {
 vi.mock('../claude/agent-view-service', () => ({
   getClaudeAgentViewService: () => ({ reconcile: async () => {} })
 }))
+
+it('conserves the canonical tuple through durable legacy edit, reopen, terminal/native consumption and removal', async () => {
+  for (const target of ['arguments', 'user-arguments', 'whole-map'] as const) {
+    const { store, readState } = await fixture()
+    store.updateSettings({
+      agentPermissionDefault: 'own',
+      agentDefaultArgs: { claude: '--verbose', codex: '--search' },
+      agentDefaultEnv: { claude: { KEEP: 'owner' } },
+      agentLaunchChoices: { claude: { model: String.raw`org\model`, options: { effort: 'high' } } },
+      nativeChatSessionOptions: {
+        claude: { model: 'sonnet', valuesByModel: { sonnet: { effort: 'low' } } }
+      }
+    })
+    const controller = new RuntimeClientSettingsController(store)
+    const { text, edit } = legacyLaunchEditor(controller, target)
+    await edit(`${text} --debug`)
+    await store.flushPendingOrThrowAsync()
+    const saved = readState()
+    await withReopenedProfileStore(saved, `canonical-${target}.json`, async (reloaded) => {
+      const settings = reloaded.getSettings()
+      expect(settings.agentLaunchChoices?.claude).toEqual({
+        model: String.raw`org\model`,
+        options: { effort: 'high' }
+      })
+      expect(settings.agentDefaultArgs?.claude).toBe('--verbose --debug')
+      expect(settings.agentDefaultArgs?.codex).toBe('--search')
+      expect(settings.agentDefaultEnv?.claude).toEqual({ KEEP: 'owner' })
+      const seed = structuredLaunchSeedOptions(settings, 'claude')
+      expect(seed).toMatchObject({ model: String.raw`org\model`, effort: 'high' })
+      const native = claudeStructuredSpawnOptions({
+        launch: {
+          options: { extraArgs: { model: 'configured-raw', 'add-dir': 'docs' } },
+          resumesTranscript: false
+        },
+        saved: seed,
+        effortFlag: 'supported',
+        flagSettingsControl: 'supported'
+      })
+      expect(native.sdkOptions.model).toBe(String.raw`org\model`)
+      expect(native.sdkOptions.effort).toBe('high')
+      expect(native.sdkOptions.extraArgs).toEqual({ 'add-dir': 'docs' })
+      const terminal = resolveAgentLaunchCommand({
+        agent: 'claude',
+        cmdOverrides: {},
+        platform: 'darwin',
+        shell: 'posix',
+        agentArgs: settings.agentDefaultArgs?.claude,
+        sessionOptions: seed
+      })
+      if (!terminal.ok) {
+        throw new Error(terminal.error)
+      }
+      expect(tokenizeStartupCommand(terminal.command, 'posix')).toMatchObject({
+        ok: true,
+        tokens: [
+          'claude',
+          '--model',
+          String.raw`org\model`,
+          '--effort',
+          'high',
+          '--verbose',
+          '--debug'
+        ]
+      })
+      await edit('--verbose --debug')
+      expect(store.getSettings().agentLaunchChoices?.claude).toBeUndefined()
+      expect(structuredLaunchSeedOptions(store.getSettings(), 'claude')).toMatchObject({
+        model: 'sonnet',
+        effort: 'low'
+      })
+    })
+  }
+})
+
+it('persists compound publication ownership through both DTOs and whole-map edits to terminal and native controls', async () => {
+  const originalPlatform = process.platform
+  for (const target of ['arguments', 'user-arguments', 'whole-map'] as const) {
+    const { store, authority, readState } = await fixture()
+    const expected = {
+      agentPermissionDefault: 'own' as const,
+      agentPermissionOverrides: { goose: 'full-access' as const },
+      agentDefaultArgs: {
+        ...emptyLoadedArgs,
+        claude: `--settings ${quoteStartupArg('{"theme":"light"}', 'cmd')} --add-dir docs`,
+        codex: '--search'
+      },
+      agentDefaultEnv: {
+        claude: { KEEP: 'owner' },
+        codex: { OTHER: 'sibling' },
+        goose: { KEEP: 'permission-owner' }
+      },
+      agentLaunchChoices: {
+        claude: { model: 'sonnet', options: { fastMode: 'true' } },
+        codex: { model: 'gpt-5.6-sol' }
+      },
+      nativeChatSessionOptions: {
+        claude: { model: 'sonnet', valuesByModel: { sonnet: { fastMode: false } } }
+      }
+    }
+    const expectTuple = (settings: GlobalSettings) => {
+      expect(settings.agentLaunchChoices).toEqual(expected.agentLaunchChoices)
+      expect(settings.agentDefaultArgs).toEqual(expected.agentDefaultArgs)
+      expect(settings.agentDefaultEnv).toEqual(expected.agentDefaultEnv)
+      expect(settings.agentPermissionDefault).toBe(expected.agentPermissionDefault)
+      expect(settings.agentPermissionOverrides).toEqual(expected.agentPermissionOverrides)
+      expect(settings.nativeChatSessionOptions).toEqual(expected.nativeChatSessionOptions)
+    }
+    store.updateSettings({ ...expected, terminalWindowsShell: 'cmd.exe' })
+    await store.flushPendingOrThrowAsync()
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+    try {
+      const controller = new RuntimeClientSettingsController(store)
+      const { text, edit } = legacyLaunchEditor(controller, target, {
+        machineName: 'accepted-generic-setting'
+      })
+      const before = store.getSettings()
+      if (target === 'whole-map') {
+        const published = controller.get()
+        expect(published.agentDefaultEnv?.goose).toEqual({
+          GOOSE_MODE: 'auto',
+          KEEP: 'permission-owner'
+        })
+        const response = await controller.update({
+          agentDefaultArgs: published.agentDefaultArgs,
+          agentDefaultEnv: published.agentDefaultEnv
+        })
+        expectTuple(store.getSettings())
+        expect(response.agentDefaultArgs).toEqual(published.agentDefaultArgs)
+        expect(response.agentDefaultEnv).toEqual(published.agentDefaultEnv)
+        await store.flushPendingOrThrowAsync()
+        const unchanged = readState()
+        expectTuple(unchanged.settings)
+        await withReopenedProfileStore(
+          unchanged,
+          'unchanged-compound-publication.json',
+          (unchangedReload) => {
+            expectTuple(unchangedReload.getSettings())
+            const reopened = new RuntimeClientSettingsController(unchangedReload).get()
+            expect(reopened.agentDefaultArgs).toEqual(published.agentDefaultArgs)
+            expect(reopened.agentDefaultEnv).toEqual(published.agentDefaultEnv)
+          }
+        )
+      } else {
+        await edit(text)
+      }
+      expectTuple(store.getSettings())
+      authority.failNextWrite()
+      const gate = authority.pause()
+      const failed = controller.mutateAgentLaunch({
+        type: 'arguments',
+        agent: 'claude',
+        value: '--model sonnet --debug'
+      })
+      const refused = expect(failed).rejects.toThrow('profile_state_write_failed')
+      const accepted = edit(`${text} --debug`)
+      try {
+        await gate.started.promise
+      } finally {
+        gate.finish.resolve()
+      }
+      await refused
+      await accepted
+      await store.flushPendingOrThrowAsync()
+      const saved = readState()
+      expect(saved.settings.agentLaunchChoices).toEqual(before.agentLaunchChoices)
+      await withReopenedProfileStore(saved, `compound-${target}.json`, async (reloaded) => {
+        const settings = reloaded.getSettings()
+        if (target === 'whole-map') {
+          expect(saved.settings.machineName).toBe('accepted-generic-setting')
+          expect(settings.machineName).toBe('accepted-generic-setting')
+        }
+        expect(settings.agentLaunchChoices).toEqual(before.agentLaunchChoices)
+        expect(settings.agentDefaultEnv).toEqual(before.agentDefaultEnv)
+        expect(settings.agentDefaultArgs?.codex).toBe('--search')
+        expect(
+          tokenizeStartupCommand(settings.agentDefaultArgs?.claude ?? '', 'cmd')
+        ).toMatchObject({
+          ok: true,
+          tokens: ['--settings', '{"theme":"light"}', '--add-dir', 'docs', '--debug']
+        })
+        const seed = structuredLaunchSeedOptions(settings, 'claude')
+        expect(seed).toMatchObject({ model: 'sonnet', fastMode: 'true', permissionMode: 'own' })
+        const terminal = tokenizeStartupCommand(
+          resolveTuiAgentLaunchArgs('claude', settings, undefined, 'cmd'),
+          'cmd'
+        )
+        expect(terminal).toMatchObject({
+          ok: true,
+          tokens: [
+            '--model',
+            'sonnet',
+            '--settings',
+            '{"theme":"light","fastMode":true}',
+            '--add-dir',
+            'docs',
+            '--debug'
+          ]
+        })
+        const spawn = claudeStructuredSpawnOptions({
+          launch: {
+            options: {
+              extraArgs: { settings: '{"theme":"light"}', 'add-dir': 'docs', debug: null }
+            },
+            resumesTranscript: false
+          },
+          saved: seed,
+          effortFlag: 'supported',
+          flagSettingsControl: 'supported'
+        })
+        expect(spawn.sdkOptions.model).toBe('sonnet')
+        expect(spawn.sdkOptions.extraArgs).toEqual({
+          settings: '{"theme":"light"}',
+          'add-dir': 'docs',
+          debug: null
+        })
+        expect(spawn.fastModeAtStart).toBe(true)
+        const fake = fakeClaude({ settings: null })
+        const connection = await fake.openConnection({
+          pathToClaudeCodeExecutable: 'inert-claude',
+          cwd: settings.workspaceDir,
+          options: spawn.sdkOptions
+        })
+        const session = sessionFor()
+        session.connection = connection
+        session.options = spawn.options
+        adoptClaudeStructuredSpawnOptions(session, { ...spawn, flagSettingsControl: 'supported' })
+        const messageOptions = readAgentSessionExecutionOptions(seed)
+        if (!messageOptions) {
+          throw new Error('missing message choices')
+        }
+        await applyClaudeMessageOptions(session, messageOptions, undefined)
+        expect(
+          fake.connections[0].calls.filter((call) => call.subtype === 'apply_flag_settings')
+        ).toEqual([{ subtype: 'apply_flag_settings', params: { settings: { fastMode: true } } }])
+        expect(session.appliedInputOptions.get('fastMode')).toBe('true')
+        await connection.close()
+        await edit(
+          `--model sonnet --settings ${quoteStartupArg('{"theme":"dark"}', 'cmd')} --add-dir docs --debug`
+        )
+        expect(store.getSettings().agentLaunchChoices?.claude).toEqual({ model: 'sonnet' })
+        expect(structuredLaunchSeedOptions(store.getSettings(), 'claude')?.fastMode).toBe('false')
+        expect(store.getSettings().agentDefaultEnv).toEqual(before.agentDefaultEnv)
+      })
+    } finally {
+      Object.defineProperty(process, 'platform', { configurable: true, value: originalPlatform })
+    }
+  }
+})

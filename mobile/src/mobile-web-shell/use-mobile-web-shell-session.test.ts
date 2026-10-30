@@ -523,7 +523,7 @@ describe('the wait for the page to speak', () => {
     })
     expect(
       live(mounted.timers.armed).filter((timer) => timer.delayMs === DOCUMENT_LOAD_DEADLINE_MS)
-    ).toHaveLength(2)
+    ).toHaveLength(1)
     await act(async () => {
       mounted.timers.fire()
     })

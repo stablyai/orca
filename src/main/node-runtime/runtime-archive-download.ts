@@ -65,11 +65,19 @@ export async function downloadVerifiedArchive(
   signal?: AbortSignal,
   retryDelaysMs: readonly number[] = RUNTIME_ARCHIVE_RETRY_DELAYS_MS,
   /** Restart from zero on each attempt. */
-  onBytes?: (bytes: number) => void
+  onBytes?: (bytes: number) => void,
+  connectTimeoutMs?: number
 ): Promise<void> {
   for (let attempt = 0; ; attempt += 1) {
     try {
-      await downloadVerifiedArchiveOnce(archive, destination, fetcher, signal, onBytes)
+      await downloadVerifiedArchiveOnce(
+        archive,
+        destination,
+        fetcher,
+        signal,
+        onBytes,
+        connectTimeoutMs
+      )
       return
     } catch (error) {
       const delay = retryDelaysMs[attempt]
@@ -92,7 +100,8 @@ async function downloadVerifiedArchiveOnce(
   destination: string,
   fetcher: MainHttpClient['fetch'],
   signal?: AbortSignal,
-  onBytes?: (bytes: number) => void
+  onBytes?: (bytes: number) => void,
+  connectTimeoutMs?: number
 ): Promise<void> {
   const { label, url, archiveSha256: expectedSha256 } = archive
   const maxBytes = archive.maxArchiveBytes ?? MAX_RUNTIME_ARCHIVE_BYTES
@@ -102,13 +111,22 @@ async function downloadVerifiedArchiveOnce(
     retryable: true
   })
   const stallTimer = setTimeout(() => stall.abort(stalled), 120_000)
+  // A dropped connection never answers; retrying it would only repeat the wait.
+  const unanswered: HttpStatusError = Object.assign(
+    new Error(`${label} download got no response within ${(connectTimeoutMs ?? 0) / 1000} s`),
+    { retryable: false }
+  )
+  const connectTimer =
+    connectTimeoutMs === undefined
+      ? undefined
+      : setTimeout(() => stall.abort(unanswered), connectTimeoutMs)
   try {
     // Verified files own the cache; no-store lets Remove free space and retries refetch.
     const response = await fetcher(url, {
       redirect: 'follow',
       cache: 'no-store',
       signal: downloadSignal
-    })
+    }).finally(() => clearTimeout(connectTimer))
     if (!response.ok || !response.body) {
       await response.body?.cancel().catch(() => undefined)
       const text = `${label} download failed: ${response.status} ${response.statusText}`
@@ -162,8 +180,8 @@ async function downloadVerifiedArchiveOnce(
       )
     }
   } catch (error) {
-    // Normalize fetch’s own AbortError back to our stall reason unless the caller canceled.
-    const downloadError = stall.signal.aborted && !signal?.aborted ? stalled : error
+    // Normalize fetch’s own AbortError back to our reason (stalled or unanswered) unless the caller canceled.
+    const downloadError = stall.signal.aborted && !signal?.aborted ? stall.signal.reason : error
     stall.abort()
     throw downloadError
   } finally {

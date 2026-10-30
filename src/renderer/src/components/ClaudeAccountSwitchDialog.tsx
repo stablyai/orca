@@ -128,9 +128,9 @@ function SwitchPromptDialog({ prompt }: { prompt: ClaudeAccountSwitchPrompt }): 
             {chosen.length <= 1
               ? translate('accounts.claude.switchSessions.restartOne', 'Restart session')
               : translate(
-                  'accounts.claude.switchSessions.restartOther',
+                  'accounts.claude.switchSessions.restartCount',
                   'Restart {{count}} sessions',
-                  { count: chosen.length }
+                  { count: chosen.length, defaultValue_one: 'Restart {{count}} session' }
                 )}
           </Button>
         </DialogFooter>
@@ -144,28 +144,21 @@ function promptDescription(prompt: ClaudeAccountSwitchPrompt): string {
   const next = prompt.nextAccountLabel
   if (prompt.review) {
     const count = elsewhere.length + cantMove.length
-    return count === 1
-      ? translate(
-          'accounts.claude.switchSessions.reviewBodyOne',
-          "1 other Claude session wasn't moved to {{next}}.",
-          { next }
-        )
-      : translate(
-          'accounts.claude.switchSessions.reviewBodyOther',
-          "{{count}} other Claude sessions weren't moved to {{next}}.",
-          { count, next }
-        )
+    return translate(
+      'accounts.claude.switchSessions.reviewBody',
+      "{{count}} other Claude sessions weren't moved to {{next}}.",
+      { count, next, defaultValue_one: "{{count}} other Claude session wasn't moved to {{next}}." }
+    )
   }
-  const accounts = { count: onAccount.length, previous: prompt.previousAccountLabel, next }
-  return onAccount.length === 1
-    ? translate(
-        'accounts.claude.switchSessions.bodyOne',
-        '1 Claude session is still running on {{previous}}. Restarting continues the conversation on {{next}}. Busy sessions wait for idle before restarting.',
-        accounts
-      )
-    : translate(
-        'accounts.claude.switchSessions.bodyOther',
-        '{{count}} Claude sessions are still running on {{previous}}. Restarting continues each conversation on {{next}}. Busy sessions wait for idle before restarting.',
-        accounts
-      )
+  return translate(
+    'accounts.claude.switchSessions.body',
+    '{{count}} Claude sessions are still running on {{previous}}. Restarting continues each conversation on {{next}}. Busy sessions wait for idle before restarting.',
+    {
+      count: onAccount.length,
+      previous: prompt.previousAccountLabel,
+      next,
+      defaultValue_one:
+        '{{count}} Claude session is still running on {{previous}}. Restarting continues the conversation on {{next}}. Busy sessions wait for idle before restarting.'
+    }
+  )
 }

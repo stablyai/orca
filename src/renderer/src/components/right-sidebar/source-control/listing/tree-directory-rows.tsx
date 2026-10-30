@@ -2,7 +2,7 @@ import React from 'react'
 import { ChevronDown, Folder, FolderOpen, Minus, Plus, Trash, Undo2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
-import type { DiscardAllArea } from '../commit/discard-all-sequence'
+import type { DiscardAllArea } from '../../../../../../shared/source-control-discard-all-sequence'
 import type {
   BranchSourceControlTreeDirectoryNode,
   SourceControlDirectoryActionPaths,

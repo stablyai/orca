@@ -533,6 +533,15 @@ describe('settings_changed schema', () => {
     ).toBe(true)
   })
 
+  it('accepts the browser extensions switch as a boolean adoption signal', () => {
+    expect(
+      eventSchemas.settings_changed.safeParse({
+        setting_key: 'experimentalBrowserExtensions',
+        value_kind: 'bool'
+      }).success
+    ).toBe(true)
+  })
+
   it.each(['experimentalStructuredNativeChat', 'openAgentTabsInChatByDefault'])(
     'rejects the retired %s key',
     (settingKey) => {

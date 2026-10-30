@@ -1,12 +1,17 @@
 import {
   createNativeChatFileHref,
   routeNativeChatHref
-} from '../../../../shared/native-chat-href-routing'
+} from '../../../../shared/native-chat/native-chat-href-routing'
 import {
   formatFileLinkLocation,
   parseFileLinkLocation
 } from '../../../../shared/file-link-location'
-import { extractTerminalFileLinks, type ParsedTerminalFileLink } from '@/lib/terminal-links'
+import {
+  extractTerminalFileLinkReadings,
+  extractTerminalFileLinks,
+  type ParsedTerminalFileLink
+} from '../../../../shared/terminal-links'
+import { ROOTED_PATH_START_PATTERN } from '../../../../shared/terminal-file-link-detection-ranges'
 import { preferLongestNonOverlappingMatches } from '@/lib/longest-non-overlapping-matches'
 
 type MarkdownNode = {
@@ -16,13 +21,11 @@ type MarkdownNode = {
   children?: MarkdownNode[]
 }
 
-const ROOTED_PATH_PREFIX_PATTERN = /^(?:~[\\/]|\.{1,2}[\\/]|[\\/]|[A-Za-z]:[\\/])/
-
 /** Whether a detected path names a file on the chat's host; the terminal's own check. */
 export type FileLinkExists = (link: ParsedTerminalFileLink) => boolean
 
 function looksLikeFilePath(link: ParsedTerminalFileLink, isProse: boolean): boolean {
-  const hasRootedPrefix = ROOTED_PATH_PREFIX_PATTERN.test(link.pathText)
+  const hasRootedPrefix = ROOTED_PATH_START_PATTERN.test(link.pathText)
   const hasLineSuffix = link.line !== null || link.column !== null
   const hasAlphabeticExtension = /\.[\p{L}][\p{L}\p{N}\p{M}_+-]*$/u.test(link.pathText)
   const hasPathExtension = /\.[\p{L}\p{N}][\p{L}\p{N}\p{M}_+-]*$/u.test(link.pathText)
@@ -107,54 +110,12 @@ function createFileLinkNode(link: ParsedTerminalFileLink, child: MarkdownNode): 
   }
 }
 
-function isTrailingPunctuation(token: string, endIndex: number): boolean {
-  return isSafeTrailingBoundary(token, endIndex) && /^\p{P}+$/u.test(token.slice(endIndex))
-}
-
-/** `endsSentence`: a token may end in sentence punctuation, which stays outside the link. */
-function linkableTokens(
-  link: ParsedTerminalFileLink,
-  endsSentence: boolean
-): ParsedTerminalFileLink[] {
-  const tokenLinks: ParsedTerminalFileLink[] = []
-  for (const match of link.displayText.matchAll(/\S+/g)) {
-    const token = match[0]
-    const exactLink = extractTerminalFileLinks(token).find(
-      (candidate) =>
-        candidate.startIndex === 0 &&
-        (candidate.endIndex === token.length ||
-          (endsSentence && isTrailingPunctuation(token, candidate.endIndex)))
-    )
-    if (exactLink && isLinkifiableFile(exactLink, true)) {
-      const startIndex = link.startIndex + (match.index ?? 0)
-      tokenLinks.push({ ...exactLink, startIndex, endIndex: startIndex + exactLink.endIndex })
-    }
-  }
-  return tokenLinks
-}
-
-// Prose can join paths into one extracted span; split path-like tokens while letting longer real spaced paths win existence checks.
-function splitProseJoinedLinks(link: ParsedTerminalFileLink): ParsedTerminalFileLink[] {
-  if (!/\s/.test(link.displayText)) {
-    return [link]
-  }
-  if (ROOTED_PATH_PREFIX_PATTERN.test(link.pathText)) {
-    return [link, ...linkableTokens(link, true)]
-  }
-  // Preserve unrooted token punctuation to avoid linking cases the extractor intentionally leaves plain.
-  const tokenLinks = linkableTokens(link, false)
-  const hasBareWord = Array.from(link.displayText.matchAll(/\S+/g)).some(
-    (match) => !/[\\/.]/.test(match[0])
-  )
-  return hasBareWord || tokenLinks.length > 1 ? tokenLinks : [link]
-}
-
 function splitTextSegment(value: string, exists: FileLinkExists): MarkdownNode[] {
+  const { links: textLinks, guesses } = extractTerminalFileLinkReadings(value)
   const links = selectExistingLinks(
-    extractTerminalFileLinks(value)
+    [...textLinks, ...guesses]
       .filter((link) => !hasPartialPathBoundary(value, link))
-      .filter((link) => isLinkifiableFile(link, true))
-      .flatMap(splitProseJoinedLinks),
+      .filter((link) => isLinkifiableFile(link, true)),
     exists
   )
   if (links.length === 0) {
@@ -210,7 +171,7 @@ function exactFileLink(value: string, exists: FileLinkExists): ParsedTerminalFil
     return null
   }
   const looksLikePath =
-    ROOTED_PATH_PREFIX_PATTERN.test(parsed.pathText) ||
+    ROOTED_PATH_START_PATTERN.test(parsed.pathText) ||
     /[\\/]/.test(parsed.pathText) ||
     /\.[\p{L}][\p{L}\p{N}\p{M}_+-]*$/u.test(parsed.pathText)
   if (!looksLikePath) {

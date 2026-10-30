@@ -15,7 +15,8 @@ import { ORCAD_MIGRATION_BLOB_CHANNEL_RUNTIME_CAPABILITY } from '../orcad-runtim
 export const ORCAD_MIGRATION_BLOB_KINDS = [
   'terminal-restore-hints',
   'shell-history',
-  'agent-session-records'
+  'agent-session-records',
+  'terminal-history'
 ] as const
 
 export type OrcadMigrationBlobKind = (typeof ORCAD_MIGRATION_BLOB_KINDS)[number]
@@ -50,6 +51,12 @@ export const ORCAD_MIGRATION_BLOB_KIND_CONTRACTS: Record<
     key: /^[a-z0-9][a-z0-9_-]{0,127}$/,
     maxBytes: 64 * MIB,
     capability: 'orcad.migration-blob.agent-session-records.v1'
+  },
+  // 16 hex of the pane key's sha256; the session id it restores as travels inside.
+  'terminal-history': {
+    key: /^[a-f0-9]{16}$/,
+    maxBytes: 16 * MIB,
+    capability: 'orcad.migration-blob.terminal-history.v1'
   }
 }
 
@@ -254,14 +261,16 @@ export function parseOrcadMigrationBlobChunkResult(
 /** Kinds this build's destination installs after commit; each is added with its installer. */
 export const ORCAD_MIGRATION_INSTALLABLE_BLOB_KINDS: readonly OrcadMigrationBlobKind[] = [
   'terminal-restore-hints',
-  'shell-history'
+  'shell-history',
+  'terminal-history'
 ]
 
-export function advertisedOrcadMigrationBlobCapabilities(): string[] {
+/** Moved panes' terminal history installs only on a WSL host, the one destination a WSL move has. */
+export function advertisedOrcadMigrationBlobCapabilities(host: { wslHost: boolean }): string[] {
   return [
     ORCAD_MIGRATION_BLOB_CHANNEL_RUNTIME_CAPABILITY,
-    ...ORCAD_MIGRATION_INSTALLABLE_BLOB_KINDS.map(
-      (kind) => ORCAD_MIGRATION_BLOB_KIND_CONTRACTS[kind].capability
-    )
+    ...ORCAD_MIGRATION_INSTALLABLE_BLOB_KINDS.filter(
+      (kind) => kind !== 'terminal-history' || host.wslHost
+    ).map((kind) => ORCAD_MIGRATION_BLOB_KIND_CONTRACTS[kind].capability)
   ]
 }

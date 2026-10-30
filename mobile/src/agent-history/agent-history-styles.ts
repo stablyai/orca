@@ -1,7 +1,7 @@
-import { StyleSheet } from 'react-native'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
 
-export const styles = StyleSheet.create({
+export const styles = themedStyleSheet(() => ({
   container: {
     flex: 1,
     backgroundColor: colors.bgBase
@@ -19,7 +19,7 @@ export const styles = StyleSheet.create({
   },
   backButton: {
     padding: spacing.xs,
-    borderRadius: radii.button
+    borderRadius: radii.control
   },
   backButtonPressed: {
     backgroundColor: colors.bgRaised
@@ -39,7 +39,7 @@ export const styles = StyleSheet.create({
   },
   refreshButton: {
     padding: spacing.xs,
-    borderRadius: radii.button
+    borderRadius: radii.control
   },
   refreshButtonPressed: {
     backgroundColor: colors.bgRaised
@@ -54,7 +54,7 @@ export const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     paddingVertical: spacing.sm,
-    borderRadius: radii.button,
+    borderRadius: radii.control,
     backgroundColor: colors.bgPanel
   },
   scopeTabActive: {
@@ -71,14 +71,6 @@ export const styles = StyleSheet.create({
   searchRow: {
     paddingHorizontal: spacing.md,
     paddingTop: spacing.sm
-  },
-  searchInput: {
-    backgroundColor: colors.bgPanel,
-    borderRadius: radii.input,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    color: colors.textPrimary,
-    fontSize: typography.bodySize
   },
   list: {
     paddingHorizontal: spacing.md,
@@ -103,7 +95,7 @@ export const styles = StyleSheet.create({
   },
   card: {
     backgroundColor: colors.bgPanel,
-    borderRadius: radii.card,
+    borderRadius: radii.surface,
     padding: spacing.md,
     marginBottom: spacing.sm
   },
@@ -143,7 +135,7 @@ export const styles = StyleSheet.create({
   },
   currentBadge: {
     backgroundColor: colors.bgRaised,
-    borderRadius: radii.button,
+    borderRadius: radii.pill,
     paddingHorizontal: spacing.sm,
     paddingVertical: 2
   },
@@ -160,7 +152,7 @@ export const styles = StyleSheet.create({
     marginLeft: 'auto',
     paddingHorizontal: spacing.xs,
     paddingVertical: spacing.xs,
-    borderRadius: radii.button
+    borderRadius: radii.control
   },
   resumeButtonPressed: {
     opacity: 0.78
@@ -192,7 +184,7 @@ export const styles = StyleSheet.create({
     marginHorizontal: spacing.md,
     marginTop: spacing.sm,
     padding: spacing.sm,
-    borderRadius: radii.input,
+    borderRadius: radii.surface,
     backgroundColor: colors.bgPanel
   },
   noticeText: {
@@ -203,7 +195,7 @@ export const styles = StyleSheet.create({
     marginHorizontal: spacing.md,
     marginTop: spacing.sm,
     padding: spacing.sm,
-    borderRadius: radii.input,
+    borderRadius: radii.surface,
     backgroundColor: colors.bgPanel
   },
   resumeBannerText: {
@@ -231,7 +223,7 @@ export const styles = StyleSheet.create({
     marginTop: spacing.sm,
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.sm,
-    borderRadius: radii.button,
+    borderRadius: radii.control,
     backgroundColor: colors.bgRaised
   },
   retryText: {
@@ -239,4 +231,4 @@ export const styles = StyleSheet.create({
     fontSize: typography.bodySize,
     fontWeight: '600'
   }
-})
+}))

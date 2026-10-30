@@ -23,4 +23,5 @@ export type OrcadHostTransport = RemoteInstallTransport & {
 /** The slot being launched; entries only its own build understands must check the version. */
 export type OrcadLaunchEnvRequest = { readonly fullVersion: string }
 
-export type OrcadLaunchEnvEntry = readonly [name: string, value: string]
+/** `keep-existing` applies the value only when the launching shell has none, so a user's own setting wins. */
+export type OrcadLaunchEnvEntry = readonly [name: string, value: string, mode?: 'keep-existing']

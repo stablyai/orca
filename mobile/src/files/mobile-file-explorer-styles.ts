@@ -1,7 +1,8 @@
 import { StyleSheet } from 'react-native'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
 
-export const fileExplorerStyles = StyleSheet.create({
+export const fileExplorerStyles = themedStyleSheet(() => ({
   container: {
     flex: 1,
     backgroundColor: colors.bgBase
@@ -23,7 +24,7 @@ export const fileExplorerStyles = StyleSheet.create({
     height: 36,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: radii.button
+    borderRadius: radii.control
   },
   backButtonPressed: {
     backgroundColor: colors.bgRaised
@@ -99,7 +100,7 @@ export const fileExplorerStyles = StyleSheet.create({
     minHeight: 28,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: radii.button,
+    borderRadius: radii.control,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.borderSubtle,
     paddingHorizontal: spacing.md
@@ -120,4 +121,4 @@ export const fileExplorerStyles = StyleSheet.create({
     color: colors.textSecondary,
     fontSize: typography.bodySize
   }
-})
+}))

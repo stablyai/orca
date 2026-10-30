@@ -16,13 +16,16 @@ export default withWorkspaceRoute(function MobileAgentSessionHistoryScreen() {
     hostId?: string | string[]
     worktreeId?: string | string[]
     name?: string | string[]
+    origin?: string | string[]
   }>()
   const hostId = firstParam(params.hostId)
   const worktreeId = firstParam(params.worktreeId)
   const name = firstParam(params.name)
+  const origin = firstParam(params.origin)
   const executionHost = useWorkspaceExecutionHost()
   const routeParams = {
     ...(name === '' ? {} : { name }),
+    ...(origin === '' ? {} : { origin }),
     ...workspaceRouteParams(executionHost)
   }
 

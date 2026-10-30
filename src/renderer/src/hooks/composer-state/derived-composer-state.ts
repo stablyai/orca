@@ -9,7 +9,6 @@ import {
 } from '@/lib/github-links'
 import { githubRepoIdentityKey } from '../../../../shared/github/repository-identity-key'
 import {
-  getSetupConfig,
   getLinkedWorkItemProvider,
   canUseIssueCommandForLinkedItemProvider,
   getWorkspaceSeedName,
@@ -17,6 +16,7 @@ import {
   renderIssueCommandTemplate
 } from '@/lib/new-workspace'
 import type { SetupRunPolicy } from '../../../../shared/orca-yaml-hook-types'
+import { getDefaultSetupDecision, getSetupConfig } from '../../../../shared/orca-hook-setup-config'
 import type { SparsePreset } from '../../../../shared/worktree/create-types'
 import { useRetiredWorktreeNames } from '@/hooks/useRetiredWorktreeNames'
 import { getSuggestedCreatureName } from '@/components/sidebar/worktree-name-suggestions'
@@ -131,12 +131,7 @@ export function useDerivedComposerState(input: DerivedComposerStateInput) {
   const requiresExplicitSetupChoice = Boolean(setupConfig) && setupPolicy === 'ask'
 
   const resolvedSetupDecision =
-    setupDecision ??
-    (!setupConfig || setupPolicy === 'ask'
-      ? null
-      : setupPolicy === 'run-by-default'
-        ? 'run'
-        : 'skip')
+    setupDecision ?? getDefaultSetupDecision(Boolean(setupConfig), setupPolicy)
 
   const isSetupCheckPending =
     selectedRepoIsGit &&

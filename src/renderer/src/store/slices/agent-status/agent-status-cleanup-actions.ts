@@ -61,10 +61,11 @@ export function createAgentStatusCleanupActions(
       ) {
         return
       }
-      set((s) => {
+      set((s, changedPaneKeys) => {
         const hasLive = paneKey in s.agentStatusByPaneKey
         const next = hasLive ? { ...s.agentStatusByPaneKey } : s.agentStatusByPaneKey
         if (hasLive) {
+          changedPaneKeys.add(paneKey)
           delete next[paneKey]
         }
         const hasLaunchConfig = paneKey in s.agentLaunchConfigByPaneKey
@@ -127,9 +128,10 @@ export function createAgentStatusCleanupActions(
       ) {
         return
       }
-      set((s) => {
+      set((s, changedPaneKeys) => {
         const next = { ...s.agentStatusByPaneKey }
         for (const key of toRemove) {
+          changedPaneKeys.add(key)
           delete next[key]
         }
         const nextLaunchConfigs = { ...s.agentLaunchConfigByPaneKey }
@@ -171,7 +173,7 @@ export function createAgentStatusCleanupActions(
         return
       }
       let removed = false
-      set((s) => {
+      set((s, changedPaneKeys) => {
         const worktreeIdsOnConnection = collectWorktreeIdsForConnection(s, connectionId)
         let next: Record<string, (typeof s.agentStatusByPaneKey)[string]> | null = null
         for (const [paneKey, existing] of Object.entries(s.agentStatusByPaneKey)) {
@@ -187,6 +189,7 @@ export function createAgentStatusCleanupActions(
             continue
           }
           next ??= { ...s.agentStatusByPaneKey }
+          changedPaneKeys.add(paneKey)
           delete next[paneKey]
         }
         const alreadyBlocked = connectionId in s.transientClearedAgentStatusConnectionIds

@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button'
 import CommentMarkdown from '@/components/sidebar/CommentMarkdown'
 import type { PRCheckDetail, PRCheckRunDetails } from '../../../../shared/github/check-types'
 import { SourceControlFixSplitButton } from '@/components/right-sidebar/source-control-fix-split-button'
-import { translate } from '@/i18n/i18n'
+import { getIntlLocale, translate } from '@/i18n/i18n'
 import { useCheckRunDetailsFixWithAI } from './check-run-details-fix-with-ai'
 import { formatCheckRunOutputForClipboard } from './check-run-clipboard-text'
 import { CheckRunAnnotations } from './CheckRunAnnotations'
@@ -13,6 +13,7 @@ import { CheckRunJobs } from './CheckRunJobs'
 import { CheckRunCopyButton } from './CheckRunCopyButton'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
 import { useCheckDetailsReadingPosition } from './use-check-details-reading-position'
+import { openAppHttpLink } from '@/lib/app-http-link-open'
 
 function formatCheckTimestamp(value: string | null | undefined): string | null {
   if (!value) {
@@ -22,7 +23,7 @@ function formatCheckTimestamp(value: string | null | undefined): string | null {
   if (Number.isNaN(parsed.getTime())) {
     return value
   }
-  return parsed.toLocaleString(undefined, {
+  return parsed.toLocaleString(getIntlLocale(), {
     month: 'short',
     day: 'numeric',
     hour: 'numeric',
@@ -396,7 +397,7 @@ export function CheckRunDetailsPanel({
             type="button"
             variant="outline"
             size="sm"
-            onClick={() => window.api.shell.openUrl(openUrl)}
+            onClick={(event) => openAppHttpLink(openUrl, { worktreeId, event })}
           >
             {translate('auto.components.editor.CheckRunDetailsPanel.a916648574', 'Open details')}
             <ExternalLink className="size-3.5" />

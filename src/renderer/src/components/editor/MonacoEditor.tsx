@@ -1,6 +1,6 @@
 import React, { useRef, useEffect, useLayoutEffect, useMemo, useState } from 'react'
 import Editor from '@monaco-editor/react'
-import type { editor } from 'monaco-editor'
+import type { editor, IRange } from 'monaco-editor'
 import type { MarkdownDocument } from '../../../../shared/filesystem-entry-types'
 import { useAppStore } from '@/store'
 import '@/lib/monaco-setup'
@@ -21,9 +21,14 @@ import { useMonacoContentSyncBridge } from './use-monaco-content-sync-bridge'
 import { useMonacoMarkdownAnnotations } from './use-monaco-markdown-annotations'
 import { useMonacoEditorDecorations } from './use-monaco-editor-decorations'
 import { useMonacoEditorMount } from './use-monaco-editor-mount'
-import { useDocumentDarkTheme } from '@/hooks/use-document-dark-theme'
 import { snapshotMonacoViewState } from './monaco-view-state-persistence'
 import { MonacoMarkdownAnnotationOverlay } from './MonacoMarkdownAnnotationOverlay'
+import { usePluginSyntaxLanguage } from './use-plugin-syntax-language'
+import {
+  PLUGIN_SYNTAX_EDITOR_OPTIONS,
+  applyModelLanguage
+} from '@/lib/monaco-languages/plugin-syntax-editor-options'
+import { useMonacoTheme } from '@/hooks/use-monaco-theme'
 import { useEditorModelRekeyCarry } from './editor-model-rekey-carry'
 
 type MonacoEditorProps = {
@@ -58,7 +63,7 @@ export default function MonacoEditor({
   viewStateId,
   relativePath,
   content,
-  language,
+  language: coreLanguage,
   onContentChange,
   onSave,
   revealLine,
@@ -77,8 +82,13 @@ export default function MonacoEditor({
   const editorContainerRef = useRef<HTMLDivElement | null>(null)
   const [mountedEditor, setMountedEditor] = useState<editor.IStandaloneCodeEditor | null>(null)
   const [autoHeightContentHeight, setAutoHeightContentHeight] = useState<number | null>(null)
+  const language = usePluginSyntaxLanguage(filePath, coreLanguage)
   const languageRef = useRef(language)
   languageRef.current = language
+  useEffect(
+    () => applyModelLanguage([mountedEditor?.getModel()], language),
+    [mountedEditor, language]
+  )
   const unregisterFileSearchSelectionRef = useRef<(() => void) | null>(null)
   const { setupCopy, toastNode } = useContextualCopySetup()
   // Cancel pending throttled writes before snapshotting final scroll on unmount.
@@ -130,12 +140,14 @@ export default function MonacoEditor({
   const [gutterMenuOpen, setGutterMenuOpen] = useState(false)
   const [gutterMenuPoint, setGutterMenuPoint] = useState({ x: 0, y: 0 })
   const [gutterMenuLine, setGutterMenuLine] = useState(1)
-  const isDark = useDocumentDarkTheme()
+  const [gutterMenuSelection, setGutterMenuSelection] = useState<IRange | null>(null)
+  const monacoTheme = useMonacoTheme()
 
   const { queueReveal, cancelScheduledReveal, clearTransientRevealHighlight } =
     useMonacoRevealScheduler()
   const contentSync = useMonacoContentSyncBridge({
     editorRef,
+    mountedEditor,
     content,
     contentRef,
     contentSyncModeRef,
@@ -215,7 +227,12 @@ export default function MonacoEditor({
     contentSync,
     decorations,
     annotations,
-    gutterMenu: { setGutterMenuOpen, setGutterMenuPoint, setGutterMenuLine }
+    gutterMenu: {
+      setGutterMenuOpen,
+      setGutterMenuPoint,
+      setGutterMenuLine,
+      setGutterMenuSelection
+    }
   })
 
   useEffect(() => {
@@ -273,8 +290,7 @@ export default function MonacoEditor({
         language={language}
         // Use defaultValue because Orca owns later content sync; controlled values would duplicate setValue.
         defaultValue={content}
-        theme={isDark ? 'vs-dark' : 'vs'}
-        onChange={contentSync.handleChange}
+        theme={monacoTheme}
         onMount={handleMount}
         options={{
           dropIntoEditor: { enabled: false },
@@ -283,12 +299,17 @@ export default function MonacoEditor({
           // Monaco 0.55 forcibly disables diff sub-editor minimaps; only file editors honor this setting.
           minimap: { enabled: settings?.editorMinimapEnabled ?? false },
           scrollBeyondLastLine: false,
+          ...PLUGIN_SYNTAX_EDITOR_OPTIONS,
           ...buildFileEditorWordWrapOptions(editorWordWrap),
           fontSize: editorFontSize,
           fontFamily: editorFontFamily,
           lineNumbers: 'on',
           renderLineHighlight: 'line',
           automaticLayout: true,
+          unicodeHighlight: {
+            ambiguousCharacters: language !== 'markdown',
+            invisibleCharacters: true
+          },
           tabSize: 2,
           readOnly,
           scrollbar: autoHeight
@@ -317,8 +338,11 @@ export default function MonacoEditor({
         onOpenChange={setGutterMenuOpen}
         point={gutterMenuPoint}
         line={gutterMenuLine}
+        selection={gutterMenuSelection}
+        fileId={fileId}
         filePath={filePath}
         relativePath={relativePath}
+        worktreeId={worktreeId}
       />
     </div>
   )

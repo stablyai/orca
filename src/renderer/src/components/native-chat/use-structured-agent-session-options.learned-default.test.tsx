@@ -23,7 +23,7 @@ import type {
   AgentSessionModelOption,
   AgentSessionOptionsResult
 } from '../../../../shared/agent-session-wire'
-import type { SessionOptionDescriptor } from '../../../../shared/native-chat-session-options'
+import type { SessionOptionDescriptor } from '../../../../shared/native-chat/input/native-chat-session-options'
 import { resetHostModelCatalogSnapshotsForTests } from '@/runtime/host-model-catalog-snapshots'
 import type { StructuredAgentSessionMutate } from './use-structured-agent-session-mutate'
 import { useStructuredAgentSessionOptions } from './use-structured-agent-session-options'
@@ -85,13 +85,12 @@ function pill(snapshot: readonly SessionOptionDescriptor[]): Pill {
 
 const LOCAL = { kind: 'local' } as const
 const NOT_STARTED: { running: { fence: number } | null } = { running: null }
-const NO_HELD = {}
 const NO_MUTATE: StructuredAgentSessionMutate = vi.fn()
 
 function renderChat(agent: string, sessionId: string, worktree: string) {
   const frames: Pill[] = []
   // Stable across renders, as the pane's own props are: a new object would re-run every read.
-  const launch = { kind: 'new' as const, heldOptions: NO_HELD, worktree }
+  const launch = { kind: 'new' as const, worktree }
   const view = renderHook(
     ({ running }: { running: { fence: number } | null }) => {
       const options = useStructuredAgentSessionOptions({

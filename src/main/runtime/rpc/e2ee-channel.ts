@@ -18,13 +18,12 @@ import { parseRemoteRuntimeJsonText } from '../../../shared/remote-runtime/reque
 import type { MobileE2EEOutboundMemoryBudget } from './mobile-e2ee-outbound-memory-budget'
 import { MobileE2EEDesktopOutboundOwner } from './mobile-e2ee-desktop-outbound-owner'
 import { createLegacyReplySenders } from './mobile-e2ee-legacy-reply-senders'
-import { parseRuntimeClientCapabilities } from './runtime-client-capabilities'
+import { RuntimeClientCapabilities } from './runtime-client-capabilities'
 import type {
   RpcBinarySendOptions,
   RpcBinarySendResult,
   RpcBinarySender
 } from './rpc-binary-sender'
-import type { RuntimeCapability } from '../../../shared/protocol-version'
 import type { EventProps } from '../../../shared/telemetry-events'
 import { track } from '../../telemetry/client'
 import type { DevicePrincipal } from '../device-principal'
@@ -85,7 +84,7 @@ export class E2EEChannel {
     return this.v2Session?.transcriptHashB64 ?? null
   }
   authenticatedDevice: E2EEAuthenticatedDevice | null = null
-  clientCapabilities: readonly RuntimeCapability[] = []
+  readonly capabilitySource = new RuntimeClientCapabilities()
 
   constructor(ws: WebSocket, options: E2EEChannelOptions) {
     this.ws = ws
@@ -188,7 +187,12 @@ export class E2EEChannel {
   private handleHello(raw: string): void {
     let hello: Record<string, unknown>
     try {
-      hello = parseRemoteRuntimeJsonText(raw) as Record<string, unknown>
+      const parsed = parseRemoteRuntimeJsonText(raw)
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+        this.onError(4001, 'Invalid handshake message')
+        return
+      }
+      hello = { ...parsed }
     } catch {
       this.onError(4001, 'Invalid handshake message')
       return
@@ -252,7 +256,7 @@ export class E2EEChannel {
     }
     const authenticatedDevice = authentication.device
 
-    this.clientCapabilities = parseRuntimeClientCapabilities(authentication.clientCapabilities)
+    this.capabilitySource.replace(authentication.clientCapabilities)
     this.deviceToken = authenticatedDevice.deviceToken ?? null
     this.authenticatedDevice = authenticatedDevice
     this.state = 'ready'
@@ -325,6 +329,7 @@ export class E2EEChannel {
   }
 
   destroy(): void {
+    this.capabilitySource.dispose()
     if (this.handshakeTimer) {
       clearTimeout(this.handshakeTimer)
       this.handshakeTimer = null

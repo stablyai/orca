@@ -4,7 +4,7 @@ import type { Terminal } from './mobile-session-route-types'
 import { mergeTerminalListWithKnownRecords, terminalRecordsEqual } from './mobile-terminal-records'
 import {
   createTerminalPrunePredicate,
-  pruneTerminalKeyboardMetrics,
+  pruneTerminalHandleMap,
   resolveRetainedTerminalHandles
 } from './mobile-terminal-prune-decision'
 import type { MobileSessionTerminalStreamDisplayModel } from './use-mobile-session-terminal-stream-display'
@@ -23,6 +23,12 @@ export function useMobileSessionTerminalList(scope: MobileSessionTerminalStreamD
     defaultTerminalHandlesToLiveInput,
     clearTerminalLiveInputDefault,
     setTerminalKeyboardMetrics,
+    setTerminalModes,
+    ptyModesRef,
+    terminalCwdRef,
+    subscribeSeqRef,
+    initialModesSeenRef,
+    webReadyHandlesRef,
     terminalRefs,
     terminalUnsubsRef,
     viewportResubscribeBudgetRef,
@@ -94,7 +100,26 @@ export function useMobileSessionTerminalList(scope: MobileSessionTerminalStreamD
               viewportResubscribeBudgetRef.current.forget(handle)
               clearTerminalLiveInputDefault(handle)
             }
-            setTerminalKeyboardMetrics((prev) => pruneTerminalKeyboardMetrics(prev, shouldPrune))
+            for (const cache of [
+              ptyModesRef.current,
+              terminalCwdRef.current,
+              initialModesSeenRef.current,
+              webReadyHandlesRef.current
+            ]) {
+              for (const handle of cache.keys()) {
+                if (shouldPrune(handle)) {
+                  cache.delete(handle)
+                }
+              }
+            }
+            for (const handle of subscribeSeqRef.current.keys()) {
+              if (shouldPrune(handle)) {
+                viewportResubscribeBudgetRef.current.forget(handle)
+                subscribeSeqRef.current.delete(handle)
+              }
+            }
+            setTerminalModes((prev) => pruneTerminalHandleMap(prev, shouldPrune))
+            setTerminalKeyboardMetrics((prev) => pruneTerminalHandleMap(prev, shouldPrune))
             // Reappearing handles may have live PTYs and earn a fresh chat rearm budget.
             nativeChatStream.notifyListedHandles(liveHandles)
             // Refill viewport attempts only after real handle absence and return.

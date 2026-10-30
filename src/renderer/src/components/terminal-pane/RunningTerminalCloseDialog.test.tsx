@@ -113,6 +113,27 @@ describe('RunningTerminalCloseDialog', () => {
     expect(getButton('Stop Agent')).toBeTruthy()
   })
 
+  it('uses truthful chat copy and the shared opt-out without terminal sleep advice', async () => {
+    const updateSettings = vi.fn().mockResolvedValue(undefined)
+    const onConfirm = vi.fn()
+    await renderDialog({ onConfirm, copyKind: 'chat-agent' }, updateSettings)
+    expect(document.body.textContent).toContain('Stop this agent?')
+    expect(document.body.textContent).toContain(
+      "Closing this chat will stop the agent's current work."
+    )
+    expect(document.body.textContent).not.toContain('terminal')
+    await act(async () => {
+      getCheckbox().click()
+    })
+    await act(async () => {
+      getButton('Stop Agent').click()
+    })
+    expect(updateSettings).toHaveBeenCalledWith({
+      skipCloseTerminalWithRunningProcessConfirm: true
+    })
+    expect(onConfirm).toHaveBeenCalledTimes(1)
+  })
+
   // Async process probes can overlap the synchronous pinned queue; only one modal/focus trap may open.
   it('waits for a visible pinned confirmation instead of stacking a second modal', async () => {
     const updateSettings = vi.fn().mockResolvedValue(undefined)

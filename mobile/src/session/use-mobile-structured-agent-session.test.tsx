@@ -11,7 +11,7 @@ import type {
   AgentJournalRenderItem,
   AgentJournalResolution
 } from '../../../src/shared/agent-session-journal-types'
-import type { SessionOptionDescriptor } from '../../../src/shared/native-chat-session-options'
+import type { SessionOptionDescriptor } from '../../../src/shared/native-chat/input/native-chat-session-options'
 import type { RpcClient } from '../transport/rpc-client'
 import { markRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
 import { formatQuestionFreeTextAnswer } from './native-chat/input/mobile-native-chat-question'
@@ -283,6 +283,49 @@ describe('useMobileStructuredAgentSession', () => {
       expect.anything(),
       expect.anything()
     )
+  })
+
+  it('keeps creation facts out of the current phone conversation', async () => {
+    await act(async () => {
+      renderer = create(createElement(Harness))
+    })
+    await vi.waitFor(() => expect(listener).toEqual(expect.any(Function)))
+    const items: AgentJournalRenderItem[] = [
+      {
+        itemId: 'before',
+        revision: 1,
+        sequence: 1,
+        observedAt: 1,
+        body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'Coordinate' }] }
+      },
+      {
+        itemId: 'start',
+        revision: 1,
+        sequence: 2,
+        observedAt: 2,
+        body: {
+          kind: 'agent-start',
+          dispatchId: 'dispatch',
+          task: 'Worker assignment',
+          worker: {
+            party: { address: 'term_worker', terminalHandle: 'term_worker', orcaSessionId: null },
+            name: 'Worker'
+          }
+        }
+      },
+      {
+        itemId: 'after',
+        revision: 1,
+        sequence: 3,
+        observedAt: 3,
+        body: { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'Answer' }] }
+      }
+    ]
+    await act(async () => listener?.(snapshotEvent(3, items)))
+    expect(hook?.session.messages.map(({ blocks }) => blocks)).toEqual([
+      [{ type: 'text', text: 'Coordinate' }],
+      [{ type: 'text', text: 'Answer' }]
+    ])
   })
 
   it('re-holds before resubscribing after a reconnect', async () => {
@@ -644,7 +687,7 @@ describe('useMobileStructuredAgentSession', () => {
     expect(retryId).not.toBe(firstId)
   })
 
-  it('keeps structured option changes dispatched after unknown delivery', async () => {
+  it('keeps unknown intent until a current query, without accepted memory or resend', async () => {
     act(() => {
       renderer = create(createElement(Harness))
     })
@@ -656,9 +699,15 @@ describe('useMobileStructuredAgentSession', () => {
         settable: true
       })
     })
+    let reconcile!: (response: Awaited<ReturnType<typeof defaultSendRequest>>) => void
     sendRequest.mockImplementation(async (method, params) => {
       if (method === 'agentSession.setOption') {
         throw markRpcDeliveryUnknown(new Error('Connection closed'))
+      }
+      if (method === 'agentSession.options') {
+        return new Promise<Awaited<ReturnType<typeof defaultSendRequest>>>((resolve) => {
+          reconcile = resolve
+        })
       }
       return defaultSendRequest(method, params)
     })
@@ -669,9 +718,18 @@ describe('useMobileStructuredAgentSession', () => {
     })
 
     const model = hook!.optionSnapshot.find((descriptor) => descriptor.id === 'model')
-    expect(model).toMatchObject({
-      valueSource: 'dispatched',
-      kind: expect.objectContaining({ currentValue: 'gpt-slow' })
+    expect(model?.kind).toMatchObject({ currentValue: 'gpt-slow' })
+    expect(
+      sendRequest.mock.calls.filter(([method]) => method === 'agentSession.setOption')
+    ).toHaveLength(1)
+    expect(
+      sendRequest.mock.calls.filter(
+        ([method]) => method === 'settings.mutateNativeChatSessionOptions'
+      )
+    ).toHaveLength(0)
+    await act(async () => reconcile(await defaultSendRequest('agentSession.options')))
+    expect(hook!.optionSnapshot.find((row) => row.id === 'model')?.kind).toMatchObject({
+      currentValue: 'gpt-fast'
     })
     expect(onSendError).not.toHaveBeenCalled()
   })

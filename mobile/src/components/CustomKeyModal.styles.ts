@@ -1,8 +1,8 @@
 import { StyleSheet } from 'react-native'
-import { colors, spacing, radii, typography } from '../theme/mobile-theme'
-import { TEXT_INPUT_FONT_SIZE } from '../platform/text-input-font-size'
+import { colors, getMobileColorScheme, radii, spacing, typography } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
 
-export const customKeyModalStyles = StyleSheet.create({
+export const customKeyModalStyles = themedStyleSheet(() => ({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -11,7 +11,7 @@ export const customKeyModalStyles = StyleSheet.create({
   keyInput: {
     width: '100%',
     height: 56,
-    borderRadius: 10,
+    borderRadius: radii.control,
     backgroundColor: colors.bgPanel,
     borderWidth: 1,
     borderColor: colors.borderSubtle,
@@ -25,7 +25,7 @@ export const customKeyModalStyles = StyleSheet.create({
   backButton: {
     width: 30,
     height: 30,
-    borderRadius: 15,
+    borderRadius: radii.control,
     alignItems: 'center',
     justifyContent: 'center'
   },
@@ -44,7 +44,7 @@ export const customKeyModalStyles = StyleSheet.create({
   },
   group: {
     backgroundColor: colors.bgPanel,
-    borderRadius: 12,
+    borderRadius: radii.surface,
     overflow: 'hidden'
   },
   separator: {
@@ -93,7 +93,7 @@ export const customKeyModalStyles = StyleSheet.create({
     minWidth: 48,
     height: 48,
     paddingHorizontal: spacing.md,
-    borderRadius: 10,
+    borderRadius: radii.control,
     backgroundColor: colors.bgPanel,
     borderWidth: 1,
     borderColor: colors.borderSubtle,
@@ -139,7 +139,7 @@ export const customKeyModalStyles = StyleSheet.create({
   chip: {
     flex: 1,
     height: 40,
-    borderRadius: 8,
+    borderRadius: radii.pill,
     backgroundColor: colors.bgPanel,
     flexDirection: 'row',
     alignItems: 'center',
@@ -166,7 +166,7 @@ export const customKeyModalStyles = StyleSheet.create({
     fontFamily: typography.monoFamily
   },
   chipGlyphSelected: {
-    color: 'rgba(10,10,10,0.5)'
+    color: getMobileColorScheme() === 'dark' ? 'rgba(10,10,10,0.5)' : 'rgba(255,255,255,0.5)'
   },
   moreLink: {
     paddingVertical: spacing.sm,
@@ -207,7 +207,7 @@ export const customKeyModalStyles = StyleSheet.create({
   },
   keyCell: {
     height: 40,
-    borderRadius: 8,
+    borderRadius: radii.control,
     backgroundColor: colors.bgPanel,
     alignItems: 'center',
     justifyContent: 'center'
@@ -236,17 +236,6 @@ export const customKeyModalStyles = StyleSheet.create({
     fontWeight: '500',
     color: colors.textSecondary
   },
-  fieldInput: {
-    backgroundColor: colors.bgBase,
-    color: colors.textPrimary,
-    borderRadius: radii.input,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    fontSize: TEXT_INPUT_FONT_SIZE,
-    fontFamily: typography.monoFamily,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle
-  },
   switchRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -261,7 +250,7 @@ export const customKeyModalStyles = StyleSheet.create({
     marginTop: spacing.md,
     backgroundColor: colors.textPrimary,
     paddingVertical: spacing.md,
-    borderRadius: 10,
+    borderRadius: radii.control,
     alignItems: 'center'
   },
   saveButtonDisabled: {
@@ -275,4 +264,4 @@ export const customKeyModalStyles = StyleSheet.create({
   saveButtonTextDisabled: {
     color: colors.textMuted
   }
-})
+}))

@@ -260,8 +260,9 @@ async function dispatchSafely(
       return {
         state: 'rejected',
         ...agentSessionFailureWords(
-          agentSessionFailureFact('providerRejected', { detail: providerDiagnosticOf(error) }),
-          { surface: 'rejection' }
+          error.rejection ??
+            agentSessionFailureFact('providerRejected', { detail: providerDiagnosticOf(error) }),
+          { ...ctx.failureTextContext, surface: 'rejection' }
         )
       }
     }

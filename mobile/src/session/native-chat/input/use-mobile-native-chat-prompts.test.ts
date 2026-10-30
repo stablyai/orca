@@ -1,9 +1,11 @@
+import { asyncQuestionSourceScope } from '../../../../../src/shared/native-chat/input/native-chat-ask'
 import { createElement } from 'react'
 import TestRenderer, { type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AgentStatusEntry } from '../../../../../src/shared/agent-status-types'
 import type { NativeChatMessage } from '../../../../../src/shared/native-chat-types'
-import { buildOmpPlanReviewAnswer } from '../../../../../src/shared/omp-plan-review-prompt'
+import { useMobileAsyncQuestionHides } from './use-mobile-native-chat-prompt-dismiss'
+import { mobileNativeChatPromptDismissals } from './mobile-native-chat-prompt-dismissals'
 import { useMobileNativeChatPrompts } from './use-mobile-native-chat-prompts'
 
 const renderers: ReactTestRenderer[] = []
@@ -32,6 +34,8 @@ function promptsFor(
   let captured: ReturnType<typeof useMobileNativeChatPrompts> | undefined
   function Probe(): null {
     captured = useMobileNativeChatPrompts({
+      asyncSourceScope: 'host/session/epoch',
+      hiddenAsyncIds: new Set(),
       enabled: true,
       status: status as AgentStatusEntry | null,
       messages,
@@ -45,165 +49,72 @@ function promptsFor(
   return captured!
 }
 
-function permissionFor(status: Partial<AgentStatusEntry> | null): unknown {
-  return promptsFor(status).permission
-}
-
-describe('useMobileNativeChatPrompts approval-envelope state gate', () => {
-  it('keeps the OMP plan review card authoritative over approval-sounding prose', () => {
-    const planReview = JSON.stringify({
-      planReview: {
-        reviewId: 'review-1',
-        plan: '# Plan',
-        options: [{ id: 'execute', label: 'Approve and execute' }]
+const askMessages: NativeChatMessage[] = [
+  {
+    id: 'm1',
+    role: 'assistant',
+    blocks: [
+      {
+        type: 'tool-call',
+        name: 'AskUserQuestion',
+        input: { questions: [{ question: 'Which path?', options: ['fast', 'safe'] }] }
       }
-    })
-    expect(
-      permissionFor({
-        state: 'blocked',
-        agentType: 'omp',
-        interactivePrompt: planReview,
-        lastAssistantMessage: 'Please approve this plan.\n1. Yes\n2. No'
-      })
-    ).toMatchObject({
-      subject: { kind: 'plan', text: '# Plan' },
-      options: [
-        { label: 'Approve and execute', send: buildOmpPlanReviewAnswer('review-1', 'execute') }
-      ]
-    })
-  })
+    ],
+    timestamp: 0,
+    source: 'transcript'
+  }
+]
 
-  it.each(['opencode', 'opencode2'])(
-    'keeps the %s approval event authoritative over numbered assistant prose',
-    (agentType) => {
-      expect(
-        permissionFor({
-          state: 'waiting',
-          agentType,
-          interactivePrompt: APPROVAL,
-          lastAssistantMessage: 'Allow this Bash command?\n1. Yes\n2. No'
-        })
-      ).toMatchObject({
-        title: 'Allow Bash?',
-        options: [
-          { label: 'Allow', send: '\r' },
-          { label: 'Deny', send: '\x1b' }
-        ]
-      })
-    }
-  )
-
-  it.each(['opencode', 'opencode2'])(
-    'does not mistake %s question text for an approval',
-    (agentType) => {
-      const prompts = promptsFor({
-        state: 'waiting',
-        agentType,
-        interactivePrompt: ASK,
-        lastAssistantMessage: 'Allow this Bash command?\n1. Yes\n2. No'
-      })
-      expect(prompts.permission).toBeNull()
-      expect(prompts.ask?.questions[0]?.question).toBe('Which path?')
-    }
-  )
-  it('renders no approval card while the agent is working', () => {
-    expect(permissionFor({ state: 'working', interactivePrompt: APPROVAL })).toBeNull()
-  })
-
-  it('renders no approval card after the turn is done', () => {
-    expect(permissionFor({ state: 'done', interactivePrompt: APPROVAL })).toBeNull()
-  })
-
-  it('renders no approval card without a status', () => {
-    expect(permissionFor(null)).toBeNull()
-  })
-
-  it('renders the approval card while the agent is waiting', () => {
-    expect(permissionFor({ state: 'waiting', interactivePrompt: APPROVAL })).toMatchObject({
-      title: 'Allow Bash?',
-      detail: 'pnpm build > build.log 2>&1'
-    })
-  })
-
-  it('renders the approval card while the agent is blocked', () => {
-    expect(permissionFor({ state: 'blocked', interactivePrompt: APPROVAL })).toMatchObject({
-      title: 'Allow Bash?'
-    })
-  })
-
-  it('prefers the heuristic numbered menu over the envelope while paused', () => {
-    const permission = permissionFor({
+describe('useMobileNativeChatPrompts terminal cards', () => {
+  it('never guesses a card from assistant prose', () => {
+    const prompts = promptsFor({
       state: 'waiting',
-      interactivePrompt: APPROVAL,
       lastAssistantMessage: 'Allow this Bash command?\n1. Yes\n2. No'
-    }) as { options: Array<{ label: string }> } | null
-    expect(permission).toMatchObject({ title: 'Permission requested' })
-    expect(permission?.options.map((o) => o.label)).toEqual(['Yes', 'No'])
+    })
+    expect(prompts.permission).toBeNull()
+    expect(prompts.ask).toBeNull()
+  })
+
+  it.each(['waiting', 'working', 'done'] as const)(
+    'shows a status approval or ask while the agent is %s, as desktop does',
+    (state) => {
+      expect(promptsFor({ state, interactivePrompt: APPROVAL }).permission).toMatchObject({
+        title: 'Allow Bash?',
+        detail: 'pnpm build > build.log 2>&1'
+      })
+      expect(promptsFor({ state, interactivePrompt: ASK }).ask).toMatchObject({
+        questions: [{ question: 'Which path?' }]
+      })
+    }
+  )
+
+  it('stamps only a status-backed card with its wait start', () => {
+    expect(
+      promptsFor({ state: 'waiting', interactivePrompt: ASK, stateStartedAt: 10 }).waitStartedAt
+    ).toBe(10)
+    expect(promptsFor({ state: 'waiting', stateStartedAt: 10 }, askMessages).waitStartedAt).toBe(
+      null
+    )
   })
 })
 
-describe('useMobileNativeChatPrompts ask state gate', () => {
-  const askMessages: NativeChatMessage[] = [
-    {
-      id: 'm1',
-      role: 'assistant',
-      blocks: [
-        {
-          type: 'tool-call',
-          name: 'AskUserQuestion',
-          input: { questions: [{ question: 'Which path?', options: ['fast', 'safe'] }] }
-        }
-      ],
-      timestamp: 0,
-      source: 'transcript'
-    }
-  ]
-
-  it('renders the ask card only while the agent is waiting or blocked', () => {
-    expect(promptsFor({ state: 'waiting', interactivePrompt: ASK }).ask).toMatchObject({
-      questions: [{ question: 'Which path?' }]
-    })
-    expect(promptsFor({ state: 'blocked', interactivePrompt: ASK }).ask).not.toBeNull()
-  })
-
-  it('renders no ask card from a sticky prompt while the agent is working or done', () => {
-    const working = promptsFor({ state: 'working', interactivePrompt: ASK })
-    expect(working.ask).toBeNull()
-    expect(working.detectedAsk).not.toBeNull()
-
-    const done = promptsFor({ state: 'done', interactivePrompt: ASK })
-    expect(done.ask).toBeNull()
-    expect(done.detectedAsk).not.toBeNull()
-  })
-
-  it('keeps the transcript-derived pending ask outside the paused gate', () => {
+describe('useMobileNativeChatPrompts transcript asks', () => {
+  it('keeps a pending transcript ask whatever the status says', () => {
     // Stale status loses interactivePrompt; transcript pending asks must remain answerable until their tool result lands.
-    expect(promptsFor({ state: 'waiting' }, askMessages).ask).not.toBeNull()
     expect(promptsFor({ state: 'done' }, askMessages).ask).not.toBeNull()
-    expect(promptsFor({ state: 'working' }, askMessages).ask).not.toBeNull()
     expect(promptsFor(null, askMessages).ask).not.toBeNull()
   })
 
   it('withholds retained transcript asks while the replacement read is unsettled', () => {
-    const prompts = promptsFor({ state: 'done' }, askMessages, true)
-    expect(prompts.ask).toBeNull()
-    expect(prompts.detectedAsk).toBeNull()
+    expect(promptsFor({ state: 'done' }, askMessages, true).ask).toBeNull()
   })
 
-  it('keeps a paused live status ask authoritative while the read is unsettled', () => {
+  it('keeps a live status ask while the read is unsettled', () => {
     const prompts = promptsFor({ state: 'waiting', interactivePrompt: ASK }, askMessages, true)
     expect(prompts.ask).toMatchObject({ questions: [{ question: 'Which path?' }] })
-    expect(prompts.detectedAsk).not.toBeNull()
   })
 
-  it('does not leak a paused-out sticky status prompt through the transcript fallback', () => {
-    // Sticky answered status suppresses transcript fallback; only the paused gate prevents a duplicate card while its result is in flight.
-    const working = promptsFor({ state: 'working', interactivePrompt: ASK }, askMessages)
-    expect(working.ask).toBeNull()
-    expect(working.detectedAsk).not.toBeNull()
-  })
-
-  it('still refuses an unpaused sticky status prompt that the transcript does not back', () => {
+  it('drops a transcript ask once its result lands', () => {
     const answered: NativeChatMessage[] = [
       ...askMessages,
       {
@@ -214,7 +125,6 @@ describe('useMobileNativeChatPrompts ask state gate', () => {
         source: 'transcript'
       }
     ]
-    expect(promptsFor({ state: 'done', interactivePrompt: ASK }, answered).ask).toBeNull()
     expect(promptsFor({ state: 'done' }, answered).ask).toBeNull()
   })
 })
@@ -240,27 +150,148 @@ describe('useMobileNativeChatPrompts in a structured chat', () => {
         timestamp: null,
         source: 'transcript'
       }
+      const notice: NativeChatMessage = {
+        id: 'mail',
+        role: 'user',
+        blocks: [{ type: 'text', text: 'You have 1 orchestration message.' }],
+        timestamp: 2,
+        source: 'transcript',
+        from: {
+          kind: 'agent',
+          senders: [
+            {
+              party: { address: 'term_a', terminalHandle: 'term_a', orcaSessionId: null },
+              name: 'Coder'
+            }
+          ],
+          orchestration: {
+            message: 'mail-notice',
+            mailbox: 'term_b',
+            dispatchId: null,
+            messages: [{ messageId: 'mail-1', runId: 'run-1', from: 'term_a' }]
+          }
+        }
+      }
+      let messages = [message]
       let captured: ReturnType<typeof useMobileNativeChatPrompts> | undefined
       function Probe(): null {
         captured = useMobileNativeChatPrompts({
+          asyncSourceScope: 'host/session/epoch',
+          hiddenAsyncIds: new Set(),
           enabled: true,
           structured: { permission: null, question: null, sendWithOutcome },
           status: null,
-          messages: [message],
+          messages,
           transcriptLoading: false
         })
         return null
       }
+      let renderer: ReactTestRenderer
       TestRenderer.act(() => {
-        renderers.push(TestRenderer.create(createElement(Probe)))
+        renderer = TestRenderer.create(createElement(Probe))
+        renderers.push(renderer)
       })
+      const initialAsk = captured?.ask
+      expect(initialAsk?.questions[0]?.question).toBe('Which color?')
+      messages = [message, notice]
+      TestRenderer.act(() => renderer.update(createElement(Probe)))
 
       const ask = captured?.ask
-      expect(ask?.questions[0]?.question).toBe('Which color?')
+      expect(ask).toEqual(initialAsk)
+      expect(ask?.questions[0]?.options.map((option) => option.label)).toEqual(['Red', 'Blue'])
       await expect(ask && captured?.structuredAnswer?.(ask, [{ indices: [1] }])).resolves.toBe(
         accepted
       )
       expect(sendWithOutcome).toHaveBeenCalledWith('> Which color?\n\nBlue')
+      messages = [
+        ...messages,
+        {
+          id: 'human-answer',
+          role: 'user',
+          blocks: [{ type: 'text', text: 'Blue' }],
+          timestamp: 3,
+          source: 'transcript'
+        }
+      ]
+      TestRenderer.act(() => renderer.update(createElement(Probe)))
+      expect(captured?.ask).toBeNull()
     }
   )
+})
+
+describe('addressed phone hide subscriptions', () => {
+  it('keeps unrelated scopes still and reuses scanner output at N/10N', () => {
+    for (const count of [8, 80]) {
+      mobileNativeChatPromptDismissals.clearForTests()
+      let scans = 0
+      const messages: NativeChatMessage[] = [
+        {
+          ...askMessages[0]!,
+          get blocks(): NativeChatMessage['blocks'] {
+            scans += 1
+            return [
+              {
+                type: 'tool-call',
+                name: 'request_user_input_async',
+                input: { questions: [{ title: 'Q1?' }] }
+              }
+            ]
+          }
+        }
+      ]
+      const renders = Array<number>(count).fill(0)
+      const actions: (() => void)[] = []
+      function Probe({ index }: { index: number }): null {
+        renders[index] = (renders[index] ?? 0) + 1
+        const sourceKey = asyncQuestionSourceScope({
+          kind: 'journal',
+          agent: 'codex',
+          sessionId: `session-${Math.floor(index / 2)}`,
+          epoch: 'epoch'
+        })
+        const hides = useMobileAsyncQuestionHides(
+          `host-${index % 2}/pane-${Math.floor(index / 2)}`,
+          sourceKey,
+          'view'
+        )
+        const prompts = useMobileNativeChatPrompts({
+          enabled: true,
+          status: null,
+          messages,
+          transcriptLoading: false,
+          asyncSourceScope: sourceKey,
+          hiddenAsyncIds: hides.hidden
+        })
+        actions[index] = hides.capture(prompts.ask?.occurrenceIds ?? [])
+        return null
+      }
+      let renderer: ReactTestRenderer
+      TestRenderer.act(() => {
+        renderer = TestRenderer.create(
+          createElement(
+            'Probes',
+            null,
+            Array.from({ length: count }, (_, index) => createElement(Probe, { key: index, index }))
+          )
+        )
+        renderers.push(renderer)
+      })
+      const initialScans = scans
+      expect(initialScans).toBeGreaterThanOrEqual(count)
+      expect(initialScans).toBeLessThanOrEqual(2 * count)
+      renders.fill(0)
+      TestRenderer.act(() => actions[0]!())
+      expect(renders).toEqual([1, ...Array<number>(count - 1).fill(0)])
+      expect(scans).toBe(initialScans)
+      renders.fill(0)
+      TestRenderer.act(() => actions[1]!())
+      expect(renders).toEqual([0, 1, ...Array<number>(count - 2).fill(0)])
+      expect(scans).toBe(initialScans)
+      renders.fill(0)
+      TestRenderer.act(() => actions[0]!())
+      expect(renders.every((value) => value === 0)).toBe(true)
+      TestRenderer.act(() => renderer.unmount())
+      renderers.pop()
+    }
+  })
 })

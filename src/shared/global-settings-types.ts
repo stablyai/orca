@@ -1,3 +1,4 @@
+import type { AgentLaunchChoices } from './agent-launch-choices'
 import type { TelemetrySettings } from './telemetry-settings-types'
 import type { BrowserProfileScope } from './browser-profile-scope'
 import type { GlobalSettingsBase } from './global-settings-base'
@@ -15,7 +16,7 @@ import type { ClaudeAgentTeamsMode } from './claude-agent-teams-tmux-compat'
 import type { TerminalCustomTheme } from './terminal-custom-themes'
 import type { UiLanguage } from './ui-language'
 import type { GlobalWindowsRuntimeDefault } from './project-execution-runtime'
-import type { PersistedNativeChatSessionOptions } from './native-chat-session-options'
+import type { PersistedNativeChatSessionOptions } from './native-chat/input/native-chat-session-options'
 import type { AgentChatPermissionMode } from './agent-chat-permission-mode'
 import type { ComputerAwakeMode } from './computer-awake-mode'
 import type { CommitMessageAiSettings } from './commit-message-ai-types'
@@ -213,6 +214,8 @@ export type GlobalSettings = GlobalSettingsBase & {
   nativeChatQueueFollowUps?: boolean
   /** Teach newly started native chats to create inline visuals; absent means on. */
   nativeChatInlineVisuals?: boolean
+  /** Hovering a web link in chat fetches the page to preview it; absent means on. GitHub cards ignore this. */
+  nativeChatLinkPreviews?: boolean
   /** Structured Codex/Claude chats inherit the login-shell env; off limits it to nativeChatShellEnvironmentVariables plus PATH/locale. */
   nativeChatInheritShellEnvironment?: boolean
   /** Login-shell variable names structured chat inherits while the whole environment is off. */
@@ -248,7 +251,8 @@ export type GlobalSettings = GlobalSettingsBase & {
   /** Maximum worker nesting; 1 forbids sub-workers. Renderer-only: omit from SettingsUpdate RPC so workers cannot raise their cap. */
   nestedWorkerMaxDepth?: number
   /** Escalate native-chat worker turn errors to the dispatching Run; absent means on. Renderer-only so workers cannot silence failures via CLI. */
-  orchestrationChatErrorEscalationEnabled?: boolean
+  /** Close a finished worker's terminal or chat after a grace period; absent means on. The coordinator's runtime decides. */
+  orchestrationWorkerAutoReleaseEnabled?: boolean
   /** Only toggles the sidebar shortcut; Artifacts stay reachable from Settings. */
   showArtifactsButton?: boolean
   /** Only toggles the sidebar shortcut; Skills stay reachable from Settings. */
@@ -267,6 +271,8 @@ export type GlobalSettings = GlobalSettingsBase & {
   browserClientHostedRemoteEnabled?: boolean
   /** Browser profile new tabs in a workspace use; missing = 'shared' (the Default profile). */
   browserProfileScope?: BrowserProfileScope
+  /** Profile new tabs use per browser host when no repo/workspace profile applies; missing = Default. */
+  browserDefaultProfileIdByHostId?: Partial<Record<ExecutionHostId, string>>
   /** Routes SSH-workspace browser pages through the workspace's SSH host; off = plain local browsing. */
   browserSshWorkspaceRoutingEnabled?: boolean
   /** Per-target opt-outs recorded from the routing error card's "Browse from this device instead". */
@@ -330,14 +336,6 @@ export type GlobalSettings = GlobalSettingsBase & {
   newWorkspaceSetupOnly?: boolean
   /** Agents hidden from picker/auto-launch; detection stays a raw PATH snapshot. */
   disabledTuiAgents: TuiAgent[]
-  /** Experimental plugin master switch; off prevents discovery, panels and plugin execution. */
-  pluginSystemEnabled: boolean
-  /** Disabled publisher.id keys remain discoverable but inactive. */
-  disabledPlugins: string[]
-  /** publisher.id → consented capability/worker-trust fingerprint; changes prompt again before code runs. Missing means never consented. */
-  pluginConsents: Record<string, string>
-  /** Local directories loaded as dev-mode plugins (manifest hot-reload). */
-  devPluginPaths: string[]
   /** One-shot guard: start Claude Agent Teams hidden for existing profiles without overriding later opt-ins. */
   claudeAgentTeamsDefaultDisabledMigrated?: boolean
   /** One-shot guard: hosts saved before the remote CLI control default flip were pinned off. */
@@ -378,6 +376,9 @@ export type GlobalSettings = GlobalSettingsBase & {
   geminiCliOAuthEnabled: boolean
   /** Per-agent CLI command overrides. A missing key means use the catalog default binary name. */
   agentCmdOverrides: Partial<Record<TuiAgent, string>>
+  /** Off keeps each Codex home's history to itself: Orca links no sessions between accounts or
+   *  into ~/.codex, and removes nothing already linked (#24511). Absent means on (#10770). */
+  codexShareHistoryAcrossAccounts?: boolean
   /** Custom CODEX_HOME for Codex session-history discovery (defaults to ~/.codex).
    *  History-only: does not change which account/config/hooks Orca uses. */
   codexSessionSourceHome?: {
@@ -388,6 +389,7 @@ export type GlobalSettings = GlobalSettingsBase & {
   }
   /** Per-agent default CLI arguments appended after the binary/path and before prompts. */
   agentDefaultArgs?: Partial<Record<TuiAgent, string>>
+  agentLaunchChoices?: AgentLaunchChoices
   /** Per-agent launch environment defaults used when yolo mode is exposed as env. */
   agentDefaultEnv?: Partial<Record<TuiAgent, Record<string, string>>>
   /** One-shot guard for adding yolo-mode default args to untouched agent launch profiles. */

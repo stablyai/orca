@@ -4,10 +4,14 @@ import { Pressable, StyleSheet, Text, View } from 'react-native'
 import type { MobileRenderableRepoIcon } from '../host-screen/host-screen-reply-schema'
 import { triggerMediumImpact } from '../platform/haptics'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import type { Worktree } from '../worktree/workspace-list-types'
 import type { WorktreeCardDetails } from '../../../src/shared/worktree/card-properties'
 import { isRemoteExecutionHostId } from '../../../src/shared/execution-host'
 import type { AgentActivityDisplayMode } from '../../../src/shared/ui-chrome-types'
+import type { WorktreeStatus } from '../../../src/shared/worktree-status-rollup'
 import { areStructurallyEqual } from '../worktree/structural-equality'
 import { projectGroupRowIndent } from '../worktree/project-group-indent'
 import { getWorktreeMetaGlyphPresence } from '../worktree/worktree-meta-glyph-presence'
@@ -22,8 +26,6 @@ function displayBranch(branch: string): string {
   return branch.replace(/^refs\/heads\//, '')
 }
 
-type WorktreeRollupStatus = 'working' | 'active' | 'permission' | 'done' | 'inactive'
-
 type Props = {
   item: Worktree
   isReadOnly: boolean
@@ -35,7 +37,7 @@ type Props = {
   /** What the desktop's shared Card layout and properties show, and where identity goes. */
   cardDetails: WorktreeCardDetails
   agentActivityDisplayMode: AgentActivityDisplayMode
-  status: WorktreeRollupStatus
+  status: WorktreeStatus
   onPress: (item: Worktree) => void
   onAgentPress?: (item: Worktree, paneKey: string) => void
   statusLive?: boolean
@@ -59,12 +61,15 @@ function WorktreeListRowComponent({
   onLongPress,
   onToggleLineage
 }: Props) {
+  useMobileColorScheme()
+  const t = useMobileTranslation()
   const isFolderWorkspace = item.workspaceKind === 'folder-workspace'
-  const folderMeta = item.comment?.trim() || item.path || 'Folder'
+  const folderMeta =
+    item.comment?.trim() || item.path || t('components.worktreeListRow.folder', 'Folder')
   const metaText = isFolderWorkspace ? folderMeta : displayBranch(item.branch)
   const lineageDepth = Math.max(0, item.lineageDepth ?? 0)
   const indent = projectGroupRowIndent(item) + lineageDepth * 18
-  const lineageChildCount = item.lineageChildCount ?? 0
+  const count = item.lineageChildCount ?? 0
   const shouldHideRepo = hideRepo && !item.showProjectName
   const showRepoChip = cardDetails.repoInTitle && !shouldHideRepo && !isFolderWorkspace
   const showRepoInMetaRow = !cardDetails.repoInTitle && !shouldHideRepo
@@ -110,12 +115,21 @@ function WorktreeListRowComponent({
       <View style={styles.worktreeMain}>
         <View style={styles.worktreeNameRow}>
           {showHostGlyph && (
-            <View accessibilityLabel={hostAccessibilityLabel || 'Remote host'}>
+            <View
+              accessibilityLabel={
+                hostAccessibilityLabel || t('components.worktreeListRow.remoteHost', 'Remote host')
+              }
+            >
               <HostKindIcon hostId={hostId} size={11} />
             </View>
           )}
           {showRepoChip && (
-            <View style={styles.repoChip} accessibilityLabel={`Project ${item.repo}`}>
+            <View
+              style={styles.repoChip}
+              accessibilityLabel={t('components.worktreeListRow.project', 'Project {{repo}}', {
+                repo: item.repo
+              })}
+            >
               <MobileRepoIcon repoIcon={repoIcon} size={11} color={repoColor} />
             </View>
           )}
@@ -139,7 +153,9 @@ function WorktreeListRowComponent({
           )}
           {isFolderWorkspace && (
             <View style={styles.folderBadge}>
-              <Text style={styles.folderBadgeText}>Folder</Text>
+              <Text style={styles.folderBadgeText}>
+                {t('components.worktreeListRow.folder', 'Folder')}
+              </Text>
             </View>
           )}
           <WorktreeMetaGlyphs presence={getWorktreeMetaGlyphPresence(item, cardDetails)} />
@@ -149,7 +165,9 @@ function WorktreeListRowComponent({
             {lineageDepth > 0 && (
               <View style={styles.childBadge}>
                 <GitBranch size={10} color={colors.textMuted} />
-                <Text style={styles.childBadgeText}>Child</Text>
+                <Text style={styles.childBadgeText}>
+                  {t('components.worktreeListRow.child', 'Child')}
+                </Text>
               </View>
             )}
             {cardDetails.host && (item.hostContextLabel || item.hostContextHealthLabel) ? (
@@ -199,7 +217,7 @@ function WorktreeListRowComponent({
             fullList={agentActivityDisplayMode === 'full'}
           />
         ) : null}
-        {lineageChildCount > 0 && onToggleLineage ? (
+        {count > 0 && onToggleLineage ? (
           <Pressable
             style={styles.lineageToggle}
             onPress={(event) => {
@@ -214,7 +232,9 @@ function WorktreeListRowComponent({
             )}
             <GitBranch size={12} color={colors.textSecondary} />
             <Text style={styles.lineageToggleText}>
-              {lineageChildCount} {lineageChildCount === 1 ? 'child' : 'children'}
+              {count === 1
+                ? t('components.worktreeListRow.children_one', '{{count}} child', { count })
+                : t('components.worktreeListRow.children_other', '{{count}} children', { count })}
             </Text>
           </Pressable>
         ) : null}
@@ -229,7 +249,7 @@ function WorktreeListRowComponent({
 
 export const WorktreeListRow = memo(WorktreeListRowComponent, areStructurallyEqual)
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   worktreeRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -287,7 +307,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.bgRaised,
     paddingHorizontal: 5,
     paddingVertical: 1,
-    borderRadius: 4
+    borderRadius: radii.pill
   },
   prNumber: {
     fontSize: 10,
@@ -299,7 +319,7 @@ const styles = StyleSheet.create({
     height: 16,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: 4,
+    borderRadius: radii.mark,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.borderSubtle,
     backgroundColor: colors.bgRaised
@@ -308,7 +328,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.bgRaised,
     paddingHorizontal: 5,
     paddingVertical: 1,
-    borderRadius: 4
+    borderRadius: radii.pill
   },
   folderBadgeText: {
     fontSize: 10,
@@ -339,7 +359,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.bgRaised,
     paddingHorizontal: 5,
     paddingVertical: 1,
-    borderRadius: 4
+    borderRadius: radii.pill
   },
   childBadgeText: {
     fontSize: 10,
@@ -365,7 +385,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.bgRaised,
     paddingHorizontal: 8,
     paddingVertical: 4,
-    borderRadius: radii.button
+    borderRadius: radii.control
   },
   lineageToggleText: {
     fontSize: 11,
@@ -379,4 +399,4 @@ const styles = StyleSheet.create({
     textAlign: 'right',
     paddingTop: 3
   }
-})
+}))

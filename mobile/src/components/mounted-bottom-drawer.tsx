@@ -19,7 +19,9 @@ import Animated, {
   interpolate,
   Extrapolation
 } from 'react-native-reanimated'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { spacing } from '../theme/mobile-theme'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { resolveBottomDrawerFillHeight } from './bottom-drawer-fill-height'
 import { resolveBottomDrawerKeyboardInset } from './bottom-drawer-keyboard-inset'
 import {
@@ -70,6 +72,8 @@ export function MountedBottomDrawer({
   zIndex = 1000,
   scrollResetKey = null
 }: MountedBottomDrawerProps) {
+  useMobileColorScheme()
+  const t = useMobileTranslation()
   const translateY = useSharedValue(0)
   const progress = useSharedValue(0)
   const keyboardOffset = useSharedValue(0)
@@ -306,7 +310,7 @@ export function MountedBottomDrawer({
       <Animated.View
         style={styles.handleHitArea}
         accessibilityRole="button"
-        accessibilityLabel="Dismiss drawer"
+        accessibilityLabel={t('components.mountedBottomDrawer.dismissDrawer', 'Dismiss drawer')}
       >
         <View style={styles.handle} />
       </Animated.View>

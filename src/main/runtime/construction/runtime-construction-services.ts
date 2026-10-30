@@ -18,6 +18,7 @@ import type {
 } from '../runtime-terminal-contracts'
 import type { TitleDisplayClear } from '../runtime-worktree-status-projection'
 import type { OrchestrationDb } from '../orchestration/db/orchestration-db'
+import type { WorkerTerminalResourceRow } from '../orchestration/worker-terminal-ownership'
 import type { ResolvedWorktree } from '../runtime-worktree-path-identity'
 import type {
   RuntimeTerminalShow,
@@ -33,7 +34,7 @@ import type { RuntimeWorktreeScanResult } from '../repo-worktree-resolution-scan
 import type { ProcessedAgentStatusChunk } from '../../../shared/agent-status-osc'
 import type { RuntimeTerminalAgentPresenceOptions } from '../runtime-terminal-agent-presence'
 import type { resolveTerminalOrchestrationCliCommand } from '../orchestration/cli-command'
-import type { OrchestrationMailboxLeaf } from '../orchestration/mailbox-owner'
+import type { OrchestrationMailboxTerminal } from '../orchestration/mailbox-owner'
 import type { OrchestrationMailboxPointerSubmitTarget } from '../orchestration/mailbox-pointer-submit'
 import type { WriteSettlement } from '../../../shared/pty-write-settlement'
 import type { StructuredPointerTarget } from '../orchestration/structured-mailbox-pointer-delivery'
@@ -43,13 +44,13 @@ import type * as PtyControllerContract from '../runtime-pty-controller-contract'
 import type { RuntimeClientEventBus } from '../runtime-client-event-bus'
 import type { RuntimeRepoSelector } from '../runtime-repo-selector'
 import type { PtyPane, PtyPaneSource } from '../terminal/surface/pty-pane-query'
-import type { PtyLaneMailboxTarget } from '../terminal/query/pty-terminal-summary'
 
 export abstract class RuntimeConstructionServices {
   abstract getOrchestrationDb(): OrchestrationDb
   abstract listRepos(): Repo[]
   abstract invalidateResolvedWorktreeCache(): void
   abstract invalidateWorktreeScanCacheForRepo(repoId: string): void
+  abstract notifyWorktreesChanged(repoId: string, options?: { invalidateGitScans?: boolean }): void
   protected abstract notifyReposChanged(): void
   protected abstract isPtyKnownExited(ptyId: string): boolean
 
@@ -108,6 +109,7 @@ export abstract class RuntimeConstructionServices {
   protected abstract readCaughtUpRuledScreen(ptyId: string): RuledScreen | null
   protected abstract clearWaitBlockedStamp(ptyId: string): void
   protected abstract readRuledScreen(ptyId: string | null | undefined): RuledScreen | null
+  protected abstract readOutputClockAt(ptyId: string | null | undefined): number | null
   protected abstract headlessTerminals: Map<string, RuntimeHeadlessTerminal>
   protected abstract readHeadlessVisibleTerminalState(
     ptyId: string
@@ -123,9 +125,18 @@ export abstract class RuntimeConstructionServices {
     record: TerminalHandleRecord
     leaf: RuntimeLeafRecord
   }
-  protected abstract getOrchestrationMailboxLeafForHandle(handle: string): OrchestrationMailboxLeaf
-  protected abstract getPtyLaneMailboxTarget(leafKey: string): PtyLaneMailboxTarget | null
+  protected abstract getTerminalPtyForHandle(handle: string): { pty: RuntimePtyWorktreeRecord }
+  protected abstract getRetainedHandlePty(handle: string): RuntimePtyWorktreeRecord | undefined
+  protected abstract getOrchestrationMailboxTerminal(
+    ptyId: string
+  ): OrchestrationMailboxTerminal | null
+  protected abstract getOrchestrationMailboxTerminalForHandle(
+    handle: string
+  ): OrchestrationMailboxTerminal | null
   protected abstract hasMailboxTerminalHandle(handle: string): boolean
+  protected abstract getMailboxTerminalForPaneKey(
+    paneKey: string
+  ): OrchestrationMailboxTerminal | null
   protected abstract startTuiIdleVisibleReadProbe(
     waiter: TerminalWaiter,
     waiterTimeoutMs: number,
@@ -232,16 +243,12 @@ export abstract class RuntimeConstructionServices {
   abstract getTerminalProcessIncarnation(handle: string): string | null
   protected abstract controllerKnowsPtyIsLive(ptyId: string): boolean
   protected abstract isLeafPtyProvenAbsent(ptyId: string): Promise<boolean>
-  protected abstract checkDeliverySettledAndArmRecheck(leaf: {
-    tabId: string
-    leafId: string
-  }): boolean
+  protected abstract checkDeliverySettledAndArmRecheck(ptyId: string): boolean
   protected abstract isPtyAwaitingUserInput(ptyId: string): boolean
   abstract getTerminalOrchestrationCliCommand(
     handle: string
   ): ReturnType<typeof resolveTerminalOrchestrationCliCommand>
   protected abstract resolveOrchestrationPointerSubmitTarget(
-    stagedLeaf: OrchestrationMailboxLeaf,
     ptyId: string
   ): OrchestrationMailboxPointerSubmitTarget | null
   abstract deliverPendingMessagesForHandle(
@@ -256,6 +263,9 @@ export abstract class RuntimeConstructionServices {
     mailboxHandle: string
   ): StructuredPointerTarget | null
   abstract getTerminalPaneKey(handle: string): string | null
+  abstract isWorkerAgentInTurn(
+    resource: Pick<WorkerTerminalResourceRow, 'pane_key' | 'terminal_handle'>
+  ): boolean
   protected abstract getWorkspaceSessionForWorktree(
     worktreeId: string
   ): WorkspaceSessionState | null
@@ -266,7 +276,11 @@ export abstract class RuntimeConstructionServices {
   protected abstract getTrackedDisplayTitleForPty(ptyId: string): string | null
   protected abstract getLeavesForPty(ptyId: string): RuntimeLeafRecord[]
   abstract notifyMessageArrived(handle: string, messageType?: string): void
-  protected abstract resolveWorktreeSelector(selector: string): Promise<ResolvedWorktree>
+  protected abstract resolveGitWorktreeSelector(selector: string): Promise<ResolvedWorktree>
+  protected abstract resolveWorkspaceSelector(
+    selector: string,
+    options?: { requireUsableFolderPath?: boolean }
+  ): Promise<ResolvedWorktree>
   protected abstract refreshPtyWorktreeRecordsWithControllerInventory(
     resolvedWorktrees: ResolvedWorktree[],
     targetWorktreeId?: string | null,

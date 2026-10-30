@@ -27,7 +27,7 @@ import { settleAttentionRemovedBy } from '../workspace-attention/attention-remov
 export function createAgentStatusProviderSessionActions(
   runtime: AgentStatusRuntime
 ): Pick<AgentStatusSlice, 'recordAgentProviderSession'> {
-  const { get, set, requestFreshness } = runtime
+  const { get, set, requestFreshness, projectConversation } = runtime
   return {
     recordAgentProviderSession: (
       paneKey: string,
@@ -51,7 +51,7 @@ export function createAgentStatusProviderSessionActions(
       }
       let removedLiveStatus = false
       settleAttentionRemovedBy(set, get, () =>
-        set((s) => {
+        set((s, changedPaneKeys) => {
           const existingStatus = s.agentStatusByPaneKey[paneKey]
           const existingRecord = s.sleepingAgentSessionsByPaneKey[paneKey]
           if (
@@ -123,6 +123,7 @@ export function createAgentStatusProviderSessionActions(
             ? { ...s.agentStatusByPaneKey }
             : s.agentStatusByPaneKey
           if (removedLiveStatus) {
+            changedPaneKeys.add(paneKey)
             delete nextLive[paneKey]
           }
           const nextRetained =
@@ -147,8 +148,12 @@ export function createAgentStatusProviderSessionActions(
             nextLaunchConfigs = { ...nextLaunchConfigs }
             delete nextLaunchConfigs[paneKey]
           }
+          const nextConversations = projectConversation(s, { ...record, agentType: agent })
           return {
             agentStatusByPaneKey: nextLive,
+            ...(nextConversations !== s.agentConversationsByPaneKey
+              ? { agentConversationsByPaneKey: nextConversations }
+              : {}),
             retainedAgentsByPaneKey: nextRetained,
             sleepingAgentSessionsByPaneKey: {
               ...s.sleepingAgentSessionsByPaneKey,

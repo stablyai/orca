@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { RuntimeTerminalWriter } from './runtime-terminal-writer'
+import { isTerminalInputPaused } from './terminal-input-admission'
+import { terminalInputSourceForClient } from './rpc/methods/terminal/terminal-input-delivery'
 import {
   WRITE_ACCEPTED,
   writeRefused,
@@ -159,4 +161,26 @@ describe('requested terminal write settlement', () => {
     expect(raw.mock.calls.map((call) => call[1])).toEqual(['body', '\r'])
     expect(settled).not.toHaveBeenCalled()
   })
+})
+
+it.each([
+  ['desktop', { kind: 'desktop' }, { id: 'desktop', type: 'desktop' }],
+  ['local CLI', { kind: 'local-cli' }, { id: 'orca-cli', type: 'desktop' }],
+  ['paired CLI', { kind: 'paired-device', deviceId: 'cli' }, { id: 'orca-cli', type: 'desktop' }],
+  ['orchestration', undefined, undefined],
+  ['mobile', { kind: 'paired-device', deviceId: 'phone' }, { id: 'phone', type: 'mobile' }],
+  ['legacy', { kind: 'paired-device', deviceId: 'old' }, undefined],
+  ['unknown', { kind: 'paired-device', deviceId: 'other' }, { id: 'unknown' }]
+] as const)('admits %s by source and driver', (source, caller, client) => {
+  const inputSource =
+    source === 'orchestration' ? undefined : terminalInputSourceForClient(client, caller)
+  for (const phone of [false, true]) {
+    const runtime = {
+      getDriver: () =>
+        phone ? { kind: 'mobile' as const, clientId: 'phone' } : { kind: 'desktop' as const }
+    }
+    expect(isTerminalInputPaused(runtime, 'pty', inputSource)).toBe(
+      phone && ['desktop', 'unknown'].includes(source)
+    )
+  }
 })

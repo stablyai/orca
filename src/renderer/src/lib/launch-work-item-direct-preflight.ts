@@ -1,6 +1,8 @@
+import { readAgentLaunchPreferencesForWorkspace } from '@/components/settings/use-host-agent-launch-preferences'
 import { useAppStore, type AppState } from '@/store'
 import { ensureDetectedAgentsForRepo } from './agent-detection-target-inventory'
-import { isTuiAgentEnabled, pickTuiAgent } from '../../../shared/tui-agent-selection'
+import { isTuiAgentEnabled } from '../../../shared/tui-agent-selection'
+import { resolveDefaultAgentForWorkspace } from './agent-tab-shortcuts'
 import { isTuiAgent } from '../../../shared/tui-agent-config'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import type { ProjectLaunchContext } from '../../../shared/rpc-contract/preflight-params'
@@ -10,7 +12,7 @@ import {
   planAgentSessionLaunch,
   type AgentSessionLaunchRequest
 } from './agent-session-launch-plan'
-import { getSetupConfig } from '@/lib/new-workspace'
+import { getDefaultSetupDecision, getSetupConfig } from '../../../shared/orca-hook-setup-config'
 import { checkRuntimeHooks } from '@/runtime/runtime-hooks-client'
 import { resolveGitHubPrStartPointForRepo } from '@/lib/github-pr-start-point'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
@@ -61,14 +63,11 @@ export async function resolveDirectSetupDecision(
     // No configured setup means no setup decision, matching callers that omit it.
     return { kind: 'decided', decision: 'inherit' }
   }
-  const policy = repo.hookSettings?.setupRunPolicy ?? 'run-by-default'
-  if (policy === 'ask') {
-    return { kind: 'needs-modal' }
-  }
-  return {
-    kind: 'decided',
-    decision: policy === 'run-by-default' ? 'run' : 'skip'
-  }
+  const decision = getDefaultSetupDecision(
+    true,
+    repo.hookSettings?.setupRunPolicy ?? 'run-by-default'
+  )
+  return decision ? { kind: 'decided', decision } : { kind: 'needs-modal' }
 }
 
 export type DirectLaunchOwnerRow = {
@@ -151,18 +150,28 @@ export async function resolveDirectProspectiveAgent(
     : agentOverride
       ? null
       : ensureDetectedAgentsForRepo(store, repo)
-  const preferences = agentLaunchPreferences ?? store.settings
+  const detectedAgentIds = ((await detectedAgentsPromise) ?? []).filter(isTuiAgent)
+  const current = useAppStore.getState()
+  const workspace = {
+    kind: projectContext?.workspaceKind ?? 'git-worktree',
+    repoId: repo.id,
+    executionHostId: getRepoExecutionHostId(repo),
+    ...(projectContext ? { executionContext: projectContext.executionContext } : {})
+  } as const
+  const preferences =
+    agentLaunchPreferences ?? readAgentLaunchPreferencesForWorkspace(current, workspace)
   const prospectiveAgent =
     agentOverride ??
-    pickTuiAgent(
-      preferences?.defaultTuiAgent,
-      new Set(((await detectedAgentsPromise) ?? []).filter(isTuiAgent)),
-      preferences?.disabledTuiAgents
-    )
+    resolveDefaultAgentForWorkspace({
+      defaultTuiAgent: preferences?.defaultTuiAgent,
+      detectedAgentIds,
+      disabledTuiAgents: preferences?.disabledTuiAgents,
+      chatIn: { store: current, workspace }
+    })
   const unavailable = Boolean(
     agentLaunchPreferences &&
     agentOverride &&
     !isTuiAgentEnabled(agentOverride, agentLaunchPreferences.disabledTuiAgents)
   )
-  return { detectedAgentsPromise, prospectiveAgent, unavailable }
+  return { prospectiveAgent, unavailable }
 }

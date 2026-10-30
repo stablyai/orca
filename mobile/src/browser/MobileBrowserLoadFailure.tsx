@@ -6,9 +6,12 @@ import {
   isBrowserNetworkLoadFailure
 } from '../../../src/shared/browser-load-failure'
 import { colors, spacing, typography } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 
 /** The desktop failure page's words over the streamed frame, which shows only a blank page. */
 export function MobileBrowserLoadFailure({ loadError }: { loadError: BrowserLoadError }) {
+  useMobileColorScheme()
   if (!isBrowserNetworkLoadFailure(loadError)) {
     return null
   }
@@ -26,7 +29,7 @@ export function MobileBrowserLoadFailure({ loadError }: { loadError: BrowserLoad
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   page: {
     ...StyleSheet.absoluteFillObject,
     alignItems: 'center',
@@ -55,4 +58,4 @@ const styles = StyleSheet.create({
     fontSize: typography.metaSize,
     marginTop: spacing.xs
   }
-})
+}))

@@ -141,7 +141,7 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
           />
         </DropdownMenuTrigger>
         <DropdownMenuContent
-          className={cn(lineageDescendantCount > 0 ? 'w-60' : 'w-52', contentClassName)}
+          className={cn(lineageDescendantCount > 0 ? 'min-w-60' : 'min-w-52', contentClassName)}
           sideOffset={0}
           align="start"
           onPointerUpCapture={suppressOpeningPointerEvent}
@@ -154,7 +154,7 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
           onClickCapture={suppressOpeningPointerEvent}
           onCloseAutoFocus={handleCloseAutoFocus}
         >
-          <DropdownMenuLabel className="px-2 py-1 text-[11px] font-medium text-muted-foreground">
+          <DropdownMenuLabel>
             {translate('auto.components.sidebar.WorktreeContextMenu.workspaceSection', 'Workspace')}
           </DropdownMenuLabel>
           {!isMultiContext && (

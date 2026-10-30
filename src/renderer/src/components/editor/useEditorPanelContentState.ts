@@ -28,7 +28,7 @@ type UseEditorPanelContentStateParams = {
 type UseEditorPanelContentStateResult = {
   fileContents: Record<string, FileContent>
   diffContents: Record<string, DiffContent>
-  reloadContent: (file: OpenFile) => void
+  reloadContent: (file: OpenFile, options?: { wakeWslDistro?: boolean }) => void
 }
 
 export function useEditorPanelContentState({
@@ -136,7 +136,7 @@ export function useEditorPanelContentState({
 
   // Route explicit reloads by mode so diff banners refresh diff bodies instead of plain-file caches.
   const reloadContent = useCallback(
-    (file: OpenFile): void => {
+    (file: OpenFile, options?: { wakeWslDistro?: boolean }): void => {
       if (file.mode === 'diff') {
         setDiffContents((prev) => {
           if (!prev[file.id]) {
@@ -146,7 +146,10 @@ export function useEditorPanelContentState({
           delete next[file.id]
           return next
         })
-        void loadDiffContent(file, { force: true })
+        void loadDiffContent(file, {
+          force: true,
+          ...(options?.wakeWslDistro ? { wakeWslDistro: true } : {})
+        })
         return
       }
       delete fileLoadRetryAttemptsRef.current[file.id]
@@ -159,7 +162,8 @@ export function useEditorPanelContentState({
         return next
       })
       void loadFileContent(file.filePath, file.id, file.worktreeId, file.relativePath, {
-        force: true
+        force: true,
+        ...(options?.wakeWslDistro ? { wakeWslDistro: true } : {})
       })
     },
     [loadDiffContent, loadFileContent]

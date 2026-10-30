@@ -39,7 +39,9 @@ beforeEach(async () => {
   db = new OrchestrationDb(':memory:')
 })
 afterEach(async () => {
-  releaseStructuredWorkerSession('dispatch-retry')
+  for (const { sessionId } of structuredWorkerIdentities.list()) {
+    releaseStructuredWorkerSession(sessionId)
+  }
   setStructuredAgentSessionHost(null)
   await rig.dispose()
   db.close()
@@ -65,7 +67,6 @@ async function createWorker() {
     }),
     publishStructuredAgentSessionTab: async () => {},
     getNestedWorkerMaxDepth: () => 2,
-    getOrchestrationHeartbeatMinutes: () => 5,
     getTerminalOrchestrationCliCommand: () => 'orca',
     orchestrationSenderNames: { nameOf: () => 'Coordinator' },
     forgetStructuredSessionMail: vi.fn(),

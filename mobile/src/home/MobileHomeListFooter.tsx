@@ -1,10 +1,13 @@
-import { StyleSheet, Text, View } from 'react-native'
+import { Text, View } from 'react-native'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import type { AccountsSnapshot } from '../components/AccountUsage'
 import { MobileHomeQuickActions } from '../components/MobileHomeQuickActions'
 import { PickerModal } from '../components/PickerModal'
 import { useConnectedHostPicker } from '../components/use-connected-host-picker'
 import type { TaskProvider } from '../../../src/shared/task-providers'
 import { colors, spacing } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import type { HostProfile } from '../transport/types'
 import type { HomeResumeCard } from '../worktree/home-resume-card'
 import { MobileHomeAccountUsageCards } from './MobileHomeAccountUsageCards'
@@ -24,6 +27,8 @@ export function MobileHomeListFooter(props: {
   onOpenTasks: (hostId: string, provider?: TaskProvider) => void
   onPairDesktop: () => void
 }) {
+  const t = useMobileTranslation()
+  useMobileColorScheme()
   const tasksHostPicker = useConnectedHostPicker(props.connectedHosts)
   const hostProviders = props.connectedHosts.map((host) => ({
     host,
@@ -45,17 +50,20 @@ export function MobileHomeListFooter(props: {
     <View>
       {props.resumeCard ? (
         <>
-          <Text style={styles.sectionHeading}>Resume</Text>
+          <Text style={styles.sectionHeading}>{t('home.listFooter.resumeHeading', 'Resume')}</Text>
           <MobileHomeResumeCard card={props.resumeCard} onOpen={props.onOpenResume} />
         </>
       ) : null}
-      <Text style={styles.sectionHeading}>Tasks</Text>
+      <Text style={styles.sectionHeading}>{t('home.listFooter.tasksHeading', 'Tasks')}</Text>
       <MobileHomeTasksCard
         enabled={props.connectedHosts.length > 0}
         providers={providers}
         onOpen={openTasks}
       />
-      <PickerModal title="Open Tasks On" {...tasksHostPicker.pickerProps} />
+      <PickerModal
+        title={t('home.listFooter.hostPickerTitle', 'Open Tasks On')}
+        {...tasksHostPicker.pickerProps}
+      />
       <MobileHomeQuickActions
         connectedHosts={props.connectedHosts}
         onPairDesktop={props.onPairDesktop}
@@ -66,7 +74,7 @@ export function MobileHomeListFooter(props: {
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   sectionHeading: {
     fontSize: 11,
     fontWeight: '600',
@@ -77,4 +85,4 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
     paddingHorizontal: spacing.xs
   }
-})
+}))

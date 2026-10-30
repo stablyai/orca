@@ -86,10 +86,10 @@ describe('GitLab source lookup routing', () => {
   it('routes runtime-owned GitLab work item lists through runtime RPC', async () => {
     const result: GitLabPagedResult<GitLabWorkItem> = {
       items: [gitlabItem({ repoId: 'runtime-returned' })],
-      page: 1,
-      perPage: 12,
-      totalCount: 1,
-      totalPages: 1
+      page: 3,
+      perPage: 1,
+      totalCount: 0,
+      totalPages: 4
     }
     vi.mocked(callRuntimeRpc).mockResolvedValue(result)
 
@@ -99,11 +99,11 @@ describe('GitLab source lookup routing', () => {
         repoId: 'renderer-repo',
         sourceContext: runtimeSourceContext,
         state: 'opened',
-        page: 1,
-        perPage: 12,
+        page: 3,
+        perPage: 1,
         query: 'fix login'
       })
-    ).resolves.toMatchObject({ items: [{ repoId: 'renderer-repo', number: 7 }] })
+    ).resolves.toEqual({ ...result, items: [gitlabItem({ repoId: 'renderer-repo' })] })
 
     // Forward the query through runtime RPC or GitLab search would return unfiltered results (#6263).
     expect(callRuntimeRpc).toHaveBeenCalledWith(
@@ -112,8 +112,8 @@ describe('GitLab source lookup routing', () => {
       expect.objectContaining({
         repo: 'id:runtime-repo',
         state: 'opened',
-        page: 1,
-        perPage: 12,
+        page: 3,
+        perPage: 1,
         query: 'fix login'
       }),
       { timeoutMs: 30_000 }
@@ -127,13 +127,14 @@ describe('GitLab source lookup routing', () => {
       hostId: 'local',
       repoId: 'local-repo'
     }
-    vi.mocked(window.api.gl.listWorkItems).mockResolvedValue({
+    const result = {
       items: [gitlabItem({ repoId: 'local-returned' })],
-      page: 1,
-      perPage: 12,
-      totalCount: 1,
-      totalPages: 1
-    })
+      page: 3,
+      perPage: 1,
+      totalCount: 0,
+      totalPages: 4
+    }
+    vi.mocked(window.api.gl.listWorkItems).mockResolvedValue(result)
 
     await expect(
       listGitLabWorkItemsForSource({
@@ -141,19 +142,19 @@ describe('GitLab source lookup routing', () => {
         repoId: 'local-repo',
         sourceContext: localSourceContext,
         state: 'opened',
-        page: 1,
-        perPage: 12,
+        page: 3,
+        perPage: 1,
         query: 'fix login'
       })
-    ).resolves.toMatchObject({ items: [{ repoId: 'local-repo', number: 7 }] })
+    ).resolves.toEqual({ ...result, items: [gitlabItem({ repoId: 'local-repo' })] })
 
     expect(window.api.gl.listWorkItems).toHaveBeenCalledWith({
       repoPath: '/workspace/app',
       repoId: 'local-repo',
       sourceContext: localSourceContext,
       state: 'opened',
-      page: 1,
-      perPage: 12,
+      page: 3,
+      perPage: 1,
       query: 'fix login'
     })
     expect(callRuntimeRpc).not.toHaveBeenCalled()

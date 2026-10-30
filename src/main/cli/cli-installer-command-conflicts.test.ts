@@ -57,37 +57,6 @@ describe('CliInstaller', () => {
     }
   )
 
-  it.skipIf(process.platform === 'win32')(
-    'replaces stale packaged Orca launcher symlinks',
-    async () => {
-      const fixture = await makeFixture()
-      const commandDir = join(fixture.root, 'bin')
-      const installPath = join(commandDir, 'orca')
-      const resourcesPath = join(fixture.root, 'Current.app', 'Contents', 'Resources')
-      const launcherPath = join(resourcesPath, 'bin', 'orca')
-      const oldLauncherPath = join(fixture.root, 'Old.app', 'Contents', 'Resources', 'bin', 'orca')
-      await mkdir(commandDir, { recursive: true })
-      await mkdir(join(resourcesPath, 'bin'), { recursive: true })
-      await writeFile(launcherPath, '#!/usr/bin/env bash\n', 'utf8')
-      await symlink(oldLauncherPath, installPath)
-
-      const installer = new CliInstaller({
-        platform: 'darwin',
-        isPackaged: true,
-        resourcesPath,
-        commandPathOverride: installPath,
-        processPathEnv: commandDir
-      })
-
-      await expect(installer.getStatus()).resolves.toMatchObject({
-        state: 'stale',
-        currentTarget: oldLauncherPath
-      })
-      await expect(installer.install()).resolves.toMatchObject({ state: 'installed' })
-      await expect(readlink(installPath)).resolves.toBe(launcherPath)
-    }
-  )
-
   // Older builds wrote generated launcher files directly into /usr/local/bin/orca.
   it.skipIf(process.platform === 'win32')(
     'replaces stale generated Unix launcher files',

@@ -9,6 +9,7 @@ import {
 import { BRIDGE_PAGE_PAINTED } from './bridge/bridge-page-painted'
 import { BRIDGE_ROUTE_PARAM_CLEAR } from './bridge/bridge-route-update'
 import { BRIDGE_HAPTICS_GRANT, BRIDGE_HAPTICS_NOTIFY } from './bridge/bridge-haptics-notify'
+import { BRIDGE_LIVENESS_PROBE_NOTIFY } from './bridge/bridge-liveness-probe-notify'
 import { MOBILE_WEB_SHELL_GRANTS } from './page-route-policy'
 
 describe('notifications, refusals and the fence', () => {
@@ -362,6 +363,23 @@ describe('haptics', () => {
     expect(bridge.haptics).toEqual([])
     // Unknown haptic kinds fail envelope parsing; older shells must not substitute a different effect.
     expect(bridge.diagnostics).toEqual([{ kind: 'refused', refusal: 'unrecognised-message' }])
+  })
+})
+
+// A page that stops hearing back cannot probe the socket itself; native owns the connection it rides.
+describe('liveness probe', () => {
+  const probe = clientFrame({ type: 'notify', name: BRIDGE_LIVENESS_PROBE_NOTIFY })
+
+  it('asks the native client for a decisive probe', () => {
+    const bridge = harness()
+    let probes = 0
+    bridge.client.probeLivenessNow = () => {
+      probes += 1
+    }
+    bridge.host.receive(clientFrame({ type: 'ready' }))
+    bridge.host.receive(probe)
+    expect(probes).toBe(1)
+    expect(bridge.diagnostics).toEqual([])
   })
 })
 

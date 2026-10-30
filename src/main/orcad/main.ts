@@ -3,12 +3,19 @@ import process from 'node:process'
 import { main } from './orcad-entry'
 import { resolveOrcadExitCode } from './orcad-exit-code'
 import { reserveServeStdoutForReadiness } from '../server/serve-stdout-boundary'
-import { runOrcadNativePreflight } from './orcad-native-preflight'
+import { runOrcadNativePreflightVerdict } from './orcad-native-preflight'
 import {
   ORCAD_PROFILE_PREFLIGHT_FLAG,
   ORCAD_STARTUP_PREFLIGHT_FLAG
 } from '../../shared/orcad-profile-preflight'
-import { preflightBundledOrcadStartup, runOrcadProfilePreflight } from './orcad-profile-preflight'
+import { onNodePtyLoadFailure } from '../providers/node-pty-load-failure'
+import {
+  confirmBundledOrcadStartupQualified,
+  discardBundledOrcadStartupQualification,
+  forgetBundledOrcadStartupQualification,
+  preflightBundledOrcadStartup,
+  runOrcadProfilePreflight
+} from './orcad-profile-preflight'
 import { assertOrcadServerRuntime } from './orcad-bundled-runtime'
 import {
   formatOrcadNativePreflightReport,
@@ -76,11 +83,13 @@ function startOrcadProcess(): void {
         process.stdout.write(`${report}\n`, () => process.exit(0))
       }, failStartup)
     } else if (
-      (flag === ORCAD_PROFILE_PREFLIGHT_FLAG || flag === ORCAD_STARTUP_PREFLIGHT_FLAG) &&
-      process.argv.length === 4
+      (flag === ORCAD_STARTUP_PREFLIGHT_FLAG && process.argv.length === 4) ||
+      (flag === ORCAD_PROFILE_PREFLIGHT_FLAG &&
+        (process.argv.length === 4 || process.argv.length === 5))
     ) {
       void runOrcadProfilePreflight(process.argv[3], {
-        nativeFeatures: flag === ORCAD_PROFILE_PREFLIGHT_FLAG
+        nativeFeatures: flag === ORCAD_PROFILE_PREFLIGHT_FLAG,
+        servedUserDataPath: process.argv[4]
       })
         // The owner reads EOF; lingering native handles must not keep this probe alive.
         .then(() => process.stdout.write('', () => process.exit(0)))
@@ -89,11 +98,16 @@ function startOrcadProcess(): void {
       // Stdout is the readiness API; send incidental diagnostics to stderr.
       reserveServeStdoutForReadiness()
       void preflightBundledOrcadStartup()
-        .then(() => {
-          // Probe before deferred node-pty loading can crash this process.
-          runOrcadNativePreflight()
+        .then((qualified) => {
+          onNodePtyLoadFailure(() => void discardBundledOrcadStartupQualification())
+          // Probe before deferred node-pty loading can crash this process; a slot qualified on this
+          // unchanged host passed it on its last launch.
+          if (runOrcadNativePreflightVerdict({ qualified }) !== 'ok') {
+            forgetBundledOrcadStartupQualification()
+          }
           return main()
         })
+        .then(confirmBundledOrcadStartupQualified)
         .catch(failStartup)
     }
   } catch (error) {

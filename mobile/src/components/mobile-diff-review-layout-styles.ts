@@ -1,7 +1,8 @@
 import { StyleSheet } from 'react-native'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
 
-export const mobileDiffReviewLayoutStyles = StyleSheet.create({
+export const mobileDiffReviewLayoutStyles = themedStyleSheet(() => ({
   safeArea: {
     flex: 1,
     backgroundColor: colors.bgBase
@@ -21,7 +22,7 @@ export const mobileDiffReviewLayoutStyles = StyleSheet.create({
   iconButton: {
     width: 44,
     height: 44,
-    borderRadius: radii.button,
+    borderRadius: radii.control,
     alignItems: 'center',
     justifyContent: 'center'
   },
@@ -59,7 +60,7 @@ export const mobileDiffReviewLayoutStyles = StyleSheet.create({
   },
   filterChip: {
     minHeight: 34,
-    borderRadius: radii.button,
+    borderRadius: radii.pill,
     paddingHorizontal: spacing.md,
     alignItems: 'center',
     justifyContent: 'center',
@@ -98,7 +99,7 @@ export const mobileDiffReviewLayoutStyles = StyleSheet.create({
   statusBadge: {
     width: 28,
     height: 28,
-    borderRadius: radii.button,
+    borderRadius: radii.pill,
     borderWidth: StyleSheet.hairlineWidth,
     alignItems: 'center',
     justifyContent: 'center'
@@ -150,7 +151,7 @@ export const mobileDiffReviewLayoutStyles = StyleSheet.create({
   fileNote: {
     minHeight: 44,
     padding: spacing.sm,
-    borderRadius: radii.button,
+    borderRadius: radii.surface,
     backgroundColor: colors.bgPanel,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.borderSubtle
@@ -175,7 +176,7 @@ export const mobileDiffReviewLayoutStyles = StyleSheet.create({
     justifyContent: 'center',
     gap: spacing.xs,
     paddingHorizontal: spacing.md,
-    borderRadius: radii.button,
+    borderRadius: radii.control,
     backgroundColor: colors.bgPanel
   },
   hunkButtonPressed: {
@@ -191,7 +192,7 @@ export const mobileDiffReviewLayoutStyles = StyleSheet.create({
     marginTop: spacing.sm,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
-    borderRadius: radii.button,
+    borderRadius: radii.surface,
     backgroundColor: colors.bgRaised,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.statusAmber
@@ -235,7 +236,7 @@ export const mobileDiffReviewLayoutStyles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.xs,
     paddingHorizontal: spacing.md,
-    borderRadius: radii.button,
+    borderRadius: radii.control,
     backgroundColor: colors.bgRaised
   },
   retryText: {
@@ -243,4 +244,4 @@ export const mobileDiffReviewLayoutStyles = StyleSheet.create({
     fontSize: typography.bodySize,
     fontWeight: '700'
   }
-})
+}))

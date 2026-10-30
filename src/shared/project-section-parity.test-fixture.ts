@@ -106,18 +106,31 @@ export const PROJECT_SECTION_PARITY_ROWS: readonly {
   { id: 'wt-m4', repoId: 'm4-orca', lastActivityAt: 10 }
 ]
 
-const SHARED = { key: 'project:github:stablyai/orca', label: 'stably/orca' }
-const WORKSPACE = { key: 'project:repo:local-workspace', label: 'orca/orca' }
-const M4_TWO = { key: 'project:repo:m4-orca-two', label: 'orca' }
+// Same-host checkouts still need path prefixes; other machines do not.
+const STABLY = {
+  key: 'project:github:stablyai/orca::setup:local-stably',
+  label: 'stably/orca'
+}
+const WORKSPACE = {
+  key: 'project:github:stablyai/orca::setup:local-workspace',
+  label: 'orca/orca'
+}
+// Why 'orca', not the server's 'Orca': the later host's derived project name wins the merge.
+const WINDOWS = { key: 'project:github:stablyai/orca', label: 'orca' }
+const M4 = { key: 'project:github:stablyai/orca::setup:m4-orca', label: 'orca/orca' }
+const M4_TWO = {
+  key: 'project:github:stablyai/orca::setup:m4-orca-two',
+  label: 'orca-two/orca'
+}
 const ASSETS = { key: 'project:repo:local-assets', label: 'design-assets' }
 
 export const PROJECT_SECTION_PARITY_HEADERS = {
-  recent: [M4_TWO, SHARED, WORKSPACE, ASSETS],
-  manual: [SHARED, ASSETS, WORKSPACE, M4_TWO]
+  recent: [M4_TWO, WINDOWS, WORKSPACE, STABLY, M4, ASSETS],
+  manual: [STABLY, ASSETS, WORKSPACE, WINDOWS, M4, M4_TWO]
 } as const
 
 /** What main serves the phone for these answers (the renderer's published catalog). */
-export const OLD_PROJECT_SECTION_PARITY_SERVED: MobileProjectSectionCatalog = {
+export const PROJECT_SECTION_PARITY_SERVED: MobileProjectSectionCatalog = {
   repos: [
     {
       id: 'local-stably',
@@ -233,20 +246,4 @@ export const OLD_PROJECT_SECTION_PARITY_SERVED: MobileProjectSectionCatalog = {
     }
   ],
   projectOrderBy: 'manual'
-}
-
-/** Current publisher identities; the old snapshot above remains an accepted peer payload. */
-export const PROJECT_SECTION_PARITY_SERVED: MobileProjectSectionCatalog = {
-  ...OLD_PROJECT_SECTION_PARITY_SERVED,
-  projects: [
-    { id: 'repo:local-assets', displayName: 'design-assets' },
-    { id: 'repo:local-workspace', displayName: 'orca' },
-    { id: 'github:stablyai/orca', displayName: 'orca' },
-    { id: 'repo:m4-orca-two', displayName: 'orca' }
-  ],
-  setups: OLD_PROJECT_SECTION_PARITY_SERVED.setups.map((setup) =>
-    setup.repoId === 'local-workspace' || setup.repoId === 'm4-orca-two'
-      ? { ...setup, projectId: `repo:${setup.repoId}` }
-      : setup
-  )
 }

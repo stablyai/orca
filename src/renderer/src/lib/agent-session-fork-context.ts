@@ -1,3 +1,4 @@
+import { trimAgentSessionContext } from '../../../shared/agent-session-context-budget'
 const MAX_FORK_CONTEXT_CHARS = 36_000
 const MAX_FORK_CAPTURE_SANITIZE_CHARS = MAX_FORK_CONTEXT_CHARS * 4
 const ESCAPE_CODE = 27
@@ -7,16 +8,6 @@ export type AgentSessionForkPromptInput = {
   capturedText: string
   sourceLabel?: string | null
   agentLabel?: string | null
-}
-
-function trimToContextBudget(value: string): string {
-  if (value.length <= MAX_FORK_CONTEXT_CHARS) {
-    return value
-  }
-  // Keep newest turns within the capture bound, where current intent and findings are likeliest.
-  const omitted = value.length - MAX_FORK_CONTEXT_CHARS
-  const marker = `\n\n[Earlier terminal output omitted: ${omitted} characters]\n\n`
-  return `${marker}${value.slice(-(MAX_FORK_CONTEXT_CHARS - marker.length))}`
 }
 
 function getMarkdownFenceForTranscript(value: string): string {
@@ -130,7 +121,7 @@ function isUnsupportedTranscriptControl(code: number): boolean {
 }
 
 export function buildBoundedSessionTranscript(capturedText: string): string | null {
-  const transcript = trimToContextBudget(
+  const transcript = trimAgentSessionContext(
     cleanAgentSessionForkTranscript(tailBoundForkCapture(capturedText))
   )
   return transcript || null

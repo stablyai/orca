@@ -26,7 +26,10 @@ import type { RpcDispatchStreamingOptions } from '../dispatcher-stream-options'
 import { SESSION_TAB_METHODS } from './session-tabs'
 import { STRUCTURED_AGENT_SESSION_METHODS } from './structured-agent-session'
 import { commitStructuredAgentSessionCreate } from './structured-agent-session-create'
-import { openTestJournalHostDatabase } from '../../../native-chat/agent-session-journal/journal-host-database-test-support'
+import {
+  closeTestJournalHostDatabases,
+  openTestJournalHostDatabase
+} from '../../../native-chat/agent-session-journal/journal-host-database-test-support'
 import { createStructuredAgentSessionLogger } from '../../../native-chat/agent-session-wire/structured-agent-session-logger'
 import { codexProviderHandle } from '../../../../shared/agent-session-provider-handle-encoding'
 import { NO_STRUCTURED_AGENTS } from '../../../native-chat/agent-session-wire/structured-agent-session-adapter-router-test-support'
@@ -203,5 +206,6 @@ afterEach(async () => {
   vi.restoreAllMocks()
   await host?.flushAllStreamedEvents()
   setStructuredAgentSessionHost(null)
+  await closeTestJournalHostDatabases()
   await rm(directory, { recursive: true, force: true })
 })

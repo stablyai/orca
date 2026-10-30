@@ -35,11 +35,31 @@ import type {
   CodexWslRuntimeHookInstallPlan,
   WslCanonicalPathSettlement
 } from './codex-wsl-hook-install-plan'
+import { blockedWslDistroForPath } from '../wsl/wsl-unc-access-gate'
 
-// Serialize clear/grant/fallback per file so concurrent pane launches cannot interleave trust writes.
+/** True when touching the distro's `\\wsl.localhost` files now would start it (E9); a user act passes. */
+export async function isWslHookDistroBlocked(distro: string): Promise<boolean> {
+  return (await blockedWslDistroForPath('', distro)) !== null
+}
+
+/** A WSL home whose install was skipped because its distro is stopped; the relay installs later. */
+export function skippedWslHookInstallStatus(runtimeHomePath: string): AgentHookInstallStatus {
+  return {
+    agent: 'codex',
+    state: 'not_installed',
+    configPath: pathWin32.join(runtimeHomePath, 'hooks.json'),
+    managedHooksPresent: false,
+    detail: 'The WSL distro is not running; Orca installs these hooks once it runs.'
+  }
+}
+
+/**
+ * Serialize clear/grant/fallback per file so concurrent pane launches cannot interleave trust writes.
+ * Null: skipped, because the distro is stopped and its UNC files would start it.
+ */
 export function installManagedHooksIntoWslRuntime(
   plan: CodexWslRuntimeHookInstallPlan
-): Promise<AgentHookInstallStatus> {
+): Promise<AgentHookInstallStatus | null> {
   return runExclusivelyForCodexTrustConfig(plan.tomlPath, () =>
     installManagedHooksIntoWslRuntimeExclusively(plan)
   )
@@ -47,7 +67,11 @@ export function installManagedHooksIntoWslRuntime(
 
 async function installManagedHooksIntoWslRuntimeExclusively(
   plan: CodexWslRuntimeHookInstallPlan
-): Promise<AgentHookInstallStatus> {
+): Promise<AgentHookInstallStatus | null> {
+  // Checked inside the queue, right before the first UNC read: a stop while queued must skip.
+  if (await isWslHookDistroBlocked(plan.wslDistro)) {
+    return null
+  }
   const config = readHooksJson(plan.configPath)
   if (!config) {
     return {
@@ -117,6 +141,18 @@ async function installManagedHooksIntoWslRuntimeExclusively(
     const grant = await grantManagedCodexHookTrust(grantPlan, () =>
       removeSelfComputedTrustBeforeGrant(grantPlan)
     )
+    // The distro may have stopped during the hash wait; the fallback write would start it again.
+    // hooks.json is already written, so report the missing trust rather than a clean skip.
+    if (grant.lane === 'fallback' && (await isWslHookDistroBlocked(plan.wslDistro))) {
+      return {
+        agent: 'codex',
+        state: 'error',
+        configPath: plan.configPath,
+        managedHooksPresent: true,
+        detail:
+          'Hooks installed but trust is pending: the WSL distro stopped before Orca could write it. Orca writes it once the distro runs.'
+      }
+    }
     if (grant.lane === 'fallback') {
       // Upsert only Orca's entries to preserve user approvals not rebuilt here.
       upsertHookTrustEntries(plan.tomlPath, trustEntries)

@@ -1,4 +1,5 @@
 import { useCallback, useRef, useState, type MutableRefObject } from 'react'
+import { translate } from '../i18n/mobile-i18n'
 import { useWorkspaceRouteHandoff } from '../navigation/workspace-route-handoff'
 import type { RpcClient } from '../transport/rpc-client'
 import { isRendererUnavailableReply } from '../transport/renderer-unavailable-reply'
@@ -19,6 +20,7 @@ import type { MobileBranchCompareState } from './mobile-source-control-screen-st
 type Params = {
   client: RpcClient | null
   connState: ConnectionState
+  diffShowWhitespace: boolean
   hostId: string
   worktreeId: string
   name: string
@@ -38,6 +40,7 @@ export function useMobileSourceControlOpeners(params: Params) {
   const {
     client,
     connState,
+    diffShowWhitespace,
     hostId,
     worktreeId,
     name,
@@ -85,7 +88,9 @@ export function useMobileSourceControlOpeners(params: Params) {
         if (!mountedRef.current) {
           return
         }
-        setActionError('Waiting for desktop...')
+        setActionError(
+          translate('sourceControl.openers.waitingForDesktop', 'Waiting for desktop...')
+        )
         return
       }
       openingPathRef.current = entry.path
@@ -100,7 +105,10 @@ export function useMobileSourceControlOpeners(params: Params) {
         const diffReply = await sourceFileDiffOpenRun.request(client, {
           worktree: `id:${worktreeId}`,
           relativePath: entry.path,
-          staged: entry.area === 'staged'
+          staged: entry.area === 'staged',
+          ...(entry.area === 'staged' && entry.status === 'renamed' && entry.oldPath
+            ? { oldPath: entry.oldPath }
+            : {})
         })
         // Headless hosts have no editor tabs; use git.diff on the review screen.
         if (isRendererUnavailableReply(diffReply)) {
@@ -125,7 +133,12 @@ export function useMobileSourceControlOpeners(params: Params) {
             sourceFileDiffOpenRun.interpret(diffReply)
           }
         } catch (error) {
-          throw new Error(refusedRpcMessageOrFallback(error, 'Unable to open diff'))
+          throw new Error(
+            refusedRpcMessageOrFallback(
+              error,
+              translate('sourceControl.openers.openDiffFailed', 'Unable to open diff')
+            )
+          )
         }
         if (!mountedRef.current) {
           return
@@ -143,7 +156,12 @@ export function useMobileSourceControlOpeners(params: Params) {
           return
         }
         if (revealResult === 'timeout') {
-          throw new Error("The file opened, but its tab isn't ready yet. Try again.")
+          throw new Error(
+            translate(
+              'sourceControl.openers.tabNotReady',
+              "The file opened, but its tab isn't ready yet. Try again."
+            )
+          )
         }
         triggerSelection()
         // Embedded panels dismiss their dock; route panels pop back to the activated diff, with Back as the unwired-dock fallback.
@@ -157,7 +175,11 @@ export function useMobileSourceControlOpeners(params: Params) {
           return
         }
         triggerError()
-        setActionError(err instanceof Error ? err.message : 'Unable to open diff')
+        setActionError(
+          err instanceof Error
+            ? err.message
+            : translate('sourceControl.openers.openDiffFailed', 'Unable to open diff')
+        )
       } finally {
         if (openingPathRef.current === entry.path) {
           openingPathRef.current = null
@@ -188,6 +210,7 @@ export function useMobileSourceControlOpeners(params: Params) {
     useMobileBranchDiffPreview({
       client,
       connState,
+      diffShowWhitespace,
       hostId,
       worktreeId,
       origin,

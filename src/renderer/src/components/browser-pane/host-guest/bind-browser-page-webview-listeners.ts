@@ -1,4 +1,4 @@
-import { normalizeBrowserNavigationUrl } from '../../../../../shared/browser-url'
+import { normalizeBrowserGuestSrc } from '../../../../../shared/browser-extension-url'
 import { ORCA_BROWSER_BLANK_URL } from '../../../../../shared/constants'
 import { parkBrowserPageViewport } from './browser-page-viewport'
 import { subscribeBrowserSystemResume } from './browser-system-resume'
@@ -157,7 +157,7 @@ export function bindBrowserPageWebviewListeners({
   if (needsInitialNavigation) {
     // Why: set src only after listeners attach so a fast localhost failure isn't missed.
     const initialUrl =
-      normalizeBrowserNavigationUrl(initialBrowserUrlRef.current) ?? ORCA_BROWSER_BLANK_URL
+      normalizeBrowserGuestSrc(initialBrowserUrlRef.current) ?? ORCA_BROWSER_BLANK_URL
     lastKnownWebviewUrlRef.current = initialUrl
     webview.src = initialUrl
   } else if (isPaintableRef.current) {

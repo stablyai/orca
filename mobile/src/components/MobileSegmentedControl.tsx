@@ -1,5 +1,7 @@
-import { Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native'
-import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { Pressable, Text, View, type StyleProp, type ViewStyle } from 'react-native'
+import { colors, concentricRadius, radii, spacing, typography } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 
 export type MobileSegment<Value extends string> = { value: Value; label: string }
 
@@ -20,6 +22,7 @@ type Props<Value extends string> = {
 
 /** A pick-one pill control; each segment reads as a radio button. */
 export function MobileSegmentedControl<Value extends string>(props: Props<Value>) {
+  useMobileColorScheme()
   return (
     <View style={[styles.segmented, props.style]} accessibilityRole="radiogroup">
       {props.segments.map((segment) => {
@@ -53,21 +56,21 @@ export function MobileSegmentedControl<Value extends string>(props: Props<Value>
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   segmented: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: colors.bgBase,
-    borderRadius: radii.button,
+    borderRadius: radii.control,
     padding: 2
   },
   segment: {
     paddingHorizontal: spacing.md,
     paddingVertical: 6,
-    borderRadius: radii.button - 1
+    borderRadius: concentricRadius(radii.control, 2)
   },
   segmentFill: { flex: 1, alignItems: 'center', paddingHorizontal: spacing.xs },
   segmentActive: { backgroundColor: colors.bgRaised },
   segmentText: { fontSize: typography.metaSize, color: colors.textSecondary, fontWeight: '600' },
   segmentTextActive: { color: colors.textPrimary }
-})
+}))

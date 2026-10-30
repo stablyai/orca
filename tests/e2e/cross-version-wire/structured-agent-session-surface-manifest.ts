@@ -148,6 +148,10 @@ export function paramsFor(method: string): unknown {
       const fields = { messageId: 'queued-1' }
       return { envelope: envelope({ method, fields, fence }), ...fields }
     }
+    case 'agentSession.queuedMessageMove': {
+      const fields = { messageId: 'queued-1', beforeMessageId: null }
+      return { envelope: envelope({ method, fields, fence }), ...fields }
+    }
     case 'agentSession.queuedMessagesResume':
       return { envelope: envelope({ method, fields: {}, fence }) }
     case 'agentSession.queuedMessageUpdate': {
@@ -177,6 +181,12 @@ export function paramsFor(method: string): unknown {
     }
     case 'agentSession.history':
       return { sessionId: SESSION, direction: 'tail' }
+    case 'agentSession.continuationContext':
+      return {
+        sessionId: SESSION,
+        workspaceId: WORKSPACE,
+        expectedCursor: { epoch: 'epoch-a', sequence: 0 }
+      }
     case ITEM_DETAIL_METHOD:
       return { sessionId: SESSION, itemId: 'item-1' }
     case 'agentSession.sleepWorkspace':

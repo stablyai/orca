@@ -15,16 +15,84 @@ vi.mock('@/i18n/i18n', () => ({
 }))
 
 import { TooltipProvider } from '@/components/ui/tooltip'
-import type { SessionOptionDescriptor } from '../../../../shared/native-chat-session-options'
+import type {
+  SessionOptionDescriptor,
+  SessionOptionSetResult,
+  SessionOptionValue
+} from '../../../../shared/native-chat/input/native-chat-session-options'
 import type { NativeChatOptionPickerRequest } from './native-chat-composer-types'
 import { NativeChatSessionOptionPickers } from './NativeChatSessionOptionPickers'
+import { CODEX_SESSION_OPTION_CATALOG } from '../../../../shared/agent-session-option-catalog-claude-codex'
+import {
+  applyStructuredAgentSessionOptions,
+  commitStructuredAgentSessionOption,
+  createStructuredAgentSessionOptionState
+} from '../../../../shared/structured-agent-session-options'
+import {
+  structuredAgentSessionMessageSelection,
+  structuredAgentSessionShownSnapshot
+} from '../../../../shared/structured-agent-session-option-view'
 
 const settle = (): Promise<void> =>
   act(async () => new Promise((resolve) => setTimeout(resolve, 30)))
 
+it('keeps pointer, ArrowDown and requested-open on the same disabled-placeholder boundary', async () => {
+  const placeholder: SessionOptionDescriptor = {
+    id: 'model',
+    label: 'Model',
+    category: 'model',
+    kind: { type: 'select', choices: [] },
+    valueSource: 'unknown',
+    transport: 'agent-session',
+    settable: false
+  }
+  const consume = vi.fn()
+  const view = render(
+    <TooltipProvider>
+      <NativeChatSessionOptionPickers
+        surface={surface}
+        snapshot={[placeholder]}
+        isWorking={false}
+      />
+    </TooltipProvider>
+  )
+  const trigger = screen.getByRole('button', { name: 'Model' })
+  expect(trigger).toHaveProperty('disabled', true)
+  fireEvent.click(trigger)
+  fireEvent.keyDown(trigger, { key: 'ArrowDown' })
+  view.rerender(
+    <TooltipProvider>
+      <NativeChatSessionOptionPickers
+        surface={surface}
+        snapshot={[placeholder]}
+        isWorking={false}
+        pickerRequest={{ id: 'model', consume }}
+      />
+    </TooltipProvider>
+  )
+  await settle()
+  expect(consume).toHaveBeenCalledOnce()
+  expect(screen.queryByRole('dialog')).toBeNull()
+  view.rerender(
+    <TooltipProvider>
+      <NativeChatSessionOptionPickers
+        surface={surface}
+        snapshot={[placeholder, effort]}
+        isWorking={false}
+      />
+    </TooltipProvider>
+  )
+  expect(trigger).toHaveProperty('disabled', false)
+  fireEvent.keyDown(trigger, { key: 'ArrowDown' })
+  await settle()
+  expect(screen.getByRole('dialog')).not.toBeNull()
+})
+
 const surface = {
   getSnapshot: vi.fn(() => []),
-  setOption: vi.fn(() => Promise.resolve({ snapshot: [] })),
+  setOption: vi.fn((_id: string, _value: SessionOptionValue): Promise<SessionOptionSetResult> =>
+    Promise.resolve({ snapshot: [] })
+  ),
   invokeAction: vi.fn(() => Promise.resolve({ snapshot: [] })),
   subscribe: vi.fn(() => vi.fn())
 }
@@ -205,6 +273,43 @@ describe('session option picker focus', () => {
     expect(document.activeElement).toBe(messageBox)
   })
 
+  it('captures an explicit click on the displayed Codex default while passive display stays sparse', async () => {
+    let state = applyStructuredAgentSessionOptions(
+      createStructuredAgentSessionOptionState('codex', CODEX_SESSION_OPTION_CATALOG),
+      CODEX_SESSION_OPTION_CATALOG,
+      {
+        models: [
+          {
+            id: 'gpt-host',
+            label: 'GPT Host',
+            isDefault: true,
+            defaultEffort: 'low',
+            efforts: [
+              { value: 'low', label: 'Low' },
+              { value: 'high', label: 'High' }
+            ]
+          }
+        ],
+        listedModelIds: ['gpt-host'],
+        current: { model: 'gpt-host', acceptedInputSources: { model: 'saved' }, defaulted: [] }
+      }
+    )
+    surface.setOption.mockImplementationOnce(async (id: string, value: SessionOptionValue) => {
+      state = commitStructuredAgentSessionOption(state, id, String(value))
+      return { snapshot: structuredAgentSessionShownSnapshot(state) }
+    })
+    await renderComposer(structuredAgentSessionShownSnapshot(state))
+    expect(structuredAgentSessionMessageSelection(state)).toEqual({ model: 'gpt-host' })
+    await openPicker()
+    fireEvent.click(screen.getByRole('radio', { name: 'Low' }))
+    await settle()
+    expect(surface.setOption).toHaveBeenCalledExactlyOnceWith('effort', 'low')
+    expect(structuredAgentSessionMessageSelection(state)).toEqual({
+      model: 'gpt-host',
+      effort: 'low'
+    })
+  })
+
   it('closes on a press of the effort level already in use, without a write', async () => {
     const messageBox = await renderComposer([model, effort])
     await openPicker()
@@ -336,7 +441,10 @@ describe('session option picker focus', () => {
     expect(screen.queryByRole('tooltip')).toBeNull()
 
     cleanup()
-    await renderComposer([{ ...model, settable: false, disabledReason: 'set-when-session-starts' }])
+    await renderComposer([
+      { ...model, settable: false, disabledReason: 'set-when-session-starts' },
+      effort
+    ])
     pill().focus()
     await settle()
     expect(screen.getByRole('tooltip').textContent).toBe('Set when the session starts.')

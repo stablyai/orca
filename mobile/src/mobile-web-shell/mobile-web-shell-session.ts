@@ -1,9 +1,9 @@
-import type { MobileWebShellFailureReason } from '../../modules/orca-mobile-web-shell/src/load-state'
 import { evaluateMobileWebBundleCompat } from '../transport/mobile-web-bundle-compat'
 import type {
   CachedGeneration,
   MobileWebShellGates,
   MobileWebShellManifestFacts,
+  MobileWebShellReportedFailure as ShellFailure,
   MobileWebShellSession,
   MobileWebShellSessionEffect,
   MobileWebShellSessionEvent,
@@ -158,17 +158,15 @@ function onManifestRead(
 }
 
 // Retry suspect disk bytes once via delete/refetch; renderer loss gets one remount without deletion; unavailable isolation is terminal.
-// Ignore reports outside ready: retired-view batches must not interrupt recovery already in flight.
-function onShellFailed(
-  session: MobileWebShellSession,
-  reason: MobileWebShellFailureReason
-): MobileWebShellStep {
-  if (session.state.kind !== 'ready') {
+// Retired document reports cannot interrupt recovery; profile failures can end startup before ready.
+function onShellFailed(session: MobileWebShellSession, reason: ShellFailure): MobileWebShellStep {
+  if (session.state.kind !== 'ready' && reason !== 'host-profile-unreadable') {
     return step(session, {})
   }
   const failed = { kind: 'failed', reason, retriedOnce: session.retriedOnce } as const
-  if (reason === 'isolation-unavailable') {
-    return step(session, { state: failed })
+  if (reason === 'isolation-unavailable' || reason === 'host-profile-unreadable') {
+    // Terminal failures advance flow so pending startup work is cancelled and its completions rejected.
+    return step(session, { state: failed, flow: session.flow + 1 })
   }
   if (reason === 'render-process-gone') {
     return session.remountedOnce
@@ -227,6 +225,9 @@ function decideDownloadFailed(
 }
 
 function onLayoutChanged(session: MobileWebShellSession, wide: boolean): MobileWebShellStep {
+  if (session.state.kind === 'failed' && session.state.reason === 'host-profile-unreadable') {
+    return step(session, { wide })
+  }
   const view = routeViewOf(session.routes, session.routePathname, wide)
   if (session.gates === null || sameRouteView(view, session)) {
     return step(session, { wide })

@@ -7,7 +7,6 @@ import {
   applyStructuredAgentSessionModelCatalog,
   applyStructuredAgentSessionOptions,
   createStructuredAgentSessionOptionState,
-  settleStructuredAgentSessionBuiltinCatalog,
   structuredAgentSessionOptionSnapshot,
   canSetStructuredAgentSessionOption,
   commitStructuredAgentSessionOption
@@ -36,28 +35,33 @@ const HOST_CATALOG: AgentSessionModelCatalogResult = {
 const LAUNCH = { newLaunch: true }
 
 describe('structured option state from the host model catalog', () => {
-  it('renders the quiet placeholder before the host answers, never a built-in label', () => {
-    const state = createStructuredAgentSessionOptionState('codex', SEED)
-    expect(structuredAgentSessionOptionSnapshot(state)).toEqual([
-      expect.objectContaining({
-        id: 'model',
-        valueSource: 'unknown',
+  it.each(['codex', 'pi'] as const)(
+    '%s: pending inventory offers no built-ins and retains an applicable good list',
+    (agent) => {
+      const seed = structuredAgentSessionSeedCatalog(agent)!
+      const state = createStructuredAgentSessionOptionState(agent, seed)
+      const pending: AgentSessionModelCatalogResult = { origin: 'unknown', listingInProgress: true }
+      const launch = { newLaunch: true, coherentCatalog: true }
+      const cold = applyStructuredAgentSessionModelCatalog(state, seed, pending, launch)
+      expect(cold.catalogSource).toBe('seed')
+      expect(structuredAgentSessionOptionSnapshot(cold)[0]).toMatchObject({
         settable: false,
-        kind: { type: 'select', choices: [] }
+        kind: { choices: [] }
       })
-    ])
-  })
-
-  it('makes the built-in list pickable, naming nothing, once the host says it has none', () => {
-    const state = settleStructuredAgentSessionBuiltinCatalog(
-      createStructuredAgentSessionOptionState('codex', SEED)
-    )
-    expect(state.catalogSource).toBe('builtin')
-    const model = structuredAgentSessionOptionSnapshot(state).find((d) => d.id === 'model')!
-    expect(model.kind.type === 'select' && model.kind.choices.length).toBeGreaterThan(0)
-    expect(model.settable).toBe(true)
-    expect(model.kind.type === 'select' ? model.kind.currentValue : null).toBeUndefined()
-  })
+      const good = applyStructuredAgentSessionModelCatalog(state, seed, HOST_CATALOG, launch)
+      const refresh = applyStructuredAgentSessionModelCatalog(good, seed, pending, launch)
+      expect(refresh.catalog).toBe(good.catalog)
+      expect(refresh.catalogSource).toBe(good.catalogSource)
+      const unavailable = applyStructuredAgentSessionModelCatalog(
+        cold,
+        seed,
+        { origin: 'unknown' },
+        launch
+      )
+      expect(unavailable.catalogSource).toBe('builtin')
+      expect(unavailable.listingInProgress).toBe(false)
+    }
+  )
 
   it('upgrades the seed with host models as a provisional, uncommitted default', () => {
     const state = applyStructuredAgentSessionModelCatalog(
@@ -152,58 +156,6 @@ describe('structured option state from the host model catalog', () => {
     expect(
       applyStructuredAgentSessionModelCatalog(hosted, SEED, { origin: 'unknown' }, LAUNCH)
     ).toBe(hosted)
-  })
-
-  it('refreshes inventory after a live answer while retaining the chat’s own selection', () => {
-    const live = applyStructuredAgentSessionOptions(
-      createStructuredAgentSessionOptionState('codex', SEED),
-      SEED,
-      {
-        models: [{ id: 'gpt-live', label: 'GPT Live', isDefault: true, efforts: [] }],
-        current: { model: 'gpt-live', confirmed: ['model'] }
-      }
-    )
-    expect(live.catalogSource).toBe('live')
-    const refreshed = applyStructuredAgentSessionModelCatalog(live, SEED, HOST_CATALOG, {
-      ...LAUNCH,
-      coherentCatalog: true
-    })
-    for (const agent of ['grok', 'pi']) {
-      const sourced = { ...live, record: { ...live.record, agent } }
-      expect(applyStructuredAgentSessionModelCatalog(sourced, SEED, HOST_CATALOG, LAUNCH)).toBe(
-        sourced
-      )
-    }
-    expect(refreshed.catalog?.models.map((row) => row.id)).toEqual(['gpt-hosted'])
-    expect(refreshed.record).toBe(live.record)
-    const snapshot = structuredAgentSessionOptionSnapshot(live)
-    const model = snapshot.find((descriptor) => descriptor.id === 'model')!
-    expect(model.kind.type === 'select' ? model.kind.currentValue : null).toBe('gpt-live')
-  })
-
-  it('shows Pi live choices immediately and keeps them after a late, narrower host list', () => {
-    const seed = structuredAgentSessionSeedCatalog('pi')!
-    const models = [
-      { id: 'A', label: 'A', isDefault: true, efforts: [] },
-      { id: 'B', label: 'B', isDefault: false, efforts: [] }
-    ]
-    const launch = { ...LAUNCH, coherentCatalog: true }
-    const live = applyStructuredAgentSessionOptions(
-      createStructuredAgentSessionOptionState('pi', seed),
-      seed,
-      { models, current: { model: 'A', defaulted: [] } },
-      launch
-    )
-    const choices = (state: typeof live) => structuredAgentSessionOptionSnapshot(state)[0]?.kind
-    expect(choices(live)).toMatchObject({ choices: [{ value: 'A' }, { value: 'B' }] })
-    const settled = applyStructuredAgentSessionModelCatalog(
-      live,
-      seed,
-      { origin: 'probe', models: [models[0]!], fetchedAt: 1 },
-      launch
-    )
-    expect(choices(settled)).toEqual(choices(live))
-    expect(canSetStructuredAgentSessionOption(settled, 'model', 'B')).toBe(true)
   })
 
   it.each([

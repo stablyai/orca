@@ -1,9 +1,12 @@
-import { StyleSheet, Text, View } from 'react-native'
-import { colors } from '../theme/mobile-theme'
+import { Text, View } from 'react-native'
+import { colors, radii } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { workspaceOptionsBadgeText } from '../worktree/workspace-options-copy'
 
 /* Keep the trigger unclipped so the corner badge remains visible. */
 export function WorkspaceOptionsCountBadge({ count }: { count: number }) {
+  useMobileColorScheme()
   const text = workspaceOptionsBadgeText(count)
   if (text === null) {
     return null
@@ -15,7 +18,7 @@ export function WorkspaceOptionsCountBadge({ count }: { count: number }) {
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   badge: {
     position: 'absolute',
     top: -5,
@@ -23,7 +26,7 @@ const styles = StyleSheet.create({
     minWidth: 14,
     height: 14,
     paddingHorizontal: 3,
-    borderRadius: 7,
+    borderRadius: radii.pill,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.textPrimary
@@ -33,4 +36,4 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: colors.bgBase
   }
-})
+}))

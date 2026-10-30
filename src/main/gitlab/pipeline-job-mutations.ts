@@ -18,6 +18,7 @@ import {
 } from './gl-utils'
 import { encodedProject } from './project-path-encoding'
 import { withProjectRef } from './merge-request-project-resolution'
+import { codeHostFailure, classifiedFailure } from '../../shared/code-host-failure-copy'
 
 // Large traces need more than the runner default; the renderer also bounds the call.
 const JOB_TRACE_EXEC_TIMEOUT_MS = 60_000
@@ -79,12 +80,12 @@ export async function getJobTrace(
         if (isMissingJobLogError(msg)) {
           return { ok: true, trace: '' }
         }
-        return { ok: false, error: classifyJobLogError(msg).message }
+        return classifiedFailure(classifyJobLogError(msg))
       } finally {
         release()
       }
     },
-    { ok: false, error: 'Could not resolve GitLab project for this repository' },
+    codeHostFailure('gitlab.projectUnresolved'),
     localGitOptions
   )
 }
@@ -122,12 +123,12 @@ export async function retryJob(
         }
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)
-        return { ok: false, error: classifyGlabError(msg).message }
+        return classifiedFailure(classifyGlabError(msg))
       } finally {
         release()
       }
     },
-    { ok: false, error: 'Could not resolve GitLab project for this repository' },
+    codeHostFailure('gitlab.projectUnresolved'),
     localGitOptions
   )
 }

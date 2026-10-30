@@ -4,6 +4,7 @@ import { useAppStore } from '@/store'
 import { formatDiffComments } from '@/lib/diff-comments-format'
 import { NotesSendMenu, type NotesSendMenuScope } from './NotesSendMenu'
 import { translate } from '@/i18n/i18n'
+import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 
 // Expire unconsumed keyboard requests so navigating away cannot reopen the menu on a later mount.
 const OPEN_REQUEST_TTL_MS = 5000
@@ -36,6 +37,7 @@ export function DiffNotesSendMenu({
   // Enable on exactly one instance per worktree to avoid opening multiple menus for one shortcut.
   respondToOpenRequest?: boolean
 }): React.JSX.Element {
+  const languageRevision = useUiLanguageRevision()
   const clearDeliveredDiffComments = useAppStore((s) => s.clearDeliveredDiffComments)
   const openRequest = useAppStore((s) => s.diffNotesSendMenuOpenRequest)
   const consumeOpenRequest = useAppStore((s) => s.consumeDiffNotesSendMenuOpenRequest)
@@ -75,7 +77,8 @@ export function DiffNotesSendMenu({
       },
       allNotesScope
     ]
-  }, [canSendFileScope, unsentFileNotes, unsentNotes])
+    // oxlint-disable-next-line react-hooks/exhaustive-deps -- translate() reads the UI language implicitly.
+  }, [canSendFileScope, unsentFileNotes, unsentNotes, languageRevision])
 
   return (
     <NotesSendMenu

@@ -1,5 +1,6 @@
 import type { ProviderRateLimits } from '../../shared/rate-limit-types'
 import { extractCodexAuthError } from '../../shared/codex-auth-errors'
+import { codexSpawnEnoent, isSpawnEnoent } from '../codex-cli/windows-only-agent-cli'
 import {
   excerptAgentFailureOutput,
   sanitizeAgentFailureDetail
@@ -161,20 +162,15 @@ export function readCodexRateLimitsViaRpc(
     }
 
     function onError(error: Error): void {
-      const isEnoent = (error as NodeJS.ErrnoException).code === 'ENOENT'
-      const isBareCommand = codexCommand === 'codex'
+      const enoent = isSpawnEnoent(error) ? codexSpawnEnoent(codexCommand) : null
       settle(
         {
           provider: 'codex',
           session: null,
           weekly: null,
           updatedAt: Date.now(),
-          error: isEnoent
-            ? isBareCommand
-              ? 'Codex CLI not found'
-              : 'Codex CLI found but could not run — Node.js may not be in your PATH'
-            : withMacTailscaleDnsHint(error.message, stderr),
-          status: isEnoent && isBareCommand ? 'unavailable' : 'error'
+          error: enoent?.message ?? withMacTailscaleDnsHint(error.message, stderr),
+          status: enoent?.missing ? 'unavailable' : 'error'
         },
         { kill: true }
       )

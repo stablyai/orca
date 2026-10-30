@@ -103,6 +103,7 @@ import {
   setupScriptPromptShownSchema,
   workspaceCreateFailedSchema
 } from './telemetry-repository-event-schemas'
+import { pluginInstalledSchema } from './telemetry-plugin-event-schemas'
 import { sshRemoteRuntimeResolvedSchema } from './telemetry-ssh-runtime-event-schemas'
 import { wslUsageSnapshotSchema } from './telemetry-wsl-usage-event-schemas'
 import {
@@ -112,6 +113,11 @@ import {
   sshHostServerMoveSchema,
   sshHostServerLegacyRelayBridgeSchema
 } from './telemetry-ssh-host-server-event-schemas'
+import {
+  wslMoveOrchestratorSchema,
+  wslMoveUndoSchema,
+  wslMoveSchema
+} from './telemetry-wsl-move-event-schemas'
 
 // Breaking payload changes require a new event name to keep historical rows distinguishable; optional additions are safe.
 export const eventSchemas = {
@@ -225,5 +231,11 @@ export const eventSchemas = {
   ssh_host_server_move: sshHostServerMoveSchema,
   ssh_host_server_legacy_relay_bridge: sshHostServerLegacyRelayBridgeSchema,
 
-  wsl_usage_snapshot: wslUsageSnapshotSchema
+  wsl_move: wslMoveSchema,
+  wsl_move_orchestrator: wslMoveOrchestratorSchema,
+  wsl_move_undo: wslMoveUndoSchema,
+
+  wsl_usage_snapshot: wslUsageSnapshotSchema,
+
+  plugin_installed: pluginInstalledSchema
 } as const

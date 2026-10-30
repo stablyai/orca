@@ -1,7 +1,9 @@
+import { useAppStore } from '@/store'
+import { forgetStructuredSessionSelection } from '@/lib/structured-agent-session-selection-controller'
 // @vitest-environment happy-dom
 
-import { act, renderHook } from '@testing-library/react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { act, cleanup, renderHook } from '@testing-library/react'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({ call: vi.fn() }))
 
@@ -20,7 +22,7 @@ vi.mock('@/lib/structured-agent-session-launch-options', () => ({
   getStructuredAgentSessionLaunchSelection: () => null
 }))
 
-import type { SessionOptionDescriptor } from '../../../../shared/native-chat-session-options'
+import type { SessionOptionDescriptor } from '../../../../shared/native-chat/input/native-chat-session-options'
 import type { StructuredAgentSessionMutate } from './use-structured-agent-session-mutate'
 import { useStructuredAgentSessionOptions } from './use-structured-agent-session-options'
 import { resetHostModelCatalogSnapshotsForTests } from '@/runtime/host-model-catalog-snapshots'
@@ -60,7 +62,7 @@ function renderOptions(initial: Props = {}) {
         turnId: null,
         unloadedTurnRevisions: undefined,
         mutate,
-        launch: { kind: 'new', seedOptions: { model: 'gpt-5.5' }, heldOptions: {} }
+        launch: { kind: 'new', seedOptions: { model: 'gpt-5.5' } }
       }),
     { initialProps: initial }
   )
@@ -116,21 +118,41 @@ function modelChoices(snapshot: readonly SessionOptionDescriptor[]): string[] {
 
 const flush = (): Promise<void> => act(async () => {})
 
+const initialStore = useAppStore.getState()
+afterEach(() => {
+  cleanup()
+  forgetStructuredSessionSelection(sessionId, PAIRED_TARGET)
+  forgetStructuredSessionSelection(`${sessionId}-other`, PAIRED_TARGET)
+  useAppStore.setState(initialStore, true)
+})
 describe('host model catalog read', () => {
   beforeEach(() => {
+    useAppStore.getState().setRuntimeEnvironments([
+      {
+        id: PAIRED_TARGET.environmentId,
+        name: 'catalog host',
+        createdAt: 1,
+        updatedAt: 1,
+        pairingRevision: 1,
+        lastUsedAt: null,
+        runtimeId: null,
+        endpoints: [],
+        preferredEndpointId: 'loopback'
+      }
+    ])
     mocks.call.mockReset()
     resetHostModelCatalogSnapshotsForTests()
     sessionCount += 1
     sessionId = `session-${sessionCount}`
   })
 
-  it('reads a warm catalog once, showing the quiet placeholder only until it answers', async () => {
+  it('reads a warm catalog once, showing saved input before its labels arrive', async () => {
     const first = deferred()
     answerCatalog([() => first.promise])
     const { result, unmount } = renderOptions()
     await flush()
-    expect(modelChoices(result.current.optionSnapshot)).toEqual([])
-    expect(model(result.current.optionSnapshot).settable).toBe(false)
+    expect(modelChoices(result.current.optionSnapshot)).toEqual(['gpt-5.5'])
+    expect(model(result.current.optionSnapshot).kind.currentValue).toBe('gpt-5.5')
     first.resolve(HOST_CATALOG)
     await flush()
     expect(catalogReads()).toEqual([{ agent: 'codex', sessionId }])
@@ -141,7 +163,7 @@ describe('host model catalog read', () => {
     unmount()
   })
 
-  it('a new Codex chat on a cold catalog shows a usable unnamed built-in list, then the listing', async () => {
+  it('a cold catalog keeps only the saved model until discovery adds replacement choices', async () => {
     const waited = deferred()
     answerCatalog([() => Promise.resolve(LISTING), () => waited.promise])
     const { result, unmount } = renderOptions()
@@ -150,10 +172,11 @@ describe('host model catalog read', () => {
       { agent: 'codex', sessionId },
       { agent: 'codex', sessionId, waitForListing: true }
     ])
-    // A settled empty host catalog enables built-ins without claiming a replaceable model default.
+    // Pending discovery describes only the saved input, never built-in replacement choices.
     const first = model(result.current.optionSnapshot)
     expect(usable(result.current.optionSnapshot)).toBe(true)
-    expect(first.kind.type === 'select' ? first.kind.currentValue : null).toBeUndefined()
+    expect(first.kind.currentValue).toBe('gpt-5.5')
+    expect(modelChoices(result.current.optionSnapshot)).toEqual(['gpt-5.5'])
     expect(modelChoices(result.current.optionSnapshot)).not.toContain('gpt-hosted')
     await act(async () => {
       expect(await result.current.setStructuredOption('model', 'gpt-5.5')).toBe(true)
@@ -203,6 +226,7 @@ describe('host model catalog read', () => {
     )
     const { result, unmount } = renderOptions({ attached: true })
     await flush()
+    expect(mocks.call.mock.calls.some(([, method]) => method === 'agentSession.options')).toBe(true)
     live.resolve({
       models: [{ id: 'gpt-live', label: 'GPT Live', isDefault: true, efforts: [] }],
       current: { model: 'gpt-live', confirmed: ['model'] }

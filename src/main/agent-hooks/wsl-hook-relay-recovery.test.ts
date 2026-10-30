@@ -3,7 +3,18 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { WslRelayRecovery, type WslRelayRecoveryState } from './wsl-hook-relay-recovery'
 import type { WslRelayDistroState, WslRelayRestartSetup } from './wsl-hook-relay-state'
 import { wslHookRelayStateKey } from './wsl-hook-relay-state-key'
-import { captureWslRelaySetup, restartWslRelay } from './wsl-hook-relay-state-machine'
+import {
+  captureWslRelaySetup,
+  markWslRelayFailed,
+  restartWslRelay
+} from './wsl-hook-relay-state-machine'
+
+const { noteWslDistroMayHaveStoppedMock } = vi.hoisted(() => ({
+  noteWslDistroMayHaveStoppedMock: vi.fn()
+}))
+vi.mock('../wsl/wsl-unc-access-gate', () => ({
+  noteWslDistroMayHaveStopped: noteWslDistroMayHaveStoppedMock
+}))
 
 beforeEach(() => vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] }))
 
@@ -81,8 +92,38 @@ describe('WslRelayRecovery', () => {
     expect(restart).not.toHaveBeenCalled()
     expect(deferred).toHaveLength(1)
     // Something else (the user) started the distro: only now does the relay come back.
+    isDistroRunning.mockResolvedValue(true)
     deferred[0]()
+    await waitFor(() => restart.mock.calls.length === 1)
     expect(restart).toHaveBeenCalledExactlyOnceWith('Ubuntu', { launchKinds: [] })
+  })
+
+  it('re-reads a settled list before a drained restart, and waits again if the distro stopped', async () => {
+    const restart = vi.fn()
+    const deferred: (() => void)[] = []
+    const isDistroRunning = vi.fn(async (_distro: string, _startedAfter: number) => false)
+    const recovery = new WslRelayRecovery({
+      isDistroRunning,
+      deferUntilRunning: (_distro, task) => deferred.push(task),
+      captureSetup: () => ({ launchKinds: [] }),
+      warn: vi.fn(),
+      isDisposed: () => false,
+      isCurrent: () => true,
+      restart,
+      dropState: vi.fn()
+    })
+    recovery.scheduleRestart(makeState())
+    await vi.advanceTimersByTimeAsync(250)
+    await waitFor(() => deferred.length === 1)
+
+    // Drained by a list that still named the stopping distro; a fresh settled read says stopped.
+    deferred[0]()
+    await waitFor(() => deferred.length === 2)
+    expect(restart).not.toHaveBeenCalled()
+
+    isDistroRunning.mockResolvedValue(true)
+    deferred[1]()
+    await waitFor(() => restart.mock.calls.length === 1)
   })
 
   it('restarts with the relay config captured before dropState discarded it', async () => {
@@ -94,8 +135,9 @@ describe('WslRelayRecovery', () => {
       launchKinds: ['pi', 'omp']
     }
     const expected = live
+    const isDistroRunning = vi.fn(async (_distro: string, _startedAfter: number) => false)
     const recovery = new WslRelayRecovery({
-      isDistroRunning: async () => false,
+      isDistroRunning,
       deferUntilRunning: (_distro, task) => deferred.push(task),
       captureSetup: () => live ?? { launchKinds: [] },
       warn: vi.fn(),
@@ -109,7 +151,9 @@ describe('WslRelayRecovery', () => {
     recovery.scheduleRestart(makeState())
     await vi.advanceTimersByTimeAsync(250)
     await waitFor(() => deferred.length === 1)
+    isDistroRunning.mockResolvedValue(true)
     deferred[0]()
+    await waitFor(() => restart.mock.calls.length === 1)
     expect(restart).toHaveBeenCalledExactlyOnceWith('Ubuntu', expected)
   })
 
@@ -338,5 +382,20 @@ describe('restartWslRelay', () => {
     expect(states.get(wslHookRelayStateKey('Ubuntu'))).toBe(live)
     expect(live.codexHomePath).toBe('/new')
     expect(ensure.mock.calls).toEqual([['Ubuntu'], ['Ubuntu', undefined, 'pi']])
+  })
+})
+
+describe('markWslRelayFailed', () => {
+  it('marks the distro as possibly stopped so the next UNC read re-checks before touching it', () => {
+    const scheduleRestart = vi.fn()
+    markWslRelayFailed(
+      { distro: 'Ubuntu', phase: 'running', failures: 0, cooldownUntil: 0 },
+      'relay link mux disposed (connection_lost)',
+      { cooldownBaseMs: 1_000 },
+      { warn: vi.fn() },
+      { scheduleRestart }
+    )
+    expect(noteWslDistroMayHaveStoppedMock).toHaveBeenCalledExactlyOnceWith('Ubuntu')
+    expect(scheduleRestart).toHaveBeenCalledOnce()
   })
 })

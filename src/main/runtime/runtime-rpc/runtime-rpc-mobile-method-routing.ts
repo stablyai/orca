@@ -42,6 +42,7 @@ export const EXECUTION_HOST_METHODS = [
   'files.open',
   'files.openDiff',
   'files.read',
+  'files.readChatImage',
   'files.readChunk',
   'files.readDir',
   'files.readDocPreview',
@@ -65,6 +66,7 @@ export const EXECUTION_HOST_METHODS = [
   'git.commit',
   'git.commitCompare',
   'git.commitDiff',
+  'git.completeMerge',
   'git.diff',
   'git.discard',
   'git.discoverCommitMessageModels',
@@ -78,6 +80,7 @@ export const EXECUTION_HOST_METHODS = [
   'git.pull',
   'git.push',
   'git.rebaseFromBase',
+  'git.resolveConflict',
   'git.stage',
   'git.status',
   'git.unstage',
@@ -145,8 +148,11 @@ export const EXECUTION_HOST_METHODS = [
   'nativeChat.readSession',
   'nativeChat.subscribe',
   'nativeChat.unsubscribe',
-  // Mobile reports takeover out of band, matching desktop renderer signaling.
+  // The worker's own host keeps it open and owns its countdown; older phones still report typing and viewing.
   'orchestration.workerTerminalUserInput',
+  'orchestration.workerChatTouch',
+  'orchestration.workerAutoClose',
+  'orchestration.workerKeepOpen',
   'projectGroup.list',
   'repo.baseRefDefault',
   'repo.gitAvailable',
@@ -156,6 +162,8 @@ export const EXECUTION_HOST_METHODS = [
   'repo.searchRefs',
   'repo.sparsePresets',
   'repo.update',
+  // The host that owns the workspace scans its skills.
+  'skills.discover',
   // SSH targets belong to the host that holds them; untargeted calls stay the Mac's own, as on the desktop.
   'ssh.connect',
   'ssh.getState',
@@ -164,6 +172,7 @@ export const EXECUTION_HOST_METHODS = [
   'ssh.listTargets',
   // A targeted status is the server's own, so a server workspace gates on what that server supports.
   'status.get',
+  'session.readTerminalScrollback',
   'session.tabs.activate',
   'session.tabs.close',
   'session.tabs.closeLifecycle',

@@ -1,3 +1,4 @@
+import { linearIssueReadFailureMessage } from '../../../src/shared/integration-credential-errors'
 import type { ProviderLoadActionsModel } from './use-mobile-tasks-provider-load-actions'
 import { fetchJiraTaskIssues } from './mobile-jira-task-source'
 import { isHostedTaskRepo, useCallback, useEffect, useRef } from './mobile-tasks-dependencies'
@@ -60,6 +61,7 @@ export function useMobileTasksTaskListLoading(model: ProviderLoadActionsModel) {
     taskStateHydrated,
     tasksSupported
   } = model
+  const unsettledLoadRef = useRef(0)
   const loadTasks = useCallback(
     async (options: { silent?: boolean } = {}): Promise<void> => {
       if (!client || connState !== 'connected' || !tasksSupported || !taskStateHydrated) {
@@ -67,6 +69,7 @@ export function useMobileTasksTaskListLoading(model: ProviderLoadActionsModel) {
       }
       const generation = loadGenerationRef.current + 1
       loadGenerationRef.current = generation
+      unsettledLoadRef.current = generation
       const requestClient = client
       const isCurrent = () =>
         loadGenerationRef.current === generation && clientRef.current === requestClient
@@ -126,7 +129,7 @@ export function useMobileTasksTaskListLoading(model: ProviderLoadActionsModel) {
             return
           }
           if (provider === 'github') {
-            const page = await fetchGitHubItemsPage(requestClient, queriedRepos)
+            const page = await fetchGitHubItemsPage(requestClient, queriedRepos, 0, isCurrent)
             if (!isCurrent()) {
               return
             }
@@ -140,11 +143,13 @@ export function useMobileTasksTaskListLoading(model: ProviderLoadActionsModel) {
             setGithubCurrentPage(0)
             setItems(page.items)
             if (effectiveRepoIds.size > 0) {
-              void countGitHubItemPages(requestClient, queriedRepos).then((totalPages) => {
-                if (isCurrent()) {
-                  setGithubCountedTotalPages(totalPages)
+              void countGitHubItemPages(requestClient, queriedRepos, isCurrent).then(
+                (totalPages) => {
+                  if (isCurrent()) {
+                    setGithubCountedTotalPages(totalPages)
+                  }
                 }
-              })
+              )
             } else {
               // Do not spend GitHub Search quota on all-repo totals before the user narrows scope.
               setGithubCountedTotalPages(null)
@@ -175,6 +180,9 @@ export function useMobileTasksTaskListLoading(model: ProviderLoadActionsModel) {
             queriedRepos,
             GITHUB_REPO_CONCURRENCY,
             async (repo) => {
+              if (!isCurrent()) {
+                return { items: [] }
+              }
               try {
                 const reply = await gitlabWorkItemSearchRead.request(requestClient, {
                   repo: `id:${repo.id}`,
@@ -254,8 +262,17 @@ export function useMobileTasksTaskListLoading(model: ProviderLoadActionsModel) {
         }
         setItems([])
         resetGitHubItemsState()
-        setError(err instanceof Error ? err.message : 'Failed to load tasks')
+        setError(
+          provider === 'linear'
+            ? linearIssueReadFailureMessage(err)
+            : err instanceof Error
+              ? err.message
+              : 'Failed to load tasks'
+        )
       } finally {
+        if (unsettledLoadRef.current === generation) {
+          unsettledLoadRef.current = 0
+        }
         if (isCurrent()) {
           setLoading(false)
           setRefreshing(false)
@@ -284,6 +301,18 @@ export function useMobileTasksTaskListLoading(model: ProviderLoadActionsModel) {
       taskStateHydrated,
       tasksSupported
     ]
+  )
+  // Abandoning an in-flight load must release its spinners; a successor load in the same commit re-sets them.
+  useEffect(
+    () => () => {
+      loadGenerationRef.current += 1
+      if (unsettledLoadRef.current !== 0) {
+        unsettledLoadRef.current = 0
+        setLoading(false)
+        setRefreshing(false)
+      }
+    },
+    [loadTasks, loadGenerationRef, setLoading, setRefreshing]
   )
   // Server-repo changes quietly reload unfiltered lists; a changed loadTasks already owns filter reloads, while Jira/Linear read independently.
   const listedServerReposRef = useRef({ serverRepoList, loadTasks })

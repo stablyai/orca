@@ -3,6 +3,8 @@ import type { LocalFileAccess } from '../../../shared/local-file-access'
 
 export type RuntimeReadableFileContent = {
   mediaUrl?: string
+  /** Bytes behind `mediaUrl`, for viewers that no longer see the content. */
+  size?: number
   content: string
   isBinary: boolean
   isImage?: boolean
@@ -27,6 +29,8 @@ export type RuntimeFileReadArgs = {
   expectedEnvironmentPairingRevision?: number
   /** Set by readers that render the bytes: page a remote PDF/image too large for one reply. */
   pageOversizedBinary?: boolean
+  /** A user act (open, expand, Retry); may start a stopped WSL distro. Local reads only. */
+  wakeWslDistro?: boolean
 }
 
 export type RuntimeFileOperationArgs = {

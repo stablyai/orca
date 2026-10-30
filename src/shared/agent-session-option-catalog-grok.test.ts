@@ -7,7 +7,7 @@ import {
 } from './agent-session-option-catalog'
 import { GROK_SESSION_OPTION_CATALOG } from './agent-session-option-catalog-grok'
 import { resolveAgentSessionOptionLaunch } from './agent-session-option-launch'
-import { parseBuiltSessionOptionCommand } from './native-chat-session-option-commands'
+import { parseBuiltSessionOptionCommand } from './native-chat/input/native-chat-session-option-commands'
 
 function grokEffortOption(modelId = 'grok-4.7'): CatalogOption {
   const model = GROK_SESSION_OPTION_CATALOG.models.find((candidate) => candidate.id === modelId)!
@@ -78,7 +78,7 @@ describe('grok launch args', () => {
   })
 
   it('emits only -m for a persisted model the seed does not carry', () => {
-    // Unknown IDs fatally fail grok launch; authoritative discovery must retire them via clearNativeChatSessionOptionModel before static-seed launch resolution.
+    // A remembered model remains the launch selection even when discovery no longer lists it.
     expect(resolveAgentSessionOptionLaunch('grok', { model: 'grok-build' })).toEqual({
       args: ['-m', 'grok-build'],
       appliedValues: { model: 'grok-build' }
