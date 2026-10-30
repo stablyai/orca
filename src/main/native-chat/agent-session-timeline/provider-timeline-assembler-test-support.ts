@@ -283,7 +283,7 @@ export async function openProviderTimelineRig(
     reopenJournal: async () => {
       await rows()
       await journal.close()
-      closeTestJournalHostDatabase(root)
+      await closeTestJournalHostDatabase(root)
       return journals.open(journalOptions)
     },
     restart: async (more = {}) => {

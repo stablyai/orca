@@ -16,6 +16,7 @@ import { releaseStructuredWorkerSession } from '../../orchestration-structured-w
 import { sessionIdFromStructuredWorkerIncarnation } from '../../../../structured-worker-identity'
 import { readExactWorkerOutput } from './worker-output'
 import { exposeWorkerTerminalResource } from './worker-terminal-resource-presentation'
+import { liveWorkerTerminalAutoReleaseAt } from '../../../../orchestration/worker-terminal-ownership'
 import { readFederatedWorkerOutput } from '../federation/federated-worker-read'
 import { showFederatedWorker } from '../federation/federated-worker-show'
 import {
@@ -74,7 +75,8 @@ export const ORCHESTRATION_WORKER_CONTROL_METHODS = [
         projection: projectFleetWorker(runtime, db, params.dispatch),
         terminal: observation.exact ? observation.terminal : null,
         observation: exposeObservation(observation),
-        terminalResource: resource ? exposeWorkerTerminalResource(resource) : null
+        terminalResource: resource ? exposeWorkerTerminalResource(resource) : null,
+        autoReleaseAt: liveWorkerTerminalAutoReleaseAt(resource)
       }
     }
   }),

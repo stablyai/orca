@@ -315,7 +315,8 @@ export abstract class AgentHookServerIngestTerminal extends AgentHookServerInges
       event.origin ?? 'osc',
       undefined,
       mutationBefore,
-      newRun
+      newRun,
+      !preservedProviderSession
     )
   }
 }

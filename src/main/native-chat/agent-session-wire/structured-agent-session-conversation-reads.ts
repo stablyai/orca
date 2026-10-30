@@ -85,7 +85,6 @@ export function createStructuredAgentSessionConversationReads(context: () => Rea
       const { deps, conversation } = context()
       return revealStructuredAgentSession(deps, id, conversation)
     },
-    journalSnapshot: async (id: string) => (await context().conversation(id)).journal.snapshot(),
     sessionAgent: (id: string) => context().deps.store.getConversation(id)?.provider ?? null,
     childAccountHome: (id: string) => context().sessions.get(id)?.child?.accountHome,
     holdsSessions: () => context().deps.store.holdsRecords(),

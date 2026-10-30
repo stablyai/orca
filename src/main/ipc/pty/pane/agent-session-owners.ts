@@ -37,6 +37,10 @@ export function seedTerminalRestoreRecordsFromSpawnResult(
       ...(lastTitle !== undefined ? { lastTitle } : {})
     })
   }
+  if (result.isReattach === true) {
+    runtime?.startReattachedOutputClock?.(result.id)
+    runtime?.restoreReattachedAgentStatus?.(result.id)
+  }
 }
 
 export function assertSpawnReplyWasLive(result: PtySpawnResult): void {

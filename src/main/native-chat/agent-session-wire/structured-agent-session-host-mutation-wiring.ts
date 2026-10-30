@@ -16,6 +16,8 @@ import { IN_PROCESS_OPTIONS_READER } from './structured-agent-session-option-obs
 import { settleStructuredAgentSessionLateDispatch } from './structured-agent-session-late-dispatch'
 import * as agentStart from './structured-agent-session-agent-start'
 import type { StructuredAgentSessionAttachContext } from './structured-agent-session-attach-context'
+import type { AgentSessionRewindParams } from '../../../shared/agent-session-rewind'
+import { rewindStructuredAgentSession } from './structured-agent-session-rewind'
 import type { StructuredAgentSessionClientDelivery } from './structured-agent-session-client-delivery'
 import type { StructuredAgentSessionConversationLifetime } from './structured-agent-session-conversation-lifetime'
 import type { StructuredAgentSessionConversations } from './structured-agent-session-conversations'
@@ -82,7 +84,8 @@ export function createStructuredAgentSessionHostMutationContext(
 
 /** Resolve context per call so moved maps/fences cannot become stale closures. */
 export function structuredAgentSessionMutationDelegates(
-  context: () => StructuredAgentSessionMutationContext
+  context: () => StructuredAgentSessionMutationContext,
+  attachContext: () => StructuredAgentSessionAttachContext
 ) {
   return {
     cancel: (
@@ -101,6 +104,8 @@ export function structuredAgentSessionMutationDelegates(
       caller: StructuredAgentSessionCaller,
       params: Parameters<typeof changeStructuredAgentSessionThreadGoal>[2]
     ) => changeStructuredAgentSessionThreadGoal(context(), caller, params),
+    rewind: (caller: StructuredAgentSessionCaller, params: AgentSessionRewindParams) =>
+      rewindStructuredAgentSession(context(), attachContext(), caller, params),
     // Only in-process readers omit client identity.
     readOptions: (
       sessionId: string,
