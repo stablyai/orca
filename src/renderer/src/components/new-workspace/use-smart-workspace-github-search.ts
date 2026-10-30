@@ -1,5 +1,5 @@
 import { beginGitHubTaskRead } from '@/store/github/request-coordination'
-import { useEffect, useMemo } from 'react'
+import { useEffect, useEffectEvent, useMemo } from 'react'
 import { normalizeGitHubLinkQuery, parseGitHubIssueOrPRLink } from '@/lib/github-links'
 import {
   lookupGitHubWorkItemByOwnerRepoForSource,
@@ -46,6 +46,19 @@ export function useSmartWorkspaceGithubSearch({
   const parsedGhLink = useMemo(
     () => (sourceQueryWithinLimit ? parseGitHubIssueOrPRLink(debouncedQuery) : null),
     [debouncedQuery, sourceQueryWithinLimit]
+  )
+
+  const acquireRead = useEffectEvent(() =>
+    beginGitHubTaskRead(
+      repoBackedSearchTargets.map((target) => ({
+        repoId: target.repo.id,
+        path: target.repo.path,
+        sourceContext: target.githubSourceContext
+      })),
+      undefined,
+      { repos },
+      foundation.githubItems
+    )
   )
 
   useEffect(() => {
@@ -149,15 +162,7 @@ export function useSmartWorkspaceGithubSearch({
       }
     }
 
-    const read = beginGitHubTaskRead(
-      repoBackedSearchTargets.map((target) => ({
-        repoId: target.repo.id,
-        path: target.repo.path,
-        sourceContext: target.githubSourceContext
-      })),
-      undefined,
-      { repos }
-    )
+    const read = acquireRead()
     const trimmed = normalizedGhQuery.query.trim()
     const query = trimmed ? normalizedGhQuery.query : ''
     if (repoBackedSearchTargets.length === 1) {

@@ -37,7 +37,8 @@ export type GitHubTaskRead = ReturnType<typeof beginGitHubTaskRead>
 export function beginGitHubTaskRead(
   sources: readonly { repoId: string; path?: string; sourceContext?: TaskSourceContext | null }[],
   projectTarget?: RuntimeClientTarget,
-  state?: Pick<AppState, 'repos'>
+  state?: Pick<AppState, 'repos'>,
+  destinationItems?: GitHubWorkItem[]
 ) {
   const { scopes, legacy, listDomains } = captureGitHubTaskReadDomains(sources, state)
   let program: ReadOperation[] = []
@@ -45,7 +46,7 @@ export function beginGitHubTaskRead(
   const borrowedRows = new Map<string, GitHubWorkItem>()
   let pending: GitHubWorkItem[] | undefined
   let publish: ((update: (current: GitHubWorkItem[]) => GitHubWorkItem[]) => void) | undefined
-  let previous: GitHubWorkItem[] | undefined
+  let previous = destinationItems
   const ownedFields = new Map<string, Set<keyof GitHubWorkItem>>()
   let release: (() => void) | undefined
   let version = 0,

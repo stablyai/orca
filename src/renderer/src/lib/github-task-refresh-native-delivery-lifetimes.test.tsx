@@ -461,3 +461,184 @@ it('keeps two useful no-install returns in their own committed destinations afte
   ).toEqual(['Useful uncached return', 'Useful uncached return'])
   disposed.forEach((spy) => spy.mockRestore())
 })
+
+it('keeps accepted New through a mounted nonempty query transition to a cold destination', async () => {
+  const { click } = await import('./github-task-refresh.test-fixture')
+  const { useSmartWorkspaceNameFieldController } =
+    await import('@/components/new-workspace/use-smart-workspace-name-field-controller')
+  const { RowLabel } = await import('@/components/new-workspace/smart-workspace-source-row-content')
+  const coordination = await import('@/store/github/request-coordination')
+  const { getLocalPreflightContext, localPreflightContextKey } =
+    await import('@/lib/local-preflight-context')
+  const { workItemsCacheKey } = await import('@/store/github/cache-identity')
+  const { getTaskSourceCacheScope } = await import('../../../shared/task-source-context')
+  const old = { ...seed, id: 'issue:5', title: 'Old', labels: ['bug'] }
+  const sources = { issues: { owner: 'o', repo: 'r' }, prs: null }
+  const q1 = 'is:open',
+    q2 = 'is:open label:bug'
+  const bucket = (query: string) =>
+    workItemsCacheKey(repo.id, 12, query, getTaskSourceCacheScope(source))
+  const registeredRepos = store.getState().repos
+  const foreign = store.getState().workItemsCache[initialCacheKey].data![1]
+  const foreignBytes = JSON.stringify(foreign)
+  const selected = vi.fn(),
+    noop = () => {}
+  let query = q1
+  let model: ReturnType<typeof useSmartWorkspaceNameFieldController> | undefined
+  const props = {
+    repos: registeredRepos,
+    repoId: repo.id,
+    selectedRepo: repo,
+    githubSourceContext: source,
+    branchesEnabled: false,
+    onRepoChange: noop,
+    onValueChange: noop,
+    onGitHubItemSelect: selected,
+    onBranchSelect: noop,
+    onLinearIssueSelect: noop,
+    selectedSource: null,
+    onClearSelectedSource: noop
+  }
+  function Smart() {
+    const current = useSmartWorkspaceNameFieldController({ ...props, value: query })
+    React.useLayoutEffect(() => {
+      model = current
+    })
+    return (
+      <section data-cold-smart>
+        {current.rows
+          .filter((row) => row.kind === 'github')
+          .map((row) => (
+            <button
+              key={row.value}
+              data-cold-issue={row.item.url}
+              onClick={() => current.handleSelect(row)}
+            >
+              <RowLabel row={row} />
+            </button>
+          ))}
+      </section>
+    )
+  }
+  const outputs = () => <Smart />
+  const button = () =>
+    container.querySelector<HTMLButtonElement>(
+      '[data-cold-issue="https://github.com/o/r/issues/5"]'
+    )
+  const reads: { marks: number; disposed: boolean }[] = []
+  const observations: { mockRestore: () => void }[] = []
+  const begin = coordination.beginGitHubTaskRead
+  const beginSpy = vi.spyOn(coordination, 'beginGitHubTaskRead').mockImplementation((...args) => {
+    const read = begin(...args),
+      record = { marks: 0, disposed: false }
+    reads.push(record)
+    const mark = read.mark,
+      dispose = read.dispose,
+      deliver = read.deliver
+    observations.push(
+      vi.spyOn(read, 'mark').mockImplementation((...input) => {
+        record.marks++
+        return mark(...input)
+      }),
+      vi.spyOn(read, 'dispose').mockImplementation(() => {
+        record.disposed = true
+        return dispose()
+      }),
+      vi.spyOn(read, 'deliver').mockImplementation((items, destination) =>
+        deliver(items, (update) =>
+          destination(
+            Object.assign((current: GitHubWorkItem[]) => {
+              const result = update(current)
+              console.info('RESIDUAL-TRANSITION', JSON.stringify({ input: items, current, result }))
+              return result
+            }, update)
+          )
+        )
+      )
+    )
+    return read
+  })
+  const snapshot = (stage: string) =>
+    console.info(
+      'RESIDUAL-STAGE',
+      JSON.stringify({
+        stage,
+        query,
+        smart: model?.githubItems,
+        native: button()?.textContent,
+        q1: store.getState().workItemsCache[bucket(q1)],
+        q2: store.getState().workItemsCache[bucket(q2)],
+        dialog: container.querySelector('h1')?.textContent,
+        reads,
+        listCalls: list.mock.calls,
+        directCalls: direct.mock.calls,
+        selected: selected.mock.calls
+      })
+    )
+  Object.assign(window.api, {
+    linear: { status: vi.fn().mockResolvedValue({ connected: false, viewer: null }) }
+  })
+  store.setState({
+    preflightStatus: {
+      git: { installed: true },
+      gh: { installed: true, authenticated: true },
+      glab: { installed: false, authenticated: false }
+    },
+    preflightStatusChecked: true,
+    preflightStatusContextKey: localPreflightContextKey(getLocalPreflightContext(store.getState()))
+  })
+  direct.mockResolvedValueOnce({ item: old, body: 'Old body', comments: [] })
+  list.mockResolvedValueOnce({ items: [old], sources })
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+  try {
+    await mount(false, outputs, q1, true)
+    expect(list).toHaveBeenCalledTimes(1)
+    expect(button()?.textContent).toBe('#5 Old')
+    expect(reads).toEqual([{ marks: 0, disposed: true }])
+    const retained = model!.githubItems[0]
+    snapshot('Q1 Old completed and committed')
+    const pending = Promise.withResolvers<{ items: GitHubWorkItem[]; sources: typeof sources }>()
+    list.mockReturnValueOnce(pending.promise)
+    query = q2
+    await mount(false, outputs, q1, true)
+    await act(async () => vi.advanceTimersByTimeAsync(600))
+    expect(list).toHaveBeenCalledTimes(2)
+    expect(store.getState().workItemsCache[bucket(q2)]).toBeUndefined()
+    expect(model!.githubItems[0]).toBe(retained)
+    expect(reads).toEqual([
+      { marks: 0, disposed: true },
+      { marks: 0, disposed: false }
+    ])
+    snapshot('same mounted Q2 cold; Q1 Old retained; real transport held')
+    direct.mockResolvedValueOnce({ item: { ...old, title: 'New' }, body: 'New body', comments: [] })
+    await click()
+    expect(container.querySelector('h1')?.textContent).toBe('New#5')
+    expect(store.getState().workItemsCache[bucket(q1)].data![0].title).toBe('New')
+    expect(store.getState().workItemsCache[bucket(q2)]).toBeUndefined()
+    expect(model!.githubItems[0]).toBe(retained)
+    expect(reads[1]).toEqual({ marks: 1, disposed: false })
+    snapshot('DIRECT New accepted while Q2 pending; retained Old is pre-acquisition')
+    await act(async () => pending.resolve({ items: [{ ...old, title: 'New' }], sources }))
+    await act(async () => button()!.click())
+    snapshot('provider New returned; native row and SAME whole selection consumed')
+    expect(reads[1]).toEqual({ marks: 1, disposed: true })
+    expect(list).toHaveBeenCalledTimes(2)
+    expect(direct).toHaveBeenCalledTimes(2)
+    expect(update).not.toHaveBeenCalled()
+    expect(store.getState().repos).toBe(registeredRepos)
+    expect(model?.githubSourceContext).toBe(source)
+    expect(store.getState().workItemsCache[initialCacheKey].data![1]).toBe(foreign)
+    expect(JSON.stringify(foreign)).toBe(foreignBytes)
+    expect(store.getState().workItemsCache[bucket(q2)].data![0].title).toBe('New')
+    expect(selected).toHaveBeenCalledTimes(1)
+    expect(selected.mock.calls[0][0]).toBe(model!.githubItems[0])
+    expect.soft(button()?.textContent, 'native title after cold Q2 return').toBe('#5 New')
+    expect
+      .soft(selected.mock.calls[0][0].title, 'SAME whole callback after cold Q2 return')
+      .toBe('New')
+  } finally {
+    observations.forEach((spy) => spy.mockRestore())
+    beginSpy.mockRestore()
+    vi.useRealTimers()
+  }
+})
