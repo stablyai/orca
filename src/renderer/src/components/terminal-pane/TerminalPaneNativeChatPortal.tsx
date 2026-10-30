@@ -33,7 +33,7 @@ export function TerminalPaneNativeChatPortal({
   } = controller
   const chatPaneSessionId = useAppStore((state) =>
     effectiveChatViewMode && chatPane
-      ? resolvePaneAgentSessionId(state, makePaneKey(tabId, chatPane.leafId))
+      ? resolvePaneAgentSessionId(state, makePaneKey(tabId, chatPane.leafId), 'retained')
       : null
   )
   if (!effectiveChatViewMode || !chatPane?.container) {

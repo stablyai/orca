@@ -139,7 +139,11 @@ export function isInheritedFromActivePane(
   existing: AgentStatusEntry,
   data: AgentStatusIpcPayload,
   incoming: AgentType | undefined,
-  owner: { connectionId: string | null | undefined; worktreeId: string | undefined }
+  owner: {
+    connectionId: string | null | undefined
+    worktreeId: string | undefined
+    observedAgentType?: AgentType
+  }
 ): boolean {
   const sameTerminal = sameAgentStatusTerminalOwner(
     { connectionId: existing.connectionId ?? null, worktreeId: existing.worktreeId },
@@ -154,6 +158,7 @@ export function isInheritedFromActivePane(
     resolveAgentStatusIdentity({
       existing: { ...existing, agentPresence: data.paneOwner },
       incoming,
+      observedAgentType: owner.observedAgentType,
       incomingSession: data.providerSession?.id,
       now: data.receivedAt
     }).inheritedFromActivePane

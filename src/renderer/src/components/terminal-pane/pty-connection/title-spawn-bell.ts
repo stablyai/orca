@@ -16,15 +16,13 @@ import type { ConnectPanePtySession } from './connect-pane-pty-session'
 import { installPanePtyVisibilityBind } from './pane-pty-visibility-bind'
 
 export function installTitleSpawnBell(session: ConnectPanePtySession): void {
-  session.onTitleChange = (
-    title: string,
-    rawTitle: string,
-    meta?: { staleWorkingTitleClear?: boolean }
-  ): void => {
-    if (!meta?.staleWorkingTitleClear && resolveCommittedTitleAgentType(rawTitle)) {
-      session.paneForegroundAgentTracker.onAgentStartupObserved()
-    }
-    // Share owner-aware display/title/completion/GPU decisions so raw title text cannot override stronger pane identity (#7428/#7447).
+  let lastTitle: {
+    title: string
+    rawTitle: string
+    displayTitle: string
+    ptyId: string | null
+  } | null = null
+  const presentTitle = (title: string, rawTitle: string) => {
     const decision = resolvePaneTitleDecision({
       normalizedTitle: title,
       rawTitle,
@@ -33,8 +31,68 @@ export function installTitleSpawnBell(session: ConnectPanePtySession): void {
       userGpuMode: useAppStore.getState().settings?.terminalGpuAcceleration ?? 'auto'
     })
     const paneTitle = decision.displayTitle
+    lastTitle = { title, rawTitle, displayTitle: paneTitle, ptyId: session.transport.getPtyId() }
     session.manager.setPaneGpuRendering(session.pane.id, decision.rendererPolicy.gpuEnabled)
     session.deps.setRuntimePaneTitle(session.deps.tabId, session.pane.id, paneTitle)
+    if (session.manager.getActivePane()?.id === session.pane.id) {
+      session.deps.updateTabTitle(session.deps.tabId, paneTitle)
+    }
+    return decision
+  }
+  let displayOwner = session.getAuthoritativePaneAgent()
+  let rendererOwner = session.getPaneScopedRendererOwner()
+  const initial = useAppStore.getState()
+  let previousForeground = initial.paneForegroundAgentByPaneKey[session.cacheKey]
+  let previousStatus = initial.agentStatusByPaneKey[session.cacheKey]
+  let previousLaunch = initial.agentLaunchConfigByPaneKey[session.cacheKey]
+  let previousRetirement = initial.recentlyRetiredAgentStatusPaneKeys?.[session.cacheKey]
+  session.waitTeardowns.push(
+    useAppStore.subscribe((state) => {
+      const key = session.cacheKey
+      const foreground = state.paneForegroundAgentByPaneKey[key]
+      const entry = state.agentStatusByPaneKey[key]
+      const launch = state.agentLaunchConfigByPaneKey[key]
+      const retirement = state.recentlyRetiredAgentStatusPaneKeys?.[key]
+      const changed =
+        foreground !== previousForeground ||
+        entry !== previousStatus ||
+        launch !== previousLaunch ||
+        retirement !== previousRetirement
+      previousForeground = foreground
+      previousStatus = entry
+      previousLaunch = launch
+      previousRetirement = retirement
+      if (!changed || session.disposed || !session.transport?.getPtyId()) {
+        return
+      }
+      const nextDisplayOwner = session.getAuthoritativePaneAgent()
+      const nextRendererOwner = session.getPaneScopedRendererOwner()
+      const ownerChanged = displayOwner !== nextDisplayOwner || rendererOwner !== nextRendererOwner
+      displayOwner = nextDisplayOwner
+      rendererOwner = nextRendererOwner
+      if (entry && foreground) {
+        state.correctAgentStatusIdentity(key, entry, foreground)
+      }
+      if (ownerChanged && lastTitle && lastTitle.ptyId === session.transport.getPtyId()) {
+        const liveTitle =
+          useAppStore.getState().runtimePaneTitlesByTabId?.[session.deps.tabId]?.[session.pane.id]
+        if (liveTitle === lastTitle.displayTitle) {
+          presentTitle(lastTitle.title, lastTitle.rawTitle)
+        } else {
+          lastTitle = null
+        }
+      }
+    })
+  )
+  session.onTitleChange = (
+    title: string,
+    rawTitle: string,
+    meta?: { staleWorkingTitleClear?: boolean }
+  ): void => {
+    if (!meta?.staleWorkingTitleClear && resolveCommittedTitleAgentType(rawTitle)) {
+      session.paneForegroundAgentTracker.onAgentStartupObserved()
+    }
+    const decision = presentTitle(title, rawTitle)
     // Stale expiry updates display without feeding completion; silence mid-task is not observed idle.
     if (!meta?.staleWorkingTitleClear && session.syncAgentTaskCompleteTrackingEnabled()) {
       const activeHookStatus = useAppStore.getState().agentStatusByPaneKey[session.cacheKey]
@@ -43,11 +101,6 @@ export function installTitleSpawnBell(session: ConnectPanePtySession): void {
         session.agentCompletionCoordinator.observeTitle(decision.rawTitle)
       }
     }
-    // Only active split titles drive the tab to avoid flicker; focus changes copy the newly active pane’s stored title.
-    if (session.manager.getActivePane()?.id === session.pane.id) {
-      session.deps.updateTabTitle(session.deps.tabId, paneTitle)
-    }
-
     if (!session.hasConsideredInitialCacheTimerSeed) {
       session.hasConsideredInitialCacheTimerSeed = true
       const state = useAppStore.getState()

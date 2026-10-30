@@ -2,7 +2,7 @@ import type { RecognizedAgentProcess } from '../../../../shared/agent-process-re
 import type { PaneForegroundAgentEntry } from '@/store/slices/pane-foreground-agent'
 import type { RuntimeTerminalProcessInspection } from '@/runtime/runtime-terminal-inspection'
 
-export type ForegroundReadReason = 'command' | 'visible-pty' | 'command-finished'
+export type ForegroundReadReason = 'command' | 'visible-pty' | 'command-finished' | 'accepted-input'
 
 export type PaneForegroundAgentTrackerDeps = {
   getPtyId: () => string | null
@@ -31,4 +31,19 @@ export type PaneForegroundAgentTrackerDeps = {
   onConfirmedShellForeground?: (reason: 'visible-pty' | 'command-finished' | 'process-exit') => void
   onCommandFinishedUnavailable?: () => void
   onVisibleForegroundSettled?: (outcome: 'agent' | 'shell' | 'inconclusive') => void
+}
+
+export type PaneForegroundAgentTracker = {
+  /** True while any read is scheduled or running, whatever its authority. */
+  hasReadInFlight: () => boolean
+  onVisiblePtyBound: (expectsAgent?: boolean) => boolean
+  onCommandStarted: (requireConfirmation?: boolean) => void
+  /** Accepted input requests evidence without asserting a shell lifecycle boundary. */
+  onAcceptedCommandBoundary: () => void
+  onAgentStartupObserved: () => void
+  /** True when pane identity must remain visible until an async shell confirmation. */
+  onCommandFinished: () => boolean
+  /** The process monitor confirmed this agent exited (no agent, no children, settled). */
+  onProcessExitConfirmed: (process: RecognizedAgentProcess) => void
+  dispose: () => void
 }

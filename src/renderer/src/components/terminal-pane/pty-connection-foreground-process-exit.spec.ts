@@ -16,6 +16,9 @@ import {
   installTerminalTestGlobals,
   restoreTerminalTestGlobals
 } from './pty-connection-test-environment'
+import { sendTerminalInputThroughPane } from './pty-connection-test-dom'
+import { resolveMockPaneWindowsShiftEnterEncoding } from './pty-connection-test-store-state'
+import { hasCtrlEnterCsiUAuthorityForPane } from './terminal-ctrl-enter'
 import { mockPanePtyArgs } from './pty-connection-test-connect-mock-pane'
 
 export function registerPtyConnectionForegroundProcessExitTests(): void {
@@ -57,6 +60,7 @@ export function registerPtyConnectionForegroundProcessExitTests(): void {
       visible: boolean
     ): Promise<{
       cacheKey: string
+      pane: ReturnType<typeof createPane>
       binding: { sampleForegroundAgentOnFocus: () => void }
       deps: ReturnType<typeof createDeps>
     }> {
@@ -72,10 +76,11 @@ export function registerPtyConnectionForegroundProcessExitTests(): void {
         restoredPtyIdByLeafId: { [LEAF_1]: ptyId },
         isVisibleRef: { current: visible }
       })
-      const binding = connectPanePty(...mockPanePtyArgs(createPane(1), createManager(1), deps))
+      const pane = createPane(1)
+      const binding = connectPanePty(...mockPanePtyArgs(pane, createManager(1), deps))
       await vi.advanceTimersByTimeAsync(20)
       await flushAsyncTicks(20)
-      return { cacheKey: makePaneKey(tabId, LEAF_1), binding, deps }
+      return { cacheKey: makePaneKey(tabId, LEAF_1), binding, deps, pane }
     }
 
     it('retires a hand-typed Codex read in a pane without command marks once it exits', async () => {
@@ -86,7 +91,7 @@ export function registerPtyConnectionForegroundProcessExitTests(): void {
       vi.mocked(window.api.pty.getForegroundProcess).mockImplementation(async () => foreground)
       vi.mocked(window.api.pty.hasChildProcesses).mockImplementation(async () => children)
 
-      const { cacheKey, binding, deps } = await connectRestoredPane(ptyId, true)
+      const { cacheKey, pane, deps } = await connectRestoredPane(ptyId, true)
       await vi.advanceTimersByTimeAsync(3_000)
       expect(mockStoreState.paneForegroundAgentByPaneKey[cacheKey]).toMatchObject({
         agent: 'codex',
@@ -99,18 +104,24 @@ export function registerPtyConnectionForegroundProcessExitTests(): void {
 
       expect(mockStoreState.paneForegroundAgentByPaneKey[cacheKey]).toEqual({
         agent: null,
-        shellForeground: false
+        shellForeground: true
       })
       expect(mockStoreState.clearAgentLaunchConfig).toHaveBeenCalledWith(cacheKey)
       expect(deps.onAgentExitedRef.current).toHaveBeenCalledWith(LEAF_1)
 
-      // Codex typed again in the same unmarked pane: the next sample must identify it.
-      foreground = 'codex'
+      // Stale agent titles cannot retain agent-specific keys in the shell.
+      expect(hasCtrlEnterCsiUAuthorityForPane(mockStoreState, cacheKey, 'Droid')).toBe(false)
+      expect(resolveMockPaneWindowsShiftEnterEncoding(mockStoreState, cacheKey, 'Droid')).toBe(
+        'alt-enter'
+      )
+      // The next unmarked launch is discovered even while the pane remains hidden.
+      deps.isVisibleRef.current = false
+      foreground = 'droid'
       children = true
-      binding.sampleForegroundAgentOnFocus()
+      sendTerminalInputThroughPane(pane, '\r')
       await vi.advanceTimersByTimeAsync(3_000)
       expect(mockStoreState.paneForegroundAgentByPaneKey[cacheKey]).toMatchObject({
-        agent: 'codex',
+        agent: 'droid',
         agentEvidence: 'process-read'
       })
     })

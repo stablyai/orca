@@ -184,6 +184,8 @@ export function buildStoreState(overrides: StoreLike): StoreLike {
     suppressedPtyExitIds: {},
     markAgentAttentionUnread: vi.fn(),
     agentStatusByPaneKey: {},
+    paneForegroundAgentByPaneKey: {},
+    recentlyRetiredAgentStatusPaneKeys: {},
     agentLaunchConfigByPaneKey: {},
     setAgentStatuses: vi.fn(() => []),
     recordAgentProviderSession: vi.fn(),

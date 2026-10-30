@@ -1,4 +1,6 @@
 import { vi } from 'vitest'
+import { normalizeCompatibleAgentStatusEntryForOwner } from '../../../../shared/agent-title-owner'
+import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
 import type { PaneForegroundAgentEntry } from '@/store/slices/pane-foreground-agent'
 import { LEAF_1 } from './pty-connection-test-pane-fixtures'
 import type { StoreState } from './pty-connection-test-store-state'
@@ -63,6 +65,21 @@ export function createInitialStoreState(getState: () => StoreState): StoreState 
     clearAgentLaunchConfig: vi.fn(),
     observeTerminalGitHubPullRequestLink: vi.fn(),
     recordTerminalInput: vi.fn(),
+    correctAgentStatusIdentity: vi.fn(
+      (paneKey: string, entry: AgentStatusEntry, foreground: PaneForegroundAgentEntry) => {
+        if (
+          getState().agentStatusByPaneKey[paneKey] === entry &&
+          getState().paneForegroundAgentByPaneKey[paneKey] === foreground &&
+          foreground.agentEvidence === 'process-read' &&
+          !foreground.shellForeground
+        ) {
+          getState().agentStatusByPaneKey[paneKey] = normalizeCompatibleAgentStatusEntryForOwner(
+            entry,
+            foreground.agent
+          )
+        }
+      }
+    ),
     setAgentStatus: vi.fn(
       (
         paneKey: string,

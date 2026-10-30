@@ -19,7 +19,7 @@ import {
 
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
 
-import { installCommandInferredPaneAgent } from './command-inferred-pane-agent'
+import { installPaneAgentLifecycle } from './pane-agent-lifecycle'
 
 export function installSleepingRecordAccess(session: ConnectPanePtySession): void {
   session.getSleepingRecordForPane = (
@@ -190,5 +190,5 @@ export function installSleepingRecordAccess(session: ConnectPanePtySession): voi
     )
     return neutralTerminalTitle(tab?.defaultTitle)
   }
-  installCommandInferredPaneAgent(session)
+  installPaneAgentLifecycle(session)
 }

@@ -1,3 +1,7 @@
+import {
+  normalizeCompatibleAgentStatusEntryForOwner,
+  shareCompatibleTitleIdentityGroup
+} from '../../../../../shared/agent-title-owner'
 import { resolvePaneKey } from '../../../lib/agent-status-pane-ownership'
 import type { AgentStatusSlice } from './agent-status-slice-contract'
 import type { AgentStatusRuntime } from './agent-status-runtime'
@@ -30,7 +34,10 @@ import {
 
 export function createAgentStatusLiveActions(
   runtime: AgentStatusRuntime
-): Pick<AgentStatusSlice, 'setAgentStatus' | 'setAgentStatuses' | 'transactAgentStatuses'> {
+): Pick<
+  AgentStatusSlice,
+  'setAgentStatus' | 'setAgentStatuses' | 'transactAgentStatuses' | 'correctAgentStatusIdentity'
+> {
   const {
     get,
     set,
@@ -167,10 +174,45 @@ export function createAgentStatusLiveActions(
     }
   }
 
+  const correctAgentStatusIdentity: AgentStatusSlice['correctAgentStatusIdentity'] = (
+    paneKey,
+    expectedEntry,
+    expectedForeground
+  ) => {
+    let corrected = false
+    set((state, changedPaneKeys) => {
+      const entry = state.agentStatusByPaneKey[paneKey]
+      const foreground = state.paneForegroundAgentByPaneKey[paneKey]
+      if (
+        !entry ||
+        entry !== expectedEntry ||
+        foreground !== expectedForeground ||
+        foreground?.agentEvidence !== 'process-read' ||
+        foreground.shellForeground ||
+        state.recentlyRetiredAgentStatusPaneKeys[paneKey] !== undefined ||
+        isRecentlyClosedAgentStatusTab(
+          state.recentlyClosedAgentStatusTabIds,
+          getTabIdFromPaneKey(paneKey)
+        ) ||
+        !shareCompatibleTitleIdentityGroup(entry.agentType, foreground.agent)
+      ) {
+        return state
+      }
+      const next = normalizeCompatibleAgentStatusEntryForOwner(entry, foreground.agent)
+      if (next === entry) {
+        return state
+      }
+      changedPaneKeys.add(paneKey)
+      corrected = true
+      return { agentStatusByPaneKey: { ...state.agentStatusByPaneKey, [paneKey]: next } }
+    })
+    return corrected
+  }
+
   const setAgentStatuses = (updates: Parameters<AgentStatusSlice['setAgentStatuses']>[0]) =>
     updates.length === 0
       ? []
       : transactAgentStatuses((transaction) => updates.map(transaction.apply))
 
-  return { setAgentStatus, setAgentStatuses, transactAgentStatuses }
+  return { setAgentStatus, setAgentStatuses, transactAgentStatuses, correctAgentStatusIdentity }
 }

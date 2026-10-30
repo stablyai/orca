@@ -1,3 +1,4 @@
+import { resolveCompatibleAgentTypeForOwner } from './agent-title-owner'
 import {
   AGENT_STATUS_STALE_AFTER_MS,
   isFreshNonDoneAgentStatus,
@@ -47,17 +48,51 @@ function isActiveExistingIdentity(
   return isFreshNonDoneAgentStatus(existing, now, staleAfterMs)
 }
 
+/** The accepted hook row spans pending process reads; shell proof and retirement end its applicability. */
+export function resolveAgentStatusPaneOwner(
+  state: {
+    paneForegroundAgentByPaneKey: Record<
+      string,
+      { agent: AgentType | null; agentEvidence?: string; shellForeground: boolean }
+    >
+    agentStatusByPaneKey: Record<string, { agentType?: AgentType }>
+    agentLaunchConfigByPaneKey: Record<string, { identity?: { agentType?: AgentType } }>
+    recentlyRetiredAgentStatusPaneKeys: Record<string, unknown>
+  },
+  paneKey: string
+): AgentType | undefined {
+  const foreground = state.paneForegroundAgentByPaneKey[paneKey]
+  if (
+    state.recentlyRetiredAgentStatusPaneKeys[paneKey] !== undefined ||
+    foreground?.shellForeground
+  ) {
+    return undefined
+  }
+  const hook = state.agentStatusByPaneKey[paneKey]?.agentType
+  const launch = state.agentLaunchConfigByPaneKey[paneKey]?.identity?.agentType
+  return (
+    (foreground?.agentEvidence === 'process-read' ? (foreground.agent ?? undefined) : undefined) ??
+    resolveCompatibleAgentTypeForOwner(hook === 'unknown' ? undefined : hook, launch) ??
+    launch
+  )
+}
+
 export function resolveAgentStatusIdentity(args: {
   existing?: ExistingAgentIdentity
   incoming?: AgentType
   incomingProcess?: AgentProcessIdentity
   incomingSession?: string
+  observedAgentType?: AgentType
   now: number
   staleAfterMs?: number
 }): AgentIdentityResolution {
   const staleAfterMs = args.staleAfterMs ?? AGENT_STATUS_STALE_AFTER_MS
-  const existingAgentType = normalizedKnownAgentType(args.existing?.agentType)
-  const incomingAgentType = normalizedKnownAgentType(args.incoming)
+  const existingAgentType = normalizedKnownAgentType(
+    resolveCompatibleAgentTypeForOwner(args.existing?.agentType, args.observedAgentType)
+  )
+  const incomingAgentType = normalizedKnownAgentType(
+    resolveCompatibleAgentTypeForOwner(args.incoming, args.observedAgentType)
+  )
 
   if (!incomingAgentType) {
     return {
@@ -72,7 +107,7 @@ export function resolveAgentStatusIdentity(args: {
     }
   }
   const otherProcessOwner = hasOtherAgentProcessOwner(args.existing.agentPresence, {
-    agent: incomingAgentType,
+    agent: args.incoming ?? incomingAgentType,
     process: args.incomingProcess
   })
   if (existingAgentType === incomingAgentType) {
@@ -86,7 +121,7 @@ export function resolveAgentStatusIdentity(args: {
   if (
     owner?.session &&
     !owner.ended &&
-    owner.agent === incomingAgentType &&
+    owner.agent === args.incoming &&
     owner.session === args.incomingSession &&
     !otherProcessOwner
   ) {

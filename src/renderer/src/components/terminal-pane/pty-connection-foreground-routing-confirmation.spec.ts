@@ -131,9 +131,9 @@ export function registerPtyConnectionForegroundRoutingConfirmationTests(): void 
       it('does not retain routing capability when no confirmation read is scheduled', async () => {
         vi.useFakeTimers()
         const isVisibleRef = { current: false }
-        const ptyId = 'pty-pi-hidden-no-read'
+        const ptyId = 'pty-pi-unbound-no-read'
         const tabId = `tab-${ptyId}`
-        const { binding, cacheKey } = await connectRestoredPaneForForegroundSampling({
+        const { binding, cacheKey, transport } = await connectRestoredPaneForForegroundSampling({
           ptyId,
           tabId,
           isVisibleRef
@@ -144,7 +144,8 @@ export function registerPtyConnectionForegroundRoutingConfirmationTests(): void 
           shellForeground: false
         }
 
-        // Hidden panes skip visible sampling, so fail closed to legacy encoding without leaving an uncleared pending flag.
+        // An unbound PTY cannot schedule confirmation or retain byte authority.
+        transport.getPtyId.mockReturnValue(null)
         binding.requestWindowsShiftEnterReconfirmation()
         await vi.advanceTimersByTimeAsync(350)
         await flushAsyncTicks()
@@ -208,10 +209,13 @@ export function registerPtyConnectionForegroundRoutingConfirmationTests(): void 
 
         expect(mockStoreState.paneForegroundAgentByPaneKey[cacheKey]).toEqual({
           agent: 'pi',
+          agentEvidence: undefined,
           routingRevoked: true,
+          routingConfirmationPending: true,
           shellForeground: false
         })
-        expect(resolveMockPaneWindowsShiftEnterEncoding(mockStoreState, cacheKey)).toBe('alt-enter')
+        expect(resolveMockPaneWindowsShiftEnterEncoding(mockStoreState, cacheKey)).toBe('csi-u')
+        expect(mockStoreState.paneForegroundAgentByPaneKey[cacheKey]?.routingTrusted).not.toBe(true)
       })
 
       it.each(['null result', 'provider rejection'] as const)(

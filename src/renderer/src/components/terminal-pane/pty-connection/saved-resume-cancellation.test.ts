@@ -33,7 +33,7 @@ vi.mock('../terminal-startup-command-paste', () => ({
 }))
 vi.mock('../terminal-paste-runtime', () => ({ resolveTerminalPasteRuntime: () => ({}) }))
 vi.mock('@/lib/new-workspace', () => ({ CLIENT_PLATFORM: 'win32' }))
-vi.mock('./command-inferred-pane-agent', () => ({ installCommandInferredPaneAgent: vi.fn() }))
+vi.mock('./pane-agent-lifecycle', () => ({ installPaneAgentLifecycle: vi.fn() }))
 
 afterEach(() => {
   vi.useRealTimers()

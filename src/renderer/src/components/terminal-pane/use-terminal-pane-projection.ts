@@ -179,7 +179,7 @@ export function useTerminalPaneProjection(controller: TerminalPaneMobileControll
     useShallow((state) => ({
       menuAgentSessionId:
         contextMenu.open && contextMenuLeafId
-          ? resolvePaneAgentSessionId(state, makePaneKey(tabId, contextMenuLeafId))
+          ? resolvePaneAgentSessionId(state, makePaneKey(tabId, contextMenuLeafId), 'retained')
           : null,
       // Cheap stand-in for the tab menu's gate, on this pane's own conversation; the click looks it up.
       activePaneCanResumeInChat:

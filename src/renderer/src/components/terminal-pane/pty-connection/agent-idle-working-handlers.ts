@@ -31,7 +31,6 @@ export function installAgentIdleWorkingHandlers(session: ConnectPanePtySession):
     // Transient reconnect ineligibility cannot prevent authoritative shell-title exit from native chat.
     session.deps.onAgentExitedRef.current(session.pane.leafId)
     session.clearSuppressedTitleSideEffects()
-    session.clearCommandInferredPaneAgent()
     session.requestKnownWindowsShiftEnterReconfirmation()
     // Clear cache countdown when title returns to shell; process/PTY lifecycle owns actual agent-row removal.
     session.deps.setCacheTimerStartedAt(session.cacheKey, null)

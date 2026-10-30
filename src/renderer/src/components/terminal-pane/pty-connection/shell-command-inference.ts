@@ -2,10 +2,9 @@ import { detectAgentStatusFromTitle } from '@/lib/agent-status'
 import { useAppStore } from '@/store'
 import type { AgentType } from '../../../../../shared/agent-status-types'
 import { AGENT_INTERRUPT_SETTLE_MS } from '../../../../../shared/agent-interrupt-intent'
-import { resolvePaneAgentOwner } from '../../../../../shared/pane-agent-owner'
+import { resolveCompatibleAgentTypeForOwner } from '../../../../../shared/agent-title-owner'
 import { titleAfterInferredInterrupt } from '../../../../../shared/terminal-pane-title-reset'
 
-import { MANUAL_AGENT_COMMAND_MAX_CHARS } from './pty-connect-limits'
 import {
   CURSOR_AGENT_REATTACH_HEADER,
   terminalOwnsDomFocus,
@@ -15,107 +14,52 @@ import {
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
 
 export function installShellCommandInference(session: ConnectPanePtySession): void {
+  // Temporary input-forwarder seam; its owner removes this call with the next ownership rewrite.
+  session.cancelSuspendedShellCommandInference = (): void => {}
   session.observeAcceptedShellCommandInput = (data: string): void => {
-    if (
-      data.includes('\r') ||
-      data.includes('\n') ||
-      data.includes('\x03') ||
-      data.includes('\x04')
-    ) {
-      // Why: shells without OSC 133 give no command/exit boundary. An accepted
-      // submit or interrupt revokes stale trusted Shift+Enter routing and confirms once.
-      session.requestKnownWindowsShiftEnterReconfirmation()
-    }
-    if (session.commandInferredPaneAgent) {
+    const submitted = data.includes('\r') || data.includes('\n')
+    if (!submitted && !data.includes('\x03') && !data.includes('\x04')) {
       return
     }
-    // Why: bytes typed inside a live agent TUI are prompt text, not shell
-    // commands, even if they spell another agent binary name.
-    if (session.hasFreshPaneAgentSurface()) {
-      session.resetPendingShellCommandLine()
-      return
-    }
-    if (session.shellCommandInferenceSuspendedUntilCommandEnd) {
-      if (data.includes('\x03') || data.includes('\x15')) {
-        session.shellCommandInferenceSuspendedUntilCommandEnd = false
-        session.resetPendingShellCommandLine()
-      }
-      if (data.includes('\r') || data.includes('\n')) {
-        session.shellCommandInferenceSuspendedUntilCommandEnd = false
-      }
-      return
-    }
-    if (data.length > MANUAL_AGENT_COMMAND_MAX_CHARS) {
-      session.resetPendingShellCommandLine()
-      session.shellCommandInferenceSuspendedUntilCommandEnd =
-        !data.includes('\r') && !data.includes('\n')
-      return
-    }
-    for (let index = 0; index < data.length; index += 1) {
-      const char = data[index]!
-      if (char === '\r' || char === '\n') {
-        session.shellCommandInferenceSuspendedUntilCommandEnd = false
-        session.rememberCommandInferredPaneAgent()
-        if (session.commandInferredPaneAgent) {
-          return
-        }
-        continue
-      }
-      if (char === '\x7f' || char === '\b') {
-        session.deletePendingShellCommandCharacter()
-        continue
-      }
-      if (char === '\x17') {
-        session.deletePendingShellCommandWord()
-        continue
-      }
-      if (char === '\x03' || char === '\x15') {
-        session.resetPendingShellCommandLine()
-        continue
-      }
-      if (char === '\x1b') {
-        const nextIndex = session.consumeShellCommandCsiSequence(data, index)
-        if (nextIndex !== null) {
-          index = nextIndex - 1
-          continue
-        }
-        session.resetPendingShellCommandLine()
-        continue
-      }
-      if (char < ' ') {
-        session.resetPendingShellCommandLine()
-        continue
-      }
-      if (char >= ' ') {
-        session.appendPendingShellCommandInput(char)
-        if (session.shellCommandInferenceSuspendedUntilCommandEnd) {
-          return
-        }
-      }
+    const reconfirming = session.requestKnownWindowsShiftEnterReconfirmation()
+    if (submitted && !reconfirming && !session.getPaneScopedRendererOwner()) {
+      session.paneForegroundAgentTracker.onAcceptedCommandBoundary()
     }
   }
-  /** Launch ownership preserves OMP over Pi-compatible titles/hooks; typed command ownership covers manual launches without metadata. */
-  session.getAuthoritativePaneAgent = (): AgentType | undefined => {
+  const paneEvidence = () => {
     const state = useAppStore.getState()
-    const tab = (state.tabsByWorktree[session.deps.worktreeId] ?? []).find(
-      (entry) => entry.id === session.deps.tabId
-    )
-    return (
-      resolvePaneAgentOwner({
-        launchAgent: tab?.launchAgent,
-        startupLaunchAgent: session.paneStartup?.launchAgent,
-        initialStatusAgent: session.paneStartup?.initialAgentStatus?.agent,
-        commandInferredAgent: session.commandInferredPaneAgent,
-        hookAgent: state.agentStatusByPaneKey[session.cacheKey]?.agentType
-      }) ?? undefined
-    )
+    const foreground = state.paneForegroundAgentByPaneKey[session.cacheKey]
+    const retired = state.recentlyRetiredAgentStatusPaneKeys?.[session.cacheKey] !== undefined
+    const processAgent =
+      !retired && !foreground?.shellForeground && foreground?.agentEvidence === 'process-read'
+        ? (foreground.agent ?? undefined)
+        : undefined
+    const hook =
+      !retired && !foreground?.shellForeground
+        ? state.agentStatusByPaneKey[session.cacheKey]
+        : undefined
+    const launch =
+      !retired && !foreground?.shellForeground
+        ? (state.agentLaunchConfigByPaneKey[session.cacheKey]?.identity.agentType ??
+          (!foreground && !hook && !session.handledExitPtyId
+            ? (session.paneStartup?.launchAgent ?? session.paneStartup?.initialAgentStatus?.agent)
+            : undefined))
+        : undefined
+    const hookAgent = hook?.agentType === 'unknown' ? undefined : hook?.agentType
+    return { processAgent, hook, hookAgent, launch }
   }
-  // GPU veto needs current pane evidence: tab-shared/never-cleared launch seeds can describe siblings or dead agents. Use fresh active rows or command evidence; Pi/OMP titles retain their own guard (#7428).
+  session.getAuthoritativePaneAgent = (): AgentType | undefined => {
+    const { processAgent, hookAgent, launch } = paneEvidence()
+    return processAgent ?? resolveCompatibleAgentTypeForOwner(hookAgent, launch) ?? launch
+  }
+  // Display identity survives inter-turn Done; GPU policy requires live pane evidence.
   session.getPaneScopedRendererOwner = (): AgentType | undefined => {
-    const entry = useAppStore.getState().agentStatusByPaneKey[session.cacheKey]
+    const { processAgent, hook, hookAgent, launch } = paneEvidence()
     return (
-      session.commandInferredPaneAgent ??
-      (session.isFreshActivePaneAgentEntry(entry) ? entry.agentType : undefined)
+      processAgent ??
+      (session.isFreshActivePaneAgentEntry(hook)
+        ? resolveCompatibleAgentTypeForOwner(hookAgent, launch)
+        : undefined)
     )
   }
   session.clearInferredInterruptWorkingTitle = (): void => {

@@ -30,6 +30,7 @@ import type {
   SleepingAgentSessionRecord
 } from '../../../../../shared/agent-session-resume'
 import type { AgentStatusStateUpdate } from './agent-status-runtime'
+import type { PaneForegroundAgentEntry } from '../pane-foreground-agent'
 import type { ProgramStatusFacet } from '../../../../../shared/program-status/facet'
 
 export type AgentStatusSlice = {
@@ -89,6 +90,13 @@ export type AgentStatusSlice = {
     routing?: AgentStatusRouting,
     metadata?: AgentStatusMetadata
   ) => void
+
+  /** Correct compatible display identity against the exact current row and admitted process evidence. */
+  correctAgentStatusIdentity: (
+    paneKey: string,
+    expectedEntry: AgentStatusEntry,
+    expectedForeground: PaneForegroundAgentEntry
+  ) => boolean
 
   /** Publish ordered status batch once; generated/tab titles publish separately (three writes, not 2N). */
   setAgentStatuses: (updates: readonly AgentStatusBatchUpdate[]) => boolean[]

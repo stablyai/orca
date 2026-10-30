@@ -9,9 +9,9 @@ describe('resolvePaneAgentOwner', () => {
     expect(resolvePaneAgentOwner({ startupLaunchAgent: 'codex', hookAgent: 'claude' })).toBe(
       'codex'
     )
-    expect(
-      resolvePaneAgentOwner({ initialStatusAgent: 'gemini', commandInferredAgent: 'codex' })
-    ).toBe('gemini')
+    expect(resolvePaneAgentOwner({ initialStatusAgent: 'gemini', hookAgent: 'codex' })).toBe(
+      'gemini'
+    )
   })
 
   it('falls through to the durable host-stamped hook identity when launch intent is gone', () => {

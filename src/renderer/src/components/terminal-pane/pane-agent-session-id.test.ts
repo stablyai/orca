@@ -70,6 +70,12 @@ describe('resolvePaneAgentSessionId', () => {
     ).toBe('confirmed-session')
   })
 
+  it('keeps the retained ID copyable after exit while live-only consumers see no session', () => {
+    const exited = state(undefined, sleeping('saved-session'), true)
+    expect(resolvePaneAgentSessionId(exited, PANE_KEY, 'retained')).toBe('saved-session')
+    expect(resolvePaneAgentSessionId(exited, PANE_KEY)).toBeNull()
+  })
+
   describe('liveness', () => {
     it('is absent once the pane is proven back at the shell', () => {
       expect(

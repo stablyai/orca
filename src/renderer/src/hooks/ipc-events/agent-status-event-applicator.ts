@@ -1,3 +1,8 @@
+import {
+  normalizeCompatibleAgentTitleForOwner,
+  resolveCompatibleAgentTypeForOwner
+} from '../../../../shared/agent-title-owner'
+import { resolveAgentStatusPaneOwner } from '../../../../shared/agent-status-identity'
 import { isWslHookRelayConnectionId } from '../../../../shared/wsl-hook-relay-contract'
 import { pickHostTurnEnd, type AgentStatusIpcPayload } from '../../../../shared/agent-status-types'
 import { isDecorativeAgentTitleFrameChange } from '../../../../shared/agent-decorative-title-signature'
@@ -159,6 +164,7 @@ export function createAgentStatusEventApplicator(args: {
       return 'dropped'
     }
     const existingStatus = store.agentStatusByPaneKey[paneKey]
+    const observedAgentType = resolveAgentStatusPaneOwner(store, paneKey)
     if (data.programStatusOnly === true) {
       // Why after ownership but before staleness: the republished row keeps its old receivedAt.
       return applyProgramStatusOnlyUpdate(store, options?.batch, paneKey, programStatus)
@@ -199,12 +205,16 @@ export function createAgentStatusEventApplicator(args: {
       existingStatus &&
       isInheritedFromActivePane(existingStatus, data, statusPayload.agentType, {
         connectionId: ownershipConnectionId,
-        worktreeId: owningWorktreeId
+        worktreeId: owningWorktreeId,
+        observedAgentType
       })
     ) {
       return 'dropped'
     }
-    const terminalTitle = resolveAgentStatusTerminalTitle(statusPayload, title)
+    const reportedTitle = resolveAgentStatusTerminalTitle(statusPayload, title)
+    const terminalTitle = reportedTitle
+      ? normalizeCompatibleAgentTitleForOwner(reportedTitle, observedAgentType)
+      : reportedTitle
     const statusWorktreeId = data.worktreeId ?? owningWorktreeId
     const update: AgentStatusUpdate = {
       paneKey,
@@ -234,6 +244,10 @@ export function createAgentStatusEventApplicator(args: {
       if (statusWorktreeId && (!replayed || resolvedPayload.state === 'working')) {
         const notificationPayload = {
           ...resolvedPayload,
+          agentType: resolveCompatibleAgentTypeForOwner(
+            resolvedPayload.agentType,
+            observedAgentType
+          ),
           stateStartedAt: data.stateStartedAt,
           ...pickHostTurnEnd(data)
         }

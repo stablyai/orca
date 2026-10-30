@@ -1,4 +1,6 @@
 import type * as React from 'react'
+import type { StoreApi } from 'zustand'
+import type { AppState } from '@/store/types'
 import { vi } from 'vitest'
 import type { Mock } from 'vitest'
 import type { MockTransport } from './pty-connection-test-pane-fixtures'
@@ -8,6 +10,9 @@ type StoreSubscriber = (state: StoreState) => void
 
 type PtyConnectionTestBindings = {
   getState: () => StoreState
+  getProductionStore?: () => StoreApi<AppState> | undefined
+  onStoreNotification?: () => void
+  onStoreSelection?: () => void
   getTransportQueue: () => MockTransport[]
   getTransportOptions: () => Record<string, unknown>[]
   getStoreSubscribers: () => StoreSubscriber[]
@@ -75,21 +80,49 @@ vi.mock('./terminal-webgl-atlas-recovery', () => ({
   scheduleTerminalWebglAtlasRecovery: fixture.mocks.scheduleTerminalWebglAtlasRecovery
 }))
 
-vi.mock('@/store', () => ({
-  useAppStore: {
-    getState: () => fixture.current().getState(),
-    subscribe: (listener: StoreSubscriber) => {
-      // Unsubscribe must keep the suite that created the subscription.
-      const bindings = fixture.current()
-      bindings.getStoreSubscribers().push(listener)
-      return () => {
-        bindings.setStoreSubscribers(
-          bindings.getStoreSubscribers().filter((candidate) => candidate !== listener)
-        )
+vi.mock('@/store', () => {
+  const observe = (state: AppState): AppState => {
+    const onSelection = fixture.current().onStoreSelection
+    return onSelection
+      ? new Proxy(state, {
+          get(target, key, receiver) {
+            if (
+              key === 'paneForegroundAgentByPaneKey' ||
+              key === 'agentStatusByPaneKey' ||
+              key === 'agentLaunchConfigByPaneKey' ||
+              key === 'recentlyRetiredAgentStatusPaneKeys'
+            ) {
+              onSelection()
+            }
+            return Reflect.get(target, key, receiver)
+          }
+        })
+      : state
+  }
+  return {
+    useAppStore: {
+      getState: () => {
+        const production = fixture.current().getProductionStore?.()?.getState()
+        return production ? observe(production) : fixture.current().getState()
+      },
+      subscribe: (listener: StoreSubscriber & ((state: AppState) => void)) => {
+        const bindings = fixture.current()
+        const productionStore = bindings.getProductionStore?.()
+        if (productionStore) {
+          return productionStore.subscribe((state) => {
+            bindings.onStoreNotification?.()
+            listener(observe(state))
+          })
+        }
+        bindings.getStoreSubscribers().push(listener)
+        return () =>
+          bindings.setStoreSubscribers(
+            bindings.getStoreSubscribers().filter((candidate) => candidate !== listener)
+          )
       }
     }
   }
-}))
+})
 
 vi.mock('@/lib/agent-status', async (importOriginal) => {
   const { buildAgentStatusModuleMock } = await import('./pty-connection-test-environment')

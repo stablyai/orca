@@ -1,38 +1,52 @@
 // @vitest-environment happy-dom
 
-import { cleanup, render } from '@testing-library/react'
+import { cleanup, fireEvent, render, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import type { NativeChatContextMenuActions } from '../native-chat/use-native-chat-context-menu'
+import type { PaneAgentSessionIdState } from './pane-agent-session-id'
+import { NativeChatPaneMenuItems } from '../native-chat/NativeChatPaneMenuItems'
+import { useTerminalPaneContextMenu } from './use-terminal-pane-context-menu'
+import { createPane, createManager } from './pty-connection-test-pane-fixtures'
+import { mockPanePtyArgs } from './pty-connection-test-connect-mock-pane'
+import { buildPaneConnectionDeps } from './pty-connection-test-deps'
+import { createInitialStoreState } from './pty-connection-test-store-fixtures'
 import type { TerminalPaneController } from './use-terminal-pane-controller'
 
-type NativeChatPortalMenuActions = {
-  onClosePane: () => void
-  onCopyAgentSessionContext: () => void
-  canClearPaneTitle: boolean
-  onClearPaneTitle: () => void
-}
+type NativeChatPortalMenuActions = Omit<NativeChatContextMenuActions, 'onPaste'>
 
 const mocks = vi.hoisted(
   (): {
+    state: PaneAgentSessionIdState
     nativeChatViewProps: null | {
       isFocusedGroup: boolean
       contextMenuActions: NativeChatPortalMenuActions
     }
-  } => ({ nativeChatViewProps: null })
-)
-
-vi.mock('@/store', () => ({
-  useAppStore: (
-    selector: (state: {
-      agentStatusByPaneKey: Record<string, never>
-      sleepingAgentSessionsByPaneKey: Record<string, never>
-      paneForegroundAgentByPaneKey: Record<string, never>
-    }) => unknown
-  ) =>
-    selector({
+  } => ({
+    nativeChatViewProps: null,
+    state: {
       agentStatusByPaneKey: {},
       sleepingAgentSessionsByPaneKey: {},
       paneForegroundAgentByPaneKey: {}
-    })
+    }
+  })
+)
+
+vi.mock('@/store', () => ({
+  useAppStore: Object.assign(
+    (selector: (state: PaneAgentSessionIdState) => unknown) => selector(mocks.state),
+    { getState: () => mocks.state }
+  )
+}))
+vi.mock('@/components/ui/dropdown-menu', () => ({
+  DropdownMenuItem: ({
+    children,
+    onSelect
+  }: {
+    children?: React.ReactNode
+    onSelect?: () => void
+  }) => <button onClick={onSelect}>{children}</button>,
+  DropdownMenuSeparator: () => null,
+  DropdownMenuShortcut: ({ children }: { children?: React.ReactNode }) => <span>{children}</span>
 }))
 
 vi.mock('../native-chat/NativeChatView', () => ({
@@ -41,7 +55,12 @@ vi.mock('../native-chat/NativeChatView', () => ({
     contextMenuActions: NativeChatPortalMenuActions
   }) => {
     mocks.nativeChatViewProps = props
-    return <span data-focused-group={String(props.isFocusedGroup)} />
+    return (
+      <>
+        <span data-focused-group={String(props.isFocusedGroup)} />
+        <NativeChatPaneMenuItems actions={props.contextMenuActions} />
+      </>
+    )
   }
 }))
 
@@ -50,6 +69,11 @@ import { TerminalPaneNativeChatPortal } from './TerminalPaneNativeChatPortal'
 afterEach(() => {
   cleanup()
   mocks.nativeChatViewProps = null
+  mocks.state = {
+    agentStatusByPaneKey: {},
+    sleepingAgentSessionsByPaneKey: {},
+    paneForegroundAgentByPaneKey: {}
+  }
 })
 
 describe('TerminalPaneNativeChatPortal', () => {
@@ -91,6 +115,75 @@ describe('TerminalPaneNativeChatPortal', () => {
       1,
       controller.contextMenu.onClearPaneTitle
     )
+  })
+
+  it('renders and copies the retained provider ID from an exited pane through its real action', async () => {
+    const portalContainer = document.createElement('div')
+    document.body.appendChild(portalContainer)
+    const paneKey = 'tab-1:11111111-1111-4111-8111-111111111111'
+    mocks.state = {
+      agentStatusByPaneKey: {
+        [paneKey]: {
+          paneKey,
+          state: 'done',
+          agentType: 'claude',
+          prompt: '',
+          updatedAt: 1,
+          stateStartedAt: 1,
+          stateHistory: [],
+          providerSession: { key: 'session_id', id: 'retained-provider-session' }
+        }
+      },
+      sleepingAgentSessionsByPaneKey: {},
+      paneForegroundAgentByPaneKey: { [paneKey]: { agent: null, shellForeground: true } }
+    }
+    const write = vi.fn().mockResolvedValue(undefined)
+    Object.assign(window, { api: { ui: { writeTerminalClipboardText: write } } })
+    const mockPane = createPane(1)
+    Object.assign(mockPane.terminal, { focus: vi.fn() })
+    const mockManager = createManager(1)
+    mockManager.getPanes.mockReturnValue([mockPane])
+    mockManager.getActivePane.mockReturnValue(mockPane)
+    const state = createInitialStoreState(() => state)
+    const [, manager] = mockPanePtyArgs(
+      mockPane,
+      mockManager,
+      buildPaneConnectionDeps(() => state)
+    )
+    const { result } = renderHook(() =>
+      useTerminalPaneContextMenu({
+        managerRef: { current: manager },
+        paneTransportsRef: { current: new Map() },
+        paneCwdRef: { current: new Map() },
+        containerRef: { current: null },
+        tabId: 'tab-1',
+        worktreeId: 'wt-1',
+        groupId: null,
+        fallbackCwd: '/tmp',
+        toggleExpandPane: vi.fn(),
+        onRequestClosePane: vi.fn(),
+        onClearPaneScrollback: vi.fn(),
+        onSetTitle: vi.fn(),
+        onClearPaneTitle: vi.fn(),
+        onPasteError: vi.fn(),
+        onAgentSessionForkReady: vi.fn(),
+        onAgentSessionContinuationReady: vi.fn(),
+        forceBracketedMultilineTextPaste: false,
+        rightClickToPaste: false
+      })
+    )
+    const controller = makeController(portalContainer, { activePaneIsChatLeaf: true })
+    controller.contextMenu = result.current
+    render(<TerminalPaneNativeChatPortal controller={controller} />)
+    const copy = [...portalContainer.querySelectorAll('button')].find(
+      (button) => button.textContent === 'Copy Session ID'
+    )
+    if (!copy) {
+      throw new Error('missing retained session action')
+    }
+    fireEvent.click(copy)
+    await waitFor(() => expect(write).toHaveBeenCalledWith('retained-provider-session'))
+    portalContainer.remove()
   })
 
   it('only gives the composer focus ownership to the active split leaf', () => {

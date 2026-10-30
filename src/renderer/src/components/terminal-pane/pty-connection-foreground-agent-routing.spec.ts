@@ -212,7 +212,7 @@ export function registerPtyConnectionForegroundAgentRoutingTests(): void {
       })
     })
 
-    it('confirms a manually typed Droid without OSC command boundaries', async () => {
+    it('discovers hidden Droid after an identity-free accepted submit without OSC boundaries', async () => {
       vi.useFakeTimers()
       const { connectPanePty } = await import('./pty-connection')
       vi.mocked(window.api.pty.confirmForegroundProcess).mockResolvedValue('droid')
@@ -232,7 +232,7 @@ export function registerPtyConnectionForegroundAgentRoutingTests(): void {
       await vi.advanceTimersByTimeAsync(20)
       await flushAsyncTicks()
 
-      sendTerminalInputThroughPane(pane, 'droid\r')
+      sendTerminalInputThroughPane(pane, '\r')
       expect(resolveMockPaneWindowsShiftEnterEncoding(mockStoreState, paneKey)).toBe('alt-enter')
 
       await vi.advanceTimersByTimeAsync(350)

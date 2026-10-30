@@ -8,8 +8,6 @@ export type PaneAgentOwnerSignals = {
   startupLaunchAgent?: AgentType | null
   /** Startup-provided initial agent status (pane connection only). */
   initialStatusAgent?: AgentType | null
-  /** Agent inferred from a manually typed shell command (pane connection only). */
-  commandInferredAgent?: AgentType | null
   /** Live focused-pane hook identity — host-stamped, published, mirror-safe. */
   hookAgent?: AgentType | null
   /** Live sibling-pane hook identity. */
@@ -24,7 +22,7 @@ export type PaneAgentOwnerSignals = {
 
 export type ResolvedPaneAgentOwner = {
   agent: AgentType
-  /** User-selected launch/startup/typed-command identity — not a status frame. */
+  /** User-selected launch/startup identity — not a status frame. */
   ownerIsLaunch: boolean
 }
 
@@ -35,7 +33,6 @@ const PANE_OWNER_RANK: readonly {
   { key: 'launchAgent', ownerIsLaunch: true },
   { key: 'startupLaunchAgent', ownerIsLaunch: true },
   { key: 'initialStatusAgent', ownerIsLaunch: true },
-  { key: 'commandInferredAgent', ownerIsLaunch: true },
   { key: 'hookAgent', ownerIsLaunch: false },
   { key: 'siblingHookAgent', ownerIsLaunch: false },
   { key: 'completedHookAgent', ownerIsLaunch: false },

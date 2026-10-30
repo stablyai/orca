@@ -221,11 +221,84 @@ describe('createPaneForegroundAgentTracker', () => {
     })
   })
 
-  it('uses typed-agent text only to await process confirmation', async () => {
+  it('keeps accepted input confirm-only when no real command marker arrives', async () => {
+    readForegroundProcess.mockResolvedValue('zsh')
+    const tracker = makeTracker()
+    tracker.onAcceptedCommandBoundary()
+    await flushSettleRead(COMMAND_SETTLE_MS + WRAPPER_RESOLVE_RETRY_MS + SECOND_WRAPPER_RETRY_MS)
+    expect(confirmForegroundProcess).toHaveBeenCalledTimes(3)
+    expect(publish).not.toHaveBeenCalled()
+    expect(onConfirmedShellForeground).not.toHaveBeenCalled()
+  })
+
+  it.each([false, true])(
+    'coalesces accepted submit with OSC start (read in flight=%s)',
+    async (inFlight) => {
+      readForegroundProcess.mockResolvedValue(null)
+      let finishFirstRead: (value: string | null) => void = () => {}
+      readForegroundProcess.mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            finishFirstRead = resolve
+          })
+      )
+      const tracker = makeTracker()
+      tracker.onAcceptedCommandBoundary()
+      tracker.onAcceptedCommandBoundary()
+      expect(publish).not.toHaveBeenCalled()
+      if (inFlight) {
+        await flushSettleRead(COMMAND_SETTLE_MS)
+      }
+      tracker.onCommandStarted(true)
+      tracker.onVisiblePtyBound()
+      expect(publish).toHaveBeenCalledExactlyOnceWith({ agent: null, shellForeground: false })
+      if (!inFlight) {
+        await flushSettleRead(COMMAND_SETTLE_MS)
+      }
+      finishFirstRead(null)
+      await flushSettleRead(0)
+      await flushSettleRead(WRAPPER_RESOLVE_RETRY_MS + SECOND_WRAPPER_RETRY_MS)
+      expect(confirmForegroundProcess).toHaveBeenCalledTimes(3)
+      expect(publish).toHaveBeenCalledTimes(2)
+      expect(onConfirmedShellForeground).not.toHaveBeenCalled()
+      expect(tracker.hasReadInFlight()).toBe(false)
+    }
+  )
+
+  it('discovers an alias result only from confirmed process data and fences a replaced PTY', async () => {
+    readForegroundProcess.mockResolvedValue('droid')
+    const tracker = makeTracker()
+    tracker.onAcceptedCommandBoundary()
+    await flushSettleRead(COMMAND_SETTLE_MS)
+    expect(publish).toHaveBeenLastCalledWith({
+      agent: 'droid',
+      agentEvidence: 'process-read',
+      routingTrusted: true,
+      shellForeground: false
+    })
+    publish.mockClear()
+    let finish: (process: string) => void = () => {}
+    readForegroundProcess.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve
+        })
+    )
+    tracker.onAcceptedCommandBoundary()
+    await flushSettleRead(COMMAND_SETTLE_MS)
+    ptyId = 'pty-2'
+    finish('droid')
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(publish).not.toHaveBeenCalled()
+    tracker.dispose()
+  })
+
+  it('awaits provider confirmation when a boundary requires routing evidence', async () => {
     readForegroundProcess.mockResolvedValueOnce('powershell.exe').mockResolvedValueOnce('droid')
     const tracker = makeTracker()
 
-    tracker.onCommandStarted('droid')
+    tracker.onCommandStarted(true)
     expect(publish).toHaveBeenCalledExactlyOnceWith({ agent: null, shellForeground: false })
 
     await flushSettleRead(COMMAND_SETTLE_MS)
@@ -239,11 +312,11 @@ describe('createPaneForegroundAgentTracker', () => {
     })
   })
 
-  it('never publishes typed Droid when command-start reads stay unavailable', async () => {
+  it('never invents an agent when confirmation reads stay unavailable', async () => {
     readForegroundProcess.mockResolvedValue(null)
     const tracker = makeTracker()
 
-    tracker.onCommandStarted('droid')
+    tracker.onCommandStarted(true)
     await flushSettleRead(COMMAND_SETTLE_MS)
     expect(publish).toHaveBeenLastCalledWith({ agent: null, shellForeground: false })
 
@@ -258,10 +331,10 @@ describe('createPaneForegroundAgentTracker', () => {
     expect(publish).toHaveBeenLastCalledWith({ agent: null, shellForeground: false })
   })
 
-  it('does not replace known foreground identity with typed command inference', () => {
+  it('revokes known foreground routing at an actual command start', () => {
     const tracker = makeTracker(() => true)
 
-    tracker.onCommandStarted('droid')
+    tracker.onCommandStarted(true)
 
     expect(publish).toHaveBeenCalledExactlyOnceWith({ agent: null, shellForeground: false })
   })

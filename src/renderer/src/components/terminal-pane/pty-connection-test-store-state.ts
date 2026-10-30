@@ -122,6 +122,7 @@ export type StoreState = {
   clearAgentLaunchConfig: ReturnType<typeof vi.fn>
   observeTerminalGitHubPullRequestLink: ReturnType<typeof vi.fn>
   recordTerminalInput: ReturnType<typeof vi.fn>
+  correctAgentStatusIdentity: ReturnType<typeof vi.fn>
   setAgentStatus: ReturnType<typeof vi.fn>
   removeAgentStatus: ReturnType<typeof vi.fn>
   dropAgentStatus: ReturnType<typeof vi.fn>
@@ -139,7 +140,8 @@ export type WindowsShiftEnterPaneState = Parameters<
 
 export function resolveMockPaneWindowsShiftEnterEncoding(
   state: StoreState,
-  paneKey: string
+  paneKey: string,
+  terminalTitle?: string
 ): ReturnType<typeof resolveWindowsShiftEnterEncodingForPane> {
   return resolveWindowsShiftEnterEncodingForPane(
     {
@@ -147,6 +149,7 @@ export function resolveMockPaneWindowsShiftEnterEncoding(
       agentLaunchConfigByPaneKey:
         state.agentLaunchConfigByPaneKey as WindowsShiftEnterPaneState['agentLaunchConfigByPaneKey']
     },
-    paneKey
+    paneKey,
+    terminalTitle
   )
 }

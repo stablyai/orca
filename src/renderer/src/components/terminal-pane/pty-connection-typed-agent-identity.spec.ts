@@ -2,34 +2,75 @@ import { bindPtyConnectionTestMocks } from './pty-connection-mocks.spec'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { flushAsyncTicks } from './pty-connection-test-async'
+import { mockPanePtyArgs } from './pty-connection-test-connect-mock-pane'
 import { sendTerminalInputThroughPane } from './pty-connection-test-dom'
 import {
   LEAF_1,
   createMockTransport,
   createPane,
   createManager,
-  type ConnectCallbacks,
-  type MockTransport
+  type MockTransport,
+  type ConnectCallbacks
 } from './pty-connection-test-pane-fixtures'
 import { buildPaneConnectionDeps } from './pty-connection-test-deps'
 import {
   createInitialStoreState,
   buildActiveRuntimeEnvironmentState
 } from './pty-connection-test-store-fixtures'
-import type { StoreState } from './pty-connection-test-store-state'
+import type { createTestStore } from '@/store/slices/store-test-helpers'
+import type { IpcPtyTransportOptions } from './pty-transport-types'
+import {
+  resolveMockPaneWindowsShiftEnterEncoding,
+  type StoreState
+} from './pty-connection-test-store-state'
 import {
   installTerminalTestGlobals,
   restoreTerminalTestGlobals
 } from './pty-connection-test-environment'
 
+function checkedTitleCallback(
+  options: Record<string, unknown>
+): NonNullable<IpcPtyTransportOptions['onTitleChange']> {
+  const { onTitleChange } = options
+  if (typeof onTitleChange !== 'function') {
+    throw new Error('missing live title callback')
+  }
+  return (title, rawTitle) => onTitleChange(title, rawTitle)
+}
+
+function checkedTitleCallbacks(options: Record<string, unknown>): {
+  onTitleChange: NonNullable<IpcPtyTransportOptions['onTitleChange']>
+  onAgentStatus: NonNullable<IpcPtyTransportOptions['onAgentStatus']>
+} {
+  const { onAgentStatus } = options
+  if (typeof onAgentStatus !== 'function') {
+    throw new Error('missing live status callback')
+  }
+  return {
+    onTitleChange: checkedTitleCallback(options),
+    onAgentStatus: (payload) => onAgentStatus(payload)
+  }
+}
+
 export function registerPtyConnectionTypedAgentIdentityTests(): void {
   let mockStoreState: StoreState
+  let productionStore: ReturnType<typeof createTestStore> | undefined
+  let notifications = 0
+  let selections = 0
   let transportFactoryQueue: MockTransport[] = []
   let createdTransportOptions: Record<string, unknown>[] = []
   let storeSubscribers: ((state: StoreState) => void)[] = []
 
   function createDeps(overrides: Record<string, unknown> = {}) {
-    return buildPaneConnectionDeps(() => mockStoreState, overrides)
+    return buildPaneConnectionDeps(() => mockStoreState, {
+      setRuntimePaneTitle: vi.fn((tabId: string, paneId: number, title: string) => {
+        mockStoreState.runtimePaneTitlesByTabId[tabId] = {
+          ...mockStoreState.runtimePaneTitlesByTabId[tabId],
+          [paneId]: title
+        }
+      }),
+      ...overrides
+    })
   }
 
   // Why: activeRuntimeEnvironmentId exercises the remote-runtime path where the renderer still owns OSC 9999 status.
@@ -44,9 +85,19 @@ export function registerPtyConnectionTypedAgentIdentityTests(): void {
       transportFactoryQueue = []
       createdTransportOptions = []
       storeSubscribers = []
+      productionStore = undefined
+      notifications = 0
+      selections = 0
       mockStoreState = createInitialStoreState(() => mockStoreState)
       bindPtyConnectionTestMocks({
         getState: () => mockStoreState,
+        getProductionStore: () => productionStore,
+        onStoreNotification: () => {
+          notifications += 1
+        },
+        onStoreSelection: () => {
+          selections += 1
+        },
         getTransportQueue: () => transportFactoryQueue,
         getTransportOptions: () => createdTransportOptions,
         getStoreSubscribers: () => storeSubscribers,
@@ -61,43 +112,70 @@ export function registerPtyConnectionTypedAgentIdentityTests(): void {
       await restoreTerminalTestGlobals()
     })
 
-    it('normalizes Pi-compatible remote runtime status to OMP after typed omp command', async () => {
-      const { connectPanePty } = await import('./pty-connection')
-      enableActiveRuntimeEnvironment()
-      const paneKey = makePaneKey('tab-1', LEAF_1)
-      const pane = createPane(1)
-      const transport = createMockTransport('remote:web-env-1@@pty-omp')
-      transportFactoryQueue.push(transport)
-      const manager = createManager(1, 1)
-      const deps = createDeps()
+    it.each([false, true])(
+      'keeps observed Pi identity without real OMP evidence (reattach=%s)',
+      async (partialReattach) => {
+        vi.useFakeTimers()
+        const { connectPanePty } = await import('./pty-connection')
+        enableActiveRuntimeEnvironment()
+        const paneKey = makePaneKey('tab-1', LEAF_1)
+        const pane = createPane(1)
+        const transport = createMockTransport(null)
+        const callbacksRef: { current?: ConnectCallbacks } = {}
+        const connect = transport.connect.getMockImplementation()
+        transport.connect.mockImplementation(async (options) => {
+          callbacksRef.current = options.callbacks
+          return connect?.(options)
+        })
+        transportFactoryQueue.push(transport)
+        const manager = createManager(1, 1)
+        const deps = createDeps({
+          restoredLeafId: LEAF_1,
+          restoredPtyIdByLeafId: { [LEAF_1]: 'tab-pty' }
+        })
 
-      connectPanePty(pane as never, manager as never, deps as never)
-      sendTerminalInputThroughPane(pane, 'omp\r')
-      await flushAsyncTicks()
-      const onTitleChange = createdTransportOptions[0]?.onTitleChange as
-        | ((title: string, rawTitle: string) => void)
-        | undefined
-      const onAgentStatus = createdTransportOptions[0]?.onAgentStatus as
-        | ((payload: { state: 'done'; prompt: string; agentType: 'pi' }) => void)
-        | undefined
-      if (!onTitleChange || !onAgentStatus) {
-        throw new Error('missing remote PTY callbacks')
+        const binding = connectPanePty(...mockPanePtyArgs(pane, manager, deps))
+        await vi.advanceTimersByTimeAsync(20)
+        await flushAsyncTicks(20)
+        if (partialReattach) {
+          sendTerminalInputThroughPane(pane, 'om')
+          if (!callbacksRef.current?.onReattachDetermined) {
+            throw new Error('missing reattach callback')
+          }
+          callbacksRef.current.onReattachDetermined()
+        }
+        sendTerminalInputThroughPane(pane, partialReattach ? 'p\r' : 'omp\r')
+        await vi.advanceTimersByTimeAsync(20)
+        await flushAsyncTicks(20)
+        const onTitleChange = createdTransportOptions[0]?.onTitleChange as
+          | ((title: string, rawTitle: string) => void)
+          | undefined
+        const onAgentStatus = createdTransportOptions[0]?.onAgentStatus as
+          | ((payload: { state: 'done'; prompt: string; agentType: 'pi' }) => void)
+          | undefined
+        if (!onTitleChange || !onAgentStatus) {
+          throw new Error('missing remote PTY callbacks')
+        }
+        onTitleChange('Pi ready', 'Pi ready')
+        onAgentStatus({
+          state: 'done',
+          prompt: '',
+          agentType: 'pi'
+        })
+
+        expect(transport.sendInput).toHaveBeenCalledWith(
+          partialReattach ? 'p\r' : 'omp\r',
+          'query-reply'
+        )
+        expect(deps.setRuntimePaneTitle).toHaveBeenCalledWith('tab-1', 1, 'Pi ready')
+        expect(deps.updateTabTitle).toHaveBeenCalledWith('tab-1', 'Pi ready')
+        expect(mockStoreState.agentStatusByPaneKey[paneKey]).toMatchObject({
+          state: 'done',
+          agentType: 'pi'
+        })
+        binding.dispose()
       }
-      onTitleChange('Pi ready', 'Pi ready')
-      onAgentStatus({
-        state: 'done',
-        prompt: '',
-        agentType: 'pi'
-      })
-
-      expect(transport.sendInput).toHaveBeenCalledWith('omp\r', 'query-reply')
-      expect(deps.setRuntimePaneTitle).toHaveBeenCalledWith('tab-1', 1, 'OMP ready')
-      expect(deps.updateTabTitle).toHaveBeenCalledWith('tab-1', 'OMP ready')
-      expect(mockStoreState.agentStatusByPaneKey[paneKey]).toMatchObject({
-        state: 'done',
-        agentType: 'omp'
-      })
-    })
+    )
 
     it('drives runtime title, tab title, and renderer policy from one title decision', async () => {
       const { connectPanePty } = await import('./pty-connection')
@@ -107,7 +185,7 @@ export function registerPtyConnectionTypedAgentIdentityTests(): void {
       const manager = createManager(1, 1)
       const deps = createDeps()
 
-      connectPanePty(pane as never, manager as never, deps as never)
+      connectPanePty(...mockPanePtyArgs(pane, manager, deps))
       await flushAsyncTicks()
       const onTitleChange = createdTransportOptions[0]?.onTitleChange as
         | ((title: string, rawTitle: string) => void)
@@ -147,7 +225,7 @@ export function registerPtyConnectionTypedAgentIdentityTests(): void {
       const manager = createManager(1, 1)
       const deps = createDeps()
 
-      connectPanePty(pane as never, manager as never, deps as never)
+      connectPanePty(...mockPanePtyArgs(pane, manager, deps))
       await flushAsyncTicks()
       const onTitleChange = createdTransportOptions[0]?.onTitleChange as
         | ((title: string, rawTitle: string) => void)
@@ -226,7 +304,7 @@ export function registerPtyConnectionTypedAgentIdentityTests(): void {
       // Stale, never-cleared launch identity must not veto the renderer.
       const deps = createDeps({ startup: { command: 'claude', launchAgent: 'claude' } })
 
-      connectPanePty(pane as never, manager as never, deps as never)
+      connectPanePty(...mockPanePtyArgs(pane, manager, deps))
       await flushAsyncTicks()
       const onTitleChange = createdTransportOptions[0]?.onTitleChange as
         | ((title: string, rawTitle: string) => void)
@@ -262,7 +340,7 @@ export function registerPtyConnectionTypedAgentIdentityTests(): void {
       const manager = createManager(1, 1)
       const deps = createDeps()
 
-      connectPanePty(pane as never, manager as never, deps as never)
+      connectPanePty(...mockPanePtyArgs(pane, manager, deps))
       await flushAsyncTicks()
       const onTitleChange = createdTransportOptions[0]?.onTitleChange as
         | ((title: string, rawTitle: string) => void)
@@ -300,7 +378,7 @@ export function registerPtyConnectionTypedAgentIdentityTests(): void {
       const manager = createManager(1, 1)
       const deps = createDeps()
 
-      connectPanePty(pane as never, manager as never, deps as never)
+      connectPanePty(...mockPanePtyArgs(pane, manager, deps))
       await flushAsyncTicks()
       const onTitleChange = createdTransportOptions[0]?.onTitleChange as
         | ((title: string, rawTitle: string) => void)
@@ -314,404 +392,356 @@ export function registerPtyConnectionTypedAgentIdentityTests(): void {
       expect(manager.setPaneGpuRendering).toHaveBeenCalledWith(1, false)
     })
 
-    it('normalizes after shell word deletion edits a typed command to omp', async () => {
-      const { connectPanePty } = await import('./pty-connection')
-      enableActiveRuntimeEnvironment()
-      const paneKey = makePaneKey('tab-1', LEAF_1)
-      const pane = createPane(1)
-      const transport = createMockTransport('remote:web-env-1@@pty-omp-edited')
-      transportFactoryQueue.push(transport)
-      const manager = createManager(1, 1)
-      const deps = createDeps()
-
-      connectPanePty(pane as never, manager as never, deps as never)
-      sendTerminalInputThroughPane(pane, 'pi \x17omp\r')
-      await flushAsyncTicks()
-      const onTitleChange = createdTransportOptions[0]?.onTitleChange as
-        | ((title: string, rawTitle: string) => void)
-        | undefined
-      const onAgentStatus = createdTransportOptions[0]?.onAgentStatus as
-        | ((payload: { state: 'done'; prompt: string; agentType: 'pi' }) => void)
-        | undefined
-      if (!onTitleChange || !onAgentStatus) {
-        throw new Error('missing remote PTY callbacks')
-      }
-      onTitleChange('Pi ready', 'Pi ready')
-      onAgentStatus({
-        state: 'done',
-        prompt: '',
-        agentType: 'pi'
-      })
-
-      expect(transport.sendInput).toHaveBeenCalledWith('pi \x17omp\r', 'query-reply')
-      expect(deps.setRuntimePaneTitle).toHaveBeenCalledWith('tab-1', 1, 'OMP ready')
-      expect(mockStoreState.agentStatusByPaneKey[paneKey]).toMatchObject({
-        state: 'done',
-        agentType: 'omp'
-      })
-    })
-
-    it('keeps Pi-compatible remote runtime status as Pi after typed pi command', async () => {
-      const { connectPanePty } = await import('./pty-connection')
-      enableActiveRuntimeEnvironment()
-      const paneKey = makePaneKey('tab-1', LEAF_1)
-      const pane = createPane(1)
-      const transport = createMockTransport('remote:web-env-1@@pty-pi')
-      transportFactoryQueue.push(transport)
-      const manager = createManager(1, 1)
-      const deps = createDeps()
-
-      connectPanePty(pane as never, manager as never, deps as never)
-      sendTerminalInputThroughPane(pane, 'pi\r')
-      await flushAsyncTicks()
-      const onTitleChange = createdTransportOptions[0]?.onTitleChange as
-        | ((title: string, rawTitle: string) => void)
-        | undefined
-      const onAgentStatus = createdTransportOptions[0]?.onAgentStatus as
-        | ((payload: { state: 'done'; prompt: string; agentType: 'pi' }) => void)
-        | undefined
-      if (!onTitleChange || !onAgentStatus) {
-        throw new Error('missing remote PTY callbacks')
-      }
-      onTitleChange('Pi ready', 'Pi ready')
-      onAgentStatus({
-        state: 'done',
-        prompt: '',
-        agentType: 'pi'
-      })
-
-      expect(transport.sendInput).toHaveBeenCalledWith('pi\r', 'query-reply')
-      expect(deps.setRuntimePaneTitle).toHaveBeenCalledWith('tab-1', 1, 'Pi ready')
-      expect(deps.updateTabTitle).toHaveBeenCalledWith('tab-1', 'Pi ready')
-      expect(mockStoreState.agentStatusByPaneKey[paneKey]).toMatchObject({
-        state: 'done',
-        agentType: 'pi',
-        terminalTitle: 'Pi ready'
-      })
-    })
-
-    it('does not infer shell ownership from prompts typed inside an existing Pi session', async () => {
-      const { connectPanePty } = await import('./pty-connection')
-      enableActiveRuntimeEnvironment()
-      const paneKey = makePaneKey('tab-1', LEAF_1)
-      const now = Date.now()
-      mockStoreState.agentStatusByPaneKey[paneKey] = {
-        state: 'done',
-        prompt: '',
-        agentType: 'pi',
-        paneKey,
-        terminalTitle: 'Pi ready',
-        updatedAt: now,
-        stateStartedAt: now,
-        stateHistory: []
-      }
-      mockStoreState.runtimePaneTitlesByTabId = { 'tab-1': { 1: 'Pi ready' } }
-      const pane = createPane(1)
-      const transport = createMockTransport('remote:web-env-1@@pty-pi-prompt')
-      transportFactoryQueue.push(transport)
-      const manager = createManager(1, 1)
-      const deps = createDeps()
-
-      connectPanePty(pane as never, manager as never, deps as never)
-      sendTerminalInputThroughPane(pane, 'omp\r')
-      await flushAsyncTicks()
-      const onTitleChange = createdTransportOptions[0]?.onTitleChange as
-        | ((title: string, rawTitle: string) => void)
-        | undefined
-      const onAgentStatus = createdTransportOptions[0]?.onAgentStatus as
-        | ((payload: { state: 'done'; prompt: string; agentType: 'pi' }) => void)
-        | undefined
-      if (!onTitleChange || !onAgentStatus) {
-        throw new Error('missing remote PTY callbacks')
-      }
-      onTitleChange('Pi ready', 'Pi ready')
-      onAgentStatus({
-        state: 'done',
-        prompt: '',
-        agentType: 'pi'
-      })
-
-      expect(transport.sendInput).toHaveBeenCalledWith('omp\r', 'query-reply')
-      expect(deps.setRuntimePaneTitle).toHaveBeenCalledWith('tab-1', 1, 'Pi ready')
-      expect(mockStoreState.agentStatusByPaneKey[paneKey]).toMatchObject({
-        state: 'done',
-        agentType: 'pi',
-        terminalTitle: 'Pi ready'
-      })
-    })
-
-    it('does not infer shell ownership from prompts typed in a title-only Pi session', async () => {
-      const { connectPanePty } = await import('./pty-connection')
-      enableActiveRuntimeEnvironment()
-      const paneKey = makePaneKey('tab-1', LEAF_1)
-      mockStoreState.runtimePaneTitlesByTabId = { 'tab-1': { 1: 'Pi ready' } }
-      const pane = createPane(1)
-      const transport = createMockTransport('remote:web-env-1@@pty-pi-title-only')
-      transportFactoryQueue.push(transport)
-      const manager = createManager(1, 1)
-      const deps = createDeps()
-
-      connectPanePty(pane as never, manager as never, deps as never)
-      sendTerminalInputThroughPane(pane, 'omp\r')
-      await flushAsyncTicks()
-      const onTitleChange = createdTransportOptions[0]?.onTitleChange as
-        | ((title: string, rawTitle: string) => void)
-        | undefined
-      const onAgentStatus = createdTransportOptions[0]?.onAgentStatus as
-        | ((payload: { state: 'done'; prompt: string; agentType: 'pi' }) => void)
-        | undefined
-      if (!onTitleChange || !onAgentStatus) {
-        throw new Error('missing remote PTY callbacks')
-      }
-      onTitleChange('Pi ready', 'Pi ready')
-      onAgentStatus({
-        state: 'done',
-        prompt: '',
-        agentType: 'pi'
-      })
-
-      expect(transport.sendInput).toHaveBeenCalledWith('omp\r', 'query-reply')
-      expect(deps.setRuntimePaneTitle).toHaveBeenCalledWith('tab-1', 1, 'Pi ready')
-      expect(mockStoreState.agentStatusByPaneKey[paneKey]).toMatchObject({
-        state: 'done',
-        agentType: 'pi',
-        terminalTitle: 'Pi ready'
-      })
-    })
-
-    it('lets a new typed omp command override a stale retained done status', async () => {
-      const { connectPanePty } = await import('./pty-connection')
-      enableActiveRuntimeEnvironment()
-      const paneKey = makePaneKey('tab-1', LEAF_1)
-      const now = Date.now()
-      mockStoreState.agentStatusByPaneKey[paneKey] = {
-        state: 'done',
-        prompt: '',
-        agentType: 'pi',
-        paneKey,
-        terminalTitle: 'Pi ready',
-        updatedAt: now,
-        stateStartedAt: now,
-        stateHistory: []
-      }
-      const pane = createPane(1)
-      const transport = createMockTransport('remote:web-env-1@@pty-stale-done')
-      transportFactoryQueue.push(transport)
-      const manager = createManager(1, 1)
-      const deps = createDeps()
-
-      connectPanePty(pane as never, manager as never, deps as never)
-      sendTerminalInputThroughPane(pane, 'omp\r')
-      await flushAsyncTicks()
-      const onTitleChange = createdTransportOptions[0]?.onTitleChange as
-        | ((title: string, rawTitle: string) => void)
-        | undefined
-      const onAgentStatus = createdTransportOptions[0]?.onAgentStatus as
-        | ((payload: { state: 'done'; prompt: string; agentType: 'pi' }) => void)
-        | undefined
-      if (!onTitleChange || !onAgentStatus) {
-        throw new Error('missing remote PTY callbacks')
-      }
-      onTitleChange('Pi ready', 'Pi ready')
-      onAgentStatus({
-        state: 'done',
-        prompt: '',
-        agentType: 'pi'
-      })
-
-      expect(deps.setRuntimePaneTitle).toHaveBeenCalledWith('tab-1', 1, 'OMP ready')
-      expect(mockStoreState.agentStatusByPaneKey[paneKey]).toMatchObject({
-        state: 'done',
-        agentType: 'omp'
-      })
-    })
-
-    it('tracks cursor edits when inferring a typed omp command', async () => {
-      const { connectPanePty } = await import('./pty-connection')
-      enableActiveRuntimeEnvironment()
-      const paneKey = makePaneKey('tab-1', LEAF_1)
-      const pane = createPane(1)
-      const transport = createMockTransport('remote:web-env-1@@pty-cursor-edit')
-      transportFactoryQueue.push(transport)
-      const manager = createManager(1, 1)
-      const deps = createDeps()
-
-      connectPanePty(pane as never, manager as never, deps as never)
-      sendTerminalInputThroughPane(pane, 'op\x1b[Dm\r')
-      await flushAsyncTicks()
-      const onTitleChange = createdTransportOptions[0]?.onTitleChange as
-        | ((title: string, rawTitle: string) => void)
-        | undefined
-      const onAgentStatus = createdTransportOptions[0]?.onAgentStatus as
-        | ((payload: { state: 'done'; prompt: string; agentType: 'pi' }) => void)
-        | undefined
-      if (!onTitleChange || !onAgentStatus) {
-        throw new Error('missing remote PTY callbacks')
-      }
-      onTitleChange('Pi ready', 'Pi ready')
-      onAgentStatus({
-        state: 'done',
-        prompt: '',
-        agentType: 'pi'
-      })
-
-      expect(transport.sendInput).toHaveBeenCalledWith('op\x1b[Dm\r', 'query-reply')
-      expect(mockStoreState.agentStatusByPaneKey[paneKey]).toMatchObject({
-        state: 'done',
-        agentType: 'omp'
-      })
-    })
-
-    it('tracks delete-key cursor edits when inferring a typed omp command', async () => {
-      const { connectPanePty } = await import('./pty-connection')
-      enableActiveRuntimeEnvironment()
-      const paneKey = makePaneKey('tab-1', LEAF_1)
-      const pane = createPane(1)
-      const transport = createMockTransport('remote:web-env-1@@pty-delete-edit')
-      transportFactoryQueue.push(transport)
-      const manager = createManager(1, 1)
-      const deps = createDeps()
-
-      connectPanePty(pane as never, manager as never, deps as never)
-      sendTerminalInputThroughPane(pane, 'ommp\x1b[D\x1b[D\x1b[3~\r')
-      await flushAsyncTicks()
-      const onTitleChange = createdTransportOptions[0]?.onTitleChange as
-        | ((title: string, rawTitle: string) => void)
-        | undefined
-      const onAgentStatus = createdTransportOptions[0]?.onAgentStatus as
-        | ((payload: { state: 'done'; prompt: string; agentType: 'pi' }) => void)
-        | undefined
-      if (!onTitleChange || !onAgentStatus) {
-        throw new Error('missing remote PTY callbacks')
-      }
-      onTitleChange('Pi ready', 'Pi ready')
-      onAgentStatus({
-        state: 'done',
-        prompt: '',
-        agentType: 'pi'
-      })
-
-      expect(mockStoreState.agentStatusByPaneKey[paneKey]).toMatchObject({
-        state: 'done',
-        agentType: 'omp'
-      })
-    })
-
-    it('skips manual agent inference for large paste chunks', async () => {
-      const { connectPanePty } = await import('./pty-connection')
-      enableActiveRuntimeEnvironment()
-      const paneKey = makePaneKey('tab-1', LEAF_1)
-      const pane = createPane(1)
-      const transport = createMockTransport('remote:web-env-1@@pty-large-paste')
-      transportFactoryQueue.push(transport)
-      const manager = createManager(1, 1)
-      const deps = createDeps()
-
-      connectPanePty(pane as never, manager as never, deps as never)
-      sendTerminalInputThroughPane(pane, `${' '.repeat(4097)}omp\r`)
-      await flushAsyncTicks()
-      const onTitleChange = createdTransportOptions[0]?.onTitleChange as
-        | ((title: string, rawTitle: string) => void)
-        | undefined
-      const onAgentStatus = createdTransportOptions[0]?.onAgentStatus as
-        | ((payload: { state: 'done'; prompt: string; agentType: 'pi' }) => void)
-        | undefined
-      if (!onTitleChange || !onAgentStatus) {
-        throw new Error('missing remote PTY callbacks')
-      }
-      onTitleChange('Pi ready', 'Pi ready')
-      onAgentStatus({
-        state: 'done',
-        prompt: '',
-        agentType: 'pi'
-      })
-
-      expect(mockStoreState.agentStatusByPaneKey[paneKey]).toMatchObject({
-        state: 'done',
-        agentType: 'pi',
-        terminalTitle: 'Pi ready'
-      })
-    })
-
-    it('resumes manual agent inference when large paste input is cancelled', async () => {
-      const { connectPanePty } = await import('./pty-connection')
-      enableActiveRuntimeEnvironment()
-      const paneKey = makePaneKey('tab-1', LEAF_1)
-      const pane = createPane(1)
-      const transport = createMockTransport('remote:web-env-1@@pty-cancelled-large-paste')
-      transportFactoryQueue.push(transport)
-      const manager = createManager(1, 1)
-      const deps = createDeps()
-
-      connectPanePty(pane as never, manager as never, deps as never)
-      sendTerminalInputThroughPane(pane, 'x'.repeat(4097))
-      sendTerminalInputThroughPane(pane, '\x03')
-      sendTerminalInputThroughPane(pane, 'omp\r')
-      await flushAsyncTicks()
-      const onTitleChange = createdTransportOptions[0]?.onTitleChange as
-        | ((title: string, rawTitle: string) => void)
-        | undefined
-      const onAgentStatus = createdTransportOptions[0]?.onAgentStatus as
-        | ((payload: { state: 'done'; prompt: string; agentType: 'pi' }) => void)
-        | undefined
-      if (!onTitleChange || !onAgentStatus) {
-        throw new Error('missing remote PTY callbacks')
-      }
-      onTitleChange('Pi ready', 'Pi ready')
-      onAgentStatus({
-        state: 'done',
-        prompt: '',
-        agentType: 'pi'
-      })
-
-      expect(mockStoreState.agentStatusByPaneKey[paneKey]).toMatchObject({
-        state: 'done',
-        agentType: 'omp'
-      })
-    })
-
-    it('preserves typed shell ownership through same-chunk command-finished side effects', async () => {
-      const { connectPanePty } = await import('./pty-connection')
-      enableActiveRuntimeEnvironment()
-      const paneKey = makePaneKey('tab-1', LEAF_1)
-      const dataCallbackRef: { current: ((data: string) => void) | null } = { current: null }
-      const pane = createPane(1)
-      const transport = createMockTransport('remote:env-1@@pty-command-finished')
-      transport.connect.mockImplementation(
-        async ({ callbacks }: { callbacks?: ConnectCallbacks }) => {
-          dataCallbackRef.current = callbacks?.onData ?? null
-          return 'remote:env-1@@pty-command-finished'
+    it.each([false, true])(
+      'uses process-read OMP with title first=%s without inventing status',
+      async (titleFirst) => {
+        const { connectPanePty } = await import('./pty-connection')
+        enableActiveRuntimeEnvironment()
+        const paneKey = makePaneKey('tab-1', LEAF_1)
+        const pane = createPane(1)
+        transportFactoryQueue.push(createMockTransport('remote:web-env-1@@observed-omp'))
+        const manager = createManager(1, 1)
+        const deps = createDeps()
+        connectPanePty(...mockPanePtyArgs(pane, manager, deps))
+        await flushAsyncTicks()
+        const callbacks = checkedTitleCallbacks(createdTransportOptions[0])
+        const title = () => callbacks.onTitleChange('Pi ready', 'Pi ready')
+        const status = () =>
+          callbacks.onAgentStatus({ state: 'working', prompt: 'task', agentType: 'pi' })
+        if (titleFirst) {
+          title()
+          status()
         }
-      )
-      transportFactoryQueue.push(transport)
+        const prior = mockStoreState.agentStatusByPaneKey[paneKey]
+        const writes = mockStoreState.setAgentStatus.mock.calls.length
+        mockStoreState.setPaneForegroundAgent(paneKey, {
+          agent: 'omp',
+          agentEvidence: 'process-read',
+          shellForeground: false
+        })
+        for (const subscriber of storeSubscribers) {
+          subscriber(mockStoreState)
+        }
+        if (!titleFirst) {
+          title()
+          status()
+        }
+        expect(deps.setRuntimePaneTitle).toHaveBeenLastCalledWith('tab-1', 1, 'OMP ready')
+        expect(deps.updateTabTitle).toHaveBeenLastCalledWith('tab-1', 'OMP ready')
+        expect(mockStoreState.agentStatusByPaneKey[paneKey]).toMatchObject({
+          agentType: 'omp',
+          state: 'working'
+        })
+        if (titleFirst) {
+          expect(mockStoreState.setAgentStatus).toHaveBeenCalledTimes(writes)
+          if (!prior || typeof prior !== 'object') {
+            throw new Error('missing baseline status')
+          }
+          expect(mockStoreState.agentStatusByPaneKey[paneKey]).toEqual({
+            ...prior,
+            agentType: 'omp',
+            terminalTitle: expect.stringContaining('OMP')
+          })
+        }
+      }
+    )
+
+    it('refreshes a misleading GPU title on late process evidence without replaying completion', async () => {
+      const { connectPanePty } = await import('./pty-connection')
+      const paneKey = makePaneKey('tab-1', LEAF_1)
+      const pane = createPane(1)
+      transportFactoryQueue.push(createMockTransport('pty-observed-gpu'))
       const manager = createManager(1, 1)
       const deps = createDeps()
-
-      connectPanePty(pane as never, manager as never, deps as never)
-      sendTerminalInputThroughPane(pane, 'omp\r')
+      connectPanePty(...mockPanePtyArgs(pane, manager, deps))
       await flushAsyncTicks()
-      const onTitleChange = createdTransportOptions[0]?.onTitleChange as
-        | ((title: string, rawTitle: string) => void)
-        | undefined
-      const onAgentStatus = createdTransportOptions[0]?.onAgentStatus as
-        | ((payload: { state: 'done'; prompt: string; agentType: 'pi' }) => void)
-        | undefined
-      const dataCallback = dataCallbackRef.current
-      if (!dataCallback || !onTitleChange || !onAgentStatus) {
-        throw new Error('missing remote PTY callbacks')
+      const onTitle = checkedTitleCallback(createdTransportOptions[0])
+      onTitle('✦ Gemini CLI', '✦ Gemini CLI')
+      expect(manager.setPaneGpuRendering).toHaveBeenLastCalledWith(1, false)
+      const timerWrites = deps.setCacheTimerStartedAt.mock.calls.length
+      mockStoreState.setPaneForegroundAgent(paneKey, {
+        agent: 'omp',
+        agentEvidence: 'process-read',
+        shellForeground: false
+      })
+      for (const subscriber of storeSubscribers) {
+        subscriber(mockStoreState)
       }
-      dataCallback('\x1b]133;D;0\x07')
-      onTitleChange('Pi ready', 'Pi ready')
-      onAgentStatus({
-        state: 'done',
-        prompt: '',
-        agentType: 'pi'
-      })
+      expect(manager.setPaneGpuRendering).toHaveBeenLastCalledWith(1, true)
+      expect(deps.setCacheTimerStartedAt).toHaveBeenCalledTimes(timerWrites)
+      expect(mockStoreState.setAgentStatus).not.toHaveBeenCalled()
+    })
 
-      expect(mockStoreState.agentStatusByPaneKey[paneKey]).toMatchObject({
-        state: 'done',
-        agentType: 'omp'
+    it('completes hidden confirmation, coalesces submits, releases unavailable reads and retries', async () => {
+      vi.useFakeTimers()
+      const { connectPanePty } = await import('./pty-connection')
+      const pane = createPane(1)
+      const paneKey = makePaneKey('tab-hidden-continuation', LEAF_1)
+      transportFactoryQueue.push(createMockTransport('pty-hidden-continuation'))
+      const binding = connectPanePty(
+        ...mockPanePtyArgs(
+          pane,
+          createManager(1),
+          createDeps({ tabId: 'tab-hidden-continuation', isVisibleRef: { current: false } })
+        )
+      )
+      await vi.advanceTimersByTimeAsync(20)
+      vi.mocked(window.api.pty.confirmForegroundProcess).mockClear()
+      // Keep the independent process-exit monitor live; count the confirmation ladder alone.
+      vi.mocked(window.api.pty.getForegroundProcess).mockResolvedValue('droid')
+      const reads = () =>
+        vi
+          .mocked(window.api.pty.confirmForegroundProcess)
+          .mock.calls.filter(([id]) => id === 'pty-hidden-continuation').length
+      let foreground: string | null = 'droid'
+      vi.mocked(window.api.pty.confirmForegroundProcess).mockImplementation(async () => foreground)
+      sendTerminalInputThroughPane(pane, '\r')
+      await vi.advanceTimersByTimeAsync(350)
+      expect(resolveMockPaneWindowsShiftEnterEncoding(mockStoreState, paneKey)).toBe('csi-u')
+      expect(reads()).toBe(1)
+      sendTerminalInputThroughPane(pane, '\r')
+      await flushAsyncTicks()
+      expect(mockStoreState.paneForegroundAgentByPaneKey[paneKey]?.routingConfirmationPending).toBe(
+        true
+      )
+      expect(resolveMockPaneWindowsShiftEnterEncoding(mockStoreState, paneKey)).toBe('csi-u')
+      for (let index = 0; index < 10; index += 1) {
+        await vi.advanceTimersByTimeAsync(20)
+        sendTerminalInputThroughPane(pane, '\r')
+        await flushAsyncTicks()
+      }
+      await vi.advanceTimersByTimeAsync(150)
+      expect(reads()).toBe(2)
+      expect(mockStoreState.paneForegroundAgentByPaneKey[paneKey]?.routingTrusted).toBe(true)
+      foreground = null
+      sendTerminalInputThroughPane(pane, '\r')
+      await flushAsyncTicks()
+      expect(resolveMockPaneWindowsShiftEnterEncoding(mockStoreState, paneKey)).toBe('csi-u')
+      await vi.advanceTimersByTimeAsync(350 + 1200 + 6000)
+      expect(reads()).toBe(5)
+      expect(
+        mockStoreState.paneForegroundAgentByPaneKey[paneKey]?.routingConfirmationPending
+      ).not.toBe(true)
+      expect(resolveMockPaneWindowsShiftEnterEncoding(mockStoreState, paneKey)).toBe('alt-enter')
+      foreground = 'droid'
+      sendTerminalInputThroughPane(pane, '\r')
+      await flushAsyncTicks()
+      expect(resolveMockPaneWindowsShiftEnterEncoding(mockStoreState, paneKey)).toBe('csi-u')
+      await vi.advanceTimersByTimeAsync(350)
+      expect(reads()).toBe(6)
+      expect(mockStoreState.paneForegroundAgentByPaneKey[paneKey]?.routingTrusted).toBe(true)
+      foreground = 'cmd.exe'
+      sendTerminalInputThroughPane(pane, '\x03')
+      await flushAsyncTicks()
+      await vi.advanceTimersByTimeAsync(350 + 1200 + 6000)
+      expect(mockStoreState.paneForegroundAgentByPaneKey[paneKey]).toEqual({
+        agent: null,
+        shellForeground: true
       })
+      expect(resolveMockPaneWindowsShiftEnterEncoding(mockStoreState, paneKey)).toBe('alt-enter')
+      binding.dispose()
+    })
+
+    it('normalizes a compatible hook against only the exact pane managed OMP launch', async () => {
+      const { connectPanePty } = await import('./pty-connection')
+      enableActiveRuntimeEnvironment()
+      const paneKey = makePaneKey('tab-1', LEAF_1)
+      mockStoreState.agentLaunchConfigByPaneKey[paneKey] = {
+        launchConfig: {},
+        identity: { agentType: 'omp' }
+      }
+      const pane = createPane(1)
+      const deps = createDeps()
+      transportFactoryQueue.push(createMockTransport('remote:web-env-1@@managed-omp'))
+      connectPanePty(...mockPanePtyArgs(pane, createManager(1), deps))
+      await flushAsyncTicks()
+      const options = createdTransportOptions[0]
+      if (
+        typeof options.onAgentStatus !== 'function' ||
+        typeof options.onTitleChange !== 'function'
+      ) {
+        throw new Error('missing callbacks')
+      }
+      options.onAgentStatus({ state: 'working', prompt: 'task', agentType: 'pi' })
+      options.onTitleChange('Pi ready', 'Pi ready')
+      expect(mockStoreState.agentStatusByPaneKey[paneKey]).toMatchObject({ agentType: 'omp' })
+      expect(deps.setRuntimePaneTitle).toHaveBeenLastCalledWith('tab-1', 1, 'OMP ready')
+    })
+
+    it.each([1, 10])(
+      'adds no discovery reads or identity nulls for %s known-TUI submits',
+      async (count) => {
+        vi.useFakeTimers()
+        const { connectPanePty } = await import('./pty-connection')
+        const tabId = `tab-known-tui-${count}`
+        const paneKey = makePaneKey(tabId, LEAF_1)
+        const pane = createPane(1)
+        const ptyId = `pty-known-tui-${count}`
+        transportFactoryQueue.push(createMockTransport(ptyId))
+        const binding = connectPanePty(
+          ...mockPanePtyArgs(
+            pane,
+            createManager(1),
+            createDeps({ tabId, isVisibleRef: { current: false } })
+          )
+        )
+        await vi.advanceTimersByTimeAsync(20)
+        mockStoreState.setPaneForegroundAgent(paneKey, {
+          agent: 'codex',
+          agentEvidence: 'process-read',
+          routingTrusted: true,
+          shellForeground: false
+        })
+        mockStoreState.setPaneForegroundAgent.mockClear()
+        vi.mocked(window.api.pty.confirmForegroundProcess).mockClear()
+        for (let index = 0; index < count; index += 1) {
+          sendTerminalInputThroughPane(pane, 'omp\r')
+        }
+        await vi.advanceTimersByTimeAsync(8_000)
+        expect(window.api.pty.confirmForegroundProcess).not.toHaveBeenCalledWith(ptyId)
+        expect(
+          mockStoreState.setPaneForegroundAgent.mock.calls.filter(([key]) => key === paneKey)
+        ).toEqual([])
+        expect(mockStoreState.dropAgentStatus).not.toHaveBeenCalled()
+        binding.dispose()
+      }
+    )
+
+    it.each([5, 50])(
+      'bounds real store callbacks and isolates presentation across %s mounted connections',
+      async (count) => {
+        vi.useFakeTimers()
+        const { createTestStore, makeTab, makeWorktree, TEST_REPO } =
+          await import('@/store/slices/store-test-helpers')
+        Object.assign(window.api, {
+          settings: { getSync: () => ({ terminalMainSideEffectAuthority: false }) }
+        })
+        productionStore = createTestStore()
+        const store = productionStore
+        store.setState({
+          repos: [{ ...TEST_REPO, connectionId: null, executionHostId: 'local' }],
+          worktreesByRepo: {
+            [TEST_REPO.id]: [makeWorktree({ id: 'wt-1', repoId: TEST_REPO.id, hostId: 'local' })]
+          },
+          settings: null
+        })
+        const { connectPanePty } = await import('./pty-connection')
+        const panes = []
+        for (let index = 0; index < count; index += 1) {
+          const tabId = `tab-owner-${index}`
+          store.setState((state) => ({
+            tabsByWorktree: {
+              'wt-1': [
+                ...(state.tabsByWorktree['wt-1'] ?? []),
+                makeTab({ id: tabId, worktreeId: 'wt-1', ptyId: `pty-owner-${index}` })
+              ]
+            }
+          }))
+          const transport = createMockTransport(`pty-owner-${index}`)
+          transport.connect.mockResolvedValue({ id: `pty-owner-${index}` })
+          transportFactoryQueue.push(transport)
+          const deps = createDeps({
+            tabId,
+            isVisibleRef: { current: false },
+            setRuntimePaneTitle: vi.fn((tab: string, pane: number, title: string) =>
+              store.getState().setRuntimePaneTitle(tab, pane, title)
+            )
+          })
+          const manager = createManager(1)
+          const binding = connectPanePty(...mockPanePtyArgs(createPane(1), manager, deps))
+          panes.push({ binding, manager, deps, paneKey: makePaneKey(tabId, LEAF_1) })
+        }
+        await vi.advanceTimersByTimeAsync(20)
+        for (const options of createdTransportOptions) {
+          checkedTitleCallback(options)('Pi ready', 'Pi ready')
+        }
+        const clear = () => {
+          notifications = 0
+          selections = 0
+          for (const pane of panes) {
+            pane.deps.setRuntimePaneTitle.mockClear()
+            pane.manager.setPaneGpuRendering.mockClear()
+          }
+        }
+        clear()
+        store.setState({ activeWorktreeId: 'another-host' })
+        expect(notifications).toBeGreaterThanOrEqual(count)
+        expect(notifications).toBeLessThanOrEqual(8 * count)
+        expect(selections).toBeGreaterThan(0)
+        expect(selections).toBeLessThanOrEqual(64 * count)
+        for (const pane of panes) {
+          expect(pane.deps.setRuntimePaneTitle).not.toHaveBeenCalled()
+        }
+        clear()
+        store.getState().setPaneForegroundAgent('other-host:foreign', {
+          agent: 'omp',
+          agentEvidence: 'process-read',
+          shellForeground: false
+        })
+        expect(notifications).toBeGreaterThanOrEqual(count)
+        expect(notifications).toBeLessThanOrEqual(8 * count)
+        expect(selections).toBeGreaterThan(0)
+        expect(selections).toBeLessThanOrEqual(64 * count)
+        for (const pane of panes) {
+          expect(pane.deps.setRuntimePaneTitle).not.toHaveBeenCalled()
+        }
+        store
+          .getState()
+          .setAgentStatus(panes[0].paneKey, { state: 'working', prompt: 'task', agentType: 'pi' })
+        clear()
+        store.getState().setPaneForegroundAgent(panes[0].paneKey, {
+          agent: 'omp',
+          agentEvidence: 'process-read',
+          shellForeground: false
+        })
+        expect(store.getState().agentStatusByPaneKey[panes[0].paneKey].agentType).toBe('omp')
+        expect(panes[0].deps.setRuntimePaneTitle).toHaveBeenCalledTimes(1)
+        expect(notifications).toBeLessThanOrEqual(8 * count)
+        expect(selections).toBeGreaterThan(0)
+        expect(selections).toBeLessThanOrEqual(64 * count)
+        for (const pane of panes.slice(1)) {
+          expect(pane.manager.setPaneGpuRendering).not.toHaveBeenCalled()
+        }
+        for (const pane of panes) {
+          pane.binding.dispose()
+        }
+        clear()
+        store.getState().setPaneForegroundAgent(panes[0].paneKey, {
+          agent: 'pi',
+          agentEvidence: 'process-read',
+          shellForeground: false
+        })
+        expect(notifications).toBe(0)
+        expect(selections).toBe(0)
+        for (const pane of panes) {
+          expect(pane.deps.setRuntimePaneTitle).not.toHaveBeenCalled()
+        }
+      }
+    )
+
+    it('retains OMP hook display identity through inter-turn done without GPU or routing authority', async () => {
+      const { connectPanePty } = await import('./pty-connection')
+      const { dispatchAgentHookTerminalLifecycle } = await import('./agent-hook-terminal-lifecycle')
+      const paneKey = makePaneKey('tab-1', LEAF_1)
+      const pane = createPane(1)
+      transportFactoryQueue.push(createMockTransport('pty-hook-omp'))
+      const manager = createManager(1, 1)
+      const deps = createDeps()
+      connectPanePty(...mockPanePtyArgs(pane, manager, deps))
+      await flushAsyncTicks()
+      for (const state of ['working', 'done'] as const) {
+        mockStoreState.setAgentStatus(paneKey, { state, prompt: 'task', agentType: 'omp' })
+        dispatchAgentHookTerminalLifecycle(paneKey, { state, prompt: 'task', agentType: 'omp' })
+        for (const subscriber of storeSubscribers) {
+          subscriber(mockStoreState)
+        }
+      }
+      const onTitle = checkedTitleCallback(createdTransportOptions[0])
+      onTitle('Pi ready', 'Pi ready')
+      expect(deps.setRuntimePaneTitle).toHaveBeenLastCalledWith('tab-1', 1, 'OMP ready')
+      onTitle('✦ Gemini CLI', '✦ Gemini CLI')
+      expect(manager.setPaneGpuRendering).toHaveBeenLastCalledWith(1, false)
+      expect(mockStoreState.paneForegroundAgentByPaneKey[paneKey]?.routingTrusted).not.toBe(true)
     })
   })
 }
