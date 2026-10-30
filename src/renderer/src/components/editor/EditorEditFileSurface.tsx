@@ -1,5 +1,9 @@
 import { translate } from '@/i18n/i18n'
 import { getConnectionIdForFile } from '@/lib/connection-context'
+import { getConnectionIdForFileFromState } from '@/lib/connection-owner-resolution'
+import { isClientLocalReadOnlyTab } from '@/lib/local-file-access'
+import { getWorkspaceFileRevealOwner } from '@/lib/reveal-in-file-manager'
+import { useAppStore } from '@/store'
 import type { MarkdownViewMode, OpenFile, PendingEditorReveal } from '@/store/slices/editor'
 import type { GitDiffResult } from '../../../../shared/git-diff-compare-types'
 import type { GitStatusEntry } from '../../../../shared/git-status-types'
@@ -106,6 +110,20 @@ export function EditorEditFileSurface({
   handleSave: (content: string) => Promise<boolean>
   reloadContent: (file: OpenFile, options?: { wakeWslDistro?: boolean }) => void
 }): React.JSX.Element {
+  const imageOwner = useAppStore((state) => {
+    if (!activeFile.externalSshTargetId && isClientLocalReadOnlyTab(activeFile)) {
+      return 'local'
+    }
+    const connectionId =
+      activeFile.externalSshTargetId ??
+      getConnectionIdForFileFromState(state, activeFile.worktreeId, activeFile.filePath)
+    return connectionId === undefined
+      ? 'unresolved'
+      : getWorkspaceFileRevealOwner(state, activeFile.worktreeId, {
+          runtimeEnvironmentId: activeFile.runtimeEnvironmentId,
+          connectionId
+        })
+  })
   if (activeFile.conflict?.kind === 'conflict-placeholder') {
     return <ConflictPlaceholderView file={activeFile} />
   }
@@ -172,6 +190,10 @@ export function EditorEditFileSurface({
           src={fileContent.mediaUrl}
           byteSize={fileContent.size}
           filePath={activeFile.filePath}
+          imageSource={{
+            path: activeFile.filePath,
+            ...(imageOwner === 'local' ? { localOwner: imageOwner } : {})
+          }}
           mimeType={fileContent.mimeType}
           preferenceKey={pdfPreferenceKey}
           scrollCacheKey={pdfViewStateKey}

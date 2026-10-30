@@ -22,6 +22,7 @@ import {
 } from './image-viewer-zoom'
 import { translate } from '@/i18n/i18n'
 import { buildImageDataUri } from '../../../../shared/image-data-uri'
+import { ImageActions, ImageActionsButton, type ImageActionSource } from './ImageActions'
 
 const FALLBACK_IMAGE_MIME_TYPE = 'image/png'
 
@@ -39,6 +40,7 @@ type ImageViewerProps = {
   preferenceKey?: string | null
   // Omission disables PDF scroll memory because diff/conflict surfaces can share a path.
   scrollCacheKey?: string | null
+  imageSource?: ImageActionSource
 }
 
 export default function ImageViewer({
@@ -49,7 +51,8 @@ export default function ImageViewer({
   mimeType = FALLBACK_IMAGE_MIME_TYPE,
   layout = 'fill',
   preferenceKey,
-  scrollCacheKey = null
+  scrollCacheKey = null,
+  imageSource
 }: ImageViewerProps): JSX.Element {
   const [isPopupOpen, setIsPopupOpen] = useState(false)
   const [inlineZoom, setInlineZoom] = useState(1)
@@ -309,105 +312,112 @@ export default function ImageViewer({
 
   return (
     <>
-      <div className={cn('flex min-h-0 flex-col', isIntrinsicLayout ? 'h-auto' : 'h-full')}>
-        <div
-          ref={setInlineSurfaceRef}
-          className={cn(
-            'cursor-pointer bg-muted/20',
-            isIntrinsicLayout
-              ? 'flex justify-center overflow-visible p-4'
-              : 'flex-1 overflow-auto scrollbar-editor'
-          )}
-          onClick={openPopup}
-          title={translate('auto.components.editor.ImageViewer.77bfc9b35a', 'Open image in popup')}
-        >
+      <ImageActions src={previewSrc} title={filename} imageSource={imageSource}>
+        <div className={cn('flex min-h-0 flex-col', isIntrinsicLayout ? 'h-auto' : 'h-full')}>
           <div
+            ref={setInlineSurfaceRef}
             className={cn(
-              'flex justify-center',
+              'cursor-pointer bg-muted/20',
               isIntrinsicLayout
-                ? 'max-w-full items-start'
-                : 'h-max min-h-full w-max min-w-full items-center p-4'
+                ? 'flex justify-center overflow-visible p-4'
+                : 'flex-1 overflow-auto scrollbar-editor'
+            )}
+            onClick={openPopup}
+            title={translate(
+              'auto.components.editor.ImageViewer.77bfc9b35a',
+              'Open image in popup'
             )}
           >
             <div
-              className="flex items-center justify-center"
-              style={
+              className={cn(
+                'flex justify-center',
                 isIntrinsicLayout
-                  ? { transform: `scale(${inlineZoom})`, transformOrigin: 'center center' }
-                  : inlineImageLayoutStyle
-              }
+                  ? 'max-w-full items-start'
+                  : 'h-max min-h-full w-max min-w-full items-center p-4'
+              )}
             >
-              <img
-                src={previewSrc}
-                alt={filename}
-                className={cn(
-                  'object-contain',
+              <div
+                className="flex items-center justify-center"
+                style={
                   isIntrinsicLayout
-                    ? 'block h-auto max-h-none max-w-full'
-                    : inlineImageLayoutSize
-                      ? 'block h-full w-full'
-                      : // Percentage maxima cannot constrain the w-max/h-max box before load; use viewport units.
-                        'block max-h-[100vh] max-w-[100vw]'
-                )}
-                onLoad={(event) => {
-                  const img = event.currentTarget
-                  setImageDimensions({ width: img.naturalWidth, height: img.naturalHeight })
-                  setFailedPreviewSrc(null)
-                }}
-                // Key failures by source so new images retry immediately without an effect reset.
-                onError={() => setFailedPreviewSrc(previewSrc)}
-              />
+                    ? { transform: `scale(${inlineZoom})`, transformOrigin: 'center center' }
+                    : inlineImageLayoutStyle
+                }
+              >
+                <img
+                  src={previewSrc}
+                  alt={filename}
+                  className={cn(
+                    'object-contain',
+                    isIntrinsicLayout
+                      ? 'block h-auto max-h-none max-w-full'
+                      : inlineImageLayoutSize
+                        ? 'block h-full w-full'
+                        : // Percentage maxima cannot constrain the w-max/h-max box before load; use viewport units.
+                          'block max-h-[100vh] max-w-[100vw]'
+                  )}
+                  onLoad={(event) => {
+                    const img = event.currentTarget
+                    setImageDimensions({ width: img.naturalWidth, height: img.naturalHeight })
+                    setFailedPreviewSrc(null)
+                  }}
+                  // Key failures by source so new images retry immediately without an effect reset.
+                  onError={() => setFailedPreviewSrc(previewSrc)}
+                />
+              </div>
             </div>
           </div>
-        </div>
-        <div className="flex items-center gap-4 border-t px-4 py-2 text-xs text-muted-foreground">
-          <div className="flex items-center gap-1">
-            <button
-              type="button"
-              className="rounded p-1 hover:bg-accent hover:text-foreground disabled:opacity-50"
-              onClick={() =>
-                applyInlineZoomChange((currentZoom) => currentZoom / IMAGE_VIEWER_ZOOM_STEP)
-              }
-              disabled={inlineZoom <= MIN_IMAGE_VIEWER_ZOOM}
-              title={translate('auto.components.editor.ImageViewer.be27304574', 'Zoom out')}
-            >
-              <ZoomOut size={14} />
-            </button>
-            <button
-              type="button"
-              className="rounded p-1 hover:bg-accent hover:text-foreground disabled:opacity-50"
-              onClick={() => applyInlineZoomChange(() => 1)}
-              disabled={inlineZoom === 1}
-              title={translate('auto.components.editor.ImageViewer.6c89c73d9f', 'Reset zoom')}
-            >
-              <RotateCcw size={14} />
-            </button>
-            <button
-              type="button"
-              className="rounded p-1 hover:bg-accent hover:text-foreground disabled:opacity-50"
-              onClick={() =>
-                applyInlineZoomChange((currentZoom) => currentZoom * IMAGE_VIEWER_ZOOM_STEP)
-              }
-              disabled={inlineZoom >= MAX_IMAGE_VIEWER_ZOOM}
-              title={translate('auto.components.editor.ImageViewer.3c9217f5a6', 'Zoom in')}
-            >
-              <ZoomIn size={14} />
-            </button>
-            <span className="ml-1 tabular-nums">{inlineZoomPercent}%</span>
-          </div>
-          <span className="min-w-0 truncate" title={filename}>
-            {filename}
-          </span>
-          {imageDimensions && (
-            <span>
-              {imageDimensions.width} x {imageDimensions.height}
+          <div className="flex items-center gap-4 border-t px-4 py-2 text-xs text-muted-foreground">
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                className="rounded p-1 hover:bg-accent hover:text-foreground disabled:opacity-50"
+                onClick={() =>
+                  applyInlineZoomChange((currentZoom) => currentZoom / IMAGE_VIEWER_ZOOM_STEP)
+                }
+                disabled={inlineZoom <= MIN_IMAGE_VIEWER_ZOOM}
+                title={translate('auto.components.editor.ImageViewer.be27304574', 'Zoom out')}
+              >
+                <ZoomOut size={14} />
+              </button>
+              <button
+                type="button"
+                className="rounded p-1 hover:bg-accent hover:text-foreground disabled:opacity-50"
+                onClick={() => applyInlineZoomChange(() => 1)}
+                disabled={inlineZoom === 1}
+                title={translate('auto.components.editor.ImageViewer.6c89c73d9f', 'Reset zoom')}
+              >
+                <RotateCcw size={14} />
+              </button>
+              <button
+                type="button"
+                className="rounded p-1 hover:bg-accent hover:text-foreground disabled:opacity-50"
+                onClick={() =>
+                  applyInlineZoomChange((currentZoom) => currentZoom * IMAGE_VIEWER_ZOOM_STEP)
+                }
+                disabled={inlineZoom >= MAX_IMAGE_VIEWER_ZOOM}
+                title={translate('auto.components.editor.ImageViewer.3c9217f5a6', 'Zoom in')}
+              >
+                <ZoomIn size={14} />
+              </button>
+              <span className="ml-1 tabular-nums">{inlineZoomPercent}%</span>
+            </div>
+            <span className="min-w-0 truncate" title={filename}>
+              {filename}
             </span>
-          )}
-          <span>{estimatedSize}</span>
+            {imageDimensions && (
+              <span>
+                {imageDimensions.width} x {imageDimensions.height}
+              </span>
+            )}
+            <span>{estimatedSize}</span>
+            <ImageActionsButton src={previewSrc} title={filename} imageSource={imageSource} />
+          </div>
         </div>
-      </div>
+      </ImageActions>
       <ImageViewerPopup
         filename={filename}
+        imageSource={imageSource}
         imageLayoutSize={popupImageLayoutSize}
         imageLayoutStyle={popupImageLayoutStyle}
         isOpen={isPopupOpen}

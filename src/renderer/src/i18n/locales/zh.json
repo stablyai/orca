@@ -19681,6 +19681,18 @@
       "stepDownload": "下载",
       "stepUnpack": "解压",
       "stepCheck": "检查"
+    },
+    "editor": {
+      "imageActions": {
+        "saveAs": "图片另存为…",
+        "saved": "图片已保存",
+        "copyPath": "复制图片路径",
+        "copyLink": "复制图片链接",
+        "pathCopied": "图片路径已复制",
+        "linkCopied": "图片链接已复制",
+        "failed": "图片操作失败",
+        "label": "图片操作"
+      }
     }
   },
   "dashboardPopout": {

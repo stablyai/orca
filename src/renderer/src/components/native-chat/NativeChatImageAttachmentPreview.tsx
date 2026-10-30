@@ -4,6 +4,7 @@ import { translate } from '@/i18n/i18n'
 import { basename } from '@/lib/path'
 import { useLocalImageSrc } from '@/components/editor/useLocalImageSrc'
 import { PanZoomImageDialog } from '@/components/editor/PanZoomImageDialog'
+import { ImageActions, type ImageActionSource } from '@/components/editor/ImageActions'
 import { copyableNativeChatImageSrc, keepPreviewOpenForChatMenu } from './native-chat-image-copy'
 import { isNativeChatImageAttachmentPath } from './native-chat-image-paste'
 import { isNativeChatPastedImagePath } from '../../../../shared/native-chat-image-label'
@@ -207,56 +208,69 @@ function NativeChatImageThumbnail({
   const KindIcon = isFile ? FileText : ImageIcon
   // The thumbnail may be the downscaled clipboard preview; copy only the file.
   const copySrc = copyableNativeChatImageSrc(localSrc)
+  const imageSource: ImageActionSource | undefined =
+    !isPending && attachment.path
+      ? {
+          path: attachment.path,
+          ...(!readEnvironmentId && !attachment.connectionId
+            ? { localOwner: 'local' as const }
+            : {})
+        }
+      : undefined
 
   return (
     <>
-      <div ref={thumbnailRef} className="relative size-14 shrink-0">
-        <button
-          type="button"
-          aria-label={numberedLabel(
-            number,
-            isPending
-              ? pendingLabel
-              : `${translate('components.native-chat.composer.viewAttachment', 'View image')}: ${label}`
-          )}
-          aria-busy={isPending}
-          title={label}
-          data-native-chat-copy-image-src={copySrc}
-          onClick={() => setIsOpen(true)}
-          className="flex size-full items-center justify-center overflow-hidden rounded-md border border-border bg-chat-canvas transition-colors hover:border-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        >
-          {thumbnailSrc ? (
-            <img
-              src={thumbnailSrc}
-              alt={label}
-              className={`size-full object-cover${isPending ? ' opacity-50' : ''}`}
-            />
-          ) : isPending ? (
-            <span className="flex max-w-full flex-col items-center gap-1 px-1">
-              <LoadingSpinner className="size-4 shrink-0 text-muted-foreground" />
-              {attachment.pendingName ? (
-                <span className="max-w-full truncate text-xs text-muted-foreground">
-                  {attachment.pendingName}
-                </span>
-              ) : null}
+      <ImageActions src={localSrc} title={label} imageSource={imageSource}>
+        <div ref={thumbnailRef} className="relative size-14 shrink-0">
+          <button
+            type="button"
+            aria-label={numberedLabel(
+              number,
+              isPending
+                ? pendingLabel
+                : `${translate('components.native-chat.composer.viewAttachment', 'View image')}: ${label}`
+            )}
+            aria-busy={isPending}
+            title={label}
+            data-native-chat-copy-image-src={copySrc}
+            onClick={() => setIsOpen(true)}
+            className="flex size-full items-center justify-center overflow-hidden rounded-md border border-border bg-chat-canvas transition-colors hover:border-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            {thumbnailSrc ? (
+              <img
+                src={thumbnailSrc}
+                alt={label}
+                className={`size-full object-cover${isPending ? ' opacity-50' : ''}`}
+              />
+            ) : isPending ? (
+              <span className="flex max-w-full flex-col items-center gap-1 px-1">
+                <LoadingSpinner className="size-4 shrink-0 text-muted-foreground" />
+                {attachment.pendingName ? (
+                  <span className="max-w-full truncate text-xs text-muted-foreground">
+                    {attachment.pendingName}
+                  </span>
+                ) : null}
+              </span>
+            ) : (
+              <KindIcon className="size-5 text-muted-foreground" />
+            )}
+          </button>
+          {isPending && thumbnailSrc ? (
+            <span className="pointer-events-none absolute inset-x-0 bottom-0 flex justify-center rounded-b-md bg-chat-canvas/90 py-0.5">
+              <LoadingSpinner className="size-3 text-muted-foreground" />
             </span>
-          ) : (
-            <KindIcon className="size-5 text-muted-foreground" />
-          )}
-        </button>
-        {isPending && thumbnailSrc ? (
-          <span className="pointer-events-none absolute inset-x-0 bottom-0 flex justify-center rounded-b-md bg-chat-canvas/90 py-0.5">
-            <LoadingSpinner className="size-3 text-muted-foreground" />
-          </span>
-        ) : null}
-        <ImageNumberBadge number={number} />
-        <RemoveAttachmentButton onRemove={() => onRemove(attachment.id)} />
-      </div>
+          ) : null}
+          <ImageNumberBadge number={number} />
+          <RemoveAttachmentButton onRemove={() => onRemove(attachment.id)} />
+        </div>
+      </ImageActions>
       <PanZoomImageDialog
         open={isOpen}
         onOpenChange={setIsOpen}
         src={fullSizeSrc}
+        actionSrc={localSrc ?? null}
         title={label}
+        imageSource={imageSource}
         showTitle
         onInteractOutside={keepPreviewOpenForChatMenu}
         data-native-chat-copy-image-src={copySrc}

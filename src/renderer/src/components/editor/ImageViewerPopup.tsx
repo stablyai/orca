@@ -4,6 +4,12 @@ import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/compone
 import { cn } from '@/lib/utils'
 import type { ImageViewerImageDimensions } from './image-viewer-zoom'
 import { translate } from '@/i18n/i18n'
+import {
+  ImageActions,
+  ImageActionsButton,
+  keepImageActionsOpen,
+  type ImageActionSource
+} from './ImageActions'
 
 type ImageViewerPopupProps = {
   filename: string
@@ -14,6 +20,7 @@ type ImageViewerPopupProps = {
   imageLayoutStyle: CSSProperties | undefined
   onOpenChange: (open: boolean) => void
   setSurfaceRef: (surface: HTMLDivElement | null) => void
+  imageSource?: ImageActionSource
 }
 
 export default function ImageViewerPopup({
@@ -24,11 +31,13 @@ export default function ImageViewerPopup({
   imageLayoutSize,
   imageLayoutStyle,
   onOpenChange,
-  setSurfaceRef
+  setSurfaceRef,
+  imageSource
 }: ImageViewerPopupProps): JSX.Element {
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent
+        onInteractOutside={keepImageActionsOpen}
         showCloseButton={false}
         className="top-1/2 left-1/2 flex h-[80vh] w-[70vw] max-w-[70vw] -translate-x-1/2 -translate-y-1/2 flex-col gap-0 overflow-hidden border border-border/60 bg-background p-0 shadow-2xl sm:max-w-[70vw]"
       >
@@ -41,6 +50,7 @@ export default function ImageViewerPopup({
         </DialogDescription>
         <div className="flex shrink-0 items-center justify-between border-b border-border/60 bg-background/95 px-3 py-2">
           <div className="min-w-0 truncate text-sm font-medium text-foreground">{filename}</div>
+          <ImageActionsButton src={previewUrl} title={filename} imageSource={imageSource} />
           <button
             type="button"
             className="inline-flex items-center gap-1 rounded-md border border-border/60 bg-background px-2 py-1 text-xs text-muted-foreground hover:bg-accent hover:text-foreground"
@@ -50,26 +60,28 @@ export default function ImageViewerPopup({
             <span>{translate('auto.components.editor.ImageViewerPopup.535f4e2b56', 'Close')}</span>
           </button>
         </div>
-        <div
-          ref={setSurfaceRef}
-          className="min-h-0 flex-1 overflow-auto bg-muted/20 scrollbar-editor"
-        >
-          <div className="flex h-max min-h-full w-max min-w-full items-center justify-center p-4">
-            <div className="flex items-center justify-center" style={imageLayoutStyle}>
-              <img
-                src={previewUrl}
-                alt={filename}
-                className={cn(
-                  'object-contain',
-                  imageLayoutSize
-                    ? 'block h-full w-full'
-                    : // Percentage maxima cannot constrain the w-max/h-max box before load; use viewport units.
-                      'block max-h-[100vh] max-w-[100vw]'
-                )}
-              />
+        <ImageActions src={previewUrl} title={filename} imageSource={imageSource}>
+          <div
+            ref={setSurfaceRef}
+            className="min-h-0 flex-1 overflow-auto bg-muted/20 scrollbar-editor"
+          >
+            <div className="flex h-max min-h-full w-max min-w-full items-center justify-center p-4">
+              <div className="flex items-center justify-center" style={imageLayoutStyle}>
+                <img
+                  src={previewUrl}
+                  alt={filename}
+                  className={cn(
+                    'object-contain',
+                    imageLayoutSize
+                      ? 'block h-full w-full'
+                      : // Percentage maxima cannot constrain the w-max/h-max box before load; use viewport units.
+                        'block max-h-[100vh] max-w-[100vw]'
+                  )}
+                />
+              </div>
             </div>
           </div>
-        </div>
+        </ImageActions>
         <div className="flex shrink-0 items-center justify-between border-t border-border/60 bg-background/95 px-3 py-2 text-xs text-muted-foreground">
           <div>
             {translate('auto.components.editor.ImageViewerPopup.0ef78475e7', 'Press Esc to close')}

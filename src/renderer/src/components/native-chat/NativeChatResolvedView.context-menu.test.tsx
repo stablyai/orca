@@ -2,6 +2,7 @@
 
 import '@testing-library/jest-dom/vitest'
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as ImageBlobPng from '@/lib/image-blob-png'
 import { NativeChatImageAttachmentPreview } from './NativeChatImageAttachmentPreview'
@@ -180,13 +181,21 @@ describe('NativeChatResolvedView image menu ownership', () => {
   )
 
   it('reports a clipboard write failure without announcing success while the write is pending', async () => {
+    const user = userEvent.setup()
     const write = Promise.withResolvers<void>()
     mocks.fetch.mockResolvedValue({ ok: true, blob: async () => new Blob(['original image']) })
     mocks.writeClipboardImage.mockReturnValue(write.promise)
     render(<RetainedBridgeChat />)
 
-    fireEvent.contextMenu(screen.getByRole('img', { name: 'original.png' }))
-    fireEvent.click(await screen.findByRole('menuitem', { name: 'Copy image' }))
+    await user.pointer({
+      target: screen.getByRole('img', { name: 'original.png' }),
+      keys: '[MouseRight]'
+    })
+    const menu = await screen.findByRole('menu')
+    expect(menu).toHaveAttribute('data-state', 'open')
+    const copy = within(menu).getByRole('menuitem', { name: 'Copy image' })
+    expect(copy).toBeInTheDocument()
+    await user.click(copy)
 
     await waitFor(() => expect(mocks.writeClipboardImage).toHaveBeenCalledOnce())
     expect(mocks.success).not.toHaveBeenCalled()

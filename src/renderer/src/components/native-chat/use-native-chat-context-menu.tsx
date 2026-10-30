@@ -183,6 +183,9 @@ export function useNativeChatContextMenu({
 
   const onContextMenuCapture = useCallback(
     (event: React.MouseEvent<HTMLElement>) => {
+      if (event.target instanceof Element && event.target.closest('[data-image-actions]')) {
+        return
+      }
       event.stopPropagation()
       if (opensNativeEditableMenu(event.target)) {
         // A cancelled event opens no native menu that could consume the hint.

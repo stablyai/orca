@@ -7,6 +7,12 @@ import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import {
+  ImageActions,
+  ImageActionsButton,
+  keepImageActionsOpen,
+  type ImageActionSource
+} from './ImageActions'
+import {
   IMAGE_VIEWER_ZOOM_STEP,
   MIN_IMAGE_VIEWER_ZOOM,
   getPinchZoomFactor,
@@ -40,6 +46,8 @@ type PanZoomImageDialogProps = Omit<
   /** Shown instead of the image while it has no source or after it fails to load. */
   fallback?: React.ReactNode
   toolbarActions?: React.ReactNode
+  imageSource?: ImageActionSource
+  actionSrc?: string | null
 }
 
 function ToolbarButton({
@@ -71,7 +79,10 @@ export function PanZoomImageDialog({
   background,
   fallback,
   toolbarActions,
+  imageSource,
+  actionSrc = src,
   onCloseAutoFocus,
+  onInteractOutside,
   ...contentProps
 }: PanZoomImageDialogProps): React.JSX.Element {
   const openerRef = useRef<Element | null>(null)
@@ -107,6 +118,10 @@ export function PanZoomImageDialog({
             opener.focus({ preventScroll: true })
           }
         }}
+        onInteractOutside={(event) => {
+          keepImageActionsOpen(event)
+          onInteractOutside?.(event)
+        }}
       >
         <DialogTitle className="sr-only">{title}</DialogTitle>
         {/* Mount with dialog content so each opening starts fitted. */}
@@ -118,6 +133,8 @@ export function PanZoomImageDialog({
           background={background}
           fallback={fallback}
           toolbarActions={toolbarActions}
+          imageSource={imageSource}
+          actionSrc={actionSrc}
           onClose={() => onOpenChange(false)}
         />
       </DialogContent>
@@ -133,10 +150,20 @@ function PanZoomImageCanvas({
   background,
   fallback,
   toolbarActions,
+  imageSource,
+  actionSrc,
   onClose
 }: Pick<
   PanZoomImageDialogProps,
-  'src' | 'size' | 'title' | 'showTitle' | 'background' | 'fallback' | 'toolbarActions'
+  | 'src'
+  | 'size'
+  | 'title'
+  | 'showTitle'
+  | 'background'
+  | 'fallback'
+  | 'toolbarActions'
+  | 'imageSource'
+  | 'actionSrc'
 > & { onClose: () => void }): React.JSX.Element {
   // Use state: the portal canvas mounts after this component’s first effects.
   const [canvas, setCanvas] = useState<HTMLDivElement | null>(null)
@@ -246,7 +273,7 @@ function PanZoomImageCanvas({
   const offset = geometry && view ? getPanZoomViewOffset(view, geometry.viewport, scale) : null
 
   return (
-    <>
+    <ImageActions src={imageSrc ? actionSrc : null} title={title} imageSource={imageSource}>
       {/* Anchor to dialog edges so padding cannot frame the canvas. */}
       <div
         ref={setCanvas}
@@ -327,6 +354,11 @@ function PanZoomImageCanvas({
             </span>
           ) : null}
           <div className="pointer-events-auto ml-auto flex shrink-0 items-center gap-0.5 rounded-md border border-border bg-background p-0.5 shadow-xs">
+            <ImageActionsButton
+              src={imageSrc ? actionSrc : null}
+              title={title}
+              imageSource={imageSource}
+            />
             <ToolbarButton
               label={translate('auto.components.editor.PanZoomImageDialog.zoomOut', 'Zoom out')}
               disabled={!view || view.zoom <= MIN_IMAGE_VIEWER_ZOOM}
@@ -358,6 +390,6 @@ function PanZoomImageCanvas({
           </div>
         </div>
       </TooltipProvider>
-    </>
+    </ImageActions>
   )
 }
