@@ -6,7 +6,10 @@ import type { XtermUnicodeServiceCore } from '../../../../src/shared/terminal-un
 export type TerminalOscLinkService = { getLinkData?: (id: number) => { uri?: string } | undefined }
 
 export type TerminalDocumentCore = XtermUnicodeServiceCore & {
-  _renderService?: { dimensions?: { css: { cell: { height: number; width: number } } } }
+  _renderService?: {
+    hasRenderer?: () => boolean
+    dimensions?: { css: { cell: { height: number; width: number } } }
+  }
   _oscLinkService?: TerminalOscLinkService
   _inputHandler?: { _oscLinkService?: TerminalOscLinkService }
 }

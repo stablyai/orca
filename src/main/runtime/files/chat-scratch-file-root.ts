@@ -1,6 +1,11 @@
 import { lstat } from 'node:fs/promises'
-import { basename, dirname } from 'node:path'
+import { basename, dirname, isAbsolute, resolve } from 'node:path'
 import type { RuntimeStore } from '../runtime-store-contract'
+import {
+  isDeviceNamespacePath,
+  isNetworkSharePath,
+  isWindowsReservedDeviceName
+} from '../../ipc/automatic-load-path-text'
 import {
   resolveAuthorizedPath,
   type ResolveAuthorizedPathOptions
@@ -21,7 +26,29 @@ export function resolveRuntimeAuthorizedPath(
   store: RuntimeStore,
   options: ResolveAuthorizedPathOptions = {}
 ): Promise<string> {
-  return resolveAuthorizedPath(targetPath, store, { ...options, extraRoots: [chatScratchRoot()] })
+  return resolveAuthorizedPath(targetPath, store, {
+    ...options,
+    extraRoots: [...(options.extraRoots ?? []), chatScratchRoot()]
+  })
+}
+
+/**
+ * A local file already persisted in `openFilesByWorktree` has desktop `user-file` authority for
+ * that exact path, provided it is an absolute local path and not a device or network share.
+ */
+export function extraRootsForPersistedOpenFile(filePath: string): readonly string[] {
+  if (typeof filePath !== 'string' || !isAbsolute(filePath)) {
+    return []
+  }
+  const resolved = resolve(filePath)
+  if (
+    isDeviceNamespacePath(resolved) ||
+    isWindowsReservedDeviceName(resolved) ||
+    isNetworkSharePath(resolved)
+  ) {
+    return []
+  }
+  return [resolved]
 }
 
 export function isChatScratchWorktreeId(worktreeId: string): boolean {

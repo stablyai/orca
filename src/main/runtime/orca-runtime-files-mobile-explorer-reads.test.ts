@@ -1,4 +1,4 @@
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import { SshHostNotServedError } from '../providers/ssh-host-not-served-error'
 import type * as FileSystem from 'node:fs/promises'
@@ -252,6 +252,25 @@ describe('RuntimeFileCommands', () => {
       expect(result).toEqual({ worktree: 'wt-1', relativePath, kind: 'binary', opened: true })
     }
   )
+
+  it('opens an absolute external file in the desktop editor with extraRoots authority', async () => {
+    const openFile = vi.fn()
+    const { commands } = createRuntimeFileCommands({ openFile })
+    const externalPath = resolve('/var/log/app.log')
+    resolveAuthorizedPathMock.mockImplementation(async (targetPath) => targetPath)
+    statMock.mockResolvedValue({ isDirectory: () => false })
+
+    const result = await commands.openMobileFile('id:wt-1', externalPath)
+
+    expect(openFile).toHaveBeenCalledWith(
+      'wt-1',
+      externalPath,
+      externalPath,
+      null,
+      undefined
+    )
+    expect(result).toEqual({ worktree: 'wt-1', relativePath: externalPath, kind: 'text', opened: true })
+  })
 
   it('rejects a missing binary instead of opening a ghost tab', async () => {
     const openFile = vi.fn()

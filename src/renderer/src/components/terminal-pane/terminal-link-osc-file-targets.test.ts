@@ -377,4 +377,22 @@ describe('handleOscLink', () => {
     )
     expect(openFilePathMock).not.toHaveBeenCalled()
   })
+
+  it('ignores ConPTY-truncated OSC 8 links containing replacement characters', () => {
+    setPlatform('Windows')
+
+    expect(
+      handleOscLink(
+        'file:///D:/code/写\ufffd\ufffd',
+        { metaKey: false, ctrlKey: true },
+        {
+          ...deps,
+          startupCwd: 'D:\\code\\写作',
+          worktreePath: 'D:\\code\\写作'
+        }
+      )
+    ).toBe(false)
+    expect(openFileMock).not.toHaveBeenCalled()
+    expect(openFilePathMock).not.toHaveBeenCalled()
+  })
 })

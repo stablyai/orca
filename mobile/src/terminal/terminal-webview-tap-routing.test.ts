@@ -293,6 +293,23 @@ describe('terminal WebView tap routing', () => {
     })
   })
 
+  it('ignores ConPTY-truncated OSC 8 file links containing replacement chars and falls back to the visible path', async () => {
+    const line = '  /小说/三国坞堡穿越/卷一/正文/第01章-验棺.md第01章-验棺.md'
+    const oscLinks = [{ row: 0, startCol: 0, endCol: 40, uri: 'file:///D:/code/写\ufffd\ufffd' }]
+    const { posted } = boot(line, oscLinks)
+    await settle()
+
+    fireTouch('touchstart', [{ x: screenXForCol(6), y: tapY }])
+    fireTouch('touchend', [])
+
+    expect(posted.find((m) => m.type === 'terminal-file-tap')).toMatchObject({
+      type: 'terminal-file-tap',
+      pathText: '/小说/三国坞堡穿越/卷一/正文/第01章-验棺.md',
+      line: null,
+      column: null
+    })
+  })
+
   it('opens plain file URLs through terminal file taps', async () => {
     const line = 'open file:///tmp/result.json#L12C3 now'
     const { posted } = boot(line)

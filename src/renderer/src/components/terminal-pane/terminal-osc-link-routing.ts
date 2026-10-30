@@ -40,6 +40,11 @@ function isDesktopOscLinkActivation(event: TerminalLinkEvent | undefined): boole
   return isTerminalLinkDirectActivation(event) || isTerminalLinkActionActivation(event)
 }
 
+/** ConPTY widens raw UTF-8 OSC 8 bytes to Latin-1 and terminates early on byte 0x9C (C1 ST), leaving C1 controls, replacement chars, or truncated UTF-8 tails. */
+export function isCorruptedOscLinkText(rawText: string): boolean {
+  return /[\u0080-\u009f\ufffd]|[\u00c2-\u00f4][\u0080-\u00bf]+|[\u00c2-\u00f4]$/.test(rawText)
+}
+
 export function handleOscLink(
   rawText: string,
   event: TerminalLinkEvent | undefined,
@@ -56,7 +61,7 @@ export function handleOscLink(
       actionDestinations?: TerminalHttpLinkActionDestinations
     }
 ): boolean {
-  if (!isDesktopOscLinkActivation(event)) {
+  if (isCorruptedOscLinkText(rawText) || !isDesktopOscLinkActivation(event)) {
     return false
   }
   const finish = (handled: boolean): boolean => {

@@ -1,5 +1,5 @@
 import { open, stat } from 'node:fs/promises'
-import { extname } from 'node:path'
+import { extname, win32 } from 'node:path'
 import type { RuntimeStore } from '../runtime-store-contract'
 import type { RuntimeFileCommandHost } from './file-command-host'
 import type {
@@ -24,12 +24,16 @@ import {
   previewableBinaryByteLimit
 } from './file-preview-budget'
 import { readLocalFileRange } from '../../ipc/filesystem/local-file-range-read'
+import type { ResolveAuthorizedPathOptions } from '../../ipc/filesystem/filesystem-auth'
 import { windowsFsPath } from '../../wsl/wsl-unc-drive-fs-path'
 import { guardWslUncPathAccess } from '../../wsl/wsl-unc-access-gate'
 import { resolveLocalFileRequestPath } from '../../ipc/local-file-access-resolution'
 import type { LocalFileAccess } from '../../../shared/local-file-access'
 import { filePreviewForPath } from '../../../shared/file-preview-kind'
-import { resolveRuntimeAuthorizedPath } from './chat-scratch-file-root'
+import {
+  extraRootsForPersistedOpenFile,
+  resolveRuntimeAuthorizedPath
+} from './chat-scratch-file-root'
 import {
   NodeFileReadTooLargeError,
   readNodeFileWithinLimit
@@ -57,15 +61,25 @@ export class RuntimeFileReads {
     const target = await this.host.resolveRuntimeFileTarget(worktreeSelector)
     const { worktree } = target
     requireLocalRuntimeFileRoute(target)
-    if (!isSafeMobileRelativePath(relativePath)) {
+    const persisted = !isSafeMobileRelativePath(relativePath)
+      ? findPersistedOpenFilePath(store, worktree.id, relativePath)
+      : null
+    if (!isSafeMobileRelativePath(relativePath) && !persisted) {
       throw new Error('invalid_relative_path')
     }
-    if (isMobileBinaryPath(relativePath)) {
+    const targetCheckPath = persisted ? persisted.filePath : relativePath
+    if (isMobileBinaryPath(targetCheckPath)) {
       throw new Error('binary_file')
     }
 
-    const filePath = joinWorktreeRelativePath(worktree.path, relativePath)
-    const content = await readLocalMobileFile(filePath, store)
+    const filePath = persisted
+      ? persisted.filePath
+      : joinWorktreeRelativePath(worktree.path, relativePath)
+    const content = await readLocalMobileFile(
+      filePath,
+      store,
+      persisted ? { extraRoots: persisted.extraRoots } : undefined
+    )
     const truncated = truncateMobileFilePreview(content)
 
     return {
@@ -82,9 +96,30 @@ export class RuntimeFileReads {
     relativePath: string,
     maxContentBytes?: number
   ): Promise<RuntimeFilePreviewResult> {
-    const target = await resolveFileExplorerPath(this.host, worktreeSelector, relativePath)
-    requireLocalRuntimeFileRoute(target)
-    const filePath = await resolveRuntimeAuthorizedPath(target.path, this.host.requireStore())
+    const store = this.host.requireStore()
+    let rawPath: string
+    let authOptions: ResolveAuthorizedPathOptions | undefined
+    if (!isSafeMobileRelativePath(relativePath)) {
+      const target = await this.host.resolveRuntimeFileTarget(worktreeSelector)
+      requireLocalRuntimeFileRoute(target)
+      const persisted = findPersistedOpenFilePath(store, target.worktree.id, relativePath)
+      if (!persisted) {
+        const explorerTarget = await resolveFileExplorerPath(
+          this.host,
+          worktreeSelector,
+          relativePath
+        )
+        rawPath = explorerTarget.path
+      } else {
+        rawPath = persisted.filePath
+        authOptions = { extraRoots: persisted.extraRoots }
+      }
+    } else {
+      const target = await resolveFileExplorerPath(this.host, worktreeSelector, relativePath)
+      requireLocalRuntimeFileRoute(target)
+      rawPath = target.path
+    }
+    const filePath = await resolveRuntimeAuthorizedPath(rawPath, store, authOptions)
     const mimeType = RUNTIME_PREVIEWABLE_BINARY_MIME_TYPES[extname(filePath).toLowerCase()]
     const buffer = await readPreviewBytes(
       filePath,
@@ -249,12 +284,55 @@ async function readPreviewBytes(
   }
 }
 
-async function readLocalMobileFile(filePath: string, store: RuntimeStore): Promise<string> {
-  // Bound preview reads so large files cannot block the WebSocket.
+const WINDOWS_DRIVE_PATH = /^[a-zA-Z]:[\\/]/
+
+// Why: Windows accepts both separators. Compare only drive-letter paths so POSIX
+// names containing a backslash never match a different file.
+function normalizeWindowsDriveComparisonPath(filePath: string): string {
+  const normalized = win32.normalize(filePath)
+  return `${normalized.slice(0, 1).toLowerCase()}${normalized.slice(1)}`
+}
+
+function sameWindowsDrivePath(left: string, right: string): boolean {
+  return (
+    WINDOWS_DRIVE_PATH.test(left) &&
+    WINDOWS_DRIVE_PATH.test(right) &&
+    normalizeWindowsDriveComparisonPath(left) === normalizeWindowsDriveComparisonPath(right)
+  )
+}
+
+function findPersistedOpenFilePath(
+  store: RuntimeStore,
+  worktreeId: string,
+  relativePath: string
+): { filePath: string; extraRoots: readonly string[] } | null {
+  const openFile = store
+    .getWorkspaceSession?.()
+    ?.openFilesByWorktree?.[worktreeId]?.find(
+      (candidate) =>
+        !candidate.externalSshTargetId &&
+        (candidate.relativePath === relativePath ||
+          candidate.filePath === relativePath ||
+          sameWindowsDrivePath(candidate.filePath, relativePath))
+    )
+  if (!openFile) {
+    return null
+  }
+  const extraRoots = extraRootsForPersistedOpenFile(openFile.filePath)
+  return extraRoots.length > 0 ? { filePath: openFile.filePath, extraRoots } : null
+}
+
+async function readLocalMobileFile(
+  filePath: string,
+  store: RuntimeStore,
+  options?: ResolveAuthorizedPathOptions
+): Promise<string> {
+  // Why: cap the read so opening a large file can't block the WebSocket (previews are read-only convenience views).
   const { bytes } = await readLocalRuntimeFilePrefix(
     filePath,
     store,
-    MOBILE_FILE_READ_MAX_BYTES + 1
+    MOBILE_FILE_READ_MAX_BYTES + 1,
+    options
   )
   // An extension the list does not know can still be binary; as text, a save would corrupt it.
   if (isBinaryBuffer(bytes)) {
@@ -266,9 +344,12 @@ async function readLocalMobileFile(filePath: string, store: RuntimeStore): Promi
 export async function readLocalRuntimeFilePrefix(
   filePath: string,
   store: RuntimeStore,
-  maxBytes: number
+  maxBytes: number,
+  options?: ResolveAuthorizedPathOptions
 ): Promise<{ bytes: Buffer; size: number }> {
-  const authorizedPath = windowsFsPath(await resolveRuntimeAuthorizedPath(filePath, store))
+  const authorizedPath = windowsFsPath(
+    await resolveRuntimeAuthorizedPath(filePath, store, options)
+  )
   const fileStat = await stat(authorizedPath)
   const readLimit = Math.min(fileStat.size, maxBytes)
   const handle = await open(authorizedPath, 'r')

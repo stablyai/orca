@@ -25,6 +25,15 @@ describe('findOpenedMobileSessionTab', () => {
     expect(findOpenedMobileSessionTab(tabs, 'README.md')?.id).toBe('md-1')
   })
 
+  it('matches an external file tab by filePath or normalized path', () => {
+    const tabs: OpenedMobileSessionTabCandidate[] = [
+      { type: 'file', id: 'file-ext', filePath: 'C:\\Users\\User\\doc.md', relativePath: 'C:\\Users\\User\\doc.md' }
+    ]
+
+    expect(findOpenedMobileSessionTab(tabs, 'C:/Users/User/doc.md')?.id).toBe('file-ext')
+    expect(findOpenedMobileSessionTab(tabs, 'c:\\users\\user\\doc.md')?.id).toBe('file-ext')
+  })
+
   it('ignores non-openable tabs even if they carry path-shaped data', () => {
     const tabs: OpenedMobileSessionTabCandidate[] = [
       { type: 'browser', id: 'browser-1', relativePath: 'README.md' },

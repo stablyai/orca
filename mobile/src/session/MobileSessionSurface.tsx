@@ -5,6 +5,7 @@ import type { MobileSessionController } from './use-mobile-session-controller'
 import { MobileSessionContentRow } from './MobileSessionContentRow'
 import { MobileSessionHeader } from './MobileSessionHeader'
 import { MobileSessionSheets } from './MobileSessionSheets'
+import { MobileTerminalFileTapSheet } from './MobileTerminalFileTapSheet'
 
 export function MobileSessionSurface({ controller }: { controller: MobileSessionController }) {
   useMobileColorScheme()
@@ -17,6 +18,7 @@ export function MobileSessionSurface({ controller }: { controller: MobileSession
         <MobileSessionContentRow controller={controller} />
       </View>
       <MobileSessionSheets controller={controller} />
+      <MobileTerminalFileTapSheet controller={controller} />
     </View>
   )
 }

@@ -1,6 +1,6 @@
 import { MobileFileMediaPreview } from '../files/MobileFileMediaPreview'
 import type { MobileFilePreviewRpcSender } from '../files/mobile-file-preview-operations'
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import {
   FlatList,
   Image,
@@ -37,6 +37,12 @@ import { DiffLineRow } from './MobileSessionDiffLineRow'
 import { sendableMobileDiffComments } from './mobile-diff-comments'
 import { MobileLoadErrorState } from '../components/MobileLoadErrorState'
 
+export const MOBILE_SESSION_FILE_READER_LINE_HEIGHT = 22
+
+export function scrollOffsetForSessionFileLine(line: number): number {
+  return Math.max(0, line - 1) * MOBILE_SESSION_FILE_READER_LINE_HEIGHT
+}
+
 type FileReaderProps = {
   doc: FileDocState | undefined
   client?: MobileFilePreviewRpcSender | null
@@ -44,6 +50,8 @@ type FileReaderProps = {
   relativePath: string
   documentId?: string
   language?: string
+  initialLine?: number
+  initialLineSeq?: number
   diffCommentActions?: DiffCommentActions
 }
 
@@ -59,8 +67,13 @@ function FileReaderDocument({
   title,
   relativePath,
   language,
+  initialLine,
+  initialLineSeq,
   diffCommentActions
 }: FileReaderProps) {
+  const scrollRef = useRef<ScrollView>(null)
+  const contentHeightRef = useRef(0)
+  const revealedKeyRef = useRef<string | null>(null)
   useMobileColorScheme()
   const t = useMobileTranslation()
   const syntaxLanguage = useMemo(
@@ -69,6 +82,51 @@ function FileReaderDocument({
   )
   const [fileSyntax, setFileSyntax] = useState<FileSyntaxState | null>(null)
   const [diffSyntax, setDiffSyntax] = useState<DiffSyntaxState | null>(null)
+  const revealTargetKey = initialLine
+    ? `${relativePath}:${initialLine}:${initialLineSeq ?? 0}`
+    : null
+  const syntaxReady =
+    doc?.status === 'ready' &&
+    (doc.kind === 'file' || doc.kind === 'html') &&
+    fileSyntax?.doc === doc &&
+    fileSyntax.language === syntaxLanguage
+  const applyInitialLineScroll = useCallback(
+    (height: number) => {
+      if (
+        !initialLine ||
+        !revealTargetKey ||
+        revealedKeyRef.current === revealTargetKey ||
+        !scrollRef.current
+      ) {
+        return
+      }
+      scrollRef.current.scrollTo({
+        y: scrollOffsetForSessionFileLine(initialLine),
+        animated: false
+      })
+      if (height > 0 && syntaxReady) {
+        revealedKeyRef.current = revealTargetKey
+      }
+    },
+    [initialLine, revealTargetKey, syntaxReady]
+  )
+  const handleContentSizeChange = useCallback(
+    (_width: number, height: number) => {
+      contentHeightRef.current = height
+      applyInitialLineScroll(height)
+    },
+    [applyInitialLineScroll]
+  )
+  useEffect(() => {
+    if (doc?.status !== 'ready') {
+      contentHeightRef.current = 0
+      revealedKeyRef.current = null
+      return
+    }
+    if (doc.kind === 'file' || doc.kind === 'html') {
+      applyInitialLineScroll(contentHeightRef.current)
+    }
+  }, [applyInitialLineScroll, doc])
   const [activeCommentLine, setActiveCommentLine] = useState<number | null>(null)
   const [commentDraft, setCommentDraft] = useState('')
   const plainDiffLines = useMemo(
@@ -303,8 +361,10 @@ function FileReaderDocument({
   const renderSourceText = (content: string) => (
     <View style={styles.markdownEditor}>
       <ScrollView
+        ref={scrollRef}
         style={styles.filePreviewScroll}
         contentContainerStyle={styles.filePreviewContent}
+        onContentSizeChange={handleContentSizeChange}
       >
         <Text
           selectable

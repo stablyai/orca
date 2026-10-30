@@ -43,6 +43,7 @@ vi.mock('./mobile-terminal-action-sheet-actions', () => ({
 }))
 
 import { MobileSessionSheets } from './MobileSessionSheets'
+import { MobileTerminalFileTapSheet } from './MobileTerminalFileTapSheet'
 
 async function newTabLabels(executionHost?: string): Promise<string[]> {
   sheets.labelsByTitle.clear()
@@ -76,5 +77,29 @@ describe('the New Tab sheet', () => {
   it('leaves out Markdown Note for a server workspace, whose host opens no editor tabs', async () => {
     const labels = await newTabLabels('runtime:vm')
     expect(labels).toEqual(['Terminal', 'Browser'])
+  })
+
+  it('offers Open File and Copy Path for a tapped terminal file link', async () => {
+    sheets.labelsByTitle.clear()
+    await act(async () => {
+      create(
+        createElement(MobileTerminalFileTapSheet, {
+          controller: {
+            pendingTerminalFileTap: {
+              title: 'ai_era_early_childhood_education.md',
+              displayPath: 'C:/Users/me/.gemini/ai_era_early_childhood_education.md',
+              copyPath: 'C:/Users/me/.gemini/ai_era_early_childhood_education.md',
+              onOpen: () => {}
+            },
+            setPendingTerminalFileTap: () => {},
+            showToast: () => {}
+          }
+        })
+      )
+    })
+    expect(sheets.labelsByTitle.get('ai_era_early_childhood_education.md')).toEqual([
+      'Open File',
+      'Copy Path'
+    ])
   })
 })
