@@ -1,3 +1,4 @@
+import { asyncQuestionBody } from './structured-agent-session-async-question.test-fixture'
 import { createAgentSessionCurrentRequestsReader } from '../../../shared/agent-session-current-requests-reader'
 import { afterEach, expect, it, vi } from 'vitest'
 import { selectAgentSessionCurrentRequests } from '../../../shared/agent-session-current-requests'

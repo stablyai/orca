@@ -33,6 +33,7 @@ export type MessageQuestionRow = {
 /** Source facts are replayable evidence; only the repository owns the saved terminal decisions. */
 export class MessageQuestionIngest {
   private readonly scan = createPendingAskScanner()
+  private readonly interruptedScans = new Map<string, ReturnType<typeof createPendingAskScanner>>()
   private readonly definitions = new Map<string, MessageQuestionOccurrence>()
   private readonly delivered = new Map<string, MessageQuestionDelivery>()
   private readonly interruptedTurns = new Map<string, MessageQuestionFact>()
@@ -53,6 +54,15 @@ export class MessageQuestionIngest {
 
   append(message: NativeChatMessage, row: MessageQuestionRow): readonly string[] {
     const created: string[] = []
+    let scan = this.scan
+    if (row.turnId !== null && this.interruptedTurns.has(row.turnId)) {
+      let owned = this.interruptedScans.get(row.turnId)
+      if (!owned) {
+        owned = createPendingAskScanner()
+        this.interruptedScans.set(row.turnId, owned)
+      }
+      scan = owned
+    }
     if (isInterruptedStatusMessage(message)) {
       const fact = { id: message.id, at: message.timestamp ?? null, order: row.order }
       if (row.turnId === null) {
@@ -63,15 +73,13 @@ export class MessageQuestionIngest {
       this.dirty = true
     } else if (isDeliveredNativeChatUserMessage(message)) {
       this.deliver(row.context, { id: message.id, at: message.timestamp ?? null, order: row.order })
+      if (scan === this.scan) {
+        this.interruptedScans.clear()
+      }
     }
-    for (const contributor of this.scan.append(message)) {
+    for (const contributor of scan.append(message)) {
       const sourceId = messageQuestionSourceId(this.source)
-      const id = messageQuestionOccurrenceId(
-        sourceId,
-        row.context,
-        contributor.sourceRowId,
-        contributor.callSlot
-      )
+      const id = messageQuestionOccurrenceId(this.source, row.context, contributor)
       created.push(id)
       this.definitions.set(id, {
         id,
@@ -110,6 +118,8 @@ export class MessageQuestionIngest {
   }
 
   retire(context: string, fact: MessageQuestionFact): void {
+    this.scan.interrupt()
+    this.interruptedScans.clear()
     this.retiredContexts.set(context, fact)
     this.dirty = true
   }

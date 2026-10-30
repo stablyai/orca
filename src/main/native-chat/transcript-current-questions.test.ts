@@ -137,7 +137,7 @@ it.each([40, 400])(
         onAppend: () => {
           appends++
         },
-        onCurrentRequests: notify
+        onCurrentRequests: (next) => notify(next)
       })
       if (!subscription) {
         throw new Error('Expected watcher')

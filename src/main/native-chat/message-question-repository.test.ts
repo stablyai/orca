@@ -43,8 +43,8 @@ function occurrence(
 ): MessageQuestionOccurrence {
   const sourceId = messageQuestionSourceId(owner)
   const context = 'context-1'
-  return {
-    id: messageQuestionOccurrenceId(sourceId, context, row, 0),
+  const record: MessageQuestionOccurrence = {
+    id: '',
     sourceId,
     context,
     sourceRowId: row,
@@ -63,6 +63,8 @@ function occurrence(
     resolution: PENDING_MESSAGE_QUESTION,
     ...overrides
   }
+  record.id = messageQuestionOccurrenceId(owner, context, record)
+  return record
 }
 
 it('keeps exactly the cancelled call terminal through definition edits, replay and database reopen', () => {
@@ -71,7 +73,7 @@ it('keeps exactly the cancelled call terminal through definition edits, replay a
   const q2 = occurrence('row-2', 2)
   const secondCall = occurrence('row-1', 1, {
     callSlot: 1,
-    id: messageQuestionOccurrenceId(q1.sourceId, q1.context, q1.sourceRowId, 1)
+    id: messageQuestionOccurrenceId(source, q1.context, { ...q1, callSlot: 1 })
   })
   expect(repository.reconcile(source, [q1, secondCall]).writeError).toBeUndefined()
   repository.cancel(source, [q1.id], 'phone-1', 10)

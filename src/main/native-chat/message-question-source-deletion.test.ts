@@ -38,8 +38,8 @@ function location() {
 }
 function occurrence(source: MessageQuestionSource): MessageQuestionOccurrence {
   const sourceId = messageQuestionSourceId(source)
-  return {
-    id: messageQuestionOccurrenceId(sourceId, 'root', 'row-1', 0),
+  const record: MessageQuestionOccurrence = {
+    id: '',
     sourceId,
     context: 'root',
     sourceRowId: 'row-1',
@@ -51,6 +51,8 @@ function occurrence(source: MessageQuestionSource): MessageQuestionOccurrence {
     questions: [{ question: 'Which?', multiSelect: false, options: [{ label: 'Blue' }] }],
     resolution: PENDING_MESSAGE_QUESTION
   }
+  record.id = messageQuestionOccurrenceId(source, record.context, record)
+  return record
 }
 it.each([false, true])(
   'removes linkage only after approved file deletion, releasing its owner before removal (restarted=%s)',

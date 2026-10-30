@@ -1,5 +1,10 @@
 import { createHash } from 'node:crypto'
 import { z } from 'zod'
+import {
+  asyncQuestionOccurrenceId,
+  asyncQuestionSourceScope,
+  type AsyncQuestionContributor
+} from '../../shared/native-chat/input/native-chat-ask'
 
 export const messageQuestionSourceSchema = z.discriminatedUnion('kind', [
   z.strictObject({ kind: z.literal('structured'), sessionId: z.string(), agent: z.string() }),
@@ -36,10 +41,22 @@ export function messageQuestionSourceId(source: MessageQuestionSource): string {
 }
 
 export function messageQuestionOccurrenceId(
-  sourceId: string,
+  source: MessageQuestionSource,
   context: string,
-  sourceRowId: string,
-  callSlot: number
+  contributor: AsyncQuestionContributor
 ): string {
-  return `message-question:${identity([sourceId, context, sourceRowId, callSlot])}`
+  const scope = asyncQuestionSourceScope(
+    source.kind === 'structured'
+      ? { kind: 'journal', agent: source.agent, sessionId: source.sessionId, epoch: context }
+      : {
+          kind: 'transcript',
+          agent: source.agent,
+          sessionId: source.sessionId,
+          transcriptPath: source.filePath
+        }
+  )
+  return asyncQuestionOccurrenceId(
+    source.kind === 'structured' ? scope : JSON.stringify([scope, context]),
+    contributor
+  )
 }

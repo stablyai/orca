@@ -71,7 +71,10 @@ import {
   AttachmentUploadIdParams,
   AttachmentUploadStartParams
 } from './agent-session-attachment-params'
-import { CurrentRequestsParams } from './agent-session-current-requests-params'
+import {
+  CancelCurrentQuestionsParams,
+  CurrentRequestsParams
+} from './agent-session-current-requests-params'
 import { CreateAgentSessionParams, EnsureAgentSessionParams } from './agent-session-params'
 import { ReadVisualParams } from './agent-session-visual-params'
 import {
@@ -429,6 +432,7 @@ import {
   ManagedServerUpdate
 } from './managed-server-params'
 import {
+  NativeChatCancelCurrentQuestions,
   NativeChatCurrentRequests,
   NativeChatSession,
   NativeChatUnsubscribe
@@ -751,6 +755,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'agentSession.acknowledgeAttention': AcknowledgeAttentionParams,
   'agentSession.agents': AgentsParams,
   'agentSession.cancel': CancelParams,
+  'agentSession.cancelCurrentQuestions': CancelCurrentQuestionsParams,
   'agentSession.close': OptionsParams,
   'agentSession.commands': OptionsParams,
   'agentSession.continuationContext': ContinuationContextParams,
@@ -1222,6 +1227,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'mobileWeb.bundle.chunk': MobileWebBundleChunkParamsSchema,
   'mobileWeb.bundle.manifest': null,
   'mobileWeb.bundle.range': MobileWebBundleChunkParamsSchema,
+  'nativeChat.cancelCurrentQuestions': NativeChatCancelCurrentQuestions,
   'nativeChat.currentRequests': NativeChatCurrentRequests,
   'nativeChat.readSession': NativeChatSession,
   'nativeChat.subscribe': NativeChatSession,

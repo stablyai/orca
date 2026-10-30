@@ -64,25 +64,32 @@ export function structuredAsyncQuestions(
     )
     const scoped = hostStatesTurnScopes(all)
     let precedingTurn: string | null = null
-    context = 'root'
+    context = JSON.stringify([cursor.epoch, 'root'])
+    // Classify owners before parsing: late stopped work cannot change live raw-ID deduplication.
+    for (const item of all) {
+      const turn = readAgentJournalTurn(item.body)
+      if (!turn || !isRootAgentJournalItem(item)) {
+        continue
+      }
+      const verdict = agentTurnVerdict({
+        state: turn.state,
+        outcome: readAgentJournalTurnOutcome(turn)
+      })
+      if (verdict === 'cancellation') {
+        ingest.interrupt(item.itemId, {
+          id: item.itemId,
+          at: turn.completedAt ?? item.observedAt
+        })
+      }
+    }
     for (const item of all) {
       if (isAgentSessionContextClear(item.body)) {
         ingest.retire(context, { id: item.itemId, at: item.observedAt })
-        context = item.itemId
+        context = JSON.stringify([cursor.epoch, item.itemId])
       }
       const turn = readAgentJournalTurn(item.body)
       if (turn && isRootAgentJournalItem(item)) {
         precedingTurn = item.itemId
-        const verdict = agentTurnVerdict({
-          state: turn.state,
-          outcome: readAgentJournalTurnOutcome(turn)
-        })
-        if (verdict === 'cancellation' || verdict === 'interruption') {
-          ingest.interrupt(item.itemId, {
-            id: item.itemId,
-            at: turn.completedAt ?? item.observedAt
-          })
-        }
       }
       const turnId =
         item.turnScope?.kind === 'turn' ? item.turnScope.turnItemId : scoped ? null : precedingTurn

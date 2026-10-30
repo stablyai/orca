@@ -118,8 +118,7 @@ export class MessageQuestionRepository {
       const record = messageQuestionOccurrenceSchema.parse(incoming)
       if (
         record.sourceId !== sourceId ||
-        record.id !==
-          messageQuestionOccurrenceId(sourceId, record.context, record.sourceRowId, record.callSlot)
+        record.id !== messageQuestionOccurrenceId(source, record.context, record)
       ) {
         throw new Error('Message question identity mismatch')
       }

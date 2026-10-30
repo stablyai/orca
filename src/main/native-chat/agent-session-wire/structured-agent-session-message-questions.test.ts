@@ -22,22 +22,9 @@ afterEach(async () => {
   vi.restoreAllMocks()
 })
 
-import { codexItemBody } from '../../codex/codex-structured-item-translation'
+import { asyncQuestionBody } from './structured-agent-session-async-question.test-fixture'
 import { currentWork } from './structured-agent-session-leftover-settlement.test-fixture'
 
-function asyncQuestionBody(id = 'provider-call') {
-  const body = codexItemBody({
-    type: 'agentMessage',
-    id,
-    text: 'Which color?',
-    delivery: 'async',
-    questions: [{ title: 'Which color?', options: ['Red', 'Blue'] }]
-  })
-  if (body?.kind !== 'message') {
-    throw new Error('expected recorded async question')
-  }
-  return body
-}
 function asyncRows(current: QueuedMessageTestRig) {
   const payload = currentWork(current).requestProjection(
     SESSION,
@@ -224,7 +211,7 @@ it('publishes a later question through late cancelled-turn output and host repla
       { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'Late completion' }] },
       { fence: 1, turnScope: oldScope }
     )
-    await current.host.flushAllStreamedEvents()
+    await current.host.flushStreamedEvents(SESSION)
     await vi.waitFor(() => expect(live.state().cursor?.sequence).toBe(journal.cursor().sequence))
     expect(live.state().asyncQuestions?.map((row) => row.sourceRowId)).toEqual([question.itemId])
   } finally {
@@ -278,7 +265,10 @@ it.each([40, 400])(
       requestContract: 'agent-session.current-requests.v2',
       emit: (event) => {
         if (event.type !== 'end') {
-          cursor = event.cursor.sequence
+          cursor =
+            event.type === 'batch'
+              ? event.batch.cursor.sequence
+              : (event.page.liveCursor?.sequence ?? event.page.window.nextCursor.sequence)
           if (event.currentRequests) {
             publications++
           }
@@ -286,7 +276,7 @@ it.each([40, 400])(
       }
     })
     try {
-      await current.host.flushAllStreamedEvents()
+      await current.host.flushStreamedEvents(SESSION)
       let scopes = 0
       const item = journal.item.bind(journal)
       vi.spyOn(journal, 'item').mockImplementation((id) => {
@@ -311,7 +301,7 @@ it.each([40, 400])(
         },
         { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
       )
-      await current.host.flushAllStreamedEvents()
+      await current.host.flushStreamedEvents(SESSION)
       await vi.waitFor(() => expect(cursor).toBe(journal.cursor().sequence))
       expect(scopes).toBeGreaterThan(count)
       expect(scopes).toBeLessThanOrEqual(count * 30)
@@ -321,7 +311,7 @@ it.each([40, 400])(
         asyncQuestionBody(),
         { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
       )
-      await current.host.flushAllStreamedEvents()
+      await current.host.flushStreamedEvents(SESSION)
       await vi.waitFor(() => expect(publications).toBeGreaterThan(before))
       expect(asyncRows(current).map((row) => row.sourceRowId)).toEqual([question.itemId])
     } finally {
@@ -371,7 +361,9 @@ it.each([40, 400])(
       }
     })
     try {
-      await current.host.flushAllStreamedEvents()
+      await current.host.flushStreamedEvents(SESSION)
+      // Join commit-triggered delivery before measuring only unchanged resource reads.
+      await current.host.collaboratorsForTests().conversationDelivery.loop.wake(SESSION)
       const projection = currentWork(current).requestProjection(
         SESSION,
         'agent-session.current-requests.v2'
@@ -399,7 +391,7 @@ it.each([40, 400])(
         { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'Delivered answer' }] },
         { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
       )
-      await current.host.flushAllStreamedEvents()
+      await current.host.flushStreamedEvents(SESSION)
       await vi.waitFor(() => expect(publications).toBeGreaterThan(before))
       expect(asyncRows(current)).toEqual([])
     } finally {
@@ -442,7 +434,7 @@ it.each(['before', 'after'] as const)(
         { kind: 'turn', turnId: identity.turnId, state: 'interrupted', outcome: 'cancellation' },
         { fence: 1 }
       )
-      await current.host.flushAllStreamedEvents()
+      await current.host.flushStreamedEvents(SESSION)
       await vi.waitFor(() => expect(live.state().asyncQuestions).toEqual([]))
       const late = async () =>
         journal.appendItem(
@@ -474,13 +466,13 @@ it.each(['before', 'after'] as const)(
         }
       )
       q2Id = q2.itemId
-      await current.host.flushAllStreamedEvents()
+      await current.host.flushStreamedEvents(SESSION)
       await vi.waitFor(() =>
         expect(live.state().asyncQuestions?.map((row) => row.sourceRowId)).toEqual([q2Id])
       )
       if (placement === 'after') {
         await late()
-        await current.host.flushAllStreamedEvents()
+        await current.host.flushStreamedEvents(SESSION)
         await vi.waitFor(() =>
           expect(live.state().cursor?.sequence).toBe(journal.cursor().sequence)
         )
@@ -536,7 +528,7 @@ it('publishes exact-ID shared Cancel without a journal row, historical restateme
       asyncQuestionBody('call-Q2'),
       { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
-    await current.host.flushAllStreamedEvents()
+    await current.host.flushStreamedEvents(SESSION)
     await vi.waitFor(() => expect(second.state().asyncQuestions).toHaveLength(2))
     const cursor = journal.cursor()
     const restate = vi.spyOn(currentWork(current), 'restatedSubmissions')
