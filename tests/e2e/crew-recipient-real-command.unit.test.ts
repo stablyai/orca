@@ -1,42 +1,42 @@
 import { mkdtempSync } from 'node:fs'
 import { join } from 'node:path'
-import { runColdCrewCostProfiles } from '../main/runtime/orchestration/crew/crew-recipient-delta-cost.test-fixture'
+import { runColdCrewCostProfiles } from '../../src/main/runtime/orchestration/crew/crew-recipient-delta-cost.test-fixture'
 import { tmpdir } from 'node:os'
-import * as profileStorage from '../main/orca-profiles/profile-storage-paths'
-import { ORCHESTRATION_CREW_METHODS } from '../main/runtime/rpc/methods/orchestration/crew-methods'
-import { CrewFrame, type OrchestrationCrewFrame } from '../shared/orchestration-crew'
+import * as profileStorage from '../../src/main/orca-profiles/profile-storage-paths'
+import { ORCHESTRATION_CREW_METHODS } from '../../src/main/runtime/rpc/methods/orchestration/crew-methods'
+import { CrewFrame, type OrchestrationCrewFrame } from '../../src/shared/orchestration-crew'
 import { randomUUID } from 'node:crypto'
-import { RpcDispatcher } from '../main/runtime/rpc/dispatcher'
-import { ORCHESTRATION_METHODS } from '../main/runtime/rpc/methods/orchestration'
-import { TERMINAL_QUERY_METHODS } from '../main/runtime/rpc/methods/terminal/terminal-query-methods'
-import { JournalHostDatabase } from '../main/native-chat/agent-session-journal/journal-host-database'
-import { AgentSessionRecordStore } from '../main/runtime/agent-session-record-store'
+import { RpcDispatcher } from '../../src/main/runtime/rpc/dispatcher'
+import { ORCHESTRATION_METHODS } from '../../src/main/runtime/rpc/methods/orchestration'
+import { TERMINAL_QUERY_METHODS } from '../../src/main/runtime/rpc/methods/terminal/terminal-query-methods'
+import { JournalHostDatabase } from '../../src/main/native-chat/agent-session-journal/journal-host-database'
+import { AgentSessionRecordStore } from '../../src/main/runtime/agent-session-record-store'
 import {
   peekOpenedAgentSessionRecordStore,
   releaseAgentSessionRecordStore
-} from '../main/runtime/agent-session-record-store-slot'
-import * as crewRuntimeInputs from '../main/runtime/orchestration/crew/crew-runtime-watch'
-import { testOrcaSessionId } from '../shared/orca-session-address-test-fixture'
-import '../main/runtime/rpc/unused-default-rpc-methods.test-fixture'
+} from '../../src/main/runtime/agent-session-record-store-slot'
+import * as crewRuntimeInputs from '../../src/main/runtime/orchestration/crew/crew-runtime-watch'
+import { testOrcaSessionId } from '../../src/shared/orca-session-address-test-fixture'
+import '../../src/main/runtime/rpc/unused-default-rpc-methods.test-fixture'
 import { afterEach, expect, it, vi } from 'vitest'
 import { z } from 'zod'
-import { dispatch } from './dispatch'
-import { RuntimeClient, RuntimeClientError } from './runtime-client'
-import { fingerprintAuthenticatedPairingCredential } from '../main/runtime/device-principal'
-import { syncFederatedDispatch } from '../main/runtime/orchestration/federation-sync'
-import { prepareFederatedAttachmentAuthority } from '../main/runtime/rpc/methods/orchestration/federation/federation-attachment-authority'
-import { readOrchestrationCompatibilityEvidence } from '../shared/orchestration-compatibility-evidence'
-import { ORCHESTRATION_FEDERATION_LIFECYCLE_SETTLEMENT_PROTOCOL_VERSION } from '../shared/protocol-version'
+import { dispatch } from '../../src/cli/dispatch'
+import { RuntimeClient, RuntimeClientError } from '../../src/cli/runtime-client'
+import { fingerprintAuthenticatedPairingCredential } from '../../src/main/runtime/device-principal'
+import { syncFederatedDispatch } from '../../src/main/runtime/orchestration/federation-sync'
+import { prepareFederatedAttachmentAuthority } from '../../src/main/runtime/rpc/methods/orchestration/federation/federation-attachment-authority'
+import { readOrchestrationCompatibilityEvidence } from '../../src/shared/orchestration-compatibility-evidence'
+import { ORCHESTRATION_FEDERATION_LIFECYCLE_SETTLEMENT_PROTOCOL_VERSION } from '../../src/shared/protocol-version'
 import {
   createSessionCallerHarness,
   orchestrationRequest,
   ADDRESS_X,
   SESSION_X,
   WORKER_PANE
-} from '../main/runtime/rpc/orchestration-session-caller-test-fixture'
+} from '../../src/main/runtime/rpc/orchestration-session-caller-test-fixture'
 
 const hostRef = vi.hoisted((): { current: unknown } => ({ current: null }))
-vi.mock('../main/native-chat/agent-session-wire/structured-agent-session-registry', () => ({
+vi.mock('../../src/main/native-chat/agent-session-wire/structured-agent-session-registry', () => ({
   getStructuredAgentSessionHost: () => hostRef.current
 }))
 afterEach(async () => {

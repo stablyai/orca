@@ -99,7 +99,7 @@ it('keeps retained NULL-session nested structured process reads inside selected 
         f.db.getCurrentRunForCoordinator({
           terminalHandle: identity.handle,
           paneKey: identity.paneKey,
-          orcaSessionId: identity.sessionId
+          orcaSessionId: testOrcaSessionId(identity.sessionId)
         })
       ).toBeUndefined()
     }
