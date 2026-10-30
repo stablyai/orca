@@ -41,6 +41,7 @@ import {
   type WorktreeTerminalProvisioningHost
 } from '../runtime-worktree-terminal-provisioning'
 import { readFreshComposerHold } from '../launched-agent-composer-readiness'
+import { waitForTerminalComposer } from '../terminal/wait/terminal-composer-lifetime'
 import { buildTerminalWaitText } from '../terminal-wait-tail-state'
 import {
   describeLaunchedAgentHost,
@@ -221,53 +222,43 @@ export abstract class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntime
       signal
     }: { requireComposerMarker?: boolean; stopOnDialog?: boolean; signal?: AbortSignal } = {}
   ): Promise<RuntimeTerminalWait> {
-    const initialPtyId =
-      this.getLivePtyForHandle(handle)?.pty.ptyId ?? this.getLiveLeafForHandle(handle).leaf.ptyId
-    const stop = new AbortController()
-    const onAbort = (): void => stop.abort()
-    signal?.addEventListener('abort', onAbort, { once: true })
-    const ptyId = await waitForWorktreeStartupDraft(
-      { ...this.getWorktreeStartupReadinessHost(), getPtyId: () => initialPtyId },
-      handle,
-      agent,
+    return waitForTerminalComposer(
       {
-        timeoutMs,
-        requireComposerMarker,
-        // Every caller pastes and then presses Enter: a worker brief or a launch prompt.
-        submit: true,
-        signal: stop.signal,
-        isShellInFront: async (ownerPtyId) =>
-          (await this.readLaunchedAgentForeground(ownerPtyId, agent)) === 'shell',
-        accept: (readyPtyId) => {
-          const pty = this.ptysById.get(readyPtyId)
-          const hold = pty
-            ? readFreshComposerHold(
-                buildTerminalWaitText(pty.tailBuffer, pty.tailPartialLine, pty.preview),
-                this.readLiveTerminalScreenLines(readyPtyId)
-              )
-            : null
-          if (hold === 'dialog' && stopOnDialog) {
-            stop.abort()
+        handle,
+        getTarget: () => this.getTerminalPtyForHandle(handle).pty,
+        buildResult: () => this.buildTuiIdleProbeResult(handle, null),
+        waiters: this.terminalWaiters,
+        signal
+      },
+      (target, stop) =>
+        waitForWorktreeStartupDraft(
+          { ...this.getWorktreeStartupReadinessHost(), getPtyId: () => target.ptyId },
+          handle,
+          agent,
+          {
+            timeoutMs,
+            requireComposerMarker,
+            // Every caller pastes and then presses Enter: a worker brief or a launch prompt.
+            submit: true,
+            signal: stop.signal,
+            isShellInFront: async (ownerPtyId) =>
+              (await this.readLaunchedAgentForeground(ownerPtyId, agent)) === 'shell',
+            accept: (readyPtyId) => {
+              const pty = this.ptysById.get(readyPtyId)
+              const hold = pty
+                ? readFreshComposerHold(
+                    buildTerminalWaitText(pty.tailBuffer, pty.tailPartialLine, pty.preview),
+                    this.readLiveTerminalScreenLines(readyPtyId)
+                  )
+                : null
+              if (hold === 'dialog' && stopOnDialog) {
+                stop.abort()
+              }
+              return hold === null
+            }
           }
-          return hold === null
-        }
-      }
+        )
     )
-    signal?.removeEventListener('abort', onAbort)
-    if (!ptyId) {
-      throw new Error(
-        signal?.aborted
-          ? 'request_aborted'
-          : stop.signal.aborted
-            ? 'agent_startup_dialog'
-            : 'timeout'
-      )
-    }
-    this.assertLiveTerminalHandleTargetsPty(handle, ptyId)
-    if (!this.ptysById.get(ptyId)?.connected) {
-      throw new Error('terminal_handle_stale')
-    }
-    return this.buildTuiIdleProbeResult(handle, null)
   }
 
   /** What holds the terminal a launch started its agent in, read fresh from the execution host. */
