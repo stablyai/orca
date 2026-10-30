@@ -12,6 +12,7 @@ import { Button } from '../../ui/button'
 import {
   isPluginAppThemeSelected,
   isPluginTerminalThemeSelected,
+  terminalThemeSlotUpdate,
   terminalThemeUpdate
 } from '../state/plugin-theme-apply'
 import { PluginThemeSwatch } from './PluginThemeSwatch'
@@ -22,7 +23,7 @@ type Chip = {
   showsNow: boolean
   selected: boolean
   icon: React.ReactNode
-  update: Partial<GlobalSettings>
+  update: () => Partial<GlobalSettings>
 }
 
 /** One-click "use it" for each theme a plugin adds, e.g. the other light/dark variant. */
@@ -59,7 +60,7 @@ export function PluginThemeUseNow({
       showsNow: theme.base === mode,
       selected: isPluginAppThemeSelected(settings, theme),
       icon: <PluginThemeSwatch theme={theme} />,
-      update: pluginAppThemeSlotUpdate(theme.base, theme.id)
+      update: () => pluginAppThemeSlotUpdate(theme.base, theme.id)
     })),
     ...icons.map((theme) => ({
       key: `icon:${theme.id}`,
@@ -67,7 +68,7 @@ export function PluginThemeUseNow({
       showsNow: true,
       selected: settings.pluginIconTheme === theme.id,
       icon: null,
-      update: { pluginIconTheme: theme.id }
+      update: () => ({ pluginIconTheme: theme.id })
     })),
     ...terminals.map((stored): Chip => {
       // Installation can place a theme in the displayed slot despite its declared mode.
@@ -78,21 +79,22 @@ export function PluginThemeUseNow({
               mode: shownTerminal.useLightVariant ? ('light' as const) : ('dark' as const)
             }
           : stored
-      const update = terminalThemeUpdate(settings, theme, dark, terminalThemes)
+      const slots = terminalThemeSlotUpdate(theme, dark)
       return {
         key: `terminal:${theme.id}`,
         label: theme.label,
-        showsNow: selectTerminalTheme({ ...settings, ...update }, dark).themeName === theme.id,
+        showsNow: selectTerminalTheme({ ...settings, ...slots }, dark).themeName === theme.id,
         selected: isPluginTerminalThemeSelected(settings, theme, dark),
         // Why an icon: a plugin's terminal themes often share their app themes' names.
         icon: <SquareTerminal aria-hidden="true" />,
-        update
+        update: () => terminalThemeUpdate(settings, theme, dark, terminalThemes)
       }
     })
   ]
   const choose = async (chip: Chip): Promise<void> => {
     try {
-      await updateSettingsOrThrow(chip.update)
+      const update = chip.update()
+      await updateSettingsOrThrow(update)
       if (!chip.showsNow) {
         toast.success(
           otherMode === 'light'

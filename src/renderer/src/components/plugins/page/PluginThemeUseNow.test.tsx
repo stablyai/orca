@@ -113,6 +113,108 @@ const terminalTheme = (
   terminal: { background: '#181818', foreground: '#eeeeee', red: '#ff0000' }
 })
 
+it.each([6, 60])('prepares only the clicked terminal palette among %i choices', async (count) => {
+  state.terminal = Array.from({ length: count }, (_, index) =>
+    terminalTheme(
+      `Choice${index}`,
+      index === count - 1 ? 'unknown' : index === 0 ? 'light' : 'dark'
+    )
+  )
+  const candidate = state.terminal[count - 1]
+  load({
+    theme: 'system',
+    terminalUseSeparateLightTheme: false,
+    terminalColorOverrides: { background: '#123456' }
+  })
+  const before = settings()
+  let visits = 0
+  const originalFind = state.terminal.find
+  const lookup = vi.spyOn(state.terminal, 'find').mockImplementation((predicate, thisArg) =>
+    originalFind.call(state.terminal, (entry, index, array) => {
+      visits++
+      return predicate.call(thisArg, entry, index, array)
+    })
+  )
+  let acknowledge: () => void = () => {}
+  settingsSet.mockImplementationOnce(
+    (updates) =>
+      new Promise((resolve) => {
+        acknowledge = () => {
+          saved = { ...saved, ...updates, ...normalizePluginThemeSettings(updates) }
+          resolve(saved)
+        }
+      })
+  )
+  try {
+    render(<PluginThemeUseNow pluginKey={pluginKey} />)
+    expect(screen.getAllByRole('button')).toHaveLength(count)
+    expect(visits).toBe(0)
+    expect(settingsSet).not.toHaveBeenCalled()
+    act(() => load({ ...settings(), terminalFontSize: 17 }))
+    expect(visits).toBe(0)
+    expect(settingsSet).not.toHaveBeenCalled()
+    expect(screen.getByRole('button', { name: `Use now: ${candidate.label}` })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Use for light: Choice0' })).toBeTruthy()
+    changeSystem(false)
+    expect(screen.getByRole('button', { name: 'Use now: Choice0' })).toBeTruthy()
+    expect(visits).toBe(0)
+    expect(settingsSet).not.toHaveBeenCalled()
+
+    await choose(`Use now: ${candidate.label}`)
+    const clickedVisits = visits
+    expect(clickedVisits).toBeGreaterThan(0)
+    expect(clickedVisits).toBeLessThanOrEqual(2 * count)
+    expect(settingsSet).toHaveBeenCalledTimes(1)
+    const update = settingsSet.mock.calls[0][0]
+    expect(update).toMatchObject({
+      terminalThemeLight: candidate.id,
+      terminalUseSeparateLightTheme: true,
+      terminalPluginPalettes: [{ id: candidate.id, colors: candidate.terminal }]
+    })
+    expect(update).toHaveProperty('terminalColorOverrides', undefined)
+    expect(update).not.toHaveProperty('theme')
+    expect(settings().terminalThemeLight).toBe(before.terminalThemeLight)
+    expect(
+      screen
+        .getByRole('button', { name: `Use now: ${candidate.label}` })
+        .getAttribute('aria-pressed')
+    ).toBe('false')
+    expect(toast.success).not.toHaveBeenCalled()
+    changeSystem(true)
+    expect(visits).toBe(clickedVisits)
+    expect(settingsSet).toHaveBeenCalledTimes(1)
+    expect(update.terminalThemeLight).toBe(candidate.id)
+    await act(async () => acknowledge())
+    expect(settings()).toMatchObject({
+      theme: 'system',
+      terminalThemeDark: before.terminalThemeDark,
+      terminalThemeLight: candidate.id,
+      terminalUseSeparateLightTheme: true
+    })
+    expect(visits).toBe(clickedVisits)
+    changeSystem(false)
+    expect(
+      screen
+        .getByRole('button', { name: `Use now: ${candidate.label}` })
+        .getAttribute('aria-pressed')
+    ).toBe('true')
+    expect(resolveEffectiveTerminalAppearance(settings(), false).theme).toMatchObject(
+      candidate.terminal
+    )
+    expect(visits).toBe(clickedVisits)
+    act(() => load({ ...settings(), terminalFontSize: 18 }))
+    expect(visits).toBe(clickedVisits)
+    expect(settingsSet).toHaveBeenCalledTimes(1)
+    expect(toast.success).not.toHaveBeenCalled()
+    expect(toast.error).not.toHaveBeenCalled()
+    console.info(
+      `terminal palette contract N=M=${count}: render=0, click=${clickedVisits}, pending/ack/later=0, writes=1`
+    )
+  } finally {
+    lookup.mockRestore()
+  }
+})
+
 it('fills only the slot of the theme it was asked for', async () => {
   state.app = [appTheme('Dusk', 'dark')]
   render(<PluginThemeUseNow pluginKey={pluginKey} />)
