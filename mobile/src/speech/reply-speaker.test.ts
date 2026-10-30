@@ -40,6 +40,7 @@ const {
   setAutoReadNeedsHeadphones,
   speakReply,
   speakSample,
+  stopAutoReading,
   stopSpeaking
 } = await import('./reply-speaker')
 
@@ -342,6 +343,38 @@ describe('auto-read paused', () => {
     speakReply('waiting', 'Waiting.', 'queue')
     nextMessage('test')
     expect(last().text).toBe('Waiting.')
+  })
+})
+
+describe('previous and auto-read stops', () => {
+  it('does not read a message twice when Previous picks one that also waits', () => {
+    speakReply('a', 'First.', 'queue')
+    finishPiece()
+    speakReply('b', 'Second.', 'queue')
+    previousMessage('test')
+    expect(last().text).toBe('First.')
+    setAutoPlay(false)
+    playReading('test')
+    finishPiece()
+    previousMessage('test')
+    expect(last().text).toBe('Second.')
+    finishPiece()
+    setAutoPlay(true)
+    expect(lastState()).toBe('idle')
+  })
+
+  it('stops what auto-read started and leaves the Read button alone', () => {
+    speakReply('auto', 'Auto.', 'queue')
+    speakReply('waiting', 'Waiting.', 'queue')
+    stopAutoReading('test')
+    expect(lastState()).toBe('idle')
+    speakReply('manual', 'Manual.', 'interrupt')
+    speakReply('queued', 'Queued.', 'queue')
+    stopAutoReading('test')
+    expect(lastState()).toBe('reading')
+    finishPiece()
+    expect(last().text).toBe('Manual.')
+    expect(lastState()).toBe('idle')
   })
 })
 

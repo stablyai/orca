@@ -22,7 +22,7 @@ import {
   type LastReadMessage
 } from './project-name-announcement'
 import { useReadScopePreference } from './read-scope-preference'
-import { expireHolds, speakReply } from './reply-speaker'
+import { expireHolds, speakReply, stopAutoReading } from './reply-speaker'
 import { logSpeechEvent } from './speech-diagnostics'
 
 // Why: on screen, the workspace list's worktree.ps cadence; off screen, slower to spare battery.
@@ -239,9 +239,16 @@ export function useAutoReadReplies(): void {
     pollRef.current = () => void poll()
     void poll()
     const timer = setInterval(() => void poll(), FOREGROUND_POLL_MS)
+    // Why: without screen-off reading, auto-read ends with the screen, as its setting says.
+    const leaving = AppState.addEventListener('change', (state) => {
+      if (state === 'background' && !backgroundReadingActive()) {
+        stopAutoReading('left the screen without screen-off reading')
+      }
+    })
     return () => {
       cancelled = true
       clearInterval(timer)
+      leaving.remove()
       feeds.closeAll()
       pollRef.current = () => undefined
     }
