@@ -84,7 +84,7 @@ async function socketCall(endpoint: string, frame: string) {
     socket.on('error', reject)
     socket.on('connect', () => socket.write(frame))
     socket.on('data', (chunk) => {
-      response += chunk
+      response += chunk.toString()
       if (response.includes('\n')) {
         socket.end()
         resolve(response.trim())

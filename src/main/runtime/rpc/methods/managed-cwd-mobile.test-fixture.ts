@@ -132,7 +132,7 @@ export function managedCwdMobileFixture(runtime: OrcaRuntimeService, directory: 
         dispatch = undefined
         transport.receive(ws, sealed)
         expect(dispatch).toBeDefined()
-        await dispatch
+        await Promise.resolve(dispatch)
         const encryptedReply = socket.sent.at(-1)!
         expect(socket.sent.length).toBeGreaterThan(before)
         const reply = decrypt(encryptedReply, sharedKey)

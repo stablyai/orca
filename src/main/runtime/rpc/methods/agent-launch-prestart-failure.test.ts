@@ -9,7 +9,10 @@ import { computeAgentLaunchFingerprint } from '../../../../shared/agent-launch-o
 import { AGENT_LAUNCH_SURFACE_UNAVAILABLE_CODE } from '../../../../shared/agent-launch-surface'
 import { assertOpenCodeModelLaunchPreferencesAbsent } from '../../../opencode/opencode-model-startup-plan'
 import type { AgentSessionRecordStore } from '../../agent-session-record-store'
-import { openTestAgentSessionRecordStore } from '../../agent-session-record-store-test-harness'
+import {
+  openTestAgentSessionRecordStore,
+  editPersistedTestAgentSessionStore
+} from '../../agent-session-record-store-test-harness'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import {
   RuntimeLineageError,
@@ -22,7 +25,6 @@ import {
   agentLaunchFailureMessage
 } from './agent-launch-failure-code'
 import { closeTestJournalHostDatabase } from '../../../native-chat/agent-session-journal/journal-host-database-test-support'
-import { editPersistedTestAgentSessionStore } from '../../agent-session-record-store-test-harness'
 import { RpcDispatcher } from '../dispatcher'
 import type { RpcDispatchStreamingOptions } from '../dispatcher-stream-options'
 import {
