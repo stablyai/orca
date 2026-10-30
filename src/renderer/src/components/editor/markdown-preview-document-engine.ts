@@ -30,7 +30,7 @@ function collectTextNodes(node: Root | Root['children'][number], values: string[
     (node.tagName === 'math' ||
       node.tagName === 'svg' ||
       (node.tagName === 'code' &&
-        node.properties.className?.toString().includes('language-mermaid')))
+        /language-(mermaid|d2)\b/.test(node.properties.className?.toString() ?? '')))
   ) {
     return
   }

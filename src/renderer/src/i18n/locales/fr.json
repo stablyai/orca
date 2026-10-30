@@ -16155,6 +16155,10 @@
           "1829437fce": "Nouveau Markdown",
           "newDocumentHeading": "Nouveau document"
         },
+        "D2Block": {
+          "diagramError": "Erreur de diagramme :",
+          "installHint": "Installez la CLI d2 pour afficher ce diagramme."
+        },
         "DiagramViewerModal": {
           "title": "Diagramme"
         },

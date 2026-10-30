@@ -15538,6 +15538,10 @@
           "1829437fce": "新規 Markdown",
           "newDocumentHeading": "新規ドキュメント"
         },
+        "D2Block": {
+          "diagramError": "図のエラー:",
+          "installHint": "この図を表示するには d2 CLI をインストールしてください。"
+        },
         "DiagramViewerModal": {
           "title": "図"
         },

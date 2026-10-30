@@ -15538,6 +15538,10 @@
           "1829437fce": "新 Markdown",
           "newDocumentHeading": "新建文档"
         },
+        "D2Block": {
+          "diagramError": "图表错误：",
+          "installHint": "安装 d2 CLI 以渲染此图表。"
+        },
         "DiagramViewerModal": {
           "title": "图表"
         },

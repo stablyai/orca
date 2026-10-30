@@ -1,5 +1,5 @@
 ---
-title: HTML, Mermaid, PDF & image viewers
+title: HTML, Mermaid, D2, PDF & image viewers
 ---
 
 import { Callout } from '@/components/docs/prose'
@@ -17,6 +17,10 @@ On paired runtimes, the HTML file must be inside the worktree. Very old paired s
 ## Mermaid
 
 Mermaid diagrams render inline inside markdown preview. Standalone `.mmd` files open in a dedicated viewer with pan/zoom.
+
+## D2
+
+D2 diagrams in ` ```d2 ` code blocks render inline in markdown preview and below the block in the rich editor. They need the [`d2` CLI](https://d2lang.com) on your `PATH`; without it the block shows its source and an install hint. SSH worktrees use your local `d2`. Web and mobile show the source only.
 
 ## PDF
 

@@ -112,6 +112,7 @@ function createWebPreloadApi(): Partial<PreloadApi> {
       onResourceWindowVisibility: () => () => {}
     },
     aiVault: createWebAiVaultApi(),
+    d2: { render: () => Promise.resolve({ ok: false, reason: 'unavailable' }) },
     preflight: createPreflightApi(),
     notifications: createNotificationsApi(),
     rateLimits: createRateLimitsApi(),

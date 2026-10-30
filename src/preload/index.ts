@@ -27,6 +27,7 @@ import { ptyApi } from './api/pty-bridge'
 import { feedbackApi } from './api/feedback-bridge'
 import { crashReportsApi } from './api/crash-reports-bridge'
 import { exportApi } from './api/export-bridge'
+import { d2Api } from './api/d2-bridge'
 import { ghApi } from './api/gh-bridge'
 import { hostedReviewApi } from './api/hosted-review-bridge'
 import { glApiBridge } from './api/gl-bridge'
@@ -127,6 +128,7 @@ const api = {
   feedback: feedbackApi,
   crashReports: crashReportsApi,
   export: exportApi,
+  d2: d2Api,
   gh: ghApi,
   hostedReview: hostedReviewApi,
   gl: glApiBridge,

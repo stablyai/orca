@@ -38,10 +38,15 @@ import type {
   AgentSessionAttachmentPathUploadResult,
   AgentSessionAttachmentUploadTarget
 } from '../../shared/agent-session-attachments'
+import type { D2RenderRequest, D2RenderResult } from '../../shared/d2-render-types'
 import type {
   PrepareDroppedPathsRequest,
   PreparedDroppedPaths
 } from '../../shared/native-file-drop-preparation'
+
+export type D2Api = {
+  render: (args: D2RenderRequest) => Promise<D2RenderResult>
+}
 
 export type ExportApi = {
   htmlToPdf: (args: { html: string; title: string }) => Promise<PdfExportResult>

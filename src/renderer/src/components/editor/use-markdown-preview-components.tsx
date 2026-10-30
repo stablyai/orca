@@ -2,6 +2,7 @@ import React, { useMemo } from 'react'
 import type { Components } from 'react-markdown'
 import type { MarkdownDocument } from '../../../../shared/filesystem-entry-types'
 import CodeBlockCopyButton from './CodeBlockCopyButton'
+import D2Block from './D2Block'
 import MermaidBlock from './MermaidBlock'
 import {
   getMarkdownDocLinkAnchor,
@@ -173,6 +174,9 @@ export function useMarkdownPreviewComponents({
             <MermaidBlock content={String(children).trimEnd()} isDark={isDark} htmlLabels={false} />
           )
         }
+        if (/language-d2\b/.test(className || '')) {
+          return <D2Block content={String(children).trimEnd()} isDark={isDark} />
+        }
         return (
           <code className={className} {...props}>
             {children}
@@ -181,7 +185,10 @@ export function useMarkdownPreviewComponents({
       },
       pre: ({ node, children, ...props }) => {
         const child = React.Children.toArray(children)[0]
-        if (React.isValidElement(child) && child.type === MermaidBlock) {
+        if (
+          React.isValidElement(child) &&
+          (child.type === MermaidBlock || child.type === D2Block)
+        ) {
           return <>{children}</>
         }
         return wrapAnnotatedBlock(

@@ -15538,6 +15538,10 @@
           "1829437fce": "새로운 Markdown",
           "newDocumentHeading": "새 문서"
         },
+        "D2Block": {
+          "diagramError": "다이어그램 오류:",
+          "installHint": "이 다이어그램을 표시하려면 d2 CLI를 설치하세요."
+        },
         "DiagramViewerModal": {
           "title": "다이어그램"
         },
