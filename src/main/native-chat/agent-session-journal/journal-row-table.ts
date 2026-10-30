@@ -35,8 +35,15 @@ export function insertJournalRow(
   row: JournalRow,
   savedAt = row.ts
 ): number {
+  const rowJson = journalRowReadBack(sessionId, row)
+  // The table timestamp records the save; the JSON timestamp can remain pinned to item start.
+  db.prepare(INSERT_ROW).run(sessionId, row.epoch, row.seq, savedAt, rowJson)
+  return Buffer.byteLength(rowJson, 'utf8')
+}
+
+/** Rejects a row the reader would not read back before it can break the next load. */
+export function journalRowReadBack(sessionId: string, row: JournalRow): string {
   const rowJson = serializeJournalRow(row)
-  // Reject unreadable rows before they can break the next load; the caller rolls back.
   const readBack = parseJournalRow(rowJson)
   if (!readBack.ok || readBack.row.seq !== row.seq) {
     throw new AgentSessionJournalError(
@@ -44,9 +51,7 @@ export function insertJournalRow(
       `the ${row.kind} row for ${sessionId} would not read back, so it was not written`
     )
   }
-  // The table timestamp records the save; the JSON timestamp can remain pinned to item start.
-  db.prepare(INSERT_ROW).run(sessionId, row.epoch, row.seq, savedAt, rowJson)
-  return Buffer.byteLength(rowJson, 'utf8')
+  return rowJson
 }
 
 // Page fetches release read snapshots before reduction so WAL checkpoints are not blocked.

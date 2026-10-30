@@ -50,7 +50,7 @@ import {
   readJournalSessionEpoch
 } from './journal-row-table'
 import type { AgentJournalEpochReason, JournalRow } from './journal-row-schema'
-import { assertJournalFence } from './journal-write-guards'
+import { AgentSessionJournalError, assertJournalFence } from './journal-write-guards'
 import type { JournalOperationReceipt } from './journal-row-writer'
 
 import type { JournalAttachmentClaim } from './journal-submission-hook'
@@ -198,6 +198,10 @@ export function replaceJournalEpoch(input: {
   input.database.transaction(
     (db) => {
       const retired = readJournalSessionEpoch(db, sessionId)
+      // The new epoch was built from the live one; refuse if another write replaced it meanwhile.
+      if (input.previous && retired !== input.previous.epoch) {
+        throw new AgentSessionJournalError('journal_row_rejected', 'the chat epoch changed')
+      }
       if (retired !== null) {
         journalOutcomeSource(db, sessionId, retired)
       }
@@ -225,16 +229,18 @@ export function replaceJournalEpoch(input: {
     },
     false,
     (publication) => {
+      // Adopt, then finish the nonthrowing ownership bookkeeping, before the fallible publication.
+      const state = publication.adopt()
+      claimsCommitted.forEach((commit) => commit())
+      input.queue.receipt.committed()
       input.onPublished({
-        state: publication.adopt(),
+        state,
         newer: null,
         damage: null,
         projectionThrough: publication.through
       })
     }
   )
-  claimsCommitted.forEach((commit) => commit())
-  input.queue.receipt.committed()
 
   receipt?.committed()
 }

@@ -48,7 +48,9 @@ export class JournalDraftMap<K, V> extends Map<K, V> {
     if (!this.has(key)) {
       this.inserted.add(key)
       this.recreated.add(key)
+      // A (re)created key moves to the end of both orders, as the live map's re-insert does.
       this.touched.delete(key)
+      this.pending.delete(key)
     }
     this.access.assign(value)
     this.writes.set(key, value)
@@ -181,6 +183,7 @@ export class JournalDraftSet<T> extends Set<T> {
     if (!this.has(value)) {
       this.inserted.add(value)
       this.recreated.add(value)
+      this.pending.delete(value)
       this.pending.add(value)
       this.touched.delete(value)
       this.touched.add(value)

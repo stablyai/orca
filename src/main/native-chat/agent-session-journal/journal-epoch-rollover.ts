@@ -17,6 +17,7 @@ import {
   readJournalSessionEpoch
 } from './journal-row-table'
 import type { AgentJournalEpochReason, JournalRow } from './journal-row-schema'
+import { AgentSessionJournalError } from './journal-write-guards'
 
 export function publishNewEpoch(input: {
   database: JournalHostDatabase
@@ -27,6 +28,8 @@ export function publishNewEpoch(input: {
   now: number
   /** Unhanded cards wait again; replacement submissions may relink them. */
   queue: JournalQueueRestatement
+  /** The epoch the caller built from (null: none yet); a different stored epoch refuses. */
+  expectedEpoch?: string | null
   /** Adopt committed state before fallible follow-up work. */
   onPublished: (loaded: JournalLoad) => void
 }): void {
@@ -56,6 +59,9 @@ export function publishNewEpoch(input: {
   input.database.transaction(
     (db) => {
       const retired = readJournalSessionEpoch(db, sessionId)
+      if (input.expectedEpoch !== undefined && retired !== input.expectedEpoch) {
+        throw new AgentSessionJournalError('journal_row_rejected', 'the chat epoch changed')
+      }
       if (retired !== null) {
         journalOutcomeSource(db, sessionId, retired)
       }
@@ -69,14 +75,15 @@ export function publishNewEpoch(input: {
     },
     false,
     (publication) => {
+      // Adopt, then finish the nonthrowing queue bookkeeping, before the fallible publication.
+      const state = publication.adopt()
+      input.queue.receipt.committed()
       input.onPublished({
-        state: publication.adopt(),
+        state,
         newer: null,
         damage: null,
         projectionThrough: publication.through
       })
     }
   )
-
-  input.queue.receipt.committed()
 }
