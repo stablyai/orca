@@ -150,7 +150,9 @@ export function createTerminalPaneManagerOptions(
         ...buildWindowsPtyCompatibilityOptions(ptyBackendContext),
         ...buildTerminalKeyboardProtocolOptions(ptyBackendContext),
         fontSize: currentSettings?.terminalFontSize ?? 14,
-        fontFamily: buildFontFamily(currentSettings?.terminalFontFamily ?? ''),
+        fontFamily: buildFontFamily(currentSettings?.terminalFontFamily ?? '', {
+          eastAsianAmbiguousWide: currentSettings?.terminalEastAsianAmbiguousWidth === 'wide'
+        }),
         fontWeight: terminalFontWeights.fontWeight,
         fontWeightBold: terminalFontWeights.fontWeightBold,
         scrollback: normalizeDesktopTerminalScrollbackRows(currentSettings?.terminalScrollbackRows),

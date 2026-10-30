@@ -43,6 +43,25 @@ export function isIOSWebView() {
 const TERMINAL_FONT_FALLBACKS =
   '"Menlo", "Monaco", "Cascadia Mono", "Consolas", "DejaVu Sans Mono", "Liberation Mono", "Orca Nerd Font Symbols", "Symbols Nerd Font Mono", monospace'
 
+// Why: wide ambiguous mode allocates two cells; CJK UI fonts supply full-em glyphs ahead of Consolas (#9958).
+const CJK_AMBIGUOUS_FALLBACKS =
+  '"Malgun Gothic", "Microsoft YaHei", "Yu Gothic", "Apple SD Gothic Neo", "PingFang SC", "Hiragino Sans", "Noto Sans CJK KR", "Noto Sans CJK SC", "Noto Sans CJK JP"'
+
+export function terminalFontFamilyForAmbiguousWidth(
+  mode: 'narrow' | 'wide' | null | undefined
+): string {
+  const lead = isIOSWebView() ? 'ui-monospace, ' : '"SF Mono", '
+  if (mode === 'wide') {
+    return (
+      lead +
+      '"Menlo", "Monaco", "Cascadia Mono", ' +
+      CJK_AMBIGUOUS_FALLBACKS +
+      ', "Consolas", "DejaVu Sans Mono", "Liberation Mono", "Orca Nerd Font Symbols", "Symbols Nerd Font Mono", monospace'
+    )
+  }
+  return lead + TERMINAL_FONT_FALLBACKS
+}
+
 // Wait one frame after changing fontSize for cell metrics, then fit the new grid before native PTY reflow.
 export function applyTextScale(scope: TerminalDocumentScope, scale: number) {
   scope.currentTextScale = scale
@@ -90,6 +109,5 @@ export function startTextScaling(scope: TerminalDocumentScope) {
   scope.currentTextScale = scope.start().textScale
   scope.scrollIndicator = elementInRoot(scope.root, 'scroll-indicator')
   scope.scrollThumb = elementInRoot(scope.root, 'scroll-thumb')
-  scope.terminalFontFamily =
-    (isIOSWebView() ? 'ui-monospace, ' : '"SF Mono", ') + TERMINAL_FONT_FALLBACKS
+  scope.terminalFontFamily = terminalFontFamilyForAmbiguousWidth('narrow')
 }

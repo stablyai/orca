@@ -20,6 +20,8 @@ export type TerminalWebViewCommand =
       // Width-reflow replay contains the same rewrapped content; preserve reader position instead of jumping to bottom.
       preserveScroll?: boolean
       frame: TerminalFrame | null
+      /** Desktop Settings twin for East Asian Ambiguous cell width (#9958). */
+      eastAsianAmbiguousWidth?: 'narrow' | 'wide'
     }
   | { type: 'set-font-scale'; id?: number; fontScale: number }
   | { type: 'resize'; id?: number; cols: number; rows: number; frame: TerminalFrame | null }

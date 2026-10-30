@@ -43,6 +43,7 @@ import type {
   SourceControlViewMode,
   TaskViewPresetId
 } from './ui-chrome-types'
+import type { TerminalEastAsianAmbiguousWidth } from './east-asian-ambiguous-width'
 import type { WorktreeVisibilityDefaults } from './repo-types'
 
 export type { WorktreeVisibilityDefaults } from './repo-types'
@@ -103,6 +104,11 @@ export type GlobalSettings = GlobalSettingsBase & {
   terminalFontFamily: string
   terminalFontWeight: number
   terminalFontWeightBold: number
+  /**
+   * East Asian Ambiguous (① ■ ★ →) cell width. Default `narrow` matches modern
+   * CLI width tables; `wide` matches conhost/CJK locales (#9958).
+   */
+  terminalEastAsianAmbiguousWidth?: TerminalEastAsianAmbiguousWidth
   terminalLineHeight: number
   terminalScrollSensitivity: number
   terminalFastScrollSensitivity: number

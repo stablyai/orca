@@ -30,6 +30,7 @@ import {
   setDefaultWslDistroOverride
 } from '../git/runner'
 import { wslHookRelayManager } from '../agent-hooks/wsl-hook-relay-manager'
+import { setTerminalEastAsianAmbiguousWidthMode } from '../../shared/terminal-unicode-provider'
 import { applyAppIcon } from '../app-icon'
 import {
   shouldSuppressDevEducation,
@@ -238,6 +239,8 @@ export async function initializeReadyFoundation(): Promise<void> {
     profile.profile.id
   )
   setDefaultWslDistroOverride(store.getSettings().terminalWindowsWslDistro ?? null)
+  // Why: headless emulators measure widths in this process; keep EAW mode aligned with Settings (#9958).
+  setTerminalEastAsianAmbiguousWidthMode(store.getSettings().terminalEastAsianAmbiguousWidth)
   store.onSettingsChanged((updates, settings) => {
     if ('electronHttp1CompatibilityMode' in updates) {
       writeHttp1CompatibilityMarker(
@@ -248,6 +251,9 @@ export async function initializeReadyFoundation(): Promise<void> {
     }
     if ('terminalWindowsWslDistro' in updates) {
       setDefaultWslDistroOverride(settings.terminalWindowsWslDistro ?? null)
+    }
+    if ('terminalEastAsianAmbiguousWidth' in updates) {
+      setTerminalEastAsianAmbiguousWidthMode(settings.terminalEastAsianAmbiguousWidth)
     }
     if (
       ('terminalWindowsShell' in updates || 'terminalWindowsPowerShellImplementation' in updates) &&

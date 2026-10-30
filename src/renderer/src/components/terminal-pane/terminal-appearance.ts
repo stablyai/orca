@@ -9,6 +9,7 @@ import {
   resolveEffectiveTerminalAppearance
 } from '@/lib/terminal-theme'
 import { buildFontFamily } from '@/lib/monospace-font-family'
+import { setTerminalEastAsianAmbiguousWidthMode } from '../../../../shared/terminal-unicode-provider'
 import { safeFit, safeFitAndThen } from '@/lib/pane-manager/pane-tree-ops'
 import { canApplyPaneMetricOptions } from '@/lib/pane-manager/pane-fit'
 import {
@@ -181,9 +182,15 @@ export function applyTerminalAppearance(
     // Hidden panes defer cursor blink so settings changes cannot restart their blink timer.
     setTerminalCursorBlinkOption(pane.terminal, settings.terminalCursorBlink)
     const paneSize = paneFontSizes.get(pane.id)
+    // Why: keep the shared unicode provider and CJK font stack in lockstep with
+    // the opt-in wide ambiguous setting (#9958).
+    const eastAsianAmbiguousWide = settings.terminalEastAsianAmbiguousWidth === 'wide'
+    setTerminalEastAsianAmbiguousWidthMode(settings.terminalEastAsianAmbiguousWidth)
     const metricOptions = {
       fontSize: paneSize ?? settings.terminalFontSize,
-      fontFamily: buildFontFamily(settings.terminalFontFamily),
+      fontFamily: buildFontFamily(settings.terminalFontFamily, {
+        eastAsianAmbiguousWide
+      }),
       fontWeight: terminalFontWeights.fontWeight,
       fontWeightBold: terminalFontWeights.fontWeightBold,
       lineHeight: normalizeTerminalLineHeight(settings.terminalLineHeight)

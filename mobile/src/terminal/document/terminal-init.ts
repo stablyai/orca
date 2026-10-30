@@ -7,7 +7,7 @@ import { MOBILE_TERMINAL_CARET_OPTIONS } from '../terminal-webview-html/theme'
 import { ESC } from './escape-introducers'
 import { notify } from './host-notify'
 import { reportLaidOutCellBox } from './laid-out-cell-box'
-import { fontPxForScale } from './text-scaling'
+import { fontPxForScale, terminalFontFamilyForAmbiguousWidth } from './text-scaling'
 import type { TerminalDocumentScope, TerminalDocumentTerminal } from './document-scope'
 import { scheduleDocumentFrame } from './document-frame-registry'
 import { applyFitScale } from './fit-scale'
@@ -31,7 +31,10 @@ import { applyTerminalTheme } from './terminal-theme'
 import { attachWebglAddon, cancelWebglContextRecovery } from './webgl-recovery'
 import { afterWritesDrained, enqueueWrite, pumpWrites, resetWriteQueue } from './write-queue'
 import { DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT } from '../../../../src/shared/terminal-scrollback-policy'
-import { activateOrcaTerminalUnicodeProvider } from '../../../../src/shared/terminal-unicode-provider'
+import {
+  activateOrcaTerminalUnicodeProvider,
+  setTerminalEastAsianAmbiguousWidthMode
+} from '../../../../src/shared/terminal-unicode-provider'
 
 function openTerminal(scope: TerminalDocumentScope, cols: number, rows: number) {
   const term = scope.createTerminal({
@@ -94,8 +97,13 @@ export function init(
   nextFontScale: unknown,
   preserveScroll: boolean,
   nextOscLinks: unknown,
-  kittyKeyboardFlags: unknown
+  kittyKeyboardFlags: unknown,
+  eastAsianAmbiguousWidth?: unknown
 ) {
+  // Why: host Settings → Ambiguous Character Width must land before the first write (#9958).
+  const ambiguousWidth = eastAsianAmbiguousWidth === 'wide' ? 'wide' : 'narrow'
+  setTerminalEastAsianAmbiguousWidthMode(ambiguousWidth)
+  scope.terminalFontFamily = terminalFontFamilyForAmbiguousWidth(ambiguousWidth)
   // Replay replaces the scroll target; retire momentum and pending drags belonging to the old one.
   stopSurfaceTouchGestures(scope)
   resetSmoothScrollOffset(scope)
@@ -161,6 +169,7 @@ export function init(
     nextTerm = reused
     scope.term = reused
     reused.reset()
+    reused.options.fontFamily = scope.terminalFontFamily
     reused.options.fontSize = fontPxForScale(scope.currentTextScale)
     reused.resize(cols || 80, rows || 24)
     // Seed the reported grid so its first box change can trigger one DOM-column refit.
