@@ -6,13 +6,16 @@ import {
   realpath,
   rm,
   stat,
+  utimes,
   writeFile
 } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { UsageSourceCacheRef } from '../usage/usage-source-cache-file'
+import { mergeAppendedFile } from './omp-usage-aggregation'
 import { scanOmpUsageFiles } from './scanner'
+import type { OmpUsagePersistedFile, OmpUsageSession } from './types'
 
 type RawLine = Record<string, unknown> | string
 
@@ -241,15 +244,167 @@ describe('scanOmpUsageFiles', () => {
   })
 
   it('resumes appended files from the persisted byte offset', async () => {
-    const padding = Array.from({ length: 160 }, (_, index) => ({
-      type: 'title',
-      title: `padding-${index}-${'x'.repeat(200)}`
-    }))
-    const file = await writeSession('slug-resume', [
-      sessionRecord('resume-session', worktreePath, localTimestamp(10, 5, 9, 0)),
-      ...padding,
+    const padding = (tag: string, count: number) =>
+      Array.from({ length: count }, (_, index) => ({
+        type: 'title',
+        title: `${tag}-${index}-${'x'.repeat(200)}`
+      }))
+    const parsedLine = JSON.stringify(
       usageMessage({
         timestamp: localTimestamp(10, 5, 9, 5),
+        model: 'glm-5.4',
+        provider: 'giga-osa',
+        input: 100,
+        output: 10,
+        costTotal: 0.001
+      })
+    )
+    // Differs only in equal-width token counts, so an in-place rewrite keeps the byte length.
+    const editedLine = JSON.stringify(
+      usageMessage({
+        timestamp: localTimestamp(10, 5, 9, 5),
+        model: 'glm-5.4',
+        provider: 'giga-osa',
+        input: 900,
+        output: 90,
+        costTotal: 0.001
+      })
+    )
+    expect(Buffer.byteLength(editedLine)).toBe(Buffer.byteLength(parsedLine))
+
+    const file = await writeSession('slug-resume', [
+      sessionRecord('resume-session', worktreePath, localTimestamp(10, 5, 9, 0)),
+      ...padding('head', 60),
+      parsedLine,
+      ...padding('tail', 60),
+      usageMessage({
+        timestamp: localTimestamp(10, 6, 10, 0),
+        input: 200,
+        output: 20,
+        costTotal: 0.002
+      })
+    ])
+
+    const first = await scanOmpUsageFiles(worktrees(), sourceCache)
+    expect(first.sessions[0]).toMatchObject({
+      inputTokens: 300,
+      outputTokens: 30,
+      totalTokens: 330
+    })
+    const firstSources = JSON.parse(await readFile(sourceCache.path, 'utf-8')) as {
+      sources: { mtimeMs: number; parseResumeState?: { parsedBytes: number } | null }[]
+    }
+    expect(firstSources.sources[0]?.parseResumeState?.parsedBytes).toBe((await stat(file)).size)
+
+    // A same-size mid-file rewrite only moves mtime; a resumed scan keeps the parsed totals.
+    const original = await readFile(file, 'utf-8')
+    const rewritten = original.replace(parsedLine, editedLine)
+    expect(rewritten).not.toBe(original)
+    expect(Buffer.byteLength(rewritten)).toBe(Buffer.byteLength(original))
+    await writeFile(file, rewritten)
+    await utimes(file, new Date(), new Date(Date.now() + 2_000))
+    expect((await stat(file)).mtimeMs).not.toBe(firstSources.sources[0]?.mtimeMs)
+
+    const second = await scanOmpUsageFiles(worktrees(), sourceCache)
+    expect(second.sessions[0]).toMatchObject({
+      startedAt: localTimestamp(10, 5, 9, 0),
+      endedAt: localTimestamp(10, 6, 10, 0),
+      model: 'glm-5.4',
+      inputTokens: 300,
+      outputTokens: 30,
+      totalTokens: 330
+    })
+    expect(second.dailyAggregates.map((aggregate) => aggregate.day)).toEqual([
+      localDay(10, 5),
+      localDay(10, 6)
+    ])
+
+    await appendFile(
+      file,
+      toJsonl([
+        usageMessage({
+          timestamp: localTimestamp(10, 7, 11, 0),
+          input: 50,
+          output: 5,
+          reasoning: 2,
+          costTotal: 0.0005
+        })
+      ])
+    )
+
+    const third = await scanOmpUsageFiles(worktrees(), sourceCache)
+    expect(third.sessions[0]).toMatchObject({
+      endedAt: localTimestamp(10, 7, 11, 0),
+      inputTokens: 350,
+      outputTokens: 35,
+      reasoningTokens: 2,
+      totalTokens: 385
+    })
+    expect(third.sessions[0]?.costUsd).toBeCloseTo(0.0035, 10)
+    expect(third.dailyAggregates.map((aggregate) => aggregate.day)).toEqual([
+      localDay(10, 5),
+      localDay(10, 6),
+      localDay(10, 7)
+    ])
+    const thirdSources = JSON.parse(await readFile(sourceCache.path, 'utf-8')) as {
+      sources: { parseResumeState?: { parsedBytes: number } | null }[]
+    }
+    expect(thirdSources.sources[0]?.parseResumeState?.parsedBytes).toBe((await stat(file)).size)
+  })
+
+  it('counts a usage line once after its partial write completes', async () => {
+    const line = JSON.stringify(
+      usageMessage({
+        timestamp: localTimestamp(10, 9, 9, 1),
+        model: 'glm-5.4',
+        provider: 'giga-osa',
+        input: 40,
+        output: 4,
+        costTotal: 0.0004
+      })
+    )
+    const splitAt = Math.floor(line.length / 2)
+    const file = await writeSession(
+      'slug-partial',
+      [sessionRecord('partial-session', worktreePath, localTimestamp(10, 9, 9, 0))],
+      line.slice(0, splitAt)
+    )
+
+    const first = await scanOmpUsageFiles(worktrees(), sourceCache)
+    expect(first.sessions).toHaveLength(0)
+
+    await appendFile(file, `${line.slice(splitAt)}\n`)
+    const second = await scanOmpUsageFiles(worktrees(), sourceCache)
+    expect(second.sessions).toHaveLength(1)
+    expect(second.sessions[0]).toMatchObject({
+      sessionId: 'partial-session',
+      inputTokens: 40,
+      outputTokens: 4,
+      totalTokens: 44
+    })
+    expect(second.dailyAggregates).toHaveLength(1)
+    expect(second.dailyAggregates[0]).toMatchObject({
+      inputTokens: 40,
+      outputTokens: 4,
+      totalTokens: 44
+    })
+
+    const third = await scanOmpUsageFiles(worktrees(), sourceCache)
+    expect(third.sessions[0]).toMatchObject({ totalTokens: 44 })
+    expect(third.dailyAggregates).toEqual(second.dailyAggregates)
+  })
+
+  it('reparses from scratch when a rewritten file invalidates the checkpoint', async () => {
+    const padding = (tag: string, count: number) =>
+      Array.from({ length: count }, (_, index) => ({
+        type: 'title',
+        title: `${tag}-${index}-${'x'.repeat(200)}`
+      }))
+    const file = await writeSession('slug-rewrite', [
+      sessionRecord('old-session', worktreePath, localTimestamp(10, 7, 9, 0)),
+      ...padding('old', 60),
+      usageMessage({
+        timestamp: localTimestamp(10, 7, 9, 5),
         model: 'glm-5.4',
         provider: 'giga-osa',
         input: 100,
@@ -259,52 +414,114 @@ describe('scanOmpUsageFiles', () => {
     ])
 
     const first = await scanOmpUsageFiles(worktrees(), sourceCache)
-    expect(first.sessions).toHaveLength(1)
     expect(first.sessions[0]).toMatchObject({
-      inputTokens: 100,
-      outputTokens: 10,
+      sessionId: 'old-session',
+      repoId: 'repo-1',
       totalTokens: 110
     })
-    const firstSources = JSON.parse(await readFile(sourceCache.path, 'utf-8')) as {
-      sources: { path: string; parseResumeState?: { parsedBytes: number } | null }[]
-    }
-    expect(firstSources.sources[0]?.parseResumeState?.parsedBytes).toBe((await stat(file)).size)
 
-    await appendFile(
-      file,
-      toJsonl([
-        usageMessage({
-          timestamp: localTimestamp(10, 6, 10, 0),
-          input: 200,
-          output: 20,
-          reasoning: 5,
-          costTotal: 0.002
-        })
-      ])
-    )
+    const replacement = toJsonl([
+      sessionRecord('new-session', '/elsewhere/project', localTimestamp(10, 8, 8, 0)),
+      ...padding('new', 40),
+      usageMessage({
+        timestamp: localTimestamp(10, 8, 8, 5),
+        model: 'glm-5.4',
+        provider: 'other-provider',
+        input: 5,
+        output: 1,
+        costTotal: 0.0001
+      })
+    ])
+    expect(Buffer.byteLength(replacement)).toBeLessThan((await stat(file)).size)
+    await writeFile(file, replacement)
 
     const second = await scanOmpUsageFiles(worktrees(), sourceCache)
+    expect(second.sessions).toHaveLength(1)
     expect(second.sessions[0]).toMatchObject({
-      startedAt: localTimestamp(10, 5, 9, 0),
-      endedAt: localTimestamp(10, 6, 10, 0),
-      model: 'glm-5.4',
-      inputTokens: 300,
-      outputTokens: 30,
-      reasoningTokens: 5,
-      totalTokens: 330
+      sessionId: 'new-session',
+      provider: 'other-provider',
+      inputTokens: 5,
+      outputTokens: 1,
+      totalTokens: 6
     })
-    expect(second.sessions[0]?.costUsd).toBeCloseTo(0.003, 10)
-    expect(second.dailyAggregates.map((aggregate) => aggregate.day)).toEqual([
-      localDay(10, 5),
-      localDay(10, 6)
-    ])
-    const secondSources = JSON.parse(await readFile(sourceCache.path, 'utf-8')) as {
-      sources: { path: string; parseResumeState?: { parsedBytes: number } | null }[]
-    }
-    expect(secondSources.sources[0]?.parseResumeState?.parsedBytes).toBe((await stat(file)).size)
+    expect(second.sessions[0]?.repoId).toBeUndefined()
+    expect(second.dailyAggregates.map((aggregate) => aggregate.day)).toEqual([localDay(10, 8)])
+  })
+})
 
-    const third = await scanOmpUsageFiles(worktrees(), sourceCache)
-    expect(third.sessions[0]).toMatchObject({ totalTokens: 330 })
-    expect(third.dailyAggregates).toEqual(second.dailyAggregates)
+describe('mergeAppendedFile', () => {
+  const session = (overrides: Partial<OmpUsageSession>): OmpUsageSession => ({
+    sessionId: 'session-a',
+    startedAt: localTimestamp(10, 10, 9, 0),
+    endedAt: localTimestamp(10, 10, 9, 5),
+    cwd: '/repo',
+    model: 'glm-5.4',
+    provider: 'giga-osa',
+    inputTokens: 10,
+    outputTokens: 1,
+    cacheReadTokens: 0,
+    cacheWriteTokens: 0,
+    reasoningTokens: 0,
+    totalTokens: 11,
+    costUsd: 0.001,
+    ...overrides
+  })
+  const persistedFile = (
+    overrides: Partial<OmpUsagePersistedFile>,
+    sessionOverrides: Partial<OmpUsageSession>
+  ): OmpUsagePersistedFile => ({
+    path: '/repo/session.jsonl',
+    mtimeMs: 1,
+    size: 10,
+    sessions: [session(sessionOverrides)],
+    dailyAggregates: [],
+    ...overrides
+  })
+
+  it('combines a same-identified appended session', () => {
+    const merged = mergeAppendedFile(
+      persistedFile({}, {}),
+      persistedFile(
+        { mtimeMs: 2, size: 20 },
+        { startedAt: localTimestamp(10, 11, 9, 0), endedAt: localTimestamp(10, 11, 9, 5) }
+      )
+    )
+
+    expect(merged.sessions).toHaveLength(1)
+    expect(merged.sessions[0]).toMatchObject({
+      sessionId: 'session-a',
+      startedAt: localTimestamp(10, 10, 9, 0),
+      endedAt: localTimestamp(10, 11, 9, 5),
+      inputTokens: 20,
+      outputTokens: 2,
+      totalTokens: 22
+    })
+  })
+
+  it('keeps a differently identified appended session instead of combining ids', () => {
+    const merged = mergeAppendedFile(
+      persistedFile({}, {}),
+      persistedFile(
+        { mtimeMs: 2, size: 20 },
+        {
+          sessionId: 'session-b',
+          startedAt: localTimestamp(10, 11, 9, 0),
+          endedAt: localTimestamp(10, 11, 9, 5),
+          inputTokens: 20,
+          outputTokens: 2,
+          reasoningTokens: 3,
+          totalTokens: 22,
+          costUsd: 0.002
+        }
+      )
+    )
+
+    expect(merged.sessions.map((entry) => entry.sessionId)).toEqual(['session-a', 'session-b'])
+    expect(merged.sessions[1]).toMatchObject({
+      inputTokens: 20,
+      outputTokens: 2,
+      reasoningTokens: 3,
+      totalTokens: 22
+    })
   })
 })

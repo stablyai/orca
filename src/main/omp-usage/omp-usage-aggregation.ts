@@ -68,11 +68,20 @@ export function mergeAppendedFile(
 ): OmpUsagePersistedFile {
   const previousSession = previous.sessions[0]
   const appendedSession = appended.sessions[0]
+  let sessions: OmpUsageSession[]
+  if (!appendedSession) {
+    sessions = previous.sessions
+  } else if (!previousSession) {
+    sessions = [appendedSession]
+  } else if (previousSession.sessionId === appendedSession.sessionId) {
+    sessions = [combineOmpSessions(previousSession, appendedSession)]
+  } else {
+    // A session boundary inside one file must not fold a new session into the cached one.
+    sessions = [previousSession, appendedSession]
+  }
   return {
     ...appended,
-    sessions: appendedSession
-      ? [previousSession ? combineOmpSessions(previousSession, appendedSession) : appendedSession]
-      : previous.sessions,
+    sessions,
     dailyAggregates: mergeDailyAggregates(previous.dailyAggregates, appended.dailyAggregates)
   }
 }
