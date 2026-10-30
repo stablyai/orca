@@ -7,7 +7,7 @@ import {
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '../../store'
 import { acquireBrowserAutomationBootstrapLease } from './browser-automation-bootstrap-lease'
-import { browserTabSplitTarget } from './browser-tab-split-placement'
+import { browserTabSplitTarget, splitCallerWorktreeId } from './browser-tab-split-placement'
 import {
   findBrowserTabWorktreeId,
   isBrowserWorkspaceOwnedByPairedServer,
@@ -62,7 +62,11 @@ export function registerBrowserRequestIpcBridge(unsubs: (() => void)[]): void {
           data.fallbackWorktreeId && store.getKnownWorktreeById(data.fallbackWorktreeId)
             ? data.fallbackWorktreeId
             : null
-        const worktreeId = data.worktreeId ?? store.activeWorktreeId ?? fallbackWorktreeId
+        const worktreeId =
+          data.worktreeId ??
+          (data.split ? splitCallerWorktreeId(store, data.splitFromTabId) : undefined) ??
+          store.activeWorktreeId ??
+          fallbackWorktreeId
         if (!worktreeId) {
           window.api.ui.replyTabCreate({
             requestId: data.requestId,

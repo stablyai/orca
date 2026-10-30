@@ -9,6 +9,22 @@ type SplitPlacementState = Pick<
   | 'ensureWorktreeRootGroup'
 >
 
+const isCallerTab = (fromTabId: string) => (tab: { id: string; entityId: string }) =>
+  tab.id === fromTabId || tab.entityId === fromTabId
+
+// Why: a CLI outside its workspace's directory sends no workspace; the caller's tab still names it.
+export function splitCallerWorktreeId(
+  state: Pick<AppState, 'unifiedTabsByWorktree'>,
+  fromTabId: string | undefined
+): string | undefined {
+  if (!fromTabId) {
+    return undefined
+  }
+  return Object.entries(state.unifiedTabsByWorktree).find(([, tabs]) =>
+    tabs.some(isCallerTab(fromTabId))
+  )?.[0]
+}
+
 // Splits beside the caller's terminal, else the active pane, else the root group.
 export function browserTabSplitTarget(
   state: SplitPlacementState,
@@ -20,9 +36,7 @@ export function browserTabSplitTarget(
   const isLive = (groupId: string | undefined): groupId is string =>
     groupId !== undefined && groups.some((group) => group.id === groupId)
   const callerGroupId = fromTabId
-    ? (state.unifiedTabsByWorktree[worktreeId] ?? []).find(
-        (tab) => tab.id === fromTabId || tab.entityId === fromTabId
-      )?.groupId
+    ? (state.unifiedTabsByWorktree[worktreeId] ?? []).find(isCallerTab(fromTabId))?.groupId
     : undefined
   const activeGroupId = state.activeGroupIdByWorktree[worktreeId]
   const sourceGroupId = isLive(callerGroupId)

@@ -52,8 +52,6 @@ const TAB_CREATE_STRIPPED_PARAMS = [
   'profileId',
   'placement',
   'targetGroupId',
-  'split',
-  'splitFromTabId',
   'activate',
   'navigation'
 ] as const
@@ -139,6 +137,12 @@ async function scopeRequest(
   }
   const params: Record<string, unknown> = { ...request.params }
   if (request.method === 'browser.tabCreate') {
+    if (params.split !== undefined) {
+      throw new BridgeRefusal(
+        'invalid_argument',
+        'tab create --split is not available from an SSH host; the desktop decides where its tabs open.'
+      )
+    }
     for (const key of TAB_CREATE_STRIPPED_PARAMS) {
       delete params[key]
     }

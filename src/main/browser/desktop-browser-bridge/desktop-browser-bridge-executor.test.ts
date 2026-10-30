@@ -227,7 +227,7 @@ describe('executeDesktopBrowserBridgeRequest', () => {
     expect(dispatched).toEqual([])
   })
 
-  it('creates a tab only with the host’s url and workspace, never its profile, group, split, page id or focus', async () => {
+  it('creates a tab only with the host’s url and workspace, never its profile, group, page id or focus', async () => {
     const { value, dispatched } = deps()
 
     await executeDesktopBrowserBridgeRequest(
@@ -240,8 +240,6 @@ describe('executeDesktopBrowserBridgeRequest', () => {
           page: 'local-page',
           profileId: 'work-profile',
           targetGroupId: 'local-group',
-          split: 'right',
-          splitFromTabId: 'local-tab',
           activate: true,
           navigation: 'caller',
           placement: { kind: 'client', browserHostClientId: 'x' }
@@ -254,6 +252,22 @@ describe('executeDesktopBrowserBridgeRequest', () => {
       url: 'https://example.com',
       worktree: `id:${HOST_WORKSPACE}`
     })
+  })
+
+  it('refuses a split rather than opening a plain tab the host did not ask for', async () => {
+    const { value, dispatched } = deps()
+
+    const outcome = await executeDesktopBrowserBridgeRequest(
+      request({
+        method: 'browser.tabCreate',
+        workspaceId: HOST_WORKSPACE,
+        params: { url: 'https://example.com', worktree: `id:${HOST_WORKSPACE}`, split: 'right' }
+      }),
+      value
+    )
+
+    expect(outcome).toMatchObject({ ok: false, error: { code: 'invalid_argument' } })
+    expect(dispatched).toEqual([])
   })
 
   it('returns the desktop’s own error unchanged and audits the failure', async () => {

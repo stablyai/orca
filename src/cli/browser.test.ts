@@ -300,6 +300,15 @@ describe('orca cli browser page targeting', () => {
     expect(errorSpy).toHaveBeenCalledWith('--split must be right, left, down, or up')
   })
 
+  it('rejects --split with no direction instead of opening a plain tab', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    await main(['tab', 'create', '--split='], '/tmp/not-an-orca-worktree')
+
+    expect(callMock).not.toHaveBeenCalled()
+    expect(errorSpy).toHaveBeenCalledWith('Missing value for --split')
+  })
+
   it('opens browser-launch URLs on the client hosting the current worktree', async () => {
     queueFixtures(
       callMock,

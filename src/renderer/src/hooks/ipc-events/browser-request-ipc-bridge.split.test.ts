@@ -108,6 +108,23 @@ describe('browser tab create with a split pane', () => {
     })
   })
 
+  it("opens in the caller's workspace when the CLI names none", () => {
+    mocks.getState.mockReturnValue({ ...storeState(), activeWorktreeId: 'other-workspace' })
+
+    mocks.createListener?.({
+      requestId: 'r4',
+      url: 'about:blank',
+      split: 'right',
+      splitFromTabId: 'term-1'
+    })
+
+    expect(mocks.createBrowserTab).toHaveBeenCalledWith(
+      WT,
+      'about:blank',
+      expect.objectContaining({ split: expect.objectContaining({ sourceGroupId: 'g-terminal' }) })
+    )
+  })
+
   it('adds a plain tab without --split', () => {
     mocks.createListener?.({ requestId: 'r3', worktreeId: WT, url: 'about:blank' })
 

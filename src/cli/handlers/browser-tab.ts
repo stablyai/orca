@@ -9,6 +9,7 @@ import { formatTabList, formatTabListWithProfiles, formatTabShow, printResult } 
 import {
   getOptionalNonNegativeIntegerFlag,
   getOptionalStringFlag,
+  getPresentStringFlag,
   getRequiredStringFlag
 } from '../flags'
 import { RuntimeClientError } from '../runtime-client'
@@ -64,7 +65,7 @@ export const BROWSER_TAB_HANDLERS: Record<string, CommandHandler> = {
   'tab create': async ({ flags, client, cwd, json }) => {
     const url = getOptionalStringFlag(flags, 'url')
     const profileId = getOptionalStringFlag(flags, 'profile')
-    const split = getOptionalStringFlag(flags, 'split')
+    const split = getPresentStringFlag(flags, 'split')
     if (split !== undefined && !isBrowserTabSplitDirection(split)) {
       throw new RuntimeClientError('invalid_argument', '--split must be right, left, down, or up')
     }
