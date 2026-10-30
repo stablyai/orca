@@ -47,9 +47,11 @@ export function useTabGroupCreationCommands({
   // Why: these stay unmemoized plain lambdas — the original built them inline in the returned commands object.
   return {
     newBrowserTab: () => {
-      void openNewBrowserTabInActiveWorkspace(groupId, undefined, plusPlacement()).catch((error) => {
-        toast.error(error instanceof Error ? error.message : String(error))
-      })
+      void openNewBrowserTabInActiveWorkspace(groupId, undefined, plusPlacement()).catch(
+        (error) => {
+          toast.error(error instanceof Error ? error.message : String(error))
+        }
+      )
     },
     newSimulatorTab: worktreeState.mobileEmulatorEnabled
       ? () => {
