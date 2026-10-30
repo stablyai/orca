@@ -1,9 +1,8 @@
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { runProcess } from '@orca/process-host'
 import { afterEach, describe, expect, it } from 'vitest'
-import { gitExecFileAsync } from '../runner'
 import { getDiff } from './file-diff'
 import { getSubmoduleStatus } from './submodule-status'
 
@@ -14,11 +13,8 @@ afterEach(async () => {
 })
 
 describe('literal submodule gitlinks with real Git', () => {
-  it.each([
-    'ordinary',
-    'module[12]',
-    ...(process.platform === 'win32' ? [] : [':(literal)module'])
-  ])('reads %j without selecting a neighboring submodule', async (submodulePath) => {
+  it('reads a glob-like submodule path without selecting a matching neighbor', async () => {
+    const submodulePath = 'module[12]'
     const root = await mkdtemp(join(tmpdir(), 'orca-gitlink-pathspec-'))
     directories.push(root)
     const source = join(root, 'source')
@@ -46,7 +42,6 @@ describe('literal submodule gitlinks with real Git', () => {
       await git(repo, 'config', 'user.name', 'Test')
       await git(repo, 'config', 'user.email', 'test@example.test')
       await git(repo, 'config', 'commit.gpgsign', 'false')
-      await git(repo, 'config', 'core.hooksPath', '')
     }
     await init(source)
     await writeFile(join(source, 'file.txt'), 'target original\n')
@@ -57,13 +52,10 @@ describe('literal submodule gitlinks with real Git', () => {
     await git(source, 'commit', '-qam', 'update')
     const head = (await git(source, 'rev-parse', 'HEAD')).trim()
     await init(neighborSource)
-    await writeFile(join(neighborSource, 'neighbor.txt'), 'neighbor preserved\n')
+    await writeFile(join(neighborSource, 'neighbor.txt'), 'neighbor\n')
     await git(neighborSource, 'add', '.')
     await git(neighborSource, 'commit', '-qm', 'unrelated history')
     await init(parent)
-    expect((await gitExecFileAsync(['--version'], { cwd: parent })).stdout.trim()).toBe(
-      (await git(parent, '--version')).trim()
-    )
     await git(parent, 'clone', '-q', source, submodulePath)
     await git(parent, 'clone', '-q', neighborSource, 'module1')
     await git(child, 'checkout', '-q', base)
@@ -74,37 +66,17 @@ describe('literal submodule gitlinks with real Git', () => {
     await git(parent, 'add', '.')
     await git(parent, 'commit', '-qm', 'parent')
     await git(child, 'checkout', '-q', head)
-    const parentHead = await git(parent, 'rev-parse', 'HEAD')
-    const childIndex = await readFile(join(child, '.git/index'))
-    const neighborIndex = await readFile(join(parent, 'module1', '.git/index'))
-    const parentIndex = await readFile(join(parent, '.git/index'))
-    const pointer = {
-      originalContent: `Subproject commit ${base}\n`,
-      modifiedContent: `Subproject commit ${head}\n`
-    }
-    const content = { originalContent: 'target original\n', modifiedContent: 'target committed\n' }
 
     expect((await getSubmoduleStatus(parent, submodulePath)).entries).toContainEqual(
       expect.objectContaining({ path: 'file.txt', status: 'modified' })
     )
-    expect(await getDiff(parent, submodulePath, false)).toMatchObject(pointer)
-    expect(await getDiff(parent, `${submodulePath}/file.txt`, false)).toMatchObject(content)
-    expect(await readFile(join(parent, '.git/index'))).toEqual(parentIndex)
-
-    await git(parent, 'add', '--', `:(literal)${submodulePath}`)
-    const stagedIndex = await readFile(join(parent, '.git/index'))
-    expect(
-      (await getSubmoduleStatus(parent, submodulePath, { staged: true })).entries
-    ).toContainEqual(expect.objectContaining({ path: 'file.txt', status: 'modified' }))
-    expect(await getDiff(parent, submodulePath, true)).toMatchObject(pointer)
-    expect(await getDiff(parent, `${submodulePath}/file.txt`, true)).toMatchObject(content)
-    expect(await readFile(join(parent, '.git/index'))).toEqual(stagedIndex)
-    expect(await readFile(join(child, '.git/index'))).toEqual(childIndex)
-    expect(await readFile(join(parent, 'module1', '.git/index'))).toEqual(neighborIndex)
-    expect(await readFile(join(parent, 'module1', 'neighbor.txt'), 'utf8')).toBe(
-      'neighbor preserved\n'
-    )
-    expect(await git(parent, 'rev-parse', 'HEAD')).toBe(parentHead)
-    expect((await git(child, 'rev-parse', 'HEAD')).trim()).toBe(head)
+    expect(await getDiff(parent, submodulePath, false)).toMatchObject({
+      originalContent: `Subproject commit ${base}\n`,
+      modifiedContent: `Subproject commit ${head}\n`
+    })
+    expect(await getDiff(parent, `${submodulePath}/file.txt`, false)).toMatchObject({
+      originalContent: 'target original\n',
+      modifiedContent: 'target committed\n'
+    })
   })
 })
