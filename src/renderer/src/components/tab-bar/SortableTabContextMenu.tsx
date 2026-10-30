@@ -12,7 +12,6 @@ import { translate } from '@/i18n/i18n'
 import { TerminalTabSplitMenuSection } from './TerminalTabSplitMenuSection'
 import { TabSessionSurfaceSwitchMenuItems } from './TabSessionSurfaceSwitchMenuItems'
 import type { NativeChatTabSession } from './tab-session-history-switch'
-import { TAB_CONTEXT_MENU_CONTENT_CLASS } from './tab-context-menu-sizing'
 import { CopyTabIdMenuItem } from './CopyTabIdMenuItem'
 import { CloseSplitPaneMenuItem } from './CloseSplitPaneMenuItem'
 
@@ -140,7 +139,7 @@ export function SortableTabContextMenu({
   const showTerminalViewSwitch = canToggleViewMode && isChatView && onToggleViewMode !== undefined
 
   return (
-    <ContextMenuContent className={TAB_CONTEXT_MENU_CONTENT_CLASS}>
+    <ContextMenuContent className="min-w-[13rem] max-w-[calc(100vw-1rem)] whitespace-nowrap data-[state=open]:animate-none data-[state=closed]:animate-none data-[state=closed]:pointer-events-none">
       <TerminalTabSplitMenuSection
         unifiedTabId={unifiedTabId}
         groupId={groupId}

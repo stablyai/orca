@@ -10,7 +10,6 @@ import { PanelBottomClose, PanelRightClose, SquareTerminal } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
 import { TabWorkspaceLayoutMenuSection } from './TabWorkspaceLayoutMenuSection'
 import { requestActiveTerminalPaneSplit } from './request-active-terminal-pane-split'
-import { TAB_CONTEXT_SUBMENU_CONTENT_CLASS } from './tab-context-menu-sizing'
 import { cn } from '@/lib/utils'
 
 export function TerminalTabSplitMenuSection({
@@ -53,7 +52,12 @@ export function TerminalTabSplitMenuSection({
               'Split terminal'
             )}
           </ContextMenuSubTrigger>
-          <ContextMenuSubContent className={cn('min-w-[12rem]', TAB_CONTEXT_SUBMENU_CONTENT_CLASS)}>
+          <ContextMenuSubContent
+            className={cn(
+              'min-w-[12rem]',
+              'max-w-[calc(100vw-1rem)] whitespace-nowrap data-[state=open]:animate-none data-[state=closed]:animate-none data-[state=closed]:pointer-events-none'
+            )}
+          >
             <ContextMenuItem onSelect={() => splitActiveTerminalPane('vertical')}>
               <PanelRightClose className="size-3.5 shrink-0" />
               {translate(

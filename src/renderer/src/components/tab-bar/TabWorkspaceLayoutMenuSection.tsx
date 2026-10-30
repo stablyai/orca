@@ -10,7 +10,6 @@ import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Columns2 } from 'lucide-reac
 import type { TabSplitDirection } from '../../store/slices/tabs'
 import { translate } from '@/i18n/i18n'
 import { canMoveTabToNewPaneColumn, moveTabToNewPaneColumn } from './tab-move-to-pane-column'
-import { TAB_CONTEXT_SUBMENU_CONTENT_CLASS } from './tab-context-menu-sizing'
 
 const PANE_COLUMN_DIRECTIONS: TabSplitDirection[] = ['right', 'left', 'down', 'up']
 
@@ -68,7 +67,7 @@ export function TabWorkspaceLayoutMenuSection({
             'Move Tab to Split'
           )}
         </ContextMenuSubTrigger>
-        <ContextMenuSubContent className={TAB_CONTEXT_SUBMENU_CONTENT_CLASS}>
+        <ContextMenuSubContent className="max-w-[calc(100vw-1rem)] whitespace-nowrap data-[state=open]:animate-none data-[state=closed]:animate-none data-[state=closed]:pointer-events-none">
           {PANE_COLUMN_DIRECTIONS.map((direction) => (
             <ContextMenuItem
               key={direction}
