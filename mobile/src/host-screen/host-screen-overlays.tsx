@@ -178,7 +178,7 @@ export function HostScreenOverlays({ controller }: { controller: HostScreenContr
         <OrcaHookTrustDrawer
           visible={actions.archiveTrustRequest != null}
           prompt={actions.archiveTrustRequest?.prompt ?? null}
-          busy={actions.archiveTrustBusy}
+          busy={false}
           onRunOnce={() => void actions.approveArchiveTrust(false)}
           onAlwaysTrust={() => void actions.approveArchiveTrust(true)}
           onDontRun={actions.skipArchiveHook}

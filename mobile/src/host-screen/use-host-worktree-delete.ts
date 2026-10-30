@@ -38,7 +38,7 @@ export type ArchiveHookFailure = RowClients & { item: Worktree; message: string 
 
 // Desktop's ensureHooksConfirmed('archive'): a script that cannot be inspected or checked against trust does not run.
 async function decideArchiveHookRun(
-  args: RowClients & { repos: readonly { id: string }[]; item: Worktree }
+  args: RowClients & { repos: readonly { id: string }[] | null; item: Worktree }
 ): Promise<ArchiveHookDecision> {
   const { repoId } = args.item
   try {
@@ -60,7 +60,10 @@ async function decideArchiveHookRun(
       return { kind: 'skip' }
     }
     const trust = ui.value?.trustedOrcaHooks ?? {}
-    if (isOrcaHookTrusted(trust, args.repos, repoId, 'archive', archiveTrust.contentHash)) {
+    const trusted = args.repos
+      ? isOrcaHookTrusted(trust, args.repos, repoId, 'archive', archiveTrust.contentHash)
+      : trust[repoId]?.archive?.contentHash === archiveTrust.contentHash
+    if (trusted) {
       return { kind: 'run' }
     }
     return {
@@ -97,7 +100,6 @@ export function useHostWorktreeDelete(args: {
     archiveTrustRequestRef.current = request
     setArchiveTrustRequestState(request)
   }, [])
-  const [archiveTrustBusy, setArchiveTrustBusy] = useState(false)
   const [archiveHookFailure, setArchiveHookFailure] = useState<ArchiveHookFailure | null>(null)
 
   const hideRow = useCallback((item: Worktree) => {
@@ -162,7 +164,8 @@ export function useHostWorktreeDelete(args: {
       )
       const decision = await decideArchiveHookRun({
         ...clients,
-        repos: [...desktopRepos, ...serverRepos.values()],
+        // Without the desktop's catalog a same-id repo elsewhere can't be ruled out, so only an exact-script approval counts.
+        repos: desktopRepos.length > 0 ? [...desktopRepos, ...serverRepos.values()] : null,
         item
       })
       if (decision.kind !== 'ask') {
@@ -195,13 +198,19 @@ export function useHostWorktreeDelete(args: {
     [client, clientForRow, deleteWithArchiveTrust]
   )
 
+  // Taken synchronously so a second tap on the drawer finds nothing to act on.
+  const takeArchiveTrustRequest = useCallback(() => {
+    const request = archiveTrustRequestRef.current
+    setArchiveTrustRequest(null)
+    return request
+  }, [setArchiveTrustRequest])
+
   const approveArchiveTrust = useCallback(
     async (alwaysTrust: boolean) => {
-      const request = archiveTrustRequest
-      if (!request || archiveTrustBusy) {
+      const request = takeArchiveTrustRequest()
+      if (!request) {
         return
       }
-      setArchiveTrustBusy(true)
       try {
         await persistOrcaHookTrustApproval({
           client: request.desktopClient,
@@ -215,37 +224,25 @@ export function useHostWorktreeDelete(args: {
         restoreRow(request.item)
         setActionError(error instanceof Error ? error.message : 'Failed to trust archive script.')
         return
-      } finally {
-        setArchiveTrustBusy(false)
-        setArchiveTrustRequest(null)
       }
       await removeWorktree(request.item, request, { runHooks: true, ...request.waiver })
     },
-    [
-      archiveTrustBusy,
-      archiveTrustRequest,
-      removeWorktree,
-      restoreRow,
-      setActionError,
-      setArchiveTrustRequest
-    ]
+    [removeWorktree, restoreRow, setActionError, takeArchiveTrustRequest]
   )
 
   const skipArchiveHook = useCallback(() => {
-    const request = archiveTrustRequest
-    if (!request || archiveTrustBusy) {
-      return
+    const request = takeArchiveTrustRequest()
+    if (request) {
+      void removeWorktree(request.item, request, { runHooks: false })
     }
-    setArchiveTrustRequest(null)
-    void removeWorktree(request.item, request, { runHooks: false })
-  }, [archiveTrustBusy, archiveTrustRequest, removeWorktree, setArchiveTrustRequest])
+  }, [removeWorktree, takeArchiveTrustRequest])
 
   const cancelArchiveTrust = useCallback(() => {
-    if (archiveTrustRequest && !archiveTrustBusy) {
-      restoreRow(archiveTrustRequest.item)
-      setArchiveTrustRequest(null)
+    const request = takeArchiveTrustRequest()
+    if (request) {
+      restoreRow(request.item)
     }
-  }, [archiveTrustBusy, archiveTrustRequest, restoreRow, setArchiveTrustRequest])
+  }, [restoreRow, takeArchiveTrustRequest])
 
   // Desktop's Delete Anyway: rerun the trusted hook with an explicit waiver for its failure.
   const deleteDespiteArchiveHookFailure = useCallback(() => {
@@ -260,7 +257,6 @@ export function useHostWorktreeDelete(args: {
 
   return {
     archiveHookFailure,
-    archiveTrustBusy,
     archiveTrustRequest,
     approveArchiveTrust,
     cancelArchiveTrust,
