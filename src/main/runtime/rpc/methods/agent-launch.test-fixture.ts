@@ -1,4 +1,3 @@
-import { noteAgentLaunchPaneAccepted } from '../../../agent-launch/agent-launch-pane-attachment'
 /** Use one runtime stub for RPC and replay tests so they exercise the same host surface. */
 
 import { vi } from 'vitest'
@@ -166,7 +165,6 @@ export function runtimeStub(options: AgentLaunchRuntimeStubOptions = {}) {
       (request: Omit<AgentLaunchTabPublishRequest, 'requestId'>) =>
         options.publishAgentLaunchTab?.(request) ?? null
     ),
-    noteAcceptedAgentLaunchPane: vi.fn((paneKey: string) => noteAgentLaunchPaneAccepted(paneKey)),
     reportAgentLaunchPaneVerdict: vi.fn(
       (_pane: { worktreeId: string; tabId: string; leafId: string }, _verdict: unknown) => {}
     ),
@@ -205,30 +203,4 @@ export const CAPABLE_CLIENT: Partial<RpcContext> = {
   clientKind: 'mobile',
   pairedDeviceId: 'device-1',
   clientCapabilities: [AGENT_LAUNCH_RUNTIME_CAPABILITY]
-}
-
-export function terminalOptions(runtime: AgentLaunchRuntimeStub): Record<string, unknown> {
-  return runtime.createTerminal.mock.calls[0]?.[1] ?? {}
-}
-
-/** The record not open yet when the request arrives, as on the first launch after a restart. */
-export function coldRecord<T extends AgentLaunchRuntimeStub>(runtime: T): T {
-  runtime.openedAgentSessionRecordStore.mockReturnValueOnce(null)
-  return runtime
-}
-
-/** A spawn that fails before the daemon was asked for a process: nothing can be running. */
-export function failBeforeDispatch(runtime: AgentLaunchRuntimeStub, message: string): void {
-  runtime.createTerminal.mockRejectedValueOnce(new Error(message))
-}
-
-/** A spawn the daemon was asked for, whose answer was lost: the process may exist. */
-export function failAfterDispatch(runtime: AgentLaunchRuntimeStub, message: string): void {
-  runtime.createTerminal.mockImplementationOnce(async (_selector, createOptions) => {
-    const dispatched = createOptions?.onPtySpawnDispatched
-    if (typeof dispatched === 'function') {
-      dispatched()
-    }
-    throw new Error(message)
-  })
 }

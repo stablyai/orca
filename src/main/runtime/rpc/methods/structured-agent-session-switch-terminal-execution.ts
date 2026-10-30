@@ -3,10 +3,10 @@ import type { AgentSessionRecord } from '../../../../shared/agent-session-record
 import type { StructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-host'
 import type { z } from 'zod'
 import type { RpcContext } from '../core'
-import { agentLaunchTabViewerRule } from './agent-launch-tab-publication'
+import { agentLaunchMovesHostWindow } from './agent-launch-tab-publication'
 import { SwitchToTerminalParams } from './structured-agent-session-schemas'
 import type {
-  agentSessionSwitchDeadline,
+  AgentSessionSwitchDeadline,
   AgentSessionSwitchResult
 } from '../../../../shared/agent-session-switch-execution'
 import { agentSessionRefusalError } from '../../../../shared/agent-session-wire-refusals'
@@ -16,15 +16,14 @@ import {
   resolveStructuredChatCliSource
 } from '../../../ai-vault/structured-chat-cli-fork'
 
+/** Stop the chat with proof, spawn the terminal parked, then one layout replace into the chat's slot. */
 export async function executeStructuredSessionTerminalSwitch(
   params: z.infer<typeof SwitchToTerminalParams>,
   record: AgentSessionRecord,
   ctx: RpcContext,
   host: StructuredAgentSessionHost,
   sessionId: string,
-  deadline: ReturnType<typeof agentSessionSwitchDeadline>,
-  execution: NonNullable<z.infer<typeof SwitchToTerminalParams>['execution']>,
-  selectionCurrent: (consume?: boolean) => boolean
+  deadline: AgentSessionSwitchDeadline
 ): Promise<AgentSessionSwitchResult> {
   const agent = record.provider
   if (!isTuiAgent(agent)) {
@@ -32,32 +31,23 @@ export async function executeStructuredSessionTerminalSwitch(
       reason: 'hostUnsupported'
     })
   }
-  const terminalExecution = SwitchToTerminalParams.parse(params).execution
-  const sourceTabId = terminalExecution?.sourceTabId
-  let workCurrent = () => false
-  const retire = ctx.runtime.captureSessionSwitchRetirement(
-    record.location.workspaceId,
-    sessionId,
-    sourceTabId,
-    () => workCurrent(),
-    () => host.retainSwitch(sessionId),
-    {
-      invocationId: execution.invocationId,
-      generation: host.switchGeneration(sessionId)!,
-      sessionId,
-      tabId: sourceTabId ?? `agent-session:${sessionId}`,
-      phase: 'prepare'
-    }
-  )
-  workCurrent = await host.stopForSwitch(
+  const execution = SwitchToTerminalParams.parse(params).execution
+  const workCurrent = await host.stopForSwitch(
     sessionId,
     { callerKey: 'trusted-local:session-switch' },
     deadline
   )
   host.guardSwitchWork(sessionId, workCurrent)
-  const snapshot = await host.journalSnapshot(sessionId)
-  deadline.check()
-  const content = nativeConversationContent(snapshot)
+  const check = () => {
+    deadline.check()
+    if (!workCurrent()) {
+      throw agentSessionRefusalError('agent_session_operation_invalid', {
+        reason: 'messagesUnsettled'
+      })
+    }
+  }
+  const content = nativeConversationContent(await host.journalSnapshot(sessionId))
+  check()
   if (content === 'uncertain') {
     throw agentSessionRefusalError('agent_session_operation_invalid', {
       reason: 'messagesUnsettled'
@@ -74,74 +64,37 @@ export async function executeStructuredSessionTerminalSwitch(
           false
         )
       : undefined
-  deadline.check()
+  check()
   if (content === 'saved' && !prepared?.cliForkSource) {
     throw agentSessionRefusalError('agent_session_identity_required', {
       reason: 'transcriptNotFound'
     })
   }
-  deadline.check()
-  const placement = retire.placement() ?? {
-    afterTabId: sourceTabId,
-    groupId: terminalExecution?.groupId
-  }
-  const terminal = await ctx.runtime.createSessionSwitchTerminal(record.location.workspaceId, {
-    invocationId: execution.invocationId,
+  // Parked: bound to a pane no layout shows yet. A lost reply is answered by re-issuing this same
+  // create, which adopts the running terminal through the conversation's claim.
+  const terminal = await host.trackSwitchPhysical(
     sessionId,
-    agent,
-    source: prepared?.cliForkSource,
-    commandOverride: terminalExecution?.commandOverride,
-    options: record.options,
-    afterTabId: sourceTabId,
-    groupId: terminalExecution?.groupId,
-    execution: {
-      invocationId: execution.invocationId,
-      openPlacement: {
-        invocationId: execution.invocationId,
-        generation: host.switchGeneration(sessionId)!,
-        placement,
-        activate: true,
-        viewerSelection: execution.viewerSelection
-      },
-      signal: deadline.signal,
-      trackPhysical: (work, recover) => host.trackSwitchPhysical(sessionId, work, recover),
-      remaining: deadline.remaining,
-      check: () => {
-        deadline.check()
-        if (!workCurrent()) {
-          throw agentSessionRefusalError('agent_session_operation_invalid', {
-            reason: 'messagesUnsettled'
-          })
-        }
-      },
-      selectionCurrent,
-      viewerSelection: execution.viewerSelection,
-      viewer: agentLaunchTabViewerRule(ctx, 'focused')
-    }
+    ctx.runtime.spawnSwitchTerminal(record.location.workspaceId, {
+      agent,
+      source: prepared?.cliForkSource,
+      commandOverride: execution?.commandOverride,
+      options: record.options,
+      signal: deadline.signal
+    })
+  )
+  check()
+  const placed = await ctx.runtime.placeSwitchTerminal(record.location.workspaceId, {
+    terminal,
+    chatSessionId: sessionId,
+    windowTabId: execution?.sourceTabId,
+    activate: true,
+    focusWindow: agentLaunchMovesHostWindow(ctx)
   })
-  if (terminal.agentResumeRefused || terminal.agentResumeUnavailable) {
-    return {
-      status: 'refused',
-      sessionId,
-      refusal: agentSessionRefusalError('agent_session_operation_unknown', {
-        reason: 'outcomeUnknown'
-      }).refusal
-    }
-  }
-  if (terminal.switchOutcomeUnknown) {
-    return {
-      status: 'uncertain',
-      sessionId,
-      refusal: agentSessionRefusalError('agent_session_operation_unknown', {
-        reason: 'outcomeUnknown'
-      }).refusal
-    }
-  }
-  const retired = await retire()
+  await host.setSessionTabVisibility(sessionId, false)
   return {
     status: 'completed',
     sessionId,
-    terminal: terminal.tab.id,
-    sourceRetained: Boolean(sourceTabId && !retired)
+    terminal: placed.tabId,
+    sourceRetained: !placed.replaced
   }
 }

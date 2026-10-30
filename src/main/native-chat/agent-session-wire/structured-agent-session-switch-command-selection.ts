@@ -17,11 +17,8 @@ export type SwitchCommand = {
   settled: boolean
   result?: AgentSessionSwitchResult
   deadline: AgentSessionSwitchDeadline
-  retain: () => Promise<void>
-  retentionAllowed: boolean
   completion: Promise<AgentSessionSwitchResult>
   physical?: Promise<void>
-  physicalRecovery?: Set<() => Promise<void>>
   cleanupTimer?: ReturnType<typeof setTimeout>
 }
 
@@ -35,14 +32,12 @@ export function selectStructuredSessionSwitchCommand(args: {
   direction: SwitchCommand['direction']
   deadline: AgentSessionSwitchDeadline
   run: () => Promise<AgentSessionSwitchResult>
-  onRetained?: (check: () => void) => Promise<void>
   allowUncreated?: boolean
   conversationKey?: string
   destinationCurrent?: (result: AgentSessionSwitchResult) => boolean | undefined
   onAccepted?: () => void
 }): SwitchCommand {
-  const { host, commands, isDisposed, id, invocationId, direction, deadline, run, onRetained } =
-    args
+  const { host, commands, isDisposed, id, invocationId, direction, deadline, run } = args
   const { sessions, serialize } = host
   deadline.check()
   const prior =
@@ -80,7 +75,6 @@ export function selectStructuredSessionSwitchCommand(args: {
         reason: 'handoffInFlight'
       })
     }
-    prior.retentionAllowed = false
     clearTimeout(prior.cleanupTimer)
     prior.deadline.revoke()
     for (const [alias, current] of commands) {
@@ -99,18 +93,6 @@ export function selectStructuredSessionSwitchCommand(args: {
     direction,
     settled: false,
     deadline,
-    retentionAllowed: true,
-    retain: async () => {
-      const check = () => {
-        if (!command.retentionAllowed || commands.get(id) !== command) {
-          throw agentSessionRefusalError('agent_session_operation_expired', {
-            reason: 'operationExpired'
-          })
-        }
-      }
-      check()
-      await onRetained?.(check)
-    },
     completion: Promise.resolve().then(async () => {
       if (host.context().deps.store.getRecord(id)) {
         await serialize(id, async () => {
@@ -122,27 +104,15 @@ export function selectStructuredSessionSwitchCommand(args: {
           }
         })
       }
-      try {
-        const result = await run()
-        command.result = result
-        if (result.status !== 'completed') {
-          await command.retain()
-        }
-        return result
-      } catch (error) {
-        await command.retain().catch(() => {})
-        throw error
-      }
+      const result = await run()
+      command.result = result
+      return result
     })
   }
   commands.set(id, command)
   if (args.conversationKey) {
     commands.set(args.conversationKey, command)
   }
-  const retainOnExpiry = () => {
-    void command.retain().catch(() => {})
-  }
-  deadline.signal.addEventListener('abort', retainOnExpiry, { once: true })
   const session = sessions.get(id)
   if (session) {
     session.switchCommand = command
@@ -153,7 +123,6 @@ export function selectStructuredSessionSwitchCommand(args: {
       await command.physical
       command.settled = true
       deadline.dispose()
-      deadline.signal.removeEventListener('abort', retainOnExpiry)
       for (const [key, current] of commands) {
         if (current === command && sessions.get(key)?.switchCommand === command) {
           delete sessions.get(key)!.switchCommand
@@ -165,7 +134,6 @@ export function selectStructuredSessionSwitchCommand(args: {
       }
       command.cleanupTimer = setTimeout(
         () => {
-          command.retentionAllowed = false
           for (const [key, current] of commands) {
             if (current === command) {
               commands.delete(key)

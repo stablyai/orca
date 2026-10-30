@@ -24,16 +24,6 @@ function assertUniqueRuntimeGraphTabIds(tabs: readonly RuntimeSyncedTab[]): void
 }
 
 export abstract class OrcaRuntimeWithSyncWindowGraph extends OrcaRuntimeWithAttachWindow {
-  private switchProjectionViewer: { windowId: number; generation: string | undefined } | undefined
-
-  supportsConditionalSwitchProjection(): boolean {
-    return (
-      this.graphStatus === 'ready' &&
-      this.switchProjectionViewer?.windowId === this.authoritativeWindowId &&
-      this.switchProjectionViewer?.generation === this.rendererGeneration
-    )
-  }
-
   /** Layout-owner builds: main's panes in place of the window's (session-tabs-inventory.ts). */
   protected abstract withMainSurfaces(windowId: number, graph: Graph): Graph
   declare protected terminalGroupGridSizes?: RuntimeSyncWindowGraph['terminalGroupGridSizes']
@@ -96,10 +86,6 @@ export abstract class OrcaRuntimeWithSyncWindowGraph extends OrcaRuntimeWithAtta
       this.servesHeadlessGraph = true
       this.rendererGeneration = null
     }
-    this.switchProjectionViewer =
-      graph.conditionalSwitchProjection === 1
-        ? { windowId, generation: rendererGeneration ?? undefined }
-        : undefined
     graph = ORCA_LAYOUT_OWNER_IS_MAIN ? this.withMainSurfaces(windowId, graph) : graph
 
     if (graph.terminalGroupGridSizes) {

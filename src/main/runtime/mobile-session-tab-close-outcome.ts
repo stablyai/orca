@@ -50,10 +50,18 @@ export function refusedMobileSessionTabClose(
   } as MobileSessionTabCloseOutcome
 }
 
+/** What retiring one terminal pane may carry: its captured presentation and proofs. */
+export type TerminalPaneRetirementOptions = Pick<
+  MobileSessionTabCloseOptions,
+  'originalPresentation' | 'rendererOwnsPresentation' | 'retirementProofs' | 'presentationRetired'
+>
+
 export type MobileSessionTabCloseOptions = {
   originalPresentation?: TerminalSurfaceCloseCapture
   rendererOwnsPresentation?: boolean
   retirementProofs?: RuntimeMobileSessionRetiredTerminalSurface[]
+  /** The pane's presentation is already gone (a replace's write or its own exit); retire only its bookkeeping. */
+  presentationRetired?: boolean
   reason?: RuntimeSessionTabCloseReason
   expectedPublicationEpoch?: string
   expectedTerminalHandle?: string

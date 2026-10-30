@@ -27,9 +27,9 @@ import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import { savedSessionId } from '../saved-structured-agent-session-restoration'
 import { structuredSessionTabRetired } from '../structured-worker-custody'
 import type { StructuredAgentId } from '../../../shared/agent-session-provider-handle'
-import { OrcaRuntimeWithStructuredSessionSwitchProjection } from './structured-session-switch-projection'
+import { OrcaRuntimeWithChatTabLayoutQueue } from './chat-tab-layout-queue-owner'
 
-export abstract class OrcaRuntimeWithCloseStructuredAgentSessionTab extends OrcaRuntimeWithStructuredSessionSwitchProjection {
+export abstract class OrcaRuntimeWithCloseStructuredAgentSessionTab extends OrcaRuntimeWithChatTabLayoutQueue {
   protected abstract isHeadlessOwnedMobileBrowserTab(
     ...args: Parameters<BrowserOwnership['isHeadlessOwnedMobileBrowserTab']>
   ): ReturnType<BrowserOwnership['isHeadlessOwnedMobileBrowserTab']>

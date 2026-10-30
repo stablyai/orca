@@ -1,8 +1,5 @@
-import {
-  isSessionTabSelectionRequest,
-  placeCreatedSessionTab
-} from '../../../../shared/session-tab-placement'
-import { captureMobileTerminalCreatePlacement } from './mobile-terminal-create-anchor'
+import { placeCreatedSessionTab } from '../../../../shared/session-tab-placement'
+import { insertTabIdIntoOrder } from '../../../../shared/workspace-layout/tab-order'
 import { OrcaRuntimeWithReconcileOwnedMobileTerminal } from './mobile-terminal-create-reconciliation'
 import type {
   RuntimeMobileSessionCreateTerminalResult,
@@ -20,7 +17,6 @@ import { deriveRemoteRuntimeTerminalCreateHandle } from '../../remote-runtime-te
 import type { OrcaRuntimeWithBuildPtyTerminalSummary as PtyTerminalSummaryMethods } from '../query/pty-terminal-summary'
 import {
   buildHeadlessMobileSessionTabGroups,
-  placeHeadlessSessionTabAtCapture,
   buildMaterializedHeadlessParentLayout,
   getHeadlessMobileSessionGroupId
 } from '../../mobile-session-layout-projection'
@@ -63,15 +59,8 @@ export abstract class OrcaRuntimeWithCreateRuntimeOwnedMobileSessionTerminal ext
     const create = (preAllocatedHandle?: string) =>
       this.createTerminal(`id:${worktreeId}`, {
         focus: false,
-        ...(opts.switchExecution
-          ? { presentation: 'background' as const, agentLaunchViewer: () => 'none' as const }
-          : opts.presentation
-            ? { presentation: opts.presentation }
-            : {}),
+        ...(opts.presentation ? { presentation: opts.presentation } : {}),
         ...(opts.afterDesktopTabId ? { afterTabId: opts.afterDesktopTabId } : {}),
-        beforePtySpawn: opts.beforePtySpawn,
-        switchExecution: opts.switchExecution,
-        ...(opts.keepPaneOnStartFailure ? { keepPaneOnStartFailure: true as const } : {}),
         onPtySpawnDispatched: (launch) => {
           if (mutationHandle && launch) {
             recordOwnedMobileTerminalDispatchRecipe(
@@ -119,13 +108,6 @@ export abstract class OrcaRuntimeWithCreateRuntimeOwnedMobileSessionTerminal ext
         ...(opts.refuseSleptWorktree ? { refuseSleptWorktree: true } : {}),
         ...(opts.resumesSleepingRecord ? { resumesSleepingRecord: true } : {})
       })
-    const beforeCreate = this.mobileSessionTabsByWorktree.get(worktreeId)
-    const { sourceGroup, capturedOrder, capturedTabs } = captureMobileTerminalCreatePlacement(
-      beforeCreate,
-      afterTabId,
-      opts.afterDesktopTabId
-    )
-    let targetGroupId = opts.targetGroupId ?? sourceGroup?.id
     const terminal = opts.createMutation
       ? await this.dedupeTerminalCreate(
           opts.createMutation.clientIdentity,
@@ -174,9 +156,6 @@ export abstract class OrcaRuntimeWithCreateRuntimeOwnedMobileSessionTerminal ext
           candidate.parentTabId === parentTabId &&
           candidate.leafId === leafId
       ) ?? null
-    if (existingSurface) {
-      targetGroupId = existing?.tabGroups?.find((group) => group.tabOrder.includes(parentTabId))?.id
-    }
     const parentLayout = buildMaterializedHeadlessParentLayout(
       leafId,
       livePty.pty.ptyId,
@@ -187,34 +166,14 @@ export abstract class OrcaRuntimeWithCreateRuntimeOwnedMobileSessionTerminal ext
       existingSurface?.customTitle !== undefined
         ? existingSurface.customTitle
         : this.getPtyManualTitle(livePty.pty, false) || undefined
-    const viewerRequest = isSessionTabSelectionRequest(opts.switchExecution?.viewerSelection)
-    const publishActivate = opts.switchExecution?.openPlacement?.activate ?? activate
-    activate = activate && !viewerRequest && (opts.switchExecution?.selectionCurrent?.() ?? true)
     const tab: RuntimeMobileSessionTerminalTab = {
       type: 'terminal',
-      ...(existingSurface?.openPlacement
-        ? {
-            openPlacement: {
-              ...existingSurface.openPlacement,
-              activate:
-                existingSurface.openPlacement.activate &&
-                (viewerRequest ? publishActivate : activate)
-            }
-          }
-        : opts.switchExecution?.openPlacement
-          ? {
-              openPlacement: {
-                ...opts.switchExecution.openPlacement,
-                activate: viewerRequest ? publishActivate : activate
-              }
-            }
-          : {}),
       id: `${parentTabId}::${leafId}`,
       parentTabId,
       leafId,
       ptyId: livePty.pty.ptyId,
       incarnationId: livePty.pty.incarnationId,
-      title: existingSurface?.title ?? terminal.title ?? livePty.pty.title ?? 'Terminal',
+      title: terminal.title ?? livePty.pty.title ?? 'Terminal',
       ...(customTitle !== undefined ? { customTitle } : {}),
       // Omit only a proven root correction; an unverifiable fallback keeps its saved request.
       ...((terminal.savedStartupCwd ?? cwd) && (terminal.savedStartupCwd ?? cwd) !== workspace.path
@@ -225,34 +184,42 @@ export abstract class OrcaRuntimeWithCreateRuntimeOwnedMobileSessionTerminal ext
         ? { viewMode: opts.viewMode }
         : {}),
       parentLayout,
-      isActive: activate || (existingSurface?.isActive ?? false)
+      isActive: activate
     }
-    const currentTabs = (existing?.tabs ?? []).map((candidate) => ({
-      ...candidate,
-      ...(candidate.type === 'terminal' && candidate.parentTabId === parentTabId
-        ? { parentLayout }
-        : {}),
-      isActive: activate ? false : candidate.isActive
-    }))
-    const tabs = existingSurface
-      ? currentTabs.map((candidate) => (candidate.id === tab.id ? tab : candidate))
-      : placeCreatedSessionTab(currentTabs, tab, afterTabId, {
-          afterParentGroup: opts.supportsSplitGroupPlacement !== false,
-          captured: capturedTabs
-        })
+    const tabs = placeCreatedSessionTab(
+      (existing?.tabs ?? []).map((candidate) => ({
+        ...candidate,
+        ...(candidate.type === 'terminal' && candidate.parentTabId === parentTabId
+          ? { parentLayout }
+          : {}),
+        isActive: activate ? false : candidate.isActive
+      })),
+      tab,
+      afterTabId,
+      { afterParentGroup: opts.supportsSplitGroupPlacement !== false }
+    )
     const tabGroups = buildHeadlessMobileSessionTabGroups(
       worktreeId,
       tabs,
       activate ? tab : null,
       existing?.tabGroups,
-      targetGroupId ? { tabId: parentTabId, groupId: targetGroupId } : undefined
+      opts.targetGroupId ? { tabId: parentTabId, groupId: opts.targetGroupId } : undefined
     )
-    if (
-      !existingSurface &&
-      capturedOrder &&
-      (!opts.targetGroupId || opts.targetGroupId === sourceGroup?.id)
-    ) {
-      placeHeadlessSessionTabAtCapture(tabGroups, tabs, parentTabId, capturedOrder)
+    if (opts.afterDesktopTabId) {
+      const group = tabGroups.find((candidate) => candidate.tabOrder.includes(parentTabId))
+      if (group?.tabOrder.includes(opts.afterDesktopTabId)) {
+        const topLevelTabs = tabs.map((candidate) => ({
+          id: candidate.type === 'terminal' ? candidate.parentTabId : candidate.id,
+          isPinned: candidate.isPinned === true
+        }))
+        group.tabOrder = insertTabIdIntoOrder(
+          group.tabOrder,
+          topLevelTabs,
+          parentTabId,
+          tab.isPinned === true,
+          opts.afterDesktopTabId
+        )
+      }
     }
     const next: RuntimeMobileSessionTabsSnapshot = {
       worktree: worktreeId,
@@ -261,8 +228,8 @@ export abstract class OrcaRuntimeWithCreateRuntimeOwnedMobileSessionTerminal ext
       snapshotVersion: (existing?.snapshotVersion ?? 0) + 1,
       // Activating the new tab must also focus its requested split group.
       activeGroupId:
-        activate && targetGroupId && tabGroups.some((group) => group.id === targetGroupId)
-          ? targetGroupId
+        activate && opts.targetGroupId
+          ? opts.targetGroupId
           : (existing?.activeGroupId ?? getHeadlessMobileSessionGroupId(worktreeId)),
       activeTabId: activate ? tab.id : (existing?.activeTabId ?? null),
       activeTabType: activate ? 'terminal' : (existing?.activeTabType ?? null),
@@ -272,14 +239,7 @@ export abstract class OrcaRuntimeWithCreateRuntimeOwnedMobileSessionTerminal ext
       tabs
     }
     // Store adds retirement proofs; emit that snapshot because version-deduping subscribers would miss proofs from a pre-store frame.
-    if (activate) {
-      opts.switchExecution?.check()
-      opts.switchExecution?.selectionCurrent?.(true)
-    }
     const stored = this.storeMobileSessionSnapshot(worktreeId, next)
-    if (opts.switchExecution?.openPlacement) {
-      this.markPaneLiveTitlesDirty()
-    }
     const result = this.toMobileSessionTabsResult(stored)
     const changeSequence = ++this.mobileSessionTabsChangeSequence
     for (const subscription of this.mobileSessionTabListeners) {
@@ -297,7 +257,6 @@ export abstract class OrcaRuntimeWithCreateRuntimeOwnedMobileSessionTerminal ext
     }
     return {
       tab: created,
-      ...(terminal.switchOutcomeUnknown ? { switchOutcomeUnknown: true as const } : {}),
       ...(terminal.agentResumeUnavailable ? { agentResumeUnavailable: true as const } : {}),
       ...(terminal.agentResumeRefused ? { agentResumeRefused: true as const } : {}),
       publicationEpoch: result.publicationEpoch,

@@ -19,12 +19,7 @@ import type { PtyControllerInventory } from '../../runtime-pty-controller-contra
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import { markAgentLaunchesClosedByUser } from '../../../agent-launch/agent-launch-pane-attachment'
 
-import type { MobileSessionTabCloseOptions } from '../../mobile-session-tab-close-outcome'
-
-type TerminalPaneRetirementOptions = Pick<
-  MobileSessionTabCloseOptions,
-  'originalPresentation' | 'rendererOwnsPresentation' | 'retirementProofs'
->
+import type { TerminalPaneRetirementOptions } from '../../mobile-session-tab-close-outcome'
 
 export abstract class OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs extends OrcaRuntimeWithTerminalSurfaceCloseCommit {
   protected abstract getRendererOwnedBrowserPageIds(
@@ -123,6 +118,7 @@ export abstract class OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs exten
     }
     if (
       options.originalPresentation &&
+      !options.presentationRetired &&
       (options.rendererOwnsPresentation || windowListsTab(this, this.tabs, target.tabId))
     ) {
       if (!this.notifier?.closeTerminalTab) {
@@ -138,7 +134,9 @@ export abstract class OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs exten
       markAgentLaunchesClosedByUser(worktreeId, target)
     }
     try {
-      if (ORCA_LAYOUT_OWNER_IS_MAIN && options.originalPresentation) {
+      if (options.presentationRetired && ORCA_LAYOUT_OWNER_IS_MAIN) {
+        closedTab = true
+      } else if (ORCA_LAYOUT_OWNER_IS_MAIN && options.originalPresentation) {
         const reply = await this.applyLayoutCommand(
           {
             type: 'closePane',

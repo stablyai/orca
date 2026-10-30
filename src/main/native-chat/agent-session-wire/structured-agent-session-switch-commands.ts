@@ -32,7 +32,6 @@ export function createStructuredAgentSessionSwitchCommands(
         options: {
           conversationKey?: string
           direction: SwitchCommand['direction']
-          onRetained?: (check: () => void) => Promise<void>
           allowUncreated?: boolean
           destinationCurrent?: (result: AgentSessionSwitchResult) => boolean | undefined
           onAccepted?: () => void
@@ -60,15 +59,7 @@ export function createStructuredAgentSessionSwitchCommands(
         if (selected.deadline !== deadline) {
           deadline.dispose()
         }
-        try {
-          return await selected.completion
-        } catch (error) {
-          // Each ordinary retry drives the original receiver join, never another Stop/create.
-          void Promise.all(
-            [...(selected.physicalRecovery ?? [])].map((recover) => recover())
-          ).catch(() => {})
-          throw error
-        }
+        return selected.completion
       },
       adoptSwitch: (from: string, to: string) =>
         host.serialize(to, async () => {
@@ -89,30 +80,17 @@ export function createStructuredAgentSessionSwitchCommands(
         }
       },
       switchGeneration: (id: string) => commands.get(id)?.generation,
-      retainSwitch: async (id: string) => {
-        await commands.get(id)?.retain()
-      },
       switchExecuting: (id: string) => Boolean(commands.get(id) && !commands.get(id)?.settled),
-      trackSwitchPhysical: <T>(
-        id: string,
-        work: Promise<T>,
-        recover?: () => Promise<void>
-      ): Promise<T> => {
+      /** Stop and spawn work already dispatched settles even when the observing request expired. */
+      trackSwitchPhysical: <T>(id: string, work: Promise<T>): Promise<T> => {
         const command = commands.get(id)
         if (command) {
           command.physical = Promise.allSettled([command.physical, work]).then(() => {})
-          if (recover) {
-            const recoveries = (command.physicalRecovery ??= new Set())
-            recoveries.add(recover)
-            void work.finally(() => recoveries.delete(recover)).catch(() => {})
-          }
         }
         return work
       },
       waitSwitchPhysical: async (id: string): Promise<void> => {
-        const command = commands.get(id)
-        await Promise.all([...(command?.physicalRecovery ?? [])].map((recover) => recover()))
-        await command?.physical
+        await commands.get(id)?.physical
       }
     },
     revoke: (id: string): boolean => {
@@ -120,14 +98,12 @@ export function createStructuredAgentSessionSwitchCommands(
       if (!command) {
         return false
       }
-      command.retentionAllowed = false
       command.deadline.revoke()
       return true
     },
     dispose: () => {
       unsubscribe()
       for (const command of commands.values()) {
-        command.retentionAllowed = false
         clearTimeout(command.cleanupTimer)
         command.deadline.revoke()
       }

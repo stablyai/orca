@@ -1,6 +1,5 @@
 // Use main's rows/order/groups, augmented by window-only rows and live view facts (selection, dirty state, titles, theme/status and editor drafts).
 
-import { preserveSessionTabOpenPlacement } from './session-tab-open-placement'
 import type { RuntimeMobileSessionSnapshotTab } from '../../../shared/runtime-mobile-session-tab-contracts'
 import { orderIdOf, placeInMainGroups, withStrayIn } from './main-session-tab-group-placement'
 import type {
@@ -128,10 +127,7 @@ export function withMainSessionTabRows(
   // A main-held row is main's; a browser or chat row stays the window's while both list it.
   const rows = projected.tabs.map((row) =>
     isMainRow(row)
-      ? preserveSessionTabOpenPlacement(
-          withWindowFacts(row, windowRows.get(row.id), rules),
-          windowRows.get(row.id)
-        )
+      ? withWindowFacts(row, windowRows.get(row.id), rules)
       : (windowRows.get(row.id) ?? row)
   )
   const windowOnlyIds = new Set(windowOnly.map((row) => row.id))

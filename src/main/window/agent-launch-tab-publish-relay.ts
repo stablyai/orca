@@ -43,13 +43,7 @@ export function requestAgentLaunchTabPublishFromRenderer(
         finish(new Error(reply.error))
         return
       }
-      finish(null, {
-        tabId: reply.tabId,
-        created: reply.created,
-        placement: reply.placement,
-        withdrawalRoot: reply.withdrawalRoot,
-        withdrawn: reply.withdrawn
-      })
+      finish(null, { tabId: reply.tabId, created: reply.created, placement: reply.placement })
     }
     ipcMain.on('agentLaunch:tabPublishReply', onReply)
     webContents.send('ui:publishAgentLaunchTab', { ...request, requestId })

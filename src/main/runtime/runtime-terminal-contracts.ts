@@ -27,7 +27,6 @@ import type { TerminalInputKind } from '../../shared/terminal-input-kind'
 import type { RuntimePtyController } from './runtime-pty-controller-contract'
 import type { RuntimeAgentRowSnapshot } from './runtime-worktree-agent-rows'
 import type { WorkerTerminalHostScope } from '../../shared/worker-terminal-host-scope'
-import type { AgentSessionSwitchAuthority } from '../../shared/agent-session-switch-execution'
 
 export type TerminalCreateOptions = {
   command?: string
@@ -107,12 +106,10 @@ export type TerminalCreateOptions = {
   /** The user's own act (a CLI command, a paired client's create, a launch); without it a stopped WSL distro holds the start. */
   wslUserAct?: true
   signal?: AbortSignal
-  switchExecution?: AgentSessionSwitchAuthority
   /** Refuse (`worktree_terminals_sleeping`) instead of waking a worktree the host has put to sleep. */
   refuseSleptWorktree?: boolean
   onPtySpawnCommitted?: () => void
   /** Called before the spawn request leaves this process; a throw before it proves nothing spawned. */
-  beforePtySpawn?: () => void
   onPtySpawnDispatched?: (launch?: {
     tabId: string
     leafId: string

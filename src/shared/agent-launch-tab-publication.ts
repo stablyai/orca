@@ -2,7 +2,6 @@
 
 import type { AgentLaunchPlacement, AgentLaunchPlacementReceipt } from './agent-launch-intent'
 import type { TuiAgent } from './tui-agent'
-import type { SessionTabOpenPlacement } from './session-tab-placement'
 
 /**
  * Whose screen moves, decided on the host from who called. Mirrors the browser-tab split between
@@ -22,17 +21,13 @@ export type AgentLaunchTabViewerRule =
 
 export type AgentLaunchTabPublishRequest = {
   requestId: string
-  withdraw?: { root: string }
   worktreeId: string
   tabId: string
   leafId: string
   launchAgent: TuiAgent
   viewMode: 'terminal' | 'chat'
   placement?: AgentLaunchPlacement
-  openPlacement?: SessionTabOpenPlacement
   viewer: AgentLaunchTabViewerRule
-  /** Original caller navigation, compared by the addressed viewer at its final selection writer. */
-  viewerSelection?: string
   /** The launch's prompt, so a pane whose agent did not start can offer to copy it. */
   prompt?: string
   /** Which launch this is: a retry of the same one never resets what the tab keeps about it. */
@@ -48,8 +43,6 @@ export type AgentLaunchTabPublishReply =
       /** True for a tab created by this launch (including just before request); false for retries finding it. */
       created: boolean
       placement: AgentLaunchPlacementReceipt
-      withdrawalRoot?: string
-      withdrawn?: boolean
     }
   | { requestId: string; error: string }
 
@@ -58,18 +51,4 @@ export type AgentLaunchTabPublished = {
   tabId: string
   created: boolean
   placement: AgentLaunchPlacementReceipt
-  /** Original provisional root, used only by the creating owner for conditional withdrawal. */
-  withdrawalRoot?: string
-  withdrawn?: boolean
-}
-
-export function launchTabWithdrawalIdentity(
-  root: unknown,
-  tabs: readonly { id: string; entityId?: string; groupId?: string }[],
-  groups: readonly { id: string; tabOrder: string[] }[],
-  tabId: string
-): string {
-  const tab = tabs.find((row) => row.entityId === tabId || row.id === tabId)
-  const group = groups.find((row) => row.id === tab?.groupId)
-  return JSON.stringify([root, tab?.groupId, group?.tabOrder.indexOf(tab?.id ?? '')])
 }

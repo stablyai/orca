@@ -68,8 +68,18 @@ export abstract class OrcaRuntimeWithTerminalSwitchCloseCapture extends OrcaRunt
       terminal: handle,
       incarnationId: incarnation
     }
+    /** Whether retiring this pane retires its tab: only then may the chat take the tab's slot. */
+    const wholeTab = () => {
+      const resolution = this.resolveTerminalCloseTarget(source.worktreeId, {
+        kind: 'pane',
+        tabId: source.tabId,
+        leafId: source.leafId
+      })
+      return resolution === 'tab' || resolution === 'last-pane'
+    }
     return {
       source,
+      wholeTab,
       placement: () =>
         matchesTerminalSurfaceCapture(
           originalPresentation,
@@ -79,22 +89,28 @@ export abstract class OrcaRuntimeWithTerminalSwitchCloseCapture extends OrcaRunt
           ? (readPlacement() ?? originalPlacement)
           : undefined,
       stop: async () => {
+        // A split sibling keeps the tab, so that pane may retire on exit as any pane does.
         const stop = await this.stopExplicitlyClosedTabPtys(
           [addressedPty],
           addressedPty,
-          incarnation
+          incarnation,
+          {
+            closing: wholeTab()
+          }
         )
         if (!stop.stopped) {
           throw new Error('terminal_close_unverifiable')
         }
       },
-      retire: async () => {
+      /** Retires the pane's bookkeeping; its presentation too, unless a replace or its exit already did. */
+      retire: async (presentationRetired = false) => {
         const outcome = await this.closeMobileSessionTab(`id:${source.worktreeId}`, source.tabId, {
           originalPresentation,
           rendererOwnsPresentation,
           localPtyTeardownOwnedExternally: true,
           force: replacement,
-          retirementProofs: [proof]
+          retirementProofs: [proof],
+          presentationRetired
         })
         if (outcome.refused) {
           throw new Error('terminal_pane_close_failed')

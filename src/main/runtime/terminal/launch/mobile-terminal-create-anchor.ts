@@ -1,5 +1,3 @@
-import type { RuntimeMobileSessionTabsSnapshot } from '../../../../shared/runtime-types'
-import { captureSessionTabPlacement } from '../../../../shared/session-tab-placement'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import type { RuntimeMobileSessionSnapshotTab } from '../../../../shared/runtime-mobile-session-tab-contracts'
 
@@ -31,23 +29,4 @@ export function mainPlacedAfter(
   return ORCA_LAYOUT_OWNER_IS_MAIN && afterDesktopTabId
     ? { afterDesktopTabId: heldTabId() ?? afterDesktopTabId }
     : {}
-}
-
-export function captureMobileTerminalCreatePlacement(
-  beforeCreate: RuntimeMobileSessionTabsSnapshot | undefined,
-  afterTabId: string | undefined,
-  afterDesktopTabId: string | undefined
-) {
-  const anchor = beforeCreate?.tabs.find((tab) => tab.id === afterTabId)
-  const anchorParentId =
-    afterDesktopTabId ?? (anchor?.type === 'terminal' ? anchor.parentTabId : anchor?.id)
-  const sourceGroup = beforeCreate?.tabGroups?.find((group) =>
-    group.tabOrder.includes(anchorParentId ?? '')
-  )
-  const capturedOrder = captureSessionTabPlacement(sourceGroup?.tabOrder ?? [], anchorParentId)
-  const capturedTabs = captureSessionTabPlacement(
-    beforeCreate?.tabs.map((tab) => tab.id) ?? [],
-    afterTabId
-  )
-  return { sourceGroup, capturedOrder, capturedTabs }
 }

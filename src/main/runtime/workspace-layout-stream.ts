@@ -79,7 +79,6 @@ export class WorkspaceLayoutStream {
       store: () => StreamStore | null
       homeHostId: (key: string) => ExecutionHostId | null
       liveTitle: (ptyId: string) => string | null
-      withOpenPlacements?: (layout: PublishedWorkspaceLayout) => PublishedWorkspaceLayout
     }
   ) {
     this.projection = new WorkspaceLayoutProjection(deps)
@@ -246,18 +245,13 @@ export class WorkspaceLayoutStream {
       const titles = paneLiveTitlesOf(layout, this.deps)
       // Switch point: a pane's start facts are live state, laid over as its title is.
       const starts = ORCA_LAYOUT_OWNER_IS_MAIN ? paneStartFactsOf(layout, this.deps) : null
-      const placed = this.deps.withOpenPlacements?.(layout) ?? layout
-      const liveTitles = JSON.stringify([
-        titles,
-        starts,
-        placed.tabs.map((tab) => tab.openPlacement)
-      ])
+      const liveTitles = JSON.stringify(starts ? [titles, starts] : titles)
       const previous = before.get(key)
       if (previous?.json === json && previous.liveTitles === liveTitles) {
         shown.set(key, previous)
         continue
       }
-      const shownLayout = withLiveTitles(placed, titles)
+      const shownLayout = withLiveTitles(layout, titles)
       const laid = starts ? withPaneStartFacts(shownLayout, starts) : shownLayout
       shown.set(key, { json, liveTitles, layout: laid })
       changed.push(key)
@@ -309,8 +303,7 @@ export class WorkspaceLayoutStream {
   private freshLayouts(): Map<string, PublishedWorkspaceLayout> {
     const fresh = new Map<string, PublishedWorkspaceLayout>()
     for (const [key, { layout }] of this.projection.projectFresh()) {
-      const placed = this.deps.withOpenPlacements?.(layout) ?? layout
-      const titled = withLiveTitles(placed, paneLiveTitlesOf(layout, this.deps))
+      const titled = withLiveTitles(layout, paneLiveTitlesOf(layout, this.deps))
       const starts = ORCA_LAYOUT_OWNER_IS_MAIN ? paneStartFactsOf(layout, this.deps) : null
       fresh.set(key, starts ? withPaneStartFacts(titled, starts) : titled)
     }

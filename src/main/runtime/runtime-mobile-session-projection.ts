@@ -284,7 +284,6 @@ export function projectRuntimeMobileSessionTabs(
       : {}
     tabs.push({
       type: 'terminal',
-      ...(tab.openPlacement ? { openPlacement: tab.openPlacement } : {}),
       id: tab.id,
       parentTabId: tab.parentTabId,
       leafId: tab.leafId,

@@ -67,7 +67,6 @@ export function prepareTerminalCreateCompletion(args: {
     result: ({ surface, warning }: Awaited<ReturnType<typeof revealCreatedTerminal>>) => {
       return {
         ...terminalLaunchPublicFacts(result, launch.adoptedStablePane, pty),
-        ...(result.switchOutcomeUnknown ? { switchOutcomeUnknown: true as const } : {}),
         handle,
         savedStartupCwd,
         tabId,

@@ -135,8 +135,6 @@ export async function captureDescendantSnapshot(
 type KillSweepDeps = SnapshotDeps &
   TerminateDeps & {
     ownsRoot?: () => boolean
-    /** Conditional ordinary close admits only after the final census; refusal signals nothing. */
-    admitClose?: () => Promise<boolean>
     /** Shutdown can retain the owner until descendant escalation finishes. */
     terminateDescendants?: (snapshot: DescendantSnapshot) => void | Promise<unknown>
     awaitEscalation?: boolean | (() => boolean)
@@ -153,14 +151,7 @@ export async function killWithDescendantSweep(
   deps: KillSweepDeps = {}
 ): Promise<void> {
   const platform = deps.platform ?? process.platform
-  let admitted = !deps.admitClose
   if (platform === 'win32') {
-    if (deps.admitClose) {
-      admitted = await deps.admitClose()
-      if (!admitted) {
-        return
-      }
-    }
     try {
       if ((deps.ownsRoot?.() ?? true) && Number.isInteger(rootPid) && rootPid > 0) {
         // Owned jobs survive PID reuse and include descendants reparented away from the shell.
@@ -180,20 +171,12 @@ export async function killWithDescendantSweep(
         }
       }
     } finally {
-      if (!deps.admitClose || (admitted && (deps.ownsRoot?.() ?? true))) {
-        killRoot()
-      }
+      killRoot()
     }
     return
   }
 
   const snapshot = await captureDescendantSnapshot(rootPid, deps)
-  if (deps.admitClose) {
-    admitted = await deps.admitClose()
-    if (!admitted) {
-      return
-    }
-  }
   let descendants: void | Promise<unknown> = undefined
   const awaitEscalation =
     typeof deps.awaitEscalation === 'function' ? deps.awaitEscalation() : deps.awaitEscalation
@@ -206,9 +189,7 @@ export async function killWithDescendantSweep(
       }
       await descendants
     } finally {
-      if (!deps.admitClose || (admitted && (deps.ownsRoot?.() ?? true))) {
-        killRoot()
-      }
+      killRoot()
     }
     return
   }
@@ -220,9 +201,7 @@ export async function killWithDescendantSweep(
         : terminateDescendantSnapshot(snapshot, deps)
     }
   } finally {
-    if (!deps.admitClose || (admitted && (deps.ownsRoot?.() ?? true))) {
-      killRoot()
-    }
+    killRoot()
   }
 }
 

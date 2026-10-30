@@ -26,14 +26,6 @@ export function resolveTerminalLaunchResult(
   const requestedRecipeUnavailable = refused || result.agentResumeUnavailable || adoptedStablePane
   const owner = result.stablePaneOwner
   const surface =
-    (result.switchRecoveredSurface
-      ? {
-          ...result.switchRecoveredSurface,
-          terminalHandle:
-            result.agentSessionEnsure?.owner.surface.terminalHandle ??
-            result.stablePaneOwner?.handle
-        }
-      : undefined) ??
     result.agentSessionEnsure?.owner.surface ??
     (owner ? { terminalHandle: owner.handle, tabId: owner.tabId, leafId: owner.leafId } : undefined)
   return {

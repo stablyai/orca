@@ -193,9 +193,6 @@ function runReplaySafeAgentLaunch(
     return active.promise
   }
 
-  if (params.paneKey) {
-    context.runtime.noteAcceptedAgentLaunchPane(params.paneKey, params.operationId)
-  }
   let promise: Promise<AgentLaunchResult>
   promise = executeReplaySafeAgentLaunch(params, context, fingerprint).finally(() => {
     if (activeAgentLaunches.get(key)?.promise === promise) {
@@ -260,9 +257,6 @@ export async function launchAgentOnHost(
   }
   assertAgentLaunchTargetAuthorized(params.target, host)
   if (!operationId) {
-    if (params.paneKey) {
-      host.runtime.noteAcceptedAgentLaunchPane(params.paneKey, operationId)
-    }
     return runLegacyAgentLaunch(params, host)
   }
   return runReplaySafeAgentLaunch({ ...params, operationId }, host).catch((error: unknown) => {

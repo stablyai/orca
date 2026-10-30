@@ -1,5 +1,4 @@
 import { copySleepingAgentLaunchConfig } from '../../runtime-agent-launch-resolution'
-import type { MobileTerminalCreateOptions } from './mobile-terminal-create-options'
 import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-session-contracts'
 import { OrcaRuntimeWithFailedStartPanes } from './failed-start-pane'
 import type { WorktreeStartupLaunch } from '../../../../shared/worktree/launch-types'
@@ -19,7 +18,36 @@ import type { AgentLaunchRuntime } from '../../../../shared/agent-launch-runtime
 import { navigationTargetsHost } from '../../../../shared/runtime-navigation'
 import { MOBILE_TERMINAL_CREATE_RESULT_TTL_MS } from '../../orca-runtime-core'
 import { seedResumeLaunchIdentity } from '../../../ipc/pty/pane/resume-launch-identity'
-import type { AgentSessionSwitchAuthority } from '../../../../shared/agent-session-switch-execution'
+
+/** A paired client's terminal create request. */
+export type MobileTerminalCreateOptions = {
+  terminalImageViewerSupported?: boolean
+  afterTabId?: string
+  sourceChatFork?: { sessionId: string }
+  targetGroupId?: string
+  command?: string
+  sessionOptions?: Record<string, string>
+  commandOverride?: string
+  launchRuntime?: AgentLaunchRuntime
+  shellOverride?: string
+  cwd?: string
+  env?: Record<string, string>
+  envToDelete?: string[]
+  startupCommandDelivery?: WorktreeStartupLaunch['startupCommandDelivery']
+  agent?: TuiAgent
+  agentPrompt?: string
+  launchConfig?: SleepingAgentLaunchConfig
+  launchAgent?: TuiAgent
+  /** A switch's start: its ordinary spawn admission checks the conversation. */
+  resumeProviderSession?: AgentProviderSessionMetadata
+  resumeOrigin?: 'switch'
+  viewMode?: 'terminal' | 'chat'
+  activate?: boolean
+  clientNavigationId?: string
+  clientMutationId?: string
+  supportsSplitGroupPlacement?: boolean
+  signal?: AbortSignal
+}
 
 export type OwnedMobileTerminalDispatchRecipe = {
   tabId: string
@@ -68,8 +96,6 @@ export function recordOwnedMobileTerminalDispatchRecipe(
   })
 }
 
-export type { MobileTerminalCreateOptions } from './mobile-terminal-create-options'
-
 export type OwnedMobileTerminalCreateOptions = {
   /** A paired client's own create or tab open; without it a stopped WSL distro holds the start. */
   wslUserAct?: true
@@ -92,14 +118,10 @@ export type OwnedMobileTerminalCreateOptions = {
   resumeOrigin?: 'saved' | 'switch'
   spawnIntent?: SpawnIntent
   launchRuntime?: AgentLaunchRuntime
-  switchExecution?: AgentSessionSwitchAuthority &
-    Pick<NonNullable<MobileTerminalCreateOptions['switchExecution']>, 'viewerSelection'>
   signal?: AbortSignal
   refuseSleptWorktree?: boolean
   resumesSleepingRecord?: true
   /** See TerminalCreateOptions; a create that throws before it proves nothing spawned. */
-  beforePtySpawn?: () => void
-  keepPaneOnStartFailure?: true
   onPtySpawnDispatched?: () => void
   /** The PTY this create produced, reported before publication can fail. */
   onPtyCreated?: (ptyId: string, result: RuntimeTerminalCreate) => void
@@ -153,13 +175,12 @@ export abstract class OrcaRuntimeWithCreateMobileSessionTerminal extends OrcaRun
       // Older mobile clients optimistically append; preserve that placement until they advertise
       // split-group ordering support.
       supportsSplitGroupPlacement?: boolean
-      switchExecution?: MobileTerminalCreateOptions['switchExecution']
       signal?: AbortSignal
     } = {}
   ): Promise<RuntimeMobileSessionCreateTerminalResult> {
     const navigation = opts.navigation ?? 'all'
     const select = opts.select ?? opts.activate !== false
-    if (select && navigationTargetsHost(navigation) && !opts.switchExecution) {
+    if (select && navigationTargetsHost(navigation)) {
       this.clientSessionTabSelections.noteHostNavigation()
     }
     const runOpts = {

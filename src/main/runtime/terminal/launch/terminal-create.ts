@@ -4,10 +4,7 @@ import { OrcaRuntimeWithTerminalCreateDeduplication } from './terminal-create-de
 import * as dependencies from '../../orca-runtime-create-terminal-dependencies'
 import { createDesktopTerminal } from '../../orca-runtime-create-terminal-desktop'
 import { terminalCreateTeamAllocation } from './terminal-create-team-allocation'
-import {
-  createIdempotentCallback,
-  reportTerminalSpawnDispatched
-} from '../../orca-runtime-report-pty-spawn-commit'
+import { createIdempotentCallback } from '../../orca-runtime-report-pty-spawn-commit'
 import { recordPtySurface, spawnSurfaceClaimSequence } from '../../pty-recorded-surface-topology'
 import { agentLaunchTokenFor, withAgentLaunchToken } from '../../../agent-launch/agent-launch-token'
 import { seedPtyLaunchTitle } from './pty-launch-title'
@@ -40,7 +37,6 @@ export abstract class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTermi
       }
       const workspace = await this.resolveTerminalCreateLaunchScope(worktreeSelector, created, opts)
       const launchOpts = await this.resolveAgentTerminalCreateOptions(workspace, opts)
-      launchOpts.switchExecution?.check()
       const launchTitleAt = { sequence: this.nextTitleObservationSequence(), epochMs: Date.now() }
       let cwd = this.resolveWorkspaceTerminalStartupCwd(workspace, launchOpts.cwd) ?? workspace.path
       const session = this.getWorkspaceSessionForWorktree(workspace.id)
@@ -110,15 +106,13 @@ export abstract class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTermi
         }
         try {
           const { launchAgent } = launchOpts
+          launchOpts.onPtySpawnDispatched?.({
+            tabId,
+            leafId,
+            launchConfig: effectiveLaunchConfig,
+            launchAgent
+          })
           result = await dependencies.spawnInAdmittedPane(this.store, ptyController, {
-            keepOnFailure: launchOpts.keepPaneOnStartFailure,
-            beforeAdmission: launchOpts.beforePtySpawn,
-            beforeSpawn: reportTerminalSpawnDispatched(launchOpts, () => ({
-              tabId,
-              leafId,
-              launchConfig: effectiveLaunchConfig,
-              launchAgent
-            })),
             ...initialSize,
             cwd,
             command: sequencedStartupCommand
@@ -189,36 +183,28 @@ export abstract class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTermi
         if (launchOpts.signal?.aborted) {
           throw new Error('client_disconnected')
         }
-        const acquire = async () => {
-          const adoptedBeforeLaunch = await ptyController.adoptStablePane?.({
-            ...initialSize,
-            cwd,
-            connectionId: workspace.connectionId,
-            worktreeId: workspace.id,
-            preAllocatedHandle,
-            tabId,
-            leafId,
-            spawnFresh,
-            onOutcome: (outcome, operation) => {
-              claimedStablePaneCreate?.acceptOutcome?.(outcome, operation)
-              teamAllocation.acceptOutcome(outcome)
-            },
-            switchExecution: launchOpts.switchExecution,
-            signal: launchOpts.signal
-          })
-          if (adoptedBeforeLaunch) {
-            result = dependencies.materializedStablePaneReply(
-              adoptedBeforeLaunch,
-              preAllocatedHandle
-            )
-            Object.assign(result, this.getTerminalLaunchResult(result.id))
-          } else if (!ptyController.adoptStablePane) {
-            result = await spawnFresh({ mustExist: false })
-            teamAllocation.acceptFresh(result)
-          }
+        const adoptedBeforeLaunch = await ptyController.adoptStablePane?.({
+          ...initialSize,
+          cwd,
+          connectionId: workspace.connectionId,
+          worktreeId: workspace.id,
+          preAllocatedHandle,
+          tabId,
+          leafId,
+          spawnFresh,
+          onOutcome: (outcome, operation) => {
+            claimedStablePaneCreate?.acceptOutcome?.(outcome, operation)
+            teamAllocation.acceptOutcome(outcome)
+          },
+          signal: launchOpts.signal
+        })
+        if (adoptedBeforeLaunch) {
+          result = dependencies.materializedStablePaneReply(adoptedBeforeLaunch, preAllocatedHandle)
+          Object.assign(result, this.getTerminalLaunchResult(result.id))
+        } else if (!ptyController.adoptStablePane) {
+          result = await spawnFresh({ mustExist: false })
+          teamAllocation.acceptFresh(result)
         }
-        const physical = acquire()
-        await (launchOpts.switchExecution?.trackPhysical?.(physical) ?? physical)
         if (!result.stablePaneOwner) {
           reportPtySpawnCommitted()
         }
@@ -231,9 +217,7 @@ export abstract class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTermi
           launchToken
         })
         if (launch.surface) {
-          tabId = launch.surface.tabId
-          leafId = launch.surface.leafId
-          preAllocatedHandle = launch.surface.terminalHandle ?? preAllocatedHandle
+          ;({ terminalHandle: preAllocatedHandle, tabId, leafId } = launch.surface)
           paneKey = dependencies.makePaneKey(tabId, leafId)
         }
         this.assertCreatedPtyRegistrationAllowed(result.id, result.incarnationId)

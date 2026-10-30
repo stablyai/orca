@@ -20,7 +20,6 @@ import type {
 import { parsePaneKey } from '../../../../shared/stable-pane-id'
 import {
   markAgentLaunchesClosedByUser,
-  noteAgentLaunchPaneAccepted,
   resetAgentLaunchPanesForTests,
   resolveAgentLaunchPaneVerdict
 } from '../../../agent-launch/agent-launch-pane-attachment'
@@ -31,10 +30,6 @@ import type { RpcContext } from '../core'
 import { DESKTOP_RPC_CALLER } from '../rpc-caller-identity'
 import {
   STRUCTURED_PREFERENCE,
-  terminalOptions,
-  coldRecord,
-  failBeforeDispatch,
-  failAfterDispatch,
   methodNamed,
   rpcContext,
   runtimeStub,
@@ -167,9 +162,9 @@ function hostWithWindow(
       (request: Omit<AgentLaunchTabPublishRequest, 'requestId'>) =>
         runtime.publishAgentLaunchTab(request)
     ),
-    withdrawAgentLaunchPaneInMainLayout: vi.fn<
-      RpcContext['runtime']['withdrawAgentLaunchPaneInMainLayout']
-    >(async (_address, current) => current?.() ?? false)
+    withdrawAgentLaunchPaneInMainLayout: vi.fn(
+      (_address: { worktreeId: string; tabId: string; leafId: string }) => true
+    )
   })
 }
 
@@ -197,6 +192,10 @@ function plainLaunch(
   )
 }
 
+function terminalOptions(runtime: Host): Record<string, unknown> {
+  return runtime.createTerminal.mock.calls[0]?.[1] ?? {}
+}
+
 /** What the pane's spawn decides when it mounts; `unowned` is an ordinary pane's spawn. */
 async function paneVerdict(
   runtime: Host,
@@ -207,6 +206,28 @@ async function paneVerdict(
       runtime.hasLiveTerminalForPaneKey(key)
     )) ?? 'unowned'
   )
+}
+
+/** The record not open yet when the request arrives, as on the first launch after a restart. */
+function coldRecord(runtime: Host): Host {
+  runtime.openedAgentSessionRecordStore.mockReturnValueOnce(null)
+  return runtime
+}
+
+/** A spawn that fails before the daemon was asked for a process: nothing can be running. */
+function failBeforeDispatch(runtime: Host, message: string): void {
+  runtime.createTerminal.mockRejectedValueOnce(new Error(message))
+}
+
+/** A spawn the daemon was asked for, whose answer was lost: the process may exist. */
+function failAfterDispatch(runtime: Host, message: string): void {
+  runtime.createTerminal.mockImplementationOnce(async (_selector, createOptions) => {
+    const dispatched = createOptions?.onPtySpawnDispatched
+    if (typeof dispatched === 'function') {
+      dispatched()
+    }
+    throw new Error(message)
+  })
 }
 
 describe.each(['window', 'main'] as const)('the %s owning the layout', (owner) => {
@@ -374,12 +395,7 @@ describe.each(['window', 'main'] as const)('the %s owning the layout', (owner) =
       })
       await vi.waitFor(() =>
         expect(runtime.reportAgentLaunchPaneVerdict).toHaveBeenCalledWith(
-          {
-            worktreeId: 'wt-7',
-            tabId: TAB_ID,
-            leafId: LEAF_ID,
-            operationId: runtime.published[0]?.operationId
-          },
+          { worktreeId: 'wt-7', tabId: TAB_ID, leafId: LEAF_ID },
           { kind: 'not-started', code: 'spawn claude ENOENT' }
         )
       )
@@ -495,12 +511,7 @@ describe.each(['window', 'main'] as const)('the %s owning the layout', (owner) =
 
       await vi.waitFor(() =>
         expect(runtime.reportAgentLaunchPaneVerdict).toHaveBeenCalledWith(
-          {
-            worktreeId: 'wt-7',
-            tabId: TAB_ID,
-            leafId: LEAF_ID,
-            operationId: runtime.published[0]?.operationId
-          },
+          { worktreeId: 'wt-7', tabId: TAB_ID, leafId: LEAF_ID },
           { kind: 'not-started', code: 'spawn claude ENOENT' }
         )
       )
@@ -559,7 +570,7 @@ describe.each(['window', 'main'] as const)('the %s owning the layout', (owner) =
       expect(retried.published[0]?.operationId).toBe(operationId)
       await vi.waitFor(() =>
         expect(retried.reportAgentLaunchPaneVerdict).toHaveBeenCalledWith(
-          { worktreeId: 'wt-7', tabId: TAB_ID, leafId: LEAF_ID, operationId },
+          { worktreeId: 'wt-7', tabId: TAB_ID, leafId: LEAF_ID },
           { kind: 'proceed' }
         )
       )
@@ -577,7 +588,7 @@ describe.each(['window', 'main'] as const)('the %s owning the layout', (owner) =
       await replayLaunch(remadeForNothing, { paneKey: PANE_KEY, operationId }, CLI)
       await vi.waitFor(() =>
         expect(remadeForNothing.reportAgentLaunchPaneVerdict).toHaveBeenCalledWith(
-          { worktreeId: 'wt-7', tabId: TAB_ID, leafId: LEAF_ID, operationId },
+          { worktreeId: 'wt-7', tabId: TAB_ID, leafId: LEAF_ID },
           { kind: 'withdrawn' }
         )
       )
@@ -591,7 +602,7 @@ describe.each(['window', 'main'] as const)('the %s owning the layout', (owner) =
       await replayLaunch(survived, { paneKey: PANE_KEY, operationId }, CLI)
       await vi.waitFor(() =>
         expect(survived.reportAgentLaunchPaneVerdict).toHaveBeenCalledWith(
-          { worktreeId: 'wt-7', tabId: TAB_ID, leafId: LEAF_ID, operationId },
+          { worktreeId: 'wt-7', tabId: TAB_ID, leafId: LEAF_ID },
           { kind: 'proceed' }
         )
       )
@@ -879,18 +890,11 @@ describe.each(['window', 'main'] as const)('the %s owning the layout', (owner) =
         )
       )
       expect(refused.publishAgentLaunchTabInMainLayout).toHaveBeenCalledOnce()
-      const publication = await refused.publishAgentLaunchTabInMainLayout.mock.results[0]!.value
-      const [, current] = refused.withdrawAgentLaunchPaneInMainLayout.mock.calls[0]!
       await vi.waitFor(() =>
         expect(refused.withdrawAgentLaunchPaneInMainLayout).toHaveBeenCalledWith(
-          { worktreeId: 'wt-7', tabId: TAB_ID, leafId: LEAF_ID, operationId },
-          current,
-          publication?.withdrawalRoot
+          expect.objectContaining({ worktreeId: 'wt-7', tabId: TAB_ID, leafId: LEAF_ID })
         )
       )
-      expect(current?.()).toBe(true)
-      noteAgentLaunchPaneAccepted(PANE_KEY)
-      expect(current?.()).toBe(false)
     }
   )
 
@@ -909,8 +913,8 @@ describe.each(['window', 'main'] as const)('the %s owning the layout', (owner) =
       refused.publishAgentLaunchTabInMainLayout.mockImplementation((request) =>
         real.runtime.publishAgentLaunchTabInMainLayout(request)
       )
-      refused.withdrawAgentLaunchPaneInMainLayout.mockImplementation((...args) =>
-        real.runtime.withdrawAgentLaunchPaneInMainLayout(...args)
+      refused.withdrawAgentLaunchPaneInMainLayout.mockImplementation((address) =>
+        real.runtime.withdrawAgentLaunchPaneInMainLayout(address)
       )
       const mainTabIds = () =>
         real.session().tabsByWorktree[MAIN_WORKTREE_ID]?.map((tab) => tab.id) ?? []
@@ -937,7 +941,7 @@ describe.each(['window', 'main'] as const)('the %s owning the layout', (owner) =
       ).resolves.toMatchObject({ tabId: TAB_ID, created: true })
       await vi.waitFor(() => expect(mainTabIds()).not.toContain(TAB_ID))
       expect(refused.reportAgentLaunchPaneVerdict).toHaveBeenCalledWith(
-        { worktreeId: MAIN_WORKTREE_ID, tabId: TAB_ID, leafId: LEAF_ID, operationId },
+        { worktreeId: MAIN_WORKTREE_ID, tabId: TAB_ID, leafId: LEAF_ID },
         { kind: 'withdrawn' }
       )
     }

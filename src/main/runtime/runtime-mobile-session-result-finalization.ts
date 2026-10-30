@@ -34,7 +34,6 @@ export function finalizeRuntimeMobileSessionTabsResult(
         null)
   return {
     worktree: snapshot.worktree,
-    ...(snapshot.switchProjections ? { switchProjections: snapshot.switchProjections } : {}),
     publicationEpoch: snapshot.publicationEpoch,
     snapshotVersion: snapshot.snapshotVersion,
     activeGroupId,

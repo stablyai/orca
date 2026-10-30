@@ -1,6 +1,3 @@
-import { withPublishedSessionTabOpenPlacements } from './session-tabs/session-tab-open-placement'
-import { parsePaneKey } from '../../shared/stable-pane-id'
-import { noteAgentLaunchPaneAccepted } from '../agent-launch/agent-launch-pane-attachment'
 import { conversationRecordReader } from './orchestration/structured-session-lineage'
 import type { RuntimeLinearCommandSurface } from './runtime-linear-command-surface'
 import { installRuntimeLinearCommandSurface } from './runtime-linear-command-surface'
@@ -193,22 +190,6 @@ class OrcaRuntimeService extends OrcaRuntimeSidebarBase {
     return this.notifier.publishAgentLaunchTab(request)
   }
 
-  /** Retain final verdicts, clear settled ones, and remove withdrawn panes without removing split siblings. */
-  noteAcceptedAgentLaunchPane(paneKey: string, operationId?: string): void {
-    noteAgentLaunchPaneAccepted(paneKey)
-    const pane = parsePaneKey(paneKey)
-    if (!pane || !this.supportsConditionalSwitchProjection()) {
-      return
-    }
-    this.notifier?.agentLaunchPaneVerdict?.({
-      worktreeId: '',
-      ...pane,
-      operationId,
-      accepted: true,
-      verdict: { kind: 'proceed' }
-    })
-  }
-
   reportAgentLaunchPaneVerdict(
     pane: AgentLaunchPaneAddress,
     verdict: AgentLaunchPaneVerdict
@@ -244,11 +225,6 @@ class OrcaRuntimeService extends OrcaRuntimeSidebarBase {
     store: () => this.store,
     homeHostId: (key) => this.tryGetWorkspaceSessionHostIdForWorktree(key),
     liveTitle: (ptyId) => this.getTrackedDisplayTitleForPty(ptyId) || null,
-    withOpenPlacements: (layout) =>
-      withPublishedSessionTabOpenPlacements(
-        layout,
-        this.mobileSessionTabsByWorktree.get(layout.worktreeId)
-      ),
     ...this.paneFactSources()
   })
 

@@ -1,21 +1,4 @@
-import type { TerminalSurfaceCloseIdentity } from './terminal-tab-close'
 import { insertTabIdIntoOrder, partitionPinnedTabOrder } from './workspace-layout/tab-order'
-
-/** The existing host command's open intent, carried with membership to the actual layout owner. */
-export type SessionTabOpenPlacement = {
-  invocationId: string
-  generation: string
-  placement: { groupId?: string; afterTabId?: string; index?: number }
-  activate: boolean
-  viewerSelection?: string
-  /** Present for terminal-to-chat; source reuse cannot turn its captured index into authority. */
-  source?: TerminalSurfaceCloseIdentity
-}
-
-/** Recognizes viewer-owned requests; only the initiating viewer can admit or consume one. */
-export function isSessionTabSelectionRequest(token: string | undefined): boolean {
-  return token?.startsWith('selection-v1:') === true && token.length > 'selection-v1:'.length
-}
 
 /** Call-local neighbors survive an anchor retiring while creation is awaited. */
 export type CapturedSessionTabPlacement = { preceding: string[]; following: string[] }

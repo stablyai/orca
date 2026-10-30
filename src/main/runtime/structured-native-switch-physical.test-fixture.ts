@@ -118,9 +118,7 @@ export async function nativeSwitchPhysicalFixture(
             { runtime },
             host,
             sessionId,
-            deadline,
-            execution,
-            runtime.captureSessionSwitchSelection()
+            deadline
           ),
         { direction: 'terminal' }
       )

@@ -1,5 +1,4 @@
 import { randomUUID } from 'node:crypto'
-import { preserveSessionTabOpenPlacements } from '../session-tabs/session-tab-open-placement'
 import { preserveTerminalRetirementProofs } from '../mobile-session-terminal-retirement-proof'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import { startedMainTerminalSurfaces } from '../terminal/surface/main-terminal-surfaces'
@@ -116,10 +115,6 @@ export abstract class OrcaRuntimeWithRuntimeId extends RuntimeConstructionServic
     snapshot: RuntimeMobileSessionTabsSnapshot
   ): RuntimeMobileSessionTabsSnapshot {
     const existing = this.mobileSessionTabsByWorktree.get(worktreeId)
-    snapshot = preserveSessionTabOpenPlacements(snapshot, existing)
-    if (snapshot.switchProjections === undefined && existing?.switchProjections) {
-      snapshot = { ...snapshot, switchProjections: existing.switchProjections }
-    }
     if (ORCA_LAYOUT_OWNER_IS_MAIN) {
       const merged = startedMainTerminalSurfaces(this)?.withMainOrder(snapshot) ?? snapshot
       // Main-order-only rebuilds are no-ops unless occupant/publication/retirement evidence changed.

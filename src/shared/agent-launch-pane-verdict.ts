@@ -22,17 +22,10 @@ export type AgentLaunchPaneVerdict =
 export const AGENT_LAUNCH_PANE_REFUSED_CODE = 'agent_launch_pane_refused'
 
 /** The pane a verdict is about, as the window addresses it. */
-export type AgentLaunchPaneAddress = {
-  worktreeId: string
-  tabId: string
-  leafId: string
-  operationId?: string
-}
+export type AgentLaunchPaneAddress = { worktreeId: string; tabId: string; leafId: string }
 
 export type AgentLaunchPaneVerdictEvent = AgentLaunchPaneAddress & {
   verdict: AgentLaunchPaneVerdict
-  accepted?: true
-  withdrawalRoot?: string
 }
 
 /** A launch pane as the window saves it: only a pending one, since its outcome is this session's. */

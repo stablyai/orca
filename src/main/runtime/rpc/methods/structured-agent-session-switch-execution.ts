@@ -1,4 +1,3 @@
-import { retainStructuredSwitchSource } from './structured-agent-session-switch-retention'
 import { structuredSessionSwitchFailure } from './structured-agent-session-switch-failure'
 import {
   captureStructuredSwitchWorkCheck,
@@ -10,6 +9,7 @@ import type { RpcContext } from '../core'
 import type { SwitchToChatParams, SwitchToTerminalParams } from './structured-agent-session-schemas'
 import {
   agentSessionSwitchDeadline,
+  type AgentSessionSwitchDeadline,
   type AgentSessionSwitchResult
 } from '../../../../shared/agent-session-switch-execution'
 import {
@@ -37,6 +37,15 @@ import { interruptWorkingAgent } from '../../terminal-agent-interrupt'
 import { mainAgentState } from '../../../../shared/main-agent-status'
 import { captureSwitchStoppedCliTurn } from '../../../native-chat/agent-session-wire/structured-agent-session-switch-import'
 import { worktreeIdsEqual } from '../../../../shared/worktree/id'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+
+type Prepared = Awaited<ReturnType<typeof prepareStructuredSessionSwitch>>
+
+/**
+ * One switch, both directions: stop the exact source with proof, prepare the destination at
+ * rest with no tab, then one layout replace. A failure before the replace leaves the source tab
+ * untouched with its agent stopped; nothing was shown that could need withdrawing.
+ */
 export async function executeStructuredSessionSwitch(
   params: z.infer<typeof SwitchToChatParams> | z.infer<typeof SwitchToTerminalParams>,
   ctx: RpcContext,
@@ -44,23 +53,10 @@ export async function executeStructuredSessionSwitch(
 ): Promise<AgentSessionSwitchResult> {
   const deadline = agentSessionSwitchDeadline()
   let sessionId = params.sessionId
-  const selectionCurrent = ctx.runtime.captureSessionSwitchSelection(
-    undefined,
-    params.execution?.viewerSelection,
-    true
-  )
   let commandOwned = false
   const operation = (async (): Promise<AgentSessionSwitchResult> => {
     const prepared = await prepareStructuredSessionSwitch(params, ctx, sessionId, deadline)
-    const {
-      host,
-      execution,
-      create,
-      sourceEvidence,
-      createIdentity,
-      providerSessionId,
-      conversation
-    } = prepared
+    const { host, execution, create, conversation } = prepared
     sessionId = prepared.sessionId
     commandOwned = true
     return host.runSwitch(
@@ -76,188 +72,15 @@ export async function executeStructuredSessionSwitch(
             ctx,
             host,
             sessionId,
-            deadline,
-            execution,
-            selectionCurrent
+            deadline
           )
         }
-        deadline.check()
-        const source = 'source' in execution ? execution.source : undefined
-        const close = source
-          ? captureStructuredSwitchTerminalSource(
-              ctx.runtime,
-              host,
-              sessionId,
-              direction,
-              source.terminal,
-              source.expectedIncarnationId,
-              source.originalPresentation
-            )
-          : undefined
-        const paneKey = close ? `${close.source.tabId}:${close.source.leafId}` : undefined
-        const row = paneKey ? ctx.runtime.agentTransitions.latestRow(paneKey) : null
-        const adopt = createIdentity?.adopt
-        const retainedSource =
-          !adopt && source
-            ? await prepareStructuredChatCliTranscript(
-                await resolveStructuredChatCliSource(
-                  { sessionId, workspaceId: recordWorkspace(host, sessionId) },
-                  false
-                ),
-                (args) => ctx.runtime.prepareAiVaultSessionResume(args),
-                false
-              )
-            : undefined
-        const before = adopt?.transcriptPath
-          ? {
-              agent: create!.agent,
-              sessionId: adopt.providerHandle.nativeId,
-              filePath: adopt.transcriptPath,
-              source: adopt.source
-            }
-          : retainedSource?.cliForkSource
-        const stopped = before
-          ? await captureSwitchStoppedCliTurn(
-              before,
-              Boolean(row && mainAgentState(row) === 'working'),
-              deadline
-            )
-          : undefined
-        deadline.check()
-        if (close) {
-          if (paneKey) {
-            await interruptWorkingAgent(
-              ctx.runtime,
-              (key) => ctx.runtime.agentTransitions.latestRow(key),
-              paneKey,
-              {
-                signal: deadline.signal,
-                beforeWrite: async () => {
-                  deadline.check()
-                }
-              }
-            )
-          }
-          // Shutdown already accepted must finish even when the observing request expires.
-          try {
-            await host.trackSwitchPhysical(sessionId, close.stop())
-          } catch {
-            host.deps.logger.warn('switch source exit was not confirmed', {
-              scope: 'session-switch',
-              sessionId,
-              direction,
-              source: 'terminal',
-              exactIncarnation: true
-            })
-            throw agentSessionRefusalError('agent_session_ownership_unknown', {
-              reason: 'ownerUnproven'
-            })
-          }
-        }
-        deadline.check()
-        if (create) {
-          try {
-            const preparedCreate = await prepareStructuredAgentSessionCreateForWorktree({
-              ...create,
-              runtime: ctx.runtime,
-              caller: structuredCallerFor(ctx),
-              atRest: true,
-              ensureHost: async () => host,
-              structuredAgentCliSourceEvidence: sourceEvidence
-            })
-            deadline.check()
-            const created = await commitStructuredAgentSessionCreate({
-              runtime: ctx.runtime,
-              caller: structuredCallerFor(ctx),
-              prepared: { ...preparedCreate, tab: null },
-              activate: false,
-              check: deadline.check
-            })
-            if (!created.ok) {
-              throw new AgentSessionRefusalError(created.refusal)
-            }
-            sessionId = created.value.sessionId
-          } catch (error) {
-            sessionId = resolveStructuredSwitchRetainedOwner(
-              error,
-              host,
-              createIdentity,
-              providerSessionId
-            )
-          }
-          await host.adoptSwitch(conversation?.commandKey ?? params.sessionId, sessionId)
-        }
-        const record = requireStructuredSwitchRecord(host, sessionId)
-        const check = captureStructuredSwitchWorkCheck(host, sessionId, deadline, direction)
-        if (
-          source ||
-          nativeConversationContent(await host.journalSnapshot(sessionId)) === 'saved'
-        ) {
-          const transcript = await prepareStructuredChatCliTranscript(
-            await resolveStructuredChatCliSource(
-              { sessionId, workspaceId: record.location.workspaceId },
-              false
-            ),
-            (args) => ctx.runtime.prepareAiVaultSessionResume(args),
-            false
-          )
-          check()
-          if (!transcript.cliForkSource) {
-            throw agentSessionRefusalError('agent_session_identity_required', {
-              reason: 'transcriptUnreadable'
-            })
-          }
-          await host.refreshSwitchTranscript(
-            sessionId,
-            transcript.cliForkSource,
-            deadline,
-            stopped,
-            check
-          )
-        }
-        const revealed = await host.revealSession(sessionId)
-        check()
-        if (!revealed.readable && revealed.openRefusal) {
-          throw new AgentSessionRefusalError(revealed.openRefusal)
-        }
-        const replaceSource =
-          close && worktreeIdsEqual(close.source.worktreeId, record.location.workspaceId)
-        const placement =
-          (replaceSource ? close.placement() : close ? undefined : create?.tabPlacement) ?? {}
-        await ctx.runtime.publishStructuredAgentSessionTab({
-          ...revealed,
-          activate: true,
-          check,
-          selectionCurrent,
-          viewerSelection: execution.viewerSelection,
-          focusWindow: agentLaunchMovesHostWindow(ctx),
-          placement,
-          openPlacement: {
-            invocationId: execution.invocationId,
-            generation: host.switchGeneration(sessionId)!,
-            placement,
-            activate: true,
-            viewerSelection: execution.viewerSelection,
-            ...(replaceSource ? { source: close.source } : {})
-          }
-        })
-        deadline.check()
-        if (replaceSource) {
-          await close.retire()
-        }
-        deadline.check()
-        // Publication is complete; a first new send may already own the ordinary start.
-        const starting = await host.openSwitchToChat(sessionId, deadline)
-        if (starting.owned) {
-          void host.trackSwitchPhysical(sessionId, starting.outcome).catch(() => {})
-        } else {
-          void starting.outcome.catch(() => {})
-        }
-        return { status: 'completed', sessionId }
+        const result = await switchToChat(params, ctx, prepared, sessionId, deadline)
+        sessionId = result.sessionId
+        return result
       },
       {
         direction,
-        onAccepted: selectionCurrent.accept,
         conversationKey: conversation?.commandKey,
         allowUncreated: Boolean(create),
         destinationCurrent: (result) => {
@@ -265,18 +88,7 @@ export async function executeStructuredSessionSwitch(
           return record
             ? ctx.runtime.currentSessionSwitchDestination(record.location.workspaceId, result)
             : undefined
-        },
-        onRetained:
-          direction === 'terminal'
-            ? (check) =>
-                retainStructuredSwitchSource(
-                  ctx.runtime,
-                  host,
-                  sessionId,
-                  execution.invocationId,
-                  check
-                )
-            : undefined
+        }
       }
     )
   })()
@@ -292,4 +104,176 @@ export async function executeStructuredSessionSwitch(
   } catch (error) {
     return structuredSessionSwitchFailure(error, sessionId)
   }
+}
+
+async function switchToChat(
+  params: z.infer<typeof SwitchToChatParams> | z.infer<typeof SwitchToTerminalParams>,
+  ctx: RpcContext,
+  prepared: Prepared,
+  sessionId: string,
+  deadline: AgentSessionSwitchDeadline
+): Promise<AgentSessionSwitchResult> {
+  const {
+    host,
+    execution,
+    create,
+    sourceEvidence,
+    createIdentity,
+    providerSessionId,
+    conversation
+  } = prepared
+  deadline.check()
+  const source = 'source' in execution ? execution.source : undefined
+  const close = source
+    ? captureStructuredSwitchTerminalSource(
+        ctx.runtime,
+        host,
+        sessionId,
+        'chat',
+        source.terminal,
+        source.expectedIncarnationId,
+        source.originalPresentation
+      )
+    : undefined
+  const paneKey = close ? `${close.source.tabId}:${close.source.leafId}` : undefined
+  const row = paneKey ? ctx.runtime.agentTransitions.latestRow(paneKey) : null
+  const adopt = createIdentity?.adopt
+  const retainedSource =
+    !adopt && source
+      ? await prepareStructuredChatCliTranscript(
+          await resolveStructuredChatCliSource(
+            { sessionId, workspaceId: recordWorkspace(host, sessionId) },
+            false
+          ),
+          (args) => ctx.runtime.prepareAiVaultSessionResume(args),
+          false
+        )
+      : undefined
+  const before = adopt?.transcriptPath
+    ? {
+        agent: create!.agent,
+        sessionId: adopt.providerHandle.nativeId,
+        filePath: adopt.transcriptPath,
+        source: adopt.source
+      }
+    : retainedSource?.cliForkSource
+  const stopped = before
+    ? await captureSwitchStoppedCliTurn(
+        before,
+        Boolean(row && mainAgentState(row) === 'working'),
+        deadline
+      )
+    : undefined
+  deadline.check()
+  if (close && paneKey) {
+    await interruptWorkingAgent(
+      ctx.runtime,
+      (key) => ctx.runtime.agentTransitions.latestRow(key),
+      paneKey,
+      { signal: deadline.signal, beforeWrite: async () => deadline.check() }
+    )
+    // Shutdown already accepted must finish even when the observing request expires.
+    try {
+      await host.trackSwitchPhysical(sessionId, close.stop())
+    } catch {
+      host.deps.logger.warn('switch source exit was not confirmed', {
+        scope: 'session-switch',
+        sessionId,
+        direction: 'chat',
+        source: 'terminal',
+        exactIncarnation: true
+      })
+      throw agentSessionRefusalError('agent_session_ownership_unknown', { reason: 'ownerUnproven' })
+    }
+  }
+  deadline.check()
+  if (create) {
+    try {
+      const preparedCreate = await prepareStructuredAgentSessionCreateForWorktree({
+        ...create,
+        runtime: ctx.runtime,
+        caller: structuredCallerFor(ctx),
+        atRest: true,
+        ensureHost: async () => host,
+        structuredAgentCliSourceEvidence: sourceEvidence
+      })
+      deadline.check()
+      const created = await commitStructuredAgentSessionCreate({
+        runtime: ctx.runtime,
+        caller: structuredCallerFor(ctx),
+        prepared: { ...preparedCreate, tab: null },
+        activate: false,
+        check: deadline.check
+      })
+      if (!created.ok) {
+        throw new AgentSessionRefusalError(created.refusal)
+      }
+      sessionId = created.value.sessionId
+    } catch (error) {
+      sessionId = resolveStructuredSwitchRetainedOwner(
+        error,
+        host,
+        createIdentity,
+        providerSessionId
+      )
+    }
+    await host.adoptSwitch(conversation?.commandKey ?? params.sessionId, sessionId)
+  }
+  const record = requireStructuredSwitchRecord(host, sessionId)
+  const check = captureStructuredSwitchWorkCheck(host, sessionId, deadline, 'chat')
+  if (source || nativeConversationContent(await host.journalSnapshot(sessionId)) === 'saved') {
+    const transcript = await prepareStructuredChatCliTranscript(
+      await resolveStructuredChatCliSource(
+        { sessionId, workspaceId: record.location.workspaceId },
+        false
+      ),
+      (args) => ctx.runtime.prepareAiVaultSessionResume(args),
+      false
+    )
+    check()
+    if (!transcript.cliForkSource) {
+      throw agentSessionRefusalError('agent_session_identity_required', {
+        reason: 'transcriptUnreadable'
+      })
+    }
+    await host.refreshSwitchTranscript(
+      sessionId,
+      transcript.cliForkSource,
+      deadline,
+      stopped,
+      check
+    )
+  }
+  const revealed = await host.revealSession(sessionId)
+  check()
+  if (!revealed.readable && revealed.openRefusal) {
+    throw new AgentSessionRefusalError(revealed.openRefusal)
+  }
+  // The one layout write: the chat takes the terminal tab's slot. A split sibling keeps the tab,
+  // so the chat opens beside it; a source in another workspace keeps its tab untouched.
+  const sameWorkspace =
+    close !== undefined && worktreeIdsEqual(close.source.worktreeId, record.location.workspaceId)
+  const replaces = sameWorkspace && close.wholeTab() ? close.source.tabId : undefined
+  await ctx.runtime.publishStructuredAgentSessionTab({
+    ...revealed,
+    activate: true,
+    check,
+    focusWindow: agentLaunchMovesHostWindow(ctx),
+    ...(replaces ? { replaces } : sameWorkspace ? { placement: close.placement() } : {})
+  })
+  deadline.check()
+  if (sameWorkspace) {
+    // Whole tab: the replace closed it in main's model, the window closes its own. Split pane: the
+    // window retired it on exit, main's model closes it here.
+    await close.retire(replaces ? ORCA_LAYOUT_OWNER_IS_MAIN : !ORCA_LAYOUT_OWNER_IS_MAIN)
+  }
+  deadline.check()
+  // Publication is complete; a first new send may already own the ordinary start.
+  const starting = await host.openSwitchToChat(sessionId, deadline)
+  if (starting.owned) {
+    void host.trackSwitchPhysical(sessionId, starting.outcome).catch(() => {})
+  } else {
+    void starting.outcome.catch(() => {})
+  }
+  return { status: 'completed', sessionId }
 }

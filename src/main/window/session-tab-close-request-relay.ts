@@ -15,18 +15,17 @@ const SESSION_TAB_CLOSE_RESPONSE_GRACE_MS = 5_000
 export async function requestSessionTabCloseFromRenderer(
   mainWindow: BrowserWindow,
   tabId: string,
-  worktreeId: string,
-  switchProjection?: SessionTabCloseRequest['switchProjection']
-): Promise<void | boolean> {
+  worktreeId: string
+): Promise<void> {
   if (mainWindow.isDestroyed() || mainWindow.webContents.isDestroyed()) {
     throw new Error('renderer_unavailable')
   }
   const webContents = mainWindow.webContents
   const requestId = randomUUID()
-  return await new Promise<void | boolean>((resolve, reject) => {
+  await new Promise<void>((resolve, reject) => {
     let settled = false
     const releaseListeners: (() => void)[] = []
-    const finish = (error?: Error, applied?: boolean): void => {
+    const finish = (error?: Error): void => {
       if (settled) {
         return
       }
@@ -38,7 +37,7 @@ export async function requestSessionTabCloseFromRenderer(
       if (error) {
         reject(error)
       } else {
-        resolve(applied)
+        resolve()
       }
     }
     const onRendererUnavailable = (): void => finish(new Error('renderer_unavailable'))
@@ -46,7 +45,7 @@ export async function requestSessionTabCloseFromRenderer(
       if (event.sender !== webContents || response.requestId !== requestId) {
         return
       }
-      finish(response.error ? new Error(response.error) : undefined, response.switchApplied)
+      finish(response.error ? new Error(response.error) : undefined)
     }
     const expiresAt = Date.now() + SESSION_TAB_CLOSE_CONFIRMATION_MS
     const timeout = setTimeout(
@@ -63,13 +62,7 @@ export async function requestSessionTabCloseFromRenderer(
         onRendererUnavailable
       )
     )
-    const request: SessionTabCloseRequest = {
-      requestId,
-      tabId,
-      worktreeId,
-      expiresAt,
-      ...(switchProjection ? { switchProjection } : {})
-    }
+    const request: SessionTabCloseRequest = { requestId, tabId, worktreeId, expiresAt }
     try {
       webContents.send('ui:sessionTabCloseRequest', request)
     } catch {

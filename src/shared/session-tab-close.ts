@@ -1,5 +1,3 @@
-import type { SessionSwitchProjection } from './agent-session-switch-execution'
-
 export const SESSION_TAB_CLOSE_CANCELED_ERROR = 'session_tab_close_canceled'
 export const SESSION_TAB_CLOSE_FAILED_ERROR = 'session_tab_close_failed'
 export const SESSION_TAB_NOT_FOUND_ERROR = 'session_tab_not_found'
@@ -10,11 +8,9 @@ export type SessionTabCloseRequest = {
   tabId: string
   worktreeId: string
   expiresAt?: number
-  switchProjection?: SessionSwitchProjection
 }
 
 export type SessionTabCloseResponse = {
   requestId: string
   error?: string
-  switchApplied?: boolean
 }

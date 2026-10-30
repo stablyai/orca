@@ -13,7 +13,9 @@ export abstract class OrcaRuntimeWithExplicitCloseTabPtyStops extends OrcaRuntim
   protected async stopExplicitlyClosedTabPtys(
     ptyIds: readonly string[],
     addressedPtyId: string,
-    capturedIncarnationId?: string
+    capturedIncarnationId?: string,
+    /** `closing` keeps the exited pane shown until its tab is replaced; off, the exit retires it. */
+    options: { closing?: boolean } = {}
   ): Promise<ExplicitCloseStop> {
     let addressedPtyStop = NO_STOP
     const deadlineMs = Date.now() + EXPLICIT_TERMINAL_CLOSE_STOP_TIMEOUT_MS
@@ -27,9 +29,10 @@ export abstract class OrcaRuntimeWithExplicitCloseTabPtyStops extends OrcaRuntim
         (!current || current.incarnationId === capturedIncarnationId) &&
         (!replacement || replacement.incarnationId === capturedIncarnationId) &&
         this.getPtyLivenessVerdict(ptyId)?.status === 'exited'
-      const settle = capturedIncarnationId
-        ? this.intentionalPtyStops.mark(ptyId, 'closing', capturedIncarnationId)
-        : null
+      const settle =
+        capturedIncarnationId && options.closing !== false
+          ? this.intentionalPtyStops.mark(ptyId, 'closing', capturedIncarnationId)
+          : null
       try {
         if (!stopped && this.ptyController?.stopAndWait) {
           try {
