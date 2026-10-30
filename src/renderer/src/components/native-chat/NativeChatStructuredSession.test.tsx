@@ -35,6 +35,61 @@ import { structuredAgentSessionPaneKey } from '../../../../shared/structured-age
 import { structuredAgentSessionDraftScopeKey } from './native-chat-composer-draft-store'
 
 describe('NativeChatStructuredSession', () => {
+  it('isolates mounted chats from unrelated settings and renders their live follow-up choice', async () => {
+    const original = useAppStore.getState().settings
+    const settings = { ...getDefaultSettings('/tmp'), nativeChatFollowUpBehavior: 'steer' as const }
+    useAppStore.setState({ settings })
+    const view = render(
+      <>
+        {['local-chat', 'ssh-chat'].map((sessionId) => (
+          <NativeChatStructuredSession
+            key={sessionId}
+            isVisible
+            isFocusedGroup
+            tabId={sessionId}
+            sessionId={sessionId}
+            target={
+              sessionId === 'local-chat'
+                ? { kind: 'local' }
+                : { kind: 'environment', environmentId: 'ssh-host' }
+            }
+            agent="codex"
+          />
+        ))}
+      </>
+    )
+    try {
+      await act(async () => {})
+      mocks.controllerRender.mockClear()
+      act(() =>
+        useAppStore.setState({ settings: { ...settings, nativeChatFollowUpBehavior: 'steer' } })
+      )
+      expect(mocks.controllerRender).not.toHaveBeenCalled()
+      act(() =>
+        useAppStore.setState({
+          settings: { ...settings, showTasksButton: !settings.showTasksButton }
+        })
+      )
+      expect(mocks.controllerRender).not.toHaveBeenCalled()
+      act(() =>
+        useAppStore.setState({ settings: { ...settings, nativeChatFollowUpBehavior: 'queue' } })
+      )
+      expect(new Set(mocks.controllerRender.mock.calls.map(([sessionId]) => sessionId))).toEqual(
+        new Set(['local-chat', 'ssh-chat'])
+      )
+      expect(mocks.controllerRender.mock.calls.every(([, queue]) => queue === true)).toBe(true)
+      mocks.controllerRender.mockClear()
+      act(() => useAppStore.setState({ settings }))
+      expect(new Set(mocks.controllerRender.mock.calls.map(([sessionId]) => sessionId))).toEqual(
+        new Set(['local-chat', 'ssh-chat'])
+      )
+      expect(mocks.controllerRender.mock.calls.every(([, queue]) => queue === false)).toBe(true)
+    } finally {
+      view.unmount()
+      useAppStore.setState({ settings: original })
+    }
+  })
+
   it('applies persisted appearance at the chat root and updates it live', () => {
     const original = useAppStore.getState().settings
     useAppStore.setState({

@@ -1,9 +1,8 @@
-// @vitest-environment happy-dom
-import { act, cleanup, render } from '@testing-library/react'
+import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, expect, it, vi } from 'vitest'
-import { useMobileNativeChatQueueFollowUps } from '../../../../../mobile/src/session/use-mobile-native-chat-queue-follow-ups'
-import type { RpcClient } from '../../../../../mobile/src/transport/rpc-client'
-import type { ConnectionState, RpcResponse } from '../../../../../mobile/src/transport/types'
+import { useMobileNativeChatQueueFollowUps } from './use-mobile-native-chat-queue-follow-ups'
+import type { RpcClient } from '../transport/rpc-client'
+import type { ConnectionState, RpcResponse } from '../transport/types'
 
 function connection() {
   let state: ConnectionState = 'connected'
@@ -60,7 +59,15 @@ const reply = (behavior: string): RpcResponse => ({
   _meta: { runtimeId: 'r' }
 })
 
-afterEach(cleanup)
+const renderers = new Set<ReactTestRenderer>()
+afterEach(() => {
+  act(() => {
+    for (const renderer of renderers) {
+      renderer.unmount()
+    }
+  })
+  renderers.clear()
+})
 
 it('shares one live scalar per connection, fences late reads/events, and isolates real hook renders', async () => {
   const a = connection(),
@@ -72,13 +79,17 @@ it('shares one live scalar per connection, fences late reads/events, and isolate
     renders.set(id, (renders.get(id) ?? 0) + 1)
     return null
   }
-  const mounted = render(
-    <>
-      <Chat id="a1" client={a.client} />
-      <Chat id="a2" client={a.client} />
-      <Chat id="b" client={b.client} />
-    </>
-  )
+  let mounted: ReactTestRenderer | undefined
+  await act(async () => {
+    mounted = create(
+      <>
+        <Chat id="a1" client={a.client} />
+        <Chat id="a2" client={a.client} />
+        <Chat id="b" client={b.client} />
+      </>
+    )
+    renderers.add(mounted)
+  })
   await act(async () => {})
   expect(a.client.subscribe).toHaveBeenCalledTimes(1)
   expect(b.client.subscribe).toHaveBeenCalledTimes(1)
@@ -135,7 +146,7 @@ it('shares one live scalar per connection, fences late reads/events, and isolate
   expect(values.get('a1')).toBe(true)
   await act(async () => a.replies[1]!(reply('steer')))
   expect(values.get('a1')).toBe(true)
-  mounted.unmount()
+  await act(async () => mounted?.unmount())
   expect(a.states.size).toBe(0)
   expect(b.states.size).toBe(0)
   expect(a.stops).toHaveBeenCalledTimes(3)
@@ -143,8 +154,7 @@ it('shares one live scalar per connection, fences late reads/events, and isolate
 })
 
 it('existing phone workspace event reader ignores additive preference snapshot and events', async () => {
-  const { startHostWorktreeRefresh } =
-    await import('../../../../../mobile/src/worktree/host-worktree-refresh')
+  const { startHostWorktreeRefresh } = await import('../worktree/host-worktree-refresh')
   const host = connection()
   const fetchWorktrees = vi.fn(async () => {}),
     fetchRepoMetadata = vi.fn(async () => {}),
