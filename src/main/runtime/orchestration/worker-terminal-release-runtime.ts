@@ -22,4 +22,5 @@ export type WorkerTerminalReleaseRuntime = StructuredSessionSurfaceRuntime &
     | 'getExactWorkerProviderSession'
     | 'readTerminal'
     | 'notifyMessageArrived'
+    | 'isWorkerAgentInTurn'
   >

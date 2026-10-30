@@ -25,7 +25,7 @@ export abstract class DaemonPtySessionControl extends DaemonPtySessionInput {
     deadlineMs?: number
   ): Promise<void>
 
-  async attach(id: string): Promise<Pick<PtySpawnResult, 'providerSequence' | 'lastTitle'> | void> {
+  async attach(id: string): Promise<PtySpawnResult> {
     await this.ensureConnected()
     if (!this.canDelegateBackgroundToDaemon) {
       this.setPtyBackgrounded(id, false)
@@ -46,13 +46,8 @@ export abstract class DaemonPtySessionControl extends DaemonPtySessionInput {
     if (result.exitedBeforeSpawnReply) {
       throw new SessionNotFoundError(id)
     }
-    // A restarted runtime has never seen the surviving session's title.
-    return result.providerSequence || result.lastTitle
-      ? {
-          ...(result.providerSequence ? { providerSequence: result.providerSequence } : {}),
-          ...(result.lastTitle ? { lastTitle: result.lastTitle } : {})
-        }
-      : undefined
+    // A restarted runtime has never seen the surviving session's screen or title.
+    return result
   }
 
   hasPty(id: string): boolean {

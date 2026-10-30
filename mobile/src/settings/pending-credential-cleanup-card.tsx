@@ -136,7 +136,7 @@ export function PendingCredentialCleanupCard() {
 const styles = themedStyleSheet(() => ({
   section: {
     backgroundColor: colors.bgPanel,
-    borderRadius: 12,
+    borderRadius: radii.surface,
     overflow: 'hidden'
   },
   sectionSpacer: {
@@ -169,7 +169,7 @@ const styles = themedStyleSheet(() => ({
   retryButton: {
     width: 72,
     height: 32,
-    borderRadius: radii.button,
+    borderRadius: radii.control,
     backgroundColor: colors.bgRaised,
     alignItems: 'center',
     justifyContent: 'center'

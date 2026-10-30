@@ -1,3 +1,4 @@
+import { preventSecondaryMenuSelection } from '@/components/ui/prevent-secondary-menu-selection'
 import React, { useCallback } from 'react'
 import {
   Copy,
@@ -48,15 +49,6 @@ import { copyFileToOsClipboard, downloadRemoteFile } from './file-explorer-row-f
 import { fileExplorerNodeTabRelativePath } from './file-explorer-directory-listing'
 
 const isMac = navigator.userAgent.includes('Mac')
-
-function stopRightButtonMenuSelection(event: React.PointerEvent): void {
-  if (event.button !== 2) {
-    return
-  }
-  // Right-button release can hit Radix's first menu item on macOS/Electron; suppress accidental selection.
-  event.preventDefault()
-  event.stopPropagation()
-}
 
 type FileExplorerRowContextMenuProps = Pick<
   FileExplorerRowProps,
@@ -152,7 +144,7 @@ export function FileExplorerRowContextMenu({
   return (
     <ContextMenuContent
       className="min-w-64"
-      onPointerUpCapture={stopRightButtonMenuSelection}
+      onPointerUpCapture={preventSecondaryMenuSelection}
       onCloseAutoFocus={(e) => e.preventDefault()}
     >
       <ContextMenuItem

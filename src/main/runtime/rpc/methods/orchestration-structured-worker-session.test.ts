@@ -112,10 +112,10 @@ describe('structured worker session', () => {
     )
     expect(dispose).not.toHaveBeenCalled()
 
-    releaseStructuredWorkerSession('d1')
+    releaseStructuredWorkerSession(created.identity.sessionId)
     expect(dispose).toHaveBeenCalledTimes(1)
     expect(structuredWorkerIdentities.get(created.identity.handle)).toBeNull()
-    releaseStructuredWorkerSession('d1')
+    releaseStructuredWorkerSession(created.identity.sessionId)
     expect(dispose).toHaveBeenCalledTimes(1)
   })
 
@@ -145,7 +145,7 @@ describe('structured worker session', () => {
       )
     )
     expect(envAtSpawn?.ORCA_PANE_KEY).toBeUndefined()
-    releaseStructuredWorkerSession('d_spawn')
+    releaseStructuredWorkerSession(created.identity.sessionId)
   })
 
   it('forgets the identity and discards the session when the start fails', async () => {
@@ -235,12 +235,12 @@ describe('structured worker session', () => {
     expect(structuredWorkerIdentities.getBySessionId(created.identity.sessionId)?.agent).toBe(
       'codex'
     )
-    releaseStructuredWorkerSession('d2')
+    releaseStructuredWorkerSession(created.identity.sessionId)
   })
 
   it('does not activate the worker session, so a dispatch cannot steal the surface', async () => {
     installHost()
-    await createStructuredWorkerSession({
+    const created = await createStructuredWorkerSession({
       runtime: { ensureStructuredAgentSessionHost: async () => {} } as never,
       worktreeId: 'wt_1',
       agent: 'claude',
@@ -248,7 +248,7 @@ describe('structured worker session', () => {
       onJournalActivity: () => {}
     })
     expect(createSpy.mock.calls[0]![0].activate).toBe(false)
-    releaseStructuredWorkerSession('d3')
+    releaseStructuredWorkerSession(created.identity.sessionId)
   })
 
   it('refuses a session pinned to a non-local execution host', async () => {

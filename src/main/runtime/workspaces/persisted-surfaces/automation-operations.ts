@@ -1,4 +1,5 @@
 import type { AutomationsChangedPayload } from '../../../../shared/runtime-client-events'
+import { getWorkerTerminalAutoReleaseScheduler } from '../../orchestration/worker-terminal-auto-release-scheduler'
 import type { ResolvedWorktree } from '../../runtime-worktree-path-identity'
 import { OrcaRuntimeWithPtyForegroundProcessReads } from '../../client/runtime-client-state'
 import type {
@@ -27,6 +28,9 @@ import type { LegacyWorkerTerminalRecoveryPlan } from '../../orchestration/orche
 import type { LegacyWorkerTerminalRecoveryResult } from '../../runtime-legacy-worker-terminal-recovery-types'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { worktreeIdsEqual } from '../../../../shared/worktree/id'
+
+// Keyed by runtime, not a field: the database can open while the runtime is still constructing.
+const runtimesWatchingAutoReleaseSetting = new WeakSet<object>()
 
 export abstract class OrcaRuntimeWithAutomationOperations extends OrcaRuntimeWithPtyForegroundProcessReads {
   abstract notifyAutomationsChanged(payload?: AutomationsChangedPayload): void
@@ -155,6 +159,9 @@ export abstract class OrcaRuntimeWithAutomationOperations extends OrcaRuntimeWit
       this.bindMailHandBack(this._orchestrationDb)
       this.ensureOrchestrationFederationRelay()
       this.scheduleRestoredMessageRepoints()
+      this.bindWorkerTerminalAutoRelease(this._orchestrationDb)
+      // Recover deadlines armed before a restart.
+      getWorkerTerminalAutoReleaseScheduler(this).rearm()
     }
     return this._orchestrationDb
   }
@@ -177,6 +184,26 @@ export abstract class OrcaRuntimeWithAutomationOperations extends OrcaRuntimeWit
     this.bindMailHandBack(db)
     this.ensureOrchestrationFederationRelay()
     this.scheduleRestoredMessageRepoints()
+    this.bindWorkerTerminalAutoRelease(db)
+  }
+
+  private bindWorkerTerminalAutoRelease(db: OrchestrationDb): void {
+    db.workerTerminalAutoReleaseListener = () => {
+      if (this._orchestrationDb === db) {
+        getWorkerTerminalAutoReleaseScheduler(this).rearm()
+      }
+    }
+    db.workerAutoReleaseEnabled = () =>
+      this.store?.getSettings?.()?.orchestrationWorkerAutoReleaseEnabled !== false
+    if (this.store?.onSettingsChanged && !runtimesWatchingAutoReleaseSetting.has(this)) {
+      runtimesWatchingAutoReleaseSetting.add(this)
+      // Turning the setting off drops the timer; turning it on finds the deadlines still due.
+      this.store.onSettingsChanged((updates) => {
+        if ('orchestrationWorkerAutoReleaseEnabled' in updates && this._orchestrationDb) {
+          getWorkerTerminalAutoReleaseScheduler(this).rearm()
+        }
+      })
+    }
   }
 
   private bindMailHandBack(db: OrchestrationDb): void {

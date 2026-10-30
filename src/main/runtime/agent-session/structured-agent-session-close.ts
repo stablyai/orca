@@ -32,6 +32,8 @@ export type StructuredAgentSessionCloseOptions = {
   runtime?: StructuredSessionSurfaceRuntime
   surface?: StructuredSessionSurface | null
   afterClose?: () => void
+  // Last word in the session lane before Stop.
+  admitClose?: () => boolean
 }
 
 export async function closeStructuredAgentSessionChild(
@@ -51,7 +53,7 @@ export async function closeStructuredAgentSessionChild(
       ? captureStructuredSessionSurface(host, sessionId, options.runtime)
       : options.surface
   try {
-    await host.close(sessionId, 'evict')
+    await host.close(sessionId, 'evict', options.admitClose)
   } catch (error) {
     if (!structuredSessionCloseSettled(sessionId)) {
       return {

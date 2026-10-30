@@ -2113,6 +2113,7 @@
       "requestFailed": "请求失败：{{method}}"
     },
     "header": {
+      "workspaceDetailsHint": "显示工作区的完整名称及其所在位置",
       "backToWorktrees": "返回工作树",
       "moreActions": "更多会话操作",
       "openFileExplorer": "打开文件资源管理器",

@@ -21,6 +21,7 @@ import {
 import { getAgentCatalog, AgentIcon } from '@/lib/agent-catalog'
 import { useAppStore } from '@/store'
 import { useOptionalShortcutLabel } from '@/hooks/useShortcutLabel'
+import { useAgentMenuShortcutLabels } from './agent-menu-shortcut-labels'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { LaunchSource } from '../../../../shared/telemetry-events'
 import { translate } from '@/i18n/i18n'
@@ -188,6 +189,7 @@ export function ProjectedAgentMenuItems({
   const openSettingsPage = useAppStore((s) => s.openSettingsPage)
   const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
   const newAgentShortcut = useOptionalShortcutLabel('tab.newAgent')
+  const shortcutLabels = useAgentMenuShortcutLabels(pickerEntries ? model : undefined)
   const openAgentSettings = useCallback(() => {
     openSettingsTarget({ pane: 'agents', repoId: null })
     openSettingsPage()
@@ -250,7 +252,7 @@ export function ProjectedAgentMenuItems({
       ) : null}
       {pickerEntries ? (
         <AgentLaunchPickerMenu
-          model={model}
+          shortcutLabels={shortcutLabels}
           entries={pickerEntries}
           runLaunch={runLaunch}
           onSelectAgent={onSelectPickerAgent}

@@ -1,5 +1,5 @@
 import { Text, View } from 'react-native'
-import { colors } from '../theme/mobile-theme'
+import { colors, radii } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { workspaceOptionsBadgeText } from '../worktree/workspace-options-copy'
@@ -26,7 +26,7 @@ const styles = themedStyleSheet(() => ({
     minWidth: 14,
     height: 14,
     paddingHorizontal: 3,
-    borderRadius: 7,
+    borderRadius: radii.pill,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.textPrimary

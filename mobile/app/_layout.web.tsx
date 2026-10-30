@@ -3,6 +3,7 @@ import { useWindowDimensions, View } from 'react-native'
 import { Slot, usePathname } from 'expo-router'
 import { SafeAreaFrameContext, SafeAreaInsetsContext } from 'react-native-safe-area-context'
 import { ZERO_SAFE_AREA_INSETS } from '../src/mobile-web-shell/bridge/bridge-safe-area-insets'
+import { DetailCardHostProvider } from '../src/components/detail-card-host'
 import { SideSafeArea } from '../src/layout/side-safe-area'
 import { usePageBridgeClient } from '../src/transport/client-context.web'
 import { colors } from '../src/theme/mobile-theme'
@@ -25,9 +26,11 @@ export default function PageRootLayout() {
     <SafeAreaFrameContext.Provider value={frame}>
       <SafeAreaInsetsContext.Provider value={insets}>
         <View style={[styles.root, transparent && styles.transparent]}>
-          <SideSafeArea>
-            <Slot />
-          </SideSafeArea>
+          <DetailCardHostProvider>
+            <SideSafeArea>
+              <Slot />
+            </SideSafeArea>
+          </DetailCardHostProvider>
         </View>
       </SafeAreaInsetsContext.Provider>
     </SafeAreaFrameContext.Provider>

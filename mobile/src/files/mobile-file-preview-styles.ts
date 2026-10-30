@@ -1,5 +1,5 @@
 import { StyleSheet } from 'react-native'
-import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { colors, concentricRadius, radii, spacing, typography } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 
 export const filePreviewStyles = themedStyleSheet(() => ({
@@ -24,7 +24,7 @@ export const filePreviewStyles = themedStyleSheet(() => ({
     height: 36,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: radii.button
+    borderRadius: radii.control
   },
   backButtonPressed: {
     backgroundColor: colors.bgRaised
@@ -65,7 +65,7 @@ export const filePreviewStyles = themedStyleSheet(() => ({
     height: 36,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: radii.button,
+    borderRadius: radii.control,
     backgroundColor: colors.bgRaised
   },
   saveButtonDisabled: {
@@ -101,7 +101,7 @@ export const filePreviewStyles = themedStyleSheet(() => ({
     padding: 1,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.borderSubtle,
-    borderRadius: radii.button,
+    borderRadius: radii.control,
     backgroundColor: colors.bgPanel
   },
   modeToggle: {
@@ -109,7 +109,7 @@ export const filePreviewStyles = themedStyleSheet(() => ({
     height: 28,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: radii.row,
+    borderRadius: concentricRadius(radii.control, 2),
     backgroundColor: 'transparent',
     opacity: 0.72
   },

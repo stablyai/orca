@@ -35,7 +35,7 @@ export const hostScreenPrimaryStyles = themedStyleSheet(() => ({
     height: 24,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: radii.button,
+    borderRadius: radii.control,
     marginLeft: spacing.xs
   },
   hostIdentity: {
@@ -59,7 +59,7 @@ export const hostScreenPrimaryStyles = themedStyleSheet(() => ({
   reconnectButton: {
     paddingVertical: 4,
     paddingHorizontal: spacing.sm,
-    borderRadius: radii.button,
+    borderRadius: radii.control,
     backgroundColor: colors.bgPanel,
     borderWidth: 1,
     borderColor: colors.borderSubtle
@@ -104,7 +104,7 @@ export const hostScreenPrimaryStyles = themedStyleSheet(() => ({
     gap: 4,
     paddingHorizontal: spacing.sm + 2,
     paddingVertical: spacing.xs,
-    borderRadius: 12,
+    borderRadius: radii.pill,
     borderWidth: 1,
     borderColor: colors.borderSubtle
   },
@@ -134,7 +134,7 @@ export const hostScreenPrimaryStyles = themedStyleSheet(() => ({
     height: 28,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: radii.button
+    borderRadius: radii.control
   },
   toolbarIconDisabled: {
     opacity: 0.6

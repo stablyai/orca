@@ -138,7 +138,7 @@ describe('structured worker stop retires the chat tab', () => {
     const { runtime, emit } = await runtimeShowingStructuredTab()
     expect(await structuredTabIds(runtime)).toEqual([`agent-session:${SESSION}`])
 
-    await expect(stopStructuredWorker(identity, 'd1', runtime)).resolves.toEqual({
+    await expect(stopStructuredWorker(identity, runtime)).resolves.toEqual({
       stopped: true,
       closeAttempted: true
     })
@@ -156,7 +156,7 @@ describe('structured worker stop retires the chat tab', () => {
     const identity = registerIdentity()
     const { runtime } = await runtimeShowingStructuredTab()
 
-    const stop = await stopStructuredWorker(identity, 'd1', runtime)
+    const stop = await stopStructuredWorker(identity, runtime)
 
     expect(stop.stopped).toBe(false)
     expect(await structuredTabIds(runtime)).toEqual([`agent-session:${SESSION}`])
@@ -181,7 +181,7 @@ describe('structured worker stop retires the chat tab', () => {
       })
     }
 
-    await expect(stopStructuredWorker(identity, 'd1', runtime)).resolves.toEqual({
+    await expect(stopStructuredWorker(identity, runtime)).resolves.toEqual({
       stopped: true,
       closeAttempted: true
     })
@@ -195,7 +195,7 @@ describe('structured worker stop retires the chat tab', () => {
   it('settles a runtime that has no tab surface at all', async () => {
     installHost()
     const identity = registerIdentity()
-    await expect(stopStructuredWorker(identity, 'd1')).resolves.toEqual({
+    await expect(stopStructuredWorker(identity)).resolves.toEqual({
       stopped: true,
       closeAttempted: true
     })
@@ -336,7 +336,7 @@ describe('structured worker discard retires the chat tab', () => {
       })
     ).rejects.toThrow(/was refused/)
 
-    expect(close).toHaveBeenCalledWith(createdSessionId, 'evict')
+    expect(close).toHaveBeenCalledWith(createdSessionId, 'evict', undefined)
     expect(await structuredTabIds(runtime)).toEqual([])
   })
 })

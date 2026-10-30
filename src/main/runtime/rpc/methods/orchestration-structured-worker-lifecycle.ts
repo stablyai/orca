@@ -72,9 +72,9 @@ export type StructuredWorkerStopOutcome = {
  * Re-resolve /clear successors after each close. Unverifiable sessions remain untouched and retained. */
 export async function stopStructuredWorker(
   identity: StructuredWorkerIdentity,
-  dispatchId: string,
   runtime?: StructuredSessionSurfaceRuntime &
-    Pick<OrcaRuntimeService, 'forgetStructuredSessionMail'>
+    Pick<OrcaRuntimeService, 'forgetStructuredSessionMail'>,
+  admitClose?: () => boolean
 ): Promise<StructuredWorkerStopOutcome> {
   const closed = new Set<string>()
   // Any close this stop issued, so a later session's failure cannot erase an earlier close.
@@ -94,8 +94,9 @@ export async function stopStructuredWorker(
     closed.add(sessionId)
     const outcome = await closeStructuredAgentSessionChild(sessionId, {
       ...(runtime ? { runtime } : {}),
+      ...(admitClose ? { admitClose } : {}),
       // Release redrive after close but before proof; an unsettled close returns early, leaving an unowned subscription otherwise.
-      afterClose: () => releaseStructuredWorkerSession(dispatchId, runtime, identity.sessionId)
+      afterClose: () => releaseStructuredWorkerSession(identity.sessionId, runtime)
     })
     closeAttempted ||= outcome.closeAttempted
     if (!outcome.stopped) {

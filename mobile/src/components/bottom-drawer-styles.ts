@@ -1,5 +1,5 @@
 import { Platform, StyleSheet } from 'react-native'
-import { colors, spacing } from '../theme/mobile-theme'
+import { colors, radii, spacing } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 
 export const bottomDrawerStyles = themedStyleSheet(() => ({
@@ -26,8 +26,8 @@ export const bottomDrawerStyles = themedStyleSheet(() => ({
   },
   drawer: {
     backgroundColor: colors.bgBase,
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
+    borderTopLeftRadius: radii.surface,
+    borderTopRightRadius: radii.surface,
     paddingHorizontal: spacing.md,
     ...Platform.select({
       ios: {
