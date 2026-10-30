@@ -16,6 +16,7 @@ import { routeTerminalQueryReply } from './terminal-webview-query-reply-routing'
 import { useTerminalWebViewReadyPromises } from './terminal-webview-ready-promises'
 import { createTerminalWriteCoalescer } from './terminal-write-coalescer'
 import { isTerminalGestureInput } from './terminal-gesture-input'
+import { useTerminalWheelProfile } from './use-terminal-wheel-profile'
 
 // Share readiness, queues, coalescing and imperative handles across hosts; only document command/notify transport differs.
 
@@ -32,6 +33,7 @@ export function useTerminalWebViewController(
   const {
     terminalTheme,
     interactionActive = true,
+    tuiWheelProfile = 'one-row',
     textScale = 1,
     onWebReady,
     onEngineError,
@@ -76,6 +78,12 @@ export function useTerminalWebViewController(
     [post]
   )
 
+  const announceWheelProfile = useTerminalWheelProfile(
+    tuiWheelProfile,
+    isWebReadyRef,
+    sendToDocument
+  )
+
   const flushPendingMessages = useCallback(() => {
     pendingMessages.flush(sendToDocument)
   }, [pendingMessages, sendToDocument])
@@ -115,10 +123,13 @@ export function useTerminalWebViewController(
       // Reload drops commands; readiness must restore the selected theme even if its React value did not change.
       sendToDocument({ type: 'set-interaction-active', active: interactionActive })
       sendToDocument({ type: 'set-theme', terminalTheme })
+      // Why: a reloaded document has forgotten the pane's program as well.
+      announceWheelProfile()
       flushPendingMessages()
     },
     [
       interactionActive,
+      announceWheelProfile,
       clearEngineError,
       clearWebReadyWatchdog,
       flushPendingMessages,

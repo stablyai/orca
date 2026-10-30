@@ -1,7 +1,11 @@
 // @vitest-environment happy-dom
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createTerminalDocumentScope } from './document-scope'
 import { cancelDocumentFrames, scheduleDocumentFrame } from './document-frame-registry'
+import { catchNormalBufferOverscroll } from './normal-buffer-overscroll'
+import { cancelPendingTouchTravel } from './tui-wheel-pacing'
+
+afterEach(() => vi.restoreAllMocks())
 
 // Disposal can call back into document modules; cancellation must remove pending frames and refuse new ones.
 describe('the document frame registry', () => {
@@ -60,4 +64,30 @@ describe('the document frame registry', () => {
     expect(next.scheduledFrames).toEqual([7])
     vi.restoreAllMocks()
   })
+
+  it.each(['bounce', 'pending-wheel'] as const)(
+    'forgets repeatedly cancelled %s frames while retaining an unrelated pending frame',
+    (owner) => {
+      const scope = createTerminalDocumentScope()
+      let next = 0
+      vi.spyOn(globalThis, 'requestAnimationFrame').mockImplementation(() => ++next)
+      const cancel = vi.spyOn(globalThis, 'cancelAnimationFrame').mockImplementation(() => {})
+      const unrelated = scheduleDocumentFrame(scope, () => {})
+      for (let index = 0; index < 100; index += 1) {
+        const id = scheduleDocumentFrame(scope, () => {})
+        if (owner === 'bounce') {
+          scope.overscrollFrameId = id
+          catchNormalBufferOverscroll(scope)
+        } else {
+          scope.touchGesture.pendingWheelFrameId = id
+          cancelPendingTouchTravel(scope)
+        }
+      }
+      expect(cancel).toHaveBeenCalledTimes(100)
+      expect(scope.scheduledFrames).toEqual([unrelated])
+      expect(scope.framesStopped).toBe(false)
+      cancelDocumentFrames(scope)
+      expect(cancel).toHaveBeenLastCalledWith(unrelated)
+    }
+  )
 })

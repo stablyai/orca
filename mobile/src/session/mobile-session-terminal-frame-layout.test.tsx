@@ -55,6 +55,7 @@ function controller(
     isPendingTerminalRecoveryParked: false,
     showEmptyState: false,
     terminals: [],
+    visibleTabs: [],
     notifyTerminalFrame,
     dictation: { isRecording: false },
     nativeChatSendError: { message: null, clear: () => {} }

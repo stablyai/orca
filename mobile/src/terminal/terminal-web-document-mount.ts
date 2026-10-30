@@ -10,6 +10,7 @@ import terminalNerdFontUrl from '../../assets/fonts/SymbolsNerdFontMono-Regular.
 import { terminalNerdFontCss } from './terminal-nerd-font-css.mjs'
 import { createTerminalDocument } from './document/create-terminal-document'
 import type { TerminalWebViewCommand } from './terminal-webview-messages'
+import { createSmoothTerminal, createSmoothWebglAddon } from './smooth-viewport-renderer.mjs'
 
 // Mount the native document factory with page-owned seams and fresh scope so overlapping terminals cannot share state.
 
@@ -20,6 +21,11 @@ export type TerminalWebDocument = {
 }
 
 const STYLE_ELEMENT_ID = 'orca-terminal-document-style'
+
+// The page imports xterm itself rather than the WebView bundle, so wrap the same two classes.
+// Without them scrollback moves only in whole rows.
+const SmoothTerminal = createSmoothTerminal(Terminal)
+const SmoothWebglAddon = createSmoothWebglAddon(WebglAddon)
 
 const HOST_CLASS = 'orca-terminal-document-host'
 
@@ -47,7 +53,7 @@ ${prefix} #selection-overlay, ${prefix} #scroll-indicator { position: absolute; 
 // Null WebGL addon selects the existing DOM fallback; log it because rendering is slower.
 function createPageWebglAddon(onFallback: (reason: string) => void) {
   try {
-    return new WebglAddon()
+    return new SmoothWebglAddon()
   } catch (error) {
     onFallback(error instanceof Error ? error.message : String(error))
     return null
@@ -176,7 +182,7 @@ function startPageDocument(
     observeViewport: viewport.observe,
 
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the shape is xterm's own, except that `getCell` takes back the cell xterm allocated and the document declares only the members it reads on one.
-    createTerminal: (options) => new Terminal(options) as unknown as TerminalDocumentTerminal,
+    createTerminal: (options) => new SmoothTerminal(options) as unknown as TerminalDocumentTerminal,
     createUnicode11Addon: () => new Unicode11Addon(),
     createWebglAddon: () =>
       createPageWebglAddon((reason) =>

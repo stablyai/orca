@@ -17,6 +17,7 @@ import { useHostProfile } from '../transport/use-host-profile'
 import { useHostDisplay } from '../transport/use-host-display'
 import { FileReader } from './MobileSessionFileReader'
 import { MarkdownReader } from './MobileSessionMarkdownReader'
+import { terminalWheelProfiles } from './terminal-wheel-profiles'
 
 export function MobileSessionActiveContent({
   controller
@@ -98,7 +99,8 @@ export function MobileSessionActiveContent({
     keyboardLift,
     activeTerminalKeyboardLift,
     toastAnimatedStyle,
-    createTabBusy
+    createTabBusy,
+    visibleTabs
   } = controller
   const hostProfile = useHostProfile(hostId)
   const hostTitle = useHostDisplay(hostProfile).title
@@ -106,6 +108,7 @@ export function MobileSessionActiveContent({
     () => (client ? { client, worktreeId } : undefined),
     [client, worktreeId]
   )
+  const wheelProfiles = useMemo(() => terminalWheelProfiles(visibleTabs), [visibleTabs])
   const content = showLoadingState ? (
     <View style={styles.emptyState}>
       <ActivityIndicator size="small" color={colors.textSecondary} />
@@ -240,6 +243,7 @@ export function MobileSessionActiveContent({
           active={terminal.handle === activeHandle}
           keyboardLift={terminal.handle === activeHandle ? activeTerminalKeyboardLift : 0}
           terminalTheme={terminal.terminalTheme}
+          tuiWheelProfile={wheelProfiles.get(terminal.handle) ?? 'one-row'}
           textScale={terminalTextScale}
           onTextScaleChange={(scale) => {
             // Why: pinch-to-zoom reports a new preset; persist it so the size sticks across panes and launches.

@@ -3,6 +3,7 @@ import { AppState, StyleSheet, View } from 'react-native'
 import { useFocusEffect } from 'expo-router'
 import type { ParsedFileLinkLocation } from '../../../src/shared/file-link-location'
 import { TerminalWebView } from '../terminal/TerminalWebView'
+import type { TuiWheelProfile } from '../terminal/document/tui-wheel-pacing'
 import type {
   MobileTerminalTheme,
   TerminalKeyboardAvoidanceMetrics,
@@ -16,6 +17,7 @@ type TerminalPaneViewProps = {
   active: boolean
   keyboardLift: number
   terminalTheme?: MobileTerminalTheme
+  tuiWheelProfile?: TuiWheelProfile
   textScale: number
   onRef: (handle: string, ref: TerminalWebViewHandle | null) => void
   onWebReady: (handle: string) => void
@@ -40,6 +42,7 @@ export function TerminalPaneView({
   active,
   keyboardLift,
   terminalTheme,
+  tuiWheelProfile,
   textScale,
   onRef,
   onWebReady,
@@ -102,6 +105,7 @@ export function TerminalPaneView({
         ref={setRef}
         style={styles.terminalWebView}
         terminalTheme={terminalTheme}
+        tuiWheelProfile={tuiWheelProfile}
         textScale={textScale}
         shownAtMount={active}
         interactionActive={active && appActive && routeFocused}
