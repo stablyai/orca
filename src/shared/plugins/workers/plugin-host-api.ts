@@ -159,24 +159,9 @@ export const PLUGIN_HOST_API = {
     scope: 'plugin-private',
     capability: 'storage:own',
     mutation: false,
-    surfaces: ALL_SURFACES,
+    surfaces: WORKER_ONLY,
     params: storageGetParams,
     result: storageGetResult
-  }),
-  'storage.compareAndSet': spec({
-    summary:
-      'Atomically writes a private JSON value only if it still matches expected; absent keys compare as null.',
-    since: 1,
-    scope: 'plugin-private',
-    capability: 'storage:own',
-    mutation: true,
-    surfaces: ALL_SURFACES,
-    params: z.strictObject({
-      key: storageKeySchema,
-      expected: pluginJsonValueSchema,
-      value: pluginJsonValueSchema
-    }),
-    result: z.object({ swapped: z.boolean() })
   }),
   'storage.set': spec({
     summary: "Writes a JSON value to the plugin's private store.",

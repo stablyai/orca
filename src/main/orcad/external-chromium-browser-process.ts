@@ -18,11 +18,14 @@ import {
   type ExternalChromiumPageRecord as PageRecord
 } from './external-chromium-tab-projection'
 import { ExternalChromiumTabRegistry } from './external-chromium-tab-registry'
+import { agentBrowserSnapshotArgs } from '../browser/agent-browser-snapshot-arguments'
+import { Snapshot } from '../../shared/rpc-contract/browser-observation-params'
 const AgentBrowserSnapshot = z.object({
   refs: z
     .record(z.string(), z.object({ name: z.string().optional(), role: z.string().optional() }))
     .optional(),
-  snapshot: z.string().optional()
+  // An object for --delta/--full: agent-browser's full, unchanged or delta answer.
+  snapshot: z.union([z.string(), z.looseObject({ kind: z.string() })]).optional()
 })
 
 export class ExternalChromiumBrowserProcess {
@@ -138,7 +141,7 @@ export class ExternalChromiumBrowserProcess {
     const page = await this.tabs.resolveTargetPage(host, params)
     await this.session.selectPage(page.agentPageId)
     if (method === 'browserSnapshot') {
-      return this.snapshot(page)
+      return this.snapshot(page, params)
     }
     if (method === 'browserScreenshot') {
       return this.session.screenshot(params, false)
@@ -195,8 +198,10 @@ export class ExternalChromiumBrowserProcess {
     return normalizeExternalChromiumCommandResult(method, params, result)
   }
 
-  private async snapshot(page: PageRecord): Promise<unknown> {
-    const data = AgentBrowserSnapshot.parse(await this.session.run(['snapshot']))
+  private async snapshot(page: PageRecord, params: Record<string, unknown>): Promise<unknown> {
+    const data = AgentBrowserSnapshot.parse(
+      await this.session.run(agentBrowserSnapshotArgs(Snapshot.parse(params)))
+    )
     return externalChromiumSnapshotResult(page, data, await this.tabs.describePage(page))
   }
 }

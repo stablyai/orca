@@ -96,6 +96,7 @@ import {
 import { CertificateProceed } from './browser-core-params'
 import { MouseClick } from './browser-extras-params'
 import { BrowserIdentitySet, ProfileCreate } from './browser-identity-params'
+import { Screenshot, Snapshot } from './browser-observation-params'
 import {
   Check,
   ClipboardWrite,
@@ -126,7 +127,6 @@ import {
   ProfileDelete,
   ProfileImportFromBrowser,
   Screencast,
-  Screenshot,
   Scroll,
   Select,
   SelectorPath,
@@ -900,7 +900,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'browser.setHeaders': SetHeaders,
   'browser.setMedia': SetMedia,
   'browser.setOffline': SetOffline,
-  'browser.snapshot': BrowserTarget,
+  'browser.snapshot': Snapshot,
   'browser.storage.local.clear': BrowserTarget,
   'browser.storage.local.get': StorageKey,
   'browser.storage.local.set': StorageKeyValue,
