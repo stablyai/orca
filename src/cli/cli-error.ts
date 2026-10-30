@@ -155,8 +155,12 @@ export function reportCliError(error: unknown, json: boolean, context: CliErrorC
 }
 
 // Agents that read only stderr, or pipe stdout through tail, must still see the failure.
-export function formatOrchestrationErrorLine(code: string, message: string): string {
-  return `error: ${code}: ${message.split('\n')[0]}`
+export function formatOrchestrationErrorLine(
+  code: string,
+  message: string,
+  level: 'error' | 'warning' = 'error'
+): string {
+  return `${level}: ${code}: ${message.split('\n')[0]}`
 }
 
 function cliErrorJsonResponse(

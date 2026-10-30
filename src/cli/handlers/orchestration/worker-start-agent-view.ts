@@ -17,17 +17,17 @@ export type WorkerStartAgentReceipt = WorkerStartReceipt & {
   mode?: { mode?: string; preferred?: string; detail: string }
   launch?: { requested?: LaunchChoice; effective?: LaunchChoice }
   recovery?: string
+  stage?: string
   turnStart?: string
-  prompt?: { stages?: string[] }
   next?: string
 }
 
-// "ready" only means the task was written; say whether the agent was seen picking it up.
-const TURN_START_TEXT: Record<string, string> = {
-  observed: 'Turn started.',
-  permission: 'Turn started; the agent is waiting on a permission prompt.',
-  unsupported: 'Task typed in; this agent cannot report that its turn started.',
-  unobserved: 'Task typed in; its turn start was not observed yet.'
+// A hook-capable agent that has not shown its turn yet is usually slow, not dead; a resend duplicates the task.
+function isUnobservedTurnStart(value: WorkerStartAgentReceipt): boolean {
+  return (
+    value.state === 'outcome_unknown' &&
+    (value.turnStart === 'unobserved' || value.stage === 'turn_start_unobserved')
+  )
 }
 
 type WorkerStartFields = {
@@ -37,7 +37,6 @@ type WorkerStartFields = {
   runCreated?: true
   objective?: string
   state: string
-  turnStart?: string
   agent?: string
   model?: string
   effort?: string
@@ -60,18 +59,7 @@ export const WORKER_START_VIEW: OrchestrationAgentView<WorkerStartAgentReceipt, 
       const requested = value.launch?.requested
       const fellBack = value.mode?.mode !== undefined && value.mode.mode !== value.mode.preferred
       const residual = (value.residualResources ?? []).map(describeEffect)
-      // Older runtimes record the observed start only as a prompt stage.
-      const turnStart =
-        value.turnStart ?? (value.prompt?.stages?.includes('turn_started') ? 'observed' : undefined)
-      const unconfirmed = turnStart === 'unsupported' || turnStart === 'unobserved'
-      const show = renderOrchestrationArgv([
-        'orca',
-        'orchestration',
-        'worker-show',
-        '--dispatch',
-        value.dispatchId
-      ])
-      const runtimeNext = value.next && resolveOrcaCommandsInText(value.next)
+      const unobserved = isUnobservedTurnStart(value)
       return {
         dispatchId: value.dispatchId,
         taskId: value.taskId,
@@ -79,7 +67,6 @@ export const WORKER_START_VIEW: OrchestrationAgentView<WorkerStartAgentReceipt, 
         runCreated: value.run?.created ? true : undefined,
         objective: value.run?.created ? value.run.objective : undefined,
         state: value.state,
-        turnStart,
         agent: effective?.agent ?? requested?.agent ?? undefined,
         // Null unless requested or chosen by a fallback.
         model: effective?.model ?? requested?.model ?? undefined,
@@ -90,35 +77,34 @@ export const WORKER_START_VIEW: OrchestrationAgentView<WorkerStartAgentReceipt, 
         terminal: findEffectId(value.effects, 'terminal', 'agent'),
         workspace: findEffectId(value.effects, 'worktree'),
         failedStage: value.failedStage,
-        lastError: value.lastError,
+        lastError: unobserved ? undefined : value.lastError,
         warning: value.lastError ? undefined : value.warning,
-        residualResources: value.state !== 'ready' && residual.length ? residual : undefined,
-        nextCommands: value.state === 'ready' ? undefined : value.nextCommands,
-        next: value.recovery
-          ? resolveOrcaCommandsInText(value.recovery)
-          : unconfirmed
-            ? `Do not resend the task; check it with ${show}.${runtimeNext ? ` ${runtimeNext}` : ''}`
-            : runtimeNext
+        // Its terminal is the live worker, and abandon or a screen read would invite a retry.
+        residualResources:
+          value.state !== 'ready' && !unobserved && residual.length ? residual : undefined,
+        nextCommands: value.state === 'ready' || unobserved ? undefined : value.nextCommands,
+        next: unobserved
+          ? `Task typed in but the worker hasn't been seen starting; don't resend or abandon it. End your turn; Orca wakes you when it reports. If nothing arrives, run ${renderOrchestrationArgv(['orca', 'orchestration', 'worker-show', '--dispatch', value.dispatchId])}.`
+          : value.recovery
+            ? resolveOrcaCommandsInText(value.recovery)
+            : value.next && resolveOrcaCommandsInText(value.next)
       }
     },
-    text: (fields) => {
+    text: (fields, value) => {
       const lines: string[] = []
       const where = fields.runId
         ? ` in ${fields.runCreated ? 'new ' : ''}Run ${fields.runId}${fields.objective ? `: ${fields.objective}` : ''}`
         : ''
-      if (fields.state === 'ready') {
+      if (fields.state === 'ready' || isUnobservedTurnStart(value)) {
         const how = [fields.agent, fields.model, fields.effort, fields.mode].filter(Boolean)
         lines.push(
-          `Started ${fields.dispatchId}${how.length ? ` (${how.join(', ')})` : ''} for ${fields.taskId}${where}`
+          `${fields.state === 'ready' ? 'Started' : 'Dispatched'} ${fields.dispatchId}${how.length ? ` (${how.join(', ')})` : ''} for ${fields.taskId}${where}`
         )
       } else {
         lines.push(
           `Worker ${fields.dispatchId} ${fields.state}${fields.failedStage ? ` at ${fields.failedStage}` : ''}${fields.lastError ? `: ${fields.lastError}` : ''}`,
           `Task ${fields.taskId}${where}`
         )
-      }
-      if (fields.turnStart && TURN_START_TEXT[fields.turnStart]) {
-        lines.push(TURN_START_TEXT[fields.turnStart])
       }
       if (fields.terminal || fields.workspace) {
         lines.push(
@@ -141,10 +127,16 @@ export const WORKER_START_VIEW: OrchestrationAgentView<WorkerStartAgentReceipt, 
     failure: (value) =>
       value.state === 'ready'
         ? undefined
-        : {
-            code: value.state === 'outcome_unknown' ? 'start_outcome_unknown' : 'start_failed',
-            message: `${value.failedStage ?? 'start'}: ${value.lastError ?? value.state}`
-          }
+        : isUnobservedTurnStart(value)
+          ? {
+              level: 'warning',
+              code: 'turn_start_unobserved',
+              message: "task typed in; the worker may still be starting. Don't resend."
+            }
+          : {
+              code: value.state === 'outcome_unknown' ? 'start_outcome_unknown' : 'start_failed',
+              message: `${value.failedStage ?? 'start'}: ${value.lastError ?? value.state}`
+            }
   }
 
 function findEffectId(

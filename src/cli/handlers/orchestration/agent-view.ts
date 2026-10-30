@@ -7,10 +7,12 @@ import type { RuntimeRpcSuccess } from '../../runtime-client'
 
 type AgentViewFields = Record<string, unknown>
 
+/** `warning` keeps the non-zero exit but tells the agent the work may still be fine. */
 export type OrchestrationFailure = {
   code: string
   message: string
   exitCode?: number
+  level?: 'error' | 'warning'
 }
 
 /** What one command prints by default: the same small fields as one-line JSON or plain text. */
@@ -74,7 +76,7 @@ export function printOrchestrationReceipt<TResult extends AgentViewFields>(
 
 export function reportOrchestrationFailure(failure: OrchestrationFailure): void {
   process.exitCode = failure.exitCode ?? 1
-  console.error(formatOrchestrationErrorLine(failure.code, failure.message))
+  console.error(formatOrchestrationErrorLine(failure.code, failure.message, failure.level))
 }
 
 // Agents reading the head get the ids and the tail gets the next step.

@@ -293,35 +293,26 @@ describe('orchestration agent views', () => {
     })
   })
 
-  it('says whether the worker was seen starting, and not to resend when it was not', async () => {
-    const flags: [string, string][] = [['task', 'task_1']]
-    const typedIn = await run(
-      'worker-start',
-      flags,
-      { ...OLDER_RUNTIME_START, turnStart: 'unsupported', next: 'End your turn.' },
-      true
-    )
-    expect(JSON.parse(typedIn.stdout).result).toMatchObject({
-      state: 'ready',
-      turnStart: 'unsupported',
-      next: 'Do not resend the task; check it with orca-dev orchestration worker-show --dispatch ctx_1. End your turn.'
-    })
-
-    const unobserved = await run('worker-start', flags, {
+  it('frames an unobserved turn start as a slow worker, not a failure to retry', async () => {
+    const { stdout, stderr } = await run('worker-start', [['task', 'task_1']], {
       ...OLDER_RUNTIME_START,
       state: 'outcome_unknown',
+      stage: 'turn_start_unobserved',
       turnStart: 'unobserved',
-      lastError: 'The agent did not show that it started the task.'
+      lastError: 'The agent did not show that it started the task.',
+      nextCommands: ['orca orchestration worker-abandon --dispatch ctx_1 --json']
     })
-    expect(unobserved.stdout).toContain('Task typed in; its turn start was not observed yet.')
-    expect(unobserved.stdout).toContain(
-      'Next: Do not resend the task; check it with orca-dev orchestration worker-show --dispatch ctx_1.'
-    )
 
-    const started = await run('worker-start', flags, {
-      ...OLDER_RUNTIME_START,
-      prompt: { stages: ['input_accepted', 'turn_started'] }
-    })
-    expect(started.stdout).toContain('\nTurn started.\n')
+    expect(stdout).toBe(
+      [
+        'Dispatched ctx_1 for task_1 in Run run_1',
+        'Terminal term_agent in workspace wt_1::/repo',
+        "Next: Task typed in but the worker hasn't been seen starting; don't resend or abandon it. End your turn; Orca wakes you when it reports. If nothing arrives, run orca-dev orchestration worker-show --dispatch ctx_1."
+      ].join('\n')
+    )
+    expect(stderr).toBe(
+      "warning: turn_start_unobserved: task typed in; the worker may still be starting. Don't resend."
+    )
+    expect(process.exitCode).toBe(1)
   })
 })
