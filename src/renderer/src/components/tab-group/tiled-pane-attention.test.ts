@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentStatusEntry, AgentStatusState } from '../../../../shared/agent-status-types'
 import { getDefaultSettings } from '../../../../shared/constants'
 import type { Tab, TabGroup } from '../../../../shared/tab-types'
@@ -13,7 +13,15 @@ import {
 } from './tiled-pane-attention'
 
 const WORKTREE_ID = 'wt-1'
-const NOW = Date.now()
+const NOW = 1_800_000_000_000
+
+beforeEach(() => {
+  vi.useFakeTimers({ now: NOW, toFake: ['Date'] })
+})
+
+afterEach(() => {
+  vi.useRealTimers()
+})
 
 function makeGroup(id: string, activeTabId: string | null): TabGroup {
   return { id, worktreeId: WORKTREE_ID, activeTabId, tabOrder: activeTabId ? [activeTabId] : [] }
