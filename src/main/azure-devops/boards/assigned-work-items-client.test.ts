@@ -97,6 +97,28 @@ describe('loadAzureDevOpsAssignedWorkItems', () => {
     expect(page.unhydratedItemCount).toBe(1)
   })
 
+  it('reports the query bound when the result comes back at it', async () => {
+    const ids = Array.from({ length: 1000 }, (_, i) => ({ id: i + 1 }))
+    installAzureDevOpsFetchFixture({
+      [TYPES]: TYPES_RESPONSE,
+      [WIQL]: { workItems: ids },
+      [ITEMS]: itemsRoute()
+    })
+    const page = await loadAzureDevOpsAssignedWorkItems(CLOUD_REPO)
+    expect(page.items).toHaveLength(1000)
+    expect(page.truncatedAtQueryLimit).toBe(1000)
+  })
+
+  it('leaves the bound unreported when the whole assigned set fits', async () => {
+    installAzureDevOpsFetchFixture({
+      [TYPES]: TYPES_RESPONSE,
+      [WIQL]: { workItems: [{ id: 1 }] },
+      [ITEMS]: itemsRoute()
+    })
+    const page = await loadAzureDevOpsAssignedWorkItems(CLOUD_REPO)
+    expect(page.truncatedAtQueryLimit).toBeUndefined()
+  })
+
   it('rejects when the query itself fails, instead of reading as nothing assigned', async () => {
     const stub = vi.fn(async (input: string | URL | Request) =>
       new URL(String(input)).pathname === WIQL

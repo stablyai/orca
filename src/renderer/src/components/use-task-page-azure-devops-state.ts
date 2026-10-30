@@ -64,6 +64,8 @@ export type AzureDevOpsContentProps = {
     /** Rows before the filter bar, so "nothing assigned" reads differently from "nothing matches". */
     totalItemCount: number
     unhydratedItemCount: number
+    /** The query's own result bound when the list came back at it, so it is capped. */
+    truncatedAtQueryLimit: number | null
     errorStatus: AzureDevOpsWorkItemsErrorStatus | null
     errorMessage: string | null
     loading: boolean
@@ -262,6 +264,7 @@ export function useTaskPageAzureDevOpsState(model: TaskPageRuntimeHostsModel) {
     backlogUnhydratedItemCount: page?.unhydratedItemCount ?? 0,
     workItems: assigned.items,
     workItemsUnhydratedItemCount: assigned.unhydratedItemCount,
+    workItemsTruncatedAtQueryLimit: assigned.truncatedAtQueryLimit,
     workItemsErrorStatus: assigned.errorStatus,
     workItemsErrorMessage: assigned.errorMessage,
     workItemsLoading: assigned.status === 'loading',

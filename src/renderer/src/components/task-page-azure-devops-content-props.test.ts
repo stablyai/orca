@@ -106,6 +106,7 @@ function props(
     projectLabel: 'acme/Project',
     workItems: overrides.workItems ?? [],
     workItemsUnhydratedItemCount: 0,
+    workItemsTruncatedAtQueryLimit: null,
     workItemsErrorStatus: null,
     workItemsErrorMessage: null,
     workItemsLoading: false,

@@ -120,6 +120,12 @@ export type AzureDevOpsAssignedWorkItemsPage = {
    * by a field rule since the query). Absent from older hosts.
    */
   unhydratedItemCount?: number
+  /**
+   * The query came back at its own result bound, so this is that bound and the list
+   * holds only the most recently changed items: local filtering cannot reach the rest.
+   * Absent when the whole assigned set fits, and from older hosts.
+   */
+  truncatedAtQueryLimit?: number
 }
 
 export type AzureDevOpsBoardColumn = {

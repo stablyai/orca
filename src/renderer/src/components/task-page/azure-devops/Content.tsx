@@ -92,7 +92,10 @@ export function AzureDevOpsWorkItemsArea(
   }
   return (
     <>
-      <AzureDevOpsBacklogNotices unhydratedItemCount={props.unhydratedItemCount} />
+      <AzureDevOpsBacklogNotices
+        unhydratedItemCount={props.unhydratedItemCount}
+        truncatedAtQueryLimit={props.truncatedAtQueryLimit}
+      />
       <div className="min-h-0 flex-1 overflow-auto scrollbar-sleek">
         <AzureDevOpsBacklogTable {...props.table} />
       </div>

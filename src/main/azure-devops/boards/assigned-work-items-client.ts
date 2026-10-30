@@ -63,5 +63,12 @@ export async function loadAzureDevOpsAssignedWorkItems(
   const items = await hydrateAzureDevOpsWorkItems(repo, ids, [...ASSIGNED_WORK_ITEM_FIELDS], {
     requireResponse: true
   })
-  return { items, unhydratedItemCount: ids.length - items.length }
+  return {
+    items,
+    unhydratedItemCount: ids.length - items.length,
+    // Why: a bounded result looks exactly like a complete one, so the view has to be told.
+    ...(ids.length >= ASSIGNED_WORK_ITEMS_LIMIT
+      ? { truncatedAtQueryLimit: ASSIGNED_WORK_ITEMS_LIMIT }
+      : {})
+  }
 }

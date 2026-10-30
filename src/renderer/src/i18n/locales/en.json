@@ -3229,7 +3229,8 @@
           },
           "workItems": {
             "loadFailed": "Couldn’t load your Azure DevOps work items: {{value0}}",
-            "empty": "No work items in this project are assigned to you."
+            "empty": "No work items in this project are assigned to you.",
+            "queryLimit": "Only the {{value0}} most recently changed work items are shown, so the filters above cannot reach the rest. Narrow the list in Azure DevOps."
           },
           "workItemsView": "Work items",
           "columnAreaPath": "Area Path",

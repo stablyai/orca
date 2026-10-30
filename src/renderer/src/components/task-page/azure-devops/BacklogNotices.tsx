@@ -3,17 +3,29 @@ import { translate } from '@/i18n/i18n'
 import { AzureDevOpsLoadNoticeLine, AzureDevOpsLoadNotices } from './LoadNotice'
 
 export function AzureDevOpsBacklogNotices({
-  unhydratedItemCount
+  unhydratedItemCount,
+  truncatedAtQueryLimit = null
 }: {
   /** Level items the query returned that the host could not load. */
   unhydratedItemCount: number
+  /** The query's own result bound when the list came back at it, so rows beyond it are absent. */
+  truncatedAtQueryLimit?: number | null
 }): React.JSX.Element | null {
-  if (unhydratedItemCount <= 0) {
-    return null
+  const lines: React.JSX.Element[] = []
+  if (truncatedAtQueryLimit !== null && truncatedAtQueryLimit > 0) {
+    lines.push(
+      <AzureDevOpsLoadNoticeLine key="query-limit" kind="query-limit">
+        {translate(
+          'auto.components.TaskPage.azureDevOps.workItems.queryLimit',
+          'Only the {{value0}} most recently changed work items are shown, so the filters above cannot reach the rest. Narrow the list in Azure DevOps.',
+          { value0: truncatedAtQueryLimit }
+        )}
+      </AzureDevOpsLoadNoticeLine>
+    )
   }
-  return (
-    <AzureDevOpsLoadNotices>
-      <AzureDevOpsLoadNoticeLine kind="unhydrated-items">
+  if (unhydratedItemCount > 0) {
+    lines.push(
+      <AzureDevOpsLoadNoticeLine key="unhydrated-items" kind="unhydrated-items">
         {translate(
           'auto.components.TaskPage.azureDevOps.backlog.unhydratedItems',
           '{{count}} work items couldn’t be loaded and are missing from this list. Refresh to try again.',
@@ -24,6 +36,7 @@ export function AzureDevOpsBacklogNotices({
           }
         )}
       </AzureDevOpsLoadNoticeLine>
-    </AzureDevOpsLoadNotices>
-  )
+    )
+  }
+  return lines.length === 0 ? null : <AzureDevOpsLoadNotices>{lines}</AzureDevOpsLoadNotices>
 }

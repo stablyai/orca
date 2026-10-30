@@ -39,6 +39,8 @@ export function useAzureDevOpsWorkItemsLoader(args: {
 }): {
   items: AzureDevOpsWorkItem[]
   unhydratedItemCount: number
+  /** The query's own result bound when the list came back at it; null otherwise. */
+  truncatedAtQueryLimit: number | null
   status: AzureDevOpsWorkItemsLoadStatus
   errorStatus: AzureDevOpsWorkItemsErrorStatus | null
   errorMessage: string | null
@@ -137,6 +139,7 @@ export function useAzureDevOpsWorkItemsLoader(args: {
   return {
     items: current?.page?.items ?? NO_ITEMS,
     unhydratedItemCount: current?.page?.unhydratedItemCount ?? 0,
+    truncatedAtQueryLimit: current?.page?.truncatedAtQueryLimit ?? null,
     status: current?.status ?? 'idle',
     errorStatus: current?.errorStatus ?? null,
     errorMessage: current?.errorMessage ?? null,

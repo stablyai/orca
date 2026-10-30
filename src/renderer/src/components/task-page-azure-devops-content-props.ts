@@ -64,6 +64,7 @@ export function buildAzureDevOpsContentProps(args: {
   /** Items assigned to the signed-in user project-wide, most recently changed first. */
   workItems: AzureDevOpsWorkItem[]
   workItemsUnhydratedItemCount: number
+  workItemsTruncatedAtQueryLimit: number | null
   workItemsErrorStatus: AzureDevOpsContentProps['workItems']['errorStatus']
   workItemsErrorMessage: string | null
   workItemsLoading: boolean
@@ -176,6 +177,7 @@ export function buildAzureDevOpsContentProps(args: {
       },
       totalItemCount: args.workItems.length,
       unhydratedItemCount: args.workItemsUnhydratedItemCount,
+      truncatedAtQueryLimit: args.workItemsTruncatedAtQueryLimit,
       errorStatus: args.workItemsErrorStatus,
       errorMessage: args.workItemsErrorMessage,
       loading: args.workItemsLoading

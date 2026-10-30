@@ -51,6 +51,7 @@ function area(
     },
     totalItemCount: items.length,
     unhydratedItemCount: 0,
+    truncatedAtQueryLimit: null,
     errorStatus: null,
     errorMessage: null,
     loading: false,
@@ -81,6 +82,14 @@ describe('AzureDevOpsWorkItemsArea', () => {
   it('counts the items the host could not hydrate, reusing the backlog notice', () => {
     render(<AzureDevOpsWorkItemsArea {...area({ unhydratedItemCount: 2 })} />)
     expect(screen.getByText(/2 work items couldn’t be loaded/)).toBeInTheDocument()
+  })
+
+  it('says the list is capped at the query bound, which is not a hydration shortfall', () => {
+    render(<AzureDevOpsWorkItemsArea {...area({ truncatedAtQueryLimit: 1000 })} />)
+    expect(
+      screen.getByText(/Only the 1000 most recently changed work items are shown/)
+    ).toBeInTheDocument()
+    expect(screen.queryByText(/couldn’t be loaded/)).toBeNull()
   })
 
   it('shows the host-unreachable notice, not a raw message, when contact was lost', () => {
