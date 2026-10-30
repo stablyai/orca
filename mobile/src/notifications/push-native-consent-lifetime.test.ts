@@ -12,7 +12,7 @@ import {
 import { pushOwnerRpcPort as client } from './push-owner-native-ports.test-fixture'
 import { expect, it, vi } from 'vitest'
 import { ownerCleanup } from '../../../cloud/apps/push/src/push-owner-integration.test-fixture'
-import { AppState, Platform } from 'react-native'
+import { Platform } from 'react-native'
 import type { ConnectionState } from '../transport/types'
 import type { HostClientStoreEntry } from '../transport/host-entry-opener'
 import {

@@ -13,6 +13,9 @@ it('holds the saved forwarding environment across restart, applies reads without
   vi.useFakeTimers()
   const first = new RuntimeMobileNotificationController()
   const restarted = new RuntimeMobileNotificationController()
+  const schedule = vi.spyOn(globalThis, 'setTimeout')
+  const cancel = vi.spyOn(globalThis, 'clearTimeout')
+  const errors: unknown[] = []
   try {
     first.configureDismissalStore(folder)
     const structuredOrigin = {
@@ -36,9 +39,24 @@ it('holds the saved forwarding environment across restart, applies reads without
       forwardingEnvironmentId: 'A-environment-for-B'
     }
     first.dispatch(alert)
+    const firstTimer = schedule.mock.results.at(-1)?.value
+    expect(firstTimer).toBeDefined()
+    expect(schedule).toHaveBeenLastCalledWith(expect.any(Function), 7 * 86400_000)
+    expect(vi.getTimerCount()).toBe(1)
     await first.closeDismissals()
+    expect(cancel).toHaveBeenLastCalledWith(firstTimer)
+    expect(vi.getTimerCount()).toBe(0)
     restarted.configureDismissalStore(folder)
+    const restoredTimer = schedule.mock.results.at(-1)?.value
+    expect(restoredTimer).toBeDefined()
+    expect(restoredTimer).not.toBe(firstTimer)
+    expect(vi.getTimerCount()).toBe(1)
     expect(restarted.getForwardedEnvironments()).toEqual(['A-environment-for-B'])
+    const replacementTimer = schedule.mock.results.at(-1)?.value
+    expect(replacementTimer).toBeDefined()
+    expect(replacementTimer).not.toBe(restoredTimer)
+    expect(cancel).toHaveBeenLastCalledWith(restoredTimer)
+    expect(vi.getTimerCount()).toBe(1)
     const events: MobileNotificationEvent[] = []
     restarted.onDispatched((event) => events.push(event))
     restarted.retireStructuredAttention({
@@ -46,6 +64,8 @@ it('holds the saved forwarding environment across restart, applies reads without
       observedCursor: structuredOrigin.journalCursor
     })
     expect(events.map((event) => event.type)).toEqual(['dismiss'])
+    expect(cancel).toHaveBeenLastCalledWith(replacementTimer)
+    expect(vi.getTimerCount()).toBe(0)
     expect(restarted.getForwardedEnvironments()).toEqual([])
     restarted.dispatch({ ...alert, notificationId: 'next' })
     const changes: string[][] = []
@@ -53,12 +73,44 @@ it('holds the saved forwarding environment across restart, applies reads without
     await restarted.flushDismissals()
     await vi.advanceTimersByTimeAsync(7 * 86400_000)
     expect(changes).toEqual([[]])
+    expect(vi.getTimerCount()).toBe(0)
     expect(restarted.getForwardedEnvironments()).toEqual([])
-  } finally {
-    await first.closeDismissals()
+    restarted.dispatch({ ...alert, notificationId: 'live-close' })
+    const liveTimer = schedule.mock.results.at(-1)?.value
+    expect(liveTimer).toBeDefined()
+    expect(schedule).toHaveBeenLastCalledWith(expect.any(Function), 7 * 86400_000)
+    expect(vi.getTimerCount()).toBe(1)
+    const beforeClose = changes.slice()
+    const eventsBeforeClose = events.slice()
     await restarted.closeDismissals()
+    expect(cancel).toHaveBeenLastCalledWith(liveTimer)
+    expect(vi.getTimerCount()).toBe(0)
+    await vi.advanceTimersByTimeAsync(7 * 86400_000)
+    expect(changes).toEqual(beforeClose)
+    expect(events).toEqual(eventsBeforeClose)
+  } catch (error) {
+    errors.push(error)
+  } finally {
+    const closed = await Promise.allSettled([
+      Promise.resolve().then(() => first.closeDismissals()),
+      Promise.resolve().then(() => restarted.closeDismissals())
+    ])
+    for (const result of closed) {
+      if (result.status === 'rejected') {
+        errors.push(result.reason)
+      }
+    }
+    schedule.mockRestore()
+    cancel.mockRestore()
     vi.useRealTimers()
-    rmSync(folder, { recursive: true, force: true })
+    try {
+      rmSync(folder, { recursive: true, force: true })
+    } catch (error) {
+      errors.push(error)
+    }
+  }
+  if (errors.length) {
+    throw new AggregateError(errors, 'Forwarded notification lifetime or cleanup failed')
   }
 })
 
