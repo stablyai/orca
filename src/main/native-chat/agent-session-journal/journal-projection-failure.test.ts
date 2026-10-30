@@ -88,7 +88,7 @@ it('keeps sends on cache-local failure, but adopts nothing on outcome, receipt, 
   expectProjectionMatches(database, rig.state())
   database.db.exec('DROP TRIGGER cache_failure')
   await finishCatchUp(new JournalProjectionCatchUp(database, sessionId, epoch))
-  rig.projection.opened(rig.state().lastSequence)
+  rig.projection.opened(true)
   const saved = encodeJournalState(rig.state())
   const live = rig.state()
   const scenarios = [

@@ -22,6 +22,7 @@ import {
   journalStateScalars
 } from './journal-state-layout'
 import type { JournalCatchUpStep, JournalCatchUpPacing } from './journal-projection-catch-up'
+import type { OUTCOME_FORMAT_1_COLLECTIONS } from './journal-outcome-format-1'
 
 // Intended: private conversion state and paced publication keep bookkeeping off the send path.
 export class JournalOutcomeConversion {
@@ -181,14 +182,24 @@ function* tailVerify(
   verified: number
 ): Generator<void, boolean> {
   const scalars = journalOutcomeScalars(state)
-  const collections = new Map<string, Lookup>([['queue.cards', state.queue.cards]])
-  for (const [path, value] of Object.entries(state)) {
-    if (value instanceof Map) {
-      collections.set(path, value)
-    } else if (value instanceof Set) {
-      collections.set(path, { has: (key) => value.has(key), get: (key) => key })
-    }
-  }
+  const lookups = {
+    items: keyed(state.items, isText),
+    itemFences: keyed(state.itemFences, isText),
+    itemExecutionOwners: keyed(state.itemExecutionOwners, isText),
+    providerActivityAt: keyed(state.providerActivityAt, isNumber),
+    tombstones: keyed(state.tombstones, isText),
+    removedTurnIds: members(state.removedTurnIds),
+    submissions: keyed(state.submissions, isText),
+    receipts: keyed(state.receipts, isText),
+    aliases: keyed(state.aliases, isText),
+    itemEchoes: keyed(state.itemEchoes, isText),
+    appliedSettlementIds: members(state.appliedSettlementIds),
+    stoppedHistoryCarried: keyed(state.stoppedHistoryCarried, isText),
+    queuedHandOffPlaces: keyed(state.queuedHandOffPlaces, isText),
+    normalizedHandOffs: members(state.normalizedHandOffs),
+    'queue.cards': keyed(state.queue.cards, isText)
+  } satisfies Record<(typeof OUTCOME_FORMAT_1_COLLECTIONS)[number], Lookup>
+  const collections = new Map<string, Lookup>(Object.entries(lookups))
   let after = { seq: verified + 1, field: '', key: '' }
   for (;;) {
     const values = readJournalOutcomePage(database.db, generation, after, state.lastSequence)
@@ -207,6 +218,21 @@ function* tailVerify(
 }
 
 type Lookup = { has: (key: unknown) => boolean; get: (key: unknown) => unknown }
+const isText = (key: unknown): key is string => typeof key === 'string'
+const isNumber = (key: unknown): key is number => typeof key === 'number'
+
+/** Typed point lookups into a live collection, for keys parsed from stored JSON. */
+function keyed<K, V>(map: ReadonlyMap<K, V>, isKey: (key: unknown) => key is K): Lookup {
+  return {
+    has: (key) => isKey(key) && map.has(key),
+    get: (key) => (isKey(key) ? map.get(key) : undefined)
+  }
+}
+
+/** A set entry is stored as [value, value]. */
+function members(set: ReadonlySet<string>): Lookup {
+  return { has: (key) => isText(key) && set.has(key), get: (key) => key }
+}
 
 function tailValueMatches(
   value: JournalOutcome,

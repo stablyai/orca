@@ -51,10 +51,10 @@ afterEach(async () => {
   await closeTestJournalHostDatabases()
   await rm(root, { recursive: true, force: true })
 })
-const item = (seq: number): JournalRow => ({
+const item = (seq: number, itemId = 'stream'): JournalRow => ({
   ...base(seq),
   kind: 'item',
-  itemId: 'stream',
+  itemId,
   revision: seq,
   body: { kind: 'status', text: `revision ${seq}` }
 })
@@ -175,7 +175,7 @@ it('fences cached opens and every writer before mutation, while the old parser r
 it('opens a chat whole while its cache rebuild is between pages, then from the finished cache', async () => {
   const rows = [projectionEpochRow]
   for (let seq = 2; seq < 80; seq++) {
-    rows.push({ ...item(seq), itemId: `item-${seq}` })
+    rows.push(item(seq, `item-${seq}`))
   }
   const rig = projectionWriter(database, seedOutcomeRows(database, rows))
   rigs.push(rig)
@@ -191,7 +191,7 @@ it('opens a chat whole while its cache rebuild is between pages, then from the f
   expect(between?.projectionThrough).toBe(0)
   expect(between && encodeJournalState(between.state)).toEqual(encodeJournalState(rig.state()))
   // A write between pages lands in the outcome log; the rebuild copies it from the moving tip.
-  await rig.writer.enqueue((seq) => ({ ...item(seq), itemId: 'late' }))
+  await rig.writer.enqueue((seq) => item(seq, 'late'))
   await finishCatchUp(rebuild)
   const cached = restoreJournal(database.db, sessionId)
   expect(cached?.projectionThrough).toBe(rig.state().lastSequence)
