@@ -6,7 +6,10 @@ import { replaceRuntimeEnvironmentRevisions } from '@/runtime/runtime-environmen
 import { isWebRuntimeSessionActive } from '@/runtime/web-runtime-session-environment'
 import type * as TerminalOperation from '@/runtime/web-runtime-terminal-create-operation'
 import type * as WebEnvironment from '@/runtime/web-runtime-session-environment'
+import type * as RuntimeRpcClient from '@/runtime/runtime-rpc-client'
 import type { AgentLaunchChoices } from '../../src/shared/agent-launch-choices'
+import type { FolderWorkspace } from '../../src/shared/folder-workspace-types'
+import type { ProjectGroup } from '../../src/shared/project-group-types'
 
 const mocks = vi.hoisted(() => ({
   actualOperation: false,
@@ -18,7 +21,9 @@ const mocks = vi.hoisted(() => ({
   toastSuccess: vi.fn(),
   clipboard: vi.fn(),
   reveal: vi.fn(),
-  capability: vi.fn(async () => false),
+  capability: vi.fn<typeof RuntimeRpcClient.runtimeEnvironmentSupportsCapability>(
+    async () => false
+  ),
   hostRpc: vi.fn()
 }))
 
@@ -39,6 +44,8 @@ export const store = {
     activeRuntimeEnvironmentId: 'web-runtime' as string | null
   },
   projects: [{ id: 'repo-1', localWindowsRuntimePreference: { kind: 'inherit-global' as const } }],
+  folderWorkspaces: [] as FolderWorkspace[],
+  projectGroups: [] as ProjectGroup[],
   // The client stamps a server's rows on arrival; focus alone never names the owner.
   repos: [
     { id: 'repo-1', connectionId: null, path: '/repo', executionHostId: 'runtime:web-runtime' }
@@ -131,6 +138,8 @@ afterEach(() => {
 beforeEach(() => {
   vi.clearAllMocks()
   mocks.actualOperation = false
+  store.folderWorkspaces = []
+  store.projectGroups = []
   vi.mocked(isWebRuntimeSessionActive).mockReturnValue(true)
   store.worktreesByRepo = { 'repo-1': store.worktreesByRepo['repo-1'].slice(0, 1) }
   store.repos = [{ ...store.repos[0], executionHostId: 'runtime:web-runtime' }]

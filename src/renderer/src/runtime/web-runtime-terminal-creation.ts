@@ -82,6 +82,6 @@ export async function createWebRuntimeAgentSessionTerminalWithLaunchDraft(
   }
   return {
     outcome: created.outcome,
-    promptDelivered: created.outcome.status === 'created' && Boolean(created.hostTabId)
+    promptDelivered: created.outcome.status === 'created'
   }
 }
