@@ -1,3 +1,4 @@
+import { queuedMessageEditAcceptsText } from './queued-message-edit-command'
 import { describe, expect, it, vi } from 'vitest'
 import {
   dispatchStructuredAgentSessionComposerCommand,
@@ -158,7 +159,7 @@ describe('agent-implemented commands pass through to the agent', () => {
       { name: 'fast', kind: 'command' },
       { name: 'compact', kind: 'command' }
     ] as const
-    expect(isStructuredAgentSessionComposerCommand('/fast', 'omp')).toBe(true)
+    expect(isStructuredAgentSessionComposerCommand('/fast', 'omp')).toBe(false)
     expect(isStructuredAgentSessionComposerCommand('/fast', 'omp', sessionCommands)).toBe(false)
     expect(
       await dispatchStructuredAgentSessionComposerCommand('/fast status', {
@@ -171,17 +172,31 @@ describe('agent-implemented commands pass through to the agent', () => {
     expect(isStructuredAgentSessionComposerCommand('/compact', 'omp', sessionCommands)).toBe(true)
   })
 
-  it('keeps refusing a Codex command the model cannot carry out', async () => {
-    expect(isStructuredAgentSessionComposerCommand('/permissions', 'codex')).toBe(true)
-    expect(
-      await dispatchStructuredAgentSessionComposerCommand('/permissions', {
-        ...controller,
-        agent: 'codex'
-      })
-    ).toMatchObject({
-      handled: true,
-      error:
-        '/permissions is not available in chat sessions. Use the slash menu to see available commands.'
-    })
+  it('leaves provider text independent of the optional inventory', async () => {
+    for (const sessionCommands of [
+      undefined,
+      [],
+      [{ name: 'permissions', kind: 'command' as const }]
+    ]) {
+      expect(queuedMessageEditAcceptsText('/fast status', 'omp', sessionCommands)).toBe(true)
+      expect(queuedMessageEditAcceptsText('/clear', 'omp', sessionCommands)).toBe(false)
+      expect(
+        isStructuredAgentSessionComposerCommand('/permissions', 'codex', sessionCommands)
+      ).toBe(false)
+      expect(
+        await dispatchStructuredAgentSessionComposerCommand('/permissions', {
+          ...controller,
+          agent: 'codex',
+          sessionCommands
+        })
+      ).toEqual(PASSED_THROUGH)
+      expect(
+        await dispatchStructuredAgentSessionComposerCommand('/fast status', {
+          ...controller,
+          agent: 'omp',
+          sessionCommands
+        })
+      ).toEqual(PASSED_THROUGH)
+    }
   })
 })

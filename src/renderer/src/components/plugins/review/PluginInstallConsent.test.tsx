@@ -11,7 +11,14 @@ function renderConsent(
 ): void {
   render(
     <PluginInstallConsent
-      trust={{ worker, declarative: false, panel: !worker }}
+      trust={{
+        worker,
+        declarative: false,
+        panel: !worker,
+        editor: false,
+        sidebarPanel: !worker,
+        recipesOnly: false
+      }}
       capabilities={capabilities}
       shortcuts={[]}
       installed={null}

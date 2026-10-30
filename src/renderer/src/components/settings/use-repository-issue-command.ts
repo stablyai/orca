@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { readRuntimeIssueCommand, writeRuntimeIssueCommand } from '@/runtime/runtime-hooks-client'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
+import { watchRefusedWslRead } from '@/runtime/wsl-refused-read-watch'
 
 export function useRepositoryIssueCommand({
   repoId,
@@ -37,75 +38,42 @@ export function useRepositoryIssueCommand({
   }, [])
 
   useEffect(() => {
-    let cancelled = false
-    let inFlight = false
-    let refused: string | null = null
-    // Running signals that land while a read is in flight would otherwise be missed.
-    let ranDuringRead = new Set<string>()
     updateIssueCommandDraft('')
     setHasSharedIssueCommand(false)
     setIssueCommandSaveError(null)
     setIssueCommandReadOnly(false)
     setIssueCommandStoppedDistro(null)
     contentUnknownRef.current = true
-    const load = (): void => {
-      inFlight = true
-      ranDuringRead = new Set()
-      void readRuntimeIssueCommand(selectedHostId, repoId)
-        .then((result) => {
-          inFlight = false
-          if (cancelled) {
-            return
-          }
-          if (result.status === 'error') {
-            refused = result.refusedWslDistro?.toLowerCase() ?? null
-            setIssueCommandReadOnly(true)
-            setIssueCommandStoppedDistro(result.refusedWslDistro ?? null)
-            if (refused && ranDuringRead.has(refused)) {
-              load()
-            }
-            return
-          }
-          refused = null
-          const localContent = result.localContent ?? ''
-          contentUnknownRef.current = false
-          setIssueCommandReadOnly(false)
-          setIssueCommandStoppedDistro(null)
-          updateIssueCommandDraft(localContent)
-          setHasSharedIssueCommand(Boolean(result.sharedContent))
-          lastCommittedIssueCommandRef.current = localContent
-        })
-        .catch(() => {
-          inFlight = false
-          if (cancelled) {
-            return
-          }
-          // A failed read stays editable, as before; only a refused one is known to hide content.
-          contentUnknownRef.current = false
-          updateIssueCommandDraft('')
-          setHasSharedIssueCommand(false)
-          lastCommittedIssueCommandRef.current = ''
-        })
-    }
-    // Subscribed before the read (#35812's pattern): main signals once a refusing distro runs.
-    const onDistroRunning = window.api?.preflight?.onWslDistroRunning
-    const stopWaiting =
-      typeof onDistroRunning === 'function'
-        ? onDistroRunning((distro) => {
-            const key = distro.toLowerCase()
-            if (inFlight) {
-              ranDuringRead.add(key)
-            } else if (key === refused) {
-              refused = null
-              load()
-            }
-          })
-        : null
-    load()
+    // A refused read is re-asked once its distro runs: main's signal here, a bounded re-poll for a paired host.
+    const stopWatching = watchRefusedWslRead({
+      hostId: selectedHostId,
+      read: () => readRuntimeIssueCommand(selectedHostId, repoId),
+      refusedDistro: (result) => (result.status === 'error' ? result.refusedWslDistro : undefined),
+      onResult: (result) => {
+        if (result.status === 'error') {
+          setIssueCommandReadOnly(true)
+          setIssueCommandStoppedDistro(result.refusedWslDistro ?? null)
+          return
+        }
+        const localContent = result.localContent ?? ''
+        contentUnknownRef.current = false
+        setIssueCommandReadOnly(false)
+        setIssueCommandStoppedDistro(null)
+        updateIssueCommandDraft(localContent)
+        setHasSharedIssueCommand(Boolean(result.sharedContent))
+        lastCommittedIssueCommandRef.current = localContent
+      },
+      onError: () => {
+        // A failed read stays editable, as before; only a refused one is known to hide content.
+        contentUnknownRef.current = false
+        updateIssueCommandDraft('')
+        setHasSharedIssueCommand(false)
+        lastCommittedIssueCommandRef.current = ''
+      }
+    })
 
     return () => {
-      cancelled = true
-      stopWaiting?.()
+      stopWatching()
       const draft = issueCommandDraftRef.current.trim()
       if (!contentUnknownRef.current && draft !== lastCommittedIssueCommandRef.current) {
         // Saving the user's own edit is a user act: it may start the repo's stopped WSL distro.
@@ -127,6 +95,10 @@ export function useRepositoryIssueCommand({
     }
     const trimmed = issueCommandDraft.trim()
     updateIssueCommandDraft(trimmed)
+    // A blur with no edit saves nothing, so it never starts a stopped distro.
+    if (trimmed === lastCommittedIssueCommandRef.current) {
+      return
+    }
     try {
       await writeRuntimeIssueCommand(selectedHostId, repoId, trimmed, { wakeWslDistro: true })
       lastCommittedIssueCommandRef.current = trimmed

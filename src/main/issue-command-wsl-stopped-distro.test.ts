@@ -117,4 +117,19 @@ describe('issue command reads for a stopped WSL distro (E9)', () => {
       'utf-8'
     )
   })
+
+  it('refuses a host-path repo whose Git runs in the stopped distro', async () => {
+    await expect(
+      writeIssueCommandUnlessWslStopped(HOST_REPO, 'x', () => ({ wslDistro: 'Ubuntu' }))
+    ).rejects.toThrow("WSL distro 'Ubuntu' is not running")
+    expect(mocks.writeFileSync).not.toHaveBeenCalled()
+  })
+
+  it('still saves a host-path repo whose runtime awaits repair (no Git distro yet)', async () => {
+    const repairing = (): never => {
+      throw new Error('Project runtime requires repair')
+    }
+    await writeIssueCommandUnlessWslStopped(HOST_REPO, 'mine', repairing)
+    expect(mocks.writeFileSync).toHaveBeenCalled()
+  })
 })

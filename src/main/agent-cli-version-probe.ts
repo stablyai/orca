@@ -13,12 +13,16 @@ export type AgentCliVersionCheck =
   | { status: 'tooOld'; version: string; minimumVersion: string }
   | { status: 'unknown' | 'missing'; version: null }
 
+export type AgentCliVersionInput = Pick<ProcessSpec, 'program' | 'cwd' | 'env'> & {
+  prefixArgs?: readonly string[]
+}
+
 export type AgentCliVersionReader = (
-  input: Pick<ProcessSpec, 'program' | 'cwd' | 'env'>
+  input: AgentCliVersionInput
 ) => Promise<{ version: string | null; started?: false }>
 
 export async function checkAgentCliVersion(
-  input: Pick<ProcessSpec, 'program' | 'cwd' | 'env'>,
+  input: AgentCliVersionInput,
   minimumVersions: readonly string[],
   read: AgentCliVersionReader = readAgentCliVersion
 ): Promise<AgentCliVersionCheck> {
@@ -53,14 +57,16 @@ export function agentCliMinimumVersion(
 }
 
 export async function readAgentCliVersion(
-  input: Pick<ProcessSpec, 'program' | 'cwd' | 'env'>,
+  input: AgentCliVersionInput,
   parseVersion: typeof parseCliVersion = parseCliVersion
 ): Promise<{ version: string | null; started?: false }> {
+  const { prefixArgs = [], ...launch } = input
   let result
   try {
     result = await runProcess({
-      ...input,
-      args: ['--version'],
+      ...launch,
+      args: [...prefixArgs, '--version'],
+      terminationBarrier: true,
       timeoutMs: 5_000,
       maxOutputBytes: 4_096,
       killOnOutputLimit: true

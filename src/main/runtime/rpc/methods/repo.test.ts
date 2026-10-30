@@ -395,6 +395,7 @@ describe('repo RPC methods', () => {
 
     const hooksResponse = await dispatcher.dispatch(makeRequest('repo.hooks', { repo: 'repo-1' }))
     await dispatcher.dispatch(makeRequest('repo.hooksCheck', { repo: 'repo-1' }))
+    await dispatcher.dispatch(makeRequest('repo.hooksCheck', { repo: 'repo-1', background: true }))
     await dispatcher.dispatch(makeRequest('repo.setupScriptImports', { repo: 'repo-1' }))
     await dispatcher.dispatch(makeRequest('repo.issueCommandRead', { repo: 'repo-1' }))
     // A launch's wake reaches the read; a non-boolean value is dropped, as older clients send none.
@@ -416,7 +417,9 @@ describe('repo RPC methods', () => {
       ok: true,
       result: { setupTrust: { contentHash: 'hash-1', scriptContent: 'pnpm install' } }
     })
-    expect(runtime.checkRepoHooks).toHaveBeenCalledWith('repo-1')
+    expect(runtime.checkRepoHooks).toHaveBeenNthCalledWith(1, 'repo-1', { background: false })
+    // A render-driven check from a newer client asks the host to spare a stopped distro.
+    expect(runtime.checkRepoHooks).toHaveBeenNthCalledWith(2, 'repo-1', { background: true })
     expect(runtime.inspectRepoSetupScriptImports).toHaveBeenCalledWith('repo-1')
     expect(vi.mocked(runtime.readRepoIssueCommand).mock.calls).toEqual([
       ['repo-1', { wakeWslDistro: undefined }],

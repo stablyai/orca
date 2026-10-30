@@ -5,7 +5,7 @@ import { isGitRepoKind } from '../../../../shared/repo-kind'
 import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { refreshGitStatusForWorktree } from './git-status-refresh'
 import { isWindowVisible } from '@/lib/window-visibility-interval'
-import { takeWorkspaceSwitchWake } from '@/lib/workspace-switch-user-act'
+import { takeRecentWorkspaceSwitchWake } from '@/lib/workspace-switch-user-act'
 import {
   hasInteractiveActiveGitStatusConsumer,
   shouldPollActiveGitStatus
@@ -134,7 +134,7 @@ export function useGitStatusPolling(options: { enabled?: boolean } = {}): void {
         }
         // Only the first status after the user's own switch here may start WSL (E9); polls, remounts
         // and restores stay gated.
-        const wakeWslDistro = takeWorkspaceSwitchWake(activeWorktreeId, 'git-status')
+        const wakeWslDistro = takeRecentWorkspaceSwitchWake(activeWorktreeId, 'git-status')
         await refreshGitStatusForWorktree({
           target: copy.transport,
           ownerHostId: copy.hostId,

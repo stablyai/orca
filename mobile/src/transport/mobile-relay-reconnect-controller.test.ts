@@ -302,9 +302,9 @@ describe('relay reconnect controller', () => {
   it('resets backoff after an authenticated relay remains stable', () => {
     const onRetry = vi.fn()
     const reconnect = createController(onRetry)
-    const session: Pick<MobileRelayRpcSession, 'getFailure' | 'probeAfterBackground'> = {
+    const session: Pick<MobileRelayRpcSession, 'getFailure' | 'notifyForeground'> = {
       getFailure: () => new RelayOuterError(4408),
-      probeAfterBackground: () => {}
+      notifyForeground: () => {}
     }
     const logical = {
       getActivePath: () => 'relay'
@@ -364,20 +364,20 @@ describe('relay reconnect controller', () => {
     expect(relayFailureAllowsGraceRetry(new RelayOuterError(4429))).toBe(false)
   })
 
-  it('probes a retained relay once on a real background return, not on a foreground nudge', () => {
+  it('nudges a retained relay tolerantly when availability returns', () => {
     const reconnect = createController(vi.fn())
-    const session = { getFailure: () => null, probeAfterBackground: vi.fn() }
+    const session = { getFailure: () => null, notifyForeground: vi.fn() }
     const logical = new FakeLogicalClient('connected', 'relay')
     reconnect.setActiveSession(session)
 
     reconnect.handleForeground(logical, true)
-    expect(session.probeAfterBackground).not.toHaveBeenCalled()
+    expect(session.notifyForeground).not.toHaveBeenCalled()
     reconnect.handleForeground(logical, false)
-    expect(session.probeAfterBackground).toHaveBeenCalledOnce()
+    expect(session.notifyForeground).toHaveBeenCalledExactlyOnceWith('focus')
 
     reconnect.clear()
     reconnect.handleForeground(logical, false)
-    expect(session.probeAfterBackground).toHaveBeenCalledOnce()
+    expect(session.notifyForeground).toHaveBeenCalledExactlyOnceWith('focus')
   })
 
   it('redials an attach timeout once quickly per failure streak', () => {
@@ -398,7 +398,7 @@ describe('relay reconnect controller', () => {
     vi.advanceTimersByTime(1)
     expect(onRetry).toHaveBeenCalledTimes(2)
 
-    reconnect.setActiveSession({ getFailure: () => null, probeAfterBackground: () => {} })
+    reconnect.setActiveSession({ getFailure: () => null, notifyForeground: () => {} })
     vi.advanceTimersByTime(30_000)
     reconnect.registerFailure(attachTimeout())
     vi.advanceTimersByTime(1_500)

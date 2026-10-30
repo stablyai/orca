@@ -171,10 +171,10 @@ export function useMobileDictation(options: UseMobileDictationOptions): UseMobil
         }
       },
       setIdle: () => applyStatus('idle'),
-      commitRecordingStart: () => {
+      commitRecordingStart: (hostDedupesResends) => {
         acceptingChunksRef.current = true
         pendingChunksRef.current.clear()
-        pendingAudioBudgetRef.current.reset()
+        pendingAudioBudgetRef.current.reset(hostDedupesResends)
         if (!capture.begin()) {
           return false
         }

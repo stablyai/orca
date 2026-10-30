@@ -145,9 +145,8 @@ describe('packed-refs lock ownership', () => {
   })
 })
 
-describe('stranded per-ref locks', () => {
-  it('clears the empty refs/**/*.lock files its own dead process left behind', async () => {
-    // Git can die between O_EXCL creation and registering signal cleanup, leaving a persistent empty lock.
+describe('unattributed per-ref locks', () => {
+  it('preserves empty ref locks when only an old dead-owner marker exists', async () => {
     const commonDir = await gitCommonDir()
     const namespace = join(commonDir, 'refs', 'remotes', 'origin')
     await mkdir(namespace, { recursive: true })
@@ -157,30 +156,7 @@ describe('stranded per-ref locks', () => {
 
     await new PackRefsLockOwnership(commonDir).claim(laterBy(ABANDONED_LOCK_AGE_MS + 1))
 
-    await expect(exists(join(namespace, 'main.lock'))).resolves.toBe(false)
+    await expect(exists(join(namespace, 'main.lock'))).resolves.toBe(true)
     await expect(exists(join(namespace, 'main'))).resolves.toBe(true)
-  })
-
-  it('leaves a non-empty ref lock alone, because a live writer is mid-write', async () => {
-    const commonDir = await gitCommonDir()
-    const namespace = join(commonDir, 'refs', 'heads')
-    await mkdir(namespace, { recursive: true })
-    await writeFile(join(namespace, 'busy.lock'), 'b'.repeat(40))
-    await writeFile(paths(commonDir).marker, JSON.stringify({ pid: DEAD_PID }))
-
-    await new PackRefsLockOwnership(commonDir).claim(laterBy(ABANDONED_LOCK_AGE_MS + 1))
-
-    await expect(exists(join(namespace, 'busy.lock'))).resolves.toBe(true)
-  })
-
-  it('leaves ref locks alone when there is no marker naming a dead process', async () => {
-    const commonDir = await gitCommonDir()
-    const namespace = join(commonDir, 'refs', 'heads')
-    await mkdir(namespace, { recursive: true })
-    await writeFile(join(namespace, 'other.lock'), '')
-
-    await new PackRefsLockOwnership(commonDir).claim(laterBy(ABANDONED_LOCK_AGE_MS + 1))
-
-    await expect(exists(join(namespace, 'other.lock'))).resolves.toBe(true)
   })
 })

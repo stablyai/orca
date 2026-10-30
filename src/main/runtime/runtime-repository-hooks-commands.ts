@@ -50,7 +50,7 @@ export class RuntimeRepositoryHooksCommands {
     }
   }
 
-  async checkRepoHooks(repoSelector: string) {
+  async checkRepoHooks(repoSelector: string, options: { background?: boolean } = {}) {
     const repo = await this.deps.resolveRepo(repoSelector)
     if (isFolderRepo(repo)) {
       return { status: 'ok' as const, hasHooks: false, hooks: null, mayNeedUpdate: false }
@@ -58,6 +58,20 @@ export class RuntimeRepositoryHooksCommands {
     const connectionId = getRepoDialableSshTargetId(repo)
     if (connectionId) {
       return { status: 'error' as const, hasHooks: false, hooks: null, mayNeedUpdate: false }
+    }
+    // As the desktop's hooks:check: a render-driven check must not open a stopped distro's UNC paths.
+    const blocked = options.background ? await blockedWslDistroForPath(repo.path) : null
+    if (blocked) {
+      return {
+        status: 'error' as const,
+        hasHooks: false,
+        hooks: null,
+        mayNeedUpdate: false,
+        unavailable:
+          blocked.state === 'stopped'
+            ? ('wsl-distro-stopped' as const)
+            : ('wsl-distro-unverifiable' as const)
+      }
     }
     const has = hasHooksFile(repo.path)
     const hooks = has ? loadHooks(repo.path) : null

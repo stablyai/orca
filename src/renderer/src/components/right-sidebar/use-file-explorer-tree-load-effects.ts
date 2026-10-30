@@ -6,7 +6,7 @@ import { decideExpandedDirLoad } from './file-explorer-stale-dir-cache'
 import { clearFileExplorerUndoHistory } from './fileExplorerUndoRedo'
 import type { DirCache } from './file-explorer-types'
 import { splitPathSegments } from './path-tree'
-import { takeWorkspaceSwitchWake } from '@/lib/workspace-switch-user-act'
+import { takeRecentWorkspaceSwitchWake } from '@/lib/workspace-switch-user-act'
 
 type UseFileExplorerTreeLoadEffectsParams = {
   /** The store worktree id, keying the user's own switches to this workspace. */
@@ -91,7 +91,7 @@ export function useFileExplorerTreeLoadEffects({
     resetSelection()
     setNameFilterQuery('')
     // Only the user's own switch here may start its stopped WSL distro (E9), once per switch.
-    const wake = workspaceKey !== null && takeWorkspaceSwitchWake(workspaceKey, 'explorer')
+    const wake = workspaceKey !== null && takeRecentWorkspaceSwitchWake(workspaceKey, 'explorer')
     resetAndLoad(wake ? { wakeWslDistro: true } : undefined)
     clearFileExplorerUndoHistory()
   }, [visibleFilesWorktreePath, resetSelection]) // eslint-disable-line react-hooks/exhaustive-deps

@@ -5,7 +5,7 @@ import {
   pluginPointsFromManifest,
   pluginTrust
 } from './plugin-access-profile'
-import { pluginTrustWarnings } from './plugin-consent-copy'
+import { pluginTrustLabel, pluginTrustWarnings } from './plugin-consent-copy'
 
 const commandManifest = pluginManifestSchema.parse({
   manifestVersion: 1,
@@ -89,18 +89,32 @@ describe('pluginTrust', () => {
       execution: 'sandboxed-ui',
       points: pluginPointsFromManifest(commandManifest)
     })
-    expect(trust).toEqual({ worker: false, declarative: true, panel: true })
-    expect(pluginTrustWarnings(trust)).toEqual(['Its commands can act for you or your agents'])
+    expect(trust).toMatchObject({ worker: false, declarative: true, panel: true })
+    expect(pluginTrustWarnings(trust)).toEqual([
+      'Its commands can act for you or your agents',
+      "Runs the publisher's code inside Orca to draw its view. Orca shows what it can access and asks before enabling it."
+    ])
   })
 
-  it('adds no warning for a panel known to carry no instructions', () => {
+  it('says a panel runs the publisher code, never that it is sandboxed', () => {
     const trust = pluginTrust({ execution: 'sandboxed-ui', points: new Set(['panels']) })
-    expect(pluginTrustWarnings(trust)).toEqual([])
+    expect(pluginTrustLabel(trust)).toBe('Adds a panel')
+    expect(pluginTrustWarnings(trust)).toEqual([
+      "Runs the publisher's code inside Orca to draw its view. Orca shows what it can access and asks before enabling it."
+    ])
+    expect(
+      pluginTrustLabel(
+        pluginTrust({ execution: 'sandboxed-ui', points: new Set(['customEditors']) })
+      )
+    ).toBe('Opens and edits files')
+    expect(
+      pluginTrustLabel(pluginTrust({ execution: 'declarative', points: new Set(['vmRecipes']) }))
+    ).toBe('Adds VM recipes')
   })
 
   it('over-warns when the profile or contributions are unknown', () => {
     expect(pluginTrust({ execution: 'sandboxed-ui', points: null }).declarative).toBe(true)
-    expect(pluginTrust({ execution: null, points: null })).toEqual({
+    expect(pluginTrust({ execution: null, points: null })).toMatchObject({
       worker: false,
       declarative: true,
       panel: false
@@ -109,7 +123,7 @@ describe('pluginTrust', () => {
   })
 
   it('claims nothing runs only for content-only plugins', () => {
-    expect(pluginTrust({ execution: 'data', points: null })).toEqual({
+    expect(pluginTrust({ execution: 'data', points: null })).toMatchObject({
       worker: false,
       declarative: false,
       panel: false

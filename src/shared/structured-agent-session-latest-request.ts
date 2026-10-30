@@ -90,7 +90,7 @@ export function latestStructuredAgentSessionRequest(
         id: item.itemId,
         turnState: null,
         outcome: 'failure',
-        settledAt: submission.resolvedAt ?? undefined
+        settledAt: submission.resolvedAt ?? submission.submittedAt
       }
     }
   }
@@ -135,12 +135,12 @@ function rejectedSubmissionsByItem(
   return rejected
 }
 
-/** A turn recovery settled ended when that settle was written: when the user learns it stopped. */
+/** Recovery dates its own settle; older provider ends without clocks use their turn publication. */
 function turnEndedAt(
   item: AgentJournalRenderItem,
   turn: AgentJournalTurnLifecycle
 ): number | undefined {
-  return item.recoveredAt ?? turn.completedAt
+  return item.recoveredAt ?? turn.completedAt ?? item.observedAt
 }
 
 function messageProse(blocks: readonly NativeChatBlock[]): string {

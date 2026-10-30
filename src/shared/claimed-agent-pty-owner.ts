@@ -1,3 +1,5 @@
+import type { PtyCreationDisposition } from './pty-creation-disposition'
+export type { PtyCreationDisposition } from './pty-creation-disposition'
 import { randomUUID } from 'node:crypto'
 import type {
   AgentSessionClaimedSpawnResult,
@@ -29,6 +31,7 @@ type ReservedOwner = {
   generation: string
   phase: 'reserved'
   promise: Promise<AgentSessionClaimedSpawnResult>
+  creation?: Promise<PtyCreationDisposition>
 }
 
 type LiveOwner = LiveAgentSessionOwner
@@ -61,7 +64,8 @@ export class ClaimedAgentPtyOwnerRegistry {
     }>
     isLive?: (owner: LiveAgentSessionOwner) => boolean | Promise<boolean>
     /** Called when this request waits on another request's start instead of starting its own. */
-    onJoin?: () => void
+    onJoin?: (creation?: Promise<PtyCreationDisposition>) => void
+    creation?: Promise<PtyCreationDisposition>
   }): Promise<AgentSessionClaimedSpawnResult> {
     // Snapshot reused retry arguments before awaits so caller mutations cannot change registry keys.
     const requestedClaim = cloneClaim(args.claim)
@@ -93,7 +97,7 @@ export class ClaimedAgentPtyOwnerRegistry {
       if (reserved.worktreeScopeDigest !== requestedClaim.worktreeScopeDigest) {
         throw new Error('agent_session_conflict')
       }
-      args.onJoin?.()
+      args.onJoin?.(reserved.creation)
       const result = await reserved.promise
       return { disposition: 'adopted', owner: cloneOwner(result.owner as LiveOwner) }
     }
@@ -113,10 +117,11 @@ export class ClaimedAgentPtyOwnerRegistry {
       worktreeScopeDigest: requestedClaim.worktreeScopeDigest,
       generation,
       phase: 'reserved',
+      creation: args.creation,
       promise
     })
 
-    let promotedOwner: LiveOwner | null = null
+    let published = false
     try {
       const spawned = await args.spawn({ generation })
       const owner: LiveOwner = spawned.owner
@@ -155,9 +160,9 @@ export class ClaimedAgentPtyOwnerRegistry {
       const keys = this.keysByPtyId.get(owner.ptyId) ?? new Set<string>()
       keys.add(key)
       this.keysByPtyId.set(owner.ptyId, keys)
-      promotedOwner = owner
       // Index before awaited proof so an exit beating spawn completion can remove the matching generation.
       if (args.isLive && !(await args.isLive(cloneOwner(owner)))) {
+        this.release(owner.ptyId, owner.generation)
         throw new Error('agent_session_exited_during_start')
       }
       const current = this.live.get(key)
@@ -169,17 +174,29 @@ export class ClaimedAgentPtyOwnerRegistry {
         owner: cloneOwner(owner)
       }
       resolveReservation(result)
+      published = true
       return result
     } catch (error) {
-      if (promotedOwner) {
-        this.release(promotedOwner.ptyId, promotedOwner.generation)
-      }
       rejectReservation(error)
       throw error
     } finally {
-      const current = this.reserved.get(key)
-      if (current?.generation === generation) {
-        this.reserved.delete(key)
+      const finish = () => {
+        if (this.reserved.get(key)?.generation === generation) {
+          this.reserved.delete(key)
+        }
+      }
+      if (published || !args.creation) {
+        finish()
+      } else {
+        void args.creation.then(async (disposition) => {
+          if (disposition.kind === 'unknown') {
+            return
+          }
+          if (disposition.kind === 'physical' || disposition.kind === 'failed') {
+            await disposition.completion
+          }
+          finish()
+        })
       }
     }
   }

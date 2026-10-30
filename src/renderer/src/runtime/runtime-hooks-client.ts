@@ -51,7 +51,7 @@ export async function checkRuntimeHooks(
   return callRuntimeRpc<HookCheckResult>(
     target,
     'repo.hooksCheck',
-    { repo: repoId },
+    { repo: repoId, ...(options.background ? { background: true } : {}) },
     { timeoutMs: 15_000 }
   )
 }

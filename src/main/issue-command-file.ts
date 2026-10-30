@@ -97,8 +97,20 @@ export async function writeIssueCommandUnlessWslStopped(
   options: { wakeWslDistro?: boolean } = {}
 ): Promise<void> {
   await guardWslUncPathAccess(repoPath, () => writeIssueCommand(repoPath, content, gitOptions), {
-    wake: options.wakeWslDistro === true
+    wake: options.wakeWslDistro === true,
+    // A host-path repo whose Git runs in WSL starts the distro through the ignore check a save
+    // runs; clearing runs no Git, so it leaves the options unresolved.
+    wslDistro: content.trim() ? gitWslDistro(gitOptions) : undefined
   })
+}
+
+function gitWslDistro(gitOptions: IssueCommandGitOptions): string | undefined {
+  try {
+    return (typeof gitOptions === 'function' ? gitOptions() : gitOptions).wslDistro
+  } catch {
+    // A runtime awaiting repair resolves no Git distro; the path still gates UNC repos.
+    return undefined
+  }
 }
 
 /** Empty content removes the local override so the shared orca.yaml command applies. */

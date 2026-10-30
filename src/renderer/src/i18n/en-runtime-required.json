@@ -118,6 +118,12 @@
         "resultsFound_other": "{{count}} results found."
       },
       "activity": {
+        "ActivityPrototypePage": {
+          "activityOptionsFilterCount_one": "Activity options ({{count}} filter)",
+          "activityOptionsFilterCount_other": "Activity options ({{count}} filters)",
+          "threadListOptionsActiveFilters_one": "Thread list options ({{count}} filter active)",
+          "threadListOptionsActiveFilters_other": "Thread list options ({{count}} filters active)"
+        },
         "ActivityThreadContextMenu": {
           "clearMany_one": "Clear {{count}} Agent from List",
           "clearMany_other": "Clear {{count}} Agents from List",
@@ -145,6 +151,8 @@
           "usageCoverageRuns_other": "{{known}}/{{count}} runs"
         },
         "AutomationRunsDashboard": {
+          "historyUnavailable_one": "Run history is unavailable for {{count}} automation. Counts include available history only.",
+          "historyUnavailable_other": "Run history is unavailable for {{count}} automations. Counts include available history only.",
           "local": "Local",
           "remote": "Remote"
         },
@@ -174,6 +182,10 @@
         },
         "extraAgentArgs": {
           "unsupported": "Extra arguments aren't supported for this agent yet."
+        },
+        "hostSummary": {
+          "partialFailureOfHosts_one": "{{failed}} of {{count}} host could not be loaded",
+          "partialFailureOfHosts_other": "{{failed}} of {{count}} hosts could not be loaded"
         },
         "runHistory": {
           "occurrencesCount_one": "{{count}} time",
@@ -885,9 +897,23 @@
           "removeContainedProjects_one": "Remove {{count}} contained project",
           "removeContainedProjects_other": "Remove {{count}} contained projects"
         },
+        "RemoveFolderDialog": {
+          "openTerminalWarning_one": "{{count}} open terminal in this project will be closed.",
+          "openTerminalWarning_other": "{{count}} open terminals in this project will be closed."
+        },
         "SetupScriptPromptCard": {
           "savedWithSkippedFields_one": "{{count}} unsupported field skipped. Saved the setup command.",
           "savedWithSkippedFields_other": "{{count}} unsupported fields skipped. Saved the setup command."
+        },
+        "SidebarRepositoryFilterSection": {
+          "selectedProjects_one": "{{count}} project",
+          "selectedProjects_other": "{{count}} projects"
+        },
+        "SidebarWorkspaceOptionsMenu": {
+          "optionsActiveFilters_one": "Workspace options ({{count}} filter active)",
+          "optionsActiveFilters_other": "Workspace options ({{count}} filters active)",
+          "optionsFilterCount_one": "Workspace options ({{count}} filter)",
+          "optionsFilterCount_other": "Workspace options ({{count}} filters)"
         },
         "WorkspaceKanbanDrawerHeader": {
           "selectedCount_one": "{{count}} selected",
@@ -1272,6 +1298,7 @@
       "unevaluableSchedule": "Orca could not evaluate this automation and skipped the occurrence.",
       "watchTimedOut": "Orca stopped watching this run after 6h without a completion signal.",
       "workspaceHostAmbiguous": "The automation workspace spans more than one host, so Orca cannot tell which one to run it on.",
+      "wslDistroStopped": "The WSL distro {{distro}} is stopped, so this scheduled run did not start it. Start the distro or use Run now; later runs go ahead while it runs.",
       "wslMoveInProgress": "This automation's project is moving to its WSL host, so Orca skipped this run. Runs resume when the move finishes.",
       "wslMoveOwnedByHost": "This automation's project now runs on its WSL host, which runs this automation there. Orca no longer runs this local copy."
     }
@@ -1498,7 +1525,7 @@
       },
       "failureWords": {
         "accountSwitchInProgress": "{{agent}}'s setup is changing on this host. Try again after it finishes.",
-        "agentCommandNotRunnable": "{{agent}}'s Command in Settings → Agents must be a program path or name Orca can find, with no arguments or variables. Change it or reset it.",
+        "agentCommandNotRunnable": "{{agent}}'s Command in Settings → Agents must start with a program Orca can find. Variables, pipes and other shell syntax aren't supported; use the Environment setting for variables. Change it or reset it.",
         "agentCommandNotSignedIn": "Sign in to {{agent}} with `{{loginCommand}}` on the computer running this chat.",
         "agentNotSignedIn": "Sign in to {{agent}}.",
         "answerUnconfirmed": "Your answer was recorded but the agent did not confirm it.",
@@ -2087,7 +2114,6 @@
   },
   "settings": {
     "agents": {
-      "approveForMe": "approve for me",
       "permissionOverrideMore_one": "and {{count}} more",
       "permissionOverrideMore_other": "and {{count}} more",
       "permissionOverridesFollow_one": "{{count}} agent now follows {{mode}}",
@@ -2148,6 +2174,58 @@
     }
   },
   "sidebar": {
+    "agentSummary": {
+      "agentCount_one": "{{count}} agent",
+      "agentCount_other": "{{count}} agents",
+      "allInState": {
+        "blocked_one": "{{count}} agent blocked",
+        "blocked_other": "All {{count}} agents blocked",
+        "done_one": "{{count}} agent done",
+        "done_other": "All {{count}} agents done",
+        "failed_one": "{{count}} agent failed",
+        "failed_other": "All {{count}} agents failed",
+        "idle_one": "{{count}} agent idle",
+        "idle_other": "All {{count}} agents idle",
+        "interrupted_one": "{{count}} agent interrupted",
+        "interrupted_other": "All {{count}} agents interrupted",
+        "monitoring_one": "{{count}} agent monitoring",
+        "monitoring_other": "All {{count}} agents monitoring",
+        "needsAttention_one": "{{count}} agent needs attention",
+        "needsAttention_other": "All {{count}} agents needs attention",
+        "notReporting_one": "{{count}} agent not reporting",
+        "notReporting_other": "All {{count}} agents not reporting",
+        "unconfirmed_one": "{{count}} agent unconfirmed",
+        "unconfirmed_other": "All {{count}} agents unconfirmed",
+        "waiting_one": "{{count}} agent waiting",
+        "waiting_other": "All {{count}} agents waiting",
+        "working_one": "{{count}} agent working",
+        "working_other": "All {{count}} agents working"
+      },
+      "stateCount": {
+        "blocked_one": "{{count}} blocked",
+        "blocked_other": "{{count}} blocked",
+        "done_one": "{{count}} done",
+        "done_other": "{{count}} done",
+        "failed_one": "{{count}} failed",
+        "failed_other": "{{count}} failed",
+        "idle_one": "{{count}} idle",
+        "idle_other": "{{count}} idle",
+        "interrupted_one": "{{count}} interrupted",
+        "interrupted_other": "{{count}} interrupted",
+        "monitoring_one": "{{count}} monitoring",
+        "monitoring_other": "{{count}} monitoring",
+        "needsAttention_one": "{{count}} needs attention",
+        "needsAttention_other": "{{count}} needs attention",
+        "notReporting_one": "{{count}} not reporting",
+        "notReporting_other": "{{count}} not reporting",
+        "unconfirmed_one": "{{count}} unconfirmed",
+        "unconfirmed_other": "{{count}} unconfirmed",
+        "waiting_one": "{{count}} waiting",
+        "waiting_other": "{{count}} waiting",
+        "working_one": "{{count}} working",
+        "working_other": "{{count}} working"
+      }
+    },
     "createProject": {
       "errors": {
         "createDirectoryFailed": "Failed to create directory: {{detail}}",
@@ -2311,10 +2389,10 @@
     "namingFailure": {
       "errors": {
         "agentNotRun": "Orca could not run the chat-name agent.",
-        "noAgentAvailable": "No chat-name agent can run in this workspace.",
-        "noName": "The chat-name agent returned no name.",
+        "antigravityFailed": "Antigravity could not name this chat. Try generating the name again.",
         "grokFailed": "Grok could not name this chat. Try generating the name again.",
-        "antigravityFailed": "Antigravity could not name this chat. Try generating the name again."
+        "noAgentAvailable": "No chat-name agent can run in this workspace.",
+        "noName": "The chat-name agent returned no name."
       }
     }
   },
@@ -2388,14 +2466,16 @@
       "showLinked_other": "Show {{count}} linked reviews and tasks"
     }
   },
-  "workspaceOptions": {
-    "activeFilterCount_one": "{{count}} filter",
-    "activeFilterCount_other": "{{count}} filters"
-  },
   "workspaceSpace": {
     "compact": {
       "linkedAndScannedCount_one": "{{size}} in linked worktrees · {{count}} workspace",
       "linkedAndScannedCount_other": "{{size}} in linked worktrees · {{count}} workspaces"
+    }
+  },
+  "worktreeJumpPalette": {
+    "filter": {
+      "ariaActiveCount_one": "Filter: {{count}} active.",
+      "ariaActiveCount_other": "Filter: {{count}} active."
     }
   }
 }

@@ -43,7 +43,9 @@ const installMarketplacePluginSchema = marketplacePluginSchema.extend({
   /** Ask main to approve in the same step if the installed plugin is content only. */
   enableIfData: z.literal(true).optional(),
   /** The preview's consentFingerprint: one-click approves only these exact bytes. */
-  expectedFingerprint: z.string().min(1).max(256).optional()
+  expectedFingerprint: z.string().min(1).max(256).optional(),
+  /** The page was opened from an `orca://plugins/...` link; only labels install telemetry. */
+  fromInstallLink: z.literal(true).optional()
 })
 const installedPluginSchema = z.strictObject({
   pluginKey: z.string().refine(isQualifiedPluginKey, 'invalid qualified plugin key')
@@ -76,6 +78,7 @@ export function registerPluginMarketplaceHandlers(
   const ensureOfficialSeed = (): void => {
     if (getSettings().pluginSystemEnabled === true) {
       void services.marketplace.seedOfficialSource().catch(() => undefined)
+      void services.marketplace.seedCommunitySource().catch(() => undefined)
     }
   }
   ipcMain.handle('plugins:listMarketplaces', () => {
@@ -106,12 +109,15 @@ export function registerPluginMarketplaceHandlers(
     return services.installer.preview(parsed.marketplaceSourceId, parsed.pluginKey)
   })
   ipcMain.handle('plugins:installMarketplacePlugin', async (event, args: unknown) => {
-    const { enableIfData, expectedFingerprint, ...identity } =
+    const { enableIfData, expectedFingerprint, fromInstallLink, ...identity } =
       installMarketplacePluginSchema.parse(args)
     return installCatalogReleaseWithApproval({
       pluginKey: identity.pluginKey,
       pluginService,
-      install: () => services.installer.install(identity),
+      install: () =>
+        services.installer.install(identity, {
+          trigger: fromInstallLink ? 'deep_link' : 'catalog'
+        }),
       approve: (pluginKey, reviewedFingerprint) =>
         approveConsent(pluginKey, reviewedFingerprint, event.sender.id),
       ...(enableIfData ? { enableIfData: { expectedFingerprint } } : {})

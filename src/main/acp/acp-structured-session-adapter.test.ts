@@ -1,3 +1,9 @@
+import { readFileSync } from 'node:fs'
+import { acpLaunchSpecFor } from './acp-launch-specs'
+import {
+  NewSessionResponseSchema,
+  SessionNotificationSchema
+} from './generated/acp-protocol.generated'
 import { afterEach, describe, expect, it } from 'vitest'
 import { readAgentJournalTurn } from '../../shared/agent-session-turn-record'
 import {
@@ -5,7 +11,6 @@ import {
   SESSION
 } from '../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
 import { AgentSessionAcquisitionRootExitObservedError } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
-import { acpLaunchSpecFor } from './acp-launch-specs'
 import { GENERIC_ACP_DIALECT } from './acp-dialects/acp-dialect'
 import { OPENCODE_ACP_DIALECT } from './acp-dialects/opencode-dialect'
 import { OMP_ACP_DIALECT } from './acp-dialects/omp-dialect'
@@ -435,6 +440,46 @@ describe('ACP structured session adapter: turns', () => {
       )
     }
   )
+
+  it('keeps recorded OpenCode startup identity inert when its own model arrives later', async () => {
+    const startup = NewSessionResponseSchema.parse(
+      JSON.parse(
+        readFileSync(new URL('./fixtures/opencode-v2-start-options.json', import.meta.url), 'utf8')
+      )
+    )
+    const frames = readFileSync(
+      new URL('./fixtures/opencode-v2-reopen.jsonl', import.meta.url),
+      'utf8'
+    )
+      .trim()
+      .split('\n')
+      .map((line) => JSON.parse(line))
+    const late = SessionNotificationSchema.parse(frames[1].message.params)
+    const rig = await openAcpAdapterRig({
+      spec: acpLaunchSpecFor('opencode2')!,
+      script: (agent) =>
+        agent.on('session/new', (frame) =>
+          agent.reply(frame, { ...startup, sessionId: PROVIDER_SESSION })
+        )
+    })
+    await rig.acquire()
+    rig.child().agent.notify('session/update', { ...late, sessionId: PROVIDER_SESSION })
+    await waitFor(() =>
+      expect(rig.lifecycle.at(-1)).toMatchObject({
+        type: 'options-reported',
+        reportedOptions: { model: 'opencode/big-pickle' }
+      })
+    )
+    await rig.adapter.dispatch({
+      sessionId: SESSION,
+      fence: 1,
+      clientMessageId: 'own-model',
+      body: hello,
+      executionOptions: {}
+    })
+    await rig.frame('session/prompt')
+    expect(rig.sent('session/set_config_option')).toHaveLength(0)
+  })
 
   it("sends Grok's prompt identity only to an agent whose dialect echoes it", async () => {
     const rig = await openAcpAdapterRig({

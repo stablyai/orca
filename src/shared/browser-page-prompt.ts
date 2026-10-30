@@ -1,6 +1,10 @@
 import type { BrowserExternalAppPrompt } from './browser-external-app'
 import type { BrowserHttpAuthCredentials, BrowserHttpAuthPrompt } from './browser-http-auth'
 import type {
+  BrowserJavaScriptDialogAnswer,
+  BrowserJavaScriptDialogPrompt
+} from './browser-javascript-dialog'
+import type {
   BrowserSitePermissionDecision,
   BrowserSitePermissionPrompt
 } from './browser-site-permission'
@@ -9,6 +13,10 @@ import type {
 export type BrowserPagePromptKinds = {
   'external-app': { details: BrowserExternalAppPrompt; answer: true }
   'http-auth': { details: BrowserHttpAuthPrompt; answer: BrowserHttpAuthCredentials }
+  'javascript-dialog': {
+    details: BrowserJavaScriptDialogPrompt
+    answer: BrowserJavaScriptDialogAnswer
+  }
   'site-permission': { details: BrowserSitePermissionPrompt; answer: BrowserSitePermissionDecision }
 }
 

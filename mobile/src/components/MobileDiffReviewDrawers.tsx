@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { KeyboardAvoidingView, Pressable, Text, TextInput, View } from 'react-native'
+import { KeyboardAvoidingView, Pressable, Text, View } from 'react-native'
 import { Check, Copy, FileText, Plus, Send, Trash2, X } from 'lucide-react-native'
 import type { DiffComment } from '../../../src/shared/diff-comment-types'
 import { colors } from '../theme/mobile-theme'
@@ -15,6 +15,8 @@ import type { ComposerState, SendSheetState } from '../session/mobile-diff-revie
 import { reviewSheetKey, type ReviewSheet } from '../session/mobile-diff-review-sheets'
 import type { useMobileDiffReviewController } from '../session/use-mobile-diff-review-controller'
 import { mobileDiffReviewStyles as styles } from './mobile-diff-review-screen-styles'
+import { MessageBox } from './composer-input/MessageBox'
+import { composerInputStyles } from './composer-input/composer-input-styles'
 import { hostOs } from '../platform/host-os'
 import { useWorkspaceOnPairedHost } from '../navigation/workspace-execution-host'
 
@@ -257,20 +259,18 @@ function NoteComposerContent({ controller, composer }: Props & { composer: Compo
           <X size={18} color={colors.textPrimary} strokeWidth={2.2} />
         </Pressable>
       </View>
-      <TextInput
-        style={styles.composerInput}
+      <MessageBox
         value={controller.composerBody}
         onChangeText={controller.setComposerBody}
-        multiline
         autoFocus
         placeholder={t('components.diffReviewDrawers.reviewNote', 'Review note')}
-        placeholderTextColor={colors.textMuted}
         accessibilityLabel={composerLabel(t, composer)}
+        onSend={() => void controller.saveComposer()}
+        sendAccessibilityLabel={saveLabel(t, composer)}
+        leading={
+          composer.mode === 'edit' ? <DeleteNoteButton onPress={controller.deleteComment} /> : null
+        }
       />
-      <View style={styles.drawerButtonRow}>
-        {composer.mode === 'edit' ? <DeleteNoteButton onPress={controller.deleteComment} /> : null}
-        <SaveNoteButton controller={controller} composer={composer} />
-      </View>
     </KeyboardAvoidingView>
   )
 }
@@ -286,46 +286,26 @@ function composerLabel(
     : t('components.diffReviewDrawers.reviewNote', 'Review note')
 }
 
+function saveLabel(t: Translate, composer: ComposerState): string {
+  return composer.mode === 'create' && composer.lineNumber > 0
+    ? composerLabel(t, composer)
+    : t('session.diffLineRow.saveNote', 'Save note')
+}
+
 function DeleteNoteButton({ onPress }: { onPress: () => Promise<void> }) {
   useMobileColorScheme()
   const t = useMobileTranslation()
   return (
     <Pressable
-      style={({ pressed }) => [styles.secondaryButton, pressed && styles.buttonPressed]}
+      style={({ pressed }) => [
+        composerInputStyles.ghostButton,
+        pressed && composerInputStyles.pressed
+      ]}
       onPress={() => void onPress()}
       accessibilityRole="button"
       accessibilityLabel={t('components.diffReviewDrawers.deleteNote', 'Delete note')}
     >
-      <Trash2 size={14} color={colors.statusRed} strokeWidth={2.2} />
-      <Text style={styles.destructiveText}>{t('common.delete', 'Delete')}</Text>
-    </Pressable>
-  )
-}
-
-function SaveNoteButton({
-  controller,
-  composer
-}: {
-  controller: ReturnType<typeof useMobileDiffReviewController>
-  composer: ReturnType<typeof useMobileDiffReviewController>['composer']
-}) {
-  useMobileColorScheme()
-  const t = useMobileTranslation()
-  const disabled = controller.composerBody.trim().length === 0
-  return (
-    <Pressable
-      style={({ pressed }) => [
-        styles.primaryButton,
-        disabled && styles.buttonDisabled,
-        pressed && styles.buttonPressed
-      ]}
-      disabled={disabled}
-      onPress={() => void controller.saveComposer()}
-      accessibilityRole="button"
-      accessibilityLabel={composerLabel(t, composer)}
-    >
-      <Check size={14} color={colors.bgBase} strokeWidth={2.2} />
-      <Text style={styles.primaryButtonText}>{t('common.save', 'Save')}</Text>
+      <Trash2 size={18} color={colors.statusRed} strokeWidth={2} />
     </Pressable>
   )
 }

@@ -18,15 +18,31 @@ import { bytesDocumentBoxes } from './editor-bytes-document-boxes'
 
 const listeners = new Set<() => void>()
 let unsubscribeStore: (() => void) | null = null
+// Why: boxes change outside the store, so a store write that leaves the tabs alone may still need a sweep.
+let boxesChangedSinceSweep = false
 
-function notify(): void {
+function notifyListeners(): void {
   for (const listener of listeners) {
     listener()
   }
 }
 
+function notify(): void {
+  boxesChangedSinceSweep = true
+  notifyListeners()
+}
+
 /** Drops a draft once its tab is clean (saved, reverted, discarded) and the entry once it closes. */
 function dropSettledDrafts(state: AppState, previous: AppState): void {
+  if (
+    !boxesChangedSinceSweep &&
+    state.openFiles === previous.openFiles &&
+    state.editorBufferIdOf === previous.editorBufferIdOf &&
+    state.editorBufferViews === previous.editorBufferViews
+  ) {
+    return
+  }
+  boxesChangedSinceSweep = false
   let changed = false
   const isOpen = (id: string): boolean => state.openFiles.some((file) => file.id === id)
   for (const [fileId, box] of bytesDocumentBoxes) {
@@ -51,7 +67,7 @@ function dropSettledDrafts(state: AppState, previous: AppState): void {
     unsubscribeStore = null
   }
   if (changed) {
-    notify()
+    notifyListeners()
   }
 }
 

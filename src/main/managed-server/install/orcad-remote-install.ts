@@ -35,6 +35,8 @@ export async function installOrcadBundle(
     nodeRuntimeArchive: () => Promise<string>
     /** Offline archive location named when downloads fail. */
     nodeRuntimeOfflineArchivePath?: string
+    /** Per-source connect budget for the host's own download fallback. */
+    nodeRuntimeHostConnectTimeoutSeconds?: number
     /** WSL opt-in: reuse a matching stat signature previously hashed to this pin. */
     recordedNodeRuntimeProbe?: boolean
     signal?: AbortSignal
@@ -53,6 +55,7 @@ export async function installOrcadBundle(
     target: options.target,
     archivePath: options.nodeRuntimeArchive,
     offlineArchivePath: options.nodeRuntimeOfflineArchivePath,
+    hostConnectTimeoutSeconds: options.nodeRuntimeHostConnectTimeoutSeconds,
     signal: options.signal,
     ...(options.recordedNodeRuntimeProbe
       ? { posixProbeCommand: recordedRemoteNodeRuntimeProbeCommand }

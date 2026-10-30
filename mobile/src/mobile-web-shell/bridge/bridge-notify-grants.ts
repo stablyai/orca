@@ -5,10 +5,15 @@ import {
   type BridgeClientMessage
 } from './bridge-envelope'
 import { BRIDGE_HAPTICS_GRANT, BRIDGE_HAPTICS_NOTIFY } from './bridge-haptics-notify'
+import { BRIDGE_LIVENESS_PROBE_NOTIFY } from './bridge-liveness-probe-notify'
 import { BRIDGE_BACK_CLAIM_NOTIFY } from './bridge-page-back'
 import { BRIDGE_PAGE_LOCATION } from './bridge-page-location'
 import { BRIDGE_PAGE_PAINTED } from './bridge-page-painted'
 import { BRIDGE_ROUTE_PARAM_CLEAR } from './bridge-route-update'
+import {
+  BRIDGE_TERMINAL_KEY_RAIL_CLAIM_NOTIFY,
+  BRIDGE_TERMINAL_KEY_RAIL_GRANT
+} from './bridge-terminal-key'
 
 export type BridgeNotifyName = Extract<BridgeClientMessage, { type: 'notify' }>['name']
 
@@ -26,7 +31,9 @@ const BRIDGE_NOTIFY_GRANTS: Readonly<Record<BridgeNotifyName, string | null>> = 
   storage: 'storage',
   [BRIDGE_EXTERNAL_LINK_GRANT]: BRIDGE_EXTERNAL_LINK_GRANT,
   [BRIDGE_FAULT_GRANT]: BRIDGE_FAULT_GRANT,
-  [BRIDGE_HAPTICS_NOTIFY]: BRIDGE_HAPTICS_GRANT
+  [BRIDGE_HAPTICS_NOTIFY]: BRIDGE_HAPTICS_GRANT,
+  [BRIDGE_TERMINAL_KEY_RAIL_CLAIM_NOTIFY]: BRIDGE_TERMINAL_KEY_RAIL_GRANT,
+  [BRIDGE_LIVENESS_PROBE_NOTIFY]: null
 }
 
 export type BridgeNotifyRefusal = 'before-ready' | 'ungranted'

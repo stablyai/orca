@@ -219,8 +219,8 @@ describe('useSourceControlGitHistory stale completion', () => {
     await flush()
     expect(mocks.getRuntimeGitHistory).toHaveBeenLastCalledWith(
       expect.objectContaining({ worktreeId: 'A', worktreePath: '/a' }),
-      // Showing Commits is a user act, so it may start a stopped WSL distro.
-      { limit: 50, baseRef: 'origin/main', wakeWslDistro: true }
+      // A mount with Commits already open is restored state, not a user act: no WSL wake (E9).
+      { limit: 50, baseRef: 'origin/main' }
     )
 
     await act(async () => {
@@ -228,10 +228,10 @@ describe('useSourceControlGitHistory stale completion', () => {
     })
     await flush()
     expect(mocks.getRuntimeGitHistory).toHaveBeenCalledTimes(2)
+    // A base-ref move refetches in the background; it never starts a stopped distro.
     expect(mocks.getRuntimeGitHistory).toHaveBeenLastCalledWith(expect.anything(), {
       limit: 50,
-      baseRef: 'origin/dev',
-      wakeWslDistro: true
+      baseRef: 'origin/dev'
     })
   })
 

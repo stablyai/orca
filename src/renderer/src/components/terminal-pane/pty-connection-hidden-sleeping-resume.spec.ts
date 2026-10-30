@@ -229,6 +229,20 @@ export function registerPtyConnectionHiddenSleepingResumeTests(): void {
       expect(resumeCommands(transport)[0]).toContain("'resume' 'codex-session-1'")
     })
 
+    it('keeps an initial hidden workspace-sleep wake explicit', async () => {
+      seedSleepingPane(null, { origin: 'worktree-sleep' })
+      const resumeSleptPane = vi.fn(async () => true)
+      window.api.worktrees = { ...window.api.worktrees, resumeSleptPane }
+      const { requestSleepingAgentWakeOnMount } = await import('@/lib/sleeping-agent-wake-requests')
+      requestSleepingAgentWakeOnMount('wt-1', ['tab-1'])
+      connectHiddenPane(null)
+      await flushAsyncTicks(20)
+      expect(resumeSleptPane).toHaveBeenCalledWith(
+        { worktreeId: 'wt-1', tabId: 'tab-1', leafId: LEAF_2 },
+        undefined
+      )
+    })
+
     it('resumes a held hidden pane immediately on a phone wake', async () => {
       seedSleepingPane(DEAD_SESSION_ID)
       setHostLiveness(false)

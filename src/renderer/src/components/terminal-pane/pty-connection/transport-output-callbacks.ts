@@ -55,6 +55,7 @@ export function bindCaptureTransportOutputCallbacks(session: ConnectPanePtySessi
               session.remotePtyIncarnationId === result.incarnationId)
           ) {
             session.remotePtyIncarnationId = result.incarnationId
+            session.noteBoundProcessIncarnation(result.incarnationId)
             applyTerminalLaunchResult(session, result, launchContext, 'observer')
           }
         },

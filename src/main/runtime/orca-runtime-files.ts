@@ -26,6 +26,7 @@ export class RuntimeFileCommands {
   readonly readFileExplorerPreview: RuntimeFileReads['readFileExplorerPreview']
   readonly readChatImagePreview: RuntimeFileReads['readChatImagePreview']
   readonly readDocPreviewFile: RuntimeFileReads['readDocPreviewFile']
+  readonly readDocPreviewChunk: RuntimeFileReads['readDocPreviewChunk']
   readonly readFileExplorerChunk: RuntimeFileReads['readFileExplorerChunk']
   readonly writeFileExplorerFile: RuntimeFileMutations['writeFileExplorerFile']
   readonly writeFileExplorerFileBase64: RuntimeFileMutations['writeFileExplorerFileBase64']
@@ -64,6 +65,7 @@ export class RuntimeFileCommands {
     this.readFileExplorerPreview = this.reads.readFileExplorerPreview.bind(this.reads)
     this.readChatImagePreview = this.reads.readChatImagePreview.bind(this.reads)
     this.readDocPreviewFile = this.reads.readDocPreviewFile.bind(this.reads)
+    this.readDocPreviewChunk = this.reads.readDocPreviewChunk.bind(this.reads)
     this.readFileExplorerChunk = this.reads.readFileExplorerChunk.bind(this.reads)
     this.writeFileExplorerFile = this.mutations.writeFileExplorerFile.bind(this.mutations)
     this.writeFileExplorerFileBase64 = this.mutations.writeFileExplorerFileBase64.bind(

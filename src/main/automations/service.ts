@@ -31,7 +31,7 @@ import {
 import { createAutomationRunWriter, type AutomationRunWriter } from './automation-run-writer'
 import { reportAutomationScheduleDrift } from './schedule-drift-report'
 import {
-  describeScheduledRefusal,
+  describeScheduledTickRefusal,
   missedBeyondGrace,
   recordMissedRun,
   recordRefusedAutomationRun,
@@ -264,7 +264,7 @@ export class AutomationService {
     // Fold recurring refusals before creating rows so they do not evict real run history.
     const target = this.resolveTarget(automation)
     const canDispatch = this.canDispatchToRenderer() || Boolean(this.headlessDispatcher)
-    const refusal = describeScheduledRefusal({ target, canDispatch })
+    const refusal = await describeScheduledTickRefusal(this.store, { target, canDispatch })
     // Once WSL owns the schedule, avoid churning skips on the retained local copy.
     if (refusal?.errorCode === 'wslMoveOwnedByHost') {
       await this.runs.advanceNextRun(automation.id, now)

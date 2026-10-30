@@ -36,6 +36,19 @@ export async function assertWslDistroRunningForExec(
   }
 }
 
+/**
+ * A terminal launch someone asked for runs as a user act on its distro (null: the default); a
+ * passive restore (#35813) or a non-WSL launch runs as-is, so the E9 gates apply to it.
+ */
+export function runAsWslLaunchUserAct<T>(
+  launch: { isWsl: boolean; passiveRestore: boolean; distro: string | null | undefined },
+  act: () => Promise<T>
+): Promise<T> {
+  return launch.isWsl && !launch.passiveRestore
+    ? runAsWslExecUserAct(launch.distro ?? null, act)
+    : act()
+}
+
 /** Runs `act` as a user act on `distro` (null: the default), so its `wsl.exe` runs may start it. */
 export async function runAsWslExecUserAct<T>(
   distro: string | null | undefined,

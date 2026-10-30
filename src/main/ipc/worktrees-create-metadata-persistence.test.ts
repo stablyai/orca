@@ -28,6 +28,7 @@ const WORKTREE_HANDLER_CHANNELS = [
   'worktrees:listKnownForExecutionHost',
   'worktrees:forgetRemovedForExecutionHost',
   'worktrees:cancelListDetected',
+  'worktrees:scanStartingWslDistro',
   'worktrees:create',
   'worktrees:adoptProvisionedRoot',
   'worktrees:prefetchCreateBase',

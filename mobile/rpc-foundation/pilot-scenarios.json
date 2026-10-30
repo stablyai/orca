@@ -14549,7 +14549,8 @@
           "params": {
             "audioBase64": "ACVKb5S53gM=",
             "dictationId": "dictation-1",
-            "sampleRate": 16000
+            "sampleRate": 16000,
+            "seq": 0
           },
           "reply": {
             "ok": true,
@@ -20080,7 +20081,12 @@
       "sites": ["mobile/src/settings/notification-display-test.tsx"],
       "schedules": [],
       "deviceStore": {
+        "orca:pushServiceNotificationsEnabled": "true",
         "orca:hosts": "[{\"id\":\"host-1\",\"name\":\"Desk\",\"endpoint\":\"ws://desk.local:7777\",\"publicKeyB64\":\"AAAA\",\"lastConnected\":1700000000000}]"
+      },
+      "deviceState": {
+        "notificationPermissions": { "status": "granted", "canAskAgain": true },
+        "pushToken": { "type": "ios", "data": "fixture-apns-token" }
       },
       "steps": [
         {
@@ -20119,7 +20125,12 @@
       "sites": ["mobile/src/settings/notification-display-test.tsx"],
       "schedules": [],
       "deviceStore": {
+        "orca:pushServiceNotificationsEnabled": "true",
         "orca:hosts": "[{\"id\":\"host-1\",\"name\":\"Desk\",\"endpoint\":\"ws://desk.local:7777\",\"publicKeyB64\":\"AAAA\",\"lastConnected\":1700000000000}]"
+      },
+      "deviceState": {
+        "notificationPermissions": { "status": "granted", "canAskAgain": true },
+        "pushToken": { "type": "ios", "data": "fixture-apns-token" }
       },
       "steps": [
         {
@@ -20159,7 +20170,12 @@
       "sites": ["mobile/src/settings/notification-display-test.tsx"],
       "schedules": [],
       "deviceStore": {
+        "orca:pushServiceNotificationsEnabled": "true",
         "orca:hosts": "[{\"id\":\"host-1\",\"name\":\"Desk\",\"endpoint\":\"ws://desk.local:7777\",\"publicKeyB64\":\"AAAA\",\"lastConnected\":1700000000000}]"
+      },
+      "deviceState": {
+        "notificationPermissions": { "status": "granted", "canAskAgain": true },
+        "pushToken": { "type": "ios", "data": "fixture-apns-token" }
       },
       "steps": [
         {
@@ -20199,7 +20215,12 @@
       "sites": ["mobile/src/settings/notification-display-test.tsx"],
       "schedules": [],
       "deviceStore": {
+        "orca:pushServiceNotificationsEnabled": "true",
         "orca:hosts": "[{\"id\":\"host-1\",\"name\":\"Desk\",\"endpoint\":\"ws://desk.local:7777\",\"publicKeyB64\":\"AAAA\",\"lastConnected\":1700000000000}]"
+      },
+      "deviceState": {
+        "notificationPermissions": { "status": "granted", "canAskAgain": true },
+        "pushToken": { "type": "ios", "data": "fixture-apns-token" }
       },
       "steps": [
         {
@@ -20739,7 +20760,8 @@
         {
           "complete": "git.status#1",
           "params": {
-            "worktree": "id:repo42::/p"
+            "worktree": "id:repo42::/p",
+            "includeLineStats": false
           },
           "reply": {
             "ok": true,

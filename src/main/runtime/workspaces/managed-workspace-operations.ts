@@ -262,8 +262,8 @@ export abstract class OrcaRuntimeWithListManagedWorktrees extends OrcaRuntimeWit
   }
 
   /** The window opened a slept pane; main resumes it and the window attaches. */
-  resumeSleptPane(pane: RestoredPane): Promise<boolean> {
-    return this.workspaceSleep.resumePane(pane)
+  resumeSleptPane(pane: RestoredPane, automatic?: boolean): Promise<boolean> {
+    return this.workspaceSleep.resumePane(pane, automatic)
   }
 
   /** The window reopened a slept agent whose tab is gone in a fresh tab; this record is spent. */

@@ -109,7 +109,7 @@ export function useLinearIssueWorkspaceDetail({
       id: comment.id || createBrowserUuid(),
       body: comment.body,
       createdAt: comment.createdAt,
-      user: { displayName: 'You' }
+      user: { displayName: translate('auto.components.issueComments.you', 'You') }
     }
     optimisticCommentsRef.current.push(added)
     setComments((current) => [...current, added])

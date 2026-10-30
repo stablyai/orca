@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { RelayDispatcher } from '../../wsl-guest/dispatcher'
 import { registerWslHookFsHandlers } from '../../wsl-guest/wsl-hook-fs-bridge'
 import { SshChannelMultiplexer, type MultiplexerTransport } from '../ssh/ssh-channel-multiplexer'
-import { createWslHookSftpAdapter } from './wsl-hook-fs-adapter'
+import { createWslHookSftpAdapter, installWslGuestHooks } from './wsl-hook-fs-adapter'
 import {
   installRemoteManagedAgentHooks,
   REMOTE_MANAGED_HOOK_INSTALLER_AGENTS
@@ -123,7 +123,8 @@ describe.skipIf(process.platform === 'win32')(
     it('runs the unchanged remote managed hook installers against a WSL guest home', async () => {
       const adapter = createWslHookSftpAdapter(harness.mux)
       const results = await installRemoteManagedAgentHooks(adapter, home, {
-        agents: REMOTE_MANAGED_HOOK_INSTALLER_AGENTS
+        agents: REMOTE_MANAGED_HOOK_INSTALLER_AGENTS,
+        claudeVersion: '2.1.310'
       })
 
       expect(results.length).toBeGreaterThan(0)
@@ -132,7 +133,34 @@ describe.skipIf(process.platform === 'win32')(
       const claudeSettings = JSON.parse(
         readFileSync(join(home, '.claude', 'settings.json'), 'utf8')
       )
-      expect(claudeSettings.hooks).toBeTruthy()
+      expect(claudeSettings.hooks.StopFailure).toBeTruthy()
+      let rawVersion = '11.17.0'
+      harness.guestDispatcher.onRequest('preflight.detectAgents', async () => ({
+        agents: ['claude'],
+        versions: { claude: rawVersion }
+      }))
+      const reinstall = () =>
+        installWslGuestHooks({
+          mux: harness.mux,
+          guestHome: home,
+          codexHomePath: null,
+          distro: 'Ubuntu',
+          installHooks: installRemoteManagedAgentHooks,
+          settings: null,
+          warn: (message) => {
+            throw new Error(message)
+          },
+          installCodex: async () => null
+        })
+      await reinstall()
+      expect(JSON.parse(readFileSync(join(home, '.claude', 'settings.json'), 'utf8'))).toEqual(
+        claudeSettings
+      )
+      rawVersion = 'launcher 11.17.0\n1.0.64 (Claude Code)'
+      await reinstall()
+      const oldSettings = JSON.parse(readFileSync(join(home, '.claude', 'settings.json'), 'utf8'))
+      expect(oldSettings.hooks.StopFailure).toBeUndefined()
+      expect(oldSettings.hooks.PreToolUse).toBeTruthy()
       const script = readFileSync(join(home, '.orca', 'agent-hooks', 'claude-hook.sh'), 'utf8')
       expect(script).toContain('/hook/claude')
     }, 20_000)
@@ -237,6 +265,7 @@ describe('WslHookRelayManager', () => {
       listDistros: async () => ['Ubuntu'],
       isDistroRunning: vi.fn(async () => true),
       deferUntilRunning: vi.fn(),
+      blockedForExec: vi.fn(async () => null),
       spawnRelay: vi.fn(() => fakeChild()),
       runInstall: vi.fn(async () => ({ code: 0, stderr: '' })),
       waitForSentinel: vi.fn(async () => guestTransport()),
@@ -260,6 +289,16 @@ describe('WslHookRelayManager', () => {
     }
     return { manager: new WslHookRelayManager(deps), deps }
   }
+
+  it('starts no relay for a stopped distro outside a user act (a passive restore, E9)', async () => {
+    const { manager, deps } = createManager({
+      blockedForExec: vi.fn(async () => ({ distro: 'Ubuntu', state: 'stopped' as const }))
+    })
+    await manager.ensureForDistro('Ubuntu', codexHome)
+    expect(deps.blockedForExec).toHaveBeenCalledWith('Ubuntu')
+    expect(deps.spawnRelay).not.toHaveBeenCalled()
+    expect(manager.getGuestEndpointFilePath('Ubuntu')).toBeNull()
+  })
 
   it('starts one relay per distro, installs hooks, exposes the guest endpoint path, and forwards envelopes', async () => {
     const { manager, deps } = createManager({})
@@ -454,21 +493,30 @@ describe('WslHookRelayManager', () => {
     expect(manager.getGuestEndpointFilePath('Ubuntu')).toBeNull()
   })
 
-  it('forwards the WSL guest Claude version to the shared remote installer', async () => {
-    const waitForSentinel = vi.fn(async () =>
-      guestTransport({ detectedAgents: ['claude'], claudeVersion: '2.1.261 (Claude Code)' })
-    )
-    const { manager, deps } = createManager({ waitForSentinel })
+  it.each([
+    ['2.1.221 (Claude Code)\r\n', '2.1.221'],
+    ['launcher 0.1.0\n2.1.310 (Claude Code)', '2.1.310'],
+    ['launcher 11.17.0\n1.0.64 (Claude Code)', '1.0.64'],
+    ['11.17.0', undefined],
+    [undefined, undefined]
+  ] as const)(
+    'forwards identified WSL version without losing agent presence: %s',
+    async (raw, expected) => {
+      const waitForSentinel = vi.fn(async () =>
+        guestTransport({ detectedAgents: ['claude'], claudeVersion: raw })
+      )
+      const { manager, deps } = createManager({ waitForSentinel })
 
-    manager.ensureForDistro('Ubuntu')
-    await vi.waitFor(() => expect(deps.installHooks).toHaveBeenCalledTimes(1))
+      manager.ensureForDistro('Ubuntu')
+      await vi.waitFor(() => expect(deps.installHooks).toHaveBeenCalledTimes(1))
 
-    expect(deps.installHooks).toHaveBeenCalledWith(expect.anything(), home, {
-      agents: ['claude'],
-      claudeVersion: '2.1.261'
-    })
-    manager.disposeAll()
-  })
+      expect(deps.installHooks).toHaveBeenCalledWith(expect.anything(), home, {
+        agents: ['claude'],
+        ...(expected ? { claudeVersion: expected } : {})
+      })
+      manager.disposeAll()
+    }
+  )
 
   it('reinstalls into a newly resolved runtime home without restarting the relay', async () => {
     const { manager, deps } = createManager({})

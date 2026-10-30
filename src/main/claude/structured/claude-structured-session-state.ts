@@ -1,4 +1,5 @@
 import type { StructuredAgentSessionChildWorkProducer } from '../../native-chat/agent-session-wire/structured-agent-session-subagent-rows'
+import type { ClaudeCliFlagCheck, ClaudeCliFlagFact } from '../claude-cli-flag-support'
 import type { StructuredAgentSessionLogger } from '../../native-chat/agent-session-wire/structured-agent-session-logger'
 import type { AgentJournalDispatchRejection } from '../../../shared/agent-session-failure-words'
 import type { SubmissionRejectionFact } from '../../../shared/agent-session-failure'
@@ -66,6 +67,7 @@ export type ClaudeStructuredSessionEvent =
       sessionId: string
       reason: string
       failure?: SubmissionRejectionFact
+      deathEvidenceKind?: 'kill-delivered'
       /** Present for first-hand child exits so the host can fence recovery. */
       cause?: 'unexpected-exit' | 'requested-close'
       fence?: number
@@ -186,6 +188,10 @@ export type ClaudeSession = {
   firstRootInit?: { permissionMode: string | null }
   /** Fast was omitted from launch settings and must be applied before message input. */
   fastModeAtStart: boolean
+  /** Rechecks this child's CLI support; absent where the launch had no flag support to ask. */
+  cliFlag?: ClaudeCliFlagCheck
+  /** Whether the CLI answers live effort and Fast changes; `unknown` ones are rechecked, then tried. */
+  flagSettingsControl?: ClaudeCliFlagFact
   /** CLI-advertised protocol capabilities from init; gates interrupt-receipt handling. */
   capabilities: readonly string[]
   backgroundTasks: ClaudeBackgroundTaskTracker

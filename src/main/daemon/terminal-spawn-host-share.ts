@@ -34,8 +34,8 @@ export class TerminalSpawnHostShare {
     return this.liveSessions.size + interactive + user + automatic
   }
 
-  tryReserve(state: SpawnAdmissionState): boolean {
-    return this.ledger.tryReserve(this.share(state))
+  tryReserve(state: SpawnAdmissionState, maximum = this.maxTerminals): boolean {
+    return this.ledger.tryReserve(this.share(state), maximum)
   }
 
   recordAutomaticAdmit(now: number): void {

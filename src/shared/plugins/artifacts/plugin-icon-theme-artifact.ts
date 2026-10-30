@@ -123,7 +123,9 @@ const svgIndexSchema = z
 const pluginIconThemeMetadataSchema = z.object({
   id: pluginContentIdSchema,
   pluginKey: z.string(),
-  label: z.string()
+  label: z.string(),
+  // Optional: older hosts omit it.
+  revision: z.string().optional()
 })
 
 /** Each distinct SVG is sent once; the maps point into `svgs` so rows never repeat image data. */

@@ -114,7 +114,7 @@ export function handleRichMarkdownEditorClick({
   const href =
     clickedNode?.type.name === 'richMarkdownHtmlSuperscriptLink'
       ? String(clickedNode.attrs.href ?? '')
-      : getClickedLinkHref(view, pos)
+      : getClickedLinkHref(view, event)
   if (
     clickedNode?.type.name === 'richMarkdownHtmlSuperscriptLink' &&
     !classifyHtmlSuperscriptLinkAction(href, sourceSnapshot)
@@ -179,12 +179,26 @@ function activateMarkdownImageClick({
   return true
 }
 
-function getClickedLinkHref(view: EditorView, pos: number): string {
-  const linkMark = view.state.doc
-    .resolve(pos)
-    .marks()
-    .find((mark) => mark.type.name === 'link')
-  return linkMark ? (linkMark.attrs.href as string) || '' : ''
+function getClickedLinkHref(view: EditorView, event: MouseEvent): string {
+  const target =
+    event.target instanceof Element
+      ? event.target
+      : event.target instanceof Node
+        ? event.target.parentElement
+        : null
+  const link = target?.closest('a')
+  if (!link || !view.dom.contains(link)) {
+    return ''
+  }
+  // The rendered href is blanked for file:, drive-path and custom schemes, so read the mark instead.
+  let linkPos: number
+  try {
+    linkPos = view.posAtDOM(link, 0)
+  } catch {
+    return ''
+  }
+  const linkMark = view.state.doc.nodeAt(linkPos)?.marks.find((mark) => mark.type.name === 'link')
+  return linkMark ? String(linkMark.attrs.href ?? '') : ''
 }
 
 function openShiftModifiedMarkdownLink({

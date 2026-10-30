@@ -147,7 +147,7 @@ export const claudeScriptedChild: ScriptedAgentChildFactory = () => {
         'exited'
           ? null
           : pid * 10,
-      resolveClaudeCommand: () => '/nonexistent/scripted-claude',
+      resolveClaudeCommand: () => ({ command: '/nonexistent/scripted-claude', prefixArgs: [] }),
       resolveClaudeAuthPolicy: () => ({ account: 'system' })
     },
     holdHandshakes: true,

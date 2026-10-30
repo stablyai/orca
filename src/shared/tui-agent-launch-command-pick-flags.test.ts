@@ -1,3 +1,4 @@
+import { tokenizeStartupCommand } from './tui-agent-startup-shell'
 import { describe, expect, it } from 'vitest'
 import { resolveAgentLaunchCommand } from './tui-agent-launch-command'
 
@@ -28,7 +29,7 @@ describe('one copy of each chat-picked flag', () => {
         .split(' ')
         .map((token) => `'${token}'`)
         .join(' ')
-      expect(result.command).toBe(`codex ${expectedArgs}`)
+      expect(result.command).toBe(`codex '-c' 'disable_paste_burst=true' ${expectedArgs}`)
       expect(result.appliedSessionOptions).toEqual({})
     }
   )
@@ -51,7 +52,7 @@ describe('one copy of each chat-picked flag', () => {
 
   it.each([
     ['claude', 'opus', '--model=haiku', "claude '--model=haiku'"],
-    ['codex', 'gpt-5.5', '-mo3', "codex '-mo3'"]
+    ['codex', 'gpt-5.5', '-mo3', "codex '-c' 'disable_paste_burst=true' '-mo3'"]
   ] as const)(
     'sends one model flag for %s with a configured %s',
     (agent, model, agentArgs, command) => {
@@ -101,7 +102,9 @@ describe('one copy of each chat-picked flag', () => {
       sessionOptions: { model: 'gpt-5.5', effort: 'high' },
       agentArgs: '-c model_reasoning_effort=low'
     })
-    expect(result.command).toBe("codex '-m' 'gpt-5.5' '-c' 'model_reasoning_effort=low'")
+    expect(result.command).toBe(
+      "codex '-c' 'disable_paste_burst=true' '-m' 'gpt-5.5' '-c' 'model_reasoning_effort=low'"
+    )
     expect(result.appliedSessionOptions).toEqual({ model: 'gpt-5.5' })
   })
 })
@@ -116,4 +119,74 @@ describe('a saved permission mode on terminals', () => {
     expect(result.command).toBe("claude '--dangerously-skip-permissions'")
     expect(result.appliedSessionOptions).toEqual({})
   })
+})
+
+it.each([false, true])(
+  'keeps Claude effective settings and Restart literal with override=%s',
+  (override) => {
+    const raw = `--settings '{"language":"french"}' --settings '{"env":{"SAFE":"kept"}}' --add-dir docs`
+    const result = launch({
+      agentArgs: raw,
+      sessionOptions: { fastMode: true },
+      sessionOptionsOverrideAgentArgs: override
+    })
+    const parsed = tokenizeStartupCommand(result.command, 'posix')
+    expect(parsed.ok).toBe(true)
+    if (!parsed.ok) {
+      throw new Error('invalid compiler result')
+    }
+    const settings = parsed.tokens
+      .filter((_, index) => parsed.tokens[index - 1] === '--settings')
+      .map((value) => JSON.parse(value))
+    expect(settings).toEqual([
+      { language: 'french' },
+      { env: { SAFE: 'kept' }, ...(override ? { fastMode: true } : {}) }
+    ])
+    expect(result.appliedSessionOptions.fastMode).toBe(override ? true : undefined)
+    const restart = tokenizeStartupCommand(result.resumeLaunch.agentCommand, 'posix')
+    expect(restart.ok).toBe(true)
+    if (!restart.ok) {
+      throw new Error('invalid Restart')
+    }
+    const resumed = restart.tokens
+      .filter((_, index) => restart.tokens[index - 1] === '--settings')
+      .map((value) => JSON.parse(value))
+    expect(resumed).toEqual(settings)
+  }
+)
+
+it('never claims Fast applied over a literal settings file, including custom commands', () => {
+  for (const override of [false, true]) {
+    const result = launch({
+      cmdOverrides: { claude: 'my-claude' },
+      agentArgs: '--settings ./team.json',
+      sessionOptions: { fastMode: true },
+      sessionOptionsOverrideAgentArgs: override
+    })
+    expect(result.command).toBe("my-claude '--settings' './team.json'")
+    expect(result.appliedSessionOptions.fastMode).toBeUndefined()
+    expect(result.resumeLaunch.agentCommand).toBe(result.command)
+  }
+})
+
+it('retains same-token-count Claude settings rewrites in projection and Restart', () => {
+  const agentArgs = `--settings '{"language":"french","fastMode":true}'`
+  const result = launch({
+    agentArgs,
+    sessionOptions: { fastMode: false },
+    sessionOptionsOverrideAgentArgs: true
+  })
+  expect(result.command).toContain('"language":"french","fastMode":false')
+  expect(result.resumeLaunch.agentArgs).toContain('"language":"french","fastMode":false')
+  expect(result.appliedSessionOptions.fastMode).toBe(false)
+  const conflict = resolveAgentLaunchCommand({
+    agent: 'claude',
+    platform: 'linux',
+    shell: 'posix',
+    cmdOverrides: { claude: 'my-claude --settings ./fixed.json' },
+    agentArgs,
+    sessionOptions: { fastMode: false },
+    sessionOptionsOverrideAgentArgs: true
+  })
+  expect(conflict).toMatchObject({ ok: false, error: expect.stringContaining('conflicts') })
 })

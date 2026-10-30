@@ -128,6 +128,8 @@ export type PtyConnectionDeps = {
   clearExitedPanePtyLayoutBindingForLeaf?: (leafId: string, exitedPtyId: string) => void
   /** Settles the captured one-shot startup only after this pane owns a concrete PTY. */
   onStartupBound?: () => void
+  /** Re-renders mobile lock overlays for fit/driver state that arrived before this pane bound its PTY. */
+  refreshMobileOverlays?: () => void
   getPtyInputOwner?: (paneId: number) => TerminalLinkPtyMouseSuppression | undefined
   deferPtyInput?: (
     paneId: number,

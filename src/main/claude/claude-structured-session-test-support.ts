@@ -56,6 +56,7 @@ export function fakeClaude(
     initSessionId?: string
     initUuid?: string
     initModel?: string
+    initPermissionMode?: string
     /** Default: live SessionStart proof; 'none': no hook; 'init': unmeasured startup shape. */
     initProof?: 'init' | 'session-start' | 'none'
     initAccount?: unknown
@@ -92,6 +93,7 @@ export function fakeClaude(
         session_id: options.initSessionId ?? PROVIDER_SESSION_ID,
         uuid: options.initUuid ?? 'init-uuid',
         model: options.initModel ?? 'claude-sonnet-5',
+        ...(options.initPermissionMode ? { permissionMode: options.initPermissionMode } : {}),
         apiKeySource: 'none',
         ...(options.capabilities ? { capabilities: options.capabilities } : {})
       })
@@ -258,6 +260,7 @@ export function adapterAtPublishFor(
       providerSessionId: PROVIDER_SESSION_ID,
       resumeLeafUuid: null,
       resumesTranscript: false,
+      cliFlag: async () => 'supported' as const,
       continuesChain: false,
       ...launch,
       env: { ...launch.env, [ORCA_AGENT_SESSION_SPAWN_TOKEN_ENV]: spawnToken }

@@ -1,7 +1,11 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { AndroidCommandResult, AndroidCommandRunner } from './android-command-runner'
 import type { AndroidSdkPaths } from './android-sdk-discovery'
-import { installAndroidApk } from './android-capability-operations'
+import {
+  dumpAndroidAccessibilityTree,
+  installAndroidApk,
+  launchAndroidApp
+} from './android-capability-operations'
 
 const SDK: AndroidSdkPaths = {
   sdkRoot: '/sdk',
@@ -27,5 +31,61 @@ describe('installAndroidApk', () => {
     await expect(installAndroidApk(bad, SDK, 's', '/a.apk')).rejects.toMatchObject({
       code: 'emulator_error'
     })
+  })
+})
+
+describe('dumpAndroidAccessibilityTree', () => {
+  it.each([
+    { stdout: '', stderr: 'ERROR: could not get idle state.' },
+    { stdout: 'ERROR: could not get idle state.', stderr: 'WARNING: diagnostic output' }
+  ])('rejects a zero-exit dump failure before reading stale XML: %j', async (diagnostic) => {
+    const runner = vi.fn<AndroidCommandRunner>().mockResolvedValueOnce({ ...diagnostic, code: 0 })
+    runner.mockResolvedValue(ok('<hierarchy><node text="Old screen"/></hierarchy>'))
+
+    await expect(dumpAndroidAccessibilityTree(runner, SDK, 's')).rejects.toMatchObject({
+      code: 'emulator_error',
+      message: expect.stringContaining('ERROR:')
+    })
+    expect(runner).toHaveBeenCalledTimes(1)
+  })
+
+  it('reads a successful dump despite unrelated stderr warnings', async () => {
+    const runner = vi.fn<AndroidCommandRunner>()
+    runner.mockResolvedValueOnce({
+      code: 0,
+      stdout: 'UI hierchary dumped to: /sdcard/window_dump.xml',
+      stderr: 'WARNING: diagnostic output'
+    })
+    runner.mockResolvedValueOnce(ok('<hierarchy><node text="Current screen"/></hierarchy>'))
+
+    const tree = await dumpAndroidAccessibilityTree(runner, SDK, 's')
+    expect(tree.children[0]).toMatchObject({ text: 'Current screen' })
+    expect(runner).toHaveBeenCalledTimes(2)
+  })
+})
+
+describe('launchAndroidApp', () => {
+  it.each([
+    { stdout: '', stderr: 'Error type 3\nError: Activity class {com.x/.Missing} does not exist.' },
+    { stdout: 'Error: Activity class {com.x/.Missing} does not exist.', stderr: '' }
+  ])('rejects a zero-exit activity launch failure: %j', async (diagnostic) => {
+    const runner = vi.fn<AndroidCommandRunner>().mockResolvedValue({ ...diagnostic, code: 0 })
+
+    await expect(launchAndroidApp(runner, SDK, 's', 'com.x', '.Missing')).rejects.toMatchObject({
+      code: 'emulator_error',
+      message: expect.stringContaining('Error:')
+    })
+  })
+
+  it('accepts a successful launch with a brought-to-front warning', async () => {
+    const runner = vi.fn<AndroidCommandRunner>().mockResolvedValue({
+      code: 0,
+      stdout: 'Starting: Intent { cmp=com.Error/.ErrorActivity }',
+      stderr: 'Warning: Activity not started, its current task has been brought to the front'
+    })
+
+    await expect(
+      launchAndroidApp(runner, SDK, 's', 'com.Error', '.ErrorActivity')
+    ).resolves.toBeUndefined()
   })
 })

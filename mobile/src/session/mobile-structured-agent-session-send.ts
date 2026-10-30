@@ -8,10 +8,8 @@ import {
   type StructuredAgentSessionAttachment
 } from '../../../src/shared/structured-agent-session-send-mutation'
 import { structuredAgentSessionBlocksTooLarge } from '../../../src/shared/rpc-contract/structured-agent-session-message-params'
-import {
-  AGENT_SESSION_MESSAGE_TOO_LARGE_PARTS,
-  agentSessionWriteNoticeEnglish
-} from '../../../src/shared/agent-session-refusal-notice'
+import { AGENT_SESSION_MESSAGE_TOO_LARGE_PARTS } from '../../../src/shared/agent-session-refusal-notice'
+import { mobileAgentSessionWriteNoticeText } from './agent-session-write-notice-copy'
 import type { RpcClient } from '../transport/rpc-client'
 import type { MobileNativeChatSendOutcome } from './native-chat/mobile-native-chat-send'
 import {
@@ -31,6 +29,8 @@ export async function sendMobileStructuredAgentSessionMessage(input: {
   skills?: readonly AgentJournalSkillRef[]
   /** Sent only when the host advertises `agent-session.queued-messages.v1`. */
   delivery?: 'queue-if-active'
+  /** Sent only when the host advertises `agent-session.send-selection.v1`. */
+  selection?: Readonly<Record<string, string>>
   /** Sent only when the host advertises `agent-session.send-options.v1`. */
   options?: Readonly<Record<string, string>>
   deadline?: number
@@ -46,7 +46,7 @@ export async function sendMobileStructuredAgentSessionMessage(input: {
   const body = structuredAgentSessionSendBody(input.text, input.attachments, input.skills)
   // The host refuses it unexplained, so say why here and keep the draft.
   if (structuredAgentSessionBlocksTooLarge(body.blocks)) {
-    input.onError(agentSessionWriteNoticeEnglish(AGENT_SESSION_MESSAGE_TOO_LARGE_PARTS))
+    input.onError(mobileAgentSessionWriteNoticeText(AGENT_SESSION_MESSAGE_TOO_LARGE_PARTS))
     return 'rejected'
   }
   // Use one operation id per Send action so separate taps cannot replay each other.
@@ -59,7 +59,8 @@ export async function sendMobileStructuredAgentSessionMessage(input: {
     fields: {
       body,
       ...(input.delivery ? { delivery: input.delivery } : {}),
-      ...(input.options ? { options: input.options } : {})
+      ...(input.options ? { options: input.options } : {}),
+      ...(input.selection !== undefined ? { selection: input.selection } : {})
     },
     clientOperationId: input.clientMessageId,
     timeoutMs

@@ -78,6 +78,7 @@ export function createTerminalPanePtyDeps(args: {
     clearExitedPanePtyLayoutBinding: deps.clearExitedPanePtyLayoutBinding,
     clearExitedPanePtyLayoutBindingForLeaf: deps.clearExitedPanePtyLayoutBindingForLeaf,
     onStartupBound: deps.onStartupBound,
+    refreshMobileOverlays: deps.refreshMobileOverlays,
     getPtyInputOwner: (paneId) =>
       refs.httpLinkClickFallbackDisposablesRef.current.get(paneId)?.ptyMouseSuppression,
     recordPaneMode2031Subscription: (paneId, mode) => {

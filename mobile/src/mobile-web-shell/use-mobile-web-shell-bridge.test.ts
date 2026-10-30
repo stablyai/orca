@@ -136,6 +136,9 @@ function Harness(props: {
     route: { pathname: '/h/host-1' },
     safeAreaInsets: { top: 0, right: 0, bottom: 0, left: 0 },
     keyboardInset: 0,
+    foldDivision: null,
+    pageGeometry: { occlusions: [], sideRail: false },
+    terminalKeyRail: [],
     colorScheme: 'dark',
     uiLocale: 'en',
     pageRoutes: ['/h/[hostId]'],
@@ -172,7 +175,8 @@ function Harness(props: {
       props.probe.paints += 1
     },
     onPageBackClaim: (claimed) => props.probe.backClaims.push(claimed),
-    onPageLocation: () => {}
+    onPageLocation: () => {},
+    onTerminalKeyRailClaim: () => {}
   })
   props.probe.view = view
   return props.session.kind === 'ready'

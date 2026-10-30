@@ -157,7 +157,8 @@ export function validateAgentSessionReservationInput(request: AgentSessionReserv
 export function applyAgentSessionReservation(
   state: AgentSessionStoreState,
   request: AgentSessionReserveRequest,
-  leaseTtlMs: number
+  leaseTtlMs: number,
+  legacyIds: readonly string[] = []
 ): {
   record: AgentSessionRecord
   disposition: Exclude<AgentSessionReserveDisposition, 'replayed'>
@@ -181,7 +182,7 @@ export function applyAgentSessionReservation(
     if (request.expectedFence !== null) {
       throw agentSessionRefusalError('agent_session_checkpoint_stale', { reason: 'recordMissing' })
     }
-    assertReservedTabUnheld(state, request)
+    assertReservedTabUnheld(state, request, legacyIds)
     return { record: createAgentSessionRecord(request, reservation), disposition: 'created' }
   }
   const existing = selected.record
@@ -201,7 +202,7 @@ export function applyAgentSessionReservation(
   if (request.expectedFence === null && !recreatable) {
     throw agentSessionRefusalError('agent_session_conflict', { reason: 'sessionExists' })
   }
-  assertReservedTabUnheld(state, request)
+  assertReservedTabUnheld(state, request, legacyIds)
   const pinned = {
     ...existing,
     ...(!existing.launchArgs && request.launchArgs ? { launchArgs: [...request.launchArgs] } : {}),
@@ -281,7 +282,8 @@ function createAgentSessionRecord(
 export function commitAgentSessionReservation(
   state: AgentSessionStoreState,
   request: AgentSessionReserveRequest,
-  leaseTtlMs: number
+  leaseTtlMs: number,
+  legacyIds: readonly string[] = []
 ): AgentSessionReserveResult {
   const decision = evaluateAgentSessionReserveOperation(state, request)
   const existing = state.records.get(request.sessionId)
@@ -296,7 +298,7 @@ export function commitAgentSessionReservation(
       throw agentSessionRefusalError(decision.code, decision.details)
     }
     const row = pendingAgentSessionOperationRow({ ...request.operation, now: request.now })
-    return reserveWithOperationRow(state, continued, row, leaseTtlMs)
+    return reserveWithOperationRow(state, continued, row, leaseTtlMs, legacyIds)
   }
   if (decision.decision === 'replay') {
     const record = requireAgentSessionRecordForReplay(state, decision.row, request.sessionId)
@@ -304,21 +306,22 @@ export function commitAgentSessionReservation(
       return { record, disposition: 'replayed', operationRow: decision.row }
     }
     if (continued) {
-      return reserveWithOperationRow(state, continued, decision.row, leaseTtlMs)
+      return reserveWithOperationRow(state, continued, decision.row, leaseTtlMs, legacyIds)
     }
     const retried = admitPendingAgentSessionReservationReplay(record, request)
     return { record: retried, disposition: 'replayed', operationRow: decision.row }
   }
-  return reserveWithOperationRow(state, request, decision.row, leaseTtlMs)
+  return reserveWithOperationRow(state, request, decision.row, leaseTtlMs, legacyIds)
 }
 
 function reserveWithOperationRow(
   state: AgentSessionStoreState,
   request: AgentSessionReserveRequest,
   row: AgentSessionOperationRow,
-  leaseTtlMs: number
+  leaseTtlMs: number,
+  legacyIds: readonly string[] = []
 ): AgentSessionReserveResult {
-  const result = applyAgentSessionReservation(state, request, leaseTtlMs)
+  const result = applyAgentSessionReservation(state, request, leaseTtlMs, legacyIds)
   state.operations.set(agentSessionOperationKey(row.callerKey, row.operationId), row)
   state.records.set(result.record.sessionId, result.record)
   return { ...result, operationRow: row }

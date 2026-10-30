@@ -104,4 +104,108 @@ describe('a passive restore of a WSL bridge pane (E9)', () => {
     expect(spawns).toBe(1)
     expect(readState).not.toHaveBeenCalled()
   })
+
+  // The cwd alone names the distro: a PowerShell pane of a host-path folder still runs in the guest.
+  describe('a non-WSL shell whose cwd is a WSL UNC path', () => {
+    const uncRestore = (cwd: string, extra: { wslPassiveRestore?: true } = {}) =>
+      adapter.spawn({
+        cols: 80,
+        rows: 24,
+        cwd,
+        sessionId: 'wt-1::C:/folder@@pane1',
+        shellOverride: 'powershell.exe',
+        ...extra
+      })
+
+    it.each([
+      ['\\\\wsl.localhost\\Ubuntu\\home\\jin\\repo'],
+      ['\\\\wsl$\\Ubuntu\\home\\jin\\repo']
+    ])('holds its passive restore while the distro is stopped (%s)', async (cwd) => {
+      const error = await uncRestore(cwd, { wslPassiveRestore: true }).catch(
+        (caught: unknown) => caught
+      )
+      expect(error instanceof Error ? parseWslDistroHold(error.message) : null).toEqual({
+        distro: 'Ubuntu',
+        state: 'stopped'
+      })
+      expect(spawns).toBe(0)
+    })
+
+    it("starts the user's own launch without reading the distro", async () => {
+      await uncRestore('\\\\wsl.localhost\\Ubuntu\\home\\jin\\repo')
+      expect(spawns).toBe(1)
+      expect(readState).not.toHaveBeenCalled()
+    })
+
+    it('leaves a host cwd alone', async () => {
+      await uncRestore('C:\\folder', { wslPassiveRestore: true })
+      expect(spawns).toBe(1)
+      expect(readState).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('a background start from main (orchestration, automations, recovery)', () => {
+    const fresh = () =>
+      adapter.spawn({
+        cols: 80,
+        rows: 24,
+        cwd: WSL_CWD,
+        isNewSession: true,
+        wslBackgroundStart: true
+      })
+
+    it('holds a new terminal too, starting nothing, while the distro is stopped', async () => {
+      const error = await fresh().catch((caught: unknown) => caught)
+      expect(error instanceof Error ? parseWslDistroHold(error.message) : null).toEqual({
+        distro: 'Ubuntu',
+        state: 'stopped'
+      })
+      expect(spawns).toBe(0)
+    })
+
+    it('holds it as unverifiable when the read cannot tell', async () => {
+      readState.mockResolvedValue('unverifiable')
+      const error = await fresh().catch((caught: unknown) => caught)
+      expect(error instanceof Error ? parseWslDistroHold(error.message) : null).toEqual({
+        distro: 'Ubuntu',
+        state: 'unverifiable'
+      })
+      expect(spawns).toBe(0)
+    })
+
+    it('holds its restore of a saved pane', async () => {
+      const held = await adapter
+        .spawn({
+          cols: 80,
+          rows: 24,
+          cwd: WSL_CWD,
+          sessionId: SESSION_ID,
+          wslBackgroundStart: true
+        })
+        .catch((caught: unknown) => caught)
+      expect(held instanceof Error ? parseWslDistroHold(held.message) : null).toEqual({
+        distro: 'Ubuntu',
+        state: 'stopped'
+      })
+      expect(spawns).toBe(0)
+    })
+
+    it('starts once a settled read proves the distro running', async () => {
+      readState.mockResolvedValue('running')
+      await fresh()
+      expect(spawns).toBe(1)
+    })
+
+    it('leaves a non-WSL start alone', async () => {
+      await adapter.spawn({
+        cols: 80,
+        rows: 24,
+        cwd: 'C:\\repo',
+        isNewSession: true,
+        wslBackgroundStart: true
+      })
+      expect(spawns).toBe(1)
+      expect(readState).not.toHaveBeenCalled()
+    })
+  })
 })

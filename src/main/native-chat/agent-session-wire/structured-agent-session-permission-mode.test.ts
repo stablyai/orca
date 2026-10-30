@@ -361,7 +361,7 @@ describe('a chat permission mode', () => {
         resolveWorkspacePath: async () => rig.root,
         resolveLaunchArgs: () => [],
         resolveClaudeAuthPolicy: () => ({ account: 'system' }),
-        resolveCodexCommand: () => 'codex-pr-30107-missing',
+        resolveCodexCommand: () => ({ command: 'codex-pr-30107-missing', prefixArgs: [] }),
         logger: { warn: vi.fn(), error: vi.fn() }
       }
     })

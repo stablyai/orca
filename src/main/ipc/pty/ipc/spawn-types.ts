@@ -120,7 +120,8 @@ export type PtySpawnIpcDeps = PtySpawnCodexResumeDeps & {
   assertWorkspaceAcceptsNewPty: (
     worktreeId: string | undefined,
     sessionId?: string,
-    cwd?: string
+    cwd?: string,
+    passiveWslRestore?: boolean
   ) => Promise<void> | void
   resolvePtySpawnStartupCwd: (
     worktreeId: string | undefined,

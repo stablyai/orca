@@ -5,9 +5,9 @@ import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { filterJiraProjectPickerProjects } from '@/components/jira-project-picker-filter'
 import { isVisibleJiraCreateField } from '@/components/task-page/jira/task-page-jira-create-fields'
 import {
-  compareJiraProjectsByDisplayLabel,
+  jiraProjectDisplayLabelComparator,
   getJiraProjectSelectionKey
-} from '@/components/task-page-jira-project-selection'
+} from '@/components/task-page/jira/task-page-jira-project-selection'
 
 import type { TaskPageJiraCreationStatePreludeModel } from './use-task-page-jira-creation-state'
 
@@ -33,8 +33,8 @@ export function useTaskPageJiraCreationProjects(model: TaskPageJiraCreationState
   const languageRevision = useUiLanguageRevision()
   const sortedAvailableJiraProjects = useMemo(
     () =>
-      [...availableJiraProjects].sort((a, b) =>
-        compareJiraProjectsByDisplayLabel(a, b, includeJiraSiteNameInProjectLabel)
+      [...availableJiraProjects].sort(
+        jiraProjectDisplayLabelComparator(includeJiraSiteNameInProjectLabel)
       ),
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- the comparator collates in the UI language.
     [availableJiraProjects, includeJiraSiteNameInProjectLabel, languageRevision]

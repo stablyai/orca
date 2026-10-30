@@ -11,7 +11,9 @@ import { getUnstageAllPaths } from '../../../src/shared/source-control-discard-a
 import {
   canDiscardStatusEntry,
   canStageStatusEntry,
-  canUnstageStatusEntry
+  canUnstageStatusEntry,
+  getConflictResolutions,
+  type ConflictResolution
 } from '../../../src/shared/source-control-entry-actions'
 import type { SourceControlGroupOrder } from '../../../src/shared/ui-chrome-types'
 import type { RpcResponse } from '../transport/types'
@@ -91,6 +93,10 @@ export function isMobileGitStageableEntry(entry: MobileGitStatusEntry): boolean 
 
 export function isMobileGitDiscardableEntry(entry: MobileGitStatusEntry): boolean {
   return hasKnownArea(entry) && canDiscardStatusEntry(entry)
+}
+
+export function getMobileConflictResolutions(entry: MobileGitStatusEntry): ConflictResolution[] {
+  return hasKnownArea(entry) ? getConflictResolutions(entry) : []
 }
 
 export function isMobileGitUnstageableEntry(entry: MobileGitStatusEntry): boolean {

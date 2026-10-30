@@ -2,6 +2,7 @@ import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { Plus } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
+import { openAppHttpLinkFromAnchor } from '@/lib/app-http-link-open'
 
 function AddReferenceAction({
   onClick
@@ -66,11 +67,14 @@ export function DetailHeader({
 export function MetadataActionIcon({
   label,
   href,
+  workspaceId,
   onClick,
   children
 }: {
   label: string
   href?: string
+  /** The card's workspace hosts the link, not whichever one is selected. */
+  workspaceId?: string
   onClick?: (event: React.MouseEvent<HTMLButtonElement>) => void
   children: React.ReactNode
 }): React.JSX.Element {
@@ -81,7 +85,10 @@ export function MetadataActionIcon({
         target="_blank"
         rel="noreferrer"
         aria-label={label}
-        onClick={(event) => event.stopPropagation()}
+        onClick={(event) => {
+          event.stopPropagation()
+          openAppHttpLinkFromAnchor(event, workspaceId)
+        }}
       >
         {children}
       </a>

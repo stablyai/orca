@@ -6,7 +6,7 @@ import {
 import type { AgentStatusState } from '../../shared/agent-status-types'
 import type { RuntimeTerminalWaitBlockedReason } from '../../shared/runtime-types'
 import { getSyntheticAgentTerminalTitle } from '../../shared/synthetic-agent-title'
-import { resolveExplicitTerminalTitleAgentType } from '../../shared/terminal-title-agent-type'
+import { resolveTerminalTitlePolicyAgentType } from '../../shared/terminal-title-agent-type'
 import type { TuiAgent } from '../../shared/tui-agent'
 import type { TerminalAgent } from '../../shared/terminal-agent'
 import { isTuiAgent } from '../../shared/tui-agent-config'
@@ -73,7 +73,7 @@ export function nameOnlyIdleNeedsCorroboration(
 ): boolean {
   // Why the title fallback: an adopted pane carries no launch metadata, but its
   // name-only title is exactly the thing that names the agent.
-  const resolved = agent ?? (title ? resolveExplicitTerminalTitleAgentType(title) : null)
+  const resolved = agent ?? (title ? resolveTerminalTitlePolicyAgentType(title) : null)
   if (!isTuiAgent(resolved)) {
     return false
   }

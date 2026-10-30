@@ -95,7 +95,7 @@ describe('agentSession.modelCatalog', () => {
       resolveAccountHome: async () => ({ variable: 'CODEX_HOME', path: '/account/other' }),
       probes: {
         codex: createCodexModelCatalogProbe({
-          resolveCommand: () => '/installed/codex',
+          resolveCommand: () => ({ command: '/installed/codex', prefixArgs: [] }),
           resolveEnvironment: async () => ({}),
           resolveLaunchArgs: () => ['-c', 'model_provider="work"'],
           runSession

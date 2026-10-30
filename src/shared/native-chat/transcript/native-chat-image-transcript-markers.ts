@@ -4,7 +4,7 @@ import {
   TERMINAL_CONTROL_CHARACTER_PATTERN
 } from '../../ansi-escape-sequences'
 import { isTextBlock, type NativeChatBlock, type NativeChatMessage } from '../../native-chat-types'
-import { imageReferenceToken, replaceImageReferences } from '../../native-chat-image-reference'
+import { imageReferenceToken, replaceImageReferences } from '../native-chat-image-reference'
 import { NATIVE_CHAT_QUOTED_FILE_REFERENCE } from '../../agent-image-paste'
 
 // Keep whitespace and path starts disjoint so incomplete markers cannot rescan their suffix.

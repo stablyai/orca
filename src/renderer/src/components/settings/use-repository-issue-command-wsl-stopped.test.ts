@@ -39,13 +39,9 @@ function emitDistroRunning(distro: string): void {
   }
 }
 
-function render() {
+function render(selectedHostId: 'local' | 'runtime:env-1' = 'local') {
   return renderHook(() =>
-    useRepositoryIssueCommand({
-      repoId: 'repo-1',
-      repoHostIdentity: 'local',
-      selectedHostId: 'local'
-    })
+    useRepositoryIssueCommand({ repoId: 'repo-1', repoHostIdentity: 'local', selectedHostId })
   )
 }
 
@@ -134,5 +130,27 @@ describe('issue command editor while its WSL distro is stopped (E9)', () => {
 
     expect(distroRunningListeners.size).toBe(0)
     expect(client.read).toHaveBeenCalledTimes(1)
+  })
+
+  it('a blur with no edit saves nothing, so it never starts the distro', async () => {
+    client.read.mockResolvedValue(READ)
+    const hook = render()
+    await vi.waitFor(() => expect(hook.result.current.issueCommandDraft).toBe('my private command'))
+
+    await act(async () => hook.result.current.commitIssueCommand())
+
+    expect(client.write).not.toHaveBeenCalled()
+  })
+
+  it("re-asks a paired host on window focus, since its running signal can't reach us", async () => {
+    client.read.mockResolvedValueOnce(REFUSED).mockResolvedValueOnce(READ)
+    const hook = render('runtime:env-1')
+    await vi.waitFor(() => expect(hook.result.current.issueCommandStoppedDistro).toBe('Ubuntu'))
+    expect(distroRunningListeners.size).toBe(0)
+
+    act(() => window.dispatchEvent(new Event('focus')))
+
+    await vi.waitFor(() => expect(hook.result.current.issueCommandDraft).toBe('my private command'))
+    expect(hook.result.current.issueCommandReadOnly).toBe(false)
   })
 })

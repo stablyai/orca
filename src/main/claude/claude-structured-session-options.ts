@@ -179,6 +179,9 @@ function observeClaudeSettingsReadback(
   }
 }
 
+/** Effort and Fast change through a control this CLI never answers. */
+const CLAUDE_CLI_UPDATE_REQUIRED = { supported: false, reason: 'cli-update-required' }
+
 /** Reuse the initialize catalog and held options without another CLI request. */
 export function claudeStructuredSessionOptionsFrom(
   session: ClaudeSession,
@@ -192,6 +195,7 @@ export function claudeStructuredSessionOptionsFrom(
     ...row,
     resolvedModel: null
   }))
+  const changesLive = session.flagSettingsControl !== 'unsupported'
   const effort =
     session.options.get('effort') ??
     session.reportedOptions.effort ??
@@ -202,7 +206,9 @@ export function claudeStructuredSessionOptionsFrom(
     desiredFastMode ??
     session.reportedOptions.fastMode ??
     (session.fastModeState === undefined ? undefined : session.fastModeState !== 'off')
-  const support = claudeFastModeSupport([], session.fastModeDisabledReason)
+  const support = changesLive
+    ? claudeFastModeSupport([], session.fastModeDisabledReason)
+    : CLAUDE_CLI_UPDATE_REQUIRED
   const confirmed = [
     ...(current.confirmed ? ['model'] : []),
     ...(effort && session.confirmedOptions.has('effort') ? ['effort'] : []),
@@ -214,6 +220,7 @@ export function claudeStructuredSessionOptionsFrom(
   return {
     models: wireClaudeModels(models),
     ...(support ? { fastModeSupport: support } : {}),
+    ...(changesLive ? {} : { effortFixed: true as const }),
     current: {
       model,
       reportedPermissionMode: session.reportedOptions.reportedPermissionMode,

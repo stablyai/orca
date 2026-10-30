@@ -38,21 +38,28 @@ export function aiVaultSessionResumeInChatWorkspaceMatters(
 /** Compare with shared runtime rules; POSIX case folding would conflate distinct directories. */
 export function aiVaultSessionCwdMatchesWorkspace(
   cwd: string | null | undefined,
-  workspacePath: string | null | undefined
+  workspacePath: string | null | undefined,
+  cwdAliases: readonly string[] = []
 ): boolean {
   if (!cwd || !workspacePath) {
     return false
   }
-  return (
-    normalizeRuntimePathForComparison(cwd.trim()) ===
-    normalizeRuntimePathForComparison(workspacePath.trim())
+  const workspace = normalizeRuntimePathForComparison(workspacePath.trim())
+  return [cwd, ...cwdAliases].some(
+    (path) => normalizeRuntimePathForComparison(path.trim()) === workspace
   )
 }
 
 export function resolveAiVaultSessionResumeInChatEligibility(args: {
   session: Pick<
     AiVaultSession,
-    'agent' | 'cwd' | 'filePath' | 'executionHostId' | 'messageCount' | 'previewMessages'
+    | 'agent'
+    | 'cwd'
+    | 'cwdAliases'
+    | 'filePath'
+    | 'executionHostId'
+    | 'messageCount'
+    | 'previewMessages'
   > & { structuredSession?: AiVaultSession['structuredSession'] }
   targetWorkspaceId: string | null
   targetWorkspacePath: string | null
@@ -83,7 +90,7 @@ export function resolveAiVaultSessionResumeInChatEligibility(args: {
   }
   if (
     aiVaultSessionResumeInChatWorkspaceMatters(session.agent) &&
-    !aiVaultSessionCwdMatchesWorkspace(session.cwd, args.targetWorkspacePath)
+    !aiVaultSessionCwdMatchesWorkspace(session.cwd, args.targetWorkspacePath, session.cwdAliases)
   ) {
     return { available: false, reason: 'workspace' }
   }
