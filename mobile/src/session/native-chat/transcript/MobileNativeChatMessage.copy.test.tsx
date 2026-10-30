@@ -372,3 +372,83 @@ describe('iOS whole-message copy', () => {
     expect(nodes('Pressable')).toHaveLength(0)
   })
 })
+
+it.each([1, 10])(
+  'updates generated labels in %i actual memoized transcript consumers without changing source tokens or open paths',
+  async (count) => {
+    const { mobileI18n, activateMobileUiLocale } = await import('../../../i18n/mobile-i18n')
+    const references =
+      await import('../../../../../src/shared/native-chat-text-attachment-references')
+    const recognize = vi.spyOn(references, 'nativeChatTextAttachmentPaths')
+    const base = '/host/agent-session-attachments/12345678-1234-1234-1234-123456789abc/'
+    const generated = `${base}orca-paste-35636.txt`
+    const ordinary = `${base}Pasted text`
+    const original = `Read @${generated} and @"${ordinary}"`
+    const onOpenFile = vi.fn()
+    mobileI18n.addResourceBundle('fr', 'translation', {
+      chat: { textAttachmentPreview: { pastedText: 'Texte collé' } }
+    })
+    let tree: ReactTestRenderer | undefined
+    try {
+      await act(async () => {
+        await activateMobileUiLocale('en')
+      })
+      await act(async () => {
+        tree = create(
+          createElement(
+            'Rows',
+            null,
+            Array.from({ length: count }, (_, index) =>
+              createElement(MobileNativeChatMessage, {
+                key: index,
+                message: {
+                  ...message,
+                  role: 'user',
+                  blocks: [{ type: 'text', text: original }],
+                  id: String(index)
+                },
+                structuredActivityUi: true,
+                onOpenFile
+              })
+            )
+          )
+        )
+      })
+      expect(recognize).toHaveBeenCalledTimes(count)
+      const actions = () =>
+        tree!.root
+          .findAll((node) => String(node.type) === 'Text')
+          .filter(
+            (node) =>
+              node.props.accessibilityRole === 'button' && typeof node.props.onPress === 'function'
+          )
+      expect(actions().filter((node) => node.children.join('') === 'Pasted text')).toHaveLength(
+        count * 2
+      )
+      recognize.mockClear()
+      await act(async () => {
+        await activateMobileUiLocale('fr')
+      })
+      expect(recognize).not.toHaveBeenCalled()
+      const translated = actions().filter((node) => node.children.join('') === 'Texte collé')
+      expect(translated).toHaveLength(count)
+      expect(actions().filter((node) => node.children.join('') === 'Pasted text')).toHaveLength(
+        count
+      )
+      act(() => translated[0]!.props.onPress())
+      expect(onOpenFile).toHaveBeenCalledWith(generated)
+      expect(
+        tree!.root
+          .findAll((node) => String(node.type) === 'MobileMarkdown')
+          .map((node) => node.props.content)
+      ).toEqual(Array.from({ length: count }, () => original))
+    } finally {
+      act(() => tree?.unmount())
+      recognize.mockRestore()
+      await act(async () => {
+        await activateMobileUiLocale('en')
+      })
+      mobileI18n.removeResourceBundle('fr', 'translation')
+    }
+  }
+)

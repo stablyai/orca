@@ -262,7 +262,11 @@ function MobileNativeChatMessageImpl({
           onLongPress={onLongPress}
           text={text}
         />
-        <TextAttachmentActions text={text} onOpenFile={onOpenFile} />
+        <TextAttachmentActions
+          text={text}
+          onOpenFile={onOpenFile}
+          pastedText={t('chat.textAttachmentPreview.pastedText', 'Pasted text')}
+        />
       </View>
     ) : (
       <Prose
@@ -376,9 +380,11 @@ export const MobileNativeChatMessage = memo(MobileNativeChatMessageImpl)
 
 const TextAttachmentActions = memo(function TextAttachmentActions({
   text,
+  pastedText,
   onOpenFile
 }: {
   text: string
+  pastedText: string
   onOpenFile?: (path: string) => void
 }) {
   const paths = useMemo(() => nativeChatTextAttachmentPaths(text), [text])
@@ -389,7 +395,7 @@ const TextAttachmentActions = memo(function TextAttachmentActions({
       onPress={() => onOpenFile?.(path)}
       style={styles.agentAttribution}
     >
-      {chatTextAttachmentName(path)}
+      {chatTextAttachmentName(path, pastedText)}
     </Text>
   ))
 })

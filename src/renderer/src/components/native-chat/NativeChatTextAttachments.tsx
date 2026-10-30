@@ -1,3 +1,5 @@
+import { translate } from '@/i18n/i18n'
+import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { createContext, useCallback, useContext, useState, useMemo, type ReactNode } from 'react'
 import { Button } from '@/components/ui/button'
 import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
@@ -71,6 +73,7 @@ function AttachmentButton({
   path: string
   runtimeContext?: RuntimeFileOperationArgs | null
 }) {
+  useUiLanguageRevision()
   const [open, setOpen] = useState(false)
   const opener = useContext(NativeChatTextAttachmentOpener)
   const visible = useContext(NativeChatMarkdownImageOwnerContext)?.isVisible ?? true
@@ -85,7 +88,10 @@ function AttachmentButton({
         size="sm"
         onClick={() => visible && (opener ? opener(path) : setOpen(true))}
       >
-        {chatTextAttachmentName(path)}
+        {chatTextAttachmentName(
+          path,
+          translate('components.native-chat.composer.pastedTextLabel', 'Pasted text')
+        )}
       </Button>
       {open && visible ? (
         <NativeChatTextAttachmentPreview

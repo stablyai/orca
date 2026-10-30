@@ -1,3 +1,5 @@
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
+import type { Translate } from '../i18n/mobile-i18n'
 import { createMobileChatAttachmentReader } from './mobile-chat-attachment-read'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useMemo, useState, useEffect, useCallback } from 'react'
@@ -21,6 +23,7 @@ const useAttachmentTextPreview = createAttachmentTextPreviewHook({
 
 export function MobileChatAttachmentPreview({ params }: { params: MobileFilePreviewRouteParams }) {
   useMobileColorScheme()
+  const t = useMobileTranslation()
   const { client, state } = useWorkspaceClient(params.hostId)
   const router = useWorkspaceRouteHandoff()
   const clipboard = useClipboardWriter()
@@ -85,44 +88,56 @@ export function MobileChatAttachmentPreview({ params }: { params: MobileFilePrev
     <View style={styles.container}>
       <SafeAreaView edges={['top']} style={styles.header}>
         <View style={styles.topBar}>
-          {action('Back', false, () => {
+          {action(t('common.back', 'Back'), false, () => {
             source.dispose()
             router.back()
           })}
           <View style={styles.titleBlock}>
             <Text numberOfLines={1} style={styles.title}>
-              {chatTextAttachmentName(path)}
+              {chatTextAttachmentName(
+                path,
+                t('chat.textAttachmentPreview.pastedText', 'Pasted text')
+              )}
             </Text>
             <Text style={styles.meta}>
               {source.size === null
-                ? 'Text attachment'
-                : `${source.size.toLocaleString(getUiIntlLocale())} bytes`}
+                ? t('chat.textAttachmentPreview.textAttachment', 'Text attachment')
+                : t('chat.textAttachmentPreview.byteSize', '{{size}} bytes', {
+                    size: source.size.toLocaleString(getUiIntlLocale())
+                  })}
             </Text>
           </View>
         </View>
       </SafeAreaView>
       <View style={styles.topBar}>
-        {action('Copy', busy || !smallCopy, () => void copy())}
-        {action('Save', true, () => {})}
-        {action('Retry', busy, retry)}
+        {action(t('common.copy', 'Copy'), busy || !smallCopy, () => void copy())}
+        {action(t('common.save', 'Save'), true, () => {})}
+        {action(t('common.retry', 'Retry'), busy, retry)}
       </View>
       <Text style={styles.meta}>
         {smallCopy
-          ? 'Save will be available in a phone update.'
-          : 'Full Copy and Save for this attachment will be available in a phone update.'}
+          ? t('chat.textAttachmentPreview.saveUpdate', 'Save will be available in a phone update.')
+          : t(
+              'chat.textAttachmentPreview.fullCopySaveUpdate',
+              'Full Copy and Save for this attachment will be available in a phone update.'
+            )}
       </Text>
       {error ? (
         <Text accessibilityRole="alert" style={styles.errorText}>
-          {error}
+          {formatAttachmentPreviewError(error, t)}
         </Text>
       ) : null}
       <ScrollView style={styles.scroll} contentContainerStyle={styles.textContent}>
         {segments}
       </ScrollView>
       <View style={[styles.topBar, { flexWrap: 'wrap' }]}>
-        {action('First', busy || !display, () => void load(0))}
         {action(
-          'Prev',
+          t('chat.textAttachmentPreview.first', 'First'),
+          busy || !display,
+          () => void load(0)
+        )}
+        {action(
+          t('chat.textAttachmentPreview.prev', 'Prev'),
           busy || !display || (display.page === 0 && display.subpage === 0),
           () =>
             display &&
@@ -132,7 +147,7 @@ export function MobileChatAttachmentPreview({ params }: { params: MobileFilePrev
             )
         )}
         <TextInput
-          accessibilityLabel="Attachment page"
+          accessibilityLabel={t('chat.textAttachmentPreview.attachmentPage', 'Attachment page')}
           style={styles.meta}
           keyboardType="number-pad"
           value={String((display?.page ?? 0) + 1)}
@@ -149,7 +164,7 @@ export function MobileChatAttachmentPreview({ params }: { params: MobileFilePrev
           {display ? ` (${display.subpage + 1}/${display.subpages})` : ''}
         </Text>
         {action(
-          'Next',
+          t('chat.textAttachmentPreview.next', 'Next'),
           busy ||
             !display ||
             (display.page + 1 === source.pageCount && display.subpage + 1 === display.subpages),
@@ -161,11 +176,67 @@ export function MobileChatAttachmentPreview({ params }: { params: MobileFilePrev
             )
         )}
         {action(
-          'Last',
+          t('chat.textAttachmentPreview.last', 'Last'),
           busy || !display,
           () => void load(source.pageCount - 1, Number.MAX_SAFE_INTEGER)
         )}
       </View>
     </View>
   )
+}
+
+function formatAttachmentPreviewError(message: string, t: Translate): string {
+  switch (message) {
+    case 'Unreadable attachment reply. Try again.':
+      return t(
+        'chat.textAttachmentPreview.unreadableReply',
+        'Unreadable attachment reply. Try again.'
+      )
+    case 'Attachment changed or its reply was incomplete. Close it and try again.':
+      return t(
+        'chat.textAttachmentPreview.incompleteReply',
+        'Attachment changed or its reply was incomplete. Close it and try again.'
+      )
+    case 'This file cannot be previewed as text. Save it to open it in another app.':
+      return t(
+        'chat.textAttachmentPreview.notText',
+        'This file cannot be previewed as text. Save it to open it in another app.'
+      )
+    case 'Unable to open attachment. Try again.':
+      return t('chat.textAttachmentPreview.openFailed', 'Unable to open attachment. Try again.')
+    case 'This host cannot open text attachments yet. Update Orca on that host, then retry.':
+      return t(
+        'chat.textAttachmentPreview.hostUpdate',
+        'This host cannot open text attachments yet. Update Orca on that host, then retry.'
+      )
+    case 'This file is too large to copy. Save it instead.':
+      return t(
+        'chat.textAttachmentPreview.copyTooLarge',
+        'This file is too large to copy. Save it instead.'
+      )
+    case 'Connection changed. Retry to reopen the attachment.':
+      return t(
+        'chat.textAttachmentPreview.connectionChanged',
+        'Connection changed. Retry to reopen the attachment.'
+      )
+    case 'The attachment host changed. Close it and reopen it.':
+      return t(
+        'chat.textAttachmentPreview.hostChanged',
+        'The attachment host changed. Close it and reopen it.'
+      )
+    case 'Unable to read this attachment. Reconnect and try again. The file may have been removed or changed.':
+      return t(
+        'chat.textAttachmentPreview.readFailed',
+        'Unable to read this attachment. Reconnect and try again. The file may have been removed or changed.'
+      )
+    case 'Full Copy for this attachment needs the upcoming phone update.':
+      return t(
+        'chat.textAttachmentPreview.copyFrame',
+        'Full Copy for this attachment needs the upcoming phone update.'
+      )
+    case 'Unable to copy attachment. Try again.':
+      return t('chat.textAttachmentPreview.copyFailed', 'Unable to copy attachment. Try again.')
+    default:
+      return message
+  }
 }

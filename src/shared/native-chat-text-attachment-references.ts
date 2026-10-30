@@ -51,9 +51,9 @@ export function nativeChatTextAttachmentParts(
   return parts.length ? parts : [{ text }]
 }
 
-export function chatTextAttachmentName(path: string): string {
+export function chatTextAttachmentName(path: string, pastedText = 'Pasted text'): string {
   const name = path.split(/[\\/]/).at(-1) ?? path
-  return /^orca-paste-.*\.txt$/.test(name) ? 'Pasted text' : name
+  return /^orca-paste-.*\.txt$/.test(name) ? pastedText : name
 }
 
 export function nativeChatTextAttachmentPaths(text: string): string[] {

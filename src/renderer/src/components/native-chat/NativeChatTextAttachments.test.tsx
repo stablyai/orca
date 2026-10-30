@@ -2,6 +2,7 @@
 import { Profiler, StrictMode, useContext, useState, useMemo } from 'react'
 import { toast } from 'sonner'
 import { i18n } from '@/i18n/i18n'
+import * as languageRevision from '@/i18n/translation-resource-version'
 import { useAppStore } from '@/store'
 import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
@@ -29,6 +30,28 @@ const mocks = vi.hoisted(() => {
     append: vi.fn(),
     finish: vi.fn(),
     cancel: vi.fn()
+  }
+})
+const subscriptions = vi.hoisted(() => ({ registered: 0, live: 0, notifications: 0, removed: 0 }))
+vi.mock('@/i18n/translation-resource-version', async (importOriginal) => {
+  const original = await importOriginal<typeof languageRevision>()
+  return {
+    ...original,
+    getTranslationResourceVersion: vi.fn(original.getTranslationResourceVersion),
+    advanceTranslationResourceVersion: vi.fn(original.advanceTranslationResourceVersion),
+    subscribeTranslationResourceVersion: vi.fn((callback: () => void) => {
+      subscriptions.registered += 1
+      subscriptions.live += 1
+      const unsubscribe = original.subscribeTranslationResourceVersion(() => {
+        subscriptions.notifications += 1
+        callback()
+      })
+      return () => {
+        subscriptions.live -= 1
+        subscriptions.removed += 1
+        unsubscribe()
+      }
+    })
   }
 })
 vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: mocks.rpc }))
@@ -341,4 +364,255 @@ it('updates only open preview chrome from language resources without replacing i
     await i18n.changeLanguage('en')
     i18n.removeResourceBundle(language, 'translation')
   }
+})
+
+it.each([1, 10])(
+  'bounds real locale publication and releases %i open previews independently of closed labels',
+  async (count) => {
+    const language = 'fr-x-pr35636-population'
+    const commits = vi.fn()
+    const publications: {
+      live: number
+      delta: number
+      notifications: number
+      commits: number
+      snapshots: number
+    }[] = []
+    const initialLive = subscriptions.live
+    const unrelatedWorktree = useAppStore.getState().activeWorktreeId
+    const originalReads = mocks.rpc.mock.calls.length
+    const renderText = (text: string) => <span>{text}</span>
+    const context = { target, worktreeId: 'w', worktreePath: '/repo' }
+    const generated = (index: number) => path.replace('123-abc', `population-${index}`)
+    const ordinary = path.replace('orca-paste-123-abc.txt', 'Pasted text')
+    i18n.addResourceBundle(language, 'translation', {
+      components: {
+        'native-chat': {
+          composer: { pastedTextLabel: 'Texte collé' },
+          textAttachmentPreview: {
+            copiedContents: 'Contenu copié',
+            copyContents: 'Copier tout',
+            attachmentPage: 'Page jointe'
+          }
+        }
+      }
+    })
+    const view = render(
+      <>
+        {Array.from({ length: count }, (_, index) => (
+          <Profiler key={index} id={String(index)} onRender={commits}>
+            <NativeChatTextAttachments
+              content={`@${generated(index)}`}
+              structured
+              runtimeContext={context}
+              renderText={renderText}
+            />
+          </Profiler>
+        ))}
+        <NativeChatTextAttachments
+          content={`@"${ordinary}"`}
+          structured
+          runtimeContext={context}
+          renderText={renderText}
+        />
+      </>
+    )
+    try {
+      const closedLive = subscriptions.live
+      expect(closedLive - initialLive).toBe(count + 1)
+      expect(mocks.rpc).toHaveBeenCalledTimes(originalReads)
+      const registrations = subscriptions.registered
+      const closedButtons = screen.getAllByRole('button', { name: 'Pasted text' }).slice(0, count)
+      for (const node of closedButtons) {
+        fireEvent.click(node)
+      }
+      await waitFor(() =>
+        expect(
+          screen
+            .getAllByRole('button', { name: 'Copy contents' })
+            .every((node) => !node.hasAttribute('disabled'))
+        ).toBe(true)
+      )
+      expect(subscriptions.live - closedLive).toBe(count)
+      expect(subscriptions.registered - registrations).toBe(count)
+      const inputs = Array.from(document.querySelectorAll('input[aria-label="Attachment page"]'))
+      expect(inputs).toHaveLength(count)
+      const reads = mocks.rpc.mock.calls.length
+      const settledCommits = commits.mock.calls.length
+      const revision = languageRevision.getTranslationResourceVersion()
+      const notifications = subscriptions.notifications
+      await act(async () => useAppStore.setState({ activeWorktreeId: 'other35636' }))
+      expect(commits).toHaveBeenCalledTimes(settledCommits)
+      expect(subscriptions.notifications).toBe(notifications)
+      expect(languageRevision.getTranslationResourceVersion()).toBe(revision)
+      const publish = async (event: () => Promise<void> | void) => {
+        const live = subscriptions.live
+        const before = languageRevision.getTranslationResourceVersion()
+        const notified = subscriptions.notifications
+        const published = vi.mocked(languageRevision.advanceTranslationResourceVersion).mock.calls
+          .length
+        const rendered = commits.mock.calls.length
+        const snapshots = vi.mocked(languageRevision.getTranslationResourceVersion).mock.calls
+          .length
+        await act(event)
+        const delta = languageRevision.getTranslationResourceVersion() - before
+        expect(delta).toBeGreaterThan(0)
+        expect(
+          vi.mocked(languageRevision.advanceTranslationResourceVersion).mock.calls.length -
+            published
+        ).toBe(delta)
+        expect(subscriptions.notifications - notified).toBe(live * delta)
+        expect(commits.mock.calls.length - rendered).toBeGreaterThanOrEqual(count)
+        expect(commits.mock.calls.length - rendered).toBeLessThanOrEqual(count * delta)
+        const snapshotCalls =
+          vi.mocked(languageRevision.getTranslationResourceVersion).mock.calls.length - snapshots
+        expect(snapshotCalls).toBeGreaterThan(0)
+        expect(snapshotCalls).toBeLessThanOrEqual(16 * live * delta + 5)
+        publications.push({
+          live,
+          delta,
+          notifications: subscriptions.notifications - notified,
+          commits: commits.mock.calls.length - rendered,
+          snapshots: snapshotCalls
+        })
+        expect(mocks.rpc).toHaveBeenCalledTimes(reads)
+      }
+      await publish(async () => {
+        await i18n.changeLanguage(language)
+      })
+      expect(
+        Array.from(view.container.querySelectorAll('button')).filter(
+          (node) => node.textContent === 'Texte collé'
+        )
+      ).toHaveLength(count)
+      expect(
+        Array.from(view.container.querySelectorAll('button')).filter(
+          (node) => node.textContent === 'Pasted text'
+        )
+      ).toHaveLength(1)
+      expect(Array.from(document.querySelectorAll('input[aria-label="Page jointe"]'))).toEqual(
+        inputs
+      )
+      await publish(() => {
+        i18n.addResource(
+          language,
+          'translation',
+          'components.native-chat.textAttachmentPreview.copyContents',
+          'Copier encore'
+        )
+      })
+      expect(
+        Array.from(document.querySelectorAll('button')).filter(
+          (node) => node.textContent === 'Copier encore'
+        )
+      ).toHaveLength(count)
+      await publish(() => {
+        i18n.addResource('inactive35636', 'translation', 'unrelated35636', 'unrelated')
+      })
+      fireEvent.click(screen.getAllByRole('button', { name: 'Copier encore' })[0]!)
+      await waitFor(() => expect(mocks.write).toHaveBeenCalledWith(bytes.toString('utf8')))
+      await waitFor(() => expect(toast.success).toHaveBeenCalledWith('Contenu copié'))
+      const removals = subscriptions.removed
+      for (const node of document.querySelectorAll('[data-slot="sheet-close"]')) {
+        fireEvent.click(node)
+      }
+      await waitFor(() => expect(screen.queryAllByRole('spinbutton')).toHaveLength(0))
+      expect(subscriptions.live).toBe(closedLive)
+      expect(subscriptions.removed - removals).toBe(count)
+      const closedReads = mocks.rpc.mock.calls.length
+      const before = languageRevision.getTranslationResourceVersion()
+      const notified = subscriptions.notifications
+      await act(async () => {
+        i18n.addResource(
+          language,
+          'translation',
+          'components.native-chat.composer.pastedTextLabel',
+          'Texte fermé'
+        )
+      })
+      expect(subscriptions.notifications - notified).toBe(
+        closedLive * (languageRevision.getTranslationResourceVersion() - before)
+      )
+      expect(screen.getAllByRole('button', { name: 'Texte fermé' })).toHaveLength(count)
+      expect(mocks.rpc).toHaveBeenCalledTimes(closedReads)
+      view.unmount()
+      expect(subscriptions.live).toBe(initialLive)
+      const retiredNotifications = subscriptions.notifications
+      const retiredCommits = commits.mock.calls.length
+      await act(async () => {
+        i18n.addResource(language, 'translation', 'unrelatedRetired35636', 'value')
+      })
+      expect(subscriptions.notifications).toBe(retiredNotifications)
+      expect(commits).toHaveBeenCalledTimes(retiredCommits)
+      expect(mocks.rpc).toHaveBeenCalledTimes(closedReads)
+      process.stdout.write(
+        `PR35636 desktop locale population ${JSON.stringify({ count, closedLabels: count + 1, openPreviewListeners: count, remainingListeners: subscriptions.live, reads, publications })}\n`
+      )
+    } finally {
+      view.unmount()
+      useAppStore.setState({ activeWorktreeId: unrelatedWorktree })
+      await i18n.changeLanguage('en')
+      i18n.removeResourceBundle(language, 'translation')
+      i18n.removeResourceBundle('inactive35636', 'translation')
+    }
+  }
+)
+
+it('presents owned reader and hook failures in the current locale without re-reading or replacing external errors', async () => {
+  const language = 'fr-x-pr35636-errors'
+  i18n.addResourceBundle(language, 'translation', {
+    components: {
+      'native-chat': {
+        textAttachmentPreview: {
+          hostUpdate: 'Mettre à jour cet hôte, puis réessayer.',
+          notText: 'Enregistrer ce fichier pour l’ouvrir.',
+          openFailed: 'Impossible d’ouvrir la pièce jointe.',
+          unreadableReply: 'Réponse illisible.',
+          incompleteReply: 'Réponse incomplète.'
+        }
+      }
+    }
+  })
+  capable = false
+  const view = render(
+    <NativeChatTextAttachmentPreview path={path} target={target} onClose={() => {}} />
+  )
+  await screen.findByText(
+    'This host cannot open text attachments yet. Update Orca on that host, then retry.'
+  )
+  const reads = mocks.rpc.mock.calls.length
+  await act(async () => {
+    await i18n.changeLanguage(language)
+  })
+  expect(screen.getByText('Mettre à jour cet hôte, puis réessayer.')).toBeTruthy()
+  expect(mocks.rpc).toHaveBeenCalledTimes(reads)
+  capable = true
+  mocks.rpc.mockRejectedValueOnce(new TypeError('invalid encoding'))
+  fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
+  await screen.findByText('Enregistrer ce fichier pour l’ouvrir.')
+  mocks.rpc.mockRejectedValueOnce('external non-error')
+  fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
+  await screen.findByText('Impossible d’ouvrir la pièce jointe.')
+  mocks.rpc.mockRejectedValueOnce(new Error('External diagnostic unchanged'))
+  fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
+  await screen.findByText('External diagnostic unchanged')
+  mocks.rpc
+    .mockResolvedValueOnce({ capabilities: [AGENT_SESSION_TEXT_ATTACHMENT_READ_CAPABILITY] })
+    .mockResolvedValueOnce({})
+  fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
+  await screen.findByText('Réponse illisible.')
+  mocks.rpc
+    .mockResolvedValueOnce({ capabilities: [AGENT_SESSION_TEXT_ATTACHMENT_READ_CAPABILITY] })
+    .mockResolvedValueOnce({
+      snapshot: 'a'.repeat(64),
+      size: 1,
+      bytesRead: 0,
+      contentBase64: '',
+      eof: true
+    })
+  fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
+  await screen.findByText('Réponse incomplète.')
+  view.unmount()
+  await i18n.changeLanguage('en')
+  i18n.removeResourceBundle(language, 'translation')
 })

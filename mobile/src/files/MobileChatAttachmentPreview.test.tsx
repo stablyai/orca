@@ -1,4 +1,5 @@
-import { createElement } from 'react'
+import { createElement, Profiler } from 'react'
+import * as mobileLanguage from '../i18n/mobile-i18n'
 import { act, create, type ReactTestRenderer, type ReactTestInstance } from 'react-test-renderer'
 import { afterEach, expect, it, vi } from 'vitest'
 import type { RpcResponse } from '../transport/types'
@@ -7,6 +8,27 @@ import { MobileNativeChatComposerAttachments } from '../session/native-chat/comp
 import { normalizeMobileFilePreviewRouteParams } from './mobile-file-preview-route'
 import { MobileFilePreviewScreen } from './MobileFilePreviewScreen'
 
+const subscriptions = vi.hoisted(() => ({ registered: 0, live: 0, notifications: 0, removed: 0 }))
+vi.mock('../i18n/mobile-i18n', async (importOriginal) => {
+  const original = await importOriginal<typeof mobileLanguage>()
+  return {
+    ...original,
+    getMobileUiRevision: vi.fn(original.getMobileUiRevision),
+    subscribeMobileUiLanguage: vi.fn((callback: () => void) => {
+      subscriptions.registered += 1
+      subscriptions.live += 1
+      const unsubscribe = original.subscribeMobileUiLanguage(() => {
+        subscriptions.notifications += 1
+        callback()
+      })
+      return () => {
+        subscriptions.live -= 1
+        subscriptions.removed += 1
+        unsubscribe()
+      }
+    })
+  }
+})
 const mocks = vi.hoisted(() => ({
   push: vi.fn(),
   back: vi.fn(),
@@ -44,7 +66,12 @@ vi.mock('../navigation/workspace-route-handoff', () => ({
 vi.mock('../platform/clipboard', () => ({ useClipboardWriter: () => ({ writeText: mocks.write }) }))
 vi.mock('../platform/haptics', () => ({ triggerSelection: vi.fn() }))
 vi.mock('../components/ConfirmModal', () => ({ ConfirmModal: () => null }))
-vi.mock('./MobileFilePreviewBody', () => ({ MobileFilePreviewBody: () => null }))
+vi.mock('./MobileFileMediaPreview', () => ({ MobileFileMediaPreview: () => null }))
+vi.mock('./MobileFileMarkdownPreview', () => ({ MobileFileMarkdownPreview: () => null }))
+vi.mock('./MobileFilePreviewEditableSource', () => ({
+  MobileFilePreviewEditableSource: () => null
+}))
+vi.mock('./MobileFilePreviewSourceText', () => ({ MobileFilePreviewSourceText: () => null }))
 vi.mock('../transport/host-client-hooks', () => ({ useForceReconnect: () => vi.fn() }))
 const client = {
   sendRequest: (...args: unknown[]) => mocks.send(...args),
@@ -61,9 +88,13 @@ const textIn = (node: ReactTestInstance | string): string =>
   typeof node === 'string' ? node : node.children.map(textIn).join('')
 const button = (label: string) =>
   tree!.root.find((node) => String(node.type) === 'Pressable' && textIn(node) === label)
-afterEach(() => {
+afterEach(async () => {
   act(() => tree?.unmount())
   tree = null
+  await act(async () => {
+    await mobileLanguage.activateMobileUiLocale('en')
+  })
+  mobileLanguage.mobileI18n.removeResourceBundle('fr', 'translation')
   vi.clearAllMocks()
 })
 
@@ -178,4 +209,272 @@ it('refuses escaped full Copy that exceeds the phone frame and never copies the 
       .map(textIn)
       .join('')
   ).toContain('Full Copy for this attachment needs the upcoming phone update')
+  const reads = mocks.send.mock.calls.length
+  mobileLanguage.mobileI18n.addResourceBundle('fr', 'translation', {
+    chat: { textAttachmentPreview: { copyFrame: 'Copie complète après la mise à jour.' } }
+  })
+  await act(async () => {
+    await mobileLanguage.activateMobileUiLocale('fr')
+  })
+  expect(
+    tree!.root.findAll((node) => node.props.accessibilityRole === 'alert').map(textIn)
+  ).toContain('Copie complète après la mise à jour.')
+  expect(mocks.send).toHaveBeenCalledTimes(reads)
+  expect(mocks.write).not.toHaveBeenCalled()
+})
+
+it.each([1, 10])(
+  'bounds real mobile locale publications at %i mounted preview routes and retires on Back until unmount',
+  async (count) => {
+    const text = '\ufeffraw\r\n🙂 exact bytes'
+    const bytes = Buffer.from(text)
+    serveAttachment(bytes)
+    const commits = vi.fn()
+    const baseLive = subscriptions.live
+    const route = normalizeMobileFilePreviewRouteParams({
+      hostId: 'owner',
+      worktreeId: 'work',
+      source: 'chatAttachment',
+      absolutePath: path.replace('report.txt', 'orca-paste-35636.txt')
+    })
+    const composer = createElement(MobileNativeChatComposerAttachments, {
+      images: [],
+      files: [
+        { id: 'ordinary', name: 'Pasted text', mime: 'text/plain', byteLength: bytes.length, path }
+      ],
+      onOpenFile: mocks.push
+    })
+    const ui = (open: boolean) =>
+      createElement(
+        'Routes',
+        null,
+        composer,
+        open
+          ? Array.from({ length: count }, (_, index) =>
+              createElement(
+                Profiler,
+                { key: index, id: String(index), onRender: commits },
+                createElement(MobileFilePreviewScreen, { route })
+              )
+            )
+          : null
+      )
+    mobileLanguage.mobileI18n.addResourceBundle('fr', 'translation', {
+      common: { back: 'Retour', copy: 'Copier', save: 'Enregistrer', retry: 'Réessayer' },
+      chat: {
+        textAttachmentPreview: {
+          pastedText: 'Texte collé',
+          first: 'Début',
+          prev: 'Préc',
+          next: 'Suivant',
+          last: 'Fin',
+          byteSize: '{{size}} octets',
+          attachmentPage: 'Page jointe',
+          saveUpdate: 'Enregistrer après la mise à jour.'
+        }
+      }
+    })
+    await act(async () => {
+      tree = create(ui(false))
+    })
+    const closedLive = subscriptions.live
+    expect(closedLive - baseLive).toBe(2)
+    expect(mocks.send).not.toHaveBeenCalled()
+    const registrations = subscriptions.registered
+    await act(async () => {
+      tree!.update(ui(true))
+    })
+    expect(subscriptions.live - closedLive).toBe(count * 2)
+    expect(subscriptions.registered - registrations).toBe(count * 2)
+    const inputs = tree!.root.findAll((node) => String(node.type) === 'TextInput')
+    expect(inputs).toHaveLength(count)
+    const reads = mocks.send.mock.calls.slice()
+    const rendered = commits.mock.calls.length
+    const notifications = subscriptions.notifications
+    const revision = mobileLanguage.getMobileUiRevision()
+    await act(async () => {
+      tree!.update(ui(true))
+    })
+    expect(subscriptions.notifications).toBe(notifications)
+    expect(mobileLanguage.getMobileUiRevision()).toBe(revision)
+    expect(mocks.send.mock.calls).toEqual(reads)
+    const activate = async () => {
+      const before = mobileLanguage.getMobileUiRevision()
+      const notified = subscriptions.notifications
+      const renderedBefore = commits.mock.calls.length
+      const snapshots = vi.mocked(mobileLanguage.getMobileUiRevision).mock.calls.length
+      await act(async () => {
+        await mobileLanguage.activateMobileUiLocale('fr')
+      })
+      const delta = mobileLanguage.getMobileUiRevision() - before
+      expect(delta).toBe(1)
+      expect(subscriptions.notifications - notified).toBe(subscriptions.live * delta)
+      expect(commits.mock.calls.length - renderedBefore).toBe(count)
+      expect(
+        vi.mocked(mobileLanguage.getMobileUiRevision).mock.calls.length - snapshots
+      ).toBeLessThanOrEqual(12 * subscriptions.live + 2)
+      expect(mocks.send.mock.calls).toEqual(reads)
+    }
+    expect(commits.mock.calls.length).toBeGreaterThanOrEqual(rendered)
+    await activate()
+    expect(tree!.root.findAll((node) => String(node.type) === 'TextInput')).toEqual(inputs)
+    expect(
+      inputs.every(
+        (input) => input.props.accessibilityLabel === 'Page jointe' && input.props.value === '1'
+      )
+    ).toBe(true)
+    const buttons = (label: string) =>
+      tree!.root.findAll((node) => String(node.type) === 'Pressable' && textIn(node) === label)
+    expect(buttons('Copier')).toHaveLength(count)
+    expect(buttons('Enregistrer').every((node) => node.props.disabled)).toBe(true)
+    const visible = tree!.root.findAll((node) => String(node.type) === 'Text').map(textIn)
+    expect(visible.filter((value) => value === 'Texte collé')).toHaveLength(count)
+    expect(visible).toContain('Pasted text')
+    expect(
+      visible.filter((value) => value === `${bytes.length.toLocaleString('fr')} octets`)
+    ).toHaveLength(count)
+    expect(visible.filter((value) => value === 'Enregistrer après la mise à jour.')).toHaveLength(
+      count
+    )
+    const beforeCatalog = mobileLanguage.getMobileUiRevision()
+    const notifiedBeforeCatalog = subscriptions.notifications
+    mobileLanguage.mobileI18n.addResource('fr', 'translation', 'common.copy', 'Tout copier')
+    expect(mobileLanguage.getMobileUiRevision()).toBe(beforeCatalog)
+    expect(subscriptions.notifications).toBe(notifiedBeforeCatalog)
+    await activate()
+    expect(buttons('Tout copier')).toHaveLength(count)
+    await act(async () => buttons('Tout copier')[0]!.props.onPress())
+    expect(mocks.write).toHaveBeenCalledWith(text)
+    const afterCopy = mocks.send.mock.calls.length
+    const liveBeforeBack = subscriptions.live
+    await act(async () => {
+      for (const node of buttons('Retour')) {
+        node.props.onPress()
+      }
+    })
+    expect(mocks.back).toHaveBeenCalledTimes(count)
+    expect(subscriptions.live).toBe(liveBeforeBack)
+    await act(async () => buttons('Tout copier')[0]!.props.onPress())
+    expect(mocks.write).toHaveBeenCalledTimes(1)
+    expect(mocks.send).toHaveBeenCalledTimes(afterCopy)
+    const removals = subscriptions.removed
+    await act(async () => {
+      tree!.update(ui(false))
+    })
+    expect(subscriptions.live).toBe(closedLive)
+    expect(subscriptions.removed - removals).toBe(count * 2)
+    const retiredCommits = commits.mock.calls.length
+    const notified = subscriptions.notifications
+    await act(async () => {
+      await mobileLanguage.activateMobileUiLocale('fr')
+    })
+    expect(subscriptions.notifications - notified).toBe(closedLive)
+    expect(commits).toHaveBeenCalledTimes(retiredCommits)
+    expect(mocks.send).toHaveBeenCalledTimes(afterCopy)
+    act(() => tree!.unmount())
+    tree = null
+    expect(subscriptions.live).toBe(baseLive)
+    const retiredNotifications = subscriptions.notifications
+    await act(async () => {
+      await mobileLanguage.activateMobileUiLocale('en')
+    })
+    expect(subscriptions.notifications).toBe(retiredNotifications)
+  }
+)
+
+it.each([undefined, [], ''])(
+  'renders a translated missing/malformed chat route through the actual error surface (%s)',
+  async (absolutePath) => {
+    mobileLanguage.mobileI18n.addResourceBundle('fr', 'translation', {
+      files: {
+        filePreviewResponse: { loadFailed: 'Impossible de charger l’aperçu' },
+        filePreviewScreen: { loadFailed: 'Impossible de charger l’aperçu' }
+      }
+    })
+    await act(async () => {
+      await mobileLanguage.activateMobileUiLocale('fr')
+    })
+    const route = normalizeMobileFilePreviewRouteParams({
+      hostId: 'owner',
+      worktreeId: 'work',
+      source: 'chatAttachment',
+      absolutePath
+    })
+    expect(route.ok).toBe(false)
+    await act(async () => {
+      tree = create(createElement(MobileFilePreviewScreen, { route }))
+    })
+    expect(tree!.root.findAll((node) => String(node.type) === 'Text').map(textIn)).toContain(
+      'Impossible de charger l’aperçu'
+    )
+    expect(mocks.send).not.toHaveBeenCalled()
+  }
+)
+
+it('translates retained reader and hook refusals without restarting the source, and preserves exact unknown errors', async () => {
+  mobileLanguage.mobileI18n.addResourceBundle('fr', 'translation', {
+    chat: {
+      textAttachmentPreview: {
+        hostUpdate: 'Mettre à jour cet hôte.',
+        notText: 'Enregistrer pour ouvrir.',
+        openFailed: 'Impossible d’ouvrir.'
+      }
+    }
+  })
+  const route = normalizeMobileFilePreviewRouteParams({
+    hostId: 'owner',
+    worktreeId: 'work',
+    source: 'chatAttachment',
+    absolutePath: path
+  })
+  mocks.send.mockResolvedValue({ id: 's', ok: true, result: { capabilities: [] } })
+  await act(async () => {
+    tree = create(createElement(MobileFilePreviewScreen, { route }))
+  })
+  const reads = mocks.send.mock.calls.length
+  await act(async () => {
+    await mobileLanguage.activateMobileUiLocale('fr')
+  })
+  const alerts = () =>
+    tree!.root.findAll((node) => node.props.accessibilityRole === 'alert').map(textIn)
+  expect(alerts()).toContain('Mettre à jour cet hôte.')
+  expect(mocks.send).toHaveBeenCalledTimes(reads)
+  mocks.send.mockRejectedValueOnce(new TypeError('invalid encoding'))
+  await act(async () => button('Retry').props.onPress())
+  expect(alerts()).toContain('Enregistrer pour ouvrir.')
+  mocks.send.mockRejectedValueOnce('external non-error')
+  await act(async () => button('Retry').props.onPress())
+  expect(alerts()).toContain('Impossible d’ouvrir.')
+  mocks.send.mockRejectedValueOnce(new Error('External diagnostic unchanged'))
+  await act(async () => button('Retry').props.onPress())
+  expect(alerts()).toContain('External diagnostic unchanged')
+})
+
+it('keeps large full Copy and Save disabled with the same localized F2 explanation', async () => {
+  serveAttachment(Buffer.from('a'.repeat(530_000)))
+  mobileLanguage.mobileI18n.addResourceBundle('fr', 'translation', {
+    chat: {
+      textAttachmentPreview: {
+        fullCopySaveUpdate: 'Copie complète et enregistrement après la mise à jour.'
+      }
+    }
+  })
+  await act(async () => {
+    await mobileLanguage.activateMobileUiLocale('fr')
+  })
+  const route = normalizeMobileFilePreviewRouteParams({
+    hostId: 'owner',
+    worktreeId: 'work',
+    source: 'chatAttachment',
+    absolutePath: path
+  })
+  await act(async () => {
+    tree = create(createElement(MobileFilePreviewScreen, { route }))
+  })
+  expect(button('Copy').props.disabled).toBe(true)
+  expect(button('Save').props.disabled).toBe(true)
+  expect(tree!.root.findAll((node) => String(node.type) === 'Text').map(textIn)).toContain(
+    'Copie complète et enregistrement après la mise à jour.'
+  )
+  expect(mocks.write).not.toHaveBeenCalled()
 })
