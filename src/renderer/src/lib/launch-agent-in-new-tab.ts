@@ -165,7 +165,7 @@ export function launchAgentInNewTabWithOutcome(
       surface: { kind: 'host-published' },
       terminalCompletion: webHostDelivery,
       pasteDraftAfterLaunch: false,
-      ...(hasPrompt && promptDelivery !== 'draft' ? { promptDeliveryResult: webHostDelivery } : {})
+      ...(hasPrompt ? { promptDeliveryResult: webHostDelivery } : {})
     }
   }
 
@@ -249,13 +249,10 @@ export function launchAgentInNewTabWithOutcome(
       ...(onPromptDelivered ? { onPromptDelivered } : {}),
       ...(onPromptDeliveryUnconfirmed ? { onPromptDeliveryUnconfirmed } : {})
     })
-    if (promptDelivery === 'submit-after-ready') {
-      promptDeliveryResult = deliveryPromise
-    } else {
-      void deliveryPromise.catch((error) =>
-        console.error('Prompt delivery failed after launch', error)
-      )
-    }
+    promptDeliveryResult = deliveryPromise
+    void deliveryPromise.catch((error) =>
+      console.error('Prompt delivery failed after launch', error)
+    )
   } else if (hasPrompt) {
     onPromptDelivered?.()
   }

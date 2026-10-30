@@ -193,7 +193,7 @@ describe('a structured chat launch on a paired server', () => {
         promptDeliveryResult: completion.promise
       }))
       const launch = beginStructuredAgentSessionProvisionalLaunch({
-        plan: pairedPlan(),
+        plan: { ...pairedPlan(), promptDelivery: 'draft' },
         hooks: {},
         beforeOpen: vi.fn(),
         onHostDeclined

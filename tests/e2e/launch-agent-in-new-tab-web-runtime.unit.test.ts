@@ -1,155 +1,23 @@
 // @vitest-environment happy-dom
+import { mocks, store } from './launch-agent-web-terminal.test-fixture'
 import { createElement, useState } from 'react'
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { act, fireEvent, render, screen } from '@testing-library/react'
 import { useTabAgentMenuLaunch } from '@/components/tab-bar/QuickLaunchButton'
-import { resetHostStructuredAgentsForTests } from '@/runtime/host-structured-agents'
 import { replaceRuntimeEnvironmentRevisions } from '@/runtime/runtime-environment-revision'
 import { STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY } from '../../src/shared/protocol-version'
 import { AGENT_SESSION_AGENTS_METHOD } from '../../src/shared/agent-session/agent-session-registered-agents'
 import { pasteDraftWhenAgentReady } from '@/lib/agent-paste-draft'
 import { newAgentPromptOutcome } from '@/lib/new-agent-prompt-outcome'
 import { newAgentLaunchRequestId } from '@/lib/agent-launch-request-id'
-import type * as TerminalOperation from '@/runtime/web-runtime-terminal-create-operation'
-import type * as WebEnvironment from '@/runtime/web-runtime-session-environment'
 import { stubRuntimeEnvironmentBridge } from '@/runtime/runtime-environment-bridge-fixture'
 import { AGENT_LAUNCH_CHOICES_CAPABILITY } from '../../src/shared/agent-launch-runtime-capability'
 import { OrcaRuntimeService } from '../../src/main/runtime/orca-runtime'
 import { consumeOldHostPreparedCommand } from './prepared-action-launch.test-fixture'
 import { clearHostAgentMenuSettingsForTests } from '@/components/settings/use-host-agent-launch-preferences'
 import { projectAgentLaunchSettings } from '../../src/shared/agent-launch-settings'
-import type { AgentLaunchChoices } from '../../src/shared/agent-launch-choices'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-
-const mocks = vi.hoisted(() => ({
-  actualOperation: false,
-  createTab: vi.fn(),
-  closeTab: vi.fn(),
-  createWebRuntimeSessionTerminal: vi.fn(),
-  setActiveTabType: vi.fn(),
-  toastError: vi.fn(),
-  capability: vi.fn(async () => false),
-  hostRpc: vi.fn()
-}))
-
-const choices: AgentLaunchChoices = {}
-const hostStatuses = new Map<
-  string,
-  { status: { hostPlatform: string; capabilities: string[]; runtimeId?: string } }
->([['web-runtime', { status: { hostPlatform: 'linux', capabilities: [] } }]])
-const store = {
-  activeRepoId: 'repo-1',
-  activeWorktreeId: 'wt-1',
-  settings: {
-    agentLaunchChoices: choices,
-    agentCmdOverrides: {} as Record<string, string>,
-    agentDefaultArgs: {} as Record<string, string>,
-    agentDefaultEnv: {} as Record<string, Record<string, string>>,
-    experimentalNativeChat: false,
-    activeRuntimeEnvironmentId: 'web-runtime' as string | null
-  },
-  projects: [{ id: 'repo-1', localWindowsRuntimePreference: { kind: 'inherit-global' as const } }],
-  // The client stamps a server's rows on arrival; focus alone never names the owner.
-  repos: [
-    { id: 'repo-1', connectionId: null, path: '/repo', executionHostId: 'runtime:web-runtime' }
-  ],
-  worktreesByRepo: {
-    'repo-1': [
-      {
-        id: 'wt-1',
-        repoId: 'repo-1',
-        projectId: 'repo-1',
-        path: '/repo/worktree',
-        displayName: 'main'
-      }
-    ]
-  },
-  tabsByWorktree: { 'wt-1': [{ id: 'tab-1' }] as { id: string; launchAgent?: string }[] },
-  openFiles: [] as { id: string; worktreeId: string }[],
-  browserTabsByWorktree: {} as Record<string, { id: string }[]>,
-  tabBarOrderByWorktree: {} as Record<string, string[]>,
-  terminalLayoutsByTabId: {},
-  ptyIdsByTabId: {},
-  sshConnectionStates: new Map(),
-  sshStateByEnvironment: new Map(),
-  runtimeStatusByEnvironmentId: hostStatuses,
-  transientClearedAgentStatusConnectionIds: {},
-  allWorktrees: vi.fn(() => store.worktreesByRepo['repo-1']),
-  createTab: mocks.createTab,
-  closeTab: mocks.closeTab,
-  queueTabStartupCommand: vi.fn(),
-  setActiveTabType: mocks.setActiveTabType,
-  setActiveWorktree: vi.fn(),
-  setTabBarOrder: vi.fn(),
-  setAgentStatus: vi.fn(),
-  seedNativeChatLaunchPrompt: vi.fn(),
-  markNativeChatLaunchPromptFailed: vi.fn()
-}
-
-vi.mock('@/runtime/runtime-rpc-client', () => ({
-  runtimeEnvironmentSupportsCapability: mocks.capability,
-  callRuntimeRpc: mocks.hostRpc
-}))
-vi.mock('@/store', () => ({ useAppStore: { getState: () => store } }))
-vi.mock('sonner', () => ({ toast: { message: vi.fn(), error: mocks.toastError } }))
-vi.mock('@/components/tab-bar/reconcile-order', () => ({ reconcileTabOrder: vi.fn(() => []) }))
-vi.mock('@/lib/agent-paste-draft', () => ({ pasteDraftWhenAgentReady: vi.fn() }))
-vi.mock('@/lib/telemetry', () => ({
-  track: vi.fn(),
-  tuiAgentToAgentKind: (agent: string) => agent
-}))
-vi.mock('@/runtime/web-runtime-terminal-create-operation', async (importOriginal) => {
-  const actual = await importOriginal<typeof TerminalOperation>()
-  return {
-    createWebRuntimeSessionTerminalResult: (
-      ...args: Parameters<typeof actual.createWebRuntimeSessionTerminalResult>
-    ) =>
-      mocks.actualOperation
-        ? actual.createWebRuntimeSessionTerminalResult(...args)
-        : mocks.createWebRuntimeSessionTerminal(...args)
-  }
-})
-vi.mock('@/runtime/web-runtime-session-snapshot', () => ({
-  refreshWebRuntimeSessionTabsSnapshot: vi.fn(async () => {})
-}))
-vi.mock('@/runtime/web-runtime-terminal-placement-settlement', () => ({
-  settleWebRuntimeTerminalPlacement: vi.fn(async () => {})
-}))
-vi.mock('@/runtime/web-runtime-session-environment', async (importOriginal) => ({
-  ...(await importOriginal<typeof WebEnvironment>()),
-  isWebRuntimeSessionActive: vi.fn(() => true)
-}))
-afterEach(() => {
-  cleanup()
-  vi.unstubAllGlobals()
-  vi.useRealTimers()
-})
+import { describe, expect, it, vi } from 'vitest'
 
 describe('launchAgentInNewTab paired web runtime', () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-    mocks.actualOperation = false
-    clearHostAgentMenuSettingsForTests()
-    resetHostStructuredAgentsForTests()
-    replaceRuntimeEnvironmentRevisions([{ id: 'web-runtime', createdAt: 1 }])
-    mocks.capability.mockResolvedValue(false)
-    store.settings = {
-      agentLaunchChoices: {},
-      agentCmdOverrides: {},
-      agentDefaultArgs: {},
-      agentDefaultEnv: {},
-      experimentalNativeChat: false,
-      activeRuntimeEnvironmentId: 'web-runtime'
-    }
-    store.runtimeStatusByEnvironmentId = new Map([
-      ['web-runtime', { status: { hostPlatform: 'linux', capabilities: [] } }]
-    ])
-    store.tabsByWorktree = { 'wt-1': [{ id: 'tab-1' }] }
-    mocks.createWebRuntimeSessionTerminal.mockResolvedValue({
-      outcome: { status: 'created' },
-      hostTabId: 'host-tab::leaf-1'
-    })
-  })
-
   it.each([true, false, 'failed'] as const)('delegates agent quick launch (%s)', async (mode) => {
     store.settings.agentDefaultArgs = { claude: '--model "model with spaces"' }
     const activate = mode === true
@@ -553,10 +421,8 @@ describe('launchAgentInNewTab paired web runtime', () => {
       )
       expect(mocks.createWebRuntimeSessionTerminal).not.toHaveBeenCalled()
       expect(mocks.createTab).not.toHaveBeenCalled()
-      expect(handoff).toHaveBeenCalledTimes(promptDelivery === 'draft' ? 0 : 1)
-      if (promptDelivery !== 'draft') {
-        await expect(handoff.mock.calls[0][0]).resolves.toEqual({ delivered: false })
-      }
+      expect(handoff).toHaveBeenCalledOnce()
+      await expect(handoff.mock.calls[0][0]).resolves.toEqual({ delivered: false })
     }
   )
 
@@ -566,6 +432,7 @@ describe('launchAgentInNewTab paired web runtime', () => {
       vi.useFakeTimers()
       mocks.actualOperation = true
       mocks.capability.mockResolvedValue(true)
+      vi.mocked(pasteDraftWhenAgentReady).mockResolvedValue(true)
       store.settings.experimentalNativeChat = true
       store.runtimeStatusByEnvironmentId.get('web-runtime')!.status = {
         hostPlatform: 'linux',
@@ -596,7 +463,9 @@ describe('launchAgentInNewTab paired web runtime', () => {
       const result = launchAgentInNewTab({
         requestId: newAgentLaunchRequestId(),
         agent: 'opencode',
-        worktreeId: 'wt-1'
+        worktreeId: 'wt-1',
+        prompt: 'review this context',
+        promptDelivery: 'draft'
       })
       expect(mocks.hostRpc).toHaveBeenCalledWith(
         expect.anything(),
@@ -626,6 +495,10 @@ describe('launchAgentInNewTab paired web runtime', () => {
       await vi.advanceTimersByTimeAsync(0)
       await expect(result?.structuredSettlement).resolves.toMatchObject({
         kind: mode === 'cancelled' ? 'cancelled' : 'terminal'
+      })
+      expect(result?.promptDeliveryResult).toBeDefined()
+      await expect(result?.promptDeliveryResult).resolves.toMatchObject({
+        delivered: mode !== 'cancelled'
       })
       const creates = () =>
         dispatch.mock.calls.filter(([r]) => r.method === 'terminal.createAgentSession')

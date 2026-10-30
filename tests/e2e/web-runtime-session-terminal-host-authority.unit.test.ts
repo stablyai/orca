@@ -712,7 +712,7 @@ describe('createWebRuntimeSessionTerminal', () => {
         command: "claude --prefill 'https://github.com/o/r/issues/12'",
         launchDraft: 'https://github.com/o/r/issues/12'
       })
-    ).resolves.toEqual({ status: 'created' })
+    ).resolves.toEqual({ outcome: { status: 'created' }, promptDelivered: true })
 
     // Argv-prefill sends no paste, so only this seeds the mirrored composer.
     expect(mocks.deliverLaunchPromptToAgentTab).not.toHaveBeenCalled()

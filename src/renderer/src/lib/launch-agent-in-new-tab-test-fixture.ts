@@ -180,7 +180,10 @@ beforeEach(() => {
   setLocalRuntimeCapabilitiesForTests([])
   mockIsWebRuntimeSessionActive.mockReturnValue(false)
   mockCreateWebRuntimeSessionTerminal.mockResolvedValue({ status: 'created' })
-  mockCreateWebRuntimeAgentSessionTerminalWithLaunchDraft.mockResolvedValue({ status: 'created' })
+  mockCreateWebRuntimeAgentSessionTerminalWithLaunchDraft.mockResolvedValue({
+    outcome: { status: 'created' },
+    promptDelivered: true
+  })
   store.activeRepoId = 'repo-1'
   store.activeWorktreeId = 'wt-1'
   store.settings = {

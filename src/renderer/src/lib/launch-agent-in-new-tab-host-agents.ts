@@ -124,8 +124,7 @@ export function launchOnceHostAnswered(
       args.focusIntent?.cancel()
       return { kind: 'failed', error }
     })
-  const deliversPrompt =
-    Boolean(args.prompt?.trim()) && (args.promptDelivery ?? 'auto-submit') !== 'draft'
+  const deliversPrompt = Boolean(args.prompt?.trim())
   return {
     surface: { kind: 'host-published' },
     pasteDraftAfterLaunch: false,

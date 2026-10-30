@@ -23,23 +23,6 @@ vi.stubGlobal(
 )
 afterEach(cleanup)
 
-it('names rendered row triggers by purpose and current value through defaults, selection and disabling', () => {
-  const props = { agent: 'claude' as const, layout: 'rows' as const, onChange: vi.fn() }
-  const view = render(<AgentChoiceControls {...props} value={{}} />)
-  expect(
-    screen.getByRole('button', { name: 'Model: Agent default' }).hasAttribute('disabled')
-  ).toBe(false)
-  expect(screen.getByRole('button', { name: 'Effort: Default' })).toBeTruthy()
-  view.rerender(
-    <AgentChoiceControls
-      {...props}
-      value={{ model: 'opus', options: { effort: 'high' } }}
-      disabled
-    />
-  )
-  expect(screen.getByRole('button', { name: 'Model: Opus' }).hasAttribute('disabled')).toBe(true)
-  expect(screen.getByRole('button', { name: 'Effort: High' }).hasAttribute('disabled')).toBe(true)
-})
 const initial: AgentLaunchSettingsSource = {
   agentPermissionDefault: 'ask',
   agentDefaultArgs: { claude: '--verbose' },
@@ -81,7 +64,7 @@ function Fixture({ save }: { save: (mutation: unknown) => Promise<void> }) {
 
 it('removes a choice with dirty conflicting text in one mutation and shares two-Backspace removal', async () => {
   const save = vi.fn(async () => {})
-  render(<Fixture save={save} />)
+  const view = render(<Fixture save={save} />)
   const input = screen.getByRole('textbox', { name: 'Arguments' })
   if (!(input instanceof HTMLTextAreaElement)) {
     throw new Error('Missing Arguments textarea')
@@ -134,6 +117,21 @@ it('removes a choice with dirty conflicting text in one mutation and shares two-
     userArgs: '--permission-mode default --verbose'
   })
   await waitFor(() => expect(input.value).toBe('--verbose'))
+  const props = { agent: 'claude' as const, layout: 'rows' as const, onChange: vi.fn() }
+  view.rerender(<AgentChoiceControls {...props} value={{}} />)
+  expect(
+    screen.getByRole('button', { name: 'Model: Agent default' }).hasAttribute('disabled')
+  ).toBe(false)
+  expect(screen.getByRole('button', { name: 'Effort: Default' })).toBeTruthy()
+  view.rerender(
+    <AgentChoiceControls
+      {...props}
+      value={{ model: 'opus', options: { effort: 'high' } }}
+      disabled
+    />
+  )
+  expect(screen.getByRole('button', { name: 'Model: Opus' }).hasAttribute('disabled')).toBe(true)
+  expect(screen.getByRole('button', { name: 'Effort: High' }).hasAttribute('disabled')).toBe(true)
 })
 
 it('keeps the dirty text and badge after a failed coupled save', async () => {

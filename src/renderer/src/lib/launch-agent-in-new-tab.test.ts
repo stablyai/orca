@@ -416,9 +416,7 @@ describe('launchAgentInNewTab', () => {
 
     await launchAgentInNewTab({ requestId: 'request-14', agent: 'claude', worktreeId: 'wt-1' })
       ?.terminalCompletion
-    expect(mockToastError).toHaveBeenCalledWith(
-      'Upgrade the remote Orca host before starting or resuming agent sessions.'
-    )
+    expect(mockToastError).toHaveBeenCalledWith(expect.stringMatching(/Claude.*try again/))
     expect(mockSetActiveTabType).not.toHaveBeenCalled()
   })
 
@@ -468,7 +466,7 @@ describe('launchAgentInNewTab', () => {
       launchPlatform: 'win32'
     })
 
-    expect(result).not.toHaveProperty('promptDeliveryResult')
+    expect(result?.promptDeliveryResult).toBeDefined()
     expect(queuedStartups()).toContainEqual(
       expect.objectContaining({
         command: "claude '--dangerously-skip-permissions'"
@@ -485,7 +483,7 @@ describe('launchAgentInNewTab', () => {
     )
   })
 
-  it('logs rejected non-deferred prompt delivery without exposing it to callers', async () => {
+  it('exposes rejected draft delivery while keeping its existing error observer', async () => {
     const error = new Error('paste failed')
     const originalConsole = console
     const consoleError = vi.fn()
@@ -504,8 +502,7 @@ describe('launchAgentInNewTab', () => {
         launchPlatform: 'win32'
       })
 
-      expect(result).not.toHaveProperty('promptDeliveryResult')
-      await new Promise((resolve) => setTimeout(resolve, 0))
+      await expect(result?.promptDeliveryResult).rejects.toBe(error)
       expect(consoleError).toHaveBeenCalledWith('Prompt delivery failed after launch', error)
     } finally {
       vi.stubGlobal('console', originalConsole)
