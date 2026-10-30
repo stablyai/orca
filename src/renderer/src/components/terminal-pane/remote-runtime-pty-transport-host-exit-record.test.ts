@@ -635,4 +635,74 @@ describe('remote runtime pane whose host session already ended (#31539)', () => 
       transport.destroy?.()
     }
   })
+
+  it('keeps watching-finally priority over waiting faults through actual published rebind delivery', async () => {
+    const transport = await attachRestoredHostTab(vi.fn(), vi.fn())
+    const original = transport.getInputSource?.()
+    const events = await import('../../runtime/web-session-terminal-handle-events')
+    const subscribe = events.subscribeAcceptedWebSessionTerminalHandle
+    const removals: number[] = []
+    let registrations = 0
+    let failed = false
+    let failure: unknown
+    const observation = vi
+      .spyOn(events, 'subscribeAcceptedWebSessionTerminalHandle')
+      .mockImplementation((args, listener) => {
+        const registration = ++registrations
+        const stop = subscribe(args, (update) => {
+          try {
+            listener(update)
+          } catch (error) {
+            failed = true
+            failure = error
+          }
+        })
+        return () => {
+          stop()
+          removals.push(registration)
+          if (registration === 1) {
+            throw new Error('waiting fault after real removal')
+          }
+          if (registration === 2) {
+            throw undefined
+          }
+        }
+      })
+    const { promise: show, resolve: finishShow } = Promise.withResolvers<void>()
+    const defaultCall = runtimeCall.getMockImplementation()
+    runtimeCall.mockImplementation(async (args: { method: string }) => {
+      if (args.method === 'terminal.show') {
+        await show
+        return { ok: true, result: { terminal: { connected: true } } }
+      }
+      return defaultCall?.(args)
+    })
+    try {
+      refuseStream('terminal_handle_stale')
+      await vi.waitFor(() => expect(registrations).toBe(2))
+      expect(events.getWebSessionTerminalHandleSubscriberCountForTests()).toBe(2)
+      await publishHostSurface({ terminal: 'terminal-new' }, 9)
+      expect(failed).toBe(true)
+      expect(failure).toBeUndefined()
+      expect(removals).toEqual([1, 2])
+      expect(events.getWebSessionTerminalHandleSubscriberCountForTests()).toBe(0)
+      expect(transport.getInputSource?.()).toBe(original)
+      expect(transport.getPtyId()).toBe(HOST_TAB_PTY_ID)
+      observation.mockRestore()
+      finishShow()
+      resolvedPaneHandle = 'terminal-new'
+      const frames = subscribeFrameCount()
+      transport.attach({ existingPtyId: 'remote:hub-env@@terminal-new', callbacks: {} })
+      await vi.waitFor(() => expect(subscribeFrameCount()).toBeGreaterThan(frames))
+      emitSnapshot(latestSubscribePayload().streamId, 'new prompt')
+      expect(transport.sendInput('after-captured-cleanup', 'driving')).toBe(true)
+      await vi.waitFor(() => expect(inputFrameTexts().join('')).toContain('after-captured-cleanup'))
+      expect(original?.isCurrent()).toBe(false)
+    } finally {
+      observation.mockRestore()
+      finishShow()
+      transport.destroy?.()
+    }
+    expect(events.getWebSessionTerminalHandleSubscriberCountForTests()).toBe(0)
+  })
 })

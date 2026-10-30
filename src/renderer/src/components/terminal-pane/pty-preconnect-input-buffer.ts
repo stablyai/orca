@@ -134,12 +134,16 @@ export function createPtyPreconnectInputBuffer(
   }
 
   const runFlush = async (writer: PreconnectInputWriter): Promise<void> => {
+    let failed = false
     let failure: unknown
     const settle = (input: BufferedInput, accepted: boolean): void => {
       try {
         settleBufferedInput(input, accepted)
       } catch (error) {
-        failure ??= error
+        if (!failed) {
+          failed = true
+          failure = error
+        }
       }
     }
     try {
@@ -227,14 +231,15 @@ export function createPtyPreconnectInputBuffer(
       buffering = false
       stopFlush()
     } catch (error) {
-      failure ??= error
+      failed = true
+      failure = error
       try {
         clear()
       } catch (cleanupError) {
-        failure ??= cleanupError
+        failure = cleanupError
       }
     } finally {
-      if (failure !== undefined) {
+      if (failed) {
         throw failure
       }
     }

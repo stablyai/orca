@@ -24,6 +24,8 @@ let subscriptionCallbacks: MultiplexSubscriptionCallbacks = null
 let resolvedPaneHandle = 'terminal-1'
 
 const {
+  runtimeCall,
+  inputFrameTexts,
   runtimeSubscribe,
   subscriptionSendBinary,
   emitMultiplexReady,
@@ -399,4 +401,192 @@ describe('createRemoteRuntimePtyTransport', () => {
     expect(onErrorCleared.mock.calls.map(([message]) => message)).toEqual(errors)
     transport.destroy?.()
   })
+
+  it.each([null, undefined])(
+    'preserves newly caught attach transition throw %s through captured close',
+    async (transitionFailure) => {
+      const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+      const { getRemoteRuntimeTerminalMultiplexer } =
+        await import('../../runtime/remote-runtime-terminal-multiplexer')
+      const multiplexer = getRemoteRuntimeTerminalMultiplexer('env-1')
+      const subscribe = multiplexer.subscribeTerminal.bind(multiplexer)
+      const closed = vi.fn()
+      const interception = vi
+        .spyOn(multiplexer, 'subscribeTerminal')
+        .mockImplementation(async (args) => {
+          const stream = await subscribe(args)
+          const close = stream.close
+          stream.close = () => {
+            close()
+            closed()
+            throw new Error('later old close')
+          }
+          return stream
+        })
+      const transport = createRemoteRuntimePtyTransport('env-1', {
+        worktreeId: 'wt-1',
+        tabId: 'tab-1',
+        leafId: 'pane:1'
+      })
+      let observe: { dispose: () => void } | undefined
+      const warning = vi.spyOn(console, 'warn')
+      try {
+        await transport.connect({ url: '', callbacks: {} })
+        emitSnapshot(latestSubscribePayload().streamId, 'live A')
+        const original = transport.getInputSource?.()
+        expect(original?.isCurrent()).toBe(true)
+        observe = transport.observeInputSource?.({
+          beforeChange: () => {},
+          afterChange: (source) => {
+            if (source !== original) {
+              throw new Error('injected observer fault')
+            }
+          }
+        })
+        warning.mockImplementationOnce(() => {
+          throw transitionFailure
+        })
+        const subscriptions = runtimeSubscribe.mock.calls.length
+        const calls = runtimeCall.mock.calls.length
+        let failed = false
+        let failure: unknown
+        try {
+          transport.attach({ existingPtyId: 'remote:env-1@@terminal-2', callbacks: {} })
+        } catch (error) {
+          failed = true
+          failure = error
+        }
+        expect(failed).toBe(true)
+        expect(failure).toBe(transitionFailure)
+        expect(closed).toHaveBeenCalledOnce()
+        expect(original?.isCurrent()).toBe(false)
+        expect(runtimeCall).toHaveBeenCalledTimes(calls)
+        expect(runtimeSubscribe).toHaveBeenCalledTimes(subscriptions)
+        observe?.dispose()
+        warning.mockRestore()
+        interception.mockRestore()
+        resolvedPaneHandle = 'terminal-2'
+        transport.attach({ existingPtyId: 'remote:env-1@@terminal-2', callbacks: {} })
+        await vi.waitFor(() => expect(latestSubscribePayload().terminal).toBe('terminal-2'))
+        emitSnapshot(latestSubscribePayload().streamId, 'live B')
+        expect(transport.sendInput('successor-positive', 'driving')).toBe(true)
+        await vi.waitFor(() => expect(inputFrameTexts().join('')).toContain('successor-positive'))
+      } finally {
+        observe?.dispose()
+        warning.mockRestore()
+        interception.mockRestore()
+        transport.destroy?.()
+      }
+    }
+  )
+
+  it('does not continue subscription after a real rebind callback throws undefined', async () => {
+    const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+    const onPtyRebind = vi.fn((): void => {
+      throw undefined
+    })
+    const onError = vi.fn()
+    const transport = createRemoteRuntimePtyTransport('env-1', {
+      worktreeId: 'wt-1',
+      tabId: 'tab-1',
+      leafId: 'pane:1',
+      onPtyRebind
+    })
+    try {
+      await transport.connect({ url: '', callbacks: {} })
+      emitSnapshot(latestSubscribePayload().streamId, 'live A')
+      const original = transport.getInputSource?.()
+      const subscriptions = runtimeSubscribe.mock.calls.length
+      resolvedPaneHandle = 'terminal-2'
+      transport.attach({ existingPtyId: 'remote:env-1@@terminal-1', callbacks: { onError } })
+      await vi.waitFor(() => expect(onError).toHaveBeenCalledOnce())
+      expect(onPtyRebind).toHaveBeenCalledExactlyOnceWith(
+        'remote:env-1@@terminal-2',
+        'remote:env-1@@terminal-1'
+      )
+      expect(runtimeSubscribe).toHaveBeenCalledTimes(subscriptions)
+      expect(original?.isCurrent()).toBe(false)
+      expect(inputFrameTexts()).toEqual([])
+      onPtyRebind.mockImplementation(() => {})
+      transport.attach({ existingPtyId: 'remote:env-1@@terminal-2', callbacks: {} })
+      await vi.waitFor(() => expect(latestSubscribePayload().terminal).toBe('terminal-2'))
+      emitSnapshot(latestSubscribePayload().streamId, 'live B')
+      expect(transport.sendInput('current-positive', 'driving')).toBe(true)
+      await vi.waitFor(() => expect(inputFrameTexts().join('')).toContain('current-positive'))
+    } finally {
+      transport.destroy?.()
+    }
+  })
+
+  it.each([null, undefined])(
+    'rejects a genuine public connect with the first old recovery throw %s',
+    async (entryFailure) => {
+      const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+      const { promise: oldResolution, resolve: finishOld } = Promise.withResolvers<void>()
+      const defaultCall = runtimeCall.getMockImplementation()
+      let resolvingOld = false
+      let inject = false
+      const recoveryStates: string[] = []
+      const transport = createRemoteRuntimePtyTransport('env-1', {
+        worktreeId: 'wt-1',
+        tabId: 'tab-1',
+        leafId: 'pane:1'
+      })
+      try {
+        await transport.connect({
+          url: '',
+          callbacks: {
+            onRecoveryStateChange: (state) => {
+              recoveryStates.push(state.reason ?? state.phase)
+              if (inject) {
+                inject = false
+                throw entryFailure
+              }
+            }
+          }
+        })
+        emitSnapshot(latestSubscribePayload().streamId, 'live A')
+        runtimeCall.mockImplementation(async (args: { method: string }) => {
+          if (args.method === 'terminal.resolvePane' && !resolvingOld) {
+            resolvingOld = true
+            await oldResolution
+          }
+          return defaultCall?.(args)
+        })
+        subscriptionCallbacks?.onResponse({
+          ok: true,
+          result: {
+            type: 'error',
+            streamId: latestSubscribePayload().streamId,
+            message: 'terminal_pane_owner_changed'
+          }
+        })
+        await vi.waitFor(() => expect(resolvingOld).toBe(true))
+        expect(recoveryStates).toContain('ownership')
+        const creates = runtimeCall.mock.calls.filter(
+          ([args]) => args.method === 'terminal.create'
+        ).length
+        const nextCallbacks = { onRecoveryStateChange: vi.fn() }
+        inject = true
+        await expect(transport.connect({ url: '', callbacks: nextCallbacks })).rejects.toBe(
+          entryFailure
+        )
+        expect(nextCallbacks.onRecoveryStateChange).not.toHaveBeenCalled()
+        expect(
+          runtimeCall.mock.calls.filter(([args]) => args.method === 'terminal.create')
+        ).toHaveLength(creates)
+        finishOld()
+        resolvedPaneHandle = 'terminal-2'
+        await transport.connect({ url: '', sessionId: 'remote:env-1@@terminal-2', callbacks: {} })
+        emitSnapshot(latestSubscribePayload().streamId, 'live B')
+        expect(transport.getPtyId()).toBe('remote:env-1@@terminal-2')
+        expect(transport.sendInput('new-entry-positive', 'driving')).toBe(true)
+        await vi.waitFor(() => expect(inputFrameTexts().join('')).toContain('new-entry-positive'))
+      } finally {
+        inject = false
+        finishOld()
+        transport.destroy?.()
+      }
+    }
+  )
 })

@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { PtyTransportRecoveryState } from './pty-transport-types'
 import {
   createRemoteRuntimeTransportMocks,
   type MultiplexSubscriptionCallbacks
@@ -228,6 +229,74 @@ describe('remote runtime PTY stream end verdict', () => {
       } finally {
         interception.mockRestore()
         transport.destroy?.()
+      }
+    }
+  )
+
+  it.each(['viewer-undefined', 'tail-undefined', 'tail-error'] as const)(
+    'preserves destroy viewer/tail priority for %s and finishes captured cleanup',
+    async (site) => {
+      const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+      const { getRemoteRuntimeTerminalMultiplexer } =
+        await import('../../runtime/remote-runtime-terminal-multiplexer')
+      const multiplexer = getRemoteRuntimeTerminalMultiplexer('env-1')
+      const subscribe = multiplexer.subscribeTerminal.bind(multiplexer)
+      const closed = vi.fn()
+      const interception = vi
+        .spyOn(multiplexer, 'subscribeTerminal')
+        .mockImplementation(async (args) => {
+          const stream = await subscribe(args)
+          const close = stream.close
+          stream.close = () => {
+            close()
+            closed()
+          }
+          return stream
+        })
+      const viewerFailure = site === 'viewer-undefined' ? undefined : new Error('viewer')
+      const tailFailure = site === 'tail-undefined' ? undefined : new Error('tail')
+      let disposedEmissions = 0
+      const onRecoveryStateChange = vi.fn((state: PtyTransportRecoveryState) => {
+        if (state.phase === 'disposed') {
+          disposedEmissions += 1
+          if (disposedEmissions === 2 && site !== 'viewer-undefined') {
+            throw tailFailure
+          }
+        }
+      })
+      const onDisconnect = vi.fn(() => {
+        throw viewerFailure
+      })
+      const onPtyExit = vi.fn()
+      const transport = createRemoteRuntimePtyTransport('env-1', { worktreeId: 'wt-1', onPtyExit })
+      try {
+        await transport.connect({ url: '', callbacks: { onDisconnect, onRecoveryStateChange } })
+        emitSnapshot(latestSubscribePayload().streamId, 'live A')
+        const source = transport.getInputSource?.()
+        expect(source?.isCurrent()).toBe(true)
+        let failed = false
+        let failure: unknown
+        try {
+          transport.destroy?.()
+        } catch (error) {
+          failed = true
+          failure = error
+        }
+        expect(failed).toBe(true)
+        expect(failure).toBe(site === 'viewer-undefined' ? viewerFailure : tailFailure)
+        expect(disposedEmissions).toBe(2)
+        expect(onDisconnect).toHaveBeenCalledOnce()
+        expect(onPtyExit).toHaveBeenCalledOnce()
+        expect(closed).toHaveBeenCalledOnce()
+        expect(source?.isCurrent()).toBe(false)
+        expect(transport.getRecoveryState?.().phase).toBe('disposed')
+        expect(transport.getPtyId()).toBeNull()
+        expect(transport.sendInput('after-destroy', 'driving')).toBe(false)
+        expect(inputFrameTexts()).toEqual([])
+        const events = await import('../../runtime/web-session-terminal-handle-events')
+        expect(events.getWebSessionTerminalHandleSubscriberCountForTests()).toBe(0)
+      } finally {
+        interception.mockRestore()
       }
     }
   )

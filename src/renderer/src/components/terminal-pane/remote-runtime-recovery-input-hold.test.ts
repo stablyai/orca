@@ -404,30 +404,53 @@ it.each(['ordinary', 'current', 'retired'] as const)(
   }
 )
 
-it('publishes retirement before throwing abort cleanup reenters and keeps the successor expectation', async () => {
-  const hold = createRemoteRuntimeRecoveryInputHold({ holdBeforeFirstConnect: true })
-  hold.expect(endpoint)
-  const firstSignal = new AbortController()
-  const first = hold.enqueueAccepted(endpoint, 'old-one', 'driving', { signal: firstSignal.signal })
-  const second = hold.enqueueAccepted(endpoint, 'old-two', 'driving')
-  const next = { handle: 'terminal-2', incarnationId: 'inc-2' }
-  let successor = hold.expect(endpoint)
-  vi.spyOn(firstSignal.signal, 'removeEventListener').mockImplementationOnce(() => {
-    expect(hold.isHoldingBeforeBind()).toBe(false)
-    expect(hold.hasPendingInput()).toBe(false)
-    successor = hold.expect(next)
-    expect(hold.enqueue(next, 'fresh', 'driving')).toBe(true)
-    throw new Error('old abort cleanup')
-  })
-  expect(() => hold.discardUnscoped()).toThrow('old abort cleanup')
-  await expect(first).resolves.toBe(false)
-  await expect(second).resolves.toBe(false)
-  hold.settleExpectation(successor, true)
-  const { sent, writer } = createWriter()
-  await hold.release(next, writer)?.done
-  expect(sent).toEqual(['fresh'])
-  expect(hold.isHolding()).toBe(false)
-})
+it.each([new Error('old abort cleanup'), null, undefined])(
+  'preserves partial retirement throw %s through notice and cleanup reentry',
+  async (firstFailure) => {
+    const notice = vi.fn(() => {
+      throw new Error('later typing notice')
+    })
+    const hold = createRemoteRuntimeRecoveryInputHold({
+      holdBeforeFirstConnect: true,
+      onTypingDiscardedBeforeBind: notice
+    })
+    hold.expect(endpoint)
+    const firstSignal = new AbortController()
+    const first = hold.enqueueAccepted(endpoint, 'old-one', 'driving', {
+      signal: firstSignal.signal
+    })
+    const second = hold.enqueueAccepted(endpoint, 'old-two', 'driving')
+    const next = { handle: 'terminal-2', incarnationId: 'inc-2' }
+    let successor = hold.expect(endpoint)
+    const remove = firstSignal.signal.removeEventListener.bind(firstSignal.signal)
+    vi.spyOn(firstSignal.signal, 'removeEventListener').mockImplementationOnce((...args) => {
+      remove(...args)
+      expect(hold.isHoldingBeforeBind()).toBe(false)
+      expect(hold.hasPendingInput()).toBe(false)
+      successor = hold.expect(next)
+      expect(hold.enqueue(next, 'fresh', 'driving')).toBe(true)
+      throw firstFailure
+    })
+    let failed = false
+    let failure: unknown
+    try {
+      hold.discardUnscoped()
+    } catch (error) {
+      failed = true
+      failure = error
+    }
+    expect(failed).toBe(true)
+    expect(failure).toBe(firstFailure)
+    expect(notice).toHaveBeenCalledOnce()
+    await expect(first).resolves.toBe(false)
+    await expect(second).resolves.toBe(false)
+    hold.settleExpectation(successor, true)
+    const { sent, writer } = createWriter()
+    await hold.release(next, writer)?.done
+    expect(sent).toEqual(['fresh'])
+    expect(hold.isHolding()).toBe(false)
+  }
+)
 
 it('terminates when the last retained active scoped waiter aborts', async () => {
   const { createPtyInputSourceBinding } = await import('./pty-input-source')

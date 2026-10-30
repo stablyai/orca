@@ -2605,19 +2605,10 @@ export function createRemoteRuntimePtyTransport(
     if (stopWatching) {
       stopWatchingHostRebind = null
     }
-    let failure: unknown
     try {
       stopWaiting?.()
-    } catch (error) {
-      failure = error
-    }
-    try {
+    } finally {
       stopWatching?.()
-    } catch (error) {
-      failure ??= error
-    }
-    if (failure !== undefined) {
-      throw failure
     }
   }
 
@@ -3097,6 +3088,7 @@ export function createRemoteRuntimePtyTransport(
         nextIncarnationId !== null &&
         authoritativePtyIncarnationId !== nextIncarnationId)
     let reboundVersion: number | undefined
+    let failed = false
     let failure: unknown
     try {
       changeInputEndpoint(
@@ -3121,6 +3113,7 @@ export function createRemoteRuntimePtyTransport(
         sourceVersion
       )
     } catch (error) {
+      failed = true
       failure = error
     }
     const ownsRebind = (): boolean =>
@@ -3162,10 +3155,13 @@ export function createRemoteRuntimePtyTransport(
       try {
         complete()
       } catch (error) {
-        failure ??= error
+        if (!failed) {
+          failed = true
+          failure = error
+        }
       }
     }
-    if (failure !== undefined) {
+    if (failed) {
       throw failure
     }
     return ownsRebind()
@@ -4066,6 +4062,8 @@ export function createRemoteRuntimePtyTransport(
     let attachLifecycleEpoch = lifecycleEpoch
     let generation = attachGeneration
     let sourceVersion: number | undefined
+    let transitionFailed = false
+    let transitionFailure: unknown
     let callbackFailure: unknown
     try {
       changeInputEndpoint(nextHandle, null, () => {
@@ -4102,7 +4100,8 @@ export function createRemoteRuntimePtyTransport(
         }
       })
     } catch (error) {
-      callbackFailure = error
+      transitionFailed = true
+      transitionFailure = error
     }
     const ownsAttach = (): boolean =>
       sourceVersion !== undefined &&
@@ -4129,6 +4128,9 @@ export function createRemoteRuntimePtyTransport(
       } catch (error) {
         callbackFailure ??= error
       }
+    }
+    if (transitionFailed) {
+      throw transitionFailure
     }
     if (!ownsAttach() || sourceVersion !== inputSource.version()) {
       if (callbackFailure !== undefined) {
@@ -4360,6 +4362,7 @@ export function createRemoteRuntimePtyTransport(
     resubscribeEpoch = null
     resubscribeRequestedHandle = null
     resubscribeRequestedReplacementPolicy = 'reuse'
+    let entryFailed = false
     let entryFailure: unknown
     for (const cleanup of [
       () => stopWaiting?.(),
@@ -4378,10 +4381,13 @@ export function createRemoteRuntimePtyTransport(
       try {
         cleanup()
       } catch (error) {
-        entryFailure ??= error
+        if (!entryFailed) {
+          entryFailed = true
+          entryFailure = error
+        }
       }
     }
-    if (entryFailure !== undefined) {
+    if (entryFailed) {
       throw entryFailure
     }
     if (destroyed || connectLifecycleEpoch !== lifecycleEpoch) {
@@ -4994,19 +5000,37 @@ export function createRemoteRuntimePtyTransport(
 
     destroy() {
       let adoptedVersion: number | undefined
-      let failure: unknown
+      let prefixFailed = false
+      let prefixFailure: unknown
       try {
         changeInputEndpoint(null, null, () => {
           destroyed = true
           adoptedVersion = inputSource.version()
         })
       } catch (error) {
-        failure = error
+        prefixFailed = true
+        prefixFailure = error
       }
+      let viewerFailed = false
+      let viewerFailure: unknown
+      let tailFailed = false
+      let tailFailure: unknown
       if (adoptedVersion !== undefined) {
+        try {
+          setAttachmentUnavailable()
+        } catch (error) {
+          if (!prefixFailed) {
+            prefixFailed = true
+            prefixFailure = error
+          }
+        }
+        try {
+          this.disconnect()
+        } catch (error) {
+          viewerFailed = true
+          viewerFailure = error
+        }
         for (const cleanup of [
-          () => setAttachmentUnavailable(),
-          () => this.disconnect(),
           () => outputProcessor.disposePendingSideEffectGauge(),
           () => inputBatcher.clear(),
           () => viewportBatcher.clear(),
@@ -5015,12 +5039,21 @@ export function createRemoteRuntimePtyTransport(
           try {
             cleanup()
           } catch (error) {
-            failure ??= error
+            if (!tailFailed) {
+              tailFailed = true
+              tailFailure = error
+            }
           }
         }
       }
-      if (failure !== undefined) {
-        throw failure
+      if (prefixFailed) {
+        throw prefixFailure
+      }
+      if (tailFailed) {
+        throw tailFailure
+      }
+      if (viewerFailed) {
+        throw viewerFailure
       }
     }
   }

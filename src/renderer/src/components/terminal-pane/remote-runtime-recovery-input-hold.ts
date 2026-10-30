@@ -143,6 +143,7 @@ export function createRemoteRuntimeRecoveryInputHold(
   ): HeldInput | null => {
     const droppedTyping = current.beforeBind && current.typed && current.buffer.hasPendingInput()
     let replacement: HeldInput | null = null
+    let failed = false
     let failure: unknown
     try {
       current.buffer.discardUnscoped(() => {
@@ -157,6 +158,7 @@ export function createRemoteRuntimeRecoveryInputHold(
         held = replacement
       })
     } catch (error) {
+      failed = true
       failure = error
     }
     try {
@@ -164,9 +166,12 @@ export function createRemoteRuntimeRecoveryInputHold(
         options.onTypingDiscardedBeforeBind?.()
       }
     } catch (error) {
-      failure ??= error
+      if (!failed) {
+        failed = true
+        failure = error
+      }
     }
-    if (failure !== undefined) {
+    if (failed) {
       throw failure
     }
     return held === replacement ? replacement : null

@@ -250,3 +250,93 @@ it('publishes bulk survivors before abort cleanup reentry and settles all remove
     laterCleanup.mockRestore()
   }
 })
+
+it.each([null, undefined])(
+  'retains first flush settlement throw %s while delivering later input',
+  async (firstFailure) => {
+    const buffer = createPtyPreconnectInputBuffer()
+    const firstSignal = new AbortController()
+    const laterSignal = new AbortController()
+    const first = buffer.enqueueAccepted('accepted-first', 'driving', undefined, {
+      signal: firstSignal.signal
+    })
+    const later = buffer.enqueueAccepted('accepted-later', 'driving', undefined, {
+      signal: laterSignal.signal
+    })
+    expect(buffer.enqueue('ordinary-positive', 'ordinary', 'driving')).toBe(true)
+    const removeFirst = firstSignal.signal.removeEventListener.bind(firstSignal.signal)
+    const removeLater = laterSignal.signal.removeEventListener.bind(laterSignal.signal)
+    const firstCleanup = vi
+      .spyOn(firstSignal.signal, 'removeEventListener')
+      .mockImplementationOnce((...args) => {
+        removeFirst(...args)
+        throw firstFailure
+      })
+    const laterCleanup = vi
+      .spyOn(laterSignal.signal, 'removeEventListener')
+      .mockImplementationOnce((...args) => {
+        removeLater(...args)
+        throw new Error('later settlement')
+      })
+    const sent: string[] = []
+    await expect(
+      buffer.flush({
+        isCurrent: () => true,
+        sendInput: (data) => {
+          sent.push(data)
+          return true
+        },
+        sendInputImmediate: () => true,
+        sendInputAccepted: async (data) => {
+          sent.push(data)
+          return true
+        }
+      })
+    ).rejects.toBe(firstFailure)
+    await expect(first).resolves.toBe(true)
+    await expect(later).resolves.toBe(true)
+    expect(sent).toEqual(['accepted-first', 'accepted-later', 'ordinary-positive'])
+    expect(firstCleanup).toHaveBeenCalledOnce()
+    expect(laterCleanup).toHaveBeenCalledOnce()
+    expect(buffer.hasPendingInput()).toBe(false)
+    expect(buffer.isBuffering()).toBe(false)
+  }
+)
+
+it.each(['body-undefined', 'clear-null', 'clear-undefined'] as const)(
+  'preserves body versus clear priority for %s through real accepted cleanup',
+  async (site) => {
+    const buffer = createPtyPreconnectInputBuffer()
+    expect(buffer.enqueue('ordinary', 'ordinary', 'driving')).toBe(true)
+    const controller = new AbortController()
+    const accepted = buffer.enqueueAccepted('pending', 'driving', undefined, {
+      signal: controller.signal
+    })
+    const remove = controller.signal.removeEventListener.bind(controller.signal)
+    const cleanup = vi
+      .spyOn(controller.signal, 'removeEventListener')
+      .mockImplementationOnce((...args) => {
+        remove(...args)
+        expect(buffer.hasPendingInput()).toBe(false)
+        expect(buffer.isBuffering()).toBe(false)
+        if (site !== 'body-undefined') {
+          throw site === 'clear-null' ? null : undefined
+        }
+      })
+    const primary = site === 'body-undefined' ? undefined : new Error('primary writer')
+    const write = vi.fn(() => {
+      throw primary
+    })
+    await expect(
+      buffer.flush({
+        isCurrent: () => true,
+        sendInput: write,
+        sendInputImmediate: () => true
+      })
+    ).rejects.toBe(site === 'clear-null' ? null : undefined)
+    await expect(accepted).resolves.toBe(false)
+    expect(cleanup).toHaveBeenCalledOnce()
+    expect(write).toHaveBeenCalledExactlyOnceWith('ordinary', 'driving', undefined)
+    expect(buffer.enqueue('after-clear', 'ordinary', 'driving')).toBe(false)
+  }
+)
