@@ -11,7 +11,8 @@ export const SUPPORTED_UI_LOCALES = [
   'pt',
   'ru',
   'tr',
-  'de'
+  'de',
+  'pl'
 ] as const
 export type SupportedUiLocale = (typeof SUPPORTED_UI_LOCALES)[number]
 

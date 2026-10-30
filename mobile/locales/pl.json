@@ -1,0 +1,8 @@
+{
+  "ios": {
+    "NSCameraUsageDescription": "Zezwól aplikacji Orca na używanie aparatu do skanowania kodów QR.",
+    "NSLocalNetworkUsageDescription": "Orca łączy się z aplikacją na komputerze przez sieć lokalną.",
+    "NSMicrophoneUsageDescription": "Zezwól aplikacji Orca na używanie mikrofonu do dyktowania. Nagranie jest wysyłane do transkrypcji na sparowany komputer.",
+    "NSPhotoLibraryUsageDescription": "Zezwól aplikacji Orca na dołączanie zdjęć z biblioteki do sesji terminala na sparowanym komputerze."
+  }
+}

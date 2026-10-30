@@ -19,7 +19,8 @@
       "pt-BR": "./locales/pt-BR.json",
       "ru": "./locales/ru.json",
       "tr": "./locales/tr.json",
-      "de": "./locales/de.json"
+      "de": "./locales/de.json",
+      "pl": "./locales/pl.json"
     },
     "splash": {
       "image": "./assets/splash-icon.png",
@@ -98,14 +99,40 @@
         "expo-localization",
         {
           "supportedLocales": {
-            "ios": ["en", "zh-Hans", "zh-Hant", "ja", "ko", "es", "fr", "pt-BR", "ru", "tr", "de"]
+            "ios": [
+              "en",
+              "zh-Hans",
+              "zh-Hant",
+              "ja",
+              "ko",
+              "es",
+              "fr",
+              "pt-BR",
+              "ru",
+              "tr",
+              "de",
+              "pl"
+            ]
           }
         }
       ],
       [
         "./plugins/android-locale-config.js",
         {
-          "locales": ["en", "zh-Hans", "zh-Hant", "ja", "ko", "es", "fr", "pt-BR", "ru", "tr", "de"]
+          "locales": [
+            "en",
+            "zh-Hans",
+            "zh-Hant",
+            "ja",
+            "ko",
+            "es",
+            "fr",
+            "pt-BR",
+            "ru",
+            "tr",
+            "de",
+            "pl"
+          ]
         }
       ],
       "expo-notifications",
