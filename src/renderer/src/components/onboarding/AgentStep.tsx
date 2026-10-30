@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
-import { isNativeChatDefaultFor } from '../../../../shared/structured-native-chat-launch-route'
+import { nativeChatPreferenceFor } from '../../../../shared/structured-native-chat-launch-route'
 import { i18n, translate } from '@/i18n/i18n'
 import { openAppHttpLink } from '@/lib/app-http-link-open'
 import { useScrollEdgeFades } from '@/lib/use-scroll-edge-fades'
@@ -63,7 +63,7 @@ export function AgentStep({
   // Chat runs only on native installs; an agent found only in WSL opens in a terminal.
   const opensAsChat = (id: TuiAgent): boolean =>
     chatAgents.includes(id) &&
-    isNativeChatDefaultFor({ experimentalNativeChat: true, nativeChatProviders }, id) &&
+    nativeChatPreferenceFor({ agentDefaultSurface: 'chat', nativeChatProviders }, id) &&
     (!detectedSet.has(id) || chatDetected === null || chatDetected.includes(id))
   const availableDetected = new Set([
     ...detectedSet,

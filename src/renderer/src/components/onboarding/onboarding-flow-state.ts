@@ -124,13 +124,11 @@ export function remapOpenOnboardingLastCompletedStep({
 
 /** Chat turns on the experimental Chat UI; Terminal turns it off. Unchanged choices write nothing. */
 export function agentSurfaceSettingsUpdate(
-  settings: Pick<GlobalSettings, 'experimentalNativeChat'> | null | undefined,
+  settings: Pick<GlobalSettings, 'agentDefaultSurface'> | null | undefined,
   surface: AgentSurface
-): Partial<Pick<GlobalSettings, 'experimentalNativeChat'>> {
+): Partial<Pick<GlobalSettings, 'agentDefaultSurface'>> {
   const chat = surface === 'chat'
-  return (settings?.experimentalNativeChat === true) === chat
-    ? {}
-    : { experimentalNativeChat: chat }
+  return (settings?.agentDefaultSurface === 'chat') === chat ? {} : { agentDefaultSurface: surface }
 }
 
 type SkippedOnboardingPreferenceOptions = {
@@ -140,7 +138,7 @@ type SkippedOnboardingPreferenceOptions = {
   settingsTheme: GlobalSettings['theme'] | undefined
   selectedAgent: TuiAgent | null
   agentSurface: AgentSurface
-  settings: Pick<GlobalSettings, 'experimentalNativeChat'> | null
+  settings: Pick<GlobalSettings, 'agentDefaultSurface'> | null
   setTheme: (theme: GlobalSettings['theme']) => void
   applyTheme: (theme: GlobalSettings['theme']) => void
   updateSettings: (updates: Partial<GlobalSettings>) => Promise<void> | void

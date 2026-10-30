@@ -53,6 +53,7 @@ export function ContextualTourOverlay(): JSX.Element | null {
       : false
   )
   const activeTabId = useAppStore((s) => s.activeTabId)
+  const activeTabType = useAppStore((s) => s.activeTabType)
   const sidebarOpen = useAppStore((s) => s.sidebarOpen)
   const markContextualToursSeen = useAppStore((s) => s.markContextualToursSeen)
   const advanceContextualTour = useAppStore((s) => s.advanceContextualTour)
@@ -174,6 +175,7 @@ export function ContextualTourOverlay(): JSX.Element | null {
     if (measurement.kind !== 'render') {
       // Discard stale/detached targets so the next scroll performs a full scan.
       measuredTargetRef.current = null
+      setRenderState(null)
     }
     if (measurement.kind === 'advance') {
       advanceContextualTour()
@@ -256,7 +258,7 @@ export function ContextualTourOverlay(): JSX.Element | null {
 
   useLayoutEffect(() => {
     measureTourOverlay()
-  }, [measureTourOverlay])
+  }, [activeTabId, activeTabType, measureTourOverlay])
 
   useEffect(() => {
     if (

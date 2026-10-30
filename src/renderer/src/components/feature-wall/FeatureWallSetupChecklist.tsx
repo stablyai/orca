@@ -28,7 +28,7 @@ import type { AgentSurface } from '../onboarding/use-onboarding-flow-types'
 import { agentSurfaceSettingsUpdate } from '../onboarding/onboarding-flow-state'
 import { onboardingChatPermissionSetting } from '../onboarding/use-onboarding-flow-persistence'
 import { savedYoloPermissions } from '../onboarding/use-onboarding-yolo-permissions'
-import { applyAllAgentsPermission } from '../../../../shared/tui-agent-permission-choice'
+import { applyAllAgentsPermission } from '../../../../shared/agent-launch/permissions/tui-agent-permission-choice'
 import { NotificationStep } from '../onboarding/NotificationStep'
 import { useAppStore } from '@/store'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
@@ -203,7 +203,7 @@ function DefaultAgentAction(): React.JSX.Element {
     settings?.defaultTuiAgent && settings.defaultTuiAgent !== 'blank'
       ? settings.defaultTuiAgent
       : null
-  const agentSurface: AgentSurface = settings?.experimentalNativeChat === true ? 'chat' : 'terminal'
+  const agentSurface: AgentSurface = settings?.agentDefaultSurface === 'chat' ? 'chat' : 'terminal'
   const detectedSet = useMemo(() => new Set(detectedAgentIds ?? []), [detectedAgentIds])
   const handleSelectAgent = useCallback(
     (agent: TuiAgent) => {

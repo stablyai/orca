@@ -13,10 +13,10 @@ import type { SkillInstallRequest, SkillInstallResult } from '../../shared/skill
 import type { RuntimeSkillCommandHost } from './runtime-skill-command-contract'
 import type {
   BundledSkillAutoUpdateRequest,
-  BundledSkillExecuteRequest,
+  LocalBundledSkillExecuteRequest,
   BundledSkillInstallResult,
   BundledSkillPlan,
-  BundledSkillPlanRequest
+  LocalBundledSkillPlanRequest
 } from '../../shared/bundled-skill-plan'
 import {
   autoUpdateLocalBundledSkills,
@@ -176,11 +176,11 @@ export class RuntimeSkillInstallCommands {
       this.progress.delete(request.operationId)
     }
   }
-  planLocalBundledSkills(request: BundledSkillPlanRequest): Promise<BundledSkillPlan> {
+  planLocalBundledSkills(request: LocalBundledSkillPlanRequest): Promise<BundledSkillPlan> {
     return planLocalBundledSkills(this.host, request)
   }
   executeLocalBundledSkills(
-    request: BundledSkillExecuteRequest
+    request: LocalBundledSkillExecuteRequest
   ): Promise<BundledSkillInstallResult> {
     return executeLocalBundledSkills(this.host, request)
   }

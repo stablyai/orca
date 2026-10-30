@@ -1,3 +1,4 @@
+import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY as CHAT } from '../../../../shared/agent-session/agent-session-runtime-capabilities'
 // @vitest-environment happy-dom
 
 import { act, useEffect, useRef, useState } from 'react'
@@ -16,9 +17,8 @@ import type * as HostStructuredAgents from '@/runtime/host-structured-agents'
 import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
 import {
   STRUCTURED_AGENT_SESSION_AVAILABILITY_RUNTIME_CAPABILITY as HEALTH,
-  STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY as CATALOG,
-  STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY as CHAT
-} from '../../../../shared/protocol-version'
+  STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY as CATALOG
+} from '../../../../shared/agent-session/structured-agent-session-surface-capabilities'
 
 const rpc = vi.hoisted(() => ({ call: vi.fn(), subscribe: vi.fn() }))
 vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: rpc.call }))

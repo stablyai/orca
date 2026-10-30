@@ -12,11 +12,12 @@ import { ArrowLeft, ArrowRight, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { useAppStore } from '@/store'
-import type {
-  ContextualTourId,
-  ContextualTourStepPlacement,
-  ContextualTourStepControl,
-  ContextualTourStepAction
+import {
+  getContextualTour,
+  type ContextualTourId,
+  type ContextualTourStepPlacement,
+  type ContextualTourStepControl,
+  type ContextualTourStepAction
 } from '../../../../shared/contextual-tours'
 import { ContextualTourArrow } from './ContextualTourArrow'
 import { ContextualTourControl } from './ContextualTourControl'
@@ -27,10 +28,12 @@ import {
 } from './contextual-tour-floating-position'
 import { translate } from '@/i18n/i18n'
 import { addAppKeyListener, removeAppKeyListener } from '@/lib/app-keyboard-router'
+import { hasVisibleOverlay } from '@/lib/visible-overlay'
+import { getMeasurableContextualTourTarget } from './contextual-tour-gate'
 
 const FOCUSABLE_SELECTOR =
   'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
-const SKIP_BUTTON_SELECTOR = 'button[aria-label^="Skip"], button[aria-label="Dismiss tour"]'
+const SKIP_BUTTON_SELECTOR = '[data-contextual-tour-dismiss]'
 
 export type ActiveTourRenderState = {
   rect: DOMRect
@@ -193,6 +196,7 @@ export function ContextualTourOverlaySurface({
           type="button"
           variant="ghost"
           size="icon-xs"
+          data-contextual-tour-dismiss=""
           aria-label={
             renderState.isLastStep
               ? translate(
@@ -306,7 +310,8 @@ export function handleContextualTourOverlayKeyDown(event: KeyboardEvent<HTMLDivE
 }
 
 export function handleContextualTourGlobalKeyDown(event: globalThis.KeyboardEvent): void {
-  const activeTourId = useAppStore.getState().activeContextualTourId
+  const { activeContextualTourId: activeTourId, activeContextualTourStepIndex } =
+    useAppStore.getState()
   if (!activeTourId || event.key !== 'Escape') {
     return
   }
@@ -314,6 +319,12 @@ export function handleContextualTourGlobalKeyDown(event: globalThis.KeyboardEven
   const overlay = document.querySelector<HTMLElement>('[data-contextual-tour-overlay]')
   const focusRoot = document.querySelector<HTMLElement>('[data-contextual-tour-panel]') ?? overlay
   if (!overlay || !focusRoot) {
+    return
+  }
+  const step = getContextualTour(activeTourId).steps[activeContextualTourStepIndex]
+  const target = step ? getMeasurableContextualTourTarget(step.targetSelector)?.element : null
+  // A menu containing the lesson's target belongs to the tour; other popups own Escape first.
+  if (hasVisibleOverlay({ ignoreContaining: target ? [focusRoot, target] : focusRoot })) {
     return
   }
 

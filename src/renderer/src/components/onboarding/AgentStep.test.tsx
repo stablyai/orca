@@ -4,7 +4,7 @@ import { TooltipProvider } from '@/components/ui/tooltip'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { resolveAgentLaunchRoute } from '@/lib/agent-launch-routing'
-import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
+import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../../../shared/agent-session/agent-session-runtime-capabilities'
 import { AgentStep } from './AgentStep'
 
 function render(
@@ -97,7 +97,7 @@ describe('AgentStep agent surfaces', () => {
     const html = render('chat', ['claude'], 'claude', ['claude'], nativeChatProviders)
     const route = resolveAgentLaunchRoute({
       agent: 'claude',
-      settings: { experimentalNativeChat: true, nativeChatProviders },
+      settings: { agentDefaultSurface: 'chat', nativeChatProviders },
       executionHostId: 'local',
       hostCapabilities: [STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY]
     })

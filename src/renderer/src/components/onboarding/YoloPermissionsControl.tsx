@@ -7,8 +7,8 @@ import { useAppStore } from '@/store'
 import {
   applyAgentPermissionOverrides,
   PERMISSION_CHOICE_AGENTS
-} from '../../../../shared/tui-agent-permission-choice'
-import type { TuiAgent } from '../../../../shared/tui-agent'
+} from '../../../../shared/agent-launch/permissions/tui-agent-permission-choice'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 
 export function YoloPermissionsControl({
   yoloPermissions,

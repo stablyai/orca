@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState, type Dispatch, type SetStateAction } 
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
-import { isNativeChatDefaultFor } from '../../../../shared/structured-native-chat-launch-route'
+import { nativeChatPreferenceFor } from '../../../../shared/structured-native-chat-launch-route'
 import { chatProviderAgents, useHostStructuredAgentsVersion } from '@/lib/chat-provider-agents'
 import type { ProspectiveWorkspace } from '@/lib/agent-launch-route-input'
 import { readChatProgram, resolveChatProgramContext } from '@/lib/host-chat-program'
@@ -70,19 +70,19 @@ export function useOnboardingAgentSurface({
   // Unchosen, the page reflects the saved Chat UI setting, including once settings hydrate.
   const [choice, setAgentSurface] = useState<AgentSurface | null>(null)
   const agentSurface: AgentSurface =
-    choice ?? (settings?.experimentalNativeChat === true ? 'chat' : 'terminal')
+    choice ?? (settings?.agentDefaultSurface === 'chat' ? 'chat' : 'terminal')
 
   const { chatAgents, chatDetected, refreshDetectedAgents } = useChatAgentDetection()
   const chatSettings = {
-    experimentalNativeChat: true,
+    agentDefaultSurface: 'chat' as const,
     nativeChatProviders: settings?.nativeChatProviders
   }
   const selectedAgentOpensAsChat =
     selectedAgent !== null &&
     chatDetected?.includes(selectedAgent) === true &&
-    isNativeChatDefaultFor(chatSettings, selectedAgent)
+    nativeChatPreferenceFor(chatSettings, selectedAgent)
   const installedChatAgent = chatAgents.find(
-    (agent) => chatDetected?.includes(agent) && isNativeChatDefaultFor(chatSettings, agent)
+    (agent) => chatDetected?.includes(agent) && nativeChatPreferenceFor(chatSettings, agent)
   )
 
   useEffect(() => {

@@ -97,7 +97,7 @@ afterEach(() => {
 
 describe('setup guide default agent step', () => {
   it('switches between Chat UI and Terminal and saves the choice right away', () => {
-    renderDefaultAgentStep({ experimentalNativeChat: false })
+    renderDefaultAgentStep({ agentDefaultSurface: 'terminal' })
 
     expect(radio('Terminal UI').getAttribute('aria-checked')).toBe('true')
     // The inline switch replaces the "Turn on now" tip.
@@ -105,7 +105,7 @@ describe('setup guide default agent step', () => {
 
     act(() => radio('Chat UI').click())
 
-    expect(useAppStore.getState().settings?.experimentalNativeChat).toBe(true)
+    expect(useAppStore.getState().settings?.agentDefaultSurface).toBe('chat')
     expect(radio('Chat UI').getAttribute('aria-checked')).toBe('true')
     expect(
       container.querySelector('[title="Aider"]')?.closest('.space-y-3')?.textContent
@@ -113,11 +113,11 @@ describe('setup guide default agent step', () => {
 
     act(() => radio('Terminal UI').click())
 
-    expect(useAppStore.getState().settings?.experimentalNativeChat).toBe(false)
+    expect(useAppStore.getState().settings?.agentDefaultSurface).toBe('terminal')
   })
 
   it('moves focus and saves the surface with arrow keys from one tab stop', async () => {
-    renderDefaultAgentStep({ experimentalNativeChat: false })
+    renderDefaultAgentStep({ agentDefaultSurface: 'terminal' })
     act(() => radio('Terminal UI').focus())
     expect(radio('Terminal UI').tabIndex).toBe(0)
     expect(radio('Chat UI').tabIndex).toBe(-1)
@@ -130,7 +130,7 @@ describe('setup guide default agent step', () => {
     })
 
     expect(document.activeElement).toBe(radio('Chat UI'))
-    expect(useAppStore.getState().settings?.experimentalNativeChat).toBe(true)
+    expect(useAppStore.getState().settings?.agentDefaultSurface).toBe('chat')
     expect(radio('Chat UI').tabIndex).toBe(0)
     expect(radio('Terminal UI').tabIndex).toBe(-1)
   })
