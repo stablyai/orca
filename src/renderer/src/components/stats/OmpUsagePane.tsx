@@ -306,6 +306,13 @@ export function OmpUsagePane(): React.JSX.Element {
           )}
         </p>
 
+        <p className="px-1 text-xs text-muted-foreground">
+          {translate(
+            'auto.components.stats.OmpUsagePane.dailyScopeCaption',
+            'Daily totals cover all local omp usage; scope applies to sessions, breakdowns and recent sessions.'
+          )}
+        </p>
+
         <CodexUsageDailyChart
           daily={daily.map((point) => ({
             day: point.day,

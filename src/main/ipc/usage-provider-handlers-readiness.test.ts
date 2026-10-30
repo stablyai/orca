@@ -222,11 +222,15 @@ it('registers the omp provider on the full channel set', async () => {
   })
 })
 
-it('accepts omp wherever a bundled usage provider id is typed', () => {
-  const providerId: UsageProviderId = 'omp'
-  const workerProviderId: UsageScanWorkerProviderId = 'omp'
-  expect(providerId).toBe('omp')
-  expect(workerProviderId).toBe('omp')
+it('types omp on both provider id aliases and the registrar store map', () => {
+  // Compile-time: both provider-id aliases accept 'omp'.
+  const providerIds: { usage: UsageProviderId; worker: UsageScanWorkerProviderId } = {
+    usage: 'omp',
+    worker: 'omp'
+  }
+  // Compile-time: the registrar's store map requires an OmpUsageStore under ompUsage.
+  const stores: Parameters<typeof registerUsageProviderHandlers>[0] = createProviders()
+  expect(stores.ompUsage.id).toBe(providerIds.usage)
 })
 
 it('keeps a loaded provider snapshot synchronous for direct callers', () => {

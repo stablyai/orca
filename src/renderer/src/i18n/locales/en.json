@@ -5216,7 +5216,8 @@
           "85457c02fe": "Claude",
           "b2cf4310ce": "Overview",
           "grokUsageTab": "Grok",
-          "trackingSince": "Tracking since {{value0}}"
+          "trackingSince": "Tracking since {{value0}}",
+          "ompUsageTab": "omp"
         },
         "UsageOverviewPane": {
           "33f7b043d2": "Providers",
@@ -5275,7 +5276,8 @@
             "d6e9f0a1b2": "credits",
             "a3b6c7d8e9": "grok usage",
             "9f2a3b4c5d": "xai",
-            "museKeyword": "muse"
+            "museKeyword": "muse",
+            "ompKeyword": "omp"
           }
         },
         "usage": {
@@ -5341,6 +5343,25 @@
           "emptyMessage": "No local Muse usage found yet for this scope.",
           "noCostNote": "Muse session logs record tokens but not cost, so no cost estimate is shown.",
           "recentSessionsDescription": "Most recent local Muse sessions in this scope."
+        },
+        "OmpUsagePane": {
+          "title": "omp Usage Tracking",
+          "enableLabel": "Enable omp usage analytics",
+          "disabledDescription": "Reads local omp session logs to show token, model, and session stats.",
+          "scopeAll": "All local omp usage",
+          "optionsLabel": "omp usage options",
+          "refreshAriaLabel": "Refresh omp usage",
+          "emptyMessage": "No local omp usage found yet for this scope.",
+          "notAvailable": "n/a",
+          "sessions": "Sessions",
+          "cost": "Cost",
+          "lastActive": "Last active",
+          "recentSessions": "Recent sessions",
+          "recentSessionsDescription": "Most recent local omp sessions in this scope.",
+          "sessionCount_one": "{{count}} session",
+          "sessionCount_other": "{{count}} sessions",
+          "tokenAccountingNote": "Reasoning tokens are shown separately and never count toward output totals. Cache writes are tracked apart from cache reads.",
+          "dailyScopeCaption": "Daily totals cover all local omp usage; scope applies to sessions, breakdowns and recent sessions."
         },
         "usageFormatters": {
           "notScannedYet": "Not scanned yet",

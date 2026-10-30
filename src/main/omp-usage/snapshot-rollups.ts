@@ -140,26 +140,34 @@ export function buildOmpUsageRecentSessions(
   filteredSessions: readonly OmpUsageSession[],
   limit = 10
 ): OmpUsageSessionRow[] {
-  return filteredSessions.slice(0, limit).map((session): OmpUsageSessionRow => {
-    const lastActiveAt = session.endedAt ?? session.startedAt
-    return {
-      sessionId: session.sessionId,
-      lastActiveAt,
-      durationMinutes: Math.max(
-        0,
-        Math.round(
-          (new Date(lastActiveAt).getTime() - new Date(session.startedAt).getTime()) / 60_000
-        )
-      ),
-      projectLabel: projectLabel(session),
-      model: session.model || null,
-      inputTokens: session.inputTokens,
-      cacheReadTokens: session.cacheReadTokens,
-      cacheWriteTokens: session.cacheWriteTokens,
-      outputTokens: session.outputTokens,
-      reasoningTokens: session.reasoningTokens,
-      totalTokens: session.totalTokens,
-      costUsd: session.costUsd
-    }
-  })
+  return (
+    filteredSessions
+      .map((session) => {
+        const lastActiveAt = session.endedAt ?? session.startedAt
+        const parsed = Date.parse(lastActiveAt)
+        return { session, lastActiveAt, lastActiveTime: Number.isNaN(parsed) ? 0 : parsed }
+      })
+      // The column shows last activity, not session start; the store may hand over an unsorted list.
+      .sort((left, right) => right.lastActiveTime - left.lastActiveTime)
+      .slice(0, limit)
+      .map(({ session, lastActiveAt }) => ({
+        sessionId: session.sessionId,
+        lastActiveAt,
+        durationMinutes: Math.max(
+          0,
+          Math.round(
+            (new Date(lastActiveAt).getTime() - new Date(session.startedAt).getTime()) / 60_000
+          )
+        ),
+        projectLabel: projectLabel(session),
+        model: session.model || null,
+        inputTokens: session.inputTokens,
+        cacheReadTokens: session.cacheReadTokens,
+        cacheWriteTokens: session.cacheWriteTokens,
+        outputTokens: session.outputTokens,
+        reasoningTokens: session.reasoningTokens,
+        totalTokens: session.totalTokens,
+        costUsd: session.costUsd
+      }))
+  )
 }

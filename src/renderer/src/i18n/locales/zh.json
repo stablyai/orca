@@ -4590,7 +4590,8 @@
           "85457c02fe": "Claude",
           "b2cf4310ce": "概览",
           "grokUsageTab": "Grok",
-          "trackingSince": "自 {{value0}} 开始跟踪"
+          "trackingSince": "自 {{value0}} 开始跟踪",
+          "ompUsageTab": "omp"
         },
         "UsageOverviewPane": {
           "33f7b043d2": "供应商",
@@ -4648,7 +4649,8 @@
             "d6e9f0a1b2": "额度",
             "a3b6c7d8e9": "grok 使用量",
             "9f2a3b4c5d": "xai",
-            "museKeyword": "muse"
+            "museKeyword": "muse",
+            "ompKeyword": "omp"
           }
         },
         "usage": {
@@ -4711,6 +4713,25 @@
           "emptyMessage": "尚未找到此范围内的本地 Muse 使用情况。",
           "noCostNote": "Muse 会话日志只记录token而不记录费用，因此不显示费用估算。",
           "recentSessionsDescription": "此范围内最近的本地 Muse 会话。"
+        },
+        "OmpUsagePane": {
+          "title": "omp 用量追踪",
+          "enableLabel": "启用 omp 用量分析",
+          "disabledDescription": "读取本地 omp 会话日志，显示 Token、模型和会话统计。",
+          "scopeAll": "所有本地 omp 用量",
+          "optionsLabel": "omp 用量选项",
+          "refreshAriaLabel": "刷新 omp 用量",
+          "emptyMessage": "此范围内尚未找到本地 omp 用量。",
+          "notAvailable": "n/a",
+          "sessions": "会话",
+          "cost": "费用",
+          "lastActive": "最近活动",
+          "recentSessions": "最近会话",
+          "recentSessionsDescription": "此范围内最近的本地 omp 会话。",
+          "sessionCount_one": "{{count}} 个会话",
+          "sessionCount_other": "{{count}} 个会话",
+          "tokenAccountingNote": "推理 Token 单独显示，从不计入输出总量。缓存写入与缓存读取分开统计。",
+          "dailyScopeCaption": "每日总计覆盖所有本地 omp 用量；范围仅适用于会话、细分和最近会话。"
         },
         "usageFormatters": {
           "notScannedYet": "尚未扫描",

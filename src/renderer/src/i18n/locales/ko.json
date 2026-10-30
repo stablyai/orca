@@ -4590,7 +4590,8 @@
           "85457c02fe": "Claude",
           "b2cf4310ce": "개요",
           "grokUsageTab": "Grok",
-          "trackingSince": "{{value0}} 이후 추적 중"
+          "trackingSince": "{{value0}} 이후 추적 중",
+          "ompUsageTab": "omp"
         },
         "UsageOverviewPane": {
           "33f7b043d2": "공급자",
@@ -4648,7 +4649,8 @@
             "d6e9f0a1b2": "크레딧",
             "a3b6c7d8e9": "grok 사용량",
             "9f2a3b4c5d": "xai",
-            "museKeyword": "muse"
+            "museKeyword": "muse",
+            "ompKeyword": "omp"
           }
         },
         "usage": {
@@ -4711,6 +4713,25 @@
           "emptyMessage": "이 범위에서 아직 로컬 Muse 사용량을 찾지 못했습니다.",
           "noCostNote": "Muse 세션 로그에는 토큰만 기록되고 비용은 기록되지 않으므로 비용 추정치를 표시하지 않습니다.",
           "recentSessionsDescription": "이 범위에서 가장 최근의 로컬 Muse 세션입니다."
+        },
+        "OmpUsagePane": {
+          "title": "omp 사용량 추적",
+          "enableLabel": "omp 사용량 분석 사용",
+          "disabledDescription": "로컬 omp 세션 로그를 읽어 토큰, 모델 및 세션 통계를 표시합니다.",
+          "scopeAll": "모든 로컬 omp 사용량",
+          "optionsLabel": "omp 사용량 옵션",
+          "refreshAriaLabel": "omp 사용량 새로 고침",
+          "emptyMessage": "이 범위에서 로컬 omp 사용량을 아직 찾지 못했습니다.",
+          "notAvailable": "n/a",
+          "sessions": "세션",
+          "cost": "비용",
+          "lastActive": "마지막 활동",
+          "recentSessions": "최근 세션",
+          "recentSessionsDescription": "이 범위의 최근 로컬 omp 세션.",
+          "sessionCount_one": "{{count}}개 세션",
+          "sessionCount_other": "{{count}}개 세션",
+          "tokenAccountingNote": "추론 토큰은 별도로 표시되며 출력 합계에 포함되지 않습니다. 캐시 쓰기는 캐시 읽기와 별도로 집계됩니다.",
+          "dailyScopeCaption": "일별 합계는 모든 로컬 omp 사용량을 포함합니다. 범위는 세션, 분석 및 최근 세션에만 적용됩니다."
         },
         "usageFormatters": {
           "notScannedYet": "아직 스캔하지 않음",

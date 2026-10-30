@@ -15378,7 +15378,8 @@
             "d6e9f0a1b2": "créditos",
             "a3b6c7d8e9": "uso do grok",
             "9f2a3b4c5d": "xai",
-            "museKeyword": "muse"
+            "museKeyword": "muse",
+            "ompKeyword": "omp"
           }
         },
         "UsageOverviewPane": {
@@ -15415,7 +15416,8 @@
           "85457c02fe": "Claude",
           "b2cf4310ce": "Visão Geral",
           "grokUsageTab": "Grok",
-          "trackingSince": "Rastreando desde {{value0}}"
+          "trackingSince": "Rastreando desde {{value0}}",
+          "ompUsageTab": "omp"
         },
         "ShareUsageCard": {
           "4a4c6c79a3": "sessões ·",
@@ -15482,6 +15484,25 @@
           "emptyMessage": "Nenhum uso local do Muse encontrado ainda neste escopo.",
           "noCostNote": "Os registros de sessões do Muse registram tokens, mas não custos, por isso nenhuma estimativa de custo é exibida.",
           "recentSessionsDescription": "Sessões locais mais recentes do Muse neste escopo."
+        },
+        "OmpUsagePane": {
+          "title": "Rastreamento de uso do omp",
+          "enableLabel": "Ativar a análise de uso do omp",
+          "disabledDescription": "Lê os registros de sessões locais do omp para mostrar estatísticas de tokens, modelos e sessões.",
+          "scopeAll": "Todo o uso local do omp",
+          "optionsLabel": "Opções de uso do omp",
+          "refreshAriaLabel": "Atualizar o uso do omp",
+          "emptyMessage": "Nenhum uso local do omp encontrado neste escopo ainda.",
+          "notAvailable": "n/d",
+          "sessions": "Sessões",
+          "cost": "Custo",
+          "lastActive": "Última atividade",
+          "recentSessions": "Sessões recentes",
+          "recentSessionsDescription": "Sessões locais recentes do omp neste escopo.",
+          "sessionCount_one": "{{count}} sessão",
+          "sessionCount_other": "{{count}} sessões",
+          "tokenAccountingNote": "Os tokens de raciocínio são mostrados separadamente e nunca entram nos totais de saída. As gravações de cache são rastreadas separadamente das leituras de cache.",
+          "dailyScopeCaption": "Os totais diários abrangem todo o uso local do omp; o escopo se aplica a sessões, detalhamentos e sessões recentes."
         },
         "usageFormatters": {
           "notScannedYet": "Ainda não escaneado",
