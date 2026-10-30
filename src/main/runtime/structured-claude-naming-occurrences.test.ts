@@ -1,3 +1,5 @@
+import { agentJournalSubmissionKey } from '../../shared/agent-session-journal-item-key'
+import { claudePromptUuidForSubmission } from '../claude/structured/claude-structured-session-id'
 import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session-mutation-envelope'
 import { CREATE_TEST_CALLER } from '../native-chat/agent-session-wire/structured-agent-session-create-test-fixture'
 import { appendFile, readFile } from 'node:fs/promises'
@@ -259,9 +261,14 @@ it('names the materialized committed rewind fork at rest and never replays it on
   onTestFinished
 }) => {
   const fixture = await createClaudeNamingRuntime()
+  let stopping: Promise<void> | undefined
   onTestFinished(async () => {
-    await fixture.dispose()
-    vi.restoreAllMocks()
+    try {
+      await stopping
+    } finally {
+      await fixture.dispose()
+      vi.restoreAllMocks()
+    }
   })
   await writeNativeNamingConversation(fixture.file, fixture.nativeId, fixture.root)
   const host = await fixture.install()
@@ -313,10 +320,39 @@ it('names the materialized committed rewind fork at rest and never replays it on
     destination,
     `${JSON.stringify({ type: 'custom-title', sessionId: fork.sessionId, customTitle: 'Later fork CLI' })}\n`
   )
-  expect(await fixture.send('Resume the fork')).toMatchObject({ ok: true })
-  await vi.waitFor(() => expect(fixture.native.connections.at(-1)?.sent).toHaveLength(1))
-  await stopStructuredAgentSessionRuntime()
-  expect(fixture.launches.at(-1)?.options.resume).toBe(fork.sessionId)
+  const previous = fixture.native.connections.at(-1)
+  const connectionCount = fixture.native.connections.length
+  const launchCount = fixture.launches.length
+  const sent = await fixture.send('Resume the fork')
+  expect(sent).toMatchObject({ ok: true })
+  if (!sent.ok) {
+    throw new Error('fork resume send was refused')
+  }
+  const uuid = claudePromptUuidForSubmission(
+    HOST_TEST_SESSION,
+    agentJournalSubmissionKey(sent.value.clientMessageId)
+  )
+  await vi.waitFor(async () => {
+    const connection = fixture.native.connections[connectionCount]
+    expect(connection).toBeDefined()
+    expect(connection).not.toBe(previous)
+    expect(connection?.launch).toBe(fixture.launches[launchCount])
+    expect(connection?.sent).toContainEqual(
+      expect.objectContaining({
+        type: 'user',
+        uuid,
+        message: { role: 'user', content: [{ type: 'text', text: 'Resume the fork' }] }
+      })
+    )
+    expect(
+      (await host.journalSnapshot(HOST_TEST_SESSION)).submissions.find(
+        (submission) => submission.clientMessageId === sent.value.clientMessageId
+      )
+    ).toMatchObject({ dispatchState: 'accepted' })
+  })
+  stopping = stopStructuredAgentSessionRuntime()
+  await stopping
+  expect(fixture.launches[launchCount]?.options.resume).toBe(fork.sessionId)
   expect(await nativeNamingTitle(destination)).toBe('Later fork CLI')
   expect(fixture.controls).toEqual([])
 })

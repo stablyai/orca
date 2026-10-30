@@ -31,11 +31,10 @@ export async function writeNativeNamingConversation(
   title = 'Old'
 ): Promise<void> {
   await mkdir(dirname(path), { recursive: true })
-  const user = randomUUID()
   const rows = [
     {
       type: 'user',
-      uuid: user,
+      uuid: randomUUID(),
       parentUuid: null,
       sessionId: nativeId,
       cwd,
@@ -100,7 +99,8 @@ export async function createClaudeNamingRuntime(
   })
   let operation = 0
   const operationId = () => `${Date.now()}-${(++operation).toString(16).padStart(32, '0')}`
-  const native = fakeClaude({ initSessionId: nativeId })
+  const nativeOptions = { initSessionId: nativeId, holdInit: options.initialize !== undefined }
+  const native = fakeClaude(nativeOptions)
   const install = async () => {
     host = await ensureStructuredAgentSessionHost({
       stateDirectory: root,
@@ -125,13 +125,16 @@ export async function createClaudeNamingRuntime(
           throw new Error('expected the production UUID launch')
         }
         const targetFile = join(dirname(file), `${target}.jsonl`)
-        const child = fakeClaude({ initSessionId: target })
-        const connection = await child.openConnection(launch, handlers)
-        const actual = child.connections.at(-1)
+        nativeOptions.initSessionId = target
+        const connection = await native.openConnection(launch, handlers)
+        const actual = native.connections.find((candidate) => candidate === connection)
         if (!actual) {
           throw new Error('native fixture did not create its connection')
         }
-        native.connections.push(actual)
+        void options.initialize?.then(
+          () => actual.initialization.resolve(),
+          (error: unknown) => actual.initialization.reject(error)
+        )
         let remembered: string | undefined
         try {
           remembered = await nativeNamingTitle(targetFile)
@@ -142,17 +145,6 @@ export async function createClaudeNamingRuntime(
           await writeNativeNamingConversation(targetFile, target, launch.cwd)
           remembered = 'Old'
         }
-        const initialized = connection.initializationResult
-        const closed = Promise.withResolvers<never>()
-        void closed.promise.catch(() => {})
-        connection.initializationResult = () =>
-          Promise.race([
-            (async () => {
-              await options.initialize
-              return initialized()
-            })(),
-            closed.promise
-          ])
         connection.renameSession = async (name, target) => {
           controls.push({ name, nativeId: target })
           await options.beforeControl?.(actual, name)
@@ -167,6 +159,7 @@ export async function createClaudeNamingRuntime(
           (closing ??= (async () => {
             actual.closed = true
             actual.closeCount++
+            actual.initialization.dispose()
             const proven = (await options.beforeClose?.(actual)) ?? true
             if (proven) {
               if (remembered !== undefined) {
@@ -179,7 +172,6 @@ export async function createClaudeNamingRuntime(
             } else {
               closing = undefined
             }
-            closed.reject(new Error('native fixture closed before initialize answered'))
             return proven
           })())
         connection.send = async (message, beforeDispatch) => {
@@ -298,6 +290,7 @@ export async function createClaudeNamingRuntime(
       })
     },
     async dispose() {
+      native.dispose()
       await stopStructuredAgentSessionRuntime()
       closeTestJournalHostDatabase(root)
       await rm(root, { recursive: true, force: true })
