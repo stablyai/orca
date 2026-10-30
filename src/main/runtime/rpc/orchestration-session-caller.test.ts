@@ -56,7 +56,13 @@ const NAMES_NO_RESOLVED_PARTY: Readonly<Record<string, string>> = {
   'orchestration.federationAttachStart terminal': 'names the remote worker terminal',
   'orchestration.workerTerminalUserInput terminal': 'names the worker terminal',
   'orchestration.workerTerminalUserInput sessionId':
-    'names the worker session, as its terminal does'
+    'names the worker session, as its terminal does',
+  'orchestration.workerAutoClose terminal': 'names the worker terminal',
+  'orchestration.workerAutoClose sessionId': 'names the worker session, as its terminal does',
+  'orchestration.workerKeepOpen terminal': 'names the worker terminal',
+  'orchestration.workerKeepOpen sessionId': 'names the worker session, as its terminal does',
+  'orchestration.workerChatTouch terminal': 'names the worker terminal',
+  'orchestration.workerChatTouch sessionId': 'names the worker session, as its terminal does'
 }
 
 /** One request per identity-consulting method, valid enough to reach the dispatcher entry. */
@@ -103,9 +109,9 @@ describe('orchestration session callers at the dispatch entry', () => {
       })
       .sort()
 
-    // The population: 45 registered methods carrying 29 party-naming fields.
-    expect(registry.size).toBe(45)
-    expect(partyNaming).toHaveLength(29)
+    // The population: 49 registered methods carrying 35 party-naming fields.
+    expect(registry.size).toBe(49)
+    expect(partyNaming).toHaveLength(35)
     expect(partyNaming).toEqual(
       [
         ...Object.entries(ORCHESTRATION_CALLER_PARAM).map(

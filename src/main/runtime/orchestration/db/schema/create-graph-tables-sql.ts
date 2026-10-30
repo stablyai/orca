@@ -33,6 +33,8 @@ CREATE TABLE IF NOT EXISTS federated_dispatches (
   remote_terminal_handle  TEXT,
   to_home_imported_sequence INTEGER NOT NULL DEFAULT 0,
   to_home_acknowledged_sequence INTEGER NOT NULL DEFAULT 0,
+  home_auto_release_at    TEXT,
+  home_auto_release_state TEXT,
   created_at              TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at              TEXT NOT NULL DEFAULT (datetime('now'))
 );

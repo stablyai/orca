@@ -65,18 +65,16 @@ describe('federated worker release ownership', () => {
     expect(runtime.closeTerminal).not.toHaveBeenCalled()
   })
 
-  it('durably retains a user-taken-over remote worker terminal', async () => {
-    createAttachment('ctx_takeover', 'created')
-    settleAttachment('ctx_takeover')
+  it('refuses the home a release of a remote worker the user kept open', async () => {
+    createAttachment('ctx_kept', 'created')
+    settleAttachment('ctx_kept')
 
-    const changed = (await call('orchestration.workerTerminalUserInput', 'ctx_takeover', {
-      paneKey: PANE_KEY
-    })) as { changed: number }
-
-    expect(changed.changed).toBe(1)
-    await expect(call('orchestration.federationRelease', 'ctx_takeover')).resolves.toMatchObject({
+    await expect(
+      call('orchestration.workerKeepOpen', 'ctx_kept', { paneKey: PANE_KEY, keep: true })
+    ).resolves.toEqual({ autoClose: { kept: true } })
+    await expect(call('orchestration.federationRelease', 'ctx_kept')).resolves.toMatchObject({
       state: 'retained',
-      reason: 'user_takeover',
+      reason: 'user_kept',
       processAction: 'none'
     })
     expect(runtime.closeTerminal).not.toHaveBeenCalled()

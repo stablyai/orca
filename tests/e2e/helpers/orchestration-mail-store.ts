@@ -65,6 +65,27 @@ export function insertDirectRunMail(
   return id
 }
 
+// A consuming check now marks its batch handled, so only an older Orca leaves one outstanding.
+export function insertUnackedRunDelivery(
+  userDataDir: string,
+  params: { runId: string; subject: string }
+): string {
+  const messageId = `msg_e2e_${randomUUID()}`
+  const deliveryId = `delivery_e2e_${randomUUID()}`
+  withMailDb(userDataDir, (db) => {
+    db.prepare(
+      `INSERT INTO messages (
+         id, run_id, delivery_contract, from_handle, to_handle, subject, type
+       ) VALUES (?, ?, 'current_delivery', 'e2e-sender', ?, ?, 'status')`
+    ).run(messageId, params.runId, `run:${params.runId}`, params.subject)
+    db.prepare(
+      `INSERT INTO deliveries (id, run_id, mailbox_handle, consumer_generation, message_ids)
+       SELECT ?, id, ?, consumer_generation, ? FROM runs WHERE id = ?`
+    ).run(deliveryId, `run:${params.runId}`, JSON.stringify([messageId]), params.runId)
+  })
+  return deliveryId
+}
+
 // Seed a legacy running coordinator directly; orchestration.run would introduce scheduler races.
 export function startCoordinatorRun(userDataDir: string, handle: string): void {
   withMailDb(userDataDir, (db) => {

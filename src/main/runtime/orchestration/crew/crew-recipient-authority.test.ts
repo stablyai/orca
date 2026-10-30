@@ -16,6 +16,7 @@ import { LEGACY_CONTRACT_VERSION, LEGACY_RUN_ID } from '../db/contract-constants
 import { federatedControlMailRefusal } from '../../rpc/methods/orchestration/messaging/send-control-mail'
 import { ORCHESTRATION_FEDERATION_CONTROL_MAIL_PROTOCOL_VERSION } from '../../../../shared/protocol-version'
 import { subscribeCrew } from './crew-stream'
+import * as ownerSelection from '../../rpc/methods/orchestration/messaging/recipient-owner-selection'
 import type { OrchestrationCrewFrame } from '../../../../shared/orchestration-crew'
 
 const LOCAL = testOrcaSessionId('aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa')
@@ -454,4 +455,181 @@ it('uses the existing federated protocol/ready refusal after an actual selected 
     )?.code
   ).toBe('capability_unsupported')
   expect(f.db.getInbox()).toEqual([])
+})
+
+it('keeps complete multi-bound session and terminal Run choice in the shared first-owner cut', () => {
+  const f = authorityFixture()
+  const runtime = new OrcaRuntimeService()
+  runtime.setOrchestrationDb(f.db)
+  const address = formatOrcaSessionAddress(IMPORTED)
+  const first = f.db.createRun({
+    objective: 'R1',
+    coordinatorHandle: null,
+    coordinatorPaneKey: null,
+    coordinatorOrcaSessionId: IMPORTED
+  })
+  const newest = f.db.createRun({
+    objective: 'R2',
+    coordinatorHandle: null,
+    coordinatorPaneKey: null,
+    coordinatorOrcaSessionId: IMPORTED
+  })
+  const resolutions = vi.spyOn(ownerSelection, 'selectBareRecipientOwner')
+  try {
+    for (const params of [
+      {},
+      { senderRunId: first.id },
+      { explicitRunId: first.id },
+      { explicitRunId: 'run_unbound', senderRunId: first.id }
+    ]) {
+      const result = resolveBareOrchestrationRecipient({
+        runtime,
+        db: f.db,
+        handle: address,
+        ...params
+      })
+      if (params.explicitRunId === 'run_unbound') {
+        expect(result).toMatchObject({
+          ok: false,
+          code: 'recipient_run_mismatch',
+          message: expect.stringContaining(newest.id)
+        })
+      } else {
+        expect(result).toMatchObject({
+          ok: true,
+          to: `run:${params.senderRunId ?? params.explicitRunId ?? newest.id}`
+        })
+      }
+    }
+    resolutions.mockClear()
+    expect(f.available([IMPORTED], first.id)(IMPORTED)).toBe(true)
+    expect(resolutions.mock.results.at(-1)).toMatchObject({
+      type: 'return',
+      value: { ok: true, to: `run:${first.id}` }
+    })
+    const facts = f.input()
+    facts.prepare([IMPORTED])
+    expect(facts.currentRun(facts.keyFor(IMPORTED)!)?.id).toBe(newest.id)
+    const pane = f.handles.get('term_peer')!
+    const terminalRuns = ['terminal R1', 'terminal R2'].map((objective) =>
+      f.db.createRun({ objective, coordinatorHandle: 'term_peer', coordinatorPaneKey: pane })
+    )
+    vi.spyOn(runtime, 'getLiveTerminalPaneKey').mockImplementation(
+      (handle) => f.handles.get(handle) ?? null
+    )
+    expect(
+      resolveBareOrchestrationRecipient({ runtime, db: f.db, handle: 'term_peer' })
+    ).toMatchObject({ ok: true, to: `run:${terminalRuns[1].id}` })
+    expect(
+      resolveBareOrchestrationRecipient({
+        runtime,
+        db: f.db,
+        handle: 'term_peer',
+        senderRunId: terminalRuns[0].id
+      })
+    ).toMatchObject({ ok: true, to: `run:${terminalRuns[0].id}` })
+    expect(
+      resolveBareOrchestrationRecipient({
+        runtime,
+        db: f.db,
+        handle: 'term_peer',
+        explicitRunId: terminalRuns[0].id
+      })
+    ).toMatchObject({ ok: true, to: `run:${terminalRuns[0].id}` })
+    expect(
+      resolveBareOrchestrationRecipient({
+        runtime,
+        db: f.db,
+        handle: 'term_peer',
+        explicitRunId: 'run_unbound',
+        senderRunId: terminalRuns[0].id
+      })
+    ).toMatchObject({
+      ok: false,
+      code: 'recipient_run_mismatch',
+      message: expect.stringContaining(terminalRuns[1].id)
+    })
+  } finally {
+    resolutions.mockRestore()
+  }
+})
+
+it('uses the newest no-Dispatch caller Run before complete history ambiguity for native and terminal callers', () => {
+  for (const native of [true, false]) {
+    const f = authorityFixture()
+    const caller = {
+      address: native ? formatOrcaSessionAddress(LOCAL) : 'term_worker',
+      terminalHandle: native ? null : 'term_worker',
+      paneKey: native ? null : f.handles.get('term_worker')!,
+      orcaSessionId: native ? LOCAL : null
+    }
+    const peer = formatOrcaSessionAddress(IMPORTED)
+    const old = f.db.createRun({
+      objective: 'T old R3',
+      coordinatorHandle: null,
+      coordinatorPaneKey: null,
+      coordinatorOrcaSessionId: IMPORTED
+    })
+    const first = f.db.createRun({
+      objective: 'T then R1',
+      coordinatorHandle: null,
+      coordinatorPaneKey: null,
+      coordinatorOrcaSessionId: IMPORTED
+    })
+    const move = (
+      runId: string,
+      handle: string,
+      pane: string | null,
+      session = caller.orcaSessionId
+    ) =>
+      f.db.bindRun({
+        runId,
+        coordinatorHandle: handle,
+        coordinatorPaneKey: pane,
+        coordinatorOrcaSessionId: session
+      })
+    move(old.id, 'term_helper', f.handles.get('term_helper')!, null)
+    move(first.id, caller.terminalHandle ?? caller.address, caller.paneKey)
+    const newest = f.db.createRun({
+      objective: 'S newest R2',
+      coordinatorHandle: caller.terminalHandle,
+      coordinatorPaneKey: caller.paneKey,
+      coordinatorOrcaSessionId: caller.orcaSessionId
+    })
+    const runtime = new OrcaRuntimeService()
+    runtime.setOrchestrationDb(f.db)
+    vi.spyOn(runtime, 'getLiveTerminalPaneKey').mockImplementation(
+      (handle) => f.handles.get(handle) ?? null
+    )
+    const ordinary = resolveMessageRun(runtime, { sender: caller, to: peer })
+    expect(ordinary.run?.id).toBe(newest.id)
+    expect(f.db.getRunMailboxOwnerIdsForHandle(peer)).toEqual([old.id, first.id].sort())
+    expect(
+      resolveBareOrchestrationRecipient({
+        runtime,
+        db: f.db,
+        handle: peer,
+        senderRunId: ordinary.run?.id
+      })
+    ).toMatchObject({ ok: false, code: 'recipient_ambiguous' })
+    const facts = f.input()
+    const prepared = facts.prepare([IMPORTED], caller)
+    expect(facts.senderRun(prepared)).toEqual({ kind: 'ready', id: newest.id })
+    expect(
+      facts.finish([IMPORTED], newest.id, { livePane: () => null, process: () => null })(IMPORTED)
+    ).toBe(false)
+    f.db.insertMessage({
+      from: peer,
+      to: caller.address,
+      subject: 'Retained peer',
+      body: 'unchanged content'
+    })
+    const output = new CrewReadModel(() => f.deps, f.db.crewChanges.subscribe).read(caller.address)
+    const row = output.sections.talkingWith.find(
+      (item) => item.latest?.preview === 'unchanged content'
+    )!
+    expect(row).toBeDefined()
+    expect(row).not.toHaveProperty('sendAddress')
+    expect(row.latest?.preview).toBe('unchanged content')
+  }
 })

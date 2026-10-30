@@ -89,7 +89,7 @@ export abstract class OrcaRuntimeWithRegisterPty extends OrcaRuntimeWithInvalida
       }
     }
     this.ptyLivenessVerdictByPtyId.delete(ptyId)
-    this.terminalViewSubscribers.markSpawnPublished(ptyId)
+    this.mainDaemonAttachments.markSpawnPublished(ptyId)
     // Record spawn-time pane identity so stalled graph sync cannot hide the live PTY backing a pending mobile create.
     const paneKey =
       binding && isValidTerminalTabId(binding.tabId) && isTerminalLeafId(binding.leafId)

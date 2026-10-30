@@ -65,7 +65,6 @@ type Owner = {
   beginGraphReload: (windowId: number) => number
   findHandleForPtyRecord: (ptyId: string, context?: TerminalIdentityReadContext) => string | null
   issueHandle: (leaf: RuntimeLeafRecord, context?: TerminalIdentityReadContext) => string
-  rejectWaitersForHandle: (handle: string, reason: string) => void
 }
 
 class IdentityRuntime extends OrcaRuntimeService {
@@ -138,8 +137,7 @@ class IdentityRuntime extends OrcaRuntimeService {
       dropDisconnectedPtyRecord: this.dropDisconnectedPtyRecord.bind(this),
       beginGraphReload: this.beginGraphReload.bind(this),
       findHandleForPtyRecord: this.findHandleForPtyRecord.bind(this),
-      issueHandle: this.issueHandle.bind(this),
-      rejectWaitersForHandle: this.rejectWaitersForHandle.bind(this)
+      issueHandle: this.issueHandle.bind(this)
     }
   }
 }
@@ -151,13 +149,10 @@ export function identityFixture(
   const runtime = new IdentityRuntime(runtimeStore, undefined, deps)
   const owner = runtime.identityOwner()
   const rejected = vi.fn<(handle: string, reason: string) => void>()
-  const reject = owner.rejectWaitersForHandle
-  Object.defineProperty(runtime, 'rejectWaitersForHandle', {
-    value: (handle: string, reason: string) => {
-      rejected(handle, reason)
-      reject(handle, reason)
-    },
-    configurable: true
+  const reject = owner.terminalWaiters.reject.bind(owner.terminalWaiters)
+  vi.spyOn(owner.terminalWaiters, 'reject').mockImplementation((waiter, reason) => {
+    rejected(waiter.handle, reason)
+    reject(waiter, reason)
   })
   const add = (id: string, handle: string, paneKey = PANE, connected = true) => {
     owner.recordPtyWorktree(id, TEST_WORKTREE_ID, { paneKey, connected })

@@ -218,12 +218,12 @@ export function resolveBareOrchestrationRecipient(params: {
   return selectBareRecipientOwner({
     ...params,
     handle,
-    boundRun: () =>
+    boundRuns: () =>
       party.orcaSessionId !== null
-        ? db.getCurrentRunForCoordinator(party)
+        ? db.runsBoundToCoordinator(party)
         : paneKey
-          ? db.getCurrentRunForPane(paneKey)
-          : undefined,
+          ? db.runsBoundToPane(paneKey)
+          : [],
     dispatches: () => db.getActiveDispatchMailboxOwners(handle, paneKey),
     ownerRunIds: () => db.getRunMailboxOwnerIdsForHandle(handle, params.legacyAdoptedMailboxOwner),
     fallback: () => {

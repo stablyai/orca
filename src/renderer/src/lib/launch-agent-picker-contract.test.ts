@@ -202,19 +202,7 @@ describe('picker window launch contract', () => {
                   null,
                   createElement(AgentLaunchPickerMenu, {
                     entries: [entry],
-                    runLaunch,
-                    model: {
-                      state: 'settled',
-                      rows,
-                      detection: {
-                        detectedIds: ['claude'],
-                        isLoading: false,
-                        isRefreshing: false,
-                        detectionFailed: false,
-                        needsServerUpdate: false,
-                        refresh: async (): Promise<AgentPickerEntry['agent'][]> => ['claude']
-                      }
-                    }
+                    runLaunch
                   })
                 )
               )

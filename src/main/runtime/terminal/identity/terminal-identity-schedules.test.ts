@@ -16,6 +16,10 @@ function exitWaiter(f: ReturnType<typeof identityFixture>, handle: string) {
   const reject = vi.fn()
   f.owner.terminalWaiters.add({
     handle,
+    ptyId:
+      f.owner.handles.get(handle)?.ptyId ??
+      [...f.owner.handleByPtyId].find(([, value]) => value === handle)?.[0] ??
+      '',
     condition: 'exit',
     resolve: vi.fn(),
     reject,
@@ -57,7 +61,7 @@ it('fences the old waiter at actual spawn before registration and routes success
       f.runtime.onPtySpawned('pty-same', 'new')
       effects.push('spawn-returned')
       expect(reject).toHaveBeenCalledOnce()
-      expect(f.owner.terminalWaiters.get('term_old')).toBeUndefined()
+      expect(f.owner.terminalWaiters.forPty('pty-same')).toEqual([])
       expect(f.owner.getLivePtyForHandle('term_old', watched.context())).toBeNull()
       f.runtime.registerPreAllocatedHandleForPty('pty-same', 'term_old')
       f.runtime.registerPty('pty-same', TEST_WORKTREE_ID, null, {
@@ -153,7 +157,8 @@ it('uses actual graph close, promotion, cancellation and timeout without a brows
         throw new Error('Expected active renderer reload fence')
       }
       expect(rejectKnown).not.toHaveBeenCalled()
-      expect(rejectUnknown).toHaveBeenCalledOnce()
+      // Reload drops an unproved alias; PTY-keyed waits survive until the process or graph ends.
+      expect(rejectUnknown).not.toHaveBeenCalled()
       expect(f.owner.handles.has(unknownHandle)).toBe(false)
       expect(f.runtime.markRendererReloadCancelled(2, fence)).toBe(true)
       expect(f.owner.getLeavesForPty('pty-known')[0]?.ptyId).toBe('pty-known')
@@ -164,6 +169,7 @@ it('uses actual graph close, promotion, cancellation and timeout without a brows
       expect(timeout).not.toBeNull()
       await vi.advanceTimersByTimeAsync(RUNTIME_GRAPH_RELOAD_TIMEOUT_MS)
       expect(rejectKnown).toHaveBeenCalledOnce()
+      expect(rejectUnknown).toHaveBeenCalledOnce()
       expect(() => f.runtime.assertGraphReady()).toThrow('runtime_unavailable')
       expect(f.owner.leaves.size).toBe(0)
       expect(f.owner.getLeavesForPty('pty-known')).toEqual([])
@@ -229,5 +235,115 @@ it('retires Crew raw capture for actual execution-context distro learn and outpu
     expect(watched.acquisition).toHaveBeenCalledTimes(reset)
   } finally {
     watched.close()
+  }
+})
+
+it('retains pane-issued process identity across reload with exact first-match and SSH precedence in either context', () => {
+  for (const captured of [false, true]) {
+    const f = identityFixture()
+    f.runtime.registerPty('retained-process', TEST_WORKTREE_ID, null, {
+      tabId: 'tab-original',
+      leafId: LEAF,
+      incarnationId: 'original'
+    })
+    f.runtime.attachWindow(1)
+    f.runtime.syncWindowGraph(1, identityGraph('retained-process'))
+    const handle = f.runtime.getTerminalHandleForPaneKey(PANE)!
+    expect(handle).toMatch(/^term_/)
+    expect(f.owner.handleByPtyId.has('retained-process')).toBe(false)
+    expect(f.owner.handleByPtyIncarnation.get('retained-process')?.handle).toBe(handle)
+    expect(f.runtime.getTerminalProcessIncarnation(handle)).toBe('retained-process:original')
+    const fence = f.runtime.markRendererReloading(1)
+    expect(fence).not.toBeNull()
+    expect(f.owner.handles.has(handle)).toBe(false)
+    expect(f.owner.handleByLeafKey.size).toBe(0)
+    const attachment = f.runtime.registerOrchestrationCompatibilitySshAttachment(
+      'remote',
+      'connection',
+      {
+        handle,
+        paneKey: PANE,
+        processIncarnation: 'ssh-process'
+      }
+    )
+    const read = () =>
+      f.runtime.getTerminalProcessIncarnation(
+        handle,
+        captured ? f.runtime.createTerminalIdentityReadContext() : undefined
+      )
+    try {
+      expect(read()).toBe('retained-process:original')
+      const pty = f.owner.ptysById.get('retained-process')!
+      f.owner.source.setPtyConnected(pty, false)
+      expect(read()).toBe('retained-process:original')
+      f.owner.source.setPtyIncarnationId(pty, 'replacement')
+      expect(read()).toBe('ssh-process')
+      f.owner.source.setIncarnation('retained-process', {
+        handle,
+        incarnationId: null,
+        leafKey: 'first'
+      })
+      f.owner.recordPtyWorktree('later-valid', TEST_WORKTREE_ID, { incarnationId: 'later' })
+      f.owner.source.setIncarnation('later-valid', {
+        handle,
+        incarnationId: 'later',
+        leafKey: 'later'
+      })
+      expect(read()).toBe('ssh-process')
+      f.owner.source.setIncarnation('retained-process', {
+        handle,
+        incarnationId: 'stale',
+        leafKey: 'first'
+      })
+      expect(read()).toBe('ssh-process')
+      f.owner.source.removeIncarnation('retained-process')
+      expect(read()).toBe('later-valid:later')
+      f.owner.source.removeIncarnation('later-valid')
+      expect(read()).toBe('ssh-process')
+      f.runtime.releaseOrchestrationCompatibilitySshAttachment(attachment.attachmentId)
+      expect(read()).toBeNull()
+    } finally {
+      f.runtime.releaseOrchestrationCompatibilitySshAttachment(attachment.attachmentId)
+      if (fence) {
+        f.runtime.markRendererReloadCancelled(1, fence)
+      }
+    }
+  }
+})
+
+it('observes actual retained issuance, removal and reinsertion in already-open shared-raw readers', () => {
+  const f = identityFixture()
+  f.runtime.registerPty('shared-retained', TEST_WORKTREE_ID, null, {
+    tabId: 'tab-original',
+    leafId: LEAF,
+    incarnationId: 'shared-process'
+  })
+  f.runtime.attachWindow(1)
+  f.runtime.syncWindowGraph(1, identityGraph('shared-retained'))
+  const raw = f.runtime.createTerminalIdentityRawInputs()
+  const contexts = [
+    undefined,
+    f.runtime.createTerminalIdentityReadContext(raw),
+    f.runtime.createTerminalIdentityReadContext(raw)
+  ]
+  const handle = f.runtime.getTerminalHandleForPaneKey(PANE, contexts[1])!
+  const retained = f.owner.handleByPtyIncarnation.get('shared-retained')!
+  expect(retained.handle).toBe(handle)
+  const fence = f.runtime.markRendererReloading(1)
+  expect(fence).not.toBeNull()
+  const read = () =>
+    contexts.map((context) => f.runtime.getTerminalProcessIncarnation(handle, context))
+  try {
+    expect(read()).toEqual(contexts.map(() => 'shared-retained:shared-process'))
+    f.owner.source.removeIncarnation('shared-retained')
+    expect(read()).toEqual(contexts.map(() => null))
+    f.owner.source.setIncarnation('shared-retained', retained)
+    expect(read()).toEqual(contexts.map(() => 'shared-retained:shared-process'))
+    f.owner.source.clearIncarnations()
+    expect(read()).toEqual(contexts.map(() => null))
+  } finally {
+    if (fence) {
+      f.runtime.markRendererReloadCancelled(1, fence)
+    }
   }
 })

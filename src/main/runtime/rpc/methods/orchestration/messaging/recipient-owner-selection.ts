@@ -6,13 +6,15 @@ export function selectBareRecipientOwner(params: {
   handle: string
   senderRunId?: string
   explicitRunId?: string
-  boundRun: () => { id: string } | undefined
+  boundRuns: () => readonly { id: string }[]
   dispatches: () => Pick<DispatchContextRow, 'id' | 'run_id'>[]
   ownerRunIds: () => string[]
   fallback: () => BareRecipientResolution
 }): BareRecipientResolution {
   const { handle } = params
-  const boundRun = params.boundRun()
+  const boundRuns = params.boundRuns()
+  const addressedRunId = params.explicitRunId ?? params.senderRunId
+  const boundRun = boundRuns.find((run) => run.id === addressedRunId) ?? boundRuns[0]
   if (boundRun) {
     const mismatch = runMismatch(handle, boundRun.id, params.explicitRunId)
     return mismatch ?? { ok: true, to: `run:${boundRun.id}`, runId: boundRun.id }
