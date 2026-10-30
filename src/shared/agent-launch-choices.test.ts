@@ -356,6 +356,94 @@ describe('dedicated agent choices', () => {
   })
 })
 
+it('adds one Claude settings carrier only for deliberate Fast, including explicit off', () => {
+  for (const value of ['true', 'false']) {
+    const launch = projectAgentLaunchProfile('claude', undefined, {
+      target: 'terminal',
+      userArgs: '--add-dir docs',
+      choices: { options: { fastMode: value } }
+    })
+    expect(launch.args).toContain(`"fastMode":${value}`)
+    expect(launch.args.match(/--settings/g)).toHaveLength(1)
+  }
+  expect(
+    projectAgentLaunchProfile('claude', undefined, {
+      target: 'terminal',
+      userArgs: '--add-dir docs',
+      choices: { model: 'opus' }
+    }).args
+  ).not.toContain('--settings')
+})
+
+it('edits only the last inline Claude settings object and never unshadows earlier settings on removal', () => {
+  const earlier = `--settings '{"language":"french"}'`
+  const effective = '{"__proto__":{"unchanged":1},"env":{"A":"B"},"fastMode":false}'
+  const text = `${earlier} --settings '${effective}' --add-dir docs`
+  const launch = projectAgentLaunchProfile('claude', undefined, {
+    target: 'terminal',
+    userArgs: text,
+    choices: { options: { fastMode: 'true' } }
+  })
+  const parsed = tokenizeStartupCommand(launch.args, 'posix')
+  expect(parsed.ok).toBe(true)
+  if (!parsed.ok) {
+    throw new Error('invalid compiled arguments')
+  }
+  const objects = parsed.tokens
+    .filter((_, index) => parsed.tokens[index - 1] === '--settings')
+    .map((value) => JSON.parse(value))
+  expect(objects).toEqual([{ language: 'french' }, JSON.parse(effective.replace('false', 'true'))])
+  const analysis = choiceArgs.analyzeAgentChoiceArgs(
+    'claude',
+    `${earlier} --settings '{"fastMode":true}'`
+  )
+  const removed = analysis.cut(analysis.occurrences.filter((item) => item.key === 'fastMode'))
+  expect(removed).toBe(`${earlier} --settings '{}'`)
+  const shadowed = choiceArgs.analyzeAgentChoiceArgs(
+    'claude',
+    `--settings '{"fastMode":true}' --settings '{}'`
+  )
+  expect(shadowed.occurrences.filter((item) => item.key === 'fastMode')).toEqual([])
+})
+
+it('leaves effective file and unparseable Claude settings literal and never reports Fast applied', () => {
+  for (const text of [
+    `--settings '{"fastMode":true}' --settings './file with spaces.json'`,
+    `--settings '{"language":"french"}' --settings '{broken'`
+  ]) {
+    const launch = projectAgentLaunchProfile('claude', undefined, {
+      target: 'terminal',
+      userArgs: text,
+      choices: { options: { fastMode: 'true' } }
+    })
+    expect(launch.args).toBe(text)
+    const analysis = choiceArgs.analyzeAgentChoiceArgs('claude', text)
+    expect(analysis.opaqueKeys.has('fastMode')).toBe(true)
+    expect(analysis.occurrences.filter((item) => item.key === 'fastMode')).toEqual([])
+  }
+})
+
+it('round-trips arbitrary host-owned Codex tier ids through the common config carrier without a release list', () => {
+  const userArgs = '-c service_tier=account_fast_v9 --add-dir docs'
+  const read = reconcileAgentChoiceArgs({
+    agent: 'codex',
+    userArgs,
+    choices: {},
+    mode: 'arguments-edit',
+    keys: new Set(['serviceTier'])
+  })
+  expect(read).toEqual({
+    userArgs: '--add-dir docs',
+    choices: { options: { serviceTier: 'account_fast_v9' } }
+  })
+  const launch = projectAgentLaunchProfile('codex', undefined, {
+    target: 'terminal',
+    userArgs: read.userArgs,
+    choices: read.choices
+  })
+  expect(launch.args).toBe('-c service_tier=account_fast_v9 --add-dir docs')
+})
+
 it.each([
   ['claude', '--add-dir /tmp/😀 --model "opus" --effort high -- tail'],
   ['claude', '--add-dir /tmp --model=opus --effort=high -- tail'],
@@ -620,5 +708,44 @@ it('bounds real raw-edit transport across invalid, divergent, exhausted and two-
     )
   } finally {
     spy.mockRestore()
+  }
+})
+
+it('keeps settings equals, operand and terminator ownership at the shared analyzer boundary', () => {
+  const text = `--settings='{"fastMode":true,"shadowed":1}' --settings='{"fastMode":false,"env":{"fastMode":true}}' --add-dir docs`
+  const analysis = choiceArgs.analyzeAgentChoiceArgs('claude', text)
+  const fast = analysis.occurrences.filter((item) => item.key === 'fastMode')
+  expect(fast).toMatchObject([{ value: 'false', owned: false, lift: false }])
+  expect(
+    reconcileAgentChoiceArgs({
+      agent: 'claude',
+      userArgs: text,
+      choices: {},
+      mode: 'arguments-edit',
+      keys: new Set(['fastMode'])
+    })
+  ).toEqual({ userArgs: text, choices: {} })
+  const cut = analysis.cut(fast)!
+  for (const shell of ['posix', 'powershell', 'cmd'] as const) {
+    const parsed = tokenizeStartupCommand(cut, shell)
+    expect(parsed).toMatchObject({
+      ok: true,
+      tokens: [
+        '--settings={"fastMode":true,"shadowed":1}',
+        '--settings',
+        '{"env":{"fastMode":true}}',
+        '--add-dir',
+        'docs'
+      ]
+    })
+  }
+  for (const raw of [
+    `-- --settings '{"fastMode":true}'`,
+    `--model --settings '{"fastMode":true}'`,
+    `--settings '{broken`
+  ]) {
+    const result = choiceArgs.analyzeAgentChoiceArgs('claude', raw)
+    expect(result.occurrences.filter((item) => item.key === 'fastMode')).toEqual([])
+    expect(result.cut([])).toBe(raw)
   }
 })

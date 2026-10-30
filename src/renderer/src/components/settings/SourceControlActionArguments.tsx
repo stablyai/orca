@@ -106,9 +106,11 @@ export function SourceControlActionArguments({
         if (!chosen) {
           return []
         }
-        const option = sourceControlActionOptions(agent, selected?.model ?? '').find(
-          ({ option }) => option.id === key
-        )?.option
+        const option =
+          sourceControlActionOptions(agent, selected?.model ?? '').find(
+            ({ option }) => option.id === key
+          )?.option ??
+          sourceControlActionOptions(agent, '').find(({ option }) => option.id === key)?.option
         const flag = option?.apply.composedIntoModel
           ? `${option.label} ${chosen}`
           : projectAgentLaunchProfile(

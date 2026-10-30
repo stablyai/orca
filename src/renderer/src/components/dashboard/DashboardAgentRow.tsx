@@ -66,6 +66,7 @@ function stateDotTooltipLabel(
 }
 
 type Props = {
+  showModel?: boolean
   agent: DashboardAgentRowData
   onDismiss: (paneKey: string) => void
   /** Navigate to this agent's tab; paneKey lets the caller mark-visit the exact clicked row. */
@@ -95,6 +96,7 @@ type Props = {
 
 const DashboardAgentRow = React.memo(function DashboardAgentRow({
   agent,
+  showModel = true,
   onDismiss,
   onActivate,
   now,
@@ -324,7 +326,7 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
         >
           {displayLabel}
         </span>
-        {model && (
+        {showModel && model && (
           <span
             className={cn(
               'max-w-24',
@@ -332,7 +334,7 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
               sendTargetStatus === 'eligible' || sendTargetStatus === 'sending'
                 ? 'min-w-0'
                 : 'shrink-0',
-              'truncate font-mono text-[10px] text-muted-foreground/70'
+              'truncate font-mono text-3xs text-muted-foreground/70'
             )}
             title={model}
           >

@@ -205,6 +205,9 @@
         "needsAttention_one": "{{count}} agent needs attention",
         "needsAttention_other": "All {{count}} agents needs attention"
       }
+    },
+    "cardProperties": {
+      "agentModel": "Agent model"
     }
   },
   "app": {
@@ -516,15 +519,9 @@
       },
       "providers": {
         "title": "Providers",
-        "description": "Choose which agents open as a chat. Turned off, an installed agent opens in a terminal.",
         "searchAgents": "agents",
         "searchCli": "CLI",
         "searchTerminal": "terminal",
-        "agentDisabled": "Turned off in Agent settings",
-        "installed": "Installed",
-        "notInstalled": "Not installed",
-        "install": "Install",
-        "toggleLabel": "Open {{value0}} as a chat",
         "antigravityDescription": "Antigravity chats run a server Orca downloads to this host, separate from the agy CLI.",
         "antigravityNotSignedIn": "Not signed in. Chats need an Antigravity sign-in, separate from your agy terminal account.",
         "antigravityAccount": "Account",
@@ -797,7 +794,6 @@
       "defaultOpensAs": "Open {{value0}} as",
       "defaultOpensAsChat": "Chat",
       "defaultOpensAsCli": "CLI",
-      "defaultOpensAsScope": "Applies to new {{value0}} sessions launched from this computer, including on paired hosts. Matches its Providers switch.",
       "save": "Save",
       "clearDefault": "Clear default agent",
       "autoUnsupported": "Approve for me needs a newer Orca on this host.",
@@ -850,7 +846,11 @@
         "description": "Lets each Codex account, and your own ~/.codex, resume conversations started on the others. Turn off to keep every account's history separate. Turning it off removes nothing already shared.",
         "unsupported": "Update Orca on {{host}} to change this setting there.",
         "updateFailed": "Could not update the setting on {{host}}."
-      }
+      },
+      "installCliForTerminal": "Install the {{value0}} CLI to open it in a terminal.",
+      "chatRuntime": "Chat runtime",
+      "chatChoiceTitle": "Open as chat or CLI",
+      "chatChoiceDescription": "Choose whether each agent opens as a chat or in its CLI."
     },
     "followSymlinkedDirectoriesKeywords": {
       "symlink": "symlink",
@@ -13193,7 +13193,10 @@
           "commands": "Commands & panels",
           "catalogLabel": "Filter by catalog",
           "editors": "Editors",
-          "remoteVms": "Remote/VMs"
+          "remoteVms": "Remote/VMs",
+          "games": "Games",
+          "agents": "Agents",
+          "integrations": "Integrations"
         },
         "PluginUpdateAllDialog": {
           "previewError": "Couldn’t read this update",
@@ -13216,13 +13219,13 @@
           "newRecipes": "Machine recipes",
           "newContributions": "Features that act for you",
           "allAccess": "See all access",
-          "update": "Update"
+          "update": "Update",
+          "review": "Review"
         },
         "PluginDetailInfo": {
           "previous": "Previous",
           "updated": "Updated",
           "license": "License",
-          "homepage": "Homepage",
           "whatsNew": "What’s new",
           "hashCopied": "Content hash copied",
           "hashCopyFailed": "Couldn't copy the hash."
@@ -13371,6 +13374,22 @@
         },
         "pluginTryAction": {
           "incompleteLanguage": "This language pack is too incomplete to switch to."
+        },
+        "PluginUpdateReview": {
+          "title": "Review update to {{value0}}",
+          "back": "Back",
+          "approve": "Approve & update",
+          "explain": "This update asks for more than the version you approved. It installs only if you approve it here.",
+          "before": "Before",
+          "after": "After"
+        },
+        "PluginNotOfficialWarning": {
+          "unknownPublisher": "its publisher",
+          "install": "Make sure you trust {{value0}} before installing. This plugin runs the publisher’s code inside Orca.",
+          "update": "Make sure you trust {{value0}} before updating. This plugin runs the publisher’s code inside Orca.",
+          "installed": "Make sure you trust {{value0}}. This plugin runs the publisher’s code inside Orca.",
+          "label": "Not an official plugin:",
+          "translations": "Translations can change any text in Orca. Make sure you trust {{value0}}."
         }
       },
       "right": {
@@ -18672,6 +18691,13 @@
           "confirm": "Sign in",
           "cancel": "Cancel"
         },
+        "javaScriptDialog": {
+          "title": "{{origin}} says",
+          "anonymousTitle": "This page says",
+          "confirm": "OK",
+          "cancel": "Cancel",
+          "answer": "Answer"
+        },
         "sitePermission": {
           "label": {
             "camera": "Camera",
@@ -18965,6 +18991,9 @@
       },
       "runtimeGitSyncClient": {
         "completeMergeNeedsNewerHost": "Completing a merge needs a newer Orca on this host. Update Orca on that host."
+      },
+      "runtimeGitWorkingTreeClient": {
+        "resolveConflictNeedsNewerHost": "Resolving conflicts needs a newer Orca on this host. Update Orca on that host."
       }
     },
     "ssh": {
@@ -19765,6 +19794,7 @@
         "goToAgent": "Go to agent",
         "messageFromCoordinator": "Message from coordinator",
         "showMore": "Show more",
+        "startedWorker": "Started worker",
         "taskFromCoordinator": "Task from coordinator",
         "updateFromWorker": "Update from worker"
       },
@@ -20529,7 +20559,7 @@
       "heroBody": "One-time {{size}} MB download. It's shared by {{agent}} chats on the computer running this chat.",
       "heroBodyNoSize": "One-time download. It's shared by {{agent}} chats on the computer running this chat.",
       "stripSize": "{{size}} MB download on the computer running this chat",
-      "settingsHint": "Also in Settings › Chat › Providers",
+      "settingsHint": "Also in Settings › Agents",
       "installShort": "Install",
       "tryAgain": "Try again",
       "cancelShort": "Cancel",
@@ -22779,6 +22809,22 @@
       "unmarkFile": "Unmark {{path}} as viewed"
     }
   },
+  "agentPicker": {
+    "search": "Search agents and setups…",
+    "configure": "Configure {{agent}}",
+    "arguments": "Arguments",
+    "argumentsHint": "Applies only to CLI launches.",
+    "launchChat": "Launch chat",
+    "launchTerminal": "Launch terminal",
+    "setByArguments": "Set by your Arguments",
+    "searchModels": "Search models",
+    "noModels": "No models match your search.",
+    "legacyModels": "Legacy models",
+    "toggleArguments": "Toggle Arguments",
+    "argumentsTerminalHint": "Only applies to terminal (CLI) launches",
+    "searchAgentModels": "Search {{agent}} models…",
+    "legacyModelCount": "{{total}} models"
+  },
   "automations": {
     "runFailures": {
       "noDispatchHost": "No Orca window was available to launch the automation.",
@@ -23122,5 +23168,9 @@
       "needsPermission": "Agent needs permission",
       "statusStale": "Agent status is stale"
     }
+  },
+  "wslDistroHold": {
+    "terminalStopped": "The WSL distro {{distro}} is stopped, so Orca didn't start this terminal. Start the distro, then try again.",
+    "terminalUnverifiable": "Orca couldn't check whether the WSL distro {{distro}} is running, so it didn't start this terminal. Start the distro, then try again."
   }
 }

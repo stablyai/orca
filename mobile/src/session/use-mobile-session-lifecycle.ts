@@ -1,3 +1,5 @@
+import { useShellStorage } from '../platform/shell-storage'
+import { useDirectionPadAvailable } from '../layout/use-shell-side-rail'
 import { settleSessionPreferenceRead } from './session-preference-read'
 import { useEffect, useRef, useCallback, useState } from 'react'
 import { AppState, type AppStateStatus, Platform } from 'react-native'
@@ -16,6 +18,8 @@ import { loadCustomKeys, subscribeStoredCustomKeys } from '../terminal/terminal-
 import type { MobileSessionTabReconciliationModel } from './use-mobile-session-tab-reconciliation'
 
 export function useMobileSessionLifecycle(scope: MobileSessionTabReconciliationModel) {
+  const shellStorage = useShellStorage()
+  const padAvailable = useDirectionPadAvailable()
   const [customKeysLoaded, setCustomKeysLoaded] = useState(false)
   const [accessoryLayoutLoaded, setAccessoryLayoutLoaded] = useState(false)
   const {
@@ -25,11 +29,13 @@ export function useMobileSessionLifecycle(scope: MobileSessionTabReconciliationM
     setCustomKeys,
     setShortcutLayout,
     setVisibleBuiltInIds,
+    setDirectionPadEnabled,
     setHostEndpoint,
     connStateRef,
     terminalRefs,
     initializedHandlesRef,
     activeHandleRef,
+    visibleTerminalHandlesRef,
     scheduleDelayedAction,
     unsubscribeTerminal,
     subscribeToTerminal
@@ -75,7 +81,7 @@ export function useMobileSessionLifecycle(scope: MobileSessionTabReconciliationM
         customKeysReadRevisionRef.current += 1
       }
     }
-  }, [])
+  }, [shellStorage])
 
   useEffect(
     () =>
@@ -92,11 +98,12 @@ export function useMobileSessionLifecycle(scope: MobileSessionTabReconciliationM
   const layoutReadRevisionRef = useRef(0)
   const refreshAccessoryLayout = useCallback(() => {
     const revision = ++layoutReadRevisionRef.current
-    void settleSessionPreferenceRead(loadTerminalAccessoryLayout()).then((layout) => {
+    void settleSessionPreferenceRead(loadTerminalAccessoryLayout(padAvailable)).then((layout) => {
       if (layoutReadRevisionRef.current === revision) {
         if (layout) {
           setShortcutLayout?.(layout)
           setVisibleBuiltInIds(layout.visibleBuiltInIds)
+          setDirectionPadEnabled(layout.directionPadEnabled !== false)
         }
         setAccessoryLayoutLoaded(true)
       }
@@ -111,7 +118,7 @@ export function useMobileSessionLifecycle(scope: MobileSessionTabReconciliationM
         layoutReadRevisionRef.current += 1
       }
     }
-  }, [])
+  }, [padAvailable, shellStorage])
 
   useFocusEffect(
     useCallback(() => {
@@ -165,6 +172,7 @@ export function useMobileSessionLifecycle(scope: MobileSessionTabReconciliationM
       // WKWebView can resume blank without ready; clear the latch so init waits for a fresh pong.
       const outcome = recoverActiveTerminalAfterForeground({
         activeHandleRef,
+        visibleTerminalHandlesRef,
         terminalRefs,
         initializedHandlesRef,
         connStateRef,
@@ -190,6 +198,7 @@ export function useMobileSessionLifecycle(scope: MobileSessionTabReconciliationM
     }
     recoverActiveTerminalAfterForeground({
       activeHandleRef,
+      visibleTerminalHandlesRef,
       terminalRefs,
       initializedHandlesRef,
       connStateRef,

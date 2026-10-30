@@ -31,7 +31,8 @@ function createServices(): PluginMarketplaceHandlerServices {
       refreshSource: vi.fn().mockResolvedValue({ id: SOURCE_ID }),
       refreshAll: vi.fn().mockResolvedValue([{ id: SOURCE_ID }]),
       listPlugins: vi.fn().mockResolvedValue([{ pluginKey: PLUGIN_KEY }]),
-      seedOfficialSource: vi.fn().mockResolvedValue({ id: SOURCE_ID })
+      seedOfficialSource: vi.fn().mockResolvedValue({ id: SOURCE_ID }),
+      seedCommunitySource: vi.fn().mockResolvedValue(undefined)
     } as unknown as PluginMarketplaceService,
     installer: {
       preview: vi.fn().mockResolvedValue({ pluginKey: PLUGIN_KEY }),
@@ -144,6 +145,7 @@ describe('plugin marketplace IPC authority', () => {
     expect(services.marketplace.listSources).toHaveBeenCalledTimes(2)
     // The startup seed is deferred, so opening the marketplace seeds the official catalog.
     expect(services.marketplace.seedOfficialSource).toHaveBeenCalledTimes(2)
+    expect(services.marketplace.seedCommunitySource).toHaveBeenCalledTimes(2)
     expect(services.marketplace.addSource).toHaveBeenCalledWith(source)
     expect(services.marketplace.removeSource).toHaveBeenCalledWith(SOURCE_ID)
     expect(services.marketplace.refreshSource).toHaveBeenCalledWith(SOURCE_ID)

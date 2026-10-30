@@ -1,4 +1,4 @@
-import { ActivityIndicator, Pressable, Text, TextInput, View } from 'react-native'
+import { ActivityIndicator, Pressable, Text, View } from 'react-native'
 import { ChevronDown, ChevronUp } from 'lucide-react-native'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import type { WorkspaceCreateSetupDecision } from '../tasks/workspace-create-params'
@@ -8,6 +8,7 @@ import { colors } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { BottomDrawer } from './BottomDrawer'
 import { MobileAgentIcon } from './MobileAgentIcon'
+import { TextField } from './composer-input/TextField'
 import type { NewWorktreeAgentOption } from './new-worktree-agent-selection'
 import { newWorktreeFormStyles as styles } from './new-worktree-form-styles'
 import type { SetupRunPolicy } from './new-worktree-modal-types'
@@ -155,12 +156,10 @@ export function NewWorktreeFormSheet(props: {
                 <Text style={styles.label}>
                   {t('components.newWorktreeFormSheet.note', 'Note')}
                 </Text>
-                <TextInput
-                  style={styles.input}
+                <TextField
                   value={props.note}
                   onChangeText={props.onNoteChange}
                   placeholder={t('components.newWorktreeFormSheet.notePlaceholder', 'Write a note')}
-                  placeholderTextColor={colors.textMuted}
                   autoCapitalize="none"
                   autoCorrect={false}
                 />

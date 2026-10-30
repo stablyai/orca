@@ -1,13 +1,11 @@
 import type { TaskCreateActionsModel } from './use-mobile-tasks-task-create-actions'
 import {
+  MessageBox,
   MobileMarkdown,
   Pressable,
   type ReactNode,
-  Send,
   Text,
-  TextInput,
-  View,
-  colors
+  View
 } from './mobile-tasks-dependencies'
 import {
   type DetailComment,
@@ -43,39 +41,18 @@ export function useMobileTasksDetailCommentRenderers(model: TaskCreateActionsMod
     onChangeText: (next: string) => void
     onSubmit: () => void
     disabled?: boolean
-  }): ReactNode => {
-    const hasText = args.value.trim().length > 0
-    return (
-      <View style={styles.commentComposer}>
-        <TextInput
-          style={[styles.input, styles.commentInput, styles.commentComposerInput]}
-          value={args.value}
-          onChangeText={args.onChangeText}
-          placeholder={t('tasks.detailCommentRenderers.commentPlaceholder', 'Add a comment')}
-          placeholderTextColor={colors.textMuted}
-          editable={!args.disabled}
-          multiline
-          numberOfLines={1}
-          textAlignVertical="top"
-        />
-        {hasText ? (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={t('tasks.detailCommentRenderers.sendComment', 'Send comment')}
-            style={({ pressed }) => [
-              styles.commentComposerSend,
-              pressed && !args.disabled && styles.commentComposerSendPressed,
-              args.disabled && styles.commentComposerSendDisabled
-            ]}
-            disabled={args.disabled}
-            onPress={args.onSubmit}
-          >
-            <Send size={16} color={args.disabled ? colors.textMuted : colors.textPrimary} />
-          </Pressable>
-        ) : null}
-      </View>
-    )
-  }
+  }): ReactNode => (
+    <MessageBox
+      style={styles.stackedInput}
+      value={args.value}
+      onChangeText={args.onChangeText}
+      placeholder={t('tasks.detailCommentRenderers.commentPlaceholder', 'Add a comment')}
+      editable={!args.disabled}
+      onSend={args.onSubmit}
+      canSend={!args.disabled && args.value.trim().length > 0}
+      sendAccessibilityLabel={t('tasks.detailCommentRenderers.sendComment', 'Send comment')}
+    />
+  )
 
   const renderDetailComment = (
     comment: DetailComment,
@@ -119,8 +96,7 @@ export function useMobileTasksDetailCommentRenderers(model: TaskCreateActionsMod
                   </Text>
                 </Pressable>
               ) : null}
-              <TextInput
-                style={[styles.input, styles.replyInput]}
+              <MessageBox
                 value={itemReplyDrafts[String(comment.id)] ?? ''}
                 onChangeText={(next) =>
                   setItemReplyDrafts((current) => ({
@@ -129,19 +105,10 @@ export function useMobileTasksDetailCommentRenderers(model: TaskCreateActionsMod
                   }))
                 }
                 placeholder={t('tasks.detailCommentRenderers.reply', 'Reply')}
-                placeholderTextColor={colors.textMuted}
-                multiline
-                textAlignVertical="top"
+                onSend={() => void replyToGitHubComment(actionItem, comment)}
+                canSend={!mutatingStatus && !!(itemReplyDrafts[String(comment.id)] ?? '').trim()}
+                sendAccessibilityLabel={t('tasks.detailCommentRenderers.reply', 'Reply')}
               />
-              <Pressable
-                style={styles.inlineSaveButtonCompact}
-                disabled={mutatingStatus || !(itemReplyDrafts[String(comment.id)] ?? '').trim()}
-                onPress={() => void replyToGitHubComment(actionItem, comment)}
-              >
-                <Text style={styles.inlineSaveText}>
-                  {t('tasks.detailCommentRenderers.reply', 'Reply')}
-                </Text>
-              </Pressable>
             </>
           ) : null}
         </View>

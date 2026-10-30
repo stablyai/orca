@@ -277,14 +277,8 @@
         "antigravityAccount": "Compte",
         "antigravitySignInNeeded": "Les discussions nécessitent une connexion Antigravity, distincte de votre compte agy du terminal.",
         "searchTerminal": "Terminal",
-        "installed": "Installé",
-        "notInstalled": "Non installé",
-        "install": "Installer",
         "searchAgents": "agents",
-        "searchCli": "CLI",
-        "agentDisabled": "Désactivé dans les paramètres de l'agent",
-        "description": "Choisissez les agents à ouvrir dans un chat. Si cette option est désactivée, un agent installé s’ouvre dans un terminal.",
-        "toggleLabel": "Ouvrir {{value0}} dans un chat"
+        "searchCli": "CLI"
       },
       "permissionsDescriptionOwnAgents": "Les nouveaux chats suivent l’autorisation de chaque agent dans Paramètres → Agents."
     },
@@ -546,7 +540,6 @@
       "defaultOpensAs": "Ouvrir {{value0}} en tant que",
       "defaultOpensAsChat": "Chat",
       "defaultOpensAsCli": "CLI",
-      "defaultOpensAsScope": "S’applique aux nouvelles sessions {{value0}} lancées depuis cet ordinateur, y compris sur les hôtes associés. Correspond à son interrupteur dans Fournisseurs.",
       "save": "Enregistrer",
       "clearDefault": "Effacer l'agent par défaut",
       "customArgsBadge": "Personnalisé",
@@ -602,7 +595,11 @@
         "description": "Permet à chaque compte Codex, ainsi qu'à votre propre ~/.codex, de reprendre les conversations commencées sur les autres. Désactivez-le pour garder l'historique de chaque compte séparé. Le désactiver ne supprime rien de ce qui a déjà été partagé.",
         "unsupported": "Mettez à jour Orca sur {{host}} pour y modifier ce réglage.",
         "updateFailed": "Impossible de mettre à jour le réglage sur {{host}}."
-      }
+      },
+      "installCliForTerminal": "Installez la CLI {{value0}} pour l’ouvrir dans un terminal.",
+      "chatRuntime": "Environnement de chat",
+      "chatChoiceTitle": "Ouvrir en chat ou en CLI",
+      "chatChoiceDescription": "Choisissez si chaque agent s’ouvre en chat ou dans sa CLI."
     },
     "followSymlinkedDirectoriesKeywords": {
       "symlink": "lien symbolique",
@@ -1103,6 +1100,10 @@
             }
           }
         }
+      },
+      "pluginNewFile": {
+        "unavailable": "{{value0}} n’est plus disponible. Réactivez son plugin.",
+        "failed": "Impossible de créer le fichier."
       }
     },
     "lib": {
@@ -11763,7 +11764,8 @@
             "terminalRun": "Exécuter des commandes dans vos terminaux, y compris SSH"
           },
           "decisionFailed": "Impossible d'enregistrer la décision d'autorisation. Réessayez.",
-          "fullAccessWarning": "Accès complet : s’exécute comme un programme normal et peut lire vos fichiers, utiliser le réseau et lancer d’autres programmes."
+          "fullAccessWarning": "Accès complet : s’exécute comme un programme normal et peut lire vos fichiers, utiliser le réseau et lancer d’autres programmes.",
+          "uiWarning": "Exécute le code de l’éditeur dans Orca pour afficher sa vue. Orca indique ce à quoi il peut accéder et demande avant de l’activer."
         },
         "PluginConsentProvenance": {
           "official": "Officiel",
@@ -12930,7 +12932,10 @@
           "browseAll": "Parcourir tous les plugins",
           "resultCount": "{{value0}} plugins correspondent",
           "resultCountOne": "1 plugin correspond",
-          "updateAll": "Tout mettre à jour…"
+          "updateAll": "Tout mettre à jour…",
+          "notFromCatalog": "hors catalogue",
+          "allInstalledTitle": "Tous les plugins du catalogue sont installés",
+          "showInstalled": "Afficher les plugins installés"
         },
         "PluginDetailPage": {
           "bundled": "Fourni avec Orca",
@@ -12975,7 +12980,8 @@
           "copyLogs": "Copier",
           "accessFailed": "Impossible de lire ses accès",
           "retry": "Réessayer",
-          "noAccessReach": "Rien en dehors de ses propres fichiers"
+          "noAccessReach": "Rien en dehors de ses propres fichiers",
+          "customEditor": "Éditeur"
         },
         "PluginManagerRows": {
           "reinstall": "Réinstaller",
@@ -12999,6 +13005,8 @@
           "update": "Mettre à jour vers {{value0}}",
           "needsOrca": "Nécessite Orca {{value0}}",
           "rollbackTo": "Revenir à {{value0}}…",
+          "copyContentHash": "Copier le hash du contenu",
+          "reviewUpdate": "Vérifier la mise à jour",
           "dataLoadFailed": "Impossible de charger ses fichiers"
         },
         "PluginSettingsOverview": {
@@ -13011,7 +13019,13 @@
           "themes": "Thèmes",
           "languages": "Langages",
           "icons": "Icônes",
-          "commands": "Commandes et panneaux"
+          "commands": "Commandes et panneaux",
+          "catalogLabel": "Filtrer par catalogue",
+          "editors": "Éditeurs",
+          "remoteVms": "Distant/VM",
+          "games": "Jeux",
+          "agents": "Agents",
+          "integrations": "Intégrations"
         },
         "PluginUpdateAllDialog": {
           "previewError": "Impossible de lire cette mise à jour",
@@ -13034,13 +13048,13 @@
           "newRecipes": "Recettes de machine",
           "newShortcuts": "Raccourcis clavier",
           "sourceMoved": "Nouvelle source : {{value0}} (avant {{value1}})",
-          "update": "Mettre à jour"
+          "update": "Mettre à jour",
+          "review": "Examiner"
         },
         "PluginDetailInfo": {
           "previous": "Précédente",
           "updated": "Mis à jour",
           "license": "Licence",
-          "homepage": "Page d’accueil",
           "whatsNew": "Nouveautés",
           "hashCopied": "Empreinte du contenu copiée",
           "hashCopyFailed": "Impossible de copier l’empreinte."
@@ -13057,9 +13071,11 @@
           "languageCoverage": "Langue de l’interface · traduite à {{value0}} %"
         },
         "PluginInstallConsent": {
-          "fullAccessUpdates": "Les mises à jour peuvent modifier son code sans demander",
           "noOtherAccess": "Aucun autre accès",
-          "updatesKeepApproval": "Les mises à jour ne redemandent que pour un nouvel accès"
+          "replacesShortcut": "{{value0}} ({{value1}}) remplace votre raccourci pour {{value2}}.",
+          "updatesKeepApproval": "Les mises à jour ne redemandent que pour un nouvel accès",
+          "fullAccessUpdates": "Les mises à jour peuvent modifier son code sans demander",
+          "editsFileTypes": "Ouvre et modifie les fichiers {{value0}} dans Orca. Il peut lire les fichiers qu’il ouvre."
         },
         "PluginPageAction": {
           "contentOnly": "Contenu uniquement"
@@ -13131,6 +13147,34 @@
             "mod": "mod",
             "shortcut": "raccourci"
           }
+        },
+        "PluginUpdateReview": {
+          "title": "Examiner la mise à jour de {{value0}}",
+          "back": "Retour",
+          "approve": "Approuver et mettre à jour",
+          "explain": "Cette mise à jour demande plus que la version que vous avez approuvée. Elle ne s’installe que si vous l’approuvez ici.",
+          "before": "Avant",
+          "after": "Après"
+        },
+        "PluginNotOfficialWarning": {
+          "unknownPublisher": "son éditeur",
+          "install": "Assurez-vous de faire confiance à {{value0}} avant de l’installer. Ce plugin exécute le code de l’éditeur dans Orca.",
+          "update": "Assurez-vous de faire confiance à {{value0}} avant de le mettre à jour. Ce plugin exécute le code de l’éditeur dans Orca.",
+          "installed": "Assurez-vous de faire confiance à {{value0}}. Ce plugin exécute le code de l’éditeur dans Orca.",
+          "label": "Plugin non officiel :",
+          "translations": "Les traductions peuvent modifier n’importe quel texte d’Orca. Assurez-vous de faire confiance à {{value0}}."
+        },
+        "pluginConsentCopy": {
+          "addsCommands": "Ajoute des commandes",
+          "addsPanel": "Ajoute un panneau",
+          "contentOnly": "Contenu uniquement",
+          "fullAccess": "Accès complet",
+          "addsVmRecipes": "Ajoute des recettes de VM",
+          "opensAndEditsFiles": "Ouvre et modifie des fichiers",
+          "runsPluginCode": "Exécute du code de plugin"
+        },
+        "pluginTryAction": {
+          "incompleteLanguage": "Ce pack de langue est trop incomplet pour l’utiliser."
         }
       },
       "right": {
@@ -18282,7 +18326,8 @@
           "searchLabel": "Rechercher des plugins",
           "searchPlaceholder": "Rechercher des plugins",
           "updates": "Mises à jour",
-          "clearSearch": "Effacer la recherche"
+          "clearSearch": "Effacer la recherche",
+          "notInstalled": "Non installés"
         },
         "PluginListGroup": {
           "showAll": "Afficher {{value0}} de plus"
@@ -18552,6 +18597,13 @@
           "insecure": "Votre connexion à ce site n'est pas privée.",
           "retry": "Ce nom d'utilisateur ou ce mot de passe n'a pas fonctionné.",
           "description": "{{origin}} demande un nom d'utilisateur et un mot de passe."
+        },
+        "javaScriptDialog": {
+          "title": "{{origin}} indique",
+          "anonymousTitle": "Cette page indique",
+          "confirm": "OK",
+          "cancel": "Annuler",
+          "answer": "Réponse"
         },
         "sitePermission": {
           "label": {
@@ -20416,7 +20468,7 @@
       "heroBody": "Téléchargement unique de {{size}} Mo, partagé par les conversations {{agent}} sur l’ordinateur qui exécute cette conversation.",
       "heroBodyNoSize": "Téléchargement unique, partagé par les conversations {{agent}} sur l’ordinateur qui exécute cette conversation.",
       "stripSize": "Téléchargement de {{size}} Mo sur l’ordinateur qui exécute cette conversation",
-      "settingsHint": "Aussi dans Paramètres › Chat › Fournisseurs",
+      "settingsHint": "Aussi dans Paramètres › Agents",
       "installShort": "Installer",
       "tryAgain": "Réessayer",
       "cancelShort": "Annuler",
@@ -22747,6 +22799,14 @@
       "unmarkFile": "Ne plus marquer {{path}} comme consulté"
     }
   },
+  "agentPicker": {
+    "search": "Rechercher des agents et des configurations…",
+    "configure": "Configurer {{agent}}",
+    "arguments": "Arguments",
+    "argumentsHint": "S’applique uniquement aux lancements CLI.",
+    "launchChat": "Lancer le chat",
+    "launchTerminal": "Lancer le terminal"
+  },
   "wslMove": {
     "entry": {
       "hostRow": "Déplacer des projets depuis cette distro…",
@@ -23246,5 +23306,9 @@
       "needsPermission": "L’agent a besoin d’une autorisation",
       "statusStale": "Le statut de l’agent est obsolète"
     }
+  },
+  "wslDistroHold": {
+    "terminalStopped": "La distribution WSL {{distro}} est arrêtée, donc Orca n'a pas démarré ce terminal. Démarrez la distribution, puis réessayez.",
+    "terminalUnverifiable": "Orca n'a pas pu vérifier si la distribution WSL {{distro}} est en cours d'exécution, donc il n'a pas démarré ce terminal. Démarrez la distribution, puis réessayez."
   }
 }
