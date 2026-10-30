@@ -125,7 +125,7 @@ describe('resolveComposerAgentLaunchList', () => {
   it('keeps the legacy path for a single bare row and for no selection', () => {
     expect(
       resolveComposerAgentLaunchList({
-        selection: { entries: [entryOf('codex')], locked: false },
+        selection: { entries: [entryOf('codex')], locked: false, rowZeroAgent: 'codex' },
         gitWorktree: true,
         remote: false
       })
@@ -142,7 +142,7 @@ describe('resolveComposerAgentLaunchList', () => {
     ]
     expect(
       resolveComposerAgentLaunchList({
-        selection: { entries, locked: false },
+        selection: { entries, locked: false, rowZeroAgent: 'codex' },
         gitWorktree: true,
         remote: false
       })
@@ -156,10 +156,36 @@ describe('resolveComposerAgentLaunchList', () => {
   ])('collapses to the legacy path for %s', (_label, flags) => {
     expect(
       resolveComposerAgentLaunchList({
-        selection: { entries: [entryOf('codex'), entryOf('claude')], locked: flags.locked },
+        selection: {
+          entries: [entryOf('codex'), entryOf('claude')],
+          locked: flags.locked,
+          rowZeroAgent: 'codex'
+        },
         gitWorktree: flags.gitWorktree,
         remote: flags.remote
       })
     ).toBeNull()
+  })
+
+  it('treats Blank Terminal on row 0 as the legacy pick for the remaining rows', () => {
+    const entries = [entryOf('codex'), entryOf('claude')]
+    // Row 0 has no launch entry when the pick is blank; a lone bare remainder stays legacy.
+    expect(
+      resolveComposerAgentLaunchList({
+        selection: { entries, locked: false, rowZeroAgent: null },
+        gitWorktree: true,
+        remote: false
+      })
+    ).toBeNull()
+
+    // A flagged remainder still submits, without the blank row.
+    const flaggedSecond = [entries[0], entryOf('claude', { arguments: '--verbose' })]
+    expect(
+      resolveComposerAgentLaunchList({
+        selection: { entries: flaggedSecond, locked: false, rowZeroAgent: null },
+        gitWorktree: true,
+        remote: false
+      })
+    ).toEqual(entriesToLaunchList([flaggedSecond[1]]))
   })
 })

@@ -189,6 +189,26 @@ describe('NewWorkspaceComposerAgentSection agent picker', () => {
     expect(onAddAgentEntry).toHaveBeenCalledTimes(1)
   })
 
+  it('reconciles row 0 with the combobox pick when only its name changes', () => {
+    const staleRow = entryOf('claude')
+    const second = entryOf('claude')
+    const onAgentEntryChange = vi.fn()
+    renderSection({
+      quickAgent: 'codex',
+      agentEntries: [staleRow, second],
+      onAgentEntryChange
+    })
+
+    fireEvent.change(screen.getByPlaceholderText('Codex'), { target: { value: 'Worker' } })
+
+    // The row shows Codex while its draft still names Claude; a name-only edit would otherwise
+    // submit the stale harness.
+    expect(onAgentEntryChange).toHaveBeenCalledWith(staleRow.id, {
+      displayName: 'Worker',
+      draft: expect.objectContaining({ agent: 'codex', choices: {}, arguments: undefined })
+    })
+  })
+
   it('stops adding at the row cap and explains why', () => {
     const rows = Array.from({ length: MAX_COMPOSER_AGENT_ROWS }, () => entryOf('codex'))
     const onAddAgentEntry = vi.fn()

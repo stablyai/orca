@@ -63,6 +63,8 @@ export type ComposerAgentSubmitSelection = {
   entries: ComposerAgentEntry[]
   /** Folder/remote/VM targets collapse the rows to the legacy first-row pick. */
   locked: boolean
+  /** Row 0's live quick pick; `null` (Blank Terminal) cannot become a launch entry. */
+  rowZeroAgent: TuiAgent | null
 }
 
 /** Resolve the post-create launch list, or `null` to keep the legacy single-agent submit.
@@ -75,16 +77,13 @@ export function resolveComposerAgentLaunchList(args: {
   remote: boolean
 }): AgentLaunchListEntry[] | null {
   const selection = args.selection
-  if (
-    !selection ||
-    selection.locked ||
-    !args.gitWorktree ||
-    args.remote ||
-    selection.entries.length === 0
-  ) {
+  if (!selection || selection.locked || !args.gitWorktree || args.remote) {
     return null
   }
-  return isLegacySingleAgentSubmit(selection.entries)
+  // Resolution 3: Blank Terminal on row 0 has no launch entry of its own. The remaining rows
+  // decide, and a lone bare remainder stays on the legacy path like any single bare row.
+  const entries = selection.rowZeroAgent === null ? selection.entries.slice(1) : selection.entries
+  return entries.length === 0 || isLegacySingleAgentSubmit(entries)
     ? null
-    : entriesToLaunchList(selection.entries)
+    : entriesToLaunchList(entries)
 }

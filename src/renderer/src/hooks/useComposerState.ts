@@ -159,7 +159,11 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
   // The rows live beside the model, so submit must read them at call time rather than at assembly.
   const submitQuick = useCallback(
     (agent: TuiAgent | null, options?: QuickSubmitOptions): Promise<void> =>
-      modelSubmitQuick(agent, options, { entries: agentEntries, locked: agentEntriesLocked }),
+      modelSubmitQuick(agent, options, {
+        entries: agentEntries,
+        locked: agentEntriesLocked,
+        rowZeroAgent: agent
+      }),
     [agentEntries, agentEntriesLocked, modelSubmitQuick]
   )
   return {

@@ -270,7 +270,12 @@ export function NewWorkspaceComposerAgentSection({
                 'Agent name'
               )}
               onChange={(event) =>
-                onAgentEntryChange?.(entry.id, { displayName: event.target.value })
+                onAgentEntryChange?.(entry.id, {
+                  displayName: event.target.value,
+                  // Row 0 can lag a detection-driven pick; a name-only patch would submit the
+                  // stale harness, so carry the reconciled draft with it.
+                  ...(draft === entry.draft ? {} : { draft })
+                })
               }
               className="h-7 w-2/5 min-w-24 flex-none text-xs md:text-xs"
             />
