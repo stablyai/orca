@@ -6,7 +6,27 @@ import {
   type AutomationRunReport
 } from './automation-run-results'
 
-const run = { id: 'r1', automationId: 'a1' } as AutomationRun
+const run: AutomationRun = {
+  id: 'r1',
+  automationId: 'a1',
+  title: 'Run',
+  scheduledFor: 0,
+  status: 'dispatched',
+  trigger: 'manual',
+  workspaceId: null,
+  sessionKind: 'terminal',
+  chatSessionId: null,
+  terminalSessionId: null,
+  terminalPaneKey: null,
+  terminalPtyId: null,
+  outputSnapshot: null,
+  precheckResult: null,
+  usage: null,
+  error: null,
+  startedAt: null,
+  dispatchedAt: null,
+  createdAt: 0
+}
 
 function warning(key: string, message = `${key} missing`): AutomationRunReport {
   return { kind: 'warning', key, message, impact: null, evidence: null }
@@ -63,7 +83,7 @@ describe('applyAutomationRunReport', () => {
   })
 
   it('fails a run that already finished cleanly instead of waiting for a completion', () => {
-    const finished = { ...run, status: 'completed', error: null } as AutomationRun
+    const finished: AutomationRun = { ...run, status: 'completed', error: null }
 
     expect(apply(finished, { kind: 'failure', message: 'No access' }, 5)).toMatchObject({
       status: 'dispatch_failed',

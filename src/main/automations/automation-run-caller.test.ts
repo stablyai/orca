@@ -11,15 +11,25 @@ function terminalRun(id: string, overrides: Partial<AutomationRun> = {}): Automa
   return {
     id,
     automationId: 'a1',
+    title: 'Run',
+    scheduledFor: 0,
     status: 'dispatched',
+    trigger: 'manual',
+    workspaceId: null,
     sessionKind: 'terminal',
     chatSessionId: null,
+    terminalSessionId: null,
     terminalPaneKey: 'tab-1:leaf-1',
     terminalPtyId: 'pty-1',
+    outputSnapshot: null,
+    precheckResult: null,
+    usage: null,
+    error: null,
+    startedAt: null,
     createdAt: 1,
     dispatchedAt: 1,
     ...overrides
-  } as AutomationRun
+  }
 }
 
 const session = { kind: 'terminal', paneKey: 'tab-1:leaf-1', ptyId: 'pty-1' } as const
