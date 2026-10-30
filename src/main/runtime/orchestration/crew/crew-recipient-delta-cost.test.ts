@@ -93,7 +93,23 @@ it('charges independent peers on the whole trigger, covered reuse and equal topo
 })
 
 it('charges independent current, Dispatch, history, seat, resource and key-character populations', () => {
-  const samples = []
+  const samples: {
+    axis: 'current' | 'dispatch' | 'history' | 'seat' | 'resource' | 'characters'
+    n: number
+    historySelections: { length: number; chars: number }[]
+    dispatchSelections: number[]
+    historySetInput: number
+    historyUnique: number
+    historySortCardinality: number
+    candidateRows: number
+    seatCandidates: number
+    resourceCandidates: number
+    total: ReturnType<typeof sqlTotals>
+    whole: ReturnType<typeof sqlTotals>
+    output: ReturnType<CrewReadModel['read']>
+    oracle: ReturnType<typeof resolveBareOrchestrationRecipient>
+    executions: ReturnType<typeof meterCrewSql>['executions']
+  }[] = []
   for (const axis of [
     'current',
     'dispatch',

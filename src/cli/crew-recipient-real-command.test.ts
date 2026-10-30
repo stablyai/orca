@@ -1,41 +1,42 @@
 import { mkdtempSync } from 'node:fs'
 import { join } from 'node:path'
-import { runColdCrewCostProfiles } from './crew-recipient-delta-cost.test-fixture'
+import { runColdCrewCostProfiles } from '../main/runtime/orchestration/crew/crew-recipient-delta-cost.test-fixture'
 import { tmpdir } from 'node:os'
-import * as profileStorage from '../../../orca-profiles/profile-storage-paths'
-import { ORCHESTRATION_CREW_METHODS } from '../../rpc/methods/orchestration/crew-methods'
-import type { OrchestrationCrewFrame } from '../../../../shared/orchestration-crew'
+import * as profileStorage from '../main/orca-profiles/profile-storage-paths'
+import { ORCHESTRATION_CREW_METHODS } from '../main/runtime/rpc/methods/orchestration/crew-methods'
+import { CrewFrame, type OrchestrationCrewFrame } from '../shared/orchestration-crew'
 import { randomUUID } from 'node:crypto'
-import { RpcDispatcher } from '../../rpc/dispatcher'
-import { ORCHESTRATION_METHODS } from '../../rpc/methods/orchestration'
-import { TERMINAL_QUERY_METHODS } from '../../rpc/methods/terminal/terminal-query-methods'
-import { JournalHostDatabase } from '../../../native-chat/agent-session-journal/journal-host-database'
-import { AgentSessionRecordStore } from '../../agent-session-record-store'
+import { RpcDispatcher } from '../main/runtime/rpc/dispatcher'
+import { ORCHESTRATION_METHODS } from '../main/runtime/rpc/methods/orchestration'
+import { TERMINAL_QUERY_METHODS } from '../main/runtime/rpc/methods/terminal/terminal-query-methods'
+import { JournalHostDatabase } from '../main/native-chat/agent-session-journal/journal-host-database'
+import { AgentSessionRecordStore } from '../main/runtime/agent-session-record-store'
 import {
   peekOpenedAgentSessionRecordStore,
   releaseAgentSessionRecordStore
-} from '../../agent-session-record-store-slot'
-import { readCrewRuntimeInputs } from './crew-runtime-watch'
-import '../../rpc/unused-default-rpc-methods.test-fixture'
+} from '../main/runtime/agent-session-record-store-slot'
+import * as crewRuntimeInputs from '../main/runtime/orchestration/crew/crew-runtime-watch'
+import { testOrcaSessionId } from '../shared/orca-session-address-test-fixture'
+import '../main/runtime/rpc/unused-default-rpc-methods.test-fixture'
 import { afterEach, expect, it, vi } from 'vitest'
 import { z } from 'zod'
-import { dispatch } from '../../../../cli/dispatch'
-import { RuntimeClient, RuntimeClientError } from '../../../../cli/runtime-client'
-import { fingerprintAuthenticatedPairingCredential } from '../../device-principal'
-import { syncFederatedDispatch } from '../federation-sync'
-import { prepareFederatedAttachmentAuthority } from '../../rpc/methods/orchestration/federation/federation-attachment-authority'
-import { readOrchestrationCompatibilityEvidence } from '../../../../shared/orchestration-compatibility-evidence'
-import { ORCHESTRATION_FEDERATION_LIFECYCLE_SETTLEMENT_PROTOCOL_VERSION } from '../../../../shared/protocol-version'
+import { dispatch } from './dispatch'
+import { RuntimeClient, RuntimeClientError } from './runtime-client'
+import { fingerprintAuthenticatedPairingCredential } from '../main/runtime/device-principal'
+import { syncFederatedDispatch } from '../main/runtime/orchestration/federation-sync'
+import { prepareFederatedAttachmentAuthority } from '../main/runtime/rpc/methods/orchestration/federation/federation-attachment-authority'
+import { readOrchestrationCompatibilityEvidence } from '../shared/orchestration-compatibility-evidence'
+import { ORCHESTRATION_FEDERATION_LIFECYCLE_SETTLEMENT_PROTOCOL_VERSION } from '../shared/protocol-version'
 import {
   createSessionCallerHarness,
   orchestrationRequest,
   ADDRESS_X,
   SESSION_X,
   WORKER_PANE
-} from '../../rpc/orchestration-session-caller-test-fixture'
+} from '../main/runtime/rpc/orchestration-session-caller-test-fixture'
 
 const hostRef = vi.hoisted((): { current: unknown } => ({ current: null }))
-vi.mock('../../../native-chat/agent-session-wire/structured-agent-session-registry', () => ({
+vi.mock('../main/native-chat/agent-session-wire/structured-agent-session-registry', () => ({
   getStructuredAgentSessionHost: () => hostRef.current
 }))
 afterEach(async () => {
@@ -47,6 +48,7 @@ afterEach(async () => {
 
 it('keeps cold local first-frame authority through real CLI import, settlement, mailbox move, run-use and individual reply effects', async () => {
   const fixtureNow = 1_700_000_000_000
+  const crewInputs = vi.spyOn(crewRuntimeInputs, 'readCrewRuntimeInputs')
   const homeRef: { current: unknown } = { current: null }
   const workerRef: { current: unknown } = { current: null }
   const home = createSessionCallerHarness(homeRef)
@@ -97,7 +99,7 @@ it('keeps cold local first-frame authority through real CLI import, settlement, 
     legacySessionTabIds: []
   })
   let localStore = await worker.runtime.openAgentSessionRecordStore()
-  const localId = randomUUID()
+  const localId = testOrcaSessionId(randomUUID())
   const localAddress = `orca_session_id:${localId}`
   homeRef.current = { deps: { store: homeStore } }
   workerRef.current = {
@@ -224,7 +226,8 @@ it('keeps cold local first-frame authority through real CLI import, settlement, 
     const subscription = ORCHESTRATION_CREW_METHODS[0].handler(
       { party: WORKER_HANDLE },
       { runtime: worker.runtime, signal: controller.signal },
-      (frame) => {
+      (value) => {
+        const frame = CrewFrame.parse(value)
         frames.push(frame)
         if (frame.type === 'complete') {
           completed.resolve()
@@ -427,12 +430,12 @@ it('keeps cold local first-frame authority through real CLI import, settlement, 
 
     vi.spyOn(home.runtime, 'resolveOrchestrationWorkerServer').mockReturnValue({
       environmentId: 'worker-env',
-      environmentName: 'Worker host',
+      name: 'Worker host',
       peerFingerprint: workerFingerprint,
       pairingRevision: 1
     })
     vi.spyOn(home.runtime, 'callOrchestrationWorkerServer').mockImplementation(
-      async (selector, method, params, timeout, envelope, _options) => {
+      async (_selector, method, params, _timeout, envelope, _options) => {
         hostRef.current = workerRef.current
         if (method === 'status.get') {
           const status = worker.runtime.getStatus()
@@ -561,7 +564,11 @@ it('keeps cold local first-frame authority through real CLI import, settlement, 
     workerIdentity()
     hostRef.current = workerRef.current
     expect(peekOpenedAgentSessionRecordStore()).toBe(localStore)
-    const captured = readCrewRuntimeInputs(worker.runtime, worker.db, true, 'local')
+    const readers = crewInputs.mock.calls.findLast((call) => call[1] === worker.db)?.[0]
+    if (!readers) {
+      throw new Error('Expected production Crew runtime readers from the existing subscription')
+    }
+    const captured = crewRuntimeInputs.readCrewRuntimeInputs(readers, worker.db, true, 'local')
     expect(captured.records?.getRecord(localId)?.sessionId).toBe(localId)
     const detachedCrew = worker.runtime.getOrchestrationCrewSnapshot(WORKER_HANDLE)
 

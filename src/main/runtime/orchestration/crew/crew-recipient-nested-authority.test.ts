@@ -1,3 +1,4 @@
+import { testOrcaSessionId } from '../../../../shared/orca-session-address-test-fixture'
 import { fixture } from './crew-read-model.test-fixture'
 import { CrewReadModel } from './crew-read-model'
 import { OrcaRuntimeService } from '../../orca-runtime'
@@ -31,7 +32,7 @@ it('keeps retained NULL-session nested structured process reads inside selected 
     runtime.setOrchestrationDb(f.db)
     const records = new Map<string, ReturnType<typeof agentSessionConversationView>>()
     const identities = Array.from({ length: population }, (_, i) => {
-      const session = `chat-nested-${i}`
+      const session = testOrcaSessionId(`chat-nested-${i}`)
       const handle = mintStructuredWorkerHandle()
       const pane = mintStructuredWorkerPaneKey(session)
       const task = () => f.db.createTask({ runId: f.run.id, spec: 'retained nested owner' }).id

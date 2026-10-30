@@ -177,24 +177,28 @@ export function getActiveDispatchMailboxOwners(
   handle: string,
   paneKey?: string
 ): DispatchContextRow[] {
-  const byHandle = this.db
+  const rawByHandle = this.db
     .prepare(
       `SELECT * FROM dispatch_contexts
        WHERE assignee_handle = ? AND status IN ('pending', 'dispatched')
        ORDER BY rowid DESC`
     )
-    .all(handle) as DispatchContextRow[]
+    .all(handle)
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: SELECT * reads the schema-owned Dispatch row; the statement wrapper normalizes integer fields.
+  const byHandle = rawByHandle as DispatchContextRow[]
   if (activeDispatchMailboxBranch(byHandle, paneKey) === 'handle') {
     return byHandle
   }
 
-  const byExactPane = this.db
+  const rawByExactPane = this.db
     .prepare(
       `SELECT * FROM dispatch_contexts
        WHERE assignee_pane_key = ? AND status IN ('pending', 'dispatched')
        ORDER BY rowid DESC`
     )
-    .all(paneKey!) as DispatchContextRow[]
+    .all(paneKey!)
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: SELECT * reads the schema-owned Dispatch row; the statement wrapper normalizes integer fields.
+  const byExactPane = rawByExactPane as DispatchContextRow[]
   if (activeDispatchMailboxBranch(byHandle, paneKey, byExactPane) === 'pane') {
     return byExactPane
   }

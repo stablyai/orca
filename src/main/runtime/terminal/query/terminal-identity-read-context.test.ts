@@ -645,7 +645,7 @@ it('forwards finite context through actual live-pane nested-recipient reads with
     countIterations(f.owner.ptysById, counts)
     countIterations(f.owner.leaves, counts)
     const context = captured ? f.runtime.createTerminalIdentityReadContext() : undefined
-    const output = []
+    const output: (string | null)[] = []
     for (let i = 0; i < population; i++) {
       output.push(f.runtime.getLiveTerminalPaneKey(`term_nested_${i}`, context))
       output.push(f.runtime.getLiveTerminalPaneKey(`term_missing_${i}`, context))
