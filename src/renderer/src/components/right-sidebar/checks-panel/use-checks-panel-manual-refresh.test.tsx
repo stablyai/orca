@@ -116,6 +116,7 @@ describe('useChecksPanelManualRefresh ordering', () => {
     expect(input.fetchPRForBranch).toHaveBeenCalledWith('/workspace/repo', 'main', {
       force: true,
       repoId: 'repo-1',
+      repoOwnerExecutionHostId: 'local',
       worktreeId: undefined,
       linkedPRNumber: null,
       fallbackPRNumber: null,

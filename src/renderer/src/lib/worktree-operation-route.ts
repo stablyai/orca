@@ -11,6 +11,7 @@ import { getRepoIdFromWorktreeId } from '@/store/slices/worktree-helpers'
 import { resolveExactWorktreeRoute } from './worktree-owner-route'
 import {
   findIndexedDetectedWorktrees,
+  findIndexedWorktreeOwners,
   hasIndexedDetectedWorktree,
   resolveIndexedRepoOwner,
   resolveIndexedWorktreeOwner
@@ -65,14 +66,9 @@ function ownerRecordsOnHost(
   executionHostId: ExecutionHostId
 ): WorktreeOperationOwnerRecord[] {
   const owners: WorktreeOperationOwnerRecord[] = []
-  for (const worktrees of Object.values(state.worktreesByRepo ?? {})) {
-    for (const worktree of worktrees) {
-      if (
-        worktree.id === worktreeId &&
-        parseExecutionHostId(worktree.hostId)?.id === executionHostId
-      ) {
-        owners.push(worktree)
-      }
+  for (const worktree of findIndexedWorktreeOwners(state.worktreesByRepo, worktreeId)) {
+    if (parseExecutionHostId(worktree.hostId)?.id === executionHostId) {
+      owners.push(worktree)
     }
   }
   for (const worktree of findIndexedDetectedWorktrees(state.detectedWorktreesByRepo, worktreeId)) {
@@ -195,12 +191,10 @@ export function getWorktreeOperationOwnerHostIds(
   worktreeId: string
 ): ExecutionHostId[] {
   const hostIds = new Set<ExecutionHostId>()
-  for (const worktrees of Object.values(state.worktreesByRepo ?? {})) {
-    for (const worktree of worktrees) {
-      const hostId = worktree.id === worktreeId ? parseExecutionHostId(worktree.hostId)?.id : null
-      if (hostId) {
-        hostIds.add(hostId)
-      }
+  for (const worktree of findIndexedWorktreeOwners(state.worktreesByRepo, worktreeId)) {
+    const hostId = parseExecutionHostId(worktree.hostId)?.id
+    if (hostId) {
+      hostIds.add(hostId)
     }
   }
   for (const worktree of findIndexedDetectedWorktrees(state.detectedWorktreesByRepo, worktreeId)) {

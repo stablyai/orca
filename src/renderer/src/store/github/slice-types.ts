@@ -136,12 +136,13 @@ export type GitHubSlice = {
   ) => Promise<boolean>
   initGitHubCache: () => Promise<void>
   refreshAllGitHub: () => void
-  refreshGitHubForWorktree: (worktreeId: string) => void
+  refreshGitHubForWorktree: (worktreeId: string, executionHostId?: string) => void
   refreshGitHubForWorktreeIfStale: (worktreeId: string) => void
   enqueueGitHubPRRefresh: (
     worktreeId: string,
     reason: GitHubPRRefreshReason,
-    priority?: number
+    priority?: number,
+    executionHostId?: string
   ) => void
   reportVisibleGitHubPRRefreshCandidates: (
     worktreeIds: string[],

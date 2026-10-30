@@ -15,10 +15,12 @@ import {
   getWorktreeLookupIndex,
   findWorktreeById
 } from './worktree-refresh'
-import { findIndexedDetectedWorktrees } from '@/lib/worktree-runtime-owner-index'
+import {
+  findIndexedDetectedWorktrees,
+  findIndexedRepoOwnerForHost,
+  worktreeOwnerHostIds
+} from '@/lib/worktree-runtime-owner-index'
 import { findKnownWorktreeById } from '../slices/worktrees/listing/detected-worktree-meta'
-import { findRepoForHost } from '../slices/repo-host-identity'
-import { getGitHubRepoLookupIndex } from '../slices/github-repo-lookup-index'
 import { getPRRefreshRuntimeRepoTarget } from './repository-routing'
 import type { VisibleHostedReviewRefreshTarget } from './visible-hosted-review-refresh-scheduler'
 import { shouldCoordinateVisibleGitHubReview } from './visible-hosted-review-refresh-ownership'
@@ -27,14 +29,14 @@ import { isWslHostOffForForge } from './wsl-host-off-forge'
 
 export function* getVisibleHostedReviewWorkspaces(
   state: AppState,
-  options?: { selectedOnly?: boolean }
+  options?: { selectedOnly?: boolean; worktreeIds?: readonly string[] }
 ) {
   const visibleHosts =
     state.visibleWorkspaceHostIds ??
     (state.workspaceHostScope && state.workspaceHostScope !== 'all'
       ? [state.workspaceHostScope]
       : null)
-  for (const id of state.visibleReviewWorktreeIds) {
+  for (const id of options?.worktreeIds ?? state.visibleReviewWorktreeIds) {
     const owners = new Set(getWorktreeLookupIndex(state).byId.get(id)?.owners)
     for (const detected of findIndexedDetectedWorktrees(selectDetectedWorktreesByRepo(state), id)) {
       const workspace = findKnownWorktreeById(state, id, detected.hostId ?? 'local')
@@ -46,14 +48,7 @@ export function* getVisibleHostedReviewWorkspaces(
       if (worktree.isArchived || worktree.isBare) {
         continue
       }
-      const repo = findRepoForHost(state.repos, worktree.repoId, {
-        hostId: worktree.hostId,
-        settings: state.settings
-      })
-      if (!repo) {
-        continue
-      }
-      const candidate = buildPRRefreshCandidate(state, worktree, undefined, repo)
+      const candidate = buildPRRefreshCandidate(state, worktree)
       if (
         !candidate ||
         candidate.repoKind !== 'git' ||
@@ -61,7 +56,11 @@ export function* getVisibleHostedReviewWorkspaces(
       ) {
         continue
       }
-      const hostId = getRepoExecutionHostId(repo)
+      const hostId = getRepoExecutionHostId(candidate)
+      const repo = findIndexedRepoOwnerForHost(state.repos, worktree.repoId, hostId)
+      if (!repo) {
+        continue
+      }
       const runtimeHost = parseExecutionHostId(hostId)
       if (
         runtimeHost?.kind === 'runtime' &&
@@ -69,19 +68,25 @@ export function* getVisibleHostedReviewWorkspaces(
       ) {
         continue
       }
+      // Why: an older paired SSH row stamps only ssh:<target>; its recovered server owner still selects it.
+      const hostIds =
+        worktree.hostId || worktree.runtimeOwnerEnvironmentId
+          ? [...new Set([...worktreeOwnerHostIds(worktree), hostId])]
+          : [hostId]
       const activeHost = state.activeWorkspaceExecutionHostId
       const selected =
         id === state.activeWorktreeId &&
         (activeHost
-          ? hostId === activeHost
-          : owners.size === 1 || hostId === getSettingsFocusedExecutionHostId(state.settings))
+          ? hostIds.includes(activeHost)
+          : owners.size === 1 ||
+            hostIds.includes(getSettingsFocusedExecutionHostId(state.settings)))
       if (
         (options?.selectedOnly && !selected) ||
-        (!selected && visibleHosts && !visibleHosts.includes(hostId))
+        (!selected && visibleHosts && !hostIds.some((hostId) => visibleHosts.includes(hostId)))
       ) {
         continue
       }
-      yield { worktree, repo, candidate, selected }
+      yield { worktree, repo, candidate: { ...candidate, isSelected: selected }, selected }
     }
   }
 }
@@ -128,11 +133,9 @@ export function getVisibleHostedReviewRefreshTargets(
       hints.linkedAzureDevOpsPR != null ||
       hints.linkedGiteaPR != null ||
       (hostedEntry?.data != null && hostedEntry.data.provider !== 'github')
-    // The legacy GitHub action still resolves bare IDs; never pass it another owner's candidate.
     if (
       !exactRequest &&
-      (getGitHubRepoLookupIndex(state.repos).findById(repo.id) !== repo ||
-        findWorktreeById(state, worktree.id) !== worktree)
+      findWorktreeById(state, worktree.id, getRepoExecutionHostId(repo)) !== worktree
     ) {
       continue
     }
@@ -175,6 +178,7 @@ export function getVisibleHostedReviewRefreshTargets(
               force: true,
               reason: 'visible',
               repoId: candidate.repoId,
+              repoOwnerExecutionHostId: getRepoExecutionHostId(candidate),
               worktreeId: id,
               linkedPRNumber: candidate.linkedPRNumber,
               fallbackPRNumber: candidate.fallbackPRNumber,

@@ -38,6 +38,11 @@ import { useChecksPanelPolling } from './use-checks-panel-polling'
 
 import { createModel } from './checks-panel-polling-test-model'
 
+const baseRepo = createModel().repo
+if (!baseRepo) {
+  throw new Error('The polling fixture requires a repository.')
+}
+
 beforeEach(() => {
   vi.useFakeTimers()
   vi.setSystemTime(1_000_000)
@@ -171,8 +176,9 @@ describe('useChecksPanelPolling live behavior', () => {
     expect(model.fetchPRChecks).not.toHaveBeenCalled()
   })
 
-  it('uses the workspace owner and missing head override for a replacement MR', async () => {
+  it('uses the selected repository owner and missing head override for a replacement MR', async () => {
     const model = createModel({
+      repo: { ...baseRepo, executionHostId: 'runtime:owner-runtime' },
       activeGitLabReview: {
         provider: 'gitlab',
         number: 17,
@@ -210,6 +216,7 @@ describe('useChecksPanelPolling live behavior', () => {
   it('reports a failed MR read as an error naming the machine, not as no checks (#24264)', async () => {
     gitlab.fetchDetails.mockRejectedValue(new Error('glab: not logged in'))
     const model = createModel({
+      repo: { ...baseRepo, connectionId: 'devbox' },
       activeGitLabReview: {
         provider: 'gitlab',
         number: 17,
@@ -236,6 +243,17 @@ describe('useChecksPanelPolling live behavior', () => {
     expect(Math.max(0, ...setChecks.invocationCallOrder)).toBeLessThan(
       setChecksError.invocationCallOrder[0]
     )
+  })
+
+  it('reports conflicting repository/workspace context through the normal MR error path', async () => {
+    const model = createModel({
+      activeWorktree: makeWorktree({ id: 'worktree-1', repoId: 'repo-1', hostId: 'runtime:other' })
+    })
+    const { result } = renderHook(() => useChecksPanelPolling(model))
+    await act(async () => result.current.fetchGitLabDetails({ mrNumberOverride: 18 }))
+    expect(gitlab.fetchDetails).not.toHaveBeenCalled()
+    expect(model.setChecksError).toHaveBeenCalledWith(expect.stringContaining('owning host'))
+    expect(model.setCommentsError).toHaveBeenCalledWith(expect.stringContaining('owning host'))
   })
 
   it('drops replacement MR details when the relink scope changes in flight', async () => {

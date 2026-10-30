@@ -197,6 +197,113 @@ describe('visible hosted review refresh targets', () => {
     )
   })
 
+  it.each(
+    (['github', 'gitlab'] as const).flatMap((provider) => [
+      { provider, stamped: true },
+      { provider, stamped: false }
+    ])
+  )(
+    'selects a paired SSH workspace and refreshes $provider through its runtime owner (owner stamped: $stamped)',
+    async ({ provider, stamped }) => {
+      const owner: Repo = {
+        ...repo,
+        connectionId: 'builder',
+        executionHostId: 'runtime:owner-server'
+      }
+      // Older paired listings named only the physical SSH host.
+      const paired = {
+        ...worktree,
+        hostId: 'ssh:builder' as const,
+        ...(stamped ? { runtimeOwnerEnvironmentId: 'owner-server' } : {}),
+        ...(provider === 'github' ? { linkedPR: 12 } : { linkedGitLabMR: 8 })
+      }
+      const store = setup(owner)
+      store.setState({
+        repos: [repo, owner],
+        worktreesByRepo: { [repo.id]: [{ ...worktree, hostId: 'local' }, paired] },
+        activeWorktreeId: worktree.id,
+        activeWorkspaceExecutionHostId: 'ssh:builder',
+        visibleWorkspaceHostIds: ['ssh:builder'],
+        sshConnectionStates: new Map([
+          [
+            'builder',
+            { targetId: 'builder', status: 'connected', error: null, reconnectAttempt: 0 }
+          ]
+        ])
+      })
+      const key = `runtime:owner-server::${repo.id}::${worktree.branch}`
+      const selectedTargets = () =>
+        getVisibleHostedReviewRefreshTargets(store.getState(), store.getState, {
+          selectedOnly: true
+        })
+      expect(selectedTargets()).toMatchObject([{ key, selected: true }])
+      runtimeEnvironmentCall.mockResolvedValue({
+        id: 'review',
+        ok: true,
+        result: provider === 'github' ? makePR() : review
+      })
+      expect(await selectedTargets()[0].refresh()).toBe(true)
+      expect(store.getState().hostedReviewCache[key]?.data?.provider).toBe(provider)
+      expect(runtimeEnvironmentCall).toHaveBeenCalledWith(
+        expect.objectContaining({
+          selector: 'owner-server',
+          method: provider === 'github' ? 'github.prForBranch' : 'hostedReview.forBranch'
+        })
+      )
+      expect(mockApi.gh.refreshPRNow).not.toHaveBeenCalled()
+      expect(mockApi.hostedReview.forBranch).not.toHaveBeenCalled()
+
+      store.setState({ activeWorkspaceExecutionHostId: 'runtime:owner-server' })
+      expect(selectedTargets()).toMatchObject([{ key, selected: true }])
+      store.setState({ activeWorkspaceExecutionHostId: 'local' })
+      expect(selectedTargets().some((target) => target.key === key)).toBe(false)
+
+      store.setState({ activeWorktreeId: null })
+      expect(targets(store)).toMatchObject([{ key, selected: false }])
+      store.setState({ visibleWorkspaceHostIds: null, workspaceHostScope: 'ssh:builder' })
+      expect(targets(store)).toMatchObject([{ key, selected: false }])
+      store.setState({ workspaceHostScope: 'runtime:other-server' })
+      expect(targets(store)).toEqual([])
+    }
+  )
+
+  it('rejects an older paired SSH workspace that rival servers both proxy', () => {
+    const first: Repo = { ...repo, connectionId: 'builder', executionHostId: 'runtime:first' }
+    const store = setup(first)
+    store.setState({
+      repos: [first, { ...first, executionHostId: 'runtime:second' }],
+      worktreesByRepo: { [repo.id]: [{ ...worktree, hostId: 'ssh:builder', linkedPR: 12 }] },
+      activeWorktreeId: worktree.id,
+      activeWorkspaceExecutionHostId: 'ssh:builder',
+      sshConnectionStates: new Map([
+        ['builder', { targetId: 'builder', status: 'connected', error: null, reconnectAttempt: 0 }]
+      ])
+    })
+    expect(targets(store)).toEqual([])
+    store.getState().refreshGitHubForWorktree(worktree.id, 'runtime:first')
+    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
+    expect(mockApi.gh.enqueuePRRefresh).not.toHaveBeenCalled()
+  })
+
+  it('keeps an older SSH workspace on its direct repo when a server also proxies it', async () => {
+    const direct: Repo = { ...repo, connectionId: 'builder' }
+    const store = setup(direct)
+    store.setState({
+      repos: [{ ...direct, executionHostId: 'runtime:owner-server' }, direct],
+      worktreesByRepo: { [repo.id]: [{ ...worktree, hostId: 'ssh:builder' }] },
+      sshConnectionStates: new Map([
+        ['builder', { targetId: 'builder', status: 'connected', error: null, reconnectAttempt: 0 }]
+      ])
+    })
+    const rows = targets(store)
+    expect(rows.map((row) => row.key)).toEqual([`ssh:builder::${repo.id}::${worktree.branch}`])
+    await rows[0].refresh()
+    expect(mockApi.hostedReview.forBranch).toHaveBeenCalledWith(
+      expect.objectContaining({ repoOwnerExecutionHostId: 'ssh:builder' })
+    )
+    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
+  })
+
   it('excludes folders, bare, archived, detached, missing and disconnected SSH workspaces', () => {
     const store = setup()
     store.setState({ repos: [{ ...repo, kind: 'folder' }] })
@@ -468,7 +575,7 @@ describe('visible hosted review refresh targets', () => {
     expect(visibleHostedReviewRefreshInputsChanged(next, previous)).toBe(true)
   })
 
-  it('does not send a colliding runtime owner through the legacy unqualified GitHub action', () => {
+  it('refreshes the selected runtime copy when repository and worktree IDs collide', async () => {
     const first: Repo = {
       ...repo,
       executionHostId: 'runtime:first',
@@ -489,11 +596,23 @@ describe('visible hosted review refresh targets', () => {
         second: [{ ...worktree, hostId: 'runtime:second' }]
       }
     })
-    expect(
-      getVisibleHostedReviewRefreshTargets(store.getState(), store.getState, { selectedOnly: true })
-    ).toEqual([])
+    runtimeEnvironmentCall.mockResolvedValue({
+      id: 'pr-second',
+      ok: true,
+      result: makePR({ number: 26 }),
+      _meta: { runtimeId: 'second' }
+    })
+    const selected = getVisibleHostedReviewRefreshTargets(store.getState(), store.getState, {
+      selectedOnly: true
+    })
+    expect(selected).toHaveLength(1)
+    expect(await selected[0].refresh()).toBe(true)
+    expect(store.getState().prCache[`runtime:second::${prKey}`]?.data?.number).toBe(26)
+    expect(store.getState().prCache[`runtime:first::${prKey}`]).toBeUndefined()
     expect(mockApi.gh.prForBranch).not.toHaveBeenCalled()
-    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith(
+      expect.objectContaining({ selector: 'second' })
+    )
   })
 
   it('lets normal hosted-review refreshes share the host cache but forces discovery', async () => {

@@ -13,6 +13,8 @@ import {
 } from '../../../../shared/github/check-details-deadline'
 import { syncPRChecksStatus } from '../slices/github-checks'
 import { isWslDistroNotRunningRefusal } from '../../../../shared/wsl-distro-not-running-refusal'
+import { findRepoForGitHubOwner } from './repository-routing'
+import { hostedReviewOwnerIpcArgs } from '../slices/hosted-review-cache-state'
 import {
   getPRChecksCacheTtl,
   prChecksCacheSuffix,
@@ -42,8 +44,11 @@ export const createCheckActions = (
     prRepo,
     options
   ): Promise<PRCheckDetail[]> => {
-    const repo = get().repos?.find((candidate) =>
-      options?.repoId ? candidate.id === options.repoId : candidate.path === repoPath
+    const repo = findRepoForGitHubOwner(
+      get(),
+      options?.repoId,
+      repoPath,
+      options?.repoOwnerExecutionHostId
     )
     const repoId = options?.repoId ?? repo?.id
     const requestSettings = getGitHubRepoSourceSettings(get(), repo, options?.sourceContext)
@@ -162,8 +167,8 @@ export const createCheckActions = (
               headSha,
               prRepo: prRepo ?? null,
               noCache: Boolean(options?.force || options?.noCache),
-              sourceContext: options?.sourceContext,
-              ...(options?.wakeWslDistro ? { wakeWslDistro: true } : {})
+              ...hostedReviewOwnerIpcArgs(options),
+              sourceContext: options?.sourceContext
             })
       // Bounded waits can overlap stronger requests; only the current key owner may write caches/derived PR state, preserving newer run evidence.
       if (!ownsInflightRequest(inflightChecksRequests, inflightKey, requestId)) {
@@ -216,8 +221,11 @@ export const createCheckActions = (
 
   fetchPRCheckDetails: async (repoPath, args, options): Promise<PRCheckRunDetails | null> => {
     try {
-      const repo = get().repos?.find((candidate) =>
-        options?.repoId ? candidate.id === options.repoId : candidate.path === repoPath
+      const repo = findRepoForGitHubOwner(
+        get(),
+        options?.repoId,
+        repoPath,
+        options?.repoOwnerExecutionHostId
       )
       const repoId = options?.repoId ?? repo?.id
       const requestContext = getGitHubWorkItemRequestContext(
@@ -254,6 +262,7 @@ export const createCheckActions = (
                 checkName: args.checkName,
                 url: args.url,
                 prRepo: args.prRepo ?? null,
+                ...hostedReviewOwnerIpcArgs(options),
                 sourceContext: options?.sourceContext
               })
             )

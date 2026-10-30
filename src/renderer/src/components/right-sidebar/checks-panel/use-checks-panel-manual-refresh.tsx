@@ -1,3 +1,4 @@
+import { getRepoExecutionHostId } from '../../../../../shared/execution-host'
 import { useCallback } from 'react'
 import { useAppStore } from '@/store'
 import { buildGitHubPRRefreshStateClearToken } from '@/store/github/pr-refresh-state'
@@ -68,6 +69,7 @@ export function useChecksPanelManualRefresh(model: ChecksPanelManualRefreshInput
     if (!repo || !branch) {
       return
     }
+    const repoOptions = { repoId: repo.id, repoOwnerExecutionHostId: getRepoExecutionHostId(repo) }
     if (refreshInFlightRef.current) {
       return
     }
@@ -84,12 +86,11 @@ export function useChecksPanelManualRefresh(model: ChecksPanelManualRefreshInput
     refreshRequestKeyRef.current = refreshRequestKey
     const isCurrentRequest = (): boolean => refreshRequestKeyRef.current === refreshRequestKey
     const refreshStartedAt = Date.now()
-    const refreshProvider = isGitLabReviewContext ? 'gitlab' : 'github'
     let refreshOutcome = 'started'
     setIsRefreshing(true)
     recordChecksPanelPRRefreshBreadcrumb({
       event: 'start',
-      provider: refreshProvider,
+      provider: isGitLabReviewContext ? 'gitlab' : 'github',
       repoId: repo.id,
       worktreeId: activeWorktreeId,
       branch,
@@ -180,7 +181,7 @@ export function useChecksPanelManualRefresh(model: ChecksPanelManualRefreshInput
       if (isGitLabReviewContext) {
         const refreshedReview = await refreshHostedReviewCard(fetchHostedReviewForBranch, {
           repoPath: repo.path,
-          repoId: repo.id,
+          ...repoOptions,
           branch,
           admissionTier: 'interactive',
           linkedGitHubPR: linkedPR,
@@ -210,9 +211,8 @@ export function useChecksPanelManualRefresh(model: ChecksPanelManualRefreshInput
         return
       }
       const refreshStoreState = useAppStore.getState()
-      const rawPRRefreshState = refreshStoreState.prRefreshStates[prCacheKey]
       const startedPRRefreshToken = buildGitHubPRRefreshStateClearToken(
-        rawPRRefreshState,
+        refreshStoreState.prRefreshStates[prCacheKey],
         refreshStoreState.prRefreshSequences,
         prCacheKey
       )
@@ -220,7 +220,7 @@ export function useChecksPanelManualRefresh(model: ChecksPanelManualRefreshInput
       try {
         refreshedPR = await fetchPRForBranch(repo.path, branch, {
           force: true,
-          repoId: repo.id,
+          ...repoOptions,
           worktreeId: activeWorktreeId ?? undefined,
           linkedPRNumber: linkedPR,
           fallbackPRNumber: fallbackGitHubPRNumber,
@@ -236,7 +236,7 @@ export function useChecksPanelManualRefresh(model: ChecksPanelManualRefreshInput
       }
       await refreshHostedReviewCard(fetchHostedReviewForBranch, {
         repoPath: repo.path,
-        repoId: repo.id,
+        ...repoOptions,
         branch,
         admissionTier: 'interactive',
         linkedGitHubPR: linkedPR,
@@ -270,7 +270,7 @@ export function useChecksPanelManualRefresh(model: ChecksPanelManualRefreshInput
           branch,
           refreshedPR.headSha,
           refreshedPR.prRepo,
-          { force: true, repoId: repo.id, wakeWslDistro: true }
+          { force: true, ...repoOptions, wakeWslDistro: true }
         ).then(
           (result) => {
             if (!isCurrentRequest() || !isCurrentAsyncResult(prRequestKey)) {
@@ -298,7 +298,7 @@ export function useChecksPanelManualRefresh(model: ChecksPanelManualRefreshInput
         setCommentsLoading(true)
         const refreshedComments = fetchPRComments(repo.path, refreshedPR.number, {
           force: true,
-          repoId: repo.id,
+          ...repoOptions,
           prRepo: refreshedPR.prRepo
         }).then(
           (result) => {
@@ -337,7 +337,7 @@ export function useChecksPanelManualRefresh(model: ChecksPanelManualRefreshInput
     } finally {
       recordChecksPanelPRRefreshBreadcrumb({
         event: 'done',
-        provider: refreshProvider,
+        provider: isGitLabReviewContext ? 'gitlab' : 'github',
         repoId: repo.id,
         worktreeId: activeWorktreeId,
         branch,

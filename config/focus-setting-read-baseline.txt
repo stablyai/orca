@@ -257,7 +257,7 @@
 2 src/renderer/src/runtime/web-session-tabs-sync/global-session-subscription.ts
 1 src/renderer/src/runtime/web-session-tabs-sync/tracking-decisions.ts
 3 src/renderer/src/runtime/web-session-tabs-sync/use-web-session-tabs-sync.ts
-2 src/renderer/src/store/github/visible-hosted-review-refresh-targets.ts
+1 src/renderer/src/store/github/visible-hosted-review-refresh-targets.ts
 9 src/renderer/src/store/index.ts
 2 src/renderer/src/store/project-groups/project-group-mutations.ts
 1 src/renderer/src/store/repos/all-host-repo-catalog-actions.ts
@@ -317,7 +317,7 @@
 2 src/renderer/src/store/slices/worktrees/listing/fetch-detected-worktrees.ts
 2 src/renderer/src/store/slices/worktrees/listing/fetch-worktrees.ts
 1 src/renderer/src/store/slices/worktrees/listing/worktree-host-ownership.ts
-2 src/renderer/src/store/slices/worktrees/metadata/update-worktree-meta.ts
+1 src/renderer/src/store/slices/worktrees/metadata/update-worktree-meta.ts
 1 src/renderer/src/store/slices/worktrees/metadata/worktree-lineage-actions.ts
 3 src/renderer/src/store/slices/worktrees/metadata/worktree-lineage-host-merge.ts
 3 src/renderer/src/store/slices/worktrees/session/worktree-terminal-reference.ts

@@ -31,6 +31,7 @@ describe('buildSnapshottedThreadResolver', () => {
           repoPath: '/repos/widgets',
           repoId: 'repo-1',
           prNumber: 42,
+          ownerHostId: 'runtime:launch-server',
           prRepo: PR_REPO
         },
         resolveReviewThread,
@@ -41,6 +42,7 @@ describe('buildSnapshottedThreadResolver', () => {
     expect(await resolve('T1')).toBe(true)
     expect(resolveReviewThread).toHaveBeenCalledWith('/repos/widgets', 42, 'T1', true, {
       repoId: 'repo-1',
+      repoOwnerExecutionHostId: 'runtime:launch-server',
       prRepo: PR_REPO
     })
     expect(onResolvedOptimistically).toHaveBeenCalledWith('T1')

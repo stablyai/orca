@@ -208,6 +208,7 @@ export type HostedReviewCreationEligibility = {
 export type HostedReviewCreationEligibilityArgs = {
   repoPath: string
   repoId?: string
+  repoOwnerExecutionHostId?: string
   worktreePath?: string
   connectionId?: string | null
   branch: string

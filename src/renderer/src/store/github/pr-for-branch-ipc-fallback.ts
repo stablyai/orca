@@ -6,7 +6,8 @@ import type {
 /** The direct lookup when main has no refresh coordinator; only a manual one may start a stopped WSL distro (E9). */
 export function lookupPRForBranchOverIpc(
   candidate: GitHubPRRefreshCandidate,
-  reason: GitHubPRRefreshReason
+  reason: GitHubPRRefreshReason,
+  repoOwnerExecutionHostId?: string
 ): ReturnType<Window['api']['gh']['prForBranch']> {
   const fallbackPRNumber = candidate.fallbackPRNumber ?? null
   return window.api.gh.prForBranch({
@@ -18,6 +19,7 @@ export function lookupPRForBranchOverIpc(
     acceptMergedFallbackPR:
       fallbackPRNumber !== null && (candidate.fallbackPRSource ?? null) !== null,
     currentHeadOid: candidate.currentHeadOid ?? null,
+    ...(repoOwnerExecutionHostId ? { repoOwnerExecutionHostId } : {}),
     ...(reason === 'manual' ? { wakeWslDistro: true } : {})
   })
 }

@@ -36,7 +36,9 @@ import { isRuntimeSelectorNotFoundError } from '../listing/runtime-worktree-rpc-
 import { runtimeTargetForWorktreeOwner } from '../listing/worktree-owner-target'
 import { runtimeTargetForWorkspaceOwner } from '@/lib/resolve-owner'
 
-import { findRepoForHost } from '../../repo-host-identity'
+import { hasUniqueIndexedRepositoryHost } from '@/lib/worktree-runtime-owner-index'
+import { resolveReviewRepository } from '@/lib/review-owner'
+import { getRepoExecutionHostId } from '../../../../../../shared/execution-host'
 export function createUpdateWorktreeMeta(
   set: WorktreeSliceSet,
   get: WorktreeSliceGet
@@ -138,12 +140,10 @@ export function createUpdateWorktreeMeta(
     const shouldRefreshHostedReview = Boolean(
       worktreeForUpdate && hasChangedHostedReviewLinkUpdates(normalizedUpdates, worktreeForUpdate)
     )
-    const reviewRepo = shouldRefreshHostedReview
-      ? (findRepoForHost(get().repos, worktreeForUpdate?.repoId ?? '', {
-          hostId: executionHostId,
-          settings: get().settings
-        }) ?? undefined)
-      : undefined
+    const reviewRepo =
+      shouldRefreshHostedReview && worktreeForUpdate
+        ? (resolveReviewRepository(get().repos, worktreeForUpdate) ?? undefined)
+        : undefined
     const reviewBranch = worktreeForUpdate?.branch.replace(/^refs\/heads\//, '')
 
     // Why: bump lastActivityAt on comment edits so the time-decay sort doesn't drop a just-touched worktree.
@@ -215,13 +215,18 @@ export function createUpdateWorktreeMeta(
       if (
         !options?.suppressHostedReviewRefresh &&
         reviewRepo &&
+        hasUniqueIndexedRepositoryHost(
+          get().repos,
+          reviewRepo.id,
+          getRepoExecutionHostId(reviewRepo)
+        ) &&
         reviewBranch &&
         typeof get().fetchHostedReviewForBranch === 'function'
       ) {
         // Why: refetch against post-update links so a cache entry from the previous provider link can't keep showing the removed review.
         void get().fetchHostedReviewForBranch(reviewRepo.path, reviewBranch, {
           repoId: reviewRepo.id,
-          repoOwnerExecutionHostId: executionHostId ?? worktreeForUpdate?.hostId,
+          repoOwnerExecutionHostId: getRepoExecutionHostId(reviewRepo),
           ...getWorkspaceReviewRefreshHints(targetEnriched, worktreeForUpdate),
           force: true
         })

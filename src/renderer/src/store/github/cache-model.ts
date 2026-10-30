@@ -36,7 +36,10 @@ export type FetchOptions = {
   wakeWslDistro?: boolean
 }
 
-export type RepoScopedFetchOptions = FetchOptions & { repoId?: string }
+export type RepoScopedFetchOptions = FetchOptions & {
+  repoId?: string
+  repoOwnerExecutionHostId?: string
+}
 
 export type GitHubPRFallbackSource = NonNullable<GitHubPRRefreshAlias['fallbackPRSource']>
 

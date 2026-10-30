@@ -148,6 +148,7 @@ export function useChecksPanelAiAcknowledgement(model: ChecksPanelAiAcknowledgem
                 body,
                 {
                   repoId: githubTarget.repoId,
+                  repoOwnerExecutionHostId: githubTarget.ownerHostId,
                   prRepo: githubTarget.prRepo,
                   threadId: parentThreadId,
                   path: comment.path,
@@ -190,6 +191,7 @@ export function useChecksPanelAiAcknowledgement(model: ChecksPanelAiAcknowledgem
                 body,
                 {
                   repoId: githubTarget.repoId,
+                  repoOwnerExecutionHostId: githubTarget.ownerHostId,
                   prRepo: githubTarget.prRepo
                 }
               )

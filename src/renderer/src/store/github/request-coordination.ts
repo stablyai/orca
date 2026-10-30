@@ -3,6 +3,7 @@ import type { PRComment } from '../../../../shared/github/comment-types'
 import type { IssueInfo, PRInfo } from '../../../../shared/github/pull-request-types'
 import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
 import type { GetProjectViewTableResult } from '../../../../shared/github/project-result-types'
+import type { LinkedReviewClearScope } from './linked-review-clear'
 import type { AppState } from '../types'
 import { matchesRepoCacheEviction, type RepoCacheEviction } from './cache-identity'
 
@@ -47,7 +48,7 @@ export const inflightProjectViewRequests = new Map<string, InflightProjectView>(
 export const prRequestGenerations = new Map<string, number>()
 export const prRefreshStartedHostedReviewEntries = new Map<
   string,
-  AppState['hostedReviewCache'][string] | undefined
+  { entry: AppState['hostedReviewCache'][string] | undefined; clearScope?: LinkedReviewClearScope }
 >()
 
 let providerRequestSequence = 0

@@ -1,6 +1,6 @@
 import type { EditorGet, EditorSet } from '../types/editor-set-get'
 import type { EditorSlice } from '../types/editor-slice'
-import { resolveGitOperationTarget } from './git-operation-target'
+import { gitOperationExecutionHostId, resolveGitOperationTarget } from './git-operation-target'
 import { toast } from 'sonner'
 import {
   fetchRuntimeGit,
@@ -66,7 +66,10 @@ export function createGitRemotePushPull(
       })
       const refreshGitHubForWorktree = get().refreshGitHubForWorktree
       if (typeof refreshGitHubForWorktree === 'function') {
-        refreshGitHubForWorktree(worktreeId)
+        refreshGitHubForWorktree(
+          worktreeId,
+          gitOperationExecutionHostId(runtimeTarget, connectionId)
+        )
       }
     },
     pullBranch: async (worktreeId, worktreePath, connectionId, pushTarget, options) => {
@@ -88,7 +91,10 @@ export function createGitRemotePushPull(
       })
       const refreshGitHubForWorktree = get().refreshGitHubForWorktree
       if (typeof refreshGitHubForWorktree === 'function') {
-        refreshGitHubForWorktree(worktreeId)
+        refreshGitHubForWorktree(
+          worktreeId,
+          gitOperationExecutionHostId(runtimeTarget, connectionId)
+        )
       }
     },
     fastForwardBranch: async (worktreeId, worktreePath, connectionId, pushTarget, options) => {
@@ -110,7 +116,10 @@ export function createGitRemotePushPull(
       })
       const refreshGitHubForWorktree = get().refreshGitHubForWorktree
       if (typeof refreshGitHubForWorktree === 'function') {
-        refreshGitHubForWorktree(worktreeId)
+        refreshGitHubForWorktree(
+          worktreeId,
+          gitOperationExecutionHostId(runtimeTarget, connectionId)
+        )
       }
     }
   }

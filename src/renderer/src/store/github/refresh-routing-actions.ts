@@ -2,6 +2,7 @@ import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import type { GitHubSlice } from './slice-types'
 import type { GitHubPRRefreshCandidate } from '../../../../shared/github/pull-request-refresh-types'
+import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import { bypassesGitHubPRRefreshFreshness } from './pr-refresh-state'
 import {
   enqueueLocalGitHubPRRefresh,
@@ -9,6 +10,7 @@ import {
   shouldEnqueueLocalPRRefresh
 } from './repository-routing'
 import { buildPRRefreshCandidate, findWorktreeById } from './worktree-refresh'
+import { getVisibleHostedReviewWorkspaces } from './visible-hosted-review-refresh-targets'
 import {
   hasNonGitHubReview,
   shouldCoordinateVisibleGitHubReview
@@ -32,9 +34,9 @@ export const createRefreshRoutingActions = (
         : { visibleReviewCardWorktreeIds: ids }
     )
   },
-  enqueueGitHubPRRefresh: (worktreeId, reason, priority = 0) => {
+  enqueueGitHubPRRefresh: (worktreeId, reason, priority = 0, executionHostId) => {
     const state = get()
-    const worktree = findWorktreeById(state, worktreeId)
+    const worktree = findWorktreeById(state, worktreeId, executionHostId)
     const candidate = worktree ? buildPRRefreshCandidate(state, worktree) : null
     if (!candidate) {
       return
@@ -46,6 +48,7 @@ export const createRefreshRoutingActions = (
       void get().fetchPRForBranch(candidate.repoPath, candidate.branch, {
         force: bypassesGitHubPRRefreshFreshness(reason),
         repoId: candidate.repoId,
+        repoOwnerExecutionHostId: getRepoExecutionHostId(candidate),
         worktreeId: candidate.worktreeId,
         linkedPRNumber: candidate.linkedPRNumber ?? null,
         fallbackPRNumber: candidate.fallbackPRNumber ?? null,
@@ -61,6 +64,7 @@ export const createRefreshRoutingActions = (
       await get().fetchPRForBranch(candidate.repoPath, candidate.branch, {
         force: bypassesGitHubPRRefreshFreshness(reason),
         repoId: candidate.repoId,
+        repoOwnerExecutionHostId: getRepoExecutionHostId(candidate),
         worktreeId: candidate.worktreeId,
         linkedPRNumber: candidate.linkedPRNumber ?? null,
         fallbackPRNumber: candidate.fallbackPRNumber ?? null,
@@ -78,19 +82,16 @@ export const createRefreshRoutingActions = (
         : { visibleReviewWorktreeIds: worktreeIds }
     )
     const state = get()
-    const candidates = worktreeIds
-      .map((id) => {
-        const worktree = findWorktreeById(state, id)
-        const candidate = worktree ? buildPRRefreshCandidate(state, worktree) : null
-        return worktree &&
-          candidate &&
-          shouldCoordinateVisibleGitHubReview(state, worktree, candidate)
-          ? candidate
-          : null
-      })
-      .filter((candidate): candidate is GitHubPRRefreshCandidate => candidate !== null)
     const localCandidates: GitHubPRRefreshCandidate[] = []
-    for (const candidate of candidates) {
+    for (const { worktree, candidate } of getVisibleHostedReviewWorkspaces(state, {
+      worktreeIds
+    })) {
+      if (
+        findWorktreeById(state, worktree.id, getRepoExecutionHostId(candidate)) !== worktree ||
+        !shouldCoordinateVisibleGitHubReview(state, worktree, candidate)
+      ) {
+        continue
+      }
       if (getPRRefreshRuntimeRepoTarget(state, candidate)) {
         continue
       }

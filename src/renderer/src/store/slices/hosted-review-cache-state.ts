@@ -97,7 +97,7 @@ export function findHostedReviewRepoByPath(
       (candidate) => getRepoExecutionHostId(candidate) === repoOwnerExecutionHostId
     )
   }
-  return matches?.[0]
+  return matches?.find((candidate) => candidate.path === repoPath) ?? matches?.[0]
 }
 
 export function findHostedReviewRepoForFetch(
@@ -213,8 +213,13 @@ export function withHostedReviewCacheEntry(
 
 /** Known runtime repos use owner server; local/SSH/unknown repos use app IPC. Focus cannot infer ownership. */
 export function hostedReviewRepoOwnerTarget(
-  repo: Pick<Repo, 'connectionId' | 'executionHostId'> | undefined
+  repo: Pick<Repo, 'connectionId' | 'executionHostId'> | null | undefined
 ): RuntimeClientTarget {
+  if (repo === null) {
+    throw new Error(
+      'The repository is no longer available on its owning host. Reconnect and retry.'
+    )
+  }
   return (
     (repo ? ipcOrRuntimeTargetForHostId(getRepoExecutionHostId(repo)) : null) ?? { kind: 'local' }
   )

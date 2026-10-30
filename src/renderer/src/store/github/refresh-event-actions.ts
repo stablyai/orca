@@ -1,4 +1,3 @@
-import { CLEARED_HOSTED_REVIEW_SELECTION_UPDATES } from '../../../../shared/worktree/hosted-review-links'
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import type { GitHubSlice } from './slice-types'
@@ -16,15 +15,15 @@ import {
   setPRRefreshStartedHostedReviewEntry
 } from './pr-result-cache'
 import { prRefreshStartedHostedReviewEntries } from './request-coordination'
+import {
+  captureLinkedReviewClearScope,
+  clearLinkedReview,
+  type LinkedReviewClearScope
+} from './linked-review-clear'
+import { getGitHubRepoLookupIndex } from '../slices/github-repo-lookup-index'
 import { getRefreshAliasExecutionHostId } from './repository-routing'
+import { buildWorktreeLookupIndex, isStaleExactLinkedPRLookup } from './worktree-refresh'
 import {
-  buildWorktreeLookupIndex,
-  findUniqueWorktreeById,
-  isStaleExactLinkedPRLookup
-} from './worktree-refresh'
-import {
-  shouldApplyBranchMismatchedLinkedPRClear,
-  shouldApplyDivergedLinkedPRClear,
   shouldClearBranchMismatchedLinkedOpenPR,
   shouldClearDivergedLinkedMergedPR
 } from '../../../../shared/github/linked-pr-staleness'
@@ -41,14 +40,14 @@ export const createRefreshEventActions = (
       linkedPRNumber: number
       branch: string
       requestHeadOid: string | null
-      executionHostId: string
+      scope: LinkedReviewClearScope
     }[] = []
     const branchMismatchedLinkedPRClears: {
       worktreeId: string
       linkedPRNumber: number
       branch: string
       requestHeadOid: string | null
-      executionHostId: string
+      scope: LinkedReviewClearScope
     }[] = []
     set((s) => {
       let linkedWorktreeLookupIndex: WorktreeLookupIndex | undefined
@@ -77,7 +76,8 @@ export const createRefreshEventActions = (
 
         if (event.outcome) {
           const startedEntryKey = prRefreshStartedEntryKey(event.sequence, alias.cacheKey)
-          const requestStartedEntry = prRefreshStartedHostedReviewEntries.get(startedEntryKey)
+          const requestStart = prRefreshStartedHostedReviewEntries.get(startedEntryKey)
+          const requestStartedEntry = requestStart?.entry
           prRefreshStartedHostedReviewEntries.delete(startedEntryKey)
           if (previousSequence !== event.sequence) {
             deletePRRefreshStartedEntry(previousSequence, alias.cacheKey)
@@ -113,23 +113,26 @@ export const createRefreshEventActions = (
               : undefined
           // Why: a queued refresh finishing after the user unlinks an exact PR must not restore the manual-link UI.
           if (
-            isStaleExactLinkedPRLookup(s, alias.worktreeId, linkedPRNumber, worktreeLookupIndex)
+            isStaleExactLinkedPRLookup(
+              s,
+              alias.worktreeId,
+              linkedPRNumber,
+              aliasExecutionHostId,
+              worktreeLookupIndex
+            )
           ) {
             continue
           }
           if (event.outcome.kind === 'found' && alias.worktreeId) {
             const requestHeadOid = alias.currentHeadOid ?? null
-            const worktree =
-              linkedPRNumber != null
-                ? findUniqueWorktreeById(
-                    s,
-                    alias.worktreeId,
-                    aliasExecutionHostId,
-                    worktreeLookupIndex
-                  )
-                : null
+            const scope =
+              requestStart?.clearScope?.workspace.id === alias.worktreeId
+                ? requestStart.clearScope
+                : undefined
+            const worktree = scope?.workspace
             // Why: only the sequence-gate winner owns metadata side effects; late outcomes must not unlink a newer PR.
             if (
+              scope &&
               worktree &&
               linkedPRNumber != null &&
               shouldClearDivergedLinkedMergedPR({
@@ -143,9 +146,10 @@ export const createRefreshEventActions = (
                 linkedPRNumber,
                 branch: alias.branch,
                 requestHeadOid,
-                executionHostId: aliasExecutionHostId
+                scope
               })
             } else if (
+              scope &&
               worktree &&
               linkedPRNumber != null &&
               shouldClearBranchMismatchedLinkedOpenPR({
@@ -161,7 +165,7 @@ export const createRefreshEventActions = (
                 linkedPRNumber,
                 branch: alias.branch,
                 requestHeadOid,
-                executionHostId: aliasExecutionHostId
+                scope
               })
             }
           }
@@ -210,7 +214,18 @@ export const createRefreshEventActions = (
             )
             setPRRefreshStartedHostedReviewEntry(
               prRefreshStartedEntryKey(event.sequence, alias.cacheKey),
-              s.hostedReviewCache[hostedReviewCacheKey]
+              s.hostedReviewCache[hostedReviewCacheKey],
+              alias.linkedPRNumber != null
+                ? captureLinkedReviewClearScope(
+                    s,
+                    alias.worktreeId,
+                    getGitHubRepoLookupIndex(s.repos).findOnHost(
+                      aliasExecutionHostId,
+                      alias.repoId,
+                      alias.repoPath
+                    )
+                  )
+                : undefined
             )
           } else {
             // Why: pause/skip can follow an in-flight broadcast with no outcome; drop the stale request-start snapshot.
@@ -244,28 +259,10 @@ export const createRefreshEventActions = (
         : s
     })
     for (const clear of divergedLinkedPRClears) {
-      void get().updateWorktreeMeta(clear.worktreeId, CLEARED_HOSTED_REVIEW_SELECTION_UPDATES, {
-        shouldApply: () =>
-          shouldApplyDivergedLinkedPRClear({
-            worktree:
-              findUniqueWorktreeById(get(), clear.worktreeId, clear.executionHostId) ?? undefined,
-            linkedPRNumber: clear.linkedPRNumber,
-            branch: clear.branch,
-            requestHeadOid: clear.requestHeadOid
-          })
-      })
+      clearLinkedReview(get, clear.scope, clear, 'diverged')
     }
     for (const clear of branchMismatchedLinkedPRClears) {
-      void get().updateWorktreeMeta(clear.worktreeId, CLEARED_HOSTED_REVIEW_SELECTION_UPDATES, {
-        shouldApply: () =>
-          shouldApplyBranchMismatchedLinkedPRClear({
-            worktree:
-              findUniqueWorktreeById(get(), clear.worktreeId, clear.executionHostId) ?? undefined,
-            linkedPRNumber: clear.linkedPRNumber,
-            branch: clear.branch,
-            requestHeadOid: clear.requestHeadOid
-          })
-      })
+      clearLinkedReview(get, clear.scope, clear, 'branch-mismatch')
     }
   }
 })

@@ -316,7 +316,7 @@ describe('useChecksPanelCheckAndReviewActions AI details diagnostics', () => {
         url: null,
         prRepo: null
       },
-      { repoId: 'repo-1' }
+      { repoId: 'repo-1', repoOwnerExecutionHostId: 'ssh:ssh-1' }
     )
     expect(mocks.loadGitLabJobLogDetails).not.toHaveBeenCalled()
     expect(mocks.startFixChecksAgent).toHaveBeenCalledOnce()

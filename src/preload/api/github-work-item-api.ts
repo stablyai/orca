@@ -43,6 +43,7 @@ import type {
 import type { GitHubCreateIssueResult, GitHubIssueUpdate } from '../../shared/issue-mutation-types'
 
 export type GitHubRepoSelectorArgs = {
+  repoOwnerExecutionHostId?: string
   repoPath: string
   repoId?: string | null
   sourceContext?: TaskSourceContext | null

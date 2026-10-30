@@ -1,4 +1,5 @@
 import { useCallback } from 'react'
+import { forgeOwnerHostIdForWorkspace } from '@/runtime/forge-credential-target'
 import { toast } from 'sonner'
 import { mergePRCommentIntoList } from '@/store/github/pr-comment-cache'
 import { githubProjectHost } from '../../../../../shared/github/project-identity'
@@ -21,6 +22,7 @@ import { codeHostErrorText } from '@/lib/code-host-error-copy'
 
 type ChecksPanelCommentMutationsInput = Pick<
   ChecksPanelControllerState,
+  | 'activeWorktree'
   | 'addPRConversationComment'
   | 'addPRReviewCommentReply'
   | 'branch'
@@ -36,6 +38,7 @@ type ChecksPanelCommentMutationsInput = Pick<
 
 export function useChecksPanelCommentMutations(model: ChecksPanelCommentMutationsInput) {
   const {
+    activeWorktree,
     addPRConversationComment,
     addPRReviewCommentReply,
     branch,
@@ -64,6 +67,7 @@ export function useChecksPanelCommentMutations(model: ChecksPanelCommentMutation
       )
       const result = await addPRConversationComment(repo.path, prNumber, body, {
         repoId: repo.id,
+        repoOwnerExecutionHostId: forgeOwnerHostIdForWorkspace(repo, activeWorktree),
         prRepo: pr.prRepo
       })
       if (!isCurrentAsyncResult(requestKey)) {
@@ -77,6 +81,7 @@ export function useChecksPanelCommentMutations(model: ChecksPanelCommentMutation
       return { ok: true as const }
     },
     [
+      activeWorktree,
       addPRConversationComment,
       branch,
       commentsDisabledReason,
@@ -172,7 +177,11 @@ export function useChecksPanelCommentMutations(model: ChecksPanelCommentMutation
         reactionSubjectId,
         content,
         reacted,
-        { repoId: repo.id, prRepo: pr.prRepo }
+        {
+          repoId: repo.id,
+          repoOwnerExecutionHostId: forgeOwnerHostIdForWorkspace(repo, activeWorktree),
+          prRepo: pr.prRepo
+        }
       )
       if (!isCurrentAsyncResult(requestKey) || ok) {
         return ok
@@ -189,6 +198,7 @@ export function useChecksPanelCommentMutations(model: ChecksPanelCommentMutation
       return false
     },
     [
+      activeWorktree,
       branch,
       isCurrentAsyncResult,
       pr,
@@ -222,6 +232,7 @@ export function useChecksPanelCommentMutations(model: ChecksPanelCommentMutation
       const result = canPostPRReviewThreadReply(comment)
         ? await addPRReviewCommentReply(repo.path, prNumber, comment.id, body, {
             repoId: repo.id,
+            repoOwnerExecutionHostId: forgeOwnerHostIdForWorkspace(repo, activeWorktree),
             prRepo: pr.prRepo,
             threadId: parentThreadId,
             path: comment.path,
@@ -233,6 +244,7 @@ export function useChecksPanelCommentMutations(model: ChecksPanelCommentMutation
             buildPRCommentConversationReplyBody(comment.author, body),
             {
               repoId: repo.id,
+              repoOwnerExecutionHostId: forgeOwnerHostIdForWorkspace(repo, activeWorktree),
               prRepo: pr.prRepo
             }
           )
@@ -256,6 +268,7 @@ export function useChecksPanelCommentMutations(model: ChecksPanelCommentMutation
       return { ok: true as const }
     },
     [
+      activeWorktree,
       addPRConversationComment,
       addPRReviewCommentReply,
       branch,

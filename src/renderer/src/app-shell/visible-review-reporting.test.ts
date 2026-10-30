@@ -63,6 +63,32 @@ describe('review surface visibility union', () => {
 })
 
 describe('review report selector work', () => {
+  it.each(['ssh:builder', 'runtime:server'] as const)(
+    'updates the report when switching between same-ID local and %s worktrees',
+    (hostId) => {
+      const store = state()
+      const localRepo = store.getState().repos[0]
+      const localWorktree = makePRRefreshWorktree({ id: 'selected', hostId: 'local' })
+      store.setState({
+        repos: [localRepo, { ...localRepo, executionHostId: hostId }],
+        worktreesByRepo: {
+          'repo-1': [localWorktree, { ...localWorktree, hostId }]
+        },
+        activeWorkspaceExecutionHostId: 'local'
+      })
+      const select = createVisibleReviewReportIdentitySelector()
+      const localReport = select(store.getState())
+
+      store.setState({ activeWorkspaceExecutionHostId: hostId })
+      const remoteReport = select(store.getState())
+      expect(remoteReport).not.toBe(localReport)
+      expect(remoteReport).toBe(createVisibleReviewReportIdentitySelector()(store.getState()))
+
+      store.setState({ activeWorkspaceExecutionHostId: 'local' })
+      expect(select(store.getState())).toBe(localReport)
+    }
+  )
+
   it('does not rebuild candidates or serialize on unrelated agent updates', () => {
     const current = state().getState()
     const select = createVisibleReviewReportIdentitySelector()
