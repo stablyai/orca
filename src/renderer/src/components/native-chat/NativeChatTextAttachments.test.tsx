@@ -115,9 +115,27 @@ const waitUntilEnabled = (name: string) =>
 it('keeps terminal text unchanged and does no body reads until a structured reference is opened', async () => {
   const content = `Read @${path}`
   const renderText = (text: string) => <span>{text}</span>
+  const baseline = { ...subscriptions }
   const view = render(
     <NativeChatTextAttachments content={content} structured={false} renderText={renderText} />
   )
+  expect(subscriptions).toEqual(baseline)
+  const terminalNode = view.container.firstChild
+  const revision = languageRevision.getTranslationResourceVersion()
+  await act(async () => {
+    await i18n.changeLanguage('fr')
+  })
+  expect(languageRevision.getTranslationResourceVersion()).toBeGreaterThan(revision)
+  view.rerender(
+    <NativeChatTextAttachments content={content} structured={false} renderText={renderText} />
+  )
+  expect(view.container.firstChild).toBe(terminalNode)
+  expect(subscriptions).toEqual(baseline)
+  expect(mocks.rpc).not.toHaveBeenCalled()
+  await act(async () => {
+    await i18n.changeLanguage('en')
+  })
+  expect(subscriptions).toEqual(baseline)
   expect(screen.queryByRole('button')).toBeNull()
   expect(view.container.textContent).toBe(content)
   view.rerender(

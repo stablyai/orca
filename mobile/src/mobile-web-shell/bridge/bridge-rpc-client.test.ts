@@ -369,6 +369,9 @@ describe('private bridge response completion', () => {
     (reason) => {
       const page = createPageClient()
       page.start()
+      const readyFrames = page.frames()
+      expect(readyFrames).toHaveLength(1)
+      expect(readyFrames[0]).toMatchObject({ v: 1, type: 'ready' })
       const controller = new AbortController()
       controller.abort(reason)
       const beforeSend = vi.fn()
@@ -383,7 +386,7 @@ describe('private bridge response completion', () => {
         }
       }
       expect(beforeSend).not.toHaveBeenCalled()
-      expect(page.frames()).toEqual([{ v: 1, type: 'ready' }])
+      expect(page.frames()).toEqual(readyFrames)
       page.client.close()
     }
   )

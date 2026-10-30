@@ -2,6 +2,12 @@ import { createElement, Profiler } from 'react'
 import * as mobileLanguage from '../i18n/mobile-i18n'
 import { act, create, type ReactTestRenderer, type ReactTestInstance } from 'react-test-renderer'
 import { afterEach, expect, it, vi } from 'vitest'
+import { MOBILE_BRIDGE_MAX_FRAME_BYTES } from '../../../src/shared/mobile-bridge-frame-bytes'
+import {
+  forgetHostDescriptor,
+  recordHostDescriptor,
+  useHostDescriptor
+} from '../transport/host-descriptor-store'
 import type { RpcResponse } from '../transport/types'
 import { useMobileFileTapHandlers } from '../session/use-mobile-file-tap-handlers'
 import { MobileNativeChatComposerAttachments } from '../session/native-chat/composer/MobileNativeChatComposerAttachments'
@@ -34,11 +40,18 @@ const mocks = vi.hoisted(() => ({
   back: vi.fn(),
   write: vi.fn(),
   send: vi.fn(),
-  generation: 1
+  generation: 1,
+  addBack: vi.fn(),
+  removeBack: vi.fn()
 }))
 vi.mock('react-native', () => ({
   ActivityIndicator: 'ActivityIndicator',
-  BackHandler: { addEventListener: () => ({ remove: () => {} }) },
+  BackHandler: {
+    addEventListener: (...args: unknown[]) => {
+      mocks.addBack(...args)
+      return { remove: mocks.removeBack }
+    }
+  },
   Image: 'Image',
   Platform: { OS: 'ios' },
   Pressable: 'Pressable',
@@ -91,6 +104,7 @@ const button = (label: string) =>
 afterEach(async () => {
   act(() => tree?.unmount())
   tree = null
+  forgetHostDescriptor('other35636')
   await act(async () => {
     await mobileLanguage.activateMobileUiLocale('en')
   })
@@ -230,6 +244,12 @@ it.each([1, 10])(
     const bytes = Buffer.from(text)
     serveAttachment(bytes)
     const commits = vi.fn()
+    const publications: {
+      delta: number
+      notifications: number
+      commits: number
+      snapshots: number
+    }[] = []
     const baseLive = subscriptions.live
     const route = normalizeMobileFilePreviewRouteParams({
       hostId: 'owner',
@@ -244,11 +264,18 @@ it.each([1, 10])(
       ],
       onOpenFile: mocks.push
     })
+    const descriptors: (string | null | undefined)[] = []
+    function OtherHost() {
+      const descriptor = useHostDescriptor('other35636')
+      descriptors.push(descriptor?.machineName)
+      return createElement('HostWitness', { machineName: descriptor?.machineName })
+    }
     const ui = (open: boolean) =>
       createElement(
         'Routes',
         null,
         composer,
+        createElement(OtherHost),
         open
           ? Array.from({ length: count }, (_, index) =>
               createElement(
@@ -292,9 +319,19 @@ it.each([1, 10])(
     const rendered = commits.mock.calls.length
     const notifications = subscriptions.notifications
     const revision = mobileLanguage.getMobileUiRevision()
+    const descriptorRegistrations = subscriptions.registered
+    const descriptorLive = subscriptions.live
+    const witnessed = descriptors.length
     await act(async () => {
-      tree!.update(ui(true))
+      recordHostDescriptor('other35636', { machineName: 'changed35636', platform: 'linux' })
     })
+    const descriptorWitnessRenders = descriptors.length - witnessed
+    expect(descriptorWitnessRenders).toBe(1)
+    expect(descriptors.at(-1)).toBe('changed35636')
+    expect(tree!.root.findByType('HostWitness').props.machineName).toBe('changed35636')
+    expect(commits).toHaveBeenCalledTimes(rendered)
+    expect(subscriptions.registered).toBe(descriptorRegistrations)
+    expect(subscriptions.live).toBe(descriptorLive)
     expect(subscriptions.notifications).toBe(notifications)
     expect(mobileLanguage.getMobileUiRevision()).toBe(revision)
     expect(mocks.send.mock.calls).toEqual(reads)
@@ -314,8 +351,13 @@ it.each([1, 10])(
         vi.mocked(mobileLanguage.getMobileUiRevision).mock.calls.length - snapshots
       ).toBeLessThanOrEqual(12 * subscriptions.live + 2)
       expect(mocks.send.mock.calls).toEqual(reads)
+      publications.push({
+        delta,
+        notifications: subscriptions.notifications - notified,
+        commits: commits.mock.calls.length - renderedBefore,
+        snapshots: vi.mocked(mobileLanguage.getMobileUiRevision).mock.calls.length - snapshots
+      })
     }
-    expect(commits.mock.calls.length).toBeGreaterThanOrEqual(rendered)
     await activate()
     expect(tree!.root.findAll((node) => String(node.type) === 'TextInput')).toEqual(inputs)
     expect(
@@ -379,6 +421,25 @@ it.each([1, 10])(
       await mobileLanguage.activateMobileUiLocale('en')
     })
     expect(subscriptions.notifications).toBe(retiredNotifications)
+    const retiredWitness = descriptors.length
+    act(() => {
+      forgetHostDescriptor('other35636')
+      recordHostDescriptor('other35636', { machineName: 'retired35636', platform: 'linux' })
+      forgetHostDescriptor('other35636')
+    })
+    expect(descriptors).toHaveLength(retiredWitness)
+    console.info(
+      'PR35636 mobile locale population',
+      JSON.stringify({
+        count,
+        closedListeners: closedLive - baseLive,
+        openListeners: liveBeforeBack - closedLive,
+        remainingListeners: subscriptions.live - baseLive,
+        initialRpc: reads.length,
+        publications,
+        descriptorWitnessRenders
+      })
+    )
   }
 )
 
@@ -410,6 +471,91 @@ it.each([undefined, [], ''])(
     expect(mocks.send).not.toHaveBeenCalled()
   }
 )
+
+it('keeps the M5 invalid terminal document, Back, and registrations through locale activation and route reevaluation', async () => {
+  const params = {
+    hostId: 'h',
+    worktreeId: 'w',
+    source: 'terminalArtifact',
+    absolutePath: '/tmp/a.txt'
+  }
+  const route = normalizeMobileFilePreviewRouteParams(params)
+  expect(route).toEqual({ ok: false, message: 'Unable to load preview' })
+  mobileLanguage.mobileI18n.addResourceBundle('fr', 'translation', {
+    files: {
+      filePreviewScreen: {
+        loadFailed: 'Impossible de charger l’aperçu',
+        backToFiles: 'Retour aux fichiers'
+      },
+      filePreviewResponse: { loadFailed: 'Impossible de charger l’aperçu' }
+    }
+  })
+  const baseLive = subscriptions.live
+  await act(async () => {
+    tree = create(createElement(MobileFilePreviewScreen, { route }))
+  })
+  const document = tree!.root.find(
+    (node) => typeof node.type === 'function' && node.type.name === 'MobileFilePreviewDocument'
+  )
+  const back = tree!.root.find(
+    (node) => String(node.type) === 'Pressable' && node.props.accessibilityLabel === 'Back to files'
+  )
+  const registered = subscriptions.registered
+  const live = subscriptions.live
+  const removed = subscriptions.removed
+  const backRegistrations = mocks.addBack.mock.calls.slice()
+  expect(live).toBeGreaterThan(baseLive)
+  expect(backRegistrations).toHaveLength(1)
+  expect(mocks.removeBack).not.toHaveBeenCalled()
+  expect(tree!.root.findAll((node) => String(node.type) === 'Text').map(textIn)).toContain(
+    'Unable to load preview'
+  )
+  const notified = subscriptions.notifications
+  const revision = mobileLanguage.getMobileUiRevision()
+  await act(async () => {
+    await mobileLanguage.activateMobileUiLocale('fr')
+  })
+  expect(mobileLanguage.getMobileUiRevision() - revision).toBe(1)
+  expect(subscriptions.notifications - notified).toBe(live)
+  expect(tree!.root.findByType(document.type)).toBe(document)
+  expect(
+    tree!.root.find(
+      (node) =>
+        String(node.type) === 'Pressable' && node.props.accessibilityLabel === 'Retour aux fichiers'
+    )
+  ).toBe(back)
+  const reevaluated = normalizeMobileFilePreviewRouteParams({
+    ...params,
+    name: 'same refused35636'
+  })
+  expect(reevaluated).toEqual(route)
+  await act(async () => {
+    tree!.update(createElement(MobileFilePreviewScreen, { route: reevaluated }))
+  })
+  expect(tree!.root.findByType(document.type)).toBe(document)
+  expect(
+    tree!.root.find(
+      (node) =>
+        String(node.type) === 'Pressable' && node.props.accessibilityLabel === 'Retour aux fichiers'
+    )
+  ).toBe(back)
+  expect(subscriptions.registered).toBe(registered)
+  expect(subscriptions.live).toBe(live)
+  expect(subscriptions.removed).toBe(removed)
+  expect(mocks.addBack.mock.calls).toEqual(backRegistrations)
+  expect(mocks.removeBack).not.toHaveBeenCalled()
+  expect(tree!.root.findAll((node) => String(node.type) === 'Text').map(textIn)).toContain(
+    'Impossible de charger l’aperçu'
+  )
+  act(() => back.props.onPress())
+  expect(mocks.back).toHaveBeenCalledTimes(1)
+  expect(mocks.send).not.toHaveBeenCalled()
+  act(() => tree!.unmount())
+  tree = null
+  expect(subscriptions.live).toBe(baseLive)
+  expect(subscriptions.removed - removed).toBe(live - baseLive)
+  expect(mocks.removeBack).toHaveBeenCalledTimes(1)
+})
 
 it('translates retained reader and hook refusals without restarting the source, and preserves exact unknown errors', async () => {
   mobileLanguage.mobileI18n.addResourceBundle('fr', 'translation', {
@@ -451,7 +597,7 @@ it('translates retained reader and hook refusals without restarting the source, 
 })
 
 it('keeps large full Copy and Save disabled with the same localized F2 explanation', async () => {
-  serveAttachment(Buffer.from('a'.repeat(530_000)))
+  serveAttachment(Buffer.from('a'.repeat(MOBILE_BRIDGE_MAX_FRAME_BYTES)))
   mobileLanguage.mobileI18n.addResourceBundle('fr', 'translation', {
     chat: {
       textAttachmentPreview: {

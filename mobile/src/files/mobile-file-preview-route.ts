@@ -67,7 +67,7 @@ export function normalizeMobileFilePreviewRouteParams(
   if (!hostId || !worktreeId) {
     return {
       ok: false,
-      message: translate('files.filePreviewScreen.loadFailed', 'Unable to load preview')
+      message: 'Unable to load preview'
     }
   }
   if (source === 'chatAttachment') {
@@ -91,7 +91,7 @@ export function normalizeMobileFilePreviewRouteParams(
     if (!absolutePath || !grantId) {
       return {
         ok: false,
-        message: translate('files.filePreviewScreen.loadFailed', 'Unable to load preview')
+        message: 'Unable to load preview'
       }
     }
     return {
@@ -117,7 +117,7 @@ export function normalizeMobileFilePreviewRouteParams(
   if (!relativePath) {
     return {
       ok: false,
-      message: translate('files.filePreviewScreen.loadFailed', 'Unable to load preview')
+      message: 'Unable to load preview'
     }
   }
   return {

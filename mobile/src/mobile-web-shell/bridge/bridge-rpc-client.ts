@@ -133,10 +133,8 @@ export function createBridgeRpcClient(options: BridgeRpcClientOptions): BridgeRp
   }
 
   const subscriptions = new BridgeClientSubscriptions({
-    send: (frame) => posted(frame),
-    onDroppedBinaryFrame: () => {
-      report({ kind: 'binary-frame-dropped' })
-    }
+    send: posted,
+    onDroppedBinaryFrame: () => report({ kind: 'binary-frame-dropped' })
   })
 
   const handshake = createBridgeInitHandshake(() => {
@@ -165,17 +163,14 @@ export function createBridgeRpcClient(options: BridgeRpcClientOptions): BridgeRp
       requests.closeAll(replaced)
       subscriptions.failAll(replaced.message)
     },
-    prime: (connection) => {
-      cache.prime(connection)
-    }
+    prime: (connection) => cache.prime(connection)
   })
 
   function acceptState(snapshotFromShell: BridgeConnectionSnapshot): void {
-    if (cache.apply(snapshotFromShell) !== 'stale') {
-      return
+    if (cache.apply(snapshotFromShell) === 'stale') {
+      report({ kind: 'state-out-of-order' })
+      handshake.restart()
     }
-    report({ kind: 'state-out-of-order' })
-    handshake.restart()
   }
 
   const back = createPageBackConsumers({
