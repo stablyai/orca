@@ -97,10 +97,12 @@ it("moves an earlier build's cards into the journal, each action its own card, t
   })
   const sent = await fixture.rig.sendNow('ret-gone')
   expect(sent).toMatchObject({ ok: true, value: { submission: { queuedMessageId: 'ret-gone' } } })
+  // Saved cards are whole values: an import stores each card as it reads, refused or not.
   expect(queueRows()).toEqual([
-    'ret-present:queued',
+    'ret-present:queued+refusal',
     'ret-present:withdrawn',
-    'ret-gone:queued+refusal'
+    'ret-gone:queued+refusal',
+    'ret-gone:dispatched'
   ])
   expect(legacyIds()).toEqual(all.filter((id) => id !== 'ret-present' && id !== 'ret-gone'))
   await nothingSentTo('edited', 'held')
@@ -109,9 +111,9 @@ it("moves an earlier build's cards into the journal, each action its own card, t
   await fixture.rig.restartHostProcess()
   expect(await fixture.rig.drafts()).toEqual(published.slice(2))
   expect(legacyIds()).toEqual(['broken'])
-  expect(queueRows().slice(3)).toEqual([
+  expect(queueRows().slice(4)).toEqual([
     'cmd-gone:queued+refusal',
-    'disp-refused:queued',
+    'disp-refused:queued+refusal',
     'stopped-same:queued',
     'stopped-edited:queued',
     'orphan:queued',
