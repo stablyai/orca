@@ -76,11 +76,14 @@ describe('restored client-hosted browser host attach on reachability', () => {
     expect(replayClientHostedBrowserCloseIntents).not.toHaveBeenCalled()
   })
 
-  it('starts no browser client host for restored pages the server hosts', async () => {
+  it('also prepares hosting for new pages when only server-hosted pages were restored', async () => {
     stubApi(vi.fn().mockResolvedValue(createCompatibleRuntimeStatusResponse('runtime-a')))
 
     await storeWithRestoredHandles(false).getState().refreshRuntimeEnvironmentStatus('env-a')
 
-    expect(prepareBrowserClientHostPlacement).not.toHaveBeenCalled()
+    expect(prepareBrowserClientHostPlacement).toHaveBeenCalledWith({
+      selector: 'env-a',
+      preference: 'auto'
+    })
   })
 })

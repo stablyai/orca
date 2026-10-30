@@ -216,10 +216,12 @@ function statusFor(runtimeId: string, checkedAt = 1): RuntimeEnvironmentStatus {
 }
 
 /** A status slice whose state also carries the client-hosted handle the restart attach reads. */
-function storeWithClientHostedPage() {
+function storeWithClientHostedPage(withPage = true) {
   return create<RuntimeStatusSlice & { remoteBrowserPageHandlesByPageId: unknown }>()((...a) => ({
     ...createRuntimeStatusSlice(...(a as unknown as Parameters<typeof createRuntimeStatusSlice>)),
-    ...stateWith({ 'page-1': { environmentId: 'env-a', placement: CLIENT_PLACEMENT } })
+    ...stateWith(
+      withPage ? { 'page-1': { environmentId: 'env-a', placement: CLIENT_PLACEMENT } } : {}
+    )
   }))
 }
 
@@ -238,9 +240,10 @@ describe('setRuntimeEnvironmentStatus runtime-contact detection', () => {
 
   // Without mid-session ID-change observation, rows recover only by accidental new-tab/relaunch attach.
   it('re-attaches when a known environment comes back under a new runtime id', async () => {
-    const store = storeWithClientHostedPage()
+    const store = storeWithClientHostedPage(false)
 
     store.getState().setRuntimeEnvironmentStatus('env-a', statusFor('runtime-1'))
+    await Promise.resolve()
     prepareBrowserClientHostPlacement.mockClear()
     store.getState().setRuntimeEnvironmentStatus('env-a', statusFor('runtime-2'))
     await Promise.resolve()
@@ -248,21 +251,23 @@ describe('setRuntimeEnvironmentStatus runtime-contact detection', () => {
     expect(preparedEnvironmentIds()).toEqual(['env-a'])
   })
 
-  // Why: without the known-previous guard the restart path would fire on every ordinary startup.
-  it('does not re-attach on a first connect', async () => {
-    const store = storeWithClientHostedPage()
+  it('claims hosting on first connect before any browser page exists', async () => {
+    const store = storeWithClientHostedPage(false)
 
     store.getState().setRuntimeEnvironmentStatus('env-a', statusFor('runtime-1'))
     await Promise.resolve()
 
-    expect(prepareBrowserClientHostPlacement).not.toHaveBeenCalled()
+    expect(preparedEnvironmentIds()).toEqual(['env-a'])
+    expect(store.getState().remoteBrowserPageHandlesByPageId).toEqual({})
   })
 
   // Outages beyond lease grace destroy host/guests; this recovery must restart hosting or tabs remain unavailable.
   it('re-attaches when the same runtime answers again after contact was lost', async () => {
-    const store = storeWithClientHostedPage()
+    const store = storeWithClientHostedPage(false)
 
     store.getState().setRuntimeEnvironmentStatus('env-a', statusFor('runtime-1'))
+    await Promise.resolve()
+    prepareBrowserClientHostPlacement.mockClear()
     store.getState().setRuntimeEnvironmentStatus('env-a', { status: null, checkedAt: 2 })
     await Promise.resolve()
     expect(prepareBrowserClientHostPlacement).not.toHaveBeenCalled()
@@ -276,10 +281,59 @@ describe('setRuntimeEnvironmentStatus runtime-contact detection', () => {
     const store = storeWithClientHostedPage()
 
     store.getState().setRuntimeEnvironmentStatus('env-a', statusFor('runtime-1'))
+    await Promise.resolve()
     prepareBrowserClientHostPlacement.mockClear()
     store.getState().setRuntimeEnvironmentStatus('env-a', statusFor('runtime-1', 2))
     await Promise.resolve()
 
+    expect(prepareBrowserClientHostPlacement).not.toHaveBeenCalled()
+  })
+
+  it('claims hosting when the initial runtime graph becomes ready', async () => {
+    const store = storeWithClientHostedPage(false)
+    const starting = statusFor('runtime-1')
+    if (!starting.status) {
+      throw new Error('Expected runtime status')
+    }
+    starting.status.graphStatus = 'unavailable'
+    store.getState().setRuntimeEnvironmentStatus('env-a', starting)
+    await Promise.resolve()
+    expect(prepareBrowserClientHostPlacement).not.toHaveBeenCalled()
+
+    store.getState().setRuntimeEnvironmentStatus('env-a', statusFor('runtime-1', 2))
+    await Promise.resolve()
+    expect(preparedEnvironmentIds()).toEqual(['env-a'])
+  })
+
+  it.each(['unsupported', 'mobile'] as const)(
+    'does not claim empty-page hosting for a %s runtime',
+    async (kind) => {
+      const store = storeWithClientHostedPage(false)
+      const entry = statusFor('runtime-1')
+      if (!entry.status) {
+        throw new Error('Expected runtime status')
+      }
+      if (kind === 'unsupported') {
+        entry.status.capabilities = []
+      } else {
+        entry.status.deviceScope = 'mobile'
+      }
+
+      store.getState().setRuntimeEnvironmentStatus('env-a', entry)
+      await Promise.resolve()
+      expect(prepareBrowserClientHostPlacement).not.toHaveBeenCalled()
+    }
+  )
+
+  it('does not claim empty-page hosting when remote browser placement is server', async () => {
+    await ensureBrowserClientHostOnRuntimeContact(
+      {
+        ...stateWith({}),
+        runtimeStatusByEnvironmentId: new Map([['env-a', statusFor('runtime-1')]]),
+        settings: { browserClientHostedRemoteEnabled: false }
+      },
+      'env-a'
+    )
     expect(prepareBrowserClientHostPlacement).not.toHaveBeenCalled()
   })
 })

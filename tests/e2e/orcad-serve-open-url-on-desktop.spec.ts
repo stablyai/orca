@@ -1,4 +1,4 @@
-// #30731: orcad serve has no browser engine; open-url must render on its paired desktop while routing through the server.
+// #30731 / #35066: open-url must create the first page on a paired desktop while routing through the server.
 // Build the packaged slot with pnpm build:orcad, then run the electron-headless project with ORCA_E2E_ORCAD_SERVE=1 ORCA_BACKGROUND_LAUNCH=1.
 import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { createServer, type Server } from 'node:http'
@@ -152,7 +152,6 @@ test('orca open-url on orcad serve opens the page in the paired desktop', async 
           testRepoPath
         )
       )
-    // The user opens a browser tab in the server's workspace, as in the report.
     await desktop.page.evaluate(
       ({ environmentId, worktreeId }) => {
         window.__store?.getState().setActiveWorktree(worktreeId, `runtime:${environmentId}`)
@@ -169,17 +168,11 @@ test('orca open-url on orcad serve opens the page in the paired desktop', async 
         { timeout: 60_000, message: 'the server workspace never got a tab group on the desktop' }
       )
       .not.toBeNull()
-    await desktop.page.evaluate(async () => {
+    const browserPageCount = await desktop.page.evaluate(() => {
       const state = window.__store?.getState()
-      const groupId = state?.activeWorktreeId
-        ? state.activeGroupIdByWorktree[state.activeWorktreeId]
-        : undefined
-      if (!state || !groupId) {
-        throw new Error('desktop has no active tab group in the server workspace')
-      }
-      state.setBrowserDefaultUrl('about:blank')
-      await state.openNewBrowserTabInActiveWorkspace(groupId)
+      return Object.values(state?.browserPagesByWorkspace ?? {}).flat().length
     })
+    expect(browserPageCount).toBe(0)
 
     let opened: { code: number | null; stdout: string; stderr: string } | null = null
     await expect

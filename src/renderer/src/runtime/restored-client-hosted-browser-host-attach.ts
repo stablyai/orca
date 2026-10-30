@@ -1,8 +1,13 @@
 import type { RemoteBrowserPageHandle } from '../store/slices/browser'
+import type { RuntimeEnvironmentStatus } from '../../../shared/runtime-host-status'
+import type { GlobalSettings } from '../../../shared/global-settings-types'
+import { expectsBrowserClientHosting } from '../../../shared/browser-client-hosting-eligibility'
 
 type RestoredBrowserHandleSource = {
   // Optional: reachability can be observed before the browser slice has any handles to offer.
   remoteBrowserPageHandlesByPageId?: Record<string, RemoteBrowserPageHandle>
+  runtimeStatusByEnvironmentId?: ReadonlyMap<string, RuntimeEnvironmentStatus>
+  settings?: Pick<GlobalSettings, 'browserClientHostedRemoteEnabled'> | null
 }
 
 // Coalesce only in-flight attempts; early unreachable hydration must retry. Adoption spends restored markers to end retries.
@@ -19,12 +24,21 @@ export async function ensureBrowserClientHostsForRestoredPages(
   }
 }
 
-/** Reclaim hosting on runtime restart/contact return. replaceAuthority preserves live guests and inventories them to new authority; past lease grace, fresh hosting lets runtime re-place destroyed guests at last URLs. Nothing else observes these recovery edges. */
+/** Claim hosting on first contact and reclaim it after restart/contact return, even before any pages exist. */
 export async function ensureBrowserClientHostOnRuntimeContact(
   state: RestoredBrowserHandleSource,
   environmentId: string
 ): Promise<void> {
-  if (!hasLiveClientHostedPage(state, environmentId)) {
+  const status = state.runtimeStatusByEnvironmentId?.get(environmentId)?.status
+  const canHostNewPages =
+    status?.graphStatus === 'ready' &&
+    expectsBrowserClientHosting({
+      enabled: state.settings?.browserClientHostedRemoteEnabled !== false,
+      preference: 'auto',
+      deviceScope: status.deviceScope,
+      capabilities: status.capabilities
+    })
+  if (!canHostNewPages && !hasLiveClientHostedPage(state, environmentId)) {
     return
   }
   // Why re-prepare: an in-flight preparation began before this contact, so it may have failed.

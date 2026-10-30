@@ -194,6 +194,8 @@ export const createRuntimeStatusSlice: (
     // An outage past the browser-host lease grace drops this desktop's hosting, so regained contact
     // must re-claim it just like a restart does.
     const contactRegained = previous?.status === null && status.status !== null
+    const runtimeBecameReady =
+      status.status?.graphStatus === 'ready' && previous?.status?.graphStatus !== 'ready'
     // Reachable status clears offline compatibility failures before reuse-flagged refetches can pin them.
     if (status.status !== null) {
       clearRecentRuntimeCompatibilityFailure(environmentId, status.status)
@@ -252,12 +254,10 @@ export const createRuntimeStatusSlice: (
         ...(environmentsChanged ? { runtimeEnvironments } : {})
       }
     })
-    if (runtimeRestarted || contactRegained) {
+    if (runtimeBecameReady || runtimeRestarted || contactRegained) {
       void ensureBrowserClientHostOnRuntimeContact(get(), environmentId)
     }
-    if (options?.suppressDisconnectToast) {
-      dismissRuntimeDisconnectedToast(environmentId)
-    } else if (contactRegained) {
+    if (options?.suppressDisconnectToast || contactRegained) {
       dismissRuntimeDisconnectedToast(environmentId)
     } else if (previous && previous.status !== null && status.status === null) {
       showRuntimeDisconnectedToast(environmentId, get)
