@@ -27,6 +27,7 @@ import { useKeyboardPersistingTaps } from '../platform/keyboard-persisting-taps'
 import type { MobileSessionController } from './use-mobile-session-controller'
 
 const DOUBLE_TAP_RENAME_MS = 300
+export const SESSION_TAB_DOUBLE_TAP_MS = DOUBLE_TAP_RENAME_MS
 
 export function MobileSessionTabStrip({
   controller,
