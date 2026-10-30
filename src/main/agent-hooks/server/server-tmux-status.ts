@@ -54,9 +54,7 @@ export abstract class AgentHookServerTmuxStatus extends AgentHookServerOpenCodeB
           promptInteractionKey: event.promptInteractionKey
         }
         this.commitStatusRowMutation(previous && structuredStatusLegacyEvent(previous), after)
-        const parent = this.canonicalStatusStore
-          .getParents()
-          .find((record) => serializeAgentStatusSubject(record.subject) === key)
+        const parent = this.canonicalStatusStore.getCanonicalParent(subject)
         this.recordCurrentAuthorityObservation(
           { ...after, launchToken: event.launchToken },
           after,

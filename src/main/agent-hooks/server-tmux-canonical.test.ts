@@ -1,3 +1,4 @@
+import { makeStructuredAgentStatusSubject } from '../../shared/agent-status-subject'
 import { createHash } from 'node:crypto'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AgentHookServer, _internals } from './server'
@@ -14,6 +15,15 @@ vi.mock('../telemetry/cohort-classifier', () => ({ getCohortAtEmit: () => ({}) }
 const probe = vi.hoisted(() => vi.fn())
 vi.mock('../../shared/tmux-host-attachment-probe', () => ({ probeTmuxHostAttachments: probe }))
 class CanonicalTestServer extends AgentHookServer {
+  get measuredStore() {
+    return this.canonicalStatusStore
+  }
+  get measuredSubscribers() {
+    return {
+      status: this.statusChangeListeners.size,
+      provider: this.providerSessionChangeListeners.size
+    }
+  }
   hasLegacyRow(): boolean {
     return this.state.lastStatusByPaneKey.has(TMUX_TEST_PANE)
   }
@@ -26,7 +36,10 @@ beforeEach(async () => {
   server.setTmuxManagedPtyResolver(async () => TMUX_TEST_ROOT)
   await server.start({ env: 'production' })
 })
-afterEach(() => server.stop())
+afterEach(() => {
+  server.stop()
+  vi.restoreAllMocks()
+})
 describe('main canonical tmux projection', () => {
   it.each([false, true])(
     'publishes one canonical outer row with delayed verifier=%s, blocks legacy overwrites, and cleans the exact outer and inner subjects',
@@ -66,17 +79,104 @@ describe('main canonical tmux projection', () => {
       expect(server.getStatusSnapshot()).toHaveLength(0)
     }
   )
-  it('captures canonical retirement before delayed credential admission without replacing its subject', async () => {
-    await postHookEvent(server, tmuxTestBody(), '/hook/opencode')
-    const retire = server.capturePaneAuthorityRetirement(TMUX_TEST_PANE)
-    installTestLaunchAuthority(server, [
-      { paneKey: TMUX_TEST_PANE, token: 'generation', connectionId: null }
-    ])
-    expect(server.getStatusSnapshot()[0]?.launchToken).toBe('generation')
-    retire()
-    expect(server.getStatusSnapshot()).toHaveLength(0)
-    expect(server.getCanonicalStatusSnapshot().parents).toHaveLength(0)
-  })
+  it.each([10, 100])(
+    'captures canonical retirement before delayed credential admission without replacing its subject (C=%s)',
+    async (size) => {
+      for (let i = 0; i < size; i++) {
+        const subject = makeStructuredAgentStatusSubject(
+          { ...TMUX_TEST_ROOT.scope, workspaceId: 'foreign' },
+          `unrelated-${i}`
+        )
+        server.ingestStructuredStatus(
+          {
+            sessionId: subject.sessionId,
+            workspaceId: 'foreign',
+            agent: 'codex',
+            status: 'working',
+            hostExecutionOwned: true,
+            updatedAt: 100
+          },
+          subject
+        )
+      }
+      const counts = {
+        producerLists: 0,
+        producerCopies: 0,
+        captureLists: 0,
+        callbackLists: 0,
+        otherLists: 0,
+        otherCopies: 0,
+        producerKeyed: 0
+      }
+      const otherSources: Record<string, { calls: number; copied: number }> = {}
+      let phase = 'producer'
+      const parents = server.measuredStore.getParents.bind(server.measuredStore)
+      vi.spyOn(server.measuredStore, 'getParents').mockImplementation(() => {
+        const rows = parents()
+        const caller =
+          new Error('authority operation caller').stack
+            ?.split('\n')
+            .find(
+              (line) =>
+                (line.includes('/src/main/') || line.includes('/src/shared/')) &&
+                !line.includes('.test.ts')
+            ) ?? ''
+        if (caller.includes('server-tmux-status.ts')) {
+          counts.producerLists++
+          counts.producerCopies += rows.length
+        } else if (caller.includes('server-authority-fences.ts')) {
+          if (phase === 'capture') {
+            counts.captureLists++
+          } else {
+            counts.callbackLists++
+          }
+        } else {
+          counts.otherLists++
+          counts.otherCopies += rows.length
+          const entry = (otherSources[caller.trim()] ??= { calls: 0, copied: 0 })
+          entry.calls++
+          entry.copied += rows.length
+        }
+        return rows
+      })
+      const keyed = server.measuredStore.getCanonicalParent.bind(server.measuredStore)
+      vi.spyOn(server.measuredStore, 'getCanonicalParent').mockImplementation((subject) => {
+        if (
+          new Error('authority operation caller').stack
+            ?.split('\n')
+            .find(
+              (line) =>
+                (line.includes('/src/main/') || line.includes('/src/shared/')) &&
+                !line.includes('.test.ts')
+            )
+            ?.includes('server-tmux-status.ts')
+        ) {
+          counts.producerKeyed++
+        }
+        return keyed(subject)
+      })
+      await postHookEvent(server, tmuxTestBody(), '/hook/opencode')
+      phase = 'capture'
+      const retire = server.capturePaneAuthorityRetirement(TMUX_TEST_PANE)
+      installTestLaunchAuthority(server, [
+        { paneKey: TMUX_TEST_PANE, token: 'generation', connectionId: null }
+      ])
+      expect(server.getStatusSnapshotForPane(TMUX_TEST_PANE)[0]?.launchToken).toBe('generation')
+      phase = 'callback'
+      retire()
+      phase = 'assertions'
+      expect(server.getStatusSnapshotForPane(TMUX_TEST_PANE)).toHaveLength(0)
+      expect(server.getCanonicalStatusSnapshot().parents).toHaveLength(size)
+      console.log(
+        'CANONICAL_OPERATION_COUNTS',
+        JSON.stringify({ size, ...counts, otherSources, subscribers: server.measuredSubscribers })
+      )
+      expect(counts.producerLists).toBe(0)
+      expect(counts.captureLists).toBe(0)
+      expect(counts.callbackLists).toBe(0)
+      expect(counts.producerKeyed).toBe(1)
+    }
+  )
   it('dismisses a canonical projection without creating a legacy status copy', async () => {
     await postHookEvent(server, tmuxTestBody(), '/hook/opencode')
     server.dropStatusEntry(TMUX_TEST_PANE, { preserveResumeIdentity: false })

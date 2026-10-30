@@ -14,7 +14,12 @@ export abstract class AgentHookServerAuthorityFences extends AgentHookServerAuth
   capturePaneAuthorityRetirement(paneKey: string): () => void {
     const owner = this.resolvePaneKeyAlias(paneKey)
     const subject = this.authoritySubject(owner)
-    const canonical = this.canonicalStatusStore.getParents().find((parent) => parent === subject)
+    const canonical =
+      subject &&
+      'subject' in subject &&
+      this.canonicalStatusStore.getCanonicalParent(subject.subject) === subject
+        ? subject
+        : undefined
     const rootIsCurrent = canonical && this.captureTmuxRoot(owner)
     const row =
       this.state.lastStatusByPaneKey.get(owner) ??
@@ -28,9 +33,12 @@ export abstract class AgentHookServerAuthorityFences extends AgentHookServerAuth
       this.pendingLaunchAuthority.get(owner)?.evidence.launchTokenHash
     return () => {
       const currentSubject = this.authoritySubject(owner)
-      const currentCanonical = this.canonicalStatusStore
-        .getParents()
-        .find((parent) => parent === currentSubject)
+      const currentCanonical =
+        currentSubject &&
+        'subject' in currentSubject &&
+        this.canonicalStatusStore.getCanonicalParent(currentSubject.subject) === currentSubject
+          ? currentSubject
+          : undefined
       const current =
         this.state.lastStatusByPaneKey.get(owner) ??
         (currentCanonical?.status && structuredStatusLegacyEvent(currentCanonical.status))
