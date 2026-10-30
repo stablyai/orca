@@ -89,6 +89,7 @@ export async function dispatchTaskToWorker(params: {
     assigneePaneKey,
     launchTokenHash: dispatchAuthority?.launchTokenHash ?? undefined,
     processIncarnation,
+    hostScope: dispatchAuthority?.hostScope ? JSON.stringify(dispatchAuthority.hostScope) : null,
     // This authenticated host-local loop is a system root, independent of CLI callers.
     creator: { kind: 'system' },
     maxDepth: params.nestedWorkerMaxDepth

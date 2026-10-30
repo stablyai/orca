@@ -20,6 +20,8 @@ export function createDispatchContext(
     assigneePaneKey?: string
     launchTokenHash?: string
     processIncarnation?: string
+    /** The assignee's serialized host scope, matching its worker-terminal custody row. */
+    hostScope?: string | null
     /** Who is dispatching, for nesting depth. Required so a new caller must decide. */
     creator: DispatchCreator
     maxDepth: number
@@ -45,6 +47,23 @@ export function createDispatchContext(
   if (existing) {
     throw new Error(
       `Terminal ${assigneeHandle} already has an active dispatch (${existing.id} for task ${existing.task_id})`
+    )
+  }
+
+  // A finished worker's terminal stays in its Dispatch's custody; only worker-start transfers it.
+  const held =
+    assigneePaneKey && processIncarnation
+      ? this.findTransferableWorkerTerminalResource({
+          terminalHandle: assigneeHandle,
+          paneKey: assigneePaneKey,
+          processIncarnation,
+          hostScope: params.hostScope ?? null
+        })
+      : undefined
+  if (held) {
+    throw new OrchestrationError(
+      'invalid_argument',
+      `Terminal ${assigneeHandle} is still held by finished Dispatch ${held.owner_dispatch_id}. Start this Task on it with \`orca orchestration worker-start --task ${taskId} --terminal ${assigneeHandle}\`.`
     )
   }
 

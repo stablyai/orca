@@ -156,6 +156,9 @@ export const ORCHESTRATION_DISPATCH_METHODS = [
         assigneePaneKey,
         launchTokenHash: dispatchAuthority?.launchTokenHash ?? undefined,
         processIncarnation,
+        hostScope: dispatchAuthority?.hostScope
+          ? JSON.stringify(dispatchAuthority.hostScope)
+          : null,
         creator: resolveDispatchCreator(runtime, params.from, orchestrationCaller),
         maxDepth: runtime.getNestedWorkerMaxDepth()
       })

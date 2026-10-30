@@ -2,10 +2,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createOrchestrationRpcHarness } from './orchestration/rpc-test-harness'
 import type { OrchestrationRpcState } from './orchestration/rpc-test-harness'
 
-const released: string[] = []
+const released: unknown[] = []
 
 vi.mock('./orchestration-structured-worker-session', () => ({
-  releaseStructuredWorkerSession: (dispatchId: string) => released.push(dispatchId),
+  releaseStructuredWorkerSession: (sessionId: unknown) => released.push(sessionId),
   createStructuredWorkerSession: vi.fn(),
   sendStructuredWorkerPreamble: vi.fn()
 }))
@@ -41,13 +41,13 @@ describe('workerAbandon settles the structured worker session', () => {
     // Without this, the redrive subscription outlives settlement and keeps nudging a session no
     // dispatch owns.
     await harness.call('orchestration.workerAbandon', { dispatch: dispatchId }, state.ctx)
-    expect(released).toEqual([dispatchId])
+    expect(released).toHaveLength(1)
   })
 
   it('does not release twice when the dispatch was already settled', async () => {
     const dispatchId = await startedDispatch()
     await harness.call('orchestration.workerAbandon', { dispatch: dispatchId }, state.ctx)
     await harness.call('orchestration.workerAbandon', { dispatch: dispatchId }, state.ctx)
-    expect(released).toEqual([dispatchId])
+    expect(released).toHaveLength(1)
   })
 })

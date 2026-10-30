@@ -39,30 +39,31 @@ import { createKeyedTrailingEdgeCoalescer } from '../../keyed-trailing-edge-coal
 import { createStructuredAgentSessionForWorktree } from './structured-agent-session-create'
 
 type StructuredWorkerBinding = {
-  sessionId: string
   handle: string
   disposeSubscription: () => void
 }
 
-const bindingsByDispatchId = new Map<string, StructuredWorkerBinding>()
+// Keyed by the worker's root session: a reused worker outlives the Dispatch that created it.
+const bindingsBySessionId = new Map<string, StructuredWorkerBinding>()
 
 /** Every stop/release/abandon must drop redrive, identity and parked mail across the worker's /clear lineage, even after restart lost its binding. */
 export function releaseStructuredWorkerSession(
-  dispatchId: string,
-  runtime?: Pick<OrcaRuntimeService, 'forgetStructuredSessionMail'>,
-  workerSessionId?: string | null
+  workerSessionId: string | null | undefined,
+  runtime?: Pick<OrcaRuntimeService, 'forgetStructuredSessionMail'>
 ): void {
-  const binding = bindingsByDispatchId.get(dispatchId)
+  if (!workerSessionId) {
+    return
+  }
+  const binding = bindingsBySessionId.get(workerSessionId)
   if (binding) {
-    bindingsByDispatchId.delete(dispatchId)
+    bindingsBySessionId.delete(workerSessionId)
     binding.disposeSubscription()
     structuredWorkerIdentities.forget(binding.handle)
   }
-  const rootSessionId = binding?.sessionId ?? workerSessionId
-  if (!rootSessionId || !runtime?.forgetStructuredSessionMail) {
+  if (!runtime?.forgetStructuredSessionMail) {
     return
   }
-  for (const sessionId of structuredWorkerSession({ sessionId: rootSessionId }).lineage) {
+  for (const sessionId of structuredWorkerSession({ sessionId: workerSessionId }).lineage) {
     runtime.forgetStructuredSessionMail(sessionId)
   }
 }
@@ -133,8 +134,7 @@ export async function createStructuredWorkerSession(args: {
       )
     }
     const disposeSubscription = await subscribeForRedrive(host, sessionId, args.onJournalActivity)
-    bindingsByDispatchId.set(args.dispatchId, {
-      sessionId,
+    bindingsBySessionId.set(sessionId, {
       handle: identity.handle,
       disposeSubscription
     })
