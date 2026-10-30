@@ -1,4 +1,11 @@
-import { act, fireEvent, render, within } from '@testing-library/react'
+import {
+  act,
+  fireEvent,
+  render,
+  within,
+  type RenderResult,
+  type queries
+} from '@testing-library/react'
 import { expect, vi, type Mock } from 'vitest'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { AppState } from '@/store/types'
@@ -82,7 +89,7 @@ export async function exerciseNativeInventoryRetryWhileProviderSavePending(
     />
   )
   const detectAgents = vi.mocked(window.api.preflight.detectAgents)
-  let view: ReturnType<typeof render> | undefined
+  let view: RenderResult<typeof queries> | undefined
   let scheduled = 0
   try {
     const context = getLocalAgentPreflightContext(useAppStore.getState())
@@ -92,7 +99,7 @@ export async function exerciseNativeInventoryRetryWhileProviderSavePending(
     const native = useAppStore.getState().ensureNativeDetectedAgents()
     owned.push(native)
     await native
-    view = render(element(), { wrapper: TooltipProvider })
+    view = render<typeof queries>(element(), { wrapper: TooltipProvider })
     await act(async () => {
       await Promise.allSettled(owned)
     })
@@ -282,9 +289,9 @@ export async function exerciseQueuedNativeProviderSave(): Promise<void> {
     />
   )
   let scheduled = 0
-  let view: ReturnType<typeof render> | undefined
+  let view: RenderResult<typeof queries> | undefined
   try {
-    view = render(element(), { wrapper: TooltipProvider })
+    view = render<typeof queries>(element(), { wrapper: TooltipProvider })
     await act(async () => {
       await Promise.allSettled(owned)
     })

@@ -1,5 +1,14 @@
 // @vitest-environment happy-dom
-import { act, cleanup, fireEvent, render, renderHook, within } from '@testing-library/react'
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  renderHook,
+  within,
+  type RenderResult,
+  type queries
+} from '@testing-library/react'
 import { makeDetectedResult } from '@/store/slices/worktrees-detected-listing-fixtures'
 import type { AppState } from '@/store/types'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
@@ -102,7 +111,7 @@ it('shows a native failure and retries the native host even with a global WSL de
   })
   const native = useAppStore.getState().ensureNativeDetectedAgents()
   owned.push(native)
-  let view: ReturnType<typeof render> | undefined
+  let view: RenderResult<typeof queries> | undefined
   let scheduled = 0
   try {
     await native
@@ -110,7 +119,7 @@ it('shows a native failure and retries the native host even with a global WSL de
       ids: null,
       state: 'failed'
     })
-    view = render(
+    view = render<typeof queries>(
       <AgentLaunchSettingsCatalog
         settings={projectAgentLaunchSettings(settings)}
         mutate={vi.fn(async () => {})}
@@ -284,7 +293,7 @@ it.each([true, false])(
       hydrateRuntimeEnvironmentStatuses: vi.fn(),
       ensureAllDetectedAgents: ensureAll
     })
-    let view: ReturnType<typeof render> | undefined
+    let view: RenderResult<typeof queries> | undefined
     try {
       await native
       const fetched = useAppStore.getState().fetchSettings()
@@ -298,7 +307,7 @@ it.each([true, false])(
         owned.push(pending)
         return pending
       })
-      view = render(
+      view = render<typeof queries>(
         <AgentLaunchSettingsCatalog
           settings={projectAgentLaunchSettings(settings)}
           mutate={vi.fn(async () => {})}
