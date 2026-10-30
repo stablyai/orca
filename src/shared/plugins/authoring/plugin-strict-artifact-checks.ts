@@ -83,7 +83,7 @@ function check(read: PluginArtifactTextReader, path: string, parse: (text: strin
 export function strictPluginArtifactErrors(
   manifest: PluginManifest,
   read: PluginArtifactTextReader,
-  // Why: pack strings are capped relative to Orca's English text; without it only source-free rules run.
+  // Why optional: the packaged CLI ships no English catalog, so it checks only source-free rules.
   english?: EnglishSourceLookup
 ): string[] {
   const c = manifest.contributes

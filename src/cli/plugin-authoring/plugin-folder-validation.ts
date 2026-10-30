@@ -13,7 +13,6 @@ import {
   type PluginApprovalGrants
 } from '../../shared/plugins/approval/plugin-cli-approval'
 import { strictPluginArtifactErrors } from '../../shared/plugins/authoring/plugin-strict-artifact-checks'
-import { englishSourceLookup } from '../../shared/plugins/languages/plugin-translation-string-policy'
 import { validatePluginFile } from '../../shared/plugins/installation/plugin-file-validation'
 import {
   localPluginPublisher,
@@ -80,12 +79,7 @@ function resolveTargetFile(target: string): string {
 }
 
 async function contentErrors(root: string, manifest: PluginManifest): Promise<string[]> {
-  // Why lazy: the English catalog is ~1 MB and only language packs are measured against it.
-  const english =
-    manifest.contributes.languagePacks.length > 0
-      ? englishSourceLookup((await import('../../renderer/src/i18n/locales/en.json')).default)
-      : undefined
-  const errors = strictPluginArtifactErrors(manifest, manifestTextReader(root), english)
+  const errors = strictPluginArtifactErrors(manifest, manifestTextReader(root))
   for (const check of [validateDeclaredPluginArtifacts, validatePluginInstallContent]) {
     const result = await check(root, manifest)
     if (!result.ok) {
