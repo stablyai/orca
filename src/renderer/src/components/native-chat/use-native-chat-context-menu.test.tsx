@@ -134,13 +134,15 @@ function ImageHarness({
       <button type="button" data-native-chat-copy-image-src={src}>
         <img alt="shot" src="data:thumbnail" />
       </button>
-      {source ? (
-        <div data-selection-prose>
-          <NativeChatMarkdown content={source} />
-        </div>
-      ) : (
-        <p>text</p>
-      )}
+      <div data-native-chat-scroll>
+        {source ? (
+          <div data-selection-prose>
+            <NativeChatMarkdown content={source} />
+          </div>
+        ) : (
+          <p>text</p>
+        )}
+      </div>
       <textarea aria-label="composer" />
       <input aria-label="answer" disabled defaultValue="read only" />
       <div role="textbox" aria-label="prompt" contentEditable suppressContentEditableWarning>
@@ -362,7 +364,7 @@ describe('useNativeChatContextMenu', () => {
       configurable: true,
       value: () => ({ offsetNode: node, offset: node instanceof HTMLInputElement ? 5 : 0 })
     })
-    fireEvent.contextMenu(pressed())
+    fireEvent.contextMenu(node)
     Reflect.deleteProperty(document, 'caretPositionFromPoint')
 
     copyTextItem()?.onSelect?.()
