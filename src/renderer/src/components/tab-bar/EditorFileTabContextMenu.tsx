@@ -18,7 +18,6 @@ import {
 import { isRevealOrEditorOpenBlocked } from '@/lib/local-path-open-guard'
 import { formatClipboardFilePath } from '@/lib/clipboard-file-path'
 import { TabWorkspaceLayoutMenuSection } from './TabWorkspaceLayoutMenuSection'
-import { TAB_CONTEXT_MENU_CONTENT_CLASS } from './tab-context-menu-sizing'
 import { CopyTabIdMenuItem } from './CopyTabIdMenuItem'
 import { isVirtualEditorFile } from '@/store/slices/editor/tabs/editor-tab-content-type'
 import { CloseSplitPaneMenuItem } from './CloseSplitPaneMenuItem'
@@ -92,7 +91,8 @@ export function EditorFileTabContextMenu({
 
   return (
     <ContextMenuContent
-      className={TAB_CONTEXT_MENU_CONTENT_CLASS}
+      animation="none"
+      className="min-w-[13rem] max-w-[calc(100vw-1rem)] whitespace-nowrap"
       onCloseAutoFocus={(event) => {
         if (!skipMenuFocusRestoreRef.current) {
           return

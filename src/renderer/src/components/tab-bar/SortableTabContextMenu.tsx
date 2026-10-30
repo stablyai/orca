@@ -139,7 +139,10 @@ export function SortableTabContextMenu({
   const showTerminalViewSwitch = canToggleViewMode && isChatView && onToggleViewMode !== undefined
 
   return (
-    <ContextMenuContent className="min-w-[13rem] max-w-[calc(100vw-1rem)] whitespace-nowrap data-[state=open]:animate-none data-[state=closed]:animate-none data-[state=closed]:pointer-events-none">
+    <ContextMenuContent
+      animation="none"
+      className="min-w-[13rem] max-w-[calc(100vw-1rem)] whitespace-nowrap"
+    >
       <TerminalTabSplitMenuSection
         unifiedTabId={unifiedTabId}
         groupId={groupId}

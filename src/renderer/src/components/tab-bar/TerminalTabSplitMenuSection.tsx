@@ -53,10 +53,8 @@ export function TerminalTabSplitMenuSection({
             )}
           </ContextMenuSubTrigger>
           <ContextMenuSubContent
-            className={cn(
-              'min-w-[12rem]',
-              'max-w-[calc(100vw-1rem)] whitespace-nowrap data-[state=open]:animate-none data-[state=closed]:animate-none data-[state=closed]:pointer-events-none'
-            )}
+            animation="none"
+            className={cn('min-w-[12rem]', 'max-w-[calc(100vw-1rem)] whitespace-nowrap')}
           >
             <ContextMenuItem onSelect={() => splitActiveTerminalPane('vertical')}>
               <PanelRightClose className="size-3.5 shrink-0" />

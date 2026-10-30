@@ -29,7 +29,6 @@ import { useTabStripSlotProps } from './use-tab-strip-slot-props'
 import { TabWorkspaceLayoutMenuSection } from './TabWorkspaceLayoutMenuSection'
 import { useTabStripPointerActivation } from './tab-strip-pointer-activation'
 import { useTabContextMenuOpening } from './tab-context-menu-opening'
-import { TAB_CONTEXT_MENU_CONTENT_CLASS } from './tab-context-menu-sizing'
 import { cn } from '@/lib/utils'
 import { BrowserFavicon } from '@/components/browser-favicon'
 import { AgentCursorGlyph } from '../browser-pane/agent-cursor/agent-cursor-glyph'
@@ -271,9 +270,10 @@ export default function BrowserTab({
         </div>
       </ContextMenuTrigger>
       <ContextMenuContent
+        animation="none"
         className={cn(
           'rounded-[11px] border-border/80 p-1 shadow-[0_16px_36px_rgba(0,0,0,0.24)]',
-          TAB_CONTEXT_MENU_CONTENT_CLASS
+          'min-w-[13rem] max-w-[calc(100vw-1rem)] whitespace-nowrap'
         )}
       >
         <TabWorkspaceLayoutMenuSection

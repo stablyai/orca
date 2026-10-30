@@ -231,17 +231,26 @@ const pointer = (button = 0, buttons = button === 0 ? 1 : 2, y = 16) => ({
   clientX: 40,
   clientY: y
 })
+function expectStationary(menu: Element | null) {
+  expect(menu?.getAttribute('animation')).toBeNull()
+  expect(menu?.className).toContain('data-[state=closed]:pointer-events-none')
+  expect(menu?.className).not.toMatch(/animate-|fade-|zoom-|slide-|duration-/)
+}
 async function open(button = 2) {
   fireEvent.pointerDown(source(), pointer(button))
   fireEvent.contextMenu(source(), pointer(button))
-  return screen.findByRole('menuitem', { name: /^(Unpin|Pin) Tab$/ })
+  const item = await screen.findByRole('menuitem', { name: /^(Unpin|Pin) Tab$/ })
+  expectStationary(screen.getByRole('menu'))
+  return item
 }
 async function right() {
   fireEvent.pointerMove(
     screen.getByRole('menuitem', { name: 'Move Tab to Split', exact: true }),
     pointer(2)
   )
-  return screen.findByRole('menuitem', { name: 'Right', exact: true })
+  const item = await screen.findByRole('menuitem', { name: 'Right', exact: true })
+  expectStationary(item.closest('[role="menu"]'))
+  return item
 }
 afterEach(async () => {
   fireEvent.pointerCancel(document, pointer())
@@ -298,6 +307,16 @@ it.each([
   async (kind, workspace) => {
     await mount(kind, workspace)
     await open(2)
+    if (kind === 'terminal') {
+      fireEvent.pointerMove(
+        screen.getByRole('menuitem', { name: 'Split terminal', exact: true }),
+        pointer(2)
+      )
+      const terminalItem = await screen.findByRole('menuitem', {
+        name: /^Split terminal right/i
+      })
+      expectStationary(terminalItem.closest('[role="menu"]'))
+    }
     fireEvent.pointerUp(await right(), pointer(2, 0))
     await settle()
     expect(layoutApplyTestTransport.sentOfType('splitGroup')).toEqual([

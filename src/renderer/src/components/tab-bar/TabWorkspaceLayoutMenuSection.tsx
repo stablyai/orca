@@ -67,7 +67,10 @@ export function TabWorkspaceLayoutMenuSection({
             'Move Tab to Split'
           )}
         </ContextMenuSubTrigger>
-        <ContextMenuSubContent className="max-w-[calc(100vw-1rem)] whitespace-nowrap data-[state=open]:animate-none data-[state=closed]:animate-none data-[state=closed]:pointer-events-none">
+        <ContextMenuSubContent
+          animation="none"
+          className="max-w-[calc(100vw-1rem)] whitespace-nowrap"
+        >
           {PANE_COLUMN_DIRECTIONS.map((direction) => (
             <ContextMenuItem
               key={direction}
