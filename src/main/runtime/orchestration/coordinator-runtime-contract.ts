@@ -33,8 +33,6 @@ export type CoordinatorRuntime = {
   getTerminalPaneKey?(handle: string): string | null
   // Omitted by lightweight fakes; absence uses the fail-closed default.
   getNestedWorkerMaxDepth?(): number
-  // Omitted by lightweight fakes; absence keeps the default heartbeat interval.
-  getOrchestrationHeartbeatMinutes?(): number | null
   // Automatic dispatch must persist the same authenticated pane/process authority as manual dispatch.
   getOrchestrationDispatchAuthority?(handle: string): {
     paneKey: string | null

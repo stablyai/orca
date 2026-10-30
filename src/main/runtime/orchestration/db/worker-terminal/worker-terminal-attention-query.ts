@@ -37,6 +37,7 @@ export function getWorkerAttentionFactsForDispatches(
     return new Map()
   }
   const serializedIds = JSON.stringify(ids)
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this row cast is unchanged and matches every other row cast in db/; the gate flags it only because this diff adds a column inside its span.
   const rows = this.db
     .prepare(
       `SELECT d.id AS dispatch_id, d.task_id, d.status AS dispatch_status,
