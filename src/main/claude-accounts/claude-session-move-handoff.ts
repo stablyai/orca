@@ -111,6 +111,12 @@ async function listDetachedJobs(root: string | undefined): Promise<unknown> {
   return root ? listJobsFromDisk(root) : []
 }
 
+type ListDurableJobs = (root: string | undefined) => unknown
+
+function isListDurableJobs(value: unknown): value is ListDurableJobs {
+  return typeof value === 'function'
+}
+
 async function listJobsFromScript(root: string | undefined): Promise<unknown[] | null> {
   if (!existsSync(DURABLE_JOB_SCRIPT)) {
     return null
@@ -122,11 +128,11 @@ async function listJobsFromScript(root: string | undefined): Promise<unknown[] |
       return null
     }
     const listJobs = imported.listJobs
-    if (typeof listJobs !== 'function') {
+    if (!isListDurableJobs(listJobs)) {
       return null
     }
-    // listJobs is the durable-job script export; the caller re-checks each row.
-    const listed: unknown = Reflect.apply(listJobs, undefined, [root])
+    // The script export is sync. The caller re-checks each row.
+    const listed = listJobs(root)
     return Array.isArray(listed) ? listed : null
   } catch {
     return null
