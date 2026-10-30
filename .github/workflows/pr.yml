@@ -895,7 +895,7 @@ jobs:
     needs: [code_paths]
     if: needs.code_paths.outputs.mobile_web_app == 'true'
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 20
 
     steps:
       - name: Checkout
