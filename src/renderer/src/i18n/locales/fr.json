@@ -5096,6 +5096,7 @@
           "recentSessionsDescription": "Sessions locales d’omp les plus récentes dans cette portée.",
           "sessionCount_one": "{{count}} session",
           "sessionCount_other": "{{count}} sessions",
+          "sessionCount_many": "{{count}} sessions",
           "tokenAccountingNote": "Les tokens de raisonnement sont affichés séparément et ne sont jamais comptés dans les totaux de sortie. Les écritures de cache sont suivies séparément des lectures de cache.",
           "dailyScopeCaption": "Les totaux quotidiens couvrent toute l’utilisation locale d’omp ; la portée s’applique aux sessions, aux répartitions et aux sessions récentes."
         },

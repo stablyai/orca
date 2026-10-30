@@ -5482,6 +5482,8 @@
           "recentSessions": "Недавние сессии",
           "recentSessionsDescription": "Последние локальные сессии omp в выбранной области.",
           "sessionCount_one": "{{count}} сессия",
+          "sessionCount_few": "{{count}} сессии",
+          "sessionCount_many": "{{count}} сессий",
           "sessionCount_other": "{{count}} сессий",
           "tokenAccountingNote": "Токены рассуждений показываются отдельно и никогда не входят в итоги вывода. Запись в кеш учитывается отдельно от чтения из кеша.",
           "dailyScopeCaption": "Итоги по дням охватывают всё локальное использование omp; область применяется к сессиям, разбивкам и недавним сессиям."

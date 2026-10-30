@@ -15501,6 +15501,7 @@
           "recentSessionsDescription": "Sessões locais recentes do omp neste escopo.",
           "sessionCount_one": "{{count}} sessão",
           "sessionCount_other": "{{count}} sessões",
+          "sessionCount_many": "{{count}} sessões",
           "tokenAccountingNote": "Os tokens de raciocínio são mostrados separadamente e nunca entram nos totais de saída. As gravações de cache são rastreadas separadamente das leituras de cache.",
           "dailyScopeCaption": "Os totais diários abrangem todo o uso local do omp; o escopo se aplica a sessões, detalhamentos e sessões recentes."
         },
