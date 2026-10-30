@@ -1,4 +1,7 @@
-import { collectCollidingRetractionPaneKeys } from './retraction-pane-ownership'
+import {
+  collectCollidingRetractionPaneKeys,
+  buildCurrentForegroundLeafRetractionPatch
+} from './retraction-pane-ownership'
 import type { WebSessionTabsSyncState } from './state'
 import type { applyActiveStateUpdates } from './apply-active-state'
 import { buildMirroredAgentStatusPatch } from './agent-status-patch'
@@ -87,6 +90,16 @@ export function buildWebSessionTabsFinalPatch(
         retractionPaneKeys,
         batchContext
       )
+  const foregroundLeafRetractionPatch = isWebSessionTabsWorktreeRemovalFrame(snapshot)
+    ? null
+    : buildCurrentForegroundLeafRetractionPatch(
+        state,
+        retractedTabSweepPatch?.paneForegroundAgentByPaneKey ?? state.paneForegroundAgentByPaneKey,
+        nextTerminalLayoutsByTabId,
+        new Set(mirroredTerminalIds),
+        environmentId,
+        worktreeId
+      )
   const remirroredClosedTabLiftPatch = buildRemirroredClosedTabMarkerLiftPatch(
     retractedTabSweepPatch?.recentlyClosedAgentStatusTabIds ??
       state.recentlyClosedAgentStatusTabIds,
@@ -109,6 +122,7 @@ export function buildWebSessionTabsFinalPatch(
   const patch: Partial<WebSessionTabsSyncState> = {
     ...agentStatusPatch,
     ...retractedTabSweepPatch,
+    ...foregroundLeafRetractionPatch,
     ...remirroredClosedTabLiftPatch,
     ...(adoptedEditorBuffers
       ? { openFiles: adoptedEditorBuffers.views, editorBuffers: adoptedEditorBuffers.editorBuffers }

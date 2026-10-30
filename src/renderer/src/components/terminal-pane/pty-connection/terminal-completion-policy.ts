@@ -1,3 +1,4 @@
+import { clientOnlyUnverifiableInspection } from '../../../../../shared/terminal-process-inspection'
 import { useAppStore } from '@/store'
 import {
   confirmRuntimeTerminalForegroundProcess,
@@ -23,6 +24,7 @@ export function createTerminalCompletionPolicy(
     AgentCompletionCoordinatorOptions,
     'paneKey' | 'getPtyId' | 'getExpectedIncarnationId' | 'isLive' | 'onForegroundAgentExited'
   > & {
+    captureForegroundRead?: () => () => boolean
     absorbBurstBellForHookOwnedIdle: () => void
     isVisible: () => boolean
     clearSuppressedTitleSideEffects: () => void
@@ -42,8 +44,18 @@ export function createTerminalCompletionPolicy(
     getPtyId: services.getPtyId,
     isRemotePtyId: isRemoteExecutionHostPtyId,
     getExpectedIncarnationId: services.getExpectedIncarnationId,
-    inspectProcess: inspectRuntimeTerminalProcess,
-    confirmForegroundProcess: confirmRuntimeTerminalForegroundProcess,
+    inspectProcess: async (ptyId, options) => {
+      const current = services.captureForegroundRead?.()
+      const result = await inspectRuntimeTerminalProcess(ptyId, options)
+      return current?.() === false
+        ? clientOnlyUnverifiableInspection('foreground_unconfirmed')
+        : result
+    },
+    confirmForegroundProcess: async (ptyId) => {
+      const current = services.captureForegroundRead?.()
+      const result = await confirmRuntimeTerminalForegroundProcess(ptyId)
+      return current?.() === false ? null : result
+    },
     titleTurnEndEvidence: (title, foregroundAgent) =>
       hookLaneTitleTurnEndEvidence(services.paneKey, services.getPtyId(), title, foregroundAgent),
     onHookOwnedTitleIdle: services.absorbBurstBellForHookOwnedIdle,

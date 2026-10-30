@@ -205,10 +205,6 @@ export function installPtyInputForward(session: ConnectPanePtySession): void {
     if (capturedTransport.sendInput(data, inputKind, call)) {
       session.markAcceptedTerminalInputSent()
       session.observePaneInputEffects(data, baseline)
-      if (intent && dispatched?.resident.isLive) {
-        dispatched.inference.observeInputIntent(intent, baseline, dispatched.group)
-        dispatched.resident.policy.shellInput.observeTitleOnlyInterrupt()
-      }
     } else {
       session.requestRecoveryForUndeliverableInput()
     }

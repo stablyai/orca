@@ -1,3 +1,4 @@
+import type { TerminalInputCall } from './terminal-input-call'
 import { vi } from 'vitest'
 import type { Mock } from 'vitest'
 import type { PtyReplayDataMeta } from './pty-transport-types'
@@ -64,7 +65,13 @@ export function createMockTransport(initialPtyId: string | null = null): MockTra
     disconnect: vi.fn(() => {
       ptyId = null
     }),
-    sendInput: vi.fn(() => true),
+    sendInput: vi.fn((_data: string, _kind?: string, call?: TerminalInputCall) => {
+      if (ptyId) {
+        call?.onEligible?.(ptyId)
+        call?.onDispatch?.(ptyId)
+      }
+      return true
+    }),
     claimViewport: vi.fn(() => true),
     resize: vi.fn(() => true),
     getPtyId: vi.fn(() => ptyId),
@@ -75,7 +82,10 @@ export function createMockTransport(initialPtyId: string | null = null): MockTra
   const sendInput = transport.sendInput as unknown as (data: string) => boolean
   // Why: query replies route through sendInputImmediate; delegate to the same spy so reply-delivery assertions still observe them (#7329).
   transport.sendInputImmediate = vi.fn((data: string) => sendInput(data))
-  transport.sendInputAccepted = vi.fn(async (data: string) => sendInput(data))
+  transport.sendInputAccepted = vi.fn(
+    async (data: string, kind?: string, options?: { call?: TerminalInputCall }) =>
+      transport.sendInput(data, kind, options?.call)
+  )
   return transport
 }
 

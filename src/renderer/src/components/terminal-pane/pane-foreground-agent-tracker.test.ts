@@ -193,6 +193,7 @@ describe('createPaneForegroundAgentTracker', () => {
     expect(publish).toHaveBeenLastCalledWith({
       agent: 'claude',
       agentEvidence: 'process-read',
+      observationGeneration: expect.any(Number),
       shellForeground: false
     })
   })
@@ -217,6 +218,7 @@ describe('createPaneForegroundAgentTracker', () => {
     expect(publish).not.toHaveBeenCalledWith({
       agent: 'droid',
       agentEvidence: 'process-read',
+      observationGeneration: expect.any(Number),
       shellForeground: false
     })
   })
@@ -234,6 +236,7 @@ describe('createPaneForegroundAgentTracker', () => {
     expect(publish).toHaveBeenLastCalledWith({
       agent: 'droid',
       agentEvidence: 'process-read',
+      observationGeneration: expect.any(Number),
       routingTrusted: true,
       shellForeground: false
     })
@@ -289,6 +292,7 @@ describe('createPaneForegroundAgentTracker', () => {
     expect(publish).toHaveBeenLastCalledWith({
       agent: 'codex',
       agentEvidence: 'process-read',
+      observationGeneration: expect.any(Number),
       shellForeground: false
     })
   })
@@ -318,6 +322,7 @@ describe('createPaneForegroundAgentTracker', () => {
     expect(publish).toHaveBeenLastCalledWith({
       agent: 'codex',
       agentEvidence: 'process-read',
+      observationGeneration: expect.any(Number),
       shellForeground: false
     })
   })
@@ -336,6 +341,7 @@ describe('createPaneForegroundAgentTracker', () => {
     expect(publish).toHaveBeenLastCalledWith({
       agent: 'codex',
       agentEvidence: 'process-read',
+      observationGeneration: expect.any(Number),
       shellForeground: false
     })
   })
@@ -354,6 +360,7 @@ describe('createPaneForegroundAgentTracker', () => {
     expect(publish).toHaveBeenLastCalledWith({
       agent: 'codex',
       agentEvidence: 'process-read',
+      observationGeneration: expect.any(Number),
       shellForeground: false
     })
   })
@@ -379,6 +386,7 @@ describe('createPaneForegroundAgentTracker', () => {
     expect(publish).toHaveBeenLastCalledWith({
       agent: 'claude',
       agentEvidence: 'process-read',
+      observationGeneration: expect.any(Number),
       shellForeground: false
     })
   })
@@ -422,6 +430,7 @@ describe('createPaneForegroundAgentTracker', () => {
     expect(publish).toHaveBeenLastCalledWith({
       agent: 'gemini',
       agentEvidence: 'process-read',
+      observationGeneration: expect.any(Number),
       shellForeground: false
     })
   })
@@ -497,6 +506,7 @@ describe('createPaneForegroundAgentTracker', () => {
     expect(publish).toHaveBeenLastCalledWith({
       agent: 'codex',
       agentEvidence: 'process-read',
+      observationGeneration: expect.any(Number),
       shellForeground: false
     })
 
@@ -511,6 +521,7 @@ describe('createPaneForegroundAgentTracker', () => {
     expect(publish).toHaveBeenLastCalledWith({
       agent: 'codex',
       agentEvidence: 'process-read',
+      observationGeneration: expect.any(Number),
       routingTrusted: true,
       shellForeground: false
     })
@@ -594,6 +605,7 @@ describe('createPaneForegroundAgentTracker', () => {
     expect(publish).toHaveBeenLastCalledWith({
       agent: 'codex',
       agentEvidence: 'process-read',
+      observationGeneration: expect.any(Number),
       routingTrusted: true,
       shellForeground: false
     })
@@ -646,6 +658,7 @@ describe('createPaneForegroundAgentTracker', () => {
     expect(publish).toHaveBeenCalledExactlyOnceWith({
       agent: 'droid',
       agentEvidence: 'process-read',
+      observationGeneration: expect.any(Number),
       routingTrusted: true,
       shellForeground: false
     })
@@ -665,6 +678,7 @@ describe('createPaneForegroundAgentTracker', () => {
     expect(publish).toHaveBeenCalledExactlyOnceWith({
       agent: 'droid',
       agentEvidence: 'process-read',
+      observationGeneration: expect.any(Number),
       routingTrusted: true,
       shellForeground: false
     })
@@ -705,6 +719,7 @@ describe('createPaneForegroundAgentTracker', () => {
     expect(publish).toHaveBeenCalledExactlyOnceWith({
       agent: 'droid',
       agentEvidence: 'process-read',
+      observationGeneration: expect.any(Number),
       routingTrusted: true,
       shellForeground: false
     })
@@ -784,11 +799,13 @@ describe('createPaneForegroundAgentTracker', () => {
     expect(publish).toHaveBeenLastCalledWith({
       agent: 'codex',
       agentEvidence: 'process-read',
+      observationGeneration: expect.any(Number),
       shellForeground: false
     })
     expect(publish).not.toHaveBeenCalledWith({
       agent: 'claude',
       agentEvidence: 'process-read',
+      observationGeneration: expect.any(Number),
       shellForeground: false
     })
   })

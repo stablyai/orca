@@ -184,6 +184,11 @@ export function createTerminalResidentPolicy(
     startup: binding.startup ?? null,
     getPtyId,
     getExpectedIncarnationId: () => identity?.incarnationId ?? null,
+    execution: executionIsLive,
+    endpoint: initialIdentity?.endpoint,
+    executionHost: initialIdentity?.executionHost,
+    getInputGeneration: () => acceptedInputGeneration,
+    isLive,
     isVisible: () => presentationPorts.current?.isVisible() === true,
     observeForegroundAgentProcess: (process) => completion.observeForegroundAgentProcess(process),
     flushPendingInterruptInference: input.flushPendingInterruptInference,
@@ -210,6 +215,7 @@ export function createTerminalResidentPolicy(
     queueAgentIdleTerminalModeReset,
     scheduleAgentTaskCompleteNotification: notification.scheduleAgentTaskCompleteNotification,
     absorbBurstBellForHookOwnedIdle: notification.absorbBurstBellForHookOwnedIdle,
+    captureForegroundRead: foreground.publication.captureRead,
     onForegroundAgentExited: titleEffects.onForegroundAgentExited
   })
   if (binding.initialTitle) {

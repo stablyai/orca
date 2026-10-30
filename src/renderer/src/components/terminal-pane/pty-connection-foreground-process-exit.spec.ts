@@ -1,3 +1,4 @@
+import { foregroundSemantics } from './pty-connection-test-store-fixtures'
 import { bindPtyConnectionTestMocks } from './pty-connection-mocks.spec'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
@@ -88,7 +89,9 @@ export function registerPtyConnectionForegroundProcessExitTests(): void {
 
       const { cacheKey, binding, deps } = await connectRestoredPane(ptyId, true)
       await vi.advanceTimersByTimeAsync(3_000)
-      expect(mockStoreState.paneForegroundAgentByPaneKey[cacheKey]).toMatchObject({
+      expect(
+        foregroundSemantics(mockStoreState.paneForegroundAgentByPaneKey[cacheKey])
+      ).toMatchObject({
         agent: 'codex',
         agentEvidence: 'process-read'
       })
@@ -97,7 +100,7 @@ export function registerPtyConnectionForegroundProcessExitTests(): void {
       children = false
       await vi.advanceTimersByTimeAsync(10_000)
 
-      expect(mockStoreState.paneForegroundAgentByPaneKey[cacheKey]).toEqual({
+      expect(foregroundSemantics(mockStoreState.paneForegroundAgentByPaneKey[cacheKey])).toEqual({
         agent: null,
         shellForeground: false
       })
@@ -109,7 +112,9 @@ export function registerPtyConnectionForegroundProcessExitTests(): void {
       children = true
       binding.sampleForegroundAgentOnFocus()
       await vi.advanceTimersByTimeAsync(3_000)
-      expect(mockStoreState.paneForegroundAgentByPaneKey[cacheKey]).toMatchObject({
+      expect(
+        foregroundSemantics(mockStoreState.paneForegroundAgentByPaneKey[cacheKey])
+      ).toMatchObject({
         agent: 'codex',
         agentEvidence: 'process-read'
       })

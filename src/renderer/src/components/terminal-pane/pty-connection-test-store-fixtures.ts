@@ -128,3 +128,11 @@ export function buildActiveRuntimeEnvironmentState(
     }
   }
 }
+
+export function foregroundSemantics(entry: PaneForegroundAgentEntry | undefined) {
+  if (!entry) {
+    return entry
+  }
+  const { context: _context, observationGeneration: _observation, ...value } = entry
+  return value
+}

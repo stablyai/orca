@@ -1,7 +1,11 @@
 import { isPaneForegroundTrackingAllowed } from './terminal-foreground-tracking'
 import { captureTerminalFactSubject } from '../terminal-fact-subject'
 import type { AgentStatusEntry } from '../../../../../shared/agent-status-types'
-import type { TerminalForegroundServices } from './terminal-foreground-services'
+import {
+  createTerminalForegroundPublication,
+  requestTerminalForegroundReconfirmation,
+  type TerminalForegroundServices
+} from './terminal-foreground-services'
 import { dismissRetainedProgramResult } from '@/lib/program-status/result-retention'
 import { isRetainedProgramResult } from '@/lib/program-status/row'
 import { useAppStore } from '@/store'
@@ -10,11 +14,12 @@ import { createPaneForegroundAgentTracker } from '../pane-foreground-agent-track
 import { isRemoteExecutionHostPtyId } from '../../../../../shared/remote-execution-host-pty-id'
 import { inspectRuntimeTerminalProcess } from '@/runtime/runtime-terminal-inspection'
 import { dispatchTerminalCommandFinishedEvent } from '@/hooks/terminal-command-finished-event'
-import { isTuiAgent, TUI_AGENT_CONFIG } from '../../../../../shared/tui-agent-config'
+import { isTuiAgent } from '../../../../../shared/tui-agent-config'
 
 import { createTerminalLaunchAgentPolicy } from './terminal-launch-agent-policy'
 
 export function createTerminalForegroundPolicy(services: TerminalForegroundServices) {
+  const publication = createTerminalForegroundPublication(services)
   const {
     paneHasLiveHookAgentIcon,
     paneExpectsLaunchAgent,
@@ -102,7 +107,9 @@ export function createTerminalForegroundPolicy(services: TerminalForegroundServi
   const isForegroundTrackingAllowed = (id: string): boolean =>
     isPaneForegroundTrackingAllowed(id, services)
   const paneForegroundAgentTracker = createPaneForegroundAgentTracker({
-    getPtyId: () => services.getPtyId(),
+    getPtyId: () => (publication.applicable() ? services.getPtyId() : null),
+    captureRead: publication.captureRead,
+    demote: publication.demote,
     isTrackablePtyId: isForegroundTrackingAllowed,
     readForegroundProcess: (id, options) =>
       isRemoteExecutionHostPtyId(id)
@@ -114,8 +121,8 @@ export function createTerminalForegroundPolicy(services: TerminalForegroundServi
         : window.api.pty.confirmForegroundProcess(id),
     isRemotePtyId: isRemoteExecutionHostPtyId,
     getExpectedIncarnationId: () => services.getExpectedIncarnationId(),
-    publish: (entry) => useAppStore.getState().setPaneForegroundAgent(services.paneKey, entry),
-    getPublishedEntry: () => useAppStore.getState().paneForegroundAgentByPaneKey[services.paneKey],
+    publish: publication.publish,
+    getPublishedEntry: publication.current,
     // Why lazy: the completion coordinator is installed after this tracker.
     onAgentProcessRead: (process) => services.observeForegroundAgentProcess(process),
     hasKnownAgentIdentity: paneHasKnownAgentIdentity,
@@ -125,7 +132,7 @@ export function createTerminalForegroundPolicy(services: TerminalForegroundServi
         visibleForegroundSamplePending = false
         visibleForegroundSampleSettled = false
       }
-      if (reason !== 'visible-pty' && reason !== 'process-exit') {
+      if (reason !== 'process-exit') {
         settleDeferredCommandFinishedStatusDrop({ confirmedShell: true })
       }
     },
@@ -138,13 +145,15 @@ export function createTerminalForegroundPolicy(services: TerminalForegroundServi
       if (outcome !== 'inconclusive') {
         return
       }
+      settleDeferredCommandFinishedStatusDrop()
       const foreground = useAppStore.getState().paneForegroundAgentByPaneKey[services.paneKey]
       if (foreground?.routingConfirmationPending !== true) {
         return
       }
-      useAppStore.getState().setPaneForegroundAgent(services.paneKey, {
-        agent: foreground.agent,
-        agentEvidence: foreground.agentEvidence,
+      publication.publish({
+        ...foreground,
+        routingTrusted: undefined,
+        routingConfirmationPending: undefined,
         routingRevoked: true,
         shellForeground: foreground.shellForeground
       })
@@ -162,7 +171,11 @@ export function createTerminalForegroundPolicy(services: TerminalForegroundServi
     const subject = captureTerminalFactSubject(services.paneKey)
     let cleanupLaunch = subject.launch
     visibleForegroundSamplePending = false
-    const shouldDeferStatusDrop = paneForegroundAgentTracker.onCommandFinished()
+    const parkedRemote = !services.isVisible() && isRemoteExecutionHostPtyId(services.getPtyId())
+    if (parkedRemote) {
+      paneForegroundAgentTracker.suspend()
+    }
+    const shouldDeferStatusDrop = parkedRemote || paneForegroundAgentTracker.onCommandFinished()
     // Why: the finished command may have moved HEAD or the index (e.g.
     // `git checkout`); nudge git UI now instead of waiting for a poll.
     dispatchTerminalCommandFinishedEvent(services.worktreeId, bestEffortExitCode)
@@ -237,43 +250,12 @@ export function createTerminalForegroundPolicy(services: TerminalForegroundServi
     // identity from local process state, with remote/SSH excluded by the tracker.
     visibleForegroundSamplePending = paneForegroundAgentTracker.onVisiblePtyBound(expectsAgent)
   }
-  const requestKnownWindowsShiftEnterReconfirmation = () => {
-    const foreground = useAppStore.getState().paneForegroundAgentByPaneKey[services.paneKey]
-    // Why: daemon reattach/launch metadata is display-only until a live
-    // provider read confirms it. Submit/interrupt/title-exit evidence must
-    // revoke that launch-only hint too, otherwise Shift+Enter can route bytes
-    // to an agent that already exited before confirmation ever ran.
-    if (
-      !foreground?.agent ||
-      !isTuiAgent(foreground.agent) ||
-      foreground.routingTrusted !== true ||
-      TUI_AGENT_CONFIG[foreground.agent].windowsShiftEnterEncoding !== 'csi-u'
-    ) {
-      return
-    }
-    // Why: cmd.exe and Git Bash have no OSC command boundaries. Keep the icon
-    // as a hint, but revoke bytes until one current provider confirmation lands.
-    useAppStore.getState().setPaneForegroundAgent(services.paneKey, {
-      agent: foreground.agent,
-      agentEvidence: foreground.agentEvidence,
-      routingRevoked: true,
-      shellForeground: false
+  const requestKnownWindowsShiftEnterReconfirmation = () =>
+    requestTerminalForegroundReconfirmation(publication, paneForegroundAgentTracker, () => {
+      visibleForegroundSamplePending = false
+      visibleForegroundSampleSettled = false
+      sampleVisiblePaneForegroundAgent(true)
     })
-    visibleForegroundSamplePending = false
-    visibleForegroundSampleSettled = false
-    // Why: hook rows can suppress display-only sampling, but cannot restore
-    // byte authority after this function explicitly revoked routing trust.
-    sampleVisiblePaneForegroundAgent(true)
-    if (paneForegroundAgentTracker.hasReadInFlight()) {
-      useAppStore.getState().setPaneForegroundAgent(services.paneKey, {
-        agent: foreground.agent,
-        agentEvidence: foreground.agentEvidence,
-        routingRevoked: true,
-        shellForeground: false,
-        routingConfirmationPending: true
-      })
-    }
-  }
   const requestAcceptedInputDiscovery = (): void => {
     deferredCommandFinishedStatusDrop = null
     deferredConfirmedShellReconcile = null
@@ -296,6 +278,7 @@ export function createTerminalForegroundPolicy(services: TerminalForegroundServi
     onCommandFinished: handleCommandFinished
   })
   return {
+    publication,
     paneHasLiveHookAgentIcon,
     paneExpectsLaunchAgent,
     resolveExpectedLaunchTuiAgent,

@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import { useAppStore } from '../../store'
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { useEffect, useState } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -276,4 +277,42 @@ describe('terminal chat ownership lifecycle', () => {
     expect(hook.result.current.chatLeafId).toBeNull()
     expect(mocks.state.unifiedTabsByWorktree.wt[0].viewMode).toBe('terminal')
   })
+})
+
+it('keeps passive foreground out of actual chat eligibility while retaining independent title and current read', () => {
+  mocks.state.setTabViewMode('tab', 'terminal')
+  useAppStore.setState({
+    runtimePaneTitlesByTabId: { tab: { 1: 'bash', 2: 'bash' } },
+    agentStatusByPaneKey: {},
+    paneForegroundAgentByPaneKey: {}
+  })
+  const hook = renderHook(() => useFixture(makeFixture(), null))
+  expect(hook.result.current.canToggleChatForLeaf(LEFT)).toBe(false)
+  act(() =>
+    useAppStore.setState({
+      paneForegroundAgentByPaneKey: {
+        [`tab:${LEFT}`]: {
+          agent: 'codex',
+          agentEvidence: 'process-admitted',
+          shellForeground: false
+        }
+      }
+    })
+  )
+  expect(hook.result.current.canToggleChatForLeaf(LEFT)).toBe(false)
+  act(() => useAppStore.setState({ runtimePaneTitlesByTabId: { tab: { 1: 'Codex', 2: 'bash' } } }))
+  expect(hook.result.current.canToggleChatForLeaf(LEFT)).toBe(true)
+  act(() =>
+    useAppStore.setState({
+      runtimePaneTitlesByTabId: { tab: { 1: 'bash', 2: 'bash' } },
+      paneForegroundAgentByPaneKey: {
+        [`tab:${LEFT}`]: {
+          agent: 'codex',
+          agentEvidence: 'process-read',
+          shellForeground: false
+        }
+      }
+    })
+  )
+  expect(hook.result.current.canToggleChatForLeaf(LEFT)).toBe(true)
 })

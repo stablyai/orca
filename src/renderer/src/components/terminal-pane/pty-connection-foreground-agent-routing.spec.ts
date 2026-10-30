@@ -1,3 +1,4 @@
+import { foregroundSemantics } from './pty-connection-test-store-fixtures'
 import { bindPtyConnectionTestMocks } from './pty-connection-mocks.spec'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
@@ -206,7 +207,7 @@ export function registerPtyConnectionForegroundAgentRoutingTests(): void {
       await vi.advanceTimersByTimeAsync(350)
       expect(resolveMockPaneWindowsShiftEnterEncoding(mockStoreState, paneKey)).toBe('alt-enter')
       await vi.advanceTimersByTimeAsync(1200)
-      expect(mockStoreState.paneForegroundAgentByPaneKey[paneKey]).toEqual({
+      expect(foregroundSemantics(mockStoreState.paneForegroundAgentByPaneKey[paneKey])).toEqual({
         agent: 'droid',
         agentEvidence: 'process-read',
         routingTrusted: true,
@@ -240,7 +241,7 @@ export function registerPtyConnectionForegroundAgentRoutingTests(): void {
       await vi.advanceTimersByTimeAsync(350)
 
       expect(window.api.pty.confirmForegroundProcess).toHaveBeenCalledWith(ptyId)
-      expect(mockStoreState.paneForegroundAgentByPaneKey[paneKey]).toEqual({
+      expect(foregroundSemantics(mockStoreState.paneForegroundAgentByPaneKey[paneKey])).toEqual({
         agent: 'droid',
         agentEvidence: 'process-read',
         routingTrusted: true,
@@ -286,7 +287,7 @@ export function registerPtyConnectionForegroundAgentRoutingTests(): void {
       await flushAsyncTicks()
 
       expect(window.api.pty.confirmForegroundProcess).toHaveBeenCalledWith(ptyId)
-      expect(mockStoreState.paneForegroundAgentByPaneKey[paneKey]).toEqual({
+      expect(foregroundSemantics(mockStoreState.paneForegroundAgentByPaneKey[paneKey])).toEqual({
         agent: 'droid',
         agentEvidence: 'process-read',
         routingTrusted: true,
@@ -328,7 +329,7 @@ export function registerPtyConnectionForegroundAgentRoutingTests(): void {
       )
       await flushAsyncTicks()
 
-      expect(mockStoreState.paneForegroundAgentByPaneKey[paneKey]).toEqual({
+      expect(foregroundSemantics(mockStoreState.paneForegroundAgentByPaneKey[paneKey])).toEqual({
         agent: 'droid',
         agentEvidence: 'process-read',
         routingTrusted: true,
@@ -370,7 +371,7 @@ export function registerPtyConnectionForegroundAgentRoutingTests(): void {
       await flushAsyncTicks()
 
       // Benign miss: shell never latched as foreground; encoding still safe fallback.
-      expect(mockStoreState.paneForegroundAgentByPaneKey[paneKey]).toEqual({
+      expect(foregroundSemantics(mockStoreState.paneForegroundAgentByPaneKey[paneKey])).toEqual({
         agent: null,
         shellForeground: false
       })
@@ -382,7 +383,7 @@ export function registerPtyConnectionForegroundAgentRoutingTests(): void {
       await vi.advanceTimersByTimeAsync(350 + 1200 + 6000)
       await flushAsyncTicks()
 
-      expect(mockStoreState.paneForegroundAgentByPaneKey[paneKey]).toEqual({
+      expect(foregroundSemantics(mockStoreState.paneForegroundAgentByPaneKey[paneKey])).toEqual({
         agent: 'droid',
         agentEvidence: 'process-read',
         routingTrusted: true,
@@ -419,7 +420,9 @@ export function registerPtyConnectionForegroundAgentRoutingTests(): void {
       // Captured with capture-agent-pty-transcript.mjs from a real delayed Claude launch.
       onTitleChange('✳ Claude Code', '✳ Claude Code')
       await vi.advanceTimersByTimeAsync(350)
-      expect(mockStoreState.paneForegroundAgentByPaneKey[paneKey]).toMatchObject({
+      expect(
+        foregroundSemantics(mockStoreState.paneForegroundAgentByPaneKey[paneKey])
+      ).toMatchObject({
         agent: 'claude',
         agentEvidence: 'process-read',
         routingTrusted: true
@@ -449,7 +452,7 @@ export function registerPtyConnectionForegroundAgentRoutingTests(): void {
       sendTerminalInputThroughPane(pane, '\x03')
       await flushAsyncTicks()
 
-      expect(mockStoreState.paneForegroundAgentByPaneKey[paneKey]).toEqual({
+      expect(foregroundSemantics(mockStoreState.paneForegroundAgentByPaneKey[paneKey])).toEqual({
         agent: 'droid',
         routingRevoked: true,
         routingConfirmationPending: true,
@@ -460,7 +463,7 @@ export function registerPtyConnectionForegroundAgentRoutingTests(): void {
 
       await vi.advanceTimersByTimeAsync(350 + 1200 + 6000)
 
-      expect(mockStoreState.paneForegroundAgentByPaneKey[paneKey]).toEqual({
+      expect(foregroundSemantics(mockStoreState.paneForegroundAgentByPaneKey[paneKey])).toEqual({
         agent: null,
         shellForeground: true
       })
@@ -517,7 +520,7 @@ export function registerPtyConnectionForegroundAgentRoutingTests(): void {
       )
       await flushAsyncTicks()
 
-      expect(mockStoreState.paneForegroundAgentByPaneKey[paneKey]).toEqual({
+      expect(foregroundSemantics(mockStoreState.paneForegroundAgentByPaneKey[paneKey])).toEqual({
         agent: null,
         shellForeground: true
       })

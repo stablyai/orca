@@ -1,3 +1,4 @@
+import { buildForegroundLayoutRetractionPatch } from '../slices/pane-foreground-agent'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { terminalLayoutEqual } from '../../../../shared/terminal-layout-equality'
@@ -48,14 +49,17 @@ export function createTerminalLayoutActions(
         if (!layout || layout.ptyIdsByLeafId?.[leafId] === ptyId) {
           return s
         }
+        const nextLayouts = {
+          ...s.terminalLayoutsByTabId,
+          [tabId]: { ...layout, ptyIdsByLeafId: { ...layout.ptyIdsByLeafId, [leafId]: ptyId } }
+        }
         return {
-          terminalLayoutsByTabId: {
-            ...s.terminalLayoutsByTabId,
-            [tabId]: {
-              ...layout,
-              ptyIdsByLeafId: { ...layout.ptyIdsByLeafId, [leafId]: ptyId }
-            }
-          }
+          terminalLayoutsByTabId: nextLayouts,
+          ...buildForegroundLayoutRetractionPatch(
+            s.paneForegroundAgentByPaneKey,
+            nextLayouts,
+            new Set([tabId])
+          )
         }
       })
     },
@@ -99,8 +103,14 @@ export function createTerminalLayoutActions(
         if (existing && terminalLayoutEqual(existing, normalized.snapshot)) {
           return s
         }
+        const nextLayouts = { ...s.terminalLayoutsByTabId, [tabId]: normalized.snapshot }
         return {
-          terminalLayoutsByTabId: { ...s.terminalLayoutsByTabId, [tabId]: normalized.snapshot }
+          terminalLayoutsByTabId: nextLayouts,
+          ...buildForegroundLayoutRetractionPatch(
+            s.paneForegroundAgentByPaneKey,
+            nextLayouts,
+            new Set([tabId])
+          )
         }
       })
       transferNormalizedTerminalLayoutPtyOwnership(get(), tabId, ownershipTransfers)

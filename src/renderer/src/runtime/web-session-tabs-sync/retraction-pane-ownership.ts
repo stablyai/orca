@@ -1,3 +1,4 @@
+import { buildForegroundLayoutRetractionPatch } from '../../store/slices/pane-foreground-agent'
 import { parsePaneKey } from '../../../../shared/stable-pane-id'
 import { batchAgentPaneKeysForTabs, isMirroredAgentStatusOwnedBy } from './agent-status-primitives'
 import { isMirroredTerminalSurfaceId } from './terminal-surfaces'
@@ -81,7 +82,10 @@ export function collectCollidingRetractionPaneKeys(
     }
     const entry =
       state.agentStatusByPaneKey[paneKey] ?? state.retainedAgentsByPaneKey?.[paneKey]?.entry
-    if (entry && isMirroredAgentStatusOwnedBy(entry, environmentId, worktreeId)) {
+    const context = state.paneForegroundAgentByPaneKey?.[paneKey]?.context
+    const foregroundOwned =
+      context?.worktreeId === worktreeId && (context.environmentId ?? 'local') === environmentId
+    if (entry ? isMirroredAgentStatusOwnedBy(entry, environmentId, worktreeId) : foregroundOwned) {
       const panes = owned.get(tabId) ?? new Set<string>()
       panes.add(paneKey)
       owned.set(tabId, panes)
@@ -93,4 +97,24 @@ export function collectCollidingRetractionPaneKeys(
     collisions.set(tabId, owned.get(tabId) ?? new Set())
   }
   return collisions
+}
+
+export function buildCurrentForegroundLeafRetractionPatch(
+  state: WebSessionTabsSyncState,
+  entries: WebSessionTabsSyncState['paneForegroundAgentByPaneKey'],
+  layouts: WebSessionTabsSyncState['terminalLayoutsByTabId'],
+  tabIds: ReadonlySet<string>,
+  environmentId: string,
+  worktreeId: string
+) {
+  return buildForegroundLayoutRetractionPatch(entries ?? {}, layouts, tabIds, (entry, paneKey) => {
+    const context = entry.context
+    const row =
+      state.agentStatusByPaneKey[paneKey] ?? state.retainedAgentsByPaneKey?.[paneKey]?.entry
+    return (
+      context?.worktreeId === worktreeId &&
+      (context.environmentId ?? 'local') === environmentId &&
+      (!row || isMirroredAgentStatusOwnedBy(row, environmentId, worktreeId))
+    )
+  })
 }

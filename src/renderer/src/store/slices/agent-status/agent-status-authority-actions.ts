@@ -223,7 +223,20 @@ export function createAgentStatusAuthorityActions(
         acknowledgedAgentsByPaneKey: movePaneKeyedRecord(s.acknowledgedAgentsByPaneKey, from, to),
         activityClearedAtByPaneKey: movePaneKeyedRecord(s.activityClearedAtByPaneKey, from, to),
         manuallyUnreadTurnsByPaneKey: movePaneKeyedRecord(s.manuallyUnreadTurnsByPaneKey, from, to),
-        paneForegroundAgentByPaneKey: movePaneKeyedRecord(s.paneForegroundAgentByPaneKey, from, to),
+        paneForegroundAgentByPaneKey: movePaneKeyedRecord(
+          s.paneForegroundAgentByPaneKey,
+          from,
+          to,
+          (entry) =>
+            entry.agentEvidence === 'process-read'
+              ? {
+                  ...entry,
+                  agentEvidence: 'process-admitted',
+                  routingTrusted: false,
+                  routingConfirmationPending: false
+                }
+              : entry
+        ),
         ...movePaneAttention(s, from, to),
         lastTerminalInputAtByPaneKey: movePaneKeyedRecord(s.lastTerminalInputAtByPaneKey, from, to),
         cacheTimerByKey: movePaneKeyedRecord(s.cacheTimerByKey, from, to),

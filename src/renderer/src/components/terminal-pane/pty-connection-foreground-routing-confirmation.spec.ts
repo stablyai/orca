@@ -1,3 +1,4 @@
+import { foregroundSemantics } from './pty-connection-test-store-fixtures'
 import { bindPtyConnectionTestMocks } from './pty-connection-mocks.spec'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
@@ -149,7 +150,7 @@ export function registerPtyConnectionForegroundRoutingConfirmationTests(): void 
         await vi.advanceTimersByTimeAsync(350)
         await flushAsyncTicks()
 
-        expect(mockStoreState.paneForegroundAgentByPaneKey[cacheKey]).toEqual({
+        expect(foregroundSemantics(mockStoreState.paneForegroundAgentByPaneKey[cacheKey])).toEqual({
           agent: 'pi',
           routingRevoked: true,
           shellForeground: false
@@ -206,7 +207,7 @@ export function registerPtyConnectionForegroundRoutingConfirmationTests(): void 
 
         binding.sampleForegroundAgentOnFocus()
 
-        expect(mockStoreState.paneForegroundAgentByPaneKey[cacheKey]).toEqual({
+        expect(foregroundSemantics(mockStoreState.paneForegroundAgentByPaneKey[cacheKey])).toEqual({
           agent: 'pi',
           routingRevoked: true,
           shellForeground: false
@@ -245,7 +246,9 @@ export function registerPtyConnectionForegroundRoutingConfirmationTests(): void 
           )
           await flushAsyncTicks()
 
-          expect(mockStoreState.paneForegroundAgentByPaneKey[cacheKey]).toEqual({
+          expect(
+            foregroundSemantics(mockStoreState.paneForegroundAgentByPaneKey[cacheKey])
+          ).toEqual({
             agent: 'pi',
             routingRevoked: true,
             shellForeground: false
@@ -276,7 +279,7 @@ export function registerPtyConnectionForegroundRoutingConfirmationTests(): void 
 
         await advanceVisibleForegroundRead()
 
-        expect(mockStoreState.paneForegroundAgentByPaneKey[cacheKey]).toEqual({
+        expect(foregroundSemantics(mockStoreState.paneForegroundAgentByPaneKey[cacheKey])).toEqual({
           agent: 'codex',
           agentEvidence: 'process-read',
           routingTrusted: true,

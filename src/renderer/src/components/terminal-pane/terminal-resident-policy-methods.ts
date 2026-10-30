@@ -126,6 +126,7 @@ export function createTerminalResidentPolicyMethods(
     applyEffect,
     observePrLink,
     dispose(): void {
+      context.foreground.publication.clear()
       context.ended = true
       context.transport = undefined
       context.presentationPorts.clear()

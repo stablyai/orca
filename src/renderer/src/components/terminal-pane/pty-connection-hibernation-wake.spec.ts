@@ -766,7 +766,10 @@ export function registerPtyConnectionHibernationWakeTests(): void {
       sendTerminalInputThroughPane(pane, '\x1b[O')
       expect(mockStoreState.recordTerminalInput).not.toHaveBeenCalled()
       // The reply still reaches the shell; only the activity recording is gated.
-      expect(transport.sendInput).toHaveBeenCalledWith('\x1b[O', 'query-reply')
+      expect(transport.sendInput).toHaveBeenCalledWith('\x1b[O', 'query-reply', {
+        onEligible: expect.any(Function),
+        onDispatch: expect.any(Function)
+      })
 
       // Real user input fires the core signal and records activity.
       for (const listener of userInputListeners) {

@@ -1,3 +1,4 @@
+import { getTerminalSemanticResident } from '../terminal-semantic-residents'
 import { installSavedResumeStartupCancellation } from './saved-resume-startup-cancellation'
 import { launchConfigsEqual } from '../../../../../shared/agent-resume-record-equivalence'
 import { useAppStore } from '@/store'
@@ -107,12 +108,21 @@ export function installSleepingRecordAccess(session: ConnectPanePtySession): voi
         // Daemon launch metadata can outlive its process; it requests confirmation without authorizing bytes.
         const state = useAppStore.getState()
         const current = state.paneForegroundAgentByPaneKey[session.cacheKey]
-        // Why: re-mounting a parked pane must not demote this session's own read of the same agent.
-        const keepsRead =
-          current?.agent === metadata.launchAgent && current.agentEvidence === 'process-read'
+        // Same E owns its observed source; metadata replay supplies no new process proof.
+        if (
+          current?.context?.execution &&
+          (current.agentEvidence === 'process-read' ||
+            current.agentEvidence === 'process-admitted') &&
+          current.context.ptyId === session.transport.getPtyId() &&
+          getTerminalSemanticResident(current.context.ptyId)?.policy.foreground.publication.owns(
+            current
+          )
+        ) {
+          return
+        }
         state.setPaneForegroundAgent(session.cacheKey, {
           agent: metadata.launchAgent,
-          agentEvidence: keepsRead ? 'process-read' : 'launch-record',
+          agentEvidence: 'launch-record',
           shellForeground: false
         })
       }

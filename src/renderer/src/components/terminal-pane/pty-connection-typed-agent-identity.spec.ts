@@ -126,6 +126,45 @@ export function registerPtyConnectionTypedAgentIdentityTests(): void {
       expect(manager.setPaneGpuRendering).toHaveBeenCalledWith(1, false)
     })
 
+    it('keeps passive display out of the actual renderer and status-owner inputs', async () => {
+      const { connectPanePty } = await import('./pty-connection')
+      enableActiveRuntimeEnvironment()
+      const paneKey = makePaneKey('tab-1', LEAF_1)
+      const pane = createPane(1)
+      transportFactoryQueue.push(createMockTransport('remote:web-env-1@@tab-pty'))
+      const manager = createManager(1, 1)
+      const deps = createDeps()
+      connectPanePty(pane as never, manager as never, deps as never)
+      await flushAsyncTicks()
+      // SAFETY: The registering transport exposes these real resident callbacks.
+      const title = createdTransportOptions[0]?.onTitleChange as (
+        title: string,
+        raw: string
+      ) => void
+      // SAFETY: The payload matches the actual OSC status callback.
+      const status = createdTransportOptions[0]?.onAgentStatus as (payload: {
+        state: 'working'
+        prompt: string
+        agentType: 'pi'
+      }) => void
+      for (const passive of [false, true]) {
+        delete mockStoreState.agentStatusByPaneKey[paneKey]
+        delete mockStoreState.paneForegroundAgentByPaneKey[paneKey]
+        if (passive) {
+          mockStoreState.setPaneForegroundAgent(paneKey, {
+            agent: 'omp',
+            agentEvidence: 'process-admitted',
+            shellForeground: false
+          })
+        }
+        manager.setPaneGpuRendering.mockClear()
+        title('✦ Gemini CLI', '✦ Gemini CLI')
+        expect(manager.setPaneGpuRendering).toHaveBeenCalledWith(1, false)
+        status({ state: 'working', prompt: '', agentType: 'pi' })
+        expect(mockStoreState.agentStatusByPaneKey[paneKey]?.agentType).toBe('pi')
+      }
+    })
+
     it('keeps GPU enabled when a pane-scoped OMP owner emits a Gemini-looking title', async () => {
       const { connectPanePty } = await import('./pty-connection')
       const paneKey = makePaneKey('tab-1', LEAF_1)

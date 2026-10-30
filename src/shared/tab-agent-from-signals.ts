@@ -38,10 +38,15 @@ export function resolveLaunchedAgentExitEvidence(args: {
   hookAgent: TerminalAgent | null
   siblingHookAgent?: TerminalAgent | null
   hasCompletedHook: boolean
+  processAgentEvidence?: string
   processAgent?: TerminalAgent | null
   processShellForeground?: boolean
 }): boolean {
-  if (args.hookAgent || args.siblingHookAgent || args.processAgent) {
+  if (
+    args.hookAgent ||
+    args.siblingHookAgent ||
+    (args.processAgentEvidence !== 'process-admitted' && args.processAgent)
+  ) {
     return false
   }
   // Why: OSC 133;D (foreground back at shell) is title-independent exit evidence; local-only — remote panes have no shell-foreground producer.
@@ -67,6 +72,7 @@ export function resolveTabAgentFromSignals(args: {
   siblingHookAgent?: TerminalAgent | null
   focusedCompletedHookAgent?: TerminalAgent | null
   siblingCompletedHookAgent?: TerminalAgent | null
+  processAgentEvidence?: string
   processAgent?: TerminalAgent | null
   processShellForeground?: boolean
   sleepingSessionAgent?: TerminalAgent | null
@@ -145,6 +151,7 @@ export function resolveTabAgentFromSignals(args: {
     siblingHookAgent: liveSiblingIdentity,
     hasCompletedHook,
     processAgent: args.processAgent,
+    processAgentEvidence: args.processAgentEvidence,
     processShellForeground: args.processShellForeground
   })
   const activeLaunchAgent = launchedAgentExited ? null : launchAgent
@@ -169,6 +176,7 @@ export function hasObservedTabAgentSignal(args: {
   hookAgent?: TerminalAgent | null
   siblingHookAgent?: TerminalAgent | null
   hasCompletedHook: boolean
+  processAgentEvidence?: string
   processAgent?: TerminalAgent | null
 }): boolean {
   const explicitTitleAgent = resolveExplicitTerminalTitleAgentType(args.title)
@@ -176,7 +184,10 @@ export function hasObservedTabAgentSignal(args: {
     ? explicitTitleAgent === args.launchAgent
     : Boolean(explicitTitleAgent || args.siblingHookAgent)
   return Boolean(
-    args.hookAgent || args.hasCompletedHook || args.processAgent || fallbackAgentSignal
+    args.hookAgent ||
+    args.hasCompletedHook ||
+    (args.processAgentEvidence !== 'process-admitted' && args.processAgent) ||
+    fallbackAgentSignal
   )
 }
 

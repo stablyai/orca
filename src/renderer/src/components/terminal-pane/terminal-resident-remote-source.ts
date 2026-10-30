@@ -114,6 +114,7 @@ export function subscribeResidentRemoteSource(
       recovery.parkRetryAfterDeadline(reconnect)
       return
     }
+    resident?.policy.foreground.paneForegroundAgentTracker.suspend()
     const next = recovery.isActive ? epoch : recovery.begin()
     recovery.schedule(next, reconnect)
   }

@@ -1,9 +1,12 @@
+import { collectLeafIds } from '../../../../shared/terminal-pane-layout-tree'
+import { parsePaneKey } from '../../../../shared/stable-pane-id'
+import type { TerminalLayoutSnapshot } from '../../../../shared/terminal-tab-types'
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import type { TerminalAgent } from '../../../../shared/terminal-agent'
 
 /** 'launch-record': the daemon's launch identity on reattach, which can outlive the process. */
-export type PaneForegroundAgentEvidence = 'process-read' | 'launch-record'
+export type PaneForegroundAgentEvidence = 'process-read' | 'process-admitted' | 'launch-record'
 
 export type PaneForegroundAgentEntry = {
   /** Recognized agent process in the pane's foreground; null when unknown. */
@@ -11,6 +14,17 @@ export type PaneForegroundAgentEntry = {
   /** Where `agent` came from. Only 'process-read' is a live read; absent counts as unconfirmed,
    *  so a writer that omits it cannot make a sidebar row look process-backed. */
   agentEvidence?: PaneForegroundAgentEvidence
+  /** Issued by the existing execution policy, never imported or persisted. */
+  observationGeneration?: number
+  context?: {
+    execution: object
+    endpoint?: string
+    executionHost?: string
+    ptyId: string
+    incarnationId: string | null
+    worktreeId: string
+    environmentId: string | null
+  }
   /** True only when fresh provider evidence is safe for input-byte routing. */
   routingTrusted?: boolean
   /** True after exit/input evidence revokes routing until provider confirmation. */
@@ -47,6 +61,14 @@ export const createPaneForegroundAgentSlice: StateCreator<
         current &&
         current.agent === entry.agent &&
         current.agentEvidence === entry.agentEvidence &&
+        current.observationGeneration === entry.observationGeneration &&
+        current.context?.execution === entry.context?.execution &&
+        current.context?.endpoint === entry.context?.endpoint &&
+        current.context?.executionHost === entry.context?.executionHost &&
+        current.context?.ptyId === entry.context?.ptyId &&
+        current.context?.incarnationId === entry.context?.incarnationId &&
+        current.context?.worktreeId === entry.context?.worktreeId &&
+        current.context?.environmentId === entry.context?.environmentId &&
         current.routingTrusted === entry.routingTrusted &&
         current.routingRevoked === entry.routingRevoked &&
         current.routingConfirmationPending === entry.routingConfirmationPending &&
@@ -106,4 +128,37 @@ export function buildPaneForegroundAgentTabPrefixClearPatch(
     delete next[paneKey]
   }
   return { paneForegroundAgentByPaneKey: next }
+}
+
+/** A present accepted layout can revoke a leaf without ending its physical execution. */
+export function buildForegroundLayoutRetractionPatch(
+  entries: Record<string, PaneForegroundAgentEntry>,
+  layouts: Record<string, TerminalLayoutSnapshot>,
+  tabIds: ReadonlySet<string>,
+  owns: (entry: PaneForegroundAgentEntry, paneKey: string) => boolean = () => true
+): Pick<PaneForegroundAgentSlice, 'paneForegroundAgentByPaneKey'> | null {
+  let next: typeof entries | undefined
+  const leaves = new Map<string, Set<string>>()
+  for (const [key, entry] of Object.entries(entries)) {
+    const pane = parsePaneKey(key)
+    if (!pane || !tabIds.has(pane.tabId) || !owns(entry, key)) {
+      continue
+    }
+    const layout = layouts[pane.tabId]
+    if (!layout) {
+      continue
+    }
+    let retained = leaves.get(pane.tabId)
+    if (!retained) {
+      retained = new Set(collectLeafIds(layout.root))
+      leaves.set(pane.tabId, retained)
+    }
+    const ptyId = layout.ptyIdsByLeafId?.[pane.leafId]
+    if (retained.has(pane.leafId) && (!ptyId || !entry.context || entry.context.ptyId === ptyId)) {
+      continue
+    }
+    next ??= { ...entries }
+    delete next[key]
+  }
+  return next ? { paneForegroundAgentByPaneKey: next } : null
 }

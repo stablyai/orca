@@ -92,6 +92,8 @@ function resident() {
         }
       )
   )
+  state.ptyIdsByTabId!['tab-1'] = [current.identity.ptyId]
+  state.terminalLayoutsByTabId!['tab-1']!.ptyIdsByLeafId = { [LEAF_1]: current.identity.ptyId }
   end = () => registry.retire(current)
   return current
 }

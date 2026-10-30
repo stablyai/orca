@@ -1,3 +1,4 @@
+import { foregroundAgentForActions } from '../../../../shared/agent-status-identity'
 import { canCommandCodeOutputOwnPane } from './command-code-output-ownership'
 import { resolveLiveAgentStatusConnectionRouting } from '@/lib/agent-status-connection-ownership'
 import { getConnectionIdFromState } from '@/lib/connection-owner-resolution'
@@ -120,7 +121,7 @@ export function terminalResidentCommandCodeOptions(
       const state = useAppStore.getState()
       const paneForeground = state.paneForegroundAgentByPaneKey[binding.paneKey]
       return canCommandCodeOutputOwnPane({
-        foregroundAgent: paneForeground?.agent,
+        foregroundAgent: foregroundAgentForActions(paneForeground),
         shellForeground: paneForeground?.shellForeground,
         paneOwnerAgent: context.shellInput.getAuthoritativePaneAgent(),
         retainedPaneOwnerAgent: state.retainedAgentsByPaneKey[binding.paneKey]?.agentType

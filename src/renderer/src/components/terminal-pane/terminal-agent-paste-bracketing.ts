@@ -1,3 +1,4 @@
+import { foregroundAgentForActions } from '../../../../shared/agent-status-identity'
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
 import { isTuiAgent, TUI_AGENT_CONFIG } from '../../../../shared/tui-agent-config'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
@@ -30,7 +31,7 @@ export function resolveProtectedMultilinePasteOptionsForPane({
   return resolveProtectedMultilinePasteOptionsForAgentEvidence({
     isWindowsClient,
     hostPlatform,
-    foregroundAgent: paneForegroundAgentByPaneKey[paneKey]?.agent,
+    foregroundAgent: foregroundAgentForActions(paneForegroundAgentByPaneKey[paneKey]),
     entry: agentStatusByPaneKey[paneKey]
   })
 }

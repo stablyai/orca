@@ -1,3 +1,4 @@
+import { foregroundAgentForActions } from '../../../../shared/agent-status-identity'
 import { useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
@@ -84,7 +85,7 @@ export function CodexSharedServerBanner({
   // Why either signal: a typed codex is seen by the process read, or by its hooks when that read has no command marks.
   const codexInPane = useAppStore(
     (state) =>
-      state.paneForegroundAgentByPaneKey[paneKey]?.agent === 'codex' ||
+      foregroundAgentForActions(state.paneForegroundAgentByPaneKey[paneKey]) === 'codex' ||
       state.agentStatusByPaneKey[paneKey]?.agentType === 'codex'
   )
   // Why a recheck: after the fix stops the server, the banner hides unless a new one is joined.

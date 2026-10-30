@@ -23,7 +23,7 @@ import {
   type StoreState
 } from './pty-connection-test-store-state'
 import { buildPaneConnectionDeps } from './pty-connection-test-deps'
-import { createInitialStoreState } from './pty-connection-test-store-fixtures'
+import { createInitialStoreState, foregroundSemantics } from './pty-connection-test-store-fixtures'
 import {
   installTerminalTestGlobals,
   restoreTerminalTestGlobals
@@ -107,7 +107,7 @@ export function registerPtyConnectionCommandFinishedCleanupTests(): void {
         sendTerminalInputThroughPane(pane, 'droid\r')
         dataCallbackRef.current?.('\x1b]133;C\x07')
 
-        expect(mockStoreState.paneForegroundAgentByPaneKey[paneKey]).toEqual({
+        expect(foregroundSemantics(mockStoreState.paneForegroundAgentByPaneKey[paneKey])).toEqual({
           agent: null,
           shellForeground: false
         })
@@ -201,7 +201,7 @@ export function registerPtyConnectionCommandFinishedCleanupTests(): void {
 
       expect(getForegroundProcess).toHaveBeenCalledTimes(readsBeforeFinish + 1)
       expect(mockStoreState.clearAgentLaunchConfig).not.toHaveBeenCalled()
-      expect(mockStoreState.paneForegroundAgentByPaneKey[paneKey]).toEqual({
+      expect(foregroundSemantics(mockStoreState.paneForegroundAgentByPaneKey[paneKey])).toEqual({
         agent: 'droid',
         agentEvidence: 'process-read',
         routingTrusted: true,
@@ -241,7 +241,7 @@ export function registerPtyConnectionCommandFinishedCleanupTests(): void {
       dataCallbackRef.current?.('\x1b]133;D;0\x07\x1b]133;A\x07')
       await vi.advanceTimersByTimeAsync(350)
       expect(mockStoreState.clearAgentLaunchConfig).toHaveBeenCalledExactlyOnceWith(paneKey)
-      expect(mockStoreState.paneForegroundAgentByPaneKey[paneKey]).toEqual({
+      expect(foregroundSemantics(mockStoreState.paneForegroundAgentByPaneKey[paneKey])).toEqual({
         agent: null,
         shellForeground: true
       })
@@ -306,7 +306,7 @@ export function registerPtyConnectionCommandFinishedCleanupTests(): void {
         expect(mockStoreState.sleepingAgentSessionsByPaneKey[paneKey]).toBeUndefined()
         expect(deps.onAgentExitedRef.current).toHaveBeenCalledWith(LEAF_1)
       }
-      expect(mockStoreState.paneForegroundAgentByPaneKey[paneKey]).toEqual({
+      expect(foregroundSemantics(mockStoreState.paneForegroundAgentByPaneKey[paneKey])).toEqual({
         agent: null,
         shellForeground: true
       })
@@ -450,7 +450,7 @@ export function registerPtyConnectionCommandFinishedCleanupTests(): void {
       await flushAsyncTicks()
 
       // The unavailable branch really ran: it publishes an unproven foreground before settling.
-      expect(mockStoreState.paneForegroundAgentByPaneKey[paneKey]).toEqual({
+      expect(foregroundSemantics(mockStoreState.paneForegroundAgentByPaneKey[paneKey])).toEqual({
         agent: null,
         shellForeground: false
       })
@@ -631,7 +631,7 @@ export function registerPtyConnectionCommandFinishedCleanupTests(): void {
       await flushAsyncTicks()
 
       expect(mockStoreState.clearAgentLaunchConfig).toHaveBeenCalledExactlyOnceWith(paneKey)
-      expect(mockStoreState.paneForegroundAgentByPaneKey[paneKey]).toEqual({
+      expect(foregroundSemantics(mockStoreState.paneForegroundAgentByPaneKey[paneKey])).toEqual({
         agent: null,
         shellForeground: false
       })

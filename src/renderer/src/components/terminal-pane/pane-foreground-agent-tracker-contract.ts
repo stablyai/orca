@@ -1,3 +1,4 @@
+import type { TerminalAgent } from '../../../../shared/terminal-agent'
 import type { RecognizedAgentProcess } from '../../../../shared/agent-process-recognition'
 import type { PaneForegroundAgentEntry } from '@/store/slices/pane-foreground-agent'
 import type { RuntimeTerminalProcessInspection } from '@/runtime/runtime-terminal-inspection'
@@ -20,6 +21,8 @@ export type PaneForegroundAgentTrackerDeps = {
   /** Remote authorities must provide fenced evidence; local panes retain the string path. */
   isRemotePtyId?: (ptyId: string) => boolean
   getExpectedIncarnationId?: () => string | null
+  captureRead?: () => () => boolean
+  demote?: () => boolean
   publish: (entry: PaneForegroundAgentEntry) => void
   /** The entry currently published for this pane, whoever wrote it. */
   getPublishedEntry?: () => PaneForegroundAgentEntry | undefined
@@ -31,4 +34,19 @@ export type PaneForegroundAgentTrackerDeps = {
   onConfirmedShellForeground?: (reason: 'visible-pty' | 'command-finished' | 'process-exit') => void
   onCommandFinishedUnavailable?: () => void
   onVisibleForegroundSettled?: (outcome: 'agent' | 'shell' | 'inconclusive') => void
+}
+
+export type PaneForegroundAgentTracker = {
+  /** True while any read is scheduled or running, whatever its authority. */
+  hasReadInFlight: () => boolean
+  onVisiblePtyBound: (expectsAgent?: boolean) => boolean
+  onCommandStarted: (expectedAgent?: TerminalAgent | null) => void
+  onAcceptedInputBoundary: () => void
+  onAgentStartupObserved: () => void
+  /** True when pane identity must remain visible until an async shell confirmation. */
+  onCommandFinished: () => boolean
+  /** The process monitor confirmed this agent exited (no agent, no children, settled). */
+  onProcessExitConfirmed: (process: RecognizedAgentProcess) => void
+  suspend: () => void
+  dispose: () => void
 }

@@ -191,3 +191,34 @@ describe('ClaudeDiffPanelNoticeBanner', () => {
     expect(paneElement.textContent).toBe('')
   })
 })
+
+it('keeps passive display equivalent to absent foreground and retains the independent hook path', async () => {
+  setState('claude')
+  useAppStore.setState({
+    paneForegroundAgentByPaneKey: {
+      [PANE_KEY]: { agent: 'claude', agentEvidence: 'process-admitted', shellForeground: false }
+    }
+  })
+  await renderBanner()
+  expect(mayAutoOpen).not.toHaveBeenCalled()
+  await act(async () => {
+    useAppStore.setState({ paneForegroundAgentByPaneKey: {} })
+  })
+  expect(mayAutoOpen).not.toHaveBeenCalled()
+  await act(async () => {
+    useAppStore.setState({
+      agentStatusByPaneKey: {
+        [PANE_KEY]: {
+          paneKey: PANE_KEY,
+          agentType: 'claude',
+          state: 'working',
+          prompt: '',
+          updatedAt: Date.now(),
+          stateStartedAt: Date.now(),
+          stateHistory: []
+        }
+      }
+    })
+  })
+  expect(mayAutoOpen).toHaveBeenCalled()
+})

@@ -68,9 +68,12 @@ export function observeTerminalSemanticResidentExit(
   const resident = residentsByPtyId.get(ptyId)
   if (
     !resident ||
-    !isProvenProcessExit(code) ||
     (incarnationId !== undefined && resident.identity.incarnationId !== incarnationId)
   ) {
+    return
+  }
+  if (!isProvenProcessExit(code)) {
+    resident.policy.foreground.paneForegroundAgentTracker.suspend()
     return
   }
   if (useAppStore.getState().isPtyShutdownPending(ptyId)) {
