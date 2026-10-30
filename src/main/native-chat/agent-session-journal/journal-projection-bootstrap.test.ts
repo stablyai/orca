@@ -369,6 +369,119 @@ it('keeps the pages before damage and parks a closed chat until its rows change,
   expectProjectionMatches(database, published)
 })
 
+it('hands a closed chat to its open owner at a page boundary, then paces the next chat on its own work', async () => {
+  legacyChat(100)
+  const other = 'session-2'
+  database.transaction((db) => {
+    publishTestJournalEpoch(db, other, epoch)
+    for (const row of legacyRows(40)) {
+      insertTestJournalRow(db, other, row)
+    }
+  })
+  const watched = watchJournalStatements(database)
+  const opened: { journal?: AgentSessionJournal; reads?: number } = {}
+  const rests: number[] = []
+  let clock = 0
+  await backfillJournalState({
+    database: () => database,
+    stopped: () => false,
+    now: () => (clock += 30),
+    rest: async (ms) => {
+      rests.push(ms)
+      // The user opens the chat while the pass rests after its first page.
+      if (!opened.journal && coverage() === 32) {
+        opened.journal = journals.track(new AgentSessionJournal({ identity, database }))
+        await opened.journal.open()
+        opened.reads = watched.rowsRead()
+      }
+    },
+    // As the conversation map does: an open chat catches up on its own lane, here taking ten
+    // minutes of wall time.
+    repairOpen: async (id) => {
+      const journal = id === sessionId ? opened.journal : undefined
+      if (!journal) {
+        return false
+      }
+      await journal.repairProjection()
+      clock += 10 * 60_000
+      return true
+    }
+  })
+  const journal = opened.journal
+  if (!journal || opened.reads === undefined) {
+    throw new Error('the chat never opened mid-pass')
+  }
+  // After the takeover the pass pages nothing more here: the open runner reads the 68 rows after
+  // the committed page once, and the next chat's 40 rows are read once.
+  expect(watched.rowsRead() - opened.reads).toBe(68 + 40)
+  expect(coverage()).toBe(100)
+  expect(coverage(other)).toBe(40)
+  // The open chat's ten minutes are not charged to the pass's pace.
+  expect(Math.max(...rests)).toBeLessThan(60_000)
+  expect(replayedPrefixCoverage(database)).toBe(100)
+  await journal.appendItem(nextItem(1), reply('After the takeover'), {
+    fence: 1,
+    turnScope: AGENT_JOURNAL_THREAD_SCOPE
+  })
+  expect(coverage()).toBe(101)
+})
+
+it('drops a catch-up that an epoch replacement retired, and keeps the replacement', async () => {
+  legacyChat(100)
+  restAfterEveryPage()
+  const journal = journals.track(
+    new AgentSessionJournal({ identity, database, mintEpoch: () => 'replaced' })
+  )
+  await journal.open()
+  await vi.advanceTimersByTimeAsync(1_000)
+  expect(coverage()).toBe(32)
+  await journal.replaceEpochItems('legacy_import', 1, [
+    { identity: nextItem(1), body: reply('Replacement'), ownerFence: 1 }
+  ])
+  const replaced = savedTables()
+  await vi.advanceTimersByTimeAsync(60_000)
+  expect(savedTables()).toStrictEqual(replaced)
+  expect(readJournalSavedState(database.db, sessionId, 'replaced')?.lastSequence).toBe(
+    journal.cursor().sequence
+  )
+  expect(
+    database.db.prepare('SELECT COUNT(*) AS n FROM journal_items WHERE epoch = ?').get(epoch)?.n
+  ).toBe(0)
+})
+
+it('stops a pass between pages, and the next pass resumes after the last committed page', async () => {
+  legacyChat(100)
+  const watched = watchJournalStatements(database)
+  restAfterEveryPage()
+  backfill = startJournalStateBackfill(
+    {
+      database: () => database,
+      repairOpen: async () => false,
+      rest: async () => {
+        if (coverage() === 32) {
+          backfill?.stop()
+        }
+      }
+    },
+    (error) => {
+      throw error
+    }
+  )
+  await vi.advanceTimersByTimeAsync(60_000)
+  expect(coverage()).toBe(32)
+  expect(watched.rowsRead()).toBe(32)
+  await vi.advanceTimersByTimeAsync(6 * 60 * 60_000)
+  expect(coverage()).toBe(32)
+  await backfillJournalState({
+    database: () => database,
+    repairOpen: async () => false,
+    stopped: () => false,
+    rest: async () => undefined
+  })
+  expect(coverage()).toBe(100)
+  expect(watched.rowsRead()).toBe(32 + 68)
+})
+
 it.each(['another codec version', 'a corrupt item'])(
   'leaves a current-epoch view with %s untouched until the whole history folds, and parks it on a gap',
   async (unreadable) => {
