@@ -1,6 +1,24 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { AppState } from 'react-native'
-import { setNotificationViewingWorkspace } from './notification-viewing-policy'
+import {
+  getNotificationViewingWorkspace,
+  setInPageNotificationViewingWorkspace,
+  setNotificationViewingWorkspace
+} from './notification-viewing-policy'
+import {
+  noteBridgeHostClientMessage,
+  noteBridgeHostServerPayload,
+  noteInPageBackClaim,
+  noteInPageStorageWrite
+} from './in-page-notification-navigation'
+import {
+  TABS_STREAM_CLEAR_GRACE_MS,
+  activeInPageHostKeys,
+  bridgeSessionByHostKey
+} from './bridge-session-viewing-tracker'
+import { withLastVisitedWorktree } from '../worktree/last-visited-worktree-by-host'
+import { LAST_VISITED_WORKTREE_STORAGE_KEY } from '../worktree/last-visited-worktree-repo'
+import { sessionTabPaneKey } from '../session/notification-pane-tab'
 vi.mock('./push-tray-dismissal', () => ({ dismissPresentedPushNotification: vi.fn() }))
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { sha256 } from '@noble/hashes/sha256'
@@ -339,4 +357,535 @@ it('silences only the viewed workspace on its own host, desktop or server', asyn
   })
   await expect(present('runtime:env-1')).resolves.toBe(false)
   await expect(present()).resolves.toBe(true)
+})
+
+it('shows notifications from another tab in the same workspace while suppressing the active tab', async () => {
+  AppState.currentState = 'active'
+  storage.set(
+    'orca:notificationDeliveryPreferences',
+    JSON.stringify({ suppressWhileViewing: false })
+  )
+  let seq = 0
+  const presentPane = (paneKey?: string) =>
+    canPresentForegroundPush({
+      hostFingerprint,
+      worktreeId: 'repo::/work',
+      ...(paneKey ? { paneKey } : {}),
+      notificationId: `pane-${++seq}`,
+      notificationEpoch: 'epoch',
+      notificationSeq: seq
+    })
+  setNotificationViewingWorkspace({
+    hostId: 'host-1',
+    worktreeId: 'repo::/work',
+    paneKey: 'tab-a:11111111-1111-4111-8111-111111111111'
+  })
+  // The tab on screen never alerts, even with the workspace-wide switch off.
+  await expect(presentPane('tab-a:11111111-1111-4111-8111-111111111111')).resolves.toBe(false)
+  await expect(presentPane('tab-b:22222222-2222-4222-8222-222222222222')).resolves.toBe(true)
+
+  // The switch widens suppression to every tab of the open workspace.
+  storage.set('orca:notificationDeliveryPreferences', JSON.stringify({ suppressWhileViewing: true }))
+  await expect(presentPane('tab-b:22222222-2222-4222-8222-222222222222')).resolves.toBe(false)
+})
+
+it('keeps suppressing the active in-page tab across ready/drawer back-claim drops until leaving the session', async () => {
+  AppState.currentState = 'active'
+  const paneKey = sessionTabPaneKey({
+    type: 'terminal',
+    id: 'tab-a::leaf-1',
+    title: 'Claude',
+    terminal: 'pty-1',
+    isActive: true
+  })
+  expect(paneKey).toBe('tab-a:leaf-1')
+  const storedInSession = withLastVisitedWorktree(null, {
+    hostId: 'host-1',
+    worktreeId: 'repo::/work',
+    paneKey,
+    inSession: true
+  })
+  noteInPageStorageWrite(
+    'host-1',
+    LAST_VISITED_WORKTREE_STORAGE_KEY,
+    storedInSession,
+    () => {},
+    setInPageNotificationViewingWorkspace
+  )
+  setNotificationViewingWorkspace(null, { preserveInPageForHostId: 'host-1' })
+  noteInPageBackClaim(
+    false,
+    '/h/host-1',
+    'host-1',
+    () => {},
+    setInPageNotificationViewingWorkspace
+  )
+  await expect(
+    canPresentForegroundPush({
+      hostFingerprint,
+      worktreeId: 'repo::/work',
+      paneKey: 'tab-a:leaf-1',
+      notificationId: 'in-page-active',
+      notificationEpoch: 'epoch',
+      notificationSeq: 1
+    })
+  ).resolves.toBe(false)
+
+  const storedLeftSession = withLastVisitedWorktree(storedInSession, {
+    hostId: 'host-1',
+    worktreeId: 'repo::/work',
+    inSession: false
+  })
+  noteInPageStorageWrite(
+    'host-1',
+    LAST_VISITED_WORKTREE_STORAGE_KEY,
+    storedLeftSession,
+    () => {},
+    setInPageNotificationViewingWorkspace
+  )
+  await expect(
+    canPresentForegroundPush({
+      hostFingerprint,
+      worktreeId: 'repo::/work',
+      paneKey: 'tab-a:leaf-1',
+      notificationId: 'in-page-left',
+      notificationEpoch: 'epoch',
+      notificationSeq: 2
+    })
+  ).resolves.toBe(true)
+})
+
+it('suppresses notifications when the active session is on a duplicate host entry sharing the same desktop fingerprint', async () => {
+  AppState.currentState = 'active'
+  vi.mocked(loadHostCatalog).mockResolvedValue([
+    { id: 'host-stale', publicKeyB64 },
+    { id: 'host-active', publicKeyB64 }
+  ] as unknown as HostCatalogEntry[])
+  setInPageNotificationViewingWorkspace({
+    hostId: 'host-active',
+    worktreeId: 'repo::/work',
+    paneKey: 'tab-a:leaf-1'
+  })
+  const payload = {
+    hostFingerprint,
+    worktreeId: 'repo::/work',
+    paneKey: 'tab-a:leaf-1',
+    notificationId: 'dup-host-1',
+    notificationEpoch: 'epoch',
+    notificationSeq: 1
+  }
+  await expect(canPresentForegroundPush(payload, 'host-active')).resolves.toBe(false)
+  await expect(canPresentForegroundPush(payload)).resolves.toBe(false)
+  await expect(
+    shouldSuppressForegroundPush({
+      hostId: 'host-active',
+      ...payload
+    })
+  ).resolves.toBe(true)
+})
+
+it('tracks active session tab and suppression via BridgeHost RPC even when WebView bundle omits paneKey in storage', async () => {
+  AppState.currentState = 'active'
+  storage.set(
+    'orca:notificationDeliveryPreferences',
+    JSON.stringify({ suppressWhileViewing: false })
+  )
+  noteBridgeHostClientMessage(
+    'host-1',
+    {
+      v: 1,
+      type: 'subscribe',
+      id: 'tabs-sub-1',
+      method: 'session.tabs.subscribe',
+      params: { worktree: 'id:repo::/work' }
+    },
+    () => true
+  )
+  noteBridgeHostServerPayload('host-1', 'tabs-sub-1', {
+    worktree: 'repo::/work',
+    tabs: [
+      {
+        id: 'tab-a::leaf-1',
+        parentTabId: 'tab-a',
+        leafId: 'leaf-1',
+        type: 'terminal',
+        title: 'Claude',
+        isActive: true,
+        terminal: 'term-1',
+        agentStatus: { paneKey: 'tab-a:leaf-1', state: 'working' }
+      },
+      {
+        id: 'tab-b::leaf-2',
+        parentTabId: 'tab-b',
+        leafId: 'leaf-2',
+        type: 'terminal',
+        title: 'Codex',
+        isActive: false,
+        terminal: 'term-2',
+        agentStatus: { paneKey: 'tab-b:leaf-2', state: 'working' }
+      }
+    ]
+  })
+
+  const legacyStored = withLastVisitedWorktree(null, {
+    hostId: 'host-1',
+    worktreeId: 'repo::/work'
+  })
+  noteInPageStorageWrite(
+    'host-1',
+    LAST_VISITED_WORKTREE_STORAGE_KEY,
+    legacyStored,
+    () => {},
+    setInPageNotificationViewingWorkspace
+  )
+
+  await expect(
+    canPresentForegroundPush({
+      hostFingerprint,
+      worktreeId: 'repo::/work',
+      paneKey: 'tab-a:leaf-1',
+      notificationId: 'bridge-tab-a',
+      notificationEpoch: 'epoch',
+      notificationSeq: 1
+    })
+  ).resolves.toBe(false)
+
+  await expect(
+    canPresentForegroundPush({
+      hostFingerprint,
+      worktreeId: 'repo::/work',
+      paneKey: 'tab-b:leaf-2',
+      notificationId: 'bridge-tab-b',
+      notificationEpoch: 'epoch',
+      notificationSeq: 2
+    })
+  ).resolves.toBe(true)
+
+  noteBridgeHostClientMessage(
+    'host-1',
+    {
+      v: 1,
+      type: 'subscribe',
+      id: 'term-sub-2',
+      method: 'terminal.subscribe',
+      params: { handle: 'term-2' }
+    },
+    () => true
+  )
+
+  await expect(
+    canPresentForegroundPush({
+      hostFingerprint,
+      worktreeId: 'repo::/work',
+      paneKey: 'tab-b:leaf-2',
+      notificationId: 'bridge-tab-b-after-switch',
+      notificationEpoch: 'epoch',
+      notificationSeq: 3
+    })
+  ).resolves.toBe(false)
+
+  vi.useFakeTimers()
+  noteBridgeHostClientMessage(
+    'host-1',
+    {
+      v: 1,
+      type: 'cancel',
+      target: 'subscription',
+      id: 'tabs-sub-1'
+    },
+    () => true
+  )
+  // Leaving is only trusted once no stream re-subscribes within the grace window.
+  vi.advanceTimersByTime(TABS_STREAM_CLEAR_GRACE_MS)
+  vi.useRealTimers()
+
+  await expect(
+    canPresentForegroundPush({
+      hostFingerprint,
+      worktreeId: 'repo::/work',
+      paneKey: 'tab-b:leaf-2',
+      notificationId: 'bridge-after-leave',
+      notificationEpoch: 'epoch',
+      notificationSeq: 4
+    })
+  ).resolves.toBe(true)
+})
+
+it('decodes session.tabs.subscribe tabsDelta updates, tracks agentSession RPCs, and tolerates writeStorage errors', async () => {
+  AppState.currentState = 'active'
+  noteBridgeHostClientMessage(
+    'host-1',
+    {
+      v: 1,
+      type: 'subscribe',
+      id: 'tabs-delta-sub',
+      method: 'session.tabs.subscribe',
+      params: { worktree: 'id:repo::/work' }
+    },
+    () => true
+  )
+  noteBridgeHostServerPayload('host-1', 'tabs-delta-sub', {
+    type: 'snapshot',
+    worktree: 'repo::/work',
+    tabsRevision: 1,
+    activeTabId: 'tab-a',
+    tabs: [
+      {
+        id: 'tab-a',
+        parentTabId: 'tab-a',
+        leafId: 'pane:1',
+        type: 'terminal',
+        title: 'Shell 1',
+        isActive: true,
+        terminal: 'term-1'
+      }
+    ]
+  })
+
+  noteInPageStorageWrite(
+    'host-1',
+    LAST_VISITED_WORKTREE_STORAGE_KEY,
+    withLastVisitedWorktree(null, { hostId: 'host-1', worktreeId: 'repo::/work' }),
+    () => {
+      throw new TypeError('publishStorage is not a function')
+    },
+    setInPageNotificationViewingWorkspace
+  )
+
+  await expect(
+    canPresentForegroundPush({
+      hostFingerprint,
+      worktreeId: 'repo::/work',
+      paneKey: 'tab-a:11111111-1111-4111-8111-111111111111',
+      notificationId: 'legacy-leaf-match',
+      notificationEpoch: 'epoch',
+      notificationSeq: 1
+    })
+  ).resolves.toBe(false)
+
+  noteBridgeHostServerPayload('host-1', 'tabs-delta-sub', {
+    type: 'updated',
+    worktree: 'repo::/work',
+    tabsRevision: 2,
+    activeTabId: 'tab-b',
+    tabsDelta: {
+      baseRevision: 1,
+      tabs: [
+        {
+          id: 'tab-a',
+          parentTabId: 'tab-a',
+          leafId: 'pane:1',
+          type: 'terminal',
+          title: 'Shell 1',
+          isActive: false,
+          terminal: 'term-1'
+        },
+        {
+          id: 'tab-b',
+          parentTabId: 'tab-b',
+          leafId: '22222222-2222-4222-8222-222222222222',
+          type: 'terminal',
+          title: 'Claude',
+          isActive: true,
+          terminal: 'term-2'
+        }
+      ]
+    }
+  })
+
+  await expect(
+    canPresentForegroundPush({
+      hostFingerprint,
+      worktreeId: 'repo::/work',
+      paneKey: 'tab-b:22222222-2222-4222-8222-222222222222',
+      notificationId: 'delta-tab-b',
+      notificationEpoch: 'epoch',
+      notificationSeq: 2
+    })
+  ).resolves.toBe(false)
+
+  noteBridgeHostClientMessage(
+    'host-1',
+    {
+      v: 1,
+      type: 'request',
+      id: 'agent-send-1',
+      method: 'agentSession.send',
+      params: { sessionId: 'sess-structured-1', text: 'hello' }
+    },
+    () => true
+  )
+
+  await expect(
+    canPresentForegroundPush({
+      hostFingerprint,
+      worktreeId: 'repo::/work',
+      paneKey: 'structured-agent-session-sess-structured-1:sess-structured-1',
+      notificationId: 'structured-send-1',
+      notificationEpoch: 'epoch',
+      notificationSeq: 3
+    })
+  ).resolves.toBe(false)
+
+  // Switching tabs via LAST_VISITED_WORKTREE_STORAGE_KEY must not retain stale tabId/terminalHandle
+  // or be overwritten by subsequent server snapshots whose activeTabId is on a different desktop tab
+  // or by background session.tabs.list polls for other worktrees.
+  noteInPageStorageWrite(
+    'host-1',
+    LAST_VISITED_WORKTREE_STORAGE_KEY,
+    withLastVisitedWorktree(null, {
+      hostId: 'host-1',
+      worktreeId: 'repo::/work',
+      paneKey: 'tab-b:22222222-2222-4222-8222-222222222222'
+    }),
+    () => {},
+    setInPageNotificationViewingWorkspace
+  )
+  noteBridgeHostServerPayload('host-1', 'tabs-delta-sub', {
+    type: 'updated',
+    worktree: 'repo::/work',
+    tabsRevision: 3,
+    activeTabId: 'tab-a',
+    tabs: [
+      {
+        id: 'tab-a',
+        parentTabId: 'tab-a',
+        leafId: '11111111-1111-4111-8111-111111111111',
+        type: 'terminal',
+        title: 'Shell 1',
+        isActive: true,
+        terminal: 'term-1'
+      },
+      {
+        id: 'tab-b',
+        parentTabId: 'tab-b',
+        leafId: '22222222-2222-4222-8222-222222222222',
+        type: 'terminal',
+        title: 'Claude',
+        isActive: false,
+        terminal: 'term-2'
+      }
+    ]
+  })
+  noteBridgeHostClientMessage(
+    'host-1',
+    {
+      v: 1,
+      type: 'request',
+      id: 'bg-recent-cards-list',
+      method: 'session.tabs.list',
+      params: { worktree: 'id:repo::/other-worktree' }
+    },
+    () => true
+  )
+  noteBridgeHostServerPayload('host-1', 'bg-recent-cards-list', {
+    worktree: 'repo::/other-worktree',
+    activeTabId: 'other-tab',
+    tabs: [
+      {
+        id: 'other-tab',
+        parentTabId: 'other-tab',
+        leafId: '33333333-3333-4333-8333-333333333333',
+        type: 'terminal',
+        title: 'Other',
+        isActive: true,
+        terminal: 'term-other'
+      }
+    ]
+  })
+
+  await expect(
+    canPresentForegroundPush({
+      hostFingerprint,
+      worktreeId: 'repo::/work',
+      paneKey: 'tab-b:22222222-2222-4222-8222-222222222222',
+      notificationId: 'stay-on-tab-b',
+      notificationEpoch: 'epoch',
+      notificationSeq: 4
+    })
+  ).resolves.toBe(false)
+
+  // The page re-subscribes its tabs stream on re-render (e.g. when the agent finishes); the gap
+  // between cancel and subscribe must not drop the phone's tab for the desktop's active one.
+  noteBridgeHostClientMessage(
+    'host-1',
+    { v: 1, type: 'cancel', id: 'tabs-delta-sub', target: 'subscription' },
+    () => true
+  )
+  noteBridgeHostClientMessage(
+    'host-1',
+    {
+      v: 1,
+      type: 'subscribe',
+      id: 'tabs-resub',
+      method: 'session.tabs.subscribe',
+      params: { worktree: 'id:repo::/work' }
+    },
+    () => true
+  )
+  noteBridgeHostServerPayload('host-1', 'tabs-resub', {
+    type: 'snapshot',
+    worktree: 'repo::/work',
+    activeTabId: 'tab-a',
+    tabs: [
+      { id: 'tab-a', parentTabId: 'tab-a', leafId: '11111111-1111-4111-8111-111111111111', type: 'terminal', title: 'Shell 1', isActive: true, terminal: 'term-1' },
+      { id: 'tab-b', parentTabId: 'tab-b', leafId: '22222222-2222-4222-8222-222222222222', type: 'terminal', title: 'Claude', isActive: false, terminal: 'term-2' }
+    ]
+  })
+
+  await expect(
+    canPresentForegroundPush({
+      hostFingerprint,
+      worktreeId: 'repo::/work',
+      paneKey: 'tab-b:22222222-2222-4222-8222-222222222222',
+      notificationId: 'resubscribe-keeps-tab-b',
+      notificationEpoch: 'epoch',
+      notificationSeq: 5
+    })
+  ).resolves.toBe(false)
+})
+
+it('does not mark an unviewed workspace as viewed from a one-shot session.tabs.list', async () => {
+  AppState.currentState = 'active'
+  bridgeSessionByHostKey.delete('host-1')
+  activeInPageHostKeys.delete('host-1')
+  noteBridgeHostClientMessage(
+    'host-1',
+    {
+      v: 1,
+      type: 'request',
+      id: 'oneshot-tabs-list',
+      method: 'session.tabs.list',
+      params: { worktree: 'id:repo::/unviewed' }
+    },
+    () => true
+  )
+  noteBridgeHostServerPayload('host-1', 'oneshot-tabs-list', {
+    worktree: 'repo::/unviewed',
+    activeTabId: 'tab-a',
+    tabs: [
+      {
+        id: 'tab-a',
+        parentTabId: 'tab-a',
+        leafId: '11111111-1111-4111-8111-111111111111',
+        type: 'terminal',
+        title: 'Shell',
+        isActive: true,
+        terminal: 'term-1'
+      }
+    ]
+  })
+
+  expect(bridgeSessionByHostKey.get('host-1')?.worktreeId).toBeUndefined()
+  expect(getNotificationViewingWorkspace()).toBeNull()
+  await expect(
+    canPresentForegroundPush({
+      hostFingerprint,
+      worktreeId: 'repo::/unviewed',
+      paneKey: 'tab-a:11111111-1111-4111-8111-111111111111',
+      notificationId: 'oneshot-list-does-not-view',
+      notificationEpoch: 'epoch',
+      notificationSeq: 1
+    })
+  ).resolves.toBe(true)
 })

@@ -1,16 +1,48 @@
 import { useEffect, useRef, useState } from 'react'
+import { decodeInPageNotificationTarget } from '../notifications/in-page-notification-navigation'
+import type { RouteHandoff } from '../navigation/route-handoff'
+import { workspaceRouteHref } from '../navigation/workspace-execution-host'
 import { usePageBridgeClient } from '../transport/client-context.web'
+import { routeExecutionHostOf } from '../worktree/host-list-highlight'
 import type { MobileSessionTab } from './mobile-session-route-types'
 import { notificationPaneTab } from './notification-pane-tab'
 
-// The document at / receives pane requests through shell init; router params belong to the native shell.
-// Erase every arrival to repair lost clears, but switch once per value so replay cannot undo a later tab pick.
-// Keep pending requests in a ref until terminal inventory arrives, avoiding a stale selection render.
+type PendingNotificationRequest = {
+  raw: string
+  paneKey: string
+  worktreeId: string | null
+  crossWorktree: boolean
+  sawTargetWorktreeReset: boolean
+}
+
+function toPendingSeed(opened: string | null): PendingNotificationRequest | null {
+  if (!opened) {
+    return null
+  }
+  const decoded = decodeInPageNotificationTarget(opened)
+  if (!decoded.paneKey) {
+    return null
+  }
+  return {
+    raw: opened,
+    paneKey: decoded.paneKey,
+    worktreeId: decoded.worktreeId ?? null,
+    crossWorktree: false,
+    sawTargetWorktreeReset: false
+  }
+}
+
 export function useNotificationPaneNavigation({
+  hostId,
+  worktreeId,
+  router,
   sessionTabs,
   terminalsLoaded,
   switchSessionTab
 }: {
+  hostId?: string
+  worktreeId?: string
+  router?: Pick<RouteHandoff, 'replace'>
   sessionTabs: MobileSessionTab[]
   terminalsLoaded: boolean
   switchSessionTab: (tab: MobileSessionTab) => void
@@ -18,9 +50,14 @@ export function useNotificationPaneNavigation({
   const client = usePageBridgeClient()
   // The opening tap arrives only in the initial init, before route-update listeners.
   const opened = client.getShellSession()?.route?.params?.paneKey ?? null
-  const pending = useRef(opened)
+  const pending = useRef<PendingNotificationRequest | null>(toPendingSeed(opened))
+  /** The pane this hook last acted on, so one request is not served twice. Cleared by the erase. */
   const applied = useRef<string | null>(null)
   const [asked, setAsked] = useState(0)
+  const latestContextRef = useRef({ hostId, worktreeId, router })
+  useEffect(() => {
+    latestContextRef.current = { hostId, worktreeId, router }
+  })
 
   useEffect(() => {
     // Acknowledge the initial init separately; read from the client to keep the effect keyed only on client.
@@ -29,33 +66,92 @@ export function useNotificationPaneNavigation({
       client.clearRouteParam('paneKey', seed)
     }
     return client.onRouteUpdate((route) => {
-      const paneKey = route?.params?.paneKey ?? ''
-      if (paneKey === '') {
-        // An erased route permits a later tap for the same pane.
+      const rawParam = route?.params?.paneKey ?? ''
+      if (rawParam === '') {
+        // The shell's own erase, and every `ready` answered after it. Not a request, and what
+        // releases the next tap for the pane this one named.
         applied.current = null
         return
       }
-      // Retry clear on every arrival so a lost acknowledgement is repaired even when switching is deduped.
-      client.clearRouteParam('paneKey', paneKey)
-      if (paneKey === applied.current) {
+      // Asked for on arrival rather than on the switch below: the shell holds the request until
+      // it hears, so a clear that was lost has to be re-asked by the frame that repeats it.
+      client.clearRouteParam('paneKey', rawParam)
+      if (rawParam === applied.current) {
         return
       }
-      pending.current = paneKey
+      const decoded = decodeInPageNotificationTarget(rawParam)
+      const current = latestContextRef.current
+      if (
+        decoded.worktreeId &&
+        current.worktreeId &&
+        decoded.worktreeId !== current.worktreeId &&
+        current.hostId &&
+        current.router
+      ) {
+        applied.current = rawParam
+        pending.current = decoded.paneKey
+          ? {
+              raw: rawParam,
+              paneKey: decoded.paneKey,
+              worktreeId: decoded.worktreeId,
+              crossWorktree: true,
+              sawTargetWorktreeReset: false
+            }
+          : null
+        const href = workspaceRouteHref(
+          `/h/${encodeURIComponent(current.hostId)}/session/${encodeURIComponent(decoded.worktreeId)}`,
+          routeExecutionHostOf(decoded.executionHost)
+        )
+        current.router.replace(
+          decoded.paneKey
+            ? `${href}${href.includes('?') ? '&' : '?'}paneKey=${encodeURIComponent(decoded.paneKey)}`
+            : href
+        )
+        if (decoded.paneKey) {
+          setAsked((count) => count + 1)
+        }
+        return
+      }
+      if (!decoded.paneKey) {
+        return
+      }
+      pending.current = {
+        raw: rawParam,
+        paneKey: decoded.paneKey,
+        worktreeId: decoded.worktreeId ?? current.worktreeId ?? null,
+        crossWorktree: false,
+        sawTargetWorktreeReset: false
+      }
       setAsked((count) => count + 1)
     })
   }, [client])
 
   useEffect(() => {
-    const paneKey = pending.current
-    if (paneKey === null || paneKey === '' || !terminalsLoaded) {
+    const request = pending.current
+    if (request === null) {
       return
     }
-    applied.current = paneKey
-    const tab = notificationPaneTab(sessionTabs, paneKey)
-    // A pre-reconnect inventory can predate the pane named by the push.
+    if (request.worktreeId && worktreeId && request.worktreeId !== worktreeId) {
+      return
+    }
+    if (request.crossWorktree) {
+      if (sessionTabs.length === 0) {
+        request.sawTargetWorktreeReset = true
+        return
+      }
+      if (!request.sawTargetWorktreeReset) {
+        return
+      }
+    }
+    if (!terminalsLoaded) {
+      return
+    }
+    applied.current = request.raw
+    const tab = notificationPaneTab(sessionTabs, request.paneKey)
+    // Held while missing: a list loaded before a reconnect can predate the agent the push names.
     if (tab) {
       pending.current = null
       switchSessionTab(tab)
     }
-  }, [asked, sessionTabs, switchSessionTab, terminalsLoaded])
+  }, [asked, sessionTabs, switchSessionTab, terminalsLoaded, worktreeId])
 }

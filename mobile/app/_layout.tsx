@@ -2,7 +2,8 @@ import { startAndroidForegroundPushPresentation } from '../src/notifications/and
 import { registerPushDismissalTask } from '../src/notifications/push-background-dismissal'
 import { readNativeNotificationData } from '../src/notifications/native-notification-data'
 import { setNotificationViewingWorkspace } from '../src/notifications/notification-viewing-policy'
-import { useCallback, useEffect } from 'react'
+import { firstParam } from '../src/navigation/route-param-reader'
+import { useCallback, useEffect, useRef } from 'react'
 import { View } from 'react-native'
 import { Stack, useGlobalSearchParams, usePathname } from 'expo-router'
 import { StatusBar } from 'expo-status-bar'
@@ -33,6 +34,7 @@ import { SideRailProvider } from '../src/layout/side-rail'
 import { useFollowDeviceUiLocale } from '../src/i18n/use-follow-device-ui-locale'
 import { startMobileUiLanguage } from '../src/i18n/ui-language-preference'
 import { subscribeMobileUiLanguage } from '../src/i18n/mobile-i18n'
+import { InAppNotificationBanner } from '../src/notifications/InAppNotificationBanner'
 
 export { NativeScreenRecovery as ErrorBoundary } from '../src/components/NativeScreenRecovery'
 
@@ -64,18 +66,43 @@ export default function RootLayout() {
   useFollowDeviceUiLocale()
   const pathname = usePathname()
   const { hostId, worktreeId, executionHost } = useGlobalSearchParams<{
-    hostId?: string
-    worktreeId?: string
-    executionHost?: string
+    hostId?: string | string[]
+    worktreeId?: string | string[]
+    executionHost?: string | string[]
   }>()
+  const resolvedHostId = firstParam(hostId)
+  const resolvedWorktreeId = firstParam(worktreeId)
+  const resolvedExecutionHost = firstParam(executionHost)
+  const lastHostIdRef = useRef<string>('')
+  if (resolvedHostId !== '') {
+    lastHostIdRef.current = resolvedHostId
+  }
   useEffect(() => {
-    setNotificationViewingWorkspace(
-      pathname.includes('/session/') && typeof hostId === 'string' && typeof worktreeId === 'string'
-        ? { hostId, worktreeId, ...(typeof executionHost === 'string' ? { executionHost } : {}) }
-        : null
-    )
-    return () => setNotificationViewingWorkspace(null)
-  }, [pathname, hostId, worktreeId, executionHost])
+    const pathMatch = pathname.match(/^\/h\/([^/]+)(?:\/session\/(.+))?$/)
+    const effectiveHostId = resolvedHostId || (pathMatch?.[1] ?? '')
+    const effectiveWorktreeId = resolvedWorktreeId || (pathMatch?.[2] ?? '')
+    if (effectiveHostId !== '') {
+      lastHostIdRef.current = effectiveHostId
+    }
+    if (pathname.includes('/session/') && effectiveHostId !== '' && effectiveWorktreeId !== '') {
+      setNotificationViewingWorkspace({
+        hostId: effectiveHostId,
+        worktreeId: effectiveWorktreeId,
+        ...(resolvedExecutionHost !== '' ? { executionHost: resolvedExecutionHost } : {})
+      })
+    } else if (
+      pathname.startsWith('/h/') &&
+      (effectiveHostId !== '' || lastHostIdRef.current !== '')
+    ) {
+      setNotificationViewingWorkspace(null, {
+        preserveInPageForHostId: effectiveHostId || lastHostIdRef.current
+      })
+    } else if (pathname === '/new-workspace' && lastHostIdRef.current !== '') {
+      setNotificationViewingWorkspace(null, { preserveInPageForHostId: lastHostIdRef.current })
+    } else {
+      setNotificationViewingWorkspace(null)
+    }
+  }, [pathname, resolvedHostId, resolvedWorktreeId, resolvedExecutionHost])
   const openNotificationRoute = useOpenNotificationRoute()
   usePairingLinks()
 
@@ -232,6 +259,7 @@ export default function RootLayout() {
                 }}
               />
             </Stack>
+            <InAppNotificationBanner />
           </SideSafeArea>
         </SideRailProvider>
       </View>

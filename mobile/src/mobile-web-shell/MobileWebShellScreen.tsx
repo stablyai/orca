@@ -42,6 +42,13 @@ import { usePageFoldDivision, usePublishedFoldDivision } from './page-fold-divis
 import { usePublishedShellKeyRail, useShellKeyRail } from './use-shell-key-rail'
 import { hostProfileUnreadableLine, pageFaultLine } from './shell-lifecycle-log'
 import { recordShellLifecycleLine } from './shell-lifecycle-line-recorder'
+import {
+  noteInPageBackClaim,
+  noteInPageRouteParamClear,
+  noteInPageStorageWrite,
+  useInPageNotificationBridge
+} from '../notifications/in-page-notification-navigation'
+import { setInPageNotificationViewingWorkspace } from '../notifications/notification-viewing-policy'
 
 // Do not promise a retry: the shell schedules no second update attempt.
 function updateNoticeMessage(notice: MobileWebShellUpdateNotice): string {
@@ -199,7 +206,8 @@ export function MobileWebShellScreen({
     sessionEstablished: pageReady,
     snapshot,
     readStorage,
-    onStorageWrite: writeStorage,
+    onStorageWrite: (k, v) =>
+      noteInPageStorageWrite(hostId, k, v, writeStorage, setInPageNotificationViewingWorkspace),
     // Treat a page that never renders as document-load-failed: refetch once for replaced bytes, then fail visibly if its code still breaks.
     // Never throw from the page error boundary/native frame callback.
     onPageFault: (error) => {
@@ -214,12 +222,18 @@ export function MobileWebShellScreen({
     },
     // Keep the cover until the page reports its own first frame.
     onPagePainted: reportPagePainted,
-    onPageBackClaim: reportPageBackClaim,
+    onPageBackClaim: (c) =>
+      noteInPageBackClaim(
+        c,
+        route.pathname,
+        hostId,
+        reportPageBackClaim,
+        setInPageNotificationViewingWorkspace
+      ),
     onPageLocation: (href) => holdPageLocation(href, ownsHostArea),
     onTerminalKeyRailClaim: keyRail.reportClaim,
-    onRouteParamClear: (param, value) => {
-      onRouteParamClear?.(param, value)
-    },
+    onRouteParamClear: (p, v) =>
+      noteInPageRouteParamClear(p, v, route, bridge.publishRoute, onRouteParamClear),
     // Route refusal builds no tree; use document-load-failed for bounded recovery, then a terminal failure. The host logs the specific issue.
     onRouteRefused: (issue) => {
       console.warn('[web-shell] refused to open this screen', issue)
@@ -239,6 +253,17 @@ export function MobileWebShellScreen({
   // paneKey changes keep the session mounted; the host deduplicates routes and preserves in-flight frames.
   useShellPageStorageRefresh(refreshStorage, bridge.publishStorage)
   useEffect(() => bridge.publishRoute(route), [bridge.publishRoute, route])
+
+  useInPageNotificationBridge({
+    pageReady,
+    overlay,
+    ownsHostArea,
+    hostId,
+    isFocused: () => navigation.isFocused(),
+    publishRoute,
+    route,
+    setViewingWorkspace: setInPageNotificationViewingWorkspace
+  })
 
   usePublishedSafeAreaInsets(bridge.publishSafeAreaInsets, pageInsets)
   const publishKeyboardInset = bridge.publishKeyboardInset

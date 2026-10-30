@@ -60,6 +60,9 @@ export class BridgeHostSubscriptions {
       post: (json: string) => void
       onBinaryFrameDropped: (dropped: BridgeDroppedBinaryFrame) => void
       onTerminalBacklog?: (report: BridgeTerminalBacklogReport) => void
+      /** One call per incoming subscription payload before serialization. */
+      onPayload?: (id: string, payload: unknown) => void
+      /** Injected so a test drives the silence clock rather than waiting twenty seconds on it. */
       terminalTimers?: TerminalBacklogTimers
     }
   ) {}
@@ -174,6 +177,7 @@ export class BridgeHostSubscriptions {
     if (record === undefined) {
       return
     }
+    this.options.onPayload?.(id, payload)
     const backlog = record.backlog
     // Hold terminal payloads before serialization when the window or existing backlog blocks delivery; the normal window path never sees them.
     if (backlog !== null && (backlog.held || !this.windowHasRoom(record))) {

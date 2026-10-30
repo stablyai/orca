@@ -1,8 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { loadPushNotificationsEnabled } from '../storage/preferences'
 import { useAllHostClients } from '../transport/use-all-host-clients'
 import { loadHostCatalog } from '../transport/host-store'
 import { pushDeliveryTest } from '../notifications/mobile-push-delivery-test-operations'
+import { sendLocalNotificationDisplayTest } from '../notifications/push-socket-fallback'
+import { getDevicePushToken } from '../notifications/push-token'
+import type { RpcFailure } from '../transport/types'
 import { colors, spacing, typography } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
@@ -20,6 +24,26 @@ import {
   DESKTOP_NOTIFICATION_CHANNEL_ID,
   ensureDesktopNotificationChannel
 } from '../notifications/desktop-notification-channel'
+
+const TOKEN_PROBE_TIMEOUT_MS = 1500
+
+async function readPushTokenQuickly(): Promise<
+  Awaited<ReturnType<typeof getDevicePushToken>> | 'timeout'
+> {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  try {
+    return await Promise.race([
+      getDevicePushToken().catch(() => null),
+      new Promise<'timeout'>((resolve) => {
+        timer = setTimeout(() => resolve('timeout'), TOKEN_PROBE_TIMEOUT_MS)
+      })
+    ])
+  } finally {
+    if (timer !== undefined) {
+      clearTimeout(timer)
+    }
+  }
+}
 
 export function NotificationDisplayTest({ onTroubleshoot }: { onTroubleshoot: () => void }) {
   useMobileColorScheme()
@@ -123,6 +147,10 @@ export function NotificationDisplayTest({ onTroubleshoot }: { onTroubleshoot: ()
         'settings.notificationDisplayTest.unsupportedHost',
         'This desktop does not support push notifications. Update it to receive push.'
       )
+<<<<<<< HEAD
+      let sawNotRegistered = false
+      for (const { client } of connected) {
+=======
       const fallback = connected.every(({ hostId }) => getHostPushSupported(hostId) === false)
         ? 'unsupported-host'
         : await waitForPushFallback(
@@ -149,6 +177,7 @@ export function NotificationDisplayTest({ onTroubleshoot }: { onTroubleshoot: ()
       const pushHosts = connected.filter(({ hostId }) => getHostPushSupported(hostId) !== false)
       let unavailable = unsupportedHost
       for (const { client } of pushHosts) {
+>>>>>>> upstream/main
         const reply = await pushDeliveryTest.request(client, null, {
           timeoutMs: 20000,
           failWhenDisconnected: true
@@ -177,6 +206,7 @@ export function NotificationDisplayTest({ onTroubleshoot }: { onTroubleshoot: ()
           return
         }
         if (result?.reason === 'not_registered') {
+          sawNotRegistered = true
           unavailable = t(
             'settings.notificationDisplayTest.registrationPending',
             'Push registration is not ready on this desktop. Try again shortly.'
@@ -195,7 +225,22 @@ export function NotificationDisplayTest({ onTroubleshoot }: { onTroubleshoot: ()
               )
         )
       }
+<<<<<<< HEAD
+      if (
+        sawNotRegistered &&
+        (await loadPushNotificationsEnabled()) &&
+        (await readPushTokenQuickly()) === null
+      ) {
+        await sendLocalNotificationDisplayTest()
+        setMessage(
+          'Sent a local test notification. Live connection alerts are active on this device.'
+        )
+        return
+      }
+      throw new Error(unavailable)
+=======
       await localTest(unavailable)
+>>>>>>> upstream/main
     } catch (error) {
       if (!isCurrent()) {
         return
@@ -272,6 +317,9 @@ const styles = themedStyleSheet(() => ({
   detail: { color: colors.textMuted, fontSize: typography.metaSize, lineHeight: 18 },
   button: {
     alignSelf: 'flex-start',
+    alignItems: 'center',
+    justifyContent: 'center',
+    minWidth: 172,
     backgroundColor: colors.bgRaised,
     borderRadius: 8,
     paddingVertical: spacing.sm,

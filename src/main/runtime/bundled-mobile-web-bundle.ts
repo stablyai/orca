@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { getAppEnvironment, hasAppEnvironment } from '../../shared/app-environment'
 import {
@@ -30,16 +30,35 @@ export function getBundledMobileWebBundleRoot(): string | undefined {
 
 // Installs are immutable until restart; undefined means unprobed, null means absent.
 let cachedBundle: BundledMobileWebBundle | null | undefined
+let cachedManifestMtimeMs: number | undefined
+
+function currentManifestMtimeMs(root: string | undefined): number | undefined {
+  if (!root) {
+    return undefined
+  }
+  try {
+    return statSync(join(root, MANIFEST_FILENAME)).mtimeMs
+  } catch {
+    return undefined
+  }
+}
 
 export function loadBundledMobileWebBundle(): BundledMobileWebBundle | null {
-  if (cachedBundle === undefined) {
-    cachedBundle = readBundledMobileWebBundle()
+  const root = cachedBundle ? cachedBundle.root : getBundledMobileWebBundleRoot()
+  const mtimeMs = currentManifestMtimeMs(root)
+  if (cachedBundle === undefined || (mtimeMs !== undefined && mtimeMs !== cachedManifestMtimeMs)) {
+    const nextBundle = readBundledMobileWebBundle()
+    if (nextBundle !== null || cachedBundle === undefined) {
+      cachedManifestMtimeMs = mtimeMs
+      cachedBundle = nextBundle
+    }
   }
   return cachedBundle
 }
 
 export function resetBundledMobileWebBundleCacheForTests(): void {
   cachedBundle = undefined
+  cachedManifestMtimeMs = undefined
 }
 
 function readBundledMobileWebBundle(): BundledMobileWebBundle | null {

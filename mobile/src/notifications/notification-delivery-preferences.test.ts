@@ -7,6 +7,13 @@ import {
   saveNotificationDeliveryPreferences
 } from './notification-delivery-preferences'
 import {
+  getCurrentInAppNotificationBanner,
+  publishInAppNotificationBanner,
+  resetInAppNotificationBannerForTests
+} from './in-app-notification-banner-store'
+import {
+  isViewingWorkspaceTarget,
+  setInPageNotificationViewingWorkspace,
   setNotificationViewingWorkspace,
   shouldSuppressNotificationWhileViewing
 } from './notification-viewing-policy'
@@ -23,6 +30,7 @@ vi.mock('@react-native-async-storage/async-storage', () => ({
 vi.mock('react-native', () => ({ AppState: { currentState: 'background' } }))
 beforeEach(() => {
   storage.clear()
+  resetInAppNotificationBannerForTests()
   setNotificationViewingWorkspace(null)
   AppState.currentState = 'background'
 })
@@ -78,6 +86,55 @@ it('suppresses only the workspace being viewed on this phone, and never while ba
   ).toBe(false)
   AppState.currentState = 'background'
   expect(await shouldSuppressNotificationWhileViewing(event, 'ssh-host', true)).toBe(false)
+})
+
+it('suppresses notifications when viewing a workspace in-page on the host route and matches URL-encoded params', () => {
+  AppState.currentState = 'active'
+  const worktreeId = 'D:\\code\\orca::D:\\code\\orca'
+  setInPageNotificationViewingWorkspace({
+    hostId: 'host-1',
+    worktreeId
+  })
+  setNotificationViewingWorkspace(null, { preserveInPageForHostId: 'host-1' })
+
+  expect(shouldSuppressNotificationWhileViewing({ worktreeId }, 'host-1', true)).toBe(true)
+  expect(
+    isViewingWorkspaceTarget({
+      hostId: 'host-1',
+      worktreeId
+    })
+  ).toBe(true)
+
+  // Leaving the host clears the in-page viewing state.
+  setNotificationViewingWorkspace(null)
+  expect(shouldSuppressNotificationWhileViewing({ worktreeId }, 'host-1', true)).toBe(false)
+
+  // URL-encoded native route params still match decoded event worktreeId.
+  setNotificationViewingWorkspace({
+    hostId: encodeURIComponent('host-1'),
+    worktreeId: encodeURIComponent(worktreeId)
+  })
+  expect(shouldSuppressNotificationWhileViewing({ worktreeId }, 'host-1', true)).toBe(true)
+})
+
+it('auto-dismisses an active in-app banner when entering the workspace it targets', () => {
+  publishInAppNotificationBanner({
+    id: 'banner-1',
+    tone: 'complete',
+    hostId: 'host-1',
+    hostName: 'Desktop',
+    title: 'Orca',
+    body: 'Finished',
+    worktreeId: 'wt-1',
+    createdAt: 100
+  })
+  expect(getCurrentInAppNotificationBanner()?.id).toBe('banner-1')
+
+  setInPageNotificationViewingWorkspace({ hostId: 'host-1', worktreeId: 'wt-2' })
+  expect(getCurrentInAppNotificationBanner()?.id).toBe('banner-1')
+
+  setInPageNotificationViewingWorkspace({ hostId: 'host-1', worktreeId: 'wt-1' })
+  expect(getCurrentInAppNotificationBanner()).toBeNull()
 })
 
 it('recovers defaults from malformed stored preferences', async () => {

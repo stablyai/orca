@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { subscribeToDesktopNotifications } from './mobile-notifications'
 import { dismissHostPushNotification } from './push-socket-dismissal'
+import { presentSocketNotificationFallback } from './push-socket-fallback'
 import { requestNotificationCatchup } from './push-dismissal-reconciliation'
 import { RpcClientStreamRegistry } from '../transport/rpc-client-stream-registry'
 import { MobileRelayRpcStreams } from '../transport/mobile-relay-rpc-streams'
@@ -39,6 +40,9 @@ vi.mock('../transport/host-store', () => ({
 
 vi.mock('./push-socket-dismissal', () => ({
   dismissHostPushNotification: vi.fn(async () => {})
+}))
+vi.mock('./push-socket-fallback', () => ({
+  presentSocketNotificationFallback: vi.fn(async () => {})
 }))
 vi.mock('./push-dismissal-reconciliation', () => ({
   requestNotificationCatchup: vi.fn(async () => {})
@@ -335,6 +339,34 @@ describe('subscribeToDesktopNotifications', () => {
     expect(dismissHostPushNotification).not.toHaveBeenCalled()
   })
 
+  it('forwards a live notification frame to the socket fallback and catches up on ready', async () => {
+    const rpc = client()
+    const stop = subscribeToDesktopNotifications(rpc as never, 'host-1')
+    rpc.emit({ type: 'ready', subscriptionId: 'sub-1', epoch: 'epoch-1' })
+    const notification = {
+      type: 'notification',
+      notificationId: 'agent-1',
+      title: 'Needs input',
+      body: 'Reply',
+      source: 'agent-task-complete'
+    }
+    rpc.emit(notification)
+    await Promise.resolve()
+    expect(requestNotificationCatchup).toHaveBeenCalledWith(rpc, 'host-1', expect.any(Function))
+    expect(dismissHostPushNotification).not.toHaveBeenCalled()
+    expect(presentSocketNotificationFallback).toHaveBeenCalledTimes(1)
+    expect(presentSocketNotificationFallback).toHaveBeenCalledWith(
+      notification,
+      'host-1',
+      expect.any(Function),
+      rpc
+    )
+    const isDisposed = vi.mocked(presentSocketNotificationFallback).mock.calls[0]?.[2]
+    expect(isDisposed?.()).toBe(false)
+    stop()
+    expect(isDisposed?.()).toBe(true)
+  })
+
   it('keeps socket dismissal processing active', async () => {
     const rpc = client()
     subscribeToDesktopNotifications(rpc as never, 'host-1')
@@ -343,6 +375,7 @@ describe('subscribeToDesktopNotifications', () => {
     rpc.emit(dismissal)
     await Promise.resolve()
     expect(dismissHostPushNotification).toHaveBeenCalledWith(dismissal, 'host-1')
+    expect(presentSocketNotificationFallback).not.toHaveBeenCalled()
   })
 
   it('releases the host stream once a ready lands after the disposer ran (direct)', () => {

@@ -98,6 +98,7 @@ describe('structured attention mobile delivery', () => {
         source: 'agent-task-complete',
         title: 'orca / feature - Claude needs input',
         body: 'May I run the migration?',
+        agentPrompt: 'Ship it',
         worktreeId: SCOPE.workspaceId,
         paneKey: structuredAgentSessionPaneKey(
           structuredAgentSessionTabId('session-1'),

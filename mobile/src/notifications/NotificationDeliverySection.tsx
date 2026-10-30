@@ -52,11 +52,11 @@ export function NotificationDeliverySection({ value, disabled, onChange }: Props
           'suppressWhileViewing',
           t(
             'notifications.notificationDeliverySection.suppressWhileFocused',
-            'Suppress while focused'
+            'Mute the whole open workspace'
           ),
           t(
             'notifications.notificationDeliverySection.suppressWhileFocusedHint',
-            'Skip alerts for the workspace open on this phone.'
+            'The tab open on this phone never alerts. Turn on to also skip its other tabs.'
           )
         )}
       </View>

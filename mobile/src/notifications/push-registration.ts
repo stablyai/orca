@@ -320,6 +320,13 @@ export function startPushTokenSync(): () => void {
   }
 }
 
+export async function isHostPushRegistered(hostId: string): Promise<boolean> {
+  const state = hostsById.get(hostId)
+  await state?.chain
+  const value = await readRecords()
+  return value.registered.has(hostId) && !value.pending.has(hostId)
+}
+
 export function resetPushRegistrationForTests(): void {
   for (const state of hostsById.values()) {
     state.connection.support?.retire()
