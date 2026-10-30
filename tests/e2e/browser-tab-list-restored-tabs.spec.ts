@@ -12,7 +12,7 @@ import { startBrowserSplitPageServer } from './helpers/browser-split-page-server
 import { TEST_REPO_PATH_FILE } from './global-setup'
 import { readProperty, rpc } from './helpers/browser-agent-focus-scenarios'
 
-type ListedTab = { browserPageId: string; title: string; active: boolean; loaded: boolean }
+type ListedTab = { browserPageId: string; title: string; active: boolean; loaded: unknown }
 
 async function listTabs(page: Page, worktree: string): Promise<ListedTab[]> {
   const tabs = readProperty(await rpc(page, 'browser.tabList', { worktree }), 'tabs')
@@ -21,7 +21,7 @@ async function listTabs(page: Page, worktree: string): Promise<ListedTab[]> {
         browserPageId: String(readProperty(tab, 'browserPageId')),
         title: String(readProperty(tab, 'title')),
         active: readProperty(tab, 'active') === true,
-        loaded: readProperty(tab, 'loaded') === true
+        loaded: readProperty(tab, 'loaded')
       }))
     : []
 }

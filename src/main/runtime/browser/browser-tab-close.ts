@@ -145,7 +145,10 @@ export class RuntimeBrowserTabClose {
   private async listedTabAt(index: number, worktree: string | undefined) {
     const tabs = (await this.queries.browserTabList({ worktree })).tabs
     if (!Number.isInteger(index) || index < 0 || index >= tabs.length) {
-      throw new Error(`Tab index ${index} out of range (0-${tabs.length - 1})`)
+      throw new BrowserError(
+        'browser_tab_not_found',
+        `Tab index ${index} out of range (0-${tabs.length - 1})`
+      )
     }
     return tabs[index]
   }
