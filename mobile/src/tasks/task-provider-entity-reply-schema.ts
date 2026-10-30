@@ -1,19 +1,14 @@
 import { z } from 'zod'
-import type { GitHubPRFile } from '../../../src/shared/github/pull-request-types'
-import { hostUnionArms, salvagedOptional, salvagingArray } from '../../../src/shared/zod-salvage'
-import { prCount, prFlag, prNullableText, prText } from '../session/github-pr-entity-reply-schema'
+import { salvagedOptional, salvagingArray } from '../../../src/shared/zod-salvage'
+import {
+  PR_FILE_STATUS,
+  prCount,
+  prFlag,
+  prNullableText,
+  prText
+} from '../session/github-pr-entity-reply-schema'
 
 // Require unguarded consumer fields and salvage guarded members; reuse session combinators to keep absence semantics aligned.
-
-export const DETAIL_FILE_STATUS = hostUnionArms<GitHubPRFile['status']>({
-  added: true,
-  modified: true,
-  removed: true,
-  renamed: true,
-  copied: true,
-  changed: true,
-  unchanged: true
-})
 
 // Comments need id/body; reactions require only count because GitHub and GitLab disagree on content vocabulary.
 export const detailCommentSchema = z.looseObject({
@@ -72,7 +67,7 @@ export const detailFileListSchema = salvagingArray(
   z.looseObject({
     path: z.string(),
     oldPath: prText('oldPath'),
-    status: salvagedOptional('status', z.enum(DETAIL_FILE_STATUS)),
+    status: salvagedOptional('status', z.enum(PR_FILE_STATUS)),
     additions: prCount('additions'),
     deletions: prCount('deletions'),
     isBinary: prFlag('isBinary'),

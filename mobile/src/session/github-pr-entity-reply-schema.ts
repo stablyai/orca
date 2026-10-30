@@ -1,8 +1,10 @@
 import { z } from 'zod'
-import { salvagedOptional, salvagingArray } from '../../../src/shared/zod-salvage'
+import { hostUnionArms, salvagedOptional, salvagingArray } from '../../../src/shared/zod-salvage'
 import type { GitHubReaction, PRComment } from '../../../src/shared/github/comment-types'
 import type {
   GitHubAssignableUser,
+  GitHubPRFile,
+  GitHubPRFileViewedState,
   GitHubPRMergeMethodSettings,
   GitHubPRReviewSummary,
   GitHubRepositoryIdentity,
@@ -29,6 +31,20 @@ const CHECK_RUN_CONCLUSION = [
   'pending'
 ] as const
 const MERGE_METHOD = ['merge', 'squash', 'rebase'] as const
+export const PR_FILE_STATUS = hostUnionArms<GitHubPRFile['status']>({
+  added: true,
+  modified: true,
+  removed: true,
+  renamed: true,
+  copied: true,
+  changed: true,
+  unchanged: true
+})
+const PR_FILE_VIEWED_STATE = hostUnionArms<GitHubPRFileViewedState>({
+  DISMISSED: true,
+  VIEWED: true,
+  UNVIEWED: true
+})
 const CHECK_SUMMARY_STATE = ['success', 'failure', 'pending', 'neutral', 'none'] as const
 const REACTION_CONTENT = [
   '+1',
@@ -238,4 +254,36 @@ export const prChecksSchema = salvagingArray(checkDetailSchema)
 
 export function prCheckList(name: string) {
   return salvagedOptional(name, prChecksSchema)
+}
+
+// Rows need only a path; an unknown viewed state reads as unviewed and a malformed line list as uncommentable.
+const prFileSchema = z
+  .looseObject({
+    path: z.string(),
+    oldPath: prText('oldPath'),
+    status: salvagedOptional('status', z.enum(PR_FILE_STATUS)),
+    additions: prCount('additions'),
+    deletions: prCount('deletions'),
+    isBinary: prFlag('isBinary'),
+    reviewCommentLineNumbers: salvagedOptional(
+      'reviewCommentLineNumbers',
+      salvagingArray(z.number().int().positive())
+    ),
+    viewerViewedState: salvagedOptional('viewerViewedState', z.enum(PR_FILE_VIEWED_STATE))
+  })
+  .transform((file): GitHubPRFile => ({
+    path: file.path,
+    ...(file.oldPath ? { oldPath: file.oldPath } : {}),
+    status: file.status ?? 'modified',
+    additions: file.additions ?? 0,
+    deletions: file.deletions ?? 0,
+    isBinary: file.isBinary ?? false,
+    ...(file.reviewCommentLineNumbers
+      ? { reviewCommentLineNumbers: file.reviewCommentLineNumbers }
+      : {}),
+    ...(file.viewerViewedState ? { viewerViewedState: file.viewerViewedState } : {})
+  }))
+
+export function prFileList(name: string) {
+  return salvagedOptional(name, salvagingArray(prFileSchema))
 }

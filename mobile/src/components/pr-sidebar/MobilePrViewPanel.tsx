@@ -1,3 +1,4 @@
+import { useCallback } from 'react'
 import { View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { colors } from '../../theme/mobile-theme'
@@ -9,8 +10,12 @@ import type { MobileGitStatusResult } from '../../source-control/mobile-git-stat
 import type { MobilePrSidebarController } from '../../session/use-mobile-pr-sidebar-controller'
 import { MobilePRSidebar } from '../MobilePRSidebar'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
+import { useWorkspaceRouteHandoff } from '../../navigation/workspace-route-handoff'
+import { buildMobileReviewFileRoute } from '../../source-control/mobile-review-route'
 
 type Props = {
+  hostId: string
+  worktreeName: string
   client: RpcClient | null
   connState: ConnectionState
   worktreeId: string
@@ -25,6 +30,8 @@ type Props = {
 
 // Hub owns PR header/segments/load/controller; one fetch feeds branch chip and chromeless sidebar body.
 export function MobilePrViewPanelBody({
+  hostId,
+  worktreeName,
   client,
   connState,
   worktreeId,
@@ -39,6 +46,15 @@ export function MobilePrViewPanelBody({
   useMobileColorScheme()
   const t = useMobileTranslation()
   const insets = useSafeAreaInsets()
+  const router = useWorkspaceRouteHandoff()
+  // Until the PR diff screen lands, a PR file opens its branch diff in the review screen.
+  const openPrFile = useCallback(
+    (filePath: string) =>
+      router.push(
+        buildMobileReviewFileRoute({ hostId, worktreeId, worktreeName, filePath, area: 'branch' })
+      ),
+    [hostId, router, worktreeId, worktreeName]
+  )
 
   const sidebarState = !branchContextLoaded
     ? ({ kind: 'loading' } as const)
@@ -73,6 +89,8 @@ export function MobilePrViewPanelBody({
         // Hub header already hosts open-on-web while this segment is active.
         showOpenOnWeb={false}
         workspaceLabel={workspaceLabel}
+        onOpenPrFile={openPrFile}
+        prFileViewed={controller.prFileViewed}
       />
     </View>
   )

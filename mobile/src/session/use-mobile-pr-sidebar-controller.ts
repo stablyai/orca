@@ -1,6 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { ConnectionState } from '../transport/types'
 import type { RpcClient } from '../transport/rpc-client'
+import type {
+  GitHubPRFile,
+  GitHubPRFileViewedState
+} from '../../../src/shared/github/pull-request-types'
+import { useMobilePrFileViewed } from './use-mobile-pr-file-viewed'
+
+const NO_FILES: GitHubPRFile[] = []
 import {
   fetchGithubRepoSlug,
   fetchHostedReviewForBranch,
@@ -11,6 +18,7 @@ import {
 import {
   loadPrSidebarData,
   loadPrSidebarDetails,
+  patchPrSidebarFileViewedState,
   prSidebarDetailsNeedFetch,
   resolvePrSidebarDetailsAfterPhase2,
   shouldApplyResult,
@@ -283,6 +291,25 @@ export function useMobilePrSidebarController(input: PrSidebarControllerInput) {
     void load({ includeDetails: true })
   }, [load])
 
+  // The controller owns viewed writes so a pending one outlives the PR view unmounting.
+  const setFileViewedState = useCallback(
+    (prNumber: number, path: string, viewerViewedState: GitHubPRFileViewedState) => {
+      setState((prev) => patchPrSidebarFileViewedState(prev, prNumber, path, viewerViewedState))
+    },
+    []
+  )
+  const readyData = state.kind === 'ready' ? state.data : null
+  const prFileViewed = useMobilePrFileViewed({
+    client,
+    connState,
+    worktreeId,
+    prNumber: readyData?.pr.number ?? 0,
+    pullRequestId: readyData?.details?.pullRequestId,
+    prRepo: readyData?.pr.prRepo ?? null,
+    files: readyData?.details?.files ?? NO_FILES,
+    setFileViewedState
+  })
+
   return {
     prSidebarState: state,
     prSidebarIsGithubRepo: isGithubRepo,
@@ -292,7 +319,8 @@ export function useMobilePrSidebarController(input: PrSidebarControllerInput) {
     openPRSidebar,
     retryPRSidebar: retry,
     refetchPRSidebar: load,
-    ensurePrSidebarDetails
+    ensurePrSidebarDetails,
+    prFileViewed
   }
 }
 

@@ -1286,6 +1286,27 @@
       "title": "Something went wrong",
       "tryAgain": "Try again",
       "home": "Home"
+    },
+    "prFiles": {
+      "folderLabel": "{{name}}, {{viewed}} of {{total}} viewed",
+      "viewedToggle": "Viewed {{path}}",
+      "openHint": "Opens the diff",
+      "changed": "changed",
+      "unavailable": "Couldn't load changed files.",
+      "empty": "No files changed.",
+      "filterUnviewed": "Unviewed",
+      "filterCommented": "With comments",
+      "filterTests": "Tests",
+      "viewedProgress": "{{viewed}} of {{total}} viewed",
+      "tree": "Tree",
+      "list": "List",
+      "noMatches": "No files match these filters."
+    },
+    "prView": {
+      "overview": "Overview",
+      "files": "Files",
+      "comments": "Comments",
+      "checks": "Checks"
     }
   },
   "pullRequest": {
@@ -2532,6 +2553,9 @@
     "terminalSplitLayout": {
       "saveFailedTitle": "Layout could not be saved",
       "saveFailedMessage": "This layout applies for now. Choose it again to retry saving."
+    },
+    "githubPrFileMutations": {
+      "viewedSyncFailed": "Failed to sync viewed state with GitHub."
     }
   },
   "chat": {

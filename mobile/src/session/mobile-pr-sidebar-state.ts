@@ -1,5 +1,5 @@
 import type { PRCheckDetail } from '../../../src/shared/github/check-types'
-import type { PRInfo } from '../../../src/shared/github/pull-request-types'
+import type { GitHubPRFileViewedState, PRInfo } from '../../../src/shared/github/pull-request-types'
 import type { GitPushTarget } from '../../../src/shared/worktree/types'
 import type { GitHubWorkItemDetails } from '../../../src/shared/github/work-item-types'
 import type { GitHubPrReadOutcome, GitHubPrRepoSlug } from './github-pr-rpc'
@@ -272,4 +272,34 @@ export function shouldSoftRefreshPrSidebarOnHeadChange(kind: PrSidebarState['kin
 
 export function shouldApplyResult(resultSeq: number, latestSeq: number): boolean {
   return resultSeq === latestSeq
+}
+
+// Patch the loaded details in place, as desktop patches its details cache, so the mark survives remounts.
+export function patchPrSidebarFileViewedState(
+  state: PrSidebarState,
+  prNumber: number,
+  path: string,
+  viewerViewedState: GitHubPRFileViewedState
+): PrSidebarState {
+  const files = state.kind === 'ready' ? state.data.details?.files : undefined
+  // A write that settles after the branch moved to another PR must not touch that PR's files.
+  if (
+    state.kind !== 'ready' ||
+    state.data.pr.number !== prNumber ||
+    !state.data.details ||
+    // Skip no-op patches so a confirmed toggle does not re-render the whole PR view.
+    !files?.some((file) => file.path === path && file.viewerViewedState !== viewerViewedState)
+  ) {
+    return state
+  }
+  return {
+    ...state,
+    data: {
+      ...state.data,
+      details: {
+        ...state.data.details,
+        files: files.map((file) => (file.path === path ? { ...file, viewerViewedState } : file))
+      }
+    }
+  }
 }

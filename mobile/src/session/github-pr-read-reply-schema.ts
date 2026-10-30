@@ -15,6 +15,7 @@ import {
   prCheckSummary,
   prCommentList,
   prCount,
+  prFileList,
   prFlag,
   prMergeMethodSettings,
   prNullableFlag,
@@ -259,6 +260,8 @@ export const githubWorkItemDetailsSchema = z
     baseSha: prText('baseSha'),
     pullRequestId: prText('pullRequestId'),
     checks: prCheckList('checks'),
+    files: prFileList('files'),
+    filesUnavailable: prFlag('filesUnavailable'),
     participants: prUserList('participants'),
     // Absent assignees means unreported, distinct from a confirmed empty list.
     assignees: salvagedOptional('assignees', salvagingArray(z.string()))
@@ -274,6 +277,9 @@ export const githubWorkItemDetailsSchema = z
           baseSha: details.baseSha,
           pullRequestId: details.pullRequestId,
           checks: details.checks ?? [],
+          // Older hosts omit files; keep it absent so the Files tab can tell "not reported" from "no files".
+          ...(details.files ? { files: details.files } : {}),
+          ...(details.filesUnavailable ? { filesUnavailable: true } : {}),
           participants: details.participants ?? [],
           assignees: details.assignees
         }

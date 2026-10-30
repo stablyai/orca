@@ -124,6 +124,7 @@ export function MobileDiffReviewScreenView({ controller, onBack }: Props) {
               headSha={controller.prSidebarHeadSha}
               bottomInset={insets.bottom}
               workspaceLabel={controller.worktreeLabel}
+              prFileViewed={controller.prFileViewed}
             />
           </View>
         ) : null}
@@ -145,6 +146,7 @@ export function MobileDiffReviewScreenView({ controller, onBack }: Props) {
             gitStatus={gitStatus}
             headSha={controller.prSidebarHeadSha}
             workspaceLabel={controller.worktreeLabel}
+            prFileViewed={controller.prFileViewed}
           />
         </RightDrawer>
       ) : null}

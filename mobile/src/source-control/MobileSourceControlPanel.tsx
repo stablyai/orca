@@ -337,6 +337,8 @@ export function MobileSourceControlPanel({
       {showPrBody ? (
         <View style={hubStyles.tabBody}>
           <MobilePrViewPanelBody
+            hostId={hostId}
+            worktreeName={name}
             client={client}
             connState={connState}
             worktreeId={worktreeId}
