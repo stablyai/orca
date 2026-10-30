@@ -46,6 +46,7 @@ const ports = vi.hoisted(() => {
     router: { push: vi.fn(), replace: vi.fn() },
     dispatch,
     clear: vi.fn(),
+    readHosts: vi.fn<(raw: string | null) => void>(),
     readSecret: vi.fn(async (key: string): Promise<string | null> => secrets.get(key) ?? null),
     fetch: vi.fn(() => {
       throw new Error('tap must not issue HTTP')
@@ -82,7 +83,11 @@ vi.mock('react-native', () => ({
 }))
 vi.mock('@react-native-async-storage/async-storage', () => ({
   default: {
-    getItem: async (key: string) => ports.storage.get(key) ?? null,
+    getItem: async (key: string) => {
+      const raw = ports.storage.get(key) ?? null
+      if (key === 'orca:hosts') ports.readHosts(raw)
+      return raw
+    },
     setItem: async (key: string, value: string) => {
       ports.storage.set(key, value)
     },
@@ -157,12 +162,12 @@ vi.mock('react-native-safe-area-context', async () => {
 vi.mock('expo/fetch', () => ({ fetch: ports.fetch }))
 
 import RootLayout from '../../app/_layout'
-import {
-  removeHost,
-  resetHostStoreForTests,
-  updateHostNameAndEndpoint
-} from '../transport/host-store'
+import * as hostStore from '../transport/host-store'
+import * as metadataStore from '../transport/host-metadata-store'
+import type { HostCatalogEntry, StoredHostProfile } from '../transport/types'
 import { deriveHostFingerprint } from './push-host-fingerprint'
+
+const { removeHost, resetHostStoreForTests, updateHostNameAndEndpoint } = hostStore
 
 const host = {
   id: 'B',
@@ -423,5 +428,143 @@ it('rederives membership after the real native catalog await, preserves credenti
     expect(ports.dispatch).not.toHaveBeenCalled()
   } finally {
     late.resolve('fixture-token-B')
+  }
+})
+
+it.each([10, 100])('bounds actual cold/warm tap membership work for %i hosts', async (n) => {
+  const profiles = [
+    ...Array.from({ length: n - 1 }, (_, i) => ({
+      ...host,
+      id: `host-${String(i).padStart(3, '0')}`,
+      publicKeyB64: Buffer.alloc(32, i + 4).toString('base64')
+    })),
+    host
+  ]
+  const raw = JSON.stringify(profiles)
+  const removed = JSON.stringify(profiles.slice(0, -1))
+  const readBytes = () =>
+    ports.readHosts.mock.calls.map(([value]) => Buffer.byteLength(value ?? ''))
+  ports.storage.set('orca:hosts', raw)
+  for (const profile of profiles) ports.secrets.set(`orca.host-token.${profile.id}`, 'token')
+  let joined = false
+  let currentReads = 0,
+    records = 0,
+    entries = 0,
+    filters = 0,
+    kept = 0
+  const loadCatalog = hostStore.loadHostCatalog
+  const loadMetadata = metadataStore.loadStoredHostProfiles
+  const catalogSpy = vi.spyOn(hostStore, 'loadHostCatalog').mockImplementation(async () => {
+    joined = false
+    const catalog = await loadCatalog()
+    joined = true
+    return new Proxy(catalog, {
+      get(target, key, receiver) {
+        if (key !== 'filter') return Reflect.get(target, key, receiver)
+        return (
+          predicate: (row: HostCatalogEntry, index: number, rows: HostCatalogEntry[]) => unknown,
+          thisArg?: unknown
+        ) =>
+          target.filter((row, index, rows) => {
+            filters++
+            const accepted = predicate.call(thisArg, row, index, rows)
+            if (accepted) kept++
+            return accepted
+          })
+      }
+    })
+  })
+  const metadataSpy = vi
+    .spyOn(metadataStore, 'loadStoredHostProfiles')
+    .mockImplementation(async () => {
+      const current = await loadMetadata()
+      if (!joined || !current) return current
+      currentReads++
+      return new Proxy(current, {
+        get(target, key, receiver) {
+          if (key !== 'map') return Reflect.get(target, key, receiver)
+          return <U,>(
+            callback: (row: StoredHostProfile, index: number, rows: StoredHostProfile[]) => U,
+            thisArg?: unknown
+          ) => {
+            const mapped = target.map((row, index, rows) => {
+              records++
+              return callback.call(thisArg, row, index, rows)
+            })
+            const values = mapped.values.bind(mapped)
+            mapped[Symbol.iterator] = function* () {
+              for (const entry of values()) {
+                entries++
+                yield entry
+              }
+              return undefined
+            }
+            return mapped
+          }
+        }
+      })
+    })
+  let pending: ReturnType<typeof holdCredential> | undefined
+  try {
+    await mount(
+      response(
+        'scaled-cold',
+        { worktreeId: 'WA', paneKey: 'paneA', executionHost: 'runtime:A' },
+        true
+      )
+    )
+    await vi.waitFor(() => expect(ports.router.push).toHaveBeenCalledExactlyOnceWith('/h/B'))
+    expect({ currentReads, records, entries, filters, kept }).toEqual({
+      currentReads: 1,
+      records: n,
+      entries: n,
+      filters: n,
+      kept: n
+    })
+    expect(ports.readSecret).toHaveBeenCalledTimes(n)
+    expect(readBytes()).toEqual([Buffer.byteLength(raw), Buffer.byteLength(raw)])
+    expect(readBytes().reduce((total, bytes) => total + bytes, 0)).toBeLessThanOrEqual(512 * n)
+
+    resetHostStoreForTests()
+    ports.readHosts.mockClear()
+    ports.readSecret.mockClear()
+    currentReads = records = entries = filters = kept = 0
+    pending = holdCredential()
+    if (!ports.input.response) throw new Error('root response listener absent')
+    ports.input.response(
+      response('scaled-warm-removal', {
+        worktreeId: 'WA',
+        paneKey: 'paneA',
+        executionHost: 'runtime:A'
+      })
+    )
+    await pending.entered
+    // The upstream catalog retains B's valid credential; the next authoritative snapshot does not.
+    ports.storage.set('orca:hosts', removed)
+    pending.resolve('token')
+    await vi.waitFor(() => expect(ports.router.push.mock.calls).toEqual([['/h/B'], ['/']]))
+    expect({ currentReads, records, entries, filters, kept }).toEqual({
+      currentReads: 1,
+      records: n - 1,
+      entries: n - 1,
+      filters: n,
+      kept: n - 1
+    })
+    expect(records + entries + filters).toBeLessThanOrEqual(3 * n)
+    expect(ports.readSecret).toHaveBeenCalledTimes(n)
+    expect(readBytes()).toEqual([Buffer.byteLength(raw), Buffer.byteLength(removed)])
+    expect(readBytes().reduce((total, bytes) => total + bytes, 0)).toBeLessThanOrEqual(512 * n)
+    committedHost()
+    expect(ports.dispatch).not.toHaveBeenCalled()
+    expect(ports.router.replace).not.toHaveBeenCalled()
+    expect(ports.stateListeners.size).toBe(0)
+  } finally {
+    pending?.resolve('token')
+    try {
+      await unmount()
+    } finally {
+      metadataSpy.mockRestore()
+      catalogSpy.mockRestore()
+    }
   }
 })
