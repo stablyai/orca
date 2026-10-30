@@ -1,0 +1,45 @@
+name: Android updater
+
+on:
+  pull_request:
+    paths:
+      - 'mobile/modules/orca-app-updater/**'
+      - 'mobile/app.json'
+      - 'mobile/pnpm-lock.yaml'
+      - '.github/workflows/mobile-android-updater.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'mobile/modules/orca-app-updater/**'
+      - '.github/workflows/mobile-android-updater.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-updater-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: true
+
+jobs:
+  native-updater:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+      - uses: pnpm/setup@v2
+        with:
+          install: false
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 17
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec expo prebuild --platform android --no-install
+      - name: Test and lint the native updater
+        run: cd android && ./gradlew --no-configuration-cache :orca-app-updater:testDebugUnitTest :orca-app-updater:lintDebug

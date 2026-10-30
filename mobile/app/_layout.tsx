@@ -28,6 +28,8 @@ import { usePairingLinks } from '../src/navigation/use-pairing-links'
 import { consumeInitialLaunchIntent } from '../src/navigation/initial-launch-intent'
 import { recoverMobileRelayPairing } from '../src/transport/mobile-relay-pairing-recovery'
 import { appUpdateChecker } from '../src/app-update/app-update-runtime'
+import { AndroidAppUpdateModal } from '../src/app-update/AndroidAppUpdateModal'
+import { startAndroidUpdateForeground } from '../src/app-update/android-update-runtime'
 import { SideSafeArea } from '../src/layout/side-safe-area'
 import { useFollowDeviceUiLocale } from '../src/i18n/use-follow-device-ui-locale'
 import { startMobileUiLanguage } from '../src/i18n/ui-language-preference'
@@ -87,6 +89,7 @@ export default function RootLayout() {
   useEffect(() => startPushTokenSync(), [])
   // Cold start, then foreground and timer checks on the desktop updater's cadence.
   useEffect(() => appUpdateChecker.start(), [])
+  useEffect(() => startAndroidUpdateForeground(), [])
   useEffect(() => startAndroidForegroundPushPresentation(), [])
 
   // Notification taps arrive through expo-notifications, not Linking; route both cold and warm responses to their host/worktree.
@@ -231,6 +234,7 @@ export default function RootLayout() {
             />
           </Stack>
         </SideSafeArea>
+        <AndroidAppUpdateModal />
       </View>
     </RpcClientProvider>
   )

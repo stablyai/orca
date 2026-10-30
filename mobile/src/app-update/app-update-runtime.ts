@@ -11,6 +11,7 @@ import { appStoreUpdateSource } from './app-store-update-source'
 import { createAppUpdateChecker, type AppUpdateState } from './app-update-checker'
 import type { AppUpdateSource } from './app-update-source'
 import { githubReleaseUpdateSource } from './github-release-update-source'
+import { openAndroidAppUpdate } from './android-update-runtime'
 
 // expoConfig is embedded binary manifest because app does not use expo-updates; SDK 55 removed nativeAppVersion. Revisit version source if adopting OTA updates.
 export const installedAppVersion: string | null = Constants.expoConfig?.version ?? null
@@ -49,7 +50,10 @@ export function useAppUpdateState(): AppUpdateState {
   return useSyncExternalStore(appUpdateChecker.subscribe, appUpdateChecker.getSnapshot)
 }
 
-/** Opens the channel's page for the update: the GitHub release (Android) or App Store (iOS). */
+/** Android downloads in-app when the native updater is present; older shells keep the page fallback. */
 export function openAppUpdate(url: string): void {
+  if (openAndroidAppUpdate(url)) {
+    return
+  }
   void Linking.openURL(url).catch(() => {})
 }

@@ -1,0 +1,19 @@
+apply plugin: 'com.android.library'
+apply plugin: 'expo-module-gradle-plugin'
+
+group = 'expo.modules.orcaappupdater'
+version = '0.0.1'
+
+android {
+  namespace 'expo.modules.orcaappupdater'
+  defaultConfig {
+    versionCode 1
+    versionName '0.0.1'
+  }
+}
+
+dependencies {
+  implementation 'com.squareup.okhttp3:okhttp:4.12.0'
+  implementation 'androidx.core:core-ktx:1.17.0'
+  testImplementation 'junit:junit:4.13.2'
+}
