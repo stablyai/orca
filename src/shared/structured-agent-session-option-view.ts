@@ -12,6 +12,7 @@ import {
   structuredAgentSessionOwnValue
 } from './structured-agent-session-option-state'
 import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from './agent-chat-permission-mode'
+import { structuredAgentSessionDescribedModel } from './structured-agent-session-option-snapshot'
 
 /** Query base or immutable launch seed, with finite controller operations above it.
  *  Display provenance stays separate from accepted input while catalog labels load. */
@@ -47,8 +48,39 @@ export function structuredAgentSessionOptionView(
 export function structuredAgentSessionShownSnapshot(
   state: StructuredAgentSessionOptionState
 ): SessionOptionDescriptor[] {
-  return structuredAgentSessionOptionSnapshot(
-    structuredAgentSessionOptionView(state, undefined, {})
+  const view = structuredAgentSessionOptionView(state, undefined, {})
+  const snapshot = structuredAgentSessionOptionSnapshot(view)
+  const model = structuredAgentSessionModelId(view.record, 'any')
+  if (
+    view.record.agent !== 'codex' ||
+    !model ||
+    !snapshot.some(
+      (descriptor) =>
+        descriptor.id === 'effort' &&
+        descriptor.kind.type === 'select' &&
+        descriptor.kind.currentValue === undefined
+    ) ||
+    !view.verifiedModelIds?.includes(model)
+  ) {
+    return snapshot
+  }
+  const effort = structuredAgentSessionDescribedModel(view, model)?.options.find(
+    (option) => option.id === 'effort'
+  )?.kind
+  if (effort?.type !== 'select' || !effort.defaultIsCliDefault) {
+    return snapshot
+  }
+  // A listed default supplies context only; both Send paths still read the canonical snapshot.
+  return snapshot.map((descriptor) =>
+    descriptor.id === 'effort' &&
+    descriptor.kind.type === 'select' &&
+    descriptor.kind.currentValue === undefined
+      ? {
+          ...descriptor,
+          valueSource: 'default',
+          kind: { ...descriptor.kind, currentValue: effort.defaultValue }
+        }
+      : descriptor
   )
 }
 
@@ -60,10 +92,6 @@ function modelOptionView(
   const unconfirmedSeed =
     seed !== undefined && structuredAgentSessionModelId(state.record, 'own') === null
   const hasHeld = Object.keys(held).length > 0
-  const seeded =
-    unconfirmedSeed &&
-    (state.catalogSource === 'host' || state.catalogSource === 'live') &&
-    (held.model === undefined || held.model === seed.model)
   if (!state.catalog || (!unconfirmedSeed && !hasHeld)) {
     return state
   }
@@ -73,18 +101,6 @@ function modelOptionView(
   }
   if (unconfirmedSeed) {
     view = commitStructuredAgentSessionOptionValues(view, seed, 'seeded')
-    if (!seeded) {
-      // The immutable input remains capturable before a host list can label it.
-      for (const id of Object.keys(seed)) {
-        const tracked = view.record.values[id]
-        if (tracked) {
-          tracked.source = 'default'
-        }
-      }
-      if (state.catalogSource === 'host' && !hasHeld) {
-        view = { ...view, catalogSource: 'seed' }
-      }
-    }
   }
   return { ...commitStructuredAgentSessionOptionValues(view, held), pendingId: state.pendingId }
 }

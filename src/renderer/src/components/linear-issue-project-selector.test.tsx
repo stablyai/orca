@@ -90,18 +90,13 @@ describe('LinearIssueProjectSelector', () => {
       .mockReturnValueOnce(first.promise)
       .mockReturnValueOnce(second.promise)
     runtimeMocks.linearUpdateIssue.mockResolvedValue({ ok: true })
-    const onProjectChanged = vi.fn()
     const container = document.createElement('div')
     document.body.appendChild(container)
     const root = createRoot(container)
     roots.push(root)
     act(() => {
       root.render(
-        <LinearIssueProjectSelector
-          issue={selectedIssue}
-          onProjectChanged={onProjectChanged}
-          sourceContext={sourceContext}
-        />
+        <LinearIssueProjectSelector issue={selectedIssue} sourceContext={sourceContext} />
       )
     })
     act(() => {
@@ -153,8 +148,7 @@ describe('LinearIssueProjectSelector', () => {
     expect(storeMocks.state.patchLinearIssue).toHaveBeenCalledWith(
       'issue-1',
       { project: currentProject },
-      { sourceContext }
+      { scope: expect.objectContaining({ settings: sourceContext }) }
     )
-    expect(onProjectChanged).toHaveBeenCalledWith(currentProject)
   })
 })

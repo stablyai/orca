@@ -835,9 +835,7 @@
         "jira": {
           "856083302c": "더 새로운 요청이 있어 Jira 연결 요청을 건너뛰었습니다."
         },
-        "linear": {
-          "37d36984d0": "더 새로운 요청이 있어 Linear 연결 요청을 건너뛰었습니다."
-        },
+        "linear": {},
         "orca": {
           "profiles": {
             "612f7f6861": "프로필을 생성하지 못했습니다",
@@ -21979,12 +21977,7 @@
       "fetchMore": "더 불러오기",
       "connectionFailed": "연결 실패",
       "listLabel": "Linear 목록",
-      "projectsLoadFailed": "프로젝트를 불러오지 못했습니다.",
       "projectNotFound": "프로젝트를 찾을 수 없습니다.",
-      "projectLoadFailed": "프로젝트를 불러오지 못했습니다.",
-      "projectIssuesLoadFailed": "프로젝트 이슈를 불러오지 못했습니다.",
-      "viewsLoadFailed": "보기를 불러오지 못했습니다.",
-      "viewContentsLoadFailed": "보기 내용을 불러오지 못했습니다.",
       "issuesLoadFailed": "Linear 이슈를 불러오지 못했습니다.",
       "apiKeyHint": "Orca에서 사용할 Linear 워크스페이스의 개인 API 키를 붙여넣으세요. 이미 연결된 워크스페이스라면 저장된 키가 교체됩니다.",
       "remoteKeyStorage": "이 키는 활성 원격 런타임에 저장됩니다.",

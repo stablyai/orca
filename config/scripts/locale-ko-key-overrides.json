@@ -4136,9 +4136,6 @@
   "auto.store.slices.jira.856083302c": {
     "ko": "더 새로운 요청이 있어 Jira 연결 요청을 건너뛰었습니다."
   },
-  "auto.store.slices.linear.37d36984d0": {
-    "ko": "더 새로운 요청이 있어 Linear 연결 요청을 건너뛰었습니다."
-  },
   "auto.store.slices.repos.e649269645": {
     "ko": "선택한 호스트에 경로를 입력하려면 프로젝트 추가를 사용하세요."
   },

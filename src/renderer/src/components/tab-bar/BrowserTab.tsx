@@ -2,12 +2,12 @@ import { useEffect, useState } from 'react'
 import { useSortable } from '@dnd-kit/sortable'
 import { X, Pin, PinOff, Volume2, VolumeX } from 'lucide-react'
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger
-} from '@/components/ui/dropdown-menu'
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuSeparator,
+  ContextMenuTrigger
+} from '@/components/ui/context-menu'
 import { TabHoverCard } from './TabHoverCard'
 import { ORCA_BROWSER_BLANK_URL } from '../../../../shared/constants'
 import { redactKagiSessionToken } from '../../../../shared/browser-url'
@@ -28,7 +28,7 @@ import { TAB_LABEL_WIDTH_CLASSES } from './tab-width-rules'
 import { useTabStripSlotProps } from './use-tab-strip-slot-props'
 import { TabWorkspaceLayoutMenuSection } from './TabWorkspaceLayoutMenuSection'
 import { useTabStripPointerActivation } from './tab-strip-pointer-activation'
-import { TAB_CONTEXT_MENU_CONTENT_CLASS } from './tab-context-menu-sizing'
+import { useTabContextMenuOpening } from './tab-context-menu-opening'
 import { cn } from '@/lib/utils'
 import { BrowserFavicon } from '@/components/browser-favicon'
 import { AgentCursorGlyph } from '../browser-pane/agent-cursor/agent-cursor-glyph'
@@ -105,7 +105,6 @@ export default function BrowserTab({
     data: dragData
   })
   const [menuOpen, setMenuOpen] = useState(false)
-  const [menuPoint, setMenuPoint] = useState({ x: 0, y: 0 })
 
   // Only HTTP(S) URLs can open in the system browser; disable unsupported or malformed destinations.
   const openInBrowserUrl = redactKagiSessionToken(getLiveBrowserUrl(tab.id) ?? tab.url)
@@ -147,7 +146,10 @@ export default function BrowserTab({
   }, [menuOpen])
 
   // Activate on pointer-up so drag gestures cannot switch tabs mid-drag.
-  const { onPointerDown: onTabPointerDown } = useTabStripPointerActivation({ onActivate })
+  const { onPointerDown: onTabPointerDown, retirePendingActivation } = useTabStripPointerActivation(
+    { onActivate }
+  )
+  const handleMenuOpenChange = useTabContextMenuOpening(setMenuOpen, retirePendingActivation)
   const slotProps = useTabStripSlotProps(tab.id, isActive)
 
   const tabRoot = (
@@ -239,95 +241,83 @@ export default function BrowserTab({
   )
 
   return (
-    <>
-      <div
-        {...slotProps}
-        onContextMenuCapture={(event) => {
-          event.preventDefault()
-          window.dispatchEvent(new Event(CLOSE_ALL_CONTEXT_MENUS_EVENT))
-          setMenuPoint({ x: event.clientX, y: event.clientY })
-          setMenuOpen(true)
-        }}
-      >
-        {menuOpen ? (
-          tabRoot
-        ) : (
-          <TabHoverCard
-            title={tabLabel}
-            icon={<BrowserFavicon faviconUrl={tab.faviconUrl} className="size-4" />}
-            programName={
-              agentDriving
-                ? agentDrivingLabel
-                : isBlankBrowserTab(tab)
-                  ? translate('tabHoverCard.browser', 'Browser')
-                  : formatBrowserTabUrlLabel(redactKagiSessionToken(tab.url))
-            }
-          >
-            {tabRoot}
-          </TabHoverCard>
-        )}
-      </div>
-
-      <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen} modal={false}>
-        <DropdownMenuTrigger asChild>
-          <button
-            aria-hidden
-            tabIndex={-1}
-            className="pointer-events-none fixed size-px opacity-0"
-            style={{ left: menuPoint.x, top: menuPoint.y }}
-          />
-        </DropdownMenuTrigger>
-        <DropdownMenuContent
-          className={cn(
-            'rounded-[11px] border-border/80 p-1 shadow-[0_16px_36px_rgba(0,0,0,0.24)]',
-            TAB_CONTEXT_MENU_CONTENT_CLASS
-          )}
-          sideOffset={0}
-          align="start"
+    <ContextMenu open={menuOpen} onOpenChange={handleMenuOpenChange} modal={false}>
+      <ContextMenuTrigger asChild>
+        <div
+          {...slotProps}
+          onContextMenu={() => {
+            window.dispatchEvent(new Event(CLOSE_ALL_CONTEXT_MENUS_EVENT))
+            handleMenuOpenChange(true)
+          }}
         >
-          <TabWorkspaceLayoutMenuSection
-            unifiedTabId={dragData.unifiedTabId}
-            groupId={dragData.groupId}
-            trailingSeparator
-          />
-          {onDuplicate ? (
-            <>
-              <DropdownMenuItem inset onSelect={onDuplicate}>
-                {translate('auto.components.tab.bar.BrowserTab.5d6e89891f', 'Duplicate Tab')}
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-            </>
-          ) : null}
-          <DropdownMenuItem onSelect={onTogglePin}>
-            {isPinned ? <PinOff className="size-3.5" /> : <Pin className="size-3.5" />}
-            {isPinned
-              ? translate('auto.components.tab.bar.BrowserTab.c5aaee8c39', 'Unpin Tab')
-              : translate('auto.components.tab.bar.BrowserTab.911542656f', 'Pin Tab')}
-          </DropdownMenuItem>
-          {showAudioControl ? (
-            <DropdownMenuItem inset onSelect={() => setBrowserTabAudioMuted(tab.id, !audioMuted)}>
-              {toggleAudioMutedLabel}
-            </DropdownMenuItem>
-          ) : null}
-          <CopyTabIdMenuItem unifiedTabId={dragData.unifiedTabId} />
-          <DropdownMenuSeparator />
-          <DropdownMenuItem onSelect={() => !isPinned && onClose()} disabled={isPinned}>
-            <X className="size-3.5" />
-            {translate('auto.components.tab.bar.BrowserTab.1611a1324b', 'Close')}
-          </DropdownMenuItem>
-          <DropdownMenuItem inset onSelect={onCloseOthers} disabled={tabCount <= 1}>
-            {translate('components.tab.bar.BrowserTab.closeOthers', 'Close Others')}
-          </DropdownMenuItem>
-          <CloseSplitPaneMenuItem onCloseSplitPane={onCloseSplitPane} />
-          <DropdownMenuItem
-            inset
-            onSelect={() => void window.api.shell.openUrl(openInBrowserUrl)}
-            disabled={!isHttpUrl}
-          >
-            {translate('auto.components.tab.bar.BrowserTab.6e0bc8f3a8', 'Open In Browser')}
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
-    </>
+          {menuOpen ? (
+            tabRoot
+          ) : (
+            <TabHoverCard
+              title={tabLabel}
+              icon={<BrowserFavicon faviconUrl={tab.faviconUrl} className="size-4" />}
+              programName={
+                agentDriving
+                  ? agentDrivingLabel
+                  : isBlankBrowserTab(tab)
+                    ? translate('tabHoverCard.browser', 'Browser')
+                    : formatBrowserTabUrlLabel(redactKagiSessionToken(tab.url))
+              }
+            >
+              {tabRoot}
+            </TabHoverCard>
+          )}
+        </div>
+      </ContextMenuTrigger>
+      <ContextMenuContent
+        animation="none"
+        className={cn(
+          'rounded-[11px] border-border/80 p-1 shadow-[0_16px_36px_rgba(0,0,0,0.24)]',
+          'min-w-[13rem] max-w-[calc(100vw-1rem)] whitespace-nowrap'
+        )}
+      >
+        <TabWorkspaceLayoutMenuSection
+          unifiedTabId={dragData.unifiedTabId}
+          groupId={dragData.groupId}
+          trailingSeparator
+        />
+        {onDuplicate ? (
+          <>
+            <ContextMenuItem inset onSelect={onDuplicate}>
+              {translate('auto.components.tab.bar.BrowserTab.5d6e89891f', 'Duplicate Tab')}
+            </ContextMenuItem>
+            <ContextMenuSeparator />
+          </>
+        ) : null}
+        <ContextMenuItem onSelect={onTogglePin}>
+          {isPinned ? <PinOff className="size-3.5" /> : <Pin className="size-3.5" />}
+          {isPinned
+            ? translate('auto.components.tab.bar.BrowserTab.c5aaee8c39', 'Unpin Tab')
+            : translate('auto.components.tab.bar.BrowserTab.911542656f', 'Pin Tab')}
+        </ContextMenuItem>
+        {showAudioControl ? (
+          <ContextMenuItem inset onSelect={() => setBrowserTabAudioMuted(tab.id, !audioMuted)}>
+            {toggleAudioMutedLabel}
+          </ContextMenuItem>
+        ) : null}
+        <CopyTabIdMenuItem menuKind="context" unifiedTabId={dragData.unifiedTabId} />
+        <ContextMenuSeparator />
+        <ContextMenuItem onSelect={() => !isPinned && onClose()} disabled={isPinned}>
+          <X className="size-3.5" />
+          {translate('auto.components.tab.bar.BrowserTab.1611a1324b', 'Close')}
+        </ContextMenuItem>
+        <ContextMenuItem inset onSelect={onCloseOthers} disabled={tabCount <= 1}>
+          {translate('components.tab.bar.BrowserTab.closeOthers', 'Close Others')}
+        </ContextMenuItem>
+        <CloseSplitPaneMenuItem menuKind="context" onCloseSplitPane={onCloseSplitPane} />
+        <ContextMenuItem
+          inset
+          onSelect={() => void window.api.shell.openUrl(openInBrowserUrl)}
+          disabled={!isHttpUrl}
+        >
+          {translate('auto.components.tab.bar.BrowserTab.6e0bc8f3a8', 'Open In Browser')}
+        </ContextMenuItem>
+      </ContextMenuContent>
+    </ContextMenu>
   )
 }
