@@ -227,8 +227,13 @@ describe('AgentKanbanBoard', () => {
   })
 
   it('folds old responses and reveals them on request without folding waiting tabs', () => {
-    const old = Date.now() - 2 * 86400000
+    const old = Date.now() - 3 * 86400000
     renderBoard([
+      card({
+        bucket: 'done',
+        worktreeName: 'yesterday-response',
+        finishedAt: Date.now() - 36 * 60 * 60 * 1000
+      }),
       card({ bucket: 'done', worktreeName: 'old-response', finishedAt: old }),
       card({
         bucket: 'done',
@@ -237,6 +242,7 @@ describe('AgentKanbanBoard', () => {
         finishedAt: old
       })
     ])
+    expect(screen.getByText('yesterday-response')).toBeInTheDocument()
     expect(screen.queryByText('old-response')).not.toBeInTheDocument()
     expect(
       within(screen.getByRole('region', { name: 'Waiting for input' })).getByText('waiting-source')
@@ -259,7 +265,7 @@ describe('AgentKanbanBoard', () => {
       ...response,
       paneKey: 'wait',
       worktreeName: 'manual-wait',
-      finishedAt: Date.now() - 2 * 86400000
+      finishedAt: Date.now() - 3 * 86400000
     }
     localStorage.setItem(
       `orca:dashboard-task-note:v1:${taskNoteIdentity(waiting)}`,
@@ -289,7 +295,7 @@ describe('AgentKanbanBoard', () => {
       card({
         bucket: 'done',
         worktreeName: 'historical-source',
-        finishedAt: Date.now() - 2 * 86400000
+        finishedAt: Date.now() - 3 * 86400000
       })
     ])
     fireEvent.change(screen.getByLabelText('Search agents'), {

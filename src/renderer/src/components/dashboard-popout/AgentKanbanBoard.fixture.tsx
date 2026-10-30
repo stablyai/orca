@@ -63,7 +63,7 @@ const snapshot: DashboardSnapshot = {
       bucket: 'done',
       dotState: 'done',
       unseen: true,
-      finishedAt: now - 2 * 86400000
+      finishedAt: now - 3 * 86400000
     })
   ]
 }

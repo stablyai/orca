@@ -20648,7 +20648,7 @@
     "task": {
       "responses": "Responses",
       "waitingInput": "Waiting for input",
-      "responseScope": "Last 24 hours. A response is not a verified result.",
+      "responseScope": "Last 48 hours. A response is not a verified result.",
       "hideOlder": "Hide older responses",
       "showOlder": "Show older responses ({{count}})",
       "owner": "Who acts next",

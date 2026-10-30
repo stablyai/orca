@@ -122,7 +122,7 @@ function KanbanColumn({
         <p className="px-3 pb-2 text-xs text-muted-foreground">
           {translate(
             'dashboardPopout.task.responseScope',
-            'Last 24 hours. A response is not a verified result.'
+            'Last 48 hours. A response is not a verified result.'
           )}
         </p>
       ) : null}

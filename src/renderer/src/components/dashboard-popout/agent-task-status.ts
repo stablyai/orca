@@ -22,7 +22,7 @@ export const TASK_BUCKET_ORDER: readonly DashboardTaskBucket[] = [
   'done',
   'idle'
 ]
-export const RECENT_RESPONSE_MS = 24 * 60 * 60 * 1000
+export const RECENT_RESPONSE_MS = 48 * 60 * 60 * 1000
 
 export function taskNoteIdentity(card: DashboardCard): string {
   return JSON.stringify([

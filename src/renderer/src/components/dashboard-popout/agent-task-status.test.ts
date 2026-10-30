@@ -5,7 +5,6 @@ import {
   currentTaskNote,
   isOlderResponse,
   readTaskNote,
-  RECENT_RESPONSE_MS,
   taskBucket,
   taskNoteIdentity,
   taskObservation,
@@ -138,8 +137,9 @@ describe('dashboard task outcomes', () => {
     expect(taskBucket(named, note(named, 'automatic'))).toBe('done')
   })
 
-  it('folds only timed responses older than 24 hours, keeping waiting and unknown times visible', () => {
-    const now = done.finishedAt! + RECENT_RESPONSE_MS
+  it('folds timed responses at 48 hours, keeping waiting and unknown times visible', () => {
+    const now = done.finishedAt! + 48 * 60 * 60 * 1000
+    expect(isOlderResponse(done, undefined, done.finishedAt! + 36 * 60 * 60 * 1000)).toBe(false)
     expect(isOlderResponse(done, undefined, now - 1)).toBe(false)
     expect(isOlderResponse(done, undefined, now)).toBe(true)
     expect(isOlderResponse(done, note(done, 'waiting-user'), now)).toBe(false)
