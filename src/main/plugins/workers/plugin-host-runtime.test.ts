@@ -264,6 +264,20 @@ describe('worker panel messages', () => {
     expect(() => orca.panels.onMessage('', () => null)).toThrow(TypeError)
   })
 
+  it('does not let a stale disposer remove a re-registration of the same function', async () => {
+    let orca!: PluginWorkerOrcaApi
+    const { send, runtime } = await activateWith((api) => (orca = api))
+    const handler = () => 'again'
+    const first = orca.panels.onMessage('player', handler)
+    first.dispose()
+    orca.panels.onMessage('player', handler)
+
+    first.dispose()
+
+    await runtime.handleMessage(panelMessage(1, 'player', {}))
+    expect(send).toHaveBeenLastCalledWith({ orca: 1, kind: 'res', id: 1, result: 'again' })
+  })
+
   it('hands the handler a signal the host aborts', async () => {
     const seen: { signal?: AbortSignal } = {}
     let finish!: () => void

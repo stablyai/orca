@@ -21,7 +21,7 @@ export function createWorkerPanelMessages(options: {
   /** Requests the host may cancel, shared with commands so one `cancel` handler covers both. */
   running: Map<number, AbortController>
 }) {
-  const handlers = new Map<string, PanelMessageHandler>()
+  const handlers = new Map<string, { handler: PanelMessageHandler }>()
   const api: PluginPanelMessagesApi = Object.freeze({
     onMessage(panelId, handler) {
       if (typeof panelId !== 'string' || panelId === '') {
@@ -33,10 +33,12 @@ export function createWorkerPanelMessages(options: {
       if (handlers.has(panelId)) {
         throw new Error(`a message handler is already registered for panel ${panelId}`)
       }
-      handlers.set(panelId, handler)
+      // Why an object: a disposer must only remove its own registration, even if the same function is registered again.
+      const registration = { handler }
+      handlers.set(panelId, registration)
       return {
         dispose: () => {
-          if (handlers.get(panelId) === handler) {
+          if (handlers.get(panelId) === registration) {
             handlers.delete(panelId)
           }
         }
@@ -46,7 +48,7 @@ export function createWorkerPanelMessages(options: {
 
   async function deliver(request: PluginRequest): Promise<void> {
     const parsed = pluginWorkerPanelMessageParamsSchema.safeParse(request.params)
-    const handler = parsed.success ? handlers.get(parsed.data.panelId) : undefined
+    const handler = parsed.success ? handlers.get(parsed.data.panelId)?.handler : undefined
     if (!parsed.success || !handler) {
       const panelId = parsed.success ? parsed.data.panelId : '(invalid)'
       options.send(
