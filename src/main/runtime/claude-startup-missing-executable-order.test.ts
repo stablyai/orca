@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync, writeSync } from 'n
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { createHash } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import { query } from '@anthropic-ai/claude-agent-sdk'
 import { spawnProcess } from '@orca/process-host'
 import type { PipedProcessSpawner } from '@orca/process-host/process-spec'
@@ -24,9 +24,9 @@ import {
 } from '../native-chat/agent-session-wire/structured-agent-session-create-test-fixture'
 import {
   hostTestMessage,
-  hostTestOperationId,
   HOST_TEST_SESSION as SESSION
 } from '../native-chat/agent-session-wire/structured-agent-session-host-test-data'
+import { createStructuredAgentSessionOperationId } from '../../shared/structured-agent-session-mutation'
 import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session-mutation-envelope'
 import type { AgentJournalRenderItem } from '../../shared/agent-session-journal-types'
 
@@ -538,18 +538,16 @@ for (const lifecycle of ['external', 'default'] as const) {
               releaseMissing()
             }
           }
+          const createParams = createTestParams(undefined, {
+            provider: 'claude',
+            agent: 'claude',
+            accountHome: { variable: 'CLAUDE_CONFIG_DIR', path: join(directory, 'claude-home') }
+          })
+          createParams.envelope.clientOperationId =
+            createStructuredAgentSessionOperationId(randomUUID)
+          trace.fact('host-create-issued', { operationId: createParams.envelope.clientOperationId })
           persist('before-create-admission')
-          const created = await bounded(
-            host.create(
-              CALLER,
-              createTestParams(undefined, {
-                provider: 'claude',
-                agent: 'claude',
-                accountHome: { variable: 'CLAUDE_CONFIG_DIR', path: join(directory, 'claude-home') }
-              })
-            ),
-            'create admission'
-          )
+          const created = await bounded(host.create(CALLER, createParams), 'create admission')
           trace.fact('host-create-admitted', created, 'await-continuation')
           expect(created).toMatchObject({ ok: true })
           expect(acquireCount).toBe(0)
@@ -577,7 +575,7 @@ for (const lifecycle of ['external', 'default'] as const) {
           )
           trace.fact('host-subscribed')
           const body = hostTestMessage('hello')
-          const operationId = hostTestOperationId()
+          const operationId = createStructuredAgentSessionOperationId(randomUUID)
           trace.fact('host-send-issued', { operationId, body })
           persist('before-send-admission')
           const sent = await bounded(
