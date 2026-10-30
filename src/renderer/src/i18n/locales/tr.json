@@ -21858,6 +21858,7 @@
       "tabClose": "Etkin sekmeyi kapat",
       "tabCloseAll": "Tüm düzenleyici sekmelerini kapat",
       "tabRename": "Etkin sekmeyi yeniden adlandır",
+      "tabMoveToSplitRight": "Sekmeyi sağ bölmeye taşı",
       "tabReopenClosed": "Kapatılan sekmeyi yeniden aç",
       "tabNextSameType": "Sonraki sekme (aynı tür)",
       "tabPreviousSameType": "Önceki sekme (aynı tür)",

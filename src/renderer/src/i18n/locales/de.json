@@ -22031,6 +22031,7 @@
       "tabClose": "Aktiven Tab schließen",
       "tabCloseAll": "Alle Editor-Tabs schließen",
       "tabRename": "Aktiven Tab umbenennen",
+      "tabMoveToSplitRight": "Tab nach rechts teilen",
       "tabReopenClosed": "Geschlossenen Tab erneut öffnen",
       "tabNextSameType": "Zum nächsten Tab wechseln (gleicher Typ)",
       "tabPreviousSameType": "Zum vorherigen Tab wechseln (gleicher Typ)",

@@ -21719,6 +21719,7 @@
       "tabClose": "关闭当前标签页",
       "tabCloseAll": "关闭所有编辑器标签页",
       "tabRename": "重命名当前标签页",
+      "tabMoveToSplitRight": "将标签页移到右侧拆分",
       "tabReopenClosed": "重新打开已关闭的标签页",
       "tabNextSameType": "下一个标签页（同类型）",
       "tabPreviousSameType": "上一个标签页（同类型）",

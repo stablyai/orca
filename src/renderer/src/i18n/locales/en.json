@@ -22371,6 +22371,7 @@
       "tabClose": "Close active tab",
       "tabCloseAll": "Close all editor tabs",
       "tabRename": "Rename active tab",
+      "tabMoveToSplitRight": "Move tab to split right",
       "tabReopenClosed": "Reopen closed tab",
       "tabNextSameType": "Next tab (same type)",
       "tabPreviousSameType": "Previous tab (same type)",

@@ -21665,6 +21665,7 @@
       "tabClose": "활성 탭 닫기",
       "tabCloseAll": "모든 편집기 탭 닫기",
       "tabRename": "활성 탭 이름 바꾸기",
+      "tabMoveToSplitRight": "탭을 오른쪽 분할로 이동",
       "tabReopenClosed": "닫은 탭 다시 열기",
       "tabNextSameType": "다음 탭(같은 유형)",
       "tabPreviousSameType": "이전 탭(같은 유형)",

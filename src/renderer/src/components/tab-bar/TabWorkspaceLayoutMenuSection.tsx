@@ -9,6 +9,7 @@ import {
 import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Columns2 } from 'lucide-react'
 import type { TabSplitDirection } from '../../store/slices/tabs'
 import { translate } from '@/i18n/i18n'
+import { useOptionalShortcutLabel } from '@/hooks/useShortcutLabel'
 import { canMoveTabToNewPaneColumn, moveTabToNewPaneColumn } from './tab-move-to-pane-column'
 import { TAB_CONTEXT_SUBMENU_CONTENT_CLASS } from './tab-context-menu-sizing'
 
@@ -53,6 +54,7 @@ export function TabWorkspaceLayoutMenuSection({
   trailingSeparator?: boolean
   shortcutLabels?: Partial<Record<TabSplitDirection, string>>
 }): React.JSX.Element | null {
+  const moveToSplitRightShortcut = useOptionalShortcutLabel('tab.moveToSplitRight')
   if (!canMoveTabToNewPaneColumn(unifiedTabId, groupId)) {
     return null
   }
@@ -69,20 +71,23 @@ export function TabWorkspaceLayoutMenuSection({
           )}
         </DropdownMenuSubTrigger>
         <DropdownMenuSubContent className={TAB_CONTEXT_SUBMENU_CONTENT_CLASS}>
-          {PANE_COLUMN_DIRECTIONS.map((direction) => (
-            <DropdownMenuItem
-              key={direction}
-              onSelect={() => {
-                moveTabToNewPaneColumn({ unifiedTabId, groupId, direction })
-              }}
-            >
-              {paneColumnDirectionIcon(direction)}
-              {paneColumnDirectionLabel(direction)}
-              {shortcutLabels?.[direction] ? (
-                <DropdownMenuShortcut>{shortcutLabels[direction]}</DropdownMenuShortcut>
-              ) : null}
-            </DropdownMenuItem>
-          ))}
+          {PANE_COLUMN_DIRECTIONS.map((direction) => {
+            const shortcutLabel =
+              shortcutLabels?.[direction] ??
+              (direction === 'right' ? moveToSplitRightShortcut : null)
+            return (
+              <DropdownMenuItem
+                key={direction}
+                onSelect={() => {
+                  moveTabToNewPaneColumn({ unifiedTabId, groupId, direction })
+                }}
+              >
+                {paneColumnDirectionIcon(direction)}
+                {paneColumnDirectionLabel(direction)}
+                {shortcutLabel ? <DropdownMenuShortcut>{shortcutLabel}</DropdownMenuShortcut> : null}
+              </DropdownMenuItem>
+            )
+          })}
         </DropdownMenuSubContent>
       </DropdownMenuSub>
       {trailingSeparator ? <DropdownMenuSeparator /> : null}

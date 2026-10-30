@@ -21543,6 +21543,7 @@
       "tabClose": "關閉目前分頁",
       "tabCloseAll": "關閉所有編輯器分頁",
       "tabRename": "重新命名目前分頁",
+      "tabMoveToSplitRight": "將分頁移到右側分割",
       "tabReopenClosed": "重新開啟已關閉的分頁",
       "tabNextSameType": "下一個分頁（同類型）",
       "tabPreviousSameType": "上一個分頁（同類型）",

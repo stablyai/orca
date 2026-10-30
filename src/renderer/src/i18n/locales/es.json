@@ -22342,6 +22342,7 @@
       "tabClose": "Cerrar pestaña activa",
       "tabCloseAll": "Cerrar todas las pestañas del editor",
       "tabRename": "Renombrar pestaña activa",
+      "tabMoveToSplitRight": "Mover pestaña a la división derecha",
       "tabReopenClosed": "Reabrir pestaña cerrada",
       "tabNextSameType": "Pestaña siguiente (mismo tipo)",
       "tabPreviousSameType": "Pestaña anterior (mismo tipo)",

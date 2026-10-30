@@ -21665,6 +21665,7 @@
       "tabClose": "アクティブなタブを閉じる",
       "tabCloseAll": "すべてのエディタータブを閉じる",
       "tabRename": "アクティブなタブの名前を変更",
+      "tabMoveToSplitRight": "タブを右の分割へ移動",
       "tabReopenClosed": "閉じたタブを再度開く",
       "tabNextSameType": "次のタブ（同じ種類）",
       "tabPreviousSameType": "前のタブ（同じ種類）",

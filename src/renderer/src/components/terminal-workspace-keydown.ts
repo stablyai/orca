@@ -28,6 +28,7 @@ import {
   launchFloatingWorkspaceAgentShortcut
 } from './agent-tab-shortcut-launch'
 import { handleTerminalWorkspaceEditorShortcut } from './terminal-workspace-editor-shortcuts'
+import { requestActiveTabMoveToSplit } from './tab-bar/request-active-tab-move-to-split'
 import type { TerminalActivationController } from './use-terminal-activation-actions'
 
 export function handleTerminalWorkspaceKeyDown(
@@ -207,6 +208,14 @@ export function handleTerminalWorkspaceKeyDown(
     if (dispatchWorkspaceTabCommand({ type: 'close', context })) {
       event.preventDefault()
       notifyTerminalCapture('tab.close')
+    }
+    return
+  }
+  // Mod+\ moves the active tab into a new column. A sole-tab group leaves the chord free.
+  if (!event.repeat && !floatingWorkspaceFocused && matchShortcut('tab.moveToSplitRight')) {
+    if (requestActiveTabMoveToSplit('right')) {
+      event.preventDefault()
+      notifyTerminalCapture('tab.moveToSplitRight')
     }
     return
   }
