@@ -238,6 +238,74 @@ describe('AgentBrowserBridge', () => {
     expect(b.tabList('wt-1').tabs).toMatchObject([{ browserPageId: 'tab-b', active: true }])
   })
 
+  it('lets an agent drive a popup by page id and returns it to the opener when the popup closes', async () => {
+    const tabs = new Map([
+      ['tab-a', 1],
+      ['tab-b', 2]
+    ])
+    const worktrees = new Map([
+      ['tab-a', 'wt-1'],
+      ['tab-b', 'wt-1']
+    ])
+    let popupPages = [{ browserPageId: 'popup-7', webContentsId: 7, openerBrowserPageId: 'tab-b' }]
+    let closePopup = (): void => {}
+    const popup = {
+      ...mockWebContents(7, 'https://auth.example.com/', 'Sign in'),
+      once: (event: string, listener: () => void) => {
+        if (event === 'destroyed') {
+          closePopup = listener
+        }
+      }
+    }
+    const pages = new Map<number, unknown>([
+      [1, mockWebContents(1, 'https://a.com', 'A')],
+      [2, mockWebContents(2, 'https://b.com', 'B')],
+      [7, popup]
+    ])
+    webContentsFromIdMock.mockImplementation((id: number) => pages.get(id) ?? null)
+    const b = new AgentBrowserBridge(
+      mockBrowserManager(tabs, worktrees, {
+        getPopupPages: () => popupPages,
+        getGuestWebContentsId: (tabId: string) => tabs.get(tabId) ?? null
+      })
+    )
+    b.setActiveTab(1, 'wt-1')
+
+    expect(b.tabList('wt-1').tabs).toMatchObject([
+      { browserPageId: 'tab-a', active: true },
+      { browserPageId: 'tab-b', active: false },
+      { browserPageId: 'popup-7', title: 'Sign in', openerBrowserPageId: 'tab-b', active: false }
+    ])
+    const spawns: string[][] = []
+    answerAgentBrowserCommands(execFileMock, stdinWrites, (command, cb, args, child) => {
+      spawns.push(args)
+      if (command[0] === 'click') {
+        // Approving a sign-in closes the popup before the click reports back.
+        pages.delete(7)
+        popupPages = []
+        closePopup()
+      }
+      cb(null, JSON.stringify({ success: true, data: { snapshot: 'popup tree' } }), '')
+      child.emit('close')
+    })
+    await expect(b.snapshot(undefined, 'popup-7')).resolves.toEqual({
+      browserPageId: 'popup-7',
+      snapshot: 'popup tree'
+    })
+    expect(b.getActivePageId('wt-1')).toBe('tab-a')
+
+    await b.tabSwitch(undefined, 'wt-1', 'popup-7')
+    expect(b.getActivePageId('wt-1')).toBe('popup-7')
+    await expect(b.click('@e2', 'wt-1')).resolves.toBeDefined()
+
+    expect(b.getActivePageId('wt-1')).toBe('tab-b')
+    await vi.waitFor(() =>
+      expect(spawns.some((args) => args.join(' ') === '--session orca-tab-popup-7 close')).toBe(
+        true
+      )
+    )
+  })
+
   it('repairs per-worktree active routing when an active tab swaps processes', async () => {
     const tabs = new Map([['tab-a', 200]])
     const worktrees = new Map([['tab-a', 'wt-1']])

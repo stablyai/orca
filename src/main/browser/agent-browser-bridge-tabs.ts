@@ -24,7 +24,10 @@ export abstract class AgentBrowserBridgeTabs extends AgentBrowserBridgeState {
     if (browserPageId) {
       this.browserManager.beginAgentCommand(browserPageId).end()
     }
+    this.watchPopupClose(webContentsId)
   }
+
+  protected abstract watchPopupClose(webContentsId: number): void
 
   // A person's pick never pulls an agent off the tab it is driving; it applies once that tab goes idle.
   private selectForPerson(webContentsId: number, worktreeId?: string): void {
@@ -149,18 +152,19 @@ export abstract class AgentBrowserBridgeTabs extends AgentBrowserBridgeState {
     this.options.onTabsChanged?.(worktreeId)
   }
   getRegisteredTabs(worktreeId?: string): Map<string, number> {
-    const all = this.browserManager.getWebContentsIdByTabId()
-    if (!worktreeId) {
-      return all
-    }
-
-    const filtered = new Map<string, number>()
-    for (const [tabId, wcId] of all) {
-      if (this.browserManager.getWorktreeIdForTab(tabId) === worktreeId) {
-        filtered.set(tabId, wcId)
+    const tabs = new Map<string, number>()
+    for (const [tabId, wcId] of this.browserManager.getWebContentsIdByTabId()) {
+      if (!worktreeId || this.browserManager.getWorktreeIdForTab(tabId) === worktreeId) {
+        tabs.set(tabId, wcId)
       }
     }
-    return filtered
+    // Popups list after the tabs and share their opener's scope.
+    for (const popup of this.browserManager.getPopupPages()) {
+      if (tabs.has(popup.openerBrowserPageId)) {
+        tabs.set(popup.browserPageId, popup.webContentsId)
+      }
+    }
+    return tabs
   }
 
   /** Tab list results omit workspace ownership. */
@@ -173,6 +177,11 @@ export abstract class AgentBrowserBridgeTabs extends AgentBrowserBridgeState {
   tabList(worktreeId?: string): BrowserTabListResult {
     this.applyHeldPersonSelections(worktreeId)
     const tabs = this.getRegisteredTabs(worktreeId)
+    const popupOpeners = new Map(
+      this.browserManager
+        .getPopupPages()
+        .map((popup) => [popup.browserPageId, popup.openerBrowserPageId])
+    )
     // Match command routing without changing active-tab selection during discovery.
     let activeWcId =
       (worktreeId && this.activeWebContentsPerWorktree.get(worktreeId)) ?? this.activeWebContentsId
@@ -188,6 +197,7 @@ export abstract class AgentBrowserBridgeTabs extends AgentBrowserBridgeState {
       if (firstLiveWcId === null) {
         firstLiveWcId = wcId
       }
+      const openerBrowserPageId = popupOpeners.get(tabId)
       const loadError = this.browserManager.getBrowserPageLoadError(tabId)
       const certificateFailure = this.browserManager.getBrowserPageCertificateFailure(tabId)
       result.push({
@@ -199,7 +209,8 @@ export abstract class AgentBrowserBridgeTabs extends AgentBrowserBridgeState {
         title: wc.getTitle() ?? '',
         active: wcId === activeWcId,
         loadError,
-        certificateFailure
+        certificateFailure,
+        ...(openerBrowserPageId ? { openerBrowserPageId } : {})
       })
     }
     // Infer an active tab for display without changing command routing.

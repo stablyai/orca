@@ -70,6 +70,42 @@ export abstract class AgentBrowserBridgeLifecycle extends AgentBrowserBridgeRawP
     }
     this.options.onTabsChanged?.(owningWorktreeId ?? undefined)
   }
+  // A closed popup ends its session and hands the agent back to its opener, not the first listed tab.
+  protected watchPopupClose(webContentsId: number): void {
+    const popup = this.findPopupPage(webContentsId)
+    const contents = popup ? this.getWebContents(webContentsId) : null
+    if (!popup || !contents || this.watchedPopupWebContentsIds.has(webContentsId)) {
+      return
+    }
+    this.watchedPopupWebContentsIds.add(webContentsId)
+    contents.once('destroyed', () => {
+      this.watchedPopupWebContentsIds.delete(webContentsId)
+      const openerWebContentsId = this.browserManager.getGuestWebContentsId(
+        popup.openerBrowserPageId
+      )
+      if (openerWebContentsId !== null) {
+        if (this.activeWebContentsId === webContentsId) {
+          this.activeWebContentsId = openerWebContentsId
+        }
+        for (const [worktreeId, routedWebContentsId] of this.activeWebContentsPerWorktree) {
+          if (routedWebContentsId === webContentsId) {
+            this.activeWebContentsPerWorktree.set(worktreeId, openerWebContentsId)
+          }
+        }
+      }
+      const closeSession = (): void => void this.onPageClosed(popup.browserPageId)
+      // The click that makes a popup close itself reports its own result, not a kill.
+      const running = this.sessions.get(
+        `${ORCA_TAB_SESSION_PREFIX}${popup.browserPageId}`
+      )?.activeProcess
+      if (running) {
+        running.once('close', closeSession)
+      } else {
+        closeSession()
+      }
+    })
+  }
+
   protected async ensureSession(
     sessionName: string,
     browserPageId: string,
@@ -133,6 +169,7 @@ export abstract class AgentBrowserBridgeLifecycle extends AgentBrowserBridgeRawP
         webContentsId,
         activeProcess: null
       })
+      this.watchPopupClose(webContentsId)
     }
 
     // Proxy sockets outlive individual remote requests and must not inherit their revocable scope.

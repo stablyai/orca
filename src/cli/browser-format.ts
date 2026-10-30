@@ -99,7 +99,8 @@ export function formatTabListWithProfiles(
     .map((t) => {
       const marker = t.active ? '* ' : '  '
       const profile = showProfile ? `  [${t.profileLabel ?? t.profileId ?? 'Unknown'}]` : ''
-      return `${marker}[${t.index}] ${t.browserPageId}  ${t.title} — ${t.url}${profile}`
+      const popup = t.openerBrowserPageId ? `  (popup opened by ${t.openerBrowserPageId})` : ''
+      return `${marker}[${t.index}] ${t.browserPageId}  ${t.title} — ${t.url}${profile}${popup}`
     })
     .join('\n')
 }
@@ -125,7 +126,8 @@ export function formatTabShow(result: BrowserTabShowResult | BrowserTabCurrentRe
     `url: ${tab.url}`,
     `active: ${tab.active}`,
     `worktree: ${tab.worktreeId ?? 'unknown'}`,
-    `profile: ${tab.profileLabel ?? tab.profileId ?? 'unknown'}`
+    `profile: ${tab.profileLabel ?? tab.profileId ?? 'unknown'}`,
+    ...(tab.openerBrowserPageId ? [`popup opened by: ${tab.openerBrowserPageId}`] : [])
   ].join('\n')
 }
 

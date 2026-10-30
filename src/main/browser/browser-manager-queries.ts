@@ -5,8 +5,20 @@ import type {
 } from '../../shared/browser-workspace-types'
 import type { ManagedBrowserGuestContext } from './browser-certificate-trust-controller'
 import { redactKagiSessionToken } from '../../shared/browser-url'
-import { safeOrigin } from './browser-manager-types'
+import { safeOrigin, type BrowserPopupPage } from './browser-manager-types'
 import { BrowserManagerRegistration } from './browser-manager-registration'
+import { listBrowserRouteGuestPopups } from './browser-route-guest-popup-ownership'
+
+// WebContents ids are never reused within a run, so a popup page id stays unique while it lives.
+const POPUP_PAGE_ID_PREFIX = 'popup-'
+
+function popupPageWebContentsId(browserPageId: string): number | null {
+  if (!browserPageId.startsWith(POPUP_PAGE_ID_PREFIX)) {
+    return null
+  }
+  const webContentsId = Number(browserPageId.slice(POPUP_PAGE_ID_PREFIX.length))
+  return Number.isInteger(webContentsId) && webContentsId > 0 ? webContentsId : null
+}
 
 export abstract class BrowserManagerQueries extends BrowserManagerRegistration {
   getGuestWebContentsId(browserTabId: string): number | null {
@@ -27,11 +39,53 @@ export abstract class BrowserManagerQueries extends BrowserManagerRegistration {
   }
 
   getWorktreeIdForTab(browserTabId: string): string | undefined {
-    return this.worktreeIdByTabId.get(browserTabId)
+    return this.worktreeIdByTabId.get(this.resolvePageOwnerTabId(browserTabId))
   }
 
   getSessionProfileIdForTab(browserTabId: string): string | null {
-    return this.sessionProfileIdByPageId.get(browserTabId) ?? null
+    return this.sessionProfileIdByPageId.get(this.resolvePageOwnerTabId(browserTabId)) ?? null
+  }
+
+  /** Native popups (OAuth, payment) keep their opener, so agents reach them as pages beside their tab. */
+  getPopupPages(): BrowserPopupPage[] {
+    const popupWebContentsIds = new Set([
+      ...this.popupOwnerContextByGuestId.keys(),
+      ...listBrowserRouteGuestPopups()
+    ])
+    const pages: BrowserPopupPage[] = []
+    for (const webContentsId of popupWebContentsIds) {
+      const openerBrowserPageId = this.resolvePopupOwnerContext(webContentsId)?.browserTabId
+      const popup = webContents.fromId(webContentsId)
+      if (openerBrowserPageId && popup && !popup.isDestroyed()) {
+        pages.push({
+          browserPageId: `${POPUP_PAGE_ID_PREFIX}${webContentsId}`,
+          webContentsId,
+          openerBrowserPageId
+        })
+      }
+    }
+    return pages
+  }
+
+  /** Closes a popup page as the page's own window.close() would; false when it is not a live popup. */
+  closePopupPage(browserPageId: string): boolean {
+    const page = this.getPopupPages().find((popup) => popup.browserPageId === browserPageId)
+    const popup = page ? webContents.fromId(page.webContentsId) : undefined
+    if (!popup || popup.isDestroyed()) {
+      return false
+    }
+    popup.close()
+    return true
+  }
+
+  // A popup page shares its opener tab's workspace and profile.
+  private resolvePageOwnerTabId(browserPageId: string): string {
+    const popupWebContentsId = popupPageWebContentsId(browserPageId)
+    const ownerTabId =
+      popupWebContentsId === null
+        ? null
+        : this.resolvePopupOwnerContext(popupWebContentsId)?.browserTabId
+    return ownerTabId ?? browserPageId
   }
 
   getBrowserPageLoadError(browserPageId: string): BrowserLoadError | null {

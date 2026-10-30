@@ -1,6 +1,7 @@
 import { app } from 'electron'
 import type { ChildProcess } from 'node:child_process'
 import type { BrowserManager } from './browser-manager'
+import type { BrowserPopupPage } from './browser-manager-types'
 import { createAgentBrowserProcessEnvironment } from './agent-browser-process-environment'
 import { resolveAgentBrowserBinary } from './agent-browser-bridge-process'
 import type {
@@ -17,6 +18,7 @@ export abstract class AgentBrowserBridgeState {
   protected readonly heldPersonSelections = new Map<string | undefined, number>()
   // Each page has its own ref map; a worktree's unpinned refs belong to the page that last minted refs.
   protected readonly refPageByWorktree = new Map<string | undefined, string>()
+  protected readonly watchedPopupWebContentsIds = new Set<number>()
   protected readonly sessions = new Map<string, SessionState>()
   protected readonly commandQueues = new Map<string, QueuedCommand[]>()
   protected readonly processingQueues = new Set<string>()
@@ -50,7 +52,17 @@ export abstract class AgentBrowserBridgeState {
   }
 
   protected resolveTabIdSafe(webContentsId: number): string | null {
-    return this.browserManager.getTabIdForWebContentsId(webContentsId)
+    return (
+      this.browserManager.getTabIdForWebContentsId(webContentsId) ??
+      this.findPopupPage(webContentsId)?.browserPageId ??
+      null
+    )
+  }
+
+  protected findPopupPage(webContentsId: number): BrowserPopupPage | undefined {
+    return this.browserManager
+      .getPopupPages()
+      .find((popup) => popup.webContentsId === webContentsId)
   }
 
   // The daemon exits after this much idle time, taking its routes and delta baseline.
