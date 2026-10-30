@@ -47,6 +47,44 @@ export type MockPtyProcess = {
   _simulateExit: (code: number) => void
 }
 
+export function createPtyProcessEventEmitter(): Pick<
+  MockPtyProcess,
+  'onData' | 'onExit' | '_simulateData' | '_simulateExit'
+> {
+  const dataListeners = new Set<(data: string) => void>()
+  const exitListeners = new Set<(event: { exitCode: number }) => void>()
+  return {
+    onData: vi.fn((callback: (data: string) => void) => {
+      dataListeners.add(callback)
+      return {
+        dispose: vi.fn(() => {
+          dataListeners.delete(callback)
+        })
+      }
+    }),
+    onExit: vi.fn((callback: (event: { exitCode: number }) => void) => {
+      exitListeners.add(callback)
+      return {
+        dispose: vi.fn(() => {
+          exitListeners.delete(callback)
+        })
+      }
+    }),
+    _simulateData: (data: string) => {
+      const listeners = [...dataListeners]
+      for (const listener of listeners) {
+        listener(data)
+      }
+    },
+    _simulateExit: (exitCode: number) => {
+      const listeners = [...exitListeners]
+      for (const listener of listeners) {
+        listener({ exitCode })
+      }
+    }
+  }
+}
+
 const CONPTY_MOCK_PRELUDE = '\x1b[c'
 
 /** Windows spawns wait for the DA1 query bundled ConPTY writes once it reads input. */
