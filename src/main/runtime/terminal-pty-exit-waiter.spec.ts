@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from './orca-runtime'
+import { createTranscriptPane, TRANSCRIPT_PANE_PTY_ID } from './agent-transcript-pane-test-harness'
+import { waitForWorkerAgentReady } from './launched-agent-composer-readiness'
 
 export function registerTerminalPtyExitWaiterTests(): void {
   type RuntimeInternals = {
@@ -61,6 +63,63 @@ export function registerTerminalPtyExitWaiterTests(): void {
       expect(listener).toHaveBeenCalledOnce()
       expect(internals(runtime).ptyExitListenersByPtyId.has('pty-1')).toBe(false)
     })
+  })
+
+  describe('idle and fresh readiness waits on an exited terminal', () => {
+    it.each(
+      (['pi', 'claude', 'codex'] as const).flatMap((agent) =>
+        [true, false].map((exitBeforeWait) => ({ agent, exitBeforeWait }))
+      )
+    )(
+      '$agent preserves the exit cause (exit before wait: $exitBeforeWait)',
+      async ({ agent, exitBeforeWait }) => {
+        const { runtime, handle } = await createTranscriptPane({
+          paneTitle: 'shell',
+          foregroundProcess: 'bash',
+          launchAgent: agent,
+          data: ''
+        })
+        vi.useFakeTimers()
+        try {
+          const cause = { kind: 'signaled' as const, signal: 9 }
+          const exit = () =>
+            runtime.onPtyExit(TRANSCRIPT_PANE_PTY_ID, 137, 'inc-1', {
+              providerExitObserved: true,
+              cause
+            })
+          if (exitBeforeWait) {
+            exit()
+          }
+          const waits = [
+            runtime.waitForTerminal(handle, { condition: 'tui-idle', timeoutMs: 100 }),
+            waitForWorkerAgentReady(runtime, handle, {
+              agent,
+              reusesTerminal: false,
+              timeoutMs: 100
+            })
+          ]
+          const outcomes = Promise.all(waits.map((wait) => wait.catch((error: unknown) => error)))
+          if (!exitBeforeWait) {
+            exit()
+          }
+          await vi.advanceTimersByTimeAsync(100)
+          for (const error of await outcomes) {
+            expect(error).toBeInstanceOf(Error)
+            expect(error).toMatchObject({ message: 'terminal_exited', terminalExitCause: cause })
+          }
+          await expect(
+            runtime.waitForTerminal(handle, { condition: 'exit' })
+          ).resolves.toMatchObject({
+            status: 'exited',
+            exitCode: 137,
+            exitCause: cause
+          })
+          expect(runtime['terminalWaiters'].forPty(TRANSCRIPT_PANE_PTY_ID)).toHaveLength(0)
+        } finally {
+          vi.useRealTimers()
+        }
+      }
+    )
   })
 
   // Disconnected without an exit code means lost contact, not process exit; false end events exhaust phone retries and lock its composer.
