@@ -6305,6 +6305,7 @@
           "c4f8e1b72a": "X"
         },
         "SidebarToolbar": {
+          "2e50e4df03": "Token usage",
           "87d0064026": "Workspace board moved to the bottom bar",
           "a30e34eb5c": "Close workspace board",
           "49f62c5665": "Workspace board"
@@ -6733,6 +6734,11 @@
                 "62e71f2d5d": "Create workspace for {{value0}}"
               }
             }
+          }
+        },
+        "usageDashboard": {
+          "UsageDashboardDrawer": {
+            "title": "Token usage"
           }
         },
         "sidebar": {
@@ -9723,6 +9729,11 @@
         },
         "appearance": {
           "search": {
+            "showUsageButton": "Show Token Usage Button",
+            "showUsageButtonDescription": "Show the Token usage button in the sidebar toolbar.",
+            "usage": "usage",
+            "token": "token",
+            "tokens": "tokens",
             "9a115966d3": "Minimize to Tray on Close",
             "4d5b9427b5": "When enabled, closing the window keeps Orca running in the system tray instead of quitting.",
             "468448bba4": "watercolor",

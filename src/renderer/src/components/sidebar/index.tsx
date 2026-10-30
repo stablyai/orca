@@ -10,6 +10,7 @@ import WorktreeList from './WorktreeList'
 import WslMovedProjectsSection from './WslMovedProjectsSection'
 import SidebarToolbar from './SidebarToolbar'
 import WorkspaceKanbanDrawer from './WorkspaceKanbanDrawer'
+import UsageDashboardSidebarHost from '@/components/usage-dashboard/UsageDashboardSidebarHost'
 import type { VirtualizedScrollAnchor } from '@/hooks/useVirtualizedScrollAnchor'
 import { cn } from '@/lib/utils'
 import { FolderPlus, Loader2 } from 'lucide-react'
@@ -61,8 +62,11 @@ function Sidebar({
   const settings = useAppStore((s) => s.settings)
   const sidebarBody = useAppStore((s) => s.sidebarBody ?? 'workspaces')
   const showAgentDashboard = settings?.experimentalAgentDashboardPopout === true
+  const showUsageButton = settings?.showUsageButton !== false
   const agentDashboardDrawerOpen = useAppStore((s) => s.agentDashboardDrawerOpen)
   const setAgentDashboardDrawerOpen = useAppStore((s) => s.setAgentDashboardDrawerOpen)
+  const usageDrawerOpen = useAppStore((s) => s.usageDrawerOpen)
+  const setUsageDrawerOpen = useAppStore((s) => s.setUsageDrawerOpen)
   const agentReadFilter = useAppStore((s) => s.agentsReadFilter)
   const setAgentReadFilter = useAppStore((s) => s.setAgentsReadFilter)
   const agentGroupBy = useAppStore((s) => s.agentsGroupBy)
@@ -135,6 +139,13 @@ function Sidebar({
       setAgentDashboardDrawerOpen(false)
     }
   }, [agentDashboardDrawerOpen, setAgentDashboardDrawerOpen, showAgentDashboard])
+
+  useEffect(() => {
+    // Why: hiding the toolbar button leaves no way to toggle an open drawer back off.
+    if (!showUsageButton && usageDrawerOpen) {
+      setUsageDrawerOpen(false)
+    }
+  }, [setUsageDrawerOpen, showUsageButton, usageDrawerOpen])
 
   const { containerRef, onResizeStart, isResizing } = useSidebarResize<HTMLDivElement>({
     isOpen: sidebarOpen,
@@ -272,6 +283,13 @@ function Sidebar({
           onMenuOpenChange={setWorkspaceBoardMenuOpen}
         />
       ) : null}
+      <UsageDashboardSidebarHost
+        sidebarOpen={sidebarOpen}
+        workspaceBoardOpen={workspaceBoardOpen}
+        closeWorkspaceBoard={closeWorkspaceBoard}
+        leftSidebarStyle={leftSidebarStyle}
+        statusBarVisible={statusBarVisible}
+      />
       {showAgentDashboard ? (
         <React.Suspense fallback={null}>
           <AgentDashboardSidebarHost

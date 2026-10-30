@@ -123,6 +123,26 @@ export const getShowPinnedWorktreesInGroupsEntry = createLocalizedCatalog(
   })
 )
 
+export const getShowUsageButtonEntry = createLocalizedCatalog((): SettingsSearchEntry => ({
+  title: translate(
+    'auto.components.settings.appearance.search.showUsageButton',
+    'Show Token Usage Button'
+  ),
+  description: translate(
+    'auto.components.settings.appearance.search.showUsageButtonDescription',
+    'Show the Token usage button in the sidebar toolbar.'
+  ),
+  keywords: [
+    ...translateSearchKeyword('auto.components.settings.appearance.search.usage', 'usage'),
+    ...translateSearchKeyword('auto.components.settings.appearance.search.token', 'token'),
+    ...translateSearchKeyword('auto.components.settings.appearance.search.tokens', 'tokens'),
+    ...translateSearchKeyword('auto.components.settings.appearance.search.5bff6a2ef0', 'sidebar'),
+    ...translateSearchKeyword('auto.components.settings.appearance.search.6cf5f54ce1', 'button'),
+    ...translateSearchKeyword('auto.components.settings.appearance.search.648eeada79', 'hide'),
+    ...translateSearchKeyword('auto.components.settings.appearance.search.ac79fe4a04', 'show')
+  ]
+}))
+
 export const getSidebarEntries = createLocalizedCatalog((): SettingsSearchEntry[] => [
   {
     title: translate('auto.components.settings.appearance.search.155a1e7438', 'Show Tasks Button'),
@@ -187,6 +207,7 @@ export const getSidebarEntries = createLocalizedCatalog((): SettingsSearchEntry[
       ...translateSearchKeyword('auto.components.settings.appearance.search.839fb1e3ed', 'toolbox')
     ]
   },
+  getShowUsageButtonEntry(),
   getWorkspaceCardLayoutEntry(),
   getLeftSidebarAppearanceEntry(),
   getShowPinnedWorktreesInGroupsEntry()

@@ -1,10 +1,12 @@
 import React from 'react'
-import { Kanban } from 'lucide-react'
+import { ChartColumn, Kanban } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
+import { ContextMenu, ContextMenuTrigger } from '@/components/ui/context-menu'
 import { ScrollToCurrentWorkspaceToolbarButton } from './ScrollToCurrentWorkspaceToolbarButton'
 import { SidebarSettingsHelpMenu } from './SidebarSettingsHelpMenu'
+import { HideSidebarMenu } from './sidebar-nav-controls'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import { hasFeatureInteraction } from '../../../../shared/feature-interactions'
@@ -31,6 +33,13 @@ const SidebarToolbar = React.memo(function SidebarToolbar({
   const hasUsedWorkspaceBoard = useAppStore((state) =>
     hasFeatureInteraction(state.featureInteractions, 'workspace-board')
   )
+  const showUsageButton = useAppStore((state) => state.settings?.showUsageButton !== false)
+  const usageDrawerOpen = useAppStore((state) => state.usageDrawerOpen)
+  const setUsageDrawerOpen = useAppStore((state) => state.setUsageDrawerOpen)
+  const updateSettings = useAppStore((state) => state.updateSettings)
+  const hideUsageButton = React.useCallback(() => {
+    void updateSettings({ showUsageButton: false })
+  }, [updateSettings])
 
   React.useEffect(() => {
     if (!persistedUIReady) {
@@ -68,6 +77,34 @@ const SidebarToolbar = React.memo(function SidebarToolbar({
     <div className="mt-auto shrink-0">
       <div className="flex items-center justify-between border-t border-worktree-sidebar-border px-2 py-1.5">
         <div className="flex min-w-0 items-center gap-1">
+          {showUsageButton ? (
+            <ContextMenu>
+              <Tooltip>
+                <ContextMenuTrigger asChild>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon-xs"
+                      type="button"
+                      aria-label={translate(
+                        'auto.components.sidebar.SidebarToolbar.2e50e4df03',
+                        'Token usage'
+                      )}
+                      aria-pressed={usageDrawerOpen}
+                      onClick={() => setUsageDrawerOpen(!usageDrawerOpen)}
+                      className="text-muted-foreground"
+                    >
+                      <ChartColumn className="size-3.5" />
+                    </Button>
+                  </TooltipTrigger>
+                </ContextMenuTrigger>
+                <TooltipContent side="top" sideOffset={4}>
+                  {translate('auto.components.sidebar.SidebarToolbar.2e50e4df03', 'Token usage')}
+                </TooltipContent>
+              </Tooltip>
+              <HideSidebarMenu onHide={hideUsageButton} />
+            </ContextMenu>
+          ) : null}
           <SidebarSettingsHelpMenu />
         </div>
         <div className="flex items-center gap-1">
