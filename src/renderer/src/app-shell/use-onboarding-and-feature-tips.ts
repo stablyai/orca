@@ -14,7 +14,6 @@ import { useAppStore } from '../store'
 import { isWebClientLocation } from '../lib/web-client-location'
 import type { OnboardingState } from '../../../shared/onboarding-state-types'
 import { isInNativeChatUpgradeTipAudience } from '../../../shared/native-chat/native-chat-upgrade-tip-audience'
-import { isMacos12SupportNoticeEligible } from '../../../shared/macos-12-support-notice/upgrade-support'
 
 export type OnboardingGate = ReturnType<typeof useOnboardingAndFeatureTips>
 
@@ -120,10 +119,6 @@ export function useOnboardingAndFeatureTips() {
 
   useEffect(() => {
     const featureTipsDecision = getFeatureTipsAppOpenDecision({
-      macos12SupportNoticeEligible: isMacos12SupportNoticeEligible(
-        window.api.platform.get(),
-        isWebClientLocation()
-      ),
       activeModal,
       cliInstalled: featureTipCliInstalled,
       featureTipsSeenIds,

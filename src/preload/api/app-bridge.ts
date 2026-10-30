@@ -13,7 +13,6 @@ import { awaitBeforeUnloadCheckpoint, startupDiagnosticsEnabled } from '../prelo
 import type { PreloadApi } from '../api-types'
 
 export const appApi = {
-  getMacosUpgradeSupport: () => ipcRenderer.invoke('app:getMacosUpgradeSupport'),
   getSystemLanguageDetection: (browserPreferences?: readonly string[]) =>
     ipcRenderer.invoke('app:getSystemLanguageDetection', browserPreferences),
   isProfileStateSaveDelayed: (): Promise<boolean> =>

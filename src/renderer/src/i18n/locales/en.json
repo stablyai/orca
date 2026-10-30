@@ -23141,26 +23141,5 @@
       "needsPermission": "Agent needs permission",
       "statusStale": "Agent status is stale"
     }
-  },
-  "macosSupport": {
-    "title": "A heads-up for your Mac",
-    "description": "A future version of Orca will require macOS 13 or later.",
-    "checking": "Checking whether this Mac can upgrade…",
-    "upgradeDescription": "Your Mac can upgrade. Update macOS to keep receiving Orca updates.",
-    "omarchyDescription": "Apple doesn’t support macOS 13 on this Mac. Orca also runs on Omarchy, a Linux desktop.",
-    "unknownDescription": "We couldn’t confirm an upgrade for this Mac. Apple’s compatibility guide can help.",
-    "omarchyBackup": "Installing Omarchy replaces macOS. Back up your files first.",
-    "whyTitle": "Why is this changing?",
-    "whyIntro": "We’re updating Electron, the foundation Orca runs on, to bring:",
-    "whySecurity": "Ongoing security fixes from Electron and Chromium.",
-    "whyPerformance": "Faster startup and more efficient native API calls.",
-    "whySystemApis": "Support for current macOS notification APIs and secure Keychain storage.",
-    "whyRequirement": "That newer foundation requires macOS 13 or later.",
-    "stillWorks": "This Orca version will keep working for now.",
-    "dismiss": "Got it",
-    "checkingAction": "Checking your Mac…",
-    "updateAction": "How to update macOS",
-    "omarchyAction": "Explore Omarchy",
-    "checkAction": "Check compatibility"
   }
 }

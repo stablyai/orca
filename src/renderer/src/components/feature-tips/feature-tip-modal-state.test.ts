@@ -18,22 +18,6 @@ function makeSettings(
 }
 
 describe('feature tip modal state', () => {
-  it('keeps a shown Monterey notice mounted, but refuses it outside the local audience', () => {
-    const input = {
-      cliInstalled: true,
-      modalData: { tipId: 'macos-12-support' },
-      seenTipIds: ['macos-12-support'] as const,
-      inNativeChatUpgradeTipAudience: false,
-      featureInteractions: {},
-      settings: makeSettings(),
-      webClient: false,
-      macos12SupportNoticeEligible: true
-    }
-    expect(getFeatureTipForModal(input)?.id).toBe('macos-12-support')
-    expect(getFeatureTipForModal({ ...input, macos12SupportNoticeEligible: false })).toBeNull()
-    expect(getFeatureTipForModal({ ...input, webClient: true })).toBeNull()
-  })
-
   it('keeps rendering the opened tip after app open has marked it seen', () => {
     const tip = getFeatureTipForModal({
       cliInstalled: false,
