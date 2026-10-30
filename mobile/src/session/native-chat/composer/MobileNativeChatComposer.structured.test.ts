@@ -296,7 +296,7 @@ describe('MobileNativeChatComposer on a structured chat', () => {
           agent,
           draftScopeKey: scope,
           onChangeText: drafts.setComposerText,
-          onSend: bridge.send,
+          onSend: (text: string) => bridge.send(text),
           sendSurfaceId: scope,
           getSendCompletionGeneration: () => 0,
           getComposerEditGeneration: () => readMobileNativeChatDraftEditGeneration(scope),

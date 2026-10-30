@@ -7,7 +7,8 @@ import {
 import {
   HOST_TEST_NOW,
   HOST_TEST_SESSION as SESSION,
-  hostTestOperationId
+  hostTestOperationId,
+  hostTestMessage
 } from '../../../native-chat/agent-session-wire/structured-agent-session-host-test-data'
 import { setStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
 import { sendStructuredAgentSessionForClient } from './structured-agent-session-send-compatibility'
@@ -17,7 +18,6 @@ import {
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
 } from '../../../../shared/protocol-version'
 import type { RpcContext } from '../core'
-import { hostTestMessage } from '../../../native-chat/agent-session-wire/structured-agent-session-host-test-data'
 import { agentSessionMessagePayload } from '../../../../shared/structured-agent-session-send-mutation'
 
 afterEach(() => {
