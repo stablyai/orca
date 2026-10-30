@@ -26,6 +26,22 @@ export type WorktreeCreationPhase = 'preparing' | 'provisioning-vm' | 'fetching'
 
 export type WorktreeCreationProgressMode = 'stepped' | 'indeterminate'
 
+/** One post-create agent launch on the multi-agent path. Carries only
+ * serializable launch intent (no runtime handles) so Retry can replay it. */
+export type AgentLaunchListEntry = {
+  agent: TuiAgent
+  /** CLI flags appended to the agent command; flags force the terminal surface. */
+  agentArgs?: string | null
+  /** Saved launch choice: flags on terminals, seeded settings on chats. */
+  sessionOptions?: Record<string, string>
+  /** Lets a flag `agentArgs` sets win over the inherited saved choice. */
+  sessionOptionsYieldToAgentArgs?: true
+  /** Per-entry surface choice; ignored when `agentArgs` forces a terminal. */
+  requestedSurface?: 'chat' | 'terminal'
+  /** Custom tab label. */
+  displayName?: string
+}
+
 /** Serializable creation intent, including any script checks deferred until
  * after the composer closes. Retained by the pending panel for Retry. */
 export type WorktreeCreationRequest = {
@@ -80,6 +96,8 @@ export type WorktreeCreationRequest = {
   linkedPR?: number
   pushTarget?: GitPushTarget
   agent: TuiAgent | null
+  /** Post-create agent launches; replayed on Retry. Empty/absent = legacy single-agent flow. */
+  agentLaunches?: AgentLaunchListEntry[]
   /** Renderer-owned route decision captured at submit time and reused on retry. */
   agentLaunchRoute?: AgentLaunchRoute
   linkedLinearIssue?: string
@@ -134,6 +152,27 @@ export type PendingWorktreeCreation = {
   // Local git checkout meter; absent when git emits none or creation runs over SSH/runtime.
   checkoutProgress?: WorktreeCheckoutProgress
   request: WorktreeCreationRequest
+}
+
+/** Submit through `agentLaunches` instead of the legacy `agent` path when the
+ * list has a second row or a row carries flags, session options or a custom
+ * name. A surface choice alone stays legacy, and blank values do not count. */
+export function usesAgentLaunchList(
+  request: Pick<WorktreeCreationRequest, 'agent' | 'agentLaunches'>
+): boolean {
+  const launches = request.agentLaunches
+  if (!launches || launches.length === 0) {
+    return false
+  }
+  return (
+    launches.length > 1 ||
+    launches.some(
+      (entry) =>
+        Boolean(entry.agentArgs?.trim()) ||
+        Boolean(entry.displayName?.trim()) ||
+        (entry.sessionOptions !== undefined && Object.keys(entry.sessionOptions).length > 0)
+    )
+  )
 }
 
 export function findPendingWorktreeCreationId(

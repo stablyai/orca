@@ -3,6 +3,7 @@ import {
   findPendingLinkedWorkItemCreationId,
   findPendingWorktreeCreationId,
   type PendingWorktreeCreation,
+  usesAgentLaunchList,
   type WorktreeCreationRequest
 } from './pending-worktree-creation'
 
@@ -103,5 +104,84 @@ describe('findPendingLinkedWorkItemCreationId', () => {
         })
       )
     ).toBeNull()
+  })
+})
+
+describe('usesAgentLaunchList', () => {
+  it('keeps requests without a launch list on the legacy path', () => {
+    expect(usesAgentLaunchList({ agent: 'codex' })).toBe(false)
+    expect(usesAgentLaunchList({ agent: null })).toBe(false)
+  })
+
+  it('keeps a single bare entry on the legacy path', () => {
+    expect(usesAgentLaunchList({ agent: null, agentLaunches: [{ agent: 'codex' }] })).toBe(false)
+  })
+
+  it('switches to the list when a second row exists', () => {
+    expect(
+      usesAgentLaunchList({
+        agent: null,
+        agentLaunches: [{ agent: 'codex' }, { agent: 'codex' }]
+      })
+    ).toBe(true)
+  })
+
+  it('switches to the list for a single entry with CLI args', () => {
+    expect(
+      usesAgentLaunchList({
+        agent: null,
+        agentLaunches: [{ agent: 'codex', agentArgs: '--profile fast' }]
+      })
+    ).toBe(true)
+  })
+
+  it('switches to the list for a single entry with a custom name', () => {
+    expect(
+      usesAgentLaunchList({
+        agent: null,
+        agentLaunches: [{ agent: 'codex', displayName: 'worker' }]
+      })
+    ).toBe(true)
+  })
+
+  it('switches to the list for a single entry with session options', () => {
+    expect(
+      usesAgentLaunchList({
+        agent: null,
+        agentLaunches: [{ agent: 'codex', sessionOptions: { model: 'x' } }]
+      })
+    ).toBe(true)
+  })
+
+  it('does not switch for a surface choice alone or blank entry values', () => {
+    expect(
+      usesAgentLaunchList({
+        agent: null,
+        agentLaunches: [{ agent: 'codex', requestedSurface: 'chat' }]
+      })
+    ).toBe(false)
+    expect(
+      usesAgentLaunchList({
+        agent: null,
+        agentLaunches: [{ agent: 'codex', agentArgs: '  ', displayName: '', sessionOptions: {} }]
+      })
+    ).toBe(false)
+  })
+
+  it('round-trips agentLaunches through JSON', () => {
+    const launches = [
+      {
+        agent: 'codex' as const,
+        agentArgs: '--profile fast',
+        sessionOptions: { model: 'gpt-5' },
+        sessionOptionsYieldToAgentArgs: true as const,
+        requestedSurface: 'terminal' as const,
+        displayName: 'worker'
+      },
+      { agent: 'claude' as const, displayName: 'reviewer' }
+    ]
+    const full = request({ agentLaunches: launches })
+
+    expect(JSON.parse(JSON.stringify(full)).agentLaunches).toEqual(launches)
   })
 })
