@@ -8,9 +8,10 @@ type ConsentResult =
   | { status: 'retired' }
 export type ConsentPreparation = { readonly result: Promise<ConsentResult>; release(): void }
 type Cell = { current?: () => boolean; deliver?: (result: ConsentResult) => void }
+type ConsentPhase = { slot: object; selected?: Cell }
 const rootSlot = {}
 const waiting = new Map<object, Cell>()
-let physical: { slot: object; selected?: Cell } | undefined
+let physical: ConsentPhase | undefined
 
 function clear(cell: Cell): void {
   cell.current = undefined
@@ -27,10 +28,7 @@ function retire(slot: object, cell: Cell): void {
   clear(cell)
   deliver?.({ status: 'retired' })
 }
-function finish(
-  phase: NonNullable<typeof physical>,
-  preference: PushNotificationsPreference
-): void {
+function finish(phase: ConsentPhase, preference: PushNotificationsPreference): void {
   if (physical !== phase) {
     return
   }
@@ -55,7 +53,7 @@ function pump(): void {
       continue
     }
     waiting.delete(slot)
-    const phase: NonNullable<typeof physical> = { slot, selected: cell }
+    const phase: ConsentPhase = { slot, selected: cell }
     physical = phase
     void readPushNotificationsPreference().then(
       (preference) => finish(phase, preference),
