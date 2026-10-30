@@ -28,18 +28,43 @@ const CORNER_RADIUS_KEYS = [
   'borderBottomRightRadius'
 ] as const
 
-// A continuous curve squares off circles and pills, so those keep the circular curve.
-function isCircleOrPill(style: { borderRadius?: unknown; width?: unknown; height?: unknown }) {
+const BORDER_WIDTH_KEYS = [
+  'borderWidth',
+  'borderTopWidth',
+  'borderRightWidth',
+  'borderBottomWidth',
+  'borderLeftWidth'
+] as const
+
+type CornerStyle = {
+  borderRadius?: unknown
+  width?: unknown
+  height?: unknown
+  overflow?: unknown
+} & Partial<Record<(typeof BORDER_WIDTH_KEYS)[number], unknown>>
+
+// Styles that must keep the circular curve: a continuous curve squares off circles and pills, and
+// React Native strokes an unclipped visible border on a circular path while filling the background
+// with the continuous one, so their edges would not line up.
+function keepsCircularCurve(style: CornerStyle): boolean {
   const { borderRadius, width, height } = style
-  if (typeof borderRadius !== 'number') {
-    return false
-  }
-  return (
-    borderRadius >= radii.pill ||
-    (typeof width === 'number' &&
+  if (typeof borderRadius === 'number') {
+    if (borderRadius >= radii.pill) {
+      return true
+    }
+    if (
+      typeof width === 'number' &&
       typeof height === 'number' &&
-      borderRadius * 2 >= Math.min(width, height))
-  )
+      borderRadius * 2 >= Math.min(width, height)
+    ) {
+      return true
+    }
+  }
+  const hasVisibleBorder = BORDER_WIDTH_KEYS.some((key) => {
+    const value = style[key]
+    return typeof value === 'number' && value > 0
+  })
+  return hasVisibleBorder && style.overflow !== 'hidden'
 }
 
 // Every rounded style asks for Apple's continuous corner curve; iOS draws it, Android and the web ignore the key.
@@ -51,7 +76,7 @@ function withContinuousCorners<T extends StyleSheet.NamedStyles<T>>(styles: T): 
       typeof style === 'object' &&
       !('borderCurve' in style) &&
       CORNER_RADIUS_KEYS.some((key) => key in style) &&
-      !isCircleOrPill(style)
+      !keepsCircularCurve(style)
     ) {
       Object.assign(style, { borderCurve: 'continuous' })
     }
