@@ -106,6 +106,7 @@ function buildCandidateFromStart(
   let previousRowCanContinue = true
   let startRowFilled = false
   let isWrappedTableCell = false
+  let continuationLeftCells: string | null = null
   const rows: WrappedLogicalLine['rows'] = []
 
   for (let rowY = startY; rowY < startY + TERMINAL_HTTP_URL_MAX_HARD_WRAPPED_ROWS; rowY++) {
@@ -130,6 +131,11 @@ function buildCandidateFromStart(
     }
     const fragmentStartColumn = translated.columns[fragmentStart]
     if (fragmentStartColumn === undefined) {
+      break
+    }
+    const leftCells = translated.text.slice(0, fragmentStart - framedPrefix.length)
+    // A wrapped table cell shows the same cells to its left on every continuation row; a change starts a new row.
+    if (rowY > startY + 1 && outerFrameColumn !== null && leftCells !== continuationLeftCells) {
       break
     }
 
@@ -172,7 +178,6 @@ function buildCandidateFromStart(
     const contentWidth = currentRightFrameColumn - fragmentStartColumn
     const fragmentWidth = translated.columns[fragmentEnd]! - fragmentStartColumn
     const fillsRow = contentWidth > 0 && fragmentWidth / contentWidth >= MIN_HARD_WRAP_FILL_RATIO
-    const leftCells = translated.text.slice(0, fragmentStart - framedPrefix.length)
     if (rowY === startY) {
       const rightCells = translated.text.slice(currentRightFrameIndex + 1)
       startRowFilled = fillsRow
@@ -182,6 +187,7 @@ function buildCandidateFromStart(
         (VERTICAL_LAYOUT_FRAME_PATTERN.test(rightCells) &&
           NON_LAYOUT_SUFFIX_PATTERN.test(rightCells))
     } else {
+      continuationLeftCells = leftCells
       isWrappedTableCell &&= !NON_LAYOUT_SUFFIX_PATTERN.test(leftCells)
     }
     previousRowCanContinue = HARD_WRAP_CONTINUATION_SUFFIX_PATTERN.test(fragment) || fillsRow

@@ -195,6 +195,18 @@ describe('hard-wrapped terminal HTTP candidate bounds', () => {
     ).toEqual([])
   })
 
+  it('ends a wrapped cell URL at the next row that fills a cell left of it again', () => {
+    const rows = [
+      '│ doc │ https://example.com/aaaaaaaaaa │',
+      '│     │ bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb │',
+      '│ doc │ README.md                      │'
+    ].map(bufferLineWithCellColumns)
+
+    expect(buildHardWrappedHttpLogicalLineCandidates({ getLine: (y) => rows[y] }, 2)[0]?.text).toBe(
+      `https://example.com/aaaaaaaaaa${'b'.repeat(30)}`
+    )
+  })
+
   it('does not join adjacent cells from a shared framed table', () => {
     const rows = [
       '│ Label  │ https://example.com/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa │',
