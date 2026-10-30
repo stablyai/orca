@@ -224,6 +224,59 @@ describe('a staged save', () => {
     await expect(staged.begin('conn-3', target('d'), 1)).rejects.toThrow('staged_save_limit')
   })
 
+  it('keeps capacity bounded when begins arrive together', async () => {
+    const staged = saves({
+      maxBytesPerSave: 10,
+      maxSavesPerConnection: 2,
+      maxBytesPerConnection: 15,
+      maxSavesPerHost: 3
+    })
+    const target = (name: string) => at(join(root, name))
+    const results = await Promise.allSettled([
+      staged.begin('conn-1', target('a'), 10),
+      staged.begin('conn-1', target('b'), 5),
+      staged.begin('conn-2', target('c'), 1),
+      staged.begin('conn-3', target('d'), 1),
+      staged.begin('conn-1', target('e'), 1)
+    ])
+
+    expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(3)
+    expect(results.filter((result) => result.status === 'rejected')).toHaveLength(2)
+    expect(temps()).toHaveLength(3)
+    await staged.abortConnection('conn-1')
+    await staged.abortConnection('conn-2')
+  })
+
+  it('keeps a committing save charged until its guarded write finishes', async () => {
+    const staged = saves({ maxSavesPerConnection: 3, maxSavesPerHost: 3 })
+    const target = join(root, 'commit.txt')
+    const first = await staged.begin('conn-1', at(target), 3)
+    await staged.append('conn-1', first.saveId, 0, Buffer.from('abc'))
+    let release: (() => void) | undefined
+    const committing = staged.commit(
+      'conn-1',
+      first.saveId,
+      undefined,
+      () =>
+        new Promise<string>((resolve) => {
+          release = () => resolve(target)
+        })
+    )
+    await vi.waitFor(() => expect(release).toBeDefined())
+
+    const results = await Promise.allSettled([
+      staged.begin('conn-1', at(join(root, 'second.txt')), 1),
+      staged.begin('conn-1', at(join(root, 'third.txt')), 1),
+      staged.begin('conn-1', at(join(root, 'fourth.txt')), 1)
+    ])
+    expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(2)
+    expect(results.filter((result) => result.status === 'rejected')).toHaveLength(1)
+
+    release!()
+    await committing
+    await staged.abortConnection('conn-1')
+  })
+
   it('drops a save no chunk touched within the idle window, with its temp', async () => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
     const staged = saves({ idleMs: 1_000 })
