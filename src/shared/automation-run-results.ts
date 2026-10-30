@@ -2,11 +2,11 @@ import type { AutomationRun } from './automations-types'
 import type { AutomationRunOutput, AutomationRunWarning } from './automation-run-result-types'
 
 // Runs live in the whole-store blob, so every reported field is bounded.
-export const MAX_AUTOMATION_RUN_WARNINGS = 20
+export const MAX_AUTOMATION_RUN_WARNINGS = 10
 export const MAX_AUTOMATION_RUN_OUTPUTS = 10
 export const MAX_AUTOMATION_RUN_WARNING_KEY_LENGTH = 100
 export const MAX_AUTOMATION_RUN_MESSAGE_LENGTH = 1_000
-export const MAX_AUTOMATION_RUN_EVIDENCE_LENGTH = 4_096
+export const MAX_AUTOMATION_RUN_EVIDENCE_LENGTH = 2_048
 export const MAX_AUTOMATION_RUN_OUTPUT_TITLE_LENGTH = 200
 /** Fits the CLI/SSH control frame and the mobile bridge frame in one request. */
 export const MAX_AUTOMATION_RUN_OUTPUT_BYTES = 600 * 1024
@@ -81,6 +81,18 @@ export function applyAutomationRunReport(
       }
     }
     case 'failure':
+      // A run that already finished cleanly has no later completion to convert.
+      if (run.status === 'completed') {
+        return {
+          ok: true,
+          run: {
+            ...run,
+            status: 'dispatch_failed',
+            error: report.message,
+            reportedFailure: { message: report.message, reportedAt: now }
+          }
+        }
+      }
       return {
         ok: true,
         run: { ...run, reportedFailure: { message: report.message, reportedAt: now } }
@@ -93,10 +105,6 @@ export function applyAutomationRunReport(
       return { ok: true, run: { ...run, outputs: [...outputs, report.output] } }
     }
   }
-}
-
-export function hasActiveAutomationRunWarnings(run: Pick<AutomationRun, 'warnings'>): boolean {
-  return (run.warnings ?? []).some((warning) => warning.resolvedAt === null)
 }
 
 /** Methods whose caller is resolved from the CLI's injected session evidence. */

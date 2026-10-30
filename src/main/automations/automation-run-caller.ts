@@ -6,6 +6,9 @@ import { isEquivalentPaneKey } from '../runtime/orchestration/db/pane-key-match'
 export const NOT_IN_AUTOMATION_RUN_MESSAGE =
   'Not running inside an Orca automation run on this host. Run this command from the automation agent.'
 
+export const REMOTE_TERMINAL_UNSUPPORTED_MESSAGE =
+  'Reporting automation results from WSL or SSH terminals is not supported yet.'
+
 export class AutomationRunCallerError extends Error {
   readonly code = 'automation_run_caller_unknown'
 }

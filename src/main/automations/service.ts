@@ -30,6 +30,7 @@ import {
 } from './run-completion-watcher'
 import { createAutomationRunWriter, type AutomationRunWriter } from './automation-run-writer'
 import { reportAutomationScheduleDrift } from './schedule-drift-report'
+import { sweepAutomationRunOutputs } from './automation-run-output-files'
 import {
   describeScheduledTickRefusal,
   missedBeyondGrace,
@@ -125,6 +126,8 @@ export class AutomationService {
     }, this.tickMs)
     this.completionWatcher?.reconcileRetainedRuns(this.store.listAutomationRuns())
     reportAutomationScheduleDrift(this.store.listAutomations())
+    // Pruned runs and deleted automations leave their attached files behind.
+    sweepAutomationRunOutputs(this.store.listAutomationRuns())
     // Headless hosts need startup catch-up without a renderer-ready notification.
     if (this.rendererReady || this.headlessDispatcher) {
       // Serve adopts PTYs and publishes its graph before start().

@@ -16,11 +16,11 @@ import {
 import {
   AutomationRunCallerError,
   NOT_IN_AUTOMATION_RUN_MESSAGE,
+  REMOTE_TERMINAL_UNSUPPORTED_MESSAGE,
   resolveCallerAutomationRun,
   terminalCallerSession,
   type AutomationRunCallerSession
 } from '../../../automations/automation-run-caller'
-import { getAppEnvironment } from '../../../../shared/app-environment'
 import {
   automationRunOutputsRoot,
   readAutomationRunOutputFile,
@@ -35,10 +35,6 @@ const REFUSAL_COPY = {
   output_limit: `This run already has ${MAX_AUTOMATION_RUN_OUTPUTS} attached files.`,
   unknown_warning: 'No warning with that --key was reported in this run.'
 } as const
-
-function outputsRoot(): string {
-  return automationRunOutputsRoot(getAppEnvironment().getPath('userData'))
-}
 
 async function callerSession(
   method: string,
@@ -56,6 +52,9 @@ async function callerSession(
       method
     )
     return { kind: 'chat', sessionIds: [record.sessionId, evidence.agentSessionId] }
+  }
+  if (evidence?.host) {
+    throw new AutomationRunCallerError(REMOTE_TERMINAL_UNSUPPORTED_MESSAGE)
   }
   const terminal = terminalCallerSession(context.runtime, evidence)
   if (!terminal) {
@@ -128,7 +127,7 @@ export const AUTOMATION_RUN_RESULT_METHODS = [
           `The file is ${Math.ceil(bytes / 1024)} KiB; attached files are limited to ${MAX_AUTOMATION_RUN_OUTPUT_BYTES / 1024} KiB.`
         )
       }
-      const root = outputsRoot()
+      const root = automationRunOutputsRoot()
       const output = {
         id: randomUUID(),
         title: params.title,
@@ -145,7 +144,7 @@ export const AUTOMATION_RUN_RESULT_METHODS = [
         removeAutomationRunOutputFile(root, run, output)
         throw error
       }
-      sweepAutomationRunOutputs(root, context.runtime.listAutomationRuns())
+      sweepAutomationRunOutputs(context.runtime.listAutomationRuns(), root)
       return { runId: run.id, outputId: output.id }
     }
   }),
@@ -156,7 +155,8 @@ export const AUTOMATION_RUN_RESULT_METHODS = [
     handler: (params, { runtime }) => {
       const run = runtime.listAutomationRuns().find((entry) => entry.id === params.runId)
       const output = run?.outputs?.find((entry) => entry.id === params.outputId)
-      const content = run && output ? readAutomationRunOutputFile(outputsRoot(), run, output) : null
+      const content =
+        run && output ? readAutomationRunOutputFile(automationRunOutputsRoot(), run, output) : null
       if (!output || content === null) {
         throw new Error('This output is no longer available.')
       }

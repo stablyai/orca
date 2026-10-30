@@ -3,10 +3,11 @@ import { join } from 'node:path'
 import type { AutomationRun } from '../../shared/automations-types'
 import type { AutomationRunOutput } from '../../shared/automation-run-result-types'
 import { writeFileAtomically } from '../codex-accounts/fs-utils'
+import { getAppEnvironment, hasAppEnvironment } from '../../shared/app-environment'
 
 // Kept beside the profile, not the workspace, so outputs outlive deleted workspaces.
-export function automationRunOutputsRoot(userDataPath: string): string {
-  return join(userDataPath, 'automation-run-outputs')
+export function automationRunOutputsRoot(): string {
+  return join(getAppEnvironment().getPath('userData'), 'automation-run-outputs')
 }
 
 function outputPath(
@@ -63,7 +64,13 @@ function listDirectories(path: string): string[] {
 }
 
 /** Delete output folders whose run was pruned or whose automation was deleted. */
-export function sweepAutomationRunOutputs(root: string, runs: readonly AutomationRun[]): void {
+export function sweepAutomationRunOutputs(
+  runs: readonly AutomationRun[],
+  root = hasAppEnvironment() ? automationRunOutputsRoot() : null
+): void {
+  if (!root) {
+    return
+  }
   const retained = new Set(runs.map((run) => `${run.automationId}/${run.id}`))
   for (const automationId of listDirectories(root)) {
     const runIds = listDirectories(join(root, automationId))

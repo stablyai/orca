@@ -3,7 +3,6 @@ import type { AutomationRun } from './automations-types'
 import {
   MAX_AUTOMATION_RUN_WARNINGS,
   applyAutomationRunReport,
-  hasActiveAutomationRunWarnings,
   type AutomationRunReport
 } from './automation-run-results'
 
@@ -41,11 +40,9 @@ describe('applyAutomationRunReport', () => {
     let current = apply(run, warning('linear'), 1)
     current = apply(current, { kind: 'resolve-warning', key: 'linear', resolution: 'retry' }, 2)
 
-    expect(hasActiveAutomationRunWarnings(current)).toBe(false)
     expect(current.warnings?.[0]).toMatchObject({ resolvedAt: 2, resolution: 'retry' })
 
     current = apply(current, warning('linear'), 3)
-    expect(hasActiveAutomationRunWarnings(current)).toBe(true)
     expect(current.warnings?.[0]).toMatchObject({ resolvedAt: null, reportCount: 2 })
   })
 
@@ -63,5 +60,15 @@ describe('applyAutomationRunReport', () => {
     expect(
       applyAutomationRunReport(run, { kind: 'resolve-warning', key: 'nope', resolution: null }, 1)
     ).toEqual({ ok: false, reason: 'unknown_warning' })
+  })
+
+  it('fails a run that already finished cleanly instead of waiting for a completion', () => {
+    const finished = { ...run, status: 'completed', error: null } as AutomationRun
+
+    expect(apply(finished, { kind: 'failure', message: 'No access' }, 5)).toMatchObject({
+      status: 'dispatch_failed',
+      error: 'No access',
+      reportedFailure: { message: 'No access', reportedAt: 5 }
+    })
   })
 })

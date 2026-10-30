@@ -4,7 +4,7 @@ import { getOptionalStringFlag, getRequiredStringFlag } from '../flags'
 import { printResult } from '../format'
 import { RuntimeClientError, type RuntimeClient } from '../runtime-client'
 import { readArtifactFileWithinLimit } from '../../shared/artifact-file-read'
-import { readFile } from 'node:fs/promises'
+import { open } from 'node:fs/promises'
 import {
   MAX_AUTOMATION_RUN_EVIDENCE_LENGTH,
   MAX_AUTOMATION_RUN_OUTPUT_BYTES
@@ -47,14 +47,25 @@ async function readEvidence(
   if (getOptionalStringFlag(flags, 'evidence')) {
     throw new RuntimeClientError('invalid_argument', 'Use --evidence or --evidence-file, not both.')
   }
-  // The host bounds evidence; keep the tail, where errors usually end.
-  const text = await readFile(resolve(cwd, path), 'utf8').catch(() => {
+  // Keep only the tail, where errors usually end; logs can be far larger than the bound.
+  const handle = await open(resolve(cwd, path), 'r').catch(() => null)
+  const size = handle ? await handle.stat().then((stats) => (stats.isFile() ? stats.size : -1)) : -1
+  if (!handle || size < 0) {
+    await handle?.close()
     throw new RuntimeClientError(
       'invalid_argument',
       'Evidence file was not found or is not a file.'
     )
-  })
-  return text.slice(-MAX_AUTOMATION_RUN_EVIDENCE_LENGTH)
+  }
+  try {
+    const length = Math.min(size, MAX_AUTOMATION_RUN_EVIDENCE_LENGTH)
+    const buffer = Buffer.alloc(length)
+    await handle.read(buffer, 0, length, size - length)
+    // A cut multi-byte character decodes as U+FFFD; drop it rather than send it.
+    return buffer.toString('utf8').replace(/^\uFFFD+/, '')
+  } finally {
+    await handle.close()
+  }
 }
 
 export const AUTOMATION_RUN_RESULT_HANDLERS: Record<string, CommandHandler> = {
