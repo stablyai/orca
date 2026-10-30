@@ -20220,7 +20220,7 @@
     "chatUiHere": {
       "title": "Die Chat-Oberfläche ist da",
       "offIntro": "Agenten können jetzt als Chat geöffnet werden, mit formatierten Nachrichten, Grafiken und Bildern.",
-      "offTerminal": "Lieber das Terminal? Es wird weiterhin voll unterstützt und laufend verbessert. Deine Agenten öffnen sich dort, bis du Chat wählst.",
+      "offTerminal": "Lieber das Terminal? Es wird weiterhin voll unterstützt. Deine Agenten öffnen sich dort, bis du Chat wählst.",
       "onIntro": "Die Chat-Oberfläche ist nicht mehr experimentell und jetzt fester Teil von Orca. Deine Agenten öffnen sich weiterhin als Chats, mit formatierten Nachrichten, Grafiken und Bildern.",
       "onTerminal": "Auch das Terminal wird weiterhin voll unterstützt. Jeder Agent lässt sich jederzeit zurückstellen.",
       "changeInSettings": "Jederzeit unter <link>Einstellungen → Agenten</link> ändern.",

@@ -20203,7 +20203,7 @@
     "chatUiHere": {
       "title": "Sohbet arayüzü geldi",
       "offIntro": "Ajanlar artık zengin mesajlar, görseller ve resimlerle sohbet olarak açılabilir.",
-      "offTerminal": "Terminali mi tercih ediyorsunuz? Terminal tam olarak desteklenmeye ve gelişmeye devam ediyor. Sohbeti seçene kadar ajanlarınız orada açılmaya devam eder.",
+      "offTerminal": "Terminali mi tercih ediyorsunuz? Terminal tam olarak desteklenmeye devam ediyor. Sohbeti seçene kadar ajanlarınız orada açılmaya devam eder.",
       "onIntro": "Sohbet arayüzü artık deneysel değil ve Orca’nın bir parçası. Ajanlarınız zengin mesajlar, görseller ve resimlerle sohbet olarak açılmaya devam ediyor.",
       "onTerminal": "Terminal de tam olarak desteklenmeye devam ediyor. İstediğiniz ajanı dilediğiniz zaman geri alabilirsiniz.",
       "changeInSettings": "İstediğiniz zaman <link>Ayarlar → Ajanlar</link> bölümünden değiştirin.",

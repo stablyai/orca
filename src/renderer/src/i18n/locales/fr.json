@@ -20605,7 +20605,7 @@
     "chatUiHere": {
       "title": "L'interface de chat est arrivée",
       "offIntro": "Les agents peuvent désormais s'ouvrir sous forme de chat, avec des messages enrichis, des visuels et des images.",
-      "offTerminal": "Vous préférez le terminal ? Il reste entièrement pris en charge et continue de s'améliorer. Vos agents continuent de s'y ouvrir jusqu'à ce que vous choisissiez Chat.",
+      "offTerminal": "Vous préférez le terminal ? Il reste entièrement pris en charge. Vos agents continuent de s'y ouvrir jusqu'à ce que vous choisissiez Chat.",
       "onIntro": "L'interface de chat n'est plus expérimentale et fait désormais partie d'Orca. Vos agents continuent de s'ouvrir sous forme de chats, avec des messages enrichis, des visuels et des images.",
       "onTerminal": "Le terminal reste lui aussi entièrement pris en charge. Vous pouvez y remettre n'importe quel agent à tout moment.",
       "changeInSettings": "Modifiable à tout moment dans <link>Paramètres → Agents</link>.",

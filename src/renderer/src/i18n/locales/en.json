@@ -20723,7 +20723,7 @@
     "chatUiHere": {
       "title": "Chat UI is here",
       "offIntro": "Agents can now open as a chat, with rich messages, visuals and images.",
-      "offTerminal": "Prefer the terminal? It stays fully supported and keeps getting better. Your agents keep opening there until you choose Chat.",
+      "offTerminal": "Prefer the terminal? It stays fully supported. Your agents keep opening there until you choose Chat.",
       "onIntro": "Chat UI is out of Experimental and now part of Orca. Your agents keep opening as chats, with rich messages, visuals and images.",
       "onTerminal": "The terminal stays fully supported too. Switch any agent back anytime.",
       "changeInSettings": "Change anytime in <link>Settings → Agents</link>.",

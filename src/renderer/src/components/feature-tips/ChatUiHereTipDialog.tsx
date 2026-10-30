@@ -31,7 +31,7 @@ function variantCopy(variant: ShownVariant): {
         ),
         translate(
           'featureTips.chatUiHere.offTerminal',
-          'Prefer the terminal? It stays fully supported and keeps getting better. Your agents keep opening there until you choose Chat.'
+          'Prefer the terminal? It stays fully supported. Your agents keep opening there until you choose Chat.'
         )
       ],
       secondaryLabel: translate('featureTips.chatUiHere.stayInTerminal', 'Stay in terminal'),

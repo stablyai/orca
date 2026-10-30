@@ -20646,7 +20646,7 @@
     "chatUiHere": {
       "title": "Llega la interfaz de chat",
       "offIntro": "Los agentes ya pueden abrirse como un chat, con mensajes enriquecidos, elementos visuales e imágenes.",
-      "offTerminal": "¿Prefieres el terminal? Sigue teniendo soporte completo y no deja de mejorar. Tus agentes seguirán abriéndose allí hasta que elijas Chat.",
+      "offTerminal": "¿Prefieres el terminal? Sigue teniendo soporte completo. Tus agentes seguirán abriéndose allí hasta que elijas Chat.",
       "onIntro": "La interfaz de chat ya no es experimental y ahora forma parte de Orca. Tus agentes siguen abriéndose como chats, con mensajes enriquecidos, elementos visuales e imágenes.",
       "onTerminal": "El terminal también sigue teniendo soporte completo. Puedes volver a cambiar cualquier agente cuando quieras.",
       "changeInSettings": "Cámbialo cuando quieras en <link>Configuración → Agentes</link>.",
