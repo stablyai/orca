@@ -1,36 +1,34 @@
+import { handleDispatchedPtyData } from './pty-data-delivery'
 import { TERMINAL_SCROLLBACK_SESSION_BUFFER_BYTE_LIMIT } from '../../../../shared/terminal-scrollback-limits'
 import {
   clearProcessedPtyCharTotal,
-  deliverPtyDataWithDeferredAck,
   exposeE2eTerminalPtyAckGate,
   getProcessedPtyCharTotals
 } from './terminal-pty-ack-gate'
 import { clampUtf8Tail, type EagerBufferChunk } from './pty-eager-buffer-clamp'
 import {
-  bufferPreHandlerPtyData,
   clearPreHandlerPtyState,
   drainPreHandlerPtyData,
   drainPreHandlerPtyExit
 } from './pty-pre-handler-buffer'
-import { deliverPtyExitToHandlers } from './pty-exit-delivery'
+import {
+  deliverPtyExitToHandlers,
+  type PtyExitDeliveryContext,
+  type PtyExitOptions
+} from './pty-exit-delivery'
 import {
   clearReceivedPtyCharTotal,
   isPtyPushDeliveryBlackholed,
-  recordPtyDataReceived,
   startTerminalDeliveryWatchdog
 } from './terminal-delivery-watchdog'
 import { recordTerminalFreezeBreadcrumb } from './terminal-freeze-breadcrumbs'
 import { installTerminalFreezeReport } from './terminal-freeze-report'
 import {
-  bufferPtyShutdownData,
   bufferPtyShutdownReplayData,
-  isPtyDataHandlerShutdownPending,
   ptyDataHandlers,
-  ptyDataSidecars,
   ptyExitHandlers,
   ptyReplayHandlers
 } from './pty-shutdown-data-suspension'
-import { markCommittedPtyShutdowns } from './pty-shutdown-exit-deferral'
 
 export {
   ptyDataHandlers,
@@ -62,7 +60,7 @@ export type PtyDataMeta = {
 /** Per-PTY replay handlers on a dedicated pty:replay channel so the renderer can engage the replay guard and suppress xterm auto-replies. */
 const ptyExitSidecars = new Map<
   string,
-  Set<(code: number, context: { hadPrimary: boolean }) => void>
+  Set<(code: number, context: PtyExitDeliveryContext) => void>
 >()
 export const ptyWriteUnavailableHandlers = new Map<string, () => void>()
 let ptyDispatcherAttached = false
@@ -110,68 +108,6 @@ function attachPtyPushListeners(): void {
   attachPtySecondaryPushListeners(unsubscribes)
 }
 
-function handleDispatchedPtyData(payload: {
-  id: string
-  data: string
-  seq?: number
-  rawLength?: number
-  transformed?: boolean
-  background?: boolean
-  droppedOutput?: boolean
-  gapEscapeState?: string
-}): void {
-  let meta: PtyDataMeta | undefined
-  if (typeof payload.seq === 'number') {
-    meta ??= {}
-    meta.seq = payload.seq
-  }
-  if (typeof payload.rawLength === 'number') {
-    meta ??= {}
-    meta.rawLength = payload.rawLength
-  }
-  if (payload.transformed === true) {
-    meta ??= {}
-    meta.transformed = true
-  }
-  if (payload.background === true) {
-    meta ??= {}
-    meta.background = true
-  }
-  if (payload.droppedOutput === true) {
-    meta ??= {}
-    meta.droppedOutput = true
-  }
-  if (typeof payload.gapEscapeState === 'string' && payload.gapEscapeState.length > 0) {
-    meta ??= {}
-    meta.gapEscapeState = payload.gapEscapeState
-  }
-  const chars = payload.rawLength ?? payload.data.length
-  const dispatch = (): void => {
-    if (isPtyDataHandlerShutdownPending(payload.id)) {
-      // Why: teardown output is speculative until the owner verifies sleep; retain it so a failed attempt resumes without losing terminal data.
-      bufferPtyShutdownData(payload.id, payload.data, meta)
-      return
-    }
-    const handler = ptyDataHandlers.get(payload.id)
-    if (handler) {
-      handler(payload.data, meta)
-    } else {
-      bufferPreHandlerPtyData(payload.id, payload.data, meta)
-    }
-    const sidecars = ptyDataSidecars.get(payload.id)
-    if (sidecars && sidecars.size > 0) {
-      // Why: snapshot before iterating — watchers often unsubscribe (or subscribe siblings) mid-iteration, and mutating the live Set would skip or double-fire.
-      const snapshot = Array.from(sidecars)
-      for (const watcher of snapshot) {
-        watcher(payload.data)
-      }
-    }
-  }
-  recordPtyDataReceived(payload.id, chars)
-  // Why deferred: main budgets by bytes PARSED not received; ACK fires when xterm consumes, and undelivered chunks settle at return so no PTY stays backpressured.
-  deliverPtyDataWithDeferredAck(payload.id, chars, dispatch)
-}
-
 function attachPtySecondaryPushListeners(unsubscribes: (() => void)[]): void {
   const unsubscribeWriteUnavailable = window.api.pty.onWriteUnavailable?.((payload) => {
     ptyWriteUnavailableHandlers.get(payload.id)?.()
@@ -189,10 +125,6 @@ function attachPtySecondaryPushListeners(unsubscribes: (() => void)[]): void {
   )
   unsubscribes.push(
     window.api.pty.onExit((payload) => {
-      if (payload.preserveRendererBinding === true) {
-        // Why: host-initiated remote sleep has no requester transaction in this renderer; classify its ordered exit before pane cleanup runs.
-        markCommittedPtyShutdowns([payload.id])
-      }
       // Why: main drops its accounting on exit; drop totals too so a reused id restarts at zero on both sides.
       clearProcessedPtyCharTotal(payload.id)
       clearReceivedPtyCharTotal(payload.id)
@@ -208,6 +140,10 @@ function attachPtySecondaryPushListeners(unsubscribes: (() => void)[]): void {
       deliverPtyExitToHandlers({
         ptyId: payload.id,
         code: payload.code,
+        ...(payload.preserveRendererBinding === true ||
+        payload.preserveRendererBinding === 'closing'
+          ? { preserveRendererBinding: payload.preserveRendererBinding }
+          : {}),
         // Buffered exits carry their PTY lifetime because reused IDs can name a new shell (#16970).
         ...(payload.incarnationId ? { incarnationId: payload.incarnationId } : {}),
         ...(payload.replacedByRestart === true ? { replacedByRestart: true } : {}),
@@ -232,7 +168,7 @@ function attachPtySecondaryPushListeners(unsubscribes: (() => void)[]): void {
 
 export function subscribeToPtyExit(
   ptyId: string,
-  watcher: (code: number, context: { hadPrimary: boolean }) => void
+  watcher: (code: number, context: PtyExitDeliveryContext) => void
 ): () => void {
   ensurePtyDispatcher()
   let set = ptyExitSidecars.get(ptyId)
@@ -268,7 +204,7 @@ const EAGER_BUFFER_MAX_BYTES = TERMINAL_SCROLLBACK_SESSION_BUFFER_BYTE_LIMIT
 /** Fence the spawned incarnation so recycled relay IDs cannot deliver the prior owner’s exit to a fresh background agent. */
 export function registerEagerPtyBuffer(
   ptyId: string,
-  onExit: (ptyId: string, code: number) => void,
+  onExit: (ptyId: string, code: number, options?: PtyExitOptions) => void,
   incarnationId?: string
 ): EagerPtyHandle {
   ensurePtyDispatcher()
@@ -294,7 +230,7 @@ export function registerEagerPtyBuffer(
       head = 0
     }
   }
-  const exitHandler = (code: number): void => {
+  const exitHandler = (code: number, options?: PtyExitOptions): void => {
     // Shell died before attach; identity-guard so we never evict a handler a transport re-registered for this id (#7894 detach/attach race).
     if (ptyDataHandlers.get(ptyId) === dataHandler) {
       ptyDataHandlers.delete(ptyId)
@@ -302,7 +238,11 @@ export function registerEagerPtyBuffer(
     }
     ptyExitHandlers.delete(ptyId)
     eagerPtyHandles.delete(ptyId)
-    onExit(ptyId, code)
+    if (options) {
+      onExit(ptyId, code, options)
+    } else {
+      onExit(ptyId, code)
+    }
   }
 
   ptyDataHandlers.set(ptyId, dataHandler)

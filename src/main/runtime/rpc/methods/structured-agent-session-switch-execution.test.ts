@@ -283,6 +283,64 @@ it.each(['single', 'split', 'other-workspace'] as const)(
   }
 )
 
+it('keeps the stopped source when destination publication fails before retirement', async () => {
+  await savedTranscript()
+  const { runtime, session } = setupMainOwnedWorkspace()
+  const incarnationId = '11111111-1111-4111-8111-111111111111'
+  runtime.registerPty(PTY_A, WORKTREE_ID, null, { tabId: TAB_ID, leafId: LEAF_A, incarnationId })
+  const source = runtime.resolveTerminalPane(`${TAB_ID}:${LEAF_A}`, WORKTREE_ID)
+  if (!source.presentation) {
+    throw new Error('missing captured source')
+  }
+  const originalSourceTabs = structuredClone(session().tabsByWorktree[WORKTREE_ID])
+  const originalSourceLayout = structuredClone(session().terminalLayoutsByTabId[TAB_ID])
+  const acquisitions = rig.adapter.acquire.mock.calls.length
+  const stop = vi.fn(async () => {
+    await runtime.onPtyExit(PTY_A, 0, incarnationId, { hostExitConfirmed: true })
+    return true
+  })
+  const kill = vi.fn(() => false)
+  runtime.setPtyController({
+    write: () => true,
+    kill,
+    stopAndWait: stop,
+    getForegroundProcess: async () => null
+  })
+  const publish = vi
+    .spyOn(runtime, 'publishStructuredAgentSessionTab')
+    .mockRejectedValue(new Error('fixture publication failure'))
+  const result = await executeStructuredSessionSwitch(
+    {
+      sessionId: id,
+      execution: {
+        invocationId: 'publication-failure',
+        source: {
+          terminal: source.handle,
+          expectedIncarnationId: incarnationId,
+          originalPresentation: source.presentation
+        }
+      }
+    },
+    { runtime },
+    'chat'
+  )
+  expect(result).toMatchObject({
+    status: 'refused',
+    refusal: { code: 'agent_session_owner_restart_failed' }
+  })
+  expect(stop).toHaveBeenCalledExactlyOnceWith(
+    PTY_A,
+    expect.objectContaining({ expectedIncarnationId: incarnationId })
+  )
+  expect(runtime.getPtyLivenessVerdict(PTY_A)).toMatchObject({ status: 'exited' })
+  expect(publish).toHaveBeenCalledOnce()
+  expect(session().tabsByWorktree[WORKTREE_ID]).toEqual(originalSourceTabs)
+  expect(session().terminalLayoutsByTabId[TAB_ID]).toEqual(originalSourceLayout)
+  expect(rig.adapter.acquire).toHaveBeenCalledTimes(acquisitions)
+  expect(rig.adapter.dispatch).not.toHaveBeenCalled()
+  expect(kill).not.toHaveBeenCalled()
+})
+
 it('does not acquire or retire a terminal whose physical stop is unproven', async () => {
   await savedTranscript()
   const { runtime, session } = setupMainOwnedWorkspace()

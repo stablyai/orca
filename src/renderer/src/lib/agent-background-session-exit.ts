@@ -1,4 +1,5 @@
 import { useAppStore } from '@/store'
+import type { PtyExitOptions } from '@/components/terminal-pane/pty-exit-delivery'
 import {
   isProvenProcessExit,
   UNVERIFIED_PROCESS_EXIT_CODE
@@ -9,8 +10,16 @@ export function runtimeWaitExitCode(wait: { exitCode?: number | null }): number 
   return wait.exitCode ?? UNVERIFIED_PROCESS_EXIT_CODE
 }
 
-/** Drop tab/PTY identity only on proven exit (as in pty-exit-hibernate); synthetic loss retires transport but preserves reconnect adoption and guards against orphan cleanup. */
-export function settleTabPtyBinding(tabId: string, ptyId: string, code: number): void {
+/** Retained exits settle execution without dropping presentation; ordinary synthetic loss preserves reconnect adoption. */
+export function settleTabPtyBinding(
+  tabId: string,
+  ptyId: string,
+  code: number,
+  options?: PtyExitOptions
+): void {
+  if (options?.preserveRendererBinding === true || options?.preserveRendererBinding === 'closing') {
+    return
+  }
   const state = useAppStore.getState()
   if (isProvenProcessExit(code)) {
     state.clearTabPtyId(tabId, ptyId)

@@ -267,7 +267,8 @@ export type PtyApi = {
     callback: (data: {
       id: string
       code: number
-      preserveRendererBinding?: boolean
+      /** Retain presentation; only true carries reversible wake authority. */
+      preserveRendererBinding?: boolean | 'closing'
       /** Which lifetime of `id` died; absent when the execution host predates the field. */
       incarnationId?: string
       hostId?: string

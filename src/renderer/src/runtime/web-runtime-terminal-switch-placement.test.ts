@@ -24,7 +24,7 @@ import { refreshWebRuntimeSessionTabsSnapshot } from './web-runtime-session-snap
 import { toWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
 import { makePaneKey } from '../../../shared/stable-pane-id'
 import { resetWebSessionTabsSnapshotFreshnessForTests } from './web-session-tabs-sync/tracking-lifecycle'
-import { countOpenPlacementWork } from './main-loaded-layout-frames.test-fixture'
+import { countOpenPlacementWork } from './open-placement-work-counter.test-fixture'
 import { hostSessionTabIdsByLocalTabForWorktree } from './web-session-tabs-sync/tracking-mappings'
 
 const ENV = 'paired-placement',

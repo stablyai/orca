@@ -42,9 +42,9 @@ import { openWorkspaceLayoutFrameSync } from './workspace-layout-frame-sync'
 import {
   layoutSnapshotFrame,
   mainLayoutFrameSender,
-  mainLoadedLayouts,
-  countOpenPlacementWork
+  mainLoadedLayouts
 } from './main-loaded-layout-frames.test-fixture'
+import { countOpenPlacementWork } from './open-placement-work-counter.test-fixture'
 import * as frameFlushPlan from './workspace-layout-frame-flush-plan'
 import { installLayoutFrameApplyCheck } from './workspace-layout-frame-apply-check.test-fixture'
 

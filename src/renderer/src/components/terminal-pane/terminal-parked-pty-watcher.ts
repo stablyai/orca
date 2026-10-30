@@ -5,7 +5,7 @@ import { useAppStore } from '@/store'
 import { closeTerminalTab } from '../terminal/terminal-tab-actions'
 import { startParkedTerminalByteWatcher } from './parked-terminal-byte-watcher'
 import { subscribeToPtyExit } from './pty-dispatcher'
-import { isPtyExitReplacedByRestart } from './pty-exit-delivery'
+import { isPtyExitReplacedByRestart, type PtyExitDeliveryContext } from './pty-exit-delivery'
 import {
   consumePreHandlerPtyState,
   discardPreHandlerPtyState,
@@ -55,9 +55,11 @@ export function startParkedPtyWatcher(args: {
   ) {
     return
   }
-  const handlePtyExit = (code: number, { hadPrimary }: { hadPrimary: boolean }): void => {
+  const handlePtyExit = (code: number, context: PtyExitDeliveryContext): void => {
+    const { hadPrimary } = context
     // Replacement waits for a future connect, but the dead process’s working title must clear now.
     useAppStore.getState().clearRuntimePaneTitle(tab.id, pane.paneId)
+    const preserveRendererBinding = !hadPrimary && isSleepPreservedParkedPtyExit(ptyId, context)
     if (isPtyExitReplacedByRestart(ptyId)) {
       // Why: the pane lives on under its replacement PTY; only this watcher's subscription ends.
       entry.disposersByPtyId.get(ptyId)?.()
@@ -70,7 +72,7 @@ export function startParkedPtyWatcher(args: {
       useAppStore.getState().markUnverifiedPtyLoss(tab.id)
     }
     // Detach removed the primary observer; this sidecar must preserve sleep state/layout and keep the buffered-exit tombstone against stale watcher re-registration.
-    if (!hadPrimary && isSleepPreservedParkedPtyExit(ptyId)) {
+    if (preserveRendererBinding) {
       entry.disposersByPtyId.get(ptyId)?.()
       entry.disposersByPtyId.delete(ptyId)
       return
@@ -143,13 +145,21 @@ export function startParkedPtyWatcher(args: {
   })
 }
 
-// Shutdown, suppressed restart and committed sleep markers preserve state for wake/restart. Remote host-sleep dispositions never reach this sidecar, so no environment ID is needed.
-function isSleepPreservedParkedPtyExit(ptyId: string): boolean {
+// Retained exits preserve presentation only. Remote host-sleep dispositions never reach this sidecar, so no environment ID is needed.
+function isSleepPreservedParkedPtyExit(ptyId: string, context: PtyExitDeliveryContext): boolean {
   const state = useAppStore.getState()
-  if (state.isPtyShutdownPending(ptyId) || state.suppressedPtyExitIds[ptyId]) {
-    return true
+  const disposition = consumeCommittedPtyShutdownExit(ptyId, null)
+  if (disposition && context.exitOptions) {
+    if (disposition === true || context.exitOptions.preserveRendererBinding !== true) {
+      context.exitOptions.preserveRendererBinding = disposition
+    }
   }
-  return consumeCommittedPtyShutdownExit(ptyId, null)
+  return Boolean(
+    context.exitOptions?.preserveRendererBinding ||
+    disposition ||
+    state.isPtyShutdownPending(ptyId) ||
+    state.suppressedPtyExitIds[ptyId]
+  )
 }
 
 export function collapseParkedExitedLeaf(tabId: string, ptyId: string): void {

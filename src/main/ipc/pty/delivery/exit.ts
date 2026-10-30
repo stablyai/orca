@@ -153,7 +153,11 @@ function finalizePtyExitForRenderer(
   session.mainWindow.webContents.send('pty:exit', {
     ...payload,
     hostId: resolvePtyExecutionHost(payload.id),
-    ...(intentionalStops.includes('reversible') ? { preserveRendererBinding: true } : {}),
+    ...(intentionalStops.includes('reversible')
+      ? { preserveRendererBinding: true }
+      : intentionalStops.includes('closing')
+        ? { preserveRendererBinding: 'closing' }
+        : {}),
     ...(intentionalStops.includes('replaced') ? { replacedByRestart: true } : {})
   })
 }

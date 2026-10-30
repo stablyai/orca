@@ -18,6 +18,7 @@ import {
   type EagerPtyHandle
 } from '@/components/terminal-pane/pty-dispatcher'
 import { subscribeToPtyData } from '@/components/terminal-pane/pty-data-sidecar-subscriptions'
+import type { PtyExitOptions } from '@/components/terminal-pane/pty-exit-delivery'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/worktree-runtime-owner'
 import { retireProvider } from '@/lib/retire-unowned-background-terminal'
@@ -113,7 +114,7 @@ export async function launchAgentBackgroundSession(
   let unsubscribeExit = (): void => {},
     unsubscribeData = (): void => {},
     releaseRuntimeObservers = (): void => {}
-  const handleExit = (exitPtyId: string, code: number): void => {
+  const handleExit = (exitPtyId: string, code: number, options?: PtyExitOptions): void => {
     if (exitHandled) {
       return
     }
@@ -121,7 +122,7 @@ export async function launchAgentBackgroundSession(
     unsubscribeExit()
     unsubscribeData()
     if (tab) {
-      settleTabPtyBinding(tab.id, exitPtyId, code)
+      settleTabPtyBinding(tab.id, exitPtyId, code, options)
     }
     useAppStore.getState().clearAgentLaunchConfig(paneKey)
     onExit?.(exitPtyId, code)
@@ -269,7 +270,9 @@ export async function launchAgentBackgroundSession(
       eagerPtyBuffer = registerEagerPtyBuffer(ptyId, handleExit, spawned.incarnationId)
       unsubscribeData = subscribeToPtyData(ptyId, handleData)
       // A mounted transport disposes the eager exit handler; this sidecar preserves completion tracking across hidden/visible transitions.
-      unsubscribeExit = subscribeToPtyExit(ptyId, (code) => handleExit(ptyId, code))
+      unsubscribeExit = subscribeToPtyExit(ptyId, (code, context) =>
+        handleExit(ptyId, code, context.exitOptions)
+      )
     }
     // Bind PTY/ownership before mount to prevent duplicate spawn without missing user takeover.
     requestBackgroundTerminalWorktreeMount({ worktreeId, tabIds: [tab.id] })

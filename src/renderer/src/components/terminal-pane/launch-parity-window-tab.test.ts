@@ -1,7 +1,8 @@
 import type * as React from 'react'
+import { Terminal } from '@xterm/headless'
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import { flushAsyncTicks } from './pty-connection-test-async'
-import { createManager, createPane } from './pty-connection-test-pane-fixtures'
+import { createManager, createPane, terminalWriteText } from './pty-connection-test-pane-fixtures'
 import { buildPaneConnectionDeps } from './pty-connection-test-deps'
 import {
   installTerminalTestGlobals,
@@ -29,6 +30,8 @@ import {
   type WindowLaunchCase
 } from '../../../../shared/launch-parity-window-request.test-fixture'
 import { mockPanePtyArgs } from './pty-connection-test-connect-mock-pane'
+import { mainLayoutApplyTransport } from './pty-connection-test-main-pane-start-fixtures'
+import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session-resume'
 
 // Main's answer to the window's layout commands, as a switch-on build sends them.
 vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
@@ -79,6 +82,14 @@ const load = perClientLoader(async () => ({
   paneOptions: await import('./terminal-pane-manager-options'),
   defaults: await import('@/lib/pane-manager/pane-terminal-options'),
   lifecycle: await import('./terminal-pane-lifecycle-primitives'),
+  close: await import('../terminal/terminal-tab-actions'),
+  layoutBindings: await import('./use-terminal-pane-layout-bindings'),
+  parked: await import('./terminal-parked-tab-watchers'),
+  parkedRegistry: await import('./terminal-parked-watcher-registry'),
+  dispatcher: await import('./pty-dispatcher'),
+  exitBuffer: await import('./pty-pre-handler-buffer'),
+  react: await import('react'),
+  server: await import('react-dom/server'),
   workspaceStart: await loadWorkspaceStartModules()
 }))
 
@@ -217,6 +228,278 @@ describe('window-tab producers: the pty:spawn request a real pane sends', () => 
   afterEach(async () => {
     await restoreTerminalTestGlobals()
     vi.unstubAllGlobals()
+  })
+
+  it('keeps a typed parked sole pane readable and unwritable through closing IPC and late reattach until explicit close', async () => {
+    const modules = await load('linux')
+    await installTerminalTestGlobals()
+    Object.assign(window.api.platform, { get: () => ({ platform: 'linux', osRelease: '6' }) })
+    const workspace = { kind: 'folder', path: '/home/alice/source' } as const
+    const worktreeId = launchWorkspaceId(workspace)
+    const store = modules.createStore()
+    holder.store = store
+    store.setState(launchWorkspaceState(workspace, { ...getDefaultSettings('/home/alice') }))
+    const pane = createPane(1)
+    const manager = createManager(1, 1)
+    const ptyId = `${worktreeId}@@retained-source`
+    const incarnationId = 'source-incarnation'
+    const tab = store.getState().createTab(worktreeId, undefined, undefined, {
+      initialPtyId: ptyId,
+      initialLeafId: pane.leafId
+    })
+    const spawn = vi.fn<typeof window.api.pty.spawn>(async () => ({
+      id: ptyId,
+      incarnationId,
+      isReattach: true
+    }))
+    const onData = vi.fn<typeof window.api.pty.onData>(() => () => {})
+    const onExit = vi.fn<typeof window.api.pty.onExit>(() => () => {})
+    const noop = (): (() => void) => () => {}
+    Object.assign(window.api.pty, {
+      spawn,
+      onData,
+      onExit,
+      onReplay: noop,
+      onWriteUnavailable: noop,
+      onSideEffect: noop,
+      resize: vi.fn(),
+      claimViewport: vi.fn()
+    })
+    const output = 'stopped source remains readable'
+    const sink = new Terminal({
+      cols: pane.terminal.cols,
+      rows: pane.terminal.rows,
+      allowProposedApi: true
+    })
+    const painted = Promise.withResolvers<void>()
+    const reset = vi.fn(() => sink.reset())
+    let binding: ReturnType<typeof modules.pane.connectPanePty> | undefined
+    try {
+      if (!('_core' in sink)) {
+        throw new Error('headless terminal must expose the real user-input signal')
+      }
+      Object.assign(pane.terminal, { _core: sink._core, buffer: sink.buffer, reset })
+      pane.terminal.onData.mockImplementation((listener: (data: string) => void) =>
+        sink.onData(listener)
+      )
+      pane.terminal.write.mockImplementation((data, callback) => {
+        sink.write(data, () => {
+          callback?.()
+          if (terminalWriteText(data).includes(output)) {
+            painted.resolve()
+          }
+        })
+      })
+      pane.terminal.clear.mockImplementation(() => sink.clear())
+      const renderedText = (): string =>
+        Array.from({ length: sink.buffer.active.length }, (_, row) =>
+          sink.buffer.active.getLine(row)?.translateToString(true)
+        ).join('\n')
+      const automaticClose = vi.fn((exitedPtyId: string) =>
+        modules.close.closeTerminalTab(tab.id, {
+          reason: 'pty-exit',
+          lifecyclePtyId: exitedPtyId
+        })
+      )
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the real store supplies every state member read by the existing pane fixture.
+      const deps = buildPaneConnectionDeps(() => store.getState() as never, {
+        tabId: tab.id,
+        worktreeId,
+        cwd: workspace.path,
+        restoredLeafId: pane.leafId,
+        restoredPtyIdByLeafId: { [pane.leafId]: ptyId },
+        onPtyExitRef: { current: automaticClose },
+        consumeSuppressedPtyExit: vi.fn(store.getState().consumeSuppressedPtyExit),
+        clearTabPtyId: vi.fn(store.getState().clearTabPtyId),
+        updateTabPtyId: vi.fn(store.getState().updateTabPtyId)
+      })
+      const args = mockPanePtyArgs(pane, manager, deps)
+      const controller: Partial<
+        Parameters<typeof modules.layoutBindings.useTerminalPaneLayoutBindings>[0]
+      > = {
+        tabId: tab.id,
+        managerRef: { current: args[1] },
+        paneTransportsRef: args[2].paneTransportsRef,
+        containerRef: { current: null },
+        expandedPaneIdRef: { current: null },
+        expandedStyleSnapshotRef: { current: new Map() },
+        pendingPaneSizeRefreshFrameIdsRef: { current: [] },
+        persistLayoutSnapshot: vi.fn(),
+        setExpandedPaneId: vi.fn(),
+        setTabPaneExpanded: store.getState().setTabPaneExpanded,
+        setTabLayout: store.getState().setTabLayout
+      }
+      let layoutBindings:
+        | ReturnType<typeof modules.layoutBindings.useTerminalPaneLayoutBindings>
+        | undefined
+      function LayoutBindings(): null {
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the binding hook reads only the supplied layout and expand/collapse controller fields, as in pending-split-close-test-fixture.
+        layoutBindings = modules.layoutBindings.useTerminalPaneLayoutBindings(
+          controller as Parameters<typeof modules.layoutBindings.useTerminalPaneLayoutBindings>[0]
+        )
+        return null
+      }
+      modules.server.renderToString(modules.react.createElement(LayoutBindings))
+      if (!layoutBindings) {
+        throw new Error('real pane layout bindings were not created')
+      }
+      Object.assign(args[2], {
+        syncPanePtyLayoutBinding: layoutBindings.syncPanePtyLayoutBinding,
+        clearExitedPanePtyLayoutBinding: vi.fn(layoutBindings.clearExitedPanePtyLayoutBinding)
+      })
+      binding = modules.pane.connectPanePty(...args)
+      await flushAsyncTicks(20)
+      const transport = args[2].paneTransportsRef.current.get(pane.id)
+      const dispatchData = onData.mock.calls[0]?.[0]
+      const dispatchExit = onExit.mock.calls[0]?.[0]
+      if (!transport || !dispatchData || !dispatchExit) {
+        throw new Error('real IPC pane connection did not register its consumers')
+      }
+      expect(spawn).toHaveBeenCalledTimes(1)
+      expect(spawn).toHaveBeenCalledWith(expect.objectContaining({ sessionId: ptyId }))
+      expect(transport.isConnected()).toBe(true)
+      expect(transport.getPtyId()).toBe(ptyId)
+      expect(store.getState().tabsByWorktree[worktreeId]).toEqual([tab])
+      expect(store.getState().unifiedTabsByWorktree[worktreeId]).toEqual([
+        expect.objectContaining({ contentType: 'terminal', entityId: tab.id })
+      ])
+      expect(manager.getPanes()).toEqual([{ id: pane.id, leafId: pane.leafId }])
+      sink.input('status\r', true)
+      await flushAsyncTicks(20)
+      expect(window.api.pty.write).toHaveBeenCalledWith(ptyId, 'status\r', 'driving')
+      dispatchData({ id: ptyId, data: output })
+      await painted.promise
+      expect(renderedText()).toContain(output)
+      const paneKey = `${tab.id}:${pane.leafId}`
+      const liveAnchor: SleepingAgentSessionRecord = {
+        paneKey,
+        tabId: tab.id,
+        worktreeId,
+        agent: 'claude',
+        providerSession: { key: 'session_id', id: 'retained-source-conversation' },
+        prompt: '',
+        state: 'done',
+        origin: 'live',
+        capturedAt: 1,
+        updatedAt: 1
+      }
+      store.setState({
+        localOnlyScrollbackByTabId: { [tab.id]: { [pane.leafId]: output } },
+        sleepingAgentSessionsByPaneKey: { [paneKey]: liveAnchor }
+      })
+      const layoutApply = await mainLayoutApplyTransport()
+      expect(layoutApply.sentOfType('startPane')).toHaveLength(0)
+      const registerLaunch = vi.spyOn(store.getState(), 'registerAgentLaunchConfig')
+      const beforeExit = store.getState()
+      const layout = beforeExit.terminalLayoutsByTabId[tab.id]
+      expect(layout.root).toEqual({ type: 'leaf', leafId: pane.leafId })
+      expect(layout.ptyIdsByLeafId).toEqual({ [pane.leafId]: ptyId })
+      const writes = vi.mocked(window.api.pty.write).mock.calls.length
+      const clears = pane.terminal.clear.mock.calls.length
+      const resets = reset.mock.calls.length
+      const retireTab = vi.spyOn(store.getState(), 'closeTab')
+
+      modules.parked.captureParkedTerminalPaneCandidates(tab.id, worktreeId, [
+        {
+          ptyId,
+          paneId: pane.id,
+          leafId: pane.leafId,
+          drivesTabTitle: true,
+          untouchedFreshSpawn: binding.isUntouchedFreshSpawnPty(ptyId)
+        }
+      ])
+      transport.detach?.({ preserveExitObserver: false })
+      binding.dispose()
+      args[2].paneTransportsRef.current.clear()
+      modules.parked.syncParkedTerminalTabWatchersForWorkspaces(
+        new Map([[worktreeId, { tabs: [tab], parkedTabIds: new Set([tab.id]) }]])
+      )
+      expect(modules.dispatcher.ptyExitHandlers.has(ptyId)).toBe(false)
+      expect(
+        modules.parkedRegistry.parkedWatchersByTabId.get(tab.id)?.disposersByPtyId.has(ptyId)
+      ).toBe(true)
+      expect(store.getState().isPtyShutdownPending(ptyId)).toBe(false)
+      expect(store.getState().suppressedPtyExitIds[ptyId]).toBeUndefined()
+      dispatchExit({ id: ptyId, code: 0, incarnationId, preserveRendererBinding: 'closing' })
+      expect(modules.exitBuffer.hasPreHandlerPtyExit(ptyId, incarnationId)).toBe(true)
+      expect(modules.parkedRegistry.parkedWatchersByTabId.get(tab.id)?.disposersByPtyId.size).toBe(
+        0
+      )
+      expect(store.getState().terminalLayoutsByTabId[tab.id]).toEqual(layout)
+      expect(store.getState().ptyIdsByTabId[tab.id]).toEqual([ptyId])
+      const afterMarkerGrace = vi.spyOn(Date, 'now').mockReturnValue(Date.now() + 30_001)
+      try {
+        args[2].mountFollowsTerminalPark = true
+        binding = modules.pane.connectPanePty(...args)
+        await flushAsyncTicks(20)
+      } finally {
+        afterMarkerGrace.mockRestore()
+      }
+      const revealedTransport = args[2].paneTransportsRef.current.get(pane.id)
+      if (!revealedTransport) {
+        throw new Error('real reveal did not install its transport')
+      }
+      expect(revealedTransport).not.toBe(transport)
+      expect(modules.exitBuffer.hasPreHandlerPtyExit(ptyId)).toBe(false)
+      await flushAsyncTicks(20)
+      await layoutApply.settle()
+      await flushAsyncTicks(20)
+      expect(layoutApply.sentOfType('startPane')).toHaveLength(0)
+      expect(registerLaunch).not.toHaveBeenCalled()
+      expect(deps.consumeSuppressedPtyExit).toHaveReturnedWith(false)
+      expect(transport.isConnected()).toBe(false)
+      expect(transport.getPtyId()).toBeNull()
+      expect(revealedTransport.isConnected()).toBe(false)
+      expect(revealedTransport.getPtyId()).toBeNull()
+      expect(revealedTransport.sendInput('must not run\r', 'driving')).toBe(false)
+      expect(window.api.pty.write).toHaveBeenCalledTimes(writes)
+      expect(automaticClose).not.toHaveBeenCalled()
+      expect(retireTab).not.toHaveBeenCalled()
+      expect(manager.closePane).not.toHaveBeenCalled()
+      expect(deps.clearTabPtyId).not.toHaveBeenCalled()
+      expect(args[2].clearExitedPanePtyLayoutBinding).not.toHaveBeenCalled()
+      expect(store.getState().tabsByWorktree[worktreeId]).toEqual(
+        beforeExit.tabsByWorktree[worktreeId]
+      )
+      expect(store.getState().unifiedTabsByWorktree[worktreeId]).toEqual(
+        beforeExit.unifiedTabsByWorktree[worktreeId]
+      )
+      expect(store.getState().terminalLayoutsByTabId[tab.id]).toEqual(layout)
+      expect(store.getState().ptyIdsByTabId[tab.id]).toEqual([ptyId])
+      expect(store.getState().localOnlyScrollbackByTabId[tab.id]).toEqual({ [pane.leafId]: output })
+      expect(pane.terminal.clear).toHaveBeenCalledTimes(clears)
+      expect(reset).toHaveBeenCalledTimes(resets)
+      expect(renderedText()).toContain(output)
+      expect(store.getState().sleepingAgentSessionsByPaneKey).toEqual({ [paneKey]: liveAnchor })
+      expect(args[2].paneTransportsRef.current.get(pane.id)).toBe(revealedTransport)
+      expect(spawn).toHaveBeenCalledTimes(1)
+
+      vi.mocked(window.api.pty.inspectProcess).mockResolvedValue({
+        foregroundProcess: null,
+        hasChildProcesses: false,
+        childProcessEvidence: 'no-children'
+      })
+      await new Promise<void>((resolve) =>
+        modules.close.closeTerminalTab(tab.id, { reason: 'user', onClosed: resolve })
+      )
+      expect(retireTab).toHaveBeenCalledExactlyOnceWith(
+        tab.id,
+        expect.objectContaining({ reason: 'user' })
+      )
+      expect(store.getState().tabsByWorktree[worktreeId] ?? []).toEqual([])
+      expect(store.getState().unifiedTabsByWorktree[worktreeId] ?? []).toEqual([])
+      expect(store.getState().terminalLayoutsByTabId[tab.id]).toBeUndefined()
+      expect(store.getState().localOnlyScrollbackByTabId[tab.id]).toBeUndefined()
+      expect(store.getState().ptyIdsByTabId[tab.id]).toBeUndefined()
+      expect(transport.sendInput('still must not run\r', 'driving')).toBe(false)
+      expect(revealedTransport.sendInput('still must not run\r', 'driving')).toBe(false)
+      expect(window.api.pty.write).toHaveBeenCalledTimes(writes)
+      expect(spawn).toHaveBeenCalledTimes(1)
+    } finally {
+      binding?.dispose()
+      modules.parkedRegistry.disposeAllParkedTerminalWatchers()
+      sink.dispose()
+    }
   })
 
   it.each([...WINDOW_LAUNCH_CASES, ...PLUS_LAUNCH_CASES, ...WORKSPACE_START_LAUNCH_CASES])(

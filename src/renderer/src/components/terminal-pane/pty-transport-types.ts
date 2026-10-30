@@ -1,3 +1,4 @@
+import type { PtyExitOptions } from './pty-exit-delivery'
 import type { TerminalAttachmentLaunchResult } from '../../../../shared/terminal-attachment-launch-result'
 import type { AgentIdleEdgeMeta } from '../../../../shared/terminal-output-side-effects'
 import type {
@@ -138,7 +139,7 @@ type PtyCallbacks = {
   onStatus?: (shell: string) => void
   onError?: (message: string, errors?: string[]) => void
   onErrorCleared?: (message: string) => void
-  onExit?: (code: number) => void
+  onExit?: (code: number, options?: PtyExitOptions) => void
   onWriteUnavailable?: () => void
   onRecoveryStateChange?: (state: PtyTransportRecoveryState) => void
   /** `dropsReported`: the host sends onPausedOutputDropped, so a pause without one lost nothing. */
@@ -314,7 +315,7 @@ export type IpcPtyTransportOptions = {
   terminalKittyKeyboardProtocol?: boolean
   terminalColorQueryReplies?: TerminalOscColorQueryReplyColors
   telemetry?: EventProps<'agent_started'>
-  onPtyExit?: (ptyId: string, exitCode?: number) => void
+  onPtyExit?: (ptyId: string, exitCode?: number, options?: PtyExitOptions) => void
   onTitleChange?: (title: string, rawTitle: string) => void
   onPtySpawn?: (ptyId: string) => void
   /** Current surface may retain a late disposed spawn for its successor; absent/false authorizes kill (disposed-spawn-retention.ts). */

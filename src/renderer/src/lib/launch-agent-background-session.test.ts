@@ -1,6 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { BACKGROUND_MOUNT_TERMINAL_WORKTREE_EVENT } from '@/constants/terminal'
 import { toAppSshPtyId } from '../../../shared/ssh-pty-id'
+import type {
+  registerEagerPtyBuffer,
+  subscribeToPtyExit
+} from '@/components/terminal-pane/pty-dispatcher'
+import type { createTestStore } from '@/store/slices/store-test-helpers'
+import type { AppState } from '@/store/types'
 import {
   AGENT_BACKGROUND_SESSION_UUID_RE as UUID_RE,
   createAgentBackgroundSessionTestState,
@@ -21,9 +27,9 @@ const mockUpdateTabPtyId = vi.fn()
 const mockCloseTab = vi.fn()
 const mockSetTabLayout = vi.fn()
 const mockRegisterAgentLaunchConfig = vi.fn()
-const mockRegisterEagerPtyBuffer = vi.fn()
+const mockRegisterEagerPtyBuffer = vi.fn<typeof registerEagerPtyBuffer>()
 const mockSubscribeToPtyData = vi.fn()
-const mockSubscribeToPtyExit = vi.fn()
+const mockSubscribeToPtyExit = vi.fn<typeof subscribeToPtyExit>()
 const mockPasteDraftWhenAgentReady = vi.fn()
 const mockDispatchEvent = vi.fn()
 const mockGetAgentLaunchPlatformForRepo = vi.fn<() => NodeJS.Platform>()
@@ -37,11 +43,14 @@ const state = createAgentBackgroundSessionTestState({
   registerAgentLaunchConfig: mockRegisterAgentLaunchConfig
 })
 let currentStoreState = state
+let bindingStore: ReturnType<typeof createTestStore> | null = null
 
 vi.mock('@/store', () => ({
   useAppStore: {
-    getState: () => currentStoreState,
-    subscribe: vi.fn(() => () => {})
+    getState: () => bindingStore?.getState() ?? currentStoreState,
+    subscribe: vi.fn((listener: (state: AppState, previous: AppState) => void) =>
+      bindingStore ? bindingStore.subscribe(listener) : () => {}
+    )
   }
 }))
 
@@ -82,6 +91,7 @@ vi.mock('@/components/terminal-pane/pty-data-sidecar-subscriptions', () => ({
 describe('launchAgentBackgroundSession', () => {
   beforeEach(() => {
     currentStoreState = state
+    bindingStore = null
     resetAgentBackgroundSessionTestHarness({
       state,
       createTab: mockCreateTab,
@@ -457,8 +467,11 @@ describe('launchAgentBackgroundSession', () => {
       onExit
     })
 
-    const sidecar = mockSubscribeToPtyExit.mock.calls[0]?.[1] as (code: number) => void
-    sidecar(0)
+    const sidecar = mockSubscribeToPtyExit.mock.calls[0]?.[1]
+    if (!sidecar) {
+      throw new Error('Background exit sidecar was not registered')
+    }
+    sidecar(0, { hadPrimary: true })
 
     const tabId = expectReservedAgentBackgroundTabId(mockSpawn)
     expect(state.clearTabPtyId).toHaveBeenCalledWith(tabId, 'pty-1')
@@ -469,6 +482,102 @@ describe('launchAgentBackgroundSession', () => {
     expect(unsubscribe).toHaveBeenCalled()
     expect(state.markUnverifiedPtyLoss).not.toHaveBeenCalled()
   })
+
+  it.each(['eager', 'persistent sidecar'] as const)(
+    'retains a closing background binding through %s completion but clears an ordinary exit once',
+    async (entrypoint) => {
+      const { createTestStore, seedStore, makeWorktree, TEST_REPO } =
+        await import('@/store/slices/store-test-helpers')
+      const { launchAgentBackgroundSession } = await import('./launch-agent-background-session')
+      const store = createTestStore()
+      bindingStore = store
+      seedStore(store, {
+        worktreesByRepo: {
+          [TEST_REPO.id]: [makeWorktree({ id: 'wt-1', repoId: TEST_REPO.id, hostId: 'local' })]
+        }
+      })
+      const unsubscribeData = vi.fn()
+      const unsubscribeExit = vi.fn()
+      mockSubscribeToPtyData.mockReturnValue(unsubscribeData)
+      mockSubscribeToPtyExit.mockReturnValue(unsubscribeExit)
+      const onExit = vi.fn()
+      const result = await launchAgentBackgroundSession({
+        agent: 'claude',
+        worktreeId: 'wt-1',
+        prompt: 'run the automation',
+        onExit
+      })
+      if (!result) {
+        throw new Error('Background launch did not create a terminal')
+      }
+      const tab = store.getState().tabsByWorktree['wt-1'].find((tab) => tab.id === result.tabId)
+      const layout = store.getState().terminalLayoutsByTabId[result.tabId]
+      expect(tab?.ptyId).toBe('pty-1')
+      expect(store.getState().ptyIdsByTabId[result.tabId]).toEqual(['pty-1'])
+      expect(store.getState().lastKnownRelayPtyIdByTabId[result.tabId]).toBe('pty-1')
+      expect(store.getState().agentLaunchConfigByPaneKey[result.paneKey]).toBeDefined()
+
+      const eager = mockRegisterEagerPtyBuffer.mock.calls[0]?.[1]
+      const sidecar = mockSubscribeToPtyExit.mock.calls[0]?.[1]
+      if (!eager || !sidecar) {
+        throw new Error('Background exit observers were not registered')
+      }
+      const exitOptions = { preserveRendererBinding: 'closing' as const }
+      if (entrypoint === 'eager') {
+        eager(result.ptyId, 0, exitOptions)
+      } else {
+        sidecar(0, { hadPrimary: true, exitOptions })
+      }
+      // A primary and the captured persistent sidecar may both see the same physical exit.
+      sidecar(0, { hadPrimary: true, exitOptions })
+      expect(onExit).toHaveBeenCalledExactlyOnceWith('pty-1', 0)
+      expect(unsubscribeData).toHaveBeenCalledOnce()
+      expect(unsubscribeExit).toHaveBeenCalledOnce()
+      expect(store.getState().agentLaunchConfigByPaneKey[result.paneKey]).toBeUndefined()
+      expect(store.getState().tabsByWorktree['wt-1'].find((t) => t.id === result.tabId)).toBe(tab)
+      expect(store.getState().terminalLayoutsByTabId[result.tabId]).toBe(layout)
+      expect(store.getState().ptyIdsByTabId[result.tabId]).toEqual(['pty-1'])
+      expect(store.getState().lastKnownRelayPtyIdByTabId[result.tabId]).toBe('pty-1')
+      expect(store.getState().unverifiedPtyLossTabIds[result.tabId]).toBeUndefined()
+
+      mockSpawn.mockResolvedValueOnce({ id: 'pty-ordinary' })
+      const ordinaryExit = vi.fn()
+      const ordinary = await launchAgentBackgroundSession({
+        agent: 'claude',
+        worktreeId: 'wt-1',
+        prompt: 'finish normally',
+        onExit: ordinaryExit
+      })
+      if (!ordinary) {
+        throw new Error('Ordinary background launch did not create a terminal')
+      }
+      const ordinaryEager = mockRegisterEagerPtyBuffer.mock.calls[1]?.[1]
+      const ordinarySidecar = mockSubscribeToPtyExit.mock.calls[1]?.[1]
+      if (!ordinaryEager || !ordinarySidecar) {
+        throw new Error('Ordinary exit observers missing')
+      }
+      if (entrypoint === 'eager') {
+        ordinaryEager(ordinary.ptyId, 0)
+      } else {
+        ordinarySidecar(0, { hadPrimary: true })
+      }
+      ordinarySidecar(0, { hadPrimary: true })
+      expect(ordinaryExit).toHaveBeenCalledExactlyOnceWith('pty-ordinary', 0)
+      expect(unsubscribeData).toHaveBeenCalledTimes(2)
+      expect(unsubscribeExit).toHaveBeenCalledTimes(2)
+      expect(store.getState().agentLaunchConfigByPaneKey[ordinary.paneKey]).toBeUndefined()
+      expect(
+        store.getState().tabsByWorktree['wt-1'].find((t) => t.id === ordinary.tabId)?.ptyId
+      ).toBeNull()
+      expect(store.getState().ptyIdsByTabId[ordinary.tabId]).toEqual([])
+      expect(store.getState().lastKnownRelayPtyIdByTabId[ordinary.tabId]).toBeUndefined()
+      expect(store.getState().unverifiedPtyLossTabIds[ordinary.tabId]).toBeUndefined()
+      expect(store.getState().tabsByWorktree['wt-1'].find((t) => t.id === result.tabId)).toBe(tab)
+      expect(mockSpawn).toHaveBeenCalledTimes(2)
+      result.terminalOwnership?.release()
+      ordinary.terminalOwnership?.release()
+    }
+  )
 
   it('keeps the tab bound to its PTY when contact was lost rather than observed', async () => {
     // Synthetic -1 loss retires transport only; retain bindings for reconnect adoption and orphan-cleanup protection.
@@ -483,8 +592,11 @@ describe('launchAgentBackgroundSession', () => {
       onExit
     })
 
-    const sidecar = mockSubscribeToPtyExit.mock.calls[0]?.[1] as (code: number) => void
-    sidecar(-1)
+    const sidecar = mockSubscribeToPtyExit.mock.calls[0]?.[1]
+    if (!sidecar) {
+      throw new Error('Background exit sidecar was not registered')
+    }
+    sidecar(-1, { hadPrimary: true })
 
     const tabId = expectReservedAgentBackgroundTabId(mockSpawn)
     expect(state.clearTabPtyId).not.toHaveBeenCalled()
