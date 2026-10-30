@@ -201,7 +201,7 @@ describe('orchestration agent views', () => {
             workspace: { id: 'wt_1::/repo' },
             stage: { activity: 'working' },
             liveness: { verdict: 'live' },
-            nextAction: { argv: ['orca', 'orchestration', 'worker-stop', '--dispatch', 'ctx_1'] }
+            nextAction: { argv: ['orchestration', 'worker-stop', '--dispatch', 'ctx_1'] }
           }
         }
       ],

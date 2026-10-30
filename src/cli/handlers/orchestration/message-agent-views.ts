@@ -8,7 +8,11 @@ import {
   type OrchestrationMessageSummary
 } from '../../../shared/orchestration-check-output'
 import { escapeTerminalControlCharacters } from '../../../shared/terminal-control-character-escape'
-import { resolveOrcaCommandsInText, type OrchestrationAgentView } from './agent-view'
+import {
+  resolveOrcaCommandsInText,
+  resolveOrcaReplyHints,
+  type OrchestrationAgentView
+} from './agent-view'
 import { withReceiptNext } from './receipt-next-text'
 
 /** A message as the agent acts on it: payload flattened, routing and storage columns dropped. */
@@ -44,8 +48,7 @@ export function toMessageView(
     ...(message.subject && !(type === 'question' && message.subject === 'Question')
       ? { subject: message.subject }
       : {}),
-    // Runtime-written reports name `orca`; show the executable this reader runs.
-    ...(message.body ? { body: resolveOrcaCommandsInText(message.body) } : {}),
+    ...(message.body ? { body: message.body } : {}),
     ...(message.priority && message.priority !== 'normal' ? { priority: message.priority } : {}),
     ...(isLegacyReadOnlyMessage(message, options.legacyCompatibilityActive)
       ? { readOnly: true as const }
@@ -183,7 +186,7 @@ export function checkView(
         connectionLost: value.connectionLost ? true : undefined,
         legacyCompatibility: value.legacyCompatibility,
         // --format asked for the agent-readable banners themselves.
-        formatted: value.formatted && resolveOrcaCommandsInText(value.formatted),
+        formatted: value.formatted && resolveOrcaReplyHints(value.formatted),
         next: value.next && resolveOrcaCommandsInText(value.next)
       }
     },
@@ -191,7 +194,7 @@ export function checkView(
       // Legacy and preformatted batches carry safety headers only the full formatter prints.
       if (fields.legacyCompatibility || value.formatted !== undefined || !fields.messages.length) {
         return withReceiptNext(
-          resolveOrcaCommandsInText(formatOrchestrationCheckText(value, checkedTerminal)),
+          resolveOrcaReplyHints(formatOrchestrationCheckText(value, checkedTerminal)),
           fields
         )
       }

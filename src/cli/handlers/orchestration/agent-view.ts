@@ -102,7 +102,14 @@ export function renderOrchestrationArgv(argv: readonly string[]): string | undef
   if (argv.length === 0) {
     return undefined
   }
-  return renderCommand(
-    argv[0] === 'orca' ? [resolveOrchestrationCliExecutable(), ...argv.slice(1)] : argv
+  // Fleet next actions are subcommand argv (`orchestration ...`); older hosts named `orca`.
+  const subcommand = argv[0] === 'orca' ? argv.slice(1) : argv
+  return renderCommand([resolveOrchestrationCliExecutable(), ...subcommand])
+}
+
+/** Only Orca's own `[Reply: ...]` hint lines name a command; message text is left as written. */
+export function resolveOrcaReplyHints(text: string): string {
+  return text.replace(/^\[Reply: orca(?= orchestration )/gm, () =>
+    resolveOrcaCommandsInText('[Reply: orca')
   )
 }
