@@ -204,6 +204,7 @@ describe('AgentBrowserBridge', () => {
     })
     expect(spawns.find(({ command }) => command[0] === 'screenshot')?.command).toEqual([
       'screenshot',
+      expect.stringMatching(/^\/app\/orca-screenshot-[\w-]+\.png$/),
       '--if-changed',
       '--screenshot-format',
       'png'

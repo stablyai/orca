@@ -1,6 +1,8 @@
+import { randomUUID } from 'node:crypto'
 import { existsSync, readFileSync, rmSync } from 'node:fs'
+import { join } from 'node:path'
 import { z } from 'zod'
-import { nativeImage, type WebContents } from 'electron'
+import { app, nativeImage, type WebContents } from 'electron'
 import type {
   BrowserScreenshotOptions,
   BrowserScreenshotResult,
@@ -27,9 +29,16 @@ export abstract class AgentBrowserBridgeCaptureCommands extends AgentBrowserBrid
   ): Promise<BrowserScreenshotResult> {
     return this.enqueueTargetedCommand(worktreeId, browserPageId, async (sessionName, target) => {
       const wc = this.requireTargetWebContents(target)
-      const raw = await this.execAgentBrowser(sessionName, agentBrowserScreenshotArgs(options), {
-        cliArgv: true
-      })
+      // agent-browser's default name is per millisecond, so two pages could share (and delete) one file.
+      const outputPath = join(
+        app.getPath('temp'),
+        `orca-screenshot-${randomUUID()}.${options.format === 'jpeg' ? 'jpg' : 'png'}`
+      )
+      const raw = await this.execAgentBrowser(
+        sessionName,
+        agentBrowserScreenshotArgs(options, false, outputPath),
+        { cliArgv: true }
+      )
       return this.readScreenshotFromResult(raw, options.format, wc)
     })
   }
@@ -75,7 +84,7 @@ export abstract class AgentBrowserBridgeCaptureCommands extends AgentBrowserBrid
       const data = await readInCssPixels(path, screenshotFormat, wc)
       return { data, format: screenshotFormat, changed, annotations }
     } finally {
-      // agent-browser keeps every capture in its own temp folder; the bytes are ours now.
+      // The bytes are ours now; nothing else reads this capture's file.
       rmSync(path, { force: true })
     }
   }
@@ -174,6 +183,9 @@ async function readInCssPixels(
     release = acquireElectronDebugger(wc).release
     metrics = await sendGuestCdpCommand(wc, 'Page.getLayoutMetrics', {})
   } catch (error) {
+    if (error instanceof BrowserError) {
+      throw error
+    }
     throw new BrowserError(
       'browser_error',
       `Screenshot failed: ${error instanceof Error ? error.message : String(error)}`

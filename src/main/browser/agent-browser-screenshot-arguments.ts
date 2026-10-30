@@ -22,9 +22,10 @@ export const AgentBrowserScreenshotResult = z.object({
 
 export function agentBrowserScreenshotArgs(
   options: BrowserScreenshotOptions,
-  fullPage = false
+  fullPage = false,
+  outputPath?: string
 ): string[] {
-  const args = ['screenshot']
+  const args = outputPath ? ['screenshot', outputPath] : ['screenshot']
   if (fullPage) {
     args.push('--full')
   }
