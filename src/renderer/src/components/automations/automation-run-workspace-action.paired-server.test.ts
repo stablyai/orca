@@ -359,6 +359,7 @@ it.each([false, true])(
         mocks.chatTabs.push(
           makeUnifiedTab({
             id: 'stale-requested',
+            groupId: GROUP,
             entityId: requested,
             worktreeId: WT,
             executionHostId: `runtime:${ENV}`,

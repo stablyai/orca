@@ -139,7 +139,6 @@ it.each(['stop', 'discard', 'sweep'] as const)(
               worktreeId: rig.workspace,
               hostScope: { kind: 'local', hostId: 'local' }
             },
-            'lifetime-dispatch',
             rig.runtime
           )
         : consumer === 'discard'

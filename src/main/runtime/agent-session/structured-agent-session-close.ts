@@ -52,8 +52,19 @@ export async function closeStructuredAgentSessionChild(
     options.surface === undefined
       ? captureStructuredSessionSurface(host, sessionId, options.runtime)
       : options.surface
+  const admitClose = options.admitClose
+  let admitted = admitClose === undefined
   try {
-    await host.close(sessionId, 'evict', options.admitClose)
+    await host.close(
+      sessionId,
+      'evict',
+      admitClose
+        ? () => {
+            admitted = admitClose()
+            return admitted
+          }
+        : undefined
+    )
   } catch (error) {
     if (!structuredSessionCloseSettled(sessionId)) {
       return {
@@ -63,7 +74,10 @@ export async function closeStructuredAgentSessionChild(
       }
     }
   } finally {
-    options.afterClose?.()
+    // A refused close leaves the live worker's ownership and retry edges intact.
+    if (admitted) {
+      options.afterClose?.()
+    }
   }
   if (!structuredSessionCloseSettled(sessionId)) {
     return {

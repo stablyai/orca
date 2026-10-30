@@ -25,6 +25,7 @@ import { STATUS_METHODS } from './status'
 import { createKeyedTrailingEdgeCoalescer } from '../../keyed-trailing-edge-coalescer'
 import { idOf, resultOf } from '../orchestration-session-caller-test-fixture'
 import { createStructuredWorkerSessionForWorktree } from './orchestration/worker/worker-topology'
+import { completeWorkerTerminalRelease } from './orchestration/worker/worker-release-completion'
 
 vi.mock('./structured-agent-session-create', () => ({
   createStructuredAgentSessionForWorktree: async (args: { envelope: { sessionId: string } }) => {
@@ -318,6 +319,134 @@ describe('the structured redrive publication edge', () => {
       }
     }
   )
+
+  it('retains parked mail and its journal wake when a new turn refuses automatic close', async () => {
+    vi.useRealTimers()
+    vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] })
+    const { host, store, dispatch } = hostTestState()
+    const { identity } = await createStructuredWorkerSessionForWorktree({
+      runtime: state.runtime,
+      worktreeId: 'workspace-1',
+      agent: 'codex',
+      dispatchId,
+      effects: []
+    })
+    workerSessionIds.push(identity.sessionId)
+    const worker = workerJournal(identity)
+    await reattach(identity.sessionId)
+    state.db.prepareStartingWorkerAuthority({
+      dispatchId,
+      handle: identity.handle,
+      paneKey: identity.paneKey,
+      processIncarnation: identity.processIncarnation,
+      hostScope: JSON.stringify(identity.hostScope),
+      worktreeId: identity.worktreeId,
+      setupState: 'not_applicable',
+      terminalOwnership: 'created',
+      effects: []
+    })
+    state.db.markWorkerDispatchReady(dispatchId)
+    await vi.advanceTimersByTimeAsync(300)
+    const mailbox = `dispatch:${dispatchId}`
+    const { id: messageId } = state.db.insertMessage({
+      from: 'term_coord',
+      to: mailbox,
+      subject: 'Continue when available'
+    })
+    const send = vi.spyOn(host, 'send').mockRejectedValueOnce(new Error('provider unavailable'))
+    dispatch.mockClear()
+    state.runtime.notifyMessageArrived(mailbox, 'message')
+    await vi.advanceTimersByTimeAsync(300)
+    expect(send).toHaveBeenCalledTimes(1)
+    expect(dispatch).not.toHaveBeenCalled()
+    expect(state.db.getMessageById(messageId)).toMatchObject({ read: 0, delivered_at: null })
+    const fence = store.requireWritableRecord(identity.sessionId).lease.runtimeFence
+    const workerRow = state.db.getDispatchContextById(dispatchId)
+    if (!workerRow?.task_id) {
+      throw new Error('Worker Dispatch is missing')
+    }
+    expect(
+      state.db.settleWorkerReport({
+        taskId: workerRow.task_id,
+        dispatchId,
+        outcome: 'succeeded',
+        result: 'Worker finished'
+      }).action
+    ).toBe('settled')
+    expect(state.db.claimDueWorkerTerminalAutoReleases(Date.now() + 120_000)).toBe(1)
+    const resource = state.db.getWorkerTerminalResourceByOwner(dispatchId)
+    if (!resource) {
+      throw new Error('Worker resource is missing')
+    }
+    const providerStop = vi.fn<NonNullable<typeof host.deps.adapter.closeSession>>(async () => true)
+    host.deps.adapter.closeSession = providerStop
+    const forget = vi.spyOn(state.runtime, 'forgetStructuredSessionMail')
+    const retire = vi.spyOn(state.runtime, 'retireStructuredAgentSessionTabFromSnapshot')
+    const saved = vi.spyOn(state.runtime, 'removeCapturedStructuredSessionSavedTabs')
+    const hide = vi.spyOn(host, 'setSessionTabVisibility')
+    const admission = vi.spyOn(state.db, 'admitWorkerChatReleaseClose')
+    const observe = vi.spyOn(host, 'observeJournalPublications')
+    const create = vi.spyOn(host, 'create')
+    const attached = host.collaboratorsForTests().sessions.get(identity.sessionId)
+    const lease = store.requireWritableRecord(identity.sessionId).lease
+    const tabId = host.getSessionTabId(identity.sessionId)
+    const lane = Promise.withResolvers<void>()
+    const closeEntered = Promise.withResolvers<void>()
+    const held = host.collaboratorsForTests().serialize(identity.sessionId, () => lane.promise)
+    const close = host.close
+    vi.spyOn(host, 'close').mockImplementation((...args) => {
+      closeEntered.resolve()
+      return close(...args)
+    })
+    const closing = completeWorkerTerminalRelease({
+      runtime: state.runtime,
+      db: state.db,
+      dispatchId,
+      resource
+    })
+    const newTurn = { provider: 'orca', clientMessageId: 'new-turn-before-close' } as const
+    try {
+      await closeEntered.promise
+      expect(state.db.getWorkerTerminalResource(resource.id)?.release_state).toBe('releasing')
+      expect(state.db.getWorkerTerminalArchive(dispatchId)).toBeDefined()
+      await worker.journal.appendItem(
+        newTurn,
+        { kind: 'turn', turnId: 'new-turn-before-close', state: 'running' },
+        { fence, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+      )
+      expect(state.runtime.isWorkerAgentInTurn(resource)).toBe(true)
+    } finally {
+      lane.resolve()
+      await held
+    }
+    expect(await closing).toMatchObject({ state: 'retained', processAction: 'none' })
+    expect(admission).toHaveBeenCalledExactlyOnceWith(resource.id, expect.any(Function))
+    expect(admission.mock.results[0]?.value).toBe(false)
+    expect(providerStop).not.toHaveBeenCalled()
+    expect(retire).not.toHaveBeenCalled()
+    expect(saved).not.toHaveBeenCalled()
+    expect(hide).not.toHaveBeenCalled()
+    expect(host.getSessionTabId(identity.sessionId)).toBe(tabId)
+    expect(host.collaboratorsForTests().sessions.get(identity.sessionId)).toBe(attached)
+    expect(store.requireWritableRecord(identity.sessionId).lease).toEqual(lease)
+    expect(state.db.getWorkerTerminalResource(resource.id)?.release_state).toBe('not_requested')
+    expect(state.db.getWorkerTerminalArchive(dispatchId)).toBeUndefined()
+    expect.soft(forget).not.toHaveBeenCalled()
+    expect.soft(structuredWorkerIdentities.get(identity.handle)).toEqual(identity)
+    expect(state.db.getMessageById(messageId)).toMatchObject({ read: 0, delivered_at: null })
+    await worker.journal.appendTombstone(newTurn, { fence })
+    await vi.advanceTimersByTimeAsync(300)
+    expect(observe).not.toHaveBeenCalled()
+    expect(create).not.toHaveBeenCalled()
+    expect(send).toHaveBeenCalledTimes(2)
+    expect(dispatch).toHaveBeenCalledTimes(1)
+    expect(dispatch.mock.calls[0]![0].body).toMatchObject({
+      kind: 'message',
+      role: 'user',
+      from: { orchestration: { message: 'mail-notice', mailbox, messages: [{ messageId }] } }
+    })
+    expect(state.db.getMessageById(messageId)?.delivered_at).not.toBeNull()
+  })
 
   it.each([16, 160])('bounds publication work with %i resting workers', async (count) => {
     const { host } = hostTestState()

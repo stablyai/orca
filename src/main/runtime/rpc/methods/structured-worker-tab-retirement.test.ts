@@ -165,7 +165,7 @@ describe('structured worker stop retires the chat tab', () => {
   it('cannot turn a proven stop into a retained one when the prune throws', async () => {
     installHost()
     const identity = registerIdentity()
-    const runtime: NonNullable<Parameters<typeof stopStructuredWorker>[2]> = {
+    const runtime: NonNullable<Parameters<typeof stopStructuredWorker>[1]> = {
       captureStructuredAgentSessionPresentation: () => ({
         raw: { worktreeId: WORKTREE, tabId: 'agent-session:session-1' },
         saved: []
