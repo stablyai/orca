@@ -56,6 +56,7 @@ export const hostScreenPrimaryStyles = themedStyleSheet(() => ({
     fontWeight: '600',
     color: colors.textPrimary
   },
+  hostNameTextBesideSwitch: { flex: 0, flexShrink: 1 },
   reconnectButton: {
     paddingVertical: 4,
     paddingHorizontal: spacing.sm,

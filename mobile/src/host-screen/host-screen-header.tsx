@@ -2,7 +2,9 @@ import { Pressable, Text, View } from 'react-native'
 import type { Translate } from '../i18n/mobile-i18n'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { WorkspaceOptionsCountBadge } from './workspace-options-count-badge'
+import type { ReactNode } from 'react'
 import {
+  ChevronDown,
   ChevronLeft,
   List,
   PanelLeftClose,
@@ -20,6 +22,7 @@ import { hostScreenStyles as styles } from './host-screen-styles'
 import { HostRailActions, hostListActions } from './host-rail-actions'
 import { useSideRailClaim, useSideRailEdge } from '../layout/side-rail'
 import type { HostScreenController } from './use-host-screen-controller'
+import { HostSwitcherSheet } from './host-switcher-sheet'
 
 function isErrorVerdict(v: ConnectionVerdict): boolean {
   return isConnectionOutage(v) || v.kind === 'auth-failed'
@@ -42,6 +45,37 @@ function workspaceOptionsAccessibilityLabel(t: Translate, count: number): string
       )
 }
 
+// The host name opens the desktop switcher only when another paired desktop exists.
+function HostIdentityFrame({
+  children,
+  onSwitch,
+  title
+}: {
+  children: ReactNode
+  onSwitch: (() => void) | null
+  title: string
+}) {
+  const t = useMobileTranslation()
+  if (!onSwitch) {
+    return <View style={styles.hostIdentity}>{children}</View>
+  }
+  return (
+    <Pressable
+      style={styles.hostIdentity}
+      onPress={onSwitch}
+      accessibilityRole="button"
+      accessibilityLabel={t(
+        'hostScreen.hostScreenHeader.switchDesktop',
+        'Switch desktop, current: {{title}}',
+        { title }
+      )}
+      hitSlop={8}
+    >
+      {children}
+    </Pressable>
+  )
+}
+
 export function HostScreenHeader({ controller }: { controller: HostScreenController }) {
   const t = useMobileTranslation()
   useMobileColorScheme()
@@ -54,6 +88,7 @@ export function HostScreenHeader({ controller }: { controller: HostScreenControl
     forceReconnectHost,
     hostId,
     hostDisplay,
+    hostSwitcher,
     lastConnectedAt,
     onHideSidebar,
     state
@@ -81,23 +116,35 @@ export function HostScreenHeader({ controller }: { controller: HostScreenControl
         >
           <ChevronLeft size={22} color={colors.textPrimary} />
         </Pressable>
-        <View style={styles.hostIdentity}>
+        <HostIdentityFrame
+          onSwitch={hostSwitcher.canSwitch ? hostSwitcher.open : null}
+          title={hostDisplay.title}
+        >
           <View style={styles.hostIdentityLine}>
             {presentedConnState !== connState && !isErrorVerdict(connectionVerdict) ? (
               <StatusDot state={presentedConnState} />
             ) : (
               <StatusDot state={connState} verdict={connectionVerdict} />
             )}
-            <Text style={styles.hostNameText} numberOfLines={1}>
+            <Text
+              style={[
+                styles.hostNameText,
+                hostSwitcher.canSwitch && styles.hostNameTextBesideSwitch
+              ]}
+              numberOfLines={1}
+            >
               {hostDisplay.title}
             </Text>
+            {hostSwitcher.canSwitch ? <ChevronDown size={16} color={colors.textMuted} /> : null}
           </View>
           {hostDisplay.descriptorLine ? (
             <Text style={styles.hostPlatformText} numberOfLines={1}>
               {hostDisplay.descriptorLine}
             </Text>
           ) : null}
-        </View>
+        </HostIdentityFrame>
+        {/* Stay mounted through the close animation: the pick is delivered after it ends. */}
+        <HostSwitcherSheet switcher={hostSwitcher} />
         {/* auth-failed has its own banner; the page cannot re-dial the connection the shell owns. */}
         {isConnectionOutage(connectionVerdict) && hostId && forceReconnectHost !== null ? (
           <Pressable

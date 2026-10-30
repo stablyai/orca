@@ -1406,6 +1406,7 @@
       "hideSidebar": "사이드바 숨기기",
       "reconnect": "다시 연결",
       "searchWorkspaces": "워크스페이스 검색",
+      "switchDesktop": "데스크톱 전환, 현재: {{title}}",
       "tasks": "작업",
       "workspaceOptions": "워크스페이스 옵션"
     },
@@ -1418,6 +1419,9 @@
       "removeHostMessage": "\"{{name}}\"을(를) 제거하시겠습니까? 나중에 다시 페어링할 수 있습니다.",
       "sleep": "슬립",
       "unpin": "고정 해제"
+    },
+    "hostSwitcherSheet": {
+      "title": "데스크톱 전환"
     },
     "hostWorkspaceList": {
       "searchPlaceholder": "워크스페이스 검색…",

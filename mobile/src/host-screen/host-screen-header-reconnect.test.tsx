@@ -10,6 +10,7 @@ vi.mock('react-native', () => ({
   View: 'View'
 }))
 vi.mock('lucide-react-native', () => ({
+  ChevronDown: 'Icon',
   ChevronLeft: 'Icon',
   Filter: 'Icon',
   Layers: 'Icon',
@@ -22,6 +23,8 @@ vi.mock('lucide-react-native', () => ({
   UserCircle: 'Icon',
   X: 'Icon'
 }))
+
+vi.mock('./host-switcher-sheet', () => ({ HostSwitcherSheet: () => null }))
 
 import { resolveHostDisplay } from '../../../src/shared/host-display-resolution'
 import { HostScreenHeader } from './host-screen-header'
@@ -45,6 +48,7 @@ function controllerWith(forceReconnectHost: ForceReconnect) {
     forceReconnectHost,
     hostId: 'host-a',
     hostDisplay: resolveHostDisplay({ name: 'Desk' }),
+    hostSwitcher: { canSwitch: false, open: () => {} },
     lastConnectedAt: null,
     onHideSidebar: undefined,
     settings: { activeFilterCount: 0 },

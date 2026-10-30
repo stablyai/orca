@@ -569,7 +569,8 @@
       "accounts": "Accounts",
       "tasks": "Tasks",
       "closeSearch": "Close search",
-      "searchWorkspaces": "Search workspaces"
+      "searchWorkspaces": "Search workspaces",
+      "switchDesktop": "Switch desktop, current: {{title}}"
     },
     "hostScreenOverlays": {
       "deleteWorktree": "Delete Worktree",
@@ -666,6 +667,9 @@
       "workspaceOptions": "Workspace options",
       "syncedAcrossDevices": "Synced across your devices",
       "clearFilters": "Clear filters"
+    },
+    "hostSwitcherSheet": {
+      "title": "Switch Desktop"
     }
   },
   "webShell": {

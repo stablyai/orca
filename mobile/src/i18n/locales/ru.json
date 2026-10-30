@@ -1498,6 +1498,7 @@
       "hideSidebar": "Скрыть боковую панель",
       "reconnect": "Подключиться снова",
       "searchWorkspaces": "Поиск рабочих пространств",
+      "switchDesktop": "Сменить компьютер, текущий: {{title}}",
       "tasks": "Задачи",
       "workspaceOptions": "Параметры рабочих пространств"
     },
@@ -1510,6 +1511,9 @@
       "removeHostMessage": "Удалить «{{name}}»? Позже его можно подключить снова.",
       "sleep": "Перевести в сон",
       "unpin": "Открепить"
+    },
+    "hostSwitcherSheet": {
+      "title": "Сменить компьютер"
     },
     "hostWorkspaceList": {
       "searchPlaceholder": "Поиск рабочих пространств…",
