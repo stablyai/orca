@@ -25,6 +25,9 @@ import {
 } from '../../main-owned-workspace-runtime-fixture'
 import { executeStructuredSessionSwitch } from './structured-agent-session-switch-execution'
 import { DaemonRequestTimeoutError } from '../../../daemon/daemon-errors'
+import { chatTabId } from '../../agent-session/agent-session-tab-layout'
+import { ClaimedAgentPtyOwnerRegistry } from '../../../../shared/claimed-agent-pty-owner'
+import type { RuntimePtyController } from '../../runtime-pty-controller-contract'
 
 let rig: RestTestRig
 let releaseReceiverExit: (() => void) | undefined
@@ -195,8 +198,6 @@ it.each(['single', 'split', 'other-workspace'] as const)(
           return { tabId: tab.id, groupId: group!.id, tabOrder: [...group!.tabOrder] }
         })
       : undefined
-    const originalSourceTabs = structuredClone(session().tabsByWorktree[WORKTREE_ID])
-    const originalSourceLayout = structuredClone(session().terminalLayoutsByTabId[TAB_ID])
     const acquisitions = rig.adapter.acquire.mock.calls.length
     const operation = executeStructuredSessionSwitch(
       {
@@ -255,18 +256,15 @@ it.each(['single', 'split', 'other-workspace'] as const)(
       ).toBe(false)
     }
     if (elsewhere) {
-      expect(session().tabsByWorktree[WORKTREE_ID]).toEqual(originalSourceTabs)
-      expect(session().terminalLayoutsByTabId[TAB_ID]).toEqual(originalSourceLayout)
-      expect((await runtime.listMobileSessionTabs(`id:${WORKTREE_ID}`)).tabs).toEqual(
-        expect.arrayContaining([expect.objectContaining({ type: 'terminal', parentTabId: TAB_ID })])
-      )
       expect(rig.store.getRecord(sessionId)?.location.workspaceId).toBe(destinationWorkspace)
     }
     const layout = session().terminalLayoutsByTabId[TAB_ID]
     if (split) {
       expect(layout?.ptyIdsByLeafId?.[LEAF_B]).toBe(PTY_B)
       expect(layout?.root).toEqual({ type: 'leaf', leafId: LEAF_B })
-    } else if (!elsewhere) {
+    } else {
+      // Replaced in place, or (in another workspace, where nothing replaces it) exited as any
+      // stopped pane does.
       expect(session().tabsByWorktree[WORKTREE_ID]?.some((tab) => tab.id === TAB_ID)).toBe(false)
     }
     expect(rig.adapter.dispatch).not.toHaveBeenCalled()
@@ -386,4 +384,118 @@ it('reports a dispatched terminal with a lost answer as uncertain, preserving it
     refusal: { code: 'agent_session_operation_unknown', details: { reason: 'outcomeUnknown' } }
   })
   expect(rig.store.getSessionTabId(id)).toBe('source-chat')
+})
+
+it('puts the switched terminal in the chat tab’s slot and closes the chat tab, in one write', async () => {
+  const { runtime, session } = setupMainOwnedWorkspace()
+  const chatTab = chatTabId(id)
+  for (const [sessionId, tabId] of [
+    [id, chatTab],
+    ['later-tab', 'agent-session:later-tab']
+  ] as const) {
+    expect(
+      await runtime.applyLayoutCommand({
+        type: 'openAgentSessionTab',
+        workspace: WORKTREE_ID,
+        sessionId,
+        agent: 'codex',
+        tabId
+      })
+    ).toMatchObject({ ok: true })
+  }
+  vi.spyOn(runtime, 'resolveTerminalWorkspaceLaunchScope').mockResolvedValue({
+    id: WORKTREE_ID,
+    path: rig.root,
+    connectionId: null,
+    repo: null,
+    folderWorkspace: null
+  })
+  let spawned = 0
+  const spawn = vi.fn(async () => ({
+    id: `switch-pty-${++spawned}`,
+    incarnationId: '33333333-3333-4333-8333-333333333333'
+  }))
+  runtime.setPtyController({
+    spawn,
+    write: () => true,
+    kill: () => true,
+    stopAndWait: async () => true,
+    getForegroundProcess: async () => null
+  })
+  const result = await executeStructuredSessionSwitch(
+    { sessionId: id, execution: { invocationId: 'to-terminal' } },
+    { runtime },
+    'terminal'
+  )
+  expect(result).toMatchObject({ status: 'completed', sessionId: id, sourceRetained: false })
+  expect(spawn).toHaveBeenCalledOnce()
+  const terminal = result.status === 'completed' ? result.terminal : undefined
+  const group = session().tabGroups?.[WORKTREE_ID]?.find((row) =>
+    row.tabOrder.includes(terminal ?? '')
+  )
+  expect(group?.tabOrder).toEqual([TAB_ID, terminal, 'agent-session:later-tab'])
+  expect(
+    session().unifiedTabs?.[WORKTREE_ID]?.some(
+      (tab) => tab.contentType === 'agent-session' && tab.entityId === id
+    )
+  ).toBe(false)
+})
+
+it('re-issuing a switch whose first answer was lost adopts the terminal it started', async () => {
+  await savedTranscript()
+  const { runtime, session } = setupMainOwnedWorkspace()
+  vi.spyOn(runtime, 'resolveTerminalWorkspaceLaunchScope').mockResolvedValue({
+    id: WORKTREE_ID,
+    path: rig.root,
+    connectionId: null,
+    repo: null,
+    folderWorkspace: null
+  })
+  // Answers as the daemon does: one live owner per conversation claim; a repeat adopts it.
+  const owners = new ClaimedAgentPtyOwnerRegistry()
+  let started = 0
+  const spawn = vi.fn(async (args: Parameters<NonNullable<RuntimePtyController['spawn']>>[0]) => {
+    if (!args.agentSessionEnsure) {
+      throw new Error('a switch terminal carries its conversation claim')
+    }
+    const ensured = await owners.ensure({
+      claim: args.agentSessionEnsure.claim,
+      surface: args.agentSessionEnsure.surface,
+      spawn: async () => ({ ptyId: `switch-pty-${++started}` })
+    })
+    return {
+      id: ensured.owner.ptyId,
+      incarnationId: '44444444-4444-4444-8444-444444444444',
+      agentSessionEnsure: ensured,
+      ...(ensured.disposition === 'adopted' ? { isReattach: true } : {})
+    }
+  })
+  runtime.setPtyController({
+    spawn,
+    write: () => true,
+    kill: () => true,
+    getForegroundProcess: async () => null
+  })
+  const { cliForkSource: source } = await cliTranscript.prepareStructuredChatCliTranscript(
+    await cliTranscript.resolveStructuredChatCliSource({ sessionId: id, workspaceId: WORKTREE_ID }),
+    async () => {
+      throw new Error('unused')
+    },
+    false
+  )
+  const lost = await runtime.spawnSwitchTerminal(WORKTREE_ID, { agent: 'codex', source })
+  const retried = await runtime.spawnSwitchTerminal(WORKTREE_ID, { agent: 'codex', source })
+  expect(started).toBe(1)
+  expect(spawn).toHaveBeenCalledTimes(2)
+  expect(retried).toMatchObject({
+    ptyId: lost.ptyId,
+    tabId: lost.tabId,
+    paneKey: lost.paneKey
+  })
+  // The retry's own pane was withdrawn: only the source tab and the first terminal remain.
+  expect(
+    session()
+      .tabsByWorktree[WORKTREE_ID]?.map((tab) => tab.id)
+      .sort()
+  ).toEqual([TAB_ID, lost.tabId].sort())
 })

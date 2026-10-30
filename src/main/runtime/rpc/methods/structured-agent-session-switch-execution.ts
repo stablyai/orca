@@ -172,9 +172,18 @@ async function switchToChat(
       paneKey,
       { signal: deadline.signal, beforeWrite: async () => deadline.check() }
     )
+    // Only a tab the chat will replace keeps its exited pane shown for that write; a source in
+    // another workspace, or a pane in a split, exits as any pane does.
+    const destination =
+      host.deps.store.getRecord(sessionId)?.location.workspaceId ??
+      create?.worktree.replace(/^id:/, '')
+    const replacing =
+      destination !== undefined &&
+      worktreeIdsEqual(close.source.worktreeId, destination) &&
+      close.wholeTab()
     // Shutdown already accepted must finish even when the observing request expires.
     try {
-      await host.trackSwitchPhysical(sessionId, close.stop())
+      await host.trackSwitchPhysical(sessionId, close.stop(replacing))
     } catch {
       host.deps.logger.warn('switch source exit was not confirmed', {
         scope: 'session-switch',
@@ -263,9 +272,9 @@ async function switchToChat(
   })
   deadline.check()
   if (sameWorkspace) {
-    // Whole tab: the replace closed it in main's model, the window closes its own. Split pane: the
-    // window retired it on exit, main's model closes it here.
-    await close.retire(replaces ? ORCA_LAYOUT_OWNER_IS_MAIN : !ORCA_LAYOUT_OWNER_IS_MAIN)
+    // Whole tab: the layout owner's replace removed it (main's model, or the window applying the
+    // snapshot's hint). Split pane: the window retired it on exit, main's model closes it here.
+    await close.retire(replaces !== undefined || !ORCA_LAYOUT_OWNER_IS_MAIN)
   }
   deadline.check()
   // Publication is complete; a first new send may already own the ordinary start.

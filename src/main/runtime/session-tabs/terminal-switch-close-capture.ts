@@ -88,14 +88,15 @@ export abstract class OrcaRuntimeWithTerminalSwitchCloseCapture extends OrcaRunt
         )
           ? (readPlacement() ?? originalPlacement)
           : undefined,
-      stop: async () => {
-        // A split sibling keeps the tab, so that pane may retire on exit as any pane does.
+      /** `closing` keeps the exited pane shown for the write that removes its tab; without one
+       *  coming (a split sibling keeps the tab), the pane retires on exit as any pane does. */
+      stop: async (closing = wholeTab()) => {
         const stop = await this.stopExplicitlyClosedTabPtys(
           [addressedPty],
           addressedPty,
           incarnation,
           {
-            closing: wholeTab()
+            closing
           }
         )
         if (!stop.stopped) {

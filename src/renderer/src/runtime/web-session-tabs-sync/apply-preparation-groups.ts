@@ -1,6 +1,7 @@
 import type { TabGroup } from '../../../../shared/tab-types'
 import type { prepareWebSessionTabsSnapshotUnified } from './apply-preparation-unified'
 import { toWebTerminalSurfaceTabId } from '../../../../shared/terminal-surface-id'
+import { isStructuredAgentSessionHostTabId } from '../../../../shared/structured-agent-session-host-tab-id'
 import {
   isWebSessionBrowserPlacementGroupReserved,
   peekWebSessionBrowserPlacementGroup
@@ -184,16 +185,28 @@ export function prepareWebSessionTabsSnapshotGroups(
     )
   })()
 
+  // A replaced chat has already left this snapshot, so its local tab is found by its session.
+  const replacedLocalTabIds = (hostTabId: string): string[] => {
+    const chat = isStructuredAgentSessionHostTabId(hostTabId)
+      ? (state.unifiedTabsByWorktree[worktreeId] ?? []).find(
+          (tab) =>
+            tab.contentType === 'agent-session' &&
+            tab.entityId === hostTabId.slice('agent-session:'.length)
+        )
+      : undefined
+    return [
+      ...(chat ? [chat.id] : []),
+      ...[hostTabId, toWebTerminalSurfaceTabId(hostTabId)].map(
+        (id) => hostToLocalTabId.get(id) ?? id
+      )
+    ]
+  }
   // A row published in a replaced tab's slot lands where this client showed that tab, not at the end.
   let placedGroups = nextGroups
   for (const row of snapshot.tabs) {
     const tabId =
       row.replaces && hostToLocalTabId.get(row.type === 'terminal' ? row.parentTabId : row.id)
-    const replaced = row.replaces
-      ? [row.replaces.tabId, toWebTerminalSurfaceTabId(row.replaces.tabId)].map(
-          (id) => hostToLocalTabId.get(id) ?? id
-        )
-      : []
+    const replaced = row.replaces ? replacedLocalTabIds(row.replaces.tabId) : []
     const slot = currentGroups.find((group) => group.tabOrder.some((id) => replaced.includes(id)))
     if (
       !tabId ||
