@@ -134,8 +134,9 @@ function buildCandidateFromStart(
       break
     }
     const leftCells = translated.text.slice(0, fragmentStart - framedPrefix.length)
+    const isTableRow = outerFrameColumn !== null && hasFrameAtColumn(translated, outerFrameColumn)
     // A wrapped table cell shows the same cells to its left on every continuation row; a change starts a new row.
-    if (rowY > startY + 1 && outerFrameColumn !== null && leftCells !== continuationLeftCells) {
+    if (rowY > startY + 1 && isTableRow && leftCells !== continuationLeftCells) {
       break
     }
 
@@ -183,12 +184,13 @@ function buildCandidateFromStart(
       startRowFilled = fillsRow
       // Only framed cells count; screen text around an overlay is not a table row.
       isWrappedTableCell =
-        (outerFrameColumn !== null && NON_LAYOUT_SUFFIX_PATTERN.test(leftCells)) ||
+        (isTableRow && NON_LAYOUT_SUFFIX_PATTERN.test(leftCells)) ||
         (VERTICAL_LAYOUT_FRAME_PATTERN.test(rightCells) &&
           NON_LAYOUT_SUFFIX_PATTERN.test(rightCells))
     } else {
       continuationLeftCells = leftCells
-      isWrappedTableCell &&= !NON_LAYOUT_SUFFIX_PATTERN.test(leftCells)
+      isWrappedTableCell &&=
+        (outerFrameColumn === null || isTableRow) && !NON_LAYOUT_SUFFIX_PATTERN.test(leftCells)
     }
     previousRowCanContinue = HARD_WRAP_CONTINUATION_SUFFIX_PATTERN.test(fragment) || fillsRow
   }

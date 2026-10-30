@@ -125,6 +125,25 @@ describe('hard-wrapped terminal HTTP candidate bounds', () => {
     )
   })
 
+  it('reconstructs an overlay URL when only its first row shows a frame in the gutter', () => {
+    const inner = 'http://example.com/aaaa'
+    const rows = [
+      `ls | g|${inner}|`,
+      `todo  |${'b'.repeat(inner.length)}|`,
+      `  in  |${'c'.repeat(inner.length)}|`,
+      `Final |${'dddd'.padEnd(inner.length, ' ')}|`
+    ].map(bufferLineWithCellColumns)
+
+    const candidates = buildHardWrappedHttpLogicalLineCandidates(
+      { getLine: (y) => rows[y] },
+      rows.length
+    )
+
+    expect(candidates[0]?.text).toBe(
+      `${inner}${'b'.repeat(inner.length)}${'c'.repeat(inner.length)}dddd`
+    )
+  })
+
   it('reconstructs a URL in a nested frame whose left label repeats on every row', () => {
     const inner = 'http://example.com/aaaa'
     const rows = [
