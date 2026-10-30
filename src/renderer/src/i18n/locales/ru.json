@@ -19227,6 +19227,53 @@
           "noMovableChat": "Невозможно выполнить «{{action}}» — нет активного чата, который можно переместить.",
           "clientUnsupported": "Невозможно выполнить «{{action}}» — этот клиент и среда выполнения не поддерживают действие."
         }
+      },
+      "usageDashboard": {
+        "UsageDashboardDrawer": {
+          "title": "Использование токенов"
+        },
+        "UsageDashboardDrawerContent": {
+          "period": "Период",
+          "periodAria": "Период использования",
+          "periodDays": "{{days}} дн.",
+          "scope": "Охват",
+          "scopeAria": "Охват использования",
+          "scopeAll": "Все локальные данные",
+          "refresh": "Обновить данные",
+          "loading": "Загрузка…",
+          "loadFailed": "Не удалось загрузить данные.",
+          "empty": "Локальных данных пока нет. Включите провайдер в Настройки → Статистика и использование.",
+          "totalTokens": "Всего токенов",
+          "estimatedCost": "Оценка стоимости",
+          "window": "Последние {{days}} дн.",
+          "openFullStats": "Открыть статистику",
+          "estimatedCostWindow": "Оценка стоимости · {{days}} д"
+        },
+        "UsageDashboardQuotaStrip": {
+          "title": "Квоты",
+          "description": "Окна подписки по каждому провайдеру. Охват не меняет квоты.",
+          "empty": "Квоты подписки ещё не поступали."
+        },
+        "UsageDashboardDailyChart": {
+          "title": "Токены по дням",
+          "description": "Входные, кэшированные и выходные токены по дням.",
+          "gridAria": "Ежедневное использование токенов",
+          "input": "Ввод",
+          "cached": "Кэш",
+          "output": "Вывод",
+          "reasoning": "Reasoning: {{tokens}} токенов",
+          "cost": "Оценочная стоимость: {{cost}}",
+          "empty": "Пока нет использования токенов за этот период."
+        },
+        "UsageDashboardModelTable": {
+          "title": "Модели",
+          "description": "Токены и оценка стоимости по моделям за последние {{days}} дн.",
+          "provider": "Провайдер",
+          "providerOmp": "omp",
+          "cache": "Кэш",
+          "reasoning": "Reasoning",
+          "empty": "Нет использования моделей за этот период."
+        }
       }
     },
     "i18n": {

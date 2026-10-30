@@ -18154,6 +18154,53 @@
           "noMovableChat": "「{{action}}」を実行できません。移動できるアクティブなチャットがありません。",
           "clientUnsupported": "「{{action}}」を実行できません。このクライアントとランタイムは対応していません。"
         }
+      },
+      "usageDashboard": {
+        "UsageDashboardDrawer": {
+          "title": "トークン使用量"
+        },
+        "UsageDashboardDrawerContent": {
+          "period": "期間",
+          "periodAria": "使用期間",
+          "periodDays": "{{days}}日",
+          "scope": "スコープ",
+          "scopeAria": "使用スコープ",
+          "scopeAll": "すべてのローカル使用量",
+          "refresh": "使用データを更新",
+          "loading": "読み込み中…",
+          "loadFailed": "使用データを読み込めませんでした。",
+          "empty": "ローカルの使用データがまだありません。設定 → 統計と使用量でプロバイダーを有効にしてください。",
+          "totalTokens": "合計トークン",
+          "estimatedCost": "推定コスト",
+          "window": "過去{{days}}日",
+          "openFullStats": "統計を開く",
+          "estimatedCostWindow": "推定コスト · {{days}}日"
+        },
+        "UsageDashboardQuotaStrip": {
+          "title": "クォータ",
+          "description": "各プロバイダーが報告するサブスクリプション期間。スコープはクォータを変更しません。",
+          "empty": "サブスクリプションのクォータはまだ報告されていません。"
+        },
+        "UsageDashboardDailyChart": {
+          "title": "デイリートークン",
+          "description": "日ごとの入力・キャッシュ・出力トークン。",
+          "gridAria": "デイリートークン使用量",
+          "input": "入力",
+          "cached": "キャッシュ",
+          "output": "出力",
+          "reasoning": "推論: {{tokens}} トークン",
+          "cost": "推定コスト: {{cost}}",
+          "empty": "この期間のトークン使用量はまだありません。"
+        },
+        "UsageDashboardModelTable": {
+          "title": "モデル",
+          "description": "過去{{days}}日のモデルごとのトークンと推定コスト。",
+          "provider": "プロバイダー",
+          "providerOmp": "omp",
+          "cache": "キャッシュ",
+          "reasoning": "推論",
+          "empty": "この期間のモデル使用量はまだありません。"
+        }
       }
     },
     "i18n": {

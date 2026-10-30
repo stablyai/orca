@@ -18627,6 +18627,53 @@
           "noMovableChat": "No se puede ejecutar «{{action}}» — no hay ningún chat activo que se pueda mover.",
           "clientUnsupported": "No se puede ejecutar «{{action}}» — este cliente y este entorno de ejecución no lo admiten."
         }
+      },
+      "usageDashboard": {
+        "UsageDashboardDrawer": {
+          "title": "Uso de tokens"
+        },
+        "UsageDashboardDrawerContent": {
+          "period": "Período",
+          "periodAria": "Período de uso",
+          "periodDays": "{{days}} días",
+          "scope": "Alcance",
+          "scopeAria": "Alcance de uso",
+          "scopeAll": "Todo el uso local",
+          "refresh": "Actualizar datos de uso",
+          "loading": "Cargando…",
+          "loadFailed": "No se pudieron cargar los datos de uso.",
+          "empty": "Aún no hay uso local. Habilite un proveedor en Ajustes → Estadísticas y uso.",
+          "totalTokens": "Tokens totales",
+          "estimatedCost": "Costo estimado",
+          "window": "Últimos {{days}} días",
+          "openFullStats": "Abrir estadísticas completas",
+          "estimatedCostWindow": "Costo estimado · {{days}}d"
+        },
+        "UsageDashboardQuotaStrip": {
+          "title": "Cuotas",
+          "description": "Ventanas de suscripción reportadas por cada proveedor. El alcance no cambia las cuotas.",
+          "empty": "Aún no se reportan cuotas de suscripción."
+        },
+        "UsageDashboardDailyChart": {
+          "title": "Tokens diarios",
+          "description": "Tokens de entrada, caché y salida por día.",
+          "gridAria": "Uso diario de tokens",
+          "input": "Entrada",
+          "cached": "Caché",
+          "output": "Salida",
+          "reasoning": "Razonamiento: {{tokens}} tokens",
+          "cost": "Costo estimado: {{cost}}",
+          "empty": "Aún no hay uso de tokens en este período."
+        },
+        "UsageDashboardModelTable": {
+          "title": "Modelos",
+          "description": "Tokens y costo estimado por modelo en los últimos {{days}} días.",
+          "provider": "Proveedor",
+          "providerOmp": "omp",
+          "cache": "Caché",
+          "reasoning": "Razonamiento",
+          "empty": "Aún no hay uso de modelos en este período."
+        }
       }
     },
     "i18n": {

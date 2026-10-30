@@ -5076,7 +5076,9 @@
           "cached": "Cached",
           "reasoning": "Reasoning: {{tokens}} tokens",
           "cost": "Est. cost: {{cost}}",
-          "empty": "No token usage in this period yet."
+          "empty": "No token usage in this period yet.",
+          "input": "Input",
+          "output": "Output"
         },
         "UsageDashboardModelTable": {
           "title": "Models",

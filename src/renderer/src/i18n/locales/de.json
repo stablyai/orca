@@ -18655,6 +18655,53 @@
           "noMovableChat": "„{{action}}“ kann nicht ausgeführt werden — kein verschiebbarer Chat ist aktiv.",
           "clientUnsupported": "„{{action}}“ kann nicht ausgeführt werden — dieser Client und diese Laufzeitumgebung unterstützen die Aktion nicht."
         }
+      },
+      "usageDashboard": {
+        "UsageDashboardDrawer": {
+          "title": "Token-Nutzung"
+        },
+        "UsageDashboardDrawerContent": {
+          "period": "Zeitraum",
+          "periodAria": "Nutzungszeitraum",
+          "periodDays": "{{days}} Tage",
+          "scope": "Bereich",
+          "scopeAria": "Nutzungsbereich",
+          "scopeAll": "Gesamte lokale Nutzung",
+          "refresh": "Nutzungsdaten aktualisieren",
+          "loading": "Lädt…",
+          "loadFailed": "Nutzungsdaten konnten nicht geladen werden.",
+          "empty": "Noch keine lokale Nutzung. Aktivieren Sie einen Anbieter unter Einstellungen → Statistiken & Nutzung.",
+          "totalTokens": "Tokens gesamt",
+          "estimatedCost": "Geschätzte Kosten",
+          "window": "Letzte {{days}} Tage",
+          "openFullStats": "Volle Statistiken öffnen",
+          "estimatedCostWindow": "Geschätzte Kosten · {{days}}T"
+        },
+        "UsageDashboardQuotaStrip": {
+          "title": "Kontingente",
+          "description": "Von jedem Anbieter gemeldete Abonnement-Fenster. Der Bereich ändert Kontingente nicht.",
+          "empty": "Noch keine Abonnement-Kontingente gemeldet."
+        },
+        "UsageDashboardDailyChart": {
+          "title": "Tägliche Tokens",
+          "description": "Eingabe-, Cache- und Ausgabe-Tokens pro Tag.",
+          "gridAria": "Tägliche Token-Nutzung",
+          "input": "Eingabe",
+          "cached": "Cache",
+          "output": "Ausgabe",
+          "reasoning": "Reasoning: {{tokens}} Tokens",
+          "cost": "Geschätzte Kosten: {{cost}}",
+          "empty": "Noch keine Token-Nutzung in diesem Zeitraum."
+        },
+        "UsageDashboardModelTable": {
+          "title": "Modelle",
+          "description": "Tokens und geschätzte Kosten pro Modell in den letzten {{days}} Tagen.",
+          "provider": "Anbieter",
+          "providerOmp": "omp",
+          "cache": "Cache",
+          "reasoning": "Reasoning",
+          "empty": "Noch keine Modellnutzung in diesem Zeitraum."
+        }
       }
     },
     "i18n": {

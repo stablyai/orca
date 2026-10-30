@@ -18641,6 +18641,53 @@
           "noMovableChat": "“{{action}}” çalıştırılamıyor — taşınabilir etkin sohbet yok.",
           "clientUnsupported": "“{{action}}” çalıştırılamıyor — bu istemci ve çalışma zamanı bunu desteklemiyor."
         }
+      },
+      "usageDashboard": {
+        "UsageDashboardDrawer": {
+          "title": "Token kullanımı"
+        },
+        "UsageDashboardDrawerContent": {
+          "period": "Dönem",
+          "periodAria": "Kullanım dönemi",
+          "periodDays": "{{days}} gün",
+          "scope": "Kapsam",
+          "scopeAria": "Kullanım kapsamı",
+          "scopeAll": "Tüm yerel kullanım",
+          "refresh": "Kullanım verilerini yenile",
+          "loading": "Yükleniyor…",
+          "loadFailed": "Kullanım verileri yüklenemedi.",
+          "empty": "Henüz yerel kullanım yok. Ayarlar → İstatistikler ve kullanım bölümünden bir sağlayıcı etkinleştirin.",
+          "totalTokens": "Toplam token",
+          "estimatedCost": "Tahmini maliyet",
+          "window": "Son {{days}} gün",
+          "openFullStats": "Tüm istatistikleri aç",
+          "estimatedCostWindow": "Tahmini maliyet · {{days}}g"
+        },
+        "UsageDashboardQuotaStrip": {
+          "title": "Kotalar",
+          "description": "Her sağlayıcının bildirdiği abonelik pencereleri. Kapsam kotaları değiştirmez.",
+          "empty": "Henüz abonelik kotası bildirilmedi."
+        },
+        "UsageDashboardDailyChart": {
+          "title": "Günlük tokenler",
+          "description": "Gün başına giriş, önbellek ve çıkış tokenleri.",
+          "gridAria": "Günlük token kullanımı",
+          "input": "Giriş",
+          "cached": "Önbellek",
+          "output": "Çıkış",
+          "reasoning": "Akıl yürütme: {{tokens}} token",
+          "cost": "Tahmini maliyet: {{cost}}",
+          "empty": "Bu dönemde henüz token kullanımı yok."
+        },
+        "UsageDashboardModelTable": {
+          "title": "Modeller",
+          "description": "Son {{days}} günde model başına tokenler ve tahmini maliyet.",
+          "provider": "Sağlayıcı",
+          "providerOmp": "omp",
+          "cache": "Önbellek",
+          "reasoning": "Akıl yürütme",
+          "empty": "Bu dönemde henüz model kullanımı yok."
+        }
       }
     },
     "i18n": {

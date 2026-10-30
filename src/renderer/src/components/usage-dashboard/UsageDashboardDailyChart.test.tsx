@@ -58,15 +58,20 @@ describe('UsageDashboardDailyChart', () => {
     expect(view.container.querySelectorAll('[data-chart-day]')).toHaveLength(3)
     const segments = view.container.querySelectorAll('[data-chart-segment]')
     expect([...segments].map((node) => node.getAttribute('data-chart-segment'))).toEqual([
+      'empty',
       'output',
       'cached',
-      'input'
+      'input',
+      'empty'
     ])
-    // Cached folds cache reads and writes into one segment.
+    // Cached folds cache reads and writes into one segment; legend names every series.
     expect(screen.getByText('Cached')).toBeInTheDocument()
-    expect(screen.getByText('2.0k')).toBeInTheDocument()
+    // The y-axis scale replaces per-column value labels, which collided in dense windows.
+    expect(view.container.textContent).toContain('1.0k')
+    // Date labels thin out so nothing renders clipped: first and last days stay labeled.
+    expect(screen.getByText('05-13')).toBeInTheDocument()
+    expect(screen.getByText('05-15')).toBeInTheDocument()
   })
-
   it('shows reasoning tokens in the tooltip detail when the day reports them', () => {
     render(
       <UsageDashboardDailyChart

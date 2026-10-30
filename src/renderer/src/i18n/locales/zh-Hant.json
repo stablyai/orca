@@ -18396,6 +18396,53 @@
           "noMovableChat": "無法執行「{{action}}」— 沒有作用中且可移動的聊天。",
           "clientUnsupported": "無法執行「{{action}}」— 此用戶端與執行環境不支援此操作。"
         }
+      },
+      "usageDashboard": {
+        "UsageDashboardDrawer": {
+          "title": "Token 用量"
+        },
+        "UsageDashboardDrawerContent": {
+          "period": "期間",
+          "periodAria": "用量期間",
+          "periodDays": "{{days}} 天",
+          "scope": "範圍",
+          "scopeAria": "用量範圍",
+          "scopeAll": "所有本機用量",
+          "refresh": "重新整理用量資料",
+          "loading": "載入中…",
+          "loadFailed": "無法載入用量資料。",
+          "empty": "尚無本機用量。請在設定 → 統計與用量中啟用供應商。",
+          "totalTokens": "Token 總量",
+          "estimatedCost": "預估費用",
+          "window": "最近 {{days}} 天",
+          "openFullStats": "開啟完整統計",
+          "estimatedCostWindow": "預估費用 · {{days}}天"
+        },
+        "UsageDashboardQuotaStrip": {
+          "title": "配額",
+          "description": "各供應商回報的訂閱窗口。範圍不會改變配額。",
+          "empty": "尚未回報訂閱配額。"
+        },
+        "UsageDashboardDailyChart": {
+          "title": "每日 Token",
+          "description": "每日的輸入、快取與輸出 Token。",
+          "gridAria": "每日 Token 用量",
+          "input": "輸入",
+          "cached": "快取",
+          "output": "輸出",
+          "reasoning": "推理：{{tokens}} Token",
+          "cost": "預估費用：{{cost}}",
+          "empty": "此期間尚無 Token 用量。"
+        },
+        "UsageDashboardModelTable": {
+          "title": "模型",
+          "description": "最近 {{days}} 天各模型的 Token 與預估費用。",
+          "provider": "供應商",
+          "providerOmp": "omp",
+          "cache": "快取",
+          "reasoning": "推理",
+          "empty": "此期間尚無模型用量。"
+        }
       }
     },
     "i18n": {

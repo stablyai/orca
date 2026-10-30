@@ -18154,6 +18154,53 @@
           "noMovableChat": "“{{action}}” 실행 불가 — 이동 가능한 활성 채팅이 없습니다.",
           "clientUnsupported": "“{{action}}” 실행 불가 — 이 클라이언트와 런타임에서 지원하지 않습니다."
         }
+      },
+      "usageDashboard": {
+        "UsageDashboardDrawer": {
+          "title": "토큰 사용량"
+        },
+        "UsageDashboardDrawerContent": {
+          "period": "기간",
+          "periodAria": "사용 기간",
+          "periodDays": "{{days}}일",
+          "scope": "범위",
+          "scopeAria": "사용 범위",
+          "scopeAll": "전체 로컬 사용량",
+          "refresh": "사용 데이터 새로고침",
+          "loading": "불러오는 중…",
+          "loadFailed": "사용 데이터를 불러올 수 없습니다.",
+          "empty": "아직 로컬 사용량이 없습니다. 설정 → 통계 및 사용량에서 공급자를 활성화하세요.",
+          "totalTokens": "총 토큰",
+          "estimatedCost": "예상 비용",
+          "window": "지난 {{days}}일",
+          "openFullStats": "전체 통계 열기",
+          "estimatedCostWindow": "예상 비용 · {{days}}일"
+        },
+        "UsageDashboardQuotaStrip": {
+          "title": "할당량",
+          "description": "각 공급자가 보고하는 구독 기간. 범위는 할당량을 변경하지 않습니다.",
+          "empty": "아직 보고된 구독 할당량이 없습니다."
+        },
+        "UsageDashboardDailyChart": {
+          "title": "일일 토큰",
+          "description": "일별 입력, 캐시, 출력 토큰.",
+          "gridAria": "일일 토큰 사용량",
+          "input": "입력",
+          "cached": "캐시",
+          "output": "출력",
+          "reasoning": "추론: {{tokens}} 토큰",
+          "cost": "예상 비용: {{cost}}",
+          "empty": "이 기간에는 아직 토큰 사용량이 없습니다."
+        },
+        "UsageDashboardModelTable": {
+          "title": "모델",
+          "description": "지난 {{days}}일 동안 모델별 토큰 및 예상 비용.",
+          "provider": "공급자",
+          "providerOmp": "omp",
+          "cache": "캐시",
+          "reasoning": "추론",
+          "empty": "이 기간에는 아직 모델 사용량이 없습니다."
+        }
       }
     },
     "i18n": {

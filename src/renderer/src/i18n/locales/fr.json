@@ -18847,6 +18847,53 @@
           "noMovableChat": "Impossible d’exécuter « {{action}} » — aucun chat déplaçable n’est actif.",
           "clientUnsupported": "Impossible d’exécuter « {{action}} » — ce client et cet environnement d’exécution ne le prennent pas en charge."
         }
+      },
+      "usageDashboard": {
+        "UsageDashboardDrawer": {
+          "title": "Utilisation des jetons"
+        },
+        "UsageDashboardDrawerContent": {
+          "period": "Période",
+          "periodAria": "Période d’utilisation",
+          "periodDays": "{{days}} jours",
+          "scope": "Portée",
+          "scopeAria": "Portée d’utilisation",
+          "scopeAll": "Toute l’utilisation locale",
+          "refresh": "Actualiser les données",
+          "loading": "Chargement…",
+          "loadFailed": "Impossible de charger les données.",
+          "empty": "Aucune utilisation locale pour l’instant. Activez un fournisseur dans Réglages → Statistiques et utilisation.",
+          "totalTokens": "Jetons totaux",
+          "estimatedCost": "Coût estimé",
+          "window": "{{days}} derniers jours",
+          "openFullStats": "Ouvrir les statistiques",
+          "estimatedCostWindow": "Coût estimé · {{days}}j"
+        },
+        "UsageDashboardQuotaStrip": {
+          "title": "Quotas",
+          "description": "Fenêtres d’abonnement signalées par chaque fournisseur. La portée ne change pas les quotas.",
+          "empty": "Aucun quota d’abonnement signalé pour l’instant."
+        },
+        "UsageDashboardDailyChart": {
+          "title": "Jetons quotidiens",
+          "description": "Jetons d’entrée, en cache et de sortie par jour.",
+          "gridAria": "Utilisation quotidienne des jetons",
+          "input": "Entrée",
+          "cached": "Cache",
+          "output": "Sortie",
+          "reasoning": "Raisonnement : {{tokens}} jetons",
+          "cost": "Coût estimé : {{cost}}",
+          "empty": "Pas encore d’utilisation de jetons sur cette période."
+        },
+        "UsageDashboardModelTable": {
+          "title": "Modèles",
+          "description": "Jetons et coût estimé par modèle sur les {{days}} derniers jours.",
+          "provider": "Fournisseur",
+          "providerOmp": "omp",
+          "cache": "Cache",
+          "reasoning": "Raisonnement",
+          "empty": "Aucune utilisation de modèle sur cette période."
+        }
       }
     },
     "i18n": {
