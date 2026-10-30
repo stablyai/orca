@@ -110,6 +110,65 @@ function Fixture({
 }
 afterEach(cleanup)
 describe('workspace linked references in hover details', () => {
+  it('offers unlink only for persisted GitLab references, since implicit MRs cannot be suppressed', () => {
+    render(
+      <WorktreeCardDetailsHover
+        workspace={{ ...workspace, linkedPR: 57, linkedItems: [attachments[0]] }}
+        review={{
+          provider: 'gitlab',
+          number: 58,
+          title: 'Branch MR',
+          url: 'https://gitlab.example.com/team/orca/-/merge_requests/58'
+        }}
+        issue={null}
+        linearIssue={null}
+        comment={null}
+        onUnlinkReview={vi.fn()}
+      >
+        <span>Workspace</span>
+      </WorktreeCardDetailsHover>
+    )
+    expect(screen.getByLabelText('More PR actions')).toBeTruthy()
+    expect(screen.queryByLabelText('More MR actions')).toBeNull()
+  })
+  it('shows the branch review and the single older observed review with their own identities and checks', () => {
+    const saved: WorkspaceAttachment = {
+      provider: 'github',
+      type: 'pr',
+      number: 56,
+      url: 'https://github.com/acme/orca/pull/56',
+      origins: [{ kind: 'observed', tabId: 'terminal' }]
+    }
+    const { container } = render(
+      <Fixture
+        onManage={vi.fn()}
+        worktree={{ ...workspace, linkedPR: null, linkedItems: [saved] }}
+        referenceDetails={{
+          [getWorkspaceAttachmentKey(saved)]: {
+            title: 'Original merged review',
+            url: saved.url ?? '',
+            review: {
+              provider: 'github',
+              number: 56,
+              title: 'Original merged review',
+              url: saved.url,
+              state: 'merged',
+              status: 'neutral'
+            }
+          }
+        }}
+      />
+    )
+    expect(screen.getByText('Reviews · 2')).toBeTruthy()
+    expect(screen.getByRole('link', { name: 'Open PR #57' }).getAttribute('href')).toBe(review.url)
+    expect(screen.getByRole('link', { name: 'Open PR #56' }).getAttribute('href')).toBe(saved.url)
+    const rows = Array.from(container.querySelectorAll('[data-workspace-hover-reference]'))
+    expect(rows).toHaveLength(2)
+    expect(rows[0]?.textContent).toContain('Active review')
+    expect(rows[0]?.querySelector('[aria-label="Checks: Passing"]')).toBeTruthy()
+    expect(rows[1]?.textContent).toContain('Original merged review')
+    expect(rows[1]?.querySelector('[aria-label="Checks: Passing"]')).toBeNull()
+  })
   it('shows each fetched sibling status and target without applying primary checks to its peers', () => {
     const [, sibling, task] = attachments
     const details: WorkspaceReferenceDetailsMap = {

@@ -4,6 +4,7 @@ import { useAppStore } from '@/store'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { getWorkspaceAttachmentKey } from '../../../../shared/workspace-attachment-normalization'
+import { getWorkspaceCardAttachments } from './workspace-hover-attachments'
 import { getWorkspaceAttachments } from '../../../../shared/workspace-attachments'
 import type { WorktreeCardPrDisplay } from './worktree-card-pr-display'
 import { canReadWorkspaceReferenceReview } from './workspace-reference-review-source'
@@ -56,7 +57,7 @@ export function useWorkspaceReferenceDetails(
       matchWorkspaceReferenceReview(request.item, review) &&
       canReadWorkspaceReferenceReview(request, review?.provider)
   )
-  return Object.fromEntries(
+  const details: Record<string, WorkspaceReferenceDetailsMap[string]> = Object.fromEntries(
     requests.map((request) => {
       const entry = getWorkspaceReferenceLookup(request, useAppStore.getState())?.entry
       const primary =
@@ -73,4 +74,12 @@ export function useWorkspaceReferenceDetails(
       ]
     })
   )
+  const item = getWorkspaceCardAttachments(workspace, review, repo).at(-1)
+  if (item && review?.url) {
+    const key = getWorkspaceAttachmentKey(item)
+    if (!Object.hasOwn(details, key)) {
+      details[key] = { title: review.title, url: review.url, review, stale: hostOff }
+    }
+  }
+  return details
 }

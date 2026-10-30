@@ -221,6 +221,37 @@ describe('useWorktreeCardSecondaryDetails store subscriptions', () => {
       'Update the remote runtime to unlink GitHub pull requests'
     )
   })
+  it('hides a discovered branch review without deleting the older saved reference', async () => {
+    const saved: WorkspaceAttachment = {
+      provider: 'github',
+      type: 'pr',
+      number: 41,
+      url: 'https://github.com/acme/orca/pull/41'
+    }
+    const branch: WorkspaceAttachment = {
+      ...saved,
+      number: 42,
+      url: 'https://github.com/acme/orca/pull/42'
+    }
+    const updateWorktreeMeta = vi.fn().mockResolvedValue({ ok: true })
+    let unlink: ((item?: WorkspaceAttachment) => Promise<void>) | null = null
+    function Probe(): null {
+      unlink = useWorktreeCardSecondaryDetails({
+        ...secondaryDetailsArgs(makeSettings(300_000)),
+        worktree: { ...makeWorktree(), hostId: 'ssh:builder', linkedItems: [saved] },
+        prDisplay: { provider: 'github', number: 42, title: 'Branch PR', url: branch.url },
+        updateWorktreeMeta
+      }).handleUnlinkReview
+      return null
+    }
+    mount(<Probe />)
+    await act(() => unlink?.(branch))
+    expect(updateWorktreeMeta).toHaveBeenCalledWith(
+      WORKTREE_ID,
+      { suppressedGitHubPR: 42 },
+      { executionHostId: 'ssh:builder' }
+    )
+  })
   it('unlinks the chosen sibling while retaining the selected review and other sources', async () => {
     const primary: WorkspaceAttachment = {
       provider: 'github',

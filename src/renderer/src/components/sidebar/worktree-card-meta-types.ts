@@ -1,3 +1,4 @@
+import type { Repo } from '../../../../shared/repo-types'
 import type { IssueInfo } from '../../../../shared/github/pull-request-types'
 import type {
   Worktree,
@@ -52,6 +53,7 @@ export type WorktreeCardMetaBadgesRootProps = WorktreeCardMetaBadgesProps &
 
 export type WorktreeCardDetailsHoverProps = WorktreeCardMetaBadgesProps & {
   workspace?: Worktree
+  repo?: Repo
   onManageLinks?: (event: React.MouseEvent) => void
   children: React.ReactElement
   branchName?: string

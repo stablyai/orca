@@ -1,3 +1,5 @@
+import type { Repo } from '../../../../shared/repo-types'
+import { canReadWorkspaceReferenceReview } from './workspace-reference-review-source'
 import type { WorkspaceAttachment, Worktree } from '../../../../shared/worktree/types'
 import { getWorkspaceAttachments } from '../../../../shared/workspace-attachments'
 import { getWorkspaceAttachmentKey } from '../../../../shared/workspace-attachment-normalization'
@@ -9,6 +11,10 @@ import type {
   WorktreeCardJiraIssueDisplay
 } from './worktree-card-meta-types'
 import type { WorktreeCardPrDisplay } from './worktree-card-pr-display'
+import {
+  matchWorkspaceReferenceReview,
+  matchesWorkspaceReferenceUrl
+} from './workspace-reference-details'
 import type {
   WorkspaceReferenceDetails,
   WorkspaceReferenceDetailsMap
@@ -21,9 +27,115 @@ type LiveDetails = {
   review: WorktreeCardPrDisplay | null
 }
 
+type CardAttachmentCache = {
+  saved: readonly WorkspaceAttachment[]
+  savedKeys?: ReadonlySet<string>
+  repo?: Repo
+  reviewProvider?: WorktreeCardPrDisplay['provider']
+  reviewNumber?: number
+  reviewTitle?: string
+  reviewUrl?: string
+  items: readonly WorkspaceAttachment[]
+}
+
+// Immutable workspace snapshots bound invalidation; weak ownership releases replaced snapshots.
+const cardAttachmentCaches = new WeakMap<Worktree, CardAttachmentCache>()
+
+function getCardAttachmentCache(workspace: Worktree): CardAttachmentCache {
+  let cached = cardAttachmentCaches.get(workspace)
+  if (!cached) {
+    const saved = getWorkspaceAttachments(workspace)
+    cached = { saved, items: saved }
+    cardAttachmentCaches.set(workspace, cached)
+  }
+  return cached
+}
+
+export function isSavedWorkspaceCardAttachment(
+  workspace: Worktree,
+  item: WorkspaceAttachment
+): boolean {
+  const cached = getCardAttachmentCache(workspace)
+  cached.savedKeys ??= new Set(cached.saved.map(getWorkspaceAttachmentKey))
+  return cached.savedKeys.has(getWorkspaceAttachmentKey(item))
+}
+
+function canUseCardReviewSource(item: WorkspaceAttachment, repo: Repo | undefined): boolean {
+  return (
+    !item.taskSourceContext ||
+    (item.provider !== 'linear' &&
+      item.provider !== 'jira' &&
+      canReadWorkspaceReferenceReview(
+        { item, sourceContext: item.taskSourceContext, repo },
+        item.provider
+      ))
+  )
+}
+
+export function getWorkspaceCardAttachments(
+  workspace: Worktree,
+  review: WorktreeCardPrDisplay | null,
+  repo?: Repo
+): readonly WorkspaceAttachment[] {
+  const cached = getCardAttachmentCache(workspace)
+  if (!review?.url || review.provider === 'unsupported') {
+    return cached.saved
+  }
+  if (
+    cached.repo === repo &&
+    cached.reviewProvider === review.provider &&
+    cached.reviewNumber === review.number &&
+    cached.reviewTitle === review.title &&
+    cached.reviewUrl === review.url
+  ) {
+    return cached.items
+  }
+  cached.repo = repo
+  cached.reviewProvider = review.provider
+  cached.reviewNumber = review.number
+  cached.reviewTitle = review.title
+  cached.reviewUrl = review.url
+  cached.items = cached.saved
+  if (
+    !cached.saved.some(
+      (item) => canUseCardReviewSource(item, repo) && matchWorkspaceReferenceReview(item, review)
+    )
+  ) {
+    // Branch discovery supplements saved references without changing persisted links or selection.
+    cached.items = [
+      ...cached.saved,
+      {
+        provider: review.provider,
+        type: review.provider === 'gitlab' ? 'mr' : 'pr',
+        number: review.number,
+        title: review.title,
+        url: review.url
+      }
+    ]
+  }
+  return cached.items
+}
+
+export function getWorkspaceCardAttachmentCollection(
+  workspace: Worktree | undefined,
+  details: LiveDetails,
+  repo?: Repo
+): { items: readonly WorkspaceAttachment[]; showCollection: boolean } {
+  const items = workspace ? getWorkspaceCardAttachments(workspace, details.review, repo) : []
+  const showCollection =
+    items.length > 1 ||
+    Boolean(
+      workspace &&
+      items.length === 1 &&
+      !getWorkspaceHoverAttachments(workspace, details, repo).liveMatched[0]
+    )
+  return { items, showCollection }
+}
+
 export function getWorkspaceHoverAttachments(
   workspace: Worktree,
-  details: LiveDetails
+  details: LiveDetails,
+  repo?: Repo
 ): {
   items: WorkspaceAttachment[]
   activeKey: string | null
@@ -31,7 +143,7 @@ export function getWorkspaceHoverAttachments(
   /** Per item: whether it is the card's own review, issue or task, enriched from live details. */
   liveMatched: boolean[]
 } {
-  const items = getWorkspaceAttachments(workspace)
+  const items = getWorkspaceCardAttachments(workspace, details.review, repo)
   const liveMatched: boolean[] = []
   const matches = (item: WorkspaceAttachment): boolean => {
     if (item.provider === 'github' && item.type === 'issue') {
@@ -45,6 +157,7 @@ export function getWorkspaceHoverAttachments(
     }
     return (
       item.type !== 'issue' &&
+      canUseCardReviewSource(item, repo) &&
       item.provider === details.review?.provider &&
       item.number === details.review?.number
     )
@@ -61,13 +174,13 @@ export function getWorkspaceHoverAttachments(
     const sameReference =
       matches(item) &&
       live &&
-      (!item.url || item.url === live.url) &&
+      (!item.url || (live.url && matchesWorkspaceReferenceUrl(item, live.url))) &&
       items.filter(
         (candidate) =>
           candidate.provider === item.provider &&
           candidate.type === item.type &&
           matches(candidate) &&
-          (!candidate.url || candidate.url === live.url)
+          (!candidate.url || (live.url && matchesWorkspaceReferenceUrl(candidate, live.url)))
       ).length === 1
     liveMatched.push(Boolean(sameReference))
     return sameReference
@@ -79,18 +192,31 @@ export function getWorkspaceHoverAttachments(
       : item
   })
   const legacyActive = getActiveWorkspaceReviewKey(workspace)
-  const selected = items.find((item) => getWorkspaceAttachmentKey(item) === legacyActive)
+  const selected = items.find(
+    (item) => getWorkspaceAttachmentKey(item) === legacyActive && canUseCardReviewSource(item, repo)
+  )
   const candidates = selected
     ? items.filter(
         (item) =>
           item.provider === selected.provider &&
           item.type === selected.type &&
-          item.number === selected.number
+          item.number === selected.number &&
+          canUseCardReviewSource(item, repo)
       )
     : []
-  const sourceMatches = candidates.filter((item) => item.url && item.url === details.review?.url)
+  const sourceMatches = candidates.filter(
+    (item) => canUseCardReviewSource(item, repo) && item.url && item.url === details.review?.url
+  )
+  const matchingReviews = items.filter(
+    (item) =>
+      canUseCardReviewSource(item, repo) && matchWorkspaceReferenceReview(item, details.review)
+  )
   const active =
-    candidates.length > 1 ? (sourceMatches.length === 1 ? sourceMatches[0] : undefined) : selected
+    candidates.length > 1
+      ? sourceMatches.length === 1
+        ? sourceMatches[0]
+        : undefined
+      : (selected ?? (matchingReviews.length === 1 ? matchingReviews[0] : undefined))
   const activeIndex = active ? items.indexOf(active) : -1
   const activeItem = enriched[activeIndex]
   return {
@@ -118,11 +244,13 @@ export type WorkspaceLinkedItemRow = {
 export function getWorkspaceLinkedItemRows(
   workspace: Worktree,
   details: LiveDetails,
-  referenceDetails: WorkspaceReferenceDetailsMap | undefined
+  referenceDetails: WorkspaceReferenceDetailsMap | undefined,
+  repo?: Repo
 ): WorkspaceLinkedItemRow[] {
   const { items, activeKey, referenceKeys, liveMatched } = getWorkspaceHoverAttachments(
     workspace,
-    details
+    details,
+    repo
   )
   const review = details.review
   // Why: references are stored in link order; surfaces list the newest first.
@@ -133,6 +261,7 @@ export function getWorkspaceLinkedItemRows(
       const live =
         detail?.review ??
         (key === activeKey &&
+        canUseCardReviewSource(item, repo) &&
         review?.provider === item.provider &&
         review.number === item.number &&
         (!item.url || review.url === item.url)

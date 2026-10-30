@@ -7,7 +7,7 @@ import {
 import type { WorkspaceReferenceRequest } from './workspace-reference-details'
 
 export function canReadWorkspaceReferenceReview(
-  request: WorkspaceReferenceRequest,
+  request: Pick<WorkspaceReferenceRequest, 'item' | 'sourceContext' | 'repo'>,
   knownProvider?: HostedReviewProvider
 ): boolean {
   const { item, sourceContext, repo } = request

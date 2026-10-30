@@ -84,6 +84,7 @@ export function WorktreeCardParentContent({
     hasHoverDetails && !titleRenaming ? (
       <WorktreeCardDetailsHover
         workspace={worktree}
+        repo={repo}
         referenceDetails={referenceDetails}
         onManageLinks={affiliateListMode ? undefined : handleManageLinks}
         issue={hoverIssue}
@@ -172,7 +173,7 @@ export function WorktreeCardParentContent({
         className={cn(
           'flex min-w-0 flex-1 flex-col gap-1.5',
           // Why: inline agent rows intentionally outdent into the card gutter; inner elements handle truncation.
-          showInlineAgentList || getWorkspaceAttachments(worktree).length > 1
+          showInlineAgentList || presentation.referenceItemCount > 1
             ? 'overflow-visible'
             : 'overflow-hidden'
         )}

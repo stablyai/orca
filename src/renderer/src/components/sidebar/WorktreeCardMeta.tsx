@@ -1,7 +1,7 @@
 import React from 'react'
 import { useWorkspaceReferenceLinkActions } from './use-workspace-reference-link-actions'
 import { LinkActionPopover } from '@/components/link-actions/LinkActionPopover'
-import { getWorkspaceAttachments } from '../../../../shared/workspace-attachments'
+import { getWorkspaceCardAttachmentCollection } from './workspace-hover-attachments'
 import { WorktreeCardLinkedItemsSection } from './WorktreeCardLinkedItemsSection'
 import { Badge } from '@/components/ui/badge'
 import { HoverCard, HoverCardTrigger, HoverCardContent } from '@/components/ui/hover-card'
@@ -56,6 +56,7 @@ function hasComment(comment: string | null): boolean {
 
 export function WorktreeCardDetailsHover({
   workspace,
+  repo,
   referenceDetails,
   onManageLinks,
   issue,
@@ -156,10 +157,8 @@ export function WorktreeCardDetailsHover({
     )
   }, [closeHover, copyLinkedWorkItemLink, issue?.url])
   const showIdentityHeader = Boolean(branchName || workspaceTitle)
-  const attachments = getWorkspaceAttachments(workspace ?? {})
-  const showAttachmentCollection =
-    attachments.length > 1 ||
-    (attachments.length === 1 && !issue && !linearIssue && !jiraIssue && !review)
+  const { items: attachments, showCollection: showAttachmentCollection } =
+    getWorkspaceCardAttachmentCollection(workspace, { review, issue, linearIssue, jiraIssue }, repo)
 
   if (
     !showIdentityHeader &&
@@ -347,6 +346,7 @@ export function WorktreeCardDetailsHover({
           ) : null}
           <WorktreeCardLinkedItemsSection
             workspace={workspace}
+            repo={repo}
             referenceDetails={referenceDetails}
             review={review}
             issue={issue}
@@ -357,6 +357,7 @@ export function WorktreeCardDetailsHover({
             onOpen={onOpenLink}
             renderReviewActions={(item, live) => (
               <WorktreeCardLinkedReviewActions
+                workspace={workspace}
                 item={item}
                 review={live}
                 onOpenChange={handleReviewMenuOpenChange}

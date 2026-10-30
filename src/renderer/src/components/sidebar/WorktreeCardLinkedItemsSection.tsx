@@ -1,4 +1,5 @@
 import React from 'react'
+import type { Repo } from '../../../../shared/repo-types'
 import { Link2 } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
 import type { WorkspaceAttachment, Worktree } from '../../../../shared/worktree/types'
@@ -24,6 +25,7 @@ import { openAppHttpLink } from '@/lib/app-http-link-open'
 
 export function WorktreeCardLinkedItemsSection({
   workspace,
+  repo,
   referenceDetails,
   review,
   issue,
@@ -35,6 +37,7 @@ export function WorktreeCardLinkedItemsSection({
   renderReviewActions
 }: {
   workspace?: Worktree
+  repo?: Repo
   referenceDetails?: WorkspaceReferenceDetailsMap
   review: WorktreeCardPrDisplay | null
   issue?: WorktreeCardIssueDisplay | null
@@ -54,7 +57,8 @@ export function WorktreeCardLinkedItemsSection({
   const rows = getWorkspaceLinkedItemRows(
     workspace,
     { review, issue, linearIssue, jiraIssue },
-    referenceDetails
+    referenceDetails,
+    repo
   )
   const groups = [
     {

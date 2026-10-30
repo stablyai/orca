@@ -1,5 +1,6 @@
 import { useState, type MouseEvent } from 'react'
-import type { WorkspaceAttachment } from '../../../../shared/worktree/types'
+import type { WorkspaceAttachment, Worktree } from '../../../../shared/worktree/types'
+import { isSavedWorkspaceCardAttachment } from './workspace-hover-attachments'
 import type { WorktreeCardPrDisplay } from './worktree-card-pr-display'
 import { workspaceAttachmentProviderLabel } from './worktree-attachment-editing'
 import { Ellipsis, MonitorUp } from 'lucide-react'
@@ -109,6 +110,7 @@ export function WorktreeCardReviewActions({
 }
 
 export function WorktreeCardLinkedReviewActions({
+  workspace,
   item,
   review,
   onOpenChange,
@@ -116,6 +118,7 @@ export function WorktreeCardLinkedReviewActions({
   onUnlink,
   closeHover
 }: {
+  workspace?: Worktree
   item: WorkspaceAttachment
   review: WorktreeCardPrDisplay | null
   onOpenChange: (open: boolean) => void
@@ -125,6 +128,8 @@ export function WorktreeCardLinkedReviewActions({
 }): React.JSX.Element {
   const url = item.url ?? review?.url
   const label = item.type === 'mr' ? 'MR' : 'PR'
+  const canUnlink =
+    item.provider === 'github' || (workspace && isSavedWorkspaceCardAttachment(workspace, item))
   return (
     <WorktreeCardReviewActions
       label={label}
@@ -145,7 +150,7 @@ export function WorktreeCardLinkedReviewActions({
               )
           : undefined
       }
-      onUnlink={onUnlink ? () => onUnlink(item) : undefined}
+      onUnlink={onUnlink && canUnlink ? () => onUnlink(item) : undefined}
       closeHover={closeHover}
     />
   )

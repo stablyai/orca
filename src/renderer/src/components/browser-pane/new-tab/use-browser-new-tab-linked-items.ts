@@ -65,7 +65,8 @@ export function useBrowserNewTabLinkedItems(
       jiraIssue: linked.jiraIssueDisplay
     },
     // Why no per-item details: their lookup routes by the focused server, which this page must not.
-    undefined
+    undefined,
+    repo
   )
   // Why: the card also shows the review found from the branch, which no saved link may name.
   const branchReview = review.prDisplay

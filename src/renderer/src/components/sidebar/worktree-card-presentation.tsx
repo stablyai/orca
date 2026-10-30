@@ -1,5 +1,6 @@
 import React from 'react'
 import { getWorkspaceAttachments } from '../../../../shared/workspace-attachments'
+import { getWorkspaceCardAttachments } from './workspace-hover-attachments'
 
 import {
   getFlushWorktreeCardPaddingLeft,
@@ -178,7 +179,7 @@ export function buildWorktreeCardPresentation(card: WorktreeCardController) {
       ? getNewCardStyleParentContentMarginLeft(contentIndent)
       : 0
   const cardStyle = cardPaddingLeft ? { paddingLeft: cardPaddingLeft } : undefined
-  const allReferenceItems = getWorkspaceAttachments(worktree)
+  const allReferenceItems = getWorkspaceCardAttachments(worktree, hoverReview, repo)
   const referenceItems = allReferenceItems.filter((item) =>
     item.type !== 'issue'
       ? showPR &&
@@ -215,6 +216,7 @@ export function buildWorktreeCardPresentation(card: WorktreeCardController) {
     detailsAndPortsContent && !newCardStyle && !compactCards ? (
       <WorktreeCardDetailsHover
         workspace={worktree}
+        repo={repo}
         referenceDetails={referenceDetails}
         onManageLinks={affiliateListMode ? undefined : handleManageLinks}
         issue={metaIssue}
@@ -285,7 +287,8 @@ export function buildWorktreeCardPresentation(card: WorktreeCardController) {
     cardStyle,
     detailsAndPorts,
     titleRowIndicators,
-    titleOnlyCard
+    titleOnlyCard,
+    referenceItemCount: allReferenceItems.length
   }
 }
 

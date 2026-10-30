@@ -12,6 +12,8 @@ import {
   getTaskSourceCacheScope
 } from '../../../../shared/task-source-context'
 import { getWorkspaceAttachmentKey } from '../../../../shared/workspace-attachment-normalization'
+import { getWorkspaceCardAttachments } from './workspace-hover-attachments'
+import { summarizeWorkspaceReviewChecks } from '../../../../shared/workspace-review-checks'
 import { _clearHostedReviewRequestGenerationsForTest } from '@/store/slices/hosted-review-request-state'
 import { getHostedReviewCacheKey } from '@/store/slices/hosted-review-cache-identity'
 import {
@@ -94,6 +96,47 @@ beforeEach(() => {
   })
 })
 afterEach(cleanup)
+
+it('includes current branch checks beside saved references without an extra exact lookup', () => {
+  const branchReview = referenceReview(3, { status: 'failure' })
+  const hook = renderHook(() =>
+    useWorkspaceReferenceDetails(workspace, referenceRepo, branchReview, false)
+  )
+  const items = getWorkspaceCardAttachments(workspace, branchReview, referenceRepo)
+  const summary = summarizeWorkspaceReviewChecks(items, hook.result.current)
+  expect(summary).toMatchObject({ total: 3, failed: 1, unknown: 2, stale: 0, state: 'failure' })
+  expect(hook.result.current[getWorkspaceAttachmentKey(items[2])]?.review).toBe(branchReview)
+  expect(read).not.toHaveBeenCalled()
+})
+
+it('assigns branch checks only to the projected review when a saved reference has a foreign source', () => {
+  const foreign = {
+    ...referenceAttachment(3),
+    url: undefined,
+    taskSourceContext: {
+      kind: 'task-source' as const,
+      provider: 'github' as const,
+      projectId: 'other-project',
+      hostId: 'runtime:other' as const,
+      repoId: 'other-repo',
+      accountLabel: 'other-account'
+    }
+  }
+  const worktree = { ...workspace, linkedItems: [foreign] }
+  const branchReview = referenceReview(3, { status: 'failure' })
+  const hook = renderHook(() =>
+    useWorkspaceReferenceDetails(worktree, referenceRepo, branchReview, false)
+  )
+  const items = getWorkspaceCardAttachments(worktree, branchReview, referenceRepo)
+  expect(items).toHaveLength(2)
+  expect(hook.result.current[getWorkspaceAttachmentKey(foreign)]).toBeUndefined()
+  expect(hook.result.current[getWorkspaceAttachmentKey(items[1])]?.review).toBe(branchReview)
+  expect(summarizeWorkspaceReviewChecks(items, hook.result.current)).toMatchObject({
+    total: 2,
+    failed: 1,
+    unknown: 1
+  })
+})
 
 it('automatically reads every attached review without a mounted reference hook', async () => {
   renderHook(() => useVisibleHostedReviewRefresh({ enabled: true }))
