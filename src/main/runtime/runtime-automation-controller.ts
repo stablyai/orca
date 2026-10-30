@@ -34,10 +34,8 @@ export type RuntimeAutomationCreateInput = Omit<
 export type RuntimeAutomationUpdateInput = Omit<
   AutomationUpdateInput,
   'projectId' | 'workspaceId'
-> & {
-  repo?: string
-  workspace?: string
-}
+> &
+  Pick<RuntimeAutomationCreateInput, 'repo' | 'workspace'>
 
 type RuntimeAutomationTargetResolvers = {
   showRepo: (selector: string) => Promise<Repo>
@@ -127,6 +125,7 @@ export class RuntimeAutomationController {
         precheck: input.precheck,
         agentId: input.agentId,
         extraAgentArgs: input.extraAgentArgs,
+        launchSetupPatch: input.launchSetupPatch,
         runContext: input.runContext,
         sourceContext: input.sourceContext,
         projectId: target.projectId,
@@ -241,6 +240,7 @@ export class RuntimeAutomationController {
       'precheck',
       'agentId',
       'extraAgentArgs',
+      'launchSetupPatch',
       'runContext',
       'sourceContext',
       'baseBranch',

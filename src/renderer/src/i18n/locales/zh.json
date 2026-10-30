@@ -11420,7 +11420,6 @@
         },
         "PluginThemeUseNow": {
           "label": "立即使用：",
-          "useName": "立即使用：{{value0}}",
           "useForLight": "用于浅色：",
           "useForDark": "用于深色："
         },
@@ -19599,6 +19598,10 @@
       "caution": "注意"
     },
     "automations": {
+      "openIn": "打开方式",
+      "chat": "聊天",
+      "terminal": "终端",
+      "runChatUnavailable": "运行聊天不可用。正在显示其工作区；已保存的输出仍可在运行详情中查看。",
       "runTerminalUnavailable": "运行终端不可用。"
     },
     "jiraIssueTitleField": {

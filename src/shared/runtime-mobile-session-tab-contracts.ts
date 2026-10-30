@@ -76,6 +76,7 @@ export type RuntimeMobileSessionFileTab = {
   language: string
   mode?: 'edit' | 'diff'
   diffSource?: 'staged' | 'unstaged'
+  oldPath?: string
   isDirty: boolean
   color?: string | null
   isPinned?: boolean

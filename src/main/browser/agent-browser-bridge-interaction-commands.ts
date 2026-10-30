@@ -11,11 +11,16 @@ import type {
 } from '../../shared/runtime-types'
 import { BrowserError } from './cdp-bridge'
 import {
-  FILE_INPUT_TARGET_FUNCTION,
+  FILE_INPUT_FRAME_URL_FUNCTION,
+  FILE_UPLOAD_TARGET_FUNCTION,
   FILL_ELEMENT_FUNCTION,
   SELECT_ALL_ELEMENT_FUNCTION
 } from './browser-element-functions'
 import { assertUploadFilesExist } from './browser-upload-files'
+import type { WebContents } from 'electron'
+import type { CapturedElement } from './cdp-element-capture'
+import { interceptFileChooser, type OpenedFileChooser } from './guest-file-chooser'
+import { readRecord, readString } from './guest-frame-input-sessions'
 import {
   agentBrowserWaitArguments,
   type AgentBrowserWaitOptions
@@ -30,7 +35,7 @@ export abstract class AgentBrowserBridgeInteractionCommands extends AgentBrowser
     worktreeId?: string,
     browserPageId?: string
   ): Promise<BrowserHoverResult> {
-    return this.enqueueTargetedCommand(
+    return this.enqueuePageAction(
       worktreeId,
       browserPageId,
       async (sessionName) => {
@@ -46,7 +51,7 @@ export abstract class AgentBrowserBridgeInteractionCommands extends AgentBrowser
     worktreeId?: string,
     browserPageId?: string
   ): Promise<BrowserDragResult> {
-    return this.enqueueTargetedCommand(
+    return this.enqueuePageAction(
       worktreeId,
       browserPageId,
       async (sessionName) => {
@@ -62,20 +67,82 @@ export abstract class AgentBrowserBridgeInteractionCommands extends AgentBrowser
     worktreeId?: string,
     browserPageId?: string
   ): Promise<BrowserUploadResult> {
-    return this.enqueueTargetedCommand(
+    return this.enqueuePageAction(
       worktreeId,
       browserPageId,
       async (sessionName) => {
         await assertUploadFilesExist(filePaths)
-        await this.actOnElement(sessionName, element, 'upload to', FILE_INPUT_TARGET_FUNCTION)
-        return (await this.execAgentBrowser(sessionName, [
-          'upload',
-          element,
-          ...filePaths
-        ])) as BrowserUploadResult
+        const target = await this.captureElement(sessionName, element)
+        const { wc, captured } = target
+        const chooser = await interceptFileChooser(wc, captured.sessionId)
+        try {
+          const isFileInput = await this.callElementFunction(
+            sessionName,
+            target,
+            element,
+            'upload to',
+            FILE_UPLOAD_TARGET_FUNCTION,
+            { userGesture: true }
+          )
+          const input =
+            isFileInput === true
+              ? captured
+              : await this.openedFileInput(sessionName, wc, element, await chooser.next())
+          const frame = await this.sendElementCdpCommand(
+            sessionName,
+            wc,
+            'Runtime.callFunctionOn',
+            {
+              objectId: input.objectId,
+              functionDeclaration: FILE_INPUT_FRAME_URL_FUNCTION,
+              returnByValue: true
+            },
+            input.sessionId
+          )
+          const frameUrl = readRecord(frame, 'result')?.value
+          await this.sendElementCdpCommand(
+            sessionName,
+            wc,
+            'DOM.setFileInputFiles',
+            { files: filePaths, objectId: input.objectId },
+            input.sessionId
+          )
+          return {
+            uploaded: filePaths.length,
+            ...(typeof frameUrl === 'string' ? { frameUrl } : {})
+          }
+        } finally {
+          await chooser.release()
+        }
       },
       { elements: [element] }
     )
+  }
+
+  private async openedFileInput(
+    sessionName: string,
+    wc: WebContents,
+    element: string,
+    opened: OpenedFileChooser | null
+  ): Promise<CapturedElement> {
+    if (!opened?.backendNodeId) {
+      throw new BrowserError(
+        'browser_element_not_interactable',
+        `Cannot upload to ${element}: ${opened ? 'its file picker has no file input' : 'clicking it opened no file picker'}`
+      )
+    }
+    const resolved = await this.sendElementCdpCommand(
+      sessionName,
+      wc,
+      'DOM.resolveNode',
+      { backendNodeId: opened.backendNodeId },
+      opened.sessionId
+    )
+    const objectId = readString(readRecord(resolved, 'object'), 'objectId')
+    if (!objectId) {
+      throw new BrowserError('browser_error', `Could not resolve the file input ${element} opened`)
+    }
+    return { objectId, sessionId: opened.sessionId }
   }
 
   async wait(
@@ -112,7 +179,7 @@ export abstract class AgentBrowserBridgeInteractionCommands extends AgentBrowser
     worktreeId?: string,
     browserPageId?: string
   ): Promise<BrowserCheckResult> {
-    return this.enqueueTargetedCommand(
+    return this.enqueuePageAction(
       worktreeId,
       browserPageId,
       async (sessionName) => {
@@ -128,7 +195,7 @@ export abstract class AgentBrowserBridgeInteractionCommands extends AgentBrowser
     worktreeId?: string,
     browserPageId?: string
   ): Promise<BrowserFocusResult> {
-    return this.enqueueTargetedCommand(
+    return this.enqueuePageAction(
       worktreeId,
       browserPageId,
       async (sessionName) => {
@@ -143,7 +210,7 @@ export abstract class AgentBrowserBridgeInteractionCommands extends AgentBrowser
     worktreeId?: string,
     browserPageId?: string
   ): Promise<BrowserClearResult> {
-    return this.enqueueTargetedCommand(
+    return this.enqueuePageAction(
       worktreeId,
       browserPageId,
       async (sessionName) => {
@@ -159,7 +226,7 @@ export abstract class AgentBrowserBridgeInteractionCommands extends AgentBrowser
     worktreeId?: string,
     browserPageId?: string
   ): Promise<BrowserSelectAllResult> {
-    return this.enqueueTargetedCommand(
+    return this.enqueuePageAction(
       worktreeId,
       browserPageId,
       async (sessionName, target) => {

@@ -11,6 +11,8 @@ minimumReleaseAge: 4320
 minimumReleaseAgeExclude:
   # Security fix for compressed-request crashes (GHSA-27r3-jxmh-p828).
   - 'body-parser@2.4.0'
+  # File System Access blocklist and asar hardening fixes (electron#54677, #55331, #55179).
+  - 'electron@43.8.4'
   - 'bun@1.4.4'
   - '@oven/bun-darwin-aarch64@1.4.4'
   - '@oven/bun-darwin-x64@1.4.4'

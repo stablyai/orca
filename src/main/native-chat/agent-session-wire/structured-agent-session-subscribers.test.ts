@@ -109,7 +109,7 @@ describe('AgentSessionSubscribers', () => {
             expect(current.items).toHaveLength(size)
             expect(current.items.at(-1)?.body).toEqual(body(text))
             expect(journal.publicRead().snapshot).toBe(current)
-            expect(events.filter((event) => event.type === 'batch')).toHaveLength(2 * readers)
+            expect(events.filter((event) => event.type === 'batch')).toHaveLength(readers)
             expect(
               events
                 .flatMap((event) => (event.type === 'batch' ? event.batch.items : []))

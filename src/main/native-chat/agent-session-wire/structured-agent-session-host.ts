@@ -10,7 +10,6 @@ import { createStartupRecovery } from './structured-agent-session-restart-reconc
 import { StructuredAgentSessionTaskQueue } from './structured-agent-session-task-queue'
 import * as providerSupport from './structured-agent-session-provider-support'
 import * as reveal from './structured-agent-session-reveal'
-import { structuredAgentSessionOwnerStatus } from './structured-agent-session-owner-status'
 import { StructuredAgentSessionHostRuntimeState } from './structured-agent-session-host-runtime-state'
 import { structuredAgentSessionEntryDelegates } from './structured-agent-session-create'
 import * as agentStart from './structured-agent-session-agent-start'
@@ -22,7 +21,7 @@ import type * as HostTypes from './structured-agent-session-host-types'
 import { StructuredAgentSessionEventRecovery } from './structured-agent-session-event-recovery'
 import { StructuredAgentSessionBackgroundTaskChannel as BackgroundTasks } from './structured-agent-session-background-task-channel'
 import { StructuredAgentSessionClientDelivery } from './structured-agent-session-client-delivery'
-import { StructuredAgentSessionConversations } from './structured-agent-session-conversations'
+import { createStructuredAgentSessionPublicationWiring } from './structured-agent-session-publication-wiring'
 import * as resume from './structured-agent-session-restart-resume-host'
 import { structuredAgentSessionRestartResumeSurfaces } from './structured-agent-session-restart-resume-wiring'
 import * as conversation from './structured-agent-session-host-delivery'
@@ -42,16 +41,11 @@ export class StructuredAgentSessionHost extends StructuredAgentSessionHostContex
     () => this.mutationContext(),
     this
   )
-  protected readonly sessions = new StructuredAgentSessionConversations({
-    observe: (id, journal, rows) => this.clientDelivery.requestFailures.observe(id, journal, rows),
-    forget: (id) => this.clientDelivery.requestFailures.forget(id),
-    deliver: (sessionId, journal) => {
-      this.subscribers.publish(sessionId, journal)
-      this.conversationDelivery.afterCommit(sessionId, journal)
-    },
-    deliverSettleEdge: (id, journal) => this.conversationDelivery.afterSettleEdge(id, journal),
-    logger: sessionLogger.deferredStructuredAgentSessionLogger(() => this.deps.logger),
-    onOpened: (sessionId) => this.queued.onOpened(sessionId),
+  protected readonly sessions = createStructuredAgentSessionPublicationWiring({
+    client: () => this.clientDelivery,
+    delivery: () => this.conversationDelivery,
+    opened: (id) => this.queued.onOpened(id),
+    logger: () => this.deps.logger,
     now: () => this.now()
   })
   protected readonly queued = wireQueuedMessages(this.sessions, () => this.mutationContext())
@@ -64,7 +58,8 @@ export class StructuredAgentSessionHost extends StructuredAgentSessionHostContex
     (sessionId) => this.restartResume.onAgentStarted(sessionId),
     (sessionId) => this.backgroundTasks.publish(sessionId),
     (sessionId) => this.backgroundTasks.read(sessionId),
-    (sessionId) => this.runtimeState?.startFlights.projectsStarting(sessionId) ?? false
+    (sessionId) => this.runtimeState?.startFlights.projectsStarting(sessionId) ?? false,
+    this.sessions
   )
   protected readonly subscribers = this.clientDelivery.subscribers
   protected readonly tasks = new StructuredAgentSessionTaskQueue()
@@ -254,7 +249,10 @@ export class StructuredAgentSessionHost extends StructuredAgentSessionHostContex
   flushStreamedEvents = (id: string): Promise<void> => this.runtimeState.flushEventSink(id)
 
   /** Quit stops delivery and queued-card handover. */
-  stopDelivery = () => [this.conversationDelivery, this.queued.drain].forEach((d) => d.dispose())
+  stopDelivery = () => {
+    this.sessions.endPublications()
+    ;[this.conversationDelivery, this.queued.drain].forEach((d) => d.dispose())
+  }
 
   async flushAllStreamedEvents(options?: { trigger?: 'quit' | 'update' }): Promise<void> {
     this.stopDelivery()
@@ -300,15 +298,18 @@ export class StructuredAgentSessionHost extends StructuredAgentSessionHostContex
     this.clientDelivery.readCommandsSettled(sessionId, commandsOnRequest)
 
   /** Read the store; idle-released chats have no session-map entry. */
-  handoffStatus = (sessionId: string) => structuredAgentSessionOwnerStatus(this.deps, sessionId)
+  handoffStatus = (sessionId: string) => this.backgroundTasks.handoffStatus(sessionId)
 
   history: BackgroundTasks['history'] = (...args) => this.backgroundTasks.history(...args)
 
   readonly continuationContext: ReturnType<typeof contextReader>
 
-  /** Full reduction: absence from a bounded page cannot prove a revised/tombstoned item is absent. */
-  journalSnapshot = async (sessionId: string) =>
-    (await this.lifetime.conversation(sessionId)).journal.snapshot()
+  observeConversationPublications: typeof this.sessions.observeConversationPublications = (
+    ...args
+  ) => this.sessions.observeConversationPublications(...args)
+  journalSnapshot = (sessionId: string) => this.backgroundTasks.journalSnapshot(sessionId)
+  queuedSendAnswer = (sessionId: string, messageId: string) =>
+    this.backgroundTasks.queuedSendAnswer(sessionId, messageId)
 
   private readonly startJournal = structuredAgentStartJournal(
     () => this.deps,

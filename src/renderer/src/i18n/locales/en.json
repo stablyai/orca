@@ -13270,9 +13270,11 @@
         },
         "PluginThemeUseNow": {
           "label": "Use now:",
-          "useName": "Use now: {{value0}}",
           "useForLight": "Use for light:",
-          "useForDark": "Use for dark:"
+          "useForDark": "Use for dark:",
+          "assignedLight": "{{value0}} set as your light theme",
+          "assignedDark": "{{value0}} set as your dark theme",
+          "saveFailed": "Could not save the theme. Try again."
         },
         "PluginPageHero": {
           "screenshots": "Screenshots",
@@ -20515,6 +20517,10 @@
       "caution": "Caution"
     },
     "automations": {
+      "openIn": "Open in",
+      "chat": "Chat",
+      "terminal": "Terminal",
+      "runChatUnavailable": "Run chat is unavailable. Showing its workspace; any saved output remains in Run Details.",
       "runTerminalUnavailable": "Run terminal is unavailable."
     },
     "agentCombobox": {
@@ -20527,6 +20533,13 @@
     },
     "JiraIssueWorkspace": {
       "pendingChange": "Another issue change is in progress."
+    },
+    "linearWorkspacePicker": {
+      "search": "Search Linear workspaces",
+      "empty": "No workspaces found.",
+      "label": "Linear workspace",
+      "all": "All Linear workspaces",
+      "unavailable": "Unavailable Linear workspace"
     },
     "jiraProjectPicker": {
       "search": "Search Jira projects",

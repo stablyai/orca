@@ -1,6 +1,9 @@
+import { createElement } from 'react'
+import AiVaultSessionDropLayer from '../tab-group/AiVaultSessionDropLayer'
+import { writeAiVaultSessionDragData } from '@/lib/ai-vault-session-drag'
 import type * as ForkStartup from '@/lib/ai-vault-session-fork-startup'
 // @vitest-environment happy-dom
-import { renderHook, waitFor } from '@testing-library/react'
+import { cleanup, render, fireEvent, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import * as sessionSwitch from './ai-vault-session-in-place-switch'
 import type { AiVaultSession } from '../../../../shared/ai-vault-types'
@@ -17,6 +20,7 @@ const mocks = vi.hoisted(() => ({
   activateAiVaultResumeWorkspace: vi.fn(),
   switchToCli: vi.fn(async () => {}),
   confirm: vi.fn(async () => false),
+  rpc: vi.fn(),
   toastError: vi.fn(),
   toastSuccess: vi.fn()
 }))
@@ -62,6 +66,10 @@ vi.mock('./ai-vault-session-resume-in-chat-launch', () => ({
   resumeAiVaultSessionInNewChat: vi.fn()
 }))
 vi.mock('sonner', () => ({ toast: { error: mocks.toastError, success: mocks.toastSuccess } }))
+vi.mock('@/runtime/runtime-rpc-client', () => ({
+  callRuntimeRpc: mocks.rpc,
+  runtimeEnvironmentSupportsCapability: async () => true
+}))
 vi.mock('@/store', () => ({
   useAppStore: { getState: mocks.getState }
 }))
@@ -106,23 +114,30 @@ function renderActions(agentCmdOverrides?: { opencode?: string }) {
   ).result.current
 }
 
-afterEach(() => vi.restoreAllMocks())
+beforeEach(() => {
+  vi.resetAllMocks()
+  mocks.getState.mockReturnValue({
+    activeWorktreeId: 'worktree-1',
+    settings: {},
+    unifiedTabsByWorktree: {}
+  })
+  mocks.prepareAiVaultSessionForFork.mockImplementation(async (session) => ({
+    session,
+    copied: false
+  }))
+  mocks.buildAiVaultForkStartupForWorktree.mockReturnValue(FORK_STARTUP)
+  mocks.launchAiVaultSessionInNewTab.mockReturnValue({ tabId: 'tab-1' })
+  mocks.rpc.mockResolvedValue(undefined)
+})
+
+afterEach(() => {
+  cleanup()
+  vi.restoreAllMocks()
+})
 
 describe('ordinary CLI copy launch when the switch action does not apply', () => {
   beforeEach(() => {
-    vi.clearAllMocks()
     vi.spyOn(sessionSwitch, 'switchAiVaultSessionToCli').mockReturnValue(false)
-    mocks.getState.mockReturnValue({
-      activeWorktreeId: 'worktree-1',
-      settings: {},
-      unifiedTabsByWorktree: {}
-    })
-    mocks.prepareAiVaultSessionForFork.mockImplementation(async (session) => ({
-      session,
-      copied: false
-    }))
-    mocks.buildAiVaultForkStartupForWorktree.mockReturnValue(FORK_STARTUP)
-    mocks.launchAiVaultSessionInNewTab.mockReturnValue({ tabId: 'tab-1' })
   })
 
   // Either OpenCode chat may own a 2.x conversation, so the copy may open in either CLI.
@@ -265,3 +280,69 @@ vi.mock('@/components/confirmation-dialog-context', async (original) => ({
   ...(await original<Record<string, unknown>>()),
   useConfirmationDialog: () => mocks.confirm
 }))
+
+it('intercepts an ordinary structured Resume and actual pane drop on handled refusal without terminal execution', async () => {
+  mocks.getState.mockReturnValue({
+    activeWorktreeId: 'worktree-1',
+    settings: {},
+    repos: [],
+    worktreesByRepo: {},
+    folderWorkspaces: [],
+    projectGroups: [],
+    unifiedTabsByWorktree: {}
+  })
+  mocks.rpc.mockImplementation(async (_target, method) => {
+    if (method === 'session.tabs.list') {
+      throw new Error('advisory inventory unavailable')
+    }
+    return { ok: false, refusal: { code: 'agent_session_identity_required' } }
+  })
+  const actions = renderActions()
+  actions.handleResume(owned)
+  await waitFor(() =>
+    expect(mocks.toastError).toHaveBeenCalledExactlyOnceWith(
+      expect.stringContaining('no longer on this host')
+    )
+  )
+  const rect = vi
+    .spyOn(HTMLElement.prototype, 'getBoundingClientRect')
+    .mockReturnValue(new DOMRect(0, 0, 100, 100))
+  try {
+    const view = render(
+      createElement(
+        'div',
+        { 'data-tab-group-body-id': 'group', 'data-worktree-id': 'worktree-1' },
+        createElement(AiVaultSessionDropLayer, { worktreeId: 'worktree-1', enabled: true })
+      )
+    )
+    try {
+      const transfer = new DataTransfer()
+      writeAiVaultSessionDragData(transfer, {
+        agent: 'claude',
+        sessionId: owned.sessionId,
+        structuredSession: owned.structuredSession,
+        title: owned.title,
+        command: ''
+      })
+      const layer = view.container.querySelector('[data-ai-vault-session-drop-layer]')
+      if (!layer) {
+        throw new Error('drop layer must mount')
+      }
+      const drop = new MouseEvent('drop', {
+        clientX: 50,
+        clientY: 50,
+        bubbles: true,
+        cancelable: true
+      })
+      Object.defineProperty(drop, 'dataTransfer', { value: transfer })
+      fireEvent(layer, drop)
+      await waitFor(() => expect(mocks.toastError).toHaveBeenCalledTimes(2))
+      expect(mocks.launchAiVaultSessionInNewTab).not.toHaveBeenCalled()
+      expect(mocks.prepareAiVaultSessionForTerminalResume).not.toHaveBeenCalled()
+    } finally {
+      view.unmount()
+    }
+  } finally {
+    rect.mockRestore()
+  }
+})

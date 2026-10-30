@@ -11420,7 +11420,6 @@
         },
         "PluginThemeUseNow": {
           "label": "지금 사용:",
-          "useName": "지금 사용: {{value0}}",
           "useForLight": "라이트에 사용:",
           "useForDark": "다크에 사용:"
         },
@@ -19598,6 +19597,10 @@
       "caution": "주의"
     },
     "automations": {
+      "openIn": "열기 방식",
+      "chat": "채팅",
+      "terminal": "터미널",
+      "runChatUnavailable": "실행 채팅을 사용할 수 없습니다. 작업 공간을 표시합니다. 저장된 출력은 실행 세부 정보에 남아 있습니다.",
       "runTerminalUnavailable": "실행 터미널을 사용할 수 없습니다."
     },
     "jiraIssueTitleField": {

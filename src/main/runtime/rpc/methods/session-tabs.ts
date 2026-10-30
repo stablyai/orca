@@ -1,3 +1,4 @@
+import { isDeepStrictEqual } from 'node:util'
 import { terminalCreateFeatureRequirement } from '../agent-launch-feature-requirement'
 import { terminalImageViewerSupported } from '../../terminal-image-viewer-env'
 import { resolveRuntimeNavigationTarget } from '../../../../shared/runtime-navigation'
@@ -112,17 +113,31 @@ export const SESSION_TAB_METHODS = [
     params: WorktreeTabSelector,
     handler: async (
       params,
-      { runtime, connectionId, requestId, pairedDeviceId, clientKind, clientCapabilities, signal },
+      {
+        runtime,
+        connectionId,
+        requestId,
+        pairedDeviceId,
+        clientKind,
+        clientCapabilities,
+        capabilitySource,
+        signal
+      },
       emit
     ) => {
       let subscriptionId: string | null = null
       let released = false
       let endOnRelease = true
       let stopListening = (): void => {}
+      let stopCapabilities = (): void => {}
       // Safe without a version check: any other release of this key runs our cleanup first, which latches `released`.
       const release = (): void => {
         if (!released && subscriptionId) {
           runtime.cleanupSubscription(subscriptionId)
+        } else {
+          released = true
+          stopCapabilities()
+          signal?.removeEventListener('abort', release)
         }
       }
       const register = (worktreeId: string): void => {
@@ -145,6 +160,7 @@ export const SESSION_TAB_METHODS = [
             closePhoneSession?.()
             signal?.removeEventListener('abort', release)
             stopListening()
+            stopCapabilities()
             if (endOnRelease) {
               emit({ type: 'end' })
             }
@@ -156,6 +172,28 @@ export const SESSION_TAB_METHODS = [
         } else {
           signal?.addEventListener('abort', release, { once: true })
         }
+      }
+      let currentSnapshot: Awaited<ReturnType<typeof runtime.listMobileSessionTabs>> | undefined
+      const withProofDelta = createSessionTabsRetirementProofDelta(clientCapabilities)
+      const tabDelta = createSessionTabsTabDeltaEncoder(clientCapabilities)
+      const project = (
+        snapshot: NonNullable<typeof currentSnapshot>,
+        capabilities = capabilitySource?.current ?? clientCapabilities
+      ) => projectSessionTabsForClient(snapshot, clientKind, capabilities)
+      stopCapabilities =
+        capabilitySource?.observe((previous) => {
+          if (!released && currentSnapshot) {
+            const projected = project(currentSnapshot)
+            // The last frame was projected with the previous set; a change it ignores sends nothing.
+            if (!isDeepStrictEqual(projected, project(currentSnapshot, previous))) {
+              emit({ type: 'updated', ...tabDelta.update(withProofDelta(projected)) })
+            }
+          }
+        }) ?? (() => {})
+      signal?.addEventListener('abort', release, { once: true })
+      if (signal?.aborted) {
+        release()
+        return
       }
       // Register before awaits so unsubscribe finds setup; id: selectors provide identity immediately.
       const explicitWorktreeId = getExplicitWorktreeIdSelector(params.worktree)
@@ -178,13 +216,10 @@ export const SESSION_TAB_METHODS = [
           }
         }
         let subscribedWorktree = initial.worktree
-        const withProofDelta = createSessionTabsRetirementProofDelta(clientCapabilities)
-        const tabDelta = createSessionTabsTabDeltaEncoder(clientCapabilities)
+        currentSnapshot = initial
         emit({
           type: 'snapshot',
-          ...tabDelta.full(
-            withProofDelta(projectSessionTabsForClient(initial, clientKind, clientCapabilities))
-          )
+          ...tabDelta.full(withProofDelta(project(initial)))
         })
         if (released) {
           return
@@ -210,13 +245,11 @@ export const SESSION_TAB_METHODS = [
               snapshot.worktree === initial.worktree
                 ? snapshot
                 : { ...snapshot, worktree: initial.worktree }
+            const { navigationIntent: _intent, ...retained } = streamSnapshot
+            currentSnapshot = retained
             emit({
               type: 'updated',
-              ...tabDelta.update(
-                withProofDelta(
-                  projectSessionTabsForClient(streamSnapshot, clientKind, clientCapabilities)
-                )
-              )
+              ...tabDelta.update(withProofDelta(project(streamSnapshot)))
             })
           }
         }, pairedDeviceId)

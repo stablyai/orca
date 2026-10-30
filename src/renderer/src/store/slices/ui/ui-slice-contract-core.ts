@@ -16,6 +16,7 @@ import type { ExecutionHostId } from '../../../../../shared/execution-host'
 import type { TaskResumeState, TopLevelView } from '../../../../../shared/ui-chrome-types'
 
 export type PendingSidebarWorktreeReveal = {
+  rowKey?: string
   worktreeId: string
   executionHostId?: ExecutionHostId
   behavior: 'auto' | 'smooth'
@@ -212,6 +213,7 @@ export type UISliceCore = {
   revealWorktreeInSidebar: (
     worktreeId: string,
     options?: {
+      rowKey?: string
       behavior?: PendingSidebarWorktreeReveal['behavior']
       highlight?: boolean
       beginRename?: boolean

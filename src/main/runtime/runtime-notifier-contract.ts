@@ -156,7 +156,8 @@ export type RuntimeNotifier = {
     relativePath: string,
     staged: boolean,
     runtimeEnvironmentId?: string | null,
-    navigation?: RuntimeNavigationTarget
+    navigation?: RuntimeNavigationTarget,
+    oldPath?: string
   ): void
   /** Closes the whole tab. */
   closeTerminal(tabId: string): void

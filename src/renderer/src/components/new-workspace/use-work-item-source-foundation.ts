@@ -13,6 +13,7 @@ import { useLinearSourceConnection } from './use-linear-source-connection'
 import { useSmartWorkspaceFieldAvailability } from './use-smart-workspace-field-availability'
 import { useWorkItemSourceState } from './use-work-item-source-state'
 import { useJiraComposerProject } from './use-jira-composer-project'
+import { useComposerSourceScope } from './use-composer-source-scope'
 
 export function useWorkItemSourceFoundation(props: NormalizedWorkItemSourceSearchProps) {
   const {
@@ -147,6 +148,16 @@ export function useWorkItemSourceFoundation(props: NormalizedWorkItemSourceSearc
   const linearStatusChecked = hasLinearSearchSource
     ? linearConnection.loaded
     : defaultLinearStatusChecked
+  const [linearWorkspaceIdOverride, setLinearWorkspaceId] = useComposerSourceScope<
+    string | null | undefined
+  >(
+    selectedRepo,
+    linearSourceContext,
+    props.defaultLinearWorkspaceId ??
+      (hasLinearSearchSource
+        ? (linearStatus.selectedWorkspaceId ?? linearStatus.activeWorkspaceId ?? null)
+        : undefined)
+  )
   const jiraConnection = useJiraSourceConnection({
     enabled: !disabled && !textOnly && jiraSourceContext !== null,
     sourceContext: jiraSourceContext
@@ -199,9 +210,8 @@ export function useWorkItemSourceFoundation(props: NormalizedWorkItemSourceSearc
     getCachedWorkItems,
     linearStatus,
     linearStatusChecked,
-    linearWorkspaceIdOverride: hasLinearSearchSource
-      ? (linearStatus.selectedWorkspaceId ?? linearStatus.activeWorkspaceId ?? null)
-      : undefined,
+    linearWorkspaceIdOverride,
+    setLinearWorkspaceId,
     listLinearIssues,
     searchJiraIssues,
     searchLinearIssues,

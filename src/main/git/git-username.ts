@@ -1,6 +1,9 @@
 import { extractExecError, ghExecFileAsync, gitExecFileAsync } from './runner'
 import { parseHostedRemote } from './hosted-remote-url'
 import { resolveDefaultBaseRefViaExec } from './repo'
+import { createGitConfigSnapshotRunner } from '../../shared/git-config-snapshot-runner'
+
+type GitUsernameRunner = ReturnType<typeof createGitConfigSnapshotRunner>
 
 const EXPLICIT_USERNAME_CONFIG_KEYS = ['github.user', 'user.username'] as const
 
@@ -167,12 +170,9 @@ async function getGhLoginOutcome(): Promise<GhLoginOutcome> {
   return probe
 }
 
-async function readGitStdout(repoPath: string, args: string[]): Promise<string> {
+async function readGitStdout(runGit: GitUsernameRunner, args: string[]): Promise<string> {
   try {
-    const { stdout } = await gitExecFileAsync(args, {
-      cwd: repoPath,
-      timeout: LOCAL_GIT_READ_TIMEOUT_MS
-    })
+    const { stdout } = await runGit(args)
     return stdout.trim()
   } catch {
     return ''
@@ -191,37 +191,35 @@ function getDefaultBranchName(shortRef: string, remoteName: string): string {
   return remoteName ? shortRef.slice(remoteName.length + 1) : shortRef.split('/').slice(1).join('/')
 }
 
-async function getConfiguredBranchRemote(repoPath: string, branch: string | null): Promise<string> {
+async function getConfiguredBranchRemote(
+  runGit: GitUsernameRunner,
+  branch: string | null
+): Promise<string> {
   if (!branch) {
     return ''
   }
-  const remote = await readGitStdout(repoPath, ['config', '--get', `branch.${branch}.remote`])
+  const remote = await readGitStdout(runGit, ['config', '--get', `branch.${branch}.remote`])
   return remote === '.' ? '' : remote
 }
 
 /** Only the effective remote may authorize a GitHub prefix; a secondary GitHub mirror must not. */
-async function localRepoHasEffectiveGitHubRemote(repoPath: string): Promise<boolean> {
-  const remoteList = await gitExecFileAsync(['remote'], {
-    cwd: repoPath,
-    timeout: LOCAL_GIT_READ_TIMEOUT_MS
-  }).catch(() => null)
+async function localRepoHasEffectiveGitHubRemote(runGit: GitUsernameRunner): Promise<boolean> {
+  const remoteList = await runGit(['remote']).catch(() => null)
   const remotes = (remoteList?.stdout.trim() ?? '').split('\n').filter(Boolean)
   // Only a successful empty list proves there is no hosted remote to inspect.
   if (remoteList && remotes.length === 0) {
     return false
   }
-  const defaultBaseRef = await resolveDefaultBaseRefViaExec((argv) =>
-    gitExecFileAsync(argv, { cwd: repoPath, timeout: LOCAL_GIT_READ_TIMEOUT_MS })
-  )
+  const defaultBaseRef = await resolveDefaultBaseRefViaExec(runGit)
   const defaultBaseRemote = defaultBaseRef ? getRemoteNameFromRef(defaultBaseRef, remotes) : ''
   const defaultBranch = defaultBaseRef
     ? getDefaultBranchName(defaultBaseRef, defaultBaseRemote)
     : null
 
-  const currentBranch = await readGitStdout(repoPath, ['branch', '--show-current'])
+  const currentBranch = await readGitStdout(runGit, ['branch', '--show-current'])
   const candidateRemotes = [
-    await getConfiguredBranchRemote(repoPath, currentBranch || null),
-    await getConfiguredBranchRemote(repoPath, defaultBranch),
+    await getConfiguredBranchRemote(runGit, currentBranch || null),
+    await getConfiguredBranchRemote(runGit, defaultBranch),
     defaultBaseRemote,
     'origin',
     remotes.length === 1 ? remotes[0] : ''
@@ -233,7 +231,7 @@ async function localRepoHasEffectiveGitHubRemote(repoPath: string): Promise<bool
       continue
     }
     seen.add(remote)
-    const remoteUrl = await readGitStdout(repoPath, ['remote', 'get-url', remote])
+    const remoteUrl = await readGitStdout(runGit, ['remote', 'get-url', remote])
     if (remoteUrl && parseHostedRemote(remoteUrl)?.provider === 'github') {
       return true
     }
@@ -245,25 +243,25 @@ async function localRepoHasEffectiveGitHubRemote(repoPath: string): Promise<bool
 export async function resolveLocalGitUsernameDetailed(
   repoPath: string
 ): Promise<ResolvedGitUsername> {
+  const runGit = createGitConfigSnapshotRunner((args) =>
+    gitExecFileAsync(args, { cwd: repoPath, timeout: LOCAL_GIT_READ_TIMEOUT_MS })
+  )
   for (const key of EXPLICIT_USERNAME_CONFIG_KEYS) {
     try {
-      const { stdout } = await gitExecFileAsync(['config', '--get', key], {
-        cwd: repoPath,
-        timeout: LOCAL_GIT_READ_TIMEOUT_MS
-      })
+      const { stdout } = await runGit(['config', '--get', key])
       const username = normalizeConfiguredLogin(stdout)
       if (username) {
         return { username, authoritative: true }
       }
     } catch {}
   }
-  if (await localRepoHasEffectiveGitHubRemote(repoPath)) {
+  if (await localRepoHasEffectiveGitHubRemote(runGit)) {
     const outcome = await getGhLoginOutcome()
     if (outcome.login || outcome.timedOut) {
       return { username: outcome.login, authoritative: !outcome.timedOut }
     }
   }
-  const authorName = (await readGitStdout(repoPath, ['config', '--get', 'user.name'])).trim()
+  const authorName = (await readGitStdout(runGit, ['config', '--get', 'user.name'])).trim()
   if (isBranchSafeHostedLogin(authorName)) {
     return { username: authorName, authoritative: true }
   }
