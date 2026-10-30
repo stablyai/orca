@@ -12521,7 +12521,8 @@
           "newRecipes": "マシンレシピ",
           "newShortcuts": "キーボードショートカット",
           "sourceMoved": "新しいソース: {{value0}} (以前: {{value1}})",
-          "update": "アップデート"
+          "update": "アップデート",
+          "review": "確認"
         },
         "PluginDetailInfo": {
           "previous": "以前のバージョン",
@@ -12618,6 +12619,22 @@
             "mod": "モッド",
             "shortcut": "ショートカット"
           }
+        },
+        "PluginUpdateReview": {
+          "title": "{{value0}} のアップデートを確認",
+          "back": "戻る",
+          "approve": "承認してアップデート",
+          "explain": "このアップデートは、承認済みのバージョンより多くのアクセスを求めています。ここで承認した場合にのみインストールされます。",
+          "before": "変更前",
+          "after": "変更後"
+        },
+        "PluginNotOfficialWarning": {
+          "unknownPublisher": "公開元",
+          "install": "インストールする前に、{{value0}} を信頼できることを確認してください。このプラグインは公開元のコードを Orca 内で実行します。",
+          "update": "アップデートする前に、{{value0}} を信頼できることを確認してください。このプラグインは公開元のコードを Orca 内で実行します。",
+          "installed": "{{value0}} を信頼できることを確認してください。このプラグインは公開元のコードを Orca 内で実行します。",
+          "label": "公式プラグインではありません:",
+          "translations": "翻訳は Orca 内のあらゆるテキストを変更できます。{{value0}} を信頼できることを確認してください。"
         }
       },
       "right": {

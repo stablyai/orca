@@ -179,6 +179,8 @@ export function usePluginPageModel({
     stale,
     disarmed,
     execution,
+    /** The manifest the page describes, once read. */
+    manifest: plugin ? installedManifest : shownPreview?.manifest,
     trust,
     capabilities,
     shortcuts,

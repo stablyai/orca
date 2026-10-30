@@ -12807,7 +12807,8 @@
           "newRecipes": "Recetas de máquina",
           "newShortcuts": "Atajos de teclado",
           "sourceMoved": "Nueva fuente: {{value0}} (antes {{value1}})",
-          "update": "Actualizar"
+          "update": "Actualizar",
+          "review": "Revisar"
         },
         "PluginDetailInfo": {
           "previous": "Anterior",
@@ -12904,6 +12905,22 @@
             "mod": "mod",
             "shortcut": "atajo"
           }
+        },
+        "PluginUpdateReview": {
+          "title": "Revisar la actualización de {{value0}}",
+          "back": "Atrás",
+          "approve": "Aprobar y actualizar",
+          "explain": "Esta actualización pide más que la versión que aprobaste. Solo se instala si la apruebas aquí.",
+          "before": "Antes",
+          "after": "Después"
+        },
+        "PluginNotOfficialWarning": {
+          "unknownPublisher": "su editor",
+          "install": "Asegúrate de que confías en {{value0}} antes de instalarlo. Este plugin ejecuta el código del editor dentro de Orca.",
+          "update": "Asegúrate de que confías en {{value0}} antes de actualizarlo. Este plugin ejecuta el código del editor dentro de Orca.",
+          "installed": "Asegúrate de que confías en {{value0}}. Este plugin ejecuta el código del editor dentro de Orca.",
+          "label": "No es un plugin oficial:",
+          "translations": "Las traducciones pueden cambiar cualquier texto de Orca. Asegúrate de que confías en {{value0}}."
         }
       },
       "right": {

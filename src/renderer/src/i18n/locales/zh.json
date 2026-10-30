@@ -12554,7 +12554,8 @@
           "newRecipes": "机器配方",
           "newShortcuts": "键盘快捷键",
           "sourceMoved": "新来源：{{value0}}（原为 {{value1}}）",
-          "update": "更新"
+          "update": "更新",
+          "review": "查看"
         },
         "PluginDetailInfo": {
           "previous": "上一版本",
@@ -12618,6 +12619,22 @@
               "windowsFailureDescription": "请在 Windows 设置中为 Orca 开启通知。"
             }
           }
+        },
+        "PluginUpdateReview": {
+          "title": "查看 {{value0}} 的更新",
+          "back": "返回",
+          "approve": "批准并更新",
+          "explain": "此更新请求的权限超出了你已批准的版本。只有在这里批准后才会安装。",
+          "before": "之前",
+          "after": "之后"
+        },
+        "PluginNotOfficialWarning": {
+          "unknownPublisher": "其发布者",
+          "install": "安装前请确认你信任 {{value0}}。此插件会在 Orca 中运行发布者的代码。",
+          "update": "更新前请确认你信任 {{value0}}。此插件会在 Orca 中运行发布者的代码。",
+          "installed": "请确认你信任 {{value0}}。此插件会在 Orca 中运行发布者的代码。",
+          "label": "非官方插件：",
+          "translations": "翻译可以更改 Orca 中的任何文字。请确认你信任 {{value0}}。"
         }
       },
       "right": {

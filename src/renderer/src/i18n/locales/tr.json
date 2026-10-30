@@ -12950,6 +12950,25 @@
               "windowsFailureDescription": "Windows Settings bölümünde Orca için bildirimleri etkinleştirin."
             }
           }
+        },
+        "PluginUpdateAllDialog": {
+          "review": "İncele"
+        },
+        "PluginUpdateReview": {
+          "title": "{{value0}} güncellemesini incele",
+          "back": "Geri",
+          "approve": "Onayla ve güncelle",
+          "explain": "Bu güncelleme, onayladığınız sürümden daha fazlasını istiyor. Yalnızca burada onaylarsanız yüklenir.",
+          "before": "Önce",
+          "after": "Sonra"
+        },
+        "PluginNotOfficialWarning": {
+          "unknownPublisher": "yayıncı",
+          "install": "Yüklemeden önce {{value0}} tarafına güvendiğinizden emin olun. Bu eklenti, yayıncının kodunu Orca içinde çalıştırır.",
+          "update": "Güncellemeden önce {{value0}} tarafına güvendiğinizden emin olun. Bu eklenti, yayıncının kodunu Orca içinde çalıştırır.",
+          "installed": "{{value0}} tarafına güvendiğinizden emin olun. Bu eklenti, yayıncının kodunu Orca içinde çalıştırır.",
+          "label": "Resmi bir eklenti değil:",
+          "translations": "Çeviriler Orca içindeki her metni değiştirebilir. {{value0}} tarafına güvendiğinizden emin olun."
         }
       },
       "right": {

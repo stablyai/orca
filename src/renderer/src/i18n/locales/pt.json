@@ -9231,7 +9231,8 @@
           "newShortcuts": "Atalhos de teclado",
           "previewError": "Não foi possível ler esta atualização",
           "sourceMoved": "Nova fonte: {{value0}} (antes {{value1}})",
-          "update": "Atualizar"
+          "update": "Atualizar",
+          "review": "Revisar"
         },
         "PluginThemeUseNow": {
           "useForLight": "Usar no claro:",
@@ -9304,6 +9305,22 @@
             "mod": "mod",
             "shortcut": "atalho"
           }
+        },
+        "PluginUpdateReview": {
+          "title": "Revisar a atualização de {{value0}}",
+          "back": "Voltar",
+          "approve": "Aprovar e atualizar",
+          "explain": "Esta atualização pede mais do que a versão que você aprovou. Ela só é instalada se você aprová-la aqui.",
+          "before": "Antes",
+          "after": "Depois"
+        },
+        "PluginNotOfficialWarning": {
+          "unknownPublisher": "seu editor",
+          "install": "Confirme que você confia em {{value0}} antes de instalar. Este plugin executa o código do editor dentro do Orca.",
+          "update": "Confirme que você confia em {{value0}} antes de atualizar. Este plugin executa o código do editor dentro do Orca.",
+          "installed": "Confirme que você confia em {{value0}}. Este plugin executa o código do editor dentro do Orca.",
+          "label": "Não é um plugin oficial:",
+          "translations": "Traduções podem alterar qualquer texto do Orca. Confirme que você confia em {{value0}}."
         }
       },
       "right": {

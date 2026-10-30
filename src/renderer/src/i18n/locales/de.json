@@ -12964,6 +12964,25 @@
               "windowsFailureDescription": "Benachrichtigungen für Orca in „Windows Settings“ aktivieren."
             }
           }
+        },
+        "PluginUpdateAllDialog": {
+          "review": "Prüfen"
+        },
+        "PluginUpdateReview": {
+          "title": "Update für {{value0}} prüfen",
+          "back": "Zurück",
+          "approve": "Genehmigen & aktualisieren",
+          "explain": "Dieses Update verlangt mehr als die Version, die du genehmigt hast. Es wird nur installiert, wenn du es hier genehmigst.",
+          "before": "Vorher",
+          "after": "Nachher"
+        },
+        "PluginNotOfficialWarning": {
+          "unknownPublisher": "seinem Herausgeber",
+          "install": "Stelle sicher, dass du {{value0}} vertraust, bevor du es installierst. Dieses Plugin führt den Code des Herausgebers in Orca aus.",
+          "update": "Stelle sicher, dass du {{value0}} vertraust, bevor du es aktualisierst. Dieses Plugin führt den Code des Herausgebers in Orca aus.",
+          "installed": "Stelle sicher, dass du {{value0}} vertraust. Dieses Plugin führt den Code des Herausgebers in Orca aus.",
+          "label": "Kein offizielles Plugin:",
+          "translations": "Übersetzungen können jeden Text in Orca ändern. Stelle sicher, dass du {{value0}} vertraust."
         }
       },
       "right": {

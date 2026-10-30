@@ -12521,7 +12521,8 @@
           "newRecipes": "머신 레시피",
           "newShortcuts": "키보드 단축키",
           "sourceMoved": "새 소스: {{value0}} (이전 {{value1}})",
-          "update": "업데이트"
+          "update": "업데이트",
+          "review": "검토"
         },
         "PluginDetailInfo": {
           "previous": "이전 버전",
@@ -12618,6 +12619,22 @@
             "mod": "모드",
             "shortcut": "단축키"
           }
+        },
+        "PluginUpdateReview": {
+          "title": "{{value0}} 업데이트 검토",
+          "back": "뒤로",
+          "approve": "승인 후 업데이트",
+          "explain": "이 업데이트는 승인한 버전보다 더 많은 권한을 요청합니다. 여기에서 승인해야만 설치됩니다.",
+          "before": "이전",
+          "after": "이후"
+        },
+        "PluginNotOfficialWarning": {
+          "unknownPublisher": "게시자",
+          "install": "설치하기 전에 {{value0}}을(를) 신뢰할 수 있는지 확인하세요. 이 플러그인은 게시자의 코드를 Orca 안에서 실행합니다.",
+          "update": "업데이트하기 전에 {{value0}}을(를) 신뢰할 수 있는지 확인하세요. 이 플러그인은 게시자의 코드를 Orca 안에서 실행합니다.",
+          "installed": "{{value0}}을(를) 신뢰할 수 있는지 확인하세요. 이 플러그인은 게시자의 코드를 Orca 안에서 실행합니다.",
+          "label": "공식 플러그인이 아닙니다:",
+          "translations": "번역은 Orca의 모든 텍스트를 바꿀 수 있습니다. {{value0}}을(를) 신뢰할 수 있는지 확인하세요."
         }
       },
       "right": {

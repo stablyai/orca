@@ -12787,6 +12787,25 @@
               "windowsFailureDescription": "在 Windows 的「設定」中開啟 Orca 的通知。"
             }
           }
+        },
+        "PluginUpdateAllDialog": {
+          "review": "檢視"
+        },
+        "PluginUpdateReview": {
+          "title": "檢視 {{value0}} 的更新",
+          "back": "返回",
+          "approve": "核准並更新",
+          "explain": "此更新要求的權限超出你已核准的版本。只有在這裡核准後才會安裝。",
+          "before": "之前",
+          "after": "之後"
+        },
+        "PluginNotOfficialWarning": {
+          "unknownPublisher": "其發布者",
+          "install": "安裝前請確認你信任 {{value0}}。此外掛會在 Orca 中執行發布者的程式碼。",
+          "update": "更新前請確認你信任 {{value0}}。此外掛會在 Orca 中執行發布者的程式碼。",
+          "installed": "請確認你信任 {{value0}}。此外掛會在 Orca 中執行發布者的程式碼。",
+          "label": "非官方外掛：",
+          "translations": "翻譯可以變更 Orca 中的任何文字。請確認你信任 {{value0}}。"
         }
       },
       "right": {

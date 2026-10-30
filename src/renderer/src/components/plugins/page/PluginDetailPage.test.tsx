@@ -382,4 +382,70 @@ describe('PluginDetailPage', () => {
     expect(container.textContent).toContain('Minimal Icons')
     expect(container.textContent).toContain('File icon theme')
   })
+
+  describe('not-official warning', () => {
+    const banner = (container: HTMLElement) => container.querySelector('[data-plugin-not-official]')
+
+    it.each([
+      ['official', true, 'data', false],
+      ['official', true, 'trusted-worker', false],
+      ['community theme', false, 'data', false],
+      ['community', false, 'declarative', true],
+      ['community', false, 'trusted-worker', true]
+    ] as const)(
+      'on a %s catalog page with profile %s: shown %s',
+      async (_kind, official, execution, shown) => {
+        const page = { ...listing, official, release: { ...listing.release!, execution } }
+        // Why never resolved: the catalog's verified profile alone decides before the manifest is read.
+        const container = await render(
+          pluginListEntryFromListing(page),
+          () => new Promise(() => {})
+        )
+        expect(banner(container) !== null).toBe(shown)
+        if (shown) {
+          expect(banner(container)?.textContent).toBe(
+            'Not an official plugin: Make sure you trust stablyai before installing. This plugin runs the publisher’s code inside Orca.'
+          )
+          expect(banner(container)?.querySelector('button')).toBeNull()
+        }
+      }
+    )
+
+    it('keeps a one-line translations note on a community language pack page', async () => {
+      const page = {
+        ...listing,
+        official: false,
+        release: { ...listing.release!, types: ['interface-language' as const] }
+      }
+      const container = await render(pluginListEntryFromListing(page), () => new Promise(() => {}))
+      expect(banner(container)?.getAttribute('data-plugin-not-official')).toBe('translations')
+      expect(banner(container)?.textContent).toBe(
+        'Not an official plugin: Translations can change any text in Orca. Make sure you trust stablyai.'
+      )
+    })
+
+    it.each([
+      ['an official', { official: true, execution: 'trusted-worker' as const }, false],
+      ['a community theme', { execution: 'data' as const, types: ['app-theme' as const] }, false],
+      ['a community code', { execution: 'declarative' as const }, true],
+      ['a dev folder code', { isDev: true, execution: 'sandboxed-ui' as const }, true]
+    ])('on %s installed plugin: shown %s', async (_kind, change, shown) => {
+      const container = await render(
+        pluginListEntryFromInstalled({ ...installed, ...change }),
+        vi.fn()
+      )
+      expect(banner(container) !== null).toBe(shown)
+    })
+
+    it('shows for a data claim whose installed manifest carries commands', async () => {
+      vi.mocked(window.api.plugins.getInstalledManifest).mockResolvedValue(
+        pluginManifestSchema.parse({
+          ...manifest,
+          contributes: { commands: [{ id: 'go', title: 'Go', action: 'sidebar.left.toggle' }] }
+        })
+      )
+      const container = await render(pluginListEntryFromInstalled(installed), vi.fn())
+      expect(banner(container)).not.toBeNull()
+    })
+  })
 })
