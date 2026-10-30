@@ -13,6 +13,7 @@ import {
   terminalExitError
 } from '../../../../shared/terminal-start-failure'
 import { requireAcceptedSpawn } from '../spawn-outcome'
+import type { AgentSessionClaimedSpawnResult } from '../../../../shared/agent-session-host-authority'
 
 const PTY_ID = 'orca-pty-run-facts'
 const INCARNATION_ID = 'inc-run-facts'
@@ -20,13 +21,19 @@ const INCARNATION_ID = 'inc-run-facts'
 const ADOPTED = {
   disposition: 'adopted',
   owner: {
-    claim: { kind: 'terminal' },
+    claim: {
+      digestVersion: 1,
+      keyId: 'run-facts',
+      identityDigest: 'a'.repeat(43),
+      worktreeScopeDigest: 'b'.repeat(43),
+      agent: 'codex'
+    },
     generation: 'g1',
     phase: 'live',
     ptyId: PTY_ID,
     surface: { worktreeId: 'wt-1', tabId: 'tab-1', leafId: 'leaf-1', terminalHandle: 'h1' }
   }
-}
+} satisfies AgentSessionClaimedSpawnResult
 
 async function commit(
   result: Record<string, unknown>,

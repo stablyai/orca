@@ -1,6 +1,4 @@
-import { mapRuntimeError } from '../main/runtime/rpc/errors'
-import { terminalStartError } from '../shared/terminal-start-failure'
-import { RuntimeRpcFailureError } from './runtime/types'
+import { RuntimeRpcFailureError, type RuntimeRpcFailure } from './runtime/types'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const {
@@ -296,35 +294,48 @@ describe('orca cli worktree awareness', () => {
     })
   })
 
-  it.each([{ remote: [] }, { remote: ['--pairing-code', 'remote-runtime'] }])(
-    'prints the host capacity cause through the real terminal create command ($remote)',
-    async ({ remote }) => {
-      const failure = mapRuntimeError(
-        'start',
-        { runtimeId: 'host' },
-        terminalStartError('agent_session_exited_during_start', {
-          kind: 'exited',
-          exitCode: 256,
-          initialOutputDiagnostic: 'git-bash-console-capacity'
-        })
-      )
+  it.each(
+    [[], ['--pairing-code', 'remote-runtime']].flatMap((remote) =>
+      [false, true].map((json) => ({ remote, json }))
+    )
+  )(
+    'prints the host failure through terminal create ($remote, json=$json)',
+    async ({ remote, json }) => {
+      const failure = {
+        id: 'start',
+        ok: false,
+        error: {
+          code: 'agent_session_exited_during_start',
+          message:
+            'Git Bash reported its limit of 128 open terminals on this PC while starting the terminal. Close some Git Bash terminals and try again.'
+        },
+        _meta: { runtimeId: 'host' }
+      } satisfies RuntimeRpcFailure
       callMock.mockRejectedValueOnce(new RuntimeRpcFailureError(failure))
       const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+      const stderr = vi.spyOn(console, 'error').mockImplementation(() => {})
       await main(
-        ['terminal', 'create', '--worktree', 'path:/tmp/host/workspace', ...remote, '--json'],
+        [
+          'terminal',
+          'create',
+          '--worktree',
+          'path:/tmp/host/workspace',
+          ...remote,
+          ...(json ? ['--json'] : [])
+        ],
         '/tmp/client'
       )
       expect(callMock).toHaveBeenCalledWith(
         'terminal.create',
         expect.objectContaining({ worktree: 'path:/tmp/host/workspace' })
       )
-      expect(JSON.parse(String(log.mock.calls[0]?.[0]))).toMatchObject({
-        ok: false,
-        error: {
-          code: 'agent_session_exited_during_start',
-          message: expect.stringContaining('Close some Git Bash terminals')
-        }
-      })
+      if (json) {
+        expect(JSON.parse(String(log.mock.calls[0]?.[0]))).toEqual(failure)
+        expect(stderr).not.toHaveBeenCalled()
+      } else {
+        expect(stderr).toHaveBeenCalledExactlyOnceWith(failure.error.message)
+        expect(log).not.toHaveBeenCalled()
+      }
       expect(process.exitCode).toBe(1)
     }
   )

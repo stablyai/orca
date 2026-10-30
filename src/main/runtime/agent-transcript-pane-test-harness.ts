@@ -192,7 +192,7 @@ export async function createTranscriptPane(
 }
 
 export async function waitForTranscriptIdle(
-  pane: Awaited<ReturnType<typeof createTranscriptPane>>,
+  pane: Pick<Awaited<ReturnType<typeof createTranscriptPane>>, 'runtime' | 'handle'>,
   timeoutMs: number
 ) {
   vi.useFakeTimers({
