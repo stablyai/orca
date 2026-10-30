@@ -23,7 +23,7 @@ vi.mock('../managed-server/install/remote-versioned-install', async (importOrigi
 }))
 vi.mock('../managed-server/install/orcad-remote-install', () => ({ installOrcadBundle: vi.fn() }))
 vi.mock('../managed-server/install/orcad-remote-preflight', () => ({
-  preflightInstalledOrcad: vi.fn()
+  preflightInstalledOrcad: vi.fn(async () => ({}))
 }))
 vi.mock('./orcad-local-build-hash', () => ({
   computeLocalOrcadBuildHash: () => 'abc123def4567890'

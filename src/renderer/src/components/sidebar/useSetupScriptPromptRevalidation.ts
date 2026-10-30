@@ -36,6 +36,7 @@ export function useSetupScriptPromptRevalidation(input: {
   const promptNeedsRevalidation =
     promptBelongsToActiveRepo &&
     (promptState?.status === 'error' ||
+      promptState?.status === 'distro-stopped' ||
       (promptState?.status === 'ok' && !promptState.hasEffectiveSetup))
 
   // Focus may reveal disk or terminal changes that React inputs cannot observe.

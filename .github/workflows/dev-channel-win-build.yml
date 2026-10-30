@@ -195,6 +195,12 @@ jobs:
             pnpm-lock.yaml
             mobile/pnpm-lock.yaml
 
+      # Electron and builder releases fix what this downloads; the lockfile churns far more often.
+      - name: Resolve electron-builder download versions
+        id: eb-versions
+        shell: bash
+        run: node -p "const d = require('./package.json').devDependencies; 'versions=electron' + d.electron + '-builder' + d['electron-builder']" >> "$GITHUB_OUTPUT"
+
       # Cache Electron/NSIS/winCodeSign tools with release-cut’s key shape.
       - name: Cache electron-builder downloads
         uses: actions/cache@v5
@@ -202,7 +208,7 @@ jobs:
           path: |
             ~\AppData\Local\electron\Cache
             ~\AppData\Local\electron-builder\Cache
-          key: electron-builder-win-${{ hashFiles('pnpm-lock.yaml') }}
+          key: electron-builder-win-${{ steps.eb-versions.outputs.versions }}
           restore-keys: |
             electron-builder-win-
 

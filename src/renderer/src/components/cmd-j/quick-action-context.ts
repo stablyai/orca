@@ -1,4 +1,5 @@
 import type { AppState } from '@/store/types'
+import { translate } from '@/i18n/i18n'
 import { findWorktreeById } from '@/store/slices/worktree-helpers'
 import type { Worktree } from '../../../../shared/worktree/types'
 import type { SshConnectionStatus } from '../../../../shared/ssh-types'
@@ -10,6 +11,7 @@ import {
 } from '@/components/native-chat/native-chat-layout-actions'
 import type { NativeChatSplitDirection } from '@/components/native-chat/native-chat-split-shortcut'
 import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
+import type { TabSplitDirection } from '@/store/slices/tabs/tabs-slice-contract'
 
 export type CmdJUnavailableReason =
   | 'loading'
@@ -37,7 +39,7 @@ export type CmdJQuickActionContext = {
   runtimeMode: 'local-desktop' | 'paired-web'
   managedBrowserCreationEnabled?: boolean
   activeGroupId: string | null
-  openNewBrowserTab: (groupId: string) => Promise<void>
+  openNewBrowserTab: (groupId: string, splitDirection?: TabSplitDirection) => Promise<void>
   openBrowserUrl: (groupId: string, url: string) => Promise<void>
   openNewMarkdownFile: (groupId: string) => Promise<void>
   openNewTerminalTab: (groupId: string) => Promise<void>
@@ -151,7 +153,7 @@ export function getCurrentWorkspaceActionAvailability(
 export function buildCmdJQuickActionContext(args: {
   state: AppState
   activeGroupSnapshot: CmdJActiveGroupSnapshot | null
-  openNewBrowserTab: (groupId: string) => Promise<void>
+  openNewBrowserTab: (groupId: string, splitDirection?: TabSplitDirection) => Promise<void>
   openBrowserUrl: (groupId: string, url: string) => Promise<void>
   openNewMarkdownFile: (groupId: string) => Promise<void>
   openNewTerminalTab: (groupId: string) => Promise<void>
@@ -209,18 +211,44 @@ export function getUnavailableQuickActionMessage(
   actionTitle: string,
   reason: CmdJUnavailableReason
 ): string {
+  // Quote the localized title instead of lowercasing it into the sentence.
+  const options = { action: actionTitle }
   switch (reason) {
     case 'loading':
-      return `Can't ${actionTitle.toLowerCase()} — workspace is still loading.`
+      return translate(
+        'auto.components.cmdJ.quickActionUnavailable.workspaceLoading',
+        'Can’t run “{{action}}” — workspace is still loading.',
+        options
+      )
     case 'no-active-workspace':
-      return `Can't ${actionTitle.toLowerCase()} — no workspace is active.`
+      return translate(
+        'auto.components.cmdJ.quickActionUnavailable.noActiveWorkspace',
+        'Can’t run “{{action}}” — no workspace is active.',
+        options
+      )
     case 'ssh-disconnected':
-      return `Can't ${actionTitle.toLowerCase()} — workspace is disconnected.`
+      return translate(
+        'auto.components.cmdJ.quickActionUnavailable.workspaceDisconnected',
+        'Can’t run “{{action}}” — workspace is disconnected.',
+        options
+      )
     case 'no-active-group':
-      return `Can't ${actionTitle.toLowerCase()} — no tab group is available.`
+      return translate(
+        'auto.components.cmdJ.quickActionUnavailable.noTabGroup',
+        'Can’t run “{{action}}” — no tab group is available.',
+        options
+      )
     case 'no-active-chat':
-      return `Can't ${actionTitle.toLowerCase()} — no movable chat is active.`
+      return translate(
+        'auto.components.cmdJ.quickActionUnavailable.noMovableChat',
+        'Can’t run “{{action}}” — no movable chat is active.',
+        options
+      )
     case 'client-action-unsupported':
-      return `Can't ${actionTitle.toLowerCase()} — this client and runtime do not support it.`
+      return translate(
+        'auto.components.cmdJ.quickActionUnavailable.clientUnsupported',
+        'Can’t run “{{action}}” — this client and runtime do not support it.',
+        options
+      )
   }
 }

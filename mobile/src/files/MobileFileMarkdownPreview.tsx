@@ -6,11 +6,13 @@ import { Code, Pencil } from 'lucide-react-native'
 import { MobileMarkdown } from '../components/MobileMarkdown'
 import { MobileSourceCopyButton } from '../components/MobileSourceCopyButton'
 import { colors } from '../theme/mobile-theme'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import {
   MobileFilePreviewSourceText,
   MobileFilePreviewTruncatedNote
 } from './MobileFilePreviewSourceText'
 import { filePreviewStyles as styles } from './mobile-file-preview-styles'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 
 type Props = {
   relativePath: string
@@ -33,6 +35,8 @@ export function MobileFileMarkdownPreview({
   worktreeId,
   onOpenFile
 }: Props) {
+  useMobileColorScheme()
+  const t = useMobileTranslation()
   const [mode, setMode] = useState<'preview' | 'source'>(() => (initialLine ? 'source' : 'preview'))
   const [previousRelativePath, setPreviousRelativePath] = useState(relativePath)
   const [previousInitialLine, setPreviousInitialLine] = useState(initialLine)
@@ -53,7 +57,7 @@ export function MobileFileMarkdownPreview({
           onPress={() => setMode('source')}
           accessibilityRole="button"
           accessibilityState={{ selected: sourceSelected }}
-          accessibilityLabel="View Markdown source"
+          accessibilityLabel={t('files.fileMarkdownPreview.viewSource', 'View Markdown source')}
         >
           <Code
             size={15}
@@ -66,7 +70,10 @@ export function MobileFileMarkdownPreview({
           onPress={() => setMode('preview')}
           accessibilityRole="button"
           accessibilityState={{ selected: previewSelected }}
-          accessibilityLabel="View rendered Markdown preview"
+          accessibilityLabel={t(
+            'files.fileMarkdownPreview.viewPreview',
+            'View rendered Markdown preview'
+          )}
         >
           <Pencil
             size={15}
@@ -78,7 +85,11 @@ export function MobileFileMarkdownPreview({
           key={relativePath}
           text={content}
           partial={truncated}
-          accessibilityLabel={truncated ? 'Copy loaded Markdown source' : 'Copy Markdown source'}
+          accessibilityLabel={
+            truncated
+              ? t('files.fileMarkdownPreview.copyLoadedSource', 'Copy loaded Markdown source')
+              : t('files.fileMarkdownPreview.copySource', 'Copy Markdown source')
+          }
         />
       </View>
       {mode === 'preview' ? (

@@ -1,8 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { RpcClient } from '../transport/rpc-client'
 import type { RpcFailure, RpcResponse, RpcSuccess } from '../transport/types'
-import type { HostedReviewCreationEligibility } from '../../../src/shared/hosted-review'
-import { shouldOpenChecksPanelCreateComposer } from '../../../src/renderer/src/components/right-sidebar/checks-panel-review-creation'
 import {
   buildMobilePrCreateParams,
   getMobilePrCreateBlockMessage,
@@ -29,23 +27,6 @@ function clientWith(responses: RpcResponse[]): Pick<RpcClient, 'sendRequest'> & 
       calls.push({ method, params })
       return responses.shift() ?? fail('unexpected')
     })
-  }
-}
-
-function eligibility(
-  overrides: Partial<HostedReviewCreationEligibility> = {}
-): HostedReviewCreationEligibility {
-  return {
-    provider: 'github',
-    review: null,
-    canCreate: true,
-    blockedReason: null,
-    nextAction: null,
-    reviewLookupOutcome: 'not_found',
-    defaultBaseRef: 'main',
-    title: 'Add feature',
-    body: '',
-    ...overrides
   }
 }
 
@@ -91,70 +72,7 @@ describe('buildMobilePrCreateParams', () => {
   })
 })
 
-describe('mobile create form gating parity', () => {
-  it.each([
-    { reason: null, canCreate: true },
-    { reason: 'dirty', canCreate: false },
-    { reason: 'detached_head', canCreate: false },
-    { reason: 'default_branch', canCreate: false },
-    { reason: 'no_upstream', canCreate: false },
-    { reason: 'needs_push', canCreate: false },
-    { reason: 'needs_sync', canCreate: false },
-    { reason: 'auth_required', canCreate: false },
-    { reason: 'unsupported_provider', canCreate: false },
-    { reason: 'existing_review', canCreate: false },
-    { reason: 'fork_head_unsupported', canCreate: false }
-  ] as const)('matches desktop composer gating for $reason', ({ reason, canCreate }) => {
-    const desktopEligibility = eligibility({ canCreate, blockedReason: reason })
-    const desktopAllowsComposer = shouldOpenChecksPanelCreateComposer({
-      activeReview: null,
-      isFolder: false,
-      branch: 'feature/x',
-      hostedReviewCreation: desktopEligibility
-    })
-    const mobileAllowsComposer =
-      getMobilePrCreateBlockMessage({
-        provider: desktopEligibility.provider,
-        base: desktopEligibility.defaultBaseRef ?? 'main',
-        title: desktopEligibility.title ?? 'feature/x',
-        body: desktopEligibility.body ?? '',
-        canCreate: desktopEligibility.canCreate,
-        blockedReason: desktopEligibility.blockedReason,
-        nextAction: desktopEligibility.nextAction,
-        reviewLookupOutcome: desktopEligibility.reviewLookupOutcome
-      }) === null
-
-    expect(mobileAllowsComposer).toBe(desktopAllowsComposer)
-  })
-
-  it('fails closed when the review-lookup outcome is missing (older host)', () => {
-    // Older hosts without reviewLookupOutcome cannot prove no review exists.
-    expect(
-      getMobilePrCreateBlockMessage({
-        provider: 'github',
-        base: 'main',
-        title: 'Add feature',
-        body: '',
-        canCreate: true,
-        blockedReason: null
-      })
-    ).toBe(
-      'Orca could not confirm whether this branch already has a pull request. Try again in a moment.'
-    )
-    expect(
-      getMobilePrCreateBlockMessage({
-        provider: 'github',
-        base: 'main',
-        title: 'Add feature',
-        body: '',
-        canCreate: false,
-        blockedReason: 'needs_push'
-      })
-    ).toBe(
-      'Orca could not confirm whether this branch already has a pull request. Try again in a moment.'
-    )
-  })
-
+describe('getMobilePrCreateBlockMessage', () => {
   it('fails closed on an unavailable review lookup even when eligibility looks ready', () => {
     expect(
       getMobilePrCreateBlockMessage({
@@ -171,30 +89,19 @@ describe('mobile create form gating parity', () => {
     )
   })
 
-  it('fails closed on unavailable even on the needs_push Push & Create path', () => {
-    // An unavailable lookup must block even needs_push, which would otherwise offer Push & Create.
-    const mobileBlocked =
+  it('fails closed when an older host sends no review-lookup outcome', () => {
+    expect(
       getMobilePrCreateBlockMessage({
         provider: 'github',
         base: 'main',
         title: 'Add feature',
         body: '',
-        canCreate: false,
-        blockedReason: 'needs_push',
-        reviewLookupOutcome: 'unavailable'
-      }) !== null
-    const desktopAllowsComposer = shouldOpenChecksPanelCreateComposer({
-      activeReview: null,
-      isFolder: false,
-      branch: 'feature/x',
-      hostedReviewCreation: eligibility({
-        canCreate: false,
-        blockedReason: 'needs_push',
-        reviewLookupOutcome: 'unavailable'
+        canCreate: true,
+        blockedReason: null
       })
-    })
-    expect(mobileBlocked).toBe(true)
-    expect(desktopAllowsComposer).toBe(false)
+    ).toBe(
+      'Orca could not confirm whether this branch already has a pull request. Try again in a moment.'
+    )
   })
 
   it('stays safely blocked for a reason added by a newer desktop contract', () => {

@@ -5,7 +5,6 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import type { ButtonHTMLAttributes, ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Worktree } from '../../../../shared/worktree/types'
-import type { RemoveWorktreeOptions } from '@/store/slices/worktree-removal-options'
 
 const mocks = vi.hoisted(() => {
   const allWorktrees: Worktree[] = []
@@ -21,7 +20,7 @@ const mocks = vi.hoisted(() => {
     gitStatusByWorktree: {},
     deleteStateByWorktreeId: {}
   }
-  return { state, connect: vi.fn() }
+  return { state }
 })
 
 vi.mock('@/store', () => ({
@@ -60,10 +59,6 @@ vi.mock('./removal-unsaved-files', () => ({ blockRemovalForUnsavedFiles: () => f
 vi.mock('@/store/slices/worktrees/teardown/removed-workspace-unsaved-files', () => ({
   confirmUnsavedDiscard: () => new Map()
 }))
-vi.mock('./delete-worktree-flow', async () => ({
-  runWorktreeDeleteWithToast: (await import('./run-worktree-delete-with-toast'))
-    .runWorktreeDeleteWithToast
-}))
 
 import ForgetSshWorkspaceDialog from './ForgetSshWorkspaceDialog'
 
@@ -93,63 +88,34 @@ function sshWorkspace(instanceId: string): Worktree {
   }
 }
 
-function replaceWorkspace(): void {
-  mocks.state.allWorktrees.splice(0, 1, sshWorkspace('instance-B'))
-}
-
-describe('ForgetSshWorkspaceDialog Reconnect & Delete (STA-11912)', () => {
+describe('ForgetSshWorkspaceDialog', () => {
   beforeEach(() => {
     mocks.state.allWorktrees.splice(0, mocks.state.allWorktrees.length, sshWorkspace('instance-A'))
     mocks.state.modalData = {
       worktreeId: 'repo::/srv/wt',
       worktreeDeleteIdentities: [{ id: 'repo::/srv/wt', instanceId: 'instance-A', hostId }],
       displayName: 'wt',
-      resolution: { kind: 'disconnected', targetId: 'box' }
+      resolution: { kind: 'saved', targetId: 'box' }
     }
-    mocks.state.removeWorktree.mockReset()
+    mocks.state.removeWorktree.mockReset().mockResolvedValue({ ok: true })
     mocks.state.closeModal.mockReset()
-    mocks.state.clearWorktreeDeleteState.mockReset()
-    mocks.connect.mockReset()
-    vi.stubGlobal('api', { ssh: { connect: mocks.connect } })
   })
 
   afterEach(() => {
     cleanup()
-    vi.unstubAllGlobals()
   })
 
-  it('refuses when a replacement appears at the same host and id during reconnect', async () => {
-    mocks.connect.mockImplementation(async () => replaceWorkspace())
+  it('forgets a saved host’s workspace on its SSH host without a remote delete', async () => {
     render(<ForgetSshWorkspaceDialog />)
 
-    fireEvent.click(screen.getByText('Reconnect & Delete'))
+    fireEvent.click(screen.getByText('Remove from Orca'))
 
     await waitFor(() => expect(mocks.state.closeModal).toHaveBeenCalled())
-    expect(mocks.state.removeWorktree).not.toHaveBeenCalled()
-  })
-
-  it('re-checks the selected incarnation immediately before the destructive send', async () => {
-    mocks.connect.mockResolvedValue(undefined)
-    let dispatchError: unknown = null
-    mocks.state.removeWorktree.mockImplementation(
-      async (_target: unknown, _force: boolean, options?: RemoveWorktreeOptions) => {
-        replaceWorkspace()
-        try {
-          options?.assertBeforeDispatch?.()
-        } catch (error) {
-          dispatchError = error
-          return { ok: false, error: String(error) }
-        }
-        return { ok: true }
-      }
+    expect(mocks.state.removeWorktree).toHaveBeenCalledTimes(1)
+    expect(mocks.state.removeWorktree).toHaveBeenCalledWith(
+      { id: 'repo::/srv/wt', executionHostId: hostId },
+      false,
+      expect.objectContaining({ mode: 'forget-local' })
     )
-    render(<ForgetSshWorkspaceDialog />)
-
-    fireEvent.click(screen.getByText('Reconnect & Delete'))
-
-    await waitFor(() =>
-      expect(mocks.state.clearWorktreeDeleteState).toHaveBeenCalledWith('repo::/srv/wt', hostId)
-    )
-    expect(dispatchError).toBeInstanceOf(Error)
   })
 })

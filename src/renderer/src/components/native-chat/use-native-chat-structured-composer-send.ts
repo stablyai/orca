@@ -21,6 +21,7 @@ import { agentSessionWriteNoticeText } from './agent-session-write-notice-text'
 import { translate } from '@/i18n/i18n'
 import {
   readNativeChatComposerDraft,
+  subscribeToNativeChatComposerDraftAppend,
   updateNativeChatComposerDraft
 } from './native-chat-composer-draft-store'
 import { nativeChatComposerDraftLeftAfterSend } from './native-chat-composer-draft-comparison'
@@ -107,6 +108,15 @@ export function useNativeChatStructuredComposerSend({
       }
       const isCurrent = structuredTransport.capturePresentation()
       const submitted = readNativeChatComposerDraft(draftScopeKey)
+      let completeAddition = false
+      const stopObservingAppend = subscribeToNativeChatComposerDraftAppend(
+        draftScopeKey,
+        (addition) => {
+          if (typeof addition !== 'function' && addition.document !== undefined) {
+            completeAddition = true
+          }
+        }
+      )
       await dispatchNativeChatStructuredComposerText(
         structuredTransport,
         text,
@@ -133,12 +143,21 @@ export function useNativeChatStructuredComposerSend({
           if (!left) {
             return
           }
-          if (hostCommand && !isCurrent()) {
+          if (completeAddition) {
             updateNativeChatComposerDraft(
               draftScopeKey,
-              { text: left.text, document: undefined, images: left.images },
+              { ...left, document: left.document },
               'immediate'
             )
+          }
+          if (hostCommand && !isCurrent()) {
+            if (!completeAddition) {
+              updateNativeChatComposerDraft(
+                draftScopeKey,
+                { text: left.text, document: undefined, images: left.images },
+                'immediate'
+              )
+            }
             return
           }
           updateNativeChatComposerDraft(draftScopeKey, { images: left.images }, 'immediate')
@@ -167,6 +186,7 @@ export function useNativeChatStructuredComposerSend({
           )
           structuredTransport.onError(notice.text, { errorText: notice.errorText })
         })
+        .finally(stopObservingAppend)
     },
     [
       agent,

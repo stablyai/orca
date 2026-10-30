@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { Pressable, Text, View } from 'react-native'
 import {
   CalendarClock,
   CircleDot,
@@ -12,6 +12,8 @@ import {
   StickyNote
 } from 'lucide-react-native'
 import { colors, spacing, typography } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { prStateColor } from '../components/WorktreeMetaGlyphs'
 import { hostScreenStyles } from './host-screen-styles'
 import { OptionRowList } from './workspace-option-rows'
@@ -25,6 +27,8 @@ import {
   type WorkspaceOrigin
 } from '../worktree/workspace-details-model'
 import type { Worktree } from '../worktree/workspace-list-types'
+import type { Translate } from '../i18n/mobile-i18n'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 
 const ICON_SIZE = 16
 
@@ -37,19 +41,25 @@ const PROVIDER_LABELS: Record<WorkspaceDetailLink['provider'], string> = {
   'azure-devops': 'Azure DevOps',
   gitea: 'Gitea'
 }
-const STATE_LABELS: Record<string, string> = {
-  open: 'Open',
-  merged: 'Merged',
-  closed: 'Closed',
-  draft: 'Draft'
+function stateLabels(t: Translate): Record<string, string> {
+  return {
+    open: t('hostScreen.workspaceDetailsSheet.prOpen', 'Open'),
+    merged: t('hostScreen.workspaceDetailsSheet.merged', 'Merged'),
+    closed: t('hostScreen.workspaceDetailsSheet.closed', 'Closed'),
+    draft: t('hostScreen.workspaceDetailsSheet.draft', 'Draft')
+  }
 }
-const CHECK_LABELS: Record<string, string> = {
-  success: 'Checks: Passing',
-  failure: 'Checks: Failing',
-  pending: 'Checks: Pending'
+function checkLabels(t: Translate): Record<string, string> {
+  return {
+    success: t('hostScreen.workspaceDetailsSheet.checksPassing', 'Checks: Passing'),
+    failure: t('hostScreen.workspaceDetailsSheet.checksFailing', 'Checks: Failing'),
+    pending: t('hostScreen.workspaceDetailsSheet.checksPending', 'Checks: Pending')
+  }
 }
 
 export function WorkspaceDetailsSheet(props: { row: Worktree; onOpenLink: (url: string) => void }) {
+  const t = useMobileTranslation()
+  useMobileColorScheme()
   const { row, onOpenLink } = props
   const identity = getWorktreeGitIdentityDisplay({ branch: row.branch })
   const origin = buildWorkspaceOrigin(row)
@@ -82,7 +92,7 @@ export function WorkspaceDetailsSheet(props: { row: Worktree; onOpenLink: (url: 
           <View style={styles.origin} testID="workspace-origin">
             <OriginIcon size={12} color={colors.textMuted} style={styles.originIcon} />
             <Text style={styles.originText} numberOfLines={2}>
-              {originLabel(origin)}
+              {originLabel(origin, t)}
             </Text>
           </View>
         ) : null}
@@ -96,11 +106,19 @@ export function WorkspaceDetailsSheet(props: { row: Worktree; onOpenLink: (url: 
   )
 }
 
-function originLabel(origin: WorkspaceOrigin): string {
+function originLabel(origin: WorkspaceOrigin, t: Translate): string {
   if (origin.kind === 'cli') {
-    return 'Created from Orca CLI'
+    return t('hostScreen.workspaceDetailsSheet.createdFromCli', 'Created from Orca CLI')
   }
-  return origin.name ? `Created by automation \u201c${origin.name}\u201d` : 'Created by automation'
+  return origin.name
+    ? t(
+        'hostScreen.workspaceDetailsSheet.createdByNamedAutomation',
+        'Created by automation \u201c{{name}}\u201d',
+        {
+          name: origin.name
+        }
+      )
+    : t('hostScreen.workspaceDetailsSheet.createdByAutomation', 'Created by automation')
 }
 
 function DetailRow(props: {
@@ -110,6 +128,7 @@ function DetailRow(props: {
   onPress?: () => void
   accessibilityLabel?: string
 }) {
+  useMobileColorScheme()
   const body = (
     <>
       <View style={styles.icon}>{props.icon}</View>
@@ -133,6 +152,7 @@ function DetailRow(props: {
 }
 
 function ReviewIcon({ item }: { item: WorkspaceDetailLink }) {
+  useMobileColorScheme()
   const color = prStateColor(item.state ?? '')
   if (
     item.state === 'merged' ||
@@ -150,6 +170,7 @@ function ReviewIcon({ item }: { item: WorkspaceDetailLink }) {
 }
 
 function LinkIcon({ item }: { item: WorkspaceDetailLink }) {
+  useMobileColorScheme()
   if (item.type !== 'issue') {
     return <ReviewIcon item={item} />
   }
@@ -161,26 +182,35 @@ function LinkIcon({ item }: { item: WorkspaceDetailLink }) {
   return <CircleDot size={ICON_SIZE} color={colors.textSecondary} />
 }
 
-function linkMeta(item: WorkspaceDetailLink): string {
+function linkMeta(item: WorkspaceDetailLink, t: Translate): string {
   const reference = item.title ? item.label : null
   if (item.type === 'issue') {
     return [reference, PROVIDER_LABELS[item.provider]].filter(Boolean).join(' · ')
   }
   // As the desktop's tone rule: checks only speak for a review that is still open.
-  const checks = item.state === 'open' && item.checks ? CHECK_LABELS[item.checks] : null
-  return [reference, item.state ? STATE_LABELS[item.state] : null, checks]
+  const checks = item.state === 'open' && item.checks ? checkLabels(t)[item.checks] : null
+  return [reference, item.state ? stateLabels(t)[item.state] : null, checks]
     .filter(Boolean)
     .join(' · ')
 }
 
 function LinkRow({ item, onOpen }: { item: WorkspaceDetailLink; onOpen: (url: string) => void }) {
+  const t = useMobileTranslation()
+  useMobileColorScheme()
   const url = item.url
-  const meta = linkMeta(item)
+  const meta = linkMeta(item, t)
   return (
     <DetailRow
       icon={<LinkIcon item={item} />}
       onPress={url ? () => onOpen(url) : undefined}
-      accessibilityLabel={`Open ${item.label}${item.title ? `, ${item.title}` : ''}`}
+      accessibilityLabel={
+        item.title
+          ? t('hostScreen.workspaceDetailsSheet.openLinkWithTitle', 'Open {{label}}, {{title}}', {
+              label: item.label,
+              title: item.title
+            })
+          : t('hostScreen.workspaceDetailsSheet.openLink', 'Open {{label}}', { label: item.label })
+      }
       trailing={url ? <ExternalLink size={14} color={colors.textMuted} /> : undefined}
     >
       <Text style={styles.title} numberOfLines={1}>
@@ -195,7 +225,7 @@ function LinkRow({ item, onOpen }: { item: WorkspaceDetailLink; onOpen: (url: st
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   header: {
     paddingHorizontal: spacing.xs,
     paddingBottom: spacing.md - 2
@@ -261,4 +291,4 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     color: colors.textSecondary
   }
-})
+}))

@@ -20,6 +20,7 @@ vi.mock('@orca/process-host', async (importOriginal) => ({
 vi.mock('./orcad-browser-install-park', () => ({ openOrcadBrowserInstallPark: () => null }))
 
 import { resolveOrcadBrowserProvider, type OrcadBrowserProvider } from './orcad-browser-provider'
+import { agentBrowserCommandOf } from '../browser/agent-browser-bridge-test-harness'
 
 const FAKE_SIDECAR = join(import.meta.dirname, '__fixtures__', 'fake-orcad-electron-sidecar.cjs')
 const INSTALLED_EXECUTABLE = join('/Applications', 'Orca.app', 'Contents', 'MacOS', 'Orca')
@@ -29,14 +30,6 @@ let controlPath: string
 let chromiumExecutable: string
 let sidecarMode: string | undefined
 let provider: OrcadBrowserProvider | null
-
-function commandFromArgs(args: readonly string[]): string[] {
-  let index = 0
-  while (['--session', '--profile', '--args'].includes(args[index] ?? '')) {
-    index += 2
-  }
-  return args.slice(index, -1)
-}
 
 function agentBrowserSuccess(data: unknown) {
   return Promise.resolve({
@@ -76,7 +69,7 @@ beforeEach(async () => {
   )
   runProcessMock.mockReset()
   runProcessMock.mockImplementation(async (spec: ProcessSpec) => {
-    const command = commandFromArgs(spec.args ?? [])
+    const command = agentBrowserCommandOf(spec.args ?? [], spec.input)
     if (command[0] === 'open') {
       return agentBrowserSuccess({ url: 'about:blank', title: '' })
     }

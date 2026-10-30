@@ -1,20 +1,22 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
-import {
-  ClaudeStructuredSessionAdapter,
-  type ClaudeStructuredSessionAdapterDeps,
-  type ClaudeStructuredSessionEvent
-} from './claude-structured-session-adapter'
+import { ClaudeStructuredSessionAdapter } from './claude-structured-session-adapter'
+import type {
+  ClaudeStructuredSessionAdapterDeps,
+  ClaudeStructuredSessionEvent
+} from './structured/claude-structured-session-state'
 import {
   adapterFor,
   fakeClaude,
   identityFor,
   PROVIDER_SESSION_ID,
   tick,
-  recordingJournalSink,
+  recordingJournalSink
+} from './claude-structured-session-test-support'
+import {
   claudeStartupSettled,
   claudeOpened
-} from './claude-structured-session-test-support'
+} from './claude-structured-startup-settled-test-support'
 import { invokeCanUseTool } from './claude-can-use-tool-test-support'
 import {
   claudeProviderHandle,
@@ -72,6 +74,7 @@ describe('ClaudeStructuredSessionAdapter close and exit recovery', () => {
         providerSessionId: PROVIDER_SESSION_ID,
         resumeLeafUuid: null,
         resumesTranscript: false,
+        cliFlag: async () => 'supported' as const,
         continuesChain: false
       }),
       onEvent: (event) => {
@@ -334,6 +337,7 @@ describe('ClaudeStructuredSessionAdapter close and exit recovery', () => {
           providerSessionId: PROVIDER_SESSION_ID,
           resumeLeafUuid: null,
           resumesTranscript: false,
+          cliFlag: async () => 'supported' as const,
           continuesChain: false
         }
       }
@@ -345,6 +349,7 @@ describe('ClaudeStructuredSessionAdapter close and exit recovery', () => {
         providerSessionId: PROVIDER_SESSION_ID,
         resumeLeafUuid: durableLeafUuid,
         resumesTranscript: true,
+        cliFlag: async () => 'supported' as const,
         continuesChain: true
       }
     })

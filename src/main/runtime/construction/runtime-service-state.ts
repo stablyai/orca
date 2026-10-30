@@ -37,6 +37,7 @@ import { OrchestrationMailboxPointerDelivery } from '../orchestration/mailbox-po
 import { OrchestrationMailboxNotificationCoordinator } from '../orchestration/mailbox-notification-coordinator'
 import type { RuntimeMessageWaiter } from '../runtime-message-waiters'
 import { RuntimeMessageWaiters } from '../runtime-message-waiters'
+import type { WorkerTurnStopReportDeps } from '../orchestration/worker-turn-stop-report'
 import type { RuntimeSkillCommands } from '../runtime-skill-command-surface'
 import { RuntimeTerminalStreamConsumers } from '../runtime-terminal-stream-consumers'
 import type { RecentPtyOutputBuffer } from '../recent-pty-output-buffer'
@@ -44,6 +45,9 @@ import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import { mainListsEveryPane } from '../terminal/surface/main-terminal-surfaces'
 import { TUI_IDLE_QUIESCENCE_MS } from '../orca-runtime-postlude'
 import { screenClearsBlockedTail } from '../blocked-tail-screen-clear'
+import { conversationRecordReader } from '../orchestration/structured-session-lineage'
+import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/structured-agent-session-registry'
+import { peekOpenedAgentSessionRecordStore } from '../agent-session-record-store-slot'
 
 export abstract class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWithRuntimeId {
   protected readonly stopRequestedPtyIds = new Set<string>()
@@ -107,7 +111,7 @@ export abstract class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWith
   protected readonly worktreeLineage = new RuntimeWorktreeLineageController({
     getStore: () => this.store,
     getDb: () => this.getOrchestrationDbIfAvailable(),
-    resolveWorktree: (selector) => this.resolveWorktreeSelector(selector),
+    resolveWorktree: (selector) => this.resolveGitWorktreeSelector(selector),
     listResolvedWorktrees: () => this.listResolvedWorktrees(),
     showTerminal: (handle) => this.showTerminal(handle)
   })
@@ -124,7 +128,12 @@ export abstract class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWith
     getHandleForPaneKey: (paneKey) => this.getTerminalHandleForPaneKey(paneKey),
     getPaneKey: (handle) => this.getPaneKeyForTerminalHandle(handle),
     getDispatchAuthority: (handle) => this.getOrchestrationDispatchAuthority(handle),
-    getAgentStatusSnapshot: () => this.getOrchestrationFleetAgentStatusSnapshot()
+    getAgentStatusSnapshot: () => this.getOrchestrationFleetAgentStatusSnapshot(),
+    getSessionRecords: () => {
+      const store =
+        getStructuredAgentSessionHost()?.deps.store ?? peekOpenedAgentSessionRecordStore()
+      return store ? conversationRecordReader(store) : null
+    }
   })
 
   protected readonly terminalList = new RuntimeTerminalList({
@@ -133,7 +142,7 @@ export abstract class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWith
     getExplicitWorktreeId: (selector) => this.getExplicitSessionWorktreeIdSelector(selector),
     getResolvedCache: () => this.resolvedWorktrees.peek(),
     buildWorktreeFromId: (worktreeId) => this.buildResolvedWorktreeFromId(worktreeId),
-    resolveWorktree: (selector) => this.resolveWorktreeSelector(selector),
+    resolveWorktree: (selector) => this.resolveWorkspaceSelector(selector),
     listKnownWorktrees: (worktreeId, target) =>
       this.listKnownResolvedWorktreesForExplicitTarget(worktreeId, target),
     getWorktreeMap: () => this.getResolvedWorktreeMap(),
@@ -233,10 +242,7 @@ export abstract class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWith
 
   protected readonly orchestrationMailboxOwner = new OrchestrationMailboxOwner({
     getDb: () => this._orchestrationDb,
-    getLeaf: (leafKey) => this.leaves.get(leafKey) ?? this.getPtyLaneMailboxTarget(leafKey)?.leaf,
-    getLeafKey: (tabId, leafId) => this.getLeafKey(tabId, leafId),
-    getTerminalHandleForLeafKey: (leafKey) =>
-      this.handleByLeafKey.get(leafKey) ?? this.getPtyLaneMailboxTarget(leafKey)?.handle,
+    getTerminal: (ptyId) => this.getOrchestrationMailboxTerminal(ptyId),
     getTerminalProcessIncarnation: (handle) => this.getTerminalProcessIncarnation(handle),
     onRoutedMessageTypes: (mailboxHandle, types) =>
       this.messageWaiters.notifyRouted(mailboxHandle, types),
@@ -246,7 +252,8 @@ export abstract class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWith
 
   protected readonly orchestrationMailboxDeliveryTarget = new OrchestrationMailboxDeliveryTarget({
     getDb: () => this._orchestrationDb,
-    getTerminalHandleForPaneKey: (paneKey) => this.getTerminalHandleForPaneKey(paneKey),
+    getMailboxTerminalForPaneKey: (paneKey) => this.getMailboxTerminalForPaneKey(paneKey),
+    getTerminalForHandle: (handle) => this.getOrchestrationMailboxTerminalForHandle(handle),
     hasTerminalHandle: (handle) => this.hasMailboxTerminalHandle(handle),
     isStructuredSessionOwner: (handle) =>
       isStructuredWorkerHandle(handle) || handle.startsWith(ORCA_SESSION_ADDRESS_PREFIX),
@@ -259,16 +266,12 @@ export abstract class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWith
     mailboxOwner: this.orchestrationMailboxOwner,
     deliveryTarget: this.orchestrationMailboxDeliveryTarget,
     getDb: () => this._orchestrationDb,
-    getLeaf: (leafKey) => this.leaves.get(leafKey) ?? this.getPtyLaneMailboxTarget(leafKey)?.leaf,
-    getLeafKey: (tabId, leafId) => this.getLeafKey(tabId, leafId),
-    getLiveLeafForHandle: (handle) => this.getOrchestrationMailboxLeafForHandle(handle),
-    isAgentSettledForDelivery: (leaf) => this.checkDeliverySettledAndArmRecheck(leaf),
+    getTerminal: (ptyId) => this.getOrchestrationMailboxTerminal(ptyId),
+    isAgentSettledForDelivery: (ptyId) => this.checkDeliverySettledAndArmRecheck(ptyId),
     isPtyAwaitingUserInput: (ptyId) => this.isPtyAwaitingUserInput(ptyId),
     getMessageWaiters: (mailboxHandle) => this.messageWaiters.get(mailboxHandle),
     getCliCommand: (terminalHandle) => this.getTerminalOrchestrationCliCommand(terminalHandle),
-    getTerminalHandleForLeafKey: (leafKey) =>
-      this.handleByLeafKey.get(leafKey) ?? this.getPtyLaneMailboxTarget(leafKey)?.handle,
-    resolveSubmitTarget: (leaf, ptyId) => this.resolveOrchestrationPointerSubmitTarget(leaf, ptyId),
+    resolveSubmitTarget: (ptyId) => this.resolveOrchestrationPointerSubmitTarget(ptyId),
     isLeafPtyProvenAbsent: (ptyId) => this.isLeafPtyProvenAbsent(ptyId),
     redriveMailbox: (mailboxHandle, reservedTypes) =>
       this.deliverPendingMessagesForHandle(mailboxHandle, reservedTypes),
@@ -307,7 +310,7 @@ export abstract class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWith
       pointerDelivery: this.orchestrationMailboxPointerDelivery,
       structuredPointerDelivery: this.orchestrationStructuredMailboxPointerDelivery,
       getDb: () => this._orchestrationDb,
-      getLiveLeafForHandle: (handle) => this.getOrchestrationMailboxLeafForHandle(handle),
+      getTerminalForHandle: (handle) => this.getOrchestrationMailboxTerminalForHandle(handle),
       getPaneKeyForHandle: (handle) => {
         const record = this.handles.get(handle)
         return record ? `${record.tabId}:${record.leafId}` : undefined
@@ -317,10 +320,16 @@ export abstract class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWith
       deliverForHandle: (handle, reservedTypes) =>
         this.deliverPendingMessagesForHandle(handle, reservedTypes),
       notifyMessageArrived: (handle, messageType) => this.notifyMessageArrived(handle, messageType),
-      resolveMessageWaiter: (waiter) => this.messageWaiters.resolveNotified(waiter)
+      resolveMessageWaiters: (waiters) => this.messageWaiters.resolveNotified(waiters)
     })
 
   protected readonly messageWaiters = new RuntimeMessageWaiters()
+
+  protected readonly workerTurnStopReportDeps: WorkerTurnStopReportDeps = {
+    getDb: () => this._orchestrationDb,
+    isWaitingForMail: (mailbox) => (this.messageWaiters.get(mailbox)?.size ?? 0) > 0,
+    notify: (handle, messageType) => this.notifyMessageArrived(handle, messageType)
+  }
 
   protected readonly skillCommands!: RuntimeSkillCommands
 

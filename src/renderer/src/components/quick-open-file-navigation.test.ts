@@ -50,6 +50,9 @@ vi.mock('@/store/slices/editor/focus/editor-focus-reveal', () => ({
 }))
 import { openQuickOpenFile } from './quick-open-file-navigation'
 
+// Opening a path is a user act, so its stat may start a stopped WSL distro.
+const USER_ACT = { wakeWslDistro: true }
+
 beforeEach(() => {
   vi.clearAllMocks()
   mocks.route.current = { target: { kind: 'local' }, connectionId: undefined }
@@ -64,9 +67,12 @@ it('validates pasted local paths with user-named access and uses the owner-quali
     line: 12,
     column: 3
   })
-  expect(mocks.stat).toHaveBeenCalledWith(expect.anything(), '/external/guide.md', {
-    kind: 'user-file'
-  })
+  expect(mocks.stat).toHaveBeenCalledWith(
+    expect.anything(),
+    '/external/guide.md',
+    { kind: 'user-file' },
+    USER_ACT
+  )
   expect(mocks.open).toHaveBeenCalledWith(
     expect.objectContaining({
       filePath: '/external/guide.md',
@@ -122,7 +128,8 @@ it('probes SSH paths only on their owning host', async () => {
   expect(mocks.stat).toHaveBeenCalledWith(
     expect.objectContaining({ connectionId: 'ssh-a' }),
     '/external/file.ts',
-    { kind: 'user-file' }
+    { kind: 'user-file' },
+    USER_ACT
   )
   expect(mocks.open).toHaveBeenCalledWith(expect.objectContaining({ externalSshTargetId: 'ssh-a' }))
 })
@@ -207,7 +214,8 @@ it.each(['C:\\repo\\file.ts', '\\\\server\\share\\file.ts'])(
     expect(mocks.stat).toHaveBeenCalledWith(
       expect.objectContaining({ connectionId: 'ssh-windows' }),
       path,
-      { kind: 'user-file' }
+      { kind: 'user-file' },
+      USER_ACT
     )
     expect(mocks.authorize).not.toHaveBeenCalled()
     expect(mocks.reveal).toHaveBeenCalledWith(expect.any(Function), path, 3, 4, 'owner-file-id')
@@ -248,7 +256,9 @@ it('keeps a pasted POSIX file on the local workspace WSL distro before any files
   })
   expect(mocks.stat).toHaveBeenCalledWith(
     expect.anything(),
-    '\\\\wsl.localhost\\Ubuntu\\home\\repo\\file.ts'
+    '\\\\wsl.localhost\\Ubuntu\\home\\repo\\file.ts',
+    undefined,
+    USER_ACT
   )
   expect(mocks.open).toHaveBeenCalledWith(expect.objectContaining({ relativePath: 'file.ts' }))
   mocks.route.current.connectionId = 'ssh-a'
@@ -258,7 +268,8 @@ it('keeps a pasted POSIX file on the local workspace WSL distro before any files
   expect(mocks.stat).toHaveBeenLastCalledWith(
     expect.objectContaining({ connectionId: 'ssh-a' }),
     '/home/repo/file.ts',
-    { kind: 'user-file' }
+    { kind: 'user-file' },
+    USER_ACT
   )
 })
 

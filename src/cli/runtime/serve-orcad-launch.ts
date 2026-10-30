@@ -14,7 +14,6 @@ import { isSupervisedSpawnHeld } from './serve-supervised-stop'
 import { redactingSpawn, shouldRedactSupervisedStdout } from './serve-pairing-redaction'
 import { orcadServeArgs, type ServeOrcaAppArgs } from '../../shared/orcad-serve-argv'
 import { SPEECH_RECOGNIZER_DIR_ENV } from '../../shared/speech-recognizer-package'
-import { ORCAD_AGENT_BROWSER_DRIVER_ENV } from '../../shared/orcad-agent-browser-name'
 
 /** A first run may download and verify the pinned Node; bound it well past that. */
 const SELECTION_TIMEOUT_MS = 10 * 60_000
@@ -70,9 +69,7 @@ export function serveWithOrcad(
   /** The app's browser client; the slot does not carry one, so orcad serves it from here. */
   webClientRoot?: string,
   /** orcad’s slot has no speech recognizer; use the app’s copy. */
-  speechRecognizerDir?: string,
-  /** orcad's slot has no agent-browser driver; use the app's copy. */
-  agentBrowserDriver?: string
+  speechRecognizerDir?: string
 ): Promise<number> {
   const spec: ProcessSpec = {
     program: selection.runtime,
@@ -86,8 +83,7 @@ export function serveWithOrcad(
       ORCA_USER_DATA: userDataPath,
       ORCA_VERSION: selection.version,
       // Always set: a value inherited from an Orca terminal would name another install's copy.
-      [SPEECH_RECOGNIZER_DIR_ENV]: speechRecognizerDir ?? '',
-      [ORCAD_AGENT_BROWSER_DRIVER_ENV]: agentBrowserDriver ?? ''
+      [SPEECH_RECOGNIZER_DIR_ENV]: speechRecognizerDir ?? ''
     }
   }
   const spawnChild = shouldRedactSupervisedStdout(args.supervise === true)

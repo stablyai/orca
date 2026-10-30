@@ -13,10 +13,7 @@ import type { PtyLivenessVerdict } from '../../../../shared/pty-liveness-verdict
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import { exitedSplitPaneFacts } from './exited-split-pane-rule'
 import { closedPaneOfExitedPty, type ClosedPaneOfExit } from './closed-pane-of-exited-pty'
-import type {
-  RuntimePtyWorktreeRecord,
-  RuntimeLeafRecord
-} from '../../runtime-terminal-state-records'
+import type { RuntimePtyWorktreeRecord } from '../../runtime-terminal-state-records'
 
 export abstract class OrcaRuntimeWithOnPtyExit extends OrcaRuntimeWithOnClientDisconnected {
   protected abstract pruneDisconnectedPtyRecords(): void
@@ -27,8 +24,6 @@ export abstract class OrcaRuntimeWithOnPtyExit extends OrcaRuntimeWithOnClientDi
     exitCode: number,
     cause: TerminalExitCause
   ): void
-
-  protected abstract resolveExitWaiters(leaf: RuntimeLeafRecord): void
 
   protected abstract pruneDisconnectedPtyTranscript(pty: RuntimePtyWorktreeRecord): void
 
@@ -65,6 +60,8 @@ export abstract class OrcaRuntimeWithOnPtyExit extends OrcaRuntimeWithOnClientDi
       providerExitObserved?: boolean
       /** A window's view of the pane was showing when it ended (layout-owner build). */
       viewShown?: boolean
+      /** Its host went away (a WSL bridge pane's distro stopped): keep the pane to cold-restore, as after a daemon crash. */
+      hostLost?: boolean
     } = {}
   ): void | Promise<void> {
     const pty = this.ptysById.get(ptyId)
@@ -164,6 +161,7 @@ export abstract class OrcaRuntimeWithOnPtyExit extends OrcaRuntimeWithOnClientDi
       advertisedUrlWatcher.unbindPty(ptyId)
       this.mobileSubscribers.delete(ptyId)
       this.terminalViewSubscribers.clearSubscribers(ptyId)
+      this.mainDaemonAttachments.forget(ptyId)
       this.mobileDisplayModes.delete(ptyId)
       this.resizeListeners.delete(ptyId)
       this.lastRendererSizes.delete(ptyId)
@@ -208,10 +206,9 @@ export abstract class OrcaRuntimeWithOnPtyExit extends OrcaRuntimeWithOnClientDi
         if (mailboxHandle) {
           this.mailPointerRepointScheduler.schedule(mailboxHandle)
         }
-        const boundRun = this._orchestrationDb?.getCurrentRunForPane?.(
+        for (const boundRun of this._orchestrationDb?.runsBoundToPane?.(
           `${leaf.tabId}:${leaf.leafId}`
-        )
-        if (boundRun) {
+        ) ?? []) {
           this.mailPointerRepointScheduler.schedule(`run:${boundRun.id}`)
         }
       }
@@ -242,7 +239,11 @@ export abstract class OrcaRuntimeWithOnPtyExit extends OrcaRuntimeWithOnClientDi
         this.resolvePtyExitWaiters(pty, ptyId)
         this.pruneDisconnectedPtyTranscript(pty)
       }
-      if (preservesIntentionallyStoppedSurface || preservesAbnormalSshSurface) {
+      if (
+        preservesIntentionallyStoppedSurface ||
+        preservesAbnormalSshSurface ||
+        options.hostLost === true
+      ) {
         // Why: relay loss is recoverable; keep the HUB-owned pane addressable through the bounded reconnect grace.
         this.touchMobileSessionSnapshotsForPty(ptyId, { immediate: true })
       } else {
@@ -277,7 +278,6 @@ export abstract class OrcaRuntimeWithOnPtyExit extends OrcaRuntimeWithOnClientDi
       leaf.lastExitCode = exitCode
       leaf.lastExitCause = exitCause
       leaf.lastAgentStatusObservedLive = false
-      this.resolveExitWaiters(leaf)
       const leafHandle = this.handleByLeafKey.get(this.getLeafKey(leaf.tabId, leaf.leafId))
       if (leafHandle) {
         exitedSurfaces.push({ handle: leafHandle, paneKey: `${leaf.tabId}:${leaf.leafId}` })

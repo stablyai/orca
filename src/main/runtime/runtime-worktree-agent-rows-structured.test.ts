@@ -58,7 +58,7 @@ function attach(summaries: AgentSessionStatusSummary[]): RuntimeWorktreePsSummar
   const summariesById = new Map<string, RuntimeWorktreePsSummary>([[WORKTREE_ID, row]])
   attachRuntimeWorktreeAgentRows({
     summaries: summariesById,
-    workingTerminalEvidenceByWorktreeId: new Map(),
+    terminalTitleEvidenceByWorktreeId: new Map(),
     rowSources: collectRuntimeWorktreeAgentSources({
       mirroredWorktreeIdByTabId: new Map(),
       connectedPtyEvidence: {

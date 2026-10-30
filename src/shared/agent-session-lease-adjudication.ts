@@ -125,6 +125,32 @@ export function agentSessionOwnerObservationVerdict(
     : 'unverifiable'
 }
 
+/** Founding is not an observed death; every reservation/recovery leaves a different tuple. */
+export function agentSessionLeaseNeverAcquired(lease: AgentSessionLease): boolean {
+  return (
+    lease.runtimeKind === 'native' &&
+    lease.runtimeFence === 1 &&
+    lease.minimumNextFence === undefined &&
+    !lease.unreconciled &&
+    lease.claimStatus === 'released' &&
+    lease.ownerProcess === null &&
+    lease.reservedSpawnToken === null &&
+    lease.handoffStage === null &&
+    lease.handoffOperationId === null &&
+    lease.provenHandleLinkId === null &&
+    lease.deathEvidence === null
+  )
+}
+
+export function agentSessionLeasePossiblyWriting(
+  lease: AgentSessionLease | AgentSessionOwnerObservation
+): boolean {
+  return (
+    !('runtimeKind' in lease && agentSessionLeaseNeverAcquired(lease)) &&
+    agentSessionOwnerObservationVerdict(lease) !== 'exited'
+  )
+}
+
 /** Nothing holds this lease: released, no handoff in flight, and reconciled since the last restart. */
 export function agentSessionLeaseIsReleased(lease: AgentSessionLease): boolean {
   return !lease.unreconciled && lease.claimStatus === 'released' && lease.handoffStage === null

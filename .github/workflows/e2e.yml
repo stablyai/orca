@@ -32,6 +32,12 @@ on:
         required: false
         type: string
         default: '["1/2","2/2"]'
+      # Why: whole-file balancing cannot split one long spec; Playwright's native shards split its tests.
+      changed_e2e_test_shards:
+        description: JSON test-level shard assignments for the changed-spec lane; empty sizes shards by file count
+        required: false
+        type: string
+        default: ''
       # Why: artifact names are unique per workflow run, and pr.yml calls this workflow twice.
       artifact_suffix:
         description: Appended to the build and trace artifact names so two calls in one run do not collide
@@ -39,6 +45,12 @@ on:
         type: string
         default: ''
       # Why: the app, orcad and its test template (--dark-test-template) build with it; releases refuse it.
+      # Why: only required gates pay for Blacksmith; advisory lanes run on free hosted runners.
+      fast_runners:
+        description: Run on Blacksmith instead of free GitHub-hosted runners
+        required: false
+        type: boolean
+        default: false
       layout_owner:
         description: Set to main to build with ORCA_LAYOUT_OWNER=main and record save-divergence reports
         required: false
@@ -68,7 +80,7 @@ jobs:
   build:
     name: build e2e app
     if: inputs.test_files == '' || github.event_name != 'pull_request' || inputs.needs_build
-    runs-on: blacksmith-8vcpu-ubuntu-2404
+    runs-on: ${{ inputs.fast_runners && 'blacksmith-8vcpu-ubuntu-2404' || 'ubuntu-24.04' }}
     timeout-minutes: 15
     outputs:
       changed_e2e_shards: ${{ steps.changed-e2e-shards.outputs.shards }}
@@ -85,7 +97,12 @@ jobs:
         id: changed-e2e-shards
         env:
           TEST_FILES_JSON: ${{ inputs.test_files }}
+          TEST_SHARDS_JSON: ${{ inputs.changed_e2e_test_shards }}
         run: |
+          if [ -n "$TEST_SHARDS_JSON" ]; then
+            echo "shards=$(jq -c . <<<"$TEST_SHARDS_JSON")" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
           node --input-type=module <<'NODE'
           import { appendFileSync, existsSync } from 'node:fs'
           const modulePath = './config/scripts/ci-e2e-job-selection.mjs'
@@ -212,7 +229,7 @@ jobs:
     name: e2e ${{ matrix.shard_name }}
     needs: [build]
     if: inputs.test_files == ''
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ${{ inputs.fast_runners && 'blacksmith-4vcpu-ubuntu-2404' || 'ubuntu-24.04' }}
     timeout-minutes: 30
     strategy:
       fail-fast: false
@@ -328,7 +345,7 @@ jobs:
     name: changed e2e specs (${{ matrix.shard }})
     needs: [build]
     if: inputs.test_files != '' && (github.event_name != 'pull_request' || inputs.run_changed_e2e)
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ${{ inputs.fast_runners && 'blacksmith-4vcpu-ubuntu-2404' || 'ubuntu-24.04' }}
     timeout-minutes: 45
     strategy:
       fail-fast: false
@@ -361,6 +378,7 @@ jobs:
           TEST_FILES_JSON: ${{ inputs.test_files }}
           LAYOUT_OWNER: ${{ inputs.layout_owner }}
           SHARD: ${{ matrix.shard }}
+          TEST_LEVEL_SHARDS: ${{ inputs.changed_e2e_test_shards != '' }}
         run: |
           if [ -f config/scripts/ci-e2e-job-selection.mjs ]; then
             printf '%s\n' "$TEST_FILES_JSON" | node config/scripts/ci-e2e-job-selection.mjs > "$RUNNER_TEMP/general-e2e-specs"
@@ -382,6 +400,9 @@ jobs:
             exit 0
           fi
           E2E_ENV=(SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 ORCA_E2E_WEB_CLIENT=1)
+          if printf '%s\n' "${TEST_FILES[@]}" | grep -Fxq 'tests/e2e/browser-image-link-focus.spec.ts'; then
+            E2E_ENV+=(ORCA_BACKGROUND_LAUNCH=1 ORCA_E2E_BROWSER_NATIVE_XVFB=1)
+          fi
           E2E_PROJECT_ARGS=()
           if [ -n "$LAYOUT_OWNER" ]; then
             test -f out/main/ORCA_LAYOUT_OWNER_MAIN
@@ -394,7 +415,10 @@ jobs:
             E2E_PROJECT_ARGS+=(--project=electron-headful)
           fi
           E2E_SELECTION_ARGS=(--shard="$SHARD")
-          if [ -f config/scripts/ci-e2e-shard-plan.mjs ]; then
+          if [ "$TEST_LEVEL_SHARDS" = true ]; then
+            mkdir -p ci-shards-changed
+            pnpm exec playwright test "${TEST_FILES[@]}" --config tests/playwright.config.ts --project=electron-headless "${E2E_PROJECT_ARGS[@]}" --shard="$SHARD" --list --reporter=json > ci-shards-changed/selected-discovery.json
+          elif [ -f config/scripts/ci-e2e-shard-plan.mjs ]; then
             mkdir -p ci-shards-changed
             pnpm exec playwright test "${TEST_FILES[@]}" --config tests/playwright.config.ts --project=electron-headless "${E2E_PROJECT_ARGS[@]}" --list --reporter=json > ci-shards-changed/discovery.json
             export ORCA_SHARD_SOURCE_SHA="$(git rev-parse HEAD)"
@@ -452,7 +476,7 @@ jobs:
   ssh-browser-network-route:
     name: ssh browser network route
     if: inputs.test_files == '' || contains(inputs.test_files, 'tests/e2e/ssh-browser-network-execution-route.docker.unit.test.ts')
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ${{ inputs.fast_runners && 'blacksmith-4vcpu-ubuntu-2404' || 'ubuntu-24.04' }}
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v6
@@ -476,7 +500,7 @@ jobs:
       inputs.test_files == '' ||
       contains(inputs.test_files, 'tests/e2e/orcad-serve-mode-switch.spec.ts') ||
       contains(inputs.test_files, 'tests/e2e/workspace-layout-oracle-headless.spec.ts')
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ${{ inputs.fast_runners && 'blacksmith-4vcpu-ubuntu-2404' || 'ubuntu-24.04' }}
     timeout-minutes: 45
     env:
       ORCA_BACKGROUND_LAUNCH: '1'
@@ -576,7 +600,7 @@ jobs:
     name: ssh on managed orcad (Docker ${{ matrix.shard }})
     needs: [build]
     if: inputs.test_files == '' || contains(inputs.test_files, 'tests/e2e/ssh-orcad-')
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ${{ inputs.fast_runners && 'blacksmith-4vcpu-ubuntu-2404' || 'ubuntu-24.04' }}
     timeout-minutes: 60
     strategy:
       fail-fast: false

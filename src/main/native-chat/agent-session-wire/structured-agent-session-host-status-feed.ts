@@ -31,6 +31,7 @@ export function createStructuredAgentSessionHostStatusFeed(args: {
     statusSink?: StructuredAgentSessionStatusSink
     conversationNaming?: StructuredAgentSessionConversationNaming
   }
+  onPublished?: StructuredAgentSessionStatusFeedDeps['onPublished']
   onAgentStarted?: (sessionId: string) => void
   onChildWorkChanged?: (sessionId: string) => void
 }): StructuredAgentSessionStatusFeed {
@@ -61,6 +62,7 @@ export function createStructuredAgentSessionHostStatusFeed(args: {
   const feed = new StructuredAgentSessionStatusFeed({
     sessions: args.sessions,
     starting: args.starting,
+    onPublished: args.onPublished,
     getConversation: (sessionId) => args.deps().store.getConversation(sessionId),
     listConversations: () => args.deps().store.listConversations(),
     replacedRuntime: (sessionId) => args.deps().store.replacedRuntime(sessionId),

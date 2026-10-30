@@ -24,3 +24,9 @@ export type TerminalColorOverrides = {
   // Preserve Ghostty bold for future renderer support; xterm ITheme has no bold key.
   bold?: string
 }
+
+/** A selected plugin terminal theme's palette, saved so every host resolves it. */
+export type TerminalPluginPalette = {
+  id: `plugin:${string}`
+  colors: TerminalColorOverrides
+}

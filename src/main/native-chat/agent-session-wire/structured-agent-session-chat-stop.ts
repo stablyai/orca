@@ -33,7 +33,9 @@ import {
 import { performCancel, type AcceptedChatStop } from './structured-agent-session-turns-cancel'
 import { contextStructuredAgentSessionCurrentWork } from './structured-agent-session-current-work'
 import type { AgentSessionTurnContext, TurnOutcome } from './structured-agent-session-turns'
+import type { AgentSessionCloseObserver } from './structured-agent-session-adapter-stop'
 import {
+  isStructuredAgentSessionCommandTurnId,
   structuredAgentSessionStopNoteIdentity,
   structuredAgentSessionCommandWasStopped
 } from './structured-agent-session-command-turn'
@@ -131,26 +133,28 @@ export function mutateWithChatStop<TValue>(
     const { child } = target
     const feedbackId = `child:${child.fence}:${child.generation ?? 'unknown'}`
     let stopOutcome = child.close?.stopOutcome
+    const observeClose: AgentSessionCloseObserver = (evidence) => {
+      if (stopOutcome && evidence) {
+        stopOutcome.root = evidence.root === 'exited' ? 'exited' : stopOutcome.root
+        stopOutcome.workload = evidence.workload === 'exited' ? 'exited' : stopOutcome.workload
+        if (evidence.deathEvidenceKind) {
+          stopOutcome.deathEvidenceKind = evidence.deathEvidenceKind
+        }
+      }
+    }
     const stopChild = async () => {
-      if (context.sessions.get(sessionId)?.child === child) {
-        try {
+      try {
+        if (context.sessions.get(sessionId)?.child === child) {
           await context.stopAgent(sessionId, {
             recorded: 'user-stop',
-            observeClose: (evidence) => {
-              if (stopOutcome) {
-                if (evidence?.root === 'exited') {
-                  stopOutcome.root = 'exited'
-                }
-                if (evidence?.workload === 'exited') {
-                  stopOutcome.workload = 'exited'
-                }
-              }
-            }
+            observeClose
           })
-        } finally {
-          if (child.close) {
-            child.close.stopOutcome ??= stopOutcome
-          }
+        }
+      } finally {
+        const observed = child.exitObservation?.().close
+        observeClose({ ...observed?.processExit, deathEvidenceKind: observed?.deathEvidenceKind })
+        if (child.close) {
+          child.close.stopOutcome ??= stopOutcome
         }
       }
     }
@@ -225,7 +229,9 @@ export function mutateWithChatStop<TValue>(
       return { ok: true, value: { ...named, cancelled: false } }
     }
     const previouslyStopped =
-      target.turnId !== null && structuredAgentSessionCommandWasStopped(ctx.journal, target.turnId)
+      target.turnId !== null &&
+      isStructuredAgentSessionCommandTurnId(target.turnId) &&
+      structuredAgentSessionCommandWasStopped(ctx.journal, target.turnId)
     const accepted = await accept(ctx, target)
     if (!accepted.ok) {
       return accepted

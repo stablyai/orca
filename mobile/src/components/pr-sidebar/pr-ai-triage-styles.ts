@@ -1,7 +1,8 @@
 import { StyleSheet } from 'react-native'
 import { colors, radii, spacing, typography } from '../../theme/mobile-theme'
+import { themedStyleSheet } from '../../theme/themed-styles'
 
-export const prAiTriageStyles = StyleSheet.create({
+export const prAiTriageStyles = themedStyleSheet(() => ({
   triageArea: {
     gap: spacing.xs
   },
@@ -69,4 +70,4 @@ export const prAiTriageStyles = StyleSheet.create({
     color: colors.statusRed,
     fontSize: typography.metaSize
   }
-})
+}))

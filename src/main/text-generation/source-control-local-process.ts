@@ -1,8 +1,14 @@
+import { textGenerationFailure } from '../../shared/text-generation-failure-copy'
+import { killSourceControlAgentProcess } from './source-control-agent-termination'
+import { wslDistroForCommand } from '../../shared/wsl-paths'
+import { prepareWslPrompt, stageLocalPromptFiles } from './source-control-prompt-files'
+import { producePromptRecords } from './source-control-prompt-producer'
+import { argumentBudgetFailure } from './source-control-command-line-budget'
+export { fitsLocalCommandLine } from './source-control-command-line-budget'
+import { removeTree } from '../../shared/windows-transient-lock-removal'
 import { WindowsCmdLineBreakError } from '@orca/process-host'
-import type { CommitMessagePlan } from '../../shared/commit-message-plan'
+import { WindowsCommandLineBudgetError } from '../../shared/windows-command-line-budget'
 import { supervisedProviderSpawnFailure } from '../provider-process/provider-spawn-failure-report'
-import { stopSupervisedChildProcess } from '../provider-process/supervised-child-process-stop'
-import { terminateWindowsProcessTree } from '../windows-process-tree-kill'
 import {
   finalizeFromAgentOutput,
   userFacingUnsafeWindowsBatchArgs
@@ -20,85 +26,49 @@ import type {
   InternalTextGenerationResult,
   LocalProcessExecution,
   SpawnedSourceControlAgentProcess,
-  SpawnSourceControlAgent,
-  TextGenerationOperation
+  LocalSourceControlPlanInput
 } from './source-control-text-generation-types'
 
-export const SOURCE_CONTROL_KILL_SITE = 'source-control-text-generation'
+export * from './source-control-agent-termination'
 
-export async function killSourceControlAgentProcess(
-  child: SpawnedSourceControlAgentProcess
-): Promise<void> {
-  const pid = child.pid
-  if (!pid) {
-    return
-  }
-  if (child.supervised) {
-    await stopSupervisedChildProcess(child, { site: SOURCE_CONTROL_KILL_SITE })
-    return
-  }
-  if (process.platform === 'win32') {
-    // Tree-walk refusal must not release the home lock having killed nothing; root handle kill cannot hit a recycled PID.
-    await terminateWindowsProcessTree(pid, { site: SOURCE_CONTROL_KILL_SITE })
-  }
-  try {
-    child.kill('SIGKILL')
-  } catch {
-    // The process may exit between the PID check and kill.
-  }
-}
-
-// Windows has 32767 UTF-16 command-line units including quoting/separators; reserve headroom for cmd shim wrappers.
-const WINDOWS_COMMAND_LINE_UNIT_BUDGET = 30_000
-
-function exceedsWindowsCommandLineBudget(command: string, args: string[]): boolean {
-  let units = command.length + args.length
-  for (const arg of args) {
-    units += arg.length + 2
-  }
-  return units > WINDOWS_COMMAND_LINE_UNIT_BUDGET
-}
-
-// Linux caps each argv entry in bytes (128KiB on 4KiB pages), before total argv capacity; reserve headroom for single-prompt arguments.
-const LINUX_SINGLE_ARGUMENT_BYTE_BUDGET = 120 * 1024
-
-function exceedsLinuxArgumentBudget(args: string[]): boolean {
-  return args.some((arg) => Buffer.byteLength(arg, 'utf8') > LINUX_SINGLE_ARGUMENT_BYTE_BUDGET)
-}
-
-function argumentBudgetFailure(plan: CommitMessagePlan): string | null {
-  if (process.platform === 'win32' && exceedsWindowsCommandLineBudget(plan.binary, plan.args)) {
-    return `${plan.label} prompt is too large for the Windows command line. Stage fewer changes and try again.`
-  }
-  if (process.platform === 'linux' && exceedsLinuxArgumentBudget(plan.args)) {
-    return `${plan.label} prompt is too large to pass as a single command-line argument. Stage fewer changes and try again.`
-  }
-  return null
-}
-
-export function runLocalSourceControlPlan(input: {
-  plan: CommitMessagePlan
-  cwd: string
-  env: NodeJS.ProcessEnv | undefined
-  emptyResultName: string
-  operation: TextGenerationOperation
-  wslDistro?: string
-  spawnAgent: SpawnSourceControlAgent
-}): LocalProcessExecution<InternalTextGenerationResult> {
-  const { plan, cwd, operation } = input
+export function runLocalSourceControlPlan(
+  input: LocalSourceControlPlanInput
+): LocalProcessExecution<InternalTextGenerationResult> {
+  let { plan } = input
+  const { cwd, operation } = input
+  const distro = plan.promptFile ? wslDistroForCommand(cwd, input.wslDistro) : null
+  const guest = distro ? prepareWslPrompt(plan, distro) : undefined
+  let closed = false
+  let promptDirectory: string | undefined
   let markProcessClosed!: () => void
   const processClosed = new Promise<void>((resolve) => {
-    markProcessClosed = resolve
+    markProcessClosed = () => {
+      closed = true
+      if (promptDirectory) {
+        const directory = promptDirectory
+        promptDirectory = undefined
+        void removeTree(directory).catch((error: unknown) => {
+          console.error('[commit-message] Failed to remove generation prompt:', error)
+        })
+      }
+      resolve()
+    }
   })
-  const couldNotStart = `${plan.label} could not be started. Check the agent command in Settings and try again.`
+  const labelValue = { label: plan.label }
+  const couldNotStart = textGenerationFailure('agentCouldNotStart', labelValue)
   const result = new Promise<InternalTextGenerationResult>((resolve) => {
     let child: SpawnedSourceControlAgentProcess
     try {
+      plan =
+        guest?.plan ??
+        stageLocalPromptFiles(plan, (directory) => {
+          promptDirectory = directory
+        })
       // Reject oversized argv before opaque E2BIG spawn failure so users can act on the prompt-size limit.
       const budgetFailure = argumentBudgetFailure(plan)
       if (budgetFailure) {
         markProcessClosed()
-        resolve({ success: false, error: budgetFailure })
+        resolve({ success: false, ...budgetFailure })
         return
       }
       child = input.spawnAgent({
@@ -107,24 +77,31 @@ export function runLocalSourceControlPlan(input: {
         cwd,
         env: input.env,
         commandEnv: plan.env,
-        wslDistro: input.wslDistro,
+        wslDistro: distro ?? input.wslDistro,
+        ...(guest ? { preparation: guest.preparation } : {}),
         stdinMode: 'pipe',
         useCwdForNative: true
       })
     } catch (error) {
       markProcessClosed()
-      if (error instanceof WindowsCmdLineBreakError) {
+      if (error instanceof WindowsCommandLineBudgetError) {
         resolve({
           success: false,
-          error: userFacingUnsafeWindowsBatchArgs(plan.label)
+          ...textGenerationFailure('promptTooLargeForWindows', labelValue)
         })
         return
       }
+      if (error instanceof WindowsCmdLineBreakError) {
+        resolve({ success: false, ...userFacingUnsafeWindowsBatchArgs(plan.label) })
+        return
+      }
       console.error('[commit-message] Failed to spawn local generator:', error)
-      resolve({ success: false, error: couldNotStart })
+      resolve({ success: false, ...couldNotStart })
       return
     }
 
+    const stop = new AbortController()
+    const deadline = Date.now() + SOURCE_CONTROL_GENERATION_TIMEOUT_MS
     let stdout = ''
     let stderr = ''
     let stdoutBytes = 0
@@ -137,7 +114,10 @@ export function runLocalSourceControlPlan(input: {
     let terminal = false
     let terminationComplete: Promise<void> | null = null
     let detachChildListeners = (): void => {}
+    const active = (): boolean =>
+      !settled && !terminal && !stop.signal.aborted && Date.now() < deadline
     const startTermination = (): void => {
+      stop.abort()
       terminationComplete ??= killSourceControlAgentProcess(child).catch((error: unknown) => {
         console.error('[commit-message] Local generator termination failed:', error)
       })
@@ -152,6 +132,7 @@ export function runLocalSourceControlPlan(input: {
         return
       }
       settled = true
+      stop.abort()
       if (timer) {
         clearTimeout(timer)
         timer = null
@@ -175,7 +156,9 @@ export function runLocalSourceControlPlan(input: {
       startTermination()
       finalize({
         success: false,
-        error: `Generation timed out after ${SOURCE_CONTROL_GENERATION_TIMEOUT_MS / 1000}s.`
+        ...textGenerationFailure('timedOut', {
+          seconds: SOURCE_CONTROL_GENERATION_TIMEOUT_MS / 1000
+        })
       })
     }, SOURCE_CONTROL_GENERATION_TIMEOUT_MS)
 
@@ -189,6 +172,9 @@ export function runLocalSourceControlPlan(input: {
       stdout += chunk.toString('utf-8')
     }
     const onStderrData = (chunk: Buffer): void => {
+      if (settled) {
+        return
+      }
       stderrBytes += chunk.byteLength
       if (stderrBytes > MAX_SOURCE_CONTROL_AGENT_OUTPUT_BYTES) {
         outputLimitExceeded = true
@@ -206,18 +192,19 @@ export function runLocalSourceControlPlan(input: {
       if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
         finalize({
           success: false,
-          error: `${plan.binary} not found on PATH. Install ${plan.label} to use AI commit messages.`
+          ...textGenerationFailure('agentBinaryNotFound', {
+            binary: plan.binary,
+            label: plan.label
+          })
         })
         return
       }
       console.error('[commit-message] Local generator failed after spawn:', error)
-      finalize({
-        success: false,
-        error: `${plan.label} failed to start. Check the agent command in Settings and try again.`
-      })
+      finalize({ success: false, ...textGenerationFailure('agentFailedToStart', labelValue) })
     }
     const onClose = (code: number | null): void => {
       terminal = true
+      stop.abort()
       child.off?.('close', onClose)
       markClosedAfterTermination()
       if (canceledByUser) {
@@ -229,16 +216,13 @@ export function runLocalSourceControlPlan(input: {
         return
       }
       if (outputLimitExceeded) {
-        finalize({
-          success: false,
-          error: `${plan.label} CLI command produced too much output. Check the agent CLI configuration and try again.`
-        })
+        finalize({ success: false, ...textGenerationFailure('outputTooLarge', labelValue) })
         return
       }
       const spawnFailure = supervisedProviderSpawnFailure(code, stderr)
       if (spawnFailure?.thrown) {
         console.error('[commit-message] Failed to spawn local generator:', spawnFailure.error)
-        finalize({ success: false, error: couldNotStart })
+        finalize({ success: false, ...couldNotStart })
         return
       }
       if (spawnFailure) {
@@ -252,17 +236,52 @@ export function runLocalSourceControlPlan(input: {
           stderr,
           label: plan.label,
           outputFormat: plan.outputFormat,
-          emptyResultName: input.emptyResultName,
+          operation,
           includeStdoutDetail: operation !== 'branch-name' && operation !== 'conversation-name'
         })
       )
     }
+    child.stdin?.on?.('error', (error: Error) => {
+      if (active()) {
+        startTermination()
+        onError(error)
+      }
+    })
+    child.stdin?.on?.('close', () => {
+      if (guest && active() && !child.stdin?.writableEnded) {
+        startTermination()
+        onError(new Error('Generation input closed.'))
+      }
+    })
     child.stdout?.on('data', onStdoutData)
-    child.stderr?.on('data', onStderrData)
+    if (guest) {
+      child.stderr?.on('data', (chunk: Buffer) => {
+        const proved = guest.observe(chunk, onStderrData)
+        if (proved) {
+          promptDirectory = guest.cleanupPath
+          if (closed) {
+            markProcessClosed()
+          }
+          if (active() && child.stdin) {
+            void producePromptRecords(child.stdin, guest.records(), stop.signal, active).catch(
+              (error: unknown) => {
+                if (active()) {
+                  startTermination()
+                  onError(error instanceof Error ? error : new Error(String(error)))
+                }
+              }
+            )
+          }
+        }
+      })
+    } else {
+      child.stderr?.on('data', onStderrData)
+    }
     child.on('error', onError)
     child.on('close', onClose)
     child.on('exit', () => {
       terminal = true
+      stop.abort()
       markClosedAfterTermination()
     })
     detachChildListeners = () => {
@@ -270,7 +289,11 @@ export function runLocalSourceControlPlan(input: {
       child.stderr?.off?.('data', onStderrData)
     }
     try {
-      child.stdin?.end(plan.stdinPayload ?? undefined)
+      if (!guest) {
+        child.stdin?.end(plan.stdinPayload ?? undefined)
+      } else if (!child.stdin) {
+        throw new Error('Generation input is unavailable.')
+      }
     } catch (error) {
       startTermination()
       onError(error instanceof Error ? error : new Error(String(error)))

@@ -1,12 +1,16 @@
 import { useCallback, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { StyleSheet, View } from 'react-native'
 import { Navigator, usePathname } from 'expo-router'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { colors } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { HOST_STACK_SCREENS, type HostStackAnimation } from './host-stack-screens'
 import { isOverlayPageRoute } from '../new-workspace/overlay-page-route'
 
 // Expo native-stack’s web view ignores animation and switches display; reuse StackRouter with a view that retains popped screens through their exit slide.
 export function HostStack({ animation }: { animation: HostStackAnimation }) {
+  useMobileTranslation()
   return (
     <Navigator>
       {HOST_STACK_SCREENS.map(({ name, title }) => (
@@ -58,6 +62,7 @@ function transitionBetween(previous: Shown, next: Routes): Transition | null {
 }
 
 function HostStackView({ animation }: { animation: HostStackAnimation }) {
+  useMobileColorScheme()
   const { state, descriptors } = Navigator.useContext()
   const { routes } = state
   const [shown, setShown] = useState<Shown>({ routes, descriptors, transition: null })
@@ -114,6 +119,7 @@ function StackScreen({
   onSettled: () => void
   children: ReactNode
 }) {
+  useMobileColorScheme()
   const ref = useRef<View>(null)
   const transparent = isOverlayPageRoute(usePathname())
   // Resume interrupted offsets when a pop reverses an unfinished push.
@@ -168,7 +174,7 @@ function StackScreen({
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   stack: {
     flex: 1,
     overflow: 'hidden'
@@ -183,4 +189,4 @@ const styles = StyleSheet.create({
   hidden: {
     display: 'none'
   }
-})
+}))

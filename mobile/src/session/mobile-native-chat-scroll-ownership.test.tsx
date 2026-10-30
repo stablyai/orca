@@ -13,7 +13,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, expect, it, vi } from 'vitest'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import { foldToolMessages } from '../../../src/shared/native-chat/tools/native-chat-tool-fold'
-import { MobileNativeChatMessage } from './MobileNativeChatMessage'
+import { MobileNativeChatMessage } from './native-chat/transcript/MobileNativeChatMessage'
 import { MobileNativeChatScrollRootsBoundary } from './MobileNativeChatScrollRootsBoundary'
 import { MobileNativeChatScrollMotion } from './mobile-native-chat-scroll-motion'
 import {
@@ -26,9 +26,9 @@ import {
   MobileNativeChatDisclosureContext,
   useMobileNativeChatDisclosures,
   type MobileNativeChatDisclosureStore
-} from './mobile-native-chat-disclosure-store'
-import { useMobileNativeChatRowKeys } from './mobile-native-chat-row-keys'
-import { useMobileNativeChatTurnDisclosure } from './use-mobile-native-chat-turn-disclosure'
+} from './native-chat/transcript/mobile-native-chat-disclosure-store'
+import { useMobileNativeChatRowKeys } from './native-chat/transcript/mobile-native-chat-row-keys'
+import { useMobileNativeChatTurnDisclosure } from './native-chat/transcript/use-mobile-native-chat-turn-disclosure'
 
 vi.mock('react-native', async () => {
   const React = await import('react')
@@ -57,6 +57,7 @@ vi.mock('react-native', async () => {
   })
   const animation = () => ({ start() {}, stop() {} })
   return {
+    AppState: { currentState: 'active', addEventListener: () => ({ remove: () => {} }) },
     View,
     Text: View,
     Pressable: View,

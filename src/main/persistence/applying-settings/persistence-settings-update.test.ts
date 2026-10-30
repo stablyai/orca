@@ -12,7 +12,7 @@ import { makeTerminalTab } from '../persistence-session-fixtures'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { writeFileSync, rmSync, mkdtempSync } from 'node:fs'
 import { join } from 'node:path'
-import { tmpdir } from 'node:os'
+import { homedir, tmpdir } from 'node:os'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import { getDefaultWorkspaceSession } from '../../../shared/constants'
@@ -110,6 +110,18 @@ describe('Store', () => {
     expect(
       store.updateSettings({ agentSkillSharingEnabled: 1 as never }).agentSkillSharingEnabled
     ).toBe(false)
+  })
+
+  it('expands a leading ~ in the worktree location on load and every settings write', async () => {
+    writeDataFile({ settings: { workspaceDir: '~/source/.orca/worktrees' } })
+    const store = await createStore()
+
+    expect(store.getSettings().workspaceDir).toBe(join(homedir(), 'source/.orca/worktrees'))
+    expect(store.updateSettings({ workspaceDir: '~' }).workspaceDir).toBe(homedir())
+    expect(store.updateSettings({ workspaceDir: '~/wt' }).workspaceDir).toBe(join(homedir(), 'wt'))
+    // Repo-relative locations and other names that start with ~ stay as written.
+    expect(store.updateSettings({ workspaceDir: '.worktrees' }).workspaceDir).toBe('.worktrees')
+    expect(store.updateSettings({ workspaceDir: '~wt' }).workspaceDir).toBe('~wt')
   })
 
   it('normalizes bot-author overrides on load and every settings write', async () => {

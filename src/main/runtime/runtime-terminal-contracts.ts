@@ -67,6 +67,8 @@ export type TerminalCreateOptions = {
   terminalKittyKeyboardProtocol?: boolean
   terminalImageViewerSupported?: boolean
   terminalColorQueryReplies?: TerminalOscColorQueryReplyColors
+  /** Unvalidated wire value: the creator's palette and cursor, pinned with its colours on a windowed host. */
+  terminalViewAttributes?: unknown
   viewMode?: 'terminal' | 'chat'
   /** The tab group a background create joins; defaults to the first group. */
   targetGroupId?: string
@@ -101,6 +103,8 @@ export type TerminalCreateOptions = {
   agentSessionCreateOperationId?: string
   /** The paired client's declared intent; the host's fork gate validates and may defer it. */
   spawnIntent?: SpawnIntent
+  /** The user's own act (a CLI command, a paired client's create, a launch); without it a stopped WSL distro holds the start. */
+  wslUserAct?: true
   signal?: AbortSignal
   /** Refuse (`worktree_terminals_sleeping`) instead of waking a worktree the host has put to sleep. */
   refuseSleptWorktree?: boolean
@@ -240,6 +244,8 @@ export type OrchestrationCompatibilitySshTerminal = Readonly<{
 
 export type TerminalWaiter = {
   handle: string
+  /** The terminal the handle named when the wait began; the wait follows it, not the handle. */
+  ptyId: string
   condition: RuntimeTerminalWaitCondition
   resolve: (result: RuntimeTerminalWait) => void
   reject: (error: Error) => void
@@ -262,6 +268,8 @@ export type RuntimeProviderSnapshotReadOptions = {
 export type RuntimeAgentPromptWriteOptions = Omit<RuntimeTerminalWriteOptions, 'inputKind'> & {
   /** `launch` for the prompt an agent starts with; `driving` for any prompt sent to a running one. */
   inputKind: Exclude<TerminalInputKind, 'query-reply'>
+  /** Caller observation may end without cancelling a paste already accepted by the host. */
+  observationSignal?: AbortSignal
   /** Raw prompt text for submit scheduling; not written, only used for line-aware delays. */
   promptForSchedule?: string
   /** Caller observed composer input acceptance; schedule Enter using desktop draft-paste timing instead of render settlement. */

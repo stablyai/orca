@@ -18,6 +18,8 @@ import type { DiscordRestApi } from './discord-rest.js'
 const UNAUTHENTICATED_PER_MINUTE_PER_IP = 30
 const AUTHENTICATED_PER_MINUTE_PER_IP = 6_000
 const AUTHENTICATED_PER_MINUTE_PER_HOST = 600
+// Before the signature is checked; Slack sends every workspace's traffic from shared addresses.
+const SLACK_PER_MINUTE_PER_IP = 6_000
 
 export type ConnectorServerOptions = {
   now?: () => number
@@ -113,7 +115,11 @@ export function createConnectorServer(
     limitBody,
     core
   })
-  slack?.registerRoutes(app, core)
+  slack?.registerRoutes(
+    app,
+    core,
+    limitByClientIp(new RateLimiter(SLACK_PER_MINUTE_PER_IP, now), config.trustedProxyHops)
+  )
   discord?.registerRoutes(app, core)
   // Local development only: a stand-in for Slack ingress until it exists.
   if (isLoopbackOrigin(config.publicUrl)) {

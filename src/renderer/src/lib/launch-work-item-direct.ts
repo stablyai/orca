@@ -65,7 +65,6 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
   }
   const { repo, executionHostId: repoOwnerHostId, target: repoOwnerTarget } = owner
 
-  const settings = store.settings
   const promptDelivery = args.promptDelivery ?? 'draft'
   const repoConnectionId = repo.connectionId?.trim() || null
   const githubIdentity =
@@ -141,12 +140,16 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
     return false
   }
   const projectContext = projectPreflight.context
-  const { detectedAgentsPromise, prospectiveAgent } = await resolveDirectProspectiveAgent(
+  const { prospectiveAgent, unavailable } = await resolveDirectProspectiveAgent(
     store,
     repo,
     projectContext,
-    agentOverride
+    args
   )
+  if (unavailable) {
+    toast.error(unavailableAgentErrorMessage())
+    return false
+  }
   const requestId = newAgentLaunchRequestId()
   const draftContent = await getDirectWorkItemDraftContent(item, repoConnectionId)
   const preflightPlan = await planDirectWorkItemLaunch({
@@ -158,10 +161,11 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
     draftContent,
     promptDelivery,
     resolveSessionOptions: args.resolveSessionOptions,
-    sessionOptions: args.sessionOptions
+    sessionOptions: args.sessionOptions,
+    launchChoice: args.launchChoice
   })
   if (!projectContext || preflightPlan?.route !== 'structured-native-chat') {
-    const agentArgsPlan = planAgentCliArgsSuffix(agentArgs, shell)
+    const agentArgsPlan = planAgentCliArgsSuffix(args.agentArgs, shell)
     if (!agentArgsPlan.ok) {
       // Why: direct launches may create a worktree before the agent startup plan
       // is built; reject malformed saved args before touching user workspaces.
@@ -211,22 +215,21 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
     worktreeId = result.worktree.id
     worktreePath = result.worktree.path
 
-    const latestStore = useAppStore.getState()
     const launchPreparation = await prepareDirectWorkItemAgentLaunch({
       worktreeId,
       worktreePath,
       repoId,
-      agentOverride: preflightPlan?.agent ?? agentOverride,
-      agentArgs,
+      agentOverride,
+      agentLaunchPreferences: args.agentLaunchPreferences,
+      agentArgs: args.agentArgs,
       ...(args.sessionOptions ? { sessionOptions: args.sessionOptions } : {}),
       resolveAgentArgs: args.resolveAgentArgs,
       resolveSessionOptions: args.resolveSessionOptions,
+      launchChoice: args.launchChoice,
       sessionOptionsYieldToAgentArgs: args.sessionOptionsYieldToAgentArgs,
       repoConnectionId,
       repoHost: repo,
-      detectedAgentsPromise,
-      latestStore,
-      settings,
+      latestStore: useAppStore.getState(),
       draftContent,
       promptDelivery,
       launchPlatform: args.launchPlatform,

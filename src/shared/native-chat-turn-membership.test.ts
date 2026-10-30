@@ -6,7 +6,7 @@ import type {
   AgentJournalSubmission,
   AgentJournalTurnScope
 } from './agent-session-journal-types'
-import { nativeChatRowsInDrawOrder } from './native-chat-turn-grouping'
+import { nativeChatRowsInDrawOrder } from './native-chat/transcript/native-chat-turn-grouping'
 import {
   nativeChatTurnMembership,
   structuredAgentTurnAnchors,

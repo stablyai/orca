@@ -7,7 +7,7 @@ import { agentSessionFailureWords } from '../../../shared/agent-session-failure-
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
 import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
 import { DISPATCH_REJECTED_CANCELLED } from '../../../shared/structured-agent-session-dispatch-rejection'
-import { NATIVE_CHAT_STOPPED_BEFORE_START_TEXT } from '../../../shared/native-chat-stopped-before-start'
+import { NATIVE_CHAT_STOPPED_BEFORE_START_TEXT } from '../../../shared/native-chat/native-chat-stopped-before-start'
 import { projectStructuredAgentSessionMessages } from '../../../shared/structured-agent-session-message-projection'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 import {

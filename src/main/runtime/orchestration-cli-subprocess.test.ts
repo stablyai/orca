@@ -609,7 +609,7 @@ describeIfBuilt('native caller subprocess over durable records', () => {
         INSERT INTO agent_session_tabs (tab_id, session_id, position) VALUES (?, ?, 1)
       `)
         .run(structuredAgentSessionTabId(invalidId), invalidId)
-      closeTestJournalHostDatabase(rig.root)
+      await closeTestJournalHostDatabase(rig.root)
       store = await openTestAgentSessionRecordStore(rig.root)
       host = new StructuredAgentSessionHost({
         ...rig.host.deps,

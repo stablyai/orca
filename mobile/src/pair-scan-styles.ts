@@ -1,7 +1,8 @@
 import { StyleSheet } from 'react-native'
 import { colors, spacing, radii, typography } from '../src/theme/mobile-theme'
+import { themedStyleSheet } from '../src/theme/themed-styles'
 
-export const pairScanStyles = StyleSheet.create({
+export const pairScanStyles = themedStyleSheet(() => ({
   container: {
     flex: 1,
     backgroundColor: colors.bgBase,
@@ -180,4 +181,4 @@ export const pairScanStyles = StyleSheet.create({
     fontSize: typography.bodySize,
     fontWeight: '500'
   }
-})
+}))

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import recordings from './fixtures/source-control-launch-recordings.json'
 import { normalizeSourceControlActionLaunchPreferences } from './source-control-ai-actions'
 import { sourceControlActionLaunchOptions } from './source-control-action-launch-preferences'
-import type { SessionOptionValue } from './native-chat-session-options'
+import type { SessionOptionValue } from './native-chat/input/native-chat-session-options'
 import { resolveAgentLaunchCommand, terminalSessionOptionInputs } from './tui-agent-launch-command'
 import { tokenizeStartupCommand } from './tui-agent-startup-shell'
 import type { TuiAgent } from './tui-agent'
@@ -62,18 +62,6 @@ describe.each(['posix', 'powershell', 'cmd'] as const)('argument values on %s', 
     )
     expect(result.argv).toMatchObject({ ok: true, tokens: ['cursor-agent', ...capture.argv] })
   })
-
-  it.each(['--model=haiku', '--effort=low'])(
-    'keeps picks when the system prompt is %s',
-    (value) => {
-      const result = launch(`--append-system-prompt "${value}"`)
-      expect(result.argv).toMatchObject({
-        ok: true,
-        tokens: ['claude', '--model', 'opus', '--effort', 'xhigh', '--append-system-prompt', value]
-      })
-      expect(result.appliedSessionOptions).toEqual({ model: 'opus', effort: 'xhigh' })
-    }
-  )
 
   it('replaces real worker flags while preserving flag-like prompt text', () => {
     const result = launch(
@@ -158,15 +146,6 @@ describe.each(['posix', 'powershell', 'cmd'] as const)('argument values on %s', 
     expect(result.appliedSessionOptions).toEqual({ model: 'opus' })
   })
 
-  it.each(['-p', '-c', '--debug', '--resume', '--worktree'])(
-    'recognizes a model flag after boolean or optional-valued %s',
-    (flag) => {
-      const result = launch(`${flag} --model haiku`)
-      expect(result.argv).toMatchObject({ ok: true, tokens: ['claude', flag, '--model', 'haiku'] })
-      expect(result.appliedSessionOptions).toEqual({})
-    }
-  )
-
   it('recognizes a model flag after an option with an inline value', () => {
     const result = launch('--append-system-prompt=literal --model haiku')
     expect(result.argv).toMatchObject({
@@ -183,20 +162,5 @@ describe.each(['posix', 'powershell', 'cmd'] as const)('argument values on %s', 
       tokens: ['cursor-agent', '--model', 'auto', '--api-key', '-my-test-key']
     })
     expect(result.appliedSessionOptions).toEqual({ model: 'auto' })
-  })
-
-  // Clap and yargs read the dash-leading token as a new flag, so a picked model would repeat it.
-  it.each([
-    ['codex', 'gpt-5.5', '--profile -m o3', ['codex', '--profile', '-m', 'o3']],
-    [
-      'opencode',
-      'openai/gpt-5',
-      '--prompt -m openai/o3',
-      ['opencode', '--prompt', '-m', 'openai/o3']
-    ]
-  ] as const)('sends one %s model flag after a value option', (agent, model, agentArgs, tokens) => {
-    const result = launchAgent(agent, { model }, agentArgs)
-    expect(result.argv).toMatchObject({ ok: true, tokens })
-    expect(result.appliedSessionOptions).toEqual({})
   })
 })

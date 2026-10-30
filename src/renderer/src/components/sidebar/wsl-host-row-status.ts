@@ -25,6 +25,12 @@ export function getWslHostRowHealth(
 }
 
 export function getWslHostStatusLabel(status: WslHostStatus | undefined): string | null {
+  if (status?.removalPending) {
+    return translate(
+      'auto.components.sidebar.wslHostRowStatus.removalPending',
+      'Removal didn’t finish'
+    )
+  }
   switch (status?.state) {
     case undefined:
     case 'ready':
@@ -66,6 +72,20 @@ export function getWslHostRowTurnedOffDetail(): string {
   return translate(
     'auto.components.sidebar.wslHostRowStatus.turnedOffShort',
     'Turned off in Settings → Experimental'
+  )
+}
+
+export function getWslHostsPausedLabel(): string {
+  return translate(
+    'auto.components.sidebar.wslHostRowStatus.paused',
+    'WSL hosts are paused in this build. Your saved hosts and their projects keep working; adding hosts and moving projects onto them is paused.'
+  )
+}
+
+export function getWslHostsPausedShortLabel(): string {
+  return translate(
+    'auto.components.sidebar.wslHostRowStatus.pausedShort',
+    'Adding WSL distros is paused in this build.'
   )
 }
 

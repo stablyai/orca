@@ -1,12 +1,12 @@
-import { matchPaletteDocument } from './palette-match/match-document'
-import { preparePaletteQuery } from './palette-match/palette-query'
-import type { MatchRange } from './palette-match/normalized-text'
-import type { PaletteResultQualityClass } from './palette-match/match-quality'
+import { matchPaletteDocument } from '../../../shared/palette-match/match-document'
+import { preparePaletteQuery } from '../../../shared/palette-match/palette-query'
+import type { MatchRange } from '../../../shared/palette-match/normalized-text'
+import type { PaletteResultQualityClass } from '../../../shared/palette-match/match-quality'
 import type {
   PaletteDocument,
   PaletteDocumentMatch,
   PaletteDocumentRank
-} from './palette-match/palette-document'
+} from '../../../shared/palette-match/palette-document'
 import {
   buildWorktreePaletteDocuments,
   WORKTREE_PALETTE_BRANCH_FIELD_ID,
@@ -40,7 +40,7 @@ import {
   preparePaletteActivity,
   type PaletteActivityRank,
   type PaletteSearchContext
-} from './palette-match/palette-ranking'
+} from '../../../shared/palette-match/palette-ranking'
 
 export type { MatchRange }
 

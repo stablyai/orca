@@ -26,6 +26,7 @@ describe('repository command execution', () => {
     expect(gitExecFileSync).not.toHaveBeenCalled()
     expect(gitExecFileAsync).toHaveBeenCalledExactlyOnceWith(['rev-parse', '--show-toplevel'], {
       cwd: '/repo',
+      hostGit: true,
       timeout: 15_000
     })
     finish({ stdout: '/repo\n', stderr: '' })

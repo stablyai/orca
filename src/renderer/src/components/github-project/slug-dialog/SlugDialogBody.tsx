@@ -8,11 +8,14 @@ import CommentMarkdown from '@/components/sidebar/CommentMarkdown'
 import { useAppStore } from '@/store'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import type { GitHubWorkItemDetails } from '../../../../../shared/github/work-item-types'
+import type { ProjectWorkItemDetailsBySlugResult } from '../../../../../shared/github/project-result-types'
 import type { GitHubItemDialogProjectOrigin } from '@/components/GitHubItemDialog'
 import { LabelsEditor } from './LabelsEditor'
 import { AssigneesEditor } from './AssigneesEditor'
 import { CommentsList, NewCommentForm } from './Comments'
 import { translate } from '@/i18n/i18n'
+import { projectViewErrorMessage } from '../project-view-error-copy'
+import { openAppHttpLink } from '@/lib/app-http-link-open'
 
 export function SlugDialogBody({
   projectOrigin,
@@ -56,15 +59,21 @@ export function SlugDialogBody({
     const target = sourceTarget
     const request =
       target.kind === 'environment'
-        ? callRuntimeRpc<
-            { ok: true; details: GitHubWorkItemDetails } | { ok: false; error: { message: string } }
-          >(
+        ? callRuntimeRpc<ProjectWorkItemDetailsBySlugResult>(
             target,
             'github.project.workItemDetailsBySlug',
             { owner, repo, host, number, type },
             { timeoutMs: 30_000 }
           )
-        : window.api.gh.projectWorkItemDetailsBySlug({ owner, repo, host, number, type })
+        : window.api.gh.projectWorkItemDetailsBySlug({
+            owner,
+            repo,
+            host,
+            number,
+            type,
+            // Opening an item is a click (E9).
+            wakeWslDistro: true
+          })
     request
       .then((res) => {
         if (rid !== requestIdRef.current) {
@@ -73,14 +82,18 @@ export function SlugDialogBody({
         if (res.ok) {
           setDetails(res.details)
         } else {
-          setError(res.error.message)
+          setError(projectViewErrorMessage(res.error))
         }
       })
       .catch((err) => {
         if (rid !== requestIdRef.current) {
           return
         }
-        setError(err instanceof Error ? err.message : 'Failed to load details')
+        setError(
+          err instanceof Error
+            ? err.message
+            : translate('projectViews.picker.detailsFailed', 'Failed to load details')
+        )
       })
       .finally(() => {
         if (rid !== requestIdRef.current) {
@@ -109,7 +122,7 @@ export function SlugDialogBody({
     }
     const res = await patchProjectIssueOrPr(cacheKey, row.id, { title: next })
     if (!res.ok) {
-      toast.error(res.error.message)
+      toast.error(projectViewErrorMessage(res.error))
     }
   }, [titleDraft, title, patchProjectIssueOrPr, cacheKey, row])
 
@@ -126,7 +139,7 @@ export function SlugDialogBody({
     }
     const res = await patchProjectIssueOrPr(cacheKey, row.id, { body: bodyDraft })
     if (!res.ok) {
-      toast.error(res.error.message)
+      toast.error(projectViewErrorMessage(res.error))
       return
     }
     setDetails((prev) => (prev ? { ...prev, body: bodyDraft } : prev))
@@ -187,7 +200,7 @@ export function SlugDialogBody({
                 variant="ghost"
                 size="icon"
                 className="h-7 w-7"
-                onClick={() => void window.api.shell.openUrl(url)}
+                onClick={(event) => openAppHttpLink(url, { event })}
                 aria-label={translate(
                   'auto.components.github.project.slug.dialog.SlugDialogBody.69caf40ae8',
                   'Open in GitHub'
@@ -227,7 +240,7 @@ export function SlugDialogBody({
                 ...(remove.length ? { removeLabels: remove } : {})
               })
               if (!res.ok) {
-                toast.error(res.error.message)
+                toast.error(projectViewErrorMessage(res.error))
               }
             }}
           />
@@ -247,7 +260,7 @@ export function SlugDialogBody({
                 ...(remove.length ? { removeAssignees: remove } : {})
               })
               if (!res.ok) {
-                toast.error(res.error.message)
+                toast.error(projectViewErrorMessage(res.error))
               }
             }}
           />

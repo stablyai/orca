@@ -9,6 +9,8 @@ import type {
   BrowserViewportPresetId
 } from '../../../../../shared/browser-workspace-types'
 import { translate } from '@/i18n/i18n'
+import { useAppStore } from '@/store'
+import { findWorkspace } from '@/store/slices/browser-page-records'
 import {
   BROWSER_GUEST_RECOVERY_ERROR_CODE,
   createBrowserPageGuestRecovery,
@@ -113,6 +115,7 @@ export function createBrowserPageWebviewGuestSession({
         }
         if (registered) {
           registeredWebContentsIds.set(browserTabId, webContentsId)
+          publishActiveBrowserPageIfCurrent(browserTabId)
           return true
         }
         return null
@@ -276,5 +279,16 @@ export function createBrowserPageWebviewGuestSession({
     handleDidAttach,
     handleDomReady,
     handleGuestDestroyed
+  }
+}
+
+// Why: a page restored at launch is active without any focus action, so main would not learn it.
+function publishActiveBrowserPageIfCurrent(browserPageId: string): void {
+  const state = useAppStore.getState()
+  const workspace = state.activeBrowserTabId
+    ? findWorkspace(state.browserTabsByWorktree, state.activeBrowserTabId)
+    : null
+  if (workspace?.activePageId === browserPageId) {
+    window.api.browser.notifyActiveTabChanged({ browserPageId }).catch(() => {})
   }
 }

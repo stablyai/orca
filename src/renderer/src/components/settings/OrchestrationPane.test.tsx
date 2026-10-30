@@ -189,28 +189,16 @@ describe('OrchestrationPane', () => {
     expect(markup).toContain('Nested worker depth')
     expect(markup).toContain('type="number"')
     expect(markup).toContain('aria-label="Nested worker depth"')
-    expect(markup).toContain('min="1"')
-    expect(markup).not.toContain('max=')
+    const container = document.createElement('div')
+    container.innerHTML = markup
+    const depth = container.querySelector('input[aria-label="Nested worker depth"]')
+    expect(depth?.getAttribute('min')).toBe('1')
+    expect(depth?.hasAttribute('max')).toBe(false)
     expect(markup).not.toContain('Default:')
     expect(markup.indexOf('Nested worker depth')).toBeGreaterThan(
       markup.indexOf('Orchestration skill')
     )
     expect(matchesSettingsSearch('nested worker', getOrchestrationPaneSearchEntries())).toBe(true)
-  })
-
-  it('shows the chat-error preference disabled and unchecked while Chat UI is off, preserving its saved choice', () => {
-    const settings = getDefaultSettings('/tmp')
-    settings.experimentalNativeChat = false
-    settings.orchestrationChatErrorEscalationEnabled = true
-    const markup = renderToStaticMarkup(<OrchestrationPane {...getPaneProps(settings)} />)
-    expect(markup).toContain('Turn on Chat UI in Experimental settings to use it.')
-    const container = document.createElement('div')
-    container.innerHTML = markup
-    const toggle = container.querySelector('[aria-label="Tell the coordinator about chat errors"]')
-    expect(toggle?.hasAttribute('disabled')).toBe(true)
-    expect(toggle?.getAttribute('aria-checked')).toBe('false')
-    expect(settings.orchestrationChatErrorEscalationEnabled).toBe(true)
-    expect(matchesSettingsSearch('chat errors', getOrchestrationPaneSearchEntries())).toBe(true)
   })
 
   it('keeps the nested depth row visible when settings search routes to Orchestration', () => {
@@ -248,38 +236,12 @@ describe('OrchestrationPane', () => {
     expect(input.value).toBe('1')
   })
 
-  it('shows worker heartbeats on by default and saves the opposite choice when toggled', async () => {
-    const rendered = await renderPane()
-    const toggle = rendered.querySelector<HTMLButtonElement>('[aria-label="Worker heartbeats"]')
-    expect(toggle?.getAttribute('aria-checked')).toBe('true')
-
-    await act(async () => {
-      toggle?.click()
-    })
-    expect(mocks.updateSettings).toHaveBeenCalledWith({ orchestrationHeartbeatsEnabled: false })
-    expect(matchesSettingsSearch('heartbeat', getOrchestrationPaneSearchEntries())).toBe(true)
-  })
-
-  it('renders a saved heartbeat opt-out and turns it back on', async () => {
-    const rendered = await renderPane({
-      ...getDefaultSettings('/tmp'),
-      orchestrationHeartbeatsEnabled: false
-    })
-    const toggle = rendered.querySelector<HTMLButtonElement>('[aria-label="Worker heartbeats"]')
-    expect(toggle?.getAttribute('aria-checked')).toBe('false')
-    await act(async () => {
-      toggle?.click()
-    })
-    expect(mocks.updateSettings).toHaveBeenCalledWith({ orchestrationHeartbeatsEnabled: true })
-  })
-
   it('keeps host-only runtime settings out of paired web clients', () => {
     ;(globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__ = true
     const markup = renderToStaticMarkup(<OrchestrationPane {...getPaneProps()} />)
 
     expect(markup).not.toContain('Nested worker depth')
     expect(markup).not.toContain('Tell the coordinator about chat errors')
-    expect(markup).not.toContain('Worker heartbeats')
     expect(
       matchesSettingsSearch(
         'nested worker',

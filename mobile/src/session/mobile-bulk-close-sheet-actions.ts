@@ -2,6 +2,7 @@ import type { MarkdownDocState, MobileSessionTab } from './mobile-session-route-
 import type { ActionSheetAction } from '../components/ActionSheetModal'
 import { selectBulkCloseTabs } from './mobile-tab-close-selection'
 import { closeTabsAfterConfirmation } from '../../../src/shared/bulk-tab-close-confirmation'
+import { translate } from '../i18n/mobile-i18n'
 
 type BulkCloseSheetDeps = {
   sessionTabsRef: { readonly current: readonly MobileSessionTab[] }
@@ -50,7 +51,8 @@ export function createBulkCloseSheetActions(deps: BulkCloseSheetDeps) {
     }
     return [
       {
-        label: 'Close Other Tabs',
+        id: 'closeOtherTabs',
+        label: translate('session.bulkCloseSheetActions.closeOtherTabs', 'Close Other Tabs'),
         destructive: true,
         // Why: the confirm is its own native Modal; wait for this sheet to unmount (#10331).
         closeBeforePress: true,
@@ -72,7 +74,8 @@ export function createCloseWithBulkActions(
 ) {
   return (target: MobileSessionTab | null, dismiss: () => void): ActionSheetAction[] => [
     {
-      label: 'Close',
+      id: 'close',
+      label: translate('common.close', 'Close'),
       destructive: true,
       onPress: () => {
         dismiss()

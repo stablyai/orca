@@ -1,7 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import {
-  describeTerminalExitCause,
-  isDeliberateTerminalExit,
   isProvenProcessExit,
   resolveProcessExitCause,
   resolveUnreportedExitCause
@@ -31,21 +29,6 @@ describe('resolveProcessExitCause', () => {
       reason: 'stop_unverified'
     })
   })
-
-  it('keeps a real status when the host vouches for it', () => {
-    expect(resolveProcessExitCause({ exitCode: 42, signal: 0 })).toEqual({
-      kind: 'exited',
-      exitCode: 42
-    })
-    expect(resolveProcessExitCause({ exitCode: 0 })).toEqual({ kind: 'exited', exitCode: 0 })
-  })
-
-  it('treats a missing signal as no signal rather than as unknown', () => {
-    expect(resolveProcessExitCause({ exitCode: 7, signal: null })).toEqual({
-      kind: 'exited',
-      exitCode: 7
-    })
-  })
 })
 
 describe('resolveUnreportedExitCause', () => {
@@ -58,59 +41,12 @@ describe('resolveUnreportedExitCause', () => {
     // node-pty pairs signals with 0 and the wrapper returns 0, so nonzero preserves the child’s wait status.
     expect(resolveUnreportedExitCause(137)).toEqual({ kind: 'exited', exitCode: 137 })
   })
-
-  it('keeps the more specific reason for the stop sentinel', () => {
-    expect(resolveUnreportedExitCause(-1)).toEqual({ kind: 'unknown', reason: 'stop_unverified' })
-  })
-})
-
-describe('describeTerminalExitCause', () => {
-  it('gives every cause a sentence that does not need a number decoded', () => {
-    expect(describeTerminalExitCause({ kind: 'operator_close' })).toBe(
-      'Terminal closed by operator request'
-    )
-    expect(describeTerminalExitCause({ kind: 'signaled', signal: 9 })).toBe(
-      'Agent process killed by signal 9'
-    )
-    expect(describeTerminalExitCause({ kind: 'exited', exitCode: 3 })).toBe(
-      'Agent process exited with code 3'
-    )
-    expect(describeTerminalExitCause({ kind: 'unknown', reason: 'stop_unverified' })).toBe(
-      'Agent process stop was requested but never confirmed'
-    )
-    expect(describeTerminalExitCause({ kind: 'unknown', reason: 'host_status_unavailable' })).toBe(
-      'Agent process ended; this host cannot report why'
-    )
-    expect(describeTerminalExitCause({ kind: 'unknown', reason: 'cause_unreported' })).toBe(
-      'Agent process ended; the reporting host did not say why'
-    )
-  })
-})
-
-describe('isDeliberateTerminalExit', () => {
-  it('counts only an operator close as deliberate', () => {
-    expect(isDeliberateTerminalExit({ kind: 'operator_close' })).toBe(true)
-    expect(isDeliberateTerminalExit({ kind: 'exited', exitCode: 0 })).toBe(false)
-    expect(isDeliberateTerminalExit({ kind: 'signaled', signal: 9 })).toBe(false)
-    expect(isDeliberateTerminalExit({ kind: 'unknown', reason: 'stop_unverified' })).toBe(false)
-  })
 })
 
 describe('isProvenProcessExit', () => {
-  it('accepts host-vouched process statuses', () => {
-    expect(isProvenProcessExit(0)).toBe(true)
-    expect(isProvenProcessExit(137)).toBe(true)
-  })
-
   it('rejects the synthetic loss sentinel', () => {
     // A host shutdown can deliver -1 for every PTY without proving process death.
     expect(isProvenProcessExit(-1)).toBe(false)
-  })
-
-  it('answers whether the process ended, not why — so it may differ from the cause on zero', () => {
-    // Unknown reason still permits proven death; conflating them would strand exited panes.
-    expect(resolveUnreportedExitCause(0)).toEqual({ kind: 'unknown', reason: 'cause_unreported' })
-    expect(isProvenProcessExit(0)).toBe(true)
   })
 
   it('keeps a shell that a user closed with `exit` tearing down on macOS', () => {

@@ -51,7 +51,8 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
-    runs-on: ${{ fromJSON('{"ubuntu-latest":"blacksmith-4vcpu-ubuntu-2404","macos-latest":"blacksmith-6vcpu-macos-latest","windows-latest":"blacksmith-4vcpu-windows-2025"}')[matrix.os] || matrix.os }}
+    # Operation-count and retention contracts, not wall-clock budgets: use the hosted images the cache warmers seed.
+    runs-on: ${{ fromJSON('{"ubuntu-latest":"ubuntu-24.04","macos-latest":"macos-15","windows-latest":"windows-2022"}')[matrix.os] || matrix.os }}
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v6

@@ -6,7 +6,10 @@ import {
 import type { VerifyAndAddRuntimeEnvironmentResult } from '../../shared/remote-pairing-verification'
 import type { RuntimeStatus } from '../../shared/runtime-types'
 import type { RuntimeRpcResponse } from '../../shared/runtime-rpc-envelope'
-import type { PublicKnownRuntimeEnvironment } from '../../shared/runtime-environments'
+import type {
+  PublicKnownRuntimeEnvironment,
+  RuntimeEnvironmentRemoval
+} from '../../shared/runtime-environments'
 import type { RemoteRuntimeSharedConnectionDiagnostics } from '../../shared/remote-runtime/control/remote-runtime-shared-control-types'
 import { RUNTIME_ENVIRONMENT_DIAGNOSTICS_CHANNEL } from '../../shared/runtime-environment-diagnostics'
 import { RUNTIME_ENVIRONMENT_CATALOG_CHANGED_CHANNEL } from '../../shared/runtime-environment-catalog-channel'
@@ -60,7 +63,7 @@ export const runtimeEnvironmentsApi = {
     ipcRenderer.invoke('runtimeEnvironments:repairFromPairingCode', args),
   resolve: (args: { selector: string }): Promise<PublicKnownRuntimeEnvironment> =>
     ipcRenderer.invoke('runtimeEnvironments:resolve', args),
-  remove: (args: { selector: string }): Promise<{ removed: PublicKnownRuntimeEnvironment }> =>
+  remove: (args: { selector: string }): Promise<RuntimeEnvironmentRemoval> =>
     ipcRenderer.invoke('runtimeEnvironments:remove', args),
   disconnect: (args: {
     selector: string

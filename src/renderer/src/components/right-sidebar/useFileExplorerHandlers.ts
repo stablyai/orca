@@ -12,6 +12,7 @@ import {
   requireMatchingFileExplorerOperationRoute
 } from './file-explorer-operation-owner'
 import { runtimeTargetEnvironmentId } from '@/runtime/runtime-client-target'
+import { fileExplorerNodeTabRelativePath } from './file-explorer-directory-listing'
 
 type UseFileExplorerHandlersParams = {
   activeWorktreeId: string | null
@@ -37,7 +38,7 @@ type UseFileExplorerHandlersParams = {
   loadDir: (
     dirPath: string,
     depth: number,
-    options?: { force?: boolean; failOnError?: boolean }
+    options?: { force?: boolean; failOnError?: boolean; wakeWslDistro?: boolean }
   ) => Promise<boolean>
   statPath: (path: string) => Promise<{ isDirectory: boolean; escapesWorktree?: boolean }>
   markPathAsDirectory: (path: string) => void
@@ -98,19 +99,12 @@ export async function activateFileExplorerNode(args: {
       // Let the editor report unresolved target errors instead of dead-ending the click.
     }
     escapesWorktree = target?.escapesWorktree === true
-    if (target?.isDirectory && escapesWorktree) {
-      toast.error(
-        translate(
-          'auto.components.right.sidebar.useFileExplorerHandlers.folderLinksOutsideProject',
-          "This folder links outside the project, so it can't be opened here."
-        )
-      )
-      return
-    }
     if (target?.isDirectory) {
+      // A user's expand may start a stopped WSL distro.
       const loadedAsDirectory = await loadDir(node.path, node.depth, {
         force: true,
-        failOnError: true
+        failOnError: true,
+        wakeWslDistro: true
       })
       if (loadedAsDirectory) {
         markPathAsDirectory(node.path)
@@ -140,7 +134,7 @@ export async function activateFileExplorerNode(args: {
     {
       filePath: node.path,
       // Outside-project links use user-named absolute paths so reopening after restart preserves authorization.
-      relativePath: escapesWorktree ? node.path : node.relativePath,
+      relativePath: escapesWorktree ? node.path : fileExplorerNodeTabRelativePath(node),
       worktreeId: activeWorktreeId,
       runtimeEnvironmentId: fileRuntimeEnvironmentId ?? undefined,
       language: detectLanguage(node.name),

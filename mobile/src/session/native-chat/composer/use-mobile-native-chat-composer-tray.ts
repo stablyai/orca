@@ -1,6 +1,6 @@
 import { createElement, Fragment, useMemo, type ReactNode, type RefObject } from 'react'
 import type { TextInput } from 'react-native'
-import { MobileNativeChatBackgroundTasks } from '../../MobileNativeChatBackgroundTasks'
+import { MobileNativeChatBackgroundTasks } from '../input/MobileNativeChatBackgroundTasks'
 import {
   MobileNativeChatQueuedMessages,
   type MobileNativeChatQueuedMessagesProps
@@ -31,8 +31,18 @@ export function useMobileNativeChatComposerTray({
   backgroundTasks: MobileStructuredBackgroundTasks | null
 }): MobileNativeChatComposerTray {
   const { composerInputRef, editQueuedMessage } = useMobileNativeChatQueuedEditFocus(queued.onEdit)
-  const { cards, onSend, onDelete, onClearAll, editor, pause, onResume, sessionKey, steerHeld } =
-    queued
+  const {
+    cards,
+    onSend,
+    onDelete,
+    onClearAll,
+    editor,
+    onMove,
+    pause,
+    onResume,
+    sessionKey,
+    steerHeld
+  } = queued
   return useMemo(
     () => ({
       content: createElement(
@@ -53,6 +63,7 @@ export function useMobileNativeChatComposerTray({
           onClearAll,
           onEdit: editQueuedMessage,
           editor,
+          onMove,
           pause,
           onResume,
           steerHeld
@@ -66,6 +77,7 @@ export function useMobileNativeChatComposerTray({
       composerInputRef,
       editQueuedMessage,
       editor,
+      onMove,
       onDelete,
       onClearAll,
       onResume,

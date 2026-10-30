@@ -9,6 +9,9 @@ import {
   X
 } from 'lucide-react-native'
 import { colors } from '../theme/mobile-theme'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import type { Translate } from '../i18n/mobile-i18n'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { statusColor } from '../components/pr-sidebar/pr-sidebar-status-color'
 import { hubStyles } from './mobile-source-control-hub-styles'
 import type { MobilePrChipRollup, MobilePrChipSummary } from './mobile-pr-chip-summary'
@@ -19,12 +22,14 @@ type Props = {
 }
 
 export function MobileSourceControlPrChip({ summary, onPress }: Props) {
+  useMobileColorScheme()
+  const t = useMobileTranslation()
   return (
     <Pressable
       style={({ pressed }) => [hubStyles.chip, pressed && hubStyles.chipPressed]}
       onPress={onPress}
       accessibilityRole="button"
-      accessibilityLabel={chipAccessibilityLabel(summary)}
+      accessibilityLabel={chipAccessibilityLabel(summary, t)}
     >
       <View style={hubStyles.chipIcon}>
         <GitPullRequest size={15} color={colors.textSecondary} strokeWidth={2.1} />
@@ -33,12 +38,14 @@ export function MobileSourceControlPrChip({ summary, onPress }: Props) {
         <>
           <ActivityIndicator size="small" color={colors.textSecondary} />
           <Text style={hubStyles.chipMutedText} numberOfLines={1}>
-            Loading pull request…
+            {t('sourceControl.prChip.loading', 'Loading pull request…')}
           </Text>
         </>
       ) : summary.kind === 'none' ? (
         <>
-          <Text style={hubStyles.chipCreateText}>Create pull request</Text>
+          <Text style={hubStyles.chipCreateText}>
+            {t('sourceControl.prChip.createPr', 'Create pull request')}
+          </Text>
           <View style={hubStyles.chipSpacer} />
           <ChevronRight size={16} color={colors.textMuted} strokeWidth={2.1} />
         </>
@@ -73,6 +80,7 @@ export function MobileSourceControlPrChip({ summary, onPress }: Props) {
 }
 
 function ChipRollup({ rollup }: { rollup: MobilePrChipRollup }) {
+  useMobileColorScheme()
   const color = statusColor(rollup.token)
   return (
     <View style={hubStyles.rollup}>
@@ -99,20 +107,41 @@ function RollupIcon({ kind, color }: { kind: MobilePrChipRollup['kind']; color: 
   }
 }
 
-function chipAccessibilityLabel(summary: MobilePrChipSummary): string {
+function chipAccessibilityLabel(summary: MobilePrChipSummary, t: Translate): string {
   switch (summary.kind) {
     case 'loading':
-      return 'Loading pull request'
+      return t('sourceControl.prChip.loadingLabel', 'Loading pull request')
     case 'none':
-      return 'Create pull request'
+      return t('sourceControl.prChip.createPr', 'Create pull request')
     case 'unavailable':
-      return `Pull request unavailable: ${summary.message}`
+      return t('sourceControl.prChip.unavailableLabel', 'Pull request unavailable: {{message}}', {
+        message: summary.message
+      })
     case 'ready': {
-      const comments =
-        summary.commentCount != null && summary.commentCount > 0
-          ? `, ${summary.commentCount} unresolved comments`
-          : ''
-      return `Pull request #${summary.number}, ${summary.stateLabel}, ${summary.rollup.text}${comments}. Open pull request.`
+      const count = summary.commentCount
+      const details = {
+        number: summary.number,
+        state: summary.stateLabel,
+        checks: summary.rollup.text
+      }
+      if (count != null && count > 0) {
+        return count === 1
+          ? t(
+              'sourceControl.prChip.openWithComments_one',
+              'Pull request #{{number}}, {{state}}, {{checks}}, {{count}} unresolved comments. Open pull request.',
+              { ...details, count }
+            )
+          : t(
+              'sourceControl.prChip.openWithComments_other',
+              'Pull request #{{number}}, {{state}}, {{checks}}, {{count}} unresolved comments. Open pull request.',
+              { ...details, count }
+            )
+      }
+      return t(
+        'sourceControl.prChip.openLabel',
+        'Pull request #{{number}}, {{state}}, {{checks}}. Open pull request.',
+        details
+      )
     }
   }
 }

@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { EventEmitter } from 'node:events'
 import { PassThrough } from 'node:stream'
 import { describe, expect, it, vi, beforeEach } from 'vitest'
+import { createFakeSpawnedChild } from '../../../shared/__fixtures__/fake-spawned-child'
 
 const { existsSyncMock, spawnMock } = vi.hoisted(() => ({
   existsSyncMock: vi.fn(),
@@ -89,18 +90,7 @@ function expectOrcaControlMasterArgs(args: string[]): void {
   expect(args).toContain('ControlPersist=300')
 }
 
-type EventedProcess = EventEmitter & {
-  stdin: EventEmitter & {
-    write: ReturnType<typeof vi.fn>
-    end: ReturnType<typeof vi.fn>
-  }
-  stdout: EventEmitter
-  stderr: EventEmitter
-  pid: number
-  kill: ReturnType<typeof vi.fn>
-  exitCode: number | null
-  killed: boolean
-}
+type EventedProcess = ReturnType<typeof createEventedProcess>
 
 // Emit close from spawn: asynchronous Windows source reads can otherwise let it precede listener registration.
 function closeOnceSpawned(proc: EventedProcess): EventedProcess {
@@ -108,19 +98,13 @@ function closeOnceSpawned(proc: EventedProcess): EventedProcess {
   return proc
 }
 
-function createEventedProcess(): EventedProcess {
-  const proc = new EventEmitter() as EventedProcess
-  proc.stdin = Object.assign(new EventEmitter(), {
-    write: vi.fn((_chunk, _encoding, cb?: (err?: Error | null) => void) => cb?.()),
-    end: vi.fn()
+function createEventedProcess() {
+  const proc = createFakeSpawnedChild(12345)
+  const stdin = Object.assign(proc.stdin, {
+    write: vi.spyOn(proc.stdin, 'write'),
+    end: vi.spyOn(proc.stdin, 'end')
   })
-  proc.stdout = new EventEmitter()
-  proc.stderr = new EventEmitter()
-  proc.pid = 12345
-  proc.kill = vi.fn()
-  proc.exitCode = null
-  proc.killed = false
-  return proc
+  return Object.assign(proc, { stdin })
 }
 
 function createMockChildProcess(): EventEmitter & {

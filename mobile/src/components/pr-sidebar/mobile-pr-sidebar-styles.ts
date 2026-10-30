@@ -1,11 +1,11 @@
 import { StyleSheet } from 'react-native'
 import { colors, radii, spacing, typography } from '../../theme/mobile-theme'
-import { TEXT_INPUT_FONT_SIZE } from '../../platform/text-input-font-size'
+import { themedStyleSheet } from '../../theme/themed-styles'
 
 // Dock width leaves diff ~380px at 700px breakpoint (KTD2/U4).
 export const PR_SIDEBAR_DOCK_WIDTH = 320
 
-export const mobilePrSidebarStyles = StyleSheet.create({
+export const mobilePrSidebarStyles = themedStyleSheet(() => ({
   dockColumn: {
     width: PR_SIDEBAR_DOCK_WIDTH,
     backgroundColor: colors.bgPanel,
@@ -272,14 +272,6 @@ export const mobilePrSidebarStyles = StyleSheet.create({
     marginBottom: spacing.sm
   },
   pickerSearch: {
-    minHeight: 40,
-    borderRadius: radii.input,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderSubtle,
-    backgroundColor: colors.bgPanel,
-    color: colors.textPrimary,
-    paddingHorizontal: spacing.md,
-    fontSize: TEXT_INPUT_FONT_SIZE,
     marginBottom: spacing.sm
   },
   // Let parent drawer scroll mapped rows; never nest VirtualizedList inside PR ScrollView.
@@ -302,4 +294,4 @@ export const mobilePrSidebarStyles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.sm
   }
-})
+}))

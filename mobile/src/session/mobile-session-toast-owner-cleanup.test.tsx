@@ -16,7 +16,12 @@ const boundary = vi.hoisted(() => {
     synchronous: false
   }
 })
+vi.mock('expo-router', async () => {
+  const { useEffect } = await import('react')
+  return { useFocusEffect: (effect: () => () => void) => useEffect(effect, [effect]) }
+})
 vi.mock('react-native', () => ({
+  AppState: { currentState: 'active', addEventListener: () => ({ remove: vi.fn() }) },
   View: 'View',
   Platform: { OS: 'ios' },
   Keyboard: { dismiss: vi.fn() },
@@ -51,6 +56,7 @@ vi.mock('./mobile-session-styles', () => ({ styles: { container: {}, kavInner: {
 vi.mock('./MobileSessionHeader', () => ({ MobileSessionHeader: () => null }))
 vi.mock('./MobileSessionContentRow', () => ({ MobileSessionContentRow: () => null }))
 vi.mock('./MobileSessionSheets', () => ({ MobileSessionSheets: () => null }))
+vi.mock('./MobileWorkerAutoCloseStrip', () => ({ MobileWorkerAutoCloseStrip: () => null }))
 import { useMobileSessionFeedbackCapabilities } from './use-mobile-session-feedback-capabilities'
 import { useMobileSessionAccessorySelection } from './use-mobile-session-accessory-selection'
 import { MobileSessionSurface } from './MobileSessionSurface'
@@ -84,6 +90,7 @@ function mounted(strict = false) {
     createWarningState: { source: '', visible: '' },
     setCreateWarningState: vi.fn(),
     setToastMessage,
+    onLiveInputSendFailureRef: { current: vi.fn() },
     toastOpacityRef: { current: {} },
     toastHideTimerRef: { current: null },
     toastSeqRef: { current: 0 },
@@ -161,6 +168,19 @@ function mounted(strict = false) {
       act(() => renderer.update(element(surfaceKey, visible)))
   }
 }
+it('routes a Live input failure through the session toast and retires the callback on unmount', () => {
+  const { root, scope, setToastMessage } = mounted()
+
+  act(() => scope.onLiveInputSendFailureRef.current('delivery-unconfirmed'))
+
+  expect(setToastMessage).toHaveBeenCalledExactlyOnceWith(
+    'Live input interrupted. Field cleared; check the terminal before continuing.'
+  )
+  act(() => root.unmount())
+  scope.onLiveInputSendFailureRef.current('delivery-unconfirmed')
+  expect(setToastMessage).toHaveBeenCalledTimes(1)
+})
+
 it.each([
   ['success', false],
   ['failure', false],

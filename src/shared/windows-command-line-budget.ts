@@ -46,3 +46,5 @@ function countEscapes(arg: string): number {
   }
   return count
 }
+
+export class WindowsCommandLineBudgetError extends Error {}

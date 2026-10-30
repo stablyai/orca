@@ -1,4 +1,6 @@
+import { demoteActionArgumentChoices } from '../../../../shared/source-control-action-argument-choices'
 import type {
+  SourceControlActionRecipe,
   SourceControlActionId,
   SourceControlActionLaunchPreferences
 } from '../../../../shared/source-control-ai-actions'
@@ -6,9 +8,8 @@ import type { RepoSourceControlAiOverrides } from '../../../../shared/source-con
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import {
   normalizeRepoAiDraft,
-  readCompleteRecipeForDraft,
   setActionOverride
-} from './repository-source-control-ai-draft'
+} from './repository/source-control/repository-source-control-ai-draft'
 
 type RepoActionRecipe = NonNullable<
   NonNullable<RepoSourceControlAiOverrides['actionOverrides']>[SourceControlActionId]
@@ -16,17 +17,32 @@ type RepoActionRecipe = NonNullable<
 
 export function withRepoAiActionAgent(
   base: RepoSourceControlAiOverrides,
-  settings: GlobalSettings | null,
+  _settings: GlobalSettings | null,
   actionId: SourceControlActionId,
-  agentId: RepoActionRecipe['agentId']
+  agentId: RepoActionRecipe['agentId'],
+  choice?: Pick<SourceControlActionRecipe, 'surface'>
 ): RepoSourceControlAiOverrides {
-  const currentRecipe = readCompleteRecipeForDraft(base, settings, actionId)
-  // A model and permission mode are one agent's choices; neither survives a change of agent.
-  const { launchPreferences, ...rest } = currentRecipe
+  const currentRecipe = base.actionOverrides?.[actionId] ?? {}
+  // A model, permission mode and chat-or-CLI pick are one agent's choices; none survives a change.
+  const sameAgent = currentRecipe.agentId === agentId
+  const { launchPreferences, surface, ...rest } =
+    sameAgent || !currentRecipe.argumentChoices
+      ? currentRecipe
+      : demoteActionArgumentChoices({
+          ...currentRecipe,
+          agentArgs: currentRecipe.agentArgs ?? undefined
+        })
   return normalizeRepoAiDraft(
     setActionOverride(base, actionId, {
       ...rest,
-      ...(launchPreferences && currentRecipe.agentId === agentId ? { launchPreferences } : {}),
+      ...(launchPreferences && sameAgent ? { launchPreferences } : {}),
+      ...(choice
+        ? choice.surface
+          ? { surface: choice.surface }
+          : {}
+        : surface && sameAgent
+          ? { surface }
+          : {}),
       agentId
     })
   )
@@ -34,15 +50,11 @@ export function withRepoAiActionAgent(
 
 export function withRepoAiActionLaunchPreferences(
   base: RepoSourceControlAiOverrides,
-  settings: GlobalSettings | null,
+  _settings: GlobalSettings | null,
   actionId: SourceControlActionId,
   launchPreferences: SourceControlActionLaunchPreferences | undefined
 ): RepoSourceControlAiOverrides {
-  const { launchPreferences: _previous, ...currentRecipe } = readCompleteRecipeForDraft(
-    base,
-    settings,
-    actionId
-  )
+  const { launchPreferences: _previous, ...currentRecipe } = base.actionOverrides?.[actionId] ?? {}
   return normalizeRepoAiDraft(
     setActionOverride(base, actionId, {
       ...currentRecipe,

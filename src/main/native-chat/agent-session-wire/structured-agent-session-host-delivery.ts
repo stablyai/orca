@@ -104,12 +104,20 @@ export function createStructuredAgentSessionConversationDelivery(input: {
     serialize: input.serialize,
     trackStart: input.trackStart,
     startProviderChild: input.startProviderChild,
-    retireOutgrownChild: async (sessionId, continuingId) => {
+    retireOutgrownChild: async (sessionId, continuingId, next) => {
       // Defer retirement while personal Stop holds handover; its next step decides.
       const session = input.clientDelivery.readStopping(sessionId)
         ? undefined
         : sessions.get(sessionId)
       await retireOutgrownStructuredAgentSessionChild(sessionId, session, {
+        next,
+        requiresModelTransitionRestart: (submission) =>
+          session?.child?.phase === 'ready' &&
+          deps.adapter.requiresModelTransitionRestart?.({
+            sessionId,
+            fence: session.child.fence,
+            executionOptions: submission.options
+          }) === true,
         work: retainedWork(sessionId, continuingId),
         launchPermission: async () => {
           const record = deps.store.getRecord(sessionId)
@@ -216,6 +224,7 @@ export function createStructuredAgentSessionConversationDelivery(input: {
     sessions.set(sessionId, session)
     input.clientDelivery.publishRestored(sessionId)
     await settleInterruptedCommands(deps, sessionId, session)
+    input.clientDelivery.publishRestored(sessionId)
     if (session.journal.submissions().some(isQueuedAgentJournalSubmission)) {
       loop.wake(sessionId)
     }

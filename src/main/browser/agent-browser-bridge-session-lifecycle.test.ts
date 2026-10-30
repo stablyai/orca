@@ -62,18 +62,24 @@ vi.mock('./cdp-bridge', () => ({
 
 import { AgentBrowserBridge } from './agent-browser-bridge'
 import {
+  answerAgentBrowserCommands,
   createFakeAgentBrowserChild,
   createSucceedWith,
   mockBrowserManager,
   mockWebContents,
   overrideBridgeWebContentsLookup,
   resetAgentBrowserBridgeMocks,
+  succeedRecordingAgentBrowserSpawns,
   type ExecFileCallback
 } from './agent-browser-bridge-test-harness'
 
 overrideBridgeWebContentsLookup(AgentBrowserBridge.prototype, webContentsFromIdMock)
 
 const succeedWith = createSucceedWith(execFileMock, stdinWrites)
+
+function isNetworkCommand(command: string[], verb: 'route' | 'unroute'): boolean {
+  return command[0] === 'network' && command[1] === verb
+}
 
 function closeCallCount(): number {
   return execFileMock.mock.calls.filter((call: unknown[]) =>
@@ -125,18 +131,15 @@ describe('AgentBrowserBridge', () => {
     vi.useFakeTimers()
     try {
       const closeKill = vi.fn()
-      execFileMock.mockImplementation(
-        (_bin: string, args: string[], _opts: unknown, cb: ExecFileCallback) => {
-          if (args.includes('close')) {
-            return createFakeAgentBrowserChild({ kill: closeKill })
-          }
-          if (args.includes('snapshot')) {
-            cb(null, JSON.stringify({ success: true, data: { snapshot: 'ready' } }), '')
-            return createFakeAgentBrowserChild({ kill: vi.fn() })
-          }
-          throw new Error(`unexpected agent-browser args ${args.join(' ')}`)
+      const commands: string[][] = []
+      answerAgentBrowserCommands(execFileMock, stdinWrites, (command, cb, _args, child) => {
+        commands.push(command)
+        if (command.includes('close')) {
+          child.kill.mockImplementation(closeKill)
+          return
         }
-      )
+        cb(null, JSON.stringify({ success: true, data: { snapshot: 'ready' } }), '')
+      })
 
       const promise = bridge.snapshot()
       const rejection = expect(promise).rejects.toMatchObject({
@@ -149,7 +152,7 @@ describe('AgentBrowserBridge', () => {
 
       await rejection
       expect(closeKill).toHaveBeenCalled()
-      expect(execFileMock.mock.calls.some((call) => call[1].includes('snapshot'))).toBe(false)
+      expect(commands.some((command) => command[0] === 'snapshot')).toBe(false)
     } finally {
       vi.useRealTimers()
     }
@@ -163,26 +166,24 @@ describe('AgentBrowserBridge', () => {
 
     const commandCalls: string[][] = []
     let releaseDestroyClose: (() => void) | null = null
-    execFileMock.mockImplementation(
-      (_bin: string, args: string[], _opts: unknown, cb: ExecFileCallback) => {
-        commandCalls.push(args)
-        if (args.includes('close')) {
-          if (!releaseDestroyClose) {
-            releaseDestroyClose = () => {
-              cb(null, JSON.stringify({ success: true, data: null }), '')
-            }
-            return
+    answerAgentBrowserCommands(execFileMock, stdinWrites, (command, cb) => {
+      commandCalls.push(command)
+      if (command.includes('close')) {
+        if (!releaseDestroyClose) {
+          releaseDestroyClose = () => {
+            cb(null, JSON.stringify({ success: true, data: null }), '')
           }
-          cb(null, JSON.stringify({ success: true, data: null }), '')
           return
         }
-        if (args.includes('snapshot')) {
-          cb(null, JSON.stringify({ success: true, data: { snapshot: 'after-destroy' } }), '')
-          return
-        }
-        cb(null, JSON.stringify({ success: true, data: { ok: true } }), '')
+        cb(null, JSON.stringify({ success: true, data: null }), '')
+        return
       }
-    )
+      if (command[0] === 'snapshot') {
+        cb(null, JSON.stringify({ success: true, data: { snapshot: 'after-destroy' } }), '')
+        return
+      }
+      cb(null, JSON.stringify({ success: true, data: { ok: true } }), '')
+    })
 
     const destroyPromise = (
       bridge as unknown as { destroySession: (name: string) => Promise<void> }
@@ -192,17 +193,19 @@ describe('AgentBrowserBridge', () => {
     await Promise.resolve()
     await Promise.resolve()
 
-    expect(commandCalls.filter((args) => args.includes('close'))).toHaveLength(1)
-    expect(commandCalls.some((args) => args.includes('snapshot'))).toBe(false)
+    expect(commandCalls.filter((command) => command.includes('close'))).toHaveLength(1)
+    expect(commandCalls.some((command) => command[0] === 'snapshot')).toBe(false)
     expect(releaseDestroyClose).not.toBeNull()
 
     releaseDestroyClose!()
     await destroyPromise
     await expect(nextSnapshot).resolves.toEqual({
       browserPageId: 'tab-1',
-      snapshot: 'after-destroy'
+      snapshot: 'after-destroy',
+      url: 'https://example.com',
+      title: 'Example'
     })
-    expect(commandCalls.filter((args) => args.includes('close'))).toHaveLength(2)
+    expect(commandCalls.filter((command) => command.includes('close'))).toHaveLength(2)
   })
 
   it('tears down a session that finishes creating after destruction starts', async () => {
@@ -253,49 +256,49 @@ describe('AgentBrowserBridge', () => {
   })
 
   it('cancels the command already running when a session is destroyed', async () => {
+    const releasePaint = vi.fn()
+    bridge = new AgentBrowserBridge(
+      mockBrowserManager(undefined, undefined, { holdGuestActive: () => releasePaint })
+    )
+    bridge.setActiveTab(100)
     succeedWith({ snapshot: 'initial' })
     await bridge.snapshot()
+    releasePaint.mockClear()
 
     execFileMock.mockClear()
 
     const killedError = Object.assign(new Error('killed'), { killed: true })
-    let resolveRunningCommand: (() => void) | null = null
-    const activeChild = createFakeAgentBrowserChild({
-      kill: vi.fn(() => {
-        resolveRunningCommand?.()
-      })
-    })
+    let activeChild: { kill: ReturnType<typeof vi.fn> } | null = null
 
-    execFileMock.mockImplementation(
-      (_bin: string, args: string[], _opts: unknown, cb: ExecFileCallback) => {
-        if (args.includes('snapshot')) {
-          resolveRunningCommand = () => cb(killedError, '', '')
-          return activeChild
-        }
-        if (args.includes('close')) {
-          cb(null, JSON.stringify({ success: true, data: null }), '')
-          return createFakeAgentBrowserChild({ kill: vi.fn() })
-        }
-        cb(null, JSON.stringify({ success: true, data: { ok: true } }), '')
-        return createFakeAgentBrowserChild({ kill: vi.fn() })
+    answerAgentBrowserCommands(execFileMock, stdinWrites, (command, cb, _args, child) => {
+      if (command[0] === 'snapshot') {
+        child.kill.mockImplementation(() => cb(killedError, '', ''))
+        activeChild = child
+        return
       }
-    )
+      if (command.includes('close')) {
+        cb(null, JSON.stringify({ success: true, data: null }), '')
+        return
+      }
+      cb(null, JSON.stringify({ success: true, data: { ok: true } }), '')
+    })
 
     const runningSnapshot = bridge.snapshot()
     await vi.waitFor(() => {
-      expect(resolveRunningCommand).not.toBeNull()
+      expect(activeChild).not.toBeNull()
     })
 
     const destroyPromise = (
       bridge as unknown as { destroySession: (name: string) => Promise<void> }
     ).destroySession('orca-tab-tab-1')
 
-    expect(activeChild.kill).toHaveBeenCalledTimes(1)
+    expect(activeChild!.kill).toHaveBeenCalledTimes(1)
     await expect(runningSnapshot).rejects.toMatchObject({
       code: 'browser_tab_closed',
       message: 'Tab was closed while command was running'
     })
     await destroyPromise
+    expect(releasePaint).toHaveBeenCalledTimes(1)
   })
 
   it('destroys session on process swap and re-inits with --cdp', async () => {
@@ -304,13 +307,12 @@ describe('AgentBrowserBridge', () => {
     const b = new AgentBrowserBridge(mgr)
     b.setActiveTab(100)
 
-    succeedWith({ snapshot: 'tree' })
+    const firstSpawns = succeedRecordingAgentBrowserSpawns(execFileMock, stdinWrites, {
+      snapshot: 'tree'
+    })
     await b.snapshot()
 
-    const firstSnapshotCall = execFileMock.mock.calls.find((c: unknown[]) =>
-      (c[1] as string[]).includes('snapshot')
-    )
-    expect(firstSnapshotCall![1]).toContain('--cdp')
+    expect(firstSpawns.find(({ command }) => command[0] === 'snapshot')?.args).toContain('--cdp')
 
     tabs.set('tab-1', 200)
     const newWc = mockWebContents(200)
@@ -318,15 +320,59 @@ describe('AgentBrowserBridge', () => {
     succeedWith(null)
     await b.onProcessSwap('tab-1', 200)
 
-    succeedWith({ snapshot: 'new tree' })
+    const swappedSpawns = succeedRecordingAgentBrowserSpawns(execFileMock, stdinWrites, {
+      snapshot: 'new tree'
+    })
     await b.snapshot()
 
-    const snapshotCalls = execFileMock.mock.calls.filter((c: unknown[]) =>
-      (c[1] as string[]).includes('snapshot')
+    expect(swappedSpawns.findLast(({ command }) => command[0] === 'snapshot')?.args).toContain(
+      '--cdp'
     )
-    expect(snapshotCalls.length).toBeGreaterThanOrEqual(2)
-    const lastSnapshotArgs = snapshotCalls.at(-1)![1] as string[]
-    expect(lastSnapshotArgs).toContain('--cdp')
+  })
+
+  it('moves a reload-replaced page to a new daemon only after the old one exits', async () => {
+    const tabs = new Map([['tab-1', 100]])
+    const b = new AgentBrowserBridge(mockBrowserManager(tabs))
+    Object.assign(b, {
+      ownsAgentBrowserSocketDirectory: true,
+      agentBrowserEnv: { AGENT_BROWSER_SOCKET_DIR: '/tmp/orca-ab-test' }
+    })
+    let daemon: 'none' | 'up' | 'exiting' = 'none'
+    const commandsSentToExitingDaemon: string[] = []
+    lstatSyncMock.mockImplementation(() => {
+      if (daemon === 'none') {
+        throw Object.assign(new Error('No socket'), { code: 'ENOENT' })
+      }
+      return {}
+    })
+    answerAgentBrowserCommands(execFileMock, stdinWrites, (command, cb) => {
+      if (command[0] === 'close') {
+        // agent-browser answers close, then exits and removes its socket about 100 ms later.
+        daemon = 'exiting'
+        setTimeout(() => (daemon = 'none'), 50)
+      } else {
+        if (daemon === 'exiting') {
+          commandsSentToExitingDaemon.push(command[0])
+        }
+        daemon = 'up'
+      }
+      cb(null, JSON.stringify({ success: true, data: { snapshot: 'tree' } }), '')
+    })
+    webContentsFromIdMock.mockImplementation((id: number) =>
+      id === 100 ? mockWebContents(100) : null
+    )
+    await b.snapshot(undefined, 'tab-1')
+
+    // The reload destroyed guest 100 and unregistered it, so the new guest has nothing to swap from.
+    tabs.set('tab-1', 200)
+    webContentsFromIdMock.mockImplementation((id: number) =>
+      id === 200 ? mockWebContents(200) : null
+    )
+    await b.snapshot(undefined, 'tab-1')
+
+    expect(CdpWsProxyMock.mock.lastCall?.[0]).toMatchObject({ id: 200 })
+    expect(closeCallCount()).toBe(1)
+    expect(commandsSentToExitingDaemon).toEqual([])
   })
 
   it('rejects commands queued behind a running command when the page swaps guests', async () => {
@@ -338,17 +384,15 @@ describe('AgentBrowserBridge', () => {
     )
 
     let finishSnapshot: (() => void) | null = null
-    execFileMock.mockImplementation(
-      (_bin: string, args: string[], _opts: unknown, cb: ExecFileCallback) => {
-        if (args.includes('snapshot')) {
-          finishSnapshot = () =>
-            cb(null, JSON.stringify({ success: true, data: { snapshot: 'x' } }), '')
-          return createFakeAgentBrowserChild({ kill: vi.fn(() => finishSnapshot?.()) })
-        }
-        cb(null, JSON.stringify({ success: true, data: null }), '')
-        return createFakeAgentBrowserChild({ kill: vi.fn() })
+    answerAgentBrowserCommands(execFileMock, stdinWrites, (command, cb, _args, child) => {
+      if (command[0] === 'snapshot') {
+        finishSnapshot = () =>
+          cb(null, JSON.stringify({ success: true, data: { snapshot: 'x' } }), '')
+        child.kill.mockImplementation(() => finishSnapshot?.())
+        return
       }
-    )
+      cb(null, JSON.stringify({ success: true, data: null }), '')
+    })
 
     const snapshot = b.snapshot(undefined, 'tab-1')
     await vi.waitFor(() => expect(finishSnapshot).not.toBeNull())
@@ -368,25 +412,17 @@ describe('AgentBrowserBridge', () => {
     webContentsFromIdMock.mockImplementation((id: number) =>
       id === 100 || id === 200 ? mockWebContents(id) : null
     )
-    const commandCalls: string[][] = []
-    execFileMock.mockImplementation(
-      (_bin: string, args: string[], _opts: unknown, cb: ExecFileCallback) => {
-        commandCalls.push(args)
-        cb(null, JSON.stringify({ success: true, data: { ok: true } }), '')
-      }
-    )
+    const spawns = succeedRecordingAgentBrowserSpawns(execFileMock, stdinWrites, { ok: true })
 
     await b.interceptEnable(['https://old.example/**'])
     tabs.set('tab-1', 200)
     await b.onProcessSwap('tab-1', 200, 100)
     await expect(b.exec('get title')).resolves.toEqual({ ok: true })
 
-    const routeCalls = commandCalls.filter(
-      (args) => args.includes('network') && args.includes('route')
-    )
-    expect(routeCalls).toHaveLength(2)
-    expect(routeCalls.at(-1)).toContain('https://old.example/**')
-    expect(routeCalls.at(-1)).toContain('--cdp')
+    const routeSpawns = spawns.filter(({ command }) => isNetworkCommand(command, 'route'))
+    expect(routeSpawns).toHaveLength(2)
+    expect(routeSpawns.at(-1)?.command).toContain('https://old.example/**')
+    expect(routeSpawns.at(-1)?.args).toContain('--cdp')
   })
 
   it('does not replay stale intercept routes after process swap when the first command disables routing', async () => {
@@ -403,26 +439,14 @@ describe('AgentBrowserBridge', () => {
     succeedWith(null)
     await b.onProcessSwap('tab-1', 200)
 
-    const commandCalls: string[][] = []
-    execFileMock.mockImplementation(
-      (_bin: string, args: string[], _opts: unknown, cb: ExecFileCallback) => {
-        commandCalls.push(args)
-        cb(null, JSON.stringify({ success: true, data: { ok: true } }), '')
-      }
-    )
+    const spawns = succeedRecordingAgentBrowserSpawns(execFileMock, stdinWrites, { ok: true })
 
     await b.interceptDisable()
 
-    const routeCalls = commandCalls.filter(
-      (args) => args.includes('network') && args.includes('route')
+    expect(spawns.filter(({ command }) => isNetworkCommand(command, 'route'))).toHaveLength(0)
+    expect(spawns.find(({ command }) => isNetworkCommand(command, 'unroute'))?.args).toContain(
+      '--cdp'
     )
-    expect(routeCalls).toHaveLength(0)
-
-    const unrouteCall = commandCalls.find(
-      (args) => args.includes('network') && args.includes('unroute')
-    )
-    expect(unrouteCall).toBeDefined()
-    expect(unrouteCall).toContain('--cdp')
   })
 
   it('does not replay stale intercept routes after process swap when the first command enables a new route', async () => {
@@ -439,23 +463,15 @@ describe('AgentBrowserBridge', () => {
     succeedWith(null)
     await b.onProcessSwap('tab-1', 200)
 
-    const commandCalls: string[][] = []
-    execFileMock.mockImplementation(
-      (_bin: string, args: string[], _opts: unknown, cb: ExecFileCallback) => {
-        commandCalls.push(args)
-        cb(null, JSON.stringify({ success: true, data: { ok: true } }), '')
-      }
-    )
+    const spawns = succeedRecordingAgentBrowserSpawns(execFileMock, stdinWrites, { ok: true })
 
     await b.interceptEnable(['https://new.example/**'])
 
-    const routeCalls = commandCalls.filter(
-      (args) => args.includes('network') && args.includes('route')
-    )
-    expect(routeCalls).toHaveLength(1)
-    expect(routeCalls[0]).toContain('https://new.example/**')
-    expect(routeCalls[0]).not.toContain('https://old.example/**')
-    expect(routeCalls[0]).toContain('--cdp')
+    const routeSpawns = spawns.filter(({ command }) => isNetworkCommand(command, 'route'))
+    expect(routeSpawns).toHaveLength(1)
+    expect(routeSpawns[0].command).toContain('https://new.example/**')
+    expect(routeSpawns[0].command).not.toContain('https://old.example/**')
+    expect(routeSpawns[0].args).toContain('--cdp')
   })
 
   it('replays intercept routes after the daemon idles out', async () => {
@@ -467,38 +483,26 @@ describe('AgentBrowserBridge', () => {
     const session = sessions.get('orca-tab-tab-1')!
     session.lastCommandAt = Date.now() - 11 * 60 * 1000
 
-    const commandCalls: string[][] = []
-    execFileMock.mockImplementation(
-      (_bin: string, args: string[], _opts: unknown, cb: ExecFileCallback) => {
-        commandCalls.push(args)
-        cb(null, JSON.stringify({ success: true, data: { snapshot: 'tree' } }), '')
-      }
-    )
+    const spawns = succeedRecordingAgentBrowserSpawns(execFileMock, stdinWrites, {
+      snapshot: 'tree'
+    })
     await bridge.snapshot()
 
-    const routeCalls = commandCalls.filter(
-      (args) => args.includes('network') && args.includes('route')
-    )
-    expect(routeCalls).toHaveLength(1)
-    expect(routeCalls[0]).toContain('https://api.example/**')
+    const routeSpawns = spawns.filter(({ command }) => isNetworkCommand(command, 'route'))
+    expect(routeSpawns).toHaveLength(1)
+    expect(routeSpawns[0].command).toContain('https://api.example/**')
   })
 
   it('leaves a session alone while the daemon is still within its idle bound', async () => {
     succeedWith({ ok: true })
     await bridge.interceptEnable(['https://api.example/**'])
 
-    const commandCalls: string[][] = []
-    execFileMock.mockImplementation(
-      (_bin: string, args: string[], _opts: unknown, cb: ExecFileCallback) => {
-        commandCalls.push(args)
-        cb(null, JSON.stringify({ success: true, data: { snapshot: 'tree' } }), '')
-      }
-    )
+    const spawns = succeedRecordingAgentBrowserSpawns(execFileMock, stdinWrites, {
+      snapshot: 'tree'
+    })
     await bridge.snapshot()
 
-    expect(
-      commandCalls.filter((args) => args.includes('network') && args.includes('route'))
-    ).toHaveLength(0)
+    expect(spawns.filter(({ command }) => isNetworkCommand(command, 'route'))).toHaveLength(0)
   })
 
   it('makes runtime-wide session destruction terminal', async () => {

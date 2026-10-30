@@ -12,7 +12,7 @@ import type {
 } from '../../../../shared/agent-session-resume'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { StartupCommandDelivery } from '../../../../shared/codex-startup-delivery'
-import type { SessionOptionValue } from '../../../../shared/native-chat-session-options'
+import type { SessionOptionValue } from '../../../../shared/native-chat/input/native-chat-session-options'
 import type { AgentStartedTelemetry } from '../../lib/worktree-startup-payload'
 import type { NativeChatLaunchDraft, NativeChatLaunchPrompt } from '@/lib/native-chat-launch-prompt'
 import type { HostSessionSlices } from '@/lib/workspace-session-host-split'

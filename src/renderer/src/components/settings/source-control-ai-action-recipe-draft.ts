@@ -1,4 +1,5 @@
 import type { SourceControlAiSettings } from '../../../../shared/source-control-ai-types'
+import { readActionModelSelection } from '../../../../shared/source-control-action-model-selection'
 import {
   DEFAULT_SOURCE_CONTROL_ACTION_COMMAND_TEMPLATES,
   SOURCE_CONTROL_ACTION_IDS,
@@ -9,7 +10,8 @@ import {
 
 export type ActionRecipeDraftValue = {
   commandInputTemplate: string
-  agentArgs: string
+  agentArgs?: string
+  argumentChoices?: SourceControlActionRecipe['argumentChoices']
   launchPreferences?: SourceControlActionLaunchPreferences
 }
 
@@ -28,7 +30,8 @@ function readActionRecipeInputValue(
   return {
     commandInputTemplate:
       typeof value === 'string' ? value : DEFAULT_SOURCE_CONTROL_ACTION_COMMAND_TEMPLATES[actionId],
-    agentArgs: typeof recipe?.agentArgs === 'string' ? recipe.agentArgs : '',
+    agentArgs: recipe?.agentArgs,
+    argumentChoices: recipe?.argumentChoices,
     ...(recipe?.launchPreferences ? { launchPreferences: recipe.launchPreferences } : {})
   }
 }
@@ -56,5 +59,12 @@ export function retireActionLaunchPreferences(
   captured: SourceControlActionLaunchPreferences | undefined,
   selected: SourceControlActionRecipe['agentId']
 ): SourceControlActionLaunchPreferences | undefined {
-  return captured && latest === captured && captured.agentId !== selected ? undefined : latest
+  if (!captured || latest !== captured) {
+    return latest
+  }
+  const selection = readActionModelSelection(captured)
+  const obsolete = [selection?.model, ...Object.values(selection?.options ?? {})].some(
+    (entry) => entry && entry.agentId !== selected
+  )
+  return captured.agentId !== selected || obsolete ? undefined : latest
 }

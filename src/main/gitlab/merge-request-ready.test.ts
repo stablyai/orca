@@ -173,9 +173,12 @@ describe('GitLab readiness title ownership', () => {
   })
 
   it('retains the existing title-plus-readiness rejection', async () => {
-    await expect(updateMR('/repo', 12, { readyForReview: true, title: 'Rename' })).resolves.toEqual(
-      { ok: false, error: 'Cannot update the title while marking a merge request ready' }
-    )
+    await expect(
+      updateMR('/repo', 12, { readyForReview: true, title: 'Rename' })
+    ).resolves.toMatchObject({
+      ok: false,
+      error: 'Cannot update the title while marking a merge request ready'
+    })
     expect(execute).not.toHaveBeenCalled()
   })
 

@@ -113,6 +113,10 @@ export abstract class BrowserManagerState extends BrowserManagerViewportScrollSt
     error: string | null
   ): void
   protected abstract getDownloadReceivedBytes(item: Electron.DownloadItem): number
+  protected abstract isAwaitingDownloadFrom(
+    guestWebContentsId: number,
+    rootGuestWebContentsId: number
+  ): boolean
   protected abstract openLinkInOrcaTab(
     browserTabId: string,
     rawUrl: string,
@@ -192,6 +196,11 @@ export abstract class BrowserManagerState extends BrowserManagerViewportScrollSt
 
   removeCertificateRequestGuard(session: Electron.Session): void {
     this.certificateTrustController?.removeSessionRequestGuard(session)
+  }
+
+  /** Orca's shortcut overrides; extension commands yield to every Orca shortcut. */
+  getKeybindingOverrides(): KeybindingOverrides | undefined {
+    return this.settingsResolver?.().keybindings
   }
 
   setSettingsResolver(

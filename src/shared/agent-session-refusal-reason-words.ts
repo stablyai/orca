@@ -117,6 +117,7 @@ const REASON_WORDS = {
     agentCommandNotRunnable: { fact: 'agentCommandNotRunnable', action: 'actFirst' },
     runtimeNotInstalled: { fact: 'runtimeNotInstalled', action: 'actFirst' },
     fullAccessAsRoot: { fact: 'fullAccessAsRoot', action: 'actFirst' },
+    launchPreparationFailed: { fact: 'launchPreparationFailed', action: 'retry' },
     conversationOpenInTerminal: { fact: 'conversationOpenInTerminal', action: 'actFirst' },
     conversationOpenElsewhere: { fact: 'conversationOpenElsewhere', action: 'actFirst' },
     attachFailed: codeWords('retry')

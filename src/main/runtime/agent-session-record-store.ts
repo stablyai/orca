@@ -1,5 +1,3 @@
-/** Single-writer records/operation ledger in the host chat-journal database. */
-
 import { backfillAgentSessionPermissionModes } from './agent-session/ownership/agent-session-permission-backfill'
 import { createAgentSessionConversationReceipts } from './agent-session-conversation-receipts'
 import { pinAgentSessionRecordLaunchDirectory } from './agent-session-record-launch-directory'
@@ -67,12 +65,7 @@ import {
   heldAgentSessionIds,
   type AgentSessionStoreState
 } from './agent-session-store-state'
-import {
-  agentSessionVisibleTabIndex,
-  listVisibleAgentSessionIds,
-  setAgentSessionTabVisibility,
-  showAgentSessionTabs
-} from './agent-session/agent-session-tab-table'
+import { AgentSessionRecordTabs } from './agent-session/agent-session-tab-table'
 import type { JournalHostDatabase } from '../native-chat/agent-session-journal/journal-host-database'
 import type { JournalOperationReceipt } from '../native-chat/agent-session-journal/journal-row-writer'
 import { agentSessionOperationOutcomeReceipt } from './agent-session-operation-receipt'
@@ -87,18 +80,19 @@ import {
   setAgentSessionRecordUserNameThrough
 } from './agent-session-record-conversation-name'
 
+/** Single-writer records/operation ledger in the host chat-journal database. */
+
 export const AGENT_SESSION_LEASE_TTL_MS = 30_000,
   AGENT_SESSION_LEASE_RENEW_INTERVAL_MS = 10_000
 
-export class AgentSessionRecordStore {
-  private readonly deathEvidenceListeners = new Set<(sessionId: string) => void>()
-  private readonly firstRecordListeners = new Set<() => void>()
+export class AgentSessionRecordStore extends AgentSessionRecordTabs {
   readonly conversationReceipts: ReturnType<typeof createAgentSessionConversationReceipts>
 
   private constructor(
-    private readonly transactions: AgentSessionStoreTransactions,
+    transactions: AgentSessionStoreTransactions,
     readonly hostId: string
   ) {
+    super(transactions)
     this.founding = createAgentSessionFoundingStore(transactions, this.firstRecordListeners)
     this.conversationReceipts = createAgentSessionConversationReceipts(transactions)
   }
@@ -107,9 +101,15 @@ export class AgentSessionRecordStore {
   static open(args: {
     journalDatabase: JournalHostDatabase
     hostId: string
+    legacySessionTabIds: readonly string[]
   }): AgentSessionRecordStore {
     const rows = loadAgentSessionStoreRows(args.journalDatabase.db)
-    const transactions = new AgentSessionStoreTransactions(args.journalDatabase, rows, args.hostId)
+    const transactions = new AgentSessionStoreTransactions(
+      args.journalDatabase,
+      rows,
+      args.hostId,
+      args.legacySessionTabIds
+    )
     return new AgentSessionRecordStore(transactions, args.hostId)
   }
 
@@ -146,24 +146,6 @@ export class AgentSessionRecordStore {
   /** Record presence is permanent, including unreadable rows. */
   holdsRecords = (): boolean => this.state.records.size > 0 || this.state.unreadableRecords.size > 0
 
-  listVisibleSessionIds = (): string[] => listVisibleAgentSessionIds(this.state)
-
-  getVisibleSessionTabIndex = (): { present: boolean; sessionIds: string[] } =>
-    agentSessionVisibleTabIndex(this.state)
-
-  getSessionTabId = (sessionId: string): string | null =>
-    this.state.sessionTabs?.tabIdFor(sessionId) ?? null
-
-  /** Persist chat-tab identity separately from rollback-sensitive profile tabs; explicit tabId restores hidden tabs under their old ids. */
-  setSessionTabVisibility(sessionId: string, visible: boolean, tabId?: string): Promise<void> {
-    return this.transact((draft) => setAgentSessionTabVisibility(draft, sessionId, visible, tabId))
-  }
-
-  /** Publish the complete tab index in one write; a partial index would drop remaining chats on restart. */
-  showSessionTabs(sessionIds: readonly string[]): Promise<void> {
-    return this.transact((draft) => showAgentSessionTabs(draft, sessionIds))
-  }
-
   listByScope(location: AgentSessionExecutionLocation): AgentSessionRecord[] {
     const scope = agentSessionScopeKey(location)
     return this.listRecords().filter((record) => agentSessionScopeKey(record.location) === scope)
@@ -199,10 +181,19 @@ export class AgentSessionRecordStore {
   isClaimKeyVerifiable = (keyId: string, now: number): boolean =>
     isAgentSessionClaimKeyVerifiable(this.state, keyId, now)
 
-  reserveOwner = (request: AgentSessionReserveRequest): Promise<AgentSessionReserveResult> =>
-    this.transact((draft) =>
-      commitAgentSessionReservation(draft, request, AGENT_SESSION_LEASE_TTL_MS)
-    )
+  reserveOwner = (
+    request: AgentSessionReserveRequest,
+    check?: () => void
+  ): Promise<AgentSessionReserveResult> =>
+    this.transact((draft) => {
+      check?.()
+      return commitAgentSessionReservation(
+        draft,
+        request,
+        AGENT_SESSION_LEASE_TTL_MS,
+        this.transactions.legacySessionTabIds
+      )
+    })
 
   readonly founding: ReturnType<typeof createAgentSessionFoundingStore>
 
@@ -302,6 +293,13 @@ export class AgentSessionRecordStore {
   submissionReceipt = (sessionId: string) =>
     this.transactions.receipt(() => {}, { submissionSessionId: sessionId })
 
+  onAcceptedSend = (listener: (sessionId: string) => void): (() => void) => {
+    this.transactions.acceptedSendListeners.add(listener)
+    return () => {
+      this.transactions.acceptedSendListeners.delete(listener)
+    }
+  }
+
   admittedSendCount = (sessionId: string) => this.transactions.admittedSendCount(sessionId)
 
   commitOperationReceipt = (receipt: JournalOperationReceipt) =>
@@ -333,47 +331,5 @@ export class AgentSessionRecordStore {
       draft.records.set(sessionId, next)
       return next
     })
-  }
-
-  /** Notify committed death evidence from every transition; listeners must not throw. */
-  onDeathEvidence(listener: (sessionId: string) => void): () => void {
-    this.deathEvidenceListeners.add(listener)
-    return () => this.deathEvidenceListeners.delete(listener)
-  }
-
-  /** Notify first committed record; listeners must not throw. */
-  onFirstRecord(listener: () => void): () => void {
-    this.firstRecordListeners.add(listener)
-    return () => this.firstRecordListeners.delete(listener)
-  }
-
-  /** Serialize draft mutations; publish to readers only after row commit. */
-  private transact = async <T>(
-    apply: (draft: AgentSessionStoreState) => T,
-    options?: { inMemoryWhenReadOnly?: boolean }
-  ): Promise<T> => {
-    let proven: string[] = []
-    let heldBefore = true
-    const result = await this.transactions.transact((draft) => {
-      heldBefore = this.holdsRecords()
-      if (this.deathEvidenceListeners.size === 0) {
-        return apply(draft)
-      }
-      const before = new Map(
-        [...draft.records].map(([id, record]) => [id, record.lease.deathEvidence])
-      )
-      const applied = apply(draft)
-      proven = [...draft.records]
-        .filter(([id, { lease }]) => lease.deathEvidence && lease.deathEvidence !== before.get(id))
-        .map(([id]) => id)
-      return applied
-    }, options)
-    for (const sessionId of proven) {
-      this.deathEvidenceListeners.forEach((listener) => listener(sessionId))
-    }
-    if (!heldBefore && this.holdsRecords()) {
-      this.firstRecordListeners.forEach((listener) => listener())
-    }
-    return result
   }
 }

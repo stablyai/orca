@@ -1,0 +1,187 @@
+name: Computer-use task benchmark
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review, converted_to_draft]
+    paths:
+      - 'config/benchmarks/computer-use/**'
+      - 'native/computer-use-linux/**'
+      - 'native/computer-use-windows/**'
+      - '.github/workflows/computer-task-benchmark.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: computer-task-benchmark-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  ORCA_BACKGROUND_LAUNCH: '1'
+  CUA_TAG: cua-driver-rs-v0.38.0
+  CUA_DRIVER_RS_TELEMETRY_ENABLED: '0'
+  DO_NOT_TRACK: '1'
+  CUA_DRIVER_RS_UPDATE_CHECK: '0'
+  ELECTRON_VERSION: '43.8.1'
+  BASELINE_SHA: 030c88deecf3adc212d22f57b085e4bd5c6e48e6
+
+jobs:
+  contract:
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft != true
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - run: python -m unittest discover -s config/benchmarks/computer-use -p 'test_*.py'
+
+  linux:
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft != true
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [fixture, electron]
+    env:
+      BENCH_TARGET: ${{ matrix.target }}
+      ORCA_COMPUTER_BENCH_ISOLATED: '1'
+      ACCESSIBILITY_ENABLED: '1'
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Fetch immutable baseline
+        run: git fetch --no-tags --depth=1 origin "$BASELINE_SHA"
+      - name: Install isolated desktop and accessibility libraries
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends xvfb openbox dbus-x11 at-spi2-core python3-gi \
+            gir1.2-atspi-2.0 gir1.2-gtk-3.0 python3-tk xdotool xclip x11-xserver-utils x11-xkb-utils ripgrep libnss3 libgbm1 libasound2t64
+      - name: Download and verify pinned cua-driver
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/cua-dl" "$RUNNER_TEMP/cua"
+          cd "$RUNNER_TEMP/cua-dl"
+          asset='cua-driver-rs-0.38.0-linux-x86_64-binary.tar.gz'
+          gh release download "$CUA_TAG" --repo trycua/cua --pattern checksums.txt --pattern "$asset"
+          rg " $asset\$" checksums.txt | sha256sum -c -
+          tar -xzf "$asset" -C "$RUNNER_TEMP/cua"
+      - name: Install Electron
+        if: matrix.target == 'electron'
+        run: |
+          npm install --no-save --no-package-lock --prefix "$RUNNER_TEMP/electron" "electron@$ELECTRON_VERSION"
+          node "$RUNNER_TEMP/electron/node_modules/electron/install.js"
+      - name: Run task comparison on Xvfb
+        run: |
+          export CANDIDATE_SHA="$(git rev-parse HEAD)"
+          xvfb-run -a --server-args='-screen 0 1280x1024x24' dbus-run-session -- bash -euc '
+            openbox >"$RUNNER_TEMP/openbox.log" 2>&1 &
+            if [ "$BENCH_TARGET" = electron ]; then
+              /usr/bin/python3 config/benchmarks/computer-use/linux_typing_probe.py \
+                --electron "$RUNNER_TEMP/electron/node_modules/electron/dist/electron" \
+                --source "$CANDIDATE_SHA" --out "out/typing-linux-$BENCH_TARGET"
+            fi
+            /usr/bin/python3 config/benchmarks/computer-use/bench.py --target "$BENCH_TARGET" \
+              --baseline "$BASELINE_SHA" --candidate "$CANDIDATE_SHA" \
+              --cua "$RUNNER_TEMP/cua/cua-driver" \
+              --electron "$RUNNER_TEMP/electron/node_modules/electron/dist/electron" \
+              --out "out/task-linux-$BENCH_TARGET" --n 3 --budget 1800
+            if [ "$BENCH_TARGET" = electron ]; then
+              /usr/bin/python3 config/benchmarks/computer-use/linux_focus_probe.py \
+                --electron "$RUNNER_TEMP/electron/node_modules/electron/dist/electron" \
+                --baseline "$BASELINE_SHA" --candidate "$CANDIDATE_SHA" \
+                --out "out/task-linux-$BENCH_TARGET/focus-probe"
+            fi
+          '
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: computer-task-linux-${{ matrix.target }}
+          path: out/task-linux-${{ matrix.target }}
+          if-no-files-found: warn
+
+      - if: always() && matrix.target == 'electron'
+        uses: actions/upload-artifact@v4
+        with:
+          name: computer-typing-linux-electron
+          path: out/typing-linux-electron
+          if-no-files-found: warn
+
+  windows:
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft != true
+    runs-on: windows-latest
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [fixture, electron]
+    env:
+      BENCH_TARGET: ${{ matrix.target }}
+      ORCA_COMPUTER_BENCH_ISOLATED: '1'
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Fetch immutable baseline
+        run: git fetch --no-tags --depth=1 origin $env:BASELINE_SHA
+      - name: Download and verify pinned cua-driver
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: pwsh
+        run: |
+          $download = Join-Path $env:RUNNER_TEMP 'cua-dl'
+          $destination = Join-Path $env:RUNNER_TEMP 'cua'
+          New-Item -ItemType Directory -Force $download, $destination | Out-Null
+          $asset = 'cua-driver-rs-0.38.0-windows-x86_64-binary.zip'
+          gh release download $env:CUA_TAG --repo trycua/cua --pattern checksums.txt --pattern $asset --dir $download
+          $matches = @(Select-String -Path (Join-Path $download 'checksums.txt') -Pattern " $([regex]::Escape($asset))$")
+          if ($matches.Count -ne 1) { throw 'expected exactly one checksum' }
+          $expected = $matches[0].Line.Split(' ')[0]
+          $actual = (Get-FileHash (Join-Path $download $asset) -Algorithm SHA256).Hash.ToLower()
+          if ($expected -ne $actual) { throw 'cua-driver checksum mismatch' }
+          Expand-Archive (Join-Path $download $asset) -DestinationPath $destination
+      - name: Install Electron
+        if: matrix.target == 'electron'
+        run: |
+          npm install --no-save --no-package-lock --prefix "$env:RUNNER_TEMP\electron" "electron@$env:ELECTRON_VERSION"
+          node "$env:RUNNER_TEMP\electron\node_modules\electron\install.js"
+      - name: Verify native control discovery
+        if: matrix.target == 'fixture'
+        run: |
+          $candidate = git rev-parse HEAD
+          python config/benchmarks/computer-use/windows_discovery_probe.py --source $candidate --out "out/discovery-windows"
+      - name: Run task comparison on disposable Windows desktop
+        run: |
+          $candidate = git rev-parse HEAD
+          python config/benchmarks/computer-use/bench.py --target $env:BENCH_TARGET `
+            --baseline $env:BASELINE_SHA --candidate $candidate `
+            --cua "$env:RUNNER_TEMP\cua\cua-driver.exe" `
+            --electron "$env:RUNNER_TEMP\electron\node_modules\electron\dist\electron.exe" `
+            --out "out/task-windows-$env:BENCH_TARGET" --n 3 --budget 1800
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: computer-task-windows-${{ matrix.target }}
+          path: out/task-windows-${{ matrix.target }}
+          if-no-files-found: warn
+      - if: always() && matrix.target == 'fixture'
+        uses: actions/upload-artifact@v4
+        with:
+          name: computer-discovery-windows
+          path: out/discovery-windows
+          if-no-files-found: warn

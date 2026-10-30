@@ -1,6 +1,8 @@
+import { readAgentLaunchPreferencesForWorkspace } from '@/components/settings/use-host-agent-launch-preferences'
 import { useAppStore, type AppState } from '@/store'
 import { ensureDetectedAgentsForRepo } from './agent-detection-target-inventory'
-import { pickTuiAgent } from '../../../shared/tui-agent-selection'
+import { isTuiAgentEnabled } from '../../../shared/tui-agent-selection'
+import { resolveDefaultAgentForWorkspace } from './agent-tab-shortcuts'
 import { isTuiAgent } from '../../../shared/tui-agent-config'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import type { ProjectLaunchContext } from '../../../shared/rpc-contract/preflight-params'
@@ -10,7 +12,7 @@ import {
   planAgentSessionLaunch,
   type AgentSessionLaunchRequest
 } from './agent-session-launch-plan'
-import { getSetupConfig } from '@/lib/new-workspace'
+import { getDefaultSetupDecision, getSetupConfig } from '../../../shared/orca-hook-setup-config'
 import { checkRuntimeHooks } from '@/runtime/runtime-hooks-client'
 import { resolveGitHubPrStartPointForRepo } from '@/lib/github-pr-start-point'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
@@ -20,6 +22,7 @@ import type { Repo } from '../../../shared/repo-types'
 import type { OrcaHooks, RepoHookSettings } from '../../../shared/orca-yaml-hook-types'
 import type { SetupDecision } from '../../../shared/worktree/create-types'
 import type { GitHubPrStartPoint } from '../../../shared/worktree/types'
+import type { LaunchWorkItemDirectArgs } from './launch-work-item-direct-types'
 
 export async function resolveDirectPrStartPoint(
   repoId: string,
@@ -60,14 +63,11 @@ export async function resolveDirectSetupDecision(
     // No configured setup means no setup decision, matching callers that omit it.
     return { kind: 'decided', decision: 'inherit' }
   }
-  const policy = repo.hookSettings?.setupRunPolicy ?? 'run-by-default'
-  if (policy === 'ask') {
-    return { kind: 'needs-modal' }
-  }
-  return {
-    kind: 'decided',
-    decision: policy === 'run-by-default' ? 'run' : 'skip'
-  }
+  const decision = getDefaultSetupDecision(
+    true,
+    repo.hookSettings?.setupRunPolicy ?? 'run-by-default'
+  )
+  return decision ? { kind: 'decided', decision } : { kind: 'needs-modal' }
 }
 
 export type DirectLaunchOwnerRow = {
@@ -101,6 +101,7 @@ export async function planDirectWorkItemLaunch(args: {
   promptDelivery: 'draft' | 'submit-after-ready'
   resolveSessionOptions?: (agent: TuiAgent) => Readonly<Record<string, string>> | undefined
   sessionOptions?: Readonly<Record<string, string>>
+  launchChoice?: LaunchWorkItemDirectArgs['launchChoice']
 }) {
   const { prospectiveAgent, projectContext } = args
   if (!prospectiveAgent) {
@@ -120,29 +121,57 @@ export async function planDirectWorkItemLaunch(args: {
     },
     prompt: args.draftContent,
     promptDelivery: args.promptDelivery,
-    ...(sessionOptions ? { launchOptions: sessionOptions } : {})
+    ...(sessionOptions ? { launchOptions: sessionOptions } : {}),
+    ...directLaunchSurfaceRequest(args.launchChoice)
   }
   await awaitStructuredRouteHostAnswer(useAppStore.getState(), request, 3000)
   return planAgentSessionLaunch(useAppStore.getState(), request)
+}
+
+/** A picked surface stays explicit through both planning sites; none follows the settings route. */
+export function directLaunchSurfaceRequest(
+  choice: LaunchWorkItemDirectArgs['launchChoice']
+): Pick<AgentSessionLaunchRequest, 'requestedSurface' | 'selectedExecutionHostId'> {
+  return {
+    ...(choice?.requestedSurface ? { requestedSurface: choice.requestedSurface } : {}),
+    ...(choice?.executionHostId ? { selectedExecutionHostId: choice.executionHostId } : {})
+  }
 }
 
 export async function resolveDirectProspectiveAgent(
   store: AppState,
   repo: Repo,
   projectContext: ProjectLaunchContext | undefined,
-  agentOverride: TuiAgent | undefined
+  args: Pick<LaunchWorkItemDirectArgs, 'agentOverride' | 'agentLaunchPreferences'>
 ) {
+  const { agentOverride, agentLaunchPreferences } = args
   const detectedAgentsPromise = projectContext
     ? Promise.resolve(projectContext.agents)
     : agentOverride
       ? null
       : ensureDetectedAgentsForRepo(store, repo)
+  const detectedAgentIds = ((await detectedAgentsPromise) ?? []).filter(isTuiAgent)
+  const current = useAppStore.getState()
+  const workspace = {
+    kind: projectContext?.workspaceKind ?? 'git-worktree',
+    repoId: repo.id,
+    executionHostId: getRepoExecutionHostId(repo),
+    ...(projectContext ? { executionContext: projectContext.executionContext } : {})
+  } as const
+  const preferences =
+    agentLaunchPreferences ?? readAgentLaunchPreferencesForWorkspace(current, workspace)
   const prospectiveAgent =
     agentOverride ??
-    pickTuiAgent(
-      store.settings?.defaultTuiAgent,
-      new Set(((await detectedAgentsPromise) ?? []).filter(isTuiAgent)),
-      store.settings?.disabledTuiAgents
-    )
-  return { detectedAgentsPromise, prospectiveAgent }
+    resolveDefaultAgentForWorkspace({
+      defaultTuiAgent: preferences?.defaultTuiAgent,
+      detectedAgentIds,
+      disabledTuiAgents: preferences?.disabledTuiAgents,
+      chatIn: { store: current, workspace }
+    })
+  const unavailable = Boolean(
+    agentLaunchPreferences &&
+    agentOverride &&
+    !isTuiAgentEnabled(agentOverride, agentLaunchPreferences.disabledTuiAgents)
+  )
+  return { prospectiveAgent, unavailable }
 }

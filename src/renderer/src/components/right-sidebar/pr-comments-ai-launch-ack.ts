@@ -293,12 +293,19 @@ export function setPendingPRCommentAiAck(payload: PendingPRCommentAiAck): void {
   pendingAiCommentAck = payload
 }
 
-export function takePendingPRCommentAiAck(): PendingPRCommentAiAck | null {
+export function takePendingPRCommentAiAck(
+  expected?: PendingPRCommentAiAck
+): PendingPRCommentAiAck | null {
+  if (expected && pendingAiCommentAck !== expected) {
+    return null
+  }
   const payload = pendingAiCommentAck
   pendingAiCommentAck = null
   return payload
 }
 
-export function clearPendingPRCommentAiAck(): void {
-  pendingAiCommentAck = null
+export function clearPendingPRCommentAiAck(expected?: PendingPRCommentAiAck): void {
+  if (!expected || pendingAiCommentAck === expected) {
+    pendingAiCommentAck = null
+  }
 }

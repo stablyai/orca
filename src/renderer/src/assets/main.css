@@ -89,6 +89,8 @@
   --color-input: var(--input);
   --color-ring: var(--ring);
   --color-editor-surface: var(--editor-surface);
+  --color-floating-surface: var(--floating-surface);
+  --color-dialog-surface: var(--dialog-surface);
   --color-agent-question: var(--agent-question);
   --color-agent-working: var(--agent-working);
   --color-agent-question-text: var(--agent-question-text);
@@ -134,6 +136,7 @@
   --color-status-success-background: var(--status-success-background);
   --color-status-success-border: var(--status-success-border);
   --color-status-warning: var(--status-warning);
+  --color-status-warning-text: var(--status-warning-text);
   --color-jira-priority-high: var(--jira-priority-high);
   --color-jira-priority-medium: var(--jira-priority-medium);
   --color-jira-priority-low: var(--jira-priority-low);
@@ -165,6 +168,12 @@
   --radius-4xl: calc(var(--radius) * 2.6);
 }
 
+/* Why: only the drawer that carries it reads the live sidebar width; don't restyle its subtree per drag frame. */
+@property --workspace-sidebar-live-width {
+  syntax: '*';
+  inherits: false;
+}
+
 :root {
   --app-font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   --font-sans: var(--app-font-family);
@@ -189,6 +198,8 @@
   --orca-security-border: #e5e5e5;
   --orca-security-input: #e5e5e5;
   --orca-security-ring: #a1a1a1;
+  --orca-security-floating-surface: rgba(255, 255, 255, 0.82);
+  --orca-security-dialog-surface: rgba(255, 255, 255, 0.96);
   --background: #fff;
   --editor-surface: #ffffff;
   --foreground: #0a0a0a;
@@ -211,6 +222,9 @@
   --card-foreground: #0a0a0a;
   --popover: #fff;
   --popover-foreground: #0a0a0a;
+  /* Glass tints for menus and dialogs; a plugin theme replaces both with its --popover. */
+  --floating-surface: rgba(255, 255, 255, 0.82);
+  --dialog-surface: color-mix(in srgb, var(--background) 96%, transparent);
   --primary: #171717;
   --primary-foreground: #fafafa;
   --secondary: #f5f5f5;
@@ -301,6 +315,8 @@
   --orca-security-border: rgb(255 255 255 / 0.07);
   --orca-security-input: rgb(255 255 255 / 0.15);
   --orca-security-ring: #737373;
+  --orca-security-floating-surface: rgba(0, 0, 0, 0.72);
+  --orca-security-dialog-surface: rgba(23, 23, 23, 0.96);
   --background: #0a0a0a;
   --editor-surface: #1e1e1e;
   --foreground: #fafafa;
@@ -323,6 +339,8 @@
   --card-foreground: #fafafa;
   --popover: #171717;
   --popover-foreground: #fafafa;
+  --floating-surface: rgba(0, 0, 0, 0.72);
+  --dialog-surface: rgba(23, 23, 23, 0.96);
   --primary: #e5e5e5;
   --primary-foreground: #171717;
   --secondary: #262626;
@@ -403,6 +421,8 @@
   --status-success-border: color-mix(in srgb, var(--status-success) 25%, transparent);
   /* Needs-attention states use yellow, separate from errors and working states. */
   --status-warning: #ca8a04;
+  /* Why: raw amber is under 3:1 on white; small warning text needs the darker mix. */
+  --status-warning-text: color-mix(in srgb, var(--status-warning) 70%, var(--foreground));
   --jira-priority-high: var(--destructive);
   --jira-priority-medium: var(--status-warning);
   --jira-priority-low: var(--callout-note);
@@ -432,6 +452,7 @@
   --status-success-background: color-mix(in srgb, var(--status-success) 10%, transparent);
   --status-success-border: color-mix(in srgb, var(--status-success) 25%, transparent);
   --status-warning: #eab308;
+  --status-warning-text: var(--status-warning);
   --jira-priority-high: var(--destructive);
   --jira-priority-medium: var(--status-warning);
   --jira-priority-low: var(--callout-note);
@@ -471,6 +492,9 @@
   --border: var(--orca-security-border);
   --input: var(--orca-security-input);
   --ring: var(--orca-security-ring);
+  /* A plugin theme copies its --popover into these, so trust dialogs would paint on it. */
+  --floating-surface: var(--orca-security-floating-surface);
+  --dialog-surface: var(--orca-security-dialog-surface);
 }
 
 .linear-priority-bars {
@@ -487,8 +511,8 @@
   z-index: var(--toaster-z-index, 47) !important;
 }
 
-/* Keep errors above modal backdrops. Scope body > :has() to the toaster; broad rescans previously froze large diffs. */
-body:has(> [data-slot='dialog-overlay'], > [data-slot='sheet-overlay']) {
+/* Keep errors above modal backdrops. Overlay attributes come from body-overlay-attributes.ts: body:has() made every DOM mutation restyle the whole app. */
+body[data-modal-overlay-open] {
   --toaster-z-index: 60;
 }
 
@@ -537,7 +561,7 @@ body:has(> [data-slot='dialog-overlay'], > [data-slot='sheet-overlay']) {
 }
 
 /* Visible toasts absorb backdrop clicks; Toaster gates actions while a modal owns the pointer lock. */
-body:has(> [data-slot='dialog-overlay'], > [data-slot='sheet-overlay'])
+body[data-modal-overlay-open]
   [data-sonner-toaster]
   [data-sonner-toast][data-visible='true'][data-removed='false']:is(
     [data-front='true'],
@@ -838,6 +862,11 @@ body:has(> [data-slot='dialog-overlay'], > [data-slot='sheet-overlay'])
   mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 1.5rem), transparent);
 }
 
+.terminal-tab-strip[data-active-tab-dock-disabled] > [data-active-tab-dock] {
+  position: relative;
+  z-index: auto;
+}
+
 /* Why: tabs only draw a right border, so a tab docked at the end has no seam against the tab it covers. */
 .terminal-tab-strip[data-active-tab-docked='end'] > [data-active-tab-dock]::before {
   content: '';
@@ -866,7 +895,7 @@ body:has(> [data-slot='dialog-overlay'], > [data-slot='sheet-overlay'])
 }
 
 /* Blur source regions independently so status-bar animation cannot re-filter the workspace. */
-body:has(> [data-slot='dialog-overlay'], > [data-slot='sheet-overlay'], > [data-onboarding-overlay])
+body:is([data-modal-overlay-open], [data-onboarding-overlay-open])
   .app-layout
   > :not(.window-controls) {
   filter: blur(2px);
@@ -1304,8 +1333,12 @@ html.native-shell .app-layout {
 [role='option'].jump-palette-item[data-selected='true'],
 .jump-palette-command [data-slot='command-item'][data-selected='true'],
 .jump-palette-command [role='option'][data-selected='true'],
-.ai-vault-session-row[data-selected='true'] {
-  /* Flat --accent is faint in light mode; foreground mix/ring shows selection and exposes a matching status-pip cutout. */
+.ai-vault-session-row[data-selected='true'],
+.plugin-list-row:has([data-plugin-row-name]:focus-visible) {
+  /* Why: flat --accent (#f5f5f5) on the palette surface (#fff) is nearly invisible
+     in light mode — the keyboard cursor has to read as a solid selected row.
+     Mix foreground into background and draw an inset ring; expose the surface
+     as a var so status-pip cutouts can match without hardcoding. */
   --jump-palette-selection-surface: color-mix(in srgb, var(--foreground) 13%, var(--background));
   background: var(--jump-palette-selection-surface);
   border-color: transparent;
@@ -1317,8 +1350,10 @@ html.native-shell .app-layout {
 .dark [role='option'].jump-palette-item[data-selected='true'],
 .dark .jump-palette-command [data-slot='command-item'][data-selected='true'],
 .dark .jump-palette-command [role='option'][data-selected='true'],
-.dark .ai-vault-session-row[data-selected='true'] {
-  /* Dark --accent already contrasts; the light-mode foreground mix weakens it. */
+.dark .ai-vault-session-row[data-selected='true'],
+.dark .plugin-list-row:has([data-plugin-row-name]:focus-visible) {
+  /* Why accent, not the light-mode mix: --accent (#404040) already reads clearly on
+     dark surfaces; a low-%% foreground mix was a visible step down from the old row. */
   --jump-palette-selection-surface: var(--accent);
   background: var(--jump-palette-selection-surface);
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--foreground) 16%, transparent);
@@ -1874,6 +1909,30 @@ html.native-shell .app-layout {
     animation: none;
     opacity: 1;
     transform: none;
+  }
+}
+
+/* Duration matches EDITOR_REVEAL_FLASH_MS; a fade only, so it stays under reduced motion. */
+.editor-reveal-flash {
+  position: absolute;
+  inset: 0;
+  z-index: 30;
+  pointer-events: none;
+  background: color-mix(in srgb, var(--terminal-pane-locate) 6%, transparent);
+  animation: editor-reveal-flash 1.2s ease-out forwards;
+}
+
+@keyframes editor-reveal-flash {
+  0% {
+    opacity: 0;
+  }
+
+  15% {
+    opacity: 1;
+  }
+
+  100% {
+    opacity: 0;
   }
 }
 

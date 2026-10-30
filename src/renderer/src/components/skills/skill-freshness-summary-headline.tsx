@@ -42,16 +42,11 @@ export function SummaryHeadline({ plan }: { plan: BundledSkillPlan | null }): Re
   if (updates > 0) {
     return (
       <p className="text-sm font-medium text-foreground">
-        {updates === 1
-          ? translate(
-              'auto.components.skills.SkillFreshnessUpdateDialog.updateOne',
-              '1 update available'
-            )
-          : translate(
-              'auto.components.skills.SkillFreshnessUpdateDialog.updateMany',
-              '{{value0}} updates available',
-              { value0: updates }
-            )}
+        {translate(
+          'auto.components.skills.SkillFreshnessUpdateDialog.update',
+          '{{count}} updates available',
+          { count: updates, defaultValue_one: '{{count}} update available' }
+        )}
       </p>
     )
   }
@@ -67,16 +62,11 @@ export function SummaryHeadline({ plan }: { plan: BundledSkillPlan | null }): Re
               'auto.components.skills.SkillFreshnessUpdateDialog.noUpdates',
               'No updates available'
             )
-          : current === 1
-            ? translate(
-                'auto.components.skills.SkillFreshnessUpdateDialog.currentOne',
-                '1 skill is up to date'
-              )
-            : translate(
-                'auto.components.skills.SkillFreshnessUpdateDialog.currentMany',
-                '{{value0}} skills are up to date',
-                { value0: current }
-              )}
+          : translate(
+              'auto.components.skills.SkillFreshnessUpdateDialog.current',
+              '{{count}} skills are up to date',
+              { count: current, defaultValue_one: '{{count}} skill is up to date' }
+            )}
       </div>
     )
   }

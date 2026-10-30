@@ -1,22 +1,34 @@
 import { useCallback, useEffect, useRef, type MutableRefObject } from 'react'
+import { translate } from '../i18n/mobile-i18n'
 import type { RpcClient } from '../transport/rpc-client'
 import { isRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
 import { isLogicalClientCutoverError } from '../transport/stable-logical-rpc-client'
 import { nativeChatTerminalWrite } from './mobile-session-write-operations'
-import { reportWorkerTerminalUserInput } from '../terminal/worker-terminal-takeover-report'
 import { openMobileNativeChatSendBudget } from './native-chat/mobile-native-chat-send'
+import { nativeChatStopSendsSecondEscape } from '../../../src/shared/native-chat-agent-support'
+import { NATIVE_CHAT_QUESTION_STEP_MS } from '../../../src/shared/native-chat/input/native-chat-answer-stepping'
 
+// Resolves false only when no Escape could have landed, so the chat may offer Stop again.
 export function useMobileNativeChatStop(args: {
   client: RpcClient | null
   enabled: boolean
   handleRef: MutableRefObject<string | null>
   deviceTokenRef: MutableRefObject<string | null>
+  agentRef: MutableRefObject<string | null>
   streamIdentity: string
   cancelPending: () => void
   onSendError: (message: string) => void
-}): () => void {
-  const { client, enabled, handleRef, deviceTokenRef, streamIdentity, cancelPending, onSendError } =
-    args
+}): () => Promise<boolean> {
+  const {
+    client,
+    enabled,
+    handleRef,
+    deviceTokenRef,
+    agentRef,
+    streamIdentity,
+    cancelPending,
+    onSendError
+  } = args
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const generationRef = useRef(0)
   // Settle a cancelled second Escape so first-write failure cannot wait forever for an unsent write.
@@ -42,8 +54,13 @@ export function useMobileNativeChatStop(args: {
   return useCallback(() => {
     const handle = handleRef.current
     if (!client || !handle || !enabled) {
-      onSendError('Stop not sent (terminal not ready)')
-      return
+      onSendError(
+        translate(
+          'session.useNativeChatStop.terminalNotReady',
+          'Stop not sent (terminal not ready)'
+        )
+      )
+      return Promise.resolve(false)
     }
     cancelPending()
     generationRef.current += 1
@@ -56,17 +73,27 @@ export function useMobileNativeChatStop(args: {
     let sawAccepted = false
     let sawUnknown = false
     let sawRejected = false
+    let settle!: (sent: boolean) => void
+    const verdict = new Promise<boolean>((resolve) => {
+      settle = resolve
+    })
     const reportIfSettled = (): void => {
-      if (
-        generationRef.current !== generation ||
-        pending > 0 ||
-        sawAccepted ||
-        (!sawUnknown && !sawRejected)
-      ) {
+      if (pending > 0) {
+        return
+      }
+      settle(sawAccepted || sawUnknown || !sawRejected)
+      if (generationRef.current !== generation || sawAccepted || (!sawUnknown && !sawRejected)) {
         return
       }
       // Lost-ack/cutover Escape may have stopped work; report uncertainty instead of inviting a second key.
-      onSendError(sawUnknown ? 'Stop unconfirmed — check chat before retrying' : 'Stop not sent')
+      onSendError(
+        sawUnknown
+          ? translate(
+              'session.useNativeChatStop.stopUnconfirmed',
+              'Stop unconfirmed — check chat before retrying'
+            )
+          : translate('session.useNativeChatStop.stopNotSent', 'Stop not sent')
+      )
     }
     const sendEscape = (): void => {
       const activeRoute = activeRouteRef.current
@@ -102,8 +129,6 @@ export function useMobileNativeChatStop(args: {
         .then((response) => {
           if (nativeChatTerminalWrite.interpret(response) === true) {
             sawAccepted = true
-            // A deliberate Stop is human input; it takes the worker over like any other key.
-            reportWorkerTerminalUserInput(client, handle)
           } else {
             sawRejected = true
           }
@@ -122,19 +147,26 @@ export function useMobileNativeChatStop(args: {
         })
     }
     sendEscape()
+    if (!nativeChatStopSendsSecondEscape(agentRef.current)) {
+      pending -= 1
+      reportIfSettled()
+      return verdict
+    }
     dropSecondEscapeRef.current = () => {
       pending -= 1
       reportIfSettled()
     }
-    // Pace Escape bytes so remote input cannot coalesce them away.
+    // Pace like desktop's answer steps so remote input cannot coalesce the two Escapes away.
     timerRef.current = setTimeout(() => {
       timerRef.current = null
       dropSecondEscapeRef.current = null
       sendEscape()
       pending -= 1
       reportIfSettled()
-    }, 80)
+    }, NATIVE_CHAT_QUESTION_STEP_MS)
+    return verdict
   }, [
+    agentRef,
     cancelPending,
     cancelSecondEscape,
     client,

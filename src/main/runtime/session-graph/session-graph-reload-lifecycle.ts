@@ -31,10 +31,6 @@ export abstract class OrcaRuntimeWithHasTerminalsForWorktree extends OrcaRuntime
     ...args: Parameters<ResolveWaiterMethods['rejectAllWaiters']>
   ): ReturnType<ResolveWaiterMethods['rejectAllWaiters']>
 
-  protected abstract rejectWaitersForHandle(
-    ...args: Parameters<ResolveWaiterMethods['rejectWaitersForHandle']>
-  ): ReturnType<ResolveWaiterMethods['rejectWaitersForHandle']>
-
   protected abstract rememberDetachedPreAllocatedLeaves(
     ...args: Parameters<BindPtyIncarnationHandleMethods['rememberDetachedPreAllocatedLeaves']>
   ): ReturnType<BindPtyIncarnationHandleMethods['rememberDetachedPreAllocatedLeaves']>
@@ -57,7 +53,7 @@ export abstract class OrcaRuntimeWithHasTerminalsForWorktree extends OrcaRuntime
 
   async hasTerminalsForWorktree(worktreeSelector: string): Promise<boolean> {
     const graphEpoch = this.captureReadyGraphEpoch()
-    const worktree = await this.resolveWorktreeSelector(worktreeSelector)
+    const worktree = await this.resolveWorkspaceSelector(worktreeSelector)
     this.assertStableReadyGraph(graphEpoch)
     for (const leaf of this.leaves.values()) {
       if (leaf.worktreeId === worktree.id && leaf.ptyId) {
@@ -110,15 +106,6 @@ export abstract class OrcaRuntimeWithHasTerminalsForWorktree extends OrcaRuntime
     for (const [ptyId, retained] of this.handleByPtyIncarnation) {
       if (retained.incarnationId === null) {
         this.invalidatePtyIncarnationHandle(ptyId)
-      }
-    }
-    const retainedHandles = new Set([
-      ...this.handleByPtyId.values(),
-      ...[...this.handleByPtyIncarnation.values()].map((record) => record.handle)
-    ])
-    for (const handle of this.terminalWaiters.handles()) {
-      if (!retainedHandles.has(handle)) {
-        this.rejectWaitersForHandle(handle, 'terminal_handle_stale')
       }
     }
     this.handles.clear()
@@ -206,6 +193,7 @@ export abstract class OrcaRuntimeWithHasTerminalsForWorktree extends OrcaRuntime
     if (this.shouldRestoreHeadlessGraph(windowId)) {
       this.pendingHeadlessPromotionWindowId = null
       this.restoreHeadlessGraphAuthority()
+      this.republishBrowserSessionTabs()
       return
     }
     // Without an authoritative graph, live-terminal operations must fail closed.
@@ -229,6 +217,16 @@ export abstract class OrcaRuntimeWithHasTerminalsForWorktree extends OrcaRuntime
     this.clearPtyIncarnationHandles()
     // Keep pre-allocated CLI handles for reconnect adoption.
     this.rejectAllWaiters('terminal_handle_stale')
+    this.republishBrowserSessionTabs()
+  }
+
+  // Renderer browser rows are listed only while their window exists; a version bump lets every client apply the drop.
+  private republishBrowserSessionTabs(): void {
+    for (const [worktreeId, snapshot] of this.mobileSessionTabsByWorktree) {
+      if (snapshot.tabs.some((tab) => tab.type === 'browser')) {
+        this.republishMobileSessionTabsSnapshot(worktreeId)
+      }
+    }
   }
 
   protected handleGraphReloadTimeout(windowId: number): void {

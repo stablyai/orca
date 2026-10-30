@@ -172,6 +172,29 @@ describe('WslOrcadConnectionManager', () => {
     expect(await roundTrip(connection, 'hello')).toBe('hello')
   })
 
+  it('retires the listener without announcing a close, so the idle or stopped status stands', async () => {
+    const { manager, onChange } = setup()
+    const connection = await manager.ensure('Ubuntu')
+    const calls = onChange.mock.calls.length
+    await manager.retireListener('ubuntu')
+    expect(manager.get('Ubuntu')).toBeNull()
+    expect(onChange).toHaveBeenCalledTimes(calls)
+    await expect(dial(connection.localPort)).rejects.toThrow()
+    await manager.retireListener('Ubuntu')
+  })
+
+  it('keeps the listener while a user connect for the distro is in flight', async () => {
+    const { manager, deployAndLaunch } = setup()
+    const connection = await manager.ensure('Ubuntu')
+    const launch = Promise.withResolvers<WslOrcadLaunch>()
+    deployAndLaunch.mockImplementationOnce(() => launch.promise)
+    const connecting = manager.ensure('Ubuntu')
+    await manager.retireListener('Ubuntu')
+    expect(manager.get('Ubuntu')).toBe(connection)
+    launch.resolve(ready(first.port))
+    expect(await connecting).toBe(connection)
+  })
+
   it('shares one deploy and one bridge between concurrent connects to a distro', async () => {
     const { manager, deployAndLaunch, children } = setup()
     const [a, b] = await Promise.all([manager.ensure('Ubuntu'), manager.ensure('ubuntu ')])

@@ -29,6 +29,9 @@ export const EMPTY_DELETE_STATE_BY_WORKTREE_ID: AppState['deleteStateByWorktreeI
 export const EMPTY_WORKTREE_LINEAGE_BY_ID: AppState['worktreeLineageById'] = {}
 export const EMPTY_WORKSPACE_LINEAGE_BY_CHILD_KEY: AppState['workspaceLineageByChildKey'] = {}
 export const EMPTY_CYCLIC_LINEAGE_IDS: ReadonlySet<string> = new Set()
+export const EMPTY_WORKTREES: readonly Worktree[] = []
+export const EMPTY_WORKTREE_MAP: ReadonlyMap<string, Worktree> = new Map()
+export const EMPTY_REPO_MAP: ReadonlyMap<string, Repo> = new Map()
 
 // Return the shared empty reference while closed; open menus read current maps.
 export function selectMenuScopedMap<T>(menuOpen: boolean, live: T, empty: T): T {
@@ -214,6 +217,19 @@ export function preserveDeleteSiblingPosition(scope: HTMLElement | null): () => 
   }
 }
 
+/** The status every context worktree shares, or '' when they differ or there are none. */
+export function getSharedWorkspaceStatus(
+  worktrees: readonly Worktree[],
+  statusesFor: (worktree: Worktree) => readonly WorkspaceStatusDefinition[]
+): WorkspaceStatus {
+  const [first, ...rest] = worktrees
+  if (!first) {
+    return ''
+  }
+  const status = getWorkspaceStatus(first, statusesFor(first))
+  return rest.every((item) => getWorkspaceStatus(item, statusesFor(item)) === status) ? status : ''
+}
+
 export type WorkspaceStatusAssignmentPlan =
   | { readonly kind: 'board-sync'; readonly worktreeIds: readonly string[] }
   | { readonly kind: 'local-only'; readonly localWriteIds: readonly string[] }
@@ -222,14 +238,14 @@ export type WorkspaceStatusAssignmentPlan =
 export function planWorkspaceStatusAssignment(
   worktrees: readonly Worktree[],
   status: WorkspaceStatus,
-  workspaceStatuses: readonly WorkspaceStatusDefinition[],
+  statusesFor: (worktree: Worktree) => readonly WorkspaceStatusDefinition[],
   boardSyncEnabled: boolean
 ): WorkspaceStatusAssignmentPlan {
   if (boardSyncEnabled) {
     return { kind: 'board-sync', worktreeIds: worktrees.map((item) => item.id) }
   }
   const localWriteIds = worktrees
-    .filter((item) => getWorkspaceStatus(item, workspaceStatuses) !== status)
+    .filter((item) => getWorkspaceStatus(item, statusesFor(item)) !== status)
     .map((item) => item.id)
   return { kind: 'local-only', localWriteIds }
 }

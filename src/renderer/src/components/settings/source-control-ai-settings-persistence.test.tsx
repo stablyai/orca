@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
-import { beforeEach, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { useAppStore } from '../../store'
 import { ChatNamingSetting } from './ChatNamingSetting'
 import { CommitMessageAiPane } from './CommitMessageAiPane'
@@ -14,6 +14,7 @@ import * as selection from '../../../../shared/source-control-launch-agent-selec
 import * as lifts from '../../../../shared/source-control-action-permission-lift'
 import * as shell from '../../../../shared/tui-agent-startup-shell'
 import { TooltipProvider } from '../ui/tooltip'
+import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
 import {
   getDefaultSourceControlAiSettings,
   normalizeSourceControlAiSettings
@@ -22,6 +23,7 @@ import {
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn(), info: vi.fn() } }))
 
 beforeEach(() => useAppStore.setState({ settingsSearchQuery: '' }))
+afterEach(() => setLocalRuntimeCapabilitiesForTests(null))
 
 function GitPersistenceHarness({ model }: { model: SettingsPersistenceModel }) {
   const settings = useAppStore((state) => state.settings)
@@ -50,6 +52,11 @@ it('consumes an actual Git toggle failure and lets the following Chat write succ
   const model = settingsModel()
   persist.mockRejectedValueOnce(new Error('Settings disk is unavailable'))
   render(<GitPersistenceHarness model={model} />)
+  const naming = document.getElementById('chat-names')
+  if (!naming) {
+    throw new Error('Chat naming section is missing')
+  }
+  fireEvent.click(within(naming).getByRole('button', { name: 'Advanced' }))
   const toggle = screen.getByRole('switch', { name: 'Show Source Control AI actions' })
   fireEvent.click(toggle)
   await waitFor(() =>
@@ -88,6 +95,11 @@ it('does not let a failed actual Git agent selection roll back a queued Chat sel
       })
   )
   render(<GitPersistenceHarness model={settingsModel()} />)
+  const naming = document.getElementById('chat-names')
+  if (!naming) {
+    throw new Error('Chat naming section is missing')
+  }
+  fireEvent.click(within(naming).getByRole('button', { name: 'Advanced' }))
   const agents = screen.getAllByRole('combobox')
   const gitAgent = agents[0]
   const chatAgent = agents.at(-1)
@@ -112,6 +124,7 @@ it('does not let a failed actual Git agent selection roll back a queued Chat sel
 })
 
 it('global owner: bounded controlled edits, failed/same selection and no-op save', async () => {
+  setLocalRuntimeCapabilitiesForTests([])
   const settings = useAppStore.getState().settings
   if (!settings) {
     throw new Error('Missing settings')
@@ -205,7 +218,11 @@ it('global owner: bounded controlled edits, failed/same selection and no-op save
   )
   expect(input).toHaveProperty('value', '--verbose newer')
   fireEvent.click(row.getAllByRole('combobox')[0])
-  fireEvent.click(screen.getByRole('option', { name: 'Claude' }))
+  await act(async () => {
+    fireEvent.click(screen.getByRole('option', { name: 'Claude' }))
+  })
+  expect(persist).toHaveBeenCalledTimes(2)
+  expect(input).toHaveProperty('value', '--verbose newer')
   expect(row.getByRole('button', { name: /Remove --dangerously/ })).toBeDefined()
   persist.mockRejectedValueOnce(new Error('Save disk unavailable'))
   fireEvent.click(row.getByRole('button', { name: 'Save' }))
@@ -213,14 +230,17 @@ it('global owner: bounded controlled edits, failed/same selection and no-op save
     expect(console.error).toHaveBeenCalledWith(new Error('Save disk unavailable'))
   )
   fireEvent.click(row.getByRole('button', { name: 'Save' }))
-  await waitFor(() => expect(persist).toHaveBeenCalledTimes(3))
+  await waitFor(() => expect(persist).toHaveBeenCalledTimes(4))
   expect(useAppStore.getState().settings?.sourceControlAi?.actions?.fixChecks).toMatchObject({
     agentId: 'claude',
     agentArgs: '--verbose newer',
     launchPreferences: {
       agentId: 'claude',
-      model: 'sonnet',
-      options: { effort: 'high' },
+      modelSelection: {
+        base: 'default',
+        model: { agentId: 'claude', value: 'sonnet' },
+        options: { effort: { agentId: 'claude', value: 'high' } }
+      },
       permissionMode: 'full-access'
     }
   })

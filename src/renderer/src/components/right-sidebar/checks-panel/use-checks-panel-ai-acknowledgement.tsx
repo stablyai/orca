@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from 'react'
+import { useCallback, useLayoutEffect, useRef } from 'react'
 import { toast } from 'sonner'
 import { mergePRCommentIntoList } from '@/store/github/pr-comment-cache'
 import {
@@ -15,12 +15,13 @@ import type { ChecksPanelControllerState } from './use-checks-panel-controller-s
 import type { ChecksPanelReviewDataState } from './use-checks-panel-review-data'
 import type { ChecksPanelPollingState } from './use-checks-panel-polling'
 import { buildSnapshottedThreadResolver } from '../pr-comment-snapshotted-thread-resolver'
-import { markPRCommentThreadResolved } from '../pr-comment-thread-resolution'
+import { markPRCommentThreadResolved } from '@/lib/pr-comment-thread-resolution'
 import { resolveGitLabMRDiscussionForChecks } from './gitlab-review-client'
 import { clearPRCommentsListSelection } from '../pr-comments-list-selection'
 import { translate } from '@/i18n/i18n'
 import type { ChecksAgentComposerState } from './panel-state-types'
 import type { ChecksPanelReview } from '../checks-panel-review'
+import { codeHostErrorText } from '@/lib/code-host-error-copy'
 
 type ChecksPanelAiAcknowledgementInput = Pick<
   ChecksPanelControllerState,
@@ -79,6 +80,11 @@ export function useChecksPanelAiAcknowledgement(model: ChecksPanelAiAcknowledgem
     },
     [fetchComments, fetchGitLabDetails]
   )
+
+  const refreshCommentsRef = useRef(refreshCommentsAfterBulkResolve)
+  useLayoutEffect(() => {
+    refreshCommentsRef.current = refreshCommentsAfterBulkResolve
+  }, [refreshCommentsAfterBulkResolve])
 
   const resolveSelectedThreadsAfterLaunch = useCallback(
     async (resolution: NonNullable<ChecksAgentComposerState['commentResolution']>) => {
@@ -163,7 +169,7 @@ export function useChecksPanelAiAcknowledgement(model: ChecksPanelAiAcknowledgem
                 }
                 return true
               }
-              lastHostError = result.error
+              lastHostError = codeHostErrorText(result)
               console.warn('In-thread fixing reply failed:', result.error)
               return false
             } catch (err) {
@@ -193,7 +199,7 @@ export function useChecksPanelAiAcknowledgement(model: ChecksPanelAiAcknowledgem
                 }
                 return true
               }
-              lastHostError = result.error
+              lastHostError = codeHostErrorText(result)
               console.warn('Conversation fixing reply failed:', result.error)
               return false
             } catch (err) {
@@ -206,7 +212,7 @@ export function useChecksPanelAiAcknowledgement(model: ChecksPanelAiAcknowledgem
       })
 
       if (isPanelStillOnLaunchReview()) {
-        await refreshCommentsAfterBulkResolve(resolution.provider)
+        await refreshCommentsRef.current(resolution.provider)
       }
 
       // Report host errors only when replies were needed and supported; resolving alone legitimately yields zero replies.
@@ -247,7 +253,6 @@ export function useChecksPanelAiAcknowledgement(model: ChecksPanelAiAcknowledgem
       addPRConversationComment,
       addPRReviewCommentReply,
       clearSentCommentSelection,
-      refreshCommentsAfterBulkResolve,
       resolveReviewThread,
       commentsRef,
       setComments,
@@ -255,104 +260,62 @@ export function useChecksPanelAiAcknowledgement(model: ChecksPanelAiAcknowledgem
     ]
   )
 
-  /** Park the payload on tab creation to survive panel churn; irreversible host writes still wait for delivery. */
-  const claimPendingCommentResolutionForLaunch = useCallback((): void => {
-    const pendingResolution = takePendingPRCommentAiAck() ?? pendingCommentResolutionRef.current
-    pendingCommentResolutionRef.current = null
-    if (!pendingResolution) {
-      return
+  const commentLaunchCallbacks = (
+    resolution: NonNullable<ChecksAgentComposerState['commentResolution']>
+  ) => {
+    let delivered = false
+    return {
+      onLaunchAccepted: () => {
+        takePendingPRCommentAiAck(resolution)
+        if (pendingCommentResolutionRef.current === resolution) {
+          pendingCommentResolutionRef.current = null
+        }
+        claimedCommentResolutionRef.current = resolution
+        commentResolutionLaunchAcceptedRef.current = true
+        setCommentResolutionAckBusyNow(true)
+      },
+      onLaunchAborted: () => {
+        if (claimedCommentResolutionRef.current === resolution) {
+          claimedCommentResolutionRef.current = null
+        }
+        commentResolutionLaunchAcceptedRef.current = false
+        pendingCommentResolutionRef.current = resolution
+        setPendingPRCommentAiAck(resolution)
+        setCommentResolutionAckBusyNow(false)
+      },
+      onLaunched: () => {
+        if (delivered) {
+          return
+        }
+        delivered = true
+        takePendingPRCommentAiAck(resolution)
+        if (pendingCommentResolutionRef.current === resolution) {
+          pendingCommentResolutionRef.current = null
+        }
+        if (claimedCommentResolutionRef.current === resolution) {
+          claimedCommentResolutionRef.current = null
+        }
+        commentResolutionLaunchAcceptedRef.current = false
+        setCommentResolutionAckBusyNow(true)
+        void resolveSelectedThreadsAfterLaunch(resolution)
+          .catch((err) => {
+            console.warn('Failed to acknowledge selected review comments after AI launch:', err)
+            toast.error(
+              translate(
+                'auto.components.right.sidebar.ChecksPanel.495b2f8c4b',
+                'Started the agent, but could not resolve or reply on the selected comments.'
+              )
+            )
+          })
+          .finally(() => setCommentResolutionAckBusyNow(false))
+      }
     }
-    claimedCommentResolutionRef.current = pendingResolution
-    commentResolutionLaunchAcceptedRef.current = true
-    setCommentResolutionAckBusyNow(true)
-  }, [
-    setCommentResolutionAckBusyNow,
-    claimedCommentResolutionRef,
-    pendingCommentResolutionRef,
-    commentResolutionLaunchAcceptedRef
-  ])
-
-  /** Launch failed after the tab existed: hand the payload back for a retry, post nothing. */
-  const releaseClaimedCommentResolutionAfterFailedLaunch = useCallback((): void => {
-    const claimed = claimedCommentResolutionRef.current
-    claimedCommentResolutionRef.current = null
-    commentResolutionLaunchAcceptedRef.current = false
-    if (claimed) {
-      pendingCommentResolutionRef.current = claimed
-      setPendingPRCommentAiAck(claimed)
-    }
-    setCommentResolutionAckBusyNow(false)
-  }, [
-    setCommentResolutionAckBusyNow,
-    claimedCommentResolutionRef,
-    pendingCommentResolutionRef,
-    commentResolutionLaunchAcceptedRef
-  ])
-
-  /** Prompt reached the agent: only now may Orca write to the host. */
-  const consumeClaimedCommentResolutionAfterDelivery = useCallback((): void => {
-    const resolution =
-      claimedCommentResolutionRef.current ??
-      takePendingPRCommentAiAck() ??
-      pendingCommentResolutionRef.current
-    claimedCommentResolutionRef.current = null
-    pendingCommentResolutionRef.current = null
-    commentResolutionLaunchAcceptedRef.current = false
-    if (!resolution) {
-      setCommentResolutionAckBusyNow(false)
-      return
-    }
-    setCommentResolutionAckBusyNow(true)
-    void resolveSelectedThreadsAfterLaunch(resolution)
-      .catch((err) => {
-        console.warn('Failed to resolve/reply on selected review comments after AI launch:', err)
-        toast.error(
-          translate(
-            'auto.components.right.sidebar.ChecksPanel.495b2f8c4b',
-            'Started the agent, but could not resolve or reply on the selected comments.'
-          )
-        )
-      })
-      .finally(() => setCommentResolutionAckBusyNow(false))
-  }, [
-    resolveSelectedThreadsAfterLaunch,
-    setCommentResolutionAckBusyNow,
-    claimedCommentResolutionRef,
-    pendingCommentResolutionRef,
-    commentResolutionLaunchAcceptedRef
-  ])
-  // Auto-start may capture stale callbacks; invoke the latest consumer.
-  const consumeClaimedCommentResolutionAfterDeliveryRef = useRef(
-    consumeClaimedCommentResolutionAfterDelivery
-  )
-  const claimPendingCommentResolutionForLaunchRef = useRef(claimPendingCommentResolutionForLaunch)
-  const releaseClaimedCommentResolutionAfterFailedLaunchRef = useRef(
-    releaseClaimedCommentResolutionAfterFailedLaunch
-  )
-  useEffect(() => {
-    consumeClaimedCommentResolutionAfterDeliveryRef.current =
-      consumeClaimedCommentResolutionAfterDelivery
-    claimPendingCommentResolutionForLaunchRef.current = claimPendingCommentResolutionForLaunch
-    releaseClaimedCommentResolutionAfterFailedLaunchRef.current =
-      releaseClaimedCommentResolutionAfterFailedLaunch
-  }, [
-    consumeClaimedCommentResolutionAfterDelivery,
-    claimPendingCommentResolutionForLaunch,
-    releaseClaimedCommentResolutionAfterFailedLaunch
-  ])
-  const handleLaunchAccepted = useCallback((): void => {
-    claimPendingCommentResolutionForLaunchRef.current()
-  }, [])
-  const handleLaunchAborted = useCallback((): void => {
-    releaseClaimedCommentResolutionAfterFailedLaunchRef.current()
-  }, [])
+  }
   return {
     clearSentCommentSelection,
     refreshCommentsAfterBulkResolve,
     resolveSelectedThreadsAfterLaunch,
-    handleLaunchAccepted,
-    handleLaunchAborted,
-    consumeClaimedCommentResolutionAfterDeliveryRef
+    commentLaunchCallbacks
   }
 }
 

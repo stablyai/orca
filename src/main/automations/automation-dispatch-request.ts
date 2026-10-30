@@ -1,6 +1,11 @@
+import { failedPrecheckResult, runAutomationPrecheck } from './precheck-runner'
 import type { WebContents } from 'electron'
 import { isDeepStrictEqual } from 'node:util'
-import type { Automation, AutomationRun } from '../../shared/automations-types'
+import type {
+  Automation,
+  AutomationRun,
+  AutomationPrecheckResult
+} from '../../shared/automations-types'
 import { getRepoExecutionHostId } from '../../shared/execution-host'
 import type { Store } from '../persistence'
 import type { AutomationRunWriter } from './automation-run-writer'
@@ -13,10 +18,14 @@ import {
 import type { AutomationRunTargetResult } from './run-target-resolution'
 import { createAutomationDispatchToken } from './dispatch-tokens'
 import {
-  NO_DISPATCH_HOST,
   describeScheduledRefusal,
+  describeStoppedWslDistroRefusal,
   sendRendererDispatch
 } from './dispatch-refusal'
+import {
+  automationRunFailure,
+  type AutomationRunFailure
+} from '../../shared/automation-run-failure-copy'
 import { isOrcadFencedAutomation, ORCAD_FENCED_AUTOMATION } from './orcad-fenced-automation'
 import { AutomationDispatchCancelledError } from './automation-dispatch-cancelled-error'
 
@@ -33,6 +42,7 @@ type DispatchContext = Pick<
   isActive(): boolean
   getRenderer(): AutomationRendererChannel | null
   headlessDispatcher: HeadlessAutomationDispatcher | null
+  chatDispatcher?: HeadlessAutomationDispatcher | null
   resolveTarget(automation: Automation): AutomationRunTargetResult
 }
 
@@ -81,7 +91,7 @@ export async function requestAutomationDispatch(
   const resolveCurrentTarget = (): AutomationRunTargetResult => {
     const current = ctx.store.listAutomations().find((entry) => entry.id === automation.id)
     if (!current || !isDeepStrictEqual(expectedDefinition, definition(current))) {
-      return { ok: false, error: 'The automation changed before this run could launch.' }
+      return { ok: false, ...automationRunFailure('automationChanged') }
     }
     const target = ctx.resolveTarget(current)
     if (
@@ -89,19 +99,16 @@ export async function requestAutomationDispatch(
       expectedDestination &&
       !isDeepStrictEqual(expectedDestination, destination(target))
     ) {
-      return {
-        ok: false,
-        error: 'The automation destination changed before this run could launch.'
-      }
+      return { ok: false, ...automationRunFailure('destinationChanged') }
     }
     return target
   }
-  const refuse = (error: string) =>
+  const refuse = (failure: AutomationRunFailure) =>
     ctx.runs.updateRun({
       runId: run.id,
       status: 'skipped_unavailable',
       workspaceId: automation.workspaceId,
-      error
+      ...failure
     })
   const returnDurable = async (current: AutomationRun) => {
     await ctx.store.flushPendingOrThrowAsync({ drainToStableGeneration: false })
@@ -115,10 +122,19 @@ export async function requestAutomationDispatch(
   let target = resolveCurrentTarget()
   const refusal = describeScheduledRefusal({
     target,
-    canDispatch: Boolean(ctx.getRenderer() || ctx.headlessDispatcher)
+    canDispatch:
+      automation.surface === 'chat'
+        ? Boolean(ctx.chatDispatcher)
+        : Boolean(ctx.getRenderer() || ctx.headlessDispatcher)
   })
   if (refusal || !target.ok) {
-    return refuse(refusal ?? NO_DISPATCH_HOST)
+    return refuse(refusal ?? automationRunFailure('noDispatchHost'))
+  }
+  // The distro may have stopped since the tick decided; a manual run may start it.
+  const stopped =
+    run.trigger === 'scheduled' ? await describeStoppedWslDistroRefusal(ctx.store, target) : null
+  if (stopped) {
+    return refuse(stopped)
   }
   await ctx.runs.updateRun({
     runId: run.id,
@@ -135,9 +151,9 @@ export async function requestAutomationDispatch(
   // A WSL move can start while the durable claim is pending.
   const lateRefusal = describeScheduledRefusal({ target, canDispatch: true })
   if (lateRefusal || !target.ok) {
-    return refuse(lateRefusal ?? NO_DISPATCH_HOST)
+    return refuse(lateRefusal ?? automationRunFailure('noDispatchHost'))
   }
-  const renderer = ctx.getRenderer()
+  const renderer = automation.surface === 'chat' ? null : ctx.getRenderer()
   if (renderer) {
     return sendRendererDispatch(
       renderer,
@@ -150,9 +166,9 @@ export async function requestAutomationDispatch(
       run
     )
   }
-  const dispatcher = ctx.headlessDispatcher
+  const dispatcher = automation.surface === 'chat' ? ctx.chatDispatcher : ctx.headlessDispatcher
   if (!dispatcher) {
-    return refuse(NO_DISPATCH_HOST)
+    return refuse(automationRunFailure('noDispatchHost'))
   }
   return runHeadlessAutomationDispatch({
     ...ctx,
@@ -177,5 +193,35 @@ export async function requestAutomationDispatch(
       }
       return dispatcher({ ...request, target: latestTarget })
     }
+  })
+}
+
+export async function runAutomationRequestPrecheck(
+  store: Store,
+  automationId: string,
+  runId: string,
+  resolveTarget: (automation: Automation) => AutomationRunTargetResult
+): Promise<AutomationPrecheckResult | null> {
+  const automation = store.listAutomations().find((entry) => entry.id === automationId)
+  if (!automation) {
+    throw new Error('Automation not found.')
+  }
+  const run = store.listAutomationRuns(automationId).find((entry) => entry.id === runId)
+  if (!run) {
+    throw new Error('Automation run not found.')
+  }
+  if (run.trigger !== 'scheduled' || !automation.precheck) {
+    return null
+  }
+  const target = resolveTarget(automation)
+  if (!target.ok) {
+    return failedPrecheckResult(automation.precheck, Date.now(), target.error)
+  }
+  return await runAutomationPrecheck({
+    precheck: automation.precheck,
+    target:
+      automation.executionTargetType === 'ssh'
+        ? { type: 'ssh', cwd: target.cwd, connectionId: automation.executionTargetId }
+        : { type: 'local', cwd: target.cwd }
   })
 }

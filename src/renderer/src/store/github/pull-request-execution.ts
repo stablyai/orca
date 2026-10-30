@@ -21,16 +21,19 @@ import { getRuntimeRepoTarget } from './repository-routing'
 import { applyCachedChecksStatus } from './pr-check-status-cache'
 import { isWslHostOffForForge, withForgeHostOffSkip } from './wsl-host-off-forge'
 import { cachedPRCandidateFields } from './pr-refresh-cached-candidate-fields'
+import { lookupPRForBranchOverIpc } from './pr-for-branch-ipc-fallback'
 import { setGitHubPRResultCaches, shouldPreserveExistingPRForFallbackMiss } from './pr-result-cache'
 import {
   findUniqueWorktreeById,
   findWorktreeById,
-  isStaleExactLinkedPRLookup,
+  isStaleExactLinkedPRLookup
+} from './worktree-refresh'
+import {
   shouldApplyBranchMismatchedLinkedPRClear,
   shouldApplyDivergedLinkedPRClear,
   shouldClearBranchMismatchedLinkedOpenPR,
   shouldClearDivergedLinkedMergedPR
-} from './worktree-refresh'
+} from '../../../../shared/github/linked-pr-staleness'
 export function startPullRequestLookup(args: {
   set: Parameters<StateCreator<AppState>>[0]
   get: Parameters<StateCreator<AppState>>[1]
@@ -117,20 +120,10 @@ export function startPullRequestLookup(args: {
               isSelected: options?.worktreeId === get().activeWorktreeId,
               ...cachedPRCandidateFields(cached)
             }
+            const reason = options?.reason ?? 'manual'
             const response = window.api.gh.refreshPRNow
-              ? await window.api.gh.refreshPRNow({
-                  candidate,
-                  reason: options?.reason ?? 'manual'
-                })
-              : await window.api.gh.prForBranch({
-                  repoPath,
-                  repoId,
-                  branch,
-                  linkedPRNumber,
-                  fallbackPRNumber,
-                  acceptMergedFallbackPR: fallbackPRNumber !== null && fallbackPRSource !== null,
-                  currentHeadOid: requestHeadOid
-                })
+              ? await window.api.gh.refreshPRNow({ candidate, reason })
+              : await lookupPRForBranchOverIpc(candidate, reason)
             return normalizeGitHubPRForBranchOutcome(response)
           })()
       const pr = outcome.kind === 'found' ? outcome.pr : null

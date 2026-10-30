@@ -83,7 +83,10 @@ describe('the check before each write of a launch prompt', () => {
 
     const cleared = guardHarness(['agent'])
     await cleared.guard.beforeWrite('pty-1')
+    const scheduled = Promise.resolve().then(() => cleared.guard.beforeWrite('pty-1'))
     cleared.guard.dispose()
+    await expect(scheduled).rejects.toThrow('request_aborted')
+    expect(cleared.runtime.subscribeToTerminalData).toHaveBeenCalledTimes(1)
     expect(cleared.unsubscribe).toHaveBeenCalledTimes(1)
   })
 })

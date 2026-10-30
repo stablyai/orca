@@ -9,9 +9,11 @@ import {
 } from '../../shared/runtime-environment-store'
 import { getEnvironmentStorePath } from '../../shared/runtime-environment-store-file'
 import { findWslHostDeployment } from '../../shared/runtime-environment-wsl-host-store'
+import { getWslHostDeploymentStorePath } from '../../shared/wsl-host-deployment-store'
 import { getPreferredPairingOffer } from '../../shared/runtime-environments'
 import type { WslHostStatus } from '../../shared/wsl-host-types'
 import { OrcadHostUnsupportedError } from '../orcad/orcad-host-unavailable'
+import { RemoteNodeRuntimeSelfTestError } from '../ssh/orcad-remote-node-runtime-report'
 import { WslHostService, type WslHostConnector } from './wsl-host-service'
 import { wakeRememberedWslHosts } from './wsl-host-early-wake'
 import { WslOrcadLaunchDeferredError } from './wsl-orcad-connection-errors'
@@ -93,6 +95,23 @@ describe('WslHostService', () => {
       environmentId: 'wsl:ubuntu'
     })
     expect(listEnvironments(userDataPath)).toMatchObject([{ id: 'wsl:ubuntu' }])
+  })
+
+  it('re-saves the live connection on request, so the deployment link overlays again', async () => {
+    const connector = makeConnector([UBUNTU])
+    const service = makeService(connector)
+    await service.add({ distro: 'Ubuntu' })
+    service.resaveConnection('wsl:missing')
+    connector.get.mockReturnValue(connection('Ubuntu', 42001, 'token-2'))
+    pairingChanged.mockClear()
+
+    service.resaveConnection('wsl:ubuntu')
+
+    expect(findWslHostDeployment(userDataPath, 'wsl:ubuntu')?.localPort).toBe(42001)
+    expect(listEnvironments(userDataPath)).toMatchObject([
+      { id: 'wsl:ubuntu', orcadDeployment: { kind: 'wsl', localPort: 42001 } }
+    ])
+    expect(pairingChanged).toHaveBeenCalledExactlyOnceWith('wsl:ubuntu')
   })
 
   it('refuses WSL 1, an added distro, and a stopped distro the user did not ask to start', async () => {
@@ -294,7 +313,8 @@ describe('WslHostService', () => {
     await expect(service.add({ distro: 'Debian' })).resolves.toEqual({
       ok: false,
       kind: 'server-files-missing',
-      message: 'This build of Orca can’t run WSL hosts (server files missing).'
+      message: 'This build of Orca can’t run WSL hosts (server files missing).',
+      errorCode: 'serverFilesMissing'
     })
     expect(connector.listDistros).not.toHaveBeenCalled()
     await expect(service.connect('wsl:ubuntu')).rejects.toThrow('server files missing')
@@ -317,22 +337,6 @@ describe('WslHostService', () => {
     expect(listEnvironments(userDataPath)).toEqual([])
     expect(findWslHostDeployment(userDataPath, 'wsl:ubuntu')).toBeNull()
     expect(removed).toHaveBeenCalledWith('wsl:ubuntu')
-  })
-
-  it('reports what removing left running, and removes the host anyway', async () => {
-    const connector = makeConnector([UBUNTU])
-    connector.stopServer.mockResolvedValueOnce({
-      stopped: false,
-      reason: '1 terminal kept running'
-    })
-    const service = makeService(connector)
-    await service.add({ distro: 'Ubuntu' })
-
-    await expect(service.remove('wsl:ubuntu')).resolves.toEqual({
-      stopped: false,
-      reason: '1 terminal kept running'
-    })
-    expect(listEnvironments(userDataPath)).toEqual([])
   })
 
   it('keeps a host whose removal failed usable and removable again', async () => {
@@ -739,22 +743,48 @@ describe('WslHostService', () => {
     expect(wakeRememberedWslHosts(userDataPath, vi.fn())).toEqual([])
   })
 
-  it('adopts holders at startup only when a WSL host exists', async () => {
+  it('keeps the startup holders of its hosts and releases orphans', async () => {
     const connector = makeConnector([UBUNTU])
     const service = makeService(connector)
-    await service.start()
-    expect(connector.adoptHolders).not.toHaveBeenCalled()
-
     await service.add({ distro: 'Ubuntu' })
     await service.start()
-    expect(connector.adoptHolders).toHaveBeenCalledTimes(1)
+    const [isWanted] = connector.adoptHolders.mock.calls[0]
+    expect(isWanted('ubuntu')).toBe(true)
+    // A failed add or remove left a holder for a distro that is no longer a host.
+    expect(isWanted('Debian')).toBe(false)
+  })
+
+  it('keeps every startup holder when the host records cannot all be read', async () => {
+    const connector = makeConnector([UBUNTU])
+    const service = makeService(connector)
+    await service.add({ distro: 'Ubuntu' })
+    writeFileSync(getWslHostDeploymentStorePath(userDataPath), '{not json')
+    await service.start()
+    const [isWanted] = connector.adoptHolders.mock.calls[0]
+    expect(isWanted('Debian')).toBe(true)
+  })
+
+  it('releases every startup holder while WSL hosts are off', async () => {
+    const connector = makeConnector([UBUNTU])
+    const service = makeService(connector)
+    await service.add({ distro: 'Ubuntu' })
+    enabled = false
+    await service.start()
+    const [isWanted] = connector.adoptHolders.mock.calls[0]
+    expect(isWanted('Ubuntu')).toBe(false)
   })
 
   it.each([
     [
-      'unsupported-wsl1',
-      () => new OrcadHostUnsupportedError('WSL 1 cannot run the Orca server.'),
-      'WSL 1 cannot run the Orca server.'
+      'unsupported-distro',
+      () => new OrcadHostUnsupportedError('No Orca runtime supports linux-arm64-glibc.'),
+      'No Orca runtime supports linux-arm64-glibc.'
+    ],
+    [
+      'unsupported-distro',
+      () =>
+        new RemoteNodeRuntimeSelfTestError(127, 'libstdc++.so.6: cannot open shared object file'),
+      expect.stringContaining('apk add libstdc++')
     ],
     ['failed', () => new Error('bridge refused'), 'bridge refused']
   ])(

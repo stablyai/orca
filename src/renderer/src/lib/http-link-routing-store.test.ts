@@ -8,8 +8,20 @@ import { FLOATING_TERMINAL_WORKTREE_ID, getDefaultSettings } from '../../../shar
 import { seedBrowserLinkTestStore, WORKSPACE, URL_TO_OPEN } from './browser-link-open.test-fixture'
 import { captureLinkOpenIntent } from './link-open-intent'
 import { openHttpLink } from './http-link-routing'
-import { openRoutedHttpLink } from './http-link-destinations'
+import { openAppHttpLink } from './app-http-link-open'
+import { httpLinkActionDestinationsFor, openRoutedHttpLink } from './http-link-destinations'
 import * as workspaceBrowserTabOpen from './workspace-browser-tab-open'
+import type { DocPreviewExternalLink } from '../../../shared/doc-preview-scheme'
+import { subscribeDocPreviewExternalLinkConfirmation } from '@/components/browser-pane/workspace-doc/doc-preview-external-link-confirmation'
+import { canNativeChatOpenOwnedBrowser } from '@/components/native-chat/native-chat-http-link-source-owner'
+import { canOfferHttpLinkGroupAction } from './http-link-in-group-availability'
+import { runtimeStatuses } from '@/store/slices/browser-slice-test-harness'
+
+const routeMocks = vi.hoisted(() => ({ remote: vi.fn(), error: vi.fn() }))
+vi.mock('@/runtime/web-runtime-browser-creation', () => ({
+  createWebRuntimeSessionBrowserTab: routeMocks.remote
+}))
+vi.mock('sonner', () => ({ toast: { error: routeMocks.error } }))
 
 const OTHER_WORKSPACE = 'repo1::/other'
 
@@ -19,6 +31,7 @@ vi.mock('@/components/browser-pane/host-guest/browser-focus', async (importOrigi
 }))
 
 beforeEach(() => {
+  useAppStore.setState({ createBrowserTab: useAppStore.getInitialState().createBrowserTab })
   createStoreCascadesMockApi()
   seedBrowserLinkTestStore(useAppStore)
   useAppStore.setState({
@@ -353,4 +366,193 @@ it('reuses an exact page for an HTTP link without source context', async () => {
     result: { browserWorkspaceId: browser.id, browserPageId: browser.activePageId }
   })
   expect(useAppStore.getState().browserTabsByWorktree[WORKSPACE]).toHaveLength(1)
+})
+
+it.each([
+  'old-runtime',
+  'ssh-global',
+  'ssh-target',
+  'client-fail',
+  'remote-false',
+  'remote-reject'
+] as const)(
+  'preserves legacy URL/provider outcomes through the registered preview route: %s',
+  async (mode) => {
+    const ssh = mode.startsWith('ssh')
+    const remote = mode.startsWith('remote')
+    const failed = remote || mode === 'client-fail'
+    const hostId = ssh ? 'ssh:source' : 'runtime:source'
+    for (const path of ['legacy', 'preview'] as const) {
+      useAppStore.setState({ createBrowserTab: useAppStore.getInitialState().createBrowserTab })
+      seedBrowserLinkTestStore(useAppStore)
+      useAppStore.setState((state) => ({
+        activeWorkspaceExecutionHostId: hostId,
+        worktreesByRepo: {
+          repo1: [makeWorktree({ id: WORKSPACE, repoId: 'repo1', path: '/repo', hostId })]
+        },
+        unifiedTabsByWorktree: {
+          [WORKSPACE]: state.unifiedTabsByWorktree[WORKSPACE]!.map((tab) => ({
+            ...tab,
+            executionHostId: hostId
+          }))
+        },
+        runtimeStatusByEnvironmentId: remote
+          ? new Map([['source', runtimeStatuses(['browser.screencast.v1']).get('env-1')!]])
+          : new Map(),
+        settings: {
+          ...getDefaultSettings('/home/test'),
+          openLinksInApp: true,
+          browserSshWorkspaceRoutingEnabled: mode !== 'ssh-global',
+          browserSshWorkspaceRoutingDisabledTargetIds: mode === 'ssh-target' ? ['source'] : []
+        }
+      }))
+      const owner = ssh
+        ? { kind: 'ssh' as const, connectionId: 'source' }
+        : { kind: 'runtime' as const, runtimeEnvironmentId: 'source' }
+      const sourceState = useAppStore.getState()
+      if (!remote) {
+        const state = sourceState
+        const available = canNativeChatOpenOwnedBrowser(state, WORKSPACE, owner)
+        expect(available).toBe(false)
+        expect(httpLinkActionDestinationsFor(state.settings, owner, available)).toEqual({
+          primary: 'system'
+        })
+        expect(
+          canOfferHttpLinkGroupAction(state, {
+            workspaceId: WORKSPACE,
+            sourceTabId: 'source',
+            sourceOwner: owner,
+            url: URL_TO_OPEN
+          })
+        ).toBe(false)
+      }
+      routeMocks.remote.mockReset()
+      routeMocks.error.mockClear()
+      if (mode === 'remote-reject') {
+        routeMocks.remote.mockRejectedValue(new Error('private provider error'))
+      } else {
+        routeMocks.remote.mockResolvedValue(false)
+      }
+      const preview = sourceState.createBrowserTab(WORKSPACE, 'https://example.com/source', {
+        activate: false,
+        executionHostId: hostId,
+        browserRuntimeEnvironmentId: null,
+        targetGroupId: 'a'
+      })
+      const create = vi.spyOn(useAppStore.getState(), 'createBrowserTab')
+      if (mode === 'client-fail') {
+        create.mockImplementationOnce(() => {
+          throw new Error('Cannot create browser tab')
+        })
+      }
+      if (path === 'legacy') {
+        const opening = sourceState.openBrowserProfileTabInActiveWorkspace(URL_TO_OPEN, null)
+        if (mode === 'client-fail') {
+          await expect(opening).rejects.toThrow('Cannot create browser tab')
+        } else {
+          expect(await opening).toBe(!remote)
+        }
+      } else {
+        const onExternalLink = vi.fn(
+          (_callback: (event: DocPreviewExternalLink) => void) => () => {}
+        )
+        vi.stubGlobal('window', { api: { ...window.api, docPreview: { onExternalLink } } })
+        const confirm = vi.fn(async () => true)
+        const dispose = subscribeDocPreviewExternalLinkConfirmation(confirm, {
+          grantId: 'grant',
+          worktreeId: WORKSPACE,
+          browserWorkspaceId: preview.id,
+          owner: ssh
+            ? { kind: 'ssh', connectionId: 'source' }
+            : {
+                kind: 'runtime',
+                environmentId: 'source',
+                worktreeSelector: `id:${WORKSPACE}`,
+                worktreeRoot: '/repo'
+              }
+        })
+        const completed = observeBrowserLinkOpen()
+        onExternalLink.mock.calls[0]?.[0]({ url: URL_TO_OPEN, grantId: 'grant' })
+        expect(await completed).toMatchObject({ status: failed ? 'failed' : 'opened' })
+        expect(
+          vi.mocked(workspaceBrowserTabOpen.openWorkspaceBrowserTabForLink).mock.calls[0]?.[0]
+            .linkContext.linkIntent
+        ).not.toBeNull()
+        if (failed) {
+          await vi.waitFor(() =>
+            expect(routeMocks.error).toHaveBeenCalledExactlyOnceWith('Unable to open URL.')
+          )
+        } else {
+          expect(routeMocks.error).not.toHaveBeenCalled()
+        }
+        expect(confirm).toHaveBeenCalledOnce()
+        dispose()
+      }
+      if (remote) {
+        expect(routeMocks.remote).toHaveBeenCalledExactlyOnceWith(
+          expect.objectContaining({
+            worktreeId: WORKSPACE,
+            environmentId: 'source',
+            url: URL_TO_OPEN
+          })
+        )
+        expect(create).not.toHaveBeenCalled()
+      } else if (!failed) {
+        expect(create).toHaveBeenCalledExactlyOnceWith(
+          WORKSPACE,
+          URL_TO_OPEN,
+          expect.objectContaining({ browserRuntimeEnvironmentId: null })
+        )
+        const state = useAppStore.getState()
+        expect(state.browserTabsByWorktree[WORKSPACE]).toHaveLength(2)
+        expect(
+          Object.values(state.browserPagesByWorkspace)
+            .flat()
+            .filter((page) => page.url === URL_TO_OPEN)
+        ).toEqual([expect.objectContaining({ url: URL_TO_OPEN })])
+        expect(
+          state.unifiedTabsByWorktree[WORKSPACE]!.find(
+            (tab) => tab.contentType === 'browser' && tab.entityId !== preview.id
+          )?.executionHostId
+        ).toBe(hostId)
+        expect(routeMocks.remote).not.toHaveBeenCalled()
+      }
+      vi.restoreAllMocks()
+    }
+  }
+)
+
+it('opens a link from Orca UI as a browser tab in the active workspace', async () => {
+  const openUrl = vi.fn()
+  vi.stubGlobal('window', { ...window, api: { ...window.api, shell: { openUrl } } })
+  const completed = observeBrowserLinkOpen()
+
+  openAppHttpLink(URL_TO_OPEN)
+
+  expect(await completed).toMatchObject({ status: 'opened' })
+  expect(useAppStore.getState().browserTabsByWorktree[WORKSPACE]).toHaveLength(1)
+  expect(openUrl).not.toHaveBeenCalled()
+})
+
+it('opens a link from Orca UI in the system browser when the workspace browser cannot open pages', () => {
+  const openUrl = vi.fn(() => Promise.resolve())
+  vi.stubGlobal('window', { ...window, api: { ...window.api, shell: { openUrl } } })
+  // A paired web client without browser streaming has no in-app browser.
+  vi.stubGlobal('__ORCA_WEB_CLIENT__', true)
+
+  openAppHttpLink(URL_TO_OPEN)
+
+  expect(openUrl).toHaveBeenCalledExactlyOnceWith(URL_TO_OPEN)
+  expect(useAppStore.getState().browserTabsByWorktree[WORKSPACE] ?? []).toHaveLength(0)
+})
+
+it('opens a link from Orca UI in the system browser on the escape modifier click', () => {
+  const openUrl = vi.fn(() => Promise.resolve())
+  vi.stubGlobal('window', { ...window, api: { ...window.api, shell: { openUrl } } })
+
+  // Shift plus both platform keys reads as the escape modifier on every OS.
+  openAppHttpLink(URL_TO_OPEN, { event: { shiftKey: true, metaKey: true, ctrlKey: true } })
+
+  expect(openUrl).toHaveBeenCalledExactlyOnceWith(URL_TO_OPEN)
+  expect(useAppStore.getState().browserTabsByWorktree[WORKSPACE] ?? []).toHaveLength(0)
 })

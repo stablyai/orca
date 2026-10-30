@@ -75,14 +75,13 @@ beforeEach(() => {
 })
 
 describe('openWorkspaceBrowserTab', () => {
-  it('opens client-owned searches with a safe title and host-specific profile', async () => {
+  it('opens client-owned searches with a safe title and the desktop default profile', async () => {
     const createBrowserTab = createBrowserTabMock()
     const sshHost = toSshExecutionHostId('ssh-target')
     mocks.state = {
       ...ownerState(sshHost),
       createBrowserTab,
-      defaultBrowserSessionProfileId: 'focused-profile',
-      defaultBrowserSessionProfileIdByHostId: { [sshHost]: 'ssh-profile' }
+      settings: { browserDefaultProfileIdByHostId: { local: 'local-profile' } }
     }
 
     expect(canOpenWorkspaceBrowserTabOnSsh(mocks.state as never, WORKSPACE_ID, 'ssh-target')).toBe(
@@ -105,7 +104,7 @@ describe('openWorkspaceBrowserTab', () => {
         browserRuntimeEnvironmentId: null,
         executionHostId: 'ssh:ssh-target',
         focusAddressBar: false,
-        sessionProfileId: 'ssh-profile',
+        sessionProfileId: 'local-profile',
         targetGroupId: 'group-1',
         title: 'Search Google'
       }
@@ -118,9 +117,7 @@ describe('openWorkspaceBrowserTab', () => {
     const sshHost = toSshExecutionHostId('ssh-target')
     mocks.state = {
       ...ownerState(sshHost),
-      createBrowserTab,
-      defaultBrowserSessionProfileId: 'focused-profile',
-      defaultBrowserSessionProfileIdByHostId: { [sshHost]: 'ssh-profile' }
+      createBrowserTab
     }
 
     await openWorkspaceBrowserTab({
@@ -144,9 +141,7 @@ describe('openWorkspaceBrowserTab', () => {
     mocks.state = {
       ...ownerState(sshHost),
       settings: { browserSshWorkspaceRoutingDisabledTargetIds: ['ssh-target'] },
-      createBrowserTab: createBrowserTabMock(),
-      defaultBrowserSessionProfileId: 'focused-profile',
-      defaultBrowserSessionProfileIdByHostId: { [sshHost]: 'ssh-profile' }
+      createBrowserTab: createBrowserTabMock()
     }
 
     expect(canOpenWorkspaceBrowserTabOnSsh(mocks.state as never, WORKSPACE_ID, 'ssh-target')).toBe(
@@ -171,9 +166,7 @@ describe('openWorkspaceBrowserTab', () => {
     mocks.state = {
       ...ownerState(toRuntimeExecutionHostId('hub-a')),
       ...browserCapableRuntime('hub-a'),
-      createBrowserTab,
-      defaultBrowserSessionProfileId: 'client-profile',
-      defaultBrowserSessionProfileIdByHostId: {}
+      createBrowserTab
     }
 
     expect(canOpenWorkspaceBrowserTabOnRuntime(mocks.state as never, WORKSPACE_ID, 'hub-a')).toBe(
@@ -205,9 +198,7 @@ describe('openWorkspaceBrowserTab', () => {
     mocks.state = {
       ...ownerState(toRuntimeExecutionHostId('hub-a')),
       ...browserCapableRuntime('hub-a'),
-      createBrowserTab: createBrowserTabMock(),
-      defaultBrowserSessionProfileId: 'client-profile',
-      defaultBrowserSessionProfileIdByHostId: {}
+      createBrowserTab: createBrowserTabMock()
     }
 
     await openWorkspaceBrowserTab({
@@ -234,9 +225,7 @@ describe('openWorkspaceBrowserTab', () => {
     mocks.state = {
       ...ownerState(toRuntimeExecutionHostId('hub-a')),
       ...browserCapableRuntime('hub-a'),
-      createBrowserTab,
-      defaultBrowserSessionProfileId: 'client-profile',
-      defaultBrowserSessionProfileIdByHostId: {}
+      createBrowserTab
     }
     await openWorkspaceBrowserTab({
       workspaceId: WORKSPACE_ID,
@@ -260,9 +249,7 @@ describe('openWorkspaceBrowserTab', () => {
     mocks.state = {
       ...ownerState(toRuntimeExecutionHostId('hub-a')),
       ...browserCapableRuntime('hub-a'),
-      createBrowserTab,
-      defaultBrowserSessionProfileId: 'client-profile',
-      defaultBrowserSessionProfileIdByHostId: {}
+      createBrowserTab
     }
     const policySpy = vi
       .spyOn(clientCreationActionPolicy, 'getClientCreationActionPolicy')
@@ -296,9 +283,7 @@ describe('openWorkspaceBrowserTab', () => {
     mocks.state = {
       ...ownerState(toRuntimeExecutionHostId('hub-a')),
       ...browserCapableRuntime('hub-a'),
-      createBrowserTab: createBrowserTabMock(),
-      defaultBrowserSessionProfileId: 'client-profile',
-      defaultBrowserSessionProfileIdByHostId: {}
+      createBrowserTab: createBrowserTabMock()
     }
 
     await openWorkspaceBrowserTab({
@@ -318,18 +303,14 @@ describe('openWorkspaceBrowserTab', () => {
     mocks.state = {
       ...ownerState(toRuntimeExecutionHostId('hub-a')),
       ...browserCapableRuntime('hub-a'),
-      createBrowserTab: createBrowserTabMock(),
-      defaultBrowserSessionProfileId: 'client-profile',
-      defaultBrowserSessionProfileIdByHostId: {}
+      createBrowserTab: createBrowserTabMock()
     }
     const paneRuntimeEnvironmentId = 'hub-a'
 
     mocks.state = {
       ...ownerState(toRuntimeExecutionHostId('hub-b')),
       ...browserCapableRuntime('hub-b'),
-      createBrowserTab: createBrowserTabMock(),
-      defaultBrowserSessionProfileId: 'client-profile',
-      defaultBrowserSessionProfileIdByHostId: {}
+      createBrowserTab: createBrowserTabMock()
     }
 
     await expect(
@@ -348,9 +329,7 @@ describe('openWorkspaceBrowserTab', () => {
     mocks.state = {
       ...ownerState(toRuntimeExecutionHostId('hub-a')),
       ...browserCapableRuntime('hub-a'),
-      createBrowserTab: createBrowserTabMock(),
-      defaultBrowserSessionProfileId: 'client-profile',
-      defaultBrowserSessionProfileIdByHostId: {}
+      createBrowserTab: createBrowserTabMock()
     }
 
     await expect(
@@ -370,9 +349,7 @@ describe('openWorkspaceBrowserTab', () => {
     mocks.state = {
       ...ownerState(sshHost, 'hub-a'),
       ...browserCapableRuntime('hub-a'),
-      createBrowserTab: createBrowserTabMock(),
-      defaultBrowserSessionProfileId: 'client-profile',
-      defaultBrowserSessionProfileIdByHostId: {}
+      createBrowserTab: createBrowserTabMock()
     }
 
     await openWorkspaceBrowserTab({
@@ -391,9 +368,7 @@ describe('openWorkspaceBrowserTab', () => {
   it('does not fall back to a client browser for an incapable asserted runtime', async () => {
     mocks.state = {
       ...ownerState(toRuntimeExecutionHostId('hub-a')),
-      createBrowserTab: createBrowserTabMock(),
-      defaultBrowserSessionProfileId: 'client-profile',
-      defaultBrowserSessionProfileIdByHostId: {}
+      createBrowserTab: createBrowserTabMock()
     }
 
     expect(canOpenWorkspaceBrowserTabOnRuntime(mocks.state as never, WORKSPACE_ID, 'hub-a')).toBe(
@@ -411,29 +386,59 @@ describe('openWorkspaceBrowserTab', () => {
     expect(mocks.state.createBrowserTab).not.toHaveBeenCalled()
   })
 
-  it('does not fall back to a client browser when asserted runtime creation fails', async () => {
-    mocks.state = {
-      ...ownerState(toRuntimeExecutionHostId('hub-a')),
-      ...browserCapableRuntime('hub-a'),
-      createBrowserTab: createBrowserTabMock(),
-      defaultBrowserSessionProfileId: 'client-profile',
-      defaultBrowserSessionProfileIdByHostId: {}
-    }
-    mocks.createRemote.mockResolvedValue(false)
-
-    await expect(
-      openWorkspaceBrowserTab({
+  it.each(['runtime', 'ssh'] as const)(
+    'rejects another owner for an opted-in %s preview client provider',
+    async (kind) => {
+      const hostId =
+        kind === 'runtime' ? toRuntimeExecutionHostId('source') : toSshExecutionHostId('source')
+      const createBrowserTab = createBrowserTabMock()
+      mocks.state = {
+        ...ownerState(hostId),
+        settings: { browserSshWorkspaceRoutingEnabled: false },
+        createBrowserTab
+      }
+      const request = {
         workspaceId: WORKSPACE_ID,
         url: 'https://example.com/',
-        intent: { kind: 'url' },
-        expectedRuntimeEnvironmentId: 'hub-a'
-      })
-    ).rejects.toThrow('Unable to open URL.')
-    expect(mocks.createRemote).toHaveBeenCalledWith(
-      expect.objectContaining({ environmentId: 'hub-a' })
-    )
-    expect(mocks.state.createBrowserTab).not.toHaveBeenCalled()
-  })
+        intent: { kind: 'url' as const },
+        allowClientBrowserFallback: true
+      }
+      const expectedOwner = (id: string) =>
+        kind === 'runtime' ? { expectedRuntimeEnvironmentId: id } : { expectedSshConnectionId: id }
+
+      await expect(
+        openWorkspaceBrowserTab({ ...request, ...expectedOwner('other') })
+      ).rejects.toThrow('Unable to open URL.')
+      expect(createBrowserTab).not.toHaveBeenCalled()
+      expect(mocks.createRemote).not.toHaveBeenCalled()
+    }
+  )
+
+  it.each([false, true])(
+    'does not fall back to a client browser when asserted runtime creation fails (client provider opt-in %s)',
+    async (allowClientBrowserFallback) => {
+      mocks.state = {
+        ...ownerState(toRuntimeExecutionHostId('hub-a')),
+        ...browserCapableRuntime('hub-a'),
+        createBrowserTab: createBrowserTabMock()
+      }
+      mocks.createRemote.mockResolvedValue(false)
+
+      await expect(
+        openWorkspaceBrowserTab({
+          workspaceId: WORKSPACE_ID,
+          url: 'https://example.com/',
+          intent: { kind: 'url' },
+          expectedRuntimeEnvironmentId: 'hub-a',
+          allowClientBrowserFallback
+        })
+      ).rejects.toThrow('Unable to open URL.')
+      expect(mocks.createRemote).toHaveBeenCalledWith(
+        expect.objectContaining({ environmentId: 'hub-a' })
+      )
+      expect(mocks.state.createBrowserTab).not.toHaveBeenCalled()
+    }
+  )
 
   it('does not route an asserted floating-terminal source to either runtime or local browser', async () => {
     const createBrowserTab = createBrowserTabMock()
@@ -441,9 +446,7 @@ describe('openWorkspaceBrowserTab', () => {
       activeWorktreeId: FLOATING_TERMINAL_WORKTREE_ID,
       activeWorkspaceExecutionHostId: toRuntimeExecutionHostId('hub-a'),
       ...browserCapableRuntime('hub-a'),
-      createBrowserTab,
-      defaultBrowserSessionProfileId: 'client-profile',
-      defaultBrowserSessionProfileIdByHostId: {}
+      createBrowserTab
     }
 
     expect(
@@ -472,9 +475,7 @@ describe('openWorkspaceBrowserTab', () => {
       activeWorktreeId: FLOATING_TERMINAL_WORKTREE_ID,
       activeWorkspaceExecutionHostId: toRuntimeExecutionHostId('hub-a'),
       ...browserCapableRuntime('hub-a'),
-      createBrowserTab: createBrowserTabMock(),
-      defaultBrowserSessionProfileId: 'client-profile',
-      defaultBrowserSessionProfileIdByHostId: {}
+      createBrowserTab: createBrowserTabMock()
     }
 
     expect(
@@ -501,9 +502,7 @@ describe('openWorkspaceBrowserTab', () => {
     const createBrowserTab = createBrowserTabMock()
     mocks.state = {
       ...ownerState(LOCAL_EXECUTION_HOST_ID),
-      createBrowserTab,
-      defaultBrowserSessionProfileId: 'focused-profile',
-      defaultBrowserSessionProfileIdByHostId: {}
+      createBrowserTab
     }
 
     for (const url of ['http://localhost:3000/', 'http://localhost:5173/app']) {
@@ -522,8 +521,7 @@ describe('openWorkspaceBrowserTab', () => {
     mocks.state = {
       ...ownerState(sshHost, 'hub-a'),
       createBrowserTab,
-      defaultBrowserSessionProfileId: 'focused-profile',
-      defaultBrowserSessionProfileIdByHostId: { local: 'local-profile', [sshHost]: 'ssh-profile' }
+      settings: { browserDefaultProfileIdByHostId: { local: 'local-profile' } }
     }
     mocks.createRemote.mockResolvedValue(false)
 
@@ -537,35 +535,43 @@ describe('openWorkspaceBrowserTab', () => {
     expect(createBrowserTab).toHaveBeenCalledWith(
       WORKSPACE_ID,
       'https://www.google.com/search?q=hooks',
-      expect.objectContaining({ sessionProfileId: 'ssh-profile', title: 'Search Google' })
+      expect.objectContaining({ sessionProfileId: 'local-profile', title: 'Search Google' })
     )
-  })
-
-  it('opens an asserted runtime link through desktop hosting without screencast support', async () => {
-    mocks.state = {
-      ...ownerState(toRuntimeExecutionHostId('hub-a')),
-      runtimeStatusByEnvironmentId: new Map([
-        ['hub-a', { status: { capabilities: [...BROWSER_CLIENT_HOSTING_RUNTIME_CAPABILITIES] } }]
-      ]),
-      createBrowserTab: vi.fn()
-    }
-
-    expect(canOpenWorkspaceBrowserTabOnRuntime(mocks.getState(), WORKSPACE_ID, 'hub-a')).toBe(true)
-    await openWorkspaceBrowserTab({
-      workspaceId: WORKSPACE_ID,
-      url: 'http://localhost:3000/',
-      intent: { kind: 'url' },
-      expectedRuntimeEnvironmentId: 'hub-a'
-    })
-
-    expect(mocks.createRemote).toHaveBeenCalledWith(
-      expect.objectContaining({ environmentId: 'hub-a', waitForRegistration: true })
-    )
-    expect(mocks.state.createBrowserTab).not.toHaveBeenCalled()
   })
 
   it.each([
-    ['desktop hosting is disabled', [...BROWSER_CLIENT_HOSTING_RUNTIME_CAPABILITIES], false, false],
+    ['desktop hosting is on', true],
+    ['the setting asks for server rendering', false]
+  ])(
+    'opens an asserted runtime link through desktop hosting without screencast support when %s',
+    async (_label, enabled) => {
+      mocks.state = {
+        ...ownerState(toRuntimeExecutionHostId('hub-a')),
+        settings: { browserClientHostedRemoteEnabled: enabled },
+        runtimeStatusByEnvironmentId: new Map([
+          ['hub-a', { status: { capabilities: [...BROWSER_CLIENT_HOSTING_RUNTIME_CAPABILITIES] } }]
+        ]),
+        createBrowserTab: vi.fn()
+      }
+
+      expect(canOpenWorkspaceBrowserTabOnRuntime(mocks.getState(), WORKSPACE_ID, 'hub-a')).toBe(
+        true
+      )
+      await openWorkspaceBrowserTab({
+        workspaceId: WORKSPACE_ID,
+        url: 'http://localhost:3000/',
+        intent: { kind: 'url' },
+        expectedRuntimeEnvironmentId: 'hub-a'
+      })
+
+      expect(mocks.createRemote).toHaveBeenCalledWith(
+        expect.objectContaining({ environmentId: 'hub-a', waitForRegistration: true })
+      )
+      expect(mocks.state.createBrowserTab).not.toHaveBeenCalled()
+    }
+  )
+
+  it.each([
     ['an older peer lacks capabilities', undefined, true, false],
     [
       'a peer lacks a hosting capability',
@@ -611,9 +617,7 @@ describe('openWorkspaceBrowserTab', () => {
     mocks.state = {
       ...ownerState(toRuntimeExecutionHostId('hub-a')),
       ...browserCapableRuntime('hub-a'),
-      createBrowserTab,
-      defaultBrowserSessionProfileId: 'client-profile',
-      defaultBrowserSessionProfileIdByHostId: {}
+      createBrowserTab
     }
     mocks.createRemote.mockRejectedValue(new Error('create outcome unknown'))
 
@@ -664,9 +668,7 @@ describe('openWorkspaceBrowserTab', () => {
     mocks.state = {
       ...ownerState(toRuntimeExecutionHostId('hub-a')),
       ...browserCapableRuntime('hub-a'),
-      createBrowserTab: createBrowserTabMock(),
-      defaultBrowserSessionProfileId: 'focused-profile',
-      defaultBrowserSessionProfileIdByHostId: { local: 'local-profile' }
+      createBrowserTab: createBrowserTabMock()
     }
     mocks.createRemote.mockResolvedValue(false)
     await expect(openWorkspaceBrowserTab(request)).rejects.toThrow('Unable to search with Kagi.')
@@ -687,9 +689,7 @@ describe('links from a managed server reached over SSH', () => {
         ['orcad-env', { status: { capabilities: [] }, checkedAt: 1 }]
       ]),
       settings,
-      createBrowserTab: createBrowserTabMock(),
-      defaultBrowserSessionProfileId: 'client-profile',
-      defaultBrowserSessionProfileIdByHostId: {}
+      createBrowserTab: createBrowserTabMock()
     }
   }
   const sshDeployment = {

@@ -38,14 +38,16 @@ export {
 export function formatTimeAgo(ts: number): string {
   const diff = Date.now() - ts
   if (diff < 60_000) {
-    return 'just now'
+    return translate('auto.components.status.bar.tooltip.justNow', 'just now')
   }
   const mins = Math.floor(diff / 60_000)
   if (mins < 60) {
-    return `${mins}m ago`
+    return translate('auto.components.status.bar.tooltip.minutesAgo', '{{minutes}}m ago', {
+      minutes: mins
+    })
   }
   const hours = Math.floor(mins / 60)
-  return `${hours}h ago`
+  return translate('auto.components.status.bar.tooltip.hoursAgo', '{{hours}}h ago', { hours })
 }
 
 // Preserve tooltip imports while sharing countdown formatting with mobile.
@@ -299,7 +301,11 @@ export function ProviderPanel({
     )
   }
 
-  const updatedAgo = p.updatedAt ? `Updated ${formatTimeAgo(p.updatedAt)}` : 'Not yet updated'
+  const updatedAgo = p.updatedAt
+    ? translate('auto.components.status.bar.tooltip.updatedAgo', 'Updated {{time}}', {
+        time: formatTimeAgo(p.updatedAt)
+      })
+    : translate('auto.components.status.bar.tooltip.notYetUpdated', 'Not yet updated')
   const resetCreditCount =
     showResetCredits && p.provider === 'codex'
       ? (p.rateLimitResetCredits?.availableCount ?? null)
@@ -319,16 +325,11 @@ export function ProviderPanel({
         <div className={faintClass}>{updatedAgo}</div>
         {resetCreditCount !== null && resetCreditCount !== undefined ? (
           <div className={mutedClass}>
-            {resetCreditCount === 1
-              ? translate(
-                  'auto.components.status.bar.tooltip.45198c7d95',
-                  '1 rate-limit reset available'
-                )
-              : translate(
-                  'auto.components.status.bar.tooltip.bce421cba3',
-                  '{{value0}} rate-limit resets available',
-                  { value0: resetCreditCount }
-                )}
+            {translate(
+              'auto.components.status.bar.tooltip.rateLimitResetsAvailable',
+              '{{count}} rate-limit resets available',
+              { count: resetCreditCount, defaultValue_one: '{{count}} rate-limit reset available' }
+            )}
           </div>
         ) : null}
         {resetCreditExpiry ? <div className={faintClass}>{resetCreditExpiry}</div> : null}

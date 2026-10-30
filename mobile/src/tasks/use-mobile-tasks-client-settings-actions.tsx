@@ -2,7 +2,7 @@ import type { ProjectRepositoryResolutionModel } from './use-mobile-tasks-projec
 import {
   type GitHubProjectSettings,
   type TaskProvider,
-  trustedOrcaHooksWithSetupApproval,
+  persistSetupHookTrustApproval,
   useCallback,
   useLayoutEffect,
   useState
@@ -183,14 +183,15 @@ export function useMobileTasksClientSettingsActions(model: ProjectRepositoryReso
       if (!client) {
         return
       }
-      const next = trustedOrcaHooksWithSetupApproval({
-        trust: trustedOrcaHooks,
-        repoId,
-        contentHash,
-        alwaysTrust
-      })
-      taskUiStateWrite.interpret(await taskUiStateWrite.request(client, { trustedOrcaHooks: next }))
-      setTrustedOrcaHooks(next)
+      setTrustedOrcaHooks(
+        await persistSetupHookTrustApproval({
+          client,
+          trust: trustedOrcaHooks,
+          repoId,
+          contentHash,
+          alwaysTrust
+        })
+      )
     },
     [client, trustedOrcaHooks]
   )

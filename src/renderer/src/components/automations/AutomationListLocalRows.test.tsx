@@ -15,6 +15,7 @@ import type { ExternalAutomationScope } from './external-automation-scope-client
 import { AutomationListLocalRows } from './AutomationListLocalRows'
 import { AutomationListExternalRows } from './AutomationListExternalRows'
 import { indexLatestAutomationRuns } from './automation-list-last-run'
+import { useAppStore } from '@/store'
 
 // Why: Tooltip needs a provider in the app; stub so rows render standalone.
 vi.mock('@/components/ui/tooltip', () => ({
@@ -203,6 +204,34 @@ describe('Automation list row selection', () => {
   it('shows last-run status and relative time', () => {
     renderLocalRows({ onSelect: vi.fn(), runs: [makeRun()] })
     expect(screen.getByText('Failed 8h ago')).toBeTruthy()
+  })
+
+  // A moved project's local copy stays as it was for undo, but the host runs it now.
+  it("says a moved project's automation runs on the WSL host, not here", () => {
+    useAppStore.setState({
+      wslMovedProjects: [
+        {
+          kind: 'repo',
+          id: 'repo-1',
+          displayName: 'Repo 1',
+          path: '\\\\wsl.localhost\\Ubuntu\\r',
+          distro: 'Ubuntu'
+        }
+      ]
+    })
+    try {
+      renderLocalRows({ onSelect: vi.fn() })
+      expect(screen.getByText('Runs on the Ubuntu host')).toBeTruthy()
+      expect(screen.queryByText('Enabled')).toBeNull()
+    } finally {
+      useAppStore.setState({ wslMovedProjects: [] })
+    }
+  })
+
+  it('shows an ordinary local automation as enabled', () => {
+    renderLocalRows({ onSelect: vi.fn() })
+    expect(screen.getByText('Enabled')).toBeTruthy()
+    expect(screen.queryByText(/Runs on the .* host/)).toBeNull()
   })
 
   it('still selects when the local row itself is clicked', async () => {

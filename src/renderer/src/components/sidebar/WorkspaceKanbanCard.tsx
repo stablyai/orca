@@ -6,6 +6,7 @@ import type { WorkspaceStatus, Worktree } from '../../../../shared/worktree/type
 import { getWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
 import WorktreeCard from './WorktreeCard'
 import { translate } from '@/i18n/i18n'
+import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 
 type WorkspaceKanbanCardProps = {
   worktree: Worktree
@@ -38,6 +39,7 @@ function WorkspaceKanbanCard({
   onContextMenuSelect,
   onAssignWorkspaceStatus
 }: WorkspaceKanbanCardProps): React.JSX.Element {
+  useUiLanguageRevision()
   const worktreeIdentity = getWorktreeHostIdentity(worktree)
   const contextWorktrees =
     isSelected && selectedWorktrees && selectedWorktrees.length > 0 ? selectedWorktrees : undefined

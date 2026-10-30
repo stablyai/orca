@@ -5,6 +5,7 @@ import type { OrcadDecommissionResult } from '../../shared/orcad-decommission'
 import { ORCAD_MANAGED_REMOTE_PORT } from '../../shared/orcad-managed-runtime'
 import type { OrcadTerminalCensus } from '../../shared/orcad-terminal-census'
 import type { RuntimeTerminalListResult } from '../../shared/runtime-terminal-contracts'
+import { wslHostServerStopReason } from '../../shared/wsl-host-failure-copy'
 import type { WslHostServerStop } from '../../shared/wsl-host-types'
 import type { OrcadHostTransport } from '../ssh/orcad-host-transport'
 import { readRemoteOrcadManagedStopTarget } from '../managed-server/lifecycle/orcad-managed-remote-stop'
@@ -12,6 +13,7 @@ import { managedOrcadSlot } from '../managed-server/lifecycle/orcad-managed-runt
 import { resolveOrcadRemoteContext } from '../managed-server/install/orcad-remote-context'
 import { decommissionRemoteOrcad } from '../managed-server/install/orcad-remote-decommission'
 import type { WslOrcadHostTarget } from './wsl-orcad-host-target'
+import { readWslHostPeerDesktops, type WslHostPeerDesktops } from './wsl-host-peer-desktops'
 
 const CENSUS_ATTEMPTS = 20
 const CENSUS_INTERVAL_MS = 250
@@ -20,6 +22,8 @@ const CENSUS_INTERVAL_MS = 250
 export type WslHostTerminalLeftover = { handle: string; worktreeId: string; reason: string }
 
 export type WslHostServerStopSteps = {
+  /** Which other desktops share this server; throws when it can't say. */
+  peerDesktops: () => Promise<WslHostPeerDesktops>
   /** Closes every terminal orcad runs; returns the ones that refused instead of stopping. */
   endTerminals: () => Promise<WslHostTerminalLeftover[]>
   census: () => Promise<OrcadTerminalCensus>
@@ -43,6 +47,29 @@ function describeLeftovers(leftovers: readonly WslHostTerminalLeftover[]): strin
 export async function stopWslHostServer(steps: WslHostServerStopSteps): Promise<WslHostServerStop> {
   const sleep = steps.sleep ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms)))
   const problems: string[] = []
+  // Anything proven still running makes the stop `live`; only doubt leaves it `unverifiable`.
+  let provenLive = false
+  // Another Orca using this server keeps it: only this desktop lets go (R39).
+  let peers: WslHostPeerDesktops
+  try {
+    peers = await steps.peerDesktops()
+  } catch (error) {
+    await steps.closeBridge()
+    return {
+      stopped: false,
+      verdict: 'unverifiable',
+      ...wslHostServerStopReason('peerCheckFailed', { detail: errorMessage(error) })
+    }
+  }
+  if (peers.kind === 'shared') {
+    await steps.closeBridge()
+    return { stopped: true, keptForOtherDesktops: peers.names }
+  }
+  if (peers.kind === 'unsupported') {
+    console.warn(
+      '[wsl-hosts] This WSL host’s server predates the shared-host check; removing it ends its terminals for every Orca using it.'
+    )
+  }
   let leftovers: WslHostTerminalLeftover[] = []
   try {
     leftovers = await steps.endTerminals()
@@ -58,7 +85,11 @@ export async function stopWslHostServer(steps: WslHostServerStopSteps): Promise<
   const servingRuntimeId = await steps.servingRuntimeId().catch(() => null)
   await steps.closeBridge()
   if (leftovers.length > 0) {
+    provenLive = true
     problems.push(`Terminals that refused to close: ${describeLeftovers(leftovers)}`)
+  }
+  if (census.liveSessions !== null && census.liveSessions > 0) {
+    provenLive = true
   }
   if (census.liveSessions !== 0) {
     problems.push(
@@ -70,11 +101,19 @@ export async function stopWslHostServer(steps: WslHostServerStopSteps): Promise<
   // Decommission still verifies/refuses live sessions; retain its evidence.
   const result = await steps.decommission(census, servingRuntimeId)
   if (result.outcome === 'refused') {
+    provenLive ||= result.verdict === 'live'
     problems.push(`Orca’s server kept running: ${result.reason}`)
   } else if (result.retirement !== 'retired') {
+    provenLive ||= result.retirement === 'live'
     problems.push('Orca’s server stopped, but its terminal daemon is still running.')
   }
-  return problems.length === 0 ? { stopped: true } : { stopped: false, reason: problems.join(' ') }
+  return problems.length === 0
+    ? { stopped: true }
+    : {
+        stopped: false,
+        reason: problems.join(' '),
+        verdict: provenLive ? 'live' : 'unverifiable'
+      }
 }
 
 /** Use saved environment pairing and routed RPC for removal, never the bridge's raw pairing offer. */
@@ -97,8 +136,10 @@ const RuntimeIdSchema = z.object({ runtimeId: z.string().min(1) })
 export function wslHostRuntimeStopSteps(
   access: WslHostRuntimeAccess,
   environmentId: string
-): Pick<WslHostServerStopSteps, 'endTerminals' | 'census' | 'servingRuntimeId'> {
+): Pick<WslHostServerStopSteps, 'peerDesktops' | 'endTerminals' | 'census' | 'servingRuntimeId'> {
   return {
+    peerDesktops: () =>
+      readWslHostPeerDesktops((method, params) => access.call(environmentId, method, params)),
     endTerminals: async () => {
       const list = TerminalHandlesSchema.parse(
         await access.call(environmentId, 'terminal.list', { limit: 1000 })

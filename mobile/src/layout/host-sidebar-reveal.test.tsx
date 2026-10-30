@@ -61,6 +61,10 @@ vi.mock('../navigation/host-stack', () => ({
   HostStack: () => createElement(MobileSessionHeader, { controller: headerController() })
 }))
 vi.mock('../components/MobileAgentIcon', () => ({ MobileAgentIcon: () => null }))
+vi.mock('./use-top-chrome-space', () => ({ useTopChromeSpace: () => ({}) }))
+vi.mock('../session/MobileSessionHeaderMoreActionsSheet', () => ({
+  MobileSessionHeaderMoreActionsSheet: () => null
+}))
 vi.mock('../platform/haptics', () => ({ triggerMediumImpact: () => {} }))
 vi.mock('../transport/host-client-hooks', () => ({
   useDisconnectHostClient: vi.fn(),

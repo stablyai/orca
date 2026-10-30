@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
-import { spawnMock } from '../pty-ipc-mock-registry'
-import { setupPtyIpcSuite } from '../pty-ipc-test-harness'
+import { EventEmitter } from 'node:events'
+import { spawnMock } from './pty-ipc-mock-registry'
+import { setupPtyIpcSuite } from './pty-ipc-test-harness'
 import { makePaneKey } from '../../../shared/stable-pane-id'
 import type * as WslManagedCliModule from '../../cli/wsl-managed-cli'
 import { registerPtyHandlers } from './register-handlers'
@@ -8,33 +9,33 @@ import { clearProviderPtyState } from './provider/state-cleanup'
 import { hasPendingRendererSerializerForPaneKey } from './pane/serializer-state'
 import { setLocalPtyProvider } from './provider/registry'
 
-vi.mock('electron', () => import('../pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
-vi.mock('fs', () => import('../pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
-vi.mock('node-pty', () => import('../pty-ipc-mock-registry').then((m) => m.nodePtyModuleMock()))
+vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
+vi.mock('fs', () => import('./pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
+vi.mock('node-pty', () => import('./pty-ipc-mock-registry').then((m) => m.nodePtyModuleMock()))
 vi.mock('node:child_process', async (importOriginal) =>
-  (await import('../pty-ipc-mock-registry')).childProcessModuleMock(await importOriginal())
+  (await import('./pty-ipc-mock-registry')).childProcessModuleMock(await importOriginal())
 )
 vi.mock('../../opencode/hook-service', () =>
-  import('../pty-ipc-mock-registry').then((m) => m.openCodeHookServiceModuleMock())
+  import('./pty-ipc-mock-registry').then((m) => m.openCodeHookServiceModuleMock())
 )
 vi.mock('../../mimo/hook-service', () =>
-  import('../pty-ipc-mock-registry').then((m) => m.mimoHookServiceModuleMock())
+  import('./pty-ipc-mock-registry').then((m) => m.mimoHookServiceModuleMock())
 )
 vi.mock('../../agent-hooks/server', () =>
-  import('../pty-ipc-mock-registry').then((m) => m.agentHookServerModuleMock())
+  import('./pty-ipc-mock-registry').then((m) => m.agentHookServerModuleMock())
 )
 vi.mock('../../pi/titlebar-extension-service', () =>
-  import('../pty-ipc-mock-registry').then((m) => m.piTitlebarExtensionModuleMock())
+  import('./pty-ipc-mock-registry').then((m) => m.piTitlebarExtensionModuleMock())
 )
-vi.mock('../../pwsh', () => import('../pty-ipc-mock-registry').then((m) => m.pwshModuleMock()))
+vi.mock('../../pwsh', () => import('./pty-ipc-mock-registry').then((m) => m.pwshModuleMock()))
 vi.mock('../../wsl', async (importOriginal) =>
-  (await import('../pty-ipc-mock-registry')).wslModuleMock(await importOriginal())
+  (await import('./pty-ipc-mock-registry')).wslModuleMock(await importOriginal())
 )
 vi.mock('../../telemetry/client', () =>
-  import('../pty-ipc-mock-registry').then((m) => m.telemetryClientModuleMock())
+  import('./pty-ipc-mock-registry').then((m) => m.telemetryClientModuleMock())
 )
 vi.mock('../../telemetry/classify-error', () =>
-  import('../pty-ipc-mock-registry').then((m) => m.classifyErrorModuleMock())
+  import('./pty-ipc-mock-registry').then((m) => m.classifyErrorModuleMock())
 )
 const managedWslCliDir = vi.hoisted(() =>
   vi.fn((): string | null => 'C:\\orca-user-data\\wsl-managed-cli\\hash')
@@ -44,19 +45,19 @@ vi.mock('../../cli/wsl-managed-cli', async (importOriginal) => ({
   getManagedWslCliDir: managedWslCliDir
 }))
 vi.mock('../../cli/linux-terminal-orca-cli-shim', () =>
-  import('../pty-ipc-mock-registry').then((m) => m.linuxCliShimModuleMock())
+  import('./pty-ipc-mock-registry').then((m) => m.linuxCliShimModuleMock())
 )
 vi.mock('../../memory/pty-registry', () =>
-  import('../pty-ipc-mock-registry').then((m) => m.ptyRegistryModuleMock())
+  import('./pty-ipc-mock-registry').then((m) => m.ptyRegistryModuleMock())
 )
 vi.mock('../../agent-hooks/migration-unsupported-pty-state', () =>
-  import('../pty-ipc-mock-registry').then((m) => m.migrationUnsupportedPtyModuleMock())
+  import('./pty-ipc-mock-registry').then((m) => m.migrationUnsupportedPtyModuleMock())
 )
 vi.mock('../../codex/codex-pane-account-registry', () =>
-  import('../pty-ipc-mock-registry').then((m) => m.codexPaneAccountRegistryModuleMock())
+  import('./pty-ipc-mock-registry').then((m) => m.codexPaneAccountRegistryModuleMock())
 )
 vi.mock('../../codex/codex-state-db-backfill-recovery', () =>
-  import('../pty-ipc-mock-registry').then((m) => m.codexBackfillRecoveryModuleMock())
+  import('./pty-ipc-mock-registry').then((m) => m.codexBackfillRecoveryModuleMock())
 )
 
 describe('registerPtyHandlers', () => {
@@ -216,22 +217,16 @@ describe('registerPtyHandlers', () => {
   it('clears pending pane serializer declarations when their renderer is destroyed', async () => {
     registerPtyHandlers(mainWindow as never)
     const paneKey = makePaneKey('tab-crash', '22222222-2222-4222-8222-222222222222')
-    const destroyedListeners: (() => void)[] = []
-    const sender = {
+    const sender = Object.assign(new EventEmitter(), {
       id: 42,
-      isDestroyed: () => false,
-      once: vi.fn((event: string, listener: () => void) => {
-        if (event === 'destroyed') {
-          destroyedListeners.push(listener)
-        }
-      })
-    }
+      isDestroyed: () => false
+    })
 
     await handlers.get('pty:declarePendingPaneSerializer')!({ sender }, { paneKey })
 
     expect(hasPendingRendererSerializerForPaneKey(paneKey)).toBe(true)
-    expect(destroyedListeners).toHaveLength(1)
-    destroyedListeners[0]()
+    expect(sender.listenerCount('destroyed')).toBe(1)
+    sender.emit('destroyed')
     expect(hasPendingRendererSerializerForPaneKey(paneKey)).toBe(false)
   })
   it('does not retain a serializer declaration from an already-destroyed renderer', async () => {

@@ -42,6 +42,19 @@ export function getContextualCopyLineRange(selection: IRange): {
   }
 }
 
+export function getRemoteUrlLineRange(
+  line: number,
+  selection: IRange | null
+): { line: number; endLine?: number } {
+  if (selection) {
+    const { startLine, endLine } = getContextualCopyLineRange(selection)
+    if (endLine > startLine && line >= startLine && line <= endLine) {
+      return { line: startLine, endLine }
+    }
+  }
+  return { line }
+}
+
 export function getInclusiveEndLine(selection: IRange): number {
   if (selection.startLineNumber === selection.endLineNumber) {
     return selection.endLineNumber

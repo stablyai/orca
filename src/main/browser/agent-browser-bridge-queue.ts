@@ -1,21 +1,28 @@
 import type { BrowserTabSwitchResult } from '../../shared/runtime-types'
 import { BrowserError } from './cdp-bridge'
-import { AgentBrowserBridgeShutdown } from './agent-browser-bridge-shutdown'
+import { AgentBrowserBridgeActionEffects } from './agent-browser-bridge-action-effects'
 import { ORCA_TAB_SESSION_PREFIX } from './agent-browser-orphan-sweep'
 import type {
   EnqueueTargetedCommandOptions,
   ResolvedBrowserCommandTarget
 } from './agent-browser-bridge-types'
 import { runWithRemoteCliPageAdmission } from './remote-cli-page-admission'
+import { runWithActionEffects } from './agent-browser-action-effects'
 import { AGENT_BROWSER_CLEANUP_TIMEOUT_MS } from './agent-browser-bridge-types'
 import { releaseHeldPageInput } from './guest-direct-key-input'
+import { onBrowserJavaScriptDialogOpened } from './browser-javascript-dialogs'
+import {
+  assertNoJavaScriptDialog,
+  dialogAnswerHint,
+  quoteDialogMessage
+} from './agent-browser-dialog-errors'
 import {
   captureRemoteCliBrowserRevocation,
   captureRemoteCliBrowserScope,
   runOutsideRemoteCliBrowserScope
 } from '../runtime/desktop-browser-bridge/remote-cli-browser-scope'
 
-export abstract class AgentBrowserBridgeQueue extends AgentBrowserBridgeShutdown {
+export abstract class AgentBrowserBridgeQueue extends AgentBrowserBridgeActionEffects {
   // Serialize tab switches behind commands targeting the current tab.
   async tabSwitch(
     index: number | undefined,
@@ -40,12 +47,9 @@ export abstract class AgentBrowserBridgeQueue extends AgentBrowserBridgeShutdown
         )
       }
       const [tabId, wcId] = liveEntries[switchedIndex]
-      this.activeWebContentsId = wcId
       const owningWorktreeId = worktreeId ?? this.browserManager.getWorktreeIdForTab(tabId)
       // Page-only switches must also update the owning workspace for later scoped commands.
-      if (owningWorktreeId) {
-        this.activeWebContentsPerWorktree.set(owningWorktreeId, wcId)
-      }
+      this.pointAgentAt(wcId, owningWorktreeId ?? undefined)
       this.options.onTabsChanged?.(owningWorktreeId ?? undefined)
       return { switched: switchedIndex, browserPageId: tabId }
     })
@@ -58,6 +62,19 @@ export abstract class AgentBrowserBridgeQueue extends AgentBrowserBridgeShutdown
     return this.enqueueTargetedCommand(worktreeId, undefined, execute)
   }
 
+  /** A command that acts on the page; an agent's gets the effects it caused added to its result. */
+  protected enqueuePageAction<T>(
+    worktreeId: string | undefined,
+    browserPageId: string | undefined,
+    execute: (sessionName: string, target: ResolvedBrowserCommandTarget) => Promise<T>,
+    options: EnqueueTargetedCommandOptions = {}
+  ): Promise<T> {
+    return this.enqueueTargetedCommand(worktreeId, browserPageId, execute, {
+      ...options,
+      reportEffects: options.reportEffects !== false
+    })
+  }
+
   protected async enqueueTargetedCommand<T>(
     worktreeId: string | undefined,
     browserPageId: string | undefined,
@@ -68,22 +85,36 @@ export abstract class AgentBrowserBridgeQueue extends AgentBrowserBridgeShutdown
     const assertNotRevoked = captureRemoteCliBrowserRevocation()
     const origin = captureRemoteCliBrowserScope()
     assertNotRevoked()
-    const { browserPageId: pageId } = this.resolveCommandTarget(
+    const { browserPageId: pageId, webContentsId } = this.resolveCommandTarget(
       worktreeId,
       browserPageId,
       options.requireScopedTarget
     )
+    if (!browserPageId && options.elements) {
+      this.assertRefsFromPage(pageId, options.elements)
+    }
+    // Fail before queueing: the turn ahead may be a command waiting on this very dialog.
+    assertNoJavaScriptDialog(webContentsId, pageId, assertNotRevoked)
     const sessionName = `${ORCA_TAB_SESSION_PREFIX}${pageId}`
     const agentCommand = this.browserManager.beginAgentCommand(pageId)
+    // Decided at enqueue: a queued command runs under the caller of the command ahead of it.
+    const reportEffects = options.reportEffects === true && agentCommand.agent
 
-    // Dropped commands never execute, so settling also ends the lease; ending twice is harmless.
+    // A dialog blocks the page until it is answered. A command still waiting never runs; one
+    // already running answers its caller now and keeps its turn until it ends, so nothing overtakes it.
+    let running = false
+    let interrupted = false
+    // A started command ends the lease when it finishes; a dropped one when it settles.
+    let started = false
+    let stopWatching = (): void => {}
     return new Promise<T>((resolve, reject) => {
       let queue = this.commandQueues.get(sessionName)
       if (!queue) {
         queue = []
         this.commandQueues.set(sessionName, queue)
       }
-      queue.push({
+      const pageQueue = queue
+      const entry = {
         execute: () => {
           assertNotRevoked()
           const run = (): Promise<T> =>
@@ -93,21 +124,77 @@ export abstract class AgentBrowserBridgeQueue extends AgentBrowserBridgeShutdown
               (session, target) => {
                 const gate = (): void => assertNotRevoked(target.webContentsId)
                 gate()
+                if (interrupted) {
+                  throw new BrowserError(
+                    'browser_dialog_opened',
+                    'A dialog interrupted this command'
+                  )
+                }
+                assertNoJavaScriptDialog(target.webContentsId, pageId, gate)
+                if (target.webContentsId !== webContentsId) {
+                  // The page got a replacement guest while this command waited.
+                  const stopWatchingQueued = stopWatching
+                  const stopWatchingTarget = watch(target.webContentsId)
+                  stopWatching = () => {
+                    stopWatchingQueued()
+                    stopWatchingTarget()
+                  }
+                }
+                running = true
+                const act = (): Promise<T> =>
+                  reportEffects
+                    ? runWithActionEffects(
+                        this.actionEffectsHost(worktreeId, pageId, session),
+                        () => execute(session, target)
+                      )
+                    : execute(session, target)
                 return origin.bridged
-                  ? this.runHostCommand(session, target.webContentsId, gate, origin, () =>
-                      execute(session, target)
-                    )
-                  : execute(session, target)
+                  ? this.runHostCommand(session, target.webContentsId, gate, origin, act)
+                  : act()
               },
               options
             )
-          return origin.run(() => agentCommand.run(run))
+          return origin.run(() => {
+            started = true
+            return agentCommand.run(run)
+          })
         },
         resolve: resolve as (value: unknown) => void,
         reject
-      })
+      }
+      const watch = (guestId: number): (() => void) =>
+        onBrowserJavaScriptDialogOpened(guestId, (dialog) => {
+          const waitingAt = pageQueue.indexOf(entry)
+          if (waitingAt !== -1) {
+            pageQueue.splice(waitingAt, 1)
+          }
+          interrupted = true
+          try {
+            assertNotRevoked(guestId)
+          } catch (error) {
+            reject(error)
+            return
+          }
+          const opened = `The page opened a JavaScript ${dialog.type}: ${quoteDialogMessage(dialog)}.`
+          const effect = running
+            ? "The command may already have taken effect, so don't repeat it."
+            : 'The command did not run.'
+          reject(
+            new BrowserError(
+              'browser_dialog_opened',
+              `${opened} ${effect} ${dialogAnswerHint(dialog, pageId)}.`
+            )
+          )
+        })
+      pageQueue.push(entry)
+      stopWatching = watch(webContentsId)
       this.processQueue(sessionName)
-    }).finally(agentCommand.end)
+    }).finally(() => {
+      stopWatching()
+      if (!started) {
+        agentCommand.end()
+      }
+    })
   }
 
   protected async executeQueuedCommand<T>(
@@ -120,10 +207,15 @@ export abstract class AgentBrowserBridgeQueue extends AgentBrowserBridgeShutdown
     const sessionName = `${ORCA_TAB_SESSION_PREFIX}${browserPageId}`
     // A queued page may acquire a replacement guest before execution.
     const target = this.resolveCommandTarget(worktreeId, browserPageId)
-    if (options.ensureSession !== false) {
-      await this.ensureSession(sessionName, browserPageId, target.webContentsId)
+    const releaseGuest = this.browserManager.holdGuestActive(target.webContentsId)
+    try {
+      if (options.ensureSession !== false) {
+        await this.ensureSession(sessionName, browserPageId, target.webContentsId)
+      }
+      return await execute(sessionName, target)
+    } finally {
+      releaseGuest()
     }
-    return execute(sessionName, target)
   }
 
   /** Revocation must stop every later step of a host command. */
@@ -162,7 +254,11 @@ export abstract class AgentBrowserBridgeQueue extends AgentBrowserBridgeShutdown
         queue = []
         this.commandQueues.set(sessionName, queue)
       }
-      queue.push({ execute: () => runOutsideRemoteCliBrowserScope(work), resolve, reject })
+      queue.push({
+        execute: () => runOutsideRemoteCliBrowserScope(work),
+        resolve,
+        reject
+      })
       void this.processQueue(sessionName)
     })
   }

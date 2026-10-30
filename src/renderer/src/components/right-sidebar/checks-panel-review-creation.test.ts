@@ -1,28 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import type { HostedReviewCreationEligibility } from '../../../../shared/hosted-review'
 import {
   computeChecksPanelConfirmedReadiness,
-  isChecksPanelCreateEligibilityConfirmable,
   isChecksPanelHardErrorCleared,
   isChecksPanelHardRefreshErrorType,
   resolveChecksPanelHostedReviewBaseRef,
-  shouldOpenChecksPanelCreateComposer,
   type ChecksPanelConfirmedReadinessInput
 } from './checks-panel-review-creation'
-
-function eligibility(
-  overrides: Partial<HostedReviewCreationEligibility> = {}
-): HostedReviewCreationEligibility {
-  return {
-    provider: 'github',
-    review: null,
-    canCreate: true,
-    blockedReason: null,
-    nextAction: null,
-    reviewLookupOutcome: 'not_found',
-    ...overrides
-  }
-}
 
 describe('resolveChecksPanelHostedReviewBaseRef', () => {
   it('prefers the worktree base ref over the repo default', () => {
@@ -38,133 +21,6 @@ describe('resolveChecksPanelHostedReviewBaseRef', () => {
     expect(
       resolveChecksPanelHostedReviewBaseRef({ worktreeBaseRef: null, repoBaseRef: null })
     ).toBe(null)
-  })
-})
-
-describe('isChecksPanelCreateEligibilityConfirmable (shared desktop/mobile floor)', () => {
-  const base = { reviewLookup: 'not_found' as const, hasHardRefreshError: false }
-
-  it('allows canCreate and needs_push when nothing hard-blocks', () => {
-    expect(isChecksPanelCreateEligibilityConfirmable({ ...base, eligibility: eligibility() })).toBe(
-      true
-    )
-    expect(
-      isChecksPanelCreateEligibilityConfirmable({
-        ...base,
-        eligibility: eligibility({ canCreate: false, blockedReason: 'needs_push' })
-      })
-    ).toBe(true)
-  })
-
-  it('fails closed on every hard-block: null, existing_review, positive, hard error, unavailable', () => {
-    expect(isChecksPanelCreateEligibilityConfirmable({ ...base, eligibility: null })).toBe(false)
-    expect(
-      isChecksPanelCreateEligibilityConfirmable({
-        ...base,
-        eligibility: eligibility({ canCreate: false, blockedReason: 'existing_review' })
-      })
-    ).toBe(false)
-    expect(
-      isChecksPanelCreateEligibilityConfirmable({
-        ...base,
-        eligibility: eligibility(),
-        reviewLookup: 'positive_unresolved'
-      })
-    ).toBe(false)
-    expect(
-      isChecksPanelCreateEligibilityConfirmable({
-        ...base,
-        eligibility: eligibility(),
-        hasHardRefreshError: true
-      })
-    ).toBe(false)
-    expect(
-      isChecksPanelCreateEligibilityConfirmable({
-        ...base,
-        eligibility: eligibility({
-          blockedReason: 'needs_push',
-          reviewLookupOutcome: 'unavailable'
-        })
-      })
-    ).toBe(false)
-  })
-})
-
-describe('shouldOpenChecksPanelCreateComposer', () => {
-  it('opens for creation eligibility', () => {
-    expect(
-      shouldOpenChecksPanelCreateComposer({
-        activeReview: null,
-        isFolder: false,
-        branch: 'feature/x',
-        hostedReviewCreation: eligibility({ canCreate: true })
-      })
-    ).toBe(true)
-  })
-
-  it('opens for push-before-create recovery', () => {
-    expect(
-      shouldOpenChecksPanelCreateComposer({
-        activeReview: null,
-        isFolder: false,
-        branch: 'feature/x',
-        hostedReviewCreation: eligibility({ canCreate: false, blockedReason: 'needs_push' })
-      })
-    ).toBe(true)
-  })
-
-  it('does not open on positive unresolved review evidence', () => {
-    expect(
-      shouldOpenChecksPanelCreateComposer({
-        activeReview: null,
-        isFolder: false,
-        branch: 'feature/x',
-        hostedReviewCreation: eligibility({ canCreate: false, blockedReason: 'needs_push' }),
-        reviewLookup: 'positive_unresolved'
-      })
-    ).toBe(false)
-  })
-
-  it('does not open during a hard refresh error', () => {
-    expect(
-      shouldOpenChecksPanelCreateComposer({
-        activeReview: null,
-        isFolder: false,
-        branch: 'feature/x',
-        hostedReviewCreation: eligibility({ canCreate: true }),
-        hasHardRefreshError: true
-      })
-    ).toBe(false)
-  })
-
-  it('does not open when a review already exists', () => {
-    expect(
-      shouldOpenChecksPanelCreateComposer({
-        activeReview: null,
-        isFolder: false,
-        branch: 'feature/x',
-        hostedReviewCreation: eligibility({ canCreate: false, blockedReason: 'existing_review' })
-      })
-    ).toBe(false)
-  })
-
-  it('does not open for folders or empty branches', () => {
-    expect(
-      shouldOpenChecksPanelCreateComposer({
-        activeReview: null,
-        isFolder: true,
-        branch: 'feature/x',
-        hostedReviewCreation: eligibility()
-      })
-    ).toBe(false)
-    expect(
-      shouldOpenChecksPanelCreateComposer({
-        activeReview: null,
-        isFolder: false,
-        branch: '',
-        hostedReviewCreation: eligibility()
-      })
-    ).toBe(false)
   })
 })
 

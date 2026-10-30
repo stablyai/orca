@@ -1,7 +1,8 @@
 import { useCallback, useMemo, useRef, useState } from 'react'
 import { View, Text, ScrollView, Pressable } from 'react-native'
-import { File, FileText, Globe, Plus, SquareTerminal } from 'lucide-react-native'
+import { File, FileText, Globe, Plus, SquareTerminal, Columns2 } from 'lucide-react-native'
 import { triggerMediumImpact } from '../platform/haptics'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { MobileAgentIcon } from '../components/MobileAgentIcon'
 import { AgentStateDot } from '../components/AgentStateDot'
 import { useNow } from '../hooks/use-now'
@@ -12,6 +13,7 @@ import {
   resolveMobileTerminalTabAgentId
 } from './mobile-terminal-tab-agent'
 import { colors } from '../theme/mobile-theme'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { MobileSessionHeaderIconButton } from './MobileSessionHeaderIconButton'
 import { QuickCommandsTabButton } from './QuickCommandsTabButton'
 import {
@@ -28,13 +30,16 @@ const DOUBLE_TAP_RENAME_MS = 300
 
 export function MobileSessionTabStrip({
   controller,
-  inTopBar
+  inTopBar,
+  actionsCollapsed = false
 }: {
   controller: MobileSessionController
   inTopBar: boolean
+  actionsCollapsed?: boolean
 }) {
+  useMobileColorScheme()
+  const t = useMobileTranslation()
   const {
-    connState,
     activeSessionTabId,
     activeSessionTabIdRef,
     tabStripRef,
@@ -42,14 +47,10 @@ export function MobileSessionTabStrip({
     tabStripViewportWidthRef,
     tabStripContentWidthRef,
     tabLayoutsRef,
-    creating,
-    creatingBrowser,
-    creatingMarkdown,
-    setCreateError,
-    setShowCreateTabDrawer,
-    setShowQuickCommands,
-    quickCommandsSupported,
-    showToast,
+    connState,
+    createTabBusy,
+    handleOpenNewTab,
+    handleOpenQuickCommands,
     scrollActiveTabIntoView,
     holdTabStripReveal,
     cancelHeldTabStripReveal,
@@ -58,6 +59,9 @@ export function MobileSessionTabStrip({
     setRenameTarget,
     activeHandleRef,
     visibleTabs,
+    canSplitTerminals,
+    terminalSplitActive,
+    setShowTerminalLayout,
     terminals
   } = controller
   const tabBarKeepsKeyboard = useKeyboardPersistingTaps('handled')
@@ -187,54 +191,61 @@ export function MobileSessionTabStrip({
             refreshHiddenTabs()
           }}
         >
-          {visibleTabs.map((t, index) => {
-            const tabState = tabStates.get(t.id)
-            const hostAgentIdentity = getMobileTerminalTabHostAgentIdentity(t, terminals)
-            const title = getMobileSessionTabTitle(t, hostAgentIdentity)
+          {visibleTabs.map((tab, index) => {
+            const tabState = tabStates.get(tab.id)
+            const hostAgentIdentity = getMobileTerminalTabHostAgentIdentity(tab, terminals)
+            const title = getMobileSessionTabTitle(tab, hostAgentIdentity)
             return (
               <Pressable
-                key={t.id}
+                key={tab.id}
                 style={[
                   styles.tab,
                   index === 0 && !inTopBar && styles.tabFirst,
-                  t.id === activeSessionTabId && styles.tabActive
+                  tab.id === activeSessionTabId && styles.tabActive
                 ]}
                 onLayout={(e) => {
                   const { x, width } = e.nativeEvent.layout
-                  tabLayoutsRef.current.set(t.id, { x, width })
-                  if (t.id === activeSessionTabIdRef.current) {
-                    scrollActiveTabIntoView(t.id, false)
+                  tabLayoutsRef.current.set(tab.id, { x, width })
+                  if (tab.id === activeSessionTabIdRef.current) {
+                    scrollActiveTabIntoView(tab.id, false)
                   }
                   refreshHiddenTabs()
                 }}
-                onPress={() => pressTab(t)}
+                onPress={() => pressTab(tab)}
                 accessibilityRole="tab"
                 accessibilityLabel={
-                  tabState && tabState !== 'idle' ? `${title}, ${agentStateLabel(tabState)}` : title
+                  tabState && tabState !== 'idle'
+                    ? t('session.tabStrip.tabStatus', '{{title}}, {{status}}', {
+                        title,
+                        status: agentStateLabel(tabState)
+                      })
+                    : title
                 }
-                accessibilityState={{ selected: t.id === activeSessionTabId }}
+                accessibilityState={{ selected: tab.id === activeSessionTabId }}
                 onLongPress={() => {
                   triggerMediumImpact()
-                  openSessionTabActionSheetAfterKeyboardDismiss(t)
+                  openSessionTabActionSheetAfterKeyboardDismiss(tab)
                 }}
                 delayLongPress={400}
               >
                 <View style={styles.tabLabelRow}>
                   {tabState && tabState !== 'idle' ? <AgentStateDot state={tabState} /> : null}
                   <View style={styles.tabIcon}>
-                    {t.type === 'browser' && (
+                    {tab.type === 'browser' && (
                       <Globe size={13} color={colors.textSecondary} strokeWidth={2.1} />
                     )}
-                    {t.type === 'markdown' && (
+                    {tab.type === 'markdown' && (
                       <FileText size={13} color={colors.textSecondary} strokeWidth={2.1} />
                     )}
-                    {t.type === 'file' && (
+                    {tab.type === 'file' && (
                       <File size={13} color={colors.textSecondary} strokeWidth={2.1} />
                     )}
-                    {t.type === 'agent-session' && <MobileAgentIcon agentId={t.agent} size={13} />}
-                    {t.type === 'terminal' &&
+                    {tab.type === 'agent-session' && (
+                      <MobileAgentIcon agentId={tab.agent} size={13} />
+                    )}
+                    {tab.type === 'terminal' &&
                       (() => {
-                        const agentId = resolveMobileTerminalTabAgentId(t, hostAgentIdentity)
+                        const agentId = resolveMobileTerminalTabAgentId(tab, hostAgentIdentity)
                         return agentId ? (
                           <MobileAgentIcon agentId={agentId} size={13} />
                         ) : (
@@ -247,7 +258,7 @@ export function MobileSessionTabStrip({
                       })()}
                   </View>
                   <Text
-                    style={[styles.tabText, t.id === activeSessionTabId && styles.tabTextActive]}
+                    style={[styles.tabText, tab.id === activeSessionTabId && styles.tabTextActive]}
                     numberOfLines={1}
                   >
                     {title}
@@ -268,32 +279,28 @@ export function MobileSessionTabStrip({
           </View>
         ) : null}
       </View>
-      {/* Why: pinned outside the scroll strip so the new-agent button stays reachable however far the tabs scroll. */}
-      <MobileSessionHeaderIconButton
-        disabled={creating || creatingBrowser || creatingMarkdown || connState !== 'connected'}
-        onPress={() => {
-          setCreateError('')
-          setShowCreateTabDrawer(true)
-        }}
-        accessibilityLabel="New tab"
-        icon={Plus}
-      />
-      {/* Why: stable placement matters, while old hosts must stay gated because they strip agentPrompt. */}
-      <QuickCommandsTabButton
-        disabled={creating || creatingBrowser || creatingMarkdown || connState !== 'connected'}
-        onPress={() => {
-          if (quickCommandsSupported === true) {
-            setShowQuickCommands(true)
-            return
-          }
-          showToast(
-            quickCommandsSupported === false
-              ? 'Desktop update required for quick commands'
-              : 'Checking desktop capabilities — try again in a moment',
-            1600
-          )
-        }}
-      />
+      {!actionsCollapsed && (canSplitTerminals || terminalSplitActive) && (
+        <MobileSessionHeaderIconButton
+          active={terminalSplitActive}
+          accessibilityLabel={t('session.tabStrip.terminalLayout', 'Terminal layout')}
+          icon={Columns2}
+          onPress={() => setShowTerminalLayout(true)}
+        />
+      )}
+      {!actionsCollapsed ? (
+        <>
+          <MobileSessionHeaderIconButton
+            disabled={createTabBusy || connState !== 'connected'}
+            onPress={handleOpenNewTab}
+            accessibilityLabel={t('session.tabStrip.newTab', 'New tab')}
+            icon={Plus}
+          />
+          <QuickCommandsTabButton
+            disabled={createTabBusy || connState !== 'connected'}
+            onPress={handleOpenQuickCommands}
+          />
+        </>
+      ) : null}
     </View>
   )
 }

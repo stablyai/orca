@@ -155,7 +155,8 @@ export class ConnectorPosts {
         `SELECT * FROM connector_posts p
          WHERE p.source = ? AND p.state IN ('queued', 'sending') AND p.next_at <= ?
            AND NOT EXISTS (SELECT 1 FROM connector_posts ahead
-             WHERE ahead.source = p.source AND ahead.container_id = p.container_id
+             WHERE ahead.source = p.source AND ahead.workspace_id = p.workspace_id
+               AND ahead.container_id = p.container_id
                AND ahead.state IN ('queued', 'sending')
                AND (ahead.queued_at < p.queued_at
                  OR (ahead.queued_at = p.queued_at AND ahead.post_id < p.post_id)))

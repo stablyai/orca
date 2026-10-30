@@ -204,12 +204,12 @@ export type NativeChatMessage = AgentJournalProducerLinkage & {
   id: string
   role: NativeChatRole
   blocks: NativeChatBlock[]
-  /** Epoch ms; null when unavailable (e.g. scrape), sorting before timestamps. */
+  /** Epoch ms; null when unavailable (e.g. scrape). */
   timestamp: number | null
   source: NativeChatSource
   /** Optional provider row cursor; split projections share it for whole-row paging. */
   transcriptOffset?: number
-  /** Display order when the provider's sequence differs from its stable paging cursor. */
+  /** Canonical display position: JSONL record byte start or database provider sequence, independent of clocks/cursors. */
   transcriptOrder?: number
   /** Model id that produced an assistant response, as the provider API names it. */
   model?: string
@@ -233,6 +233,8 @@ export type NativeChatMessage = AgentJournalProducerLinkage & {
   command?: { name: string }
   /** On a user-role message another agent sent through Orca: who, as the journal recorded it. */
   from?: AgentMessageSource
+  /** Projected creation fact, never a user turn or provider input. */
+  agentStart?: true
   /** Accepted but not yet handed to the agent: drawn after everything the agent has done. */
   queued?: true
   /** Unsent rows belong to no turn. Draw at journal position, or after the conversation when unplaced. */

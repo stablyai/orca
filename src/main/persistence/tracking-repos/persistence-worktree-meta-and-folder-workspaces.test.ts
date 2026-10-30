@@ -297,13 +297,13 @@ describe('Store', () => {
     ])
   })
 
-  it('persists the exact folder workspace path provided on create and update', async () => {
+  it('persists exact folder workspace paths without a group folder on create, update and reload', async () => {
     const store = await createStore()
     const group = store.createProjectGroup({
       name: 'Platform',
-      parentPath: '/workspace/platform',
-      createdFrom: 'folder-scan'
+      createdFrom: 'manual'
     })
+    expect(group.parentPath).toBeNull()
     const workspace = store.createFolderWorkspace({
       projectGroupId: group.id,
       folderPath: '/workspace/platform '

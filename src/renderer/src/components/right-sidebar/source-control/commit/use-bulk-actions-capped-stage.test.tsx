@@ -15,7 +15,7 @@ vi.mock('@/runtime/runtime-git-working-tree-client', () => ({
 }))
 
 import { useSourceControlBulkActions } from './use-bulk-actions'
-import type { SourceControlEntryGroups } from '../listing/section-order'
+import type { SourceControlEntryGroups } from '../../../../../../shared/source-control-section-order'
 
 function entry(path: string, area: GitStatusEntry['area']): GitStatusEntry {
   return { path, status: area === 'untracked' ? 'untracked' : 'modified', area }

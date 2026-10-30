@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { Terminal } from '@xterm/headless'
+import { CONPTY_DA1_RESPONSE } from '../../../../shared/conpty-device-attributes'
 import {
-  CONPTY_DA1_RESPONSE,
   DEFAULT_DA1_RESPONSE,
   createTerminalPixelSizeQueryResponder,
   installTerminalCapabilityReplyHandlers,

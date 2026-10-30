@@ -1,3 +1,5 @@
+import { jiraCredentialStorageCopy } from './jira-credential-storage-copy'
+import { taskProviderErrorMessage, taskProviderErrorText } from '@/lib/task-provider-error-copy'
 import { useId, useLayoutEffect, useState } from 'react'
 import { LoaderCircle, Lock } from 'lucide-react'
 import { useAppStore } from '@/store'
@@ -90,9 +92,7 @@ export function JiraConnectDialog({
     (!requiresIdentity || Boolean(email.trim())) &&
     Boolean(apiToken.trim()) &&
     connectState !== 'connecting'
-  const credentialStorageCopy = remoteRuntime
-    ? 'Your token is sent to the selected remote runtime and stored there with runtime-supported encryption.'
-    : 'Your token is stored locally and encrypted when local runtime storage supports it.'
+  const credentialStorageCopy = jiraCredentialStorageCopy(remoteRuntime)
 
   const clearErrorOnEdit = (): void => {
     if (connectState === 'error') {
@@ -155,11 +155,15 @@ export function JiraConnectDialog({
         return
       }
       setConnectState('error')
-      setConnectError(result.error)
+      setConnectError(taskProviderErrorMessage(result))
     } catch (error) {
       if (mountedRef.current) {
         setConnectState('error')
-        setConnectError(error instanceof Error ? error.message : 'Connection failed')
+        setConnectError(
+          error instanceof Error
+            ? taskProviderErrorText(error.message)
+            : translate('taskProviders.jira.connectionFailed', 'Connection failed')
+        )
       }
     }
   }

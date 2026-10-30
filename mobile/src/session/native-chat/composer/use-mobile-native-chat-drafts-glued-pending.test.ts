@@ -4,9 +4,12 @@ import { afterEach, describe, expect, it } from 'vitest'
 import type { NativeChatMessage } from '../../../../../src/shared/native-chat-types'
 import { buildMobileNativeChatTransientData } from '../../mobile-native-chat-render-data'
 import { useMobileNativeChatDrafts } from './use-mobile-native-chat-drafts'
-import { resetMobileNativeChatDraftStoreForTests } from './mobile-native-chat-draft-store'
+import {
+  resetMobileNativeChatDraftStoreForTests,
+  useMobileNativeChatDraft
+} from './mobile-native-chat-draft-store'
 
-type DraftState = ReturnType<typeof useMobileNativeChatDrafts>
+type DraftState = ReturnType<typeof useMobileNativeChatDrafts> & { composerText: string }
 type TestRenderer = {
   unmount(): void
   update(element: ReturnType<typeof createElement>): void
@@ -41,7 +44,6 @@ function renderedPendingTexts(
   state: DraftState | null
 ): (string | undefined)[] {
   const { data } = buildMobileNativeChatTransientData({
-    messages,
     folded: messages,
     streaming: null,
     pending: state?.pending ?? []
@@ -71,7 +73,7 @@ describe('useMobileNativeChatDrafts glued pending sends', () => {
     transcriptLoading?: boolean
     transcriptSettled?: boolean
   }): null {
-    state = useMobileNativeChatDrafts({
+    const drafts = useMobileNativeChatDrafts({
       hostId: 'host',
       worktreeId: 'worktree',
       tabId: 'tab',
@@ -80,6 +82,7 @@ describe('useMobileNativeChatDrafts glued pending sends', () => {
       transcriptLoading,
       transcriptSettled
     })
+    state = { ...drafts, composerText: useMobileNativeChatDraft(drafts.draftKey) }
     return null
   }
 
@@ -103,8 +106,11 @@ describe('useMobileNativeChatDrafts glued pending sends', () => {
     )
   }
 
+  // Between the older history rows and the rows that land after a send, on the host's clock.
+  const SENT_AT = 3000
+
   function send(text: string): void {
-    const origin = state?.captureSendOrigin(text)
+    const origin = state?.captureSendOrigin(text, SENT_AT)
     if (origin) {
       state?.acceptSend(origin, text)
     }
@@ -203,7 +209,30 @@ describe('useMobileNativeChatDrafts glued pending sends', () => {
     expect(renderedPendingTexts(partial, state)).toEqual(['again'])
   })
 
-  // Rebase hydration-time sends on first authoritative history so they can retire without blocking later glue matches.
+  it('retires a captioned photo and the send glued after it once the reply lands', async () => {
+    const history = [assistantTurn('m1', 'ready', 1000)]
+    await mount(history)
+    act(() => {
+      const origin = state?.captureSendOrigin('look at this', SENT_AT)
+      if (origin) {
+        state?.acceptSend(origin, 'look at this', ['file:///a.jpg'])
+      }
+      send('is it still working?')
+    })
+
+    const glued = [
+      ...history,
+      imageTurn('m2', '/tmp/a.png', 5000),
+      userTurn('m3', 'look at this[Image #1] is it still working?', 5000)
+    ]
+    await update(glued)
+    const replied = [...glued, assistantTurn('m4', 'yes', 6000)]
+    await update(replied)
+    expect(state?.pending).toEqual([])
+    expect(renderedPendingTexts(replied, state)).toEqual([])
+  })
+
+  // Hydrating rows give no boundary, so these sends match only rows newer than their send time.
   describe('sends issued while the transcript is still hydrating', () => {
     const loadedHistory = [userTurn('m1', 'run the tests again', 1000)]
 
@@ -253,17 +282,15 @@ describe('useMobileNativeChatDrafts glued pending sends', () => {
       expect(state?.pending).toEqual([])
     })
 
-    // TUI sends lack ids/clock alignment to distinguish own echoes from identical old rows; claiming risks losing an undelivered repeat, while holding permanently blocks glue.
     it('retires a hydration-time send whose echo arrives with the read', async () => {
       await mount([], true)
       act(() => send('run the tests'))
 
-      const echoed = [userTurn('m1', 'run the tests', 1000), assistantTurn('m2', 'passed', 1100)]
+      const echoed = [userTurn('m1', 'run the tests', 5000), assistantTurn('m2', 'passed', 5100)]
       await update(echoed)
       expect(state?.pending).toEqual([])
     })
 
-    // Reconnect retains this session’s history; moving its send boundary onto the new read would exclude the send’s own glued row.
     it('retires a pair sent across a reconnect whose glued row arrives with the read', async () => {
       const retained = [userTurn('m1', 'earlier prompt', 1000), assistantTurn('m2', 'sure', 1100)]
       await mount(retained)
@@ -280,7 +307,7 @@ describe('useMobileNativeChatDrafts glued pending sends', () => {
     it('retires a photo whose image echo arrives with the read', async () => {
       await mount([], true)
       act(() => {
-        const origin = state?.captureSendOrigin('')
+        const origin = state?.captureSendOrigin('', SENT_AT)
         if (origin) {
           state?.acceptSend(origin, '', ['file:///new.png'])
         }

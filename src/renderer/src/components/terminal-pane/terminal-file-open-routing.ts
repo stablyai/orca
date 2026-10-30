@@ -1,6 +1,6 @@
 import { downloadAndOpenRemoteTerminalFile } from './terminal-remote-file-download-open'
 import { findWorkspaceFileRoute } from '@/lib/runtime-workspace-file-route'
-import { isPathInsideWorktree, toWorktreeRelativePath } from '@/lib/terminal-links'
+import { isPathInsideWorktree, toWorktreeRelativePath } from '../../../../shared/terminal-links'
 import { isMissingRuntimePathError } from '@/runtime/runtime-file-metadata-client'
 import { useAppStore } from '@/store'
 import { activateAndRevealWorkspace, activateAndRevealWorktree } from '@/lib/worktree-activation'
@@ -66,6 +66,7 @@ type TerminalFileOpenDeps = {
   browserDestination?: HttpLinkDestination
   /** The paired-server terminal that printed the link; lets its host grant a file outside workspaces. */
   terminalHandle?: string | null
+  hostFileOnly?: boolean
   /** Reports a path that could not be verified before opening; skipped once a later open supersedes it. */
   onOpenFailure?: (failure: FileOpenFailure) => void
   /** The tab that owns the link; editor opens place themselves relative to its group. */
@@ -151,11 +152,7 @@ export function openDetectedFilePath(
     }
 
     try {
-      const linkOwner = await resolveHostWorkspaceFile(
-        fileContext,
-        mappedFilePath,
-        deps.terminalHandle
-      )
+      const linkOwner = await resolveHostWorkspaceFile(fileContext, mappedFilePath, deps)
       if (linkOwner?.kind === 'grant') {
         hostGrant = hostGrantedEditorFields(linkOwner)
         mappedFilePath = linkOwner.absolutePath

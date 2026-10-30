@@ -16,7 +16,7 @@ import {
   getGitHubPRPrimaryReviewer,
   getGitHubPRReviewerRows,
   getGitHubPRReviewLabel
-} from '@/components/github-pr-reviewer-display'
+} from '../../../../../shared/github/pr-reviewer-display'
 import { cn } from '@/lib/utils'
 import { ChevronDown } from 'lucide-react'
 import { Popover, PopoverTrigger } from '@/components/ui/popover'

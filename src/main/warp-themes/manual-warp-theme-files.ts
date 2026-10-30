@@ -1,3 +1,4 @@
+import { translateMain } from '../i18n/main-i18n'
 import { createHash } from 'node:crypto'
 import path from 'node:path'
 import { BrowserWindow, dialog, type OpenDialogOptions, type WebContents } from 'electron'
@@ -39,9 +40,14 @@ export async function chooseManualWarpThemeFiles(webContents?: WebContents): Pro
 > {
   const ownerWindow = webContents ? BrowserWindow.fromWebContents(webContents) : null
   const options: OpenDialogOptions = {
-    title: 'Import Warp Theme',
+    title: translateMain('native.dialog.importWarpTheme', 'Import Warp Theme'),
     properties: ['openFile', 'multiSelections'],
-    filters: [{ name: 'Warp theme YAML', extensions: ['yaml', 'yml'] }]
+    filters: [
+      {
+        name: translateMain('native.dialog.warpThemeYaml', 'Warp theme YAML'),
+        extensions: ['yaml', 'yml']
+      }
+    ]
   }
   const result = ownerWindow
     ? await dialog.showOpenDialog(ownerWindow, options)
@@ -73,7 +79,7 @@ export async function chooseManualWarpThemeFolderPath(
 ): Promise<string | null> {
   const ownerWindow = webContents ? BrowserWindow.fromWebContents(webContents) : null
   const options: OpenDialogOptions = {
-    title: 'Import Warp Theme Folder',
+    title: translateMain('native.dialog.importWarpFolder', 'Import Warp Theme Folder'),
     properties: ['openDirectory']
   }
   const result = ownerWindow

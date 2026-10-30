@@ -2,7 +2,11 @@ import { posix as pathPosix } from 'node:path'
 import { normalizeRuntimePathForComparison } from '../../shared/cross-platform-path'
 import { parseWslUncPath } from '../../shared/wsl-paths'
 import { runWslProcess } from '../wsl/wsl-runner'
+import { assertWslUncPathRunning } from '../wsl/wsl-unc-access-gate'
+import type { onRunningWslDistrosStopped } from '../wsl-running-distro-cache'
+import { onWslDistroGateNote } from '../wsl-background-distro-gate'
 import { isCodexAccountSessionBridgeStopping } from './codex-account-session-bridge'
+import { runCodexAppServerSession } from './codex-app-server-session'
 import {
   createCodexAccountStateDb,
   healPendingCodexAccountThreads
@@ -57,11 +61,22 @@ const WSL_SESSION_BRIDGE_MAX_OUTPUT_BYTES = 64 * 1024 * 1024
 type WslBridgeDependencies = {
   openStateDb: typeof createCodexAccountStateDb
   healPending: typeof healPendingCodexAccountThreads
+  /** Throws unless the distro runs; each step outlives the launch that started the chain (E9). */
+  requireRunning: (distro: string) => Promise<void>
+  subscribeStops: typeof onRunningWslDistrosStopped
 }
 
 const defaultWslBridgeDependencies: WslBridgeDependencies = {
   openStateDb: createCodexAccountStateDb,
-  healPending: healPendingCodexAccountThreads
+  healPending: healPendingCodexAccountThreads,
+  requireRunning: (distro) => assertWslUncPathRunning('', distro),
+  // Gate notes carry running-list stops and explicit ones (a relay or watcher exit) no list saw yet.
+  subscribeStops: (listener) =>
+    onWslDistroGateNote((note) => {
+      if (note.kind === 'stopped') {
+        listener([note.distro], [])
+      }
+    })
 }
 
 const emptySummary: WslCodexSessionBridgeSummary = {
@@ -119,7 +134,10 @@ async function bridgeAndIndexWslCodexSessions(
   const buildInvocation = (_codexHomePath: string, timeoutMs: number) =>
     buildWslHealInvocation(target.distro, paths.managedHomePath, timeoutMs)
   const homeKey = normalizeRuntimePathForComparison(target.managedCodexHomePath)
+  // Every wsl.exe step below re-checks: the user may stop the distro mid-chain, and a step would boot it.
+  const requireRunning = (): Promise<void> => dependencies.requireRunning(target.distro)
   if (!homesWithCompleteIndex.has(homeKey)) {
+    await requireRunning()
     // Why: linking before Codex's first open makes that open index everything,
     // and every other Codex on the home gives up after 30s (#20669).
     const complete = await dependencies.openStateDb(target.managedCodexHomePath, {
@@ -134,6 +152,7 @@ async function bridgeAndIndexWslCodexSessions(
   if (isCodexAccountSessionBridgeStopping()) {
     return
   }
+  await requireRunning()
   const summary = await syncWslCodexSessionsIntoManagedHome(target)
   const pendingThreads = new Map<string, string>()
   const markerByThreadId = new Map<string, string>()
@@ -149,6 +168,7 @@ async function bridgeAndIndexWslCodexSessions(
   }
   if (markersWithoutThread.length > 0) {
     // Why: no thread id means thread/read can never settle it, so it would be reported forever.
+    await requireRunning()
     await clearIndexPendingMarkers(target.distro, paths, markersWithoutThread).catch(
       (error: unknown) => {
         console.warn('[codex-session-bridge] Could not clear WSL index markers:', error)
@@ -156,12 +176,37 @@ async function bridgeAndIndexWslCodexSessions(
     )
   }
   if (pendingThreads.size > 0 && !isCodexAccountSessionBridgeStopping()) {
-    await dependencies.healPending(target.managedCodexHomePath, pendingThreads, {
-      buildInvocation,
-      shouldStop: isCodexAccountSessionBridgeStopping,
-      afterBatch: (settled) =>
-        clearSettledIndexPendingMarkers(target.distro, paths, settled, markerByThreadId)
+    await requireRunning()
+    // Batches spawn synchronously from here on; a confirmed stop ends the heal before the next one.
+    const distroKey = target.distro.toLowerCase()
+    let distroStopped = false
+    const unsubscribe = dependencies.subscribeStops((stopped) => {
+      distroStopped ||= stopped.some((distro) => distro.toLowerCase() === distroKey)
     })
+    try {
+      await dependencies.healPending(target.managedCodexHomePath, pendingThreads, {
+        buildInvocation,
+        // Each batch spawns a guest codex; the inter-batch delay leaves time for the user to stop it.
+        runSession: async (invocation, body) => {
+          await requireRunning().catch((error: unknown) => {
+            distroStopped = true
+            throw error
+          })
+          return runCodexAppServerSession(invocation, body)
+        },
+        shouldStop: () => distroStopped || isCodexAccountSessionBridgeStopping(),
+        afterBatch: async (settled) => {
+          // Also the check before the next batch: a refused read ends the heal there.
+          await requireRunning().catch((error: unknown) => {
+            distroStopped = true
+            throw error
+          })
+          await clearSettledIndexPendingMarkers(target.distro, paths, settled, markerByThreadId)
+        }
+      })
+    } finally {
+      unsubscribe()
+    }
   }
   if (summary.bridgeFailed) {
     throw new Error(`WSL codex session bridge could not link every session for ${target.distro}`)

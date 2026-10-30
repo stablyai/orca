@@ -1,231 +1,14 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { resolveProjectExecutionRuntime } from '../../../shared/project-execution-runtime'
-import * as inventory from './agent-detection-target-inventory'
-import * as localCapabilities from '@/runtime/local-runtime-capabilities'
-import { RUNTIME_CAPABILITIES } from '../../../shared/protocol-version'
-import type { AppState } from '@/store'
-import type * as TuiAgentSelectionModule from '../../../shared/tui-agent-selection'
-import type * as TuiAgentStartupModule from '@/lib/tui-agent-startup'
-import type * as DirectAgentRoutingModule from '@/lib/launch-work-item-direct-agent-routing'
-
-const mocks = vi.hoisted(() => ({
-  toastError: vi.fn(),
-  createWorktree: vi.fn(),
-  ensureDetectedAgents: vi.fn(),
-  ensureRemoteDetectedAgents: vi.fn(),
-  updateWorktreeMeta: vi.fn(),
-  setSidebarOpen: vi.fn(),
-  seedNativeChatLaunchPrompt: vi.fn(),
-  seedNativeChatLaunchDraft: vi.fn(),
-  markNativeChatLaunchPromptFailed: vi.fn(),
-  activateAndRevealWorktree: vi.fn(),
-  pasteDraftWhenAgentReady: vi.fn(),
-  openModalFallback: vi.fn(),
-  resolvePrBase: vi.fn(),
-  getConnectionId: vi.fn(),
-  store: {} as Record<string, unknown> & {
-    ensureDetectedAgents: ReturnType<typeof vi.fn>
-    ensureRemoteDetectedAgents: ReturnType<typeof vi.fn>
-    createWorktree: ReturnType<typeof vi.fn>
-    updateWorktreeMeta: ReturnType<typeof vi.fn>
-    setSidebarOpen: ReturnType<typeof vi.fn>
-    seedNativeChatLaunchPrompt: ReturnType<typeof vi.fn>
-    seedNativeChatLaunchDraft: ReturnType<typeof vi.fn>
-    markNativeChatLaunchPromptFailed: ReturnType<typeof vi.fn>
-  }
-}))
-
-vi.mock('@/store', () => ({
-  useAppStore: {
-    getState: () => mocks.store
-  }
-}))
-
-vi.mock('sonner', () => ({
-  toast: {
-    error: mocks.toastError,
-    message: vi.fn()
-  }
-}))
-
-vi.mock('@/lib/agent-paste-draft', () => ({
-  pasteDraftWhenAgentReady: mocks.pasteDraftWhenAgentReady
-}))
-
-vi.mock('@/lib/worktree-activation', () => ({
-  activateAndRevealWorktree: mocks.activateAndRevealWorktree
-}))
-
-vi.mock('@/lib/ensure-hooks-confirmed', () => ({
-  ensureHooksConfirmed: vi.fn().mockResolvedValue('run')
-}))
-
-vi.mock('@/lib/connection-context', () => ({
-  getConnectionId: mocks.getConnectionId
-}))
-
-const hostMocks = vi.hoisted(() => ({
-  checkRuntimeHooks: vi.fn(),
-  callRuntimeRpc: vi.fn()
-}))
-
-vi.mock('@/runtime/runtime-hooks-client', () => ({
-  checkRuntimeHooks: hostMocks.checkRuntimeHooks
-}))
-
-vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: hostMocks.callRuntimeRpc }))
-
-vi.mock('@/lib/new-workspace', () => ({
-  CLIENT_PLATFORM: 'win32',
-  getWorkspaceIntentName: (args: {
-    workItem?: { type: 'issue' | 'pr' | 'mr'; number: number; title: string } | null
-  }) =>
-    args.workItem
-      ? {
-          displayName:
-            args.workItem.type === 'pr'
-              ? `Review PR ${args.workItem.number}`
-              : `Issue ${args.workItem.number}`,
-          seedName:
-            args.workItem.type === 'pr'
-              ? `review-pr-${args.workItem.number}`
-              : `issue-${args.workItem.number}`
-        }
-      : null,
-  getSetupConfig: vi.fn(() => null),
-  getWorkspaceSeedName: ({ explicitName }: { explicitName?: string }) => explicitName ?? '',
-  isGitLabIssueUrl: vi.fn(() => false)
-}))
-
-vi.mock('@/lib/telemetry', () => ({
-  track: vi.fn(),
-  tuiAgentToAgentKind: (agent: string) => agent
-}))
-
-vi.mock('@/lib/tui-agent-startup', async () => {
-  const actual = await vi.importActual<typeof TuiAgentStartupModule>('@/lib/tui-agent-startup')
-  return {
-    ...actual,
-    buildAgentDraftLaunchPlan: vi.fn(actual.buildAgentDraftLaunchPlan),
-    buildAgentStartupPlan: vi.fn(actual.buildAgentStartupPlan)
-  }
-})
-
-vi.mock('../../../shared/tui-agent-selection', async () => {
-  const actual = await vi.importActual<typeof TuiAgentSelectionModule>(
-    '../../../shared/tui-agent-selection'
-  )
-  return {
-    ...actual,
-    pickTuiAgent: vi.fn(actual.pickTuiAgent)
-  }
-})
-
-vi.mock('@/lib/launch-work-item-direct-agent-routing', async () => {
-  const actual = await vi.importActual<typeof DirectAgentRoutingModule>(
-    '@/lib/launch-work-item-direct-agent-routing'
-  )
-  return {
-    ...actual,
-    beginDirectWorkItemStructuredLaunch: vi.fn(actual.beginDirectWorkItemStructuredLaunch)
-  }
-})
-
+import { describe, expect, it, vi } from 'vitest'
+import { mocks } from './launch-work-item-direct-test-fixture'
 import { launchWorkItemDirect } from './launch-work-item-direct'
 import { pasteDraftWhenAgentReady } from '@/lib/agent-paste-draft'
 import { beginDirectWorkItemStructuredLaunch } from '@/lib/launch-work-item-direct-agent-routing'
 import { buildAgentDraftLaunchPlan, buildAgentStartupPlan } from '@/lib/tui-agent-startup'
 import { pickTuiAgent } from '../../../shared/tui-agent-selection'
+import type { AppState } from '@/store'
 
 describe('launchWorkItemDirect', () => {
-  afterEach(() => vi.restoreAllMocks())
-  beforeEach(() => {
-    vi.clearAllMocks()
-    vi.stubGlobal('window', {
-      api: {
-        worktrees: {
-          resolvePrBase: mocks.resolvePrBase
-        }
-      }
-    })
-    hostMocks.checkRuntimeHooks.mockResolvedValue({
-      hasHooks: false,
-      hooks: null,
-      mayNeedUpdate: false
-    })
-    mocks.resolvePrBase.mockResolvedValue({
-      baseBranch: 'abc123',
-      compareBaseRef: 'refs/remotes/origin/main',
-      headSha: 'abc123',
-      branchNameOverride: 'feature/fix',
-      pushTarget: { remoteName: 'origin', branchName: 'feature/fix' }
-    })
-    mocks.ensureDetectedAgents.mockResolvedValue(['codex'])
-    mocks.ensureRemoteDetectedAgents.mockResolvedValue(['codex'])
-    mocks.getConnectionId.mockReturnValue(null)
-    mocks.createWorktree.mockResolvedValue({
-      worktree: { id: 'repo-1::/repo/worktree', path: '/repo/worktree' },
-      setup: undefined
-    })
-    mocks.updateWorktreeMeta.mockResolvedValue(undefined)
-    mocks.activateAndRevealWorktree.mockReturnValue({ primaryTabId: 'tab-1' })
-    mocks.pasteDraftWhenAgentReady.mockResolvedValue(true)
-    mocks.store = {
-      repos: [
-        {
-          id: 'repo-1',
-          path: '/repo',
-          displayName: 'Repo',
-          addedAt: 1
-        }
-      ],
-      activeRepoId: 'repo-1',
-      activeWorktreeId: null,
-      projects: [
-        {
-          id: 'repo-1',
-          displayName: 'Repo',
-          badgeColor: '#000000',
-          sourceRepoIds: ['repo-1'],
-          createdAt: 1,
-          updatedAt: 1
-        }
-      ],
-      worktreesByRepo: {},
-      settings: {
-        defaultTuiAgent: 'codex',
-        disabledTuiAgents: [],
-        agentCmdOverrides: {}
-      },
-      ensureDetectedAgents: mocks.ensureDetectedAgents,
-      ensureRemoteDetectedAgents: mocks.ensureRemoteDetectedAgents,
-      createWorktree: mocks.createWorktree,
-      updateWorktreeMeta: mocks.updateWorktreeMeta,
-      setSidebarOpen: mocks.setSidebarOpen,
-      seedNativeChatLaunchPrompt: mocks.seedNativeChatLaunchPrompt,
-      seedNativeChatLaunchDraft: mocks.seedNativeChatLaunchDraft,
-      markNativeChatLaunchPromptFailed: mocks.markNativeChatLaunchPromptFailed
-    } as typeof mocks.store
-    // Why: SSH fixtures use target `ssh-1`, which reports a Linux host once connected.
-    mocks.store.sshConnectionStates = new Map([
-      [
-        'ssh-1',
-        {
-          targetId: 'ssh-1',
-          status: 'connected',
-          error: null,
-          reconnectAttempt: 0,
-          remotePlatform: 'linux'
-        }
-      ]
-    ])
-    mocks.store.sshStateByEnvironment = new Map()
-    mocks.store.runtimeStatusByEnvironmentId = new Map()
-  })
-
   it('rejects invalid per-launch CLI arguments before creating a workspace', async () => {
-    const { launchWorkItemDirect } = await import('./launch-work-item-direct')
-
     await expect(
       launchWorkItemDirect({
         repoId: 'repo-1',
@@ -251,7 +34,6 @@ describe('launchWorkItemDirect', () => {
   it('passes a resolved PR branch override while using a short PR identity for workspace names', async () => {
     mocks.ensureDetectedAgents.mockResolvedValue([])
     mocks.store.settings = {}
-    const { launchWorkItemDirect } = await import('./launch-work-item-direct')
 
     await launchWorkItemDirect({
       repoId: 'repo-1',
@@ -269,8 +51,10 @@ describe('launchWorkItemDirect', () => {
       }
     })
 
+    // Launching from the PR is a user act, so its base read may start a stopped WSL distro.
     expect(mocks.resolvePrBase).toHaveBeenCalledWith({
       repoId: 'repo-1',
+      wakeWslDistro: true,
       prNumber: 6934,
       headRefName: 'feature/fix',
       baseRefName: 'main',
@@ -307,7 +91,6 @@ describe('launchWorkItemDirect', () => {
   })
 
   it('treats a PR-typed GitHub issue URL as an issue without resolving a PR head', async () => {
-    const { launchWorkItemDirect } = await import('./launch-work-item-direct')
     const openModalFallback = vi.fn()
 
     await expect(
@@ -342,8 +125,6 @@ describe('launchWorkItemDirect', () => {
   })
 
   it('uses the Linear identifier in direct-launch workspace names', async () => {
-    const { launchWorkItemDirect } = await import('./launch-work-item-direct')
-
     await launchWorkItemDirect({
       repoId: 'repo-1',
       launchSource: 'task_page',
@@ -390,7 +171,6 @@ describe('launchWorkItemDirect', () => {
 
   it('prefills a link-only Linear reference without source context', async () => {
     mocks.ensureDetectedAgents.mockResolvedValue(['claude'])
-    const { launchWorkItemDirect } = await import('./launch-work-item-direct')
 
     await expect(
       launchWorkItemDirect({
@@ -457,7 +237,7 @@ describe('launchWorkItemDirect', () => {
 
   it('seeds the chat-composer launch draft for a GitHub issue draft launch', async () => {
     mocks.ensureDetectedAgents.mockResolvedValue(['claude'])
-    const { launchWorkItemDirect } = await import('./launch-work-item-direct')
+    mocks.store.settings = { defaultTuiAgent: 'codex', disabledTuiAgents: ['claude'] }
 
     await expect(
       launchWorkItemDirect({
@@ -465,6 +245,7 @@ describe('launchWorkItemDirect', () => {
         launchSource: 'task_page',
         openModalFallback: vi.fn(),
         agentOverride: 'claude',
+        agentLaunchPreferences: { defaultTuiAgent: 'claude', disabledTuiAgents: undefined },
         item: {
           type: 'issue',
           number: 12,
@@ -489,7 +270,6 @@ describe('launchWorkItemDirect', () => {
   it('seeds the chat-composer launch draft for a multi-line Linear draft launch', async () => {
     // Linear drafts always contain newlines; rejecting multiline mirrors would hide every linked issue in chat.
     mocks.ensureDetectedAgents.mockResolvedValue(['claude'])
-    const { launchWorkItemDirect } = await import('./launch-work-item-direct')
 
     await expect(
       launchWorkItemDirect({
@@ -517,7 +297,6 @@ describe('launchWorkItemDirect', () => {
 
   it('preserves explicit Linear paste content submit-after-ready behavior', async () => {
     mocks.ensureDetectedAgents.mockResolvedValue(['claude'])
-    const { launchWorkItemDirect } = await import('./launch-work-item-direct')
 
     await expect(
       launchWorkItemDirect({
@@ -570,7 +349,6 @@ describe('launchWorkItemDirect', () => {
       structuredLaunch: true,
       primaryTabId: null
     })
-    const { launchWorkItemDirect } = await import('./launch-work-item-direct')
 
     await expect(
       launchWorkItemDirect({
@@ -597,44 +375,49 @@ describe('launchWorkItemDirect', () => {
     expect(mocks.seedNativeChatLaunchDraft).not.toHaveBeenCalled()
   })
 
-  // A paired chat decline must preserve the recipe’s CLI arguments in its terminal fallback.
-  it("hands a server's decline terminal the caller's own CLI arguments", async () => {
-    mocks.ensureDetectedAgents.mockResolvedValue(['claude'])
-    vi.mocked(beginDirectWorkItemStructuredLaunch).mockReturnValueOnce({
-      completed: true,
-      structuredLaunch: true,
-      primaryTabId: null
-    })
-    const { launchWorkItemDirect } = await import('./launch-work-item-direct')
+  // A paired server that declines the chat opens this launch's terminal, which must keep the
+  // recipe's saved CLI arguments the terminal route applied.
+  it.each([undefined, '', '--model opus'])(
+    "hands a server's decline terminal the caller's own CLI arguments (%s)",
+    async (agentArgs) => {
+      mocks.ensureDetectedAgents.mockResolvedValue(['claude'])
+      vi.mocked(beginDirectWorkItemStructuredLaunch).mockReturnValueOnce({
+        completed: true,
+        structuredLaunch: true,
+        primaryTabId: null
+      })
 
-    await launchWorkItemDirect({
-      repoId: 'repo-1',
-      launchSource: 'task_page',
-      openModalFallback: vi.fn(),
-      agentOverride: 'claude',
-      agentArgs: '--model opus',
-      resolveAgentArgs: () => '--verbose --model opus',
-      launchPlatform: 'linux',
-      promptDelivery: 'submit-after-ready',
-      item: {
-        type: 'pr',
-        number: 7,
-        title: 'Fix checks',
-        url: 'https://github.com/acme/repo/pull/7',
-        pasteContent: 'Fix the failing checks.'
-      }
-    })
-
-    expect(beginDirectWorkItemStructuredLaunch).toHaveBeenCalledWith(
-      expect.objectContaining({
-        declinedTerminal: {
-          agentArgs: '--verbose --model opus',
-          launchPlatform: 'linux',
-          launchSource: 'task_page'
+      await launchWorkItemDirect({
+        repoId: 'repo-1',
+        launchSource: 'task_page',
+        openModalFallback: vi.fn(),
+        agentOverride: 'claude',
+        ...(agentArgs !== undefined ? { agentArgs } : {}),
+        ...(agentArgs ? { resolveAgentArgs: () => `--verbose ${agentArgs}` } : {}),
+        launchPlatform: 'linux',
+        promptDelivery: 'submit-after-ready',
+        item: {
+          type: 'pr',
+          number: 7,
+          title: 'Fix checks',
+          url: 'https://github.com/acme/repo/pull/7',
+          pasteContent: 'Fix the failing checks.'
         }
       })
-    )
-  })
+
+      expect(beginDirectWorkItemStructuredLaunch).toHaveBeenCalledWith(
+        expect.objectContaining({
+          declinedTerminal: {
+            ...(agentArgs !== undefined
+              ? { agentArgs: agentArgs ? `--verbose ${agentArgs}` : agentArgs }
+              : {}),
+            launchPlatform: 'linux',
+            launchSource: 'task_page'
+          }
+        })
+      )
+    }
+  )
 
   it('uses remote cursor-agent detection and paste launch for SSH repos', async () => {
     mocks.store.repos = [
@@ -707,14 +490,15 @@ describe('launchWorkItemDirect', () => {
     expect(pasteDraftWhenAgentReady).not.toHaveBeenCalled()
   })
 
-  it('does not launch a disabled saved agent even when another agent is available', async () => {
-    mocks.ensureDetectedAgents.mockResolvedValue(['codex', 'claude'])
+  it.each(['desktop', 'disabled', 'missing'])('rejects saved agent: %s', async (kind) => {
+    mocks.ensureDetectedAgents.mockResolvedValue(
+      kind === 'missing' ? ['claude'] : ['codex', 'claude']
+    )
     mocks.store.settings = {
       defaultTuiAgent: 'claude',
       disabledTuiAgents: ['codex'],
       agentCmdOverrides: {}
     }
-    const { launchWorkItemDirect } = await import('./launch-work-item-direct')
 
     await expect(
       launchWorkItemDirect({
@@ -729,11 +513,15 @@ describe('launchWorkItemDirect', () => {
         openModalFallback: mocks.openModalFallback,
         launchSource: 'task_page',
         agentOverride: 'codex',
+        agentLaunchPreferences:
+          kind === 'desktop'
+            ? undefined
+            : { defaultTuiAgent: 'codex', disabledTuiAgents: kind === 'disabled' ? ['codex'] : [] },
         promptDelivery: 'submit-after-ready'
       })
     ).resolves.toBe(false)
 
-    expect(mocks.createWorktree).toHaveBeenCalled()
+    expect(mocks.createWorktree).toHaveBeenCalledTimes(kind === 'disabled' ? 0 : 1)
     expect(mocks.updateWorktreeMeta).not.toHaveBeenCalled()
     expect(mocks.pasteDraftWhenAgentReady).not.toHaveBeenCalled()
     expect(mocks.toastError).toHaveBeenCalledWith(
@@ -753,7 +541,6 @@ describe('launchWorkItemDirect', () => {
         addedAt: 1
       }
     ]
-    const { launchWorkItemDirect } = await import('./launch-work-item-direct')
 
     await expect(
       launchWorkItemDirect({
@@ -796,7 +583,6 @@ describe('launchWorkItemDirect', () => {
         addedAt: 1
       }
     ]
-    const { launchWorkItemDirect } = await import('./launch-work-item-direct')
 
     await expect(
       launchWorkItemDirect({
@@ -819,44 +605,5 @@ describe('launchWorkItemDirect', () => {
     expect(activationOptions.startup.command).toContain(
       `command test -n "$fish_pid" && set --erase -g ORCA_PI_PREFILL; command test -z "$fish_pid" && unset ORCA_PI_PREFILL; true`
     )
-  })
-  it('uses prospective native facts to ignore hidden args before create', async () => {
-    vi.spyOn(inventory, 'loadProjectLaunchContext').mockResolvedValue({
-      agents: ['codex'],
-      workspaceKind: 'git-worktree',
-      executionContext: {
-        kind: 'host',
-        projectRuntime: resolveProjectExecutionRuntime({
-          appPlatform: 'darwin',
-          projectId: 'p1'
-        })
-      }
-    })
-    vi.spyOn(localCapabilities, 'readLocalRuntimeCapabilitiesOrUnknown').mockReturnValue(
-      RUNTIME_CAPABILITIES
-    )
-    mocks.store.settings = Object.assign({}, mocks.store.settings, { experimentalNativeChat: true })
-    vi.mocked(beginDirectWorkItemStructuredLaunch).mockReturnValueOnce({
-      completed: true,
-      structuredLaunch: true,
-      primaryTabId: null
-    })
-    await launchWorkItemDirect({
-      repoId: 'repo-1',
-      launchSource: 'task_page',
-      openModalFallback: vi.fn(),
-      agentArgs: '--model "unterminated',
-      resolveSessionOptions: () => ({ model: 'chosen' }),
-      item: {
-        type: 'issue',
-        number: 42,
-        title: 'Fix',
-        url: 'https://github.com/acme/repo/issues/42'
-      }
-    })
-    expect(mocks.createWorktree).toHaveBeenCalledOnce()
-    expect(
-      vi.mocked(beginDirectWorkItemStructuredLaunch).mock.calls.at(-1)?.[0].plan?.launchOptions
-    ).toEqual({ model: 'chosen' })
   })
 })

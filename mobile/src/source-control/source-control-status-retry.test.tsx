@@ -59,7 +59,22 @@ vi.mock('./use-mobile-source-control-state', () => ({
     unstagedCount: 0,
     stagedCount: 0,
     branchEntries: [],
-    abortConflictOperation: () => Promise.resolve()
+    abortConflictOperation: () => Promise.resolve(),
+    resolveConflict: () => Promise.resolve(),
+    completeMerge: () => Promise.resolve(),
+    primaryActionArgs: {
+      status: null,
+      hasUnresolvedConflicts: false,
+      stageablePaths: [],
+      stagedCount: 0,
+      unstagedCount: 0,
+      commitMessage: '',
+      busyAction: null,
+      openingPath: null,
+      openingBranchPath: null,
+      branchCompareResult: null,
+      handlers: {}
+    }
   })
 }))
 

@@ -95,7 +95,7 @@ async function statClientLocalFile(
 export async function resolveHostWorkspaceFile(
   context: RuntimeFileOperationArgs,
   absolutePath: string,
-  terminalHandle?: string | null
+  source: { terminalHandle?: string | null; hostFileOnly?: boolean } = {}
 ): Promise<HostWorkspaceFile | HostGrantedFile | ClientLocalFile | null> {
   const environmentId = runtimeTargetEnvironmentId(context.target)
   if (
@@ -113,7 +113,7 @@ export async function resolveHostWorkspaceFile(
       pathText: absolutePath,
       crossWorkspace: true,
       // Why: older hosts grant a file outside their workspaces only to the terminal that printed it.
-      ...(terminalHandle ? { terminal: terminalHandle } : {})
+      ...(source.terminalHandle ? { terminal: source.terminalHandle } : {})
     },
     { timeoutMs: 15_000 }
   )
@@ -133,6 +133,9 @@ export async function resolveHostWorkspaceFile(
     if (resolved.exists) {
       // Why: hosts grant files, not folders; the folder is still the host's, never this computer's.
       throw new HostFileRefusal(`${absolutePath} is a folder outside every workspace on its host`)
+    }
+    if (source.hostFileOnly) {
+      throw new HostFileRefusal(`File not found on its host: ${absolutePath}`)
     }
     return statClientLocalFile(environmentId, absolutePath)
   }

@@ -5,10 +5,21 @@ import {
   shouldUseClipboardEventPaste
 } from './terminal-clipboard-event-paste'
 
-function makeKeyEvent(
-  overrides: Partial<Pick<KeyboardEvent, 'key' | 'metaKey' | 'ctrlKey' | 'altKey' | 'shiftKey'>>
-): Pick<KeyboardEvent, 'key' | 'metaKey' | 'ctrlKey' | 'altKey' | 'shiftKey'> {
-  return { key: '', metaKey: false, ctrlKey: false, altKey: false, shiftKey: false, ...overrides }
+type KeyEventFields = Pick<
+  KeyboardEvent,
+  'key' | 'code' | 'metaKey' | 'ctrlKey' | 'altKey' | 'shiftKey'
+>
+
+function makeKeyEvent(overrides: Partial<KeyEventFields>): KeyEventFields {
+  return {
+    key: '',
+    code: '',
+    metaKey: false,
+    ctrlKey: false,
+    altKey: false,
+    shiftKey: false,
+    ...overrides
+  }
 }
 
 function makeClipboardEvent(text: string | null): ClipboardEvent {
@@ -67,6 +78,12 @@ describe('firesNativePasteEvent', () => {
       firesNativePasteEvent(makeKeyEvent({ key: 'v', ctrlKey: true, shiftKey: true }), false)
     ).toBe(true)
     expect(firesNativePasteEvent(makeKeyEvent({ key: 'Insert', shiftKey: true }), false)).toBe(true)
+  })
+
+  it('recognizes Ctrl+V on a non-Latin layout by its physical key', () => {
+    expect(
+      firesNativePasteEvent(makeKeyEvent({ key: 'м', code: 'KeyV', ctrlKey: true }), false)
+    ).toBe(true)
   })
 
   it('does not treat a remapped non-clipboard chord as a native paste event', () => {

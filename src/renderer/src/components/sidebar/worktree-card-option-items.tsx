@@ -42,6 +42,22 @@ function useToggleCardProperty(): (property: WorktreeCardProperty, checked: bool
   )
 }
 
+function AgentModelProperty(): React.JSX.Element {
+  const showAgentModels = useAppStore((s) => s.showAgentModels !== false)
+  const persistedUIReady = useAppStore((s) => s.persistedUIReady)
+  const setShowAgentModels = useAppStore((s) => s.setShowAgentModels)
+  return (
+    <DropdownMenuCheckboxItem
+      checked={showAgentModels}
+      disabled={!persistedUIReady}
+      onCheckedChange={(checked) => setShowAgentModels(checked === true)}
+      onSelect={(e) => e.preventDefault()}
+    >
+      {translate('sidebar.cardProperties.agentModel', 'Agent model')}
+    </DropdownMenuCheckboxItem>
+  )
+}
+
 /** "Card display": the experimental card style's property rows. */
 export function WorktreeCardDisplayMenuItem({
   preserveWorkspaceBoardOpen
@@ -74,6 +90,7 @@ export function WorktreeCardDisplayMenuItem({
             {opt.label}
           </DropdownMenuCheckboxItem>
         ))}
+        <AgentModelProperty />
       </DropdownMenuSubContent>
     </DropdownMenuSub>
   )
@@ -168,8 +185,9 @@ export function WorktreeCardPropertiesMenuItem({
             {opt.label}
           </DropdownMenuCheckboxItem>
         ))}
+        <AgentModelProperty />
         <DropdownMenuSeparator />
-        <DropdownMenuLabel className="px-2 py-1 text-[11px] font-medium text-muted-foreground">
+        <DropdownMenuLabel>
           {translate(
             'auto.components.sidebar.SidebarWorkspaceOptionsMenu.95c9754653',
             'Agent activity layout'

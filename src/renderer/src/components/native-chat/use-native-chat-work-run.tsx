@@ -5,7 +5,7 @@ import { deriveNativeChatRowContent } from '../../../../shared/native-chat-row-c
 import {
   nativeChatWorkRunEditKey,
   nativeChatWorkRunEntries
-} from '../../../../shared/native-chat-work-run'
+} from '../../../../shared/native-chat/native-chat-work-run'
 import { NativeChatReasoningRow } from './NativeChatReasoningRow'
 import type { NativeChatToolRunAsides } from './NativeChatToolRun'
 import type { NativeChatDiffReveal } from './native-chat-turn-diffs'

@@ -2,6 +2,7 @@ import type { CliInstallState, CliInstallStatus } from '../../shared/cli-install
 import { listWslDistrosAsync } from '../wsl'
 import {
   deferUntilWslDistroRunning,
+  isWslDistroRunning,
   listConfirmedRunningWslDistros
 } from '../wsl-background-distro-gate'
 import { CliInstaller } from './cli-installer'
@@ -48,6 +49,8 @@ type WslCliRegistrationReconciliationOptions = {
   getHostLauncherTarget?: () => Promise<string | null>
   registry?: WslCliRegistrationRegistry
   listRunningDistros?: () => Promise<string[]>
+  /** Settled read taken right before each repair spawns. */
+  isDistroRunning?: (distro: string) => Promise<boolean>
   deferUntilRunning?: (distro: string, key: string, task: () => unknown) => void
 }
 
@@ -121,18 +124,18 @@ export async function reconcileManagedWslCliRegistrations(
   )
   const distros = candidates.filter((distro) => running.has(distro.toLowerCase()))
   const deferUntilRunning = options.deferUntilRunning ?? deferUntilWslDistroRunning
-  const deferred: WslCliRegistrationReconciliationResult[] = []
-  for (const distro of candidates) {
-    if (running.has(distro.toLowerCase())) {
-      continue
-    }
-    deferred.push({ distro, outcome: 'deferred' })
+  const isDistroRunning = options.isDistroRunning ?? isWslDistroRunning
+  const deferReconciliation = (distro: string): WslCliRegistrationReconciliationResult => {
     deferUntilRunning(distro, DEFERRED_RECONCILIATION_KEY, () =>
       reconcileManagedWslCliRegistrations({ ...options, listDistros: async () => [distro] }).then(
         logWslCliReconciliationResults
       )
     )
+    return { distro, outcome: 'deferred' }
   }
+  const deferred = candidates
+    .filter((distro) => !running.has(distro.toLowerCase()))
+    .map(deferReconciliation)
   if (distros.length === 0) {
     return deferred
   }
@@ -193,8 +196,9 @@ export async function reconcileManagedWslCliRegistrations(
           return
         }
         const distro = distros[index]
-        results[index] = await runSerializedWslCliRegistrationOperation(distro, () =>
-          reconcileDistro(distro)
+        // The list may name a distro still stopping, or one that stopped while earlier repairs ran (E9).
+        results[index] = await runSerializedWslCliRegistrationOperation(distro, async () =>
+          (await isDistroRunning(distro)) ? reconcileDistro(distro) : deferReconciliation(distro)
         )
       }
     })

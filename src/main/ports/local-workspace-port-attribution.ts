@@ -1,4 +1,9 @@
 import path from 'node:path'
+import { realpath } from 'node:fs/promises'
+import { withTimeout } from '../../shared/promise-timeout-fallback'
+import { blockedWslDistroForPath } from '../wsl/wsl-unc-access-gate'
+import { PrioritySemaphore } from '../../shared/priority-semaphore'
+import { mapWithConcurrency } from '../../shared/map-with-concurrency'
 import type {
   WorkspacePort,
   WorkspacePortOwner,
@@ -10,6 +15,56 @@ import type {
   NormalizedWorkspacePortProbe,
   RawListeningPort
 } from './local-workspace-port-scan-state'
+
+const REALPATH_TIMEOUT_MS = 1_000
+const realpathSlots = new PrioritySemaphore(2)
+let aliasStart = 0
+const pendingRealpaths = new Map<string, Promise<string | null | undefined>>()
+
+function observeRealpath(root: string, deadline: number): Promise<string | null | undefined> {
+  const pending = pendingRealpaths.get(root)
+  if (pending) {
+    return pending
+  }
+  const controller = new AbortController()
+  const lookup = realpathSlots
+    .acquire(0, controller.signal)
+    .then((release) => {
+      if (controller.signal.aborted || Date.now() >= deadline) {
+        release()
+        return undefined
+      }
+      return realpathUnlessWslStopped(root).finally(release)
+    })
+    .catch((error: unknown) =>
+      error instanceof Error &&
+      'code' in error &&
+      (error.code === 'ENOENT' || error.code === 'ENOTDIR')
+        ? null
+        : undefined
+    )
+    .finally(() => {
+      if (pendingRealpaths.get(root) === operation) {
+        pendingRealpaths.delete(root)
+      }
+    })
+  const operation = withTimeout(lookup, Math.max(0, deadline - Date.now()), undefined).finally(() =>
+    controller.abort()
+  )
+  pendingRealpaths.set(root, operation)
+  return operation
+}
+
+/**
+ * A WSL root's realpath is a 9P touch that starts a stopped distro (E9). The port scan is background,
+ * so it never wakes one: a stopped root's alias stays unknown, as a timed-out lookup's does.
+ */
+async function realpathUnlessWslStopped(root: string): Promise<string | undefined> {
+  if (await blockedWslDistroForPath(root)) {
+    return undefined
+  }
+  return normalizeComparablePath(await realpath(root))
+}
 
 const HTTP_PORTS: Record<number, true> = {
   80: true,
@@ -39,6 +94,44 @@ export function normalizeWorkspacePortProbes(
     worktree,
     normalizedPath: normalizeComparablePath(worktree.path)
   }))
+}
+
+export async function resolveWorkspacePortProbes(
+  worktrees: readonly WorkspacePortProbe[],
+  requireFresh = false
+): Promise<{ probes: NormalizedWorkspacePortProbe[]; complete: boolean }> {
+  const probes = normalizeWorkspacePortProbes(worktrees)
+  const paths = [...new Set(worktrees.map((worktree) => worktree.path))]
+  paths.push(...paths.splice(0, aliasStart++ % (paths.length || 1)))
+  const older = paths.map((workspacePath) => pendingRealpaths.get(workspacePath))
+  if (requireFresh) {
+    // An older observation may release native work, but its alias cannot authorize this request.
+    await Promise.all(older.filter((operation) => operation !== undefined))
+  }
+  const deadline = Date.now() + REALPATH_TIMEOUT_MS
+  const resolvedPaths = new Map<string, string | null | undefined>()
+  await withTimeout(
+    mapWithConcurrency(paths, 2, async (workspacePath, index) => {
+      const old = older[index]
+      const blocked = requireFresh && old && pendingRealpaths.get(workspacePath) === old
+      if (blocked || Date.now() >= deadline) {
+        return
+      }
+      resolvedPaths.set(workspacePath, await observeRealpath(workspacePath, deadline))
+    }),
+    Math.max(0, deadline - Date.now()),
+    []
+  )
+  const aliases = probes.flatMap((probe) => {
+    const normalizedPath = resolvedPaths.get(probe.worktree.path)
+    return normalizedPath && normalizedPath !== probe.normalizedPath
+      ? [{ ...probe, normalizedPath }]
+      : []
+  })
+  return {
+    probes: [...probes, ...aliases],
+    complete: paths.every((workspacePath) => resolvedPaths.get(workspacePath) !== undefined)
+  }
 }
 
 function attributePortToNormalizedWorkspaces(

@@ -15,6 +15,7 @@ import {
 } from '../ui/dropdown-menu'
 import { Cloud, Download, Trash2, Loader2, ChevronDown, Check } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
+import { speechModelDescription } from './speech-model-description'
 
 function describeSpeechModelDownloadError(error: unknown): string {
   const message = error instanceof Error ? error.message : String(error)
@@ -55,7 +56,7 @@ export function VoiceSpeechModelSection({
         <Label>{translate('auto.components.settings.VoicePane.43fd4f454b', 'Speech Model')}</Label>
         <p className="text-xs text-muted-foreground">
           {selectedModel && selectedIsReady
-            ? `${selectedModel.label} — ${selectedModel.description}`
+            ? `${selectedModel.label} — ${speechModelDescription(selectedModel)}`
             : translate(
                 'auto.components.settings.VoicePane.e24f7d43d2',
                 'Select a speech model. Local models run offline; cloud models require an API key.'
@@ -157,7 +158,7 @@ export function VoiceSpeechModelSection({
                     </span>
                   </div>
                   <p className="text-[11px] text-muted-foreground mt-0.5 leading-snug">
-                    {manifest.description}
+                    {speechModelDescription(manifest)}
                   </p>
                 </div>
                 {!isCloud && isReady ? (

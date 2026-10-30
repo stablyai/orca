@@ -1,7 +1,7 @@
 // Exact function from660243e61ff:agent-startup-plan-inputs.ts; only export/import paths differ.
 // Full-source SHA256573ec1fd98d1859f983e625cd593a1e636a53eb67e43871168e0bfc14e84130c.
 import type { AgentStartupSettings, AgentStartupPlanInputs } from './agent-startup-plan-inputs'
-import type { SessionOptionValue } from './native-chat-session-options'
+import type { SessionOptionValue } from './native-chat/input/native-chat-session-options'
 import type { TuiAgent } from './tui-agent'
 import { resolveTuiAgentLaunchArgs, resolveTuiAgentLaunchEnv } from './tui-agent-launch-defaults'
 import { resolveStartupShell, type AgentStartupShell } from './tui-agent-startup-shell'

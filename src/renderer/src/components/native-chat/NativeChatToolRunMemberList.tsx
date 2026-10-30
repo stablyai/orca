@@ -7,7 +7,7 @@ import { NativeChatDiffCard } from './NativeChatDiffCard'
 import { NativeChatTaskList } from './NativeChatTaskList'
 import { NativeChatToolLine } from './NativeChatToolLine'
 import { buildEditCards } from '../../../../shared/native-chat/tools/native-chat-edit-cards'
-import { buildNativeChatTaskListRows } from '../../../../shared/native-chat-task-list-history'
+import { buildNativeChatTaskListRows } from '../../../../shared/native-chat/input/native-chat-task-list-history'
 import type { NativeChatDiffReveal } from './native-chat-turn-diffs'
 import type { NativeChatToolRunAsides } from './NativeChatToolRun'
 

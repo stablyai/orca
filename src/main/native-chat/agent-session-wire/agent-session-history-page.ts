@@ -132,7 +132,7 @@ export function readAgentSessionHistory(
   }
 }
 
-/** Reuse reduced state until the journal cursor advances. */
+/** Reuse reduced state until the complete journal source changes. */
 export function createAgentSessionCatchUpReader(
   journal: AgentSessionJournal,
   reader: HistoryReader = CLIENT_HISTORY_READER,
@@ -140,10 +140,9 @@ export function createAgentSessionCatchUpReader(
 ): (request: AgentSessionHistoryRequest) => AgentSessionHistoryResult {
   let view = initialView
   return (request) => {
-    const live = journal.cursor()
-    const prior = view.snapshot.cursor
-    if (live.epoch !== prior.epoch || live.sequence !== prior.sequence) {
-      view = journal.publicRead()
+    const live = journal.publicRead()
+    if (view !== live) {
+      view = live
     }
     return readAgentSessionHistory(journal, request, { view, reader, rowReplay: true })
   }

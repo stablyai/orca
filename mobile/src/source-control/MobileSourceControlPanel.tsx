@@ -2,11 +2,17 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ActivityIndicator, Pressable, Text, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { colors } from '../theme/mobile-theme'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { connectionRetryAction } from '../transport/connection-retry-action'
 import { useMobileSourceControlState } from './use-mobile-source-control-state'
 import { useMobileSourceControlActionSheet } from './use-mobile-source-control-action-sheet'
 import { MobileSourceControlHeader } from './MobileSourceControlHeader'
 import { MobileSourceControlContent } from './MobileSourceControlContent'
+import {
+  buildMobileSourceControlPrimaryAction,
+  resolveMobileSourceControlReviewInputs
+} from './mobile-source-control-primary-action'
 import { MobileSourceControlModals } from './MobileSourceControlModals'
 import { MobileSourceControlSegments } from './MobileSourceControlSegments'
 import { MobileSourceControlBranchCard } from './MobileSourceControlBranchCard'
@@ -15,6 +21,7 @@ import { styles } from './mobile-source-control-styles'
 import { hubStyles } from './mobile-source-control-hub-styles'
 import type { SourceControlHubTab } from './mobile-source-control-hub-tab'
 import { buildMobilePrChipSummary, countUnresolvedReviewThreads } from './mobile-pr-chip-summary'
+import { MOBILE_COMPLETE_MERGE_ACTION_ID } from './mobile-source-control-conflict-actions'
 import { isMobileConflictAborting } from './mobile-source-control-conflict-abort'
 import { useMobilePrSidebarController } from '../session/use-mobile-pr-sidebar-controller'
 import { prSidebarDetailsNeedFetch } from '../session/mobile-pr-sidebar-state'
@@ -44,6 +51,8 @@ export function MobileSourceControlPanel({
   onFileOpenStart,
   onOpenedFileDiff
 }: MobileSourceControlPanelProps) {
+  useMobileColorScheme()
+  const t = useMobileTranslation()
   const [activeTab, setActiveTab] = useState<SourceControlHubTab>(initialTab)
   const [visitedTabs, setVisitedTabs] = useState<ReadonlySet<SourceControlHubTab>>(
     () => new Set<SourceControlHubTab>([initialTab])
@@ -88,7 +97,6 @@ export function MobileSourceControlPanel({
     onOpenedFileDiff,
     onOpenHistory: openHistoryTab
   })
-  const actionSheetActions = useMobileSourceControlActionSheet(state)
   const {
     client,
     connState,
@@ -109,7 +117,8 @@ export function MobileSourceControlPanel({
     unstagedCount,
     stagedCount,
     branchEntries,
-    abortConflictOperation
+    abortConflictOperation,
+    completeMerge
   } = state
   const ioBusy = busyAction !== null || openingPath !== null || openingBranchPath !== null
   const ready = screenState.kind === 'ready'
@@ -141,6 +150,17 @@ export function MobileSourceControlPanel({
     branch: prBranch,
     headSha: prHeadSha
   })
+  const prSidebarState = prController.prSidebarState
+  const review = useMemo(
+    () => resolveMobileSourceControlReviewInputs(prSidebarState),
+    [prSidebarState]
+  )
+  const primaryActionArgs = state.primaryActionArgs
+  const actionSheetActions = useMobileSourceControlActionSheet(state, review)
+  const primaryAction = useMemo(
+    () => buildMobileSourceControlPrimaryAction({ ...primaryActionArgs, review }),
+    [primaryActionArgs, review, t]
+  )
   const isHostedRepo = prController.prSidebarIsGithubRepo
   const prSidebarKind = prController.prSidebarState.kind
   const refetchPr = prController.refetchPRSidebar
@@ -189,10 +209,10 @@ export function MobileSourceControlPanel({
         ? countUnresolvedReviewThreads(prController.prSidebarState.data.details?.comments)
         : null
     return buildMobilePrChipSummary(prController.prSidebarState, commentCount)
-  }, [isHostedRepo, prBranch, prController.prSidebarState])
+  }, [isHostedRepo, prBranch, prController.prSidebarState, t])
 
   const onRefresh = useCallback(() => {
-    void loadStatus({ preserveReadyOnFailure: true })
+    void loadStatus({ preserveReadyOnFailure: true, rereadSettings: true })
     if (activeTab === 'history') {
       setHistoryRefreshNonce((n) => n + 1)
       return
@@ -246,12 +266,14 @@ export function MobileSourceControlPanel({
     ) : screenState.kind === 'error' || screenState.kind === 'unavailable' ? (
       <View style={styles.state}>
         <Text style={styles.stateTitle}>
-          {screenState.kind === 'unavailable' ? 'Source Control Unavailable' : 'Unable to Load'}
+          {screenState.kind === 'unavailable'
+            ? t('sourceControl.panel.unavailableTitle', 'Source Control Unavailable')
+            : t('sourceControl.panel.loadFailedTitle', 'Unable to Load')}
         </Text>
         <Text style={styles.stateText}>{screenState.message}</Text>
         {screenState.kind === 'error' && statusRetry ? (
           <Pressable style={styles.retryButton} onPress={statusRetry}>
-            <Text style={styles.retryText}>Retry</Text>
+            <Text style={styles.retryText}>{t('common.retry', 'Retry')}</Text>
           </Pressable>
         ) : null}
       </View>
@@ -290,6 +312,15 @@ export function MobileSourceControlPanel({
           conflictBusy={busyAction !== null}
           conflictAborting={conflictAborting}
           onAbortConflict={(operation) => void abortConflictOperation(operation)}
+          // Failures render in the Changes body, so offer completion only where they can be read.
+          onCompleteMerge={
+            activeTab === 'changes' &&
+            conflictOperation === 'merge' &&
+            !primaryActionArgs.hasUnresolvedConflicts
+              ? () => void completeMerge()
+              : null
+          }
+          completingMerge={busyAction === MOBILE_COMPLETE_MERGE_ACTION_ID}
           prChip={prChip}
           onOpenPr={openPrTab}
         />
@@ -297,7 +328,7 @@ export function MobileSourceControlPanel({
 
       {showChanges ? (
         <View style={activeTab === 'changes' ? hubStyles.tabBody : hubStyles.tabBodyHidden}>
-          <MobileSourceControlContent state={state} />
+          <MobileSourceControlContent state={state} primaryAction={primaryAction} />
         </View>
       ) : activeTab === 'changes' ? (
         statusGate

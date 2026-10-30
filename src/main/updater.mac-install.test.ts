@@ -213,7 +213,7 @@ describe('updater mac install handoff', () => {
     )
     autoUpdaterMock.checkForUpdates.mockResolvedValue(undefined)
     const { setupAutoUpdater, downloadUpdate } = await loadUpdaterModule()
-    setupAutoUpdater({ webContents: { send: vi.fn() } } as never)
+    setupAutoUpdater(updaterMainWindow(vi.fn()))
     await vi.waitFor(() => expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(1))
     autoUpdaterMock.emit('checking-for-update')
     autoUpdaterMock.emit('update-available', { version: '1.0.61' })
@@ -232,13 +232,13 @@ describe('updater mac install handoff', () => {
     async () => {
       vi.useFakeTimers()
       const sendMock = vi.fn()
-      const mainWindow = { webContents: { send: sendMock } }
+      const mainWindow = updaterMainWindow(sendMock)
 
       autoUpdaterMock.checkForUpdates.mockResolvedValue(undefined)
       getMacUpdateRunningInstancesMock.mockResolvedValue([9654])
       const { setupAutoUpdater, downloadUpdate } = await loadUpdaterModule()
 
-      setupAutoUpdater(mainWindow as never)
+      setupAutoUpdater(mainWindow)
       await vi.waitFor(() => {
         expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(1)
       })
@@ -343,12 +343,12 @@ describe('updater mac install handoff', () => {
             finishCleanup = resolve
           })
       )
-      const mainWindow = { webContents: { send: vi.fn() } }
+      const mainWindow = updaterMainWindow(vi.fn())
 
       autoUpdaterMock.checkForUpdates.mockResolvedValue(undefined)
       const { setupAutoUpdater, downloadUpdate, quitAndInstall } = await loadUpdaterModule()
 
-      setupAutoUpdater(mainWindow as never, { onBeforeQuit })
+      setupAutoUpdater(mainWindow, { onBeforeQuit })
       await vi.waitFor(() => {
         expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(1)
       })
@@ -427,12 +427,12 @@ describe('updater mac install handoff', () => {
       vi.useFakeTimers()
 
       const sendMock = vi.fn()
-      const mainWindow = { webContents: { send: sendMock } }
+      const mainWindow = updaterMainWindow(sendMock)
 
       autoUpdaterMock.checkForUpdates.mockResolvedValue(undefined)
       const { setupAutoUpdater, downloadUpdate } = await loadUpdaterModule()
 
-      setupAutoUpdater(mainWindow as never)
+      setupAutoUpdater(mainWindow)
       await vi.waitFor(() => {
         expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(1)
       })

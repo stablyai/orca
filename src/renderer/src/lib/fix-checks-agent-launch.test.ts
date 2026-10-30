@@ -1,5 +1,16 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { replaceRuntimeEnvironmentRevisions } from '@/runtime/runtime-environment-revision'
+import { projectAgentLaunchSettings } from '../../../shared/agent-launch-settings'
+import { clearHostAgentMenuSettingsForTests } from '@/components/settings/use-host-agent-launch-preferences'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as ExecutionHostFactsModule from '@/lib/execution-host-facts'
+import type * as HostChatProgramAcquisitionModule from './host-chat-program-acquisition'
+
+const hostRpc = vi.hoisted(() => vi.fn())
+vi.mock('@/runtime/runtime-rpc-client', () => ({
+  callRuntimeRpc: hostRpc,
+  runtimeEnvironmentSupportsCapability: async () => true
+}))
+afterEach(clearHostAgentMenuSettingsForTests)
 
 const mocks = vi.hoisted(() => {
   const store = {
@@ -61,7 +72,8 @@ const mocks = vi.hoisted(() => {
   }
 })
 
-vi.mock('./host-chat-program-acquisition', () => ({
+vi.mock('./host-chat-program-acquisition', async (importOriginal) => ({
+  ...(await importOriginal<typeof HostChatProgramAcquisitionModule>()),
   acquireAgentLaunchChoices: async (_: unknown, run: () => unknown) => ({ detected: await run() })
 }))
 vi.mock('@/store', () => ({
@@ -127,6 +139,7 @@ vi.mock('../../../shared/source-control-ai', () => ({
 describe('startFixChecksAgent', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mocks.store.settings = { defaultTuiAgent: 'codex' }
     mocks.store.repos = [
       {
         id: 'repo-1',
@@ -338,5 +351,93 @@ describe('startFixChecksAgent', () => {
     ).rejects.toThrow('launch failed')
 
     expect(mocks.focusTerminalTabSurface).not.toHaveBeenCalled()
+  })
+
+  // Why: a saved chat stays implicit so a host that stops running chats falls back to a terminal.
+  it('replays a saved terminal explicitly and leaves a saved chat to the settings route', async () => {
+    Object.assign(mocks.store.settings, { disabledTuiAgents: ['codex'] })
+    Object.assign(mocks.store, {
+      runtimeStatusByEnvironmentId: new Map(),
+      ensureRuntimeDetectedAgents: vi.fn().mockResolvedValue(['codex'])
+    })
+    Object.assign(mocks.store.repos[0], { kind: 'folder', executionHostId: 'runtime:alpha' })
+    Object.assign(mocks.store.worktrees[0], { hostId: 'runtime:alpha' })
+    const preferences = projectAgentLaunchSettings({
+      defaultTuiAgent: 'codex',
+      disabledTuiAgents: ['claude']
+    })
+    hostRpc.mockResolvedValue({ settings: preferences })
+    mocks.readSourceControlLaunchRecipeAgentId.mockReturnValue('codex')
+    const { startFixChecksAgent } = await import('./fix-checks-agent-launch')
+    const launch = (worktreeId: string | null) =>
+      startFixChecksAgent({
+        repoId: 'repo-1',
+        worktreeId,
+        basePrompt: 'Fix checks',
+        launchSource: 'task_page',
+        item: {
+          id: 'pr-7',
+          repoId: 'repo-1',
+          type: 'pr',
+          number: 7,
+          title: 'PR',
+          state: 'open',
+          url: 'https://example.test/pr/7',
+          labels: [],
+          updatedAt: '',
+          author: null
+        },
+        openModalFallback: () => {}
+      })
+    const saved = (surface: 'chat' | 'terminal') =>
+      mocks.resolveSourceControlActionRecipe.mockReturnValue({
+        agentId: 'codex',
+        commandInputTemplate: '{basePrompt}',
+        surface
+      })
+
+    saved('terminal')
+    await expect(launch('wt-1')).resolves.toBe(true)
+    await expect(launch(null)).resolves.toBe(true)
+    saved('chat')
+    await expect(launch('wt-1')).resolves.toBe(true)
+    await expect(launch(null)).resolves.toBe(true)
+
+    mocks.readSourceControlLaunchRecipeAgentId.mockReturnValue(null)
+    mocks.resolveSourceControlActionRecipe.mockReturnValue({ agentId: null })
+    await expect(launch(null)).resolves.toBe(true)
+    expect(
+      mocks.launchWorkItemDirect.mock.calls.every(
+        ([args]) => args.agentLaunchPreferences.defaultTuiAgent === 'codex'
+      )
+    ).toBe(true)
+    expect(hostRpc).toHaveBeenCalledWith(
+      { kind: 'environment', environmentId: 'alpha' },
+      'settings.getAgentLaunch',
+      undefined,
+      expect.anything()
+    )
+    expect(mocks.launchAgentInNewTab.mock.calls.map(([args]) => args.requestedSurface)).toEqual([
+      'terminal',
+      undefined
+    ])
+    expect(
+      mocks.launchWorkItemDirect.mock.calls.map(([args]) => args.launchChoice?.requestedSurface)
+    ).toEqual(['terminal', undefined, undefined])
+    clearHostAgentMenuSettingsForTests()
+    replaceRuntimeEnvironmentRevisions([{ id: 'alpha', createdAt: 7 }])
+    const pending = Promise.withResolvers<{ settings: typeof preferences }>()
+    hostRpc.mockClear().mockReturnValueOnce(pending.promise)
+    mocks.launchWorkItemDirect.mockClear()
+    saved('terminal')
+    mocks.readSourceControlLaunchRecipeAgentId.mockReturnValue('codex')
+    const retired = launch(null)
+    await vi.waitFor(() => expect(hostRpc).toHaveBeenCalledOnce())
+    replaceRuntimeEnvironmentRevisions([{ id: 'alpha', createdAt: 8 }])
+    await expect(retired).resolves.toBe(false)
+    pending.reject(new Error('retired pinned request'))
+    expect(mocks.toastError).not.toHaveBeenCalled()
+    expect(mocks.launchWorkItemDirect).not.toHaveBeenCalled()
+    replaceRuntimeEnvironmentRevisions([])
   })
 })

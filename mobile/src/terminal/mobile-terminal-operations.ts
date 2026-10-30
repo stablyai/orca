@@ -2,9 +2,9 @@ import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc-o
 import { rpcResultVariant } from '../transport/rpc-operation-result-reader'
 import {
   terminalAutoRestoreFitSchema,
+  terminalBufferClearedSchema,
   terminalSendAcceptedSchema,
-  terminalViewportUpdatedSchema,
-  terminalWriteUnreadReplySchema
+  terminalViewportUpdatedSchema
 } from './terminal-reply-schema'
 
 // All terminal writers share object-result-or-null; changing it would change lost-ack handling for every input surface.
@@ -49,24 +49,13 @@ export const terminalAutoRestoreFitSave = bindDeferredRpcOperation(
   })
 )
 
-// Takeover retry uses fixed failure copy; skip refusal instead of surfacing an unused host message.
-export const workerTerminalTakeoverReport = bindDeferredRpcOperation(
-  defineRpcOperation({
-    name: 'orchestration.worker-terminal-input-or-skip',
-    method: 'orchestration.workerTerminalUserInput',
-    acceptance: 'success-result-or-skip',
-    barrier: 'after-caller-barrier',
-    read: rpcResultVariant('worker-terminal-input-reported', terminalWriteUnreadReplySchema)
-  })
-)
-
-// Preserve legacy clear semantics: fulfilled replies report success; only transport rejection reaches failure copy.
+/** A clear is successful only when the host confirms its buffer was cleared. */
 export const terminalBufferClear = bindDeferredRpcOperation(
   defineRpcOperation({
-    name: 'terminal.clear-buffer-or-skip',
+    name: 'terminal.clear-buffer',
     method: 'terminal.clearBuffer',
-    acceptance: 'success-result-or-skip',
+    acceptance: 'object-result-or-null',
     barrier: 'after-caller-barrier',
-    read: rpcResultVariant('terminal-buffer-cleared', terminalWriteUnreadReplySchema)
+    read: rpcResultVariant('terminal-buffer-cleared', terminalBufferClearedSchema)
   })
 )

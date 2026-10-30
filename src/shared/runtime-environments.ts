@@ -10,6 +10,7 @@ import {
   OrcadWslDeploymentLinkSchema,
   type OrcadWslDeploymentLink
 } from './wsl-host-deployment-link'
+import type { WslHostServerStop } from './wsl-host-types'
 
 export const RuntimeAccessEndpointSchema = z.object({
   id: z.string().min(1),
@@ -160,6 +161,12 @@ export type PublicKnownRuntimeEnvironment = Omit<KnownRuntimeEnvironment, 'endpo
   endpoints: PublicRuntimeAccessEndpoint[]
   /** Digest of the host's persisted E2EE public key, which its pairing handshake proves. */
   hostKeyFingerprint?: string
+}
+
+/** `serverStop` only for a host whose owning service stops a server (a WSL host, E11). */
+export type RuntimeEnvironmentRemoval = {
+  removed: PublicKnownRuntimeEnvironment
+  serverStop?: WslHostServerStop
 }
 
 export function redactRuntimeEnvironment(

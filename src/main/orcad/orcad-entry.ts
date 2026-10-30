@@ -24,15 +24,17 @@ import { orcadAutomationsKeepHostBusy, startOrcadAutomations } from './orcad-aut
 import { changedAiVaultSearchSettings } from '../../shared/ai-vault-search-settings'
 import type { AiVaultSearchSettings } from '../../shared/ai-vault-search-settings'
 import { stampRuntimeSourceEnv } from '../../shared/runtime-source-env'
-import { adoptWslHostLoginEnvironment } from './orcad-wsl-host-login-environment'
+import { adoptWslHostLoginEnvironmentLogged } from './orcad-wsl-host-login-environment'
 import { installOrcadProcessErrorGuards } from './orcad-process-error-guards'
 import { orcadWsPortOptions } from './orcad-ws-port-policy'
+import { createOrcadStartupTiming } from './orcad-startup-timing'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
-import { placeUnshownLiveTerminalsBestEffort } from '../runtime/terminal/adoption/unshown-live-terminal-placement'
+import { restoreOrcadTerminalAuthority } from './orcad-restored-terminal-authority'
+import { installOrcadFeatureReadiness } from '../runtime/rpc/orcad-feature-readiness'
 
 export { parseArgs }
 
-let closeOrcadObservability = (): void => {}
+let closeOrcadObservability = (): Promise<void> => Promise.resolve()
 
 /** Resolve after transport readiness publishes the desktop-compatible serve payload. */
 export async function startOrcad(options: OrcadOptions = {}): Promise<OrcadHandle> {
@@ -45,13 +47,14 @@ export async function startOrcad(options: OrcadOptions = {}): Promise<OrcadHandl
   const { readiness, instance, stop } = await startOrcadWithHost(
     userDataPath,
     (registerCleanup) => startOrcadRuntime(options, registerCleanup),
-    () => {
+    async () => {
       try {
         runOrcadQuitHandlers()
       } finally {
         // Close after quit handlers, including failed ones, so their spans reach disk.
-        closeOrcadObservability()
-        closeOrcadObservability = () => {}
+        const closing = closeOrcadObservability()
+        closeOrcadObservability = () => Promise.resolve()
+        await closing
       }
     }
   )
@@ -63,15 +66,19 @@ async function startOrcadRuntime(
   options: OrcadOptions,
   registerCleanup: (cleanup: OrcadRuntimeCleanup) => void
 ): Promise<Pick<OrcadHandle, 'readiness'>> {
+  const { time: timed, report: reportStartupTiming } = createOrcadStartupTiming()
   // Overlap login-shell probing with imports and store startup.
-  const loginEnvironment = adoptWslHostLoginEnvironment().then(
-    (names) => {
-      if (names.length > 0) {
-        console.info(`[orcad] adopted login-shell variables: ${names.join(', ')}`)
-      }
-    },
-    (error: unknown) => console.warn('[orcad] could not adopt login-shell variables:', error)
-  )
+  const loginEnvironment = adoptWslHostLoginEnvironmentLogged()
+  const { startOrcadDaemon, stopOrcadDaemon } = await import('./orcad-daemon-supervision')
+  // The daemon and its PTYs inherit the adopted login env and nothing later startup writes, so it
+  // spawns as soon as that lands, in parallel with the imports, stores and hook server. Never rejects.
+  const daemonStartup = loginEnvironment.then(() => timed('daemon', () => startOrcadDaemon()))
+  // Observed now: an early abort may never reach the await below.
+  void daemonStartup.catch(() => {})
+  // Registered first, so it runs last (cleanups run in reverse) and covers an import that throws
+  // mid-spawn. It disconnects without killing daemon PTYs that must survive restart, after an
+  // in-flight spawn settles; a failed one leaves only the disconnect to do.
+  registerCleanup(() => daemonStartup.catch(() => {}).then(() => stopOrcadDaemon()))
   const { OrcaRuntimeService } = await import('../runtime/orca-runtime')
   const { OrcaRuntimeRpcServer } = await import('../runtime/runtime-rpc')
   const { registerHeadlessPtyRuntime } = await import('../ipc/pty/register-headless-runtime')
@@ -82,8 +89,9 @@ async function startOrcadRuntime(
   const { servePublishMode } = await import('../server/serve-pairing-readiness')
   const { buildOrcadServeReadiness } = await import('./orcad-serve-readiness')
   const { createOrcadProfileStateStartup } = await import('./orcad-profile-state-startup')
-  const { startOrcadDaemon, stopOrcadDaemon } = await import('./orcad-daemon-supervision')
   const { daemonOwnsFreshPersistentPtys } = await import('../daemon/daemon-provider-state')
+  const { resolveDaemonSessionScrollbackRows } =
+    await import('../daemon/daemon-session-scrollback-window')
   const { collectOrcadHealth } = await import('./orcad-health')
   const { agentHookServer } = await import('../agent-hooks/server')
   const { isAgentStatusHooksEnabled } = await import('../agent-hooks/managed-agent-hook-controls')
@@ -103,12 +111,11 @@ async function startOrcadRuntime(
     | undefined
   let uninstallHookStatusRepublish = (): void => {}
   let uninstallObservedStatusIdentity = (): void => {}
-  // Cleanups run in reverse: RPC, then recovery and watchers, then the final flush, then daemon.
+  // Cleanups run in reverse: RPC, then recovery and watchers, then the final flush; the daemon
+  // disconnect, registered above, runs last.
   registerCleanup(() => agentHookServer.stop())
   registerCleanup(() => uninstallHookStatusRepublish())
   registerCleanup(() => uninstallObservedStatusIdentity())
-  // Disconnect without killing daemon PTYs that must survive restart.
-  registerCleanup(() => stopOrcadDaemon())
   registerCleanup(async () => {
     // A SQLite-backed orcad has no JSON mirror to absorb a debounced write after SIGTERM.
     if (profileStoreForShutdown) {
@@ -123,7 +130,7 @@ async function startOrcadRuntime(
   const runtimeUserDataPath = getAppEnvironment().getPath('userData')
   const { startEventLoopDelayProbe } = await import('../diagnostics/event-loop-delay-probe')
   startEventLoopDelayProbe('orcad', runtimeUserDataPath)
-  await prepareOrcadCliLauncher().catch((error: unknown) => {
+  await timed('cli-launcher', () => prepareOrcadCliLauncher()).catch((error: unknown) => {
     console.warn('[orcad] Could not prepare the profile CLI launcher', error)
   })
   const idleExitStartup = beginOrcadIdleExit(runtimeUserDataPath)
@@ -135,9 +142,10 @@ async function startOrcadRuntime(
     setAiVaultServiceIdleTimeoutMs(scannerIdleTimeoutMs)
   }
   // Initialize sealing before Store load unseals protected settings.
-  await prepareOrcadSecretStoreAndMigrate(runtimeUserDataPath)
-  const { store: profileStore, authority: profileStateAuthority } =
-    await createOrcadProfileStateStartup(runtimeUserDataPath)
+  await timed('secret-store', () => prepareOrcadSecretStoreAndMigrate(runtimeUserDataPath))
+  const { store: profileStore, authority: profileStateAuthority } = await timed('profile', () =>
+    createOrcadProfileStateStartup(runtimeUserDataPath)
+  )
   const observedPaneIdentities = new AgentStatusObservedPaneIdentities()
   const observedStatusCapture = new AgentStatusObservedPaneIdentityCapture(observedPaneIdentities)
   profileStoreForShutdown = profileStore
@@ -154,15 +162,15 @@ async function startOrcadRuntime(
   })
 
   // Reconcile, daemon and runtime all consume this environment.
-  await loginEnvironment
-  startOrcadManagedAgentHooks(
+  await timed('login-env-wait', () => loginEnvironment)
+  const managedAgentHooks = startOrcadManagedAgentHooks(
     profileStore,
     (enabled) => agentHookServer.setStatusHooksEnabled(enabled),
     registerCleanup
   )
 
   // Install the daemon provider before PTY handlers can route their first call.
-  await startOrcadDaemon()
+  await daemonStartup
 
   // Runtime constructor callbacks use this index only after it is installed.
   let sessionSearch: { apply(settings: AiVaultSearchSettings): void; dispose(): void } | null = null
@@ -173,6 +181,8 @@ async function startOrcadRuntime(
     registerCleanup
   )
 
+  // Gates open where each phase finishes today; RPC starts after all of them (no behavior change).
+  const featureReadiness = installOrcadFeatureReadiness()
   const { createOrcadAccountServices } = await import('./orcad-account-services')
   const accountLaunch = createOrcadAccountServices({
     store: profileStore,
@@ -202,6 +212,8 @@ async function startOrcadRuntime(
     canRecoverPersistentLocalPtys: () => daemonOwnsFreshPersistentPtys(),
     // Node hosts cannot promote into desktop windows; override the constructor’s openable default.
     getDesktopWindowStatus: () => 'blocked',
+    // No renderer reveals from this model; it keeps the daemon's live window, which deeper snapshot reads ask first.
+    headlessTerminalScrollbackRows: resolveDaemonSessionScrollbackRows(),
     // Unchanged settings would reconstruct a healthy search index; deduplicate before apply.
     applySessionSearchSettings: (before, after) => {
       const next = changedAiVaultSearchSettings(before, after)
@@ -219,6 +231,7 @@ async function startOrcadRuntime(
   // Restore prior desktop-pushed account selection before automations or CLI launches.
   const { restoreOrcadHostAccountLaunchEnv } = await import('./orcad-host-account-launch-env-store')
   restoreOrcadHostAccountLaunchEnv(runtime, runtimeUserDataPath)
+  featureReadiness.open('accounts')
 
   const { installOrcadSessionSearchService } = await import('./orcad-session-search')
   sessionSearch = await installOrcadSessionSearchService({
@@ -226,6 +239,7 @@ async function startOrcadRuntime(
     getSettings: () => profileStore.getSettings()
   })
   getAppEnvironment().onWillQuit(() => sessionSearch?.dispose())
+  featureReadiness.open('sessionSearch')
 
   const { startAgentStateRulesLiveUpdates } =
     await import('../runtime/agent-state-rules/agent-state-rules-live-update')
@@ -261,11 +275,7 @@ async function startOrcadRuntime(
   // Recover browser/orchestration authority before clients attach to the runtime graph.
   runtime.rehydrateClientHostedBrowserPages()
 
-  await runtime.refreshRestoredOrchestrationAuthority()
-  await runtime.reconcileLegacyWorkerTerminals()
-  if (ORCA_LAYOUT_OWNER_IS_MAIN) {
-    await placeUnshownLiveTerminalsBestEffort(runtime)
-  }
+  await restoreOrcadTerminalAuthority(runtime, timed, featureReadiness)
   runtime.agentTransitions.seedRestoredRows()
   void runtime.sidebarFacts?.reconcileSortStampTiers(getLocalPtyProvider())
 
@@ -298,7 +308,7 @@ async function startOrcadRuntime(
   })
   // Stop RPC before cleanup can tear down writers and runtime state.
   registerCleanup(() => rpc.stop())
-  await rpc.start()
+  await timed('rpc', () => rpc.start())
   startOrcadAutomations(runtime, profileStore, registerCleanup)
   const pushService = DesktopPushService.create({
     runtime,
@@ -322,6 +332,8 @@ async function startOrcadRuntime(
   })
 
   await new ServeReadinessPublisher().publish(readiness, servePublishMode(options))
+  reportStartupTiming()
+  managedAgentHooks.readinessPublished()
 
   await idleExitStartup.start({
     rpc,

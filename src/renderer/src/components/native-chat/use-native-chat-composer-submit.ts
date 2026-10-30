@@ -1,9 +1,7 @@
 import { useCallback, useMemo, useState } from 'react'
 import { translate } from '@/i18n/i18n'
-import {
-  applyPickerSuggestion,
-  type NativeChatPickerItem
-} from '../../../../shared/native-chat-picker-items'
+import { applyPickerSuggestion } from '../../../../shared/native-chat/input/native-chat-picker-triggers'
+import type { NativeChatPickerItem } from '../../../../shared/native-chat/input/native-chat-picker-items'
 import type { NativeChatStructuredComposerTransport } from './native-chat-composer-types'
 import type { NativeChatComposerImageAttachment } from './NativeChatComposerField'
 import { nativeChatImagesHoldSend } from './native-chat-image-reattach'

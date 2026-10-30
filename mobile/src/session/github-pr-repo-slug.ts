@@ -20,6 +20,7 @@ const METHODS_ACCEPTING_PR_REPO = new Set<string>([
   'github.resolveReviewThread',
   'github.setPRFileViewed',
   'github.updatePRState',
+  'github.markPRReadyForReview',
   'github.requestPRReviewers',
   'github.removePRReviewers',
   'github.mergePR',

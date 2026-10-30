@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { openEnum, salvagedOptional, salvagingArray } from '../../../src/shared/zod-salvage'
 import { SSH_CONNECTION_STATUS } from '../transport/ssh-connection-status-arms'
+import { SETUP_RUN_POLICIES } from '../components/new-workspace-reply-schema'
 
 const sourceText = (name: string) => salvagedOptional(name, z.string())
 
@@ -40,7 +41,7 @@ export const sshConnectionStateSchema = z
 // Agent ids are string-matched; discard non-string elements without failing the advisory probe.
 export const detectedAgentIdsSchema = salvagingArray(z.string())
 
-// Hook fields are guarded; preserve unknown setup policy strings so callers retain their existing skip behavior.
+// Hook fields are guarded; an unknown setup policy reads as skip-by-default, the existing behavior.
 export const repoSetupHooksSchema = z.looseObject({
   hooks: salvagedOptional(
     'hooks',
@@ -51,7 +52,11 @@ export const repoSetupHooksSchema = z.looseObject({
       .nullable()
   ),
   source: salvagedOptional('source', z.string().nullable()),
-  setupRunPolicy: sourceText('setupRunPolicy'),
+  setupRunPolicy: salvagedOptional(
+    'setupRunPolicy',
+    openEnum(SETUP_RUN_POLICIES, 'skip-by-default')
+  ),
+  setupConfig: salvagedOptional('setupConfig', z.looseObject({ command: z.string() }).nullable()),
   setupTrust: salvagedOptional(
     'setupTrust',
     z

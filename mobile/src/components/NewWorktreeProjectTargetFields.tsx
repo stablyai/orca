@@ -1,7 +1,11 @@
-import { View, Text, Pressable, StyleSheet, Platform } from 'react-native'
+import { View, Text, Pressable } from 'react-native'
 import { ChevronDown } from 'lucide-react-native'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { HostKindIcon } from './HostKindIcon'
-import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { colors, spacing, typography } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
+import { composerInputStyles, COMPOSER_TEXT_SIZE } from './composer-input/composer-input-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 
 type Selection = { label: string; detail?: string }
 
@@ -18,24 +22,42 @@ export function NewWorktreeProjectTargetFields({
   onOpenProject: () => void
   onOpenRunTarget: () => void
 }) {
+  useMobileColorScheme()
+  const t = useMobileTranslation()
   return (
     <>
       <View style={styles.field}>
-        <Text style={styles.label}>Project</Text>
+        <Text style={styles.label}>
+          {t('components.newWorktreeProjectTargetFields.project', 'Project')}
+        </Text>
         <Pressable style={styles.fieldButton} onPress={onOpenProject}>
           {projectBadgeColor ? (
             <View style={[styles.projectDot, { backgroundColor: projectBadgeColor }]} />
           ) : null}
-          <SelectionCopy selection={project} placeholder="Select a project" />
+          <SelectionCopy
+            selection={project}
+            placeholder={t(
+              'components.newWorktreeProjectTargetFields.selectProject',
+              'Select a project'
+            )}
+          />
           <ChevronDown size={14} color={colors.textMuted} />
         </Pressable>
       </View>
 
       <View style={styles.field}>
-        <Text style={styles.label}>Run on</Text>
+        <Text style={styles.label}>
+          {t('components.newWorktreeProjectTargetFields.runOn', 'Run on')}
+        </Text>
         <Pressable style={styles.fieldButton} onPress={onOpenRunTarget}>
           <HostKindIcon hostId={runTarget?.hostId} size={14} />
-          <SelectionCopy selection={runTarget} placeholder="Select a run target" />
+          <SelectionCopy
+            selection={runTarget}
+            placeholder={t(
+              'components.newWorktreeProjectTargetFields.selectRunTarget',
+              'Select a run target'
+            )}
+          />
           <ChevronDown size={14} color={colors.textMuted} />
         </Pressable>
       </View>
@@ -50,6 +72,7 @@ function SelectionCopy({
   selection: Selection | null
   placeholder: string
 }) {
+  useMobileColorScheme()
   return (
     <View style={styles.fieldButtonCopy}>
       <Text
@@ -67,7 +90,7 @@ function SelectionCopy({
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   field: {
     marginBottom: spacing.md
   },
@@ -78,15 +101,8 @@ const styles = StyleSheet.create({
     marginBottom: spacing.xs
   },
   fieldButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    backgroundColor: colors.bgRaised,
-    borderRadius: radii.input,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    paddingHorizontal: spacing.md,
-    paddingVertical: Platform.OS === 'ios' ? spacing.sm + 2 : spacing.sm
+    ...composerInputStyles.field,
+    paddingVertical: spacing.sm
   },
   projectDot: {
     width: 8,
@@ -98,7 +114,7 @@ const styles = StyleSheet.create({
     minWidth: 0
   },
   fieldButtonText: {
-    fontSize: typography.bodySize,
+    fontSize: COMPOSER_TEXT_SIZE,
     color: colors.textPrimary
   },
   fieldButtonDetail: {
@@ -109,4 +125,4 @@ const styles = StyleSheet.create({
   fieldButtonPlaceholder: {
     color: colors.textMuted
   }
-})
+}))

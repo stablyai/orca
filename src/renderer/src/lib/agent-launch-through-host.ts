@@ -10,7 +10,7 @@ import { isNativeChatEnabled } from '../../../shared/structured-native-chat-laun
 import type { TuiAgent } from '../../../shared/tui-agent'
 import type { LaunchSource } from '../../../shared/telemetry-events'
 import type { Tab } from '../../../shared/tab-types'
-import type { SessionOptionValue } from '../../../shared/native-chat-session-options'
+import type { SessionOptionValue } from '../../../shared/native-chat/input/native-chat-session-options'
 
 export type HostAgentLaunchArgs = {
   agent: TuiAgent

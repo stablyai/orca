@@ -96,7 +96,7 @@ describe('workspace query prototype dispatch', () => {
         return resolved
       }
       run() {
-        return this.resolveWorktreeSelector(`id:${TEST_WORKTREE_ID}`)
+        return this.resolveGitWorktreeSelector(`id:${TEST_WORKTREE_ID}`)
       }
     }
     const runtime = new Probe(store)

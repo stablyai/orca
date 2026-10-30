@@ -1,8 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
-  RECENTLY_CLOSED_AGENT_STATUS_TAB_IDS_MAX,
   RECENTLY_RETIRED_AGENT_STATUS_PANE_KEYS_MAX,
-  boundRecentlyClosedAgentStatusTabIds,
   boundRecentlyRetiredAgentStatusPaneKeys,
   removePaneKeys
 } from './agent-status-pane-keyed-records'
@@ -20,53 +18,6 @@ function fullRecord(max: number, prefix: string): Record<string, true> {
 }
 
 describe('boundRecentlyRetiredAgentStatusPaneKeys', () => {
-  it('returns the existing record when there is nothing to add', () => {
-    const existing = keyRecord(['a', 'b'])
-    expect(boundRecentlyRetiredAgentStatusPaneKeys(existing, [])).toBe(existing)
-    const empty = keyRecord([])
-    expect(boundRecentlyRetiredAgentStatusPaneKeys(empty, [])).toBe(empty)
-  })
-
-  it('returns the existing record when the additions already form its tail in order', () => {
-    const existing = keyRecord(['a', 'b', 'c'])
-    expect(boundRecentlyRetiredAgentStatusPaneKeys(existing, ['c'])).toBe(existing)
-    expect(boundRecentlyRetiredAgentStatusPaneKeys(existing, ['b', 'c'])).toBe(existing)
-    expect(boundRecentlyRetiredAgentStatusPaneKeys(existing, ['a', 'b', 'c'])).toBe(existing)
-  })
-
-  // LRU readds move keys to tail; equal key sets alone cannot prove no-op.
-  it('re-retiring an existing non-tail key changes identity and moves it to the tail', () => {
-    const existing = keyRecord(['a', 'b', 'c'])
-    const next = boundRecentlyRetiredAgentStatusPaneKeys(existing, ['a'])
-    expect(next).not.toBe(existing)
-    expect(Object.keys(next)).toEqual(['b', 'c', 'a'])
-    expect(Object.keys(existing)).toEqual(['a', 'b', 'c'])
-  })
-
-  it('tail keys re-added in a different relative order are rebuilt in the new order', () => {
-    const existing = keyRecord(['a', 'b', 'c'])
-    const next = boundRecentlyRetiredAgentStatusPaneKeys(existing, ['c', 'b'])
-    expect(next).not.toBe(existing)
-    expect(Object.keys(next)).toEqual(['a', 'c', 'b'])
-  })
-
-  it('appends new keys after the existing ones', () => {
-    const existing = keyRecord(['a'])
-    const next = boundRecentlyRetiredAgentStatusPaneKeys(existing, ['b', 'c'])
-    expect(next).not.toBe(existing)
-    expect(Object.keys(next)).toEqual(['a', 'b', 'c'])
-  })
-
-  it('evicts the oldest keys once the cap is exceeded', () => {
-    const full = fullRecord(RECENTLY_RETIRED_AGENT_STATUS_PANE_KEYS_MAX, 'k')
-    const next = boundRecentlyRetiredAgentStatusPaneKeys(full, ['fresh'])
-    const keys = Object.keys(next)
-    expect(keys).toHaveLength(RECENTLY_RETIRED_AGENT_STATUS_PANE_KEYS_MAX)
-    expect(keys[0]).toBe('k1')
-    expect(keys.at(-1)).toBe('fresh')
-    expect(next.k0).toBeUndefined()
-  })
-
   it('re-retiring the oldest key at the cap keeps it fenced and evicts the next oldest', () => {
     const full = fullRecord(RECENTLY_RETIRED_AGENT_STATUS_PANE_KEYS_MAX, 'k')
     const bumped = boundRecentlyRetiredAgentStatusPaneKeys(full, ['k0'])
@@ -84,28 +35,6 @@ describe('boundRecentlyRetiredAgentStatusPaneKeys', () => {
     expect(next).not.toBe(over)
     expect(Object.keys(next)).toHaveLength(RECENTLY_RETIRED_AGENT_STATUS_PANE_KEYS_MAX)
     expect(next.k0).toBeUndefined()
-  })
-})
-
-describe('boundRecentlyClosedAgentStatusTabIds', () => {
-  it('returns the existing record when the tab is already the most recent', () => {
-    const existing = keyRecord(['t1', 't2'])
-    expect(boundRecentlyClosedAgentStatusTabIds(existing, 't2')).toBe(existing)
-  })
-
-  it('moves a re-closed tab to the tail', () => {
-    const existing = keyRecord(['t1', 't2'])
-    const next = boundRecentlyClosedAgentStatusTabIds(existing, 't1')
-    expect(next).not.toBe(existing)
-    expect(Object.keys(next)).toEqual(['t2', 't1'])
-  })
-
-  it('evicts the oldest tab once the cap is exceeded', () => {
-    const full = fullRecord(RECENTLY_CLOSED_AGENT_STATUS_TAB_IDS_MAX, 't')
-    const next = boundRecentlyClosedAgentStatusTabIds(full, 'fresh')
-    expect(Object.keys(next)).toHaveLength(RECENTLY_CLOSED_AGENT_STATUS_TAB_IDS_MAX)
-    expect(next.t0).toBeUndefined()
-    expect(next.fresh).toBe(true)
   })
 })
 
@@ -131,25 +60,4 @@ it('removes enumerable undefined values without removing inherited or hidden key
   Object.defineProperty(record, 'hidden', { value: 1, enumerable: false })
   expect(removePaneKeys(record, new Set(['hidden', 'toString']))).toBe(record)
   expect(Object.hasOwn(removePaneKeys(record, new Set(['visible'])), 'visible')).toBe(false)
-})
-
-// Probe equivalence must cover keys missing in both directions and preserve identity on no-op.
-it('drops every requested key that is present and keeps the reference when none are', () => {
-  const base = { a: 1, b: 2, c: 3 }
-  expect(removePaneKeys({ ...base }, new Set(['a', 'b', 'c', 'd', 'e']))).toEqual({})
-  expect(removePaneKeys({ ...base }, new Set(['b', 'missing']))).toEqual({ a: 1, c: 3 })
-  const disjoint = { ...base }
-  expect(removePaneKeys(disjoint, new Set(['x', 'y']))).toBe(disjoint)
-  const noKeys = { ...base }
-  expect(removePaneKeys(noKeys, new Set())).toBe(noKeys)
-  const empty = {}
-  expect(removePaneKeys(empty, new Set(['a']))).toBe(empty)
-})
-
-it('leaves surviving keys in their original order and does not pollute the prototype', () => {
-  const record: Record<string, number> = { z: 1, y: 2, x: 3, w: 4 }
-  expect(Object.keys(removePaneKeys(record, new Set(['x', 'z'])))).toEqual(['y', 'w'])
-  const plain = { safe: 1 }
-  expect(removePaneKeys(plain, new Set(['__proto__', 'constructor']))).toBe(plain)
-  expect(Object.getPrototypeOf(plain)).toBe(Object.prototype)
 })

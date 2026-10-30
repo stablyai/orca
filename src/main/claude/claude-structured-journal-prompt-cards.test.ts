@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../shared/agent-session-journal-types'
 import type { StructuredAgentSessionSinkBarrier } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import { ClaudeJournalPrompts } from './claude-structured-journal-prompts'
-import type { ClaudeStructuredSessionEvent } from './claude-structured-session-state'
+import type { ClaudeStructuredSessionEvent } from './structured/claude-structured-session-state'
 
 const PROMPT: Extract<ClaudeStructuredSessionEvent, { type: 'prompt' }> = {
   type: 'prompt',

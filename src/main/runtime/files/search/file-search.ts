@@ -1,5 +1,6 @@
 import {
   QUICK_OPEN_SEARCH_VERSION,
+  QuickOpenPathRanker,
   isQuickOpenQueryTooLarge
 } from '../../../../shared/quick-open-path-search'
 import type { RuntimeFileListResult } from '../../../../shared/runtime-types'
@@ -18,7 +19,7 @@ import {
   type ResolvedRuntimeFileTarget
 } from '../file-target'
 import { basenameFromRelativePath } from '../file-paths'
-import { RuntimeMobileFilePathSearchCache, rankRuntimeMobileFilePaths } from './mobile-path-search'
+import { RuntimeMobileFilePathSearchCache } from './mobile-path-search'
 
 const MOBILE_FILE_LIST_LIMIT = 5000
 
@@ -115,7 +116,12 @@ export class RuntimeFileSearch {
         truncated: safePaths.length > MOBILE_FILE_PATH_SEARCH_CACHE_LIMIT
       }
     })
-    const matches = rankRuntimeMobileFilePaths(inventory.paths, query, limit)
+    // Rank the cached inventory with desktop's Quick Open rule, so every phone version gets it without a walk per query.
+    const ranker = new QuickOpenPathRanker(query, limit)
+    for (const path of inventory.paths) {
+      ranker.consider(path)
+    }
+    const matches = ranker.result()
     return {
       worktree: worktree.id,
       rootPath: worktree.path,

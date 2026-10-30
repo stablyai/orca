@@ -1,3 +1,4 @@
+import { translate } from '@/i18n/i18n'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import type { WorkspacePortScanResult } from '../../../shared/workspace-ports'
 import {
@@ -25,7 +26,12 @@ export async function refreshWorkspacePortScanForTarget(
       platform: previous?.platform ?? 'unknown',
       scannedAt: Date.now(),
       ports: previous?.ports ?? [],
-      unavailableReason: message || 'Workspace port scan failed.'
+      unavailableReason:
+        message ||
+        translate(
+          'auto.components.right.sidebar.PortsPanel.740aca88ab',
+          'Workspace port scan failed.'
+        )
     })
   }
 }

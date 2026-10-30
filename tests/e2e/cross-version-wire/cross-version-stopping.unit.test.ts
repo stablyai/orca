@@ -75,7 +75,9 @@ function publishRow(host: HostRowModules, mainAgent: Record<string, unknown>): R
     summaries,
     pathIndex: { byPath: new Map(), byRealPath: new Map() },
     missingWorktreeIds: new Set(),
+    // Older builds read workingTerminalEvidenceByWorktreeId; newer ones read terminalTitleEvidenceByWorktreeId.
     workingTerminalEvidenceByWorktreeId: new Map(),
+    terminalTitleEvidenceByWorktreeId: new Map(),
     rowSources: host.collectRuntimeWorktreeAgentSources({
       hookSnapshots: [snapshot],
       mirroredWorktreeIdByTabId: new Map(),

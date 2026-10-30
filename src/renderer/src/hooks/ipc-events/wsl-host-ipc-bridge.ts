@@ -54,7 +54,11 @@ export function registerWslHostIpcBridge(unsubs: (() => void)[]): void {
   if (typeof api.getCapability === 'function') {
     void api
       .getCapability()
-      .then(({ serverFiles }) => useAppStore.getState().setWslHostServerFiles(serverFiles))
+      .then(({ serverFiles, acceptsNewWork }) => {
+        const state = useAppStore.getState()
+        state.setWslHostServerFiles(serverFiles)
+        state.setWslHostsAcceptNewWork(acceptsNewWork !== false)
+      })
       .catch((error) => console.error('Failed to read WSL host capability:', error))
   }
   let stopped = false

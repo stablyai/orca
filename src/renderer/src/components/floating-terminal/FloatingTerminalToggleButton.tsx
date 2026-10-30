@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next'
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { PanelsTopLeft } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -63,6 +64,8 @@ export function FloatingTerminalToggleButton({
   open: boolean
   onToggle: () => void
 }): React.JSX.Element {
+  // Memoized: subscribe so a language change still repaints its labels.
+  useTranslation()
   const shortcutLabel = useShortcutLabel('floatingTerminal.toggle')
   // Read shared unread state so engaging with or closing a tab clears its minimized-panel attention dot.
   const hasFloatingUnread = useAppStore(selectFloatingWorkspaceHasUnread)

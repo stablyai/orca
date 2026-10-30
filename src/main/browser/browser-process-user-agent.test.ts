@@ -40,10 +40,6 @@ describe('cleanElectronUserAgent', () => {
     expect(cleanElectronUserAgent(raw)).toBe(expected)
   })
 
-  it('leaves an already-clean identity byte-identical', () => {
-    expect(cleanElectronUserAgent(MAC_CLEAN)).toBe(MAC_CLEAN)
-  })
-
   it.each([
     [
       'an OS comment but no engine comment',

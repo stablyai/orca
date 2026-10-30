@@ -36,6 +36,7 @@ export {
   getFolderWorkspaceAgentLaunchFact,
   resolveFolderWorkspaceLaunchDraft
 } from './folder-workspace-agent-startup'
+import { translate } from '@/i18n/i18n'
 
 type FolderWorkspaceCreateInput = {
   projectGroupId: string
@@ -96,7 +97,13 @@ export async function submitFolderWorkspaceCreate({
   const workspaceName =
     nameIsAutoManaged && linkedName
       ? linkedName
-      : name.trim() || linkedName || `${projectGroup.name} workspace`
+      : name.trim() ||
+        linkedName ||
+        translate(
+          'auto.components.sidebar.folderWorkspaceComposer.defaultWorkspaceName',
+          '{{name}} workspace',
+          { name: projectGroup.name }
+        )
   const launchHost = getFolderWorkspaceAgentLaunchFact(useAppStore.getState(), projectGroup)
   if (quickAgent && launchHost.kind === 'withheld') {
     throw new Error(launchHost.reason)

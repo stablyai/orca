@@ -1,6 +1,9 @@
+import { sameNativeChatComposerDraftDocument } from './native-chat-composer-draft-comparison'
+import type { NativeChatComposerDraftAddition } from './native-chat-composer-draft-addition'
 // Memory owns drafts; storage keeps a copy shared by the API and persistence modules.
 
 import type {
+  NativeChatComposerDraft,
   NativeChatComposerDraftImage,
   StoredNativeChatComposerDraft
 } from './native-chat-composer-draft-storage'
@@ -15,6 +18,50 @@ export type UnconfirmedDraftChange = {
 }
 
 export const records = new Map<string, DraftRecord>()
+export type NativeChatDraftPosition = { at: 'start' | 'end'; target?: string; pending: boolean }
+export const nativeChatDraftPositions = new WeakMap<
+  NativeChatComposerDraft,
+  NativeChatDraftPosition
+>()
+
+export function retireNativeChatDraftPosition(
+  draft: NativeChatComposerDraft | undefined,
+  target?: string
+): void {
+  const position = draft && nativeChatDraftPositions.get(draft)
+  if (position && (target === undefined || position.target === target)) {
+    position.pending = false
+  }
+}
+
+/** Publish UI provenance with its exact value; only metadata-only replacements inherit it. */
+export function installNativeChatDraftRecord(
+  scope: string,
+  draft?: DraftRecord,
+  position?: NativeChatDraftPosition
+): void {
+  const previous = records.get(scope)
+  if (
+    previous &&
+    draft &&
+    previous.text === draft.text &&
+    sameNativeChatComposerDraftDocument(previous.document, draft.document) &&
+    !position
+  ) {
+    position = nativeChatDraftPositions.get(previous)
+  } else {
+    retireNativeChatDraftPosition(previous)
+  }
+  if (draft) {
+    if (position) {
+      nativeChatDraftPositions.set(draft, position)
+    }
+    records.set(scope, draft)
+  } else {
+    records.delete(scope)
+  }
+}
+
 // Changed in memory with no write issued yet; a refused write comes back here for the next flush.
 export const dirtyScopes = new Set<string>()
 export const unconfirmed = new Map<string, UnconfirmedDraftChange>()
@@ -110,6 +157,9 @@ export function hasLocalChange(scopeKey: string): boolean {
 }
 
 export function clearDraftMemoryForTests(): void {
+  for (const draft of records.values()) {
+    retireNativeChatDraftPosition(draft)
+  }
   records.clear()
   dirtyScopes.clear()
   unconfirmed.clear()
@@ -121,4 +171,64 @@ export function clearDraftMemoryForTests(): void {
   load.editedBeforeLoad.clear()
   load.appendsBeforeLoad.clear()
   load.deletionsBeforeLoad.length = 0
+}
+
+export type NativeChatDraftAppend =
+  | NativeChatComposerDraftAddition
+  | ((draft: NativeChatComposerDraft) => NativeChatComposerDraft)
+const appendListeners = new Map<
+  string,
+  Set<(addition: NativeChatDraftAppend, previous: NativeChatComposerDraft) => void>
+>()
+export function subscribeToNativeChatComposerDraftAppend(
+  scope: string,
+  listener: (addition: NativeChatDraftAppend, previous: NativeChatComposerDraft) => void
+): () => void {
+  const scoped = appendListeners.get(scope) ?? new Set()
+  appendListeners.set(scope, scoped)
+  scoped.add(listener)
+  return () => {
+    scoped.delete(listener)
+    if (scoped.size === 0) {
+      appendListeners.delete(scope)
+    }
+  }
+}
+
+export function notifyDraftAppend(
+  scope: string,
+  addition: NativeChatDraftAppend,
+  previous: NativeChatComposerDraft
+): void {
+  appendListeners.get(scope)?.forEach((listener) => listener(addition, previous))
+}
+
+export type NativeChatEditDraftDestination = { scopeKey: string; active: boolean }
+export const ephemeralDrafts = new Map<string, NativeChatEditDraftDestination>()
+
+export function captureNativeChatEditDraftDestination(
+  scopeKey: string
+): NativeChatEditDraftDestination | undefined {
+  return ephemeralDrafts.get(scopeKey)
+}
+
+export function redirectNativeChatEditDraft(scopeKey: string, destination: string): void {
+  const target = ephemeralDrafts.get(scopeKey)
+  if (target) {
+    target.scopeKey = destination
+  }
+}
+
+export function isNativeChatEditDraft(scopeKey: string): boolean {
+  return scopeKey.startsWith('queued-edit:')
+}
+
+export function closeNativeChatEditDraft(scopeKey: string): void {
+  const target = ephemeralDrafts.get(scopeKey)
+  if (target?.scopeKey === scopeKey) {
+    target.active = false
+  }
+  ephemeralDrafts.delete(scopeKey)
+  installNativeChatDraftRecord(scopeKey)
+  notifyScope(scopeKey)
 }
