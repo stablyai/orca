@@ -19,7 +19,7 @@ export type OrcaHookTrustPrompt = {
 type Props = {
   visible: boolean
   prompt: OrcaHookTrustPrompt | null
-  busy: boolean
+  busy?: boolean
   onRunOnce: () => void
   onAlwaysTrust: () => void
   onDontRun: () => void
@@ -30,7 +30,7 @@ type Props = {
 export function OrcaHookTrustDrawer({
   visible,
   prompt,
-  busy,
+  busy = false,
   onRunOnce,
   onAlwaysTrust,
   onDontRun,
