@@ -757,6 +757,9 @@ describe('orchestration federation', () => {
         if (method === 'status.get') {
           return { runtimeId: workerRuntime.getRuntimeId(), capabilities: workerCapabilities }
         }
+        if (method === 'orchestration.federationShow') {
+          return {}
+        }
         if (method === 'orchestration.federationStop') {
           throw new Error('connection lost')
         }

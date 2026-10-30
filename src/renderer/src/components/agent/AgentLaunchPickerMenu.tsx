@@ -2,10 +2,8 @@ import { useId, useRef, useState, type PointerEvent } from 'react'
 import { Input } from '@/components/ui/input'
 import { DropdownMenuItem, DropdownMenuShortcut } from '@/components/ui/dropdown-menu'
 import { AgentIcon } from '@/lib/agent-catalog'
-import { useOptionalShortcutLabel } from '@/hooks/useShortcutLabel'
 import { translate } from '@/i18n/i18n'
 import { AgentLaunchSetupButton } from './AgentLaunchSetupButton'
-import type { NewTabAgentMenuModel } from '../tab-bar/use-new-tab-agent-menu-rows'
 import { chatUnavailableLabel } from '../tab-bar/tab-agent-row-presentation'
 import type { NewTabAgentMenuRow } from '../../../../shared/agent-launch-picker-rows'
 import {
@@ -36,14 +34,14 @@ function keepSetupFocus(event: PointerEvent<HTMLDivElement>) {
 }
 
 export function AgentLaunchPickerMenu({
-  model,
   disabled,
   runLaunch,
   entries,
   hideSearch,
-  onSelectAgent
+  onSelectAgent,
+  shortcutLabels
 }: {
-  model: NewTabAgentMenuModel
+  shortcutLabels?: ReadonlyMap<AgentPickerEntry['agent'], string>
   disabled?: boolean
   runLaunch: Launch
   entries: AgentPickerEntry[]
@@ -53,7 +51,6 @@ export function AgentLaunchPickerMenu({
   const [query, setQuery] = useState('')
   const [openSetup, setOpenSetup] = useState<string | null>(null)
   const root = useRef<HTMLDivElement>(null)
-  const shortcut = useOptionalShortcutLabel('tab.newAgent')
   const setups = searchAgentPickerSetups(entries, query)
   const words = query.trim().toLowerCase().split(/\s+/).filter(Boolean)
   const visible = entries.filter((entry) =>
@@ -114,11 +111,7 @@ export function AgentLaunchPickerMenu({
           disabled={disabled}
           runLaunch={runLaunch}
           onSelectAgent={onSelectAgent}
-          shortcut={
-            model.state === 'settled' && model.defaultTuiAgent === entry.agent
-              ? (shortcut ?? undefined)
-              : undefined
-          }
+          shortcut={shortcutLabels?.get(entry.agent)}
         />
       ))}
       {!visible.length && !setups.length ? (
@@ -207,7 +200,7 @@ function AgentPickerMenuRow({
           onPointerLeave={keepSetupFocus}
         >
           <AgentIcon agent={entry.agent} size={14} />
-          <span className="flex-1">{label}</span>
+          <span className="min-w-0 flex-1 truncate">{label}</span>
           {shortcut ? <DropdownMenuShortcut>{shortcut}</DropdownMenuShortcut> : null}
           {unavailable?.kind === 'chat-unavailable' && !entry.surfaces.includes('chat') ? (
             <span className="text-xs text-muted-foreground">

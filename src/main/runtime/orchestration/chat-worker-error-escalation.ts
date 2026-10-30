@@ -1,7 +1,6 @@
 import { createHash } from 'node:crypto'
 import { performance } from 'node:perf_hooks'
 import { structuredAgentSessionStartFailure } from '../../native-chat/agent-session-wire/structured-agent-session-failure-text'
-import type { GlobalSettings } from '../../../shared/global-settings-types'
 import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
 import { agentSessionFailureWords } from '../../../shared/agent-session-failure-words'
 import { formatOrcaSessionAddress, isOrcaSessionId } from '../../../shared/orca-session-address'
@@ -13,29 +12,12 @@ import { chatRequestError, isSenderOwnRejection } from './chat-worker-error-word
 import type { OrchestrationDb } from './db'
 import type { DispatchContextRow } from './types'
 import { escalateWorkerFailure } from './worker-failure-escalation'
-
-export type ChatWorkerErrorEscalationDeps = {
-  /** Chat UI is on and the user left the Orchestration switch on. */
-  enabled: () => boolean
-  db: () => OrchestrationDb | null
-  notify: (handle: string, messageType: string) => void
-}
-
-export function chatWorkerErrorEscalationEnabled(
-  settings:
-    | Pick<GlobalSettings, 'experimentalNativeChat' | 'orchestrationChatErrorEscalationEnabled'>
-    | undefined
-): boolean {
-  return (
-    settings?.experimentalNativeChat === true &&
-    settings.orchestrationChatErrorEscalationEnabled !== false
-  )
-}
+import type { WorkerTurnStopReportDeps } from './worker-turn-stop-report'
 
 type ChatWorkerDispatch = { dispatch: DispatchContextRow; from: string }
 
 /** The open Dispatch this session works, as a chat assignee or as a structured worker. */
-function chatWorkerDispatches(sessionId: string, db: OrchestrationDb): ChatWorkerDispatch[] {
+export function chatWorkerDispatches(sessionId: string, db: OrchestrationDb): ChatWorkerDispatch[] {
   const found: ChatWorkerDispatch[] = []
   if (isOrcaSessionId(sessionId)) {
     // A `/clear` successor keeps its root's address, so the Dispatch names the root.
@@ -78,13 +60,10 @@ function escalationId(dispatchId: string, request: StructuredAgentSessionRequest
 /** Capture authority synchronously; notification bookkeeping never rejects a committed write. */
 export async function escalateChatWorkerError(
   request: StructuredAgentSessionRequestFailure,
-  deps: ChatWorkerErrorEscalationDeps
+  deps: WorkerTurnStopReportDeps
 ): Promise<void> {
   try {
-    if (!deps.enabled()) {
-      return
-    }
-    const db = deps.db()
+    const db = deps.getDb()
     const targets = db ? chatWorkerDispatches(request.sessionId, db) : []
     if (!db || targets.length === 0) {
       return
@@ -117,10 +96,9 @@ export async function escalateChatWorkerError(
     }
     const { text, detail, kind } = error ?? { ...unrecordedError(request), detail: undefined }
     for (const { dispatch, from } of targets) {
-      // The journal read awaited: the Dispatch may have settled, or the user turned this off.
+      // The journal read awaited: the Dispatch may have settled.
       const current = db.getDispatchContextById(dispatch.id)
       if (
-        !deps.enabled() ||
         (current?.status !== 'pending' && current?.status !== 'dispatched') ||
         current.assignee_handle !== dispatch.assignee_handle
       ) {

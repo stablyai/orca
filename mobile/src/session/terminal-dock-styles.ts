@@ -49,31 +49,9 @@ export const terminalDockStyles = themedStyleSheet(() => ({
     borderTopColor: colors.borderSubtle,
     backgroundColor: colors.bgPanel
   },
-  // The Duo's side rail is 84pt wide; keys span it less 4pt each side.
-  keyRail: {
-    flex: 1,
-    minHeight: 0,
-    gap: spacing.sm,
-    paddingHorizontal: spacing.xs,
-    paddingVertical: spacing.xs
-  },
   keyScroll: {
     flex: 1,
     minWidth: 0
-  },
-  keyScrollVertical: {
-    flex: 1,
-    minHeight: 0
-  },
-  keyScrollContentVertical: {
-    alignItems: 'stretch',
-    gap: spacing.sm
-  },
-  keyVertical: {
-    width: 'auto',
-    height: 44,
-    alignSelf: 'stretch',
-    paddingHorizontal: 2
   },
   keyScrollContent: {
     alignItems: 'center',

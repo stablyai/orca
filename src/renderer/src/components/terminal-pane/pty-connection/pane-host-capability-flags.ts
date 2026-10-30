@@ -1,6 +1,5 @@
 import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { UNRESOLVED_OWNER_HOST_ID } from '../../../../../shared/execution-host'
-import { reportWorkerTerminalUserInput } from '@/lib/worker-terminal-takeover-report'
 import { useAppStore } from '@/store'
 import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
 import {
@@ -228,8 +227,6 @@ export function installPaneHostCapabilityFlags(session: ConnectPanePtySession): 
   // Record real input from xterm’s core signal; onData also carries query replies that falsely prevent hibernation. Fall back only if that signal is absent.
   session.recordRealUserTerminalInput = (): void => {
     session.recordTerminalInputForHibernation()
-    // Takeover must never fire from the onData fallback below: it mixes in auto-replies.
-    reportWorkerTerminalUserInput(session.cacheKey, session.runtimeEnvironmentId)
   }
   // Why: xterm fires onUserInput before onData, so publishing here made the key wait on every store subscriber before reaching the PTY.
   session.userInputActivityDisposable = subscribeToTerminalUserInput(session.pane.terminal, () =>

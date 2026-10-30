@@ -76,7 +76,6 @@ export const ORCHESTRATION_DISPATCH_METHODS = [
           taskId: task.id,
           dispatchId: 'ctx_dryrun',
           canDispatchSubWorkers: previewDepth < maxDepth,
-          heartbeatIntervalMinutes: runtime.getOrchestrationHeartbeatMinutes(),
           taskSpec: task.spec,
           coordinatorHandle: orcaSessionIdOrHandle(params.from ?? 'coordinator', db),
           workerHandle: assignee ? orcaSessionIdOrHandle(assignee, db) : 'worker',
@@ -159,12 +158,11 @@ export const ORCHESTRATION_DISPATCH_METHODS = [
         maxDepth: runtime.getNestedWorkerMaxDepth()
       })
 
-      // Build after ctx to put its real id in heartbeats and attribute liveness to this Dispatch.
+      // Build after ctx so worker_done carries this Dispatch's real id.
       const preamble = buildDispatchPreamble({
         taskId: task.id,
         dispatchId: ctx.id,
         canDispatchSubWorkers: ctx.depth < runtime.getNestedWorkerMaxDepth(),
-        heartbeatIntervalMinutes: runtime.getOrchestrationHeartbeatMinutes(),
         taskSpec: task.spec,
         coordinatorHandle: orcaSessionIdOrHandle(params.from ?? 'coordinator', db),
         workerHandle: orcaSessionIdOrHandle(to, db),
@@ -243,7 +241,6 @@ export const ORCHESTRATION_DISPATCH_METHODS = [
           // Use the real Dispatch id for matching previews; use a placeholder before dispatch.
           dispatchId: ctx?.id ?? 'ctx_preview',
           canDispatchSubWorkers: (ctx?.depth ?? 1) < runtime.getNestedWorkerMaxDepth(),
-          heartbeatIntervalMinutes: runtime.getOrchestrationHeartbeatMinutes(),
           taskSpec: task.spec,
           coordinatorHandle: orcaSessionIdOrHandle(params.from ?? 'coordinator', db),
           workerHandle: orcaSessionIdOrHandle(workerHandle, db),

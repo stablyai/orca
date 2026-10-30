@@ -7703,19 +7703,6 @@
           "191ac34567": "에이전트 오케스트레이션",
           "nestedWorkerDepthTitle": "하위 에이전트 최대 생성 단계",
           "nestedWorkerDepthDescription": "하위 에이전트를 몇 단계까지 생성할 수 있는지 설정합니다. 1이면 조율 에이전트만 하위 에이전트를 생성할 수 있고, 생성된 하위 에이전트는 자신의 하위 에이전트를 생성할 수 없습니다.",
-          "chatErrorEscalationTitle": "채팅 오류를 코디네이터에게 알리기",
-          "chatErrorEscalationDescription": "할당된 에이전트가 턴을 끝내는 오류를 만나면 그 오류를 그대로 할당한 코디네이터에게 보냅니다. 작업은 에이전트에게 계속 할당됩니다. 채팅 UI에서 실행되는 에이전트에서만 작동합니다.",
-          "chatErrorEscalationNeedsChat": "사용하려면 실험적 기능 설정에서 채팅 UI를 켜세요.",
-          "chatErrorEscalationKeywordError": "오류",
-          "chatErrorEscalationKeywordChat": "채팅",
-          "heartbeatTitle": "워커 하트비트",
-          "heartbeatDescription": "할당된 워커가 몇 분마다 상태를 알려 코디네이터가 작업 중인 에이전트와 응답 없는 에이전트를 구분할 수 있습니다. 끄면 코디네이터로 가는 메시지가 줄지만 그 상태 신호를 더 이상 받을 수 없습니다. 변경 이후 할당된 워커에 적용됩니다.",
-          "heartbeatKeywordHeartbeat": "하트비트",
-          "heartbeatKeywordStalled": "멈춤",
-          "heartbeatKeywordInterval": "간격",
-          "heartbeatIntervalTitle": "하트비트 간격",
-          "heartbeatIntervalDescription": "간격이 짧을수록 코디네이터가 더 자주 상태를 받지만 메시지도 많아집니다. 간격이 길수록 메시지는 줄지만 상태 보고 사이의 공백이 길어집니다. 변경 이후 할당된 워커에 적용됩니다.",
-          "heartbeatIntervalSuffix": "분",
           "7bc082f4de": "설치 명령 복사"
         },
         "OrchestrationSetupCard": {
@@ -11420,7 +11407,6 @@
         },
         "PluginThemeUseNow": {
           "label": "지금 사용:",
-          "useName": "지금 사용: {{value0}}",
           "useForLight": "라이트에 사용:",
           "useForDark": "다크에 사용:"
         },
@@ -19589,6 +19575,10 @@
       "caution": "주의"
     },
     "automations": {
+      "openIn": "열기 방식",
+      "chat": "채팅",
+      "terminal": "터미널",
+      "runChatUnavailable": "실행 채팅을 사용할 수 없습니다. 작업 공간을 표시합니다. 저장된 출력은 실행 세부 정보에 남아 있습니다.",
       "runTerminalUnavailable": "실행 터미널을 사용할 수 없습니다."
     },
     "jiraIssueTitleField": {

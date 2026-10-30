@@ -551,11 +551,10 @@ describe('OrcaRuntimeRpcServer', () => {
         db.insertMessage({ from: 'term_worker', to: `run:${run.id}`, subject: 'go', runId: run.id })
         runtime.notifyMessageArrived(`run:${run.id}`)
         await Promise.all([b.done, c.done])
-        const consumerGeneration = run.consumer_generation
-        const deliveryId = db.getOrCreateRunDelivery({ runId: run.id, consumerGeneration })
-          ?.delivery.id
         const results = [b, c].map((s) => s.frames.find((f) => f.ok !== undefined)?.result)
-        expect(results).toMatchObject([{ deliveryId }, { deliveryId }])
+        const batch = { deliveryId: expect.stringMatching(/^delivery_/), count: 1 }
+        expect(results).toMatchObject([batch, batch])
+        expect(db.db.prepare('SELECT COUNT(*) AS n FROM deliveries').get()).toEqual({ n: 1 })
         await waitFor(() => server['activeLongPolls'] === 0)
       } finally {
         db.close()

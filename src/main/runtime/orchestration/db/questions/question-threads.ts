@@ -143,8 +143,10 @@ export function answerQuestion(
       threadId: question.message_id,
       runId: params.runId
     })
-    // ask returns the answer directly; mark it read to prevent replay through check.
-    this.markAsRead([message.id])
+    // The answer is the worker's mail; a federated worker's copy lives on its execution host.
+    if (this.getFederatedDispatch(question.dispatch_id)) {
+      this.markAsReadAndDelivered([message.id])
+    }
     this.db
       .prepare(
         `UPDATE question_threads
@@ -165,6 +167,31 @@ export function answerQuestion(
     this.db.exec('ROLLBACK')
     throw error
   }
+}
+
+/** Whether the Dispatch's last turn ended on its own pending question: no mail has reached it since it asked. */
+export function awaitsAnswerToLatestQuestion(this: OrchestrationDb, dispatchId: string): boolean {
+  const row = this.db
+    .prepare(
+      `SELECT EXISTS (
+         SELECT 1 FROM question_threads q JOIN messages asked ON asked.id = q.message_id
+          WHERE q.dispatch_id = ? AND q.status = 'pending'
+            AND NOT EXISTS (
+              SELECT 1 FROM messages m
+               WHERE m.to_handle = 'dispatch:' || q.dispatch_id AND m.sequence > asked.sequence
+            )
+       ) OR EXISTS (
+         -- A paired worker's question lives at its Run home, so only its timestamp orders it here.
+         SELECT 1 FROM remote_questions q
+          WHERE q.dispatch_id = ? AND q.status = 'pending'
+            AND NOT EXISTS (
+              SELECT 1 FROM messages m
+               WHERE m.to_handle = 'dispatch:' || q.dispatch_id AND m.created_at > q.created_at
+            )
+       ) AS pending`
+    )
+    .get(dispatchId, dispatchId)
+  return row?.pending === 1
 }
 
 export function closeQuestionsForDispatch(this: OrchestrationDb, dispatchId: string): string[] {
@@ -189,6 +216,7 @@ export type QuestionThreadsMethods = {
   getQuestion: typeof getQuestion
   getQuestionRaw: typeof getQuestionRaw
   answerQuestion: typeof answerQuestion
+  awaitsAnswerToLatestQuestion: typeof awaitsAnswerToLatestQuestion
   closeQuestionsForDispatch: typeof closeQuestionsForDispatch
 }
 
@@ -198,6 +226,7 @@ export function attachQuestionThreads(ctor: { prototype: object }): void {
     getQuestion,
     getQuestionRaw,
     answerQuestion,
+    awaitsAnswerToLatestQuestion,
     closeQuestionsForDispatch
   })
 }
