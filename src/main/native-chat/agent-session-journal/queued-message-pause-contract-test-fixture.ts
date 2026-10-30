@@ -2,11 +2,20 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach } from 'vitest'
-import type { AgentJournalMessageItem, AgentSessionJournalIdentity } from '../../../shared/agent-session-journal-types'
+import type {
+  AgentJournalMessageItem,
+  AgentSessionJournalIdentity
+} from '../../../shared/agent-session-journal-types'
 import Database from '../../sqlite/sync-database'
 import { journalDatabasePath } from './journal-host-database'
-import { createTrackedJournalOpener, liveTestJournalRows, updateTestJournalRowJson } from './journal-host-database-test-support'
+import {
+  createTrackedJournalOpener,
+  liveTestJournalRows,
+  readTestJournalOutcomes,
+  updateTestJournalRowJson
+} from './journal-host-database-test-support'
 import { parseJournalRow } from './journal-row-schema'
+import { fields } from './journal-state-schema'
 import type { AgentSessionJournal } from './journal-store'
 import { queuePauseHolding } from './queued-message-pause'
 import { claudeProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
@@ -96,6 +105,14 @@ export function createFixture() {
   function stopEvents(): unknown[] {
     const db = new Database(journalDatabasePath(root), { readonly: true })
     try {
+      // An outcome epoch (every replaced one) stores the Stop as pause marks, not as an input row.
+      const marks = readTestJournalOutcomes(db, IDENTITY.sessionId).filter(
+        (value) => value.field === '$' && value.key === JSON.stringify('queuePauseMarks')
+      )
+      if (marks.length > 0) {
+        const stop = fields.queuePauseMarks.parse(JSON.parse(marks.at(-1)!.json)).latestStop
+        return stop ? [stop.event] : []
+      }
       return liveTestJournalRows(db, IDENTITY.sessionId).flatMap((stored) => {
         const parsed = parseJournalRow(stored.rowJson)
         return parsed.ok && parsed.row.kind === 'tombstone' && parsed.row.stopEvent
@@ -148,7 +165,12 @@ export function createFixture() {
     IDENTITY,
     acceptTurn,
     clearContext,
-    get clock() { return clock }, set clock(value: typeof clock) { clock = value },
+    get clock() {
+      return clock
+    },
+    set clock(value: typeof clock) {
+      clock = value
+    },
     fingerprintOf,
     held,
     journals,
@@ -158,9 +180,14 @@ export function createFixture() {
     queueDraft,
     reason,
     rewriteRows,
-    get root() { return root }, set root(value: typeof root) { root = value },
+    get root() {
+      return root
+    },
+    set root(value: typeof root) {
+      root = value
+    },
     stopEvents,
     turn,
-    userStop,
+    userStop
   }
 }

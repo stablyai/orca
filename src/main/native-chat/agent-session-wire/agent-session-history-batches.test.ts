@@ -1,12 +1,31 @@
+import { mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
-import type { AgentJournalItemIdentity, AgentJournalMessageItem } from '../../../shared/agent-session-journal-types'
+import type {
+  AgentJournalItemIdentity,
+  AgentJournalMessageItem
+} from '../../../shared/agent-session-journal-types'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
 import { structuredAgentSessionPayloadFingerprint } from '../../../shared/structured-agent-session-mutation'
+import {
+  closeTestJournalHostDatabase,
+  createTrackedJournalOpener
+} from '../agent-session-journal/journal-host-database-test-support'
 import { projectJournalBatch } from './agent-session-journal-batch'
 import { readAgentSessionHistory } from './agent-session-history-page'
 
-import { fixture, IDENTITY, appendItems, body, item } from './agent-session-history-contract-test-fixture'
+import {
+  fixture,
+  IDENTITY,
+  appendItems,
+  body,
+  item,
+  tick
+} from './agent-session-history-contract-test-fixture'
+
+const outcomeJournals = createTrackedJournalOpener()
 
 describe('projectJournalBatch', () => {
   it('publishes every nested lifecycle mutation atomically at the outer cursor', async () => {
@@ -67,15 +86,34 @@ describe('projectJournalBatch', () => {
   })
 
   it('accepts sparse outcome sequence groups', async () => {
-    await appendItems(3)
-    const since = fixture.journal.readSince({ epoch: fixture.journal.epoch, sequence: 0 })
-    if (!since.ok) {
-      throw new Error(`expected rows, got reset ${since.reset}`)
+    // The shared fixture pins the input format; sparse groups exist only in an outcome epoch.
+    const root = await mkdtemp(join(tmpdir(), 'orca-history-outcomes-'))
+    const journal = await outcomeJournals.open({
+      identity: IDENTITY,
+      stateDirectory: root,
+      now: tick
+    })
+    try {
+      for (let ordinal = 1; ordinal <= 3; ordinal += 1) {
+        await journal.appendItem(item(ordinal), body(`item-${ordinal}`), {
+          fence: 1,
+          turnScope: AGENT_JOURNAL_THREAD_SCOPE
+        })
+      }
+      const since = journal.readSince({ epoch: journal.epoch, sequence: 0 })
+      if (!since.ok) {
+        throw new Error(`expected rows, got reset ${since.reset}`)
+      }
+      expect(since.rows.every((row) => row.kind === 'outcome')).toBe(true)
+      const withHole = since.rows.filter((row) => row.seq !== since.rows[1]?.seq)
+      expect(
+        projectJournalBatch({ rows: withHole, snapshot: journal.snapshot(), afterSequence: 0 })
+      ).toMatchObject({ ok: true })
+    } finally {
+      await journal.close()
+      await closeTestJournalHostDatabase(root)
+      await rm(root, { recursive: true, force: true })
     }
-    const withHole = since.rows.filter((row) => row.seq !== since.rows[1]?.seq)
-    expect(
-      projectJournalBatch({ rows: withHole, snapshot: fixture.journal.snapshot(), afterSequence: 0 })
-    ).toMatchObject({ ok: true })
   })
 
   it('publishes touched items at their current reduced state, not as a delta', async () => {
