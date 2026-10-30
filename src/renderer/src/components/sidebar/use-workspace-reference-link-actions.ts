@@ -7,6 +7,7 @@ import { isTerminalLinkDirectActivation } from '@/components/terminal-pane/termi
 import { httpLinkDirectClickDestination } from '@/lib/http-link-destinations'
 import { useAppStore } from '@/store'
 import type { WorktreeCardDetailsHoverControl } from './worktree-card-details-hover-state'
+import { openAppHttpLink } from '@/lib/app-http-link-open'
 
 export function useWorkspaceReferenceLinkActions(
   workspaceId: string | undefined,
@@ -31,7 +32,7 @@ export function useWorkspaceReferenceLinkActions(
       event.preventDefault()
       event.stopPropagation()
       holdOpenUntilRefocus()
-      void window.api.shell.openUrl(url)
+      openAppHttpLink(url, { event })
       return
     }
     const state = useAppStore.getState()

@@ -9,12 +9,16 @@ import { localAgentInventoryContextKey } from '@/lib/local-preflight-context-key
 import * as contextEviction from './local-agent-context-eviction'
 import { getLegacyLoadingPatch } from './local-agent-legacy-loading'
 import {
+  markLocalAgentRefusal,
   refreshLocalAgentInventory,
   type LocalAgentInventoryLifecycle
 } from './local-agent-inventory-refresh'
-import { createEmptyLocalDetectedAgentState } from './local-detected-agent-store-state'
+import {
+  createEmptyLocalDetectedAgentState,
+  type LocalAgentRefreshOptions,
+  type LocalDetectedAgentState
+} from './local-detected-agent-store-state'
 import { readLocalAgentInventoryOutcome } from './local-agent-inventory-outcome'
-import type { LocalDetectedAgentState } from './local-detected-agent-store-state'
 
 type LocalDetectedAgentStateCreator = StateCreator<AppState, [], [], LocalDetectedAgentState>
 
@@ -23,6 +27,9 @@ export const createLocalDetectedAgentState: LocalDetectedAgentStateCreator = (se
   const lifecycle: LocalAgentInventoryLifecycle = {
     detectPromises: new Map(),
     refreshPromises: new Map(),
+    wakeRefreshes: new WeakSet(),
+    wakeDetects: new WeakSet(),
+    refusedContextKeys: new Set(),
     keptThroughFailure: new WeakSet(),
     failedDetectContextKeys: new Set(),
     detectedContextKey: null,
@@ -47,11 +54,21 @@ export const createLocalDetectedAgentState: LocalDetectedAgentStateCreator = (se
     },
     ensureAllDetectedAgents: (worktreeId?: string | null): Promise<TuiAgent[]> =>
       actions.ensureDetectedAgents(worktreeId, false, true),
+    isLocalAgentInventoryRefused: (worktreeId?: string | null): boolean =>
+      lifecycle.refusedContextKeys.has(
+        localAgentInventoryContextKey(
+          getLocalAgentPreflightContext(get(), undefined, undefined, worktreeId)
+        )
+      ),
+    ensureDetectedAgentsForPicker: (worktreeId?: string | null): Promise<TuiAgent[]> =>
+      actions.ensureDetectedAgents(worktreeId, false, false, { wakeWslDistro: true }),
     ensureDetectedAgents: (
       worktreeId?: string | null,
       nativeHost = false,
-      includeDisabled = false
+      includeDisabled = false,
+      options: LocalAgentRefreshOptions = {}
     ): Promise<TuiAgent[]> => {
+      const wake = options.wakeWslDistro === true
       const isolatedInventory =
         includeDisabled || nativeHost || worktreeId === FLOATING_TERMINAL_WORKTREE_ID
       const context = nativeHost
@@ -60,7 +77,8 @@ export const createLocalDetectedAgentState: LocalDetectedAgentStateCreator = (se
       const contextKey = localAgentInventoryContextKey(context, includeDisabled)
       const existing = get().localDetectedAgentIdsByContext[contextKey]
       const inflightRefresh = lifecycle.refreshPromises.get(contextKey)
-      if (inflightRefresh) {
+      // A picker's wake must not ride a background probe that a stopped WSL distro refuses.
+      if (inflightRefresh && (!wake || lifecycle.wakeRefreshes.has(inflightRefresh))) {
         if (!isolatedInventory) {
           lifecycle.legacyRefreshContextKey = contextKey
         }
@@ -95,7 +113,7 @@ export const createLocalDetectedAgentState: LocalDetectedAgentStateCreator = (se
         }
       }
       const inflight = lifecycle.detectPromises.get(contextKey)
-      if (inflight) {
+      if (inflight && (!wake || lifecycle.wakeDetects.has(inflight))) {
         exposeInflightToLegacy()
         return inflight
       }
@@ -116,14 +134,16 @@ export const createLocalDetectedAgentState: LocalDetectedAgentStateCreator = (se
           [contextKey]: true
         }
       }))
+      const detectArgs = includeDisabled ? context : { ...context, enabledOnly: true }
       const pending = window.api.preflight
-        .detectAgents(includeDisabled ? context : { ...context, enabledOnly: true })
+        .detectAgents(wake ? { ...detectArgs, wakeWslDistro: true } : detectArgs)
         .then((ids) => {
           const typed = ids.filter(isTuiAgent)
           if (
             requestGeneration === lifecycle.localDetectionGeneration &&
             lifecycle.detectPromises.get(contextKey) === pending
           ) {
+            lifecycle.refusedContextKeys.delete(contextKey)
             lifecycle.failedDetectContextKeys.delete(contextKey)
             const exposeToLegacy = lifecycle.legacyDetectContextKey === contextKey
             if (exposeToLegacy) {
@@ -144,12 +164,13 @@ export const createLocalDetectedAgentState: LocalDetectedAgentStateCreator = (se
           }
           return typed
         })
-        .catch((): TuiAgent[] => {
+        .catch((error: unknown): TuiAgent[] => {
           if (
             requestGeneration === lifecycle.localDetectionGeneration &&
             lifecycle.detectPromises.get(contextKey) === pending
           ) {
             lifecycle.failedDetectContextKeys.add(contextKey)
+            markLocalAgentRefusal(lifecycle, contextKey, error)
             const exposeToLegacy = lifecycle.legacyDetectContextKey === contextKey
             if (exposeToLegacy) {
               lifecycle.legacyDetectContextKey = null
@@ -173,14 +194,20 @@ export const createLocalDetectedAgentState: LocalDetectedAgentStateCreator = (se
             lifecycle.detectPromises.delete(contextKey)
           }
         })
+      if (wake) {
+        lifecycle.wakeDetects.add(pending)
+      }
       lifecycle.detectPromises.set(contextKey, pending)
       return pending
     },
 
-    refreshAllDetectedAgents: (worktreeId?: string | null): Promise<TuiAgent[]> =>
-      actions.refreshDetectedAgents(worktreeId, true),
-    refreshDetectedAgents: (worktreeId?: string | null, includeDisabled = false) =>
-      refreshLocalAgentInventory(set, get, lifecycle, worktreeId, includeDisabled),
+    refreshAllDetectedAgents: (
+      worktreeId?: string | null,
+      options?: LocalAgentRefreshOptions
+    ): Promise<TuiAgent[]> =>
+      refreshLocalAgentInventory(set, get, lifecycle, worktreeId, true, options),
+    refreshDetectedAgents: (worktreeId?: string | null, options?: LocalAgentRefreshOptions) =>
+      refreshLocalAgentInventory(set, get, lifecycle, worktreeId, false, options),
 
     clearLocalDetectedAgentContextsForProjects: (projectIds: readonly string[]) => {
       const eviction = contextEviction.getLocalAgentContextEviction({
@@ -189,7 +216,8 @@ export const createLocalDetectedAgentState: LocalDetectedAgentStateCreator = (se
         internalContextKeys: [
           ...lifecycle.detectPromises.keys(),
           ...lifecycle.refreshPromises.keys(),
-          ...lifecycle.failedDetectContextKeys
+          ...lifecycle.failedDetectContextKeys,
+          ...lifecycle.refusedContextKeys
         ],
         detectedContextKey: lifecycle.detectedContextKey,
         legacyDetectContextKey: lifecycle.legacyDetectContextKey,
@@ -202,6 +230,7 @@ export const createLocalDetectedAgentState: LocalDetectedAgentStateCreator = (se
         lifecycle.detectPromises.delete(contextKey)
         lifecycle.refreshPromises.delete(contextKey)
         lifecycle.failedDetectContextKeys.delete(contextKey)
+        lifecycle.refusedContextKeys.delete(contextKey)
       }
       lifecycle.detectedContextKey = eviction.detectedContextKey
       lifecycle.legacyDetectContextKey = eviction.legacyDetectContextKey
@@ -215,6 +244,7 @@ export const createLocalDetectedAgentState: LocalDetectedAgentStateCreator = (se
       lifecycle.detectPromises.clear()
       lifecycle.refreshPromises.clear()
       lifecycle.failedDetectContextKeys.clear()
+      lifecycle.refusedContextKeys.clear()
       lifecycle.detectedContextKey = null
       lifecycle.legacyDetectContextKey = null
       lifecycle.legacyRefreshContextKey = null

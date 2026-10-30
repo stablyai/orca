@@ -65,6 +65,7 @@ export type PtyIpcSpawnState = {
   effectiveSessionId: string | undefined
   effectiveSessionAppId: string | undefined
   expectedWslDistro: string | null
+  wslHoldReadAnchor: number | undefined
   baseEnv: Record<string, string> | undefined
   effectiveLaunchConfig: SleepingAgentLaunchConfig | undefined
   preAllocatedHandle: string | null
@@ -143,6 +144,7 @@ export function createPtyIpcSpawnState(
     effectiveSessionId: undefined,
     effectiveSessionAppId: undefined,
     expectedWslDistro: null,
+    wslHoldReadAnchor: undefined,
     baseEnv: undefined,
     effectiveLaunchConfig: undefined,
     preAllocatedHandle: null,

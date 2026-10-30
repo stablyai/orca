@@ -1,9 +1,7 @@
 import { useContext } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
 import { AlertCircle, AlertTriangle, Info } from 'lucide-react-native'
-import { AGENT_SESSION_HOST_STATUS_COPY } from '../../../../../src/shared/agent-session-host-status-rows'
 import {
-  NATIVE_CHAT_NOTICE_COPY,
   nativeChatNoticeBlock,
   nativeChatNoticeLook,
   type NativeChatNoticeTone
@@ -14,12 +12,7 @@ import {
   type NativeChatTextBlock
 } from '../../../../../src/shared/native-chat-types'
 import { readWholeAgentSessionFailureFact } from '../../../../../src/shared/agent-session-failure'
-import { agentSessionFailureSentence } from '../../../../../src/shared/agent-session-failure-words'
-import { formatUsageLimitResetClock } from '../../../../../src/shared/agent-session-usage-limit'
-import {
-  nativeChatOrcaStopRowText,
-  sayNativeChatOrcaStopEnglish
-} from '../../../../../src/shared/native-chat/native-chat-orca-stop-words'
+import { nativeChatOrcaStopRowText } from '../../../../../src/shared/native-chat/native-chat-orca-stop-words'
 import {
   MobileNativeChatNoticeContext,
   type MobileNativeChatNoticeNames
@@ -29,6 +22,12 @@ import { INLINE_TEXT_SELECTION } from '../../../components/inline-text-selection
 import { colors, radii, spacing, typography } from '../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../theme/themed-styles'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
+import { nativeChatHostStatusCopy, nativeChatNoticeCopy } from './native-chat-notice-copy'
+import { nativeChatOrcaStopSay } from './native-chat-orca-stop-copy'
+import { nativeChatUsageLimitText } from './native-chat-usage-limit-copy'
+import type { Translate } from '../../../i18n/mobile-i18n'
+import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
+import { NATIVE_CHAT_STOPPED_BEFORE_START_PRESENTATION } from '../../../../../src/shared/native-chat/native-chat-stopped-before-start'
 import { MONO_SIZE, TEXT_SIZE, scaledType } from './mobile-native-chat-message-styles'
 
 function toneColor(tone: NativeChatNoticeTone): string {
@@ -36,20 +35,23 @@ function toneColor(tone: NativeChatNoticeTone): string {
 }
 
 // Desktop's no-Continue wording; the phone always reads its Orca host as remote.
-function noticeLineText(notice: NativeChatTextBlock, names: MobileNativeChatNoticeNames): string {
+function noticeLineText(
+  notice: NativeChatTextBlock,
+  names: MobileNativeChatNoticeNames,
+  t: Translate
+): string {
   if (notice.orcaStop) {
+    const say = nativeChatOrcaStopSay(t)
     return nativeChatOrcaStopRowText(
       notice.orcaStop.cause,
-      names.hostName ?? sayNativeChatOrcaStopEnglish('unnamedServer'),
-      { continueAvailable: false, remoteHost: true }
+      names.hostName ?? say('unnamedServer'),
+      { continueAvailable: false, remoteHost: true },
+      say
     )
   }
   const failure = readWholeAgentSessionFailureFact(notice.failure)
   return failure?.kind === 'usageLimitReached'
-    ? agentSessionFailureSentence(failure, 'row', {
-        ...(names.agentName ? { agentName: names.agentName } : {}),
-        usageLimitReset: formatUsageLimitResetClock
-      })
+    ? nativeChatUsageLimitText(failure.usageLimit, names.agentName, t)
     : notice.text
 }
 
@@ -66,6 +68,8 @@ export function MobileNativeChatNoticeRow({
   onLongPress?: () => void
 }): React.JSX.Element | null {
   useMobileColorScheme()
+  const t = useMobileTranslation()
+  const copy = nativeChatNoticeCopy(t)
   const names = useContext(MobileNativeChatNoticeContext)
   const notice = nativeChatNoticeBlock(blocks)
   const aside = [styles.faint, scaledType(typography.bodySize, fontScale)]
@@ -83,7 +87,7 @@ export function MobileNativeChatNoticeRow({
   const look = nativeChatNoticeLook(notice)
   switch (look.kind) {
     case 'divider': {
-      const label = NATIVE_CHAT_NOTICE_COPY[look.label]
+      const label = copy[look.label]
       return (
         <View style={styles.divider} accessibilityRole="text" accessibilityLabel={label}>
           <View style={styles.rule} />
@@ -107,13 +111,13 @@ export function MobileNativeChatNoticeRow({
           selectable={INLINE_TEXT_SELECTION}
           style={[styles.faint, scaledType(TEXT_SIZE, fontScale)]}
         >
-          {AGENT_SESSION_HOST_STATUS_COPY[look.presentation]}
+          {nativeChatHostStatusCopy(t)[look.presentation]}
         </Text>
       )
     case 'plan':
       return (
         <View style={styles.card}>
-          <Text style={styles.planTitle}>{NATIVE_CHAT_NOTICE_COPY.plan}</Text>
+          <Text style={styles.planTitle}>{copy.plan}</Text>
           <MobileMarkdown
             content={notice.text}
             rangeSelectable
@@ -126,11 +130,13 @@ export function MobileNativeChatNoticeRow({
     case 'aside':
       return (
         <Text selectable={INLINE_TEXT_SELECTION} style={aside}>
-          {notice.text}
+          {notice.presentation === NATIVE_CHAT_STOPPED_BEFORE_START_PRESENTATION
+            ? t('chat.notice.stoppedManually', 'Stopped manually')
+            : notice.text}
         </Text>
       )
     case 'line': {
-      const lineText = noticeLineText(notice, names)
+      const lineText = noticeLineText(notice, names, t)
       const textStyle = [
         styles.line,
         scaledType(TEXT_SIZE, fontScale),

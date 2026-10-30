@@ -4,6 +4,9 @@ import { BRIDGE_BACK_FRAME } from './bridge/bridge-page-back'
 // Carry Back state across client-driven host rebuilds: the page remains mounted and is never told to claim again.
 export type BridgeSessionBack = {
   readonly claimed: boolean
+  /** The negotiated storage keys the page's `ready` named; absent for a page that named none. */
+  readonly storageKeys?: readonly string[]
+  readonly terminalKeyRailClaim?: { readonly inputOwner?: string }
 }
 
 // Drop claims when their document ends to avoid swallowing Back on an unrelated page. Host disposal alone transfers the session’s read state without reporting a dropped claim.

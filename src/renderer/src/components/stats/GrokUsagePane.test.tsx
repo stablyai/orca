@@ -56,6 +56,7 @@ vi.mock('../ui/tooltip', () => ({
 }))
 
 vi.mock('@/i18n/i18n', () => ({
+  getIntlLocale: () => 'en',
   translate: (_key: string, fallback: string, values?: Record<string, string>) =>
     values
       ? Object.entries(values).reduce(

@@ -31,6 +31,15 @@ export function claimWslMoveRun(distro: string): RunningWslMove | null {
   return running
 }
 
+/** Why `claimWslMoveRun` refused the distro just now: a move of it runs, or its move is being undone. */
+export function wslMoveClaimRefusal(
+  distro: string
+): 'wsl_move_already_running' | 'wsl_move_undo_running' {
+  return undoRuns.has(wslMoveJournalKey(distro))
+    ? 'wsl_move_undo_running'
+    : 'wsl_move_already_running'
+}
+
 export function releaseWslMoveRun(distro: string, running: RunningWslMove): void {
   const key = wslMoveJournalKey(distro)
   if (runningMoves.get(key) === running) {

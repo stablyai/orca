@@ -24,11 +24,12 @@ function writeState(state: 'running' | 'stopped'): void {
   writeFileSync(distrosFile, JSON.stringify([{ name: 'Ubuntu', state, version: 2 }]))
 }
 
-function connector(onChange = vi.fn()) {
-  const fake = createFakeWslHostConnector({ distros: [], distrosFile, pairingCode }, onChange, {
-    isKnownDistro: () => true,
-    runtime
-  })
+function connector(onChange = vi.fn(), stopSilently = false) {
+  const fake = createFakeWslHostConnector(
+    { distros: [], distrosFile, pairingCode, stopSilently },
+    onChange,
+    { isKnownDistro: () => true, runtime }
+  )
   return { fake, onChange }
 }
 
@@ -56,6 +57,14 @@ it('drops the bridge of a distro the test stops and refuses a no-boot reconnect'
     recovering: false
   })
   await expect(fake.connect('Ubuntu', { noBoot: true })).rejects.toThrow('Ubuntu is not running.')
+})
+
+it('leaves a silent stop for a runtime call to report, as when liveness saw only a quick reboot', async () => {
+  const { fake, onChange } = connector(vi.fn(), true)
+  await fake.connect('Ubuntu')
+  writeState('stopped')
+  expect(await fake.reachability('Ubuntu', 'wsl:ubuntu')).toBe('stopped')
+  expect(onChange).toHaveBeenLastCalledWith('Ubuntu', null, { state: 'closed' })
 })
 
 it('still reports a plain close for an explicit disconnect of a running distro', async () => {

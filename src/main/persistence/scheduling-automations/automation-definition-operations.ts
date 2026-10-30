@@ -1,3 +1,7 @@
+import {
+  applyAutomationLaunchSetupPatch,
+  automationWithLaunchSetup
+} from '../../../shared/automation-launch-setup'
 import { randomUUID } from 'node:crypto'
 import { invalidateLocalWorktreeMetadataPruneInputs } from '../../local-worktree-metadata-prune-gate'
 import type {
@@ -49,7 +53,7 @@ export type AutomationDefinitionOperations = {
 
 export function listAutomations(state: PersistedState): Automation[] {
   return (state.automations ?? [])
-    .map((automation) => normalizeAutomationSessionReuse(automation))
+    .map((automation) => automationWithLaunchSetup(normalizeAutomationSessionReuse(automation)))
     .sort((left, right) => left.name.localeCompare(right.name))
 }
 
@@ -63,7 +67,7 @@ export function createAutomation(
       (automation) => automation.creationKey === input.creationKey
     )
     if (existing) {
-      return existing
+      return automationWithLaunchSetup(existing)
     }
   }
   const repo = operations.state.repos.find((entry) => entry.id === input.projectId)
@@ -86,7 +90,8 @@ export function createAutomation(
   }
   const schedulerOwner = getAutomationSchedulerOwner(repo)
   const contexts = getAutomationContextsForRepo(repo, operations.state.projectHostSetups ?? [])
-  const extraAgentArgs = storedExtraAgentArgs(input.extraAgentArgs)
+  const setup = applyAutomationLaunchSetupPatch(input)
+  const extraAgentArgs = storedExtraAgentArgs(setup.extraAgentArgs)
   const automation: Automation = {
     id: randomUUID(),
     ...(input.creationKey ? { creationKey: input.creationKey } : {}),
@@ -94,6 +99,7 @@ export function createAutomation(
     prompt: input.prompt,
     precheck: normalizeAutomationPrecheck(input.precheck),
     agentId: input.agentId,
+    ...(setup.surface ? { surface: setup.surface } : {}),
     ...(extraAgentArgs !== undefined ? { extraAgentArgs } : {}),
     // Prefer authority-local contexts; client-assigned runtime IDs cannot identify this store's host.
     runContext: contexts.runContext ?? input.runContext ?? null,
@@ -123,7 +129,7 @@ export function createAutomation(
   operations.state.automations = [...(operations.state.automations ?? []), automation]
   operations.recordCreated()
   operations.flush()
-  return automation
+  return automationWithLaunchSetup(automation)
 }
 
 export function updateAutomation(
@@ -152,9 +158,12 @@ export function updateAutomation(
     assertAutomationDestination(options.destination, projectionContext)
   }
   // Ignore undefined values preserved by structuredClone; explicit clears use null.
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: filtering removes only undefined entries from the validated patch and retains every remaining field's type.
   const definedUpdates = Object.fromEntries(
-    Object.entries(updates).filter(([, value]) => value !== undefined)
-  ) as AutomationUpdateInput
+    Object.entries(applyAutomationLaunchSetupPatch(updates)).filter(
+      ([, value]) => value !== undefined
+    )
+  ) as Omit<AutomationUpdateInput, 'launchSetupPatch'> & Pick<Automation, 'surface'>
   const repoId = updates.projectId ?? current.projectId
   const repo = operations.state.repos.find((entry) => entry.id === repoId)
   const selectorMoveRequested =
@@ -255,7 +264,7 @@ export function updateAutomation(
     entry.id === id ? updated : entry
   )
   operations.flush()
-  return updated
+  return automationWithLaunchSetup(updated)
 }
 
 /** Stamp legacy targets once without retargeting user- or migration-owned contexts. */

@@ -96,21 +96,21 @@ function pausedUndo(): {
 }
 
 describe('an undo racing the move orchestrator on its distro', () => {
-  it("refuses the orchestrator's move and preview of that distro mid-undo, so the undo still releases", async () => {
+  it("refuses the orchestrator's move and preview of that distro mid-undo as undo-running, so the undo still releases", async () => {
     await movedProject()
     const { undo, hostStopped } = pausedUndo()
 
     // What the orchestrator runs when the undo's host connect wakes it.
     expect(await moveProjectsToWslHost(rig.world.deps, request)).toMatchObject({
       outcome: 'refused',
-      code: 'wsl_move_already_running'
+      code: 'wsl_move_undo_running'
     })
     // The orchestrator's preview settles an interrupted move, so it claims the run as a move does.
     expect(
       await previewWslMove(rig.world.deps, request, { settleInterrupted: 'finish-at-restart' })
     ).toMatchObject({
       outcome: 'refused',
-      code: 'wsl_move_already_running'
+      code: 'wsl_move_undo_running'
     })
     expect(claim('Debian')).not.toBeNull()
 

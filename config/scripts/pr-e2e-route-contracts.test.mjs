@@ -268,8 +268,8 @@ describe('pr-e2e-layout-oracle-routing', () => {
       // Two calls of the reusable workflow in one run must not share artifact names.
       expect(prWorkflow.jobs.layout_oracle.with.artifact_suffix).toBeTruthy()
       expect(prWorkflow.jobs.e2e.with.artifact_suffix).toBeUndefined()
-      // The merge gate keeps Blacksmith speed; the advisory lane runs free.
-      expect(prWorkflow.jobs.layout_oracle.with.fast_runners).toBe(true)
+      // Both lanes run on free hosted runners.
+      expect(prWorkflow.jobs.layout_oracle.with.fast_runners).toBeUndefined()
       expect(prWorkflow.jobs.e2e.with.fast_runners).toBeUndefined()
     })
   })

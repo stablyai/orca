@@ -3,6 +3,7 @@ import { ChevronUp } from 'lucide-react-native'
 import { colors, spacing, typography } from '../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../theme/themed-styles'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
+import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 
 export function MobileNativeChatPromptStrip({
   title,
@@ -12,13 +13,14 @@ export function MobileNativeChatPromptStrip({
   onExpand: () => void
 }): React.JSX.Element {
   useMobileColorScheme()
+  const t = useMobileTranslation()
   return (
     <View testID="native-chat-prompt-strip" style={styles.strip}>
       <Text style={styles.title} numberOfLines={1}>
         {title}
       </Text>
       <Pressable
-        accessibilityLabel="Expand"
+        accessibilityLabel={t('chat.promptStrip.expand', 'Expand')}
         accessibilityState={{ expanded: false }}
         hitSlop={8}
         style={styles.action}

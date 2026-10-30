@@ -33,6 +33,7 @@ import {
   type RefreshAgentsResult
 } from './agent-detection'
 import type { InstalledAgentDetectionOptions } from './installed-agent-detection'
+import { assertWslDistroRunningForExec } from '../wsl/wsl-background-exec-gate'
 
 export type AgentDetectionHost =
   | { kind: 'local'; context?: PreflightRuntimeContext }
@@ -142,6 +143,14 @@ export async function detectAgentsOnHost(
   return detectInstalledAgentsWithShellPathHydration(host.context, options)
 }
 
+/** Background detection in a WSL runtime refuses a stopped distro (E9); a user act for it passes. */
+export async function assertAgentDetectionHostRunning(host: AgentDetectionHost): Promise<void> {
+  const wslTarget = host.kind === 'local' ? getPreflightWslTarget(host.context) : null
+  if (wslTarget) {
+    await assertWslDistroRunningForExec(wslTarget.distro)
+  }
+}
+
 const agentRefreshListeners = new Set<() => void>()
 
 export function onAgentsRefreshedOnHost(listener: () => void): () => void {
@@ -158,12 +167,11 @@ export async function refreshAgentsOnHost(
   }
   const wsl = getPreflightWslTarget(host.context)
   const refresh = async (): Promise<RefreshAgentsResult> => {
-    const result = await (options
-      ? refreshShellPathAndDetectAgents(host.context, options)
-      : refreshShellPathAndDetectAgents(host.context))
-    if (!wsl) {
-      await captureHostShellEnvironment()
-    }
+    const detect = () =>
+      options
+        ? refreshShellPathAndDetectAgents(host.context, options)
+        : refreshShellPathAndDetectAgents(host.context)
+    const result = wsl ? await detect() : await captureHostShellEnvironment(detect)
     agentRefreshListeners.forEach((listener) => listener())
     return result
   }

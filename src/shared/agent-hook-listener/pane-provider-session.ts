@@ -5,7 +5,9 @@ import {
   readPathFromKeys,
   type AgentProviderSessionMetadata
 } from '../agent-session-resume'
+import { readFirstString } from './interactive-tool'
 import type { HookListenerState } from './listener-state'
+import { isGrokSubagentEvent } from './providers/grok-tool-fields'
 import { withHermesPaneSessionId } from './providers/hermes-events'
 import { readString } from './tool-input-preview'
 
@@ -16,8 +18,19 @@ export function readPaneProviderSession(
   paneKey: string,
   hookPayload: Record<string, unknown>
 ): AgentProviderSessionMetadata | null {
+  if (
+    source === 'copilot' &&
+    readFirstString(hookPayload, ['agent_id', 'agentId', 'parent_agent_id', 'parentAgentId'])
+  ) {
+    return null
+  }
   if (source === 'codex' && readString(hookPayload, 'agent_id')) {
     return null
+  }
+  if (source === 'grok' && isGrokSubagentEvent(hookPayload)) {
+    // A Grok child's session id is its own; the only child row it emits restates the pane's session.
+    const previous = state.lastStatusByPaneKey.get(paneKey)
+    return previous?.source === 'grok' ? (previous.providerSession ?? null) : null
   }
   const providerSession = extractAgentProviderSession(
     source,

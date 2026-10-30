@@ -161,7 +161,9 @@ it.each(['issue', undefined] as const)(
     expect(details?.body).toBe('ORIGIN body')
     expect(details?.assignees).toEqual(['ORIGIN-assignee'])
     expect(details?.comments.map((comment) => comment.body)).toEqual(['ORIGIN comment'])
-    expect(fixture.requests[1].args).toContain('owner=fork-owner')
+    expect(
+      fixture.requests.filter(({ args }) => args.includes('graphql')).map(({ args }) => args)
+    ).toEqual([expect.arrayContaining(['owner=fork-owner'])])
   }
 )
 

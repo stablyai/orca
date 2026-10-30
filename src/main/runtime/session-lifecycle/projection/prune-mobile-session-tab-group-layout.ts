@@ -131,7 +131,9 @@ export abstract class OrcaRuntimeWithPruneMobileSessionTabGroupLayout extends Or
       tabs: this.tabs,
       leaves: this.leaves,
       ptysById: this.ptysById,
+      getPtyAvailability: (ptyId) => this.ptyController?.getPtyAvailability?.(ptyId) ?? null,
       getLiveBrowserTabs: (worktreeId) => this.getListedBrowserTabsByPageId(worktreeId),
+      isRendererOwnedMobileBrowserTab: (...args) => this.isRendererOwnedMobileBrowserTab(...args),
       getProviderSessionRows: (paneKey) => this.getAgentProviderSessionRowsForPaneFn?.(paneKey),
       getProviderSessionSnapshot: () => this.getAgentProviderSessionSnapshotFn?.() ?? [],
       getStatusSnapshot: () => this.getAgentStatusSnapshotFn?.() ?? [],
@@ -297,10 +299,9 @@ export abstract class OrcaRuntimeWithPruneMobileSessionTabGroupLayout extends Or
     paneKey: string
   ): AgentStatusOrchestrationContext | undefined {
     const handle = this.getTerminalHandleForPaneKey(paneKey)
-    if (!handle) {
-      return undefined
-    }
-    return this.agentOrchestrationProjection.getForHandle(handle, undefined, { paneKey })
+    return handle
+      ? this.agentOrchestrationProjection.getForHandle(handle, undefined, { paneKey })
+      : undefined
   }
 
   getAgentStatusTerminalHandleForPaneKey(paneKey: string): string | undefined {

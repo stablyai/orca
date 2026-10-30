@@ -1,3 +1,4 @@
+import { showWorktreeCreateWarningToast } from './worktree-create-warning-toast'
 import { createWorktreeOnRuntimeHost } from './host-planned-agent-launch'
 import { runtimeRpcTargetForAuthorityKey } from '@/runtime/runtime-client-target'
 import { repoHostId } from '../listing/worktree-host-ownership'
@@ -25,7 +26,11 @@ import {
 import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
 import { runtimeTargetForRepoOwner } from '@/lib/repo-runtime-owner'
 import { WORKTREE_LINKED_WORK_ITEM_CONTEXT_RUNTIME_CAPABILITY } from '../../../../../../shared/protocol-version'
-import { WORKTREE_OPEN_EXISTING_BRANCH_RUNTIME_CAPABILITY } from '../../../../../../shared/worktree-runtime-capabilities'
+import {
+  WORKTREE_OPEN_EXISTING_BRANCH_RUNTIME_CAPABILITY,
+  WORKTREE_OPEN_EXISTING_BRANCH_V2_RUNTIME_CAPABILITY,
+  WORKTREE_OPEN_EXISTING_BRANCH_V2_REQUEST_RUNTIME_CAPABILITY
+} from '../../../../../../shared/worktree-runtime-capabilities'
 import { ensureLocalRuntimeCapabilities } from '../../../../runtime/local-runtime-capabilities'
 import { showLocalBaseRefUpdateSuggestionToast } from '@/components/sidebar/local-base-ref-suggestion-toast'
 import { requestWorktreeBaseFallbackNotice } from '@/components/worktree-base-fallback-notice'
@@ -195,19 +200,25 @@ export function createCreateWorktree(
         requestedHostId: options?.executionHostId,
         resolveOwnHostId: () => repoHostId(get(), repoId)
       })
-      if (options?.branchIntent === 'open-existing') {
+      if (options?.branchIntent) {
+        const capability =
+          options.branchIntent === 'open-existing-v2'
+            ? WORKTREE_OPEN_EXISTING_BRANCH_V2_REQUEST_RUNTIME_CAPABILITY
+            : options.branchIntent === 'create-new'
+              ? WORKTREE_OPEN_EXISTING_BRANCH_V2_RUNTIME_CAPABILITY
+              : WORKTREE_OPEN_EXISTING_BRANCH_RUNTIME_CAPABILITY
         const supported =
           target.kind === 'environment'
-            ? await runtimeEnvironmentSupportsCapability(
-                target.environmentId,
-                WORKTREE_OPEN_EXISTING_BRANCH_RUNTIME_CAPABILITY
-              ).catch(() => false)
-            : (await ensureLocalRuntimeCapabilities())?.includes(
-                WORKTREE_OPEN_EXISTING_BRANCH_RUNTIME_CAPABILITY
-              ) === true
-        if (supported) {
-          request.branchIntent = 'open-existing'
+            ? await runtimeEnvironmentSupportsCapability(target.environmentId, capability).catch(
+                () => false
+              )
+            : (await ensureLocalRuntimeCapabilities())?.includes(capability) === true
+        if (!supported) {
+          throw new Error(
+            'Update Orca on the workspace host to reuse a branch or explicitly create a separate branch.'
+          )
         }
+        request.branchIntent = options.branchIntent
       }
       // Why outside the retry loop: a branch-name conflict retry must not re-warn about the same dropped pick.
       const parent = resolveWorktreeCreateParent(get(), options?.parentWorktreeId, creationHostId)
@@ -267,6 +278,7 @@ export function createCreateWorktree(
             holdCreatedSidebarWorkspace({ worktree: created })
           }
           const { result } = outcome
+          showWorktreeCreateWarningToast(result.warning)
           showLocalBaseRefRefreshToast(result.localBaseRefRefresh, result.worktree, {
             updateSettings: get().updateSettings,
             executionHostId: creationHostId
@@ -284,7 +296,8 @@ export function createCreateWorktree(
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error)
           const shouldRetry =
-            request.branchIntent !== 'open-existing' && isRetryableWorktreeCreateConflict(message)
+            request.branchIntent !== 'open-existing-v2' &&
+            isRetryableWorktreeCreateConflict(message)
           if (!shouldRetry || attempt === CLIENT_WORKTREE_CREATE_MAX_ATTEMPTS - 1) {
             throw error
           }

@@ -6,6 +6,7 @@ import { ChevronDown, ChevronRight, Pencil, Play, Trash2 } from 'lucide-react-na
 import { ActionSheetModal } from '../../../components/ActionSheetModal'
 import { colors } from '../../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
+import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import { useLargeSystemText } from '../../../theme/use-large-system-text'
 import type { MobileQueuedMessageCard } from '../../mobile-structured-queued-message-cards'
 import type { AgentSessionQueuePause } from '../../../../../src/shared/agent-session-wire'
@@ -47,6 +48,7 @@ export function MobileNativeChatQueuedMessages({
   steerHeld = false
 }: MobileNativeChatQueuedMessagesProps): React.JSX.Element | null {
   useMobileColorScheme()
+  const t = useMobileTranslation()
   // Use a ref to block duplicate actions before disabled state renders.
   const [busyIds, setBusyIds] = useState<ReadonlySet<string>>(() => new Set())
   const inFlightRef = useRef(new Set<string>())
@@ -95,7 +97,7 @@ export function MobileNativeChatQueuedMessages({
         <Pressable
           accessibilityRole="button"
           accessibilityState={{ disabled: clearBusy }}
-          accessibilityLabel="Delete every queued message"
+          accessibilityLabel={t('chat.queuedMessages.deleteAll', 'Delete every queued message')}
           style={({ pressed }) => [
             styles.headerAction,
             pressed && styles.pressed,
@@ -105,13 +107,16 @@ export function MobileNativeChatQueuedMessages({
           onPress={() => void run(QUEUE_KEY, () => onClearAll(messageIds), messageIds)}
         >
           <Trash2 size={12} color={colors.textPrimary} strokeWidth={2} />
-          <Text style={styles.actionLabel}>Clear all</Text>
+          <Text style={styles.actionLabel}>{t('chat.queuedMessages.clearAll', 'Clear all')}</Text>
         </Pressable>
       ) : null}
       <Pressable
         accessibilityRole="button"
         accessibilityState={{ disabled: queueBusy }}
-        accessibilityLabel="Resume sending the queued messages"
+        accessibilityLabel={t(
+          'chat.queuedMessages.resumeSending',
+          'Resume sending the queued messages'
+        )}
         style={({ pressed }) => [
           styles.headerAction,
           pressed && styles.pressed,
@@ -121,7 +126,7 @@ export function MobileNativeChatQueuedMessages({
         onPress={() => void run(QUEUE_KEY, onResume && (() => onResume()))}
       >
         <Play size={12} color={colors.textPrimary} strokeWidth={2} />
-        <Text style={styles.actionLabel}>Resume</Text>
+        <Text style={styles.actionLabel}>{t('chat.queuedMessages.resume', 'Resume')}</Text>
       </Pressable>
     </>
   ) : null
@@ -142,13 +147,15 @@ export function MobileNativeChatQueuedMessages({
           <Pressable
             accessibilityRole="button"
             accessibilityState={{ expanded }}
-            accessibilityLabel="Queued messages"
+            accessibilityLabel={t('chat.queuedMessages.title', 'Queued messages')}
             style={({ pressed }) => [styles.headerToggle, pressed && styles.pressed]}
             onPress={() => setExpanded(!expanded)}
           />
           <View style={styles.headerLabels} pointerEvents="none">
             <Text style={[styles.headerLabel, pause && styles.headerLabelPaused]}>
-              {pause ? 'Paused' : 'Queued'}
+              {pause
+                ? t('chat.queuedMessages.pausedState', 'Paused')
+                : t('chat.queuedMessages.queuedState', 'Queued')}
             </Text>
             <Text
               style={styles.headerLabel}
@@ -220,7 +227,8 @@ export function MobileNativeChatQueuedMessages({
         title={menuCard?.line}
         actions={[
           {
-            label: 'Edit message',
+            id: 'editMessage',
+            label: t('chat.queuedMessages.editMessage', 'Edit message'),
             icon: Pencil,
             // Runs once the sheet's Modal is gone, so the composer Edit fills can take focus.
             closeBeforePress: true,

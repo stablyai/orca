@@ -55,16 +55,16 @@ function open(overrides: Partial<Parameters<typeof openAgentSessionJournal>[0]> 
   })
 }
 
-function withJournalDatabase<T>(run: (db: Database.Database) => T): T {
+async function withJournalDatabase<T>(run: (db: Database.Database) => T): Promise<T> {
   const opened = openTestJournalHostDatabase(root)
   try {
     return run(opened.db)
   } finally {
-    opened.close()
+    await opened.close()
   }
 }
 
-function storedRows(): { seq: number; rowJson: string }[] {
+async function storedRows(): Promise<{ seq: number; rowJson: string }[]> {
   return withJournalDatabase((db) => liveTestJournalRows(db, IDENTITY.sessionId))
 }
 
@@ -122,18 +122,18 @@ describe('a damaged chat', () => {
     ['no epoch row', (db: Database.Database) => deleteTestJournalRow(db, IDENTITY.sessionId, 1)]
   ])('fails to load and keeps every row: %s', async (_name, damage) => {
     await writeChat()
-    withJournalDatabase(damage)
-    const before = storedRows()
+    await withJournalDatabase(damage)
+    const before = await storedRows()
 
     await expect(open()).rejects.toMatchObject(UNLOADABLE)
     await expect(open()).rejects.toMatchObject(UNLOADABLE)
 
-    expect(storedRows()).toEqual(before)
+    expect(await storedRows()).toEqual(before)
   })
 
   it('names where the damage starts', async () => {
     await writeChat()
-    withJournalDatabase((db) => deleteTestJournalRow(db, IDENTITY.sessionId, 4))
+    await withJournalDatabase((db) => deleteTestJournalRow(db, IDENTITY.sessionId, 4))
 
     expect(loadTestJournal(root, IDENTITY.sessionId)).toMatchObject({
       newer: null,
@@ -143,15 +143,15 @@ describe('a damaged chat', () => {
 
   it("reads past damage to a newer build's row, which fails the load as a newer Orca's instead", async () => {
     await writeChat()
-    withJournalDatabase((db) => {
+    await withJournalDatabase((db) => {
       updateTestJournalRowJson(db, IDENTITY.sessionId, 3, '}{')
       const newer = { ...JSON.parse(storedRowJson(db, 5)), kind: 'checkpoint' }
       updateTestJournalRowJson(db, IDENTITY.sessionId, 5, JSON.stringify(newer))
     })
-    const before = storedRows()
+    const before = await storedRows()
 
     await expect(open()).rejects.toMatchObject(SAVED_BY_NEWER_ORCA)
-    expect(storedRows()).toEqual(before)
+    expect(await storedRows()).toEqual(before)
   })
 })
 
@@ -185,7 +185,7 @@ describe('a row the reader would reject', () => {
       body('before'),
       body('after')
     ])
-    expect(storedRows().map((row) => row.seq)).toEqual([1, 2, 3])
+    expect((await storedRows()).map((row) => row.seq)).toEqual([1, 2, 3])
   })
 
   it('rolls back a whole epoch replacement that holds one, keeping the epoch it would replace', async () => {
@@ -213,7 +213,7 @@ describe('a row the reader would reject', () => {
 describe('an epoch named with no rows at all', () => {
   it('is founded afresh on open, with nothing deleted, and takes writes', async () => {
     await writeChat()
-    withJournalDatabase((db) => {
+    await withJournalDatabase((db) => {
       for (const row of liveTestJournalRows(db, IDENTITY.sessionId)) {
         deleteTestJournalRow(db, IDENTITY.sessionId, row.seq)
       }

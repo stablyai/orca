@@ -53,6 +53,7 @@ import { GHCommentComposer } from './gh-comment-composer'
 import { ConversationTabDescription } from './conversation-tab-description'
 import { ConversationTabActivity } from './conversation-tab-activity'
 import { ConversationTabPRSidebar } from './conversation-tab-pr-sidebar'
+import { codeHostErrorText } from '@/lib/code-host-error-copy'
 
 export function ConversationTab({
   item,
@@ -99,7 +100,8 @@ export function ConversationTab({
   onCommentAdded: (comment: PRComment) => void
   onReviewersRequested: (reviewRequests: GitHubAssignableUser[]) => void
 }): React.JSX.Element {
-  const authorLabel = item.author ?? 'unknown'
+  const authorLabel =
+    item.author ?? translate('auto.components.GitHubItemDialog.773ff70035', 'unknown')
   const [replyingTo, setReplyingTo] = useState<number | null>(null)
   const [commentFilter, setCommentFilter] = useState<PRCommentAudienceFilter>('all')
   const [bodyDraft, setBodyDraft] = useState(body)
@@ -231,7 +233,7 @@ export function ConversationTab({
 
       if (!result.ok) {
         toast.error(
-          result.error ||
+          codeHostErrorText(result) ||
             translate('auto.components.GitHubItemDialog.283699bc82', 'Failed to post reply.')
         )
         return false

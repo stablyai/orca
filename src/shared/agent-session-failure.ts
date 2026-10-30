@@ -49,6 +49,8 @@ export const AGENT_SESSION_FAILURE_KINDS = [
   'providerExited',
   'restartFailed',
   'providerRejected',
+  'modelUnavailable',
+  'claudeEffortInvalid',
   'attachmentInvalid',
   'attachmentUnreadable',
   'emptyMessage',
@@ -166,7 +168,7 @@ export type AgentSessionProviderRetry = {
 export type AgentSessionFailureFact = {
   kind: AgentSessionFailureKind
   account?: AgentSessionAccountKind
-  /** Provider-authored, or on `launchPreparationFailed` the host error behind it; never Orca's sentence. */
+  /** Provider diagnostic, the rejected model ID on `modelUnavailable`, or the host error on `launchPreparationFailed`; never Orca's sentence. */
   detail?: ProviderDiagnostic
   /** On `restartFailed` and `startFailed`: the refusal that kept the agent from starting. On
    *  `commandRefused`: the refusal that kept the command from running. */

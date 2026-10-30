@@ -1,11 +1,10 @@
 import { join } from 'node:path'
 import { getAppEnvironment } from '../../shared/app-environment'
 import type { StatsSummary } from '../../shared/process-stats-types'
-import type { StatsEvent, StatsAggregates } from './types'
+import type { StatsEvent, StatsAggregates, StatsFile } from './types'
 import { loadStatsFile, STATS_SCHEMA_VERSION } from './stats-file-loader'
 import { AtomicSnapshotWriter } from '../persistence/atomic-snapshot-writer'
 
-const MAX_EVENTS = 10_000
 // Bound persistent PR dedup URLs at 2000 (~100KB) across long-lived installs.
 const MAX_COUNTED_PRS = 2_000
 // Stats are infrequent and UI-insensitive; batch writes more loosely than the main Store.
@@ -25,7 +24,6 @@ function getStatsFile(): string {
 }
 
 export class StatsCollector {
-  private events: StatsEvent[]
   private aggregates: StatsAggregates
   private liveAgents = new Map<string, number>()
   private writeTimer: ReturnType<typeof setTimeout> | null = null
@@ -38,8 +36,11 @@ export class StatsCollector {
 
   constructor() {
     const data = loadStatsFile(getStatsFile())
-    this.events = data.events
     this.aggregates = data.aggregates
+    // Compact pre-#35544 files so later boots stop parsing the legacy event log.
+    if (Array.isArray(data.events) && data.events.length > 0) {
+      this.scheduleSave()
+    }
   }
 
   onAgentStarted(listener: (totalAgentsSpawned: number) => void): () => void {
@@ -53,12 +54,8 @@ export class StatsCollector {
     return this.aggregates.totalAgentsSpawned
   }
 
+  /** Folds the event into aggregates; no consumer reads raw events, so they are not retained (#35544). */
   record(event: StatsEvent): void {
-    this.events.push(event)
-    // A stalled async write must not defer the in-memory retention limit.
-    if (this.events.length > MAX_EVENTS) {
-      this.events.splice(0, this.events.length - MAX_EVENTS)
-    }
     this.updateAggregates(event)
     this.scheduleSave()
   }
@@ -179,7 +176,6 @@ export class StatsCollector {
     }
     this.writeTimer = setTimeout(() => {
       this.writeTimer = null
-      // Write ~900KB snapshots off-thread to avoid main stalls every five seconds.
       void this.enqueueWrite().catch((err) => {
         console.error('[stats] Failed to write stats:', err)
       })
@@ -194,14 +190,13 @@ export class StatsCollector {
   }
 
   private serialize(): string {
-    if (this.events.length > MAX_EVENTS) {
-      this.events = this.events.slice(-MAX_EVENTS)
-    }
-    return JSON.stringify({
+    // Empty events keeps the v1 file shape for older builds and external readers.
+    const file: StatsFile = {
       schemaVersion: STATS_SCHEMA_VERSION,
-      events: this.events,
+      events: [],
       aggregates: this.aggregates
-    })
+    }
+    return JSON.stringify(file)
   }
 
   private enqueueWrite(): Promise<void> {

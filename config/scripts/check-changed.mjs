@@ -1,4 +1,4 @@
-// Pre-handoff gate: runs the checks a change's paths need, in parallel, printing only failures.
+// Pre-handoff gate: runs the checks a change's paths need, in parallel, printing failures in full.
 import { execFileSync, spawnSync } from 'node:child_process'
 import { existsSync, readdirSync } from 'node:fs'
 import { availableParallelism } from 'node:os'
@@ -16,13 +16,20 @@ import { resolveOxcCliInvocation } from './oxc-cli-invocation.mjs'
 import { resolvePnpmCliInvocation } from './pnpm-cli-invocation.mjs'
 
 const OUTPUT_TAIL_LINES = 200
+const HEARTBEAT_MS = 60_000
+const DEFAULT_STEP_TIMEOUT_MINUTES = 30
 // Windows caps a command line near 32K characters; past this, lint the whole tree instead.
 const MAX_PATH_ARGUMENT_CHARS = 24_000
 const LINTABLE = /\.[cm]?[jt]sx?$/
 const ANTI_SLOP_ROOTS = ['src/', 'config/', 'tests/', 'mobile/']
 
 function parseArgs(argv) {
-  const options = { force: false, base: null, maxWorkers: null }
+  const options = {
+    force: false,
+    base: null,
+    maxWorkers: null,
+    stepTimeoutMs: DEFAULT_STEP_TIMEOUT_MINUTES * 60_000
+  }
   for (const argument of argv) {
     if (argument === '--') {
       continue
@@ -32,8 +39,12 @@ function parseArgs(argv) {
       options.base = argument.slice('--base='.length)
     } else if (/^--max-?workers=\d+$/i.test(argument)) {
       options.maxWorkers = argument.split('=')[1]
+    } else if (/^--timeout=\d+$/.test(argument)) {
+      options.stepTimeoutMs = Number(argument.split('=')[1]) * 60_000
     } else {
-      throw new Error(`Unknown option ${argument}. Use --force, --base=<ref>, --maxWorkers=<n>.`)
+      throw new Error(
+        `Unknown option ${argument}. Use --force, --base=<ref>, --maxWorkers=<n>, --timeout=<minutes>.`
+      )
     }
   }
   return options
@@ -206,14 +217,20 @@ function buildTasks(root, plan, { files, mergeBase, maxWorkers, bun }) {
   return tasks
 }
 
-async function runTask(task, { root, env, runProcess }) {
+async function runTask(task, { root, env, runProcess, stepTimeoutMs }) {
   const startedAt = performance.now()
   let output = ''
   for (const { program, args } of task.steps) {
     try {
-      const result = await runProcess({ program, args, cwd: root, env, timeoutMs: null }, 'tail')
+      const result = await runProcess(
+        { program, args, cwd: root, env, timeoutMs: stepTimeoutMs || null },
+        'tail'
+      )
       output += result.stdout + result.stderr
-      if (result.code !== 0) {
+      if (result.timedOut) {
+        output += `\nTimed out after ${stepTimeoutMs / 60_000} min; pass --timeout=<minutes> to extend.`
+      }
+      if (result.code !== 0 || result.timedOut) {
         return { task, ok: false, output, elapsed: seconds(startedAt) }
       }
     } catch (error) {
@@ -294,13 +311,29 @@ export async function main(root, argv) {
 
   // Typecheck and tests lead the queue: they take longest, so the short checks fill in around them.
   const concurrency = Math.max(3, Math.floor(availableParallelism() / 3))
+  const running = new Map()
+  // Why: output is buffered until a task ends, so long test runs would otherwise look hung.
+  const heartbeat = setInterval(() => {
+    const active = [...running].map(([name, taskStartedAt]) => `${name} ${seconds(taskStartedAt)}`)
+    console.log(`… ${seconds(startedAt)} elapsed; running: ${active.join(', ')}`)
+  }, HEARTBEAT_MS)
+  heartbeat.unref()
   const results = await runPool(tasks, concurrency, async (task) => {
-    const result = await runTask(task, { root, env, runProcess })
-    if (!result.ok) {
+    running.set(task.name, performance.now())
+    const result = await runTask(task, {
+      root,
+      env,
+      runProcess,
+      stepTimeoutMs: options.stepTimeoutMs
+    })
+    running.delete(task.name)
+    if (result.ok) {
+      console.log(`✓ ${task.name} (${result.elapsed})`)
+    } else {
       console.error(`\n✗ ${task.name} (${result.elapsed})\n${tail(result.output)}`)
     }
     return result
-  })
+  }).finally(() => clearInterval(heartbeat))
   const failed = results.filter((result) => !result.ok)
   if (failed.length > 0) {
     console.error(

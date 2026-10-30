@@ -16,13 +16,19 @@ import {
   countWorkerTerminalInventory,
   scanWorkerTerminalStates
 } from './worker-terminal-inventory-counts'
-import { markWorkerTerminalUserOwned } from './worker-terminal-user-takeover'
+import {
+  allowWorkerTerminalAutoClose,
+  getWorkerAutoCloseState,
+  keepWorkerTerminalOpen
+} from './worker-terminal-user-keep'
 
 export {
   countWorkerTerminalInventory,
   getWorkerAttentionFacts,
   getWorkerAttentionFactsForDispatches,
-  markWorkerTerminalUserOwned
+  allowWorkerTerminalAutoClose,
+  getWorkerAutoCloseState,
+  keepWorkerTerminalOpen
 }
 
 /** `databaseId` is the real order key; the timestamp fields only satisfy pre-v3 cursors. */
@@ -272,7 +278,9 @@ export function getWorkerTerminalOrderingKey(
 }
 
 export type WorkerTerminalListingMethods = {
-  markWorkerTerminalUserOwned: typeof markWorkerTerminalUserOwned
+  allowWorkerTerminalAutoClose: typeof allowWorkerTerminalAutoClose
+  getWorkerAutoCloseState: typeof getWorkerAutoCloseState
+  keepWorkerTerminalOpen: typeof keepWorkerTerminalOpen
   listWorkerTerminalReleaseBacklog: typeof listWorkerTerminalReleaseBacklog
   listWorkerTerminalResources: typeof listWorkerTerminalResources
   getWorkerTerminalListingSnapshot: typeof getWorkerTerminalListingSnapshot
@@ -284,7 +292,9 @@ export type WorkerTerminalListingMethods = {
 
 export function attachWorkerTerminalListing(ctor: { prototype: object }): void {
   Object.assign(ctor.prototype, {
-    markWorkerTerminalUserOwned,
+    allowWorkerTerminalAutoClose,
+    getWorkerAutoCloseState,
+    keepWorkerTerminalOpen,
     listWorkerTerminalReleaseBacklog,
     listWorkerTerminalResources,
     getWorkerTerminalListingSnapshot,

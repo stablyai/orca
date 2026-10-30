@@ -295,8 +295,11 @@ function loadNativeModule(moduleName) {
     return
   }
   if (moduleName === '@orca/windows-security') {
-    // Why: the package defers loading its .node addon until the first call.
-    require(moduleName).currentUserSid()
+    const security = require(moduleName)
+    // currentUserSid loads the addon; a stale build that still loads lacks the newest export.
+    if (!security.currentUserSid() || !security.hasNativeExport('isolatedSpawnBreaksAwayFromJob')) {
+      throw new Error('stale build without the newest export; rebuild it')
+    }
     return
   }
   if (moduleName === 'node-pty') {

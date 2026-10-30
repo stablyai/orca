@@ -3,6 +3,7 @@ import {
   beginWslMoveUndoRun,
   claimWslMoveRun,
   isAnyWslMoveRunning,
+  wslMoveClaimRefusal,
   releaseWslMoveRun,
   type RunningWslMove
 } from '../persistence/moving-wsl-projects/wsl-move-running-moves'
@@ -61,8 +62,11 @@ describe('wslMoveInstallHold', () => {
     const end = beginUndo()
     // Case-insensitive like the journal key: WSL names distros case-insensitively.
     expect(claimWslMoveRun('ubuntu')).toBeNull()
+    expect(wslMoveClaimRefusal('Ubuntu')).toBe('wsl_move_undo_running')
     move = claimWslMoveRun('Debian')
     expect(move).not.toBeNull()
+    // A move, not an undo, holds Debian.
+    expect(wslMoveClaimRefusal('Debian')).toBe('wsl_move_already_running')
     end()
     const after = claimWslMoveRun('Ubuntu')
     expect(after).not.toBeNull()

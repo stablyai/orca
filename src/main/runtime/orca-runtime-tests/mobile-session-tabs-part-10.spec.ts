@@ -438,7 +438,9 @@ describe('OrcaRuntimeService', () => {
     )
 
     // Only a host-committed close may tombstone; a fire-and-forget renderer request can be declined.
-    expect(result).toEqual({ closed: true })
+    expect(result).toEqual(
+      ORCA_LAYOUT_OWNER_IS_MAIN ? { closed: true, retirementConfirmed: true } : { closed: true }
+    )
     if (ORCA_LAYOUT_OWNER_IS_MAIN) {
       expectDesktopDropsTab({ closeTerminal, getSession }, 'host-tab')
       return

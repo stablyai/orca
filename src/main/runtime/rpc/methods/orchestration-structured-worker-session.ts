@@ -1,9 +1,18 @@
+import {
+  closeStructuredAgentSessionChild,
+  type StructuredAgentSessionCloseOptions
+} from '../../agent-session/structured-agent-session-close'
 /** Create structured workers directly; attach is not readiness, so hold the preamble until the agent takes it.
  * Open dispatches retain agents through the idle sweep; settled workers rest and restart on mail. The preamble is a turn, never keystrokes. */
 
 import { randomUUID } from 'node:crypto'
 import { isDefinitiveAgentSessionCreateRefusal } from '../../../../shared/agent-session-definitive-refusal'
 import type { AgentMessageSource } from '../../../../shared/agent-session/agent-session-message-source'
+import {
+  agentSessionFailureDetailText,
+  readAgentSessionFailureFact
+} from '../../../../shared/agent-session-failure'
+import { quotedProviderDetail } from '../../../../shared/agent-session-failure-quoted-detail'
 import type {
   AgentJournalMessageItem,
   AgentJournalSubmission
@@ -151,20 +160,18 @@ function structuredCreateMayHaveCommitted(
  * Keep the tab reachable if close throws. Later authority/preamble failures also use this cleanup. */
 export async function discardStructuredWorkerSession(
   sessionId: string,
-  runtime: Pick<OrcaRuntimeService, 'retireStructuredAgentSessionTabFromSnapshot'>
+  runtime: NonNullable<StructuredAgentSessionCloseOptions['runtime']>
 ): Promise<void> {
   const host = getStructuredAgentSessionHost()
   if (!host) {
     return
   }
-  try {
-    await host.setSessionTabVisibility?.(sessionId, false)
-    await host.close(sessionId, 'evict')
-  } catch (error) {
+  const outcome = await closeStructuredAgentSessionChild(sessionId, { runtime })
+  if (!outcome.stopped) {
     console.warn(
       '[orchestration] failed to discard a half-started structured worker',
       sessionId,
-      error
+      outcome.reason
     )
     return
   }
@@ -240,12 +247,17 @@ export function preambleDispatchState(
     return submission.dispatchState
   }
   if (submission?.dispatchState === 'rejected') {
+    // Name the failure detail unless the reason already quotes it.
+    const detail = agentSessionFailureDetailText(readAgentSessionFailureFact(submission.rejection))
+    const quoted = detail ? quotedProviderDetail(detail) : ''
+    const detailClause =
+      quoted && !submission.reason?.includes(quoted) ? ` Details: ${quoted}.` : ''
     // Definitive rejection gets a typed non-delivery code so the coordinator can retry without a duplicate turn.
     throw new OrchestrationError(
       'dispatch_preamble_undelivered',
       `The dispatch preamble was not delivered${
         submission.rejection ? ` (${submission.rejection.kind})` : ''
-      }: ${reasonClause(submission.reason)}.`
+      }: ${reasonClause(submission.reason)}.${detailClause}`
     )
   }
   // Only accepted proves delivery; adapter/transport unknown requires an outcome_unknown receipt that tells the coordinator to inspect.

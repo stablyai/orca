@@ -2,7 +2,7 @@
  * Keep worktree.create's PTY/handle contract for older clients.
  * operationId adds durable at-most-once execution and recorded replay; unknown outcomes refuse, while stranded-surface recovery remains separate. */
 
-import { AGENT_LAUNCH_RUNTIME_CAPABILITY } from '../../../../shared/agent-launch-runtime-capability'
+import { agentLaunchFeatureRequirement } from '../agent-launch-feature-requirement'
 import { AgentLaunchTabClosedError } from '../../../../shared/agent-launch-tab-closed'
 import { computeAgentLaunchFingerprint } from '../../../../shared/agent-launch-operation'
 import type { AgentLaunchResult } from '../../../../shared/agent-launch-intent'
@@ -12,13 +12,14 @@ import {
   WORKTREE_CREATE_COLLISION_CODE
 } from '../../../../shared/new-workspace/worktree-create-collision'
 import { executeAgentLaunch } from '../../../agent-launch/agent-launch-executor'
-import {
-  trackTerminalSpawnDispatch,
-  type TerminalSpawnDispatch
-} from '../../../agent-launch/agent-launch-not-started'
+import { trackTerminalSpawnDispatch } from '../../../agent-launch/agent-launch-not-started'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import { defineMethod, type RpcContext } from '../core'
-import { admitAgentLaunchOperation, agentLaunchOperationCallerKey } from './agent-launch-replay'
+import {
+  admitAgentLaunchOperation,
+  agentLaunchOperationCallerKey,
+  type ReplaySafeLaunch
+} from './agent-launch-replay'
 import {
   AgentLaunchExecutionError,
   agentLaunchRefusalError,
@@ -43,7 +44,10 @@ import {
   selectAgentLaunchTabForCaller
 } from './agent-launch-caller-selection'
 import { agentLaunchWorkspaceFactory } from './agent-launch-worktree-creation'
-import { assertAgentLaunchTargetAuthorized } from './agent-launch-target-authorization'
+import {
+  assertAgentLaunchTargetAuthorized,
+  supportsAgentLaunch
+} from './agent-launch-target-authorization'
 import { resolveUnlaunchedIntent } from './agent-launch-intent-resolution'
 import {
   publishEarlyTab,
@@ -51,28 +55,15 @@ import {
   type AgentLaunchView
 } from './agent-launch-tab-publication'
 
-/** agent.launch.v2 declares support for both outcomes. CLI/runtime-socket and SSH bridges have no clientKind/capabilities; the desktop renderer is a runtime client and must advertise support. */
-export function supportsAgentLaunch(
-  context: Pick<RpcContext, 'clientKind' | 'clientCapabilities'>
-): boolean {
-  return (
-    context.clientKind === undefined ||
-    context.clientCapabilities?.includes(AGENT_LAUNCH_RUNTIME_CAPABILITY) === true
-  )
-}
+export { supportsAgentLaunch } from './agent-launch-target-authorization'
 
-/** What a launch admitted under an operation id carries into its execution. */
-type ReplaySafeLaunch = {
-  attachOperationId: string
-  callerKey: string
-  terminalSpawn: TerminalSpawnDispatch
-  /** Queue provisional surface/prompt recording without awaiting it; ordered ledger transactions keep final settlement after it. */
-  recordSurface: (provisional: AgentLaunchResult) => void
+type HostLaunchContext = RpcContext & {
+  agentLaunchPolicy?: { onSurfacePublished?: (surface: AgentLaunchResult) => void }
 }
 
 async function runAgentLaunch(
   { intent, decidedMode }: Awaited<ReturnType<typeof resolveUnlaunchedIntent>>,
-  context: RpcContext,
+  context: HostLaunchContext,
   view: AgentLaunchView,
   replaySafe?: ReplaySafeLaunch
 ): Promise<AgentLaunchResult> {
@@ -92,6 +83,11 @@ async function runAgentLaunch(
     workspaces: agentLaunchWorkspaceFactory(context, intent.agent),
     // The tab is shown as it is published, not after a prompt that can take a minute to land.
     onSurfacePublished: (surface) => {
+      try {
+        context.agentLaunchPolicy?.onSurfacePublished?.(surface)
+      } catch (error) {
+        console.warn('[agent-launch] publication bookkeeping failed', error)
+      }
       view.early?.surfacePublished(surface)
       replaySafe?.recordSurface(withPlacement(surface, view))
       if (callerNavigationId !== null && view.presentation !== 'background') {
@@ -106,7 +102,7 @@ async function runAgentLaunch(
  * Named operations bypass it: durable admission alone decides execution, including existing-workspace launches. */
 function runLegacyAgentLaunch(
   params: AgentLaunchParams,
-  context: RpcContext
+  context: HostLaunchContext
 ): Promise<AgentLaunchResult> {
   // No early tab, as before: only a replay-safe launch shows its tab before its agent exists.
   const execute = async () =>
@@ -152,7 +148,7 @@ function activeAgentLaunchesFor(runtime: OrcaRuntimeService): Map<string, Active
 
 async function executeReplaySafeAgentLaunch(
   params: AgentLaunchParams & { operationId: string },
-  context: RpcContext,
+  context: HostLaunchContext,
   fingerprint: string
 ): Promise<AgentLaunchResult> {
   // The tab is the host's first act: admission has a cold cost the user should not watch.
@@ -188,7 +184,7 @@ async function executeReplaySafeAgentLaunch(
 
 async function executeAdmittedAgentLaunch(
   params: AgentLaunchParams & { operationId: string },
-  context: RpcContext,
+  context: HostLaunchContext,
   admission: Extract<
     Awaited<ReturnType<typeof admitAgentLaunchOperation>>,
     { decision: 'execute' }
@@ -238,7 +234,7 @@ async function executeAdmittedAgentLaunch(
 
 function runReplaySafeAgentLaunch(
   params: AgentLaunchParams & { operationId: string },
-  context: RpcContext
+  context: HostLaunchContext
 ): Promise<AgentLaunchResult> {
   const callerKey = agentLaunchOperationCallerKey(context)
   const key = agentSessionOperationKey(callerKey, params.operationId)
@@ -265,6 +261,7 @@ function runReplaySafeAgentLaunch(
 export const AGENT_LAUNCH_METHODS = [
   defineMethod({
     name: 'agent.launchReplay',
+    requires: agentLaunchFeatureRequirement,
     permission: 'workspace',
     params: AgentLaunchReplay,
     handler: async (params, context): Promise<AgentLaunchResult> => {
@@ -296,31 +293,34 @@ export const AGENT_LAUNCH_METHODS = [
   }),
   defineMethod({
     name: 'agent.launch',
+    requires: agentLaunchFeatureRequirement,
     permission: 'workspace',
     params: AgentLaunch,
-    handler: async (params, context): Promise<AgentLaunchResult> => {
-      if (!supportsAgentLaunch(context)) {
-        throw new Error('agent_launch_unsupported')
-      }
-      assertAgentLaunchTargetAuthorized(params.target, context)
-      if (!params.operationId) {
-        return runLegacyAgentLaunch(params, context)
-      }
-      return runReplaySafeAgentLaunch(
-        {
-          ...params,
-          operationId: params.operationId
-        },
-        context
-      ).catch((error: unknown) => {
-        // Preserve the original error contract for callers of the optional-identity method.
-        if (error instanceof AgentLaunchExecutionError) {
-          throw error.cause instanceof AgentLaunchTabClosedError
-            ? agentLaunchTabClosedAnswer(context)
-            : error.cause
-        }
-        throw error
-      })
-    }
+    handler: (params, context) => launchAgentOnHost(params, context)
   })
 ]
+
+/** In-process schedules and RPC callers share admission, factories and prompt settlement. */
+export async function launchAgentOnHost(
+  { operationId, ...params }: AgentLaunchParams,
+  context: RpcContext,
+  policy?: HostLaunchContext['agentLaunchPolicy']
+): Promise<AgentLaunchResult> {
+  const host = { ...context, agentLaunchPolicy: policy }
+  if (!supportsAgentLaunch(host)) {
+    throw new Error('agent_launch_unsupported')
+  }
+  assertAgentLaunchTargetAuthorized(params.target, host)
+  if (!operationId) {
+    return runLegacyAgentLaunch(params, host)
+  }
+  return runReplaySafeAgentLaunch({ ...params, operationId }, host).catch((error: unknown) => {
+    // Preserve the original error contract for callers of the optional-identity method.
+    if (error instanceof AgentLaunchExecutionError) {
+      throw error.cause instanceof AgentLaunchTabClosedError
+        ? agentLaunchTabClosedAnswer(host)
+        : error.cause
+    }
+    throw error
+  })
+}

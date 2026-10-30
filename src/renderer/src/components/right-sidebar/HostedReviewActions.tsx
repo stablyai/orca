@@ -38,6 +38,7 @@ import {
 } from './right-sidebar-primary-action-layout'
 import { translate } from '@/i18n/i18n'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
+import { localizedHostedReviewCopy } from '@/i18n/hosted-review-localized-copy'
 import { getGitHubPRStackMergeBlocker, getGitHubPRStackMergeScope } from './github-pr-stack-merge'
 
 export default function HostedReviewActions({
@@ -58,8 +59,7 @@ export default function HostedReviewActions({
     (s) => getDeleteStateForWorktreeHost(worktree, s.deleteStateByWorktreeId)?.isDeleting ?? false
   )
   const isGitLab = review.provider === 'gitlab'
-  const shortLabel = isGitLab ? 'MR' : 'PR'
-  const reviewLabel = isGitLab ? 'merge request' : 'pull request'
+  const { shortLabel, reviewLabel } = localizedHostedReviewCopy(isGitLab ? 'gitlab' : 'github')
   const stackMergeScope = useMemo(
     () => (githubPR?.stack ? getGitHubPRStackMergeScope(githubPR.stack, review.number) : null),
     [githubPR?.stack, review.number]
@@ -312,10 +312,10 @@ export default function HostedReviewActions({
                 >
                   <GitPullRequestClosed className="size-3.5" />
                   {translate(
-                    'auto.components.right.sidebar.HostedReviewActions.4d5fb5a284',
-                    'Close'
-                  )}{' '}
-                  {shortLabel}
+                    'auto.components.right.sidebar.HostedReviewActions.closeReview',
+                    'Close {{review}}',
+                    { review: shortLabel }
+                  )}
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>

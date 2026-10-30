@@ -117,6 +117,8 @@ describe('OMP ACP launch resolution', () => {
     const launch = await resolver(ompRecord(), {
       probeVersion: async (input) => (asked.push(input), { version: '17.0.5' })
     })({ identity })
-    expect(asked).toEqual([{ program: launch.command, cwd: launch.cwd, env: launch.env }])
+    expect(asked).toEqual([
+      { program: launch.command, prefixArgs: launch.prefixArgs, cwd: launch.cwd, env: launch.env }
+    ])
   })
 })

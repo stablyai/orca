@@ -114,7 +114,7 @@ describe('PR linked-issue lifetime on a local worktree', () => {
       try {
         await expect(
           handlers.get('git:generatePullRequestFields')!(null, request)
-        ).resolves.toEqual({
+        ).resolves.toMatchObject({
           success: false,
           error:
             outcome === 'no changes' ? 'No branch changes to summarize.' : preparationError.message

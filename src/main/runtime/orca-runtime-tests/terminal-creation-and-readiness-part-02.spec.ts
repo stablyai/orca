@@ -1,3 +1,7 @@
+import {
+  makeRuntimeOrchestrationDb,
+  dispatchContextRow
+} from '../runtime-orchestration-db.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import {
   OrcaRuntimeService,
@@ -9,7 +13,6 @@ import {
   setTerminalViewAttributes,
   tmpdir
 } from '../orca-runtime-test-mocks.spec'
-import type { OrchestrationDb } from '../orchestration/db'
 import { getTerminalViewerColors } from '../terminal-view-attribute-store'
 import type {
   TerminalViewAttributes,
@@ -112,14 +115,15 @@ describe('OrcaRuntimeService', () => {
         retireAgentHookCompatibilityAuthority: retireAuthority
       }
     )
-    runtime.setOrchestrationDb({
-      getActiveDispatchForTerminal: (handle: string) =>
+    const orchestrationDb = makeRuntimeOrchestrationDb()
+    vi.spyOn(orchestrationDb, 'getActiveDispatchForTerminal').mockImplementation(
+      (handle: string) =>
         handle === 'term_ssh_retained'
-          ? { id: 'dispatch-ssh', task_id: 'task-ssh', status: 'dispatched' }
-          : undefined,
-      failDispatch,
-      getActiveCoordinatorRun: () => undefined
-    } as unknown as OrchestrationDb)
+          ? dispatchContextRow({ id: 'dispatch-ssh', task_id: 'task-ssh', status: 'dispatched' })
+          : undefined
+    )
+    vi.spyOn(orchestrationDb, 'failDispatch').mockImplementation(failDispatch)
+    runtime.setOrchestrationDb(orchestrationDb)
     runtime.attachWindow(TEST_WINDOW_ID)
     runtime.syncWindowGraph(TEST_WINDOW_ID, {
       tabs: [
@@ -507,15 +511,14 @@ describe('OrcaRuntimeService', () => {
       getForegroundProcess: async () => null
     })
 
-    await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
-      command: 'codex',
-      title: 'worker'
-    })
+    await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, { command: 'codex' })
 
     const spawnCall = spawn.mock.calls[0]?.[0] as
       | { command?: string; launchAgent?: string; env?: Record<string, string> }
       | undefined
-    expect(spawnCall?.command).toBe("codex '--dangerously-bypass-approvals-and-sandbox'")
+    expect(spawnCall?.command).toBe(
+      "codex '-c' 'disable_paste_burst=true' '--dangerously-bypass-approvals-and-sandbox'"
+    )
     expect(spawnedPtyEnv(spawnCall)).toMatchObject({
       CODEX_PROFILE: 'captured',
       ORCA_WORKTREE_ID: TEST_WORKTREE_ID

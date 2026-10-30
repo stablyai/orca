@@ -10,6 +10,7 @@ import {
   createMuseProvider,
   createOpenCodeProvider
 } from './usage-provider-normalization'
+import { getIntlLocale } from '@/i18n/i18n'
 
 export function buildUsageOverview(input: UsageOverviewInput): UsageOverviewModel {
   const providers = [
@@ -87,7 +88,7 @@ export function formatUsageTokens(value: number): string {
   if (value >= 1_000) {
     return `${(value / 1_000).toFixed(1)}k`
   }
-  return value.toLocaleString()
+  return value.toLocaleString(getIntlLocale())
 }
 
 export function formatUsageCost(value: number | null): string {

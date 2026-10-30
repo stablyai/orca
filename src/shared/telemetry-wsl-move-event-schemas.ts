@@ -9,6 +9,7 @@ export const WSL_MOVE_REFUSAL_VALUES = [
   'none',
   'unavailable',
   'already_running',
+  'undo_running',
   'already_in_flight',
   'nothing_new',
   'host_unavailable',

@@ -94,7 +94,10 @@ export abstract class CodexRuntimeHomeState {
   abstract reconcileLegacySharedHomeForRetainedPanes(): void
   abstract syncActiveWslSelectionsBeforeRestart(): Promise<void>
 
-  protected abstract getWslSystemCodexHomePath(target: CodexAccountSelectionTarget): string | null
+  protected abstract getWslSystemCodexHomePath(
+    target: CodexAccountSelectionTarget,
+    options?: { probeHome?: boolean }
+  ): string | null
   protected abstract finishWslLaunchPreparation(
     target: CodexAccountSelectionTarget,
     homePath: string | null

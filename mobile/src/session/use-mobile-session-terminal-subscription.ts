@@ -23,8 +23,7 @@ export function useMobileSessionTerminalSubscription(
     clientId,
     setTerminalModes,
     terminalCwdRef,
-    viewportRef,
-    viewportMeasuredRef,
+    getTerminalPaneViewport,
     terminalUnsubsRef,
     subscribingHandlesRef,
     leaseOnlyHandlesRef,
@@ -35,7 +34,6 @@ export function useMobileSessionTerminalSubscription(
     activeHandleRef,
     subscribeSeqRef,
     layoutSeqRef,
-    terminalFrameRef,
     scheduleDelayedAction,
     showToast,
     markNativeChatInputLeaseReady,
@@ -47,6 +45,8 @@ export function useMobileSessionTerminalSubscription(
   } = scope
   const subscribeToTerminal = useCallback(
     (handle: string): boolean => {
+      const { viewportRef, viewportMeasuredRef, terminalFrameRef } =
+        getTerminalPaneViewport?.(handle) ?? scope
       const diagnostics = terminalDiagnosticsRef.current
       const logSkippedGate = (reason: string) =>
         diagnostics.streamSkipped(handle, reason, handle === activeHandleRef.current)

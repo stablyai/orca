@@ -21,13 +21,7 @@ const measurementFile = 'src/main/foreign-sqlite-readers/foreign-sqlite-reader-e
 const paletteMeasurementFile =
   'src/renderer/src/lib/palette-match/palette-match-performance.test.ts'
 const measurementFiles = [measurementFile, paletteMeasurementFile]
-const phoneContractModules = [
-  'mobile/src/session/native-chat/mobile-native-chat-stream-frame.ts',
-  'mobile/src/session/mobile-native-chat-render-data.ts'
-].map((file) => normalizePath(resolve(file)))
-const phoneContractPattern = new RegExp(
-  `^(?:${phoneContractModules.map((file) => file.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')})(?:\\?.*)?$`
-)
+const phoneContractPattern = /\/mobile\/src\/.*\.(?:ts|tsx)(?:\?.*)?$/
 const transforms = {
   oxc: { exclude: [/\.js$/, phoneContractPattern] },
   plugins: [
@@ -37,7 +31,7 @@ const transforms = {
       enforce: 'pre',
       async transform(source, id) {
         const filename = normalizePath(id.split('?')[0])
-        if (!phoneContractModules.includes(filename)) {
+        if (!phoneContractPattern.test(filename)) {
           return null
         }
         const result = await transformWithOxc(source, filename, { tsconfig: false })
@@ -86,7 +80,7 @@ const testOptions = {
   environment: 'node',
   clearMocks: false,
   ...(balancedShards ? { silent: 'passed-only' as const } : {}),
-  // Persistent transforms are CI-keyed (ci-unit-module-cache.mjs); local runs stay cold.
+  // Keyed by ci-unit-module-cache.mjs in CI and vitest-local-module-cache.mjs locally.
   fsModuleCache: Boolean(moduleCachePath),
   ...(moduleCachePath ? { fsModuleCachePath: moduleCachePath } : {}),
   env: { ORCA_VITEST_RUNTIME: 'node' },

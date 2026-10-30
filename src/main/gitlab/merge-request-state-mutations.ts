@@ -9,6 +9,7 @@ import {
   type ProjectRef
 } from './gl-utils'
 import { withProjectRef } from './merge-request-project-resolution'
+import { codeHostFailure } from '../../shared/code-host-failure-copy'
 
 // Why: glab's MRCheckErrors refuses a no-op close/reopen with these fixed texts; every other
 // failure, including "has already been merged", must surface.
@@ -46,7 +47,7 @@ export async function closeMR(
         release()
       }
     },
-    { ok: false, error: 'Could not resolve GitLab project for this repository' },
+    codeHostFailure('gitlab.projectUnresolved'),
     localGitOptions
   )
 }
@@ -82,7 +83,7 @@ export async function reopenMR(
         release()
       }
     },
-    { ok: false, error: 'Could not resolve GitLab project for this repository' },
+    codeHostFailure('gitlab.projectUnresolved'),
     localGitOptions
   )
 }
@@ -120,7 +121,7 @@ export async function mergeMR(
         release()
       }
     },
-    { ok: false, error: 'Could not resolve GitLab project for this repository' },
+    codeHostFailure('gitlab.projectUnresolved'),
     localGitOptions
   )
 }

@@ -21,7 +21,7 @@ import {
   type CrashReportRecord
 } from '../../../../shared/crash-reporting'
 import type { GitHubViewer } from '../../../../shared/github/pull-request-types'
-import { translate } from '@/i18n/i18n'
+import { getIntlLocale, translate } from '@/i18n/i18n'
 import {
   CRASH_REPORT_SUBMIT_FAILURE_TOAST_ID,
   getCrashReportCopySubmissionFailure,
@@ -33,7 +33,16 @@ import { useCrashReportCopy } from './use-crash-report-copy'
 function formatSummary(report: CrashReportRecord): string {
   if (isReactErrorBoundaryReport(report)) {
     const surface = typeof report.details.surface === 'string' ? report.details.surface : null
-    return surface ? `React render error in ${surface}` : 'React render error'
+    return surface
+      ? translate(
+          'auto.components.crash.report.CrashReportDialogSurface.renderErrorIn',
+          'React render error in {{surface}}',
+          { surface }
+        )
+      : translate(
+          'auto.components.crash.report.CrashReportDialogSurface.renderError',
+          'React render error'
+        )
   }
   return `${report.processType} ${report.reason}${
     report.exitCode === null ? '' : ` (exit ${report.exitCode})`
@@ -272,7 +281,8 @@ export function CrashReportDialogSurface({
               <div className="rounded-md border border-border/70 bg-muted/30 p-3 text-xs">
                 <div className="font-medium text-foreground">{formatSummary(report)}</div>
                 <div className="mt-1 text-muted-foreground">
-                  {new Date(report.createdAt).toLocaleString()} · {report.platform} {report.arch} ·{' '}
+                  {new Date(report.createdAt).toLocaleString(getIntlLocale())} · {report.platform}{' '}
+                  {report.arch} ·{' '}
                   {translate('auto.components.crash.report.CrashReportDialog.835037edc9', 'Orca')}{' '}
                   {report.appVersion}
                 </div>
@@ -316,7 +326,8 @@ export function CrashReportDialogSurface({
               aria-hidden="true"
               className="text-right text-[11px] tabular-nums text-muted-foreground"
             >
-              {notes.length.toLocaleString()} / {MAX_USER_NOTES_LENGTH.toLocaleString()}
+              {notes.length.toLocaleString(getIntlLocale())} /{' '}
+              {MAX_USER_NOTES_LENGTH.toLocaleString(getIntlLocale())}
             </div>
           </div>
           <div className="flex items-start gap-2 rounded-md border border-border/70 bg-muted/20 p-3">

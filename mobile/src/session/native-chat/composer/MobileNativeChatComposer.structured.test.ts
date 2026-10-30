@@ -347,7 +347,8 @@ describe('MobileNativeChatComposer on a structured chat', () => {
 
   it('puts a picked skill at the start of the draft, highlighted, and deletes it as one unit', async () => {
     const onChangeText = vi.fn()
-    const catalog = structured()
+    const onSlashMenuDemand = vi.fn()
+    const catalog = structured({ onSlashMenuDemand })
     await act(async () => {
       renderer = create(draw({ value: '/re', onChangeText, structured: catalog }))
     })
@@ -355,6 +356,7 @@ describe('MobileNativeChatComposer on a structured chat', () => {
       field().props.onSelectionChange({ nativeEvent: { selection: { end: 3 } } })
     )
     expect(catalog.onSlashMenuOpen).toHaveBeenCalled()
+    expect(onSlashMenuDemand).toHaveBeenLastCalledWith(true)
     await act(async () => labelled('/review-pr')[0]!.props.onPress())
     expect(onChangeText).toHaveBeenLastCalledWith('/review-pr ')
     expect(field().props.selection).toEqual({ start: 11, end: 11 })
@@ -362,6 +364,7 @@ describe('MobileNativeChatComposer on a structured chat', () => {
     await act(async () =>
       renderer!.update(draw({ value: '/review-pr focus', onChangeText, structured: catalog }))
     )
+    expect(onSlashMenuDemand).toHaveBeenLastCalledWith(false)
     const token = field().find((node) => node.props.children === '/review-pr')
     expect(token.props.style).toMatchObject({ backgroundColor: expect.any(String) })
     await act(async () => field().props.onChangeText('/review-pr focus on auth'))

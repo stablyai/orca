@@ -44,6 +44,7 @@ on:
       - 'config/scripts/pr-code-change-scope.mjs'
       - 'config/scripts/pr-package-test-paths.mjs'
       - 'config/scripts/pr-layout-oracle-route.mjs'
+      - 'config/scripts/pr-shell-contract-prefixes.mjs'
       # Desktop suites do not feed mobile; keep fixtures and test/toolchain config inputs.
       - '!src/shared/**/*.test.[jt]s'
       - '!src/shared/**/*.test.[jt]sx'

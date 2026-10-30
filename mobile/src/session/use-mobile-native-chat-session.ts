@@ -3,7 +3,10 @@ import {
   createNativeChatTranscriptRetention,
   encodeNativeChatTranscriptIdentity
 } from '../../../src/shared/native-chat/transcript/native-chat-transcript-retention'
-import { createNativeChatMerger, replaceList } from '../../../src/shared/native-chat-merge'
+import {
+  createNativeChatMerger,
+  replaceList
+} from '../../../src/shared/native-chat/native-chat-merge'
 import type {
   NativeChatMessage,
   NativeChatTurnLifecycle

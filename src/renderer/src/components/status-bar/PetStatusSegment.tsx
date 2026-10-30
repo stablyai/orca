@@ -18,6 +18,8 @@ import { BUNDLED_PET, BUNDLED_PETS, findBundledPet, isBundledPetId } from '../pe
 import { PET_SIZE_MAX, PET_SIZE_MIN } from '../../../../shared/pet-types'
 import { translate } from '@/i18n/i18n'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
+import { isPetImportFailure } from '../../../../shared/pet-import-failure-copy'
+import { customPetLabel, petImportFailureText } from '../pet/pet-import-failure-text'
 
 // Keep visibility separate from experimental enablement so users can dismiss the pet without revisiting Settings.
 function PetStatusSegmentInner(): React.JSX.Element {
@@ -37,8 +39,16 @@ function PetStatusSegmentInner(): React.JSX.Element {
   const bundled = isBundledPetId(petId)
   const activeBundled = bundled ? (findBundledPet(petId) ?? BUNDLED_PET) : null
   const activeCustom = bundled ? null : customPets.find((m) => m.id === petId)
-  const activeLabel = activeBundled ? activeBundled.label : (activeCustom?.label ?? 'Pet')
-  const label = petVisible ? activeLabel : `${activeLabel} hidden`
+  const activeLabel = activeBundled
+    ? activeBundled.label
+    : activeCustom
+      ? customPetLabel(activeCustom)
+      : translate('auto.components.status.bar.PetStatusSegment.petFallbackLabel', 'Pet')
+  const label = petVisible
+    ? activeLabel
+    : translate('auto.components.status.bar.PetStatusSegment.petHiddenLabel', '{{pet}} hidden', {
+        pet: activeLabel
+      })
 
   const handleImport = async (): Promise<void> => {
     console.log('[pet-overlay] upload: click')
@@ -56,6 +66,10 @@ function PetStatusSegmentInner(): React.JSX.Element {
       const model = await window.api.pet.import()
       console.log('[pet-overlay] upload: result', model)
       if (!model) {
+        return
+      }
+      if (isPetImportFailure(model)) {
+        toast.error(petImportFailureText(model))
         return
       }
       addCustomPet(model)
@@ -89,6 +103,10 @@ function PetStatusSegmentInner(): React.JSX.Element {
     try {
       const model = await window.api.pet.importPetBundle()
       if (!model) {
+        return
+      }
+      if (isPetImportFailure(model)) {
+        toast.error(petImportFailureText(model))
         return
       }
       addCustomPet(model)
@@ -214,14 +232,14 @@ function PetStatusSegmentInner(): React.JSX.Element {
                     <span className="flex w-4 items-center justify-center">
                       {selected ? <Check className="size-3.5" aria-hidden /> : null}
                     </span>
-                    <span className="flex-1 truncate">{model.label}</span>
+                    <span className="flex-1 truncate">{customPetLabel(model)}</span>
                     <button
                       type="button"
                       className="ml-2 flex size-5 items-center justify-center rounded text-muted-foreground hover:bg-destructive/15 hover:text-destructive"
                       aria-label={translate(
                         'auto.components.status.bar.PetStatusSegment.3668339495',
                         'Remove {{value0}}',
-                        { value0: model.label }
+                        { value0: customPetLabel(model) }
                       )}
                       onClick={(event) => {
                         event.stopPropagation()

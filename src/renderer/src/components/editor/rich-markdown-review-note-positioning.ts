@@ -54,10 +54,14 @@ function measureReviewNoteHeights(
   positions: RichMarkdownReviewNotePosition[]
 ): Map<string, number> {
   const measuredHeights = new Map<string, number>()
-  for (const pos of positions) {
-    const el = container.querySelector(`[data-rich-markdown-review-note-id="${pos.comment.id}"]`)
-    if (el) {
-      measuredHeights.set(pos.comment.id, el.getBoundingClientRect().height)
+  if (positions.length === 0) {
+    return measuredHeights
+  }
+  const commentIds = new Set(positions.map((position) => position.comment.id))
+  for (const el of container.querySelectorAll('[data-rich-markdown-review-note-id]')) {
+    const id = el.getAttribute('data-rich-markdown-review-note-id')
+    if (id !== null && commentIds.has(id) && !measuredHeights.has(id)) {
+      measuredHeights.set(id, el.getBoundingClientRect().height)
     }
   }
   return measuredHeights

@@ -29,6 +29,10 @@ const state = vi.hoisted(() => ({
   refreshOpenCodePlugins: vi.fn(),
   adoptLoginShellAgentHomes: vi.fn(async () => {})
 }))
+const codexStart = vi.hoisted(() => {
+  const value: { settledAtPublish: boolean | null } = { settledAtPublish: null }
+  return value
+})
 const profile = vi.hoisted(() => {
   const value: { settings: Partial<GlobalSettings> } = { settings: {} }
   return value
@@ -127,7 +131,18 @@ vi.mock('../orca-profiles/profile-index-store', () => ({
 vi.mock('../ssh/ssh-host-key-store', () => ({ initSshHostKeyStoreFile() {} }))
 vi.mock('../server/serve-readiness', () => ({
   ServeReadinessPublisher: class {
-    async publish() {}
+    async publish() {
+      const startAfter: Promise<void> | undefined =
+        state.startCodexHooks.mock.calls[0]?.[0]?.startAfter
+      if (startAfter) {
+        let settled = false
+        void startAfter.then(() => {
+          settled = true
+        })
+        await new Promise((resolve) => setImmediate(resolve))
+        codexStart.settledAtPublish = settled
+      }
+    }
   }
 }))
 vi.mock('../runtime/orca-runtime', () => ({
@@ -209,6 +224,7 @@ afterEach(() => {
   rmSync(state.root, { recursive: true, force: true })
   state.profileStartupErrors.length = 0
   profile.settings = {}
+  codexStart.settledAtPublish = null
   vi.clearAllMocks()
 })
 
@@ -346,6 +362,20 @@ it('disconnects a daemon still spawning only after it settles, when the hook ser
   acquireProfileStateMaintenance(state.root).release()
 })
 
+it('disconnects the daemon when startup throws between its spawn and the stores', async () => {
+  state.root = mkdtempSync(join(tmpdir(), 'orca-headless-early-throw-'))
+  const observability = await import('./orcad-observability')
+  vi.spyOn(observability, 'installOrcadObservability').mockImplementationOnce(() => {
+    throw new Error('observability init failed')
+  })
+  const { startOrcad } = await import('./orcad-entry')
+
+  await expect(startOrcad()).rejects.toThrow('observability init failed')
+
+  expect(state.startDaemon).toHaveBeenCalledOnce()
+  expect(state.stopDaemon).toHaveBeenCalledOnce()
+})
+
 it('installs agent status hooks on the host when it starts', async () => {
   state.root = mkdtempSync(join(tmpdir(), 'orca-headless-hooks-'))
   const { startOrcad } = await import('./orcad-entry')
@@ -353,6 +383,9 @@ it('installs agent status hooks on the host when it starts', async () => {
   try {
     expect(state.startCodexHooks).toHaveBeenCalledOnce()
     expect(state.startCodexHooks.mock.calls[0]![0].resolveLaunchHome()).toBeNull()
+    // Codex's PATH scan waits for readiness to publish, then runs.
+    expect(codexStart.settledAtPublish).toBe(false)
+    await state.startCodexHooks.mock.calls[0]![0].startAfter
     await vi.waitFor(() =>
       expect(state.installManagedAgentHooks).toHaveBeenCalledWith(
         profile.settings,

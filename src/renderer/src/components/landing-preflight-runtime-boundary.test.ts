@@ -130,7 +130,7 @@ describe('landing preflight runtime boundary', () => {
     // Reveal force-refreshes through the sibling visibility handler; polling only re-arms afterward.
     act(() => setDocumentVisibility('visible'))
     expect(refresh).toHaveBeenCalledTimes(1)
-    expect(refresh).toHaveBeenCalledWith({ force: true })
+    expect(refresh).toHaveBeenCalledWith({ force: true, wakeWslDistro: true })
     expect(vi.getTimerCount()).toBe(1)
 
     view.unmount()

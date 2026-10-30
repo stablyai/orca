@@ -1,5 +1,5 @@
 import { BROWSER_GOOGLE_COOKIE_CLEAR_CAPABILITY } from '../../shared/browser-runtime-capabilities'
-import { OrcaRuntimeWithGetRuntimeId } from './workspaces/session-hosts/get-runtime-id'
+import { OrcaRuntimeWithPtyController } from './orca-runtime-pty-controller'
 import type { RuntimeDegradation, RuntimeStatus } from '../../shared/runtime-types'
 import {
   runtimeBrowserCommandsFactoryIsHeadless,
@@ -37,11 +37,6 @@ import { runtimeTerminalDegradation } from './native-terminal-availability'
 import { isWindowsProcessStartTimeAvailable } from '../windows/windows-process-table'
 import type { RuntimeWorktreeLifecycleEvent } from './orca-runtime-core'
 import { WORKTREE_CREATE_RESULT_TTL_MS } from './orca-runtime-core'
-import type { RuntimePtyController } from './runtime-pty-controller-contract'
-import type {
-  AutomaticWorkResumeOutcome,
-  AutomaticWorkStatus
-} from '../../shared/host-spawn-admission'
 import type { RuntimeNotifier } from './runtime-notifier-contract'
 import type {
   AutomationsChangedPayload,
@@ -56,6 +51,7 @@ import type { WorktreeSortOrderUpdate } from '../../shared/worktree/sort-order-u
 import { isDesktopBrowserBridgeHostEnabled } from './desktop-browser-bridge/desktop-browser-bridge-registry'
 import { DESKTOP_BROWSER_BRIDGE_RUNTIME_CAPABILITY } from '../../shared/desktop-browser-bridge-protocol'
 import { darkSwitchRuntimeCapabilities } from './dark-switch-runtime-capabilities'
+import { supportsDurableTerminalPromptDelivery } from './durable-terminal-prompt-delivery-support'
 
 type RuntimeStatusHost = {
   getAvailableAuthoritativeWindow(): unknown
@@ -66,18 +62,9 @@ type RuntimeStatusHost = {
   ): string[]
 }
 
-function supportsDurableTerminalPromptDelivery(): boolean {
-  if (typeof process.getBuiltinModule !== 'function') {
-    return false
-  }
-  try {
-    return process.getBuiltinModule('node:sqlite') !== undefined
-  } catch {
-    return false
-  }
-}
+export abstract class OrcaRuntimeWithGetStatus extends OrcaRuntimeWithPtyController {
+  protected abstract pruneUnregisteredWorktreeScans(): void
 
-export abstract class OrcaRuntimeWithGetStatus extends OrcaRuntimeWithGetRuntimeId {
   private asRuntimeStatusHost(): RuntimeStatusHost {
     return this as unknown as RuntimeStatusHost
   }
@@ -193,20 +180,6 @@ export abstract class OrcaRuntimeWithGetStatus extends OrcaRuntimeWithGetRuntime
     return this.machineName.readyWithin(MACHINE_NAME_PUBLISH_WAIT_MS)
   }
 
-  setPtyController(controller: RuntimePtyController | null): void {
-    // Write through the main-owned PTY registry so renderer reloads cannot drift handle/process identity.
-    this.ptyController = controller
-  }
-
-  /** Null when the local terminal owner has no fork gate (in-process fallback, older daemon). */
-  async getAutomaticWorkStatus(): Promise<AutomaticWorkStatus | null> {
-    return (await this.ptyController?.getAutomaticWorkStatus?.()) ?? null
-  }
-
-  async resumeAutomaticWork(): Promise<AutomaticWorkResumeOutcome> {
-    return (await this.ptyController?.resumeAutomaticWork?.()) ?? null
-  }
-
   setNotifier(notifier: RuntimeNotifier | null): void {
     this.notifier = notifier
     if (notifier) {
@@ -320,6 +293,7 @@ export abstract class OrcaRuntimeWithGetStatus extends OrcaRuntimeWithGetRuntime
   }
 
   protected notifyReposChanged(): void {
+    this.pruneUnregisteredWorktreeScans()
     wakeFolderRepoGitUpgradeWatch()
     this.notifier?.reposChanged()
     this.emitClientEvent({ type: 'reposChanged' })

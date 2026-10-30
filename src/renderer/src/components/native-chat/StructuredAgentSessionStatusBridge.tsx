@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
 import type { AgentSessionStatusSummary } from '../../../../shared/agent-session-wire'
+import type { ExecutionHostId } from '../../../../shared/execution-host'
 import { structuredAgentSessionPaneKey } from '../../../../shared/structured-agent-session-projection'
 import { projectStatus } from './structured-agent-session-status-projection'
 import {
@@ -56,6 +57,7 @@ type Member = {
   hostKey: string | null
   group: HostGroup | null
   status?: ProjectionInput
+  captured?: ProjectionInput
 }
 const ownerInputs: readonly (keyof WorktreeRuntimeOwnerState)[] = [
   'repos',
@@ -86,6 +88,41 @@ function ownerInputChanged(
   )
 }
 
+function ownerInputToken(state: AppState, key: keyof WorktreeRuntimeOwnerState): unknown {
+  return key === 'worktreesByRepo'
+    ? worktreeOwnerRowsTokenOf(selectWorktreesByRepo(state))
+    : state[key]
+}
+
+/** Owners only change with owner inputs, so feed ticks and tab-map edits reuse each tab's resolution. */
+function createTabOwnerCache(): (state: AppState, tab: StructuredTab) => ExecutionHostId | null {
+  let inputs: unknown[] | null = null
+  let owners = new WeakMap<StructuredTab, ExecutionHostId | null>()
+  return (state, tab) => {
+    const next = ownerInputs.map((key) => ownerInputToken(state, key))
+    if (!inputs || next.some((input, index) => input !== inputs?.[index])) {
+      inputs = next
+      owners = new WeakMap()
+    }
+    if (!owners.has(tab)) {
+      owners.set(tab, structuredAgentSessionOwnerForTab(state, tab))
+    }
+    return owners.get(tab) ?? null
+  }
+}
+
+/** Unchanged feed facts for an unchanged tab cannot change its projection or companions. */
+function sameCapturedInput(previous: ProjectionInput | undefined, next: ProjectionInput): boolean {
+  return (
+    previous?.tab === next.tab &&
+    previous.summary === next.summary &&
+    previous.observation === next.observation &&
+    previous.failedAt === next.failedAt &&
+    previous.sleptAt === next.sleptAt &&
+    previous.directory === next.directory
+  )
+}
+
 function sameStatusInput(previous: ProjectionInput | undefined, next: ProjectionInput): boolean {
   return (
     previous?.tab === next.tab &&
@@ -101,6 +138,7 @@ function installStatusProjection(): () => void {
   const retired = new Set<Member>()
   const groups = new Map<string, HostGroup>()
   const queue: (() => void)[] = []
+  const ownerForTab = createTabOwnerCache()
   let disposed = false
   let draining = false
   const report = (error: unknown, context: unknown): void => {
@@ -138,10 +176,9 @@ function installStatusProjection(): () => void {
     if (disposed || members.get(input.member.paneKey) !== input.member) {
       return false
     }
-    const state = useAppStore.getState()
     const tab = input.member.tab
     const target =
-      tab && structuredAgentSessionTargetForHost(structuredAgentSessionOwnerForTab(state, tab))
+      tab && structuredAgentSessionTargetForHost(ownerForTab(useAppStore.getState(), tab))
     return (
       tab === input.tab &&
       (target ? structuredAgentSessionStatusFeedKey(target) : null) === input.member.hostKey
@@ -224,6 +261,10 @@ function installStatusProjection(): () => void {
     } else {
       clean()
     }
+    // Mark consumed only after a normal return: a throwing commit leaves the input for the next emission to retry.
+    for (const input of inputs) {
+      input.member.captured = input
+    }
   }
   const activateGroups = (): void => {
     for (const [hostKey, group] of groups) {
@@ -238,10 +279,11 @@ function installStatusProjection(): () => void {
     }
   }
   const capture = (selected: Iterable<Member>): void => {
-    const inputs = [...selected].map((member): ProjectionInput => {
+    const inputs: ProjectionInput[] = []
+    for (const member of selected) {
       const { tab, group } = member
       const summary = group?.feed.getSnapshot().get(tab.entityId) ?? null
-      return {
+      const input: ProjectionInput = {
         member,
         tab,
         summary,
@@ -254,7 +296,11 @@ function installStatusProjection(): () => void {
         sleptAt: group ? group.feed.getSessionSleepState(tab.entityId) : null,
         directory: member.hostKey === 'local' ? summary?.launchDirectory : undefined
       }
-    })
+      // A host feed tick names one session; skip the hundreds of unchanged members it also carries.
+      if (!sameCapturedInput(member.captured, input)) {
+        inputs.push(input)
+      }
+    }
     enqueue(
       () => {
         activateGroups()
@@ -268,9 +314,7 @@ function installStatusProjection(): () => void {
     const next = new Map<string, Member>()
     for (const tab of getStructuredAgentSessionTabs(state.unifiedTabsByWorktree)) {
       const paneKey = structuredAgentSessionPaneKey(tab.id, tab.entityId)
-      const target = structuredAgentSessionTargetForHost(
-        structuredAgentSessionOwnerForTab(state, tab)
-      )
+      const target = structuredAgentSessionTargetForHost(ownerForTab(state, tab))
       const hostKey = target ? structuredAgentSessionStatusFeedKey(target) : null
       let group = hostKey ? groups.get(hostKey) : undefined
       if (!group && target && hostKey) {

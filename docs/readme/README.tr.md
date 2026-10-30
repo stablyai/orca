@@ -242,9 +242,9 @@ Ajanlarınızı telefonunuzdan izlemek ve yönlendirmek için masaüstü uygulam
 
 - **Discord:** Topluluğa **[Discord](https://discord.gg/fzjDKHxv8Q)** üzerinden katılın.
 - **Twitter / X:** Güncellemeler ve duyurular için **[@orca_build](https://x.com/orca_build)** hesabını takip edin.
-- **WeChat:** 12 numaralı grup doldu. Orca topluluğunun 13 numaralı WeChat grubuna katılmak için karekodu okutun.
+- **WeChat:** Orca topluluğunun WeChat grubuna katılmak için karekodu okutun.
 
-  <img src="../assets/wechat-qr-group13.jpg" alt="Orca topluluğunun 13 numaralı WeChat grubu karekodu" width="160" />
+  <img src="../assets/wechat-qr.jpg" alt="Orca topluluğunun WeChat grubu karekodu" width="160" />
 
 - **Geri bildirim ve fikirler:** Hızlı sürüm çıkarıyoruz. Eksik bulduğunuz bir şey mi var? [Yeni bir özellik isteyin](https://github.com/stablyai/orca/issues).
 - **Gizlilik:** Orca'nın hangi anonim kullanım verisini topladığını ve bunu nasıl kapatacağınızı [gizlilik ve telemetri dokümanlarında](https://www.onorca.dev/docs/telemetry) bulabilirsiniz.

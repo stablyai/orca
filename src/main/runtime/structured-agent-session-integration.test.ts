@@ -298,10 +298,13 @@ async function readKnownOptions(): Promise<RpcResponse> {
     expect(result).toMatchObject({
       ok: true,
       result: {
-        models: [{ id: 'gpt-live', defaultEffort: 'medium' }],
+        models: [{ id: 'gpt-live' }],
         current: { model: 'gpt-live' }
       }
     })
+    if (result.ok) {
+      expect(result.result).not.toHaveProperty('models.0.defaultEffort')
+    }
     return result
   })
 }
@@ -336,7 +339,7 @@ beforeEach(async () => {
         hostId: 'local',
         claimKeyId: 'key-1',
         resolveWorkspacePath: async (workspaceId) => `/repos/${workspaceId}`,
-        resolveCodexCommand: () => '/usr/local/bin/codex',
+        resolveCodexCommand: () => ({ command: '/usr/local/bin/codex', prefixArgs: [] }),
         runCodexCatalogSession: scriptedCodexCatalogSession,
         resolveAgentAccountHome: async () => ({ variable: 'CODEX_HOME', path: '/home/dev/.codex' }),
         resolveLaunchArgs: () => [],
