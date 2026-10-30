@@ -70,9 +70,7 @@ describe('the refusal a terminal verb gives a structured worker handle', () => {
     const message = structuredWorkerTerminalRefusal(handle, null).message
     expect(message).toContain('orca terminal read')
     expect(message).toContain('worker-read --source transcript')
-    expect(message).toContain(
-      `orca orchestration worker-start --task <task_id> --terminal ${handle}`
-    )
+    expect(message).toContain('orca orchestration send')
   })
 
   it('keeps the stale error for a PTY handle, which really can go stale', () => {

@@ -116,20 +116,6 @@ describe('a finished structured worker', () => {
     const { handle, firstDispatchId } = await finishedStructuredWorker(taskId)
     const resource = db.getWorkerTerminalResourceByOwner(firstDispatchId)
     expect(resource?.auto_release_at).not.toBeNull()
-    const sent = await dispatcher.dispatch(
-      request(
-        'orchestration.send',
-        { to: `dispatch:${firstDispatchId}`, subject: 'more', body: 'and the docs' },
-        { sessionId: COORDINATOR }
-      )
-    )
-    expect(sent).toMatchObject({
-      ok: false,
-      error: {
-        code: 'dispatch_inactive',
-        message: expect.stringContaining(`worker-start --task <task_id> --terminal ${handle}`)
-      }
-    })
 
     const started = call(
       'orchestration.workerStart',
