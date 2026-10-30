@@ -128,6 +128,7 @@ export type EditorFilesSlice = {
       targetGroupId?: string
       sourceFileId?: string
       placementWorkspaceId?: string
+      selection?: EditorTabSelection
     }
   ) => void
   makePreviewFilePermanent: (fileId: string, tabId?: string) => void
