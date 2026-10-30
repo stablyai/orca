@@ -16,7 +16,12 @@ import { journalOutcomeSource } from './journal-outcome-format'
 import { JournalOutcomeConversion } from './journal-outcome-conversion'
 import { JournalProjectionCatchUp } from './journal-projection-catch-up'
 import { JournalMaintenanceRunner } from './journal-state-backfill'
-import { activeJournalGenerations, ownJournalMaintenance } from './journal-maintenance'
+import {
+  activeJournalGenerations,
+  ownJournalMaintenance,
+  requestJournalMaintenance
+} from './journal-maintenance'
+import { clearJournalSavedState } from './journal-saved-state'
 import { expectProjectionMatches, projectionWriter } from './journal-projection-test-support'
 
 // The production runner over a real database: each test names the guard it exists for.
@@ -52,6 +57,7 @@ beforeEach(async () => {
   vi.spyOn(console, 'warn').mockImplementation(() => {})
 })
 afterEach(async () => {
+  vi.useRealTimers()
   runners.splice(0).forEach((runner) => runner.stop())
   for (const rig of rigs.splice(0)) {
     rig.projection.close()
@@ -252,5 +258,78 @@ it('backs off a storage failure instead of parking it, and retries once it is du
   expect(journalOutcomeSource(database.db, 'session-1', epoch)).toBeNull()
   clock += 4_000
   await maintenance.pass()
+  expect(converted('session-1')).toBe(true)
+})
+
+/** The production runner on fake timers: started, woken by requests, never driven by hand. */
+function started(): JournalMaintenanceRunner {
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] })
+  const created = new JournalMaintenanceRunner({
+    database: () => database,
+    delay: async () => {}
+  })
+  runners.push(created)
+  return created.start()
+}
+const sqliteFailure = () =>
+  Object.assign(new Error('disk I/O error'), { code: 'ERR_SQLITE_ERROR', errcode: 10 })
+
+// Mutation killed: request() scheduling only when no timer is pending (the periodic one always is).
+it('serves a request within its delay after the first pass, not at the next periodic pass', async () => {
+  seedLegacy('session-1', 10)
+  started()
+  await vi.advanceTimersByTimeAsync(60_000)
+  expect(converted('session-1')).toBe(true)
+  database.transaction((db) => clearJournalSavedState(db, 'session-1'))
+  expect(converted('session-1')).toBe(false)
+  // A write that finds the cache behind asks the database's runner.
+  requestJournalMaintenance(database.db, 'session-1')
+  await vi.advanceTimersByTimeAsync(999)
+  expect(converted('session-1')).toBe(false)
+  await vi.advanceTimersByTimeAsync(1)
+  expect(converted('session-1')).toBe(true)
+})
+
+// Mutation killed: the end-of-pass periodic reschedule replacing the sooner retry timer.
+it('retries a storage failure in the periodic pass at its backoff, not at the next pass', async () => {
+  seedLegacy('session-1', 10)
+  vi.spyOn(JournalOutcomeConversion.prototype, 'page').mockImplementationOnce(() => {
+    throw sqliteFailure()
+  })
+  const maintenance = started()
+  await vi.advanceTimersByTimeAsync(60_000)
+  expect(maintenance.parked.size).toBe(0)
+  expect(journalOutcomeSource(database.db, 'session-1', epoch)).toBeNull()
+  await vi.advanceTimersByTimeAsync(3_999)
+  expect(journalOutcomeSource(database.db, 'session-1', epoch)).toBeNull()
+  await vi.advanceTimersByTimeAsync(1)
+  expect(converted('session-1')).toBe(true)
+})
+
+// Mutation killed: serve() ending a chat's turn when its load swept a retired page instead.
+it('keeps serving a chat whose load first sweeps retired generations', async () => {
+  seedLegacy('session-1', 10)
+  database.transaction((db) => {
+    const retired = Number(
+      db
+        .prepare('INSERT INTO journal_outcome_attempts (session_id, epoch) VALUES (?, ?)')
+        .run('gone', 'gone-epoch').lastInsertRowid
+    )
+    const insert = db.prepare(`INSERT INTO journal_outcomes
+      (generation, seq, field, entry_key, ordinal, value_json, deleted)
+      VALUES (?, 1, 'aliases', ?, 's0000000000000001:0000000000000000', '["k","v"]', 0)`)
+    for (let index = 0; index < 100; index++) {
+      insert.run(retired, JSON.stringify(`k${index}`))
+    }
+  })
+  started()
+  // A request runs no startup sweep, so the chat's own load meets the retired pages.
+  requestJournalMaintenance(database.db, 'session-1')
+  await vi.advanceTimersByTimeAsync(1_000)
+  expect(
+    count(
+      'journal_outcomes WHERE generation NOT IN (SELECT generation FROM journal_outcome_epochs)'
+    )
+  ).toBe(0)
   expect(converted('session-1')).toBe(true)
 })

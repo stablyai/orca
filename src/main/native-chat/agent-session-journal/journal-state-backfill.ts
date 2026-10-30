@@ -38,6 +38,10 @@ export class JournalMaintenanceRunner {
   private readonly pace: JournalPace
   private running: Promise<void> | null = null
   private timer: ReturnType<typeof setTimeout> | null = null
+  /** One timer wakes the runner at the earlier of the next periodic pass and the first due request
+   * or retry, so neither can push the other back. */
+  private dueFull = Number.POSITIVE_INFINITY
+  private dueRequest = Number.POSITIVE_INFINITY
   private stopped = false
   private unregister: (() => void) | null = null
 
@@ -61,7 +65,8 @@ export class JournalMaintenanceRunner {
         this.request(sessionId)
       )
     }
-    this.schedule(FIRST_PASS_MS, true)
+    this.dueFull = this.clock() + FIRST_PASS_MS
+    this.arm()
     return this
   }
 
@@ -77,22 +82,27 @@ export class JournalMaintenanceRunner {
       return
     }
     this.requested.add(sessionId)
-    if (!this.running && !this.timer) {
-      this.schedule(REQUEST_DELAY_MS, false)
-    }
+    this.dueRequest = Math.min(this.dueRequest, this.clock() + REQUEST_DELAY_MS)
+    this.arm()
   }
 
   /** Sweeps, then every chat whose saved state lags; requested chats go first. */
   pass(full = true): Promise<void> {
     this.running ??= this.run(full).finally(() => {
       this.running = null
-      const waiting = [...this.deferred]
+      this.deferred.forEach((sessionId) => this.requested.add(sessionId))
       this.deferred.clear()
-      if (waiting.length > 0 && !this.timer) {
-        const due = Math.min(...waiting.map((sessionId) => this.retry.get(sessionId)?.at ?? 0))
-        waiting.forEach((sessionId) => this.requested.add(sessionId))
-        this.schedule(Math.max(REQUEST_DELAY_MS, due - this.clock()), false)
+      // Each chat still waiting is due at its retry, and never sooner than a request's delay.
+      const soonest = this.clock() + REQUEST_DELAY_MS
+      this.dueRequest = Math.min(
+        ...[...this.requested].map((sessionId) =>
+          Math.max(soonest, this.retry.get(sessionId)?.at ?? 0)
+        )
+      )
+      if (full) {
+        this.dueFull = this.clock() + PASS_INTERVAL_MS
       }
+      this.arm()
     })
     return this.running
   }
@@ -161,7 +171,8 @@ export class JournalMaintenanceRunner {
           this.fail(sessionId, attempt, step === 'parked' ? null : catchUp.failure)
           return
         }
-        if (step !== 'advanced') {
+        // 'stale' means the load swept a retired page instead of taking the chat: try it again.
+        if (step !== 'advanced' && step !== 'stale') {
           this.retry.delete(sessionId)
           return
         }
@@ -192,21 +203,27 @@ export class JournalMaintenanceRunner {
     this.deferred.add(sessionId)
   }
 
-  private schedule(delay: number, full: boolean): void {
-    if (this.stopped) {
+  /** A running pass re-arms when it ends; a periodic pass that is due serves requests too. */
+  private arm(): void {
+    if (this.stopped || this.running) {
       return
     }
     this.clearTimer()
-    this.timer = setTimeout(() => {
-      this.timer = null
-      void this.pass(full)
-        .catch((error: unknown) => logJournalProjectionFailure('', error))
-        .finally(() => {
-          if (full) {
-            this.schedule(PASS_INTERVAL_MS, true)
-          }
-        })
-    }, delay)
+    const full = this.dueFull <= this.dueRequest
+    const at = Math.min(this.dueFull, this.dueRequest)
+    if (!Number.isFinite(at)) {
+      return
+    }
+    this.timer = setTimeout(
+      () => {
+        this.timer = null
+        if (full) {
+          this.dueFull = Number.POSITIVE_INFINITY
+        }
+        void this.pass(full).catch((error: unknown) => logJournalProjectionFailure('', error))
+      },
+      Math.max(0, at - this.clock())
+    )
     unrefJournalProjectionTimer(this.timer)
   }
 
