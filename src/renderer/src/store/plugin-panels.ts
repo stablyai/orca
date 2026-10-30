@@ -195,12 +195,14 @@ export function collectActivePluginPanels(
     .flatMap((plugin) => plugin.panels.map((panel) => fromPlugin(plugin, panel)))
 }
 
+/** Missing placement is the legacy right-sidebar contract used by older paired hosts. */
 export function collectRightSidebarPluginPanels(
   plugins: readonly PluginHostListEntry[]
 ): ActivePluginPanel[] {
   return collectActivePluginPanels(plugins).filter((panel) => panel.placement !== 'left-navigation')
 }
 
+/** Main-page navigation requires an explicit placement from a live, consented plugin. */
 export function collectLeftNavigationPluginPanels(
   plugins: readonly PluginHostListEntry[]
 ): ActivePluginPanel[] {

@@ -17,6 +17,7 @@ const RIGHT_SIDEBAR_SUPPRESSED_VIEWS = new Set<ActiveView>([
   'mobile'
 ])
 
+/** Main pages, including plugin pages, must not mount an auxiliary sidebar copy. */
 export function canShowRightSidebarForView(activeView: ActiveView): boolean {
   return !RIGHT_SIDEBAR_SUPPRESSED_VIEWS.has(activeView) && !isPluginPanelTabKey(activeView)
 }

@@ -197,6 +197,7 @@ export const pluginManifestV2Object = z
   })
   .strict()
 
+/** Authoring enforces field-version floors; runtime reads retain legacy manifest compatibility. */
 function buildPluginManifestSchema(enforceEngineFloor: boolean) {
   return z.preprocess(
     upgradePluginManifestV1Names,

@@ -69,6 +69,7 @@ function WorktreeSidebar({
   )
 }
 
+/** Plugin routes own a main page while the existing workspace shell remains mounted. */
 function ActivePage({ layout }: { layout: AppChromeLayout }): React.JSX.Element {
   const { activeView, hasActiveWorktree, activePendingCreationId, creationLayoutActive } = layout
   return (

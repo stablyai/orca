@@ -6,9 +6,14 @@ import { Button } from '@/components/ui/button'
 import { canGoBackWorktreeHistory } from '@/store/slices/worktree-nav-history'
 import PluginPanel from '@/components/right-sidebar/PluginPanel'
 
+/** Host-owned chrome remains usable after the plugin's content is revoked. */
 export function PluginMainPage({ tabKey }: { tabKey: `plugin:${string}` }): React.JSX.Element {
   const panels = useLeftNavigationPluginPanels()
-  const panel = panels.find((candidate) => candidate.tabKey === tabKey)
+  const pluginSystemEnabled = useAppStore((state) => state.settings?.pluginSystemEnabled === true)
+  const panel = pluginSystemEnabled
+    ? panels.find((candidate) => candidate.tabKey === tabKey)
+    : undefined
+  /** A restored or revoked page may have no history to return to. */
   const closePage = (): void => {
     const state = useAppStore.getState()
     if (canGoBackWorktreeHistory(state)) {

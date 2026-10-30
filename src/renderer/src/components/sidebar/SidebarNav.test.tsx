@@ -126,7 +126,7 @@ function folderRepo(): Repo {
 }
 
 function setSidebarState({
-  settings = getDefaultSettings('/tmp'),
+  settings = { ...getDefaultSettings('/tmp'), pluginSystemEnabled: true },
   repos = [gitRepo()]
 }: {
   settings?: GlobalSettings
@@ -253,6 +253,16 @@ describe('SidebarNav', () => {
     await clickButton(entries[0]!)
     expect(mocks.recordViewVisit).toHaveBeenCalledWith('plugin:samples.one/dashboard')
     expect(mocks.setActiveView).toHaveBeenCalledWith('plugin:samples.one/dashboard')
+  })
+
+  it('hides cached plugin entries while the plugin system is disabled', async () => {
+    mocks.pluginPanels = [{ tabKey: 'plugin:samples.one/dashboard', title: 'Dashboard' }]
+    setSidebarState({
+      settings: { ...getDefaultSettings('/tmp'), pluginSystemEnabled: false }
+    })
+    const container = await renderSidebarNav()
+    expect(queryButtonByText(container, 'Dashboard')).toBeNull()
+    expect(queryButtonByText(container, 'Automations')).not.toBeNull()
   })
 
   it('keeps 64 plugin panels in a bounded scroll region without swallowing built-in navigation', async () => {

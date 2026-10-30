@@ -96,7 +96,7 @@ function isSimpleViewEntry(
   )
 }
 
-// Why: view entries count as live unconditionally — findWorktreeById can't resolve page sentinels.
+/** Recognize page routes before treating string history entries as workspace identities. */
 export function isViewEntry(entry: WorktreeNavHistoryEntry): entry is WorktreeNavHistoryViewEntry {
   return (
     isSimpleViewEntry(entry) ||
@@ -141,10 +141,14 @@ function getHistoryEntryKey(entry: WorktreeNavHistoryEntry): string {
   return `view:task-detail:linear:${sourceScope}:${entry.issue.workspaceId ?? 'selected'}:${entry.issue.id}`
 }
 
+/** Cached plugin entries lose authority immediately when the system setting is disabled. */
 function isLiveEntry(entry: WorktreeNavHistoryEntry, state: AppState): boolean {
   if (typeof entry === 'string' && isPluginPanelTabKey(entry)) {
-    return collectLeftNavigationPluginPanels(usePluginPanelsStore.getState().plugins).some(
-      (panel) => panel.tabKey === entry
+    return (
+      state.settings?.pluginSystemEnabled === true &&
+      collectLeftNavigationPluginPanels(usePluginPanelsStore.getState().plugins).some(
+        (panel) => panel.tabKey === entry
+      )
     )
   }
   if (isViewEntry(entry)) {

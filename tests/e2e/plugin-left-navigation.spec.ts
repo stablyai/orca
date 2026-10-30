@@ -41,6 +41,24 @@ test('left-navigation panels open a main page, support history and revoke mounte
     await orcaPage.getByRole('button', { name: 'Go forward', exact: true }).click()
     await expect(iframe).toBeVisible()
 
+    const setRendererPluginSystem = (enabled: boolean) =>
+      orcaPage.evaluate((next) => {
+        const store = window.__store
+        const settings = store?.getState().settings
+        if (!store || !settings) {
+          throw new Error('Settings not loaded')
+        }
+        store.setState({ settings: { ...settings, pluginSystemEnabled: next } })
+      }, enabled)
+    await setRendererPluginSystem(false)
+    await expect(entry).toHaveCount(0)
+    await expect(iframe).toHaveCount(0)
+    await orcaPage.getByRole('button', { name: 'Go back', exact: true }).click()
+    await expect(orcaPage.getByRole('button', { name: 'Go forward', exact: true })).toBeDisabled()
+    await setRendererPluginSystem(true)
+    await orcaPage.getByRole('button', { name: 'Go forward', exact: true }).click()
+    await expect(iframe).toBeVisible()
+
     await disablePluginSystem(orcaPage)
     await expect(entry).toHaveCount(0)
     await expect(iframe).toHaveCount(0)

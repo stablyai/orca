@@ -14,6 +14,7 @@ const TOP_LEVEL_VIEW_LOOKUP: Record<Exclude<TopLevelView, `plugin:${string}`>, t
   mobile: true
 }
 
+/** Persistence and RPC accept built-in pages or qualified plugin routes, never arbitrary keys. */
 export function isTopLevelView(value: unknown): value is TopLevelView {
   // Reject inherited prototype keys from corrupt sidecars or they can blank the main surface.
   return (

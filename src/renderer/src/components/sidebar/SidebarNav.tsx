@@ -50,6 +50,7 @@ export function shouldShowAgentDashboardButton(
 
 const AgentDashboardSidebarEntry = lazyWithRetry(() => import('./AgentDashboardSidebarEntry'))
 
+/** Keep revocable plugin pages separate from built-ins and the workspace viewport. */
 const SidebarNav = React.memo(function SidebarNav() {
   // Subscribe across this memo boundary; translate still handles pseudo-localization.
   useTranslation()
@@ -64,6 +65,7 @@ const SidebarNav = React.memo(function SidebarNav() {
   const setActiveView = useAppStore((s) => s.setActiveView)
   const recordViewVisit = useAppStore((s) => s.recordViewVisit)
   const pluginPanels = useLeftNavigationPluginPanels()
+  const pluginSystemEnabled = useAppStore((s) => s.settings?.pluginSystemEnabled === true)
   const showAgentDashboardButton = useAppStore((s) => shouldShowAgentDashboardButton(s.settings))
   const showAutomationsButton = useAppStore((s) => shouldShowAutomationsButton(s.settings))
   const showMobileButton = useAppStore((s) => shouldShowMobileButton(s.settings))
@@ -181,7 +183,7 @@ const SidebarNav = React.memo(function SidebarNav() {
           <HideSidebarMenu onHide={hideSkillsButton} />
         </ContextMenu>
       ) : null}
-      {pluginPanels.length > 0 ? (
+      {pluginSystemEnabled && pluginPanels.length > 0 ? (
         <div
           data-plugin-navigation
           className="worktree-sidebar-scrollbar max-h-[min(20vh,8rem)] min-h-0 overflow-y-auto"

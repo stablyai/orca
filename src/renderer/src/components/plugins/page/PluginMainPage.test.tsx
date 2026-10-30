@@ -2,8 +2,9 @@
 
 import { act } from 'react'
 import { createRoot } from 'react-dom/client'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
+import { getDefaultSettings } from '../../../../../shared/constants'
 
 const mocks = vi.hoisted(() => {
   const panels: { tabKey: string; title: string; pluginName: string }[] = []
@@ -20,6 +21,12 @@ vi.mock('@/components/right-sidebar/PluginPanel', () => ({
 
 import { PluginMainPage } from './PluginMainPage'
 
+beforeEach(() => {
+  useAppStore.setState({
+    settings: { ...getDefaultSettings('/tmp'), pluginSystemEnabled: true }
+  })
+})
+
 afterEach(() => {
   mocks.panels = []
   useAppStore.setState({ activeView: 'terminal' })
@@ -27,6 +34,25 @@ afterEach(() => {
 })
 
 describe('PluginMainPage', () => {
+  it('removes cached panel content immediately when the plugin system is disabled', async () => {
+    const tabKey = 'plugin:samples.one/dashboard'
+    mocks.panels = [{ tabKey, title: 'Dashboard', pluginName: 'Sample' }]
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+
+    await act(async () => root.render(<PluginMainPage tabKey={tabKey} />))
+    expect(container.querySelector('[data-panel-tab-key]')).not.toBeNull()
+    await act(async () => {
+      useAppStore.setState({
+        settings: { ...getDefaultSettings('/tmp'), pluginSystemEnabled: false }
+      })
+    })
+    expect(container.querySelector('[data-panel-tab-key]')).toBeNull()
+    expect(container.textContent).toContain('no longer available')
+    await act(async () => root.unmount())
+  })
+
   it('mounts the selected sandboxed panel surface and removes it when the panel is disabled', async () => {
     const first = 'plugin:samples.one/dashboard'
     const second = 'plugin:samples.two/dashboard'
