@@ -1,19 +1,26 @@
-// Name another agent from host records when sending on its behalf.
+// Name another agent from host records when sending on its behalf or listing its worktree.ps row.
 
 import type { AgentMessageSender } from '../../shared/agent-session/agent-session-message-source'
-import type { ConversationNameTab } from '../../shared/agent-row-conversation-name'
+import {
+  getAgentRowConversationName,
+  type ConversationNameTab
+} from '../../shared/agent-row-conversation-name'
 import type { AgentStatusIpcPayload, AgentType } from '../../shared/agent-status-types'
 import { parsePaneKey } from '../../shared/stable-pane-id'
+import { structuredAgentSessionTabId } from '../../shared/structured-agent-session-projection'
 import type { Tab } from '../../shared/tab-types'
 import type { TerminalLayoutSnapshot, TerminalTab } from '../../shared/terminal-tab-types'
 import type { OrchestrationDb } from './orchestration/db'
 import {
   orchestrationSenderName,
+  structuredChatNaming,
+  type SenderNamingSources,
   type TerminalSenderNaming
 } from './orchestration/orchestration-sender-name'
 import { agentMessageSender } from './orchestration/agent-message-sender'
 import { readAgentSessionRecordStore } from './orchestration/structured-session-lineage'
 import { terminalHostConnectionMatches } from './orchestration/worker-provider-session'
+import type { RuntimeWorktreeAgentSource } from './runtime-worktree-agent-source'
 
 type RuntimeSenderNameDeps = {
   getDb: () => OrchestrationDb | null
@@ -79,19 +86,53 @@ export class RuntimeOrchestrationSenderNames {
     return orchestrationSenderName(
       party,
       {
+        ...this.chatSources(),
         db: this.deps.getDb(),
-        records: readAgentSessionRecordStore(),
-        chatTab: (worktreeId, sessionId) =>
-          this.deps
-            .getWorkspaceSession(worktreeId)
-            ?.unifiedTabs?.[worktreeId]?.find(
-              (tab) => tab.contentType === 'agent-session' && tab.entityId === sessionId
-            ) ?? null,
         terminal: (handle) => this.terminalNaming(handle),
         generatedTitlesEnabled: this.deps.getGeneratedTitlesEnabled()
       },
       reportedDispatchId
     )
+  }
+
+  /** Desktop's compact-row name for a worktree.ps row; null keeps the phone's message fallback. */
+  agentRowName(
+    source: Pick<
+      RuntimeWorktreeAgentSource,
+      'paneKey' | 'tabId' | 'worktreeId' | 'ptyId' | 'agentType' | 'providerSessionId'
+    >
+  ): string | null {
+    const { tabId, worktreeId } = source
+    if (!tabId || !worktreeId) {
+      return null
+    }
+    const chatPrefix = structuredAgentSessionTabId('')
+    if (tabId.startsWith(chatPrefix)) {
+      const chat = structuredChatNaming(tabId.slice(chatPrefix.length), this.chatSources())
+      return chat ? chat.ownName || chat.fallback : null
+    }
+    const pane = this.paneNaming({ worktreeId, tabId, ptyId: source.ptyId ?? null }, source.paneKey)
+    return pane.tab
+      ? getAgentRowConversationName(
+          pane.tab,
+          source.agentType,
+          this.deps.getGeneratedTitlesEnabled(),
+          pane.paneTitle,
+          source.providerSessionId
+        )
+      : null
+  }
+
+  private chatSources(): Pick<SenderNamingSources, 'records' | 'chatTab'> {
+    return {
+      records: readAgentSessionRecordStore(),
+      chatTab: (worktreeId, sessionId) =>
+        this.deps
+          .getWorkspaceSession(worktreeId)
+          ?.unifiedTabs?.[worktreeId]?.find(
+            (tab) => tab.contentType === 'agent-session' && tab.entityId === sessionId
+          ) ?? null
+    }
   }
 
   private terminalNaming(handle: string): TerminalSenderNaming | null {
@@ -100,10 +141,6 @@ export class RuntimeOrchestrationSenderNames {
       return null
     }
     const pty = record.ptyId ? this.deps.getPtyAgents(record.ptyId) : undefined
-    const session = this.deps.getWorkspaceSession(record.worktreeId)
-    const tab = session?.tabsByWorktree?.[record.worktreeId]?.find(
-      (candidate) => candidate.id === record.tabId
-    )
     const paneKey = this.deps.getTerminalPaneKey(handle)
     const status = paneKey
       ? this.deps
@@ -117,14 +154,28 @@ export class RuntimeOrchestrationSenderNames {
           )
           .sort((left, right) => right.receivedAt - left.receivedAt)[0]
       : undefined
+    return {
+      ...this.paneNaming(record, paneKey),
+      agent: status?.agentType ?? pty?.launchAgent ?? pty?.foregroundAgent ?? null,
+      providerSessionId: status?.providerSession?.id,
+      paneKey
+    }
+  }
+
+  /** The pane's mirrored tab and its own live title. */
+  private paneNaming(
+    record: { worktreeId: string; tabId: string; ptyId: string | null },
+    paneKey: string | null
+  ): Pick<TerminalSenderNaming, 'tab' | 'paneTitle'> {
+    const session = this.deps.getWorkspaceSession(record.worktreeId)
+    const tab = session?.tabsByWorktree?.[record.worktreeId]?.find(
+      (candidate) => candidate.id === record.tabId
+    )
     const trackedTitle = record.ptyId ? this.deps.getTrackedTitle(record.ptyId) : null
     return {
       tab: tab ? { ...tab, title: tab.title ?? '', customTitle: tab.customTitle ?? null } : null,
       paneTitle:
-        trackedTitle ?? splitPaneTitle(session?.terminalLayoutsByTabId?.[record.tabId], paneKey),
-      agent: status?.agentType ?? pty?.launchAgent ?? pty?.foregroundAgent ?? null,
-      providerSessionId: status?.providerSession?.id,
-      paneKey
+        trackedTitle ?? splitPaneTitle(session?.terminalLayoutsByTabId?.[record.tabId], paneKey)
     }
   }
 }

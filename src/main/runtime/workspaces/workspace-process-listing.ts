@@ -132,7 +132,8 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends OrcaRuntimeWithWorktr
       terminalTitleEvidenceByWorktreeId,
       rowSources,
       orchestrationByPaneKey: this.agentOrchestrationProjection.buildByPaneKey(),
-      getSummary
+      getSummary,
+      conversationName: (source) => this.orchestrationSenderNames.agentRowName(source)
     })
 
     const sorted = [...summaries.values()].sort(compareWorktreePs)

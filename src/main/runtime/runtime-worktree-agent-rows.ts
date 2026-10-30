@@ -1,5 +1,6 @@
 import { isFreshNonDoneAgentStatus } from '../../shared/agent-status-types'
 import { isAgentStatusFresh } from '../../shared/agent-status-freshness'
+import { parsePaneKey } from '../../shared/stable-pane-id'
 import type { RuntimeWorktreeAgentRow, RuntimeWorktreePsSummary } from '../../shared/runtime-types'
 import { mergeWorktreeSummaryStatus } from './runtime-worktree-status-projection'
 import {
@@ -23,6 +24,7 @@ export function attachRuntimeWorktreeAgentRows(args: {
   terminalTitleEvidenceByWorktreeId: ReadonlyMap<string, readonly RuntimeTerminalTitleEvidence[]>
   orchestrationByPaneKey: Record<string, OrchestrationDisplay> | null | undefined
   getSummary: RuntimeWorktreePsSummaryLookup
+  conversationName?: (source: RuntimeWorktreeAgentSource) => string | null
 }): void {
   const { rowSources } = args
   const now = Date.now()
@@ -37,15 +39,22 @@ export function attachRuntimeWorktreeAgentRows(args: {
       continue
     }
     const orchestration = args.orchestrationByPaneKey?.[source.paneKey]
+    const parentPaneKey = orchestration?.parentPaneKey ?? null
+    // A child running in its parent's tab does not own that tab's name.
+    const conversationName =
+      parentPaneKey && parsePaneKey(parentPaneKey)?.tabId === source.tabId
+        ? null
+        : args.conversationName?.(source)
     const row: RuntimeWorktreeAgentRow = {
       paneKey: source.paneKey,
-      parentPaneKey: orchestration?.parentPaneKey ?? null,
+      parentPaneKey,
       state: source.state,
       ...(source.workingMode ? { workingMode: source.workingMode } : {}),
       agentType: source.agentType,
       prompt: source.prompt,
       taskTitle: orchestration?.taskTitle ?? null,
       displayName: orchestration?.displayName ?? null,
+      ...(conversationName ? { conversationName } : {}),
       lastAssistantMessage: source.lastAssistantMessage,
       toolName: source.toolName,
       toolInput: source.toolInput,
