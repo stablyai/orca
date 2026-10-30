@@ -40,7 +40,8 @@ describe('live session markdown reader copy', () => {
     onCopyPath = vi.fn(),
     onSave = vi.fn(),
     onDiscard = vi.fn(),
-    onRefresh = vi.fn()
+    onRefresh = vi.fn(),
+    onChange = vi.fn()
   function render(value: MarkdownDocState | undefined = doc) {
     act(() => {
       renderer = create(
@@ -56,7 +57,7 @@ describe('live session markdown reader copy', () => {
           onSave,
           onDiscard,
           onRefresh,
-          onChange: vi.fn(),
+          onChange,
           keyboardLift: 0
         })
       )
@@ -98,7 +99,7 @@ describe('live session markdown reader copy', () => {
     }
   )
 
-  it('opens in reading mode and preserves the current draft across explicit editing', () => {
+  it('opens in reading mode and carries edits from the editor into the preview', () => {
     render({ ...doc, isDirty: true, localContent: '# Draft' })
     const preview = () => renderer!.root.findByType('MobileFileMarkdownPreview')
     expect(preview().props.content).toBe('# Draft')
@@ -107,13 +108,26 @@ describe('live session markdown reader copy', () => {
         .find((button) => button.props.accessibilityLabel === 'Edit Markdown')!
         .props.onPress()
     )
-    expect(renderer!.root.findByType('MobileRichMarkdownEditor').props.content).toBe('# Draft')
+    const editor = renderer!.root.findByType('MobileRichMarkdownEditor')
+    expect(editor.props.content).toBe('# Draft')
+    act(() => editor.props.onChange('# Edited'))
+    expect(onChange.mock.calls).toEqual([['# Edited']])
+    const props = renderer!.root.findByType(MarkdownReader).props
+    act(() =>
+      renderer!.update(
+        createElement(MarkdownReader, {
+          ...props,
+          doc: { ...doc, isDirty: true, localContent: '# Edited' }
+        })
+      )
+    )
+    expect(renderer!.root.findByType('MobileRichMarkdownEditor').props.content).toBe('# Edited')
     act(() =>
       buttons()
         .find((button) => button.props.accessibilityLabel === 'Preview Markdown')!
         .props.onPress()
     )
-    expect(preview().props.content).toBe('# Draft')
+    expect(preview().props.content).toBe('# Edited')
     expect(onSave).not.toHaveBeenCalled()
     expect(onDiscard).not.toHaveBeenCalled()
   })
