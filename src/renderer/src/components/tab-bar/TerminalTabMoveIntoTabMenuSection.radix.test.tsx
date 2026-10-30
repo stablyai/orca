@@ -4,11 +4,7 @@
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuTrigger
-} from '@/components/ui/dropdown-menu'
+import { ContextMenu, ContextMenuContent, ContextMenuTrigger } from '@/components/ui/context-menu'
 import {
   intoPaneState,
   SOURCE,
@@ -62,22 +58,31 @@ function seedState(patch: Partial<TerminalTabIntoPaneState> = {}): void {
   )
 }
 
-/** The real Radix menu, held open, so disabled and submenu behaviour come from Radix itself. */
+/** The real Radix menu, opened by a right-click, so disabled and submenu behaviour come from Radix itself. */
 function renderOpenMenu(): void {
   const container = document.createElement('div')
   document.body.appendChild(container)
   const root = createRoot(container)
   act(() => {
     root.render(
-      <DropdownMenu open modal={false}>
-        <DropdownMenuTrigger>menu</DropdownMenuTrigger>
-        <DropdownMenuContent>
+      <ContextMenu>
+        <ContextMenuTrigger>menu</ContextMenuTrigger>
+        <ContextMenuContent>
           <TerminalTabMoveIntoTabMenuSection tabId={SOURCE} worktreeId={WT} />
-        </DropdownMenuContent>
-      </DropdownMenu>
+        </ContextMenuContent>
+      </ContextMenu>
     )
   })
   mounted.push({ container, root })
+  const trigger = container.querySelector('[data-slot="context-menu-trigger"]')
+  if (!trigger) {
+    throw new Error('Missing menu trigger')
+  }
+  act(() => {
+    trigger.dispatchEvent(
+      new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 40, clientY: 20 })
+    )
+  })
 }
 
 function menuItem(name: string): HTMLElement {
@@ -107,7 +112,7 @@ afterEach(() => {
   document.body.innerHTML = ''
 })
 
-describe('TerminalTabMoveIntoTabMenuSection in the real dropdown menu', () => {
+describe('TerminalTabMoveIntoTabMenuSection in the real context menu', () => {
   it('marks Move Into Tab disabled for a source-wide refusal, and a submenu never opens from it', () => {
     seedState({ terminalLayoutsByTabId: { [SOURCE]: targetLayout(), [TARGET]: targetLayout() } })
     renderOpenMenu()

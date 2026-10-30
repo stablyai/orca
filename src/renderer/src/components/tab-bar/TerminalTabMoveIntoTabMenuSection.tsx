@@ -1,12 +1,12 @@
 import { Columns2, PanelBottomClose, PanelRightClose } from 'lucide-react'
 import { useShallow } from 'zustand/react/shallow'
 import {
-  DropdownMenuItem,
-  DropdownMenuShortcut,
-  DropdownMenuSub,
-  DropdownMenuSubContent,
-  DropdownMenuSubTrigger
-} from '@/components/ui/dropdown-menu'
+  ContextMenuItem,
+  ContextMenuShortcut,
+  ContextMenuSub,
+  ContextMenuSubContent,
+  ContextMenuSubTrigger
+} from '@/components/ui/context-menu'
 import { translate } from '@/i18n/i18n'
 import { moveTerminalTabIntoPaneInApp } from '@/components/terminal-pane/terminal-tab-into-pane-deps'
 import {
@@ -81,25 +81,28 @@ export function TerminalTabMoveIntoTabMenuSection({
   })
 
   return (
-    <DropdownMenuSub>
-      <DropdownMenuSubTrigger
+    <ContextMenuSub>
+      <ContextMenuSubTrigger
         className="[&>svg:last-child]:size-3.5"
         disabled={sourceRefusal !== undefined}
       >
         <Columns2 className="size-3.5 shrink-0" />
         {translate('terminal.paneMove.moveIntoTab', 'Move Into Tab')}
         {sourceRefusal ? (
-          <DropdownMenuShortcut>
+          <ContextMenuShortcut>
             {describeTerminalTabIntoPaneRefusal(sourceRefusal.reason)}
-          </DropdownMenuShortcut>
+          </ContextMenuShortcut>
         ) : null}
-      </DropdownMenuSubTrigger>
+      </ContextMenuSubTrigger>
       {sourceRefusal ? null : (
-        <DropdownMenuSubContent className="min-w-[12rem] max-w-[calc(100vw-1rem)] whitespace-nowrap">
+        <ContextMenuSubContent
+          animation="none"
+          className="min-w-[12rem] max-w-[calc(100vw-1rem)] whitespace-nowrap"
+        >
           {targets.length === 0 ? (
-            <DropdownMenuItem disabled>
+            <ContextMenuItem disabled>
               {translate('terminal.paneMove.noTargets', 'No other terminal tabs')}
-            </DropdownMenuItem>
+            </ContextMenuItem>
           ) : null}
           {targets.map((target, index) => {
             const eligibility = eligibilities[index]
@@ -109,12 +112,12 @@ export function TerminalTabMoveIntoTabMenuSection({
             }
             if (!eligibility.ok) {
               return (
-                <DropdownMenuItem key={target.id} disabled>
+                <ContextMenuItem key={target.id} disabled>
                   {title}
-                  <DropdownMenuShortcut>
+                  <ContextMenuShortcut>
                     {describeTerminalTabIntoPaneRefusal(eligibility.reason)}
-                  </DropdownMenuShortcut>
-                </DropdownMenuItem>
+                  </ContextMenuShortcut>
+                </ContextMenuItem>
               )
             }
             const join = (side: 'right' | 'bottom'): void => {
@@ -126,25 +129,28 @@ export function TerminalTabMoveIntoTabMenuSection({
               })
             }
             return (
-              <DropdownMenuSub key={target.id}>
-                <DropdownMenuSubTrigger className="[&>svg:last-child]:size-3.5">
+              <ContextMenuSub key={target.id}>
+                <ContextMenuSubTrigger className="[&>svg:last-child]:size-3.5">
                   {title}
-                </DropdownMenuSubTrigger>
-                <DropdownMenuSubContent className="min-w-[10rem] max-w-[calc(100vw-1rem)] whitespace-nowrap">
-                  <DropdownMenuItem onSelect={() => join('right')}>
+                </ContextMenuSubTrigger>
+                <ContextMenuSubContent
+                  animation="none"
+                  className="min-w-[10rem] max-w-[calc(100vw-1rem)] whitespace-nowrap"
+                >
+                  <ContextMenuItem onSelect={() => join('right')}>
                     <PanelRightClose className="size-3.5 shrink-0" />
                     {translate('terminal.paneMove.splitRight', 'Split Right')}
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onSelect={() => join('bottom')}>
+                  </ContextMenuItem>
+                  <ContextMenuItem onSelect={() => join('bottom')}>
                     <PanelBottomClose className="size-3.5 shrink-0" />
                     {translate('terminal.paneMove.splitDown', 'Split Down')}
-                  </DropdownMenuItem>
-                </DropdownMenuSubContent>
-              </DropdownMenuSub>
+                  </ContextMenuItem>
+                </ContextMenuSubContent>
+              </ContextMenuSub>
             )
           })}
-        </DropdownMenuSubContent>
+        </ContextMenuSubContent>
       )}
-    </DropdownMenuSub>
+    </ContextMenuSub>
   )
 }
