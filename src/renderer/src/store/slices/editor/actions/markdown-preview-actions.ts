@@ -103,7 +103,8 @@ export function createMarkdownPreviewActions(
               source?.operationProvenance)
         const worktreeId = file.worktreeId
         const runtimeEnvironmentId = resolvedRuntimeEnvironmentId
-        const activeResult = buildEditorActiveResult(s, worktreeId, id)
+        const activeResult =
+          options?.selection === 'none' ? {} : buildEditorActiveResult(s, worktreeId, id)
 
         if (existing) {
           // Why: a fresh grant means the file was re-resolved; cached bytes may predate it.
@@ -179,7 +180,8 @@ export function createMarkdownPreviewActions(
         `${file.relativePath} (preview)`,
         'editor',
         false,
-        options?.targetGroupId
+        options?.targetGroupId,
+        options?.selection
       )
     },
 
