@@ -19,7 +19,6 @@ vi.mock('../../store', () => ({
       testStore().subscribe(...args)
   }
 }))
-// Main's answer to the window's layout commands, as a switch-on build sends them.
 vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
   (
     await import('@/runtime/layout-apply-test-transport.test-fixture')
@@ -84,7 +83,6 @@ async function setup(open = true) {
     runtimeEnvironmentId: null,
     mode: 'edit'
   })
-  // A layout-owner build draws the editor tab from main's frame.
   await main.settle()
   const position = createRuntimeFilePositionQueue(unsubs)
   return { store, fileId, position }

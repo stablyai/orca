@@ -11,7 +11,7 @@ vi.mock('node:os', async () => ({
   ...(await vi.importActual<typeof NodeOs>('node:os')),
   homedir: homedirMock
 }))
-// Why: a Windows key source on any host, as Codex on Windows keys ~/.codex/hooks.json.
+// Exercise Windows approval-key spelling on any host.
 vi.mock('./config-toml-trust', async (importOriginal) => {
   const windowsPath = (path: string): string => `C:${path.replace(/\//g, '\\')}`
   return {

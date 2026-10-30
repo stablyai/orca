@@ -11,10 +11,12 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('sonner', () => ({ toast: { error: vi.fn() } }))
 vi.mock('@/runtime/structured-agent-session-client', () => ({
+  subscribeStructuredAgentSessionStatus: vi.fn(async () => ({ unsubscribe: vi.fn() })),
   callStructuredAgentSession: mocks.call
 }))
 vi.mock('@/runtime/local-structured-chats', () => ({ localStructuredChatsInUse: async () => true }))
 vi.mock('@/runtime/local-runtime-capabilities', () => ({
+  subscribeLocalRuntimeCapabilityObservation: () => () => {},
   subscribeLocalRuntimeCapabilitiesKnown: () => () => {},
   ensureLocalRuntimeCapabilities: async () => ['agent-session.model-catalog.saved-only.v1'],
   readLocalRuntimeCapabilitiesOrUnknown: () => ['agent-session.model-catalog.saved-only.v1']
@@ -36,16 +38,14 @@ vi.mock('@/lib/structured-agent-session-launch-options', () => ({
 }))
 
 import type { AgentSessionModelCatalogResult } from '../../../../shared/agent-session-wire'
-import type { SessionOptionDescriptor } from '../../../../shared/native-chat-session-options'
+import type { SessionOptionDescriptor } from '../../../../shared/native-chat/input/native-chat-session-options'
 import { getDefaultSettings } from '../../../../shared/constants'
 import { useAppStore } from '@/store'
 import { resetHostModelCatalogSnapshotsForTests } from '@/runtime/host-model-catalog-snapshots'
 import { installHostModelCatalogSnapshotsSync } from '@/runtime/host-model-catalog-snapshots-sync'
-import type { StructuredAgentSessionMutate } from './use-structured-agent-session-mutate'
 import { useStructuredAgentSessionOptions } from './use-structured-agent-session-options'
 
-// Grok, OpenCode and OMP chats were used, but none has a saved model pick: the user's report was
-// that these painted the "Model" placeholder, then the host's pills.
+// Previously used agents without saved picks should paint cached host models immediately.
 const REGISTERED = ['claude', 'codex', 'grok', 'opencode', 'omp'].map((agent) => ({ agent }))
 const EFFORTS = [
   { value: 'low', label: 'Low' },
@@ -110,9 +110,8 @@ function renderNewChat(agent: string) {
       fence: null,
       turnId: null,
       unloadedTurnRevisions: undefined,
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: no pick is made, so mutate is never called.
-      mutate: vi.fn() as unknown as StructuredAgentSessionMutate,
-      launch: { kind: 'new', heldOptions: {}, worktree: 'id:wt-1' }
+      mutate: vi.fn(),
+      launch: { kind: 'new', worktree: 'id:wt-1' }
     })
     frames.push(pill(options.optionSnapshot))
     return options
@@ -134,7 +133,6 @@ describe('a new chat of an agent with no saved pick', () => {
       },
       runtimeStatusByEnvironmentId: new Map()
     })
-    // Each read answers what the host saved: the preload's and the pane's own alike.
     mocks.call.mockImplementation(
       async (_target: unknown, method: string, params: { agent: string }) =>
         method === 'agentSession.modelCatalog'
@@ -164,7 +162,6 @@ describe('a new chat of an agent with no saved pick', () => {
       const reads = mocks.call.mock.calls.length
       const { frames, unmount } = renderNewChat(agent)
       expect(frames[0]).toEqual(final)
-      // The pane's own read lands the same answer: no frame ever showed anything else.
       await waitFor(() => expect(mocks.call.mock.calls.length).toBeGreaterThan(reads))
       await new Promise((resolve) => setTimeout(resolve, 0))
       expect(frames.every((frame) => JSON.stringify(frame) === JSON.stringify(final))).toBe(true)

@@ -159,7 +159,7 @@ export async function discardRuntimeGitPath(
 
 export async function getRuntimeGitRemoteFileUrl(
   context: RuntimeGitContext,
-  args: { relativePath: string; line: number }
+  args: { relativePath: string; line: number; endLine?: number }
 ): Promise<string | null> {
   const target = context.target
   if (target.kind === 'local' || !context.worktreeId) {
@@ -167,6 +167,7 @@ export async function getRuntimeGitRemoteFileUrl(
       worktreePath: resolveLocalWorktreePath(context),
       relativePath: args.relativePath,
       line: args.line,
+      endLine: args.endLine,
       connectionId: context.connectionId
     })
   }
@@ -176,7 +177,8 @@ export async function getRuntimeGitRemoteFileUrl(
     {
       worktree: toRuntimeWorktreeSelector(context.worktreeId),
       relativePath: args.relativePath,
-      line: args.line
+      line: args.line,
+      endLine: args.endLine
     },
     { timeoutMs: 15_000 }
   )

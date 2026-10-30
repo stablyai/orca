@@ -43,7 +43,6 @@ describe('steadyState across daemon versions', () => {
   })
 
   it('an old daemon that ignores steadyState still answers with the full-capture shape, and the client accepts it', async () => {
-    // A pre-field daemon returns exactly what it always did: name + evidence, never a cheap answer.
     const oldDaemonAnswer = {
       foregroundProcess: 'claude',
       hasChildProcesses: true,

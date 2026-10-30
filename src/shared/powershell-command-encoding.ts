@@ -1,7 +1,5 @@
 export function encodePowerShellCommand(command: string): string {
-  // Why: some callers (setup sequencing, Hermes startup) run in the sandboxed
-  // renderer where Node's Buffer is unavailable, so encode the UTF-16LE bytes
-  // PowerShell's -EncodedCommand expects using only renderer-safe globals.
+  // Sandboxed renderers lack Buffer; use browser-safe globals for PowerShell’s required UTF-16LE encoding.
   let bytes = ''
   for (let index = 0; index < command.length; index += 1) {
     const code = command.charCodeAt(index)

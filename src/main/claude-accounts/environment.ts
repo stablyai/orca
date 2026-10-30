@@ -71,7 +71,7 @@ export function applyClaudeEnvPatch(
   return baseEnv
 }
 
-/** Whether the selected account is a host-managed one; an id no account explains counts as one. */
+/** Missing account metadata defaults to the host runtime. */
 export function isHostManagedClaudeAccount(
   accounts: readonly ClaudeManagedAccount[] | undefined,
   activeAccountId: string | null | undefined

@@ -31,7 +31,7 @@ export function applyDefaultTerminalTabs(
     return null
   }
   store.markDefaultTerminalTabsApplied(worktreeId)
-  // Switch point: main records the mark too, so zero templates or a crash before the first spawn keep it.
+  // Main also records the mark, preserving it with zero templates or a crash before first spawn.
   if (ORCA_LAYOUT_OWNER_IS_MAIN && defaultTabs.tabs.length === 0) {
     recordLayoutApply(useAppStore.getState(), worktreeId, { type: 'setDefaultTabsApplied' })
   }
@@ -75,7 +75,7 @@ export function applyDefaultTerminalTabs(
     }
   }
 
-  // Switch point: sent after the tab creates, so main writes the mark only behind their rows.
+  // Send after tab creation so main persists the mark behind their rows.
   if (ORCA_LAYOUT_OWNER_IS_MAIN) {
     recordLayoutApply(useAppStore.getState(), worktreeId, { type: 'setDefaultTabsApplied' })
   }

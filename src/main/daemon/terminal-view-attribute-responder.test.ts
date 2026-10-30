@@ -17,7 +17,7 @@ describe('installTerminalViewAttributeResponder', () => {
       emitReply: (reply) => replies.push(reply)
     })
     await write(terminal, '\x1b]7501;?\x1b\\\x1b]11;?\x1b\\')
-    // Why no OSC 11 reply: without a renderer push the color queries stay silent by design.
+    // Color queries need renderer attributes; program-status detection is independent.
     expect(replies).toEqual([PROGRAM_STATUS_QUERY_REPLY])
     terminal.dispose()
   })

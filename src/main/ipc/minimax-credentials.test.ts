@@ -128,7 +128,6 @@ describe('registerMiniMaxCredentialsHandlers', () => {
       cookieConfigured: true,
       apiKeyConfigured: false,
       cookieProtection: 'sealed',
-      // Null, not 'sealed': nothing is stored, so there is nothing to make a claim about.
       apiKeyProtection: null,
       sessionCookieSupported: true,
       cookieUnreadable: undefined,
@@ -172,8 +171,7 @@ describe('registerMiniMaxCredentialsHandlers', () => {
     const { refresh, invalidateMiniMaxCredentialState, service } = makeRefreshMock()
     registerMiniMaxCredentialsHandlers(service as RateLimitService)
     await invoke('minimaxCredentials:saveCookie', '_token=abc')
-    // Why: the save handler is fire-and-forget — wait a microtask cycle so
-    // the queued `void rateLimits?.refresh()` resolves before we assert.
+    // Drain fire-and-forget credential refresh before asserting invalidation.
     await new Promise((resolve) => setImmediate(resolve))
     expect(invalidateMiniMaxCredentialState).toHaveBeenCalledTimes(1)
     expect(refresh).toHaveBeenCalledTimes(1)

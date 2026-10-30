@@ -1,11 +1,4 @@
-/**
- * Direct reads of the orchestration mailbox for E2E assertions.
- *
- * Why read SQLite instead of `orchestration.check`: check is itself a consumer —
- * it marks rows read and backfills `delivered_at` — so using it to observe would
- * destroy the distinction these specs test. An out-of-band read proves pointer,
- * pending-Enter, and consumption state independently.
- */
+// Read SQLite out of band: orchestration.check consumes rows and backfills delivered_at, destroying the distinction under test.
 import path from 'node:path'
 import { randomUUID } from 'node:crypto'
 import Database from '../../../src/main/sqlite/sync-database'
@@ -72,12 +65,7 @@ export function insertDirectRunMail(
   return id
 }
 
-/**
- * Mark `handle` as a legacy running coordinator to prove it no longer suppresses Enter.
- *
- * Why seed instead of calling `orchestration.run`: that RPC starts a coordinator
- * loop whose scheduling would race the assertion.
- */
+// Seed a legacy running coordinator directly; orchestration.run would introduce scheduler races.
 export function startCoordinatorRun(userDataDir: string, handle: string): void {
   withMailDb(userDataDir, (db) => {
     db.prepare(
@@ -87,13 +75,7 @@ export function startCoordinatorRun(userDataDir: string, handle: string): void {
   })
 }
 
-/**
- * How a row was consumed under either the current or historical push behavior.
- *
- * `read` is checked first because a pull backfills `delivered_at` via COALESCE,
- * so a pulled row also carries a delivery stamp — the stamp alone cannot prove
- * a push happened.
- */
+// Check read first: pulls backfill delivered_at too, so a delivery stamp alone does not prove push.
 export function mailDisposition(row: MailRow | undefined): MailDisposition | 'missing' {
   if (!row) {
     return 'missing'

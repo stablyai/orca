@@ -15,7 +15,8 @@ import type { Store } from '../persistence'
 import {
   assertRegisteredGitHubRepo,
   getGitHubLocalGitOptionArgs,
-  getGitHubRepoConnectionId
+  getGitHubRepoConnectionId,
+  readGitHubRepoUnlessWslStopped
 } from './github-repo-routing'
 
 export function registerGitHubPRReadHandlers(store: Store): void {
@@ -51,17 +52,26 @@ export function registerGitHubPRReadHandlers(store: Store): void {
         headSha?: string
         prRepo?: GitHubOwnerRepo | null
         noCache?: boolean
+        /** Refresh or a check action: a user act that may start a stopped WSL distro. */
+        wakeWslDistro?: boolean
       }
     ) => {
       const repo = assertRegisteredGitHubRepo(args, store)
-      return getPRChecks(
-        repo.path,
-        args.prNumber,
-        args.headSha,
-        args.prRepo ?? null,
-        { noCache: args.noCache },
-        getGitHubRepoConnectionId(repo),
-        ...getGitHubLocalGitOptionArgs(store, repo)
+      // The checks panel polls this every 60-120 s.
+      return readGitHubRepoUnlessWslStopped(
+        store,
+        repo,
+        () =>
+          getPRChecks(
+            repo.path,
+            args.prNumber,
+            args.headSha,
+            args.prRepo ?? null,
+            { noCache: args.noCache },
+            getGitHubRepoConnectionId(repo),
+            ...getGitHubLocalGitOptionArgs(store, repo)
+          ),
+        { wake: args.wakeWslDistro === true }
       )
     }
   )

@@ -1,3 +1,4 @@
+import { taskProviderErrorMessage } from '@/lib/task-provider-error-copy'
 import { UnsealedCredentialNotice } from './UnsealedCredentialNotice'
 import { useState } from 'react'
 import { AlertCircle, CheckCircle2, LoaderCircle, Unlink } from 'lucide-react'
@@ -71,7 +72,9 @@ export function JiraIntegrationCard(): React.JSX.Element {
     }
     setTestResultBySite((prev) => ({
       ...prev,
-      [siteId]: result.ok ? { state: 'ok' } : { state: 'error', error: result.error }
+      [siteId]: result.ok
+        ? { state: 'ok' }
+        : { state: 'error', error: taskProviderErrorMessage(result) }
     }))
     setTestingSiteId(null)
   }

@@ -1,4 +1,3 @@
-/** What the projection compares and what it must not hide: scope edges, user text, aliases. */
 import { describe, expect, it } from 'vitest'
 import type { ProjectGroup } from '../../../shared/project-group-types'
 import {

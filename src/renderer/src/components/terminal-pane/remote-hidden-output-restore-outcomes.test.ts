@@ -212,7 +212,7 @@ function createPane(paneId: number) {
     },
     write: vi.fn<(data: string, callback?: () => void) => void>(function write(...args): void {
       const [data, callback] = args
-      if (data === '' || callback?.name === 'runParsedSteps') {
+      if (data.length === 0 || callback?.name === 'runParsedSteps') {
         callback?.()
       }
     }),
@@ -340,11 +340,8 @@ function createDeferred<T>(): {
   return { promise, resolve: resolveDeferred, reject: rejectDeferred }
 }
 
-// ── Scenario identities ─────────────────────────────────────────────────────
 const REMOTE_PTY_ID = 'remote:env-1@@terminal-agent-1'
-// Overflows the renderer's hidden background queue (2MB lossy cap), dropping the
-// backlog and latching model restore — mirrors the real remote pause semantics
-// where hidden-time bytes exist ONLY in the host's authoritative buffer.
+// Overflow the 2MB client queue so hidden-time recovery depends on the host’s retained buffer.
 const HIDDEN_BYTES = 'x'.repeat(2 * 1024 * 1024 + 1)
 const LIVE_AGENT_CHUNK = 'LIVE_AGENT_CHUNK\r\n'
 const HOST_SNAPSHOT_MARKER = 'HOST_SNAPSHOT_HIDDEN_AGENT_CONTENT'
@@ -410,8 +407,7 @@ async function connectHiddenRemoteAgentPane(
   }
 }
 
-// Delivers the hidden backlog, reveals the pane, and delivers one live agent
-// chunk — the exact user flow in the screenshot (agent streaming on reveal).
+// Reveal a dropped backlog while live agent output continues.
 function driveHiddenBacklogThenReveal(drive: RemotePaneDrive): void {
   drive.deliver(HIDDEN_BYTES, HIDDEN_BYTES.length)
   ;(drive.deps.isVisibleRef as { current: boolean }).current = true
@@ -431,8 +427,7 @@ async function advanceThroughNullRetryBudget(drive: RemotePaneDrive): Promise<vo
   }
 }
 
-// Generous self-heal window: lets any corrected pipeline (extended retries,
-// restore re-arm, post-abandon repaint) run to completion under fake timers.
+// Advance enough fake time for bounded re-arms, deferred repaint and retry chains to finish.
 async function advanceModernRetryProbe(): Promise<void> {
   await vi.advanceTimersByTimeAsync(2_000)
   await flushAsyncTicks(20)
@@ -673,9 +668,7 @@ describe('remote hidden-output restore outcomes', () => {
     drive.disposable.dispose()
   })
 
-  // Regression: these causes are returned before any frame leaves the client, so the host
-  // declined nothing. Charging them to its budget banners a healthy pane at ~12s — the very
-  // elapsed-time guess this change removes.
+  // Local request gates send nothing to the host; charging them as host refusal would falsely disclose loss on healthy panes.
   it('[modern] does not spend the host answer budget on locally-gated retries', async () => {
     const serializeBuffer = vi.fn()
     const serializeBufferOutcome = vi.fn().mockResolvedValue({
@@ -772,8 +765,7 @@ describe('remote hidden-output restore outcomes', () => {
     await flushAsyncTicks(20)
     expect(serializeBufferOutcome).toHaveBeenCalledTimes(1)
 
-    // The retry answer arms a post-flood repaint 2s out; interrupt it partway with an
-    // ungated re-arm (remote output unpause) whose answer is permanently unavailable.
+    // Interrupt a scheduled quiet repaint with an unpause retry that proves permanent unavailability.
     await vi.advanceTimersByTimeAsync(1_000)
     drive.setOutputPaused(true)
     drive.setOutputPaused(false)

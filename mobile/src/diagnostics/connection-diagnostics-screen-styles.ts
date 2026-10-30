@@ -1,7 +1,8 @@
 import { StyleSheet } from 'react-native'
 import { colors, spacing, typography } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
 
-export const connectionDiagnosticsScreenStyles = StyleSheet.create({
+export const connectionDiagnosticsScreenStyles = themedStyleSheet(() => ({
   container: { flex: 1, backgroundColor: colors.bgBase, padding: spacing.lg },
   topRow: { flexDirection: 'row', alignItems: 'center', marginBottom: spacing.lg },
   backButton: {
@@ -92,4 +93,4 @@ export const connectionDiagnosticsScreenStyles = StyleSheet.create({
     color: colors.textPrimary
   },
   emptyText: { fontSize: typography.metaSize, color: colors.textMuted, lineHeight: 18 }
-})
+}))

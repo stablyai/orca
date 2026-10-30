@@ -128,8 +128,7 @@ export function useWorktreePointerDrag(args: {
         reorderDraggedIds: drag.reorderDraggedIds,
         reorderUnitDraggedIds: drag.reorderUnitDraggedIds,
         rects: drag.rects,
-        // Why: reuse the floating preview's own offset so the hit test tracks the
-        // card the user sees, not the raw pointer.
+        // Hit-test the floating card’s visual offset rather than the raw pointer.
         grab: getWorktreeSidebarDragGrab({ offsetY, height }),
         anchor: null
       }

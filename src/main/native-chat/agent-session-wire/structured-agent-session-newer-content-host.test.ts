@@ -1,6 +1,3 @@
-// On a real host: what a newer Orca left in a chat, and a provider row the reader would reject,
-// never leave the chat unable to take its next message.
-
 import { cp, rm } from 'node:fs/promises'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
@@ -67,14 +64,14 @@ async function historyBodies(host: StructuredAgentSessionHost): Promise<AgentJou
   return page.page.items.map((item) => item.body)
 }
 
-/** A restarted process over the same files, holding no chat open and owning no provider. */
+/** Restart over copied files without open handles or owned providers. */
 async function relaunch(): Promise<StructuredAgentSessionHost> {
   const before = hostTestState()
   await before.host.flushAllStreamedEvents()
   await before.store.renewLeases([])
   const relaunched = `${before.root}-relaunched`
   relaunchedRoots.push(relaunched)
-  // A dead process holds no lock.
+  // A dead process retains no locks.
   await cp(before.root, relaunched, {
     recursive: true,
     filter: (source) => !source.includes('.lock')
@@ -94,7 +91,6 @@ async function relaunch(): Promise<StructuredAgentSessionHost> {
   return host
 }
 
-// A subject kind this build does not know.
 const NEWER_APPROVAL: AgentJournalItemBody = JSON.parse(
   JSON.stringify({
     kind: 'approval',
@@ -108,7 +104,6 @@ const NEWER_APPROVAL: AgentJournalItemBody = JSON.parse(
 
 it("settles a newer Orca's pending approval as it was, and the chat takes its next message", async () => {
   await attach()
-  // Still pending when its provider went away.
   emit(7, NEWER_APPROVAL)
   const host = await relaunch()
 
@@ -123,11 +118,9 @@ it("settles a newer Orca's pending approval as it was, and the chat takes its ne
   await host.flushAllStreamedEvents()
 })
 
-// A newer host's background agent can hold such an approval while no turn runs. A queued send would
-// wait behind it forever; the plain send the client makes instead starts a turn, whose card cancel
-// then settles it.
+// A newer background approval can block queues forever; a direct send starts the turn that cancels it.
 it("takes a send past a newer Orca's live approval, and the next turn's card cancel settles it", async () => {
-  // A provider whose card Cancel goes through the Stop: a card no live turn raised is declined.
+  // Model providers whose card Cancel requires the live turn’s Stop path.
   const dismissPrompt = vi.fn(async ({ commit }: { commit: () => Promise<void> }) => commit())
   Object.assign(hostTestState().host.deps.adapter, {
     routePromptCancel: () => ({ kind: 'stop' }),
@@ -180,7 +173,7 @@ it("takes a send past a newer Orca's live approval, and the next turn's card can
 it('ends a turn whose provider output would not read back as failed, and the next send works', async () => {
   const closeSession = vi.fn(async () => true)
   Object.assign(hostTestState().host.deps.adapter, { closeSession })
-  // A provider that names its generation, as the real adapters do, so its stop settles the turn.
+  // Match real adapters’ generation identity so Stop can settle the turn.
   const { acquire } = hostTestState()
   const acquired = acquire.getMockImplementation()!
   acquire.mockImplementation(async (input) => ({
@@ -194,7 +187,7 @@ it('ends a turn whose provider output would not read back as failed, and the nex
     turnLifecycle: { turnId: 'turn-1', state: 'running', startedAt: NOW }
   })
   emit(2, { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'written first' }] })
-  // TypeScript accepts it; the persisted reader rejects a call id that is only spaces.
+  // Type-valid whitespace call IDs fail persisted-reader validation.
   emit(3, {
     kind: 'message',
     role: 'assistant',
@@ -206,7 +199,6 @@ it('ends a turn whose provider output would not read back as failed, and the nex
     expect(store.getRecord(SESSION)?.lease).toMatchObject({ claimStatus: 'released' })
   })
 
-  // The turn is over, with the notice any failed journal write gives.
   expect(await historyBodies(host)).toEqual(
     expect.arrayContaining([
       expect.objectContaining({ kind: 'turn', turnId: 'turn-1', state: 'interrupted' }),

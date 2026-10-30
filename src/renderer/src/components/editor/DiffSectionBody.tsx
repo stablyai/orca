@@ -1,3 +1,4 @@
+import { DiffTooLargeNotice } from './DiffTooLargeNotice'
 import { useEffect, useLayoutEffect, useRef } from 'react'
 import type { editor } from 'monaco-editor'
 import { lazyWithRetry as lazy } from '@/lib/lazy-with-retry'
@@ -18,6 +19,12 @@ import {
 } from './diff-editor-word-wrap-options'
 import { monacoFindOptions } from './monaco-find-options'
 import { installDiffEditorShiftWheelScroll } from './diff-editor-shift-wheel-scroll'
+import { usePluginSyntaxLanguage } from './use-plugin-syntax-language'
+import {
+  PLUGIN_SYNTAX_EDITOR_OPTIONS,
+  applyModelLanguage
+} from '@/lib/monaco-languages/plugin-syntax-editor-options'
+import { useMonacoTheme } from '@/hooks/use-monaco-theme'
 
 const ImageDiffViewer = lazy(() => import('./ImageDiffViewer'))
 
@@ -50,7 +57,7 @@ export function DiffSectionBody({
   isBranchMode,
   sideBySide,
   isDark,
-  language,
+  language: coreLanguage,
   modelPathBase,
   isEditable,
   diffEditorFontSize,
@@ -62,6 +69,8 @@ export function DiffSectionBody({
   onSaveLimitedDiff,
   onMount
 }: DiffSectionBodyProps): React.JSX.Element {
+  const language = usePluginSyntaxLanguage(section.path, coreLanguage)
+  const monacoTheme = useMonacoTheme(isDark)
   const renderLimit = section.largeDiffRenderLimit?.limited ? section.largeDiffRenderLimit : null
   const diffEditorRef = useRef<editor.IStandaloneDiffEditor | null>(null)
   const wordWrapOptionsSubRef = useRef<{ dispose: () => void } | null>(null)
@@ -70,8 +79,13 @@ export function DiffSectionBody({
   useLayoutEffect(() => {
     diffWordWrapRef.current = diffWordWrap
   }, [diffWordWrap])
+  useEffect(() => {
+    const models = diffEditorRef.current?.getModel()
+    applyModelLanguage([models?.original, models?.modified], language)
+  }, [language])
   const handleEditorMount: DiffOnMount = (diffEditor, monaco) => {
     diffEditorRef.current = diffEditor
+    applyModelLanguage([diffEditor.getModel()?.original, diffEditor.getModel()?.modified], language)
     const cleanupShiftWheelScroll = installDiffEditorShiftWheelScroll(diffEditor)
     diffEditor.getModifiedEditor().onDidDispose(() => {
       cleanupShiftWheelScroll()
@@ -83,7 +97,7 @@ export function DiffSectionBody({
       wordWrapOptionsSubRef.current = null
       diffEditorRef.current = null
     })
-    // Why: Monaco applies the inline-layout wrap override after mount, once width is known.
+    // Monaco applies its inline wrap override after mount when width is known.
     wordWrapMountFrameRef.current = requestAnimationFrame(() => {
       if (diffEditorRef.current !== diffEditor) {
         return
@@ -152,7 +166,9 @@ export function DiffSectionBody({
           </Button>
         </div>
       ) : section.diffResult?.kind === 'binary' ? (
-        section.diffResult.isImage ? (
+        section.diffResult.tooLarge ? (
+          <DiffTooLargeNotice />
+        ) : section.diffResult.isImage ? (
           <ImageDiffViewer
             originalContent={section.diffResult.originalContent}
             modifiedContent={section.diffResult.modifiedContent}
@@ -207,10 +223,9 @@ export function DiffSectionBody({
           language={language}
           original={section.originalContent}
           modified={section.modifiedContent}
-          theme={isDark ? 'vs-dark' : 'vs'}
+          theme={monacoTheme}
           onMount={handleEditorMount}
-          // Why: @monaco-editor/react can dispose models before widget teardown.
-          // Keep them through unmount and dispose unattached models next tick.
+          // The React wrapper may dispose models before widgets; retain them through teardown and dispose unattached models next tick.
           originalModelPath={`${modelPathBase}:original`}
           modifiedModelPath={`${modelPathBase}:modified`}
           keepCurrentOriginalModel
@@ -224,6 +239,7 @@ export function DiffSectionBody({
             renderSideBySide: sideBySide,
             minimap: { enabled: false },
             scrollBeyondLastLine: false,
+            ...PLUGIN_SYNTAX_EDITOR_OPTIONS,
             fontSize: diffEditorFontSize,
             fontFamily: editorFontFamily || 'monospace',
             lineNumbers: 'on',

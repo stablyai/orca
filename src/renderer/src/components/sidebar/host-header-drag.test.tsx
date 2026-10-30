@@ -41,14 +41,12 @@ describe('useHostHeaderDrag', () => {
   it('does not start a drag when the pointer is released before the window listeners attach', () => {
     const { controller, header } = setup()
 
-    // A click: pointerdown arms the session, pointerup lands before React has
-    // flushed the passive effect that subscribes to window pointer events.
+    // Release before React installs the window pointer listener.
     act(() => {
       header.dispatchEvent(pointer('pointerdown', { button: 0, clientX: 10, clientY: 10 }))
       window.dispatchEvent(pointer('pointerup', { clientX: 10, clientY: 10 }))
     })
 
-    // Moving the mouse afterwards, with no button held, must not promote a drag.
     act(() => {
       window.dispatchEvent(pointer('pointermove', { clientX: 200, clientY: 400, buttons: 0 }))
     })

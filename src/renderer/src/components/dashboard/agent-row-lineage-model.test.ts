@@ -98,8 +98,7 @@ describe('buildAgentRowLineageTree', () => {
   })
 
   it('nests by parent pane key when the parent handles are stale after a restart', () => {
-    // Why: terminal handles are minted per process, so after an app restart the
-    // persisted coordinator handle names no live row; the durable pane key must win.
+    // Process-local terminal handles change after restart; durable parent pane keys must still resolve lineage.
     const parent = makeRow('parent:1', { terminalHandle: 'term-parent-reminted' })
     const child = makeRow('child:1', {
       parentPaneKey: 'parent:1',

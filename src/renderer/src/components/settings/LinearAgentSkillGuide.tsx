@@ -24,8 +24,7 @@ type LinearAgentSkillGuideProps = {
   readiness: LinearSetupReadiness
   onOpenTaskSources: () => void
   onManageLinearAccess: () => void
-  // Why: skill install/update lives once under step 2 so the page does not
-  // repeat an "Agent skill" section after the checklist.
+  // Render install/update once inside step 2 instead of duplicating an Agent skill section.
   skillPanel: ReactNode
 }
 
@@ -38,7 +37,7 @@ function SetupStatusIcon({
   checking: boolean
   unverifiable?: boolean
 }): React.JSX.Element {
-  // Keep a fixed size-5 slot so checking/done/pending never shift the column.
+  // Reserve size-5 so status changes cannot shift the column.
   if (checking) {
     return (
       <span className="flex size-5 items-center justify-center text-muted-foreground">
@@ -46,8 +45,7 @@ function SetupStatusIcon({
       </span>
     )
   }
-  // Why above `done`: an unvouched-for scan says nothing about the step either
-  // way, and painting it as pending is the claim this checklist got wrong.
+  // Unverified scans prove neither completion nor failure; test before done/pending.
   if (unverifiable) {
     return (
       <span className="flex size-5 items-center justify-center rounded-full border border-border/70 text-muted-foreground">
@@ -73,11 +71,8 @@ type LinearSetupPill = { tone: IntegrationStatusTone; label: string; showCount: 
 
 function getLinearSetupPill(readiness: LinearSetupReadiness): LinearSetupPill {
   const { completed, total } = getTaskProviderCompletedSteps(readiness)
-  // Why: route through the card's status so the two Linear surfaces share one
-  // precedence. Reading `skillUnverifiable` directly here headlined "Cannot verify"
-  // over a step the user had plainly not done (or before they had even connected).
+  // Share card precedence so unverified skill status cannot outrank a confirmed unfinished step.
   const status = getTaskProviderSetupStatus(readiness)
-  // Tone is the shared table's call, not this surface's; only the copy differs.
   const tone = TASK_PROVIDER_SETUP_STATUS_TONE[status]
   if (status === 'checking') {
     return {
@@ -93,8 +88,7 @@ function getLinearSetupPill(readiness: LinearSetupReadiness): LinearSetupPill {
       showCount: false
     }
   }
-  // Why: a scan that cannot vouch for "not installed" must not be counted against
-  // the user, so the label reports what was confirmed instead of asserting a failure.
+  // Report confirmed facts; unverifiable absence must not count as user failure.
   if (status === 'skill-unverified') {
     return {
       tone,
@@ -116,15 +110,13 @@ function getLinearSetupPill(readiness: LinearSetupReadiness): LinearSetupPill {
   }
 }
 
-// Connect, skill, and Tasks visibility in one checklist — skill UI is inlined.
 export function LinearAgentSkillGuide({
   readiness,
   onOpenTaskSources,
   onManageLinearAccess,
   skillPanel
 }: LinearAgentSkillGuideProps): React.JSX.Element {
-  // Share the Task Sources card's arithmetic so the two Linear setup surfaces
-  // cannot disagree about the same three facts; the copy stays count-based here.
+  // Share arithmetic with Task Sources so both setup surfaces agree.
   const pill = getLinearSetupPill(readiness)
   const { completed, total } = getTaskProviderCompletedSteps(readiness)
 
@@ -148,8 +140,7 @@ export function LinearAgentSkillGuide({
         <span className="inline-flex items-center gap-2">
           <IntegrationStatusPill tone={pill.tone}>{pill.label}</IntegrationStatusPill>
           {pill.showCount ? (
-            // Mirrors the Task Sources card so the confirmed count survives a label
-            // that no longer carries it.
+            // Retain the confirmed count when the status label omits it.
             <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
               {`${completed}/${total}`}
             </span>

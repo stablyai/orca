@@ -159,10 +159,9 @@ describe('insertPaneNextTo reparent frame', () => {
 
   it('passes pane drag active callbacks into dividers created during reorder', async () => {
     setupDocument()
-    const [{ insertPaneNextTo }, { createDivider }] = await Promise.all([
-      import('./pane-tree-ops'),
-      import('./pane-divider')
-    ])
+    // Why sequential: concurrent first imports can bypass Vitest's still-pending vi.mock registrations.
+    const { insertPaneNextTo } = await import('./pane-tree-ops')
+    const { createDivider } = await import('./pane-divider')
     const parent = createMockElement('pane-split')
     const source = createPane(1)
     const target = createPane(2)

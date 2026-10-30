@@ -10,14 +10,9 @@ export type ClientHostedBrowserRowPublicationHost = {
   getEmitter(): ((event: ClientHostedBrowserRowsEvent) => void) | null
 }
 
-/**
- * Pushes the host desktop's rows for client-placed browser pages. Deliberately separate from the
- * session-tabs snapshot it rides on: that snapshot is the paired-CLIENT view and is gated on
- * having RPC subscribers, while the host still needs its row after the client that made the page
- * has quit.
- */
+/** Host rows must publish without RPC subscribers; paired-client snapshot gates cannot govern the host view. */
 export class ClientHostedBrowserRowPublisher {
-  // Which workspaces the renderer currently holds rows for, so an emptied one is retracted once.
+  // Track delivered workspaces so empty rows retract once.
   private readonly publishedWorktreeIds = new Set<string>()
 
   constructor(private readonly host: ClientHostedBrowserRowPublicationHost) {}
@@ -36,8 +31,7 @@ export class ClientHostedBrowserRowPublisher {
     emit: (event: ClientHostedBrowserRowsEvent) => void
   ): void {
     const rows = this.buildRows(pages)
-    // Why: the announcement this rides on also fires on terminal and editor churn, so most calls
-    // concern a workspace that has never had a client page. Only speak up when something changed.
+    // Terminal/editor churn also reaches this seam; suppress never-published empty workspaces.
     if (rows.length === 0 && !this.publishedWorktreeIds.has(worktreeId)) {
       return
     }
@@ -67,12 +61,7 @@ export class ClientHostedBrowserRowPublisher {
     }
   }
 
-  /**
-   * Answers a renderer hydrating its rows, and records the answer as delivered. This is the other
-   * half of `publish`, not a read-only peek: a window that came up in a no-notifier gap learns
-   * about its rows only here, and an unrecorded delivery is unretractable — the emptied publish
-   * that should take the row back is the very one the never-published suppression swallows.
-   */
+  /** Record hydration as delivery or later empty publication cannot retract the rows. */
   deliverHydrationSnapshot(): ClientHostedBrowserRowsEvent[] {
     const pagesByWorktreeId = new Map<string, RuntimeBrowserClientPage[]>()
     for (const page of this.host.listClientPages()) {
@@ -83,9 +72,7 @@ export class ClientHostedBrowserRowPublisher {
         pagesByWorktreeId.set(page.workspaceId, [page])
       }
     }
-    // Replaced, not added to: the renderer clears before applying, so this set is its whole
-    // contents afterwards. Re-deriving it every hydration is also what heals a stale entry left
-    // by a window that went away between a publish and its retraction.
+    // Hydration clears/replaces the renderer's rows; replace this set too, healing stale-window deliveries.
     this.publishedWorktreeIds.clear()
     for (const worktreeId of pagesByWorktreeId.keys()) {
       this.publishedWorktreeIds.add(worktreeId)

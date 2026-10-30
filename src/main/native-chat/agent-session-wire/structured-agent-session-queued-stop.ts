@@ -1,9 +1,5 @@
-// A Stop's event and the queue. A Stop never withdraws a draft and no text ever
-// travels back over the wire: it is accepted with ONE Stop event (`JournalStopEvent`), withdrawing
-// every queued send in the same transaction (`journal-stop-acceptance.ts`), and the queue's
-// pause is derived from that event (`queued-message-pause.ts`) until any turn is sent after it and
-// accepted, or the person Resumes. The cards stay published, and Send-now sends one card without
-// lifting the pause for the rest until that card's turn starts.
+// Stop atomically records its event/queued-send withdrawal without withdrawing draft text.
+// Derive pause until a later send’s turn starts or Resume; Send-now alone lifts only its own card.
 
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import {
@@ -17,20 +13,12 @@ import {
   structuredAgentSessionStopNamesTurnNotLive
 } from './structured-agent-session-turn-stop-notes'
 
-/** The one unsettled-card predicate /clear's carry and the published-bytes bound share:
- *  waiting or returned. Pending/unknown/accepted deliveries stay outside it. */
+/** Unsettled means waiting/returned; pending, unknown and accepted deliveries are excluded. */
 export function unsettledQueuedMessages(journal: AgentSessionJournal): QueuedMessageRow[] {
   return journal.queuedMessages.list().filter(isUnsettledQueuedMessage)
 }
 
-/**
- * What a Stop reaching a running agent stops: work no Stop event records yet (`unrecorded`), or
- * only what the Stop still in force already records, which it repeats with nothing sent since, on
- * the same turn or one that opened after a Stop pressed before any turn showed (`repeat`): a card
- * queued between the presses then sends normally, as after one Stop. `late`: it names a turn the
- * journal shows already over, as a late Stop from a phone can, even while the next send is handed
- * over; only a turn with no row yet may still be opening.
- */
+/** Distinguish unrecorded work, repeated Stop without later sends, and late Stops naming ended turns. */
 export function stopReachesUnrecordedWork(
   ctx: Pick<AgentSessionTurnContext, 'journal' | 'fence' | 'currentWork'>,
   namedTurnId: string | undefined
@@ -44,15 +32,14 @@ export function stopReachesUnrecordedWork(
   if (inForce === null) {
     return 'unrecorded'
   }
-  // This interrupt may send a later send back to waiting, so this Stop must hold it.
+  // This interrupt may return later sends to waiting, so it must hold them.
   return sentSinceStop(ctx.journal, inForce) ||
     structuredAgentSessionStopNamesTurnNotLive(inForce.event.turnId, live)
     ? 'unrecorded'
     : 'repeat'
 }
 
-/** Whether anything was sent after the Stop in force and not refused, even if its fate is
- *  unknown. A send with no sequence is an older host's. */
+/** Include nonrefused later sends even if unknown; missing sequence is legacy data. */
 export function sentSinceStop(
   journal: Pick<AgentSessionJournal, 'submissions'>,
   inForce: { sequence: number }

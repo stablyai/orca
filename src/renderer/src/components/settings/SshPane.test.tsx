@@ -5,7 +5,7 @@ import { createRoot } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { resetSshConfigPassiveSyncForTests } from '../../lib/ssh-config-passive-sync'
 import type { SshConnectionState, SshTarget } from '../../../../shared/ssh-types'
-import { setRendererUiLanguage } from '@/i18n/i18n'
+import { i18n, loadRendererUiLanguage } from '@/i18n/i18n'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { SshPane } from './SshPane'
 
@@ -95,14 +95,14 @@ afterEach(async () => {
   resetSshConfigPassiveSyncForTests()
   mocks.connectionStates.clear()
   vi.clearAllMocks()
-  await setRendererUiLanguage('en')
+  await i18n.changeLanguage(await loadRendererUiLanguage('en'))
 })
 
 describe('SSH import count notices', () => {
   it.each(['en', 'ko'] as const)(
     'uses complete %s sentences and preserves the no-change branch',
     async (language) => {
-      await setRendererUiLanguage(language)
+      await i18n.changeLanguage(await loadRendererUiLanguage(language))
       const importConfig = vi.fn(
         async (_args?: {
           reAdopt?: boolean
@@ -274,7 +274,6 @@ describe('bulk removal from SSH settings', () => {
       host('gamma', { orcadFence: { environmentId: 'env-gamma' } })
     ])
     await act(async () => checkbox(pane, 'alpha').click())
-    // Shift-click selects the range alpha..gamma.
     await act(async () => {
       checkbox(pane, 'gamma').dispatchEvent(
         new MouseEvent('click', { bubbles: true, shiftKey: true })
@@ -310,7 +309,6 @@ describe('bulk removal from SSH settings', () => {
       (button) => button.textContent === 'Test'
     )
     await act(async () => test?.click())
-    // A connected host is skipped, as on its own row.
     expect(mocks.toast).toHaveBeenCalledWith('1 reachable · 1 failed · 1 already connected', {
       description: 'beta: timed out'
     })
@@ -338,7 +336,7 @@ describe('bulk removal from SSH settings', () => {
     expect(mocks.requestRemove).toHaveBeenCalledWith(expect.objectContaining({ id: 'beta' }))
     expect(mocks.requestBulkRemove).not.toHaveBeenCalled()
 
-    // When a filter hides the last selected host, the bar says so instead of just vanishing.
+    // Explain when filtering deselects the last host instead of silently hiding the bulk bar.
     await act(async () => {
       Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set?.call(filter, 'c3')
       filter.dispatchEvent(new Event('input', { bubbles: true }))

@@ -12,12 +12,12 @@ import { assertPosixOrcadHost } from './orcad-remote-host-support'
 import { quotePosixShell } from '../../../shared/shell-argument-quoting'
 import { joinRemotePath, type RemoteHostPlatform } from '../../ssh/ssh-remote-platform'
 
-/** `orcad_slot=<dir>;`, so the selections below name the long slot path once on the wire. */
+// Assign the long slot path once to reduce command size on the wire.
 function assignOrcadSlot(directory: string): string {
   return `orcad_slot=${quotePosixShell(directory.replace(/\/+$/, ''))}; `
 }
 
-/** New slots start the server directly; rollback still accepts older single-entry slots. */
+// Rollback must still accept legacy single-entry slots.
 export function selectOrcadSlotEntryCommand(host: RemoteHostPlatform, directory: string): string {
   assertPosixOrcadHost(host)
   const server = `"$orcad_slot"/${quotePosixShell(ORCAD_SERVER_ENTRY_FILENAME)}`
@@ -25,10 +25,7 @@ export function selectOrcadSlotEntryCommand(host: RemoteHostPlatform, directory:
   return `${assignOrcadSlot(directory)}if [ -f ${server} ]; then orcad_entry=${server}; else orcad_entry=${launcher}; fi`
 }
 
-/**
- * Sets `$orcad_runtime` to the pinned Node a slot's `.runtime-node` names, or exits 78.
- * Assumes the marker exists; callers decide what its absence means.
- */
+/** Set $orcad_runtime or exit 78; callers decide what an absent marker means. */
 export function orcadNodeSlotRuntimeCommand(host: RemoteHostPlatform, directory: string): string {
   assertPosixOrcadHost(host)
   const nodeMarker = `"$orcad_slot"/${quotePosixShell(ORCAD_NODE_RUNTIME_MARKER_FILENAME)}`
@@ -38,8 +35,8 @@ export function orcadNodeSlotRuntimeCommand(host: RemoteHostPlatform, directory:
   const nodeExecutable = quotePosixShell(`/${ORCAD_NODE_RUNTIME_POSIX_EXECUTABLE}`)
   return (
     `${assignOrcadSlot(directory)}orcad_node_sha=$(cat ${nodeMarker}) || exit 78; ` +
-    // Why validate: the digest becomes a path segment, so only a bare sha256 may reach it.
-    // The leading `(` keeps the pattern parseable when stop embeds this in `$(...)`.
+    // The digest becomes a path segment; reject non-SHA256 values.
+    // Leading ( keeps the case pattern parseable inside command substitution.
     'case "$orcad_node_sha" in ("" | *[!0-9a-f]*) exit 78;; esac; ' +
     '[ "${#orcad_node_sha}" -eq 64 ] || exit 78; ' +
     `orcad_runtime=${nodeRuntimePrefix}"$orcad_node_sha"${nodeExecutable}; ` +
@@ -47,10 +44,7 @@ export function orcadNodeSlotRuntimeCommand(host: RemoteHostPlatform, directory:
   )
 }
 
-/**
- * The slot's own contents pick its runtime: Node marker, then Bun, then legacy host Node.
- * Only legacy slots may use host Node; an incomplete Node or Bun slot must not change runtimes.
- */
+/** Legacy host Node fallback must never hide an incomplete Node or Bun slot. */
 export function selectOrcadSlotRuntimeCommand(
   host: RemoteHostPlatform,
   directory: string,

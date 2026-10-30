@@ -4,11 +4,8 @@ const { spawnMock } = vi.hoisted(() => ({ spawnMock: vi.fn() }))
 
 vi.mock('node:child_process', () => ({ spawn: spawnMock }))
 
-import {
-  launchExternalEditor,
-  resolveVsCodeRemoteSshLaunchSpec,
-  type ExternalEditorLaunchSpec
-} from './external-editor-launch'
+import { launchExternalEditor, type ExternalEditorLaunchSpec } from './external-editor-launch'
+import { resolveRemoteSshEditorLaunchSpec } from './remote-ssh-editor-launch'
 
 const platformDescriptor = Object.getOwnPropertyDescriptor(process, 'platform')
 
@@ -35,14 +32,16 @@ function remoteSpec(
   path: string,
   platform: NodeJS.Platform
 ): ExternalEditorLaunchSpec {
-  const spec = resolveVsCodeRemoteSshLaunchSpec(code, path, 'builder', {
-    platform,
-    fileExists: () => true
-  })
-  if (!spec) {
+  const result = resolveRemoteSshEditorLaunchSpec(
+    code,
+    path,
+    { id: 'ssh-1', label: 'Builder', host: 'builder', port: 22, username: '', source: 'manual' },
+    { platform, fileExists: () => true }
+  )
+  if (!result.ok) {
     throw new Error('expected a VS Code launch spec')
   }
-  return spec
+  return result.launchSpec
 }
 
 const HIDDEN_FIELDS = { detached: true, stdio: 'ignore', windowsHide: true, shell: false }
@@ -76,8 +75,7 @@ describe('VS Code Remote-SSH launch through @orca/process-host', () => {
     }
   )
 
-  // Why spaces on both sides: a plain `cmd /c` strips the outer quotes once a spaced code.cmd
-  // path meets a spaced argument, so the launch dies with "path not found" (seen on Windows 11).
+  // A plain cmd /c loses quotes when both the launcher path and its argument contain spaces.
   it('keeps a spaced code.cmd path and a spaced remote path intact on Windows', async () => {
     setPlatform('win32')
     const codeCmd = 'C:\\Program Files\\Microsoft VS Code\\bin\\code.cmd'
@@ -114,5 +112,42 @@ describe('VS Code Remote-SSH launch through @orca/process-host', () => {
       stdio: 'ignore',
       windowsHide: false
     })
+  })
+})
+
+describe('external editor launch environment', () => {
+  beforeEach(() => {
+    spawnMock.mockReset()
+    spawnMock.mockImplementation(spawnedChild)
+    vi.stubEnv('APPDIR', '/tmp/.mount_orca123')
+    vi.stubEnv('ARGV0', '/data/apps/orca.appimage')
+    vi.stubEnv('ORCA_EDITOR_ENV_PROBE', 'kept')
+  })
+
+  afterEach(() => {
+    vi.unstubAllEnvs()
+    if (platformDescriptor) {
+      Object.defineProperty(process, 'platform', platformDescriptor)
+    }
+  })
+
+  it.each([
+    [
+      'shell',
+      (): ExternalEditorLaunchSpec => ({
+        kind: 'shell',
+        hideWindowsConsole: true,
+        spawnCmd: '/bin/sh',
+        spawnArgs: ['-c', 'code --new-window /home/ada/project']
+      })
+    ],
+    ['Remote-SSH', () => remoteSpec('/usr/bin/code', '/home/ada/project', 'linux')]
+  ] as const)('strips the AppImage runtime env from a Linux %s launch', async (_kind, spec) => {
+    setPlatform('linux')
+    await launchExternalEditor(spec())
+    const options: { env?: NodeJS.ProcessEnv } | undefined = spawnMock.mock.calls[0]?.[2]
+    expect(options?.env).not.toHaveProperty('ARGV0')
+    expect(options?.env).toMatchObject({ ORCA_EDITOR_ENV_PROBE: 'kept' })
+    expect(process.env.ARGV0).toBe('/data/apps/orca.appimage')
   })
 })

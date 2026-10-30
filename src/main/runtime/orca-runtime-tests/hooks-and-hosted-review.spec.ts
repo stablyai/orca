@@ -328,13 +328,14 @@ describe('OrcaRuntimeService', () => {
       {},
       'origin'
     )
-    // Why: explicit owner/repo already pins identity, so it stays preference-free.
     expect(getGitHubWorkItemByOwnerRepoMock).toHaveBeenCalledWith(
       TEST_REPO_PATH,
       prRepo,
       42,
       'pr',
-      null
+      null,
+      undefined,
+      {}
     )
   })
 

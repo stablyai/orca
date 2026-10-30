@@ -20,10 +20,6 @@ import {
 import { migrateLegacyOmpOverlayState } from './legacy-omp-overlay-migration'
 import type { PiAgentKind } from '../../shared/pi-agent-kind'
 
-// Why: the Pi test suite imports `isSafeDescendCandidate` from this module's
-// public surface to lock in the Windows-junction ordering invariant against
-// future refactors. Re-export the shared implementation so the test contract
-// keeps holding after the helper moved to src/main/pty/overlay-mirror.ts.
 export const isSafeDescendCandidate = sharedIsSafeDescendCandidate
 
 const PI_AGENT_SUBDIR = 'agent'
@@ -40,19 +36,13 @@ type PiManagedExtensionEnv = {
 
 type LegacyOverlayAgentKind = Exclude<PiAgentKind, 'prime-agent'>
 
-// Why: old Orca versions used per-kind overlay roots. Keep the names so
-// upgrade-time cleanup can remove stale PTY-scoped Pi/OMP overlay dirs without
-// guessing which agent a terminated pane launched.
+// Retain old per-kind roots for upgrade cleanup.
 const OVERLAY_ROOT_DIR_NAME: Record<LegacyOverlayAgentKind, string> = {
   pi: 'pi-agent-overlays',
   omp: 'omp-agent-overlays'
 }
 
-// Why: the managed extension target is chosen by which agent is being launched, NOT
-// by which `~/.<agent>/agent` dir happens to exist on disk first. A
-// cross-agent fallback (Pi -> OMP or vice versa) silently shadows the other
-// agent's user extensions when both are installed and the user picks the
-// shadowed one in Orca's per-launch agent picker.
+// Resolve by launched kind; disk-presence fallback would shadow the other agent's extensions.
 const AGENT_HOME_DIR_NAME: Record<PiAgentKind, string> = {
   pi: '.pi',
   omp: '.omp',
@@ -80,14 +70,12 @@ export class PiTitlebarExtensionService {
   }
 
   private getSourceOverlayDir(sourceAgentDir: string, kind: LegacyOverlayAgentKind): string {
-    // Why: builds before managed extensions stored Pi/OMP state in source-scoped
-    // overlays. Resolve the old path so OMP upgrades can rescue stranded state.
+    // Rescue state from overlays used before managed extensions.
     return join(this.getOverlayRoot(kind), toSafeOverlayDirName(`source:${sourceAgentDir}`))
   }
 
   private getPtyOverlayDir(ptyId: string, kind: LegacyOverlayAgentKind): string {
-    // Why: old Orca versions used PTY-scoped hashed overlays. Keep resolving
-    // that path so new spawns/teardowns can clean stale pre-migration dirs.
+    // Resolve old PTY-scoped paths for migration cleanup.
     return join(this.getOverlayRoot(kind), toSafeOverlayDirName(ptyId))
   }
 
@@ -95,9 +83,6 @@ export class PiTitlebarExtensionService {
     return join(this.getOverlayRoot(kind), ptyId)
   }
 
-  // Why: overlay teardown must use the shared safeRemoveOverlay so the
-  // Windows-junction guard from issue #1083 stays in lock-step across all
-  // overlay consumers (Pi here, OpenCode in src/main/opencode/hook-service.ts).
   private safeRemoveOverlay(overlayDir: string, kind: LegacyOverlayAgentKind): void {
     safeRemoveOverlay(overlayDir, this.getOverlayRoot(kind))
   }
@@ -190,22 +175,17 @@ export class PiTitlebarExtensionService {
     options?: { materializeDefaultHome?: boolean; configDirName?: string }
   ): Record<string, string> {
     const freshConfigEnv = kind === 'omp' ? this.buildFreshOmpEnv() : {}
-    // The caller resolves the effective launch environment before this point.
     const sourceAgentDir = existingAgentDir || getDefaultPiAgentDir(kind, options?.configDirName)
     if (kind !== 'prime-agent') {
       try {
         this.safeRemoveOverlay(this.getPtyOverlayDir(ptyId, kind), kind)
         this.safeRemoveOverlay(this.getLegacyOverlayDir(ptyId, kind), kind)
       } catch {
-        // Why: old per-PTY overlay cleanup is best-effort; a locked stale
-        // directory should not prevent the terminal from starting.
+        // Locked legacy overlays must not prevent terminal startup.
       }
     }
 
-    // Why: bare shells used to mkdir ~/.<agent>/agent for every terminal so a
-    // later typed `pi`/`omp` got hooks. That recreates deleted unused agent
-    // homes on every open (#10196). Only materialize the default home when the
-    // caller opts in (explicit agent launch) or the dir already exists.
+    // Bare shells must not recreate deleted agent homes; materialize only on explicit opt-in (#10196).
     const materializeDefaultHome = options?.materializeDefaultHome !== false
     if (!existsSync(sourceAgentDir) && !materializeDefaultHome) {
       if (kind === 'omp') {
@@ -238,19 +218,13 @@ export class PiTitlebarExtensionService {
   }
 
   clearPty(ptyId: string): void {
-    // Why: PTY teardown doesn't know which kind was launched (the daemon
-    // exit path discards the launch command). Sweep both old PTY-scoped
-    // overlay roots for migration cleanup. Source-scoped legacy overlays are
-    // deliberately left in place so upgrades never delete user runtime state.
+    // Teardown lacks agent kind; sweep both PTY roots but preserve source overlays containing user state.
     for (const kind of Object.keys(OVERLAY_ROOT_DIR_NAME) as LegacyOverlayAgentKind[]) {
       try {
         this.safeRemoveOverlay(this.getPtyOverlayDir(ptyId, kind), kind)
         this.safeRemoveOverlay(this.getLegacyOverlayDir(ptyId, kind), kind)
       } catch {
-        // Why: on Windows the overlay dir can be locked (EPERM/EBUSY) by
-        // antivirus or indexers. Overlay cleanup is best-effort - a stale
-        // old PTY-scoped directory in userData is harmless and will be
-        // retried on the next PTY spawn/teardown.
+        // Windows AV/indexer locks leave harmless stale overlays; retry on the next spawn/teardown.
       }
     }
   }

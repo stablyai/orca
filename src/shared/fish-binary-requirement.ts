@@ -1,14 +1,6 @@
 import { spawnSync } from 'node:child_process'
 
-/**
- * Locates the fish binary live shell tests run against, and decides how strict
- * they are about finding one.
- *
- * Why the strictness is configurable: on a developer machine without fish these
- * suites must skip, but the `shell contracts` CI job is a required check whose
- * fish lane is the only end-to-end guard for #9993. There, a skip would report
- * green with nothing exercised, so ORCA_REQUIRE_FISH=1 turns it into a failure.
- */
+/** Developer machines may skip without fish; required shell-contract CI is the only end-to-end #9993 guard, so ORCA_REQUIRE_FISH=1 must fail instead. */
 const FISH_CANDIDATES = ['fish', '/opt/homebrew/bin/fish', '/usr/local/bin/fish'] as const
 
 /** Env var CI sets to make a missing or too-old fish fail instead of skip. */
@@ -48,12 +40,7 @@ export function resolveFishBinary(minMajorVersion = 1): FishBinaryLookup {
   return { available: false, path: null, majorVersion: 0, reason: 'no fish binary on PATH' }
 }
 
-/**
- * The message to fail with when CI demanded fish and did not get it, else null.
- *
- * Assert this in a test that always runs, so the requirement cannot vanish with
- * the suite it guards.
- */
+/** Return CI’s missing/old-fish failure or null. Assert outside the guarded suite so skipping it cannot hide the requirement. */
 export function fishRequirementViolation(
   lookup: FishBinaryLookup,
   env: NodeJS.ProcessEnv = process.env

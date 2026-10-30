@@ -6,7 +6,11 @@ import type {
   AgentJournalRenderItem,
   AgentJournalResetReason
 } from '../../../src/shared/agent-session-journal-types'
-import type { AgentSessionHistoryPage } from '../../../src/shared/agent-session-wire'
+import { STRUCTURED_AGENT_SESSION_CLIENT_COALESCE_MS } from '../../../src/shared/structured-agent-session-coalescer'
+import type {
+  AgentSessionSubscribeEvent,
+  AgentSessionHistoryPage
+} from '../../../src/shared/agent-session-wire'
 import { publishConnectionRevival } from '../transport/connection-revival-signal'
 import type { RpcClient } from '../transport/rpc-client'
 import { useMobileStructuredAgentState } from './use-mobile-structured-agent-state'
@@ -64,9 +68,7 @@ describe('useMobileStructuredAgentState older history', () => {
     renderer = null
   })
 
-  /** Mounts the hook on a session whose newest rows are `newest` (by default one of the
-   *  session's own, at 1000), with the host serving `older` by the cursor each read asks before:
-   *  a page, a reset, or a thrown error. */
+  // Serve cursor-addressed older pages, resets and throws behind the hook’s newest rows.
   async function mountWithOlderPages(
     older: Record<number, AgentSessionHistoryPage | AgentJournalResetReason | Error | undefined>,
     newest: AgentJournalRenderItem[] = [said(1_000)]
@@ -120,12 +122,42 @@ describe('useMobileStructuredAgentState older history', () => {
         type: 'snapshot',
         sessionId: 'session-1',
         fence: 1,
-        page: page(newest, true)
+        page: { ...page(newest, true), direction: 'tail' }
       })
     })
     await vi.waitFor(() => expect(hook.current!.state.status).toBe('ready'))
-    return { hook, historyCursors }
+    return { hook, historyCursors, emit: (event: AgentSessionSubscribeEvent) => onFrame?.(event) }
   }
+
+  it('keeps a row removed when its upsert and removal arrive within one streaming window', async () => {
+    const { hook, emit } = await mountWithOlderPages({}, [])
+    vi.useFakeTimers()
+    try {
+      const batch = {
+        cursor: cursorAt(1001),
+        items: [said(1001)],
+        removedItemIds: [],
+        submissions: []
+      }
+      act(() => emit({ type: 'batch', sessionId: 'session-1', batch }))
+      act(() =>
+        emit({
+          type: 'batch',
+          sessionId: 'session-1',
+          batch: { ...batch, cursor: cursorAt(1002), items: [], removedItemIds: ['item-1001'] }
+        })
+      )
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(STRUCTURED_AGENT_SESSION_CLIENT_COALESCE_MS)
+      })
+      expect(hook.current!.state.items).toEqual([])
+      expect(hook.current!.state.cursor?.sequence).toBe(1002)
+    } finally {
+      act(() => renderer?.unmount())
+      renderer = null
+      vi.useRealTimers()
+    }
+  })
 
   it("reads past pages of a subagent's rows to the session's own older rows", async () => {
     const { hook, historyCursors } = await mountWithOlderPages({
@@ -241,14 +273,13 @@ describe('useMobileStructuredAgentState live feed', () => {
         type: 'snapshot',
         sessionId: 'session-1',
         fence: 1,
-        page: { ...page([said(58), said(59)], false), liveCursor: cursorAt(59) }
+        page: { ...page([said(58), said(59)], false), direction: 'tail', liveCursor: cursorAt(59) }
       })
     )
     await act(async () => {
       await vi.advanceTimersByTimeAsync(100)
     })
 
-    // The phone's bridge ends a stream past its backlog limit with an error frame.
     act(() => streams[0].frame({ type: 'error', message: 'Stream ended' }))
     await act(async () => {
       await vi.advanceTimersByTimeAsync(750)
@@ -273,7 +304,6 @@ describe('useMobileStructuredAgentState live feed', () => {
     expect(hook.current!.state.items.map((item) => item.sequence)).toEqual([58, 59, 60, 61])
     expect(hook.current!.state.error).toBeUndefined()
 
-    // A host-ended feed waiting to reopen goes now when the app comes back.
     act(() => streams[1].frame({ type: 'end' }))
     act(() => publishConnectionRevival('app-resume'))
     await vi.waitFor(() => expect(streams).toHaveLength(3), { interval: 1, timeout: 50 })

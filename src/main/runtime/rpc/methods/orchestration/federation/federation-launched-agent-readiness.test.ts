@@ -8,8 +8,7 @@ import { configureFederationWorkerRuntime } from './federation-runtime.test-supp
 const HANDLE = 'term_windows_worker'
 const WORKTREE = 'repo::windows-worktree'
 
-// Why: `worker-start --on <host>` launches the agent through this attach on the worker host, so
-// it must wait for the same input box a local start waits for, or the task is typed too early.
+// Federated starts must wait for the same composer as local starts before typing the task.
 describe('federated worker first dispatch readiness', () => {
   const databases: OrchestrationDb[] = []
 

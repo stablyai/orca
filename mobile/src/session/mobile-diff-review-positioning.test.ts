@@ -53,14 +53,14 @@ describe('mobile diff review positioning', () => {
   })
 
   it('matches renamed files by oldPath through the queue key', () => {
-    const queue = [item('new.ts', 'branch', 'old.ts'), item('other.ts', 'branch')]
+    const queue = [item('other.ts', 'branch'), item('new.ts', 'branch', 'old.ts')]
 
     expect(
       findMobileDiffReviewInitialIndex(queue, {
         filePath: 'old.ts',
         area: 'branch'
       })
-    ).toBe(0)
+    ).toBe(1)
   })
 
   it('falls back to the first file when the target is missing', () => {

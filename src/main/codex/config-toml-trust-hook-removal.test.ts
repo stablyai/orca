@@ -244,7 +244,6 @@ describe('removeHookTrustEntries', () => {
   })
 
   it('preserves the line separator when no blank line precedes the removed block', () => {
-    // Why: regression — removeTrustBlock cut the leading newline, fusing prior content into the next header.
     const key = '/x/hooks.json:pre_tool_use:0:0'
     const original = [
       'a = 1',
@@ -289,7 +288,6 @@ describe('removeHookTrustEntries', () => {
   })
 
   it('removes a block whose header has an inline comment', () => {
-    // Why: same pattern mismatch as the upsert regression would leave the dead block during uninstall.
     const key = '/x/hooks.json:pre_tool_use:0:0'
     const original = `[hooks.state."${key}"] # user note\nenabled = true\ntrusted_hash = "sha256:K"\n`
     writeFileSync(configPath, original, 'utf-8')

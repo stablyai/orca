@@ -48,9 +48,15 @@ export function useActiveTerminalRepair(input: ActiveTerminalRepairInput): void 
     tabs
   } = input
   useEffect(() => {
-    repairActiveTerminalTab(input)
+    repairActiveTerminalTab({
+      activeTabId,
+      activeTabIdByWorktree,
+      activeTabType,
+      renderedActiveWorktreeId,
+      setActiveTab,
+      tabs
+    })
     // Why: `tabs` is the dependency so repair reacts to order/content changes, not just scalar ids.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     activeTabId,
     activeTabType,

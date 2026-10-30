@@ -1,11 +1,12 @@
 import type { GitHubRerunPRChecksResult } from '../../../../shared/github/check-types'
 import { ghExecFileAsync, acquire, release, type LocalGitExecOptions } from '../../gh-utils'
-// Why: pure error helpers come from their own modules so tests that mock gh-utils still classify for real.
+// Keep real error parsing available when tests mock gh-utils.
 import { extractExecError } from '../../../git/exec-error'
 import { classifyRerunChecksError } from '../../gh-error-classification'
 import { resolveGitHubRepoExecution, type GitHubApiRepository } from '../../github-api-repository'
 import { getPRChecks } from './get-pr-checks'
 import { parseActionsRunId } from './check-detail-field-mapping'
+import { codeHostFailure, classifiedFailure } from '../../../../shared/code-host-failure-copy'
 export async function rerunPRChecks(
   repoPath: string,
   prNumber: number,
@@ -24,7 +25,7 @@ export async function rerunPRChecks(
     localGitOptions
   )
   if (!ownerRepo) {
-    return { ok: false, error: 'Could not resolve GitHub owner/repo for this repository' }
+    return codeHostFailure('github.repoUnresolved')
   }
 
   const checks = await getPRChecks(
@@ -54,12 +55,9 @@ export async function rerunPRChecks(
   )
 
   if (workflowRunIds.size === 0 && checkRunIds.size === 0) {
-    return {
-      ok: false,
-      error: options.failedOnly
-        ? 'No failed GitHub Actions checks to rerun.'
-        : 'No rerunnable checks found.'
-    }
+    return codeHostFailure(
+      options.failedOnly ? 'github.noFailedChecks' : 'github.noRerunnableChecks'
+    )
   }
 
   let count = 0
@@ -90,15 +88,14 @@ export async function rerunPRChecks(
     return { ok: true, count }
   } catch (err) {
     const { stderr } = extractExecError(err)
-    const classified = classifyRerunChecksError(stderr).message
-    // Why: these POSTs are not idempotent — say how many reruns already started so a retry isn't blind.
-    return {
-      ok: false,
-      error:
-        count > 0
-          ? `${classified} (${count} rerun${count === 1 ? '' : 's'} already started)`
-          : classified
-    }
+    const classified = classifyRerunChecksError(stderr)
+    // Rerun POSTs are not idempotent; report partial success before the user retries.
+    return count > 0
+      ? {
+          ok: false,
+          error: `${classified.message} (${count} rerun${count === 1 ? '' : 's'} already started)`
+        }
+      : classifiedFailure(classified)
   } finally {
     release()
   }

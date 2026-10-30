@@ -20,21 +20,6 @@ describe('dismissTerminalKeyboard', () => {
     expect(calls).toEqual(['clear', 'live-blur', 'command-blur', 'dismiss'])
   })
 
-  it('blurs both live and buffered command inputs', () => {
-    const liveInput = { blur: vi.fn() }
-    const commandInput = { blur: vi.fn() }
-
-    dismissTerminalKeyboard({
-      clearPendingLiveInputFocus: vi.fn(),
-      commandInput,
-      dismissKeyboard: vi.fn(),
-      liveInput
-    })
-
-    expect(liveInput.blur).toHaveBeenCalledTimes(1)
-    expect(commandInput.blur).toHaveBeenCalledTimes(1)
-  })
-
   it('dismisses the keyboard without a live input handle', () => {
     const commandInput = { blur: vi.fn() }
     const dismissKeyboard = vi.fn()

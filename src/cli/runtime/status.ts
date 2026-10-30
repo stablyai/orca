@@ -24,9 +24,7 @@ export async function getCliStatus(
         pid: null
       },
       runtime: {
-        // Why: distinguishing "never started" from "was running but died"
-        // gives the user a better signal about what happened. If the metadata
-        // file exists, Orca was running at some point.
+        // Existing metadata proves the runtime started at least once.
         state: metadata ? 'stale_bootstrap' : 'not_running',
         reachable: false,
         runtimeId: null
@@ -70,7 +68,7 @@ export async function getCliStatus(
       }
     })
   } catch (error) {
-    // Why: a denied caller cannot tell a live Orca from a dead one, so report the denial, not a state.
+    // Access denial does not establish runtime liveness.
     if (error instanceof RuntimeClientError && error.code === 'runtime_access_denied') {
       throw error
     }

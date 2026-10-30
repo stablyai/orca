@@ -18,7 +18,7 @@ export type UpdaterApi = {
   getLinuxPackageInstallInstructions: () => Promise<LinuxPackageInstallInstructions>
   /** Desktop-only. Reveals the revalidated cached package in the native file manager. */
   showLinuxPackage: () => Promise<void>
-  /** `force` bypasses the main-process list cache — the refresh button, not mount or channel switches. */
+  /** Use force to bypass the cache only for an explicit refresh. */
   listBuilds: (
     channel: ReleaseChannel,
     options?: { force?: boolean }

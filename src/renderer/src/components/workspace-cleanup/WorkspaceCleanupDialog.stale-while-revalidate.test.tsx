@@ -196,8 +196,7 @@ function progressTick(
 describe('WorkspaceCleanupDialog stale-while-revalidate', () => {
   beforeEach(() => {
     globalThis.IS_REACT_ACT_ENVIRONMENT = true
-    // Why Date-only fake: relative "Updated Xh ago" labels need a pinned clock,
-    // but flush() depends on real setTimeout.
+    // Fake Date only: labels need a fixed clock but flush uses real timers.
     vi.useFakeTimers({ toFake: ['Date'], now: NOW })
     const store = createTestStore()
     seedStore(store, {})
@@ -213,8 +212,7 @@ describe('WorkspaceCleanupDialog stale-while-revalidate', () => {
     if (root) {
       act(() => root?.unmount())
     }
-    // Why: broad-scan dedupe lives in slice module state; an unresolved scan
-    // left by one case would silently join into the next case's scan call.
+    // Settle module-global scan dedupe between cases so later tests cannot join a prior unresolved scan.
     for (const resolve of holders.rig?.resolvers ?? []) {
       resolve({ scannedAt: NOW, candidates: [], errors: [] })
     }
@@ -232,7 +230,6 @@ describe('WorkspaceCleanupDialog stale-while-revalidate', () => {
     await renderDialog()
     await openDialog()
 
-    // Full list from cache while the rescan is still streaming (unresolved).
     expect(rowNames()).toEqual(expect.arrayContaining(['alpha', 'beta']))
     expect(rig.scan).toHaveBeenCalledTimes(1)
     expect(container?.textContent).toContain('Updated 2h ago')
@@ -281,7 +278,6 @@ describe('WorkspaceCleanupDialog stale-while-revalidate', () => {
     })
     await flush()
 
-    // beta was not re-reported yet; it must still be on screen mid-refresh.
     expect(rowNames()).toEqual(expect.arrayContaining(['alpha', 'beta', 'gamma']))
   })
 
@@ -303,7 +299,6 @@ describe('WorkspaceCleanupDialog stale-while-revalidate', () => {
     })
     await flush()
 
-    // Filter applied mid-stream: only beta visible even as new rows arrive.
     expect(rowNames()).toEqual(['beta'])
 
     await act(async () => {
@@ -313,7 +308,6 @@ describe('WorkspaceCleanupDialog stale-while-revalidate', () => {
     await flush()
     expect(rowNames()).toEqual(expect.arrayContaining(['alpha', 'beta', 'gamma']))
 
-    // Rows stay selectable during the stream.
     const checkbox = rowCheckbox('alpha')
     expect(checkbox).not.toBeNull()
     const before = checkbox?.getAttribute('aria-checked')
@@ -405,7 +399,6 @@ describe('WorkspaceCleanupDialog stale-while-revalidate', () => {
     })
     await flush()
 
-    // Close at 40% and reopen: the same scan keeps streaming into the store.
     await act(async () => {
       holders.store.setState({ activeModal: null })
     })
@@ -443,11 +436,9 @@ describe('WorkspaceCleanupDialog stale-while-revalidate', () => {
     })
     await flush()
 
-    // Nothing is pre-selected: the dialog no longer acts on its own verdict.
     expect(rowCheckbox('alpha')?.getAttribute('aria-checked')).toBe('false')
     expect(rowCheckbox('beta')?.getAttribute('aria-checked')).toBe('false')
 
-    // The user selects both, which is what must survive the refresh.
     await act(async () => {
       rowCheckbox('alpha')?.click()
       rowCheckbox('beta')?.click()
@@ -461,7 +452,6 @@ describe('WorkspaceCleanupDialog stale-while-revalidate', () => {
     })
     await flush()
     expect(rig.scan).toHaveBeenCalledTimes(2)
-    // Selection survives while the refresh streams.
     expect(rowCheckbox('alpha')?.getAttribute('aria-checked')).toBe('true')
 
     await act(async () => {

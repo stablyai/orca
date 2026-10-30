@@ -166,8 +166,7 @@ describe('orca profile slice', () => {
   })
 
   it('releases switching state when main reports the profile is already active', async () => {
-    // Why: a stale renderer activeOrcaProfileId must not lock the switcher
-    // forever when no relaunch is actually coming.
+    // Stale active profile without a coming relaunch must not lock switcher forever.
     orcaProfilesApi.switchProfile.mockResolvedValue({ status: 'already-active' })
     const store = createTestStore()
     store.setState({ activeOrcaProfileId: 'local-default' })

@@ -1,34 +1,5 @@
-// Why: remotes minted or reused before #17828's narrow-refspec fix are stuck on the
-// wide `+refs/heads/*:refs/remotes/<name>/*` default, so any later plain `git fetch`
-// keeps re-importing the fork's whole branch set. This sweep rewrites each surviving
-// Orca-provenance `pr-*` remote's refspec to only the branches Orca actually tracked
-// for it, then deletes the refs the earlier wide fetch already imported for every other
-// branch (`git fetch --prune` cannot reclaim these once the refspec is narrow -- verified
-// against real git, see #17828 PR). It never deletes a remote (that is
-// `worktree-push-target-cleanup.ts`'s job) -- only narrows what a future fetch pulls.
-//
-// Candidate discovery also widens past worktree metadata to every `pr-*` remote on disk
-// (see `listRemoteNames` below): metadata-only discovery misses a remote whose every
-// worktree was removed outside preserve-on-delete (worktree gone *and* metadata purged,
-// not just the worktree) -- field data on a real repo found 15 of 31 fork remotes with no
-// branch pinning them at all, permanently invisible to metadata-only discovery and stuck
-// wide forever. For those, there's nothing to narrow *to*, so the sweep clears the fetch
-// refspec entirely instead (stays pushable, imports nothing on a plain fetch) -- gated on
-// the remote still carrying the untouched stock wide default, since a `pr`-prefixed name
-// alone isn't proof of Orca provenance the way a metadata entry is.
-//
-// Interaction with `worktree-push-target-reconciliation.ts` (#17842, orphaned `pr-*`
-// remote reclamation): the two sweeps fire from different lifecycle events (this one
-// from worktree creation, that one from worktree removal), rate-limit via separate
-// `Map<repoId, timestamp>` cooldowns, and so never share state or starve each other.
-// They *can* still race on the same remote if creation and removal happen close
-// together for the same repo, because both derive their candidate remotes from the
-// same worktree-metadata store: a remote reconciliation is about to reclaim (no live
-// worktree still claims it) can be one this sweep is concurrently narrowing (its stale
-// metadata entry hasn't been pruned from the store yet). `remoteHasUrl` re-checked both
-// before and after the narrowing writes closes the practical impact of that race down
-// to "reconciliation wins and this sweep's writes get cleaned back up" rather than a
-// stray url-less `remote.<name>.*` config section -- see the guard below.
+// Narrow legacy fork fetches and prune previously imported branches; include metadata-free pr-* remotes only with stock-wide refspecs.
+// Reconciliation can remove candidates concurrently; URL rechecks best-effort repair resurrected config without a cross-process lock.
 
 import { gitExecFileAsync } from '../git/runner'
 import {
@@ -44,9 +15,7 @@ import { iterateProcessOutputLines } from '../../shared/process-output-field-sca
 import type { GitRemoteExec, WorktreePushTargetStore } from './worktree-push-target-cleanup'
 
 const NEVER_MIGRATE_REMOTE_NAMES = new Set(['origin', 'upstream'])
-// Fork remotes are always minted as `pr-${slug}` (see pull-request-push-target.ts). Used
-// only as a secondary discovery signal below for remotes with zero metadata trace --
-// primary gating stays the wide-refspec check, not this prefix alone.
+// Prefix narrows metadata-free candidates; untouched wide refspec is the stronger migration gate.
 const PR_REMOTE_NAME_PREFIX = 'pr-'
 
 async function listRemoteNames(execGit: GitRemoteExec, repoPath: string): Promise<string[]> {
@@ -58,7 +27,6 @@ async function listRemoteNames(execGit: GitRemoteExec, repoPath: string): Promis
   }
 }
 
-/** `pushTarget`-derived branches to keep per remote, gated on at least one entry proving Orca created it. */
 function collectProvenBranchesByRemote(
   store: WorktreePushTargetStore,
   repoId: string
@@ -85,8 +53,7 @@ function collectProvenBranchesByRemote(
   return branchesByRemote
 }
 
-// `branch.<name>.remote`/`.pushRemote` config can outlive worktree metadata (preserve-on-delete),
-// so a branch it protects is still worth keeping narrowly tracked even with no metadata left.
+// Preserved branch config can outlive metadata; retain those existing branches in narrow tracking.
 async function collectBranchesFromLocalConfig(
   execGit: GitRemoteExec,
   repoPath: string,
@@ -111,10 +78,7 @@ async function collectBranchesFromLocalConfig(
   return branches
 }
 
-/**
- * Exported for tests: the `execGit` seam drives the migration matrix without a real repo.
- * Returns the names of remotes actually rewritten (wide -> narrow, then pruned).
- */
+/** Return rewritten remotes after narrowing and best-effort local ref pruning. */
 export async function migrateForkRemoteRefspecsWithExec(
   repoPath: string,
   repoId: string,
@@ -122,11 +86,7 @@ export async function migrateForkRemoteRefspecsWithExec(
   execGit: GitRemoteExec
 ): Promise<string[]> {
   const branchesByRemote = collectProvenBranchesByRemote(store, repoId)
-  // Why: `branchesByRemote` only surfaces remotes with a *surviving* worktree-metadata
-  // entry. A remote whose every worktree was removed outside preserve-on-delete (metadata
-  // purged, not just the worktree) is invisible to it -- field data on a real repo found
-  // 15 of 31 fork remotes with zero branch pinning at all, still stuck wide. Widen
-  // discovery to every `pr-*` remote on disk so those aren't silently skipped forever.
+  // External removal can purge every metadata trace; also discover on-disk pr-* remotes.
   const candidateNames = new Set(branchesByRemote.keys())
   for (const remoteName of await listRemoteNames(execGit, repoPath)) {
     if (remoteName.startsWith(PR_REMOTE_NAME_PREFIX)) {
@@ -143,16 +103,12 @@ export async function migrateForkRemoteRefspecsWithExec(
       branches.add(branch)
     }
     if (!(await remoteHasUrl(execGit, repoPath, remoteName))) {
-      continue // config references a remote that no longer exists
+      continue
     }
     const before = await getRemoteFetchRefspecs(execGit, repoPath, remoteName)
     const wasWide = before.includes(wildcardForkFetchRefspec(remoteName))
     if (branches.size === 0) {
-      // No metadata and no branch config pins this remote to anything -- there's nothing
-      // to narrow *to*. Only act if it's still the untouched stock wide default: that's
-      // the strongest available signal this came from a bare `git remote add` (ours or a
-      // pre-#17828 Orca's), not a `pr`-prefixed remote a user configured by hand. Clears
-      // rather than deletes -- removing the remote outright stays #17842's job.
+      // Unpinned stock-wide remotes can stop fetching without removal; preserve custom refspecs on user-configured remotes.
       if (!wasWide) {
         continue
       }
@@ -162,14 +118,7 @@ export async function migrateForkRemoteRefspecsWithExec(
         await ensureRemoteTracksBranchNarrowly(execGit, repoPath, remoteName, branch)
       }
     }
-    // #17842's reconciliation sweep can concurrently `remote remove` this same
-    // remote (both sweeps derive their candidate list from the same, possibly-stale,
-    // worktree metadata). `remote remove` deletes the whole `remote.<name>.*` section,
-    // but `ensureRemoteTracksBranchNarrowly` above would have just resurrected a
-    // url-less `fetch`/`tagOpt` section via plain `config --add`, which doesn't care
-    // whether the remote "exists". Detect that and clean up instead of leaving ghost
-    // config behind -- narrows but does not close the race (no cross-process lock
-    // exists), so this is a best-effort self-heal, not a guarantee.
+    // Concurrent removal may leave config-only ghosts; recheck URL and repair best-effort without claiming a lock.
     if (!(await remoteHasUrl(execGit, repoPath, remoteName))) {
       await execGit(['config', '--remove-section', `remote.${remoteName}`], repoPath).catch(
         () => {}
@@ -177,18 +126,16 @@ export async function migrateForkRemoteRefspecsWithExec(
       continue
     }
     if (!wasWide) {
-      continue // already narrow (minted post-fix, or a prior sweep already ran); nothing to prune
+      continue
     }
-    // Best-effort: the refspec is narrowed regardless of whether this local ref cleanup
-    // succeeds. Purely local (no network), so failures here should be rare/unexpected.
+    // Ref pruning is local and best-effort; fetch narrowing survives cleanup failure.
     await pruneUntrackedForkRemoteRefs(execGit, repoPath, remoteName, branches).catch(() => [])
     migrated.push(remoteName)
   }
   return migrated
 }
 
-// Why: the sweep costs a handful of git subprocesses per candidate remote; bound to once
-// per repo per cooldown so bursts of worktree creates don't repeat it.
+// Rate-limit subprocess-heavy migration per repo across bursts of worktree creation.
 const MIGRATE_COOLDOWN_MS = 60 * 60 * 1000
 const lastMigratedAtByRepoId = new Map<string, number>()
 

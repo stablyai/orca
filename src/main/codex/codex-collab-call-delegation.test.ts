@@ -1,7 +1,3 @@
-// A running chat holds a subagent's section open while the parent's newest row delegates to it.
-// In Codex's default multi-agent mode that row is the collab call the host writes as a tool row,
-// so the rows the real adapter publishes must read as a delegation to the helper they name.
-
 import { describe, expect, it } from 'vitest'
 import { codexCollabRowAgentIds } from '../../shared/codex-collab-agent-tools'
 import { projectNativeChatTranscript } from '../../shared/native-chat-transcript-projection'
@@ -25,7 +21,6 @@ import {
 } from './codex-collab-call-frames-fixture'
 import { THREAD_ID } from './codex-structured-session-adapter-fixture'
 
-/** The delegation the parent's newest tool run reads as, the row a running chat's frontier judges. */
 async function newestRunDelegation(frames: Frame[]): Promise<NativeChatSubagentDelegation | null> {
   const { conversation } = projectNativeChatTranscript(
     projectStructuredAgentSessionMessages(await publishedRows(frames), [], [])

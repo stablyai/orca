@@ -13,20 +13,16 @@ import type {
 } from '../../shared/browser-workspace-types'
 import {
   applyPendingBrowserCookieImports,
-  clearPendingBrowserCookieImport,
-  setPendingBrowserCookieImport
+  clearPendingBrowserCookieImport
 } from './browser-session-cookie-staging'
 import {
   BROWSER_SESSION_META_FILE_NAME,
+  forgetBrowserSessionProfileMeta,
   loadBrowserSessionMeta,
   persistBrowserSessionMeta
 } from './browser-session-meta-store'
 import type { BrowserSessionMeta } from './browser-session-meta-store'
-import {
-  forgetBrowserSessionPartitionConfiguration,
-  installBrowserSessionPartitionPolicies,
-  retireBrowserSessionUserAgentPolicy
-} from './browser-session-partition-policies'
+import { installBrowserSessionPartitionPolicies } from './browser-session-partition-policies'
 import {
   isValidPersistedBrowserSessionProfile,
   inspectRetiredBrowserSessionProfileUserAgentModes
@@ -35,27 +31,34 @@ import {
   clearBrowserRoutePartitionPolicies,
   installBrowserRoutePartitionPolicies
 } from './browser-session-route-policies'
-import { retireProxySessionApplication } from '../network/proxy-settings'
-import { invalidateBrowserSessionProxyApplication } from './browser-session-proxy'
-import { retireFailedBrowserSessionProfile } from './browser-session-profile-retirement'
-import { cancelBrowserWebAuthnAccountRequestsForSession } from './browser-webauthn-account-picker'
+import {
+  retireDeletedBrowserSessionProfile,
+  retireFailedBrowserSessionProfile
+} from './browser-session-profile-retirement'
 import { getCanonicalUserDataPath } from '../persistence/loading-store/user-data-path'
 import { markBrowserIdentityMigrationNoticePending } from './browser-identity-mode-store'
 import { forgetBrowserSitePermissions } from './browser-site-permission-store'
 import { forgetBrowserSiteDisplay } from './browser-site-display-store'
+import { attachBrowserExtensionsToProfileSession } from './extensions/browser-extension-session-loader'
+
+type ExtensionIdListKey = 'enabledExtensionIdsByProfileId' | 'pinnedExtensionIdsByProfileId'
+type ExtensionIdListUpdate = (byProfile: Record<string, string[]>) => Record<string, string[]>
 
 export type BrowserSessionRegistryProfileOptions = {
   orcaProfileId: string
   profileDirectory: string
 }
 
-// Why: source of truth for valid partitions; will-attach-webview consults it so a compromised renderer can't smuggle in an arbitrary partition.
+// This registry supplies the partition allowlist used by will-attach-webview.
 
 class BrowserSessionRegistry {
   private readonly profiles = new Map<string, BrowserSessionProfile>()
   private activeOrcaProfileId = DEFAULT_LOCAL_ORCA_PROFILE_ID
   private metadataPathOverride: string | null = null
   private defaultPartition = ORCA_BROWSER_PARTITION
+  // Why: profiles change from IPC, the CLI and managed-profile owners; open windows and paired clients only learn of it here.
+  onProfilesChanged: (() => void) | null = null
+  onProfileDeleted: ((profileId: string) => Promise<void>) | null = null
 
   constructor() {
     this.resetDefaultProfile()
@@ -80,7 +83,6 @@ class BrowserSessionRegistry {
     })
   }
 
-  // Why: source metadata must persist across restarts (for the Settings import status) since the registry is in-memory only.
   private get metadataPath(): string {
     return (
       this.metadataPathOverride ?? join(app.getPath('userData'), BROWSER_SESSION_META_FILE_NAME)
@@ -99,7 +101,6 @@ class BrowserSessionRegistry {
     this.persistMeta({ defaultSource: source })
   }
 
-  // Why: non-default profiles are in-memory only; without this they vanish on restart.
   private persistProfiles(): void {
     const nonDefault = [...this.profiles.values()].filter((p) => p.id !== 'default')
     this.persistMeta({ profiles: nonDefault })
@@ -109,8 +110,7 @@ class BrowserSessionRegistry {
     return loadBrowserSessionMeta(() => this.metadataPath, this.defaultPartition)
   }
 
-  // Why: run before any webview loads, and set the UA before the first request or Electron's default UA invalidates imported cookies.
-  // Why re-read defaultSource: the constructor may run before app.isReady() (userData path unavailable), so loadPersistedSource() returned null.
+  // Restore profiles and their policies before any webview loads.
   initializeBrowserSessionsFromPersistedState(): void {
     const meta = this.loadPersistedMeta()
     const migration = inspectRetiredBrowserSessionProfileUserAgentModes(
@@ -118,7 +118,7 @@ class BrowserSessionRegistry {
       this.activeOrcaProfileId
     )
     if (migration.noticePending) {
-      // Why scoped: identity persistence must never reject browser-session startup.
+      // Migration bookkeeping must not block session startup.
       void markBrowserIdentityMigrationNoticePending(
         getCanonicalUserDataPath(),
         migration.degraded
@@ -131,17 +131,46 @@ class BrowserSessionRegistry {
       }
     }
     if (meta.profiles.length > 0) {
-      this.hydrateFromPersisted(meta.profiles)
+      this.hydrateFromPersisted(meta.profiles, meta.enabledExtensionIdsByProfileId)
     }
 
-    // Why: nothing else installs policies on the default partition (hydrate skips it), so without this its guest permissions would be denied.
+    // Hydration skips the default profile, so install its policies separately.
     const defaultProfile = this.getDefaultProfile()
     void installBrowserSessionPartitionPolicies(defaultProfile).catch(() => {
       console.warn('[proxy] Failed to apply proxy to browser partition', defaultProfile.partition)
     })
+    this.attachExtensions(defaultProfile, meta.enabledExtensionIdsByProfileId.default ?? [])
   }
 
-  // Why: must run before any session.fromPartition() so CookieMonster reads the staged cookies instead of overwriting them from its in-memory DB.
+  // Why here and not in the partition installer: that installer also serves route, SSH and
+  // doc-preview partitions, and release 1 runs extensions only in local browser profiles.
+  private attachExtensions(
+    profile: BrowserSessionProfile,
+    enabledExtensionIds = this.getEnabledExtensionIds(profile.id)
+  ): void {
+    attachBrowserExtensionsToProfileSession(profile, enabledExtensionIds)
+  }
+
+  getEnabledExtensionIds(profileId: string): string[] {
+    return this.loadPersistedMeta().enabledExtensionIdsByProfileId[profileId] ?? []
+  }
+
+  updateEnabledExtensionIds(update: ExtensionIdListUpdate): void {
+    this.updateExtensionIdList('enabledExtensionIdsByProfileId', update)
+  }
+
+  getPinnedExtensionIds(profileId: string): string[] {
+    return this.loadPersistedMeta().pinnedExtensionIdsByProfileId[profileId] ?? []
+  }
+
+  updatePinnedExtensionIds(update: ExtensionIdListUpdate): void {
+    this.updateExtensionIdList('pinnedExtensionIdsByProfileId', update)
+  }
+
+  private updateExtensionIdList(key: ExtensionIdListKey, update: ExtensionIdListUpdate): void {
+    this.persistMeta({ [key]: update(this.loadPersistedMeta()[key]) })
+  }
+
   applyPendingCookieImport(): void {
     applyPendingBrowserCookieImports({
       resolveMetadataPath: () => this.metadataPath,
@@ -150,16 +179,6 @@ class BrowserSessionRegistry {
     })
   }
 
-  setPendingCookieImport(partition: string, stagingDbPath: string): void {
-    setPendingBrowserCookieImport({
-      resolveMetadataPath: () => this.metadataPath,
-      defaultPartition: this.defaultPartition,
-      partition,
-      stagingDbPath
-    })
-  }
-
-  // Why: a degraded import still rewrites the live session, so an older staged DB must stop replaying over it.
   clearPendingCookieImport(partition: string): void {
     clearPendingBrowserCookieImport({
       resolveMetadataPath: () => this.metadataPath,
@@ -196,7 +215,6 @@ class BrowserSessionRegistry {
 
   resolveKnownPartition(profileId: string | null | undefined): string | null {
     if (!profileId) {
-      // Why: use the active Orca profile's default partition, not the legacy constant, or profiles resolve local-default's cookie jar.
       return this.defaultPartition
     }
     return this.profiles.get(profileId)?.partition ?? null
@@ -222,22 +240,16 @@ class BrowserSessionRegistry {
 
   async createProfile(
     scope: BrowserSessionProfileScope,
-    label: string
+    label: string,
+    owner?: BrowserSessionProfile['owner']
   ): Promise<BrowserSessionProfile | null> {
-    // Why: the registry is also an IPC boundary, so runtime types alone cannot keep invalid values out of persisted metadata.
+    // IPC callers can pass values outside the TypeScript scope union.
     if (scope !== 'isolated' && scope !== 'imported') {
       return null
     }
     const id = randomUUID()
-    // Why: deterministic partition-from-id lets main rebuild the allowlist on restart without a separate partition→profile map.
     const partition = getOrcaProfileBrowserSessionPartition(this.activeOrcaProfileId, id)
-    const profile: BrowserSessionProfile = {
-      id,
-      scope,
-      partition,
-      label,
-      source: null
-    }
+    const profile: BrowserSessionProfile = { id, scope, partition, label, source: null, owner }
     try {
       await installBrowserSessionPartitionPolicies(profile)
     } catch (error) {
@@ -246,6 +258,8 @@ class BrowserSessionRegistry {
     }
     this.profiles.set(id, profile)
     this.persistProfiles()
+    this.attachExtensions(profile)
+    this.onProfilesChanged?.()
     return profile
   }
 
@@ -264,6 +278,7 @@ class BrowserSessionRegistry {
     } else {
       this.persistProfiles()
     }
+    this.onProfilesChanged?.()
     return updated
   }
 
@@ -274,43 +289,19 @@ class BrowserSessionRegistry {
     }
     this.profiles.delete(profileId)
     this.persistProfiles()
+    this.onProfilesChanged?.()
     forgetBrowserSitePermissions(profileId)
     forgetBrowserSiteDisplay(profileId)
-    const meta = this.loadPersistedMeta()
-    const pendingCookieImports = { ...meta.pendingCookieImports }
-    delete pendingCookieImports[profile.partition]
-    const defaultPendingImport = pendingCookieImports[this.defaultPartition]
-    this.persistMeta({
-      pendingCookieImports,
-      pendingCookieDbPath: typeof defaultPendingImport === 'string' ? defaultPendingImport : null
-    })
-
-    // Why: clear the partition's storage so deleting a profile doesn't leave orphaned cookies/cache behind.
-    try {
-      const sess = session.fromPartition(profile.partition)
-      forgetBrowserSessionPartitionConfiguration(profile.partition)
-      retireBrowserSessionUserAgentPolicy(sess)
-      invalidateBrowserSessionProxyApplication(sess)
-      const release = retireProxySessionApplication(sess)
-      // Why: persistent partitions can retain service workers after every WebContents dies, so a retired session's deny policies must remain permanent.
-      cancelBrowserWebAuthnAccountRequestsForSession(sess)
-      try {
-        await release
-      } catch {
-        console.warn('[proxy] Failed to release proxy from browser partition', profile.partition)
-      }
-      await sess.clearStorageData()
-      await sess.clearCache()
-    } catch {
-      // Why: cleanup is best-effort — the profile is already out of the registry, so will-attach-webview blocks it regardless.
-    }
+    this.persistMeta(
+      forgetBrowserSessionProfileMeta(this.loadPersistedMeta(), profile, this.defaultPartition)
+    )
+    await retireDeletedBrowserSessionProfile(profile, () => this.onProfileDeleted?.(profileId))
     return true
   }
 
-  // Why: lets users undo a cookie import without deleting the default profile itself.
   async clearDefaultSessionCookies(): Promise<boolean> {
     try {
-      // Why: persist metadata before clearing storage so a mid-clear quit doesn't leave a stale "imported from X" badge.
+      // Clear import metadata first so quitting during storage cleanup cannot leave a stale source badge.
       const defaultProfile = this.profiles.get('default')
       if (defaultProfile) {
         this.profiles.set('default', { ...defaultProfile, source: null })
@@ -323,6 +314,7 @@ class BrowserSessionRegistry {
         pendingCookieDbPath: null,
         pendingCookieImports
       })
+      this.onProfilesChanged?.()
 
       const sess = session.fromPartition(this.defaultPartition)
       await sess.clearStorageData({ storages: ['cookies'] })
@@ -332,7 +324,10 @@ class BrowserSessionRegistry {
     }
   }
 
-  hydrateFromPersisted(profiles: BrowserSessionProfile[]): void {
+  hydrateFromPersisted(
+    profiles: BrowserSessionProfile[],
+    enabledExtensionIdsByProfileId = this.loadPersistedMeta().enabledExtensionIdsByProfileId
+  ): void {
     for (const profile of profiles) {
       if (!isValidPersistedBrowserSessionProfile(profile, this.activeOrcaProfileId)) {
         continue
@@ -342,6 +337,7 @@ class BrowserSessionRegistry {
         void installBrowserSessionPartitionPolicies(profile).catch(() => {
           console.warn('[proxy] Failed to apply proxy to browser partition', profile.partition)
         })
+        this.attachExtensions(profile, enabledExtensionIdsByProfileId[profile.id] ?? [])
       }
     }
   }

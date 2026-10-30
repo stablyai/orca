@@ -63,10 +63,7 @@ export function registerTerminalPtyExitWaiterTests(): void {
     })
   })
 
-  // Why: the liveness sweep clears `connected` with no exit code for every PTY behind a
-  // dropped relay, so a record in that state is a lost connection to a process that may
-  // still be running. Reading it as an exit retires a live lease and emits `end`, which the
-  // phone rearms against three times and then locks the composer on "Waiting for terminal…".
+  // Disconnected without an exit code means lost contact, not process exit; false end events exhaust phone retries and lock its composer.
   describe('PTY exit subscription demands proof of exit, not loss of connection', () => {
     function dropTheConnection(runtime: OrcaRuntimeService): void {
       const pty = internals(runtime).ptysById.get('pty-1')!

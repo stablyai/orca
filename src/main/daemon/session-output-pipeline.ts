@@ -1,16 +1,18 @@
 import { SessionOutputPlane } from './session-output-plane'
 import { TerminalShellRecoveryBarrier } from './terminal-shell-recovery-barrier'
 import type { SubprocessHandle } from './session-subprocess-handle'
+import { release } from 'node:os'
+import type { PtyOwnerBackend } from '../../shared/pty-owner-backend'
+import { windowsPtyForOwnerBackend } from '../../shared/xterm-conpty-options'
 
-/** The session's ordered output pipeline: the recovery barrier feeding the
- *  output plane. Built together because the barrier's owner is what the
- *  plane's snapshots publish, and the plane's emit is the barrier's sink. */
+/** Couple barrier emissions and snapshot ownership so neither can lag the output plane. */
 export function createSessionOutputPipeline(opts: {
   cols: number
   rows: number
   scrollback?: number | undefined
   wslDistro?: string | undefined
   historySeedChunks?: readonly string[] | undefined
+  ownerBackend?: PtyOwnerBackend | undefined
   subprocess: SubprocessHandle
   isAlive: () => boolean
 }): { output: SessionOutputPlane; recoveryBarrier: TerminalShellRecoveryBarrier } {
@@ -22,6 +24,7 @@ export function createSessionOutputPipeline(opts: {
     scrollback: opts.scrollback,
     wslDistro: opts.wslDistro,
     historySeedChunks: opts.historySeedChunks,
+    windowsPty: windowsPtyForOwnerBackend(opts.ownerBackend, release()),
     getTerminalOwner: () => barrier?.getOwner()
   })
   const recoveryBarrier = new TerminalShellRecoveryBarrier({

@@ -147,7 +147,7 @@ describe('a records frame in the window', () => {
 
   it('shows a frame of only tab rows without reading the window’s session back', async () => {
     const { store, first, writes, send, close } = await boot()
-    // The apply check runs the full build itself; this counts only the window's own calls.
+    // Exclude reference builds performed by apply checker; count only window calls.
     check.uninstall()
     vi.mocked(buildWorkspaceSessionPayload).mockClear()
     vi.mocked(loadWorkspaceLayoutWithoutReport).mockClear()
@@ -161,7 +161,6 @@ describe('a records frame in the window', () => {
     expect(writes).toHaveBeenCalledTimes(1)
     expect(buildWorkspaceSessionPayload).not.toHaveBeenCalled()
     expect(loadWorkspaceLayoutWithoutReport).not.toHaveBeenCalled()
-    // Presence: the rows changed.
     expect(store.getState().tabsByWorktree[GIT_KEY]![99]!.generatedTitle).toBe('Title 99')
     close()
   })

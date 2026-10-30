@@ -102,7 +102,7 @@ visible: r-angstrom::/w/angstrom r-angstrom::/w/angstrom r-angstrom::/w/ångstr�
 HEADER key=project-group:pg-angstrom label="angstrom" count=1 tone="text-foreground" icon=FolderTree projectGroup=pg-angstrom projectGroupDepth=0
 FOLDER key=folder-workspace:local|folder:fw-eclair projectGroup=pg-angstrom depth=0 groupDepth=1
 HEADER key=project-group:pg-angstrom-accent label="ångström" count=1 tone="text-foreground" icon=FolderTree projectGroup=pg-angstrom-accent projectGroupDepth=0
-HEADER key=project:repo:r-angstrom label="ångström" count=3 tone="text-foreground" icon=FolderTree repo=r-angstrom projectGroupDepth=1
+HEADER key=project:repo:r-angstrom label="ångström" count=3 tone="text-foreground" icon=FolderTree repo=r-angstrom projectGroupDepth=1 hostCounts={ssh:gpu-vm:1 local:2} hostIds={ssh:gpu-vm:[r-angstrom::/w/angstrom] local:[r-angstrom::/w/angstrom,r-angstrom::/w/ångström]}
 ITEM rowKey=project:repo:r-angstrom:ssh:gpu-vm|r-angstrom::/w/angstrom depth=0 groupDepth=1 children=0 hostLabel="GPU VM" placement=natural owning=project:repo:r-angstrom path=project-group:pg-angstrom-accent>project:repo:r-angstrom
 ITEM rowKey=project:repo:r-angstrom:|r-angstrom::/w/angstrom depth=0 groupDepth=1 children=0 hostLabel="Local Linux" placement=natural owning=project:repo:r-angstrom path=project-group:pg-angstrom-accent>project:repo:r-angstrom
 ITEM rowKey=project:repo:r-angstrom:|r-angstrom::/w/ångström depth=0 groupDepth=1 lastChild=true children=0 hostLabel="Local Linux" placement=natural owning=project:repo:r-angstrom path=project-group:pg-angstrom-accent>project:repo:r-angstrom
@@ -142,7 +142,7 @@ visible: r-eclair::/w/w10 r-eclair::/w/zebra r-angstrom::/w/angstrom r-angstrom:
 HEADER key=project-group:pg-angstrom label="angstrom" count=1 tone="text-foreground" icon=FolderTree projectGroup=pg-angstrom projectGroupDepth=0
 FOLDER key=folder-workspace:local|folder:fw-eclair projectGroup=pg-angstrom depth=0 groupDepth=1
 HEADER key=project-group:pg-angstrom-accent label="ångström" count=1 tone="text-foreground" icon=FolderTree projectGroup=pg-angstrom-accent projectGroupDepth=0
-HEADER key=project:repo:r-angstrom label="ångström" count=3 tone="text-foreground" icon=FolderTree repo=r-angstrom projectGroupDepth=1
+HEADER key=project:repo:r-angstrom label="ångström" count=3 tone="text-foreground" icon=FolderTree repo=r-angstrom projectGroupDepth=1 hostCounts={ssh:gpu-vm:1 local:2} hostIds={ssh:gpu-vm:[r-angstrom::/w/angstrom] local:[r-angstrom::/w/angstrom,r-angstrom::/w/ångström]}
 ITEM rowKey=project:repo:r-angstrom:ssh:gpu-vm|r-angstrom::/w/angstrom depth=0 groupDepth=1 children=0 hostLabel="GPU VM" placement=natural owning=project:repo:r-angstrom path=project-group:pg-angstrom-accent>project:repo:r-angstrom
 ITEM rowKey=project:repo:r-angstrom:|r-angstrom::/w/angstrom depth=0 groupDepth=1 children=0 hostLabel="Local Linux" placement=natural owning=project:repo:r-angstrom path=project-group:pg-angstrom-accent>project:repo:r-angstrom
 ITEM rowKey=project:repo:r-angstrom:|r-angstrom::/w/ångström depth=0 groupDepth=1 lastChild=true children=0 hostLabel="Local Linux" placement=natural owning=project:repo:r-angstrom path=project-group:pg-angstrom-accent>project:repo:r-angstrom
@@ -182,7 +182,7 @@ visible: r-angstrom::/w/angstrom r-angstrom::/w/angstrom r-angstrom::/w/ångstr�
 HEADER key=project-group:pg-angstrom label="angstrom" count=1 tone="text-foreground" icon=FolderTree projectGroup=pg-angstrom projectGroupDepth=0
 FOLDER key=folder-workspace:local|folder:fw-eclair projectGroup=pg-angstrom depth=0 groupDepth=1
 HEADER key=project-group:pg-angstrom-accent label="ångström" count=1 tone="text-foreground" icon=FolderTree projectGroup=pg-angstrom-accent projectGroupDepth=0
-HEADER key=project:repo:r-angstrom label="ångström" count=3 tone="text-foreground" icon=FolderTree repo=r-angstrom projectGroupDepth=1
+HEADER key=project:repo:r-angstrom label="ångström" count=3 tone="text-foreground" icon=FolderTree repo=r-angstrom projectGroupDepth=1 hostCounts={ssh:gpu-vm:1 local:2} hostIds={ssh:gpu-vm:[r-angstrom::/w/angstrom] local:[r-angstrom::/w/angstrom,r-angstrom::/w/ångström]}
 ITEM rowKey=project:repo:r-angstrom:ssh:gpu-vm|r-angstrom::/w/angstrom depth=0 groupDepth=1 children=0 hostLabel="GPU VM" placement=natural owning=project:repo:r-angstrom path=project-group:pg-angstrom-accent>project:repo:r-angstrom
 ITEM rowKey=project:repo:r-angstrom:|r-angstrom::/w/angstrom depth=0 groupDepth=1 children=0 hostLabel="Local Linux" placement=natural owning=project:repo:r-angstrom path=project-group:pg-angstrom-accent>project:repo:r-angstrom
 ITEM rowKey=project:repo:r-angstrom:|r-angstrom::/w/ångström depth=0 groupDepth=1 lastChild=true children=0 hostLabel="Local Linux" placement=natural owning=project:repo:r-angstrom path=project-group:pg-angstrom-accent>project:repo:r-angstrom

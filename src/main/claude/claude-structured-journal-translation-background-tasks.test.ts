@@ -18,9 +18,7 @@ import { blockOf } from './claude-background-task-row-test-support'
 import { withJournalQueueMembers } from '../native-chat/agent-session-wire/structured-agent-session-journal-double-test-support'
 import { testEventSinkLogging } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
 
-// The frames below are the ones the reported session actually carried: two real
-// failures that printed THREE red rows whose visible text was the wire opcode,
-// two of them for the same task.
+// Captured failures formerly produced duplicate rows displaying wire opcodes.
 const TASK_ID = 'byjnee2no'
 const SUMMARY = 'Background command "Wait for the verification verdict" failed with exit code 1'
 
@@ -51,7 +49,6 @@ function harness() {
   return {
     translator,
     items,
-    /** Generic unknown-frame rows — the ones that printed `claude · <opcode>`. */
     fallbackRows: () => rowsWithPrefix('provider-frame:').map(textOf),
     taskRowIds: () =>
       items
@@ -69,9 +66,7 @@ function systemFrame(fields: Record<string, unknown>) {
   }
 }
 
-/** The assistant turn that invokes the spawn tool. Admission consults it: a task
- *  whose spawning tool never reached the transcript is a nested child, so every
- *  realistic sequence forwards this first. */
+/** Forward root tool calls before task frames so admission can distinguish nested work. */
 function spawnToolCall(
   translator: ReturnType<typeof harness>['translator'],
   toolUseId = 'toolu_01CqPd7y'
@@ -158,7 +153,7 @@ function persistedTarget(
           visit(itemId, 0, body)
         }
       },
-      // This double keeps no producer linkage, so every row reads as the session's own.
+      // No producer linkage: all fixture rows belong to the session.
       visitItemsWithLinkage: ((visit) => {
         persisted.forEach((body, itemId) => visit(itemId, 0, body, {}))
       }) satisfies StructuredAgentSessionLinkageJournal['visitItemsWithLinkage'],
@@ -523,18 +518,12 @@ describe('claude journal translation — background task rows', () => {
     const { translator, fallbackRows, taskRowIds, taskRowTexts } = harness()
     playFailedBackgroundCommand(translator)
 
-    // When a payload search decided failures, this was `['claude ·
-    // message:system:task_updated', 'claude · message:system:task_notification']`.
     expect(fallbackRows()).toEqual([])
-    // One durable row for one task, however many frames reported it.
     expect(new Set(taskRowIds())).toEqual(new Set([`claude-background-task:${TASK_ID}`]))
     expect(taskRowTexts().at(-1)).toBe(SUMMARY)
   })
 
   it('reports a failure for a task nothing in this transcript ever admitted', () => {
-    // The captured frame from a session where NOTHING rendered: the typed path
-    // declined the row and told the fallback the frame was covered, so the
-    // failure reached neither surface.
     const { translator, fallbackRows, taskRowIds, taskRowTexts } = harness()
     translator.handle(
       systemFrame({
@@ -550,8 +539,6 @@ describe('claude journal translation — background task rows', () => {
 
     expect(taskRowIds()).toEqual(['claude-background-task:bjzenpq13'])
     expect(taskRowTexts().at(-1)).toBe('Locate the exact screenshot session')
-    // One row, not two: the typed row is real coverage, so the generic fallback
-    // stays quiet beside it rather than printing the opcode.
     expect(fallbackRows()).toEqual([])
   })
 
@@ -563,7 +550,6 @@ describe('claude journal translation — background task rows', () => {
         tasks: [{ task_id: TASK_ID, status: 'failed', task_type: 'local_bash' }]
       })
     )
-    // The task's own frames own its row; a nested status never makes one here.
     expect(fallbackRows()).toEqual([])
     expect(taskRowIds()).toEqual([])
   })
@@ -732,8 +718,6 @@ describe('claude journal translation — background task rows', () => {
   })
   it('keeps a nested child spawned inside a sidechain off the top-level transcript', () => {
     const { translator, taskRowIds, fallbackRows } = harness()
-    // The spawn tool call is emitted by a SUBAGENT, so it carries a parent tool
-    // id and is never a top-level invocation.
     translator.handle({
       type: 'message' as const,
       sessionId: 'orca-session',

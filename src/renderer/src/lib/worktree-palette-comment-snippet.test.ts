@@ -3,9 +3,7 @@ import { extractWorktreePaletteCommentSnippet } from './worktree-palette-comment
 
 const EMOJI = '\u{1F680}'
 
-// Why not `isWellFormed` alone: it only proves no half-pair survived, which an
-// implementation that DELETES the emoji satisfies just as well. The retained span must
-// be a contiguous slice of the source, so nothing may be dropped out of its middle.
+// isWellFormed alone also accepts deleted emoji; require a contiguous source span to catch dropped characters.
 function expectContiguousSlice(text: string, comment: string): void {
   const core = text.replace(/^\u2026/, '').replace(/\u2026$/, '')
   expect(comment).toContain(core)
@@ -23,9 +21,7 @@ describe('extractWorktreePaletteCommentSnippet', () => {
     expect(text.slice(matchRange.start, matchRange.end)).toBe('infra')
   })
 
-  // CJK carries no whitespace, so both boundary loops always exhaust their 10 iterations and
-  // stop wherever the raw code-unit arithmetic put them — which can be mid-surrogate-pair.
-  // Sweeping the emoji past the cut while the match stays put covers both halves of the pair.
+  // CJK exhausts both 10-step whitespace scans; sweep emoji across cuts to cover either split surrogate half.
   it('never splits a surrogate pair at the leading edge', () => {
     let keptEmoji = 0
     for (let offset = 0; offset < 40; offset += 1) {
@@ -43,8 +39,7 @@ describe('extractWorktreePaletteCommentSnippet', () => {
         keptEmoji += 1
       }
     }
-    // Why: the boundary iterations are the point of the loop — if the snap dropped the
-    // emoji on every one of them, the assertions above would still all pass.
+    // Require boundary iterations or dropping emoji every time would still pass the assertions above.
     expect(keptEmoji).toBeGreaterThan(0)
   })
 

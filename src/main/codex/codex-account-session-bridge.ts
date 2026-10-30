@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync } from 'node:fs'
+import { existsSync, mkdirSync, rmdirSync } from 'node:fs'
 import { dirname, join, relative } from 'node:path'
 import { normalizeRuntimePathForComparison } from '../../shared/cross-platform-path'
 import { listCodexSessionRolloutFilesIncrementally } from './codex-session-file-listing'
@@ -8,28 +8,20 @@ import {
   healCodexAccountSessionIndex
 } from './codex-account-session-index-heal'
 import { parseCodexRolloutThreadId } from './codex-session-index-heal-state'
-import { linkCodexSessionFile } from './codex-session-link'
+import { linkCodexSessionFile, tryHardlinkCodexSessionFile } from './codex-session-link'
 import {
   countCodexSessionFilesUpTo,
   findNewestCodexStateDbPath,
   readCodexStateDbBackfillStatus
 } from './codex-state-db'
 
-/**
- * Bridges Codex history between Orca-managed Codex homes.
- *
- * Why: a managed account launches Codex against its own self-contained
- * CODEX_HOME, and Codex's `/resume` picker only lists rollouts under that home.
- * Without this, switching accounts hides every conversation the user recorded
- * under a different account (or under their real ~/.codex). Rollouts are
- * hardlinked, so each conversation stays one physical log no matter how many
- * homes list it.
- */
-
+// Hardlink history across homes so account switching preserves /resume entries and one physical log.
 export type CodexAccountSessionBridgeSummary = {
   scannedFiles: number
   linkedFiles: number
-  /** Thread id -> rollout timestamp for every rollout present in the target home via this bridge. */
+  /** Rollouts left unlinked because only a hardlink was allowed and none could be made. */
+  skippedFiles: number
+  /** Thread ID to rollout timestamp for history present in the target home. */
   bridgedThreads: Map<string, string>
 }
 
@@ -46,12 +38,7 @@ const defaultBackgroundBridgeDependencies: BackgroundBridgeDependencies = {
   healIndex: healCodexAccountSessionIndex
 }
 
-/**
- * Why: Codex indexes every rollout present when it first creates a home's state
- * DB, and the TUI gives up waiting after 30s. Linking history into a fresh home
- * first turns its first launch into a minutes-long backfill (#20669), so an
- * empty home gets its state DB before any history; the heal indexes it afterwards.
- */
+// Create the DB before linking history to avoid first-launch backfill timeouts; heal indexes later.
 async function isReadyForBridgedHistory(
   targetCodexHomePath: string,
   sourceCodexHomePaths: readonly string[],
@@ -77,8 +64,7 @@ async function isReadyForBridgedHistory(
     )
     return false
   }
-  // Why: no DB in a home that has history means Codex keeps it elsewhere
-  // (`sqlite_home`) or keeps none, so linking cannot stall a launch here.
+  // Existing history without a local DB implies sqlite_home or an older CLI; linking is safe.
   // `not-tracked` is a pre-backfill schema that Codex migrates to `pending`.
   return status.kind === 'complete' || status.kind === 'missing'
 }
@@ -87,14 +73,13 @@ function hasSessionRollouts(codexHomePath: string): boolean {
   return countCodexSessionFilesUpTo(join(codexHomePath, 'sessions'), 1) > 0
 }
 
-/**
- * Starts one background bridge per target home, sharing in-flight work.
- */
 export function startCodexAccountSessionBridgeInBackground(
   args: {
     targetCodexHomePath: string
     sourceCodexHomePaths: readonly string[]
     options?: CodexSessionBridgeIncrementalOptions
+    /** Skip rather than symlink when a hardlink fails (cross-volume): for the user's own ~/.codex. */
+    hardlinkOnly?: boolean
   },
   dependenciesOverride: Partial<BackgroundBridgeDependencies> = {}
 ): Promise<void> {
@@ -140,17 +125,20 @@ export function stopCodexAccountSessionBridges(): void {
   stopping = true
 }
 
-/**
- * Mirrors every source home's rollouts into the target home's sessions tree.
- */
+export function isCodexAccountSessionBridgeStopping(): boolean {
+  return stopping
+}
+
 export async function bridgeCodexSessionsIntoAccountHome(args: {
   targetCodexHomePath: string
   sourceCodexHomePaths: readonly string[]
   options?: CodexSessionBridgeIncrementalOptions
+  hardlinkOnly?: boolean
 }): Promise<CodexAccountSessionBridgeSummary> {
   const summary: CodexAccountSessionBridgeSummary = {
     scannedFiles: 0,
     linkedFiles: 0,
+    skippedFiles: 0,
     bridgedThreads: new Map()
   }
   const targetSessionsRoot = join(args.targetCodexHomePath, 'sessions')
@@ -170,13 +158,16 @@ export async function bridgeCodexSessionsIntoAccountHome(args: {
       const result = bridgeRolloutIntoAccountHome(
         sourceSessionsRoot,
         targetSessionsRoot,
-        sourceFilePath
+        sourceFilePath,
+        args.hardlinkOnly === true
       )
       if (result === 'linked') {
         summary.linkedFiles += 1
+      } else if (result === 'skipped') {
+        summary.skippedFiles += 1
       }
       const rollout = parseCodexRolloutThreadId(sourceFilePath)
-      if (result !== 'failed' && rollout) {
+      if ((result === 'linked' || result === 'existing') && rollout) {
         summary.bridgedThreads.set(rollout.threadId, rollout.rolloutStamp)
       }
     }
@@ -184,32 +175,53 @@ export async function bridgeCodexSessionsIntoAccountHome(args: {
   return summary
 }
 
-/**
- * Links one rollout into the target sessions tree at the same relative path.
- */
 function bridgeRolloutIntoAccountHome(
   sourceSessionsRoot: string,
   targetSessionsRoot: string,
-  sourceFilePath: string
-): 'linked' | 'existing' | 'failed' {
+  sourceFilePath: string,
+  hardlinkOnly: boolean
+): 'linked' | 'existing' | 'skipped' | 'failed' {
   const targetFilePath = join(targetSessionsRoot, relative(sourceSessionsRoot, sourceFilePath))
-  // Why: rollout names carry the session UUID, so an existing target path is the
-  // same conversation already bridged (often the same inode) — never a conflict.
+  // Rollout filenames contain session UUIDs; an existing path already represents this conversation.
   if (existsSync(targetFilePath)) {
     return 'existing'
   }
+  const targetDir = dirname(targetFilePath)
+  let firstCreatedDir: string | undefined
   try {
-    mkdirSync(dirname(targetFilePath), { recursive: true })
+    firstCreatedDir = mkdirSync(targetDir, { recursive: true })
   } catch (error) {
     console.warn('[codex-account-session-bridge] Failed to create session directory:', error)
     return 'failed'
   }
-  return linkCodexSessionFile(sourceFilePath, targetFilePath) ? 'linked' : 'failed'
+  if (!hardlinkOnly) {
+    return linkCodexSessionFile(sourceFilePath, targetFilePath) ? 'linked' : 'failed'
+  }
+  if (tryHardlinkCodexSessionFile(sourceFilePath, targetFilePath)) {
+    return 'linked'
+  }
+  // Codex resume ignores a symlink, and it would dangle once the account goes; leave no trace.
+  removeEmptyCreatedDirs(targetDir, firstCreatedDir)
+  return 'skipped'
 }
 
-/**
- * Drops duplicate and self-referential sources so one launch links each home once.
- */
+function removeEmptyCreatedDirs(deepest: string, firstCreated: string | undefined): void {
+  if (!firstCreated) {
+    return
+  }
+  for (let dir = deepest; ; dir = dirname(dir)) {
+    try {
+      // Non-recursive: a directory something else wrote into in the meantime stays.
+      rmdirSync(dir)
+    } catch {
+      return
+    }
+    if (dir === firstCreated) {
+      return
+    }
+  }
+}
+
 function dedupeSourceHomes(
   sourceCodexHomePaths: readonly string[],
   targetCodexHomePath: string

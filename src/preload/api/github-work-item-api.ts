@@ -95,7 +95,12 @@ export type GithubWorkItemApi = {
     labels?: string[]
     assignees?: string[]
   }) => Promise<GitHubCreateIssueResult>
-  countWorkItems: (args: { repoPath: string; repoId?: string; query?: string }) => Promise<number>
+  countWorkItems: (args: {
+    repoPath: string
+    repoId?: string
+    query?: string
+    wakeWslDistro?: boolean
+  }) => Promise<number>
   listWorkItems: (args: {
     repoPath: string
     repoId?: string
@@ -103,6 +108,7 @@ export type GithubWorkItemApi = {
     query?: string
     page?: number
     noCache?: boolean
+    wakeWslDistro?: boolean
   }) => Promise<ListWorkItemsResult<Omit<GitHubWorkItem, 'repoId'>>>
   updateIssue: (
     args: GitHubRepoSelectorArgs & {
@@ -115,7 +121,7 @@ export type GithubWorkItemApi = {
     args: GitHubRepoSelectorArgs & {
       number: number
       body: string
-      /** Why: scopes the cross-window cache invalidation so a PR and issue sharing the same number don't evict each other. */
+      /** Keep PR and issue cache invalidation separate when their numbers match. */
       type?: 'issue' | 'pr'
       prRepo?: GitHubOwnerRepo | null
     }
@@ -132,7 +138,7 @@ export type GithubWorkItemApi = {
     sourceContext?: TaskSourceContext | null
     ownerRepo?: GitHubOwnerRepo
   }) => Promise<GitHubAssignableUser[]>
-  /** Subscribe to local-mutation broadcasts so the work-item-drawer cache can invalidate across windows. Returns an unsubscribe. */
+  /** Invalidate work-item caches across windows after local mutations. */
   onWorkItemMutated: (
     callback: (payload: {
       repoPath: string
@@ -141,7 +147,6 @@ export type GithubWorkItemApi = {
       number: number
     }) => void
   ) => () => void
-  // ── ProjectV2 (GitHub Projects) ─────────────────────────────────
   listAccessibleProjects: (
     args?: ListAccessibleProjectsArgs
   ) => Promise<ListAccessibleProjectsResult>

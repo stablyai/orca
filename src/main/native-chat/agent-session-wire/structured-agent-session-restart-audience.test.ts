@@ -1,8 +1,3 @@
-// A client too old to show an agent's chat is handed an audience without that agent. Every restart
-// operation it calls leaves that agent's offers and failures alone, and never names them back.
-// The chat here is a Codex one; an audience without Codex stands in for any agent the client
-// cannot show.
-
 import { afterEach, expect, it, vi } from 'vitest'
 import { AgentSessionRecoveryCapsule } from '../../runtime/agent-session-recovery-capsule'
 import { interruptedRestart } from './structured-agent-session-restart-interruption-test-harness'
@@ -29,7 +24,6 @@ it('neither lists nor dismisses an offer the caller cannot show', async () => {
   expect(await offersIn(root)).toHaveLength(1)
   expect(await host.restartResume.list()).toHaveLength(1)
 
-  // A caller that sees it dismisses it by dismissing everything it was shown.
   expect(await host.restartResume.dismiss(undefined, showsCodex)).toBe(1)
   expect(await offersIn(root)).toEqual([])
 })
@@ -62,7 +56,6 @@ it('keeps a failure the caller cannot show, and leaves it out of an action reply
   expect(await host.restartResume.listFailures()).toHaveLength(1)
 
   expect(await host.restartResume.listFailures(cannotShowCodex)).toEqual([])
-  // Naming a chat it can act on still answers with only what it can show.
   const reply = await host.restartResume.continueAfterRestart(
     ['another-session'],
     'modal',

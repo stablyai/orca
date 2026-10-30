@@ -1,9 +1,7 @@
 import { detectLanguage } from '@/lib/language-detect'
 import { canPreviewLanguage } from '@/lib/file-preview'
 
-// Why: HTML preview renders the on-disk working-tree file, so combined-diff
-// sections only get the affordance when that file still exists and the surface
-// is not a historical commit snapshot whose content may not match disk.
+// Preview reads the working file on disk; exclude deleted files and historical snapshots that may differ from it.
 export function canOpenDiffSectionPreviewToSide(params: {
   path: string
   status: string

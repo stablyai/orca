@@ -1,9 +1,7 @@
 import type { Ref } from 'react'
 import { ScrollView, StyleSheet, View, type ScrollViewProps, type ViewStyle } from 'react-native'
 
-/** The page's scroller, anchored at its end: scrollTop is 0 at the newest message and negative above
- *  it, so rows added above the reader never move what they read and the end needs no pin. The
- *  browser's scroll anchoring is off: the list keeps a parked reader's place itself. */
+// Reverse anchoring gives scrollTop=0 at the tail and negative offsets above; disable browser anchoring because the list restores parked readers itself.
 export function MobileNativeChatPageScroll({
   ref,
   children,

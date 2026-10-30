@@ -9,9 +9,6 @@ import {
   type WorkspaceCreateSetupDecision
 } from './workspace-create-params'
 
-// The blank/named create path, extracted from NewWorktreeModal so the modal keeps
-// only the UI-coupled setup-trust flow. Assembles worktree.create params and
-// applies the shared name-collision retry.
 export async function createBlankWorkspace(args: {
   client: RpcClient
   repoId: string
@@ -19,11 +16,9 @@ export async function createBlankWorkspace(args: {
   createdWithAgentId: TuiAgent | undefined
   comment: string | undefined
   setupDecision: WorkspaceCreateSetupDecision
-  /** True when `baseName` is a generated creature name rather than one the user typed; only then
-   *  may the host retire it. */
+  // Only generated creature names may be permanently retired by the host.
   nameWasGenerated: boolean
   worktreeCreateIdempotency: WorktreeCreateIdempotencyProbe
-  /** Whether the host can settle the surface itself; false keeps the agent-first create. */
   agentLaunchSupported: WorktreeCreateAgentLaunch['supported']
 }): Promise<WorktreeCreateResult> {
   const agentLaunch: WorktreeCreateAgentLaunch | undefined = args.createdWithAgentId

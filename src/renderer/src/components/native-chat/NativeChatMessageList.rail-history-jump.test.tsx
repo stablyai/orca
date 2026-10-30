@@ -2,7 +2,8 @@
 
 import '@testing-library/jest-dom/vitest'
 
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, screen } from '@testing-library/react'
+import { render } from './native-chat-tooltip-test-harness'
 import { useCallback, useMemo, useState } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -55,8 +56,7 @@ const TOTAL = 60
 const PAGE = 20
 /** The scroll root's top gutter, always present. */
 const TOP_GUTTER_PX = 40
-/** The "load earlier" row plus the column gap under it, present only while older
- *  history remains — so the page that exhausts history takes it away. */
+/** In-flow older-history chrome disappears with the last page. */
 const OLDER_HISTORY_ROW_PX = 52
 
 function message(index: number): NativeChatMessage {
@@ -85,8 +85,7 @@ const ROW_HEIGHT_BY_TEXT = new Map(
   ])
 )
 
-/** A lane that pages older history in the way the structured lane does: the page
- *  lands, then the returned promise settles. The outline is the unloaded prompts. */
+/** Publish each page before settling its promise; the outline also includes unloaded prompts. */
 function PagedTranscript({
   holdPage
 }: {
@@ -121,7 +120,6 @@ function PagedTranscript({
   )
 }
 
-/** The row's own prose, without the timestamp line the row also carries. */
 function rowText(row: HTMLElement): string {
   return /(?:prompt|marker)-\d+/.exec(row.querySelector('p')?.textContent ?? '')?.[0] ?? ''
 }
@@ -147,7 +145,6 @@ describe('jumping from the rail while following the end', () => {
     restore = [
       undoLayout,
       stubResizeObserver(),
-      // Rows measure exactly as estimated, so nothing but the jump moves the view.
       overrideLayoutProperty('offsetHeight', {
         get(this: HTMLElement): number {
           const estimated =
@@ -246,7 +243,6 @@ describe('jumping from the rail while following the end', () => {
     return element.scrollHeight - element.clientHeight - element.scrollTop
   }
 
-  /** Where the prompt's row sits relative to the top of the viewport. */
   function rowOffsetFromViewportTop(prompt: string): number {
     const row = screen.getByText(prompt).closest<HTMLElement>('[data-index]')
     if (!row) {
@@ -262,7 +258,6 @@ describe('jumping from the rail while following the end', () => {
   ])('jumps without animation to a message %s', async (_case, prompt, loaded) => {
     render(<PagedTranscript />)
     await settle(10)
-    // Anti-vacuous: the reader starts pinned to the very end.
     expect(distanceFromBottom()).toBe(0)
     expect(screen.queryByText(prompt) !== null).toBe(loaded)
 
@@ -299,9 +294,7 @@ describe('jumping from the rail while following the end', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'prompt-5' }))
     await frame()
-    // Anti-vacuous: the older page is in flight.
     expect(releaseFirstPage).not.toBeNull()
-    // The reader picks again while the first pick is still paging in.
     fireEvent.click(screen.getByRole('button', { name: 'prompt-45' }))
     await settle(40)
     act(() => releaseFirstPage?.())
@@ -364,14 +357,12 @@ describe('jumping from the rail while following the end', () => {
     render(<PagedTranscript holdPage={pages.holdPage} />)
     await settle(10)
     await pickUnloadedWhilePaging('prompt-5')
-    // Anti-vacuous: the older page is in flight.
     expect(pages.asked()).toBe(1)
 
     expect(screen.getByRole('button', { name: 'prompt-5' }).getAttribute('aria-busy')).toBe('true')
 
     input()
     await frame()
-    // Abandoning the jump settles the pick: nothing is left pulsing on the rail.
     expect(screen.getByRole('button', { name: 'prompt-5' }).getAttribute('aria-busy')).toBeNull()
     pages.release()
     await settle(60)
@@ -392,7 +383,6 @@ describe('jumping from the rail while following the end', () => {
     // The rail forwards its wheel to the transcript: the reader is scrolling.
     fireEvent.wheel(screen.getByRole('toolbar', { name: 'Your messages' }), { deltaY: -40 })
     await frame()
-    // Anti-vacuous: the wheel moved the transcript.
     expect(distanceFromBottom()).toBe(40)
     pages.release()
     await settle(60)

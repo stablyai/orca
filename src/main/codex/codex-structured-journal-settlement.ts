@@ -45,8 +45,7 @@ export function settleCodexJournalSession(input: {
   currentTurnIds: ReadonlyMap<string, ReadonlySet<string>>
   primaryThreadId: string | null
   ordinals: CodexTurnOrdinals
-  /** Terminal lifecycle for a turn the provider left running when it ended; null for a turn a
-   *  conversation command claimed, whose record the host settles. */
+  /** Null for command-owned turns, which the host settles. */
   settledTurnLifecycle: (threadId: string, turnId: string) => AgentJournalTurnLifecycle | null
   attributionFor: CodexRowAttribution
   now?: () => number
@@ -55,7 +54,6 @@ export function settleCodexJournalSession(input: {
   const mutations: JournalLifecycleIdentityMutationInput[] = []
   const turnOrdinalsToForget: { threadId: string; turnId: string }[] = []
   for (const active of input.activeItems.values()) {
-    // The host saw the child go, so its work was cut short.
     const body = interruptedCodexItemBody(codexActiveItemBody(active, input.streams), {
       at: input.event.observedAt ?? input.now?.() ?? Date.now(),
       call: 'interrupted'
@@ -105,11 +103,11 @@ export function settleCodexJournalTurn(input: {
   sessionId: string
   threadId: string
   turnId: string
-  /** Null off the primary thread: only the primary turn owns a lifecycle row. */
+  /** Only primary-thread turns own lifecycle rows. */
   turnLifecycle: AgentJournalTurnLifecycle | null
-  /** Host clock when the turn's end arrived, which is also the end of anything it left open. */
+  /** Host end time, also applied to unfinished items. */
   completedAt: number
-  /** How Codex ended the turn, on every thread: what a call it left running became. */
+  /** Unfinished calls inherit this turn-end state on every thread. */
   turnEnd: Extract<AgentJournalTurnLifecycleState, 'completed' | 'interrupted'>
   sink: StructuredAgentSessionEventSink
   streams: CodexStructuredItemStreams
@@ -117,7 +115,7 @@ export function settleCodexJournalTurn(input: {
   pendingPrompts?: Map<string, CodexPendingJournalPrompt>
   clearPromptTurn?: (threadId: string, turnId: string) => void
   attributionFor: CodexRowAttribution
-  /** The end of a conversation command the turn carried, which settles with it. */
+  /** Settle the carried conversation command in the same batch. */
   commandEnd?: readonly JournalLifecycleIdentityMutationInput[]
 }): StructuredAgentSessionSinkAdmission {
   const mutations: JournalLifecycleIdentityMutationInput[] = []
@@ -150,7 +148,7 @@ export function settleCodexJournalTurn(input: {
     }
     pendingPromptsToForget.push(key)
   }
-  // Revised, never tombstoned: the terminal row keeps the turn's duration durable.
+  // Preserve the terminal row so the turn's duration remains available.
   if (input.turnLifecycle) {
     mutations.push({
       kind: 'item',
@@ -179,7 +177,7 @@ export function settleCodexJournalTurn(input: {
   return ADMITTED
 }
 
-/** A settled item or prompt, naming its producer: the settlement can be the row's first write. */
+/** Include attribution because settlement may be the row's first write. */
 function settledRow(
   attributionFor: CodexRowAttribution,
   row: { threadId: string; turnId: string | null; identity: AgentJournalItemIdentity },

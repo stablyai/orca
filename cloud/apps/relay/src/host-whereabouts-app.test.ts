@@ -239,37 +239,41 @@ describe('POST /v1/admin/host-whereabouts', () => {
 describe('RelayAssignmentStore.hostWhereabouts', () => {
   it('reads the assignment row and its open migration by primary key', async () => {
     const database = await openInMemoryRelayDatabase()
-    const store = new RelayAssignmentStore(database, () => 100)
-    await store.reconcileCells([
-      { id: 'cell-a', url: 'https://cell-a.example.test', capacityRequests: 10 },
-      { id: 'cell-b', url: 'https://cell-b.example.test', capacityRequests: 10 }
-    ])
-    const identity = { userId: 'user-a', relayHostId: HOST }
-    expect(await store.hostWhereabouts(identity)).toBeNull()
+    try {
+      const store = new RelayAssignmentStore(database, () => 100)
+      await store.reconcileCells([
+        { id: 'cell-a', url: 'https://cell-a.example.test', capacityRequests: 10 },
+        { id: 'cell-b', url: 'https://cell-b.example.test', capacityRequests: 10 }
+      ])
+      const identity = { userId: 'user-a', relayHostId: HOST }
+      expect(await store.hostWhereabouts(identity)).toBeNull()
 
-    const assigned = await store.assign(identity)
-    expect(await store.hostWhereabouts(identity)).toEqual({
-      cellId: assigned.cellId,
-      assignmentEpoch: assigned.assignmentEpoch,
-      leaseExpiresAt: assigned.leaseExpiresAt,
-      openMigration: null
-    })
+      const assigned = await store.assign(identity)
+      expect(await store.hostWhereabouts(identity)).toEqual({
+        cellId: assigned.cellId,
+        assignmentEpoch: assigned.assignmentEpoch,
+        leaseExpiresAt: assigned.leaseExpiresAt,
+        openMigration: null
+      })
 
-    await database.query(
-      `INSERT INTO relay_assignment_migrations
+      await database.query(
+        `INSERT INTO relay_assignment_migrations
        (user_id, relay_host_id, source_cell_id, target_cell_id, previous_epoch, assignment_epoch,
         source_request_units, target_reserved_units, expires_at, created_at, updated_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      ['user-a', HOST, 'cell-a', 'cell-b', 1, 2, 1, 1, 900, 100, 100]
-    )
-    expect((await store.hostWhereabouts(identity))?.openMigration).toEqual({
-      sourceCellId: 'cell-a',
-      targetCellId: 'cell-b',
-      previousEpoch: 1,
-      assignmentEpoch: 2,
-      expiresAt: 900,
-      targetRegisteredAt: null
-    })
+        ['user-a', HOST, 'cell-a', 'cell-b', 1, 2, 1, 1, 900, 100, 100]
+      )
+      expect((await store.hostWhereabouts(identity))?.openMigration).toEqual({
+        sourceCellId: 'cell-a',
+        targetCellId: 'cell-b',
+        previousEpoch: 1,
+        assignmentEpoch: 2,
+        expiresAt: 900,
+        targetRegisteredAt: null
+      })
+    } finally {
+      await database.close()
+    }
   })
 })
 

@@ -1,14 +1,11 @@
 import { randomUUID } from 'node:crypto'
 import type { RelayDatabase } from './database.js'
 
-// Step 6 (decision 4): a memory cell's resume-confirmed audit rows leave in batches, off the
-// confirm's round trips. A crash or shutdown loses at most one flush interval of rows: accepted,
-// since a drain at exit would race the database pool closing.
+// Batch audit writes off confirm’s round trips; unflushed rows are lost on crash/shutdown because exit flushing would race pool closure.
 export const RESUME_AUDIT_FLUSH_MS = 5_000
 export const RESUME_AUDIT_FLUSH_ROWS = 500
 export const RESUME_AUDIT_BUFFER_MAX_ROWS = 5_000
-// An erasure deletes an account's audit rows by hand; a row this old is dropped rather than
-// retried, so a database outage cannot insert it after the account is gone.
+// Drop aged rows rather than reinserting erased accounts’ audit data after an outage.
 export const RESUME_AUDIT_MAX_AGE_MS = 10 * 60 * 1000
 
 export type ResumeConfirmedAudit = {
@@ -18,8 +15,7 @@ export type ResumeConfirmedAudit = {
   detail: { reqId: string; basisConnId: string; renewed: boolean }
 }
 
-// The id is fixed when the event happens, so a retried flush after an unknown commit outcome
-// cannot write a row twice (ON CONFLICT (id) DO NOTHING).
+// Keep event IDs fixed across unknown commit outcomes so ON CONFLICT prevents duplicate audit rows.
 type BufferedRow = ResumeConfirmedAudit & { id: string; at: number }
 
 export type ResumeAuditDrops = { overflow: number; aged: number }

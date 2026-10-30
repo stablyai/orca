@@ -1,11 +1,4 @@
-/**
- * Asks one relay on the host how many PTYs it runs, through that relay's own bridge.
- *
- * The incumbent probe can only guess from the process table, and an accepting relay whose
- * holders or children it cannot read looks the same whether it runs shells or none. The relay
- * itself knows: its own `relay.js --connect` presents its own build hash, so any client reaches it,
- * and `pty.listProcesses` needs no PTY owner role, so asking never takes over another desktop's.
- */
+/** Ask via the relay's own bridge/hash when process-table evidence is incomplete. pty.listProcesses needs no owner role and cannot take another desktop's PTYs. */
 import type { SshConnection } from '../connection/ssh-connection'
 import { SshChannelMultiplexer } from '../ssh-channel-multiplexer'
 import { quotePosixShell } from '../../../shared/shell-argument-quoting'
@@ -25,10 +18,7 @@ export async function countRelayEndpointPtys(
   return connectCommand ? countRelayPtysOverBridge(conn, connectCommand, signal) : null
 }
 
-/**
- * The relay's own `relay.js --connect`, run from its own `relay-<version>` directory. A socket
- * relocated under the short `/tmp` base names no build, so that relay is left unasked, not guessed at.
- */
+/** Short /tmp sockets name no build; leave them unasked rather than guess the relay's own bridge directory. */
 export function relayBridgeConnectCommand(nodePath: string, sockPath: string): string | null {
   const slash = sockPath.lastIndexOf('/')
   const relayDir = sockPath.slice(0, slash)
@@ -46,7 +36,6 @@ export function relayBridgeConnectCommand(nodePath: string, sockPath: string): s
   )
 }
 
-/** The same question over an already-built bridge command, such as a Windows relay's PowerShell. */
 export async function countRelayPtysOverBridge(
   conn: SshConnection,
   connectCommand: string,

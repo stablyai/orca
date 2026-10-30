@@ -26,7 +26,6 @@ class FakeChild extends EventEmitter {
     return true
   }
 
-  /** What a destroyed stdin does to writes still queued at teardown. */
   failQueuedWrites(): void {
     for (const callback of this.pendingWrites.splice(0)) {
       callback(new Error('ERR_STREAM_DESTROYED'))
@@ -96,7 +95,7 @@ describe('DesktopScriptServeChannel', () => {
     const retained = channel as unknown as { buffer: string }
     for (const chunk of ['a\nb', 'c\r\n\n\nd\ne', '\n', 'f\n\ng', Buffer.from('h\r\ni😀')]) {
       child.stdout.emit('data', chunk)
-      // The fast path in readStdout scans only the new chunk, which is sound only if this holds.
+      // The new-chunk-only search requires the retained tail to contain no newline.
       expect(retained.buffer).not.toContain('\n')
     }
     expect(retained.buffer).toBe('i😀')
@@ -116,7 +115,6 @@ describe('DesktopScriptServeChannel', () => {
       indexOf.mockRestore()
     }
     expect(handlers.onLine).toHaveBeenCalledWith(`${pending}q`)
-    // Locating the delimiter must not rescan the megabytes already known to hold none.
     expect(scanned.length).toBeGreaterThan(0)
     expect(Math.max(...scanned)).toBeLessThanOrEqual(chunk.length)
   })
@@ -154,16 +152,12 @@ describe('DesktopScriptServeChannel', () => {
     const used = collectHeap() - before
     expect(tails).toHaveLength(32)
     expect(tails[5]).toBe('{"partial":5')
-    // 32 pending tails, each sliced from a 1 Mi-char line; an un-owned tail pins the whole line.
+    // Unowned slices would pin 32 separate megabyte-scale response buffers.
     expect(used).toBeLessThan(4 * 1024 * 1024)
   })
 
   describe('once stopped', () => {
-    /**
-     * The channel's half of the stale-callback guard, pinned here rather than
-     * through the host: the host refuses a stale report too, so a host-level
-     * test passes with either guard alone and neither ends up covered.
-     */
+    /** Exercise channel guards directly so host guards cannot mask a missing check. */
     it('accepts no further writes', () => {
       const { channel, child } = createChannel()
 

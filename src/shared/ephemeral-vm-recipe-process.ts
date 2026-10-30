@@ -18,9 +18,7 @@ export type ProcessRunResult = {
 
 export function quoteShellToken(value: string): string {
   if (process.platform === 'win32') {
-    // Inside cmd.exe double quotes, `^` is literal; an embedded `"` is escaped
-    // by doubling it. This token is only displayed for manual cleanup, so it
-    // must be valid when pasted into cmd.exe.
+    // Displayed cleanup tokens must paste into cmd.exe: ^ stays literal inside double quotes; double embedded quotes.
     return quoteCmdDoubleQuoted(value)
   }
   return quotePosixShell(value)
@@ -107,8 +105,7 @@ export async function runRecipeCommand(args: {
       killRecipeProcess(child)
     }
 
-    // No setEncoding: the retained tail stays raw bytes, and a per-stream StringDecoder gives the
-    // callbacks the same character boundaries setEncoding would have (it uses the same decoder).
+    // Keep retained output as raw bytes; StringDecoder matches setEncoding’s per-stream callback character boundaries.
     const stdoutDecoder = new StringDecoder('utf8')
     const stderrDecoder = new StringDecoder('utf8')
     const capture = (
@@ -190,9 +187,7 @@ function flushDecoder(
 export function killRecipeProcess(child: ChildProcessWithoutNullStreams, force = false): void {
   const signal = force ? 'SIGKILL' : 'SIGTERM'
   if (process.platform === 'win32') {
-    // Recipes run through `cmd.exe /c` (shell: true), so child.kill() would only
-    // terminate the wrapper and orphan the actual recipe subprocess (e.g. a cloud
-    // CLI mid-provision). taskkill /T walks and kills the whole tree.
+    // cmd.exe /c wraps recipes; child.kill alone orphans cloud/provisioning children, so taskkill /T walks the tree.
     if (child.pid) {
       if (
         !admitProcessTreeKill({
@@ -201,8 +196,7 @@ export function killRecipeProcess(child: ChildProcessWithoutNullStreams, force =
           scope: 'win-taskkill-tree'
         })
       ) {
-        // Refusal blocks the tree walk, not the termination: the root kill is
-        // handle-addressed, so it cannot reach the recycled pid we refused.
+        // Refusal blocks unsafe PID tree walking; handle-addressed root termination cannot hit the recycled PID.
         child.kill(signal)
         return
       }

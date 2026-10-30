@@ -6,8 +6,7 @@ import {
 
 describe('file ownership reply schemas', () => {
   it('keeps the three hostId states distinct', () => {
-    // Absent means no host recorded and captures local; explicit null means the host said local;
-    // a string is parsed. Collapsing absent and null would change where a write lands.
+    // Absent captures local; explicit null refuses an unplaceable owner; a string is parsed.
     expect(fileOwnershipWorktreeSchema.parse({ worktree: {} })?.hostId).toBeUndefined()
     expect(fileOwnershipWorktreeSchema.parse({ worktree: { hostId: null } })?.hostId).toBeNull()
     expect(fileOwnershipWorktreeSchema.parse({ worktree: { hostId: 'ssh:a' } })?.hostId).toBe(
@@ -25,8 +24,7 @@ describe('file ownership reply schemas', () => {
   })
 
   it('passes the connection generation through and refuses a wrong-typed one', () => {
-    // The generation is echoed back to the host on the mutation, so a client-side fallback here
-    // would put a value on the wire the host then refuses.
+    // The mutation echoes this generation; a client fallback would send a value the host refuses.
     expect(
       fileOwnershipSshStateSchema.parse({ state: { targetId: 't', connectionGeneration: 3 } })
         ?.connectionGeneration

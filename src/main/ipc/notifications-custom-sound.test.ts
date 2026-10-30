@@ -42,7 +42,7 @@ describe('registerNotificationHandlers', () => {
     rmSync(tempDir, { recursive: true, force: true })
   })
 
-  it('uses the macOS default notification sound when no custom sound is configured', async () => {
+  it('leaves the macOS notification sound unset so Electron plays the system default', async () => {
     const originalPlatform = process.platform
     Object.defineProperty(process, 'platform', { value: 'darwin', configurable: true })
     try {
@@ -62,8 +62,7 @@ describe('registerNotificationHandlers', () => {
       expect(await handler({}, { source: 'test' })).toEqual({ delivered: true })
       expect(notificationCtorMock).toHaveBeenCalledWith({
         title: 'Orca notifications are on',
-        body: 'This is a test notification from Orca.',
-        sound: 'default'
+        body: 'This is a test notification from Orca.'
       })
     } finally {
       Object.defineProperty(process, 'platform', { value: originalPlatform, configurable: true })

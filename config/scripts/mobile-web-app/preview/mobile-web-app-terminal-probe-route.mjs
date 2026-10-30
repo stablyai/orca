@@ -1,25 +1,14 @@
-/**
- * The scratch route tree the terminal render check bundles, and the streams it drives.
- *
- * No route serves this screen until C7.7, so the component is reached through a route tree
- * written to a temporary directory. That is a bundler entry and a page under test, not an
- * assertion, and it is here so the check itself stays the list of things being measured. This
- * step retires the moment the session route is registered.
- */
+// Keep terminal probe route in scratch: committing under mobile/app would register test-only route shell could open.
 
 export const COLS = 80
 export const ROWS = 24
-/** Design §2 measured the host's own chunker at 48 KiB, so the sample is at least one full one. */
+// Sample must reach host chunker’s measured 48KiB size.
 export const MIN_STREAM_BYTES = 48 * 1024
-/** Printed at the top of the stream and again at the end, so the read-back covers both edges. */
+// Repeat run marker at both edges so readback proves entire stream reached buffer.
 export const FIRST_MARKER = 'ORCA-TERMINAL-RENDER-FIRST'
 export const LAST_MARKER = 'ORCA-TERMINAL-RENDER-LAST'
 
-/**
- * An escape-dense sample of at least 48 KiB: an SGR colour change every cell, an erase-to-end and
- * an absolute cursor position per row. Built here rather than committed because it is a function
- * of the grid, and a fixture sized from the constant it is meant to exercise proves nothing.
- */
+// Generate grid-dependent escape-dense 48KiB+ sample; sizing solely from cap under test would be circular.
 export function escapeDenseStream() {
   const esc = '\u001b'
   const rows = []
@@ -41,15 +30,7 @@ export function escapeDenseStream() {
   return rows.join('')
 }
 
-/**
- * The scratch route: the component under test, its handle and its notifies on `globalThis`.
- *
- * Written rather than committed because it is the bundler's entry and nothing else — a file under
- * `mobile/app` would register a route the shell could open. `beforeinput` is recorded off the
- * xterm helper textarea, which is design §8's cheap half of the IME question: it says what the
- * browser reports for text entering a terminal on the page, and leaves a composing IME on a real
- * keyboard to the device step it cannot answer.
- */
+// Expose actual component handle/notifies in scratch route; beforeinput on helper textarea covers browser text path, composing soft keyboard remains device proof.
 export function probeRouteSource(componentPath) {
   return `import { useCallback, useEffect, useRef, useState } from 'react'
 import { TextInput, View } from 'react-native'
@@ -117,14 +98,7 @@ export default function TerminalProbeRoute() {
 `
 }
 
-/**
- * The same page with no terminal on it.
- *
- * The page entry already carries Zod, which probes for `new Function` and swallows the
- * `EvalError`, so the shell's `script-src 'self'` records one refusal on any route before a line
- * of terminal code runs. Comparing against this control is what makes "zero violations" a
- * statement about the terminal rather than about the bundle it lives in.
- */
+// Same-app no-terminal control isolates terminal CSP effects from entry dependencies such as historical swallowed Zod JIT probe.
 export const CONTROL_SOURCE = `import { View } from 'react-native'
 
 export default function ControlRoute() {

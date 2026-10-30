@@ -1,6 +1,4 @@
-// Why: app shortcut owners and terminal panes both listen on window capture, so React's
-// effect order decided who saw a chord first (STA-11205). The router is installed before
-// React renders and runs every app owner, in registration order, ahead of any pane listener.
+// Install before React so app owners run in registration order ahead of pane capture listeners, independent of effect order (STA-11205).
 
 type AppKeyEventType = 'keydown' | 'keyup'
 type AppKeyListener = (event: KeyboardEvent) => void
@@ -14,8 +12,7 @@ function dispatch(type: AppKeyEventType, event: KeyboardEvent): void {
   const snapshot = registrations[type].slice()
   let stoppedImmediately = false
   const originalStop = event.stopImmediatePropagation
-  // Why: only an immediate stop ends the app stage; plain stopPropagation still lets the
-  // remaining window owners run, as it did when each owner was its own window listener.
+  // Only stopImmediatePropagation ends the app stage; plain stopPropagation preserves other window owners like native listeners.
   event.stopImmediatePropagation = () => {
     stoppedImmediately = true
     originalStop.call(event)
@@ -55,7 +52,11 @@ export function installAppKeyboardRouter(target: Window = window): void {
   installedOn = target
 }
 
-/** Window-capture key listener for app shortcut owners; terminal panes keep their own. */
+/** Runs a key that reached Orca outside this window (a focused page) through every app owner. */
+export function replayAppKeyDown(event: KeyboardEvent): void {
+  dispatch('keydown', event)
+}
+
 export function addAppKeyListener(type: AppKeyEventType, listener: AppKeyListener): void {
   installAppKeyboardRouter(installedOn ?? window)
   const list = registrations[type]

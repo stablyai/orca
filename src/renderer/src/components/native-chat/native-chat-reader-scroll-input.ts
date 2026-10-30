@@ -138,12 +138,11 @@ export function nativeChatReaderScrollInputHandlers({
   }
 }
 
-/** Reports a gesture a surface swallowed before the transcript could see it: a visual's frame. */
+/** Forward gestures swallowed by embedded surfaces before reaching the transcript. */
 export const NativeChatForwardedGestureContext = createContext<
   ((gesture: ReaderGesture) => void) | null
 >(null)
 
-/** The transcript scroller's input props, the gestures surfaces over or inside it forward, and find steps. */
 export function useNativeChatReaderScrollInput(
   scrollRef: React.RefObject<HTMLElement | null>,
   {

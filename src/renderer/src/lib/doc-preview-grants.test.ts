@@ -105,8 +105,7 @@ describe('doc preview grant lifetime', () => {
       ensureDocPreviewGrant('preview-1', request)
     ])
 
-    // Why: React StrictMode double-invokes mount effects in dev; a second mint would
-    // strand the first grant and a mount-scoped revoke would kill the live webview.
+    // StrictMode effect replay must neither mint twice nor revoke the surviving webview’s grant.
     expect(mocks.mintGrant).toHaveBeenCalledOnce()
     expect(first).toBe(second)
     expect(mocks.revokeGrant).not.toHaveBeenCalled()
@@ -166,8 +165,7 @@ describe('doc preview grant lifetime', () => {
     expect(mocks.revokeGrant).not.toHaveBeenCalled()
   })
 
-  // Why: a mint that rejects after the tab was released and reopened must not evict the entry the
-  // reopen created, or that grant can never be revoked from the tab that owns it.
+  // Late rejection from a released tab must not evict its reopened tab’s new, otherwise unrevokable grant.
   it('leaves the entry of a later mint alone when an earlier one rejects', async () => {
     const request = {
       owner: { kind: 'ssh' as const, connectionId: 'ssh-1' },

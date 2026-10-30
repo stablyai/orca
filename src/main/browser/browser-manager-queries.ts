@@ -21,7 +21,7 @@ export abstract class BrowserManagerQueries extends BrowserManagerRegistration {
     return this.tabIdByWebContentsId.get(webContentsId) ?? null
   }
 
-  /** The page a guest belongs to, following popups back to the page that opened them. */
+  /** Includes popups owned by the page. */
   getOwningTabIdForGuestWebContentsId(guestWebContentsId: number): string | null {
     return this.resolveBrowserTabIdForGuestWebContentsId(guestWebContentsId)
   }
@@ -70,7 +70,7 @@ export abstract class BrowserManagerQueries extends BrowserManagerRegistration {
     }
   }
 
-  // Why: centralize Kagi session-token redaction so every load-error path (did-fail-load, cert failure) strips it.
+  // Redact Kagi tokens on every load-error path, including certificate failures.
   protected buildLoadError(code: number, description: string, rawUrl: string): BrowserLoadError {
     return {
       code,
@@ -108,7 +108,7 @@ export abstract class BrowserManagerQueries extends BrowserManagerRegistration {
     const browserPageId = this.tabIdByWebContentsId.get(webContentsId)
     const worktreeId = browserPageId ? this.worktreeIdByTabId.get(browserPageId) : null
     if (worktreeId) {
-      // Why: runs inside an Electron guest event dispatch, so an escaping throw would be a fatal uncaught exception.
+      // Isolate listener exceptions from Electron event dispatch.
       try {
         this.browserGuestStateChangedListener?.(worktreeId)
       } catch (error) {

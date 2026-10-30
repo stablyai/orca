@@ -23,7 +23,6 @@ import {
 } from './node-pty-precondition'
 import { detectNativeHostAbi, hostNodeApiVersion, type NativeHostAbi } from './native-host-abi'
 
-/** A schema 2 manifest listing whatever the test staged in `slot`, for this host. */
 function writeHostSlotManifest(prebuildsDir: string, slot: string, abi: NativeHostAbi): void {
   const files = Object.fromEntries(
     readdirSync(join(prebuildsDir, slot)).map((file) => [
@@ -59,23 +58,14 @@ const require = createRequire(import.meta.url)
 const REAL_NODE_PTY = dirname(require.resolve('node-pty/package.json'))
 const REAL_PTY_NODE = join(REAL_NODE_PTY, 'build', 'Release', 'pty.node')
 
-/**
- * Whether this host's compiled node-pty actually loads under plain Node.
- *
- * Why not existsSync: CI ships a pty.node built for Electron's ABI, so the file is
- * present and `require` still fails. Gating on existence ran the load-dependent tests
- * on a host that could never satisfy them. Probed in a child so a bad binding cannot
- * take the test runner down with it.
- */
+// Probe real binding loads in a child: file presence can hide an Electron/Node ABI mismatch.
 const REAL_SPAWN_HELPER = join(REAL_NODE_PTY, 'build', 'Release', 'spawn-helper')
 
 const realNodePtyLoads = ((): boolean => {
   if (!existsSync(REAL_PTY_NODE)) {
     return false
   }
-  // Why spawn-helper too: on macOS a slot without it is legitimately 'degraded', so a
-  // test that expects 'ok' has an unsatisfiable premise on a host that lacks it. Only
-  // macOS builds the helper, so gating other platforms on it never lets them run.
+  // Only macOS builds spawn-helper; load-success tests there must also require it.
   if (process.platform === 'darwin' && !existsSync(REAL_SPAWN_HELPER)) {
     return false
   }
@@ -108,7 +98,6 @@ const reported = (message: string) =>
 describe('classifyNodePtyProbeResult', () => {
   it('accepts only a clean exit that printed the token', () => {
     expect(probe({ code: 0, stdout: 'ORCA_NODE_PTY_LOAD_OK /x/build/Release' })).toBeNull()
-    // A zero exit with no token means the probe never reached the load.
     expect(probe({ code: 0, stdout: '' })?.reason).toBe('load_failed')
   })
 
@@ -129,8 +118,6 @@ describe('classifyNodePtyProbeResult', () => {
   })
 
   it('separates a Node ABI mismatch from a libc mismatch', () => {
-    // These need different fixes — rebuild against this Node vs. build on an older libc —
-    // so collapsing them sends the operator to the wrong one.
     expect(
       reported(
         'was compiled against a different Node.js version using NODE_MODULE_VERSION 115. This version of Node.js requires NODE_MODULE_VERSION 127.'
@@ -143,8 +130,6 @@ describe('classifyNodePtyProbeResult', () => {
   })
 
   it('reports a signalled probe as a crash, even with no output at all', () => {
-    // The uncatchable case: a binary that aborts inside the loader never reaches the
-    // child's catch and often prints nothing.
     expect(probe({ code: null, signal: 'SIGSEGV' })).toEqual({
       status: 'blocked',
       reason: 'load_crashed',
@@ -153,7 +138,6 @@ describe('classifyNodePtyProbeResult', () => {
   })
 
   it('distinguishes no binary anywhere from a binary the loader refused', () => {
-    // "install node-pty" and "rebuild node-pty for this libc" are different instructions.
     expect(probe({ code: 3, stdout: 'ORCA_NODE_PTY_NO_BINARY\n' })).toEqual({
       status: 'blocked',
       reason: 'dependency_missing',
@@ -163,8 +147,7 @@ describe('classifyNodePtyProbeResult', () => {
   })
 
   it('ignores its own token strings echoed back inside the child stderr', () => {
-    // node prints the whole `-e` source above the stack trace, and that source contains
-    // every token below. Matching on stderr made a refused binary read as "not installed".
+    // Node echoes eval source into stderr; matching its tokens would misclassify loader failure.
     const echoedSource =
       '[eval]:1\nif(!f){console.log("ORCA_NODE_PTY_NO_BINARY");process.exit(3)}\n' +
       '        ^\n\nError: dlopen(/app/pty.node): slice is not valid mach-o file\n'
@@ -189,8 +172,6 @@ describe('classifyNodePtyProbeResult', () => {
   })
 
   it('calls a timeout unverifiable rather than blocked', () => {
-    // A probe that never answered is not evidence that node-pty is broken, and refusing
-    // to boot on it would take down hosts that work.
     expect(probe({ timedOut: true })).toEqual({
       status: 'unverifiable',
       reason: 'unknown',
@@ -205,10 +186,9 @@ describe('buildNodePtyLoadProbeScript', () => {
     expect(script).toContain('"/opt/app/node_modules/node-pty/lib/index.js"')
     expect(script).toContain('"/opt/app/node_modules/node-pty/lib/utils.js"')
     expect(script).toContain('loadNativeModule')
-    // Windows defers conpty.node to first spawn, so requiring the package proves nothing there.
+    // Windows loads conpty lazily at first spawn, so requiring the package proves too little.
     expect(script).toContain('conpty')
-    // The raw dlopen must precede requiring the package, or node-pty's own loader
-    // re-wraps the loader error into a misleading "Cannot find module".
+    // Raw dlopen must precede the wrapper that hides loader errors as module misses.
     expect(script.indexOf('process.dlopen')).toBeLessThan(script.indexOf('lib/index.js'))
   })
 })
@@ -232,9 +212,6 @@ describe('checkNodePtyPrecondition', () => {
   })
 
   it('survives a native binary that the dynamic loader refuses', () => {
-    // The whole reason the probe is a child process: this file is loaded with dlopen, and
-    // an in-process require of it can take the host down before any handler runs. Reaching
-    // the assertion below at all is the evidence.
     const dir = stageNodePty()
     writeFileSync(join(dir, 'build', 'Release', 'pty.node'), Buffer.from('not a native addon'))
 
@@ -251,23 +228,10 @@ describe('checkNodePtyPrecondition', () => {
   })
 
   it('returns a self-consistent verdict against the real host', () => {
-    // Why not a predicted status: this depends on how the host was prepared. CI's test
-    // shard runs `vitest` directly, so `ensure-native-runtime --runtime=node` never
-    // builds node-pty for the Node ABI and `degraded` is correct there; a prepared
-    // checkout gives 'ok'. Predicting either encodes an environment.
-    //
-    // Why not require('node-pty') as ground truth: that resolves the JS wrapper while
-    // the native binding loads lazily, so it proves strictly less than this checks —
-    // that was the first version of this test and it failed on CI for that reason.
-    //
-    // What is invariant: on a host where node-pty is installed at all, the verdict is
-    // never 'blocked' and never carries an unestablished reason.
+    // Prepared hosts and CI can honestly yield different load verdicts; do not predict one.
     const verdict = checkNodePtyPrecondition({ prebuildsDir: null })
 
-    // Why not a fixed status: a prepared host gives 'ok', CI's unprepared shard gives
-    // 'degraded', and a corrupt binding gives 'blocked' — all three are honest. What is
-    // invariant is that anything other than 'ok' names an established cause, so the
-    // host can never decline a terminal for a reason it did not work out.
+    // Every non-ok verdict must carry an established cause.
     expect(['ok', 'degraded', 'blocked', 'unverifiable']).toContain(verdict.status)
     if (verdict.status !== 'ok') {
       expect(verdict.reason).toBeDefined()
@@ -280,14 +244,10 @@ describe('checkNodePtyPrecondition', () => {
     )
   })
 
-  // Why gated on the real binding: this asserts a LOAD outcome, so it needs a pty.node
-  // built for the Node ABI. CI's shard never runs ensure-native-runtime, so the copy
-  // ENOENT'd there. macOS only — it is the only platform that execs spawn-helper.
+  // This load-outcome assertion needs a real Node-ABI binding and macOS-only spawn-helper.
   it.runIf(process.platform === 'darwin' && realNodePtyLoads)(
     'degrades rather than blocks when only spawn-helper is missing',
     () => {
-      // node-pty posix_spawns spawn-helper, so this host loads fine and then fails ENOENT
-      // the first time someone opens a terminal. Everything else it serves still works.
       const dir = stageNodePty()
       cpSync(
         join(REAL_NODE_PTY, 'build', 'Release', 'pty.node'),
@@ -300,10 +260,7 @@ describe('checkNodePtyPrecondition', () => {
     }
   )
 
-  // Same staging as above, read through a Linux ABI: node-pty builds spawn-helper only
-  // under binding.gyp's OS=="mac", so demanding one here called every healthy Linux
-  // orcad degraded while its terminals worked (#17844). Gated on a loadable binding for
-  // the same reason as the macOS case; the ABI is what makes it a Linux verdict.
+  // Simulate Linux to prove it never requires macOS-only spawn-helper; require a loadable binding.
   it.runIf(process.platform !== 'win32' && realNodePtyLoads)(
     'does not call a Linux host degraded over a spawn-helper it never execs',
     () => {
@@ -325,10 +282,7 @@ describe('checkNodePtyPrecondition', () => {
     }
   )
 
-  // Why split: the "ok" half needs a REAL loadable pty.node, which only exists after
-  // `ensure-native-runtime --runtime=node`. CI's shard runs vitest directly, so copying
-  // from node_modules ENOENT'd there. Slot *placement* is the logic worth checking on
-  // every host; the load verdict needs a prepared one.
+  // Placement works with fake payloads; successful load outcomes require a prepared real binding.
   it('places the matching slot even when the payload is not loadable', () => {
     const dir = stageNodePty()
     const abi = detectNativeHostAbi()
@@ -347,7 +301,6 @@ describe('checkNodePtyPrecondition', () => {
 
     const verdict = checkNodePtyPrecondition({ nodePtyDir: dir, prebuildsDir })
 
-    // Installed from the right slot, and honest that the payload does not load.
     expect(verdict.prebuilt).toMatchObject({ installed: true, slot })
     expect(verdict.status).not.toBe('ok')
     expect(verdict.reason).toBeDefined()
@@ -410,8 +363,6 @@ describe('formatNodePtyPreconditionReport', () => {
 
 describe('probeLocalBuildToolchainHints', () => {
   it('gives macOS the Xcode command line tools, not a Linux package manager', () => {
-    // The relay's hint list answers with a cross-distro apt/dnf/pacman/apk menu when it
-    // finds no package manager. On macOS every line of that menu is wrong.
     const hints = probeLocalBuildToolchainHints('darwin')
     expect(hints).toEqual(['  xcode-select --install'])
     expect(hints.join('\n')).not.toMatch(/apt-get|dnf|pacman|apk/)

@@ -1,4 +1,3 @@
-/** An SSH repo lists from its persisted rows, building the worktree-meta index exactly once. */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Store } from '../../../persistence/loading-store/store'
@@ -10,7 +9,7 @@ vi.mock('./ssh-worktree-fallback', async (importOriginal) => {
   const actual = await importOriginal<typeof SshWorktreeFallbackModule>()
   return {
     ...actual,
-    // Both builders are counted, so a second build of either kind shows up.
+    // Count both builders to expose a duplicate pass through either one.
     createSshWorktreeMetaIndex: (...args: Parameters<typeof actual.createSshWorktreeMetaIndex>) => {
       indexBuildSpy('all-hosts', ...args)
       return actual.createSshWorktreeMetaIndex(...args)
@@ -38,7 +37,7 @@ const worktreeId = `${repo.id}::/home/user/feature`
 function createStore(): Store {
   const rows: Record<string, { instanceId?: string; hostId?: string }> = {
     [worktreeId]: { instanceId: 'instance-1' },
-    // Other repos' rows share the host snapshot; only this repo's bucket is ever read back.
+    // Other repos share the snapshot; index reads must remain repo-scoped.
     'repo-2::/home/user/other': { instanceId: 'instance-2' }
   }
   return {

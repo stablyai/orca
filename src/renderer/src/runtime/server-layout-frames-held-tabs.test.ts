@@ -20,6 +20,10 @@ import { createStoreSessionMockApi } from '../store/slices/store-session-test-ha
 import { _resetLayoutFramePositionForTests } from './layout-frame-position'
 import { useAppStore } from '@/store'
 import { stageWebRuntimeBrowserTab } from './web-runtime-browser-tab-staging'
+import {
+  _resetStagedBrowserFrameHandoversForTests,
+  wasStagedBrowserTabHandedToFrames
+} from '@/lib/staged-browser-frame-handover'
 import { ensureSimulatorTab } from '@/lib/ensure-simulator-tab'
 import type { DragEndEvent } from '@dnd-kit/core'
 import { commitTabDragDrop } from '@/components/tab-group/tab-drag-drop-commit'
@@ -544,5 +548,72 @@ describe('a tab in this window’s own frame-drawn workspace', () => {
     expect(check.workspaceBuilt).toContain(WT)
     expect(tabIds(store)).not.toContain('emulator-1')
     sync.close()
+  })
+})
+
+describe('a staged server-hosted browser tab (L285)', () => {
+  /** The server's layout once it published the page: its own tab and record for it. */
+  const WITH_PAGE = (() => {
+    const layout = serverLayout([
+      serverTerminalTab('host-tab-1', LEAF_ID, 'server-pty-1'),
+      { ...serverTerminalTab('server-browser-tab', LEAF_ID, null, 2), kind: 'browser' as const }
+    ])
+    const browserTab = { ...layout.tabs[1]!, entityId: 'server-browser-1' }
+    delete browserTab.terminal
+    return {
+      ...layout,
+      tabs: [layout.tabs[0]!, browserTab],
+      browserTabs: [{ id: 'server-browser-1', pageIds: ['server-page-1'] }]
+    }
+  })()
+
+  it('stays through a frame that does not list its page, and hands over to the one that does', async () => {
+    _resetStagedBrowserFrameHandoversForTests()
+    const { store, stream, frames } = await appStoreFrameDrawn()
+    const staged = stageWebRuntimeBrowserTab({
+      environmentId: ENV,
+      worktreeId: WT,
+      remotePageId: 'server-page-1',
+      activate: true,
+      targetGroupId: HOST_GROUP
+    })!
+
+    // Another client's change rebuilds the workspace before the server publishes the page.
+    streams.send(stream, frames.records(WT, WITH_TAB_2))
+    await settle()
+    expect(check.workspaceBuilt).toContain(WT)
+    expect(tabIds(store)).toContain(staged.tabId)
+
+    check.forgetBuilds()
+    streams.send(stream, frames.records(WT, WITH_PAGE))
+    await settle()
+    expect(check.workspaceBuilt).toContain(WT)
+    expect(tabIds(store)).not.toContain(staged.tabId)
+    expect(tabIds(store)).toContain('server-browser-tab')
+    expect(wasStagedBrowserTabHandedToFrames(staged.workspaceId, 'server-page-1')).toBe(true)
+    expect(DESKTOP_CREATED_SERVER_TAB_HOLDS.isTabHeld(WT, staged.workspaceId)).toBe(false)
+  })
+
+  it('leaves no hold on a tab the mirror adopted before the frames drew the workspace', async () => {
+    const { store, stream, frames } = await appStoreFrameDrawn()
+    const staged = stageWebRuntimeBrowserTab({
+      environmentId: ENV,
+      worktreeId: WT,
+      remotePageId: 'server-page-1',
+      activate: true,
+      targetGroupId: HOST_GROUP
+    })!
+    // The mirror's adoption: same rows, the handle no longer staged.
+    store.getState().setRemoteBrowserPageHandle(staged.pageId, {
+      environmentId: ENV,
+      remotePageId: 'server-page-1'
+    })
+
+    streams.send(stream, frames.records(WT, WITH_PAGE))
+    await settle()
+    expect(check.workspaceBuilt).toContain(WT)
+    expect(tabIds(store)).not.toContain(staged.tabId)
+    expect(tabIds(store)).toContain('server-browser-tab')
+    expect(DESKTOP_CREATED_SERVER_TAB_HOLDS.isTabHeld(WT, staged.tabId!)).toBe(false)
   })
 })

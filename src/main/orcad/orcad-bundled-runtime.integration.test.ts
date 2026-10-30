@@ -64,7 +64,7 @@ beforeEach(async () => {
   })
   await writeFile(join(directory, '.server-target'), `${TARGET}\n`)
   await writeFile(join(directory, '.runtime-node'), `${SHA}\n`)
-  // A stand-in runtime at the shared-store path; handoff never hashes, it checks the marker.
+  // Handoff checks markers without hashing; stage a stand-in at the shared-store path.
   const runtime = join(directory, ...orcadNodeRuntimeRelativePath(TARGET, SHA))
   await mkdir(join(runtime, '..'), { recursive: true })
   await writeFile(

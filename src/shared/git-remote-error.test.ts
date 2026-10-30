@@ -3,7 +3,6 @@ import {
   formatSubmodulePushFailureDetail,
   isDivergentPullReconciliationError,
   isNoUpstreamError,
-  MERGE_RECONCILIATION_PULL_ARGS,
   normalizeGitErrorMessage,
   pullArgsSpecifyReconciliation,
   runPullWithDivergenceFallback
@@ -14,6 +13,63 @@ afterEach(() => {
 })
 
 describe('normalizeGitErrorMessage', () => {
+  it.each([
+    ' ! [rejected] main -> main (stale info)',
+    '\t!\t[rejected] main -> main (stale info)\t',
+    ' \x1b[31m! [rejected] main -> main (stale info)\x1b[m',
+    '\x1b[31m ! [rejected] main -> main (stale info)\x1b[0m'
+  ])('preserves stale lease rejection details: %s', (rejection) => {
+    for (const newline of ['\n', '\r\n']) {
+      const output = [
+        'Command failed: git push https://user:secret@example.com/repo.git',
+        rejection,
+        "error: failed to push some refs to 'https://token@example.com/repo.git'"
+      ].join(newline)
+
+      expect(normalizeGitErrorMessage(new Error(output), 'push')).toBe(
+        output.replace('user:secret@', '').replace('token@', '')
+      )
+    }
+  })
+
+  it('does not classify a rejection marker on a separate line as a stale lease rejection', () => {
+    const tail = "error: failed to push some refs to 'origin'"
+    const error = new Error(`Command failed: git push\n !\n [rejected] main (stale info)\n${tail}`)
+
+    expect(normalizeGitErrorMessage(error, 'push')).toBe(tail)
+  })
+
+  it('handles push errors containing many blank lines', () => {
+    const tail = "error: failed to push some refs to 'origin'"
+    const error = new Error(`Command failed: git push\n${'\n'.repeat(64_000)}${tail}`)
+
+    expect(normalizeGitErrorMessage(error, 'push')).toBe(tail)
+  })
+
+  it.each(['remote: stale info', 'hook: stale info'])(
+    'does not classify unrelated output as a lease rejection: %s',
+    (output) => {
+      const tail = "error: failed to push some refs to 'origin'"
+      const error = new Error(`Command failed: git push\n${output}\n${tail}`)
+
+      expect(normalizeGitErrorMessage(error, 'push')).toBe(tail)
+    }
+  )
+
+  it.each(['push', 'pull', 'fetch', 'upstream'] as const)(
+    'classifies noninteractive credential refusal for %s',
+    (operation) => {
+      for (const stderr of [
+        'fatal: unable to get password from user',
+        "fatal: could not read Password for 'https://user@example.com': terminal prompts disabled"
+      ]) {
+        expect(normalizeGitErrorMessage(new Error(stderr), operation)).toBe(
+          'Authentication failed. Check your remote credentials.'
+        )
+      }
+    }
+  )
+
   it('keeps the submodule name when a recursive push is rejected', () => {
     const error = new Error(
       "Command failed: git push\nPushing submodule 'find-cmux-followers'\n" +
@@ -209,7 +265,7 @@ describe('runPullWithDivergenceFallback', () => {
 
     await runPullWithDivergenceFallback([], runPull)
 
-    expect(calls).toEqual([[], [...MERGE_RECONCILIATION_PULL_ARGS]])
+    expect(calls).toEqual([[], ['--no-rebase']])
     expect(runPull).toHaveBeenCalledTimes(2)
   })
 

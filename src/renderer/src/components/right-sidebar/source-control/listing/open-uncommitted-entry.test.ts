@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { getEditorPanelRenderModel } from '@/components/editor/editor-panel-render-model'
 import { createEditorStore } from '@/store/slices/editor-slice-test-harness'
 import type { GitStatusEntry } from '../../../../../../shared/git-status-types'
-import { openUncommittedEntry } from '@/lib/workspace-file-changes-open'
+import { openUncommittedEntry } from './open-uncommitted-entry'
 
 vi.mock('sonner', () => ({ toast: { error: vi.fn() } }))
 vi.mock('@/runtime/close-mirrored-editor-tab', () => ({

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { JIRA_IMAGE_MAX_BYTES } from '../../../shared/jira-attachment-image'
+import { JIRA_IMAGE_MAX_BYTES } from '../../../shared/jira/jira-attachment-image'
 import { loadIssueImageAttachments, createMediaMarkdownResolver } from './images'
 import { attachmentImageGrant, resetAttachmentImageGrantsForTest } from './image-grants'
 import { clearAttachmentImagesForSite, _resetAttachmentImageCache } from './image-cache'

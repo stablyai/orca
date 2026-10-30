@@ -101,7 +101,7 @@ export function ensureHooksStateParentTable(content: string): string {
   return `${content}${separator}${parent}`
 }
 
-// Why (#22592): `["hooks"."state"]` is the same table; a bare-only match appended a duplicate.
+// Quoted and bare hooks.state headers identify the same table.
 function findHooksStateHeaders(content: string): {
   hasParent: boolean
   firstChildOffset: number | null

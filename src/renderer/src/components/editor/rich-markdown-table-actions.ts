@@ -1,6 +1,6 @@
 import type { Editor } from '@tiptap/react'
 import { TextSelection, type Transaction } from '@tiptap/pm/state'
-import { CellSelection, selectionCell, TableMap } from '@tiptap/pm/tables'
+import { CellSelection, selectedRect, selectionCell, TableMap } from '@tiptap/pm/tables'
 
 export type RichMarkdownTableAction =
   | 'insert-row-above'
@@ -24,8 +24,7 @@ type TableContext = {
 }
 
 function cellPositionAtDocumentPosition(editor: Editor, position: number): number | null {
-  // Why: callers dispatch cached positions, so the doc may have shrunk since
-  // capture and resolve() throws past the end.
+  // Cached positions can outlive a document shrink; resolve would throw beyond its new end.
   if (position < 0 || position > editor.state.doc.content.size) {
     return null
   }
@@ -153,12 +152,6 @@ function tableContext(editor: Editor, targetCellPosition: number): TableContext 
   }
 }
 
-function columnIndexAtCellPosition(editor: Editor, cellPosition: number): number | null {
-  const $cell = editor.state.doc.resolve(cellPosition)
-  const role = $cell.nodeAfter?.type.spec.tableRole
-  return role === 'cell' || role === 'header_cell' ? $cell.index($cell.depth) : null
-}
-
 function selectedTableCoverage(
   editor: Editor,
   context: TableContext
@@ -188,8 +181,7 @@ function selectedTableCoverage(
   return { columns, rows, includesHeader }
 }
 
-// Why: mutates the caller's transaction so the rebalance lands in the same
-// undo step as the insertion it follows.
+// Rebalance on the insertion transaction so both changes share one undo step.
 function rebalanceAddedColumn(
   transaction: Transaction,
   tablePosition: number,
@@ -252,7 +244,6 @@ export function runRichMarkdownTableAction(
   if (!context) {
     return false
   }
-  const targetColumnIndex = columnIndexAtCellPosition(editor, targetCellPosition)
   const coverage = selectedTableCoverage(editor, context)
   const chain = editor.chain().focus()
 
@@ -272,28 +263,26 @@ export function runRichMarkdownTableAction(
         return false
       }
       return chain.deleteRow().run()
-    case 'insert-column-left':
-      if (targetColumnIndex === null) {
-        return false
-      }
+    case 'insert-column-left': {
+      const insertedColumnIndex = selectedRect(editor.state).left
       return chain
         .addColumnBefore()
         .command(({ tr }) => {
-          rebalanceAddedColumn(tr, context.tablePosition, targetColumnIndex)
+          rebalanceAddedColumn(tr, context.tablePosition, insertedColumnIndex)
           return true
         })
         .run()
-    case 'insert-column-right':
-      if (targetColumnIndex === null) {
-        return false
-      }
+    }
+    case 'insert-column-right': {
+      const insertedColumnIndex = selectedRect(editor.state).right
       return chain
         .addColumnAfter()
         .command(({ tr }) => {
-          rebalanceAddedColumn(tr, context.tablePosition, targetColumnIndex + 1)
+          rebalanceAddedColumn(tr, context.tablePosition, insertedColumnIndex)
           return true
         })
         .run()
+    }
     case 'delete-column':
       if (coverage.columns.size >= context.columnCount) {
         return chain.deleteTable().run()

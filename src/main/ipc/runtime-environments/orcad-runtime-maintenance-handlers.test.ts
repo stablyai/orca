@@ -130,7 +130,7 @@ describe('managed orcad maintenance IPC', () => {
     expect(policy.isActiveEnvironment('active-environment')).toBe(true)
     expect(policy.isActiveEnvironment('e-1')).toBe(false)
     policy.retireLocalState('e-1')
-    expect(mocks.retire).toHaveBeenCalledWith('e-1', invalidateTransport, store)
+    expect(mocks.retire).toHaveBeenCalledWith('e-1', invalidateTransport, store, '/profile')
     // The SSH host stops naming the unlinked server without waiting for a reconnect.
     expect(clearHostServerStatus).toHaveBeenCalledWith('ssh-1')
   })

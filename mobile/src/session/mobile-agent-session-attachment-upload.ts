@@ -7,9 +7,6 @@ import {
 import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc-operation'
 import { rpcResultVariant } from '../transport/rpc-operation-result-reader'
 
-// A file the phone attaches to a structured chat, pumped into the host's attachment store: open a
-// slot, append the bytes in chunks, commit. The agent only ever sees the host path it answers.
-
 const uploadSlotSchema = z.looseObject({ uploadId: z.string() })
 const storedAttachmentSchema = z.looseObject({
   path: z.string(),
@@ -60,7 +57,6 @@ const attachmentUploadAbort = bindDeferredRpcOperation(
 
 type MobileAgentSessionAttachmentRpcSender = Parameters<typeof attachmentUploadStart.request>[0]
 
-/** Stores `base64` in the host's attachment store for `sessionId`; aborts the slot on any failure. */
 export async function uploadMobileAgentSessionAttachment(
   client: MobileAgentSessionAttachmentRpcSender,
   args: { sessionId: string; name: string; base64: string }

@@ -4,7 +4,6 @@ import { createTabsSliceMockApi } from '../tabs-slice-test-harness'
 import { captureEditorOpenLinkIntent } from '../editor/tabs/editor-open-target-group'
 import { drawTabsFromMain } from '../tabs-drawn-from-main.test-fixture'
 
-// Main's answer to the window's layout commands, as a switch-on build sends them.
 vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
   (
     await import('@/runtime/layout-apply-test-transport.test-fixture')
@@ -93,7 +92,6 @@ describe.each(['repo1::/tmp/feature', 'folder:folder-1'])('empty groups in %s', 
       )
 
       expect(opened?.groupId).toBe(emptyGroupId)
-      // A layout-owner build draws the opened tab in that group once main's frame is in.
       await main.settle()
       main.close()
       const state = store.getState()

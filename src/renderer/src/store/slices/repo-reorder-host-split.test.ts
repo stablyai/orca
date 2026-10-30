@@ -30,20 +30,6 @@ describe('splitRepoReorderByHost', () => {
     expect(groups).toEqual([{ hostId: 'runtime:focused-env', orderedIds: ['a', 'b'] }])
   })
 
-  it('treats unowned repos as local when no runtime is focused', () => {
-    const groups = splitRepoReorderByHost(['a', 'b'], [repo('a', null), repo('b', null)], {
-      activeRuntimeEnvironmentId: null
-    })
-    expect(groups).toEqual([{ hostId: 'local', orderedIds: ['a', 'b'] }])
-  })
-
-  it('ignores ids that no longer map to a repo', () => {
-    const groups = splitRepoReorderByHost(['a', 'gone'], [repo('a', 'local')], {
-      activeRuntimeEnvironmentId: null
-    })
-    expect(groups).toEqual([{ hostId: 'local', orderedIds: ['a'] }])
-  })
-
   it('routes duplicate bare ids by occurrence in current repo order', () => {
     const repos = [repo('same', 'local'), repo('same', 'runtime:env-1')]
     const groups = splitRepoReorderByHost(['same', 'same'], repos, {

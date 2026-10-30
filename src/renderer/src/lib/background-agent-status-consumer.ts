@@ -19,9 +19,7 @@ export function createBackgroundAgentStatusConsumer(args: {
 }): {
   consume: (data: string) => void
   resolveRouting: () => AgentStatusConnectionRouting | undefined
-  /** Stamp a launch-origin observation for this pane (STA-4293). Lives here because this
-   *  consumer already owns the pane's status ingress; callers seeding a launch row need the
-   *  same authority the byte path writes under. */
+  /** Stamp launch-origin evidence under this pane’s existing byte-ingress ownership (STA-4293). */
   observeLaunchIngress: () => AgentStatusObservation
 } {
   const processAgentStatus = createAgentStatusOscProcessor()
@@ -41,8 +39,7 @@ export function createBackgroundAgentStatusConsumer(args: {
     for (const payload of processed.payloads) {
       if (!args.mainOwnsAgentStatusWrites) {
         const routing = resolveRouting()
-        // Why: hidden callbacks can outlive tab reuse; only the exact current
-        // pane-to-PTY binding may update its status ownership.
+        // Hidden callbacks can outlive tab reuse; only the exact current pane/PTY binding may update ownership.
         if (routing) {
           useAppStore.getState().setAgentStatus(
             args.paneKey,

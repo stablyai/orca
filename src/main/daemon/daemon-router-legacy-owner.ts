@@ -3,12 +3,7 @@ import { isDaemonEndpointGoneError, TerminalSessionOwnerUnverifiedError } from '
 import type { LegacyDaemonExitProof } from './daemon-legacy-exit-proof'
 import type { DaemonPtyAdapter } from './daemon-pty-adapter'
 
-/**
- * The daemon still running an unrouted session id, or undefined when none does. Why: a spawn of
- * that id on the current daemon starts a second session under it, and the next stop of the id
- * lands on the old one's live agent. A legacy daemon that cannot answer is not proof of death,
- * so it refuses unless its pid is proven gone.
- */
+/** Resolve legacy ownership before creating a duplicate; unknown owners require endpoint-loss and exit proof. */
 export async function findLegacySessionOwner(
   opts: Pick<PtySpawnOptions, 'sessionId' | 'isNewSession' | 'attachOnly'>,
   current: DaemonPtyAdapter,
@@ -19,7 +14,7 @@ export async function findLegacySessionOwner(
   if (!sessionId || opts.isNewSession || opts.attachOnly || legacy.length === 0) {
     return undefined
   }
-  // Why first: an unreachable legacy daemon must not block reattaching the current daemon's own session.
+  // Unreachable legacy daemons must not block the current daemon's proven sessions.
   if ((await probeOwnership(current, sessionId)).live === true) {
     return current
   }
@@ -31,7 +26,7 @@ export async function findLegacySessionOwner(
   if (owner) {
     return owner.adapter
   }
-  // Why both: a missing pid alone could be stale evidence about a daemon still on the socket.
+  // A missing PID may describe an old daemon while its replacement still owns the endpoint.
   const provenExited = (adapter: DaemonPtyAdapter, endpointGone: boolean): boolean =>
     endpointGone && exitProof.hasExited(adapter)
   if (
@@ -54,7 +49,7 @@ async function probeOwnership(
   if (live !== null) {
     return { live, endpointGone: false }
   }
-  // Why: the probe never reconnects, so a daemon whose startup connect failed would refuse forever.
+  // Liveness probes do not reconnect; inventory can recover a failed startup connection.
   try {
     const processes = await adapter.listProcesses({
       deadlineMs: Date.now() + LEGACY_OWNER_INVENTORY_MS

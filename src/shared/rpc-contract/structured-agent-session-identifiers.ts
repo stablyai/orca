@@ -22,3 +22,11 @@ export const JournalCursor = z
     sequence: z.number().int().nonnegative()
   })
   .strict()
+
+export const ContinuationContextParams = z
+  .object({
+    sessionId: SessionId,
+    workspaceId: Identifier('Invalid workspace id'),
+    expectedCursor: JournalCursor
+  })
+  .strict()

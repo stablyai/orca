@@ -1,0 +1,56 @@
+# Ratcheted by config/scripts/check-flaky-test-pattern-ratchet.mjs; info severity keeps
+# `pnpm lint:ast-grep` quiet about the grandfathered baseline.
+# The TSX document below mirrors the TypeScript one; keep them in sync.
+id: test-no-in-test-import-actual
+language: typescript
+severity: info
+message: vi.importActual inside a test or helper loads the real module graph cold inside the test's timeout. Load it in beforeAll, a vi.mock factory, or at module scope.
+note: 'For a deliberate in-test load, add `// ast-grep-ignore: test-no-in-test-import-actual -- <reason>` above it.'
+files:
+  - '**/*.test.ts'
+  - '**/*.test.tsx'
+rule:
+  # The member, not the call: `await vi.importActual<T>(…)` parses as comparisons, not a generic call.
+  kind: member_expression
+  regex: '^vi\.importActual$'
+  # Module scope runs during collection, outside any test timeout.
+  inside:
+    stopBy: end
+    any:
+      - kind: arrow_function
+      - kind: function_expression
+      - kind: function_declaration
+      - kind: method_definition
+  # vi.doMock is not exempt: its factory runs on the next import, which is usually inside a test.
+  not:
+    inside:
+      stopBy: end
+      kind: call_expression
+      has: { field: function, regex: '^(vi\.(mock|hoisted)|beforeAll)$' }
+---
+id: test-no-in-test-import-actual-tsx
+language: tsx
+severity: info
+message: vi.importActual inside a test or helper loads the real module graph cold inside the test's timeout. Load it in beforeAll, a vi.mock factory, or at module scope.
+note: 'For a deliberate in-test load, add `// ast-grep-ignore: test-no-in-test-import-actual -- <reason>` above it.'
+files:
+  - '**/*.test.ts'
+  - '**/*.test.tsx'
+rule:
+  # The member, not the call: `await vi.importActual<T>(…)` parses as comparisons, not a generic call.
+  kind: member_expression
+  regex: '^vi\.importActual$'
+  # Module scope runs during collection, outside any test timeout.
+  inside:
+    stopBy: end
+    any:
+      - kind: arrow_function
+      - kind: function_expression
+      - kind: function_declaration
+      - kind: method_definition
+  # vi.doMock is not exempt: its factory runs on the next import, which is usually inside a test.
+  not:
+    inside:
+      stopBy: end
+      kind: call_expression
+      has: { field: function, regex: '^(vi\.(mock|hoisted)|beforeAll)$' }

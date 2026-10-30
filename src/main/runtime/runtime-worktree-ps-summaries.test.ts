@@ -45,6 +45,38 @@ describe('buildRuntimeWorktreePsSummaries', () => {
     ])
   })
 
+  it("sends a renamed workspace's older ids so phone history still finds its sessions", () => {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the builder reads only these fields for a git row.
+    const worktree = {
+      id: 'repo-1::/workspace/app',
+      repoId: 'repo-1',
+      path: '/workspace/app',
+      branch: 'feature',
+      isArchived: false,
+      isMainWorktree: false,
+      parentWorktreeId: null,
+      childWorktreeIds: [],
+      lineage: null,
+      lastActivityAt: 0
+    } as unknown as ResolvedWorktree
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the summary builder reads only these store methods.
+    const store = {
+      getRepos: () => [],
+      getWorktreeMeta: () => ({ priorWorktreeIds: ['repo-1::/workspace/old-app'] }),
+      getAllWorktreeMeta: () => ({}),
+      getFolderWorkspaces: () => [],
+      getProjectGroups: () => []
+    } as unknown as RuntimeStore
+
+    const summary = buildRuntimeWorktreePsSummaries({
+      store,
+      resolvedWorktrees: [worktree],
+      platformByRepoId: new Map()
+    }).get(worktree.id)
+
+    expect(summary?.priorWorktreeIds).toEqual(['repo-1::/workspace/old-app'])
+  })
+
   it('carries the error of a failed delete the host still lists', () => {
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the builder reads only these fields for a git row.
     const worktree = {
@@ -137,7 +169,6 @@ describe('buildRuntimeWorktreePsSummaries', () => {
     expect(summary('provisioned')?.defaultBranch).toBe(false)
     expect(summary('automation')?.automationCreated).toBe(true)
     expect(summary('cli')?.cliCreated).toBe(true)
-    // Kind facts go on the wire only when true.
     expect(summary('main')).not.toHaveProperty('automationCreated')
     expect(summary('main')).not.toHaveProperty('cliCreated')
     expect(summary('main')).not.toHaveProperty('detachedHead')
@@ -192,7 +223,6 @@ describe('buildRuntimeWorktreePsSummaries', () => {
     }).get(worktree.id)
 
     expect(summary?.automationName).toBe('Nightly dependency bump')
-    // Only what the phone's details read; the rest of the cached PR stays on the host.
     expect(summary?.linkedPR).toEqual({
       number: 7,
       state: 'open',

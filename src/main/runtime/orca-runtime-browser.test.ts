@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentBrowserBridge } from '../browser/agent-browser-bridge'
-import { REMOTE_RUNTIME_MAX_OUTBOUND_BINARY_FRAME_BYTES } from '../../shared/remote-runtime-memory-limits'
+import { REMOTE_RUNTIME_MAX_OUTBOUND_BINARY_FRAME_BYTES } from '../../shared/remote-runtime/remote-runtime-memory-limits'
 import type { RuntimeBrowserCommandHost } from './browser/browser-command-contracts'
 import { RuntimeBrowserPageRegistry } from './runtime-browser-page-registry'
 
@@ -96,8 +96,9 @@ function createHost(overrides: Partial<RuntimeBrowserCommandHost> = {}): Runtime
           ]
         }))
       } as unknown as AgentBrowserBridge)
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a partial host fake; these tests reach only the methods it defines.
   return {
-    resolveWorktreeSelector: async (selector) => ({ id: selector.replace(/^id:/, '') }),
+    resolveWorkspaceSelector: async (selector) => ({ id: selector.replace(/^id:/, '') }),
     resolveBrowserWorkspace: async (selector) => ({ id: selector.replace(/^id:/, '') }),
     getRuntimeBrowserPageRegistry: () => runtimeBrowserPages,
     getAuthoritativeWindow: vi.fn(),
@@ -220,6 +221,28 @@ describe('RuntimeBrowserCommands browser screencast', () => {
     expect(bridge.tabList).toHaveBeenCalledWith(undefined)
   })
 
+  it('lists no tabs without waking the window when no saved tab could mount', async () => {
+    const { RuntimeBrowserCommands } = await import('./browser/browser-commands')
+    const bridge = {
+      getRegisteredTabs: vi.fn(() => new Map()),
+      tabList: vi.fn(() => ({ tabs: [] }))
+    } as unknown as AgentBrowserBridge
+    const host = createHost({
+      getAgentBrowserBridge: () => bridge,
+      serveBrowserTabs: {
+        opened: vi.fn(),
+        start: vi.fn(async () => false),
+        hasStartable: () => false
+      }
+    })
+    const commands = new RuntimeBrowserCommands(host)
+
+    await expect(commands.browserTabList({ worktree: 'id:wt-1' })).resolves.toEqual({ tabs: [] })
+
+    expect(host.getAuthoritativeWindow).not.toHaveBeenCalled()
+    expect(waitForWorktreeTabRegistrationMock).not.toHaveBeenCalled()
+  })
+
   it('creates the first explicit-worktree browser tab without waiting for an existing registration', async () => {
     const { RuntimeBrowserCommands } = await import('./browser/browser-commands')
     const webContents = { send: vi.fn() }
@@ -262,10 +285,7 @@ describe('RuntimeBrowserCommands browser screencast', () => {
     ).resolves.toEqual({ browserPageId: 'page-new' })
 
     expect(waitForWorktreeTabRegistrationMock).not.toHaveBeenCalled()
-    // Why: with no explicit profile, main must leave sessionProfileId/
-    // sessionPartition undefined so the renderer applies the user's configured
-    // default-profile inheritance instead of being forced onto the shared
-    // default partition.
+    // Leave profile/partition absent so renderer default-profile inheritance applies.
     expect(send).toHaveBeenCalledWith(
       'browser:requestTabCreate',
       expect.objectContaining({
@@ -736,7 +756,11 @@ describe('RuntimeBrowserCommands headless offscreen routing', () => {
       createHost({
         getAgentBrowserBridge: () => bridge,
         getAvailableAuthoritativeWindow: vi.fn(() => null),
-        getOffscreenBrowserBackend: vi.fn(() => ({ createTab, closeTab: vi.fn() }))
+        getOffscreenBrowserBackend: vi.fn(() => ({
+          createTab,
+          closeTab: vi.fn(),
+          ownsTab: () => true
+        }))
       })
     )
 
@@ -749,7 +773,6 @@ describe('RuntimeBrowserCommands headless offscreen routing', () => {
       worktreeId: 'wt-1',
       profileId: undefined
     })
-    // No renderer round-trip in headless mode.
     expect(waitForTabRegistrationMock).not.toHaveBeenCalled()
     expect(setActiveTab).toHaveBeenCalledWith(202, 'wt-1')
   })

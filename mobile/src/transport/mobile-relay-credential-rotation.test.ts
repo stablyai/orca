@@ -49,9 +49,16 @@ function install(reqId: string) {
   }
 }
 
-function fakeClient(responses: RpcResponse[]): RpcClient {
+function fakeClient(responses: RpcResponse[], beforeRequest = () => {}): RpcClient {
   return {
-    sendRequest: vi.fn(async () => responses.shift()!),
+    sendRequest: vi.fn(async () => {
+      beforeRequest()
+      const response = responses.shift()
+      if (!response) {
+        throw new Error('unexpected credential request')
+      }
+      return response
+    }),
     subscribe: vi.fn(() => () => {}),
     updateTerminalSubscriptionViewport: vi.fn(),
     getState: () => 'connected',
@@ -66,16 +73,26 @@ function fakeClient(responses: RpcResponse[]): RpcClient {
 describe('mobile relay credential rotation', () => {
   it('persists pending material before install and promotes only committed status', async () => {
     const installed = install('rotate-CAgICAgICAgICAgICAgICA')
-    const client = fakeClient([
-      success({ v: 1, relay, installStatus: { v: 1, reqId: installed.reqId, state: 'not-found' } }),
-      success(installed),
-      success({
-        v: 1,
-        relay,
-        installStatus: { v: 1, reqId: installed.reqId, state: 'committed', result: installed }
-      })
-    ])
     const writes: MobileRelayCredentialBundle[] = []
+    const client = fakeClient(
+      [
+        success({
+          v: 1,
+          relay,
+          installStatus: { v: 1, reqId: installed.reqId, state: 'not-found' }
+        }),
+        success(installed),
+        success({
+          v: 1,
+          relay,
+          installStatus: { v: 1, reqId: installed.reqId, state: 'committed', result: installed }
+        })
+      ],
+      () => {
+        expect(writes).toHaveLength(1)
+        expect(writes[0]?.pending?.reqId).toBe(installed.reqId)
+      }
+    )
 
     const result = await rotateMobileRelayCredential({
       client,
@@ -98,7 +115,20 @@ describe('mobile relay credential rotation', () => {
       current: { version: 3, expiresAt: 100_000 },
       grace: { version: 2, expiresAt: 70_000 }
     })
-    expect(result.bundle.pending).toBeUndefined()
+    expect(result.bundle).toEqual({
+      v: 1,
+      hostId: 'host-1',
+      deviceToken: 'device-token',
+      current: {
+        token: 'BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc',
+        hash: '3Ev4DHdHPRMPoN6GukAY_pi7IUAF5qWJHRK6kURvnoE',
+        version: 3,
+        expiresAt: 100_000
+      },
+      grace: { ...bundle.current, expiresAt: 70_000 },
+      pending: undefined
+    })
+    expect(writes[1]).toEqual(result.bundle)
   })
 
   it('repairs legacy decoded-byte hashes before the normal rotation window', () => {
@@ -113,7 +143,30 @@ describe('mobile relay credential rotation', () => {
     }
 
     expect(mobileRelayCredentialNeedsRotation(valid, now)).toBe(false)
-    expect(mobileRelayCredentialNeedsRotation(bundle, now)).toBe(true)
+    expect(
+      mobileRelayCredentialNeedsRotation(
+        {
+          ...valid,
+          current: { ...valid.current, expiresAt: now + 604_800_000 }
+        },
+        now
+      )
+    ).toBe(true)
+    expect(
+      mobileRelayCredentialNeedsRotation(
+        {
+          ...valid,
+          current: { ...valid.current, expiresAt: now + 604_800_001 }
+        },
+        now
+      )
+    ).toBe(false)
+    expect(
+      mobileRelayCredentialNeedsRotation(
+        { ...valid, current: { ...valid.current, hash: bundle.current.hash } },
+        now
+      )
+    ).toBe(true)
     expect(
       mobileRelayCredentialNeedsRotation(
         { ...valid, pending: { token: 'C'.repeat(43), hash: 'D'.repeat(43), reqId: 'pending' } },
@@ -137,13 +190,24 @@ describe('mobile relay credential rotation', () => {
     ])
     const writeBundle = vi.fn(async () => {})
 
-    await rotateMobileRelayCredential({ client, bundle: pendingBundle, writeBundle })
+    const result = await rotateMobileRelayCredential({ client, bundle: pendingBundle, writeBundle })
 
     expect(client.sendRequest).toHaveBeenCalledOnce()
     expect(client.sendRequest).toHaveBeenCalledWith('pairing.getEndpoints', {
       installReqId: 'rotate-existing'
     })
-    expect(writeBundle).toHaveBeenCalledOnce()
+    expect(writeBundle).toHaveBeenCalledExactlyOnceWith({
+      ...bundle,
+      current: { token: 'C'.repeat(43), hash: 'D'.repeat(43), version: 3, expiresAt: 100_000 },
+      grace: { ...bundle.current, expiresAt: 70_000 },
+      pending: undefined
+    })
+    expect(result.bundle.current).toEqual({
+      token: 'C'.repeat(43),
+      hash: 'D'.repeat(43),
+      version: 3,
+      expiresAt: 100_000
+    })
   })
 
   it('applies only authoritative current or grace confirmation expiries', () => {

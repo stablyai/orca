@@ -3,8 +3,7 @@
 
 export const PROGRAM_STATUS_OSC_PREFIX = '\x1b]7501;'
 
-/** The host parses OSC 7501. Why negotiated: answering the probe changes what programs paint
- *  (Claude Code drops its title glyphs), so a client must not answer for a host that reads glyphs. */
+/** Negotiate replies: probing programs change rendering (Claude drops title glyphs), so clients cannot answer for glyph-only hosts. */
 export const PROGRAM_STATUS_RUNTIME_CAPABILITY = 'terminal.program-status.v1' as const
 
 const PROGRAM_STATUS_STATES = ['idle', 'working', 'done', 'blocked', 'error'] as const
@@ -60,6 +59,11 @@ export function isProgramStatusState(value: unknown): value is ProgramStatusStat
 
 export function isProgramStatusKind(value: unknown): value is ProgramStatusKind {
   return PROGRAM_STATUS_KINDS.some((kind) => kind === value)
+}
+
+/** Approvals and questions belong to the running turn; a sign-in or unnamed block outlives it. */
+export function isTurnScopedProgramStatusKind(kind: ProgramStatusKind | undefined): boolean {
+  return kind === 'permission' || kind === 'question'
 }
 
 /** Live states: the only ones whose reports may carry `progress`. */

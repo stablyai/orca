@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   MAX_PROVIDER_DIAGNOSTIC_CHARS,
+  agentSessionFailureDetailText,
   providerDiagnostic,
   providerDiagnosticOf,
   agentSessionFailureFact,
@@ -45,6 +46,16 @@ describe('provider diagnostics', () => {
       providerDiagnosticOf(new Error('claude stream-json exited (code 1): not signed in'))
     ).toBe(undefined)
     expect(providerDiagnosticOf('a string')).toBeUndefined()
+  })
+
+  it("puts a start's log tail behind Details, but not the raw frame a retry row already shows", () => {
+    const tail = { text: '(code 1)\nclaude: unknown option', audience: 'log' as const }
+    expect(agentSessionFailureDetailText({ kind: 'providerStartFailed', detail: tail })).toBe(
+      tail.text
+    )
+    expect(agentSessionFailureDetailText({ kind: 'providerRetrying', detail: tail })).toBe(
+      undefined
+    )
   })
 })
 
@@ -167,29 +178,57 @@ describe('reading a failure fact', () => {
 
 describe('reading all of a failure fact', () => {
   it('reads every part of a fact the host built, as it arrives off the wire', () => {
-    for (const fact of [
-      agentSessionFailureFact('startFailed', {
-        refusal: { code: 'agent_session_conflict', details: { reason: 'claimConflicted' } }
-      }),
-      agentSessionFailureFact('providerRejected', {
-        detail: providerDiagnostic('Image type .bmp', 'person')
-      }),
-      agentSessionFailureFact('attachmentInvalid', {
-        attachment: { reason: 'tooLarge', limit: 5 * 1024 * 1024 }
-      }),
-      agentSessionFailureFact('providerRetrying', {
-        retry: readProviderRetry({ error: 'rate_limit', status: 429 })
-      }),
-      agentSessionFailureFact('providerRetrying', {
-        retry: readProviderRetry({
-          error: 'server_error',
-          status: 502,
-          attempt: 3,
-          maxRetries: 10
-        })
-      })
+    for (const { fact, expected } of [
+      {
+        fact: agentSessionFailureFact('startFailed', {
+          refusal: { code: 'agent_session_conflict', details: { reason: 'claimConflicted' } }
+        }),
+        expected: {
+          kind: 'startFailed',
+          refusal: { code: 'agent_session_conflict', details: { reason: 'claimConflicted' } }
+        }
+      },
+      {
+        fact: agentSessionFailureFact('providerRejected', {
+          detail: providerDiagnostic('Image type .bmp', 'person')
+        }),
+        expected: {
+          kind: 'providerRejected',
+          detail: { text: 'Image type .bmp', audience: 'person' }
+        }
+      },
+      {
+        fact: agentSessionFailureFact('attachmentInvalid', {
+          attachment: { reason: 'tooLarge', limit: 5 * 1024 * 1024 }
+        }),
+        expected: {
+          kind: 'attachmentInvalid',
+          attachment: { reason: 'tooLarge', limit: 5 * 1024 * 1024 }
+        }
+      },
+      {
+        fact: agentSessionFailureFact('providerRetrying', {
+          retry: readProviderRetry({ error: 'rate_limit', status: 429 })
+        }),
+        expected: { kind: 'providerRetrying', retry: { error: 'rate_limit', status: 429 } }
+      },
+      {
+        fact: agentSessionFailureFact('providerRetrying', {
+          retry: readProviderRetry({
+            error: 'server_error',
+            status: 502,
+            attempt: 3,
+            maxRetries: 10
+          })
+        }),
+        expected: {
+          kind: 'providerRetrying',
+          retry: { error: 'server_error', status: 502, attempt: 3, maxRetries: 10 }
+        }
+      }
     ]) {
-      expect(readWholeAgentSessionFailureFact(JSON.parse(JSON.stringify(fact)))).toEqual(fact)
+      expect(fact).toEqual(expected)
+      expect(readWholeAgentSessionFailureFact(JSON.parse(JSON.stringify(fact)))).toEqual(expected)
     }
     // Every reason a refusal can name, on the code that names it.
     for (const [code, reasons] of Object.entries(AGENT_SESSION_REFUSAL_REASONS)) {

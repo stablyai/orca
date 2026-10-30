@@ -14,13 +14,7 @@ import {
 
 const ACTIVE_DISPATCH_STATUSES: readonly DispatchStatus[] = ['pending', 'dispatched']
 
-/**
- * Reject mail addressed to a Dispatch mailbox nobody will ever read again.
- *
- * Why: a settled Dispatch has no active reader and `check` never reroutes its
- * mailbox, so accepting the message reports success for a delivery that cannot
- * happen. Federated targets keep their own liveness check.
- */
+/** Reject settled Dispatch mailboxes: no active reader remains and check never reroutes their mail. Federation checks its own liveness. */
 export function assertDispatchMailboxDeliverable(
   runtime: OrcaRuntimeService,
   db: OrchestrationDb,
@@ -88,7 +82,11 @@ export function resolveRunBoundDispatchRecipient(
     return undefined
   }
   const recipient = `dispatch:${dispatchId}`
-  const mismatch = runMismatch(recipient, boundRun.id, explicitRunId)
+  // Naming the Dispatch's own Run is equivalent to omitting --run.
+  const mismatch =
+    explicitRunId === dispatch.run_id
+      ? undefined
+      : runMismatch(recipient, boundRun.id, explicitRunId)
   if (mismatch && !mismatch.ok) {
     throw new OrchestrationError(mismatch.code, mismatch.message)
   }
@@ -183,7 +181,7 @@ export function resolveBareOrchestrationRecipient(params: {
     party.terminalHandle === null
       ? undefined
       : (runtime.getLiveTerminalPaneKey(party.terminalHandle) ?? undefined)
-  // Why: a session-backed party's Run binding is durable, so it outranks whether its pane is live.
+  // A session party's durable Run binding outranks pane liveness.
   const boundRun =
     party.orcaSessionId !== null
       ? db.getCurrentRunForCoordinator(party)

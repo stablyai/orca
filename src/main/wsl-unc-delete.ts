@@ -2,6 +2,7 @@ import { runProcess } from '@orca/process-host'
 import { buildWslExecArgs } from '../shared/wsl-login-shell-command'
 import { parseWslPath } from './wsl'
 import { wslExeFailure, wslExeProcessSpec } from './wsl-exe-process'
+import { runAsWslUserAct } from './wsl/wsl-unc-access-gate'
 import {
   containedDeleteCommand,
   rejectionFromWslDeleteStderr,
@@ -18,20 +19,7 @@ export class WslDeleteValidationError extends Error {
   }
 }
 
-/**
- * Delete a file/directory that lives on a WSL distro's Linux filesystem,
- * addressed from Windows via a \\wsl.localhost\<distro>\... (or legacy
- * \\wsl$\...) UNC path.
- *
- * Why: Electron's shell.trashItem() cannot move a WSL UNC item to a Recycle
- * Bin — the WSL virtual volume has none — so it throws and the delete fails
- * (issue #6415). For these paths we run `rm` inside the distro via wsl.exe,
- * which performs a true delete on the Linux fs and honors Linux permissions.
- *
- * Returns false when the path is not a WSL UNC path, so callers can fall back
- * to the normal local-trash behavior (we must never hard-delete a normal local
- * file that currently goes to the Recycle Bin).
- */
+/** WSL has no Recycle Bin: delete inside the distro; return false for other paths so normal trash behavior survives. */
 export async function tryDeleteWslUncPath(
   targetPath: string,
   options: { recursive?: boolean; approvedRoots?: readonly string[] } = {}
@@ -60,15 +48,13 @@ export async function tryDeleteWslUncPath(
     const flags = options.recursive ? '-rf' : '-f'
     command = ['rm', flags, '--', info.linuxPath]
   }
-  await runWslDelete(info.distro, command)
+  // A user's delete may start a stopped distro; as a user act, background reads stop trusting "stopped".
+  await runAsWslUserAct(info.distro, () => runWslDelete(info.distro, command))
   return true
 }
 
 async function runWslDelete(distro: string, command: string[]): Promise<void> {
-  // Why: a generous bound so deleting a large directory tree on the WSL fs
-  // doesn't abort mid-delete, while still capping a wedged wsl.exe.
-  // The explicit cwd matters here (#16463): this deletes worktrees, so an
-  // inherited cwd is exactly the directory about to go.
+  // Allow large-tree deletion time while bounding a wedged wsl.exe; the process spec supplies a stable host cwd.
   const result = await runProcess(wslExeProcessSpec(buildWslExecArgs(distro, command), 30000))
   const failure = wslExeFailure(result)
   if (failure) {

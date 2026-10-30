@@ -43,10 +43,7 @@ describe('findTerminalTabIdForLeaf', () => {
     expect(findTerminalTabIdForLeaf(session({ 'tab-a': layout('leaf-1') }), 'nope')).toBeUndefined()
   })
 
-  // The guard a leafId -> tabId cache needed and this scan does not: membership is read from the
-  // tree that is there NOW. `persistPtyBinding` grafts leaves by assigning into a layout already in
-  // the record, so anything memoized across calls has to be revalidated against every mutation
-  // shape a writer can produce - including one that leaves the root node's identity untouched.
+  // persistPtyBinding can mutate layouts without changing root identity; cross-read caches would need to validate such changes.
   it('reflects a subtree replaced in place after an earlier read', () => {
     const tracked = layout('leaf-1', 'leaf-2')
     const state = session({ 'tab-a': tracked })

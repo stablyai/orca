@@ -1,6 +1,4 @@
-// #23818: a restored pane must keep the mouse encoding (DECSET 1006/1016) with
-// the tracking mode, or it reports wheel events as legacy `ESC [ M` bytes that a
-// ConPTY host delivers to the app as typed text.
+// Preserve mouse encoding with tracking, or ConPTY may deliver legacy wheel reports as typed input.
 import './xterm-env-polyfill'
 import { describe, expect, it } from 'vitest'
 import { Terminal } from '@xterm/headless'
@@ -39,7 +37,6 @@ type XtermCoreMouseEvent = {
   action: number
 }
 
-/** xterm's private mouse state service: the encoder desktop viewers send reports through. */
 type XtermMouseStateService = {
   areMouseEventsActive: boolean
   encodeMouseEvent: (event: XtermCoreMouseEvent) => string
@@ -56,7 +53,6 @@ function isXtermMouseStateService(value: unknown): value is XtermMouseStateServi
   )
 }
 
-/** The report xterm's own encoder sends for a wheel-up, or null when tracking is off. */
 function wheelUpReport(terminal: Terminal): string | null {
   const core = '_core' in terminal ? terminal._core : undefined
   const service =
@@ -129,8 +125,7 @@ describe('snapshot mouse encoding', () => {
   })
 
   it('carries the encoding from a renderer snapshot through a headless seed to its snapshot', async () => {
-    // Why: the runtime seeds its headless model from the desktop pane's snapshot, and
-    // mobile keeps only what follows the last `?1049h` of that model's snapshot.
+    // Mobile replay discards bytes before the last alternate-screen entry; encoding must survive that slice.
     const { terminal, addon } = createTerminal()
     await write(terminal, `shell$ ${CODEX_FULLSCREEN_MODES}codex`)
     const emulator = new HeadlessEmulator({ cols: 40, rows: 10 })

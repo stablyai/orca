@@ -8,9 +8,7 @@ type Props = {
   children: ReactNode
   dragContentToDismiss?: boolean
   contentScrollable?: boolean
-  // Why: smart-source (and similar) need a stable outer frame so a docked
-  // TextInput can sit above the keyboard while results reflow in flex space
-  // above it — content-sized sheets make that field ride every list change.
+  // Stable outer frame keeps docked input above keyboard while results reflow; content-sized sheets move it on every list change.
   fillAvailable?: boolean
   // Why: rename (and similar prompts) open over an IME that is already up.
   seedKeyboard?: boolean
@@ -25,8 +23,7 @@ const SHOWN = 'shown'
 const sheetKey = () => SHOWN
 
 export function BottomDrawer({ visible, onClose, onAfterClose, children, ...drawerProps }: Props) {
-  // Why: hidden drawers are rendered by parent screens even while closed; the keyed drawer
-  // renders nothing until shown, which keeps Reanimated/Gesture setup out of hot paths.
+  // Closed drawers render nothing to avoid Reanimated/Gesture setup in hot paths even when parent mounts them.
   return (
     <KeyedBottomDrawer
       {...drawerProps}

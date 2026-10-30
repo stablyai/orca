@@ -1,8 +1,6 @@
 // @vitest-environment happy-dom
 
-// The row's state clock, as the host dates it. A subagent's rows move the summary's `updatedAt`
-// but never its `statusStartedAt`, so a settled parent must keep its completion stamp and stay
-// read while its child works on; an older host that publishes no clock keeps the old dating.
+// Child updatedAt changes must not reset the parent’s host-dated completion/read stamp; older hosts retain legacy dating.
 
 import { act, cleanup, render, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
@@ -15,6 +13,9 @@ import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
 import type { Tab } from '../../../../shared/tab-types'
 import type { AppState } from '@/store/types'
 import { countActivityUnread } from '../activity/useActivityUnreadCount'
+import { savedStatusContracts } from '../../../../shared/agent-session-saved-status.test-fixture'
+import { resolveAttention } from '../../../../shared/sidebar-list/smart-attention'
+import { agentVerdictStatusLine } from '@/lib/agent-verdict-status-line'
 
 type TestStore = {
   getState: () => AppState
@@ -127,6 +128,27 @@ describe("the structured row's state clock", () => {
     resetStructuredAgentSessionStatusFeedsForTests()
   })
 
+  it.each(savedStatusContracts)(
+    'projects saved $outcome through desktop status and Smart Sort on the original turn clock',
+    async ({ summary: savedSummary, outcome, attentionClass: cls, text }) => {
+      const emit = await connect()
+      emit({ type: 'snapshot', sessions: [savedSummary] })
+      expect(row()).toMatchObject({
+        state: 'done',
+        stateStartedAt: SETTLED,
+        interrupted: outcome === 'cancellation',
+        mainAgent: { state: 'done', outcome, stateStartedAt: SETTLED }
+      })
+      expect(agentVerdictStatusLine(row())).toBe(text)
+      expect(
+        resolveAttention([{ kind: 'hook', entry: row(), hasLivePty: false }], SETTLED + 1)
+      ).toEqual({
+        cls,
+        attentionTimestamp: cls === 2 ? SETTLED : 0
+      })
+    }
+  )
+
   it('keeps a settled parent read while its subagent writes, until its own next turn ends', async () => {
     const emit = await connect()
     emit({ type: 'snapshot', sessions: [summary({ statusStartedAt: SETTLED })] })
@@ -176,7 +198,6 @@ describe("the structured row's state clock", () => {
     })
     expect(unread()).toBe(1)
 
-    // Answered: the parent is idle again, still dated by its own last turn.
     acknowledge(28_000)
     emit({ type: 'status', session: summary({ statusStartedAt: SETTLED, updatedAt: 28_500 }) })
     expect(row()).toMatchObject({ state: 'done', stateStartedAt: SETTLED })

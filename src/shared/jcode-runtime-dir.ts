@@ -1,9 +1,5 @@
-// Why: jcode runs one server/client daemon per runtime dir (the daemon lock,
-// socket, and debug socket all live there). Orca stamps a per-pane runtime dir
-// so every Orca-launched jcode pane gets its own daemon, and jcode's lifecycle
-// hooks (which fire inside the daemon) inherit that pane's ORCA_PANE_KEY
-// instead of the first pane's. Without this, a second jcode pane connects the
-// first pane's daemon and its status is attributed to the wrong tab.
+// jcode shares a daemon per runtime directory, including sockets/lock. Isolate per pane so daemon hooks inherit that pane’s ORCA_PANE_KEY;
+// otherwise later panes connect to the first daemon and report status to its tab.
 import { createHash } from 'node:crypto'
 import { mkdir } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -11,10 +7,7 @@ import { join } from 'node:path'
 
 export const JCODE_RUNTIME_DIR_ENV_KEY = 'JCODE_RUNTIME_DIR'
 
-// Why: the socket file is `<runtimeDir>/jcode.sock`, and unix socket paths are
-// capped at SUN_LEN (104 bytes). TMPDIR alone can be ~50 chars, so the full
-// pane key (73 chars) never fits; a deterministic 16-hex hash keeps the path
-// short while staying per-pane unique and stable across restarts.
+// runtimeDir/jcode.sock must fit 104 bytes. Long TMPDIR plus full 73-character pane keys cannot; a stable 16-hex digest keeps paths short.
 export function buildJcodeRuntimeDir(paneKey: string): string {
   const hash = createHash('sha256').update(paneKey).digest('hex').slice(0, 16)
   return join(tmpdir(), 'orca-jcode', hash)
@@ -35,17 +28,8 @@ export function buildJcodeRuntimeDirEnv(
     : undefined
 }
 
-/**
- * Ensures the per-pane jcode runtime dir exists before a PTY spawn (jcode fails
- * fast when it is missing) and returns the env to merge into the spawn env.
- * Async so the spawn hot path never blocks on a filesystem syscall.
- *
- * Why a failure returns undefined rather than throwing: this dir is stamped on
- * EVERY local pane, not only jcode ones, so letting an EACCES on a shared
- * /tmp/orca-jcode or a read-only TMPDIR propagate would stop a plain shell from
- * opening. Without the dir jcode falls back to its own default daemon, which is
- * the behaviour Orca had before per-pane isolation.
- */
+/** Create before PTY spawn because jcode requires the directory; use async I/O on the hot path.
+ * Every local pane receives this env, so failures must fall back to jcode’s default daemon rather than prevent ordinary shells from opening. */
 export async function ensureJcodeRuntimeDir(
   paneKey: string,
   platform: NodeJS.Platform = process.platform

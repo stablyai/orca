@@ -2,21 +2,11 @@ import { describe, expect, it } from 'vitest'
 import { OrcaRuntimeService } from './orca-runtime'
 import { AGENT_STATUS_STALE_AFTER_MS, type AgentStatusEntry } from '../../shared/agent-status-types'
 
-// Timings below are the measured deltas from a real `claude` 2.1.234 parked on a
-// Write permission prompt (epoch ms, one capture of two with identical structure):
-//   ...900370  PreToolUse Write
-//   ...900382  title "◐ Claude Code" → "✳ Claude Code"    settle, working→idle
-//   ...900421  PermissionRequest Write                     the hook Orca reports as `waiting`
-//   ...900544  title → "✳ probe2.txt Write tool file"      same idle class, last write
-//   then 31s of silence with the prompt still up.
-// The trailing same-class repaint is the whole defect: it advances lastOscTitleEpochMs
-// past a hook that is still current, while lastAgentStatusRichInvalidatedAtEpochMs (which
-// moves only on a class change) stays at the settle.
+// Captured Claude 2.1.234 permission prompt: title settles 39ms before PermissionRequest, then repaints 123ms after.
+// The same-class repaint advances title time without invalidating the still-live hook; 31s of silence follows.
 const SETTLE_AFTER_HOOK_MS = -39
 const TRAILING_TITLE_AFTER_HOOK_MS = 123
 
-// Private by design — the projection has no public entry point, and testing it through a
-// full session.tabs publication would bury the one decision this suite is about.
 type TitleRenewal = (
   status: AgentStatusEntry | null,
   pty: unknown,
@@ -43,8 +33,7 @@ function claudeStatus(state: AgentStatusEntry['state'], updatedAt: number): Agen
   }
 }
 
-/** The PTY as it stands once Claude has raised the prompt and gone quiet. */
-function parkedOnPromptPty(hookAt: number): unknown {
+function parkedOnPromptPty(hookAt: number) {
   return {
     ptyId: 'pty-1',
     lastAgentStatus: 'idle',
@@ -58,9 +47,7 @@ function parkedOnPromptPty(hookAt: number): unknown {
 }
 
 describe('mobile/paired projection for a pane pending a human answer', () => {
-  // Why both names: Claude's PermissionRequest normalizes to `waiting`, not `blocked`
-  // (agent-hook-listener normalizeClaudeEvent), so a guard written against `blocked`
-  // alone passes its own tests and still misses every Claude permission prompt.
+  // Claude normalizes PermissionRequest to waiting; blocked-only coverage misses its real prompts.
   it.each(['waiting', 'blocked'] as const)(
     'keeps a fresh `%s` instead of publishing a title-derived done',
     (state) => {
@@ -72,8 +59,6 @@ describe('mobile/paired projection for a pane pending a human answer', () => {
     }
   )
 
-  // Why: the guard is bounded by freshness, or an agent killed while parked on a prompt
-  // would hold the card open forever instead of decaying like any other abandoned row.
   it('still lets the title retire a `waiting` older than the stale boundary', () => {
     const hookAt = Date.now() - AGENT_STATUS_STALE_AFTER_MS - 1
     const out = renewFromPtyTitle()(claudeStatus('waiting', hookAt), parkedOnPromptPty(hookAt), {
@@ -82,35 +67,36 @@ describe('mobile/paired projection for a pane pending a human answer', () => {
     expect(out?.state).toBe('done')
   })
 
-  // Why: proves the guard is scoped to pending-answer states rather than switching off
-  // title renewal wholesale — an idle title must still retire a stale spinner (#1437).
-  it('still lets an idle title retire a fresh `working`', () => {
+  // Repainting an idle interval begun before the hook does not establish a new boundary.
+  it('keeps a fresh `working` hook after the idle interval began', () => {
     const hookAt = Date.now()
     const out = renewFromPtyTitle()(claudeStatus('working', hookAt), parkedOnPromptPty(hookAt), {
       preserveQuestionUnderShellTitle: true
     })
-    expect(out?.state).toBe('done')
+    expect(out?.state).toBe('working')
   })
 
-  it('does not let replay delivery time make old working evidence outrank a newer title', () => {
+  it('does not let replay delivery time outrank a newer title state transition', () => {
     const hookAt = Date.now() - 1_000
     const replayedAt = Date.now()
+    const transitionPty = {
+      ...parkedOnPromptPty(hookAt),
+      lastAgentStatusRichInvalidatedAtEpochMs: hookAt + 1
+    }
     const out = renewFromPtyTitle()(
       { ...claudeStatus('working', replayedAt), evidenceObservedAt: hookAt },
-      parkedOnPromptPty(hookAt),
+      transitionPty,
       { preserveQuestionUnderShellTitle: true }
     )
 
     expect(out?.state).toBe('done')
   })
 
-  // Why: an idle title is the ABSENCE of activity evidence, so it cannot outrank the hook.
-  // A `working` title is positive evidence the agent resumed, which does — otherwise a
-  // finished turn's question card would linger into the next working interval (#11761).
+  // Idle is absence of activity; working is positive resumed-turn evidence and can retire the question (#11761).
   it('still lets a working title retire a fresh `waiting`', () => {
     const hookAt = Date.now()
     const workingTitlePty = {
-      ...(parkedOnPromptPty(hookAt) as Record<string, unknown>),
+      ...parkedOnPromptPty(hookAt),
       lastAgentStatus: 'working',
       lastOscTitle: '⠋ Claude'
     }

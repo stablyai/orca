@@ -1,13 +1,7 @@
 import type { EditorGet, EditorSet } from '../types/editor-set-get'
 import type { EditorSlice } from '../types/editor-slice'
-import { toast } from 'sonner'
-import { extractIpcErrorMessage } from '@/lib/ipc-error'
-import {
-  assertEditorFileOperationCurrent,
-  captureEditorFileOperationProvenance,
-  getEditorFileOperationContext
-} from '@/lib/editor-file-operation-owner'
 import { createUntitledMarkdownFileWithTemplateSelection } from '@/lib/create-untitled-markdown'
+import { createUntitledFileInActiveWorkspace } from './untitled-file-creation'
 import type { OpenFile } from '../types/open-file'
 import { resolveEditorFileIdForOwner } from '../file-ids/editor-file-ids'
 import { buildEditorActiveResult } from '../tabs/editor-open-target-group'
@@ -51,49 +45,25 @@ export function createMarkdownPreviewActions(
 > {
   return {
     openNewMarkdownInActiveWorkspace: async (groupId) => {
-      const state = get()
-      const worktreeId = state.activeWorktreeId
-      if (!worktreeId) {
-        return
-      }
-      const worktree = state.getKnownWorktreeById(worktreeId)
-      if (!worktree) {
-        return
-      }
-      try {
-        const operationProvenance = captureEditorFileOperationProvenance(
-          state,
-          worktreeId,
-          undefined,
-          false
-        )
-        const operationContext = getEditorFileOperationContext(
-          state,
-          { worktreeId, operationProvenance },
-          worktree.path
-        )
-        const fileInfo = await createUntitledMarkdownFileWithTemplateSelection(
-          worktree.path,
-          worktreeId,
-          operationContext.connectionId,
-          operationContext.target,
-          operationProvenance,
-          operationContext.expectedSshConnectionGeneration,
-          operationContext.expectedSshTargetId,
-          operationContext.expectedExecutionHostId,
-          () => assertEditorFileOperationCurrent(get(), worktreeId, operationProvenance)
-        )
-        if (!fileInfo) {
-          return
-        }
-        get().openFile(fileInfo, {
-          preview: false,
-          targetGroupId: groupId,
-          focusEditor: true
-        })
+      const created = await createUntitledFileInActiveWorkspace(
+        get,
+        groupId,
+        (context) =>
+          createUntitledMarkdownFileWithTemplateSelection(
+            context.worktreePath,
+            context.worktreeId,
+            context.connectionId,
+            context.target,
+            context.operationProvenance,
+            context.expectedSshConnectionGeneration,
+            context.expectedSshTargetId,
+            context.expectedExecutionHostId,
+            context.assertOperationCurrent
+          ),
+        'Failed to create untitled markdown file.'
+      )
+      if (created) {
         get().recordFeatureInteraction('markdown-file-created')
-      } catch (err) {
-        toast.error(extractIpcErrorMessage(err, 'Failed to create untitled markdown file.'))
       }
     },
 

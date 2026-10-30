@@ -3,13 +3,12 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { BrowserWindow } from 'electron'
 import { getDefaultSettings } from '../../../../shared/constants'
-import { finishPtyShutdown } from '../provider/liveness'
 import { prepareRuntimePtySpawn } from './spawn-preflight'
 import { buildRuntimePtySpawnOptions } from './spawn-options'
 import { createRuntimePtySpawnState, type RuntimePtySpawnArgs } from './spawn-state'
 import type { PtyRuntimeControllerDeps } from './controller-deps'
+import { makeRuntimePtySpawnTestDeps } from './spawn-preflight-test-deps-fixture'
 import { ClaudeProfileRouter } from '../../../claude-accounts/claude-profile-router'
 import { installClaudeProfileRouter } from '../../../claude-accounts/claude-profile-installed-router'
 
@@ -42,44 +41,9 @@ const HOST_DEFAULT_SHELL = 'powershell.exe'
 const hostPlatform = process.platform
 
 function makeDeps(): PtyRuntimeControllerDeps {
-  const noCodexResumeLaunch: PtyRuntimeControllerDeps['noCodexResumeLaunch'] = (command) => ({
-    codexResumeHome: null,
-    command,
-    notifyResumeUnavailable: false,
-    droppedResumeArgv: false,
-    providerSession: null
-  })
-  return {
-    store: undefined,
-    getSettings: () => ({
-      ...getDefaultSettings('/tmp'),
-      terminalWindowsShell: HOST_DEFAULT_SHELL
-    }),
-    adoptStablePane: async () => null,
-    getLocalPtyStartupPromise: () => undefined,
-    getLocalPtyProviderStartupPromise: () => undefined,
-    prepareCodexResumeHome: () => null,
-    resolveCodexResumeLaunch: async (command) => noCodexResumeLaunch(command),
-    noCodexResumeLaunch,
-    reconcileSharedRuntimeResumeHome: async (resumeHome) => resumeHome.codexHomePath,
-    stripSequencedStartupResumeArgv: (env) => env,
-    assertWorkspaceAcceptsNewPty: () => undefined,
-    resolvePtySpawnStartupCwd: (_worktreeId, cwd) => cwd,
-    requestSerializedBuffer: async () => null,
-    shutdownProviderAndDetectExit: async () => false,
-    rememberSyntheticKillExit: () => {},
-    rememberRetiredRejectedPty: () => {},
-    sendPtyExitToRenderer: () => {},
-    sendPtySpawnedToRenderer: () => {},
-    finishPtyShutdown,
-    trustedTerminalHandleEnv: new Set(),
-    retiredRejectedPtyIds: new Map(),
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only `operations.ts` (write/clearBuffer) reads `mainWindow`; the spawn preflight and option build never touch it, and a real BrowserWindow cannot exist in vitest.
-    mainWindow: {} as BrowserWindow
-  }
+  return makeRuntimePtySpawnTestDeps(HOST_DEFAULT_SHELL)
 }
 
-/** Runs the preflight and option build the way `spawnPtyFromRuntimeController` sequences them. */
 async function resolveSpawnOptions(
   args: RuntimePtySpawnArgs
 ): Promise<ReturnType<typeof createRuntimePtySpawnState>['spawnOptions']> {
@@ -105,11 +69,31 @@ describe('runtime pty spawn options: declared spawn intent', () => {
   })
 })
 
-/**
- * Behavioural twin of `pty-spawn-shell-override-parity.test.ts`: a local Windows runtime spawn
- * (`terminal create --shell`, headless serve) must hand the caller's shell to the provider, not
- * the host default with the request typed into it.
- */
+describe("runtime pty spawn options: the user's act on a WSL distro (E9)", () => {
+  it("checks a folder workspace's path passively unless the start is the user's act", async () => {
+    const admit = vi.fn<PtyRuntimeControllerDeps['assertWorkspaceAcceptsNewPty']>(() => undefined)
+    for (const args of [{}, { wslUserAct: true as const }]) {
+      const ctx = createRuntimePtySpawnState(
+        { ...makeDeps(), assertWorkspaceAcceptsNewPty: admit },
+        { cols: 120, rows: 40, worktreeId: 'wt-1', ...args }
+      )
+      await prepareRuntimePtySpawn(ctx)
+      ctx.finishTerminalInstall()
+    }
+    expect(admit.mock.calls.map((call) => call[3])).toEqual([true, false])
+  })
+
+  it('marks every main-side start as background work unless its caller names the user', async () => {
+    await expect(resolveSpawnOptions({ cols: 120, rows: 40 })).resolves.toMatchObject({
+      wslBackgroundStart: true
+    })
+    await expect(
+      resolveSpawnOptions({ cols: 120, rows: 40, wslUserAct: true })
+    ).resolves.not.toHaveProperty('wslBackgroundStart')
+  })
+})
+
+/** Runtime --shell must choose the provider shell, not type its name into the host default shell. */
 describe('runtime pty spawn preflight: requested shell on a local Windows host', () => {
   afterEach(() => {
     Object.defineProperty(process, 'platform', { configurable: true, value: hostPlatform })
@@ -197,7 +181,9 @@ describe('runtime pty spawn preflight: Claude account routing in a WSL pane', ()
       rows: 40,
       cwd: '\\\\wsl.localhost\\Ubuntu\\home\\u',
       shellOverride: 'wsl.exe',
-      env: { KEEP: '1' }
+      env: { KEEP: '1' },
+      // The user's start: a background one holds until the distro is proven running (E9).
+      wslUserAct: true
     }
     const ctx = createRuntimePtySpawnState(makeDeps(), args)
     await expect(prepareRuntimePtySpawn(ctx)).resolves.toBeNull()

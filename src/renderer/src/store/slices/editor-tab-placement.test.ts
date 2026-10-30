@@ -12,7 +12,6 @@ import { layoutApplyTestTransport } from '@/runtime/layout-apply-test-transport.
 import { makeLayout, makeTab } from './store-test-helpers'
 import { drawTabsFromMain, type TabsDrawnFromMain } from './tabs-drawn-from-main.test-fixture'
 
-// Main's answer to the window's layout commands, as a switch-on build sends them.
 vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
   (
     await import('@/runtime/layout-apply-test-transport.test-fixture')
@@ -288,10 +287,7 @@ describe('createEditorSlice split-group editor routing', () => {
     const store = createDrawnEditorTabsStore()
     const { editorGroupId } = await seedTerminalAndEditorGroups(store)
 
-    // Regression #6891: with a split like Agent | Browser, focusing the browser
-    // pane and opening a file sent it to another pane. A focused browser pane
-    // was treated like a focused agent terminal, so the open was stolen into an
-    // existing editor pane instead of the focused group.
+    // Focused browser/editor/simulator panes must keep file opens in the visible group; treating browser as agent terminal stole opens into existing editors (#6891).
     const browserGroupId = store.getState().createEmptySplitGroup('wt-1', editorGroupId, 'right')
     if (!browserGroupId) {
       throw new Error('Expected split browser group')

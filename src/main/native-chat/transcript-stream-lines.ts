@@ -12,7 +12,8 @@ export async function decodeTranscriptStream(
   start: number,
   decode: TranscriptDecoder,
   includeTrailingLine: boolean,
-  maxRecordBytes = Infinity
+  maxRecordBytes = Infinity,
+  sourceOrder = false
 ): Promise<{ messages: NativeChatMessage[]; consumedBytes: number }> {
   const messages: NativeChatMessage[] = []
   let consumedBytes = 0
@@ -37,7 +38,11 @@ export async function decodeTranscriptStream(
     }
     const message = decode(line, transcriptFallbackId(filePath, start + relativeOffset))
     if (message) {
-      const ordered = inTranscriptFileOrder(message, latest)
+      const ordered = inTranscriptFileOrder(
+        message,
+        latest,
+        sourceOrder ? start + relativeOffset : undefined
+      )
       latest = ordered.latest
       messages.push(ordered.message)
     }

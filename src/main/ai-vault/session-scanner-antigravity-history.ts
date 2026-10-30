@@ -15,13 +15,7 @@ import { antigravityHistoryPromptHash } from './antigravity-history-prompt'
 
 const HISTORY_MATCH_WINDOW_MS = 2_000
 
-/**
- * The local-scan `readHistory`; remote scans inject their own transport. A
- * missing or unreadable history file is genuinely "no enrichment", but a gate
- * refusal must propagate so the caller records a scan issue — degrading it to
- * null lists the session with a missing cwd and no retry signal, and the
- * resolver's memo relies on the rejection to evict rather than pin a stall.
- */
+/** Propagate cancellation and WSL gate errors so scans report failures and rejected reads remain retryable. */
 export async function readLocalAntigravityHistory(
   path: string,
   signal?: AbortSignal
@@ -88,9 +82,7 @@ export function createAntigravityWorkspaceResolver(
       }
       let index = indexes.get(historyPath)
       if (!index) {
-        // Why: a read failure is transient (a stalled WSL distro refuses here),
-        // so it must not be memoized — every later session under this history
-        // file would inherit the rejection for the process lifetime.
+        // Evict rejected reads so a transient WSL failure does not poison later enrichment.
         const pending: Promise<AntigravityHistoryIndex> = readHistory(historyPath)
           .then(async (history) => {
             const index = indexAntigravityHistory(history)
@@ -175,6 +167,6 @@ function findAntigravityWorkspace(
   const matches = (index.byPrompt.get(opening.hash) ?? []).filter(
     (entry) => Math.abs(entry.timestampMs - promptTimestampMs) <= HISTORY_MATCH_WINDOW_MS
   )
-  // Exact prompt/time fallback is valid only when a single history row matches.
+  // Prompt hash and timestamp proximity identify a workspace only when one history row matches.
   return matches.length === 1 ? (matches[0]?.workspace ?? null) : null
 }

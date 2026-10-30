@@ -87,8 +87,7 @@ async function listWorktreesForSpaceScan(
     if (isFolderRepo(repo)) {
       return { ok: true, worktrees: [createFolderWorktree(repo)] }
     }
-    // Why: the raw `connectionId` field answers "local" for a row that spells its owner only as
-    // `executionHostId: 'ssh:<target>'`, which sizes a same-named path on this machine instead.
+    // Resolve executionHostId too, or SSH-only rows can size a same-named local path.
     const route = resolveGitRouteForHost(getRepoExecutionHostId(repo))
     if (route.kind === 'runtime') {
       return {

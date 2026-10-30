@@ -1,6 +1,6 @@
 import { lstat, realpath } from 'node:fs/promises'
 import { basename, dirname, isAbsolute, relative, resolve } from 'node:path'
-import { isDescendantOrEqual, isENOENT } from '../ipc/filesystem-path-containment'
+import { isDescendantOrEqual, isENOENT } from '../ipc/filesystem/filesystem-path-containment'
 import { isWslUncPath } from '../../shared/wsl-paths'
 import { needsWslHostResolution } from './host-readable-transcript-path'
 
@@ -26,8 +26,7 @@ export async function admitTranscriptPath(root: string, candidate: string) {
     : null
 }
 
-/** A not-yet-written transcript resolves through its deepest existing ancestor, so a linked
- *  account folder compares equal before the agent's first save. */
+/** Resolve missing files through the deepest existing ancestor so linked account roots still compare equal. */
 async function canonicalPath(path: string): Promise<string | null> {
   const missing: string[] = []
   let existing = path

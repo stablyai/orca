@@ -1,4 +1,3 @@
-// Route state dropped when a worktree mutation rewrites the `.git` marker it was derived from.
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   invalidateWslLinkedWorktreeGitRouting,
@@ -80,16 +79,14 @@ describe('invalidateWslLinkedWorktreeGitRouting', () => {
     await expect(probe(sibling)).resolves.toBe(true)
     invalidateWslLinkedWorktreeGitRouting(CWD)
 
-    // Prefix match must not reach `C:\repo-other`, which shares the string prefix.
+    // Sibling prefixes must not be mistaken for descendants.
     await expect(probe(submodule)).resolves.toBe(true)
     await expect(probe(sibling)).resolves.toBe(true)
     expect(fileSystem.stat).toHaveBeenCalledTimes(3)
   })
 
   it('leaves a probe that is already in flight alone', async () => {
-    // Scope control: invalidation must not retire in-flight probes. Doing so leaves
-    // callers waiting on them with no cached route, which `resolveGitCommand` reads
-    // as "route through wsl.exe git" — the misroute this module exists to prevent.
+    // In-flight probes must still cache their route before synchronous command resolution reads it.
     let releaseMarker: ((marker: typeof fileMarker) => void) | undefined
     const inFlight = new Promise<typeof fileMarker>((resolve) => {
       releaseMarker = resolve

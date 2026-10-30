@@ -4,8 +4,8 @@ import type {
   ClaudeSession,
   ClaudeSessionExit,
   ClaudeStructuredSessionEvent
-} from './claude-structured-session-state'
-import { cancelClaudeAcquisitionAttempt } from './claude-structured-session-state'
+} from './structured/claude-structured-session-state'
+import { cancelClaudeAcquisitionAttempt } from './structured/claude-structured-session-state'
 import {
   AgentSessionAcquisitionExitProvenError,
   AgentSessionAcquisitionExitUnprovenError,
@@ -22,8 +22,7 @@ import { settledClaudeTurnEndLeaf } from './claude-structured-resume-point'
 import { settleClaudeTurnEndWaiters } from './claude-request-end-wait'
 import type { StructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
 
-/** The root's own exit was seen first-hand. The lease follows the root, so a descendant
- *  left unverified or seen alive does not hold it. A failed spawn had no process to exit. */
+/** Root exit releases the lease even with unverified descendants; a failed spawn proves no exit. */
 export function claudeRootExitObserved(
   connection: ClaudeStreamJsonConnection | null | undefined
 ): boolean {
@@ -36,15 +35,30 @@ export function claudeAcquisitionCleanupError(
   cause: unknown
 ): Error {
   const verdict = connection?.exitVerdict
-  if (verdict?.processless === true) {
-    return new AgentSessionPreSpawnError(cause)
-  }
-  return claudeRootExitObserved(connection)
-    ? new AgentSessionAcquisitionRootExitObservedError(cause)
-    : new AgentSessionAcquisitionExitUnprovenError(cause)
+  return verdict?.processless === true
+    ? new AgentSessionPreSpawnError(cause)
+    : claudeRootExitObserved(connection) || verdict?.killDelivered
+      ? new AgentSessionAcquisitionRootExitObservedError(
+          cause,
+          verdict?.root === 'exited' ? 'exit-observed' : 'kill-delivered'
+        )
+      : new AgentSessionAcquisitionExitUnprovenError(cause)
 }
 
-/** An unproven exit keeps the acquisition so a later stop can still prove its root gone. */
+/** Completion and physical evidence are separate answers on a writer-terminal close. */
+export function claudeCloseReport(
+  connection: ClaudeStreamJsonConnection | null | undefined,
+  closed: boolean,
+  cause: unknown
+): Error | undefined {
+  const verdict = connection?.exitVerdict
+  if (closed && !verdict?.processless && (verdict?.root === 'exited' || !verdict?.killDelivered)) {
+    return undefined
+  }
+  return claudeAcquisitionCleanupError(connection, cause)
+}
+
+/** Retain unproven acquisitions so a later Stop can retry cleanup. */
 export async function resolveClaudeAcquisitionError(input: {
   error: unknown
   sessionId: string
@@ -61,11 +75,8 @@ export async function resolveClaudeAcquisitionError(input: {
       prompt.settle(null)
     }
     const closed = (await input.attempt.connection?.close()) ?? true
-    if (input.attempt.connection?.exitVerdict.processless === true) {
-      acquisitionError = new AgentSessionPreSpawnError(input.error)
-    } else if (!closed) {
-      acquisitionError = claudeAcquisitionCleanupError(input.attempt.connection, input.error)
-    }
+    acquisitionError =
+      claudeCloseReport(input.attempt.connection, closed, input.error) ?? input.error
   }
   if (!(acquisitionError instanceof AgentSessionAcquisitionExitUnprovenError)) {
     input.releaseAcquisition()
@@ -74,8 +85,6 @@ export async function resolveClaudeAcquisitionError(input: {
 }
 
 export function settleClaudeExitedSession(session: ClaudeSession): void {
-  // The child is gone, so no replay can start these turns. Nothing else ends a
-  // waiter's life now that no deadline does.
   retireClaudeDispatchWaiters(session)
   settleClaudeTurnEndWaiters(session)
   for (const prompt of session.prompts.clear()) {
@@ -95,6 +104,7 @@ type CloseClaudePublishedSessionInput = {
   }) => Promise<void>
   onEvent?: (event: ClaudeStructuredSessionEvent) => void
   logger?: StructuredAgentSessionLogger
+  settledExitErrors?: Map<string, Error>
 }
 
 async function finalizeClaudePublishedSession(
@@ -102,38 +112,30 @@ async function finalizeClaudePublishedSession(
   session: ClaudeSession
 ): Promise<boolean> {
   settleClaudeTurnEndWaiters(session)
-  // Settle every in-flight permission callback so closing leaves no dangling promise; `null`
-  // writes no response, and the SDK ignores any post-cleanup answer regardless.
+  // Null settles callbacks without writing responses during SDK cleanup.
   for (const prompt of session.prompts.clear()) {
     prompt.settle(null)
   }
   const connectionClosed = await session.connection.close()
   session.unbindReadingControl?.()
-  let rootExitVerdict: Error | undefined
-  if (connectionClosed !== true) {
-    const cleanupError = claudeAcquisitionCleanupError(
-      session.connection,
-      new Error('provider close unproven')
-    )
-    // Only a genuinely unknown exit stays indexed for a retry. A proven root exit or processless
-    // close is final — the owner releases the lease on it — so the session finalizes like a proven
-    // close and still reports the verdict; kept indexed, it refused every later start of the chat.
-    if (cleanupError instanceof AgentSessionAcquisitionExitUnprovenError) {
-      return false
-    }
-    rootExitVerdict = cleanupError
+  const rootExitVerdict = claudeCloseReport(
+    session.connection,
+    connectionClosed,
+    new Error('provider close unproven')
+  )
+  if (rootExitVerdict instanceof AgentSessionAcquisitionExitUnprovenError) {
+    return false
   }
-  // Held until the step that tells the host the child ended: released before the close's wait, a
-  // send reads as held by nobody, so in doubt, while the host still keeps the child.
+  if (rootExitVerdict) {
+    input.settledExitErrors?.set(input.sessionId, rootExitVerdict)
+  }
+  // Retain held sends through close until the host receives the exit report.
   session.events?.observeExit?.(claudeHeldSends(session))
   retireClaudeDispatchWaiters(session)
-  // Queues the session's ending for the host's child records; the adapter delivers it after close.
-  // Even a proven close is Orca losing contact, not a Stop the CLI accepted: what still ran ends
-  // with no outcome anyone reported.
+  // Closing the session does not prove an outcome for unfinished child work.
   session.childWork.clear()
   session.backgroundTasks.clear()
-  // The exit is proven, so the session ends now. Saving its resume point is bookkeeping that
-  // follows, reported on failure; it never holds the close or reads as an unproven exit.
+  // Finalize before saving the resume point; persistence failure cannot undo a proven exit.
   session.closeFinalized = true
   input.sessions.delete(input.sessionId)
   let callbackError: unknown
@@ -154,8 +156,11 @@ async function finalizeClaudePublishedSession(
       type: 'ended',
       sessionId: input.sessionId,
       reason: 'claude session closed',
-      // The host ends the child's record on it, whoever was still waiting on the close.
       cause: 'requested-close',
+      ...(rootExitVerdict instanceof AgentSessionAcquisitionRootExitObservedError &&
+      rootExitVerdict.deathEvidenceKind === 'kill-delivered'
+        ? { deathEvidenceKind: 'kill-delivered' as const }
+        : {}),
       fence: session.fence,
       acquisitionGeneration: session.acquisitionGeneration,
       observedAt
@@ -174,16 +179,16 @@ async function finalizeClaudePublishedSession(
   }
   session.closePersistence ??= persistClosedClaudeSession(input, session)
   if (rootExitVerdict) {
-    throw rootExitVerdict
+    throw callbackThrew
+      ? claudeAcquisitionCleanupError(session.connection, callbackError)
+      : rootExitVerdict
   }
   if (callbackThrew) {
-    // The exit is proven; only what followed it failed, which the caller reports.
     throw new AgentSessionAcquisitionExitProvenError(callbackError)
   }
   return true
 }
 
-/** The resume point a closed session leaves for the next start, after the close already ended. */
 async function persistClosedClaudeSession(
   input: CloseClaudePublishedSessionInput,
   session: ClaudeSession
@@ -234,23 +239,12 @@ export async function closeClaudePublishedSession(
 export function closeClaudePublishedSessionForDeps(
   sessions: Map<string, ClaudeSession>,
   sessionId: string,
-  deps: {
-    persistHandle?: (handle: {
-      sessionId: string
-      providerSessionId: string
-      leafUuid: string | null
-      fence: number
-    }) => Promise<void>
-    onEvent?: (event: ClaudeStructuredSessionEvent) => void
-    logger?: StructuredAgentSessionLogger
-  }
+  deps: Omit<CloseClaudePublishedSessionInput, 'sessions' | 'sessionId'>
 ): Promise<boolean> {
   return closeClaudePublishedSession({ sessions, sessionId, ...deps })
 }
 
-/** The root exited after a close came back unproven: joins a close still running, or finishes that
- *  one for this exact child, through `afterClose`, which publishes the session's child work like
- *  any close. What failed after the exit is reported. */
+/** Complete the pending close for this exact connection after observing its root exit. */
 export function finishClaudeCloseAfterExit(input: {
   sessions: Map<string, ClaudeSession>
   sessionId: string
@@ -273,37 +267,29 @@ export function finishClaudeCloseAfterExit(input: {
     )
 }
 
-export async function closeClaudeSession(input: {
-  sessionId: string
-  sessions: Map<string, ClaudeSession>
-  acquisitions: ClaudeAcquisitionRegistry
-  persistHandle?: (handle: {
-    sessionId: string
-    providerSessionId: string
-    leafUuid: string | null
-    fence: number
-  }) => Promise<void>
-  onEvent?: (event: ClaudeStructuredSessionEvent) => void
-  logger?: StructuredAgentSessionLogger
-}): Promise<boolean> {
+export async function closeClaudeSession(
+  input: CloseClaudePublishedSessionInput & {
+    acquisitions: ClaudeAcquisitionRegistry
+  }
+): Promise<boolean> {
   const attempt = input.acquisitions.get(input.sessionId)
-  if (!(await cancelClaudeAcquisitionAttempt(attempt))) {
-    const cleanupError = claudeAcquisitionCleanupError(
-      attempt?.connection,
-      new Error('acquisition cancel unproven')
-    )
-    // Why: cancellation must preserve the same actionable verdict as published-session close.
-    if (!(cleanupError instanceof AgentSessionAcquisitionExitUnprovenError)) {
-      // A proved-dead attempt cannot remain the owner blocking the next start.
-      if (attempt) {
-        input.acquisitions.deleteIfCurrent(input.sessionId, attempt)
-      }
-      throw cleanupError
-    }
+  const cancelled = await cancelClaudeAcquisitionAttempt(attempt)
+  const report = claudeCloseReport(
+    attempt?.connection,
+    cancelled,
+    new Error('acquisition cancel unproven')
+  )
+  if (report instanceof AgentSessionAcquisitionExitUnprovenError) {
     return false
   }
   if (attempt) {
+    if (report && input.acquisitions.get(input.sessionId) === attempt) {
+      input.settledExitErrors?.set(input.sessionId, report)
+    }
     input.acquisitions.deleteIfCurrent(input.sessionId, attempt)
+  }
+  if (report) {
+    throw report
   }
   return closeClaudePublishedSession(input)
 }

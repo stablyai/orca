@@ -24,8 +24,7 @@ export const EDITOR_ANIMATION_TIMING = {
   finalHoldMs: 2200
 } as const
 
-// Helpers shared between initial render and re-created beat-2 lines so the
-// styling stays in lockstep regardless of which path mounts the node.
+// Keep React-rendered and imperatively recreated lines styled identically.
 export function activeLineClass(): string {
   return 'relative mt-1.5 min-h-[18px] py-px'
 }

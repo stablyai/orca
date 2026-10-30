@@ -14,20 +14,14 @@ afterEach(async () => {
   resetProjectDirCwdCacheForTests()
 })
 
-// Claude's own rule, deliberately spelled out rather than imported from the
-// production encoder: these tests exist to catch Orca drifting away from how
-// Claude actually names its directories, which a shared helper would hide.
-// Claude maps every non-alphanumeric character of the raw cwd to '-', keeping
-// case, and records the cwd it was launched with (NFC on macOS).
+// Model Claude independently so a production encoder regression cannot change the fixture to match.
 function claudeProjectDirName(cwd: string): string {
   return cwd.normalize('NFC').replace(/[^a-zA-Z0-9]/g, '-')
 }
 
 describe('scanAiVaultSessions — non-ASCII scope paths', () => {
   it('lists Claude sessions when the workspace path is NFD and the transcript is NFC', async () => {
-    // Regression for #10832: macOS hands Orca decomposed (NFD) workspace paths
-    // while Claude Code writes NFC in both the project dir name and the recorded
-    // cwd, so every workspace with non-ASCII path segments listed zero sessions.
+    // macOS workspace paths may be NFD while Claude records and encodes NFC (#10832).
     const root = await mkdtemp(join(tmpdir(), 'orca-ai-vault-nfc-scope-'))
     tempRoots.push(root)
     const roots = isolatedScanRoots(root)
@@ -52,8 +46,7 @@ describe('scanAiVaultSessions — non-ASCII scope paths', () => {
       ])
     )
 
-    // A newer ASCII session plus limit:1 exhausts the recency cap, so the Korean
-    // session can only surface through scope discovery — the path under test.
+    // Exhaust the recency cap so only scoped discovery can find the Korean path.
     await mkdir(join(roots.claudeProjectsDir, '-Users-ada-other'), { recursive: true })
     await writeFile(
       join(roots.claudeProjectsDir, '-Users-ada-other', 'recent-session.jsonl'),
@@ -80,9 +73,7 @@ describe('scanAiVaultSessions — non-ASCII scope paths', () => {
   })
 
   it('lists Claude sessions for a Windows workspace whose path has uppercase segments', async () => {
-    // Claude derives the dir name from the raw cwd, so it keeps 'C--Users-Ada-repo'.
-    // Encoding from the lowercased comparison key produced 'c--users-ada-repo',
-    // which never matched — scoped discovery was dead on Windows entirely.
+    // Claude preserves path case in bucket names; a lowercased comparison key cannot reproduce them.
     const root = await mkdtemp(join(tmpdir(), 'orca-ai-vault-win-scope-'))
     tempRoots.push(root)
     const roots = isolatedScanRoots(root)

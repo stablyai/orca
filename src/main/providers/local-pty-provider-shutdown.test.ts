@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as MacosTccLoginShell from './macos-tcc-login-shell'
+import type * as PosixPtyProcessTable from '../pty/posix-pty-process-table'
 
 const {
   existsSyncMock,
@@ -14,8 +15,10 @@ const {
   killWithDescendantSweepMock,
   isWslAvailableAsyncMock,
   wslUncDirectoryExistsAsyncMock,
-  createShellPromptReadinessProbeMock
+  createShellPromptReadinessProbeMock,
+  readProcessTableMock
 } = vi.hoisted(() => ({
+  readProcessTableMock: vi.fn<(rootPid: number) => Promise<string>>(),
   existsSyncMock: vi.fn(),
   statSyncMock: vi.fn(),
   accessSyncMock: vi.fn(),
@@ -53,6 +56,13 @@ vi.mock('node-pty', () => ({
   spawn: spawnMock
 }))
 
+// Fixture pids must never be looked up in the real host process table.
+vi.mock('../pty/posix-pty-process-table', async (importOriginal) => ({
+  ...(await importOriginal<typeof PosixPtyProcessTable>()),
+  readPosixPtyProcessTable: readProcessTableMock,
+  readPosixPtyProcessTableSync: () => ''
+}))
+
 vi.mock('./macos-tcc-login-shell', async (importOriginal) => ({
   ...(await importOriginal<typeof MacosTccLoginShell>()),
   prepareMacosTccLoginShell: prepareMacosTccLoginShellMock
@@ -62,10 +72,7 @@ vi.mock('../pty-descendant-termination', () => ({
   killWithDescendantSweep: killWithDescendantSweepMock
 }))
 
-// Resolve PowerShell family names to deterministic absolute paths (the fs mock
-// above otherwise makes every probe miss). The real resolver — which skips the
-// Store App Execution Alias stub — is covered in
-// windows-powershell-executable.test.ts.
+// The fs mock misses executable probes; pin paths here and leave Store-alias coverage to the resolver tests.
 const WINDOWS_POWERSHELL_ABS = 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe'
 const PWSH7_ABS = 'C:\\Program Files\\PowerShell\\7\\pwsh.exe'
 const CMD_ABS = 'C:\\Windows\\System32\\cmd.exe'
@@ -105,8 +112,7 @@ vi.mock('../wsl', () => ({
     `\\\\wsl.localhost\\${distro}${path.replace(/\//g, '\\')}`,
   getDefaultWslDistro: () => 'Ubuntu',
   isWslAvailableAsync: () => isWslAvailableAsyncMock(),
-  // Why: WSL worktree validation now asks the distro; these tests use WSL UNC
-  // cwds that are meant to exist, so report them present without spawning wsl.exe.
+  // Fixture WSL UNC directories exist; avoid launching wsl.exe to validate them.
   wslUncDirectoryExistsAsync: (...args: unknown[]) => wslUncDirectoryExistsAsyncMock(...args)
 }))
 
@@ -158,16 +164,15 @@ describe('LocalPtyProvider', () => {
       }
     })
     spawnMock.mockReturnValue(mockProc)
+    readProcessTableMock.mockReset()
+    readProcessTableMock.mockResolvedValue('')
 
     provider = new LocalPtyProvider()
   })
 
   describe('shutdown', () => {
     it('kills the PTY process', async () => {
-      // Why: capture the spy reference before shutdown triggers onExit →
-      // POSIX kill neutralization. After neutralization, mockProc.kill is
-      // replaced with a non-spy no-op to close the UnixTerminal.destroy() →
-      // socket-close → SIGHUP-to-recycled-pid race (see docs/fix-pty-fd-leak.md).
+      // Cleanup replaces kill to prevent recycled-PID SIGHUP; capture the spy before shutdown (docs/fix-pty-fd-leak.md).
       const killSpy = mockProc.kill
       const { id } = await provider.spawn({ cols: 80, rows: 24 })
       await provider.shutdown(id, { immediate: true })
@@ -254,8 +259,7 @@ describe('LocalPtyProvider', () => {
         expect(provider.killOrphanedPtys(1)).toEqual([{ id }])
         expect(killSpy.mock.calls).toEqual([['SIGTERM'], ['SIGKILL']])
 
-        // The original graceful deadline was replaced by the immediate
-        // escalation, so it cannot call the now-neutralized proc.kill later.
+        // Immediate escalation must cancel the graceful timer before it can invoke the neutralized kill.
         await vi.advanceTimersByTimeAsync(LOCAL_PTY_GRACEFUL_FORCE_TIMEOUT_MS)
         expect(killSpy).toHaveBeenCalledTimes(2)
         exitCb?.({ exitCode: 137 })
@@ -296,6 +300,64 @@ describe('LocalPtyProvider', () => {
         exitCb?.({ exitCode: 137 })
         await graceful
         expect(provider.hasPty(id)).toBe(false)
+        expect(vi.getTimerCount()).toBe(0)
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it('keeps the kill handle until a graceful-deadline sweep settles when orphan cleanup joins', async () => {
+      vi.useFakeTimers()
+      try {
+        const killSpy = vi.fn()
+        const destroySpy = vi.fn()
+        spawnMock.mockReturnValue({ ...mockProc, kill: killSpy, destroy: destroySpy })
+        const { id } = await provider.spawn({ cols: 80, rows: 24 })
+        const table = Promise.withResolvers<string>()
+        readProcessTableMock.mockReturnValueOnce(table.promise)
+
+        const graceful = provider.shutdown(id, { immediate: false })
+        await vi.advanceTimersByTimeAsync(LOCAL_PTY_GRACEFUL_FORCE_TIMEOUT_MS)
+        expect(provider.killOrphanedPtys(1)).toEqual([{ id }])
+        expect(destroySpy).not.toHaveBeenCalled()
+
+        table.resolve('')
+        await vi.waitFor(() => expect(destroySpy).toHaveBeenCalledOnce())
+        expect(killSpy.mock.calls).toEqual([['SIGTERM'], ['SIGKILL']])
+        exitCb?.({ exitCode: 137 })
+        await graceful
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it('escalates through orphan cleanup when the graceful-deadline sweep it joined is refused', async () => {
+      vi.useFakeTimers()
+      try {
+        let forceAttempts = 0
+        const destroySpy = vi.fn()
+        const killSpy = vi.fn((signal: string) => {
+          if (signal === 'SIGKILL' && forceAttempts++ === 0) {
+            throw new Error('transient force-kill failure')
+          }
+          if (destroySpy.mock.calls.length > 0) {
+            throw new Error('killed through a released handle')
+          }
+        })
+        spawnMock.mockReturnValue({ ...mockProc, kill: killSpy, destroy: destroySpy })
+        const { id } = await provider.spawn({ cols: 80, rows: 24 })
+        const table = Promise.withResolvers<string>()
+        readProcessTableMock.mockReturnValueOnce(table.promise)
+
+        const graceful = provider.shutdown(id, { immediate: false })
+        await vi.advanceTimersByTimeAsync(LOCAL_PTY_GRACEFUL_FORCE_TIMEOUT_MS)
+        provider.killOrphanedPtys(1)
+        table.resolve('')
+
+        await vi.waitFor(() => expect(destroySpy).toHaveBeenCalledOnce())
+        expect(killSpy.mock.calls).toEqual([['SIGTERM'], ['SIGKILL'], ['SIGKILL']])
+        exitCb?.({ exitCode: 137 })
+        await graceful
         expect(vi.getTimerCount()).toBe(0)
       } finally {
         vi.useRealTimers()
@@ -495,8 +557,7 @@ describe('LocalPtyProvider', () => {
 
       await provider.shutdown(id, { immediate: true })
 
-      // Why: an orphaned pnpm/node child otherwise keeps the ConPTY console alive and holds
-      // the worktree cwd; the sweep taskkill /T /F clears the tree so removal can proceed.
+      // Windows orphan descendants hold ConPTY and cwd open; tree sweep allows worktree removal.
       expect(killWithDescendantSweepMock).toHaveBeenCalledWith(
         mockProc.pid,
         expect.any(Function),
@@ -523,18 +584,14 @@ describe('LocalPtyProvider', () => {
         expect.any(Function),
         expect.objectContaining({ ownsRoot: expect.any(Function) })
       )
+      // Root group SIGKILL must wait for the descendant SIGTERM grace, or Claude skips SessionEnd.
+      expect(killWithDescendantSweepMock.mock.calls[0][2].awaitEscalation()).toBe(true)
     })
   })
 
   describe('killAll', () => {
     it('kills all PTY processes', async () => {
-      // Why: each spawn needs its own proc so the onExit-triggered POSIX kill
-      // neutralization on one proc does not replace the kill function on the
-      // other (mockProc is shared by default in beforeEach). Each proc also
-      // needs its own exitCb holder — the default mockProc.onExit assigns to
-      // the shared `exitCb` variable, so the second spawn would overwrite the
-      // first's exit callback, and mock1Kill firing would trigger cleanup for
-      // id2 (removing it from the map before killAll iterates to it).
+      // Separate processes/callbacks prevent one exit cleanup from neutralizing or removing the other PTY.
       let exit1: ((e: { exitCode: number }) => void) | undefined
       let exit2: ((e: { exitCode: number }) => void) | undefined
       const mock1Kill = vi.fn(() => exit1?.({ exitCode: -1 }))
