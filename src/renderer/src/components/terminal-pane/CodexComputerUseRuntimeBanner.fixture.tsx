@@ -1,6 +1,11 @@
 import { defineFixture } from '../../component-fixtures/component-fixture'
 import { CodexComputerUseRuntimeNotice } from './CodexComputerUseRuntimeBanner'
 
+export const before = defineFixture({
+  width: 640,
+  render: () => <div className="relative h-44 bg-background" />
+})
+
 export const stale = defineFixture({
   width: 640,
   render: () => (
