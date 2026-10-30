@@ -2456,6 +2456,7 @@
         "startNewWorkspace": "Start new workspace",
         "workspaceSection": "Workspace",
         "noWorkspaceYet": "None yet",
+        "pullRequestsSection": "Pull requests",
         "issueDescriptionLabel": "Issue description",
         "namedUserUpdatedIssue": "{{name}} updated the issue · {{time}}",
         "someoneUpdatedIssue": "Someone updated the issue · {{time}}"
