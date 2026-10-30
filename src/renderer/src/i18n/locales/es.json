@@ -19346,7 +19346,6 @@
         "editMessage": "Editar mensaje",
         "showFullMessage": "Mostrar el mensaje completo",
         "showLess": "Mostrar menos",
-        "turnOffQueueing": "Desactivar la cola",
         "withdrawnHold": "Detenido antes de enviarse",
         "pausedSendFailed": "No se pudo enviar. Pulsa Enviar para reintentar.",
         "paused": "En pausa",
@@ -20106,9 +20105,10 @@
     },
     "settings": {
       "nativeChat": {
-        "queueFollowUpsTitle": "Poner mensajes en cola",
-        "queueFollowUpsCopy": "Los mensajes que envías mientras el agente trabaja esperan como tarjetas que puedes enviar ahora, editar o eliminar. Los mensajes con imágenes se envían de inmediato.",
-        "queueFollowUpsToggleLabel": "Alternar la cola de mensajes",
+        "followUpBehaviorTitle": "Mientras el agente trabaja, Intro",
+        "followUpBehaviorCopy": "Poner en cola: tu mensaje espera como tarjeta y se envía cuando el agente termina. Enviar ahora: entra en el turno en curso. Cmd/Ctrl+Intro hace lo otro.",
+        "followUpSteer": "Enviar ahora",
+        "followUpQueue": "Poner en cola",
         "inlineVisualsTitle": "Elementos visuales inline",
         "inlineVisualsCopy": "Permite que el agente muestre gráficos, diagramas y maquetas dentro de sus respuestas. Se aplica a los chats nuevos.",
         "inlineVisualsToggleLabel": "Alternar elementos visuales inline",

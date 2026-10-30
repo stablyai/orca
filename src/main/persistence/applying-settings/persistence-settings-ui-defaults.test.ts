@@ -13,6 +13,7 @@ import { tmpdir } from 'node:os'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import { getDefaultPersistedState } from '../../../shared/constants'
+import { nativeChatFollowUpBehavior } from '../../../shared/native-chat-follow-up-behavior'
 import { ONBOARDING_FINAL_STEP, ONBOARDING_FLOW_VERSION } from '../../../shared/onboarding-defaults'
 
 const { loadUserSshConfigMock, sshConfigHostsToTargetsMock } = vi.hoisted(() => ({
@@ -135,6 +136,18 @@ describe('Store', () => {
     store.flush()
     expect(readDataFile()).not.toHaveProperty('settings.orchestrationHeartbeatsEnabled')
     expect(readDataFile()).not.toHaveProperty('settings.orchestrationHeartbeatIntervalMinutes')
+  })
+
+  it('drops the saved queue switch and loads Steer', async () => {
+    const persisted = getDefaultPersistedState(testState.dir)
+    const { nativeChatFollowUpBehavior: _absent, ...settings } = persisted.settings
+    void _absent
+    writeDataFile({ ...persisted, settings: { ...settings, nativeChatQueueFollowUps: true } })
+    const store = await createStore()
+    expect(store.getSettings()).not.toHaveProperty('nativeChatQueueFollowUps')
+    expect(nativeChatFollowUpBehavior(store.getSettings())).toBe('steer')
+    store.flush()
+    expect(readDataFile()).not.toHaveProperty('settings.nativeChatQueueFollowUps')
   })
 
   it('returns default UI state when no data file exists', async () => {

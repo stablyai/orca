@@ -18960,7 +18960,6 @@
         "editMessage": "编辑消息",
         "showFullMessage": "显示完整消息",
         "showLess": "收起",
-        "turnOffQueueing": "关闭排队",
         "withdrawnHold": "在发送前已停止",
         "pausedSendFailed": "无法发送。点按发送以重试。",
         "paused": "已暂停",
@@ -19594,9 +19593,10 @@
         }
       },
       "nativeChat": {
-        "queueFollowUpsTitle": "将后续消息加入队列",
-        "queueFollowUpsCopy": "智能体工作时发送的消息会以卡片形式等待，你可以立即发送、编辑或删除。带图片的消息会立即发送。",
-        "queueFollowUpsToggleLabel": "切换后续消息队列",
+        "followUpBehaviorTitle": "智能体工作时按 Enter",
+        "followUpBehaviorCopy": "加入队列：消息以卡片形式等待，智能体完成后再发送。立即发送：消息直接进入正在进行的回合。Cmd/Ctrl+Enter 执行另一种。",
+        "followUpSteer": "立即发送",
+        "followUpQueue": "加入队列",
         "inlineVisualsTitle": "内联可视化",
         "inlineVisualsCopy": "允许智能体在其回复中显示图表、示意图和原型图。适用于新启动的聊天。",
         "inlineVisualsToggleLabel": "切换内联可视化",

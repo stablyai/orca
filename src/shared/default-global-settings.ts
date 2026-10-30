@@ -135,7 +135,7 @@ export function buildDefaultSettings(args: {
     experimentalBrowserExtensions: false,
     agentDefaultSurface: 'terminal',
     nativeChatResumeWorkOnRestart: false,
-    nativeChatQueueFollowUps: true,
+    nativeChatFollowUpBehavior: 'steer',
     nativeChatInlineVisuals: true,
     nativeChatLinkPreviews: true,
     nativeChatInheritShellEnvironment: true,

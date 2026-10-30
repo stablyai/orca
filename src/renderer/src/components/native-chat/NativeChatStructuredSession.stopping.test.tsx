@@ -88,7 +88,7 @@ describe("the chat pane while a person's Stop ends the turn", () => {
     // The queue is dark here: the message is sent, and the host holds it until the stop lands.
     expect(mocks.composerProps).toMatchObject({ isStopping: false, afterStop: 'send' })
     // Nothing steers into a turn a Stop is ending.
-    expect(mocks.composerProps?.steerQueued).toBeUndefined()
+    expect(mocks.composerProps?.steerHead).toBeUndefined()
     mocks.composerProps?.onStop?.()
     expect(mocks.stop).toHaveBeenCalledOnce()
   })
@@ -138,8 +138,8 @@ describe("the chat pane while a person's Stop ends the turn", () => {
     expect(mocks.composerProps).toMatchObject({ isStopping: false })
     expect(mocks.composerProps?.afterStop).toBeUndefined()
     // The pane wraps steering so it also brings the latest into view; it still steers through the queue.
-    mocks.composerProps?.steerQueued?.()
-    expect(mocks.queuedSteerNewest).toHaveBeenCalledOnce()
+    mocks.composerProps?.steerHead?.()
+    expect(mocks.queuedSteerHead).toHaveBeenCalledOnce()
     mocks.composerProps?.onStop?.()
     expect(mocks.stop).toHaveBeenCalledOnce()
   })
