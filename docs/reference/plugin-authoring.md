@@ -94,9 +94,10 @@ and `done`.
 
 ### Panel to worker messages
 
-A panel has no network and cannot reach another plugin, but it can send JSON to the worker of its
-own plugin and get a JSON reply. This needs a `trusted-worker` plugin with `main`; the worker
-registers one handler per panel `id` from `contributes.panels`:
+A panel's content security policy blocks its own fetches, beacons and navigation, and it cannot
+reach another plugin. It can send JSON to the worker of its own plugin and get a JSON reply. This
+needs a `trusted-worker` plugin with `main`; the worker registers one handler per panel `id` from
+`contributes.panels`:
 
 ```js
 // worker (main.mjs)
@@ -114,7 +115,7 @@ if (typeof orca.panel?.postMessage === 'function') {
   try {
     const reply = await orca.panel.postMessage({ type: 'getState' }, { signal })
   } catch (error) {
-    // error.code, error.message, error.retryable, error.retryAfterMs (rate_limited only)
+    // error.code, error.message, error.retryable, and sometimes error.retryAfterMs
   }
 }
 ```
@@ -129,8 +130,8 @@ no `orca.panel`.
   bytes of text; a reply is at most 256 KiB, enough for a small image as a `data:` URL. Past either,
   the call rejects with `too_large`.
 - **Rate.** A plugin's panels share one budget of 30 messages per 10 seconds, host calls included.
-  Past it the call rejects with `rate_limited`, usually with `retryAfterMs`. Poll no faster than
-  once a second, and debounce input such as a slider.
+  Past it the call rejects with `rate_limited`; `retryAfterMs` is not always set, so wait a second
+  before retrying. Poll no faster than once a second, and debounce input such as a slider.
 - **Errors.** `unknown_method`: the plugin has no worker, or its worker registered no handler for
   this panel. `unavailable`: the worker could not start or stopped before answering; send again.
   `action_failed`: the handler threw; the message is its `message`, never its stack. `timeout`: the
