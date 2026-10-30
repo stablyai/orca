@@ -1,10 +1,14 @@
 #!/usr/bin/env python3
 """Require exact synthetic Unicode typing and preflight refusal on isolated X11."""
 import argparse
+from contextlib import nullcontext
+import fcntl
 import os
 from pathlib import Path
 import subprocess
+import signal
 import sys
+import time
 
 
 def main():
@@ -33,6 +37,8 @@ def main():
         ("slots", "".join(chr(0x4E00 + i) for i in range(256)), "insufficient unused X11 keycodes"),
         ("identical", mixed, None),
         ("append", mixed, None),
+        ("latin-layout", "Orca ASCII", None),
+        ("busy", mixed, "another keyboard operation is active"),
     ]
     replacement = trial_contract.TASKS["replace_submit"]
 
@@ -58,23 +64,32 @@ def main():
     with (args.out / "engines.log").open("ab") as log:
         for name, marker, refusal in cases:
             bench.MARKER = marker
-            trial_contract.MARKER = "hello" + marker if name == "append" else marker
+            trial_contract.MARKER = "hello" + marker if name in ("append", "latin-layout") else marker
             task = "replace_submit"
             trial_contract.TASKS["replace_submit"] = replacement
             if name == "identical":
                 trial_contract.TASKS["replace_submit"] = replacement[:-1] + replacement[1:]
-            if name == "append":
+            if name in ("append", "latin-layout"):
                 trial_contract.TASKS["replace_submit"] = [step for step in replacement if step[0] != "ctrl_a"]
             cell = {"engine": "candidate", "task": task, "profile": "foreground", "round": 0, "case": name}
             trial = TypingTrial(args, args.out / f"trial-{len(evidence['rows'])}", log)
+            if name == "latin-layout":
+                subprocess.run(["setxkbmap", "ru"], check=True)
             before = keymap()
             try:
-                row = trial.run(cell, sources)
+                with (open(Path(os.environ["XDG_RUNTIME_DIR"]) / "orca-computer-keyboard.lock", "a")
+                      if name == "busy" else nullcontext()) as lock:
+                    if lock is not None:
+                        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                    row = trial.run(cell, sources)
                 evidence["rows"].append(row)
+                restored = keymap() == before
             finally:
                 trial.close()
+                if name == "latin-layout":
+                    subprocess.run(["setxkbmap", "us"], check=True)
             bench.write_json(args.out / "results.json", evidence)
-            if keymap() != before:
+            if not restored:
                 raise AssertionError("synthetic typing did not restore the X11 keyboard and modifier mappings")
             if (row["verdict"] in ("invalid_setup", "unobserved") or row.get("terminal_observation_error")
                     or row.get("observer_error")):
@@ -92,6 +107,38 @@ def main():
             if row.get("observation", {}).get("clipboard_changed"):
                 raise AssertionError("synthetic typing changed the clipboard")
             print(f"confirmed synthetic typing contract for {len(marker)} characters", flush=True)
+
+        trial = TypingTrial(args, args.out / "cancelled", log)
+        try:
+            trial.launch()
+            trial.prepare("replace_submit")
+            engine = trial.engine("candidate", sources)
+            field = trial_contract.select_unique(engine.snapshot(), trial_contract.SELECTORS["field"])
+            for action in ("click", "ctrl_a"):
+                if engine.act(action, field, True).get("error"):
+                    raise AssertionError("cancellation fixture could not focus and select the field")
+            before = keymap()
+            operation = trial.directory / "cancel.json"
+            bench.write_json(operation, engine._req("type_text", field, True, text="éΩ" * 300))
+            process = trial.engines.spawn([sys.executable, engine.o.script, str(operation)],
+                                          stdout=subprocess.PIPE, stderr=log)
+            bench.wait_for(lambda: keymap() != before, 5)
+            bench.wait_for(lambda: trial.state()["text"] != "hello", 5)
+            process.send_signal(signal.SIGTERM)
+            process.communicate(timeout=3)
+            if process.returncode != 143 or keymap() != before:
+                raise AssertionError("cancelled typing did not restore its owned mappings")
+            time.sleep(0.4)
+            first = trial.state()
+            time.sleep(0.4)
+            last = trial.state()
+            if (first["text"] != last["text"] or last["returns"] != 0
+                    or last["decoyText"] != "untouched"):
+                raise AssertionError("typing continued after the bridge was terminated")
+            evidence["cancelled"] = {"before": first, "after": last, "exit_code": process.returncode}
+            bench.write_json(args.out / "results.json", evidence)
+        finally:
+            trial.close()
 
 
 if __name__ == "__main__":

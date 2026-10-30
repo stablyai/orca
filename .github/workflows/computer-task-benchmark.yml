@@ -21,7 +21,7 @@ jobs:
       - uses: actions/checkout@v6
       - run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends xvfb openbox dbus-x11 at-spi2-core python3-gi gir1.2-atspi-2.0 gir1.2-gtk-3.0 python3-tk xdotool xclip x11-xserver-utils libnss3 libgbm1 libasound2t64
+          sudo apt-get install -y --no-install-recommends xvfb openbox dbus-x11 at-spi2-core python3-gi gir1.2-atspi-2.0 gir1.2-gtk-3.0 python3-tk xdotool xclip x11-xserver-utils x11-xkb-utils libnss3 libgbm1 libasound2t64
       - run: |
           npm install --no-save --no-package-lock --prefix "$RUNNER_TEMP/electron" electron@43.8.1
           node "$RUNNER_TEMP/electron/node_modules/electron/install.js"
