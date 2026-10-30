@@ -107,8 +107,12 @@ export function agentLaunchWorkspaceFactory(
           ...(onWorkspaceCreated ? { onWorkspaceCreated } : {}),
           // Chats have no startup command to sequence after setup; provision setup synchronously and return its completion token.
           awaitTerminalProvisioning: true,
+          ...(startupAgent ? { preparedAgentLaunch: true } : {}),
           observeSetupCompletion: true
         })
+        const startupTerminal = result.startupTerminal?.pending
+          ? await runtime.waitForPreparedAgentTerminal(result.startupTerminal.pending)
+          : result.startupTerminal
         if (!startupAgent) {
           await waitForStructuredSetup(runtime, result.setupReceipt)
         }
@@ -122,11 +126,9 @@ export function agentLaunchWorkspaceFactory(
           worktreeId: result.worktree.id,
           workspacePath: result.worktree.path,
           connectionId: repo.connectionId ?? null,
-          startupTerminalHandle: result.startupTerminal?.handle,
+          startupTerminalHandle: startupTerminal?.handle,
           ...(promptRodeLaunchCommand ? { promptRodeLaunchCommand } : {}),
-          ...(result.startupTerminal?.paneKey
-            ? { startupTerminalPaneKey: result.startupTerminal.paneKey }
-            : {}),
+          ...(startupTerminal?.paneKey ? { startupTerminalPaneKey: startupTerminal.paneKey } : {}),
           ...(warning ? { warning } : {})
         }
       } catch (error) {

@@ -1,3 +1,4 @@
+import type { RawPtySpawnObserver } from '../pty-subprocess'
 import type { PtyCreationDisposition } from '../../../shared/claimed-agent-pty-owner'
 import type { TerminalCreationWork } from '../terminal-creation-work'
 import { createDaemonPtyPhysicalOwner, type DaemonPtyPhysicalOwner } from './subprocess-handle'
@@ -40,10 +41,12 @@ export type SpawnedDaemonPty = {
 type SpawnedNativePty = {
   proc: pty.IPty
   physicalOwner: DaemonPtyPhysicalOwner
+  selectRawObserver?: () => void
   claimStartupEvents?: () => ConptyStartupEvents
 }
 
 export async function spawnNativeDaemonPty(args: {
+  rawSpawnObserver?: () => RawPtySpawnObserver
   creationWork?: TerminalCreationWork
   shellPath: string
   shellArgs: string[]
@@ -64,7 +67,7 @@ export async function spawnNativeDaemonPty(args: {
     shellPath: string,
     shellArgs: string[],
     cwd: string
-  ): Promise<{ proc: pty.IPty; physicalOwner: DaemonPtyPhysicalOwner }> => {
+  ): Promise<SpawnedNativePty> => {
     args.signal?.throwIfAborted()
     assertWslDistroAllowed(shellPath, shellArgs)
     const tcc = wrapShellSpawnForMacosTccAttribution(shellPath, shellArgs, args.env)
@@ -102,13 +105,31 @@ export async function spawnNativeDaemonPty(args: {
       recover: physical.recover
     })
     physical.observeExit()
+    const observer = args.rawSpawnObserver?.()
+    if (observer) {
+      const data = proc.onData(observer.onData)
+      if ('on' in proc && typeof proc.on === 'function') {
+        proc.on('close', observer.onExit)
+        proc.on('error', observer.onExit)
+      }
+      let exit: { dispose(): void } | undefined
+      exit = proc.onExit(() => {
+        observer.onExit()
+        data.dispose()
+        exit?.dispose()
+      })
+    }
     reportsChildExitStatus = hostReportsChildExitStatus(tcc.file)
     try {
       args.onMacosTccSpawnStrategy?.(tcc.file === shellPath ? 'direct' : 'wrapped')
     } catch {
       /* Diagnostics cannot revoke an owned child. */
     }
-    return { proc, physicalOwner: physical }
+    return {
+      proc,
+      physicalOwner: physical,
+      ...(observer ? { selectRawObserver: observer.onSelected } : {})
+    }
   }
   const spawnAt = async (
     shellPath: string,
@@ -133,6 +154,7 @@ export async function spawnNativeDaemonPty(args: {
       args.spawnCwd,
       args.primaryArgsRespawnSafe === true
     )
+    spawned.selectRawObserver?.()
     return {
       process: spawned.proc,
       physicalOwner: spawned.physicalOwner,
@@ -156,6 +178,7 @@ export async function spawnNativeDaemonPty(args: {
           attempt.effectiveCwd,
           args.primaryArgsRespawnSafe === true && !attempt.startupCommandDeliveredInShellArgs
         )
+        spawned.selectRawObserver?.()
         const message = primaryErr instanceof Error ? primaryErr.message : String(primaryErr)
         console.warn(
           `[daemon/pty] Primary shell "${args.shellPath}" failed (${message}), fell back to "${attempt.shellPath}"`

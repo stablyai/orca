@@ -3,6 +3,7 @@ import type { SubprocessHandle } from './session-subprocess-handle'
 import { buildStartupCommandSubmission } from '../../shared/startup-command-submission'
 import {
   stageStartupCommand,
+  discardStagedStartupCommand,
   startupStagingFailureNotice,
   type StartupCommandStaging
 } from '../../shared/startup-command-staging'
@@ -48,12 +49,26 @@ export async function spawnAndPublishSession(
   let lowerReported = false
   let physical: ReturnType<typeof observeReturnedTerminalProcess>
   let subprocess: SubprocessHandle
+  const staging: { current?: StartupCommandStaging } = {}
+  const prepareStartupCommand = (shellPath: string | undefined, deliveredInShellArgs: boolean) => {
+    if (!opts.command || deliveredInShellArgs || staging.current) {
+      return
+    }
+    staging.current = stageStartupCommand({
+      command: opts.command,
+      shellPath,
+      orcaBuiltLine: opts.launchAgent !== undefined,
+      ...(opts.retainOnPublicationFailure ? { owned: true as const } : {})
+    })
+  }
   try {
     subprocess = await deps.spawnSubprocess({
       onCreationDisposition: (disposition) => {
         lowerReported = true
         lower.resolve(disposition)
       },
+      rawSpawnObserver: opts.rawSpawnObserver,
+      prepareStartupCommand,
       sessionId: opts.sessionId,
       cols: size.cols,
       rows: size.rows,
@@ -85,13 +100,13 @@ export async function spawnAndPublishSession(
     opts.onPhysicalOwner?.(physical.completion, physical.exitCode)
     onPublished(opts.sessionId, physical.exitCode() === null)
   } catch (error) {
+    discardStagedStartupCommand(staging.current)
     if (!lowerReported) {
       lower.resolve({ kind: 'unknown' })
     }
     throw error
   }
 
-  const staging: { current?: StartupCommandStaging } = {}
   // Reconcile fallback-shell capability or its first command could remain queued until timeout.
   const shellReadySupported =
     (opts.shellReadySupported ?? false) &&
@@ -173,18 +188,18 @@ export async function spawnAndPublishSession(
     // Diagnostics must never turn a live PTY into a failed create.
   }
   if (startupCommandWritten && opts.command) {
-    staging.current = stageStartupCommand({
-      command: opts.command,
-      shellPath: subprocess.shellPath,
-      orcaBuiltLine: opts.launchAgent !== undefined
-    })
-    const notice = startupStagingFailureNotice(staging.current)
+    prepareStartupCommand(subprocess.shellPath, false)
+    const staged = staging.current
+    if (!staged) {
+      throw new Error('startup_command_not_prepared')
+    }
+    const notice = startupStagingFailureNotice(staged)
     if (notice) {
       session.startupIngress.accept(notice)
       try {
         deps.reportReadinessEvent?.('startup-command-stage-failed', {
           sessionId: opts.sessionId,
-          reason: staging.current.failure
+          reason: staged.failure
         })
       } catch {
         // Diagnostics must never turn a live PTY into a failed create.
@@ -192,7 +207,7 @@ export async function spawnAndPublishSession(
     }
     // Why: only Orca-wrapped shells advertise the paste-safe startup barrier.
     session.writeStartupCommand(
-      buildStartupCommandSubmission(staging.current.command, {
+      buildStartupCommandSubmission(staged.command, {
         bracketedPasteSafe: shellReadySupported
       })
     )

@@ -17,7 +17,11 @@ import {
   finishAutomationWorkspaceProvenanceRequest
 } from '../../../automations/workspace-provenance'
 import { isFolderRepo } from '../../../../shared/repo-kind'
-import { createLocalWorktree, notifyWorktreesChanged } from '../../worktree-remote'
+import {
+  createLocalWorktree,
+  notifyWorktreesChanged,
+  spawnLocalStartupAndSetupTerminals
+} from '../../worktree-remote'
 import { SshHostNotServedError } from '../../../providers/ssh-host-not-served-error'
 import { track } from '../../../telemetry/client'
 import { classifyWorkspaceCreateError } from '../../workspace-create-error-classifier'
@@ -79,6 +83,23 @@ export function registerWorktreeCreateHandlers(context: WorktreeIpcContext): voi
           if (isFolderRepo(repo)) {
             // Folder creation only registers metadata, so it needs no filesystem host route.
             result = createFolderWorkspace(createArgs, repo, store)
+            if (args.preparedAgentLaunch && args.startup) {
+              const started = await spawnLocalStartupAndSetupTerminals({
+                runtime,
+                worktree: result.worktree,
+                startup: args.startup,
+                setup: undefined,
+                defaultTabs: undefined,
+                createdWithAgent: args.createdWithAgent,
+                automationCreate: args.automationProvenanceRequest !== undefined,
+                preparedAgentLaunch: true
+              })
+              result = {
+                ...result,
+                ...(started.startupTerminal ? { startupTerminal: started.startupTerminal } : {}),
+                ...(started.warning ? { warning: started.warning } : {})
+              }
+            }
           } else {
             // Resolve executionHostId-only SSH ownership before any local Git operation.
             const createRoute = requireWorktreeCreateRoute(repo)

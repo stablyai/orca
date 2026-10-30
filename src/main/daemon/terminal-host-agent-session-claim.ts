@@ -1,3 +1,4 @@
+import type { RawPtySpawnObserver } from './pty-subprocess'
 import type { TerminalCreationWork } from './terminal-creation-work'
 import type {
   ClaimedAgentPtyOwnerRegistry,
@@ -8,6 +9,9 @@ import type { SpawnIntent } from '../../shared/host-spawn-admission'
 import type { CreateOrAttachOptions, CreateOrAttachResult } from './terminal-host-create-contract'
 
 export type InternalCreateOrAttachOptions = CreateOrAttachOptions & {
+  retainOnPublicationFailure?: true
+  reservedCapacity?: () => void
+  rawSpawnObserver?: () => RawPtySpawnObserver
   agentSessionGeneration?: string
   /** Request identity for the fork gate; absent for in-process callers. */
   spawnAdmission?: { clientId: string; declaredIntent: SpawnIntent | null; deadlineAt: number }

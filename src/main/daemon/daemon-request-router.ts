@@ -62,6 +62,11 @@ export class DaemonRequestRouter {
       case 'abortHistorySeedTransfer':
         this.options.historySeedTransfers.abort(clientId, request.payload.transferId)
         return {}
+      case 'preparedAgentLaunch':
+        if (!client?.authenticatedPairEstablished || client.streamSocket === null) {
+          throw new Error('Daemon client connection is incomplete; reconnect')
+        }
+        return this.options.host.preparedAgentLaunch(request.payload)
       case 'createOrAttach':
         return this.options.admission.createOrAttach(clientId, request)
       case 'cancelCreateOrAttach':
@@ -219,6 +224,7 @@ export class DaemonRequestRouter {
       this.options.connections.size === 1 &&
       this.options.admission.inFlight === 0 &&
       this.options.host.listSessions().length === 0 &&
+      !this.options.host.hasPendingAgentLaunches() &&
       this.options.connections.hasOnlyTransportsFor(client)
     if (retiring) {
       this.options.lifecycle.retireAfterIdleReply(clientId, requestId, client.controlSocket)

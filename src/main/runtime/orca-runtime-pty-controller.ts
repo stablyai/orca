@@ -7,11 +7,26 @@ import type {
 import type { TerminalLimitStatus, TerminalLimitUpdate } from '../../shared/terminal-limit-policy'
 
 export abstract class OrcaRuntimeWithPtyController extends OrcaRuntimeWithGetRuntimeId {
+  private unsubscribePreparedReconnect?: () => void
+  protected abstract reconcilePreparedTerminalLaunches(
+    controller: RuntimePtyController
+  ): Promise<void>
+
   setPtyController(controller: RuntimePtyController | null): void {
     // Why: CLI terminal writes must go through the main-owned PTY registry
     // instead of tunneling back through renderer IPC, or live handles could
     // drift from the process they are supposed to control during reloads.
+    this.unsubscribePreparedReconnect?.()
     this.ptyController = controller
+    if (controller?.preparedAgentLaunch) {
+      const reconcile = () => {
+        if (this.ptyController === controller) {
+          void this.reconcilePreparedTerminalLaunches(controller).catch(() => {})
+        }
+      }
+      this.unsubscribePreparedReconnect = controller.onPreparedLaunchReconnect?.(reconcile)
+      reconcile()
+    }
   }
 
   /** Null when the local terminal owner has no fork gate (in-process fallback, older daemon). */

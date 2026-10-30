@@ -62,6 +62,7 @@ export type RuntimeManagedWorktreeCreateArgs = {
   promisedAgentChat?: boolean
   /** Keys the host's in-progress creation; minted when the caller sends none. */
   creationId?: string
+  preparedAgentLaunch?: true
   /** Main-internal launch registration before catalog notification or activation. */
   onWorkspaceCreated?: (worktreeId: string) => void
   startupAgent?: TuiAgent

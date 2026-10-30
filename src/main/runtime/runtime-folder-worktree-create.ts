@@ -1,6 +1,6 @@
-import { readableWslDistroHoldText } from '../../shared/wsl-distro-stopped-hold'
-import { paneIdentity } from './runtime-terminal-pane-identity'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
+import type { PreparedTerminalPrompts } from '../daemon/prepared-agent-launch-protocol'
+import { startRuntimeLocalWorktreeTerminals } from './runtime-local-worktree-terminal-startup'
+import type { Worktree } from '../../shared/worktree/types'
 import { shouldSeedWorktreePrimaryTerminal } from '../../shared/worktree-first-surface'
 import { randomUUID } from 'node:crypto'
 import { getProjectHostSetupWorktreeMeta } from '../../shared/project-host-setup-lookup'
@@ -27,6 +27,13 @@ import { hostWorktreeTargetForRepo } from '../persistence/host-qualified-worktre
 type RuntimeFolderWorktreeCreateDeps = {
   store: RuntimeStore
   ptySpawnAvailable: boolean
+  startPrepared?: (
+    worktree: Worktree,
+    options: TerminalCreateOptions,
+    prompts: PreparedTerminalPrompts
+  ) => ReturnType<
+    NonNullable<Parameters<typeof startRuntimeLocalWorktreeTerminals>[0]['ports']['startPrepared']>
+  >
   provisionInBackground?: () => boolean
   createTerminal: (
     selector: string,
@@ -137,96 +144,56 @@ export async function createRuntimeFolderWorktree(args: {
     path: worktree.path,
     branch: worktree.branch
   })
-  const shouldActivate = request.activate === true || request.runHooks === true
-  let warning: string | undefined
-  let didSpawnStartup = false
-  let startupTerminal: CreateWorktreeResult['startupTerminal']
-  // Main owns failed agent startup too, so its pane can show the reason without a terminal service.
-  if (args.startup && (deps.ptySpawnAvailable || ORCA_LAYOUT_OWNER_IS_MAIN)) {
-    try {
-      const launchRuntime = args.startupLaunchRuntime
-      if (launchRuntime instanceof Error && !ORCA_LAYOUT_OWNER_IS_MAIN) {
-        throw launchRuntime
-      }
-      const terminal = await deps.createTerminal(`id:${worktree.id}`, {
-        command: args.startup.command,
-        ...(request.startupCwd ? { cwd: request.startupCwd } : {}),
-        ...paneIdentity(request.startupPaneKey),
-        env: args.startup.env,
-        ...(args.startup.launchConfig ? { launchConfig: args.startup.launchConfig } : {}),
-        ...(args.createdWithAgent ? { launchAgent: args.createdWithAgent } : {}),
-        ...(launchRuntime instanceof Error
-          ? { startFailure: launchRuntime }
-          : launchRuntime
-            ? { launchRuntime }
-            : {}),
-        ...(args.startup.viewMode ? { viewMode: args.startup.viewMode } : {}),
-        startupCommandDelivery: args.startup.startupCommandDelivery,
-        telemetry: args.startup.telemetry,
-        // Keep failed main-owned starts visible in their panes.
-        ...(ORCA_LAYOUT_OWNER_IS_MAIN ? { keepPaneOnStartFailure: true as const } : {}),
-        ...(shouldActivate ? {} : { surfaceOwner: false })
-      })
-      if (args.draftPaste) {
-        deps.pasteDraft(terminal.handle, args.draftPaste)
-      }
-      if (args.startupFollowup) {
-        deps.sendFollowup(terminal.handle, args.startupFollowup)
-      }
-      didSpawnStartup = true
-      startupTerminal = {
-        spawned: true,
-        handle: terminal.handle,
-        ...(terminal.tabId ? { tabId: terminal.tabId } : {}),
-        ...(terminal.paneKey ? { paneKey: terminal.paneKey } : {}),
-        ...(terminal.ptyId ? { ptyId: terminal.ptyId } : {}),
-        surface: 'background'
-      }
-    } catch (error) {
-      const message = readableWslDistroHoldText(
-        error instanceof Error ? error.message : String(error)
-      )
-      warning = `Failed to create the startup terminal for ${worktree.path}: ${message}`
-      console.warn(`[worktree-create] ${warning}`)
+  const startPrepared = deps.startPrepared
+  const started = await startRuntimeLocalWorktreeTerminals({
+    request,
+    repo,
+    worktree,
+    startup: args.startup,
+    startupFollowup: args.startupFollowup,
+    startupLaunchRuntime: args.startupLaunchRuntime,
+    createdWithAgent: args.createdWithAgent,
+    promisedAgentChat: args.promisedAgentChat,
+    draftPaste: args.draftPaste,
+    ports: {
+      canSpawn: deps.ptySpawnAvailable,
+      ...(startPrepared
+        ? { startPrepared: (options, prompts) => startPrepared(worktree, options, prompts) }
+        : {}),
+      provisionInBackground: deps.provisionInBackground,
+      createTerminal: deps.createTerminal,
+      pasteDraft: deps.pasteDraft,
+      sendFollowup: deps.sendFollowup,
+      provision: async ({ hasStartupTerminal }) => {
+        if (
+          shouldSeedWorktreePrimaryTerminal({
+            hasPrimarySurface: hasStartupTerminal,
+            callerProvidesSurface:
+              args.promisedAgentChat === true || args.createdWithAgent !== undefined
+          })
+        ) {
+          await deps.createTerminal(`id:${worktree.id}`, { surfaceOwner: false })
+        }
+        return { setupSpawned: false, setupTerminalHandle: null }
+      },
+      activate: (repoId, id, startup, _setup, _defaults, providesInitialSurface) =>
+        providesInitialSurface !== undefined
+          ? deps.activate(repoId, id, undefined, startup, providesInitialSurface)
+          : deps.activate(repoId, id, undefined, startup)
     }
-  }
-  if (shouldActivate) {
-    deps.activate(
-      repo.id,
-      worktree.id,
-      undefined,
-      // Main retains failed startup presentation; the window must not take it over.
-      ORCA_LAYOUT_OWNER_IS_MAIN
-        ? undefined
-        : args.startup && !didSpawnStartup
-          ? args.startup
-          : undefined,
-      ...(args.promisedAgentChat && !args.startup ? ([true] as const) : [])
-    )
-  }
-  if (
-    (!shouldActivate || deps.provisionInBackground?.() === true) &&
-    deps.ptySpawnAvailable &&
-    shouldSeedWorktreePrimaryTerminal({
-      // Failed agents retain their panes; do not seed a shell beside them.
-      hasPrimarySurface: didSpawnStartup || (ORCA_LAYOUT_OWNER_IS_MAIN && Boolean(args.startup)),
-      // Background attribution-only creates have historically omitted the shell.
-      callerProvidesSurface: args.promisedAgentChat === true || args.createdWithAgent !== undefined
-    })
-  ) {
-    try {
-      await deps.createTerminal(`id:${worktree.id}`, { surfaceOwner: false })
-    } catch (error) {
-      const message = readableWslDistroHoldText(
-        error instanceof Error ? error.message : String(error)
-      )
-      const initialWarning = `Failed to create the initial terminal for ${worktree.path}: ${message}`
-      warning = warning
-        ? `${warning} Also failed to create the initial terminal for ${worktree.path}: ${message}`
-        : initialWarning
-      console.warn(`[worktree-create] ${warning}`)
-    }
-  }
+  })
+  const startupTerminal: CreateWorktreeResult['startupTerminal'] = started.pendingStartup
+    ? { spawned: false, pending: started.pendingStartup }
+    : started.didSpawnStartup && started.startupTerminalHandle
+      ? {
+          spawned: true,
+          handle: started.startupTerminalHandle,
+          ...(started.startupTerminalTabId ? { tabId: started.startupTerminalTabId } : {}),
+          ...(started.startupTerminalPaneKey ? { paneKey: started.startupTerminalPaneKey } : {}),
+          ...(started.startupTerminalPtyId ? { ptyId: started.startupTerminalPtyId } : {}),
+          surface: 'background'
+        }
+      : undefined
   return {
     worktree: {
       ...worktree,
@@ -242,6 +209,6 @@ export async function createRuntimeFolderWorktree(args: {
       }
     },
     ...(startupTerminal ? { startupTerminal } : {}),
-    ...(warning ? { warning } : {})
+    ...(started.warning ? { warning: started.warning } : {})
   }
 }

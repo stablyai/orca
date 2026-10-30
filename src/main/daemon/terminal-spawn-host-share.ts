@@ -1,3 +1,5 @@
+import type { TerminalSpawnAdmissionMode } from './terminal-spawn-admission-mode'
+import type { SpawnAdmissionDecision } from '../../shared/host-spawn-admission'
 import type {
   SpawnAdmissionState,
   SpawnCharge,
@@ -12,6 +14,7 @@ import { TerminalSpawnDeferredError } from './terminal-spawn-deferred-error'
 export class TerminalSpawnHostShare {
   private readonly liveSessions = new Set<string>()
   private automaticAdmits: number[] = []
+  private pendingLaunches = 0
 
   constructor(private readonly ledger: HostTerminalLedger) {}
 
@@ -31,11 +34,28 @@ export class TerminalSpawnHostShare {
 
   terminals(state: SpawnAdmissionState): number {
     const { interactive, user, automatic } = state.inFlight
-    return this.liveSessions.size + interactive + user + automatic
+    return this.liveSessions.size + this.pendingLaunches + interactive + user + automatic
   }
 
   tryReserve(state: SpawnAdmissionState, maximum = this.maxTerminals): boolean {
     return this.ledger.tryReserve(this.share(state), maximum)
+  }
+
+  reservePending(state: SpawnAdmissionState, maximum: number): (() => void) | null {
+    if (!this.tryReserve(state, maximum)) {
+      return null
+    }
+    this.pendingLaunches++
+    this.publish(state)
+    let released = false
+    return () => {
+      if (released) {
+        return
+      }
+      released = true
+      this.pendingLaunches--
+      this.publish(state)
+    }
   }
 
   recordAutomaticAdmit(now: number): void {
@@ -82,4 +102,45 @@ export function hostTerminalCapRefusal(facts: SpawnRequestFacts, charge: SpawnCh
   return facts.declaredIntent !== null && charge !== 'interactive'
     ? new TerminalSpawnDeferredError('live_cap')
     : new Error(TERMINAL_HOST_CAP_HINT)
+}
+
+export function logSpawnAdmission(
+  log: (event: string, details: Record<string, unknown>) => void,
+  mode: TerminalSpawnAdmissionMode,
+  decision: SpawnAdmissionDecision,
+  charge: SpawnCharge,
+  facts: SpawnRequestFacts,
+  state: SpawnAdmissionState
+): void {
+  try {
+    log(mode === 'observe' ? 'spawn-admission-observed' : 'spawn-admission', {
+      decision: decision.kind,
+      ...(decision.kind === 'defer' ? { reason: decision.reason } : {}),
+      charge,
+      declaredIntent: facts.declaredIntent,
+      inFlightAutomatic: state.inFlight.automatic,
+      liveAutomatic: state.liveAutomatic
+    })
+  } catch {
+    // Diagnostics must never turn an admitted fork into a failed create.
+  }
+}
+
+export function logHostTerminalCap(
+  log: (event: string, details: Record<string, unknown>) => void,
+  facts: SpawnRequestFacts,
+  charge: SpawnCharge,
+  terminals: number,
+  maximum: number
+): void {
+  try {
+    log('host-terminal-cap-reached', {
+      charge,
+      declaredIntent: facts.declaredIntent,
+      terminals,
+      maxTerminals: maximum
+    })
+  } catch {
+    // Diagnostics must never change the refusal.
+  }
 }

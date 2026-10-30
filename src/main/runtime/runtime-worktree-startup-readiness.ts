@@ -38,16 +38,20 @@ export function pasteWorktreeStartupDraftWhenReady(
   host: WorktreeStartupReadinessHost,
   handle: string,
   draft: WorktreeStartupDraftPaste
-): void {
-  void waitForWorktreeStartupDraft(host, handle, draft.agent)
+): Promise<boolean> {
+  return waitForWorktreeStartupDraft(host, handle, draft.agent)
     .then((ptyId) => {
       if (!ptyId) {
         console.warn('[worktree-create] agent did not become ready for draft paste')
-        return
+        return false
       }
       host.write(ptyId, `${BRACKETED_PASTE_BEGIN}${draft.content}${BRACKETED_PASTE_END}`, 'launch')
+      return true
     })
-    .catch((error) => console.warn('[worktree-create] failed to paste startup draft:', error))
+    .catch((error) => {
+      console.warn('[worktree-create] failed to paste startup draft:', error)
+      return false
+    })
 }
 
 /** A post-start agent's first prompt: its process in front can still drop typed text (#10336). */

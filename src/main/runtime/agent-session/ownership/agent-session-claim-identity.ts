@@ -13,6 +13,7 @@ import {
   AGENT_SESSION_CLAIM_DIGEST_VERSION,
   type AgentSessionExecutionClaim
 } from '../../../../shared/agent-session-host-authority'
+import type { TuiAgent } from '../../../../shared/tui-agent'
 import { getAgentResumeArgv } from '../../../../shared/agent-resume-argv'
 import {
   isResumableTuiAgent,
@@ -96,6 +97,26 @@ export class AgentSessionClaimSigner {
       throw new Error('agent_session_ownership_unknown')
     }
     this.keyId = createHash('sha256').update(key).digest('base64url').slice(0, 22)
+  }
+
+  createFreshLaunchClaim(args: {
+    operationId: string
+    canonicalWorktreeId: string
+    agent: TuiAgent
+    hostScope: string
+  }): AgentSessionExecutionClaim {
+    const digest = (tag: string, fields: string[]) =>
+      createHmac('sha256', this.key)
+        .update(encodeFields([tag, this.authorityDomainId, args.hostScope, ...fields]))
+        .digest('base64url')
+    return {
+      kind: 'fresh-launch',
+      digestVersion: AGENT_SESSION_CLAIM_DIGEST_VERSION,
+      keyId: this.keyId,
+      identityDigest: digest('orca-fresh-agent-launch-v1', [args.operationId, args.agent]),
+      worktreeScopeDigest: digest('orca-fresh-agent-workspace-v1', [args.canonicalWorktreeId]),
+      agent: args.agent
+    }
   }
 
   createClaim(args: {

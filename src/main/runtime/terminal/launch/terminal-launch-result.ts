@@ -11,7 +11,13 @@ export function resolveTerminalLaunchResult(
   result: TerminalSpawnResult,
   requested: Pick<
     TerminalCreateOptions,
-    'launchConfig' | 'launchAgent' | 'launchToken' | 'title' | 'viewMode' | 'requireFreshPane'
+    | 'launchConfig'
+    | 'launchAgent'
+    | 'launchToken'
+    | 'title'
+    | 'viewMode'
+    | 'requireFreshPane'
+    | 'attachOnly'
   >
 ) {
   const stablePaneAdopted = admitStablePaneAdoption(result, requested)
@@ -29,15 +35,20 @@ export function resolveTerminalLaunchResult(
     surface,
     launchAgent: refused
       ? undefined
-      : (result.launchAgent ?? (adoptedStablePane ? undefined : requested.launchAgent)),
+      : (result.launchAgent ??
+        (adoptedStablePane && !requested.attachOnly ? undefined : requested.launchAgent)),
     launchConfig: refused
       ? undefined
-      : (result.launchConfig ?? (adoptedStablePane ? undefined : requested.launchConfig)),
+      : (result.launchConfig ??
+        (adoptedStablePane && !requested.attachOnly ? undefined : requested.launchConfig)),
     launchToken: refused
       ? undefined
-      : (result.launchToken ?? (adoptedStablePane ? undefined : requested.launchToken)),
-    effectiveTitle: refused || adoptedStablePane ? null : requested.title,
-    effectiveViewMode: refused || adoptedStablePane ? undefined : requested.viewMode
+      : (result.launchToken ??
+        (adoptedStablePane && !requested.attachOnly ? undefined : requested.launchToken)),
+    effectiveTitle:
+      refused || (adoptedStablePane && !requested.attachOnly) ? null : requested.title,
+    effectiveViewMode:
+      refused || (adoptedStablePane && !requested.attachOnly) ? undefined : requested.viewMode
   }
 }
 
@@ -48,11 +59,11 @@ export function recordTerminalLaunchMetadata(
 ): void {
   if (launch.adoptedStablePane) {
     // A lower owner can supply facts before this runtime has a launch record.
-    if (!pty.launchConfig && result.launchConfig) {
-      pty.launchConfig = copySleepingAgentLaunchConfig(result.launchConfig)
+    if (!pty.launchConfig && launch.launchConfig) {
+      pty.launchConfig = copySleepingAgentLaunchConfig(launch.launchConfig)
     }
-    pty.launchToken ??= result.launchToken ?? null
-    pty.launchAgent ??= result.launchAgent ?? null
+    pty.launchToken ??= launch.launchToken ?? null
+    pty.launchAgent ??= launch.launchAgent ?? null
     if (pty.launchToken && !pty.launchIncarnationId) {
       pty.launchIncarnationId = pty.incarnationId
     }

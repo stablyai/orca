@@ -9,13 +9,15 @@ export type LiveAgentSessionOwner = AgentSessionOwnerBinding & { phase: 'live' }
 export function cloneAgentSessionClaim(
   claim: AgentSessionExecutionClaim
 ): AgentSessionExecutionClaim {
-  return {
+  const digests = {
     digestVersion: claim.digestVersion,
     keyId: claim.keyId,
     identityDigest: claim.identityDigest,
-    worktreeScopeDigest: claim.worktreeScopeDigest,
-    agent: claim.agent
+    worktreeScopeDigest: claim.worktreeScopeDigest
   }
+  return claim.kind === 'fresh-launch'
+    ? { ...digests, kind: claim.kind, agent: claim.agent }
+    : { ...digests, agent: claim.agent }
 }
 
 export function cloneAgentSessionSurface(
@@ -42,7 +44,7 @@ export function cloneAgentSessionOwnerBinding(
 }
 
 export function agentSessionClaimKey(claim: AgentSessionExecutionClaim): string {
-  return `${claim.digestVersion}:${claim.keyId}:${claim.agent}:${claim.identityDigest}`
+  return `${claim.kind === 'fresh-launch' ? 'fresh-launch:' : ''}${claim.digestVersion}:${claim.keyId}:${claim.agent}:${claim.identityDigest}`
 }
 
 export function agentSessionClaimsEqual(
@@ -50,6 +52,7 @@ export function agentSessionClaimsEqual(
   right: AgentSessionExecutionClaim
 ): boolean {
   return (
+    left.kind === right.kind &&
     left.digestVersion === right.digestVersion &&
     left.keyId === right.keyId &&
     left.identityDigest === right.identityDigest &&

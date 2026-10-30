@@ -1,3 +1,4 @@
+import { prepareRuntimeTerminalLaunch } from './prepare-spawn'
 import { adoptMaterializedRuntimePtySpawn } from './spawn-early'
 import { createRuntimePtySpawnState } from './spawn-state'
 import { localProvider } from '../provider/registry'
@@ -60,6 +61,16 @@ export function installPtyRuntimeController(deps: PtyRuntimeControllerDeps): voi
       }
       return adopted
     },
+    supportsPreparedAgentLaunches: () => localProvider.supportsPreparedAgentLaunches?.() ?? false,
+    onPreparedLaunchReconnect: (listener) =>
+      localProvider.onPreparedLaunchReconnect?.(listener) ?? (() => {}),
+    preparedAgentLaunch: (payload) => {
+      if (!localProvider.preparedAgentLaunch) {
+        throw new Error('prepared_agent_launch_unsupported')
+      }
+      return localProvider.preparedAgentLaunch(payload)
+    },
+    prepareSpawn: (args) => prepareRuntimeTerminalLaunch(deps, args),
     spawn: async (args) => spawnPtyFromRuntimeController(deps, args),
     // Local owner only: an SSH host's gate belongs to that host's own runtime.
     terminalLimit: (update) => localTerminalLimit(localProvider, update),

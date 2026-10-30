@@ -1,3 +1,4 @@
+import { DaemonPtyPreparedLaunchRouting } from './daemon-prepared-agent-launch-routing'
 import { terminateResolvedDaemonSession } from './daemon-fenced-termination'
 import type { PtyFencedTerminationRequest } from '../../shared/pty-fenced-termination'
 import { reconcileDaemonRouterSessions } from './daemon-router-session-reconciliation'
@@ -23,7 +24,7 @@ import { retireExitedLegacyAdapter, type ExitedLegacyVerdict } from './daemon-ro
 import type { WriteSettlement } from '../../shared/pty-write-settlement'
 import type { TerminalOscColorQueryReplyColors } from '../../shared/terminal-osc-color-reply'
 
-export class DaemonPtyRouter implements IPtyProvider {
+export class DaemonPtyRouter extends DaemonPtyPreparedLaunchRouting implements IPtyProvider {
   private current: DaemonPtyAdapter
   private legacy: DaemonPtyAdapter[]
   private sessionAdapters = new Map<string, DaemonPtyAdapter>()
@@ -33,6 +34,7 @@ export class DaemonPtyRouter implements IPtyProvider {
   readonly retirement = new DaemonRouterRetirement(() => this.allAdapters())
 
   constructor(opts: { current: DaemonPtyAdapter; legacy: DaemonPtyAdapter[] }) {
+    super()
     this.current = opts.current
     this.legacy = opts.legacy
     for (const adapter of this.allAdapters()) {

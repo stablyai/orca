@@ -1,7 +1,7 @@
 /** Stage long/multiline launches on the PTY host: ready markers may precede raw mode, so MAX_CANON truncates long lines
  * (1024 bytes on macOS), and raw newlines submit early in bash 3.2. Self-delete scripts before starting the agent. */
 import { randomBytes } from 'node:crypto'
-import { readdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { chmodSync, mkdtempSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { hasControlByte, TYPED_STARTUP_LINE_PROMPT_BUDGET_BYTES } from './startup-line-prompt-carry'
@@ -21,6 +21,7 @@ export type StartupCommandStaging = {
   delivery: StartupLineDelivery
   /** Present while the script exists; the host unlinks it if the PTY exits before sourcing it. */
   scriptPath?: string
+  directoryPath?: string
   /** Why staging failed, for the host's log. */
   failure?: string
 }
@@ -64,7 +65,10 @@ export function shouldStageStartupCommand(args: {
   return needsStaging && (SOURCING_SHELLS.has(shellName) || args.orcaBuiltLine === true)
 }
 
-function stagedScriptLine(shellName: string | null, quotedPath: string): string {
+function stagedScriptLine(shellName: string | null, quotedPath: string, owned?: true): string {
+  if (owned && (shellName === 'ksh' || shellName === 'mksh')) {
+    return `eval "$(command cat -- ${quotedPath})"`
+  }
   if (shellName === 'fish') {
     // fish sourcing loses job control; eval preserves typed-line behavior.
     return `eval (string collect < ${quotedPath})`
@@ -82,24 +86,29 @@ export function stageStartupCommand(args: {
   orcaBuiltLine?: boolean
   platform?: NodeJS.Platform
   directory?: string
+  owned?: true
 }): StartupCommandStaging {
   const platform = args.platform ?? process.platform
   if (!shouldStageStartupCommand({ ...args, platform })) {
     return { command: args.command, delivery: 'typed' }
   }
   const directory = args.directory ?? tmpdir()
-  if (!staleSweepStarted) {
+  if (!args.owned && !staleSweepStarted) {
     staleSweepStarted = true
     // Crash cleanup must not delay launch.
     setTimeout(() => sweepStaleStagedStartupCommands({ directory }), 0).unref?.()
   }
   const shellName = stagingShellName(args.shellPath)
+  const directoryPath = args.owned ? mkdtempSync(join(directory, 'orca-owned-launch-')) : undefined
   const scriptPath = join(
-    directory,
+    directoryPath ?? directory,
     `${STAGED_STARTUP_COMMAND_PREFIX}${randomBytes(8).toString('hex')}.sh`
   )
   const quotedPath = quoteStartupArg(scriptPath, 'posix')
   try {
+    if (directoryPath) {
+      chmodSync(directoryPath, 0o700)
+    }
     // Unlink before the agent starts; the shell continues reading its open file.
     writeFileSync(
       scriptPath,
@@ -107,6 +116,12 @@ export function stageStartupCommand(args: {
       { mode: 0o600, flag: 'wx' }
     )
   } catch (error) {
+    if (args.owned) {
+      if (directoryPath) {
+        rmSync(directoryPath, { recursive: true, force: true })
+      }
+      throw error
+    }
     return {
       command: args.command,
       delivery: 'typed-after-stage-failed',
@@ -114,9 +129,10 @@ export function stageStartupCommand(args: {
     }
   }
   return {
-    command: stagedScriptLine(shellName, quotedPath),
+    command: stagedScriptLine(shellName, quotedPath, args.owned),
     delivery: 'staged',
-    scriptPath
+    scriptPath,
+    ...(directoryPath ? { directoryPath } : {})
   }
 }
 
@@ -137,6 +153,9 @@ export function discardStagedStartupCommand(staging: StartupCommandStaging | und
   }
   try {
     rmSync(staging.scriptPath, { force: true })
+    if (staging.directoryPath) {
+      rmSync(staging.directoryPath, { recursive: true, force: true })
+    }
   } catch {
     // The age-gated sweep is the fallback.
   }

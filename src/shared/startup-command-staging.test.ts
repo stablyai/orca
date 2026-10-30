@@ -158,6 +158,49 @@ describe('stageStartupCommand', () => {
     }
   )
 
+  it.each(['ksh', 'mksh'])('evaluates an owned launch in its original %s reader', (shell) => {
+    const staged = stageStartupCommand({
+      command: `cx '${'x'.repeat(600)}'`,
+      shellPath: `/bin/${shell}`,
+      platform: 'linux',
+      orcaBuiltLine: true,
+      directory,
+      owned: true
+    })
+    expect(staged.command).toBe(`eval "$(command cat -- '${staged.scriptPath}')"`)
+    discardStagedStartupCommand(staged)
+  })
+
+  it('keeps owned launch files private and outside age-based cleanup until exact retirement', () => {
+    const staged = stageStartupCommand({
+      command: `cx '${'x'.repeat(600)}'`,
+      shellPath: '/bin/zsh',
+      platform: 'darwin',
+      directory,
+      owned: true
+    })
+    expect(staged.directoryPath).toBeDefined()
+    expect(statSync(staged.directoryPath!).mode & 0o777).toBe(0o700)
+    expect(statSync(staged.scriptPath!).mode & 0o777).toBe(0o600)
+    expect(staged.command).toBe(`. '${staged.scriptPath}'`)
+    sweepStaleStagedStartupCommands({
+      directory,
+      now: Date.now() + 10 * STAGED_STARTUP_COMMAND_STALE_MS
+    })
+    expect(readFileSync(staged.scriptPath!, 'utf8')).toContain(`cx '${'x'.repeat(600)}'`)
+    discardStagedStartupCommand(staged)
+    expect(readdirSync(directory)).toEqual([])
+    expect(() =>
+      stageStartupCommand({
+        command: 'x'.repeat(600),
+        shellPath: '/bin/zsh',
+        platform: 'darwin',
+        directory: join(directory, 'missing'),
+        owned: true
+      })
+    ).toThrow()
+  })
+
   it('types the full command and says so when the script cannot be written', () => {
     const command = 'a'.repeat(600)
     const staged = stageStartupCommand({

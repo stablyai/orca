@@ -56,7 +56,10 @@ export async function executePtySpawn(
             ),
             ctx.paneSpawnOperation?.absentOwner
           )
-    if (stablePaneOwnerCandidate) {
+    if (
+      stablePaneOwnerCandidate &&
+      !(args.attachOnly && stablePaneOwnerCandidate.ptyId === args.sessionId)
+    ) {
       throw new PaneOwnerContentionError()
     }
     const expectedPtyId = ctx.effectiveSessionAppId ?? facts.sessionId
@@ -193,6 +196,13 @@ export async function executePtySpawn(
       facts.reportPtySpawnCommitted?.()
       ctx.stablePaneOwner = null
       ctx.rejectedRegistrationCandidate = ctx.result
+    }
+    if (
+      args.attachOnly &&
+      args.expectedIncarnationId &&
+      ctx.result.incarnationId !== args.expectedIncarnationId
+    ) {
+      throw new PaneOwnerContentionError()
     }
     if (ctx.result.isReattach || ctx.result.agentSessionEnsure?.disposition === 'adopted') {
       ctx.result.isReattach = true

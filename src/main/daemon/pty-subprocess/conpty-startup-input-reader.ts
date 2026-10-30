@@ -171,19 +171,21 @@ function withNotice(claim: () => ConptyStartupEvents): () => ConptyStartupEvents
 }
 
 // Verify ConPTY input before exposing the pane, so respawning cannot repeat user input.
-export async function spawnConptyWithInputReader(
-  spawn: () => Promise<{ proc: pty.IPty; physicalOwner: DaemonPtyPhysicalOwner }>,
+export async function spawnConptyWithInputReader<
+  Spawned extends { proc: pty.IPty; physicalOwner: DaemonPtyPhysicalOwner }
+>(
+  spawn: () => Promise<Spawned>,
   opts: {
     label: string
     signal?: AbortSignal
     // Only Orca's default interactive argv is safe to respawn; custom argv may repeat a command.
     respawnSafe: boolean
   }
-): Promise<{
-  proc: pty.IPty
-  physicalOwner: DaemonPtyPhysicalOwner
-  claimStartupEvents: () => ConptyStartupEvents
-}> {
+): Promise<
+  Spawned & {
+    claimStartupEvents: () => ConptyStartupEvents
+  }
+> {
   const firstSpawn = await spawn()
   const { proc: first, physicalOwner: firstOwner } = firstSpawn
   if (announcementUntrusted) {

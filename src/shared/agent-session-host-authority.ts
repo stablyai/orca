@@ -8,6 +8,7 @@ import type { RuntimeTerminalCreate, RuntimeTerminalPresentation } from './runti
 import { isTerminalLeafId } from './stable-pane-id'
 import { isValidTerminalTabId } from './terminal-tab-id'
 import type { TuiAgent } from './tui-agent'
+import { isTuiAgent } from './tui-agent-config'
 import type { SpawnIntent } from './host-spawn-admission'
 
 export { AGENT_SESSION_HOST_AUTHORITY_RUNTIME_CAPABILITY as AGENT_SESSION_HOST_AUTHORITY_CAPABILITY } from './protocol-version'
@@ -68,13 +69,15 @@ export type AgentSessionSurfaceBinding = {
   terminalHandle: string
 }
 
-export type AgentSessionExecutionClaim = {
+type AgentSessionClaimDigests = {
   digestVersion: typeof AGENT_SESSION_CLAIM_DIGEST_VERSION
   keyId: string
   identityDigest: string
   worktreeScopeDigest: string
-  agent: ResumableTuiAgent
 }
+
+export type AgentSessionExecutionClaim = AgentSessionClaimDigests &
+  ({ kind?: undefined; agent: ResumableTuiAgent } | { kind: 'fresh-launch'; agent: TuiAgent })
 
 export type AgentSessionOwnerBinding = {
   claim: AgentSessionExecutionClaim
@@ -171,7 +174,9 @@ export function isAgentSessionExecutionClaim(value: unknown): value is AgentSess
     typeof claim.worktreeScopeDigest === 'string' &&
     claim.worktreeScopeDigest.length === SHA256_BASE64URL_LENGTH &&
     BASE64URL_RE.test(claim.worktreeScopeDigest) &&
-    isResumableTuiAgent(claim.agent)
+    (claim.kind === 'fresh-launch'
+      ? isTuiAgent(claim.agent)
+      : claim.kind === undefined && isResumableTuiAgent(claim.agent))
   )
 }
 

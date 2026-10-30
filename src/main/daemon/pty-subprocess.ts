@@ -18,7 +18,15 @@ import type { TuiAgent } from '../../shared/tui-agent'
 
 const PTY_SPAWN_HEALTH_RETRY_ATTEMPTS = 2
 
+export type RawPtySpawnObserver = {
+  onData: (data: string) => void
+  onExit: () => void
+  onSelected: () => void
+}
+
 export type PtySubprocessOptions = {
+  rawSpawnObserver?: () => RawPtySpawnObserver
+  prepareStartupCommand?: (shellPath: string, deliveredInShellArgs: boolean) => void
   sessionId: string
   cols: number
   rows: number
@@ -81,10 +89,15 @@ export async function createPtySubprocess(opts: PtySubprocessOptions): Promise<S
       throw new TerminalAttachCanceledError(opts.sessionId)
     }
 
+    opts.prepareStartupCommand?.(
+      launch.shellPath,
+      launch.startupCommandDeliveredInShellArgs === true
+    )
     let spawned: SpawnedDaemonPty
     try {
       spawned = await spawnNativeDaemonPty({
         creationWork: work,
+        rawSpawnObserver: opts.rawSpawnObserver,
         assertCreateAllowed: opts.assertCreateAllowed,
         shellPath: launch.shellPath,
         shellArgs: launch.shellArgs,

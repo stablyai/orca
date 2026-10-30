@@ -1,3 +1,4 @@
+import { worktreeCreateSetupReceipt } from '../runtime-worktree-create-setup-receipt'
 import type { Repo } from '../../../shared/repo-types'
 import type {
   WorktreeLineageInput,
@@ -120,6 +121,15 @@ export abstract class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWi
         deps: {
           store,
           ptySpawnAvailable: Boolean(this.ptyController?.spawn),
+          startPrepared: (worktree, options, prompts) =>
+            this.startSetupAgentTerminals(
+              `id:${worktree.id}`,
+              undefined,
+              { ...options, ...wslUserAct(args) },
+              () => {},
+              worktree,
+              prompts
+            ),
           provisionInBackground: () => this.shouldProvisionWorktreeInBackground(args.navigation),
           createTerminal: (selector, options) =>
             this.createTerminal(selector, { ...options, ...wslUserAct(args) }),
@@ -207,7 +217,8 @@ export abstract class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWi
       startupTerminalHandle,
       startupTerminalTabId,
       startupTerminalPaneKey,
-      startupTerminalPtyId
+      startupTerminalPtyId,
+      pendingStartup
     } = await startRuntimeLocalWorktreeTerminals({
       request: args,
       repo,
@@ -223,6 +234,16 @@ export abstract class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWi
       warning,
       ports: {
         canSpawn: Boolean(this.ptyController?.spawn),
+        startPrepared: (options, prompts) =>
+          this.startSetupAgentTerminals(
+            `id:${worktree.id}`,
+            setup?.waitForAgentStartup ? setup : undefined,
+            { ...options, ...wslUserAct(args) },
+            () => {},
+            worktree,
+            prompts,
+            defaultTabs?.tabs[0]?.color
+          ),
         provisionInBackground: () => this.shouldProvisionWorktreeInBackground(args.navigation),
         createTerminal: (selector, options) =>
           this.createTerminal(selector, { ...options, ...wslUserAct(args) }, worktree),
@@ -253,22 +274,14 @@ export abstract class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWi
       ...(returnedSetup ? { setup: returnedSetup } : {}),
       ...(args.awaitTerminalProvisioning
         ? {
-            setupReceipt: {
-              requested: effectiveDecision,
+            setupReceipt: worktreeCreateSetupReceipt({
+              effectiveDecision,
               hookFound,
-              startupPolicy: setup?.waitForAgentStartup
-                ? ('wait-for-setup' as const)
-                : ('start-immediately' as const),
-              state: !hookFound
-                ? ('not_configured' as const)
-                : effectiveDecision === 'skip' || !shouldRunSetup
-                  ? ('skipped' as const)
-                  : // The in-process setup hook already started; spawn_failed would strand retrying callers.
-                    didSpawnSetup || didStartInProcessSetupHook
-                    ? ('running' as const)
-                    : ('spawn_failed' as const),
-              ...(setupTerminalHandle ? { terminalHandle: setupTerminalHandle } : {})
-            }
+              shouldRunSetup,
+              waitForAgentStartup: setup?.waitForAgentStartup,
+              started: didSpawnSetup || didStartInProcessSetupHook,
+              setupTerminalHandle
+            })
           }
         : {}),
       ...(defaultTabs ? { defaultTabs } : {}),
@@ -280,6 +293,7 @@ export abstract class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWi
       ...(addResult.localBaseRefUpdateSuggestion
         ? { localBaseRefUpdateSuggestion: addResult.localBaseRefUpdateSuggestion }
         : {}),
+      ...(pendingStartup ? { startupTerminal: { spawned: false, pending: pendingStartup } } : {}),
       ...(didSpawnStartup && startupTerminalHandle
         ? {
             startupTerminal: {

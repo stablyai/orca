@@ -101,6 +101,7 @@ export const WorktreeCreate = z
       })
       .optional(),
     setupOnly: z.boolean().optional(),
+    preparedAgentLaunch: z.literal(true).optional(),
     setupDecision: z
       .unknown()
       .transform((v) =>

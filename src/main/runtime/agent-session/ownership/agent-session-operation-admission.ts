@@ -227,7 +227,7 @@ export function admitAgentSessionGlobalOperationInto(
 
 export function claimAgentSessionOperationInto(
   state: { operations: Map<string, AgentSessionOperationRow> },
-  args: { callerKey: string; operationId: string }
+  args: { callerKey: string; operationId: string; now?: number }
 ): AgentSessionOperationClaim {
   const claimed = claimAgentSessionOperation(state.operations, args)
   state.operations = claimed.rows

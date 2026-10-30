@@ -1,3 +1,4 @@
+import type { PtyIncarnationId } from '../../shared/pty-incarnation'
 import type { ProgramStatusFacet } from '../../shared/program-status/facet'
 import type { AgentLaunchRuntime } from '../../shared/agent-launch-runtime'
 import type { AgentLaunchTabViewerRule } from '../../shared/agent-launch-tab-publication'
@@ -29,6 +30,9 @@ import type { RuntimeAgentRowSnapshot } from './runtime-worktree-agent-rows'
 import type { WorkerTerminalHostScope } from '../../shared/worker-terminal-host-scope'
 
 export type TerminalCreateOptions = {
+  /** Main-only rejoin of a process already accepted by its daemon. */
+  attachOnly?: boolean
+  expectedIncarnationId?: PtyIncarnationId
   command?: string
   /** Spawn Windows shell as the PTY process; selecting it through command creates only a child and later returns to the unwanted default shell. */
   shellOverride?: string

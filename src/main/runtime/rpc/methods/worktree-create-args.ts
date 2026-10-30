@@ -88,6 +88,7 @@ export function buildManagedWorktreeCreateArgs(
       defaultTarget: 'host'
     }),
     setupDecision: params.setupDecision,
+    ...(params.preparedAgentLaunch ? { preparedAgentLaunch: true as const } : {}),
     ...(params.setupOnly !== undefined ? { setupOnly: params.setupOnly } : {}),
     createdWithAgent: params.createdWithAgent ?? params.startupAgent,
     ...provenance,

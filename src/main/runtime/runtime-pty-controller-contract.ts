@@ -1,3 +1,8 @@
+import type {
+  PreparedAgentLaunchRequest,
+  PreparedAgentSpawn
+} from '../daemon/prepared-agent-launch-protocol'
+import type { RuntimePtySpawnArgs } from '../ipc/pty/runtime/spawn-state'
 import type { TerminalLimitStatus, TerminalLimitUpdate } from '../../shared/terminal-limit-policy'
 import type { TerminalViewAttributes } from '../../shared/terminal-view-attributes'
 import type { PtySpawnOutcome } from '../ipc/pty/spawn-outcome'
@@ -66,6 +71,10 @@ export type RuntimePtyController = {
     }
     materialized?: true
   } | null>
+  supportsPreparedAgentLaunches?(): boolean | Promise<boolean>
+  onPreparedLaunchReconnect?: (listener: () => void) => () => void
+  preparedAgentLaunch?(payload: PreparedAgentLaunchRequest['payload']): Promise<unknown>
+  prepareSpawn?(opts: RuntimePtySpawnArgs): Promise<PreparedAgentSpawn>
   spawn?(opts: {
     cols: number
     rows: number
@@ -94,6 +103,8 @@ export type RuntimePtyController = {
     /** The agent launch's runtime fact; when present the PTY shell comes only from it. */
     launchRuntime?: AgentLaunchRuntime
     isNewSession?: boolean
+    attachOnly?: boolean
+    expectedIncarnationId?: PtyIncarnationId
     /** No renderer view exists at spawn; main owns delivery and query replies until one mounts. */
     initiallyHidden?: boolean
     persistHostSessionBinding?: boolean

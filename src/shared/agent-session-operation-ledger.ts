@@ -50,6 +50,8 @@ export type AgentSessionOperationRow = {
   recordedAt: number
   expiresAt: number
   outcome: AgentSessionOperationOutcome
+  /** Retained until the execution owner proves all launch and adoption obligations retired. Narrow before use. */
+  preparedLaunch?: unknown
 }
 
 export type AgentSessionOperationRefusalCode =
@@ -120,14 +122,17 @@ export type AgentSessionOperationClaim =
 /** Atomically CAS pending to unknown and return the winner before effects. Admission or unconditional writes let two callers run; unknown durably records possible effects if the host dies mid-run. */
 export function claimAgentSessionOperation(
   rows: ReadonlyMap<string, AgentSessionOperationRow>,
-  args: { callerKey: string; operationId: string }
+  args: { callerKey: string; operationId: string; now?: number }
 ): { rows: Map<string, AgentSessionOperationRow>; claim: AgentSessionOperationClaim } {
   const key = agentSessionOperationKey(args.callerKey, args.operationId)
   const existing = rows.get(key)
   if (!existing) {
     return { rows: new Map(rows), claim: { claim: 'absent' } }
   }
-  if (existing.outcome.status !== 'pending') {
+  if (
+    existing.outcome.status !== 'pending' ||
+    isExpiredPreparedAgentLaunch(existing, args.now ?? Date.now())
+  ) {
     return { rows: new Map(rows), claim: { claim: 'lost', row: existing } }
   }
   const claimed: AgentSessionOperationRow = { ...existing, outcome: { status: 'unknown' } }
@@ -148,14 +153,23 @@ export function agentSessionOperationExpiry(
   )
 }
 
-/** The unexpired row a globally scoped id already holds, under whichever caller admitted it. */
+/** An unreadable descriptor is still an obligation, never proof of execution permission. */
+export function retainsAgentSessionOperation(row: AgentSessionOperationRow, now: number): boolean {
+  return row.expiresAt > now || Object.hasOwn(row, 'preparedLaunch')
+}
+
+export function isExpiredPreparedAgentLaunch(row: AgentSessionOperationRow, now: number): boolean {
+  return row.expiresAt <= now && Object.hasOwn(row, 'preparedLaunch')
+}
+
+/** The retained row a globally scoped id already holds, under whichever caller admitted it. */
 export function findAgentSessionGlobalOperationRow(
   rows: ReadonlyMap<string, AgentSessionOperationRow>,
   operationId: string,
   now: number
 ): AgentSessionOperationRow | undefined {
   for (const row of rows.values()) {
-    if (row.expiresAt > now && row.operationId === operationId) {
+    if (retainsAgentSessionOperation(row, now) && row.operationId === operationId) {
       return row
     }
   }
@@ -168,7 +182,7 @@ export function pruneAgentSessionOperationRows(
 ): Map<string, AgentSessionOperationRow> {
   const kept = new Map<string, AgentSessionOperationRow>()
   for (const [key, row] of rows) {
-    if (row.expiresAt > now) {
+    if (retainsAgentSessionOperation(row, now)) {
       kept.set(key, row)
     }
   }

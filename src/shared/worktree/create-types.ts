@@ -1,3 +1,4 @@
+import type { PendingPreparedAgentLaunch } from '../prepared-agent-launch'
 import type { WorktreeCatalogVersion } from './catalog-version'
 import type { ExecutionHostId } from '../execution-host'
 import type { ArchiveHookOverride } from './archive-hook-removal-gate'
@@ -131,6 +132,7 @@ export type CreateWorktreeArgs = {
   startup?: WorktreeStartupLaunch
   /** Correlate concurrent background creates with renderer progress; synchronous callers may omit it. */
   creationId?: string
+  preparedAgentLaunch?: true
   /** Authorizes the host to mint system-owned automation provenance. */
   automationProvenanceRequest?: AutomationWorkspaceProvenanceRequest
 }
@@ -186,6 +188,7 @@ export type CreateWorktreeResult = {
   localBaseRefUpdateSuggestion?: LocalBaseRefUpdateSuggestion
   startupTerminal?: {
     spawned: boolean
+    pending?: PendingPreparedAgentLaunch
     handle?: string
     tabId?: string
     paneKey?: string | null

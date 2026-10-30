@@ -1,3 +1,4 @@
+import { PreparedTerminalPendingError } from '../../../../terminal/launch/prepared-terminal-pending'
 import type { OrchestrationDb } from '../../../../orchestration/db'
 import type { WorkerDispatchRow } from '../../../../orchestration/types'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
@@ -55,11 +56,38 @@ function settledWorkerStartReceipt(args: WorkerStartFailureArgs): unknown {
   }
 }
 
+export async function pendingWorkerStartReceipt(
+  args: Omit<WorkerStartFailureArgs, 'runtime' | 'structuredSession' | 'error' | 'failedStage'> & {
+    pending: PreparedTerminalPendingError['pending']
+  }
+): Promise<unknown> {
+  const worker = args.db.getWorkerDispatch(args.dispatchId)
+  if (!worker) {
+    throw new PreparedTerminalPendingError(args.pending)
+  }
+  return {
+    runId: args.runId,
+    taskId: args.taskId,
+    dispatchId: args.dispatchId,
+    state: 'outcome_unknown',
+    stage: worker.stage,
+    pending: args.pending,
+    setup: args.setup,
+    launch: args.launch,
+    mode: args.mode,
+    effects: JSON.parse(worker.effects),
+    residualResources: JSON.parse(worker.residual_resources)
+  }
+}
+
 export async function failWorkerStartWithReceipt(args: WorkerStartFailureArgs): Promise<unknown> {
   // A report that settled the Task outranks a late startup error, and keeps its session alive.
   const settled = settledWorkerStartReceipt(args)
   if (settled) {
     return settled
+  }
+  if (args.error instanceof PreparedTerminalPendingError) {
+    return pendingWorkerStartReceipt({ ...args, pending: args.error.pending })
   }
   try {
     // Fail before awaiting teardown, so no report can settle between that check and this transition.
@@ -110,4 +138,10 @@ function failedWorkerStartReceipt(args: WorkerStartFailureArgs): unknown {
         }
       : {})
   }
+}
+
+export function workerStartIsReady(result: unknown): boolean {
+  return (
+    typeof result === 'object' && result !== null && 'state' in result && result.state === 'ready'
+  )
 }

@@ -1,3 +1,5 @@
+import { PreparedAgentLaunchOwner } from './prepared-agent-launch-owner'
+import type { PreparedAgentLaunchRequest } from './prepared-agent-launch-protocol'
 import { terminalSessionExitCode } from './terminal-host-returned-process'
 import { runTerminalCreation, type PendingTerminalCreation } from './terminal-creation-work'
 import { beginTerminalHostFencedTermination } from './terminal-host-fenced-termination'
@@ -58,6 +60,7 @@ export class TerminalHost {
   private readonly agentSessionOwners = new ClaimedAgentPtyOwnerRegistry()
   private readonly agentSessionGenerations = new TerminalHostAgentSessionGenerations()
   private readonly authorityGeneration = randomUUID()
+  private readonly preparedLaunches: PreparedAgentLaunchOwner
   private observationEpoch = 0
   private readonly retiredIncarnations = new Map<
     string,
@@ -66,6 +69,12 @@ export class TerminalHost {
 
   constructor(opts: TerminalHostOptions) {
     this.spawnOptions = opts
+    this.preparedLaunches = new PreparedAgentLaunchOwner({
+      owners: this.agentSessionOwners,
+      create: (options) => this.createOrAttach(options),
+      isAlive: (id) => this.sessions.get(id)?.isAlive === true,
+      reserveCapacity: () => opts.spawnGate?.reservePreparedLaunch() ?? (() => {})
+    })
     this.onSessionReaped = opts.onSessionReaped
     this.reportReadinessEvent = opts.reportReadinessEvent
     this.onFinalCheckpoint = opts.onFinalCheckpoint
@@ -117,6 +126,15 @@ export class TerminalHost {
         })
     )
   }
+
+  preparedAgentLaunch(payload: PreparedAgentLaunchRequest['payload']): Promise<unknown> {
+    if (this.creationFenced && (payload.action === 'prepare' || payload.action === 'accept')) {
+      throw new Error('Terminal host is shutting down')
+    }
+    return this.preparedLaunches.handle(payload)
+  }
+
+  hasPendingAgentLaunches = (): boolean => this.preparedLaunches.pending > 0
 
   private handleSessionExit(sessionId: string, generation: string | undefined): void {
     recordTerminalHostSessionExit(
@@ -297,7 +315,7 @@ export class TerminalHost {
   }
 
   hasLiveSessions(): boolean {
-    return hasLiveTerminalHostSessions(this.sessions)
+    return this.hasPendingAgentLaunches() || hasLiveTerminalHostSessions(this.sessions)
   }
 
   /** Last resort when shutdown overruns its deadline: an async group sweep may not have signalled yet. */

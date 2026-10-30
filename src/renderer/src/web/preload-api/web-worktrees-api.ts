@@ -57,6 +57,7 @@ export function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees
       invalidateRuntimeWorktreeCaches()
       const owned = await callRuntimeResultWithOwner<{ worktree: Worktree }>('worktree.create', {
         repo: args.repoId,
+        ...(args.preparedAgentLaunch ? { preparedAgentLaunch: true } : {}),
         name: args.name,
         // Absent means user-typed, which is what the host must assume — so send it only when true.
         ...(args.nameWasGenerated ? { nameWasGenerated: true } : {}),

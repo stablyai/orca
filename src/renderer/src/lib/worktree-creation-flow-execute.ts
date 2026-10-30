@@ -160,8 +160,8 @@ export async function executeWorktreeCreation(
   }
   await attachEphemeralVmRuntimeToWorkspace(preparedRequest, worktree.id)
 
-  const backendSpawned = result.startupTerminal?.spawned === true
   const windowStartup = windowStartupAfterCreate(creationId, preparedRequest, result)
+  const backendSpawned = windowStartup.terminalOptions.backendStartupTerminalSpawned === true
   const startupOpt = windowStartup.startup
 
   // Hand off only if still viewing creation/new workspace; preserve later navigation and toast instead (#9944).

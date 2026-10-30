@@ -1,3 +1,4 @@
+import type { PreparedAgentLaunchRequest } from './prepared-agent-launch-protocol'
 import type {
   AsyncIoHealthRequest,
   FullDiskAccessStatusRequest,
@@ -257,6 +258,7 @@ export type TakePendingOutputResult = {
 }
 
 export type DaemonRequest =
+  | PreparedAgentLaunchRequest
   | CreateOrAttachRequest
   | HistorySeedProtocol.TerminalHistorySeedTransferRequest
   | CancelCreateOrAttachRequest

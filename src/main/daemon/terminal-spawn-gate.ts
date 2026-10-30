@@ -22,7 +22,12 @@ import { TerminalSpawnDeferredError } from './terminal-spawn-deferred-error'
 import type { LegacyRestoreDetails, LegacyRestoreRecords } from './legacy-restore-records'
 import { admitRecordingLegacyRestore } from './legacy-restore-admission'
 import { TerminalSpawnWaiters } from './terminal-spawn-waiters'
-import { hostTerminalCapRefusal, TerminalSpawnHostShare } from './terminal-spawn-host-share'
+import {
+  hostTerminalCapRefusal,
+  TerminalSpawnHostShare,
+  logHostTerminalCap,
+  logSpawnAdmission
+} from './terminal-spawn-host-share'
 
 import type { TerminalSpawnAdmissionMode } from './terminal-spawn-admission-mode'
 export {
@@ -113,15 +118,16 @@ export class TerminalSpawnGate {
   admit(
     facts: SpawnRequestFacts,
     cancel?: { signal: AbortSignal; error: () => Error },
-    restore?: LegacyRestoreDetails
+    restore?: LegacyRestoreDetails,
+    reservedCapacity?: () => void
   ): TerminalSpawnLease | Promise<TerminalSpawnLease> {
     return admitRecordingLegacyRestore(
       () => {
         const maximum = this.options.resolveMaximum?.() ?? this.host.maxTerminals
-        const attempt = this.attempt(facts, cancel, false, maximum)
+        const attempt = this.attempt(facts, cancel, false, maximum, reservedCapacity)
         return attempt.kind === 'lease'
           ? attempt.lease
-          : this.admitAfterWait(facts, cancel, attempt)
+          : this.admitAfterWait(facts, cancel, attempt, reservedCapacity)
       },
       this.options.legacyRestores,
       facts,
@@ -132,13 +138,14 @@ export class TerminalSpawnGate {
   private async admitAfterWait(
     facts: SpawnRequestFacts,
     cancel: { signal: AbortSignal; error: () => Error } | undefined,
-    first: { kind: 'wait'; untilMs: number }
+    first: { kind: 'wait'; untilMs: number },
+    reservedCapacity?: () => void
   ): Promise<TerminalSpawnLease> {
     let attempt: ReturnType<TerminalSpawnGate['attempt']> = first
     while (attempt.kind === 'wait') {
       await this.waiters.waitForChange(attempt.untilMs, cancel?.signal)
       const maximum = this.options.resolveMaximum?.() ?? this.host.maxTerminals
-      attempt = this.attempt(facts, cancel, true, maximum)
+      attempt = this.attempt(facts, cancel, true, maximum, reservedCapacity)
     }
     return attempt.lease
   }
@@ -147,7 +154,8 @@ export class TerminalSpawnGate {
     facts: SpawnRequestFacts,
     cancel: { signal: AbortSignal; error: () => Error } | undefined,
     alreadyWaited: boolean,
-    maximum: number
+    maximum: number,
+    reservedCapacity?: () => void
   ): { kind: 'lease'; lease: TerminalSpawnLease } | { kind: 'wait'; untilMs: number } {
     if (cancel?.signal.aborted) {
       throw cancel.error()
@@ -173,14 +181,17 @@ export class TerminalSpawnGate {
     })
     if (this.mode === 'observe' || decision.kind === 'admit') {
       // Reserve first so refused forks cannot be logged as admitted.
-      if (!this.host.tryReserve(this.state, maximum)) {
+      if (!reservedCapacity && !this.host.tryReserve(this.state, maximum)) {
         this.refuseAtHostCap(facts, charge, maximum)
       }
       this.record(decision, charge, facts, !alreadyWaited)
-      return { kind: 'lease', lease: this.lease(facts, charge, now) }
+      const lease = this.lease(facts, charge, now)
+      reservedCapacity?.()
+      return { kind: 'lease', lease }
     }
     // Refuse at the host cap before spending time in the pacing queue.
     if (
+      !reservedCapacity &&
       decision.kind === 'wait' &&
       this.host.terminals(this.state) + 1 + others.terminals > maximum
     ) {
@@ -200,6 +211,20 @@ export class TerminalSpawnGate {
         decision.retryAt ?? (otherDaemonHoldsSlot ? now + OTHER_DAEMON_POLL_MS : Infinity),
         facts.deadlineAt
       )
+    }
+  }
+
+  reservePreparedLaunch(): () => void {
+    const release = this.host.reservePending(
+      this.state,
+      this.options.resolveMaximum?.() ?? this.host.maxTerminals
+    )
+    if (!release) {
+      throw new Error(TERMINAL_SPAWN_REFUSED_MESSAGE)
+    }
+    return () => {
+      release()
+      this.waiters.wakeAll()
     }
   }
 
@@ -240,26 +265,13 @@ export class TerminalSpawnGate {
     }
   }
 
-  startHostTerminals(): void {
-    this.host.start()
-  }
+  startHostTerminals = (): void => this.host.start()
 
-  stopHostTerminals(): void {
-    this.host.stop()
-  }
+  stopHostTerminals = (): void => this.host.stop()
 
   private refuseAtHostCap(facts: SpawnRequestFacts, charge: SpawnCharge, maximum: number): never {
     this.hostCapRefused += 1
-    try {
-      this.options.log('host-terminal-cap-reached', {
-        charge,
-        declaredIntent: facts.declaredIntent,
-        terminals: this.host.terminals(this.state),
-        maxTerminals: maximum
-      })
-    } catch {
-      // Diagnostics must never change the refusal.
-    }
+    logHostTerminalCap(this.options.log, facts, charge, this.host.terminals(this.state), maximum)
     throw hostTerminalCapRefusal(facts, charge)
   }
 
@@ -314,17 +326,6 @@ export class TerminalSpawnGate {
     } else if (decision.kind === 'refuse_retryable') {
       this.refused += 1
     }
-    try {
-      this.options.log(this.mode === 'observe' ? 'spawn-admission-observed' : 'spawn-admission', {
-        decision: decision.kind,
-        ...(decision.kind === 'defer' ? { reason: decision.reason } : {}),
-        charge,
-        declaredIntent: facts.declaredIntent,
-        inFlightAutomatic: this.state.inFlight.automatic,
-        liveAutomatic: this.state.liveAutomatic
-      })
-    } catch {
-      // Diagnostics must never turn an admitted fork into a failed create.
-    }
+    logSpawnAdmission(this.options.log, this.mode, decision, charge, facts, this.state)
   }
 }

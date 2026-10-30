@@ -54,6 +54,87 @@ function createPorts() {
 const TAB_ID = '9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d'
 const LEAF_ID = '3f2504e0-4f89-41d3-9a0c-0305e82c3301'
 
+describe('host-owned startup', () => {
+  const pending = {
+    operationId: 'operation',
+    fingerprint: 'fingerprint',
+    daemonGeneration: 'daemon',
+    reservationGeneration: 'reservation',
+    worktreeId: worktree.id,
+    setupTerminalHandle: 'term_setup'
+  }
+  it.each([true, false])(
+    'keeps the real agent pending and provisions only remaining templates (wait=%s)',
+    async (waitForAgentStartup) => {
+      const { ports, createTerminal } = createPorts()
+      const startPrepared = vi
+        .fn<NonNullable<StartupArgs['ports']['startPrepared']>>()
+        .mockResolvedValue({ pending })
+      ports.startPrepared = startPrepared
+      const setup = { runnerScriptPath: '/repo/setup.sh', envVars: {}, waitForAgentStartup }
+      const result = await startRuntimeLocalWorktreeTerminals({
+        request: {
+          repoSelector: repo.id,
+          name: 'worker',
+          preparedAgentLaunch: true,
+          activate: true
+        },
+        repo,
+        worktree,
+        setup,
+        createdWithAgent: 'codex',
+        startup: { command: 'cx' },
+        defaultTabs: {
+          runCommands: true,
+          tabs: [
+            { title: 'Agent', color: 'blue' },
+            { title: 'Logs', command: 'tail log' }
+          ]
+        },
+        startupFollowup: { agent: 'codex', prompt: 'unchanged task' },
+        ports
+      })
+      expect(startPrepared).toHaveBeenCalledWith(
+        expect.objectContaining({ command: 'cx', title: 'Agent' }),
+        { followup: { agent: 'codex', prompt: 'unchanged task' } }
+      )
+      expect(ports.provision).toHaveBeenCalledTimes(1)
+      expect(ports.provision).toHaveBeenCalledWith(
+        expect.objectContaining({
+          setup: waitForAgentStartup ? undefined : setup,
+          defaultTabs: { runCommands: true, tabs: [{ title: 'Logs', command: 'tail log' }] }
+        })
+      )
+      expect(result).toMatchObject({
+        pendingStartup: pending,
+        didSpawnStartup: false,
+        startupTerminalHandle: null
+      })
+      expect(createTerminal).not.toHaveBeenCalled()
+      expect(ports.sendFollowup).not.toHaveBeenCalled()
+      expect(ports.activate).toHaveBeenCalledWith(repo.id, worktree.id)
+    }
+  )
+
+  it('selects the unchanged legacy path when the actual owner lacks the capability', async () => {
+    const { ports, createTerminal } = createPorts()
+    ports.startPrepared = vi.fn().mockResolvedValue(null)
+    await startRuntimeLocalWorktreeTerminals({
+      request: { repoSelector: repo.id, name: 'worker', preparedAgentLaunch: true },
+      repo,
+      worktree,
+      createdWithAgent: 'codex',
+      startup: { command: 'cx' },
+      ports
+    })
+    expect(createTerminal).toHaveBeenCalledOnce()
+    expect(createTerminal).toHaveBeenCalledWith(
+      `id:${worktree.id}`,
+      expect.objectContaining({ command: 'cx' })
+    )
+  })
+})
+
 async function startupTerminalOptions(startupPaneKey?: string) {
   const { createTerminal, ports } = createPorts()
   await startRuntimeLocalWorktreeTerminals({

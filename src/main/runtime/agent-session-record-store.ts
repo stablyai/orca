@@ -1,3 +1,4 @@
+import { matchesPreparedLaunchGeneration } from '../../shared/prepared-agent-launch'
 import { backfillAgentSessionPermissionModes } from './agent-session/ownership/agent-session-permission-backfill'
 import { createAgentSessionConversationReceipts } from './agent-session-conversation-receipts'
 import { pinAgentSessionRecordLaunchDirectory } from './agent-session-record-launch-directory'
@@ -271,6 +272,38 @@ export class AgentSessionRecordStore extends AgentSessionRecordTabs {
   /** Replay evaluation writes nothing; admitMutationOperation owns the transaction. */
   evaluateMutationOperation = (args: AgentSessionMutationOperationAdmission) =>
     evaluateAgentSessionMutationOperation(this.state, args)
+
+  recordPreparedAgentLaunch = (
+    args: AgentSessionOperationAdmission & { preparedLaunch: unknown }
+  ) =>
+    this.transact((draft) => {
+      const decision = admitAgentSessionGlobalOperationInto(draft, args)
+      if (decision.decision !== 'admit') {
+        return { decision, claim: null }
+      }
+      const key = agentSessionOperationKey(args.callerKey, args.operationId)
+      draft.operations.set(key, { ...decision.row, preparedLaunch: args.preparedLaunch })
+      return { decision, claim: claimAgentSessionOperationInto(draft, args) }
+    })
+
+  retirePreparedAgentLaunch = (args: {
+    operationId: string
+    daemonGeneration: string
+    reservationGeneration: string
+  }) =>
+    this.transact((draft) => {
+      for (const [key, row] of draft.operations) {
+        const descriptor = row.preparedLaunch
+        if (
+          row.operationId !== args.operationId ||
+          !matchesPreparedLaunchGeneration(descriptor, args)
+        ) {
+          continue
+        }
+        const { preparedLaunch: _retired, ...retained } = row
+        draft.operations.set(key, retained)
+      }
+    })
 
   /** Durable CAS decides which pending replay may run its effect; reading pending alone cannot grant it. */
   claimOperation = (args: Parameters<typeof claimAgentSessionOperationInto>[1]) =>

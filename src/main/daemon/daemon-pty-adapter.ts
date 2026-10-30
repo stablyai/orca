@@ -9,7 +9,7 @@ import type { DaemonPtyRouterExitEvent } from './daemon-pty-router-events'
 import { logWslPaneDiagnostic } from './daemon-wsl-diagnostic-log'
 import { classifyWslBridgeExit, WSL_DISTRO_LOSS_EXIT_CODE } from './daemon-wsl-bridge-exit'
 import { isProvenProcessExit } from '../../shared/terminal-exit-cause'
-import { DaemonPtyDaemonRecovery } from './daemon-pty-daemon-recovery'
+import { DaemonPtyPreparedLaunch } from './daemon-prepared-agent-launch-client'
 import type { DaemonPtyAdapterOptions } from './daemon-pty-runtime-state'
 import { supportsMode2031UnsubscribeFact, type DaemonEvent } from './types'
 import type { DaemonEndpointIdentity } from './daemon-hello-protocol'
@@ -27,7 +27,7 @@ import type { DaemonAsyncIoHealth, DaemonAsyncIoStatus } from '../../shared/daem
 import { observeDaemonAsyncIoHealth } from './daemon-async-io-telemetry-event'
 import { sameEndpointIdentity } from './daemon-endpoint-incarnation'
 
-export class DaemonPtyAdapter extends DaemonPtyDaemonRecovery implements IPtyProvider {
+export class DaemonPtyAdapter extends DaemonPtyPreparedLaunch implements IPtyProvider {
   constructor(opts: DaemonPtyAdapterOptions) {
     super(opts)
     // Registered after the base listener, which marks the sessions awaiting recovery first.

@@ -57,6 +57,30 @@ describePosix('daemon startup command staging', () => {
     return { sub, result }
   }
 
+  it('fails owned staging before the physical spawn when private storage is unavailable', async () => {
+    vi.stubEnv('TMPDIR', join(tempDir, 'missing'))
+    const physicalSpawn = vi.fn()
+    const host = new TerminalHost({
+      spawnSubprocess: (options) => {
+        options.prepareStartupCommand?.('/bin/zsh', false)
+        physicalSpawn()
+        return mockSubprocess('/bin/zsh')
+      }
+    })
+    await expect(
+      host.createOrAttach({
+        sessionId: 'owned-staging-failure',
+        cols: 80,
+        rows: 24,
+        command: `cx '${'x'.repeat(600)}'`,
+        retainOnPublicationFailure: true,
+        streamClient: { onData() {}, onExit() {} }
+      })
+    ).rejects.toThrow()
+    expect(physicalSpawn).not.toHaveBeenCalled()
+    expect(host.listSessions()).toEqual([])
+  })
+
   it('types a short launch line and reports it typed', async () => {
     const { sub, result } = await create(`claude 'fix it'`)
     expect(sub.write).toHaveBeenCalledWith(`claude 'fix it'\r`)

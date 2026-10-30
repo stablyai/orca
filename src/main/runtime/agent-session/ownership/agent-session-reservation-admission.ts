@@ -5,6 +5,7 @@ import type { AgentSessionAdmissionModels } from '../../agent-session-record-opt
 import { chatAgentsShareConversations } from '../../../../shared/structured-agent-cli-conversation-adoption'
 import {
   agentSessionOperationKey,
+  isExpiredPreparedAgentLaunch,
   evaluateAgentSessionOperation,
   pendingAgentSessionOperationRow,
   pruneAgentSessionOperationRows,
@@ -302,7 +303,11 @@ export function commitAgentSessionReservation(
   }
   if (decision.decision === 'replay') {
     const record = requireAgentSessionRecordForReplay(state, decision.row, request.sessionId)
-    if (decision.row.outcome.status !== 'pending' || request.handoffOperationId === null) {
+    if (
+      isExpiredPreparedAgentLaunch(decision.row, request.now) ||
+      decision.row.outcome.status !== 'pending' ||
+      request.handoffOperationId === null
+    ) {
       return { record, disposition: 'replayed', operationRow: decision.row }
     }
     if (continued) {
