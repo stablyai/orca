@@ -25,7 +25,7 @@ describe('OpenCode verbose model listing', () => {
       'max',
       'default'
     ])
-    expect(model).not.toHaveProperty('defaultEffort')
+    expect(model).toMatchObject({ defaultEffort: 'low', declaredDefaultEffort: null })
   })
 
   it('reads every model and its variants through multiline metadata', () => {
@@ -49,6 +49,8 @@ describe('OpenCode verbose model listing', () => {
       {
         id: 'anthropic/claude-sonnet',
         label: 'anthropic/Claude Sonnet',
+        defaultEffort: 'high',
+        declaredDefaultEffort: null,
         isDefault: false,
         efforts: [
           { value: 'high', label: 'High' },
@@ -64,9 +66,16 @@ describe('OpenCode verbose model listing', () => {
           { value: 'default', label: 'Default' },
           { value: 'fast', label: 'Fast' }
         ],
-        defaultEffort: 'default'
+        defaultEffort: 'default',
+        declaredDefaultEffort: 'default'
       },
-      { id: 'openai/gpt-plain', label: 'openai/GPT Plain', isDefault: false, efforts: [] }
+      {
+        id: 'openai/gpt-plain',
+        label: 'openai/GPT Plain',
+        isDefault: false,
+        declaredDefaultEffort: null,
+        efforts: []
+      }
     ])
   })
 
@@ -92,8 +101,20 @@ describe('OpenCode verbose model listing', () => {
   it('keeps a model whose metadata does not parse, with no effort menu', () => {
     const stdout = 'openai/gpt-broken\n{\n  "name": \n}\nopenai/gpt-next\n'
     expect(parseOpenCodeModelListing(stdout)).toEqual([
-      { id: 'openai/gpt-broken', label: 'openai/gpt-broken', isDefault: false, efforts: [] },
-      { id: 'openai/gpt-next', label: 'openai/gpt-next', isDefault: false, efforts: [] }
+      {
+        id: 'openai/gpt-broken',
+        label: 'openai/gpt-broken',
+        isDefault: false,
+        declaredDefaultEffort: null,
+        efforts: []
+      },
+      {
+        id: 'openai/gpt-next',
+        label: 'openai/gpt-next',
+        isDefault: false,
+        declaredDefaultEffort: null,
+        efforts: []
+      }
     ])
   })
 })

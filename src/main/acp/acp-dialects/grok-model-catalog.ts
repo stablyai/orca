@@ -50,10 +50,11 @@ function capitalized(id: string): string {
 export function grokModelEfforts(model: Pick<ModelInfo, '_meta'>): {
   efforts: AgentSessionOptionChoice[]
   defaultEffort?: string
+  declaredDefaultEffort?: string | null
 } {
   const meta = modelMetaSchema.safeParse(model._meta ?? {})
   if (!meta.success || meta.data.supportsReasoningEffort !== true) {
-    return { efforts: [] }
+    return { efforts: [], declaredDefaultEffort: null }
   }
   const efforts: AgentSessionOptionChoice[] = []
   let defaultEffort: string | undefined
@@ -93,8 +94,13 @@ export function grokModelEfforts(model: Pick<ModelInfo, '_meta'>): {
     reportedDefaultEffort = efforts.find(({ value }) => value === meta.data.reasoningEffort)?.value
   }
   // An unmappable reported override leaves the default unknown, not the menu's recommendation.
-  defaultEffort = meta.data.reasoningEffort === undefined ? defaultEffort : reportedDefaultEffort
-  return { efforts, ...(defaultEffort ? { defaultEffort } : {}) }
+  const declaredDefaultEffort =
+    meta.data.reasoningEffort === undefined ? defaultEffort : reportedDefaultEffort
+  return {
+    efforts,
+    ...(defaultEffort ? { defaultEffort } : {}),
+    declaredDefaultEffort: declaredDefaultEffort ?? null
+  }
 }
 
 /** Session-free currentModelId may differ from the model a chat runs; leave defaults to sessions. */

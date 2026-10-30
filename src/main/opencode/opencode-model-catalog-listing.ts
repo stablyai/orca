@@ -32,13 +32,14 @@ function modelOption(id: string, metadata: unknown): AgentSessionModelOption {
     label: name ? `${providerId}/${name}` : id,
     // Listing proves availability, not the configured default.
     isDefault: false,
+    declaredDefaultEffort: variants.includes(DEFAULT_VARIANT) ? DEFAULT_VARIANT : null,
     ...(variants.length > 0
       ? {
           efforts: [...new Set([...variants, DEFAULT_VARIANT])].map((value) => ({
             value,
             label: variantLabel(value)
           })),
-          ...(variants.includes(DEFAULT_VARIANT) ? { defaultEffort: DEFAULT_VARIANT } : {})
+          defaultEffort: variants.includes(DEFAULT_VARIANT) ? DEFAULT_VARIANT : variants[0]
         }
       : { efforts: [] })
   }

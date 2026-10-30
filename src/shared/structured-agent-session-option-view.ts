@@ -63,10 +63,20 @@ export function structuredAgentSessionShownSnapshot(
   ) {
     return snapshot
   }
-  const effort = structuredAgentSessionDescribedModel(view, model)?.options.find(
-    (option) => option.id === 'effort'
-  )?.kind
-  if (effort?.type !== 'select' || !effort.defaultIsCliDefault) {
+  const described = structuredAgentSessionDescribedModel(view, model)
+  const effort = described?.options.find((option) => option.id === 'effort')?.kind
+  const declaration = described?.declaredDefaultEffort
+  const fallback =
+    declaration !== undefined
+      ? declaration
+      : view.record.agent === 'codex' && effort?.type === 'select' && effort.defaultIsCliDefault
+        ? effort.defaultValue
+        : undefined
+  if (
+    !fallback ||
+    effort?.type !== 'select' ||
+    (declaration !== undefined && !effort.choices.some((choice) => choice.value === fallback))
+  ) {
     return snapshot
   }
   // A listed default supplies context only; both Send paths still read the canonical snapshot.
@@ -77,7 +87,7 @@ export function structuredAgentSessionShownSnapshot(
       ? {
           ...descriptor,
           valueSource: 'default',
-          kind: { ...descriptor.kind, currentValue: effort.defaultValue }
+          kind: { ...descriptor.kind, currentValue: fallback }
         }
       : descriptor
   )

@@ -187,3 +187,40 @@ describe('a second new chat after one that named no model', () => {
     elsewhere.unmount()
   })
 })
+
+describe('declared context at the desktop consumer', () => {
+  it.each(['low', null, undefined])(
+    'shows only trustworthy context (%s) without adding input',
+    async (declaredDefaultEffort) => {
+      mocks.call.mockReset()
+      resetHostModelCatalogSnapshotsForTests()
+      const row = {
+        id: 'grok-4.7',
+        label: 'Grok',
+        isDefault: false,
+        efforts: EFFORTS,
+        defaultEffort: 'high',
+        ...(declaredDefaultEffort !== undefined ? { declaredDefaultEffort } : {})
+      }
+      mocks.call.mockImplementation(async (_target: unknown, method: string) =>
+        method === 'agentSession.modelCatalog'
+          ? { origin: 'probe', fetchedAt: 1, models: [row], listingNamesConfiguredModel: false }
+          : method === 'agentSession.options'
+            ? {
+                models: [row],
+                listedModelIds: [row.id],
+                current: { model: row.id, defaulted: [], acceptedInputSources: { model: 'saved' } }
+              }
+            : new Promise(() => {})
+      )
+      const chat = renderChat('grok', `declaration-${declaredDefaultEffort}`, 'id:declaration')
+      chat.rerender({ running: { fence: 1 } })
+      await waitFor(() => expect(chat.frames.at(-1)?.model).toBe(row.id))
+      expect(chat.frames.at(-1)?.effort).toBe(declaredDefaultEffort ?? null)
+      expect(chat.result.current.optionSnapshot.find((o) => o.id === 'effort')?.valueSource).toBe(
+        declaredDefaultEffort ? 'default' : 'unknown'
+      )
+      chat.unmount()
+    }
+  )
+})

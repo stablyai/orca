@@ -216,24 +216,55 @@ describe('what a send carries', () => {
     'shows %s declared effort after a reply without changing its send selection',
     (agent) => {
       const seed = structuredAgentSessionSeedCatalog(agent)
-      const row = { ...SONNET, defaultEffort: 'low' }
+      const row = { ...SONNET, defaultEffort: 'high', declaredDefaultEffort: 'low' }
       for (const listedModelIds of [['sonnet'], undefined]) {
-        const state = applyStructuredAgentSessionOptions(
-          createStructuredAgentSessionOptionState(agent, seed),
-          seed,
-          {
-            models: [row],
-            listedModelIds,
-            current: { model: 'sonnet', defaulted: [], acceptedInputSources: { model: 'saved' } }
-          }
-        )
-        const captured = structuredAgentSessionMessageSelection(state)
-        const shown = structuredAgentSessionShownSnapshot(state).find((row) => row.id === 'effort')
-        expect(shown?.valueSource).toBe(listedModelIds ? 'default' : 'unknown')
-        expect(shown?.kind.currentValue).toBe(listedModelIds ? 'low' : undefined)
-        expect(structuredAgentSessionMessageSelection(state)).toEqual(captured)
-        expect(captured).toEqual({ model: 'sonnet' })
-        expect(state.record.values.effort).toBeUndefined()
+        for (const declaration of ['low', null, undefined]) {
+          const { declaredDefaultEffort: _observation, ...oldRow } = row
+          const state = applyStructuredAgentSessionOptions(
+            createStructuredAgentSessionOptionState(agent, seed),
+            seed,
+            {
+              models: [
+                {
+                  ...oldRow,
+                  ...(declaration !== undefined ? { declaredDefaultEffort: declaration } : {})
+                }
+              ],
+              listedModelIds,
+              current: { model: 'sonnet', defaulted: [], acceptedInputSources: { model: 'saved' } }
+            }
+          )
+          const expected = listedModelIds
+            ? (declaration ?? (declaration === undefined && agent === 'codex' ? 'high' : undefined))
+            : undefined
+          const snapshot = structuredAgentSessionShownSnapshot(state)
+          expect(snapshot.find((row) => row.id === 'effort')?.kind.currentValue).toBe(expected)
+          expect(structuredAgentSessionMessageSelection(state)).toEqual({ model: 'sonnet' })
+          expect(structuredAgentSessionSendSelection(state)).toEqual(
+            agent === 'claude' ? { model: 'sonnet' } : undefined
+          )
+          const held = structuredAgentSessionOptionView(state, undefined, {
+            model: 'sonnet',
+            effort: 'max'
+          })
+          expect(
+            structuredAgentSessionShownSnapshot(held).find((row) => row.id === 'effort')?.kind
+              .currentValue
+          ).toBe(agent === 'pi' ? 'high' : 'max')
+          expect(structuredAgentSessionMessageSelection(held)).toEqual({
+            model: 'sonnet',
+            effort: 'max'
+          })
+          const picked = commitStructuredAgentSessionOption(state, 'effort', 'high')
+          expect(
+            structuredAgentSessionShownSnapshot(picked).find((row) => row.id === 'effort')?.kind
+              .currentValue
+          ).toBe('high')
+          expect(structuredAgentSessionMessageSelection(picked)).toEqual({
+            model: 'sonnet',
+            effort: 'high'
+          })
+        }
       }
     }
   )
