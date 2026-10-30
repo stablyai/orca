@@ -64,7 +64,7 @@ const storageKeySchema = z
   .min(1)
   .max(256)
   .refine((key) => !RESERVED_STORAGE_KEYS.has(key), 'reserved storage key')
-const pluginJsonValueSchema = z.json()
+export const pluginJsonValueSchema = z.json()
 export type PluginJsonValue = z.infer<typeof pluginJsonValueSchema>
 /** Caps keep per-plugin storage an honest key-value store, not a database. */
 export const PLUGIN_STORAGE_VALUE_MAX_BYTES = 256 * 1024

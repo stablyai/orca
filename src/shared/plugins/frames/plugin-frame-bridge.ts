@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { isPluginJsonObject } from '../manifest/plugin-json-object'
+import type { PluginJsonValue } from '../workers/plugin-host-api'
 import { PLUGIN_PROTOCOL_VERSION } from './plugin-protocol'
 
 /**
@@ -24,7 +25,9 @@ export const FRAME_EVENTS = {
   /** frame → host: a modifier chord, so Orca's save shortcut works inside an editor. */
   editorKeydown: 'editor.keydown',
   /** host → frame: the document, on ready and whenever it changes outside the frame. */
-  editorDocument: 'editor.document'
+  editorDocument: 'editor.document',
+  /** host → frame, payload {@link PluginPanelMessage}['payload']: what the plugin's worker passed to `panel.post`. */
+  panelMessage: 'panel.message'
 } as const
 
 /** Frame-local methods a custom editor handles or calls on the same envelope. */
@@ -44,6 +47,9 @@ export type PluginFrameHello = {
   methods: string[]
   theme: PluginFrameTheme
 }
+
+/** One `panel.post` on its way from a plugin's worker to the open frames of one of its panels. */
+export type PluginPanelMessage = { pluginKey: string; panelId: string; payload: PluginJsonValue }
 
 /** Per-plugin bridge budgets, enforced host-side. */
 export const PANEL_MESSAGE_MAX_BYTES = 64 * 1024

@@ -3,6 +3,9 @@
 export const PLUGIN_SCHEMA_SINCE_V1 = '1.4.160'
 /** First release planned to read manifest v2, the v2 catalog and their new fields. */
 export const PLUGIN_MANIFEST_V2_SINCE = '1.4.245'
+/** First release with panel messaging: `panel:own`, `panel.post`, `panel.action` and its event.
+ *  Equal to the v2 floor until it ships; set it to the release it lands in before publishing. */
+export const PLUGIN_PANEL_MESSAGING_SINCE = PLUGIN_MANIFEST_V2_SINCE
 /** First release that derives the publisher, so a format 2 manifest may leave `publisher` out. */
 export const PLUGIN_DERIVED_PUBLISHER_SINCE = '1.4.246'
 
