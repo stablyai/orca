@@ -148,6 +148,11 @@ jobs:
         run: |
           npm install --no-save --no-package-lock --prefix "$env:RUNNER_TEMP\electron" "electron@$env:ELECTRON_VERSION"
           node "$env:RUNNER_TEMP\electron\node_modules\electron\install.js"
+      - name: Verify native control discovery
+        if: matrix.target == 'fixture'
+        run: |
+          $candidate = git rev-parse HEAD
+          python config/benchmarks/computer-use/windows_discovery_probe.py --source $candidate --out "out/discovery-windows"
       - name: Run task comparison on disposable Windows desktop
         run: |
           $candidate = git rev-parse HEAD
@@ -161,4 +166,10 @@ jobs:
         with:
           name: computer-task-windows-${{ matrix.target }}
           path: out/task-windows-${{ matrix.target }}
+          if-no-files-found: warn
+      - if: always() && matrix.target == 'fixture'
+        uses: actions/upload-artifact@v4
+        with:
+          name: computer-discovery-windows
+          path: out/discovery-windows
           if-no-files-found: warn
