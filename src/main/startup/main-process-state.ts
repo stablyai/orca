@@ -23,6 +23,7 @@ import type { AutomationService } from '../automations/service'
 import type { PluginService } from '../plugins/plugin-service'
 import type { PluginKillListService } from '../plugins/catalog/plugin-kill-list-service'
 import type { PluginAutoUpdater } from '../plugins/catalog/plugin-auto-updater'
+import type { PluginUpdateReviewNotices } from '../plugins/catalog/plugin-update-review-notices'
 import type { PluginMarketplaceService } from '../plugins/catalog/plugin-marketplace-service'
 import type { PluginMarketplaceInstaller } from '../plugins/catalog/plugin-marketplace-installer'
 import type { KeybindingService } from '../keybindings/keybinding-service'
@@ -118,6 +119,8 @@ export const mainProcessState = {
   pluginMarketplaceInstaller: null as PluginMarketplaceInstaller | null,
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: widens the null initial value; assigned once plugins start.
   pluginAutoUpdater: null as PluginAutoUpdater | null,
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: widens the null initial value; assigned once plugins start.
+  pluginUpdateReviewNotices: null as PluginUpdateReviewNotices | null,
   keybindings: null as KeybindingService | null,
   // Timed reload flags cannot leak to later loads; recovery did-finish-load must preserve live PTYs (#5787).
   expectedRendererReload: createWebContentsTimedFlag(),

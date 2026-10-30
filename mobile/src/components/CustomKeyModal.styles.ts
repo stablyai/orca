@@ -1,5 +1,5 @@
 import { StyleSheet } from 'react-native'
-import { colors, getMobileColorScheme, spacing, typography } from '../theme/mobile-theme'
+import { colors, getMobileColorScheme, radii, spacing, typography } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 
 export const customKeyModalStyles = themedStyleSheet(() => ({
@@ -11,7 +11,7 @@ export const customKeyModalStyles = themedStyleSheet(() => ({
   keyInput: {
     width: '100%',
     height: 56,
-    borderRadius: 10,
+    borderRadius: radii.control,
     backgroundColor: colors.bgPanel,
     borderWidth: 1,
     borderColor: colors.borderSubtle,
@@ -25,7 +25,7 @@ export const customKeyModalStyles = themedStyleSheet(() => ({
   backButton: {
     width: 30,
     height: 30,
-    borderRadius: 15,
+    borderRadius: radii.control,
     alignItems: 'center',
     justifyContent: 'center'
   },
@@ -44,7 +44,7 @@ export const customKeyModalStyles = themedStyleSheet(() => ({
   },
   group: {
     backgroundColor: colors.bgPanel,
-    borderRadius: 12,
+    borderRadius: radii.surface,
     overflow: 'hidden'
   },
   separator: {
@@ -93,7 +93,7 @@ export const customKeyModalStyles = themedStyleSheet(() => ({
     minWidth: 48,
     height: 48,
     paddingHorizontal: spacing.md,
-    borderRadius: 10,
+    borderRadius: radii.control,
     backgroundColor: colors.bgPanel,
     borderWidth: 1,
     borderColor: colors.borderSubtle,
@@ -139,7 +139,7 @@ export const customKeyModalStyles = themedStyleSheet(() => ({
   chip: {
     flex: 1,
     height: 40,
-    borderRadius: 8,
+    borderRadius: radii.pill,
     backgroundColor: colors.bgPanel,
     flexDirection: 'row',
     alignItems: 'center',
@@ -207,7 +207,7 @@ export const customKeyModalStyles = themedStyleSheet(() => ({
   },
   keyCell: {
     height: 40,
-    borderRadius: 8,
+    borderRadius: radii.control,
     backgroundColor: colors.bgPanel,
     alignItems: 'center',
     justifyContent: 'center'
@@ -250,7 +250,7 @@ export const customKeyModalStyles = themedStyleSheet(() => ({
     marginTop: spacing.md,
     backgroundColor: colors.textPrimary,
     paddingVertical: spacing.md,
-    borderRadius: 10,
+    borderRadius: radii.control,
     alignItems: 'center'
   },
   saveButtonDisabled: {

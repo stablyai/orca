@@ -1,4 +1,3 @@
-import { terminalExitError } from '../../../shared/terminal-start-failure'
 import { OrcaRuntimeWithListManagedWorktrees } from './managed-workspace-operations'
 import type { RuntimeNavigationTarget } from '../../../shared/runtime-navigation'
 import {
@@ -33,6 +32,7 @@ import { recordCreatedWorktreeLineage as recordCreatedWorktreeLineageState } fro
 import {
   deliverStartupFollowupPrompt,
   pasteWorktreeStartupDraftWhenReady,
+  waitForWorktreeStartupDraft,
   type StartupFollowupPromptOptions,
   type WorktreeStartupReadinessHost
 } from '../runtime-worktree-startup-readiness'
@@ -41,11 +41,8 @@ import {
   provisionWorktreeTerminals,
   type WorktreeTerminalProvisioningHost
 } from '../runtime-worktree-terminal-provisioning'
-import {
-  captureTerminalStartExitCause,
-  readFreshComposerHold,
-  waitForFreshComposerPty
-} from '../launched-agent-composer-readiness'
+import { readFreshComposerHold } from '../launched-agent-composer-readiness'
+import { waitForTerminalComposer } from '../terminal/wait/terminal-composer-lifetime'
 import { buildTerminalWaitText } from '../terminal-wait-tail-state'
 import {
   describeLaunchedAgentHost,
@@ -226,48 +223,43 @@ export abstract class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntime
       signal
     }: { requireComposerMarker?: boolean; stopOnDialog?: boolean; signal?: AbortSignal } = {}
   ): Promise<RuntimeTerminalWait> {
-    const initialPty = this.getLivePtyForHandle(handle)?.pty
-    const initialPtyId = initialPty?.ptyId ?? this.getLiveLeafForHandle(handle).leaf.ptyId
-    const initialRecord = initialPty ?? (initialPtyId ? this.ptysById.get(initialPtyId) : undefined)
-    const failureCause = captureTerminalStartExitCause(initialPtyId, initialRecord, (ptyId) =>
-      this.getPtyLivenessVerdict(ptyId)
-    )
-    const ptyId = await waitForFreshComposerPty(
-      this.getWorktreeStartupReadinessHost(),
-      handle,
-      agent,
-      timeoutMs,
+    return waitForTerminalComposer(
       {
-        initialPtyId,
-        requireComposerMarker,
-        stopOnDialog,
-        signal,
-        failureCause,
-        isShellInFront: async (ownerPtyId) =>
-          (await this.readLaunchedAgentForeground(ownerPtyId, agent)) === 'shell',
-        readHold: (readyPtyId) => {
-          const pty = this.ptysById.get(readyPtyId)
-          return pty
-            ? readFreshComposerHold(
-                buildTerminalWaitText(pty.tailBuffer, pty.tailPartialLine, pty.preview),
-                this.readLiveTerminalScreenLines(readyPtyId)
-              )
-            : null
-        }
-      }
+        handle,
+        getTarget: () => this.getTerminalPtyForHandle(handle).pty,
+        buildResult: () => this.buildTuiIdleProbeResult(handle, null),
+        waiters: this.terminalWaiters,
+        signal
+      },
+      (target, stop) =>
+        waitForWorktreeStartupDraft(
+          { ...this.getWorktreeStartupReadinessHost(), getPtyId: () => target.ptyId },
+          handle,
+          agent,
+          {
+            timeoutMs,
+            requireComposerMarker,
+            // Every caller pastes and then presses Enter: a worker brief or a launch prompt.
+            submit: true,
+            signal: stop.signal,
+            isShellInFront: async (ownerPtyId) =>
+              (await this.readLaunchedAgentForeground(ownerPtyId, agent)) === 'shell',
+            accept: (readyPtyId) => {
+              const pty = this.ptysById.get(readyPtyId)
+              const hold = pty
+                ? readFreshComposerHold(
+                    buildTerminalWaitText(pty.tailBuffer, pty.tailPartialLine, pty.preview),
+                    this.readLiveTerminalScreenLines(readyPtyId)
+                  )
+                : null
+              if (hold === 'dialog' && stopOnDialog) {
+                stop.abort()
+              }
+              return hold === null
+            }
+          }
+        )
     )
-    try {
-      this.assertLiveTerminalHandleTargetsPty(handle, ptyId)
-    } catch (error) {
-      if (error instanceof Error) {
-        Object.assign(error, { terminalExitCause: failureCause() })
-      }
-      throw error
-    }
-    if (!this.ptysById.get(ptyId)?.connected) {
-      throw terminalExitError('terminal_handle_stale', failureCause())
-    }
-    return this.buildTuiIdleProbeResult(handle, null)
   }
 
   /** What holds the terminal a launch started its agent in, read fresh from the execution host. */

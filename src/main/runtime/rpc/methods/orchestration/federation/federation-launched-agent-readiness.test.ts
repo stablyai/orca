@@ -4,6 +4,10 @@ import { resolveWorkerStartReadinessTimeoutMs } from '../../../../../../shared/o
 import { OrcaRuntimeService } from '../../../../orca-runtime'
 import { OrchestrationDb } from '../../../../orchestration/db'
 import { ORCHESTRATION_METHODS } from '../../orchestration'
+import {
+  createTranscriptPane,
+  TRANSCRIPT_PANE_PTY_ID
+} from '../../../../agent-transcript-pane-test-harness'
 import { configureFederationWorkerRuntime } from './federation-runtime.test-support'
 
 const HANDLE = 'term_windows_worker'
@@ -17,6 +21,7 @@ describe('federated worker first dispatch readiness', () => {
     for (const db of databases.splice(0)) {
       db.close()
     }
+    vi.useRealTimers()
     vi.restoreAllMocks()
   })
 
@@ -90,6 +95,39 @@ describe('federated worker first dispatch readiness', () => {
         expect.any(String),
         expect.any(Object)
       )
+    }
+  )
+
+  it.each(['pi', 'codex', 'claude', 'opencode'] as const)(
+    'persists the %s execution-host failure without typing after recorded end',
+    async (agent) => {
+      const { runtime, handle } = await createTranscriptPane({
+        paneTitle: 'shell',
+        foregroundProcess: 'bash',
+        launchAgent: agent,
+        data: ''
+      })
+      const db = new OrchestrationDb(':memory:')
+      databases.push(db)
+      runtime.setOrchestrationDb(db)
+      configureFederationWorkerRuntime(runtime, handle)
+      vi.mocked(runtime.waitForTerminal).mockRestore()
+      runtime.onPtyExit(TRANSCRIPT_PANE_PTY_ID, 137, 'inc-1', { providerExitObserved: true })
+      vi.useFakeTimers()
+      const receipt = vi.fn()
+      void attach(runtime, { agent }).then(receipt)
+      await vi.waitFor(() => expect(receipt).toHaveBeenCalledOnce())
+      expect(receipt.mock.calls[0][0]).toMatchObject({
+        state: 'failed',
+        failedStage: 'agent_readiness',
+        lastError: 'terminal_exited'
+      })
+      expect(db.getRemoteDispatchAttachment('ctx_remote')).toMatchObject({
+        state: 'failed',
+        stage: 'agent_readiness',
+        last_error: 'terminal_exited'
+      })
+      expect(runtime.sendTerminalAgentPrompt).not.toHaveBeenCalled()
     }
   )
 

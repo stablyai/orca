@@ -1,3 +1,4 @@
+import type { AgentLaunchChoices } from './agent-launch-choices'
 import type { TelemetrySettings } from './telemetry-settings-types'
 import type { BrowserProfileScope } from './browser-profile-scope'
 import type { GlobalSettingsBase } from './global-settings-base'
@@ -388,6 +389,7 @@ export type GlobalSettings = GlobalSettingsBase & {
   }
   /** Per-agent default CLI arguments appended after the binary/path and before prompts. */
   agentDefaultArgs?: Partial<Record<TuiAgent, string>>
+  agentLaunchChoices?: AgentLaunchChoices
   /** Per-agent launch environment defaults used when yolo mode is exposed as env. */
   agentDefaultEnv?: Partial<Record<TuiAgent, Record<string, string>>>
   /** One-shot guard for adding yolo-mode default args to untouched agent launch profiles. */

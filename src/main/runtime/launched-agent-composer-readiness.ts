@@ -1,10 +1,4 @@
 import type { RuntimeTerminalCreate } from '../../shared/runtime-terminal-create-contract'
-import type { PtyLivenessVerdict } from '../../shared/pty-liveness-verdict'
-import type { TerminalExitCause } from '../../shared/terminal-exit-cause'
-import {
-  waitForWorktreeStartupDraft,
-  type WorktreeStartupReadinessHost
-} from './runtime-worktree-startup-readiness'
 import {
   classifyTerminalCreationFailure,
   readTerminalStartFailure,
@@ -249,78 +243,5 @@ export async function waitForLaunchedAgentComposer(
     )
   } catch (error) {
     throw readinessFailure(runtime, handle, creation, error)
-  }
-}
-
-export async function waitForFreshComposerPty(
-  host: WorktreeStartupReadinessHost,
-  handle: string,
-  agent: TuiAgent,
-  timeoutMs: number,
-  options: {
-    initialPtyId: string | null
-    requireComposerMarker: boolean
-    stopOnDialog: boolean
-    signal?: AbortSignal
-    failureCause: () => TerminalExitCause | null | undefined
-    isShellInFront: (ptyId: string) => Promise<boolean>
-    readHold: (ptyId: string) => 'dialog' | 'starting' | null
-  }
-): Promise<string> {
-  const { signal } = options
-  const stop = new AbortController()
-  const onAbort = (): void => stop.abort()
-  signal?.addEventListener('abort', onAbort, { once: true })
-  let ptyId: string | null
-  try {
-    ptyId = await waitForWorktreeStartupDraft(
-      { ...host, getPtyId: () => options.initialPtyId },
-      handle,
-      agent,
-      {
-        timeoutMs,
-        requireComposerMarker: options.requireComposerMarker,
-        // Every caller pastes and then presses Enter: a worker brief or a launch prompt.
-        submit: true,
-        signal: stop.signal,
-        isShellInFront: options.isShellInFront,
-        accept: (readyPtyId) => {
-          const hold = options.readHold(readyPtyId)
-          if (hold === 'dialog' && options.stopOnDialog) {
-            stop.abort()
-          }
-          return hold === null
-        }
-      }
-    )
-  } finally {
-    signal?.removeEventListener('abort', onAbort)
-  }
-  if (!ptyId) {
-    throw terminalExitError(
-      signal?.aborted
-        ? 'request_aborted'
-        : stop.signal.aborted
-          ? 'agent_startup_dialog'
-          : 'timeout',
-      signal?.aborted || stop.signal.aborted ? undefined : options.failureCause()
-    )
-  }
-  return ptyId
-}
-
-export function captureTerminalStartExitCause(
-  ptyId: string | null,
-  record: { incarnationId?: string | null; lastExitCause?: TerminalExitCause | null } | undefined,
-  readVerdict: (ptyId: string) => PtyLivenessVerdict | null | undefined
-): () => TerminalExitCause | null | undefined {
-  const incarnation = record?.incarnationId
-  return () => {
-    const verdict = ptyId ? readVerdict(ptyId) : null
-    return incarnation && verdict?.status === 'exited' && verdict.incarnationId === incarnation
-      ? verdict.cause
-      : incarnation && record?.incarnationId === incarnation
-        ? record.lastExitCause
-        : undefined
   }
 }

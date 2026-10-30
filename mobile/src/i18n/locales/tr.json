@@ -2117,6 +2117,7 @@
       "requestFailed": "İstek tamamlanamadı: {{method}}"
     },
     "header": {
+      "workspaceDetailsHint": "Çalışma alanının tam adını ve konumunu gösterir",
       "backToWorktrees": "Worktree'lere dön",
       "moreActions": "Diğer oturum işlemleri",
       "openFileExplorer": "Dosya gezginini aç",

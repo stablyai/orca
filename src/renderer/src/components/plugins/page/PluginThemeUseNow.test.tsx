@@ -8,11 +8,12 @@ import type { PluginThemeRegistration } from '../../../../../shared/plugins/arti
 import type { PluginTerminalThemeRegistration } from '../../../../../shared/plugins/artifacts/plugin-terminal-theme-artifact'
 import type { PluginIconThemeMetadata } from '../../../../../shared/plugins/artifacts/plugin-icon-theme-artifact'
 import {
+  DEFAULT_TERMINAL_THEME_DARK,
   resolveConfiguredTerminalColors,
   selectTerminalTheme
 } from '../../../../../shared/terminal-theme-selection'
 import { useAppStore } from '@/store'
-import { resolveEffectiveTerminalAppearance } from '@/lib/terminal-theme'
+import { getBuiltinTheme, resolveEffectiveTerminalAppearance } from '@/lib/terminal-theme'
 import { resolveMobileTerminalTheme } from '@/runtime/sync-runtime-graph/mobile-terminal-theme'
 import { PluginThemeUseNow } from './PluginThemeUseNow'
 
@@ -394,7 +395,7 @@ it.each([
   }
 )
 
-it('keeps later choices and disabled other-slot colors across terminal, phone and OSC consumers, without chip rollback', async () => {
+it("keeps later choices, and a disabled plugin's other-slot colors for re-enable, across terminal, phone and OSC consumers, without chip rollback", async () => {
   const light = terminalTheme('Light', 'light')
   const later = terminalTheme('Later', 'light')
   const dark: PluginTerminalThemeRegistration = {
@@ -418,9 +419,22 @@ it('keeps later choices and disabled other-slot colors across terminal, phone an
     terminalThemeLight: light.id,
     terminalThemeDark: dark.id
   })
-  for (const osDark of [true, false]) {
-    const current = { ...settings(), theme: 'system' as const }
-    const expected = osDark ? dark.terminal : light.terminal
+  const defaultDark = getBuiltinTheme(DEFAULT_TERMINAL_THEME_DARK)
+  if (!defaultDark) {
+    throw new Error('missing default dark terminal theme')
+  }
+  // Disabled plugin's slot shows the default; re-enabling restores the saved palette.
+  for (const [osDark, enabled] of [
+    [true, false],
+    [false, false],
+    [true, true]
+  ] as const) {
+    const current = {
+      ...settings(),
+      theme: 'system' as const,
+      disabledPlugins: enabled ? [] : [dark.pluginKey]
+    }
+    const expected = osDark ? (enabled ? dark.terminal : defaultDark) : light.terminal
     expect(resolveEffectiveTerminalAppearance(current, osDark).theme).toMatchObject(expected)
     expect(resolveConfiguredTerminalColors(current, osDark)).toEqual({
       background: expected.background,

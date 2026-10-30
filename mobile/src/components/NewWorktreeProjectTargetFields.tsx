@@ -2,7 +2,7 @@ import { View, Text, Pressable } from 'react-native'
 import { ChevronDown } from 'lucide-react-native'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { HostKindIcon } from './HostKindIcon'
-import { colors, spacing, typography } from '../theme/mobile-theme'
+import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { composerInputStyles, COMPOSER_TEXT_SIZE } from './composer-input/composer-input-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
@@ -107,7 +107,7 @@ const styles = themedStyleSheet(() => ({
   projectDot: {
     width: 8,
     height: 8,
-    borderRadius: 999
+    borderRadius: radii.pill
   },
   fieldButtonCopy: {
     flex: 1,

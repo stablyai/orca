@@ -9433,6 +9433,15 @@
         },
         "pluginTryAction": {
           "incompleteLanguage": "Este pacote de idioma está incompleto demais para mudar para ele."
+        },
+        "PluginUpdateReviewToast": {
+          "movedTitle": "{{value0}} {{value1}} vem de outro repositório",
+          "accessTitle": "{{value0}} {{value1}} quer mais acesso",
+          "manyTitle": "{{value0}} atualizações de plugins precisam da sua revisão",
+          "oneDescription": "Publicado por {{value0}}. Não será atualizado até você revisar.",
+          "manyDescription": "Não serão atualizadas até você revisá-las.",
+          "review": "Revisar",
+          "dismiss": "Dispensar"
         }
       },
       "right": {

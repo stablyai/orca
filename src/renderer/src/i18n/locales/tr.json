@@ -13113,6 +13113,15 @@
         },
         "pluginTryAction": {
           "incompleteLanguage": "Bu dil paketi geçiş yapılamayacak kadar eksik."
+        },
+        "PluginUpdateReviewToast": {
+          "movedTitle": "{{value0}} {{value1}} farklı bir depodan geliyor",
+          "accessTitle": "{{value0}} {{value1}} daha fazla erişim istiyor",
+          "manyTitle": "{{value0}} eklenti güncellemesi incelemenizi bekliyor",
+          "oneDescription": "Yayıncı: {{value0}}. Siz inceleyene kadar güncellenmeyecek.",
+          "manyDescription": "Siz inceleyene kadar güncellenmeyecekler.",
+          "review": "İncele",
+          "dismiss": "Kapat"
         }
       },
       "right": {
