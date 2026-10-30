@@ -10,6 +10,7 @@ import {
   type ExecutionHostId
 } from '../../shared/execution-host'
 import { getRepoIdFromWorktreeId } from '../../shared/worktree/id'
+import { parseWorkspaceKey } from '../../shared/workspace-scope'
 import type { SkillInstallDestinationAuthority } from '../skills/skill-install-destinations'
 import {
   resolveEnvironmentSkillProviderRoots,
@@ -110,6 +111,10 @@ export function createSkillInstallAuthority(
     environmentId: host.getRuntimeId(),
     homeDirectory: homedir(),
     resolveWorktree: async (id) => {
+      // Folder workspaces arrive as folderWorkspaceId, whose own host fence applies; repo rows cannot fence them.
+      if (parseWorkspaceKey(id)?.type === 'folder') {
+        return null
+      }
       const repos = host
         .listRepos()
         .filter((candidate) => candidate.id === getRepoIdFromWorktreeId(id))

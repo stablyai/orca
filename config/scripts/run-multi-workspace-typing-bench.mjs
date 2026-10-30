@@ -36,6 +36,8 @@ const knobByFlag = {
   '--instrumentation': 'ORCA_TYPING_BENCH_INSTRUMENTATION',
   '--graph-probe': 'ORCA_TYPING_BENCH_GRAPH_PROBE',
   '--cpu-throttle': 'ORCA_TYPING_BENCH_CPU_THROTTLE',
+  '--order-churn-ms': 'ORCA_TYPING_BENCH_ORDER_CHURN_MS',
+  '--in-app-diagnostic': 'ORCA_TYPING_BENCH_IN_APP_DIAGNOSTIC',
   '--label': 'ORCA_TYPING_BENCH_LABEL'
 }
 
@@ -60,6 +62,7 @@ const child = spawn(
     'playwright',
     'test',
     'tests/e2e/terminal-multi-workspace-typing-latency.spec.ts',
+    'tests/e2e/terminal-workspace-update-typing-latency.spec.ts',
     '--config',
     'tests/playwright.config.ts',
     '--project',

@@ -9,7 +9,7 @@ import {
   createStructuredAgentSessionOptionState,
   structuredAgentSessionOptionSnapshot
 } from '../../../../shared/structured-agent-session-options'
-import type { SessionOptionDescriptor } from '../../../../shared/native-chat-session-options'
+import type { SessionOptionDescriptor } from '../../../../shared/native-chat/input/native-chat-session-options'
 import { RuntimeRpcCallError } from '@/runtime/runtime-rpc-result'
 
 const toastError = vi.hoisted(() => vi.fn())
@@ -287,7 +287,7 @@ describe('NativeChatSessionOptionPickers', () => {
     expect(pill('Model Opus 4.8, Session options Fast').textContent).toBe('Opus 4.8Fast')
   })
 
-  it('disables the pill while the agent is working', () => {
+  it('keeps terminal command pickers disabled while the agent is working', () => {
     render(
       <NativeChatSessionOptionPickers surface={surface} snapshot={[model(), effort]} isWorking />
     )

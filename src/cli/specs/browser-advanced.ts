@@ -1,7 +1,8 @@
 import type { CommandSpec } from '../args'
 import { GLOBAL_FLAGS } from '../args'
+import { withBrowserPageTarget } from './browser-page-target'
 
-export const BROWSER_ADVANCED_COMMAND_SPECS: CommandSpec[] = [
+export const BROWSER_ADVANCED_COMMAND_SPECS: CommandSpec[] = withBrowserPageTarget([
   {
     path: ['cookie', 'get'],
     summary: 'Get cookies for the active tab (optionally filter by URL)',
@@ -263,4 +264,4 @@ export const BROWSER_ADVANCED_COMMAND_SPECS: CommandSpec[] = [
     usage: 'orca highlight --selector <ref> [--worktree <selector>] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'selector', 'worktree']
   }
-]
+])

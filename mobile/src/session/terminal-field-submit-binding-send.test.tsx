@@ -1,11 +1,14 @@
+import { terminalInputSend } from '../terminal/mobile-terminal-operations'
 // @vitest-environment happy-dom
 import { createElement, useEffect, useRef, type RefObject } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { hostOs } from '../platform/host-os'
 import { useMobileSessionTerminalSendActions } from './use-mobile-session-terminal-send-actions'
 import { useTerminalLiveInputCommit } from '../terminal/use-terminal-live-input-commit'
 import type { TerminalLiveInputSender } from '../terminal/terminal-live-input-sender'
 import type { MobileSessionTerminalWebviewModel } from './use-mobile-session-terminal-webview'
+import type { TerminalModes } from '../terminal/terminal-webview-contract'
 
 // Bind once before the client/handle arrives, then dispatch after rerender to prove the frozen field listener reads current send state.
 const mocks = vi.hoisted(() => {
@@ -30,7 +33,7 @@ vi.mock('../terminal/mobile-terminal-operations', () => ({
     interpret: () => true
   }
 }))
-vi.mock('../platform/host-os', () => ({ hostOs: () => 'android' }))
+vi.mock('../platform/host-os', () => ({ hostOs: vi.fn(() => 'android') }))
 
 // The page's own sibling, because the listener this test dispatches to only exists there.
 vi.mock(
@@ -43,6 +46,7 @@ type Session = {
   readonly activeHandle: string | null
   readonly canSend: boolean
   readonly draft: string
+  readonly modes?: TerminalModes
 }
 
 const OFFLINE: Session = { client: null, activeHandle: null, canSend: false, draft: '' }
@@ -59,6 +63,7 @@ let restoredDrafts: string[] = []
 function buildScope(session: Session): MobileSessionTerminalWebviewModel {
   const noop = (): void => {}
   const scope = {
+    sendTerminalUserInput: terminalInputSend.request,
     client: session.client,
     activeHandle: session.activeHandle,
     activeSessionTab: null,
@@ -73,7 +78,11 @@ function buildScope(session: Session): MobileSessionTerminalWebviewModel {
     connStateRef: { current: 'connected' },
     liveInputRef: { current: null },
     commandInputRef: { current: null },
-    ptyModesRef: { current: new Map() },
+    ptyModesRef: {
+      current: new Map(
+        session.activeHandle && session.modes ? [[session.activeHandle, session.modes]] : []
+      )
+    },
     liveInputFocusTimerRef: { current: null },
     sendLiveTerminalInputRef: { current: async () => true },
     sessionTabActionSheetKeyboardHideSubRef: { current: null },
@@ -183,8 +192,10 @@ function LiveHarness({ session }: { readonly session: Session }): null {
     canSend: session.canSend,
     sendLiveTerminalInputRef: sender
   })
-  changeLiveText = (text) =>
+  changeLiveText = (text) => {
+    liveField.value = text
     commit.handleLiveInputChange({ nativeEvent: { text, isComposing: false } })
+  }
   useEffect(() => {
     actions.bindLiveInputField(liveFieldRef)
     return () => actions.bindLiveInputField(null)
@@ -209,6 +220,17 @@ function pressEnter(): void {
   )
 }
 
+function pressShiftEnter(): KeyboardEvent {
+  const event = new KeyboardEvent('keydown', {
+    key: 'Enter',
+    shiftKey: true,
+    bubbles: true,
+    cancelable: true
+  })
+  liveField.dispatchEvent(event)
+  return event
+}
+
 function holdAcknowledgement(): () => void {
   let release = (): void => {}
   const pending = new Promise<void>((resolve) => {
@@ -221,7 +243,11 @@ function holdAcknowledgement(): () => void {
   }
 }
 
-describe('keyboard controls through the live pending-text queue', () => {
+describe.each(['android', 'ios'] as const)('the %s live pending-text queue', (os) => {
+  beforeEach(() => {
+    vi.mocked(hostOs).mockReturnValue(os)
+  })
+
   it('sends the control once only after pending text is acknowledged', async () => {
     mocks.sent.length = 0
     const release = holdAcknowledgement()
@@ -243,26 +269,63 @@ describe('keyboard controls through the live pending-text queue', () => {
   })
 
   it.each([
-    { key: 'Ctrl-C', press: pressControl, fieldAfter: 'hellox', expected: 'hello\x03x' },
-    { key: 'Enter', press: pressEnter, fieldAfter: 'x', expected: 'hello\rx' }
-  ])('keeps text typed right after $key behind it', async ({ press, fieldAfter, expected }) => {
-    mocks.sent.length = 0
-    const release = holdAcknowledgement()
-    let renderer: ReactTestRenderer | null = null
-    await act(async () => {
-      renderer = create(createElement(LiveHarness, { session: READY }))
-    })
-    await act(async () => {
-      changeLiveText('hello')
-      press()
-      changeLiveText(fieldAfter)
-    })
-    await act(async () => {
-      release()
-    })
-    expect(mocks.sent.map((send) => send.text).join('')).toBe(expected)
-    act(() => renderer?.unmount())
-  })
+    { key: 'Ctrl-C', press: pressControl, fieldAfter: 'hellox', bytes: '\x03' },
+    { key: 'Shift+Enter (legacy)', press: pressShiftEnter, fieldAfter: 'x', bytes: '\x1b\r' },
+    {
+      key: 'Shift+Enter (Kitty)',
+      press: pressShiftEnter,
+      fieldAfter: 'x',
+      bytes: '\x1b[13;2u',
+      kittyKeyboardFlags: 1
+    },
+    {
+      key: 'Shift+Enter (modifyOtherKeys)',
+      press: pressShiftEnter,
+      fieldAfter: 'x',
+      bytes: '\x1b[27;2;13~',
+      modifyOtherKeys: 2
+    },
+    { key: 'Enter', press: pressEnter, fieldAfter: 'x', bytes: '\r' }
+  ])(
+    'keeps text typed right after $key behind it',
+    async ({ press, fieldAfter, bytes, kittyKeyboardFlags = 0, modifyOtherKeys = 0 }) => {
+      mocks.sent.length = 0
+      const release = holdAcknowledgement()
+      let renderer: ReactTestRenderer | null = null
+      let fieldAfterControl = ''
+      await act(async () => {
+        renderer = create(
+          createElement(LiveHarness, {
+            session: {
+              ...READY,
+              modes: {
+                bracketedPasteMode: false,
+                altScreen: false,
+                mouseTrackingMode: 'none',
+                sgrMouseMode: false,
+                sgrMousePixelsMode: false,
+                applicationCursorKeysMode: false,
+                kittyKeyboardFlags,
+                modifyOtherKeys
+              }
+            }
+          })
+        )
+      })
+      await act(async () => {
+        changeLiveText('hello')
+        press()
+        fieldAfterControl = liveField.value
+        changeLiveText(fieldAfter)
+      })
+      await act(async () => {
+        release()
+      })
+      act(() => renderer?.unmount())
+      expect(mocks.sent.map((send) => send.text).join('')).toBe(`hello${bytes}x`)
+      expect(fieldAfterControl).toBe(fieldAfter === 'x' ? '' : 'hello')
+    }
+  )
 
   it.each([
     { key: 'Ctrl-C', press: pressControl, change: 'terminal switch' },

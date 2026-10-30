@@ -7,7 +7,7 @@ import {
   type StructuredAgentSessionFirstMessage,
   type StructuredAgentSessionResumeSource
 } from '../../../shared/structured-agent-session-create'
-import { structuredLaunchSeedOptions } from '../../../shared/native-chat-session-option-defaults'
+import { structuredLaunchSeedOptions } from '../../../shared/native-chat/input/native-chat-session-option-defaults'
 import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
 import { useAppStore } from '@/store'
 import {
@@ -43,6 +43,7 @@ export type StructuredAgentSessionLaunchIntent = {
   target: RuntimeClientTarget
   agent: TuiAgent
   params: StructuredAgentSessionCreateParams
+  sendSelectionSupport?: boolean
   createMessageSupport?: boolean
   createPrepared?: true
   prepareCreate?: (hostTakesExplicitOptions: boolean) => void
@@ -171,6 +172,7 @@ export function restoreStructuredAgentSessionLaunchIntent(args: {
   firstMessage?: StructuredAgentSessionFirstMessage
   optionsMode?: 'replace-model-selection'
   options?: Readonly<Record<string, string>>
+  sendSelectionSupport?: boolean
   createMessageSupport?: boolean
 }): StructuredAgentSessionLaunchIntent {
   const state = useAppStore.getState()

@@ -9,7 +9,7 @@ import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-ses
 import { agentSessionSendSubmission } from '../../../shared/agent-session-wire'
 import { projectStructuredAgentSessionMessages } from '../../../shared/structured-agent-session-message-projection'
 import { projectNativeChatTranscriptMessages } from '../../../shared/native-chat-transcript-projection'
-import { nativeChatRowsInDrawOrder } from '../../../shared/native-chat-turn-grouping'
+import { nativeChatRowsInDrawOrder } from '../../../shared/native-chat/transcript/native-chat-turn-grouping'
 import { nativeChatTurnMembership } from '../../../shared/native-chat-turn-membership'
 import { ClaudeStructuredSessionAdapter } from '../../claude/claude-structured-session-adapter'
 import {
@@ -85,6 +85,7 @@ beforeEach(async ({ task }) => {
       providerSessionId: PROVIDER_SESSION_ID,
       resumeLeafUuid: null,
       resumesTranscript: (store.getRecord(SESSION)?.providerHandleChain.length ?? 0) > 0,
+      cliFlag: async () => 'supported' as const,
       continuesChain: (store.getRecord(SESSION)?.providerHandleChain.length ?? 0) > 0
     }),
     onEvent: (event) => {

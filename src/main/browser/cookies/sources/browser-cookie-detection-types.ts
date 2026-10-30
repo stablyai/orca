@@ -22,6 +22,8 @@ export type ChromiumBrowserDef = {
   label: string
   keychainService: string
   keychainAccount: string
+  // Linux libsecret `application` attribute; defaults to keychainAccount lowercased without spaces.
+  linuxKeyringApplication?: string
   macRoot?: string
   winRoot?: string
   linuxRoot?: string
@@ -77,6 +79,17 @@ export const CHROMIUM_BROWSERS: ChromiumBrowserDef[] = [
     keychainAccount: 'Helium',
     macRoot: 'net.imput.helium'
     // Only the macOS install is verified.
+  },
+  {
+    family: 'vivaldi',
+    label: 'Vivaldi',
+    keychainService: 'Vivaldi Safe Storage',
+    keychainAccount: 'Vivaldi',
+    macRoot: 'Vivaldi',
+    winRoot: 'Vivaldi/User Data',
+    linuxRoot: 'vivaldi',
+    // Vivaldi on Linux keeps Chrome's libsecret entry name (matches yt-dlp and browser_cookie3).
+    linuxKeyringApplication: 'chrome'
   }
 ]
 

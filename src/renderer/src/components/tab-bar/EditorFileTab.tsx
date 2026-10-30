@@ -1,4 +1,4 @@
-import { createElement, useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useSortable } from '@dnd-kit/sortable'
 import { GitCompareArrows, Eye, ShieldAlert, Pin, ListChecks } from 'lucide-react'
 import { Input } from '@/components/ui/input'
@@ -28,11 +28,13 @@ import {
 import { canOpenMarkdownPreview } from '@/components/editor/markdown-preview-controls'
 import { EditorFileTabContextMenu } from './EditorFileTabContextMenu'
 import { translate } from '@/i18n/i18n'
-import { TAB_LABEL_WIDTH_CLASSES, TAB_ROOT_WIDTH_CLASSES } from './tab-width-rules'
+import { TAB_LABEL_WIDTH_CLASSES } from './tab-width-rules'
 import { useTabStripSlotProps } from './use-tab-strip-slot-props'
 import { EditorFileTabCloseButton } from './EditorFileTabCloseButton'
 import { useTabStripPointerActivation } from './tab-strip-pointer-activation'
 import { editorTabDocumentFolderAccess } from '@/lib/local-file-access'
+import { useTabCustomEditor } from '@/store/plugin-custom-editors'
+import { PluginContributionIcon } from '../plugins/PluginContributionIcon'
 
 export default function EditorFileTab({
   file,
@@ -89,6 +91,7 @@ export default function EditorFileTab({
   const isConflictReview = file.mode === 'conflict-review'
   const isCheckDetails = file.mode === 'check-details'
   const isMarkdownPreviewTab = file.mode === 'markdown-preview'
+  const customEditor = useTabCustomEditor(file)
   const HoverIcon = isConflictReview
     ? ShieldAlert
     : isCheckDetails
@@ -98,6 +101,13 @@ export default function EditorFileTab({
         : isMarkdownPreviewTab
           ? Eye
           : FileIcon
+  const tabIcon = (className: string): React.ReactNode => (
+    <PluginContributionIcon
+      url={customEditor?.iconUrl}
+      fallback={HoverIcon}
+      className={className}
+    />
+  )
   // Strike through missing paths only; changed content is explained by the editor’s on-disk banner.
   const isMissingFileMutation =
     file.externalMutation === 'deleted' || file.externalMutation === 'renamed'
@@ -229,7 +239,7 @@ export default function EditorFileTab({
       data-pinned={isPinned ? 'true' : 'false'}
       {...attributes}
       {...dragListeners}
-      className={`${TAB_ROOT_WIDTH_CLASSES} group relative flex items-center h-full px-1.5 text-xs cursor-pointer select-none outline-none focus:outline-none focus-visible:outline-none ${getTabStripBorderClasses(hasTabsToRight, { includeTopBorder: includeTopTabBorder })} ${getDropIndicatorClasses(dropIndicator ?? null)} ${getTabRootStateClasses(isActive)}`}
+      className={`group relative flex items-center h-full px-1.5 text-xs cursor-pointer select-none outline-none focus:outline-none focus-visible:outline-none ${getTabStripBorderClasses(hasTabsToRight, { includeTopBorder: includeTopTabBorder })} ${getDropIndicatorClasses(dropIndicator ?? null)} ${getTabRootStateClasses(isActive)}`}
       onPointerDown={(e) => {
         onTabPointerDown(
           e,
@@ -268,9 +278,7 @@ export default function EditorFileTab({
           className={`w-3.5 h-3.5 mr-1.5 shrink-0 ${isActive ? 'text-foreground' : 'text-muted-foreground'}`}
         />
       ) : (
-        createElement(HoverIcon, {
-          className: `w-3 h-3 mr-1 shrink-0 ${isActive ? 'text-foreground' : 'text-muted-foreground'}`
-        })
+        tabIcon(`w-3 h-3 mr-1 shrink-0 ${isActive ? 'text-foreground' : 'text-muted-foreground'}`)
       )}
       {isPinned && <Pin className="mr-1 size-3 shrink-0 text-muted-foreground" aria-hidden />}
       <span className="mr-1 flex min-w-0 flex-1 items-baseline gap-1">
@@ -376,8 +384,8 @@ export default function EditorFileTab({
         ) : (
           <TabHoverCard
             title={tabLabel}
-            programName={translate('tabHoverCard.editor', 'Editor')}
-            icon={createElement(HoverIcon, { className: 'size-4' })}
+            programName={customEditor?.title ?? translate('tabHoverCard.editor', 'Editor')}
+            icon={tabIcon('size-4')}
             description={file.relativePath}
           >
             {tabRoot}

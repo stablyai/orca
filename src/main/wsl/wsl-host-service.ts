@@ -4,7 +4,7 @@
  * parked: polls and visible work keep it down until the user acts or the distro runs again.
  */
 import { focusReachability } from './wsl-host-focus-reachability'
-import { rethrowRetryable, settlingConnectFailure } from './wsl-host-connect-failure'
+import { ensureWslHostForRuntimeCall } from './wsl-host-runtime-call'
 import type { WslHostDeploymentRecord } from '../../shared/wsl-host-deployment-store'
 import type {
   WslHostAddResult,
@@ -16,14 +16,12 @@ import type {
 import type { WslHostConnector, WslHostServiceDependencies } from './wsl-host-connector-contract'
 import { wslDistroHolderKey } from './wsl-distro-holder-record'
 import {
-  persistWslHostConnection,
+  saveWslHostConnection,
   readWslHostRecordsQuietly,
   toWslHostStatus
 } from './wsl-host-connection-record'
 import {
   sameWslDistro,
-  wslHostNotConnectedMessage,
-  wslHostStoppedMessage,
   WSL_HOST_REMOVING_MESSAGE,
   wslHostRunRefusal
 } from './wsl-host-add-admission'
@@ -84,9 +82,7 @@ export class WslHostService {
     if (!record) {
       return
     }
-    if (connection && persistWslHostConnection(this.deps.userDataPath(), record, connection)) {
-      this.deps.pairingChanged(record.environmentId)
-    }
+    saveWslHostConnection(this.deps, record, { get: () => connection })
     if (status.state === 'distro-stopped') {
       this.parked.add(record.environmentId)
     } else if (status.state === 'ready') {
@@ -212,41 +208,21 @@ export class WslHostService {
     await this.wsl.connect(record.distro, options)
   }
 
-  /**
-   * A runtime call (a poll, a fetch) never boots a distro (E9). It reconnects only to a distro
-   * confirmed running and only for visible work; a confirmed stop parks the host.
-   */
+  /** A runtime call (a poll, a fetch) never boots a distro (E9); see ensureWslHostForRuntimeCall. */
   async ensureForRuntimeCall(environmentId: string): Promise<void> {
-    const record = this.recordForEnvironment(environmentId)
-    const connector = this.connector
-    if (!record || !connector) {
-      return
-    }
-    const reachability = await connector.reachability(record.distro, environmentId)
-    if (reachability === 'available') {
-      return
-    }
-    const refusal = wslHostRunRefusal(this.deps)
-    if (refusal || this.removing.has(environmentId)) {
-      throw new Error(refusal?.message ?? WSL_HOST_REMOVING_MESSAGE)
-    }
-    // A pending host never reconnects for a runtime call.
-    admitConnectToPendingHost(this.deps.userDataPath(), record, false)
-    if (reachability === 'stopped') {
-      this.parked.add(environmentId)
-    }
-    if (this.parked.has(environmentId)) {
-      throw new Error(wslHostStoppedMessage(record.distro))
-    }
-    // Unconfirmed (running list unreadable, or possibly stale right after an exit) or not
-    // visible: refuse rather than risk a boot; liveness publishes the verdict.
-    if (reachability !== 'unreachable' || !this.visible.has(environmentId)) {
-      throw new Error(wslHostNotConnectedMessage(record.distro))
-    }
-    if (connector.isSettling(record.distro)) {
-      throw settlingConnectFailure(record.distro)
-    }
-    await connector.connect(record.distro, { noBoot: true }).catch(rethrowRetryable(record.distro))
+    await ensureWslHostForRuntimeCall(environmentId, {
+      record: this.recordForEnvironment(environmentId),
+      connector: this.connector,
+      deps: this.deps,
+      removing: this.removing,
+      parked: this.parked,
+      isVisible: () => this.visible.has(environmentId),
+      publishStopped: (record) =>
+        this.setStatus(record, { state: 'distro-stopped', terminals: 'exited', recovering: false }),
+      publishReady: (record, connection) =>
+        this.setStatus(record, { state: 'ready', census: null }, connection),
+      retry: () => this.ensureForRuntimeCall(environmentId)
+    })
   }
 
   /**
@@ -299,6 +275,10 @@ export class WslHostService {
       ? (await this.connector.reachability(record.distro, environmentId)) === 'available'
       : false
   }
+
+  /** Re-saves the live connection's pairing and ports, which the deployment link overlays onto. */
+  readonly resaveConnection = (environmentId: string): void =>
+    saveWslHostConnection(this.deps, this.recordForEnvironment(environmentId), this.connector)
 
   /** Whether anything may still be started for this distro (spawn guard). */
   isKnownDistro(distro: string): boolean {

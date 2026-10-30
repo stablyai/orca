@@ -1,13 +1,5 @@
 import { translate } from '@/i18n/i18n'
-import {
-  nativeChatToolLineLabel as sharedToolLineLabel,
-  type NativeChatToolLineLabel,
-  type NativeChatToolRowVerb
-} from '../../../../shared/native-chat/tools/native-chat-tool-line-label'
-import type {
-  NativeChatToolCallBlock,
-  NativeChatToolResultBlock
-} from '../../../../shared/native-chat-types'
+import type { NativeChatToolRowVerb } from '../../../../shared/native-chat/tools/native-chat-tool-line-label'
 
 /** Keep literal translation call sites for extraction; parity tests match the shared mobile record. */
 export function nativeChatToolRowVerb(verb: NativeChatToolRowVerb): string {
@@ -61,12 +53,4 @@ export function nativeChatToolRowVerb(verb: NativeChatToolRowVerb): string {
     case 'triedSearchWeb':
       return translate('components.native-chat.tool.row.triedSearchWeb', 'Tried to search the web')
   }
-}
-
-export function nativeChatToolLineLabel(
-  call: NativeChatToolCallBlock,
-  result?: NativeChatToolResultBlock
-): Omit<NativeChatToolLineLabel, 'verb'> & { verb: string | null } {
-  const label = sharedToolLineLabel(call, result)
-  return { ...label, verb: label.verb === null ? null : nativeChatToolRowVerb(label.verb) }
 }

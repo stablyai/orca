@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 // Use the real page adapter: its resolved refusals must not put rejected values into the next shell init’s mirror.
 vi.mock('@react-native-async-storage/async-storage', async () => ({
@@ -8,12 +8,16 @@ vi.mock('@react-native-async-storage/async-storage', async () => ({
 const { publishPageStorage } = await import('../mobile-web-shell/bridge/page-async-storage')
 const { pageStorageEntriesForInit, pageStorageKeysForRoute, PAGE_STORAGE_MAX_VALUE_CHARS } =
   await import('../mobile-web-shell/page-storage-keys')
-const { persistMirrored, readMirroredStorage } = await import('./mirrored-storage-keys')
+const { persistMirrored, readMirroredStorage, retainMirroredStorage } =
+  await import('./mirrored-storage-keys')
 
 const HOST_ID = 'host-1'
 const ROUTE = '/h/host-1/session/wt-1'
 const DOCK_WIDTH = 'orca:hostDockWidth'
 const OTHER_HOST_PIN = 'orca:pins:host-2'
+let releaseStorage = () => {}
+
+afterEach(() => releaseStorage())
 
 function initStorage(): Readonly<Record<string, string>> {
   return pageStorageEntriesForInit(readMirroredStorage(pageStorageKeysForRoute(HOST_ID, ROUTE)))
@@ -21,6 +25,7 @@ function initStorage(): Readonly<Record<string, string>> {
 }
 
 beforeEach(() => {
+  releaseStorage = retainMirroredStorage(pageStorageKeysForRoute(HOST_ID, ROUTE))
   publishPageStorage({ [DOCK_WIDTH]: '320' }, () => true, HOST_ID, ROUTE)
   return persistMirrored(DOCK_WIDTH, '320')
 })

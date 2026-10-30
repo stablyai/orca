@@ -5,12 +5,28 @@ import { RuntimeRpcCallError } from './runtime-rpc-result'
 import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'
 import { chatScratchFileAddress } from './runtime-chat-scratch-file-address'
 import {
+  acquireTerminalArtifactGrant,
   isRenewableGrantError,
   pinTerminalArtifactGrantTarget,
   renewRestoredHostFileGrant,
   renewTerminalArtifactGrant,
   type TerminalArtifactGrantTarget
 } from './runtime-terminal-artifact-grant'
+
+export async function readHostFilePreview(
+  unpinned: TerminalArtifactGrantTarget
+): Promise<RuntimeReadableFileContent> {
+  const pinned = pinTerminalArtifactGrantTarget(unpinned)
+  const granted = await acquireTerminalArtifactGrant(pinned)
+  if (!granted) {
+    throw new Error(`File not found on its host: ${pinned.absolutePath}`)
+  }
+  return readRuntimeTerminalArtifactContent({
+    ...pinned,
+    absolutePath: granted.absolutePath,
+    grantId: granted.grantId
+  })
+}
 
 /** A granted host file, or a restored tab's absolute host path (grants are never persisted). */
 export function isHostFileOutsideWorkspaces(args: {

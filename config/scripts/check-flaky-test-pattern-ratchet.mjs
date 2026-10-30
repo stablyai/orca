@@ -67,8 +67,8 @@ export function listChangedFiles(root = process.cwd()) {
   if (!base) {
     return null
   }
-  const changed = git(root, ['diff', '--name-only', '--no-renames', base])
-    .split('\n')
+  const changed = git(root, ['diff', '--name-only', '--no-renames', '-z', base])
+    .split('\0')
     .filter(Boolean)
   return new Set(changed)
 }

@@ -1,16 +1,5 @@
 import { cn } from '@/lib/utils'
-
-const GRAPES = [
-  { base: 0.64, response: 0.45, lift: 1 },
-  { base: 0.76, response: 0.75, lift: -1 },
-  { base: 0.9, response: 1, lift: 1 },
-  { base: 1, response: 1.25, lift: -1 },
-  { base: 0.86, response: 0.9, lift: 1 },
-  { base: 0.72, response: 1.1, lift: -1 },
-  { base: 0.82, response: 0.7, lift: 1 },
-  { base: 0.68, response: 0.55, lift: -1 },
-  { base: 0.58, response: 0.35, lift: 1 }
-] as const
+import { DICTATION_GRAPES } from '../../../../shared/dictation-audio-meter'
 
 type DictationGrapesProps = {
   level: number
@@ -30,7 +19,7 @@ export function DictationGrapes({ level, active, transitioning }: DictationGrape
         transitioning && 'animate-pulse motion-reduce:animate-none'
       )}
     >
-      {GRAPES.map((grape, index) => {
+      {DICTATION_GRAPES.map((grape, index) => {
         const energy = active ? normalizedLevel : 0
         const scale = grape.base + energy * grape.response
         const verticalOffset = energy * grape.lift * 2

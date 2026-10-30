@@ -70,6 +70,8 @@ export type AcpCompactionReply = { outcome: 'skipped' | 'failed'; detail: string
 
 /** Hooks interpret extensions; lifecycle and row identity stay shared. */
 export type AcpDialect = {
+  /** Effort replaces part of the native composite model selection. */
+  effortChangesModel?: true
   subagentStop?: {
     /** Probe without a target to establish support without cancelling a child. */
     probe: { method: string; params: unknown }
@@ -98,10 +100,13 @@ export type AcpDialect = {
   /** A child-session notice supplies only its outcome; the translator owns membership and replay. */
   subagentSessionEnd?(method: string, params: unknown): 'completed' | 'stopped' | undefined
   notification?(method: string, params: unknown, at: number): AcpDialectNotification | undefined
+  /** Completion of an independent text task, apart from interactive turn projection. */
+  textTaskCompletion?(
+    method: string,
+    params: unknown
+  ): { sessionId: string; promptId: string; stopReason: string } | undefined
   contextWindow?(models: unknown): number | undefined
   modelEfforts?(model: ModelInfo): { efforts: AgentSessionOptionChoice[]; defaultEffort?: string }
-  /** The agent clamps an effort another model lacks, so unlisted models' menus are unknown, not empty. */
-  clampsUnlistedEffort?: true
   /** Claimed permission requests are never auto-approved. */
   request?(method: string, params: unknown): AcpRequestPresentation | undefined
   settleRequest?(method: string, params: unknown): AcpRequestSettlement | undefined

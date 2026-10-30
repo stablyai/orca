@@ -1,3 +1,4 @@
+import { translate } from '../i18n/mobile-i18n'
 import type { RpcSendParams } from '../transport/rpc-params-contract'
 import { CLEARED_HOSTED_REVIEW_SELECTION_UPDATES } from '../../../src/shared/worktree/hosted-review-links'
 import { refusedRpcMessageOrFallback } from '../transport/rpc-refusal-message'
@@ -79,7 +80,10 @@ export function linkMobilePr(
   return setWorktreeReviewLink(
     client,
     buildWorktreeSetLinkParams(worktreeId, prNumber),
-    'Failed to update linked pull request'
+    translate(
+      'sourceControl.prLink.updatePullRequestFailed',
+      'Failed to update linked pull request'
+    )
   )
 }
 
@@ -95,7 +99,11 @@ export async function linkMobileHostedReview(
     return { ok: true }
   }
   // Link refresh failure is nonfatal: the review already exists, so keep its URL.
-  return setWorktreeReviewLink(client, params, 'Failed to update linked review')
+  return setWorktreeReviewLink(
+    client,
+    params,
+    translate('sourceControl.prLink.updateReviewFailed', 'Failed to update linked review')
+  )
 }
 
 // Like desktop, suppress the unlinked PR so branch discovery does not bring it straight back.
@@ -107,7 +115,10 @@ export function unlinkMobilePr(
   return setWorktreeReviewLink(
     client,
     { ...buildWorktreeSetLinkParams(worktreeId, null), suppressedGitHubPR: prNumber },
-    'Failed to update linked pull request'
+    translate(
+      'sourceControl.prLink.updatePullRequestFailed',
+      'Failed to update linked pull request'
+    )
   )
 }
 
@@ -131,7 +142,10 @@ export async function clearMobileWorktreeReviewLink(
   await setWorktreeReviewLink(
     client,
     { worktree: `id:${worktreeId}`, ...CLEARED_HOSTED_REVIEW_SELECTION_UPDATES },
-    'Failed to update linked pull request'
+    translate(
+      'sourceControl.prLink.updatePullRequestFailed',
+      'Failed to update linked pull request'
+    )
   )
 }
 

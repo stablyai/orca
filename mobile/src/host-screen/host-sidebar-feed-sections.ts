@@ -98,6 +98,16 @@ function matchesSearch(row: Worktree, query: string): boolean {
 }
 
 // Use desktop headers/order/nesting with phone live content and last-visited highlight; apply search locally because desktop search never reaches the feed.
+// Project and group headers repeat per host section but collapse as one.
+function hostSectionKeys(
+  collapseKey: string,
+  sectionHostId: ExecutionHostId | null
+): Pick<Section, 'key' | 'collapseKey'> {
+  return sectionHostId
+    ? { key: `${collapseKey}@${sectionHostId}`, collapseKey }
+    : { key: collapseKey }
+}
+
 export function buildHostFeedSections(sources: HostFeedListSources): Section[] {
   const liveRowOf = indexLiveRows(sources.liveRows, sources.repoHostIdByRepoId)
   const query = sources.search.trim().toLowerCase()
@@ -146,7 +156,7 @@ export function buildHostFeedSections(sources: HostFeedListSources): Section[] {
           folderScanGroupIds.add(row.projectGroup.id)
         }
         push({
-          key: row.collapseKey ?? row.key,
+          ...hostSectionKeys(row.collapseKey ?? row.key, sectionHostId),
           title: headerTitle(row),
           count: row.count,
           ...(row.icon.kind === 'pinned' ? { icon: 'pin' as const } : {}),

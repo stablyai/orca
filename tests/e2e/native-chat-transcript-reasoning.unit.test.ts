@@ -2,7 +2,7 @@
 
 import '@testing-library/jest-dom/vitest'
 
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, screen } from '@testing-library/react'
 import { afterAll, afterEach, beforeAll, expect, it, vi } from 'vitest'
 
 // Why: these fixtures have neither inline visual owners nor sender navigation.
@@ -27,6 +27,7 @@ afterEach(() => {
 import { createElement } from 'react'
 import { NativeChatMessageList } from '../../src/renderer/src/components/native-chat/NativeChatMessageList'
 import { installNativeChatMessageListTestViewport } from '../../src/renderer/src/components/native-chat/native-chat-message-list-test-viewport'
+import { render } from '../../src/renderer/src/components/native-chat/native-chat-tooltip-test-harness'
 
 let restoreViewport = (): void => {}
 beforeAll(() => {

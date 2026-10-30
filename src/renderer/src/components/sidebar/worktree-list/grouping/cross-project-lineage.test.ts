@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest'
-import { resolveProjectHostSetupProjection } from '../../../../../../shared/project-catalog-canonical-projection'
 import type { WorktreeLineage } from '../../../../../../shared/worktree/lineage-types'
 import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
 import type { Worktree } from '../../../../../../shared/worktree/types'
@@ -51,7 +50,7 @@ const worktreeMap = new Map([
   [child.id, child]
 ])
 
-const endpoint = {
+const grouping = {
   projects: [project],
   projectHostSetups: [repo, childRepo].map((checkout) => ({
     ...projectHostSetups[0]!,
@@ -61,13 +60,6 @@ const endpoint = {
     displayName: checkout.displayName
   }))
 }
-
-const canonical = resolveProjectHostSetupProjection(
-  [repo, childRepo],
-  endpoint.projects,
-  endpoint.projectHostSetups
-)
-const grouping = { projects: canonical.projects, projectHostSetups: canonical.setups }
 
 describe('cross-project sidebar lineage', () => {
   it('ranks by actual owner and keeps notices/actions there while counting displayed children', () => {
@@ -136,8 +128,7 @@ describe('cross-project sidebar lineage', () => {
         }
       }
       const worktrees = [grandchild, child, pinnedParent]
-      const parentProjectId = canonical.setups.find((setup) => setup.repoId === repo.id)!.projectId
-      const parentSection = `project:${parentProjectId}`
+      const parentSection = `project:${project.id}::setup:${repo.id}`
       const plan = buildSidebarRowPlan(
         'repo',
         worktrees,

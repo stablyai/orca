@@ -3,6 +3,12 @@ import type * as ReactModule from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
+import { createGlobalSettingsFixture } from '../../../../shared/global-settings-test-fixture'
+import type { AppState } from '@/store/types'
+import { createTestStore } from '@/store/slices/store-test-helpers'
+import { useAddRepoLocalFolderFlow } from './useAddRepoLocalFolderFlow'
+
+let dialogStore: ReturnType<typeof createTestStore> | undefined
 
 type ButtonCapture = {
   label: string
@@ -21,8 +27,8 @@ const mocks = vi.hoisted(() => ({
     addNonGitFolder: vi.fn(),
     runtimeEnvironments: [{ id: 'env-1', name: 'Remote Mac' }],
     repos: [] as Repo[],
-    endpointProjects: [],
-    endpointProjectHostSetups: [],
+    projects: [],
+    projectHostSetups: [],
     worktreesByRepo: {} as Record<string, Worktree[]>,
     fetchWorktrees: vi.fn(),
     settings: {}
@@ -51,9 +57,10 @@ function textContent(node: ReactModule.ReactNode): string {
 
 vi.mock('@/store', () => {
   const useAppStore = Object.assign(
-    (selector: (state: typeof mocks.state) => unknown) => selector(mocks.state),
+    (selector: (state: typeof mocks.state | AppState) => unknown) =>
+      selector(dialogStore?.getState() ?? mocks.state),
     {
-      getState: () => mocks.state,
+      getState: () => dialogStore?.getState() ?? mocks.state,
       setState: (next: Partial<typeof mocks.state>) => {
         Object.assign(mocks.state, next)
       }
@@ -81,7 +88,9 @@ vi.mock('@/components/ui/button', () => ({
 
 vi.mock('sonner', () => ({
   toast: {
-    error: vi.fn()
+    error: vi.fn(),
+    info: vi.fn(),
+    success: vi.fn()
   }
 }))
 
@@ -122,6 +131,7 @@ function makeWorktree(id: string, path: string, hostId: Worktree['hostId']): Wor
 describe('NonGitFolderDialog', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    dialogStore = undefined
     mocks.buttons.length = 0
     mocks.state.activeModal = 'confirm-non-git-folder'
     mocks.state.modalData = {
@@ -130,8 +140,8 @@ describe('NonGitFolderDialog', () => {
     }
     mocks.state.runtimeEnvironments = [{ id: 'env-1', name: 'Remote Mac' }]
     mocks.state.repos = []
-    mocks.state.endpointProjects = []
-    mocks.state.endpointProjectHostSetups = []
+    mocks.state.projects = []
+    mocks.state.projectHostSetups = []
     mocks.state.worktreesByRepo = {}
     mocks.state.fetchWorktrees.mockResolvedValue(true)
     mocks.onboardingGet.mockResolvedValue(null)
@@ -149,6 +159,121 @@ describe('NonGitFolderDialog', () => {
     expect(html).toContain('Remote Mac')
     expect(html).toContain('/srv/non-git')
   })
+
+  it.each(['confirm', 'cancel', 'failure'])(
+    'preserves local folder %s through both registration fallback and completed scan',
+    async (outcome) => {
+      const path = '/local/non-git'
+      for (const route of ['fallback', 'scan']) {
+        vi.clearAllMocks()
+        mocks.buttons.length = 0
+        const store = createTestStore()
+        dialogStore = store
+        const folderRepo: Repo = {
+          id: 'local-folder',
+          path,
+          displayName: 'non-git',
+          badgeColor: '#111',
+          addedAt: 1,
+          kind: 'folder'
+        }
+        const add = vi.fn(async ({ kind }: { kind: string }) =>
+          kind === 'git'
+            ? { error: `Not a valid git repository: ${path}` }
+            : outcome === 'failure'
+              ? { error: 'Folder registration failed' }
+              : { repo: folderRepo }
+        )
+        const remoteCall = vi.fn()
+        const fetchWorktrees = vi.fn().mockResolvedValue(true)
+        vi.stubGlobal('window', {
+          api: {
+            repos: { add },
+            onboarding: { get: mocks.onboardingGet },
+            runtimeEnvironments: { call: remoteCall }
+          }
+        })
+        store.setState({
+          settings: createGlobalSettingsFixture({ activeRuntimeEnvironmentId: 'env-1' }),
+          fetchWorktrees
+        })
+        const addFolder = vi.spyOn(store.getState(), 'addNonGitFolder')
+        let enter: () => Promise<unknown> = () =>
+          store.getState().addRepoPath(path, 'git', { runtimeEnvironmentId: null })
+        function LocalPicker() {
+          const flow = useAddRepoLocalFolderFlow({
+            ...store.getState(),
+            isOpen: true,
+            droppedLocalPath: '',
+            activeRuntimeEnvironmentId: null,
+            scanNestedRepos: vi.fn().mockResolvedValue({
+              selectedPath: path,
+              selectedPathKind: 'non_git_folder',
+              repos: [],
+              truncated: false,
+              timedOut: false,
+              stopped: false,
+              durationMs: 1,
+              maxDepth: 3,
+              maxRepos: 100,
+              timeoutMs: null
+            }),
+            setActiveNestedScanId: vi.fn(),
+            setNestedScanInProgress: vi.fn(),
+            showNestedRepoReview: vi.fn(),
+            onGitRepoReady: vi.fn(),
+            setIsAdding: vi.fn(),
+            setAddProjectBusyLabel: vi.fn()
+          })
+          enter = () => flow.handleAddLocalPath(path, 'local_folder_picker')
+          return null
+        }
+        if (route === 'scan') {
+          renderToStaticMarkup(<LocalPicker />)
+        }
+        await enter()
+        expect(store.getState().activeModal).toBe('confirm-non-git-folder')
+        expect(store.getState().modalData).toEqual({ folderPath: path })
+        expect(add.mock.calls).toEqual(route === 'fallback' ? [[{ path, kind: 'git' }]] : [])
+        expect(store.getState().repos).toEqual([])
+
+        renderToStaticMarkup(<NonGitFolderDialog />)
+        const button = mocks.buttons.find(
+          (entry) => entry.label === (outcome === 'cancel' ? 'Cancel' : 'Open as Folder')
+        )
+        expect(button?.onClick).toBeTypeOf('function')
+        button?.onClick?.()
+        if (outcome === 'cancel') {
+          expect(store.getState().repos).toEqual([])
+          expect(add).toHaveBeenCalledTimes(route === 'fallback' ? 1 : 0)
+          expect(addFolder).not.toHaveBeenCalled()
+        } else {
+          expect(addFolder).toHaveBeenCalledWith(path, { runtimeEnvironmentId: null })
+          await vi.waitFor(() => expect(add).toHaveBeenLastCalledWith({ path, kind: 'folder' }))
+          if (outcome === 'failure') {
+            await vi.waitFor(() =>
+              expect(toast.error).toHaveBeenCalledWith(
+                'Failed to add project',
+                expect.objectContaining({ description: 'Folder registration failed' })
+              )
+            )
+            expect(store.getState().repos).toEqual([])
+          } else {
+            await vi.waitFor(() =>
+              expect(fetchWorktrees).toHaveBeenCalledWith(folderRepo.id, {
+                executionHostId: 'local'
+              })
+            )
+            expect(store.getState().repos).toEqual([
+              expect.objectContaining({ path, kind: 'folder', executionHostId: 'local' })
+            ])
+          }
+        }
+        expect(remoteCall).not.toHaveBeenCalled()
+        expect(store.getState().activeModal).toBe('none')
+      }
+    }
+  )
 
   it('confirms runtime folder imports on the checked host', () => {
     renderToStaticMarkup(<NonGitFolderDialog />)

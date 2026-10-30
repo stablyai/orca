@@ -2,9 +2,15 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   createNativeChatTranscriptRetention,
   encodeNativeChatTranscriptIdentity
-} from '../../../src/shared/native-chat-transcript-retention'
-import { createNativeChatMerger, replaceList } from '../../../src/shared/native-chat-merge'
-import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
+} from '../../../src/shared/native-chat/transcript/native-chat-transcript-retention'
+import {
+  createNativeChatMerger,
+  replaceList
+} from '../../../src/shared/native-chat/native-chat-merge'
+import type {
+  NativeChatMessage,
+  NativeChatTurnLifecycle
+} from '../../../src/shared/native-chat-types'
 import { buildNativeChatSubscriptionId } from '../../../src/shared/native-chat/native-chat-stream-unsubscribe'
 import type { RpcClient } from '../transport/rpc-client'
 import { nativeChatSessionPageRead } from './mobile-session-read-operations'
@@ -38,6 +44,8 @@ export type MobileNativeChatSession = {
   loadingEarlier: boolean
   olderPages?: OlderPagePhase
   loadEarlier: () => void
+  /** Latest provider turn boundary from the transcript feed; absent from older hosts. */
+  transcriptLifecycle?: NativeChatTurnLifecycle
 }
 
 const INITIAL_LIMIT = 40
@@ -93,6 +101,10 @@ export function useMobileNativeChatSession(args: {
   const settled = initialStatus === 'loading' ? current : null
   const status = settled ? settled.status : initialStatus
   const [error, setError] = useState<string | undefined>(undefined)
+  const [lifecycle, setLifecycle] = useState<{
+    identity: string
+    lifecycle: NativeChatTurnLifecycle | undefined
+  } | null>(null)
   const [hasMore, setHasMore] = useState(false)
   const { phase: olderPages, load: loadOlderPages, supersede } = useMobileOlderPageLoader()
   const beforeOffsetRef = useRef<number | null>(null)
@@ -180,6 +192,10 @@ export function useMobileNativeChatSession(args: {
           limitRef.current = INITIAL_LIMIT
           beforeOffsetRef.current = applied.beforeOffset ?? null
           setHasMore(applied.hasMore ?? applied.messages.length >= INITIAL_LIMIT)
+        }
+        // Snapshots and replacements restate the boundary; appends only advance it.
+        if (frame.type === 'appended' ? frame.lifecycle !== undefined : !applied.pending) {
+          setLifecycle({ identity, lifecycle: frame.lifecycle })
         }
         setMessages(applied.messages)
         if (!applied.windowReplaced && applied.hasMore != null) {
@@ -286,6 +302,7 @@ export function useMobileNativeChatSession(args: {
     hasMore,
     loadingEarlier: olderPages === 'loading',
     olderPages,
-    loadEarlier
+    loadEarlier,
+    transcriptLifecycle: lifecycle?.identity === identity ? lifecycle.lifecycle : undefined
   }
 }

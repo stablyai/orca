@@ -181,31 +181,4 @@ describe('Cmd+J semantic proof contract', () => {
     expect(run('123')?.rank.destination).toBe(2)
     expect(run('!123')).toBeNull()
   })
-
-  it('uses the proof with fewer container-only tokens', () => {
-    const match = matchPaletteTabDocument(
-      buildPaletteTabDocument({
-        id: 'tab',
-        title: 'atlas',
-        secondaryTexts: [],
-        worktreeName: 'atlas sprint',
-        branch: 'main',
-        repoName: 'repo'
-      }),
-      ready('atlas sprint')
-    )
-    expect(match?.rank).toMatchObject({
-      coverage: 2,
-      containerOnlyTokenCount: 1,
-      placement: 2
-    })
-    expect(match?.qualityClass).toBe('exact-visible')
-    expect(match?.titleRanges).toHaveLength(1)
-    expect(match?.worktreeRanges).toHaveLength(1)
-  })
-
-  it('finds a later word-boundary phrase after an incidental first occurrence', () => {
-    const match = matchTitleAndPath('xatlas sprint Atlas sprint notes', '', 'atlas sprint')
-    expect(match?.rank.placement).toBe(1)
-  })
 })

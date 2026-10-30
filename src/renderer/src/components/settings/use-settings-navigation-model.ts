@@ -7,6 +7,7 @@ import {
   getAgentSkillNavInstallStatus,
   getLinearAgentSkillNavInstallStatus
 } from '@/lib/agent-skill-nav-install-status'
+import { getProjectHostSetupProjectionFromState } from '../../store/selectors'
 import { getSettingsSectionSearchEntries, rankSettingsSearchItems } from './settings-search'
 import { deriveNeededSectionIds } from './settings-load-performance'
 import { SCROLLBACK_PRESETS_ROWS } from './SettingsConstants'
@@ -156,7 +157,11 @@ export function useSettingsNavigationModel(
     [visibleNavSections]
   )
   const projectByRepoId = useMemo(() => {
-    const projection = { projects: model.projects, setups: model.projectHostSetups }
+    const projection = getProjectHostSetupProjectionFromState({
+      repos: model.repos,
+      projects: model.projects,
+      projectHostSetups: model.projectHostSetups
+    })
     const projectById = new Map(projection.projects.map((project) => [project.id, project]))
     const nextProjectByRepoId = new Map<string, (typeof projection.projects)[number]>()
     for (const setup of projection.setups) {

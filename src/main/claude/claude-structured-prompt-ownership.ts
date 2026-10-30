@@ -5,9 +5,10 @@ import {
 } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import type { StructuredAgentSessionAdapterStop } from '../native-chat/agent-session-wire/structured-agent-session-adapter-stop'
 import { answerClaudePrompt, cancelClaudeTurn } from './claude-structured-control-actions'
+import { leaveClaudePlanModeOnApproval } from './claude-plan-approval-mode'
 import type { ClaudeLateDispatchSettlement } from './claude-replay-turn-resolution'
 import { buildClaudePromptReply, claudePromptDismissal } from './claude-structured-prompt-replies'
-import type { ClaudeSession } from './claude-structured-session-state'
+import type { ClaudeSession } from './structured/claude-structured-session-state'
 import type { ClaudePendingPrompt } from './claude-prompt-registry'
 import { CLAUDE_STOP_GRACE_MS } from './claude-request-end-wait'
 import type { PermissionResult } from '@anthropic-ai/claude-agent-sdk'
@@ -157,6 +158,7 @@ export async function answerClaudeStructuredPrompt(input: {
     ) {
       throw new AgentSessionPromptUnavailableError(request.itemId)
     }
+    leaveClaudePlanModeOnApproval(session, claim.found.prompt, reply)
     await answerClaudePrompt(session, claim, reply)
   } catch (error) {
     session.prompts.releaseClaim(claim)

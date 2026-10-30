@@ -15,10 +15,10 @@ export function getMobileNativeChatCommands(agent: string): readonly SlashComman
   return getAgentAnsweredNativeChatCommands(agent)
 }
 
-// Terminal sends carry no picker-origin override that could reclassify a slash token as chat.
 export function classifyMobileNativeChatSend(
   agent: string | null,
-  text: string
+  text: string,
+  pickerSkillOriginToken: string | null = null
 ): NativeChatSendClassification {
   if (!agent) {
     return 'chat'
@@ -27,7 +27,7 @@ export function classifyMobileNativeChatSend(
   return classifyNativeChatSend(
     text,
     getMobileNativeChatCommands(agent),
-    null,
+    pickerSkillOriginToken,
     profile?.skillPrefix ?? null
   )
 }

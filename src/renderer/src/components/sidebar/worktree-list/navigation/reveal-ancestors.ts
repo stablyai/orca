@@ -7,7 +7,9 @@ function getProjectIdFromHeaderRowKey(rowKey: string): string | null {
   if (!rowKey.startsWith('project:')) {
     return null
   }
-  return rowKey.slice('project:'.length)
+  const withoutPrefix = rowKey.slice('project:'.length)
+  const setupSeparator = withoutPrefix.indexOf('::setup:')
+  return setupSeparator === -1 ? withoutPrefix : withoutPrefix.slice(0, setupSeparator)
 }
 
 function getRepoIdsFromHeaderRowKey(
@@ -17,6 +19,11 @@ function getRepoIdsFromHeaderRowKey(
 ): string[] {
   if (rowKey.startsWith('repo:')) {
     return [rowKey.slice('repo:'.length)]
+  }
+  const setupMarker = '::setup:'
+  const setupIndex = rowKey.indexOf(setupMarker)
+  if (rowKey.startsWith('project:') && setupIndex !== -1) {
+    return [rowKey.slice(setupIndex + setupMarker.length)]
   }
   const projectId = getProjectIdFromHeaderRowKey(rowKey)
   if (!projectId) {

@@ -1,3 +1,4 @@
+import { normalizeSourceControlAiActionDefaults } from '../source-control-ai-actions'
 import { z } from 'zod'
 import { OptionalGitAdmissionTier } from './git-admission-tier-params'
 import { OptionalTuiAgent } from './worktree-params'
@@ -124,16 +125,7 @@ export const CommitMessageAiSettings = z.object({
 })
 
 export const SourceControlAiSettings = CommitMessageAiSettings.omit({ customPrompt: true }).extend({
-  actions: z
-    .record(
-      z.string(),
-      z.object({
-        agentId: z.string().nullable().optional(),
-        commandInputTemplate: z.string().optional(),
-        agentArgs: z.string().optional()
-      })
-    )
-    .optional(),
+  actions: z.unknown().optional().transform(normalizeSourceControlAiActionDefaults),
   instructionsByOperation: z.record(z.string(), z.string()).optional(),
   modelOverridesByOperation: z
     .record(
@@ -155,16 +147,7 @@ export const SourceControlAiSettings = CommitMessageAiSettings.omit({ customProm
       openAfterCreate: z.boolean().optional()
     })
     .optional(),
-  launchActionDefaults: z
-    .record(
-      z.string(),
-      z.object({
-        agentId: z.string().nullable().optional(),
-        commandInputTemplate: z.string().optional(),
-        agentArgs: z.string().optional()
-      })
-    )
-    .optional()
+  launchActionDefaults: z.unknown().optional().transform(normalizeSourceControlAiActionDefaults)
 })
 
 export const ResolvedSourceControlAiGenerationParams = z.object({
@@ -266,7 +249,8 @@ export const GitRemoteFileUrl = WorktreeSelector.extend({
     .unknown()
     .transform((v) => (typeof v === 'string' ? v : ''))
     .pipe(z.string().min(1, 'Missing relative path')),
-  line: z.number().int().min(1)
+  line: z.number().int().min(1),
+  endLine: z.number().int().min(1).optional()
 })
 
 export const GitRemoteCommitUrl = WorktreeSelector.extend({

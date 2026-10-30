@@ -20,7 +20,7 @@ const verify = consumer.steps.find(
 )
 
 it('binds the bundle to the same run and source across architectures and retry attempts', () => {
-  expect(producer['runs-on']).toBe('blacksmith-4vcpu-ubuntu-2404')
+  expect(producer['runs-on']).toBe('ubuntu-24.04')
   for (const job of [producer, consumer]) {
     expect(
       job.steps.find((step) => step.uses?.startsWith('actions/checkout')).with.ref

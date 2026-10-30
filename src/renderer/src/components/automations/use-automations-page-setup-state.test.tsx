@@ -1,14 +1,22 @@
 // @vitest-environment happy-dom
 
-import { renderHook } from '@testing-library/react'
-import { describe, expect, it } from 'vitest'
+import { act, renderHook } from '@testing-library/react'
+import { describe, expect, it, vi } from 'vitest'
 import type { Repo } from '../../../../shared/repo-types'
+import type { HookCheckResult } from '@/runtime/runtime-hooks-client'
 import { useAutomationsPageSetupState } from './use-automations-page-setup-state'
+
+const checkRuntimeHooksMock = vi.hoisted(() =>
+  vi.fn<
+    (hostId: string, repoId: string, options?: { background?: boolean }) => Promise<HookCheckResult>
+  >()
+)
+vi.mock('@/runtime/runtime-hooks-client', () => ({ checkRuntimeHooks: checkRuntimeHooksMock }))
 
 type HookInput = Parameters<typeof useAutomationsPageSetupState>[0]
 
-function cacheKeyFor(repos: Partial<Repo>[], focused: string | null, repoId = 'repo-1'): string {
-  const { result } = renderHook(() =>
+function renderSetupState(repos: Partial<Repo>[], focused: string | null, repoId = 'repo-1') {
+  return renderHook(() =>
     useAutomationsPageSetupState({
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the cache key reads only repos and settings.
       store: {
@@ -17,12 +25,15 @@ function cacheKeyFor(repos: Partial<Repo>[], focused: string | null, repoId = 'r
         projectHostSetups: [],
         worktreesByRepo: {}
       } as unknown as HookInput['store'],
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: inert for the cache key.
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fields the cache key and hook loader read.
       local: {
         draft: { projectId: repoId },
         automationHostTargetKey: null,
         selectedAutomationRuns: { rowKey: null, ownerKey: null, notice: null },
-        selectedAutomationRunPageId: null
+        selectedAutomationRunPageId: null,
+        automationYamlHooksByRepoKey: {},
+        automationHookCheckPromisesRef: { current: new Map() },
+        setAutomationYamlHooksByRepoKey: () => {}
       } as unknown as HookInput['local'],
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: inert for the cache key.
       list: {
@@ -34,7 +45,10 @@ function cacheKeyFor(repos: Partial<Repo>[], focused: string | null, repoId = 'r
       } as unknown as HookInput['list']
     })
   )
-  return result.current.getAutomationHooksCacheKey(repoId)
+}
+
+function cacheKeyFor(repos: Partial<Repo>[], focused: string | null, repoId = 'repo-1'): string {
+  return renderSetupState(repos, focused, repoId).result.current.getAutomationHooksCacheKey(repoId)
 }
 
 describe('automation hooks cache key', () => {
@@ -60,5 +74,40 @@ describe('automation hooks cache key', () => {
     ]
   ])('%s', (_name, repos, focused, expected) => {
     expect(cacheKeyFor(repos, focused)).toBe(expected)
+  })
+})
+
+// G6: the create dialog's preview must not boot a stopped WSL distro, but a save still reads orca.yaml.
+describe('automation orca.yaml loading', () => {
+  it('previews in the background and lets a save inspect in the foreground', async () => {
+    const hooks = { scripts: { setup: 'pnpm i' } }
+    let releasePreview!: (result: HookCheckResult) => void
+    checkRuntimeHooksMock
+      .mockReset()
+      .mockReturnValueOnce(new Promise((resolve) => (releasePreview = resolve)))
+      .mockResolvedValueOnce({ hasHooks: true, hooks, mayNeedUpdate: false })
+    const { result } = renderSetupState([{ id: 'repo-1', executionHostId: 'local' }], null)
+
+    let preview!: Promise<unknown>
+    let save!: Promise<unknown>
+    await act(async () => {
+      preview = result.current.loadAutomationYamlHooksForRepo('repo-1', undefined, {
+        background: true
+      })
+      save = result.current.loadAutomationYamlHooksForRepo('repo-1')
+      releasePreview({
+        status: 'error',
+        hasHooks: false,
+        hooks: null,
+        mayNeedUpdate: false,
+        unavailable: 'wsl-distro-stopped'
+      })
+      await expect(preview).resolves.toBeNull()
+      await expect(save).resolves.toEqual(hooks)
+    })
+    expect(checkRuntimeHooksMock.mock.calls).toEqual([
+      ['local', 'repo-1', { background: true }],
+      ['local', 'repo-1', {}]
+    ])
   })
 })

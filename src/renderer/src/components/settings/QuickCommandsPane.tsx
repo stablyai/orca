@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { TerminalQuickCommand } from '../../../../shared/terminal-quick-command-types'
 import { getTerminalQuickCommandScope } from '../../../../shared/terminal-quick-commands'
@@ -125,7 +125,7 @@ export function QuickCommandsPane({
   const hostOptions = getTerminalQuickCommandHostOptions(settings, runtimeEnvironments)
 
   const [editor, setEditor] = useState<EditorState>(null)
-  const consumedAddIntentSignalRef = useRef(0)
+  const [consumedAddIntentSignal, setConsumedAddIntentSignal] = useState(0)
   // Null means sticky All so newly added repos appear automatically, matching Tasks filtering.
   const [scopeSelection, setScopeSelection] = useState<ReadonlySet<string> | null>(null)
   const [scopePopoverOpen, setScopePopoverOpen] = useState(false)
@@ -196,10 +196,10 @@ export function QuickCommandsPane({
   const intentSignal = addCommandIntentSignal
   if (
     typeof intentSignal === 'number' &&
-    shouldOpenQuickCommandAddIntent(intentSignal, consumedAddIntentSignalRef.current)
+    shouldOpenQuickCommandAddIntent(intentSignal, consumedAddIntentSignal)
   ) {
     // Consume deep-link add intent before paint so the editor opens without a pane-only flash.
-    consumedAddIntentSignalRef.current = intentSignal
+    setConsumedAddIntentSignal(intentSignal)
     setEditor({
       mode: 'add',
       command: createDraftForCurrentFilter(),

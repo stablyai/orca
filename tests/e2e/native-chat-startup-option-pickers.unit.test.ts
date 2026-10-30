@@ -4,7 +4,7 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { createElement } from 'react'
 import { afterEach, expect, it, vi } from 'vitest'
 import { computeAgentSessionPayloadFingerprint } from '../../src/shared/agent-session-mutation-envelope'
-import { claudeSessionIdForOrcaSession } from '../../src/main/claude/claude-structured-launch-resolution'
+import { claudeSessionIdForOrcaSession } from '../../src/main/claude/structured/claude-structured-session-id'
 import { hostTestMessage } from '../../src/main/native-chat/agent-session-wire/structured-agent-session-host-test-data'
 import { StructuredAgentSessionStartupAttempts } from '../../src/main/native-chat/agent-session-wire/structured-agent-session-startup-attempt'
 import { createScriptedClaudeRuntime } from '../../src/main/runtime/structured-claude-scripted-runtime-test-support'
@@ -153,7 +153,7 @@ it('picks model then effort through the menus during startup and uses both in th
         })
       )
     )
-    fireEvent.click(screen.getByRole('button', { name: 'Model opus, Reasoning effort High' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Model opus, Effort High' }))
     fireEvent.click(await screen.findByRole('option', { name: 'sonnet' }))
     fireEvent.click(await screen.findByRole('radio', { name: 'Low' }))
     const body = hostTestMessage('reply using these choices')

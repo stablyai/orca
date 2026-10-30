@@ -6,7 +6,7 @@ import {
   nativeChatReasoningDisclosureKey,
   nativeChatReasoningHeadline,
   type NativeChatReasoningHeadline
-} from '../../../../shared/native-chat-reasoning-row'
+} from '../../../../shared/native-chat/transcript/native-chat-reasoning-row'
 import {
   NativeChatReasoningBody,
   NativeChatReasoningChevron

@@ -116,6 +116,10 @@ export function useTerminalPaneTitleEffects(controller: TerminalPaneCloseControl
       setPaneTitleOverlayRects(clearPaneTitleOverlayRects)
       return
     }
+    // Hidden overlays are display:none; keeping their last rects avoids a forced layout and a pane re-render on every workspace switch.
+    if (!isVisible && !shouldMeasureHiddenStartup) {
+      return
+    }
     let frame: number | null = null
     const scheduleSync = (): void => {
       if (frame !== null) {
@@ -147,6 +151,7 @@ export function useTerminalPaneTitleEffects(controller: TerminalPaneCloseControl
     paneTitles,
     renamingPaneId,
     sessionRestoredBannerPaneIds,
+    shouldMeasureHiddenStartup,
     syncPaneTitleOverlayRects,
     containerRef,
     managerRef,

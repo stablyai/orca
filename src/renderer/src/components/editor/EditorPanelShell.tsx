@@ -107,6 +107,7 @@ export function EditorPanelShell({
           isCsv={model.isCsv}
           isNotebook={model.isNotebook}
           canToggleLineNumbers={model.canToggleLineNumbers}
+          customEditorTitles={model.customEditorTitles}
           hasEditorToggle={model.hasEditorToggle}
           availableEditorToggleModes={model.availableEditorToggleModes}
           effectiveToggleValue={model.effectiveToggleValue}
@@ -147,6 +148,7 @@ export function EditorPanelShell({
           isMermaid={model.isMermaid}
           isCsv={model.isCsv}
           isNotebook={model.isNotebook}
+          customEditor={model.activeCustomEditor}
           mdViewMode={model.mdViewMode}
           inlineMarkdownRenderState={model.inlineMarkdownRenderState}
           isChangesMode={model.isDiffSurface && !model.isSingleDiff}

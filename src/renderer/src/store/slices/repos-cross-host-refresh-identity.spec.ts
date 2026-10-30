@@ -87,7 +87,7 @@ export function registerReposCrossHostRefreshIdentityTests(): void {
   }
 
   function sharedProject(store: ReturnType<typeof createTestStore>): Project | undefined {
-    return store.getState().endpointProjects.find((project) => project.id === SHARED_PROJECT_ID)
+    return store.getState().projects.find((project) => project.id === SHARED_PROJECT_ID)
   }
 
   describe('cross-host project refresh identity', () => {

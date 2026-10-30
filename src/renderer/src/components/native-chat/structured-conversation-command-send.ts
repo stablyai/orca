@@ -1,20 +1,11 @@
-import {
-  isAgentSessionConversationCommand,
-  type AgentSessionConversationCommand,
-  type AgentSessionConversationCommandResult
+import type {
+  AgentSessionConversationCommand,
+  AgentSessionConversationCommandResult
 } from '../../../../shared/agent-session/agent-session-conversation-command'
-import {
-  readWholeAgentSessionFailureFact,
-  type AgentSessionFailureFact
-} from '../../../../shared/agent-session-failure'
-import { agentSessionFailureSentence } from '../../../../shared/agent-session-failure-words'
-import { translate } from '@/i18n/i18n'
+import type { AgentSessionFailureFact } from '../../../../shared/agent-session-failure'
 import { sayAgentSessionFailureTranslated } from './agent-session-failure-words-text'
 import { agentSessionWriteNoticeText } from './agent-session-write-notice-text'
-import {
-  agentSessionFailureStatedByStartRow,
-  structuredAgentSessionStartFailureFacts
-} from './structured-agent-session-delivery-notices'
+import { structuredAgentSessionStartFailureFacts } from './structured-agent-session-delivery-notices'
 import { pendingPromptsAllUnanswerableHere } from '../../../../shared/agent-session-approval-subject'
 import type { StructuredPromptItem } from '../../../../shared/structured-agent-session-message-projection'
 import type {
@@ -22,78 +13,23 @@ import type {
   AgentJournalSubmission
 } from '../../../../shared/agent-session-journal-types'
 import type { StructuredAgentSessionPendingSend } from './structured-agent-session-pending-sends'
-import { structuredAgentSessionCommandHostRefusalCause } from '../../../../shared/structured-agent-session-command-refusal-cause'
 import type {
   StructuredAgentSessionCommandOutcome,
   StructuredAgentSessionCommandRefusalCause
 } from '../../../../shared/structured-agent-session-composer'
+import {
+  conversationCommandReply,
+  heldConversationCommandParts,
+  structuredConversationCommandHold,
+  type StructuredConversationCommandHold
+} from '../../../../shared/structured-conversation-command-hold'
 import type { StructuredAgentSessionWriteOutcome } from './use-structured-agent-session-mutate'
-
-/** Ahead leaves command text untouched behind an unanswered local send; other holds return an explicit refusal. */
-export type StructuredConversationCommandHold =
-  | 'ahead'
-  | 'working'
-  | 'prompt'
-  | 'background'
-  | 'sending'
-
-/** Queued commands wait only for earlier unaccepted sends; ordinary commands wait for all in-flight agent work. */
-export function structuredConversationCommandHold(input: {
-  /** A /compact the host can hold as a card behind the turn or prompt. */
-  waitsInLine: boolean
-  /** A turn runs, or the chat shows the agent working on a message it has not answered. */
-  agentWorking: boolean
-  promptPending: boolean
-  backgroundTasksRunning: boolean
-  sendPending: boolean
-}): StructuredConversationCommandHold | null {
-  if (input.backgroundTasksRunning) {
-    return 'background'
-  }
-  if (input.waitsInLine) {
-    return input.sendPending ? 'ahead' : null
-  }
-  if (input.promptPending) {
-    return 'prompt'
-  }
-  if (input.agentWorking) {
-    return 'working'
-  }
-  if (input.sendPending) {
-    return 'sending'
-  }
-  return null
-}
 
 type CommandOutcome = Omit<StructuredAgentSessionCommandOutcome, 'handled'>
 
 export type StructuredConversationCommandCauses = Readonly<
   Record<StructuredAgentSessionCommandRefusalCause, boolean>
 >
-
-function heldCommandText(
-  command: AgentSessionConversationCommand,
-  hold: Exclude<StructuredConversationCommandHold, 'ahead'>
-): string {
-  const clear = command === 'clear'
-  switch (hold) {
-    case 'prompt':
-      return agentSessionWriteNoticeText([clear ? 'clearAfterAnswer' : 'compactAfterAnswer'])
-    case 'working':
-      return agentSessionWriteNoticeText([
-        'agentStillWorking',
-        clear ? 'runClearWhenDone' : 'runCompactWhenDone'
-      ])
-    case 'sending':
-      return agentSessionWriteNoticeText([clear ? 'clearAfterSending' : 'compactAfterSending'])
-    case 'background':
-      break
-  }
-  return translate(
-    'components.native-chat.conversationCommand.pendingWork',
-    'Wait for pending work and messages to finish before using this command.'
-  )
-}
 
 export async function sendStructuredConversationCommand(input: {
   command: AgentSessionConversationCommand
@@ -118,14 +54,20 @@ export async function sendStructuredConversationCommand(input: {
   })
   // A command on its way is the agent's work in flight.
   if (input.pending.current) {
-    return { accepted: false, error: heldCommandText(input.command, 'working') }
+    return {
+      accepted: false,
+      error: agentSessionWriteNoticeText(heldConversationCommandParts(input.command, 'working'))
+    }
   }
   // The message ahead reads as sending, and Send is busy until the host has it; nothing is armed.
   if (input.hold === 'ahead') {
     return { accepted: false, error: null }
   }
   if (input.hold !== null) {
-    return refused(heldCommandText(input.command, input.hold), input.hold)
+    return refused(
+      agentSessionWriteNoticeText(heldConversationCommandParts(input.command, input.hold)),
+      input.hold
+    )
   }
   input.pending.current = true
   try {
@@ -137,20 +79,12 @@ export async function sendStructuredConversationCommand(input: {
     if (outcome.kind === 'dropped') {
       return { accepted: false, error: null }
     }
-    const { value } = outcome
-    // Suppress start failures already shown in this chat; clear/new-command failures may belong elsewhere and need host wording.
-    if (
-      isAgentSessionConversationCommand(value.command) &&
-      value.command !== 'clear' &&
-      agentSessionFailureStatedByStartRow(value.failure, input.startFailures())
-    ) {
-      return { accepted: false, error: null }
-    }
-    const error = conversationCommandFailureText(value, input.agentName)
-    if (value.state === 'completed' && !error) {
-      return { accepted: true, error: null }
-    }
-    return refused(error, structuredAgentSessionCommandHostRefusalCause(value))
+    const reply = conversationCommandReply(outcome.value, {
+      agentName: input.agentName,
+      startFailures: input.startFailures(),
+      say: sayAgentSessionFailureTranslated
+    })
+    return reply.accepted ? { accepted: true, error: null } : refused(reply.error, reply.cause)
   } finally {
     input.pending.current = false
   }
@@ -222,23 +156,4 @@ export function structuredConversationCommandRunner(args: {
     })
   }
   return { runConversationCommand: run, commandRefusalCauses: causes }
-}
-
-/** Translate complete known facts/commands; preserve host text for older/newer payloads this client cannot interpret. */
-function conversationCommandFailureText(
-  result: AgentSessionConversationCommandResult,
-  agentName: string
-): string | null {
-  const fact = isAgentSessionConversationCommand(result.command)
-    ? readWholeAgentSessionFailureFact(result.failure)
-    : undefined
-  if (!fact) {
-    return result.error ?? null
-  }
-  return agentSessionFailureSentence(
-    fact,
-    'row',
-    { agentName, command: result.command },
-    sayAgentSessionFailureTranslated
-  )
 }

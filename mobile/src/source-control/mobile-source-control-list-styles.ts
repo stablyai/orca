@@ -1,8 +1,9 @@
 import { StyleSheet } from 'react-native'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
 import { TEXT_INPUT_FONT_SIZE } from '../platform/text-input-font-size'
 
-export const listStyles = StyleSheet.create({
+export const listStyles = themedStyleSheet(() => ({
   listContent: {
     paddingHorizontal: spacing.lg,
     paddingBottom: 136
@@ -263,4 +264,4 @@ export const listStyles = StyleSheet.create({
     fontSize: typography.metaSize,
     lineHeight: 16
   }
-})
+}))

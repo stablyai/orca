@@ -38,7 +38,7 @@ it('rereads the host choice after preparation and keeps the exact configured Aut
   let nextTurn = 0
   const configuration = Promise.withResolvers<unknown>()
   const codex = fakeCodexAppServer({
-    'config/read': () => configuration.promise,
+    'config/read': () => ({ config: { sandbox_workspace_write: workspace } }),
     'configRequirements/read': () => ({ requirements: null }),
     'turn/start': () => ({ turn: { id: `fresh-${++nextTurn}` } })
   })
@@ -48,6 +48,7 @@ it('rereads the host choice after preparation and keeps the exact configured Aut
     permissionMode: 'full-access'
   })
   const connection = codex.connections[0]!
+  codex.routes['config/read'] = () => configuration.promise
   let mode: AgentChatPermissionMode = 'auto'
   const send = (id: string) =>
     adapter.dispatch({

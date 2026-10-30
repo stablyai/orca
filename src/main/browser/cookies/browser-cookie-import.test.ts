@@ -441,7 +441,7 @@ describe('importCookiesFromBrowser Safari', () => {
 
     const result = await importCookiesFromBrowser(browser, 'persist:test')
 
-    expect(result).toEqual({ ok: false, reason: 'All Safari cookies are expired.' })
+    expect(result).toMatchObject({ ok: false, reason: 'All Safari cookies are expired.' })
     expect(cookieWriteMock).not.toHaveBeenCalled()
   })
 })
@@ -685,7 +685,8 @@ describe('detectInstalledBrowsers', () => {
       'firefox',
       'safari',
       'comet',
-      'helium'
+      'helium',
+      'vivaldi'
     ]
     for (const browser of browsers) {
       expect(validFamilies).toContain(browser.family)

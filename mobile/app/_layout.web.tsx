@@ -1,15 +1,18 @@
 import { useMemo, useSyncExternalStore } from 'react'
-import { StyleSheet, useWindowDimensions, View } from 'react-native'
+import { useWindowDimensions, View } from 'react-native'
 import { Slot, usePathname } from 'expo-router'
 import { SafeAreaFrameContext, SafeAreaInsetsContext } from 'react-native-safe-area-context'
 import { ZERO_SAFE_AREA_INSETS } from '../src/mobile-web-shell/bridge/bridge-safe-area-insets'
 import { SideSafeArea } from '../src/layout/side-safe-area'
 import { usePageBridgeClient } from '../src/transport/client-context.web'
 import { colors } from '../src/theme/mobile-theme'
+import { themedStyleSheet } from '../src/theme/themed-styles'
+import { useMobileColorScheme } from '../src/theme/use-mobile-color-scheme'
 import { isOverlayPageRoute } from '../src/new-workspace/overlay-page-route'
 
 // Provide shell insets below ExpoRoot (WebView CSS env insets are zero); pad only sides to avoid DefaultNavigator’s duplicate all-edge SafeAreaView.
 export default function PageRootLayout() {
+  useMobileColorScheme()
   const client = usePageBridgeClient()
   const insets = useSyncExternalStore(
     client.onSafeAreaInsetsUpdate,
@@ -31,7 +34,7 @@ export default function PageRootLayout() {
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   root: {
     flex: 1,
     backgroundColor: colors.bgBase
@@ -39,4 +42,4 @@ const styles = StyleSheet.create({
   transparent: {
     backgroundColor: 'transparent'
   }
-})
+}))

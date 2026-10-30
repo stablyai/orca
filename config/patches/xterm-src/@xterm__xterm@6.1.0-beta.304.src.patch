@@ -1,5 +1,5 @@
 diff --git a/src/browser/CoreBrowserTerminal.ts b/src/browser/CoreBrowserTerminal.ts
-index 67893b7966eb095db4459b8837de9766921f36c5..0abf7ecac1aa108f7caf711d0a5c610a688d34fd 100644
+index 67893b7966eb095db4459b8837de9766921f36c5..3c2ac1afaeda22da4482099702d3ca673c57f4e1 100644
 --- a/src/browser/CoreBrowserTerminal.ts
 +++ b/src/browser/CoreBrowserTerminal.ts
 @@ -325,6 +325,9 @@ export class CoreBrowserTerminal extends CoreTerminal implements ITerminal {
@@ -55,10 +55,18 @@ index 67893b7966eb095db4459b8837de9766921f36c5..0abf7ecac1aa108f7caf711d0a5c610a
  
      this._keyPressHandled = true;
  
-@@ -1027,6 +1048,15 @@ export class CoreBrowserTerminal extends CoreTerminal implements ITerminal {
+@@ -1027,6 +1048,23 @@ export class CoreBrowserTerminal extends CoreTerminal implements ITerminal {
     * @param ev The input event to be handled.
     */
    protected _inputEvent(ev: InputEvent): boolean {
++    // Why: Chromium updates the composing selection on input, after compositionupdate.
++    if (
++      ev.inputType === 'insertCompositionText' &&
++      this._compositionHelper instanceof CompositionHelper
++    ) {
++      // Read-only and never consumes the event, so unlike insertText it stays on in screen-reader mode.
++      this._compositionHelper.observeCompositionSelection();
++    }
 +    if (
 +      ev.data &&
 +      ev.inputType === 'insertText' &&
@@ -88,7 +96,7 @@ index 497afcf535f3eaca00889525a77e15eb633ccd96..96d499b34605f860608382114c3fbdc0
  
  export interface IBrowser {
 diff --git a/src/browser/input/CompositionHelper.ts b/src/browser/input/CompositionHelper.ts
-index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..8ce5bad71b26515ecbbb82b76d218d0b16e280a8 100644
+index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..cfc6385982b16b8c46b1eff1bbd6a1770c942abe 100644
 --- a/src/browser/input/CompositionHelper.ts
 +++ b/src/browser/input/CompositionHelper.ts
 @@ -1,10 +1,15 @@
@@ -153,7 +161,7 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..8ce5bad71b26515ecbbb82b76d218d0b
  
    /**
     * The position within the input textarea's value of the current composition.
-@@ -36,52 +71,144 @@ export class CompositionHelper {
+@@ -36,52 +71,146 @@ export class CompositionHelper {
     */
    private _compositionSuffix: string;
  
@@ -215,6 +223,8 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..8ce5bad71b26515ecbbb82b76d218d0b
 +
 +  /** The preedit's own span, used to anchor the native candidate window. */
 +  private _compositionPreedit?: HTMLElement;
++
++  private _compositionSelection?: IPosition;
 +
 +  /** The rendered row tail, set only while the cursor sits mid-line. */
 +  private _compositionRemainder?: HTMLElement;
@@ -308,7 +318,7 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..8ce5bad71b26515ecbbb82b76d218d0b
    }
  
    /**
-@@ -89,22 +216,95 @@ export class CompositionHelper {
+@@ -89,22 +218,95 @@ export class CompositionHelper {
     * @param ev The event.
     */
    public compositionupdate(ev: Pick<CompositionEvent, 'data'>): void {
@@ -413,7 +423,7 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..8ce5bad71b26515ecbbb82b76d218d0b
    }
  
    /**
-@@ -113,10 +313,33 @@ export class CompositionHelper {
+@@ -113,10 +315,33 @@ export class CompositionHelper {
     * @returns Whether the Terminal should continue processing the keydown event.
     */
    public keydown(ev: KeyboardEvent): boolean {
@@ -448,7 +458,7 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..8ce5bad71b26515ecbbb82b76d218d0b
          return false;
        }
        if (ev.keyCode === 16 || ev.keyCode === 17 || ev.keyCode === 18) {
-@@ -128,6 +351,10 @@ export class CompositionHelper {
+@@ -128,6 +353,10 @@ export class CompositionHelper {
        this._finalizeComposition(false);
      }
  
@@ -459,7 +469,7 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..8ce5bad71b26515ecbbb82b76d218d0b
      if (ev.keyCode === 229) {
        // If the "composition character" is used but gets to this point it means a non-composition
        // character (eg. numbers and punctuation) was pressed when the IME was active.
-@@ -138,6 +365,78 @@ export class CompositionHelper {
+@@ -138,6 +367,95 @@ export class CompositionHelper {
      return true;
    }
  
@@ -515,6 +525,23 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..8ce5bad71b26515ecbbb82b76d218d0b
 +    return true;
 +  }
 +
++  /** The IME's active clause is the textarea selection inside the preedit; a caret marks none. */
++  public observeCompositionSelection(): void {
++    const preedit = this._compositionPreedit;
++    const text = preedit?.textContent?.slice(1, -1) ?? '';
++    const start = this._compositionPosition.start;
++    const selectionStart = this._textarea.selectionStart - start;
++    const selectionEnd = this._textarea.selectionEnd - start;
++    this._compositionSelection =
++      this._textarea.value.substring(start, start + text.length) === text &&
++      0 <= selectionStart && selectionStart < selectionEnd && selectionEnd <= text.length
++        ? { start: selectionStart, end: selectionEnd }
++        : undefined;
++    if (preedit) {
++      this._preeditRenderer?.render(preedit, this._compositionSelection);
++    }
++  }
++
 +  /**
 +   * Settles the commit a keydown the IME consumed still owes. That commit normally arrives as the
 +   * deferred textarea diff, but an asynchronous IME can deliver it after the diff has already run
@@ -538,7 +565,7 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..8ce5bad71b26515ecbbb82b76d218d0b
    /**
     * Finalizes the composition, resuming regular input actions. This is called when a composition
     * is ending.
-@@ -146,23 +445,52 @@ export class CompositionHelper {
+@@ -146,23 +464,52 @@ export class CompositionHelper {
     *   compositionend event is triggered, such as enter, so that the composition is sent before
     *   the command is executed.
     */
@@ -602,7 +629,7 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..8ce5bad71b26515ecbbb82b76d218d0b
  
        // Since composition* events happen before the changes take place in the textarea on most
        // browsers, use a setTimeout with 0ms time to allow the native compositionend event to
-@@ -172,35 +500,313 @@ export class CompositionHelper {
+@@ -172,35 +519,313 @@ export class CompositionHelper {
        // - The last compositionupdate event's data property does not always accurately describe
        //   the character, a counter example being Korean where an ending consonsant can move to
        //   the following character if the following input is a vowel.
@@ -639,8 +666,7 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..8ce5bad71b26515ecbbb82b76d218d0b
 +        }
 +        if (this._pendingComposition === pending) {
 +          this._sendPendingComposition(pending, true);
-         }
--      }, 0);
++        }
 +      });
 +    }
 +  }
@@ -673,7 +699,7 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..8ce5bad71b26515ecbbb82b76d218d0b
 +  private _cancelPendingFinalizer(pending: IPendingComposition): void {
 +    if (pending.finalizerTimer === undefined) {
 +      return;
-     }
++    }
 +    clearTimeout(pending.finalizerTimer);
 +    this._compositionTimers.delete(pending.finalizerTimer);
 +    pending.finalizerTimer = undefined;
@@ -865,7 +891,8 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..8ce5bad71b26515ecbbb82b76d218d0b
 +      if (!this._compositionEndBelongsToCurrentTransaction(endData)) {
 +        if (endData.length === 0 && !this._hasCompositionProgress()) {
 +          this._cancelComposition();
-+        }
+         }
+-      }, 0);
 +        return;
 +      }
 +      this._finalizeComposition(true, endData);
@@ -937,13 +964,13 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..8ce5bad71b26515ecbbb82b76d218d0b
 +  private _cancelDeferredTimer(timer?: ReturnType<typeof setTimeout>): void {
 +    if (timer === undefined) {
 +      return;
-+    }
+     }
 +    clearTimeout(timer);
 +    this._compositionTimers.delete(timer);
    }
  
    /**
-@@ -222,6 +828,9 @@ export class CompositionHelper {
+@@ -222,6 +847,9 @@ export class CompositionHelper {
  
          const diff = newValue.replace(oldValue, '');
  
@@ -953,7 +980,7 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..8ce5bad71b26515ecbbb82b76d218d0b
          this._dataAlreadySent = diff;
  
          if (newValue.length > oldValue.length) {
-@@ -236,6 +845,105 @@ export class CompositionHelper {
+@@ -236,6 +864,106 @@ export class CompositionHelper {
      }, 0);
    }
  
@@ -968,6 +995,7 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..8ce5bad71b26515ecbbb82b76d218d0b
 +      this._resetCompositionView();
 +      return;
 +    }
++    this._compositionSelection = undefined;
 +    const doc = this._compositionView.ownerDocument;
 +    const preedit = doc.createElement('span');
 +    preedit.className = 'xterm-composition-preedit';
@@ -1059,7 +1087,7 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..8ce5bad71b26515ecbbb82b76d218d0b
    /**
     * Positions the composition view on top of the cursor and the textarea just below it (so the
     * IME helper dialog is positioned correctly).
-@@ -243,10 +951,23 @@ export class CompositionHelper {
+@@ -243,10 +971,33 @@ export class CompositionHelper {
     *   necessary as the IME events across browsers are not consistently triggered.
     */
    public updateCompositionElements(dontRecurse?: boolean): void {
@@ -1069,6 +1097,16 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..8ce5bad71b26515ecbbb82b76d218d0b
        return;
      }
  
++    const colors = this._themeService?.colors;
++    this._compositionView.style.setProperty(
++      '--xterm-composition-selection-background',
++      colors?.selectionBackgroundOpaque.css ?? '#FFF'
++    );
++    this._compositionView.style.setProperty(
++      '--xterm-composition-selection-foreground',
++      colors?.selectionForeground?.css ?? colors?.foreground.css ?? '#000'
++    );
++
 +    // A TUI can repaint the row under an open composition (spinners, streamed output), and this
 +    // already runs on every render — so keep the rendered tail current with the buffer. A string
 +    // compare adds no layout read.
@@ -1084,7 +1122,7 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..8ce5bad71b26515ecbbb82b76d218d0b
      if (this._bufferService.buffer.isCursorInViewport) {
        const cursorX = Math.min(this._bufferService.buffer.x, this._bufferService.cols - 1);
  
-@@ -254,31 +975,156 @@ export class CompositionHelper {
+@@ -254,31 +1005,176 @@ export class CompositionHelper {
        const cursorTop = this._bufferService.buffer.y * this._renderService.dimensions.css.cell.height;
        const cursorLeft = cursorX * this._renderService.dimensions.css.cell.width;
  
@@ -1099,7 +1137,7 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..8ce5bad71b26515ecbbb82b76d218d0b
 +        this._preeditRenderer ??= new CompositionPreeditRenderer(
 +          this._unicodeService, this._compositionView.ownerDocument, () => this.updateCompositionElements(true)
 +        );
-+        this._preeditRenderer.render(this._compositionPreedit);
++        this._preeditRenderer.render(this._compositionPreedit, this._compositionSelection);
 +      }
        // Limit the composition view width to the space between the cursor and
        // the terminal's right edge, preventing it from overflowing the terminal.
@@ -1160,6 +1198,8 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..8ce5bad71b26515ecbbb82b76d218d0b
 +  private _measure?: WidthCacheFontVariantCanvas;
 +  private _preedit?: HTMLElement;
 +  private _font = '';
++  private _selectionStart?: number;
++  private _selectionEnd?: number;
 +
 +  constructor(private readonly _unicodeService: IUnicodeService, doc: Document, refresh: () => void) {
 +    super();
@@ -1184,52 +1224,67 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..8ce5bad71b26515ecbbb82b76d218d0b
 +    super.dispose();
 +  }
 +
-+  public render(preedit: HTMLElement): void {
++  public render(preedit: HTMLElement, selection?: IPosition): void {
 +    const doc = preedit.ownerDocument;
 +    const style = doc.defaultView?.getComputedStyle(preedit);
 +    if (!style) {
 +      return;
 +    }
 +    const font = [style.fontFamily, style.fontSize, style.fontWeight, style.fontStyle, doc.defaultView?.devicePixelRatio].join('|');
-+    if (this._preedit === preedit && this._font === font) {
++    if (
++      this._preedit === preedit &&
++      this._font === font &&
++      this._selectionStart === selection?.start &&
++      this._selectionEnd === selection?.end
++    ) {
 +      return;
 +    }
 +    this._preedit = preedit;
 +    this._font = font;
++    this._selectionStart = selection?.start;
++    this._selectionEnd = selection?.end;
 +    const data = (preedit.textContent ?? '').slice(1, -1);
 +    const widths = new Map<string, number>();
 +    const nodes: Node[] = [doc.createTextNode('‎')];
 +    let start = 0;
 +    let spacing: string | undefined;
++    let selected = false;
 +    let work = 0;
-+    const emit = (end: number): void => {
++    const emit = (end: number, countLayoutWork: boolean = true): void => {
 +      if (end === start) {
 +        return;
 +      }
 +      const text = data.slice(start, end);
-+      if (spacing === undefined) {
++      if (spacing === undefined && !selected) {
 +        nodes.push(doc.createTextNode(text));
 +      } else {
 +        const span = doc.createElement('span');
-+        span.style.letterSpacing = spacing;
-+        span.style.fontKerning = 'none';
++        if (spacing !== undefined) {
++          span.style.letterSpacing = spacing;
++          span.style.fontKerning = 'none';
++          if (countLayoutWork) {
++            work++;
++          }
++        }
 +        span.style.textDecoration = 'inherit';
++        if (selected) {
++          span.classList.add('xterm-composition-preedit-selected');
++          span.style.backgroundColor = 'var(--xterm-composition-selection-background)';
++          span.style.color = 'var(--xterm-composition-selection-foreground)';
++        }
 +        span.textContent = text;
 +        nodes.push(span);
-+        work++;
 +      }
 +      start = end;
 +    };
 +    for (const { segment, index } of this._segmenter.segment(data)) {
-+      // Bound cold measurements and styled runs without changing an already-corrected prefix.
-+      if (work >= MAX_PREEDIT_LAYOUT_WORK) {
-+        emit(index);
-+        spacing = undefined;
-+        break;
-+      }
++      // Why: a clause boundary inside a grapheme highlights the whole grapheme.
++      const nextSelected =
++        selection !== undefined && index < selection.end && index + segment.length > selection.start;
 +      let nextSpacing: string | undefined;
 +      const columns = this._unicodeService.wcwidth(segment.codePointAt(0)!);
-+      if (CJK.test(segment) && !NATIVE.test(segment) && (columns === 2 || /^[\uff61-\uff9f]$/u.test(segment))) {
++      // Bound cold measurements and styled runs without changing an already-corrected prefix.
++      if (work < MAX_PREEDIT_LAYOUT_WORK && CJK.test(segment) && !NATIVE.test(segment) && (columns === 2 || /^[\uff61-\uff9f]$/u.test(segment))) {
 +        let width = widths.get(segment);
 +        if (width === undefined) {
 +          this._measure ??= new WidthCacheFontVariantCanvas();
@@ -1240,9 +1295,12 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..8ce5bad71b26515ecbbb82b76d218d0b
 +        }
 +        nextSpacing = `calc(var(--xterm-composition-cell-width) * ${columns} - ${width}px)`;
 +      }
-+      if (nextSpacing !== spacing) {
-+        emit(index);
++      const spacingChanged = nextSpacing !== spacing;
++      if (spacingChanged || nextSelected !== selected) {
++        // Why: selection-only splits do not add layout or measurement work.
++        emit(index, spacingChanged);
 +        spacing = nextSpacing;
++        selected = nextSelected;
 +      }
      }
 +    emit(data.length);

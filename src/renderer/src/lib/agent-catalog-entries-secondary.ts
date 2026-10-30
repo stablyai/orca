@@ -13,7 +13,7 @@ export function secondaryAgentCatalogEntries(): AgentCatalogEntry[] {
       id: 'goose',
       label: translate('auto.lib.agent.catalog.8da11d876c', 'Goose'),
       cmd: 'goose',
-      homepageUrl: 'https://block.github.io/goose/docs/quickstart/'
+      homepageUrl: 'https://goose-docs.ai/docs/quickstart/'
     },
     {
       id: 'amp',
@@ -82,7 +82,7 @@ export function secondaryAgentCatalogEntries(): AgentCatalogEntry[] {
       label: translate('auto.lib.agent.catalog.9e2a9bb87b', 'Continue'),
       // Continue installs as cn; continue is commonly a shell builtin.
       cmd: 'cn',
-      homepageUrl: 'https://docs.continue.dev/guides/cli'
+      homepageUrl: 'https://docs.continue.dev/cli/quickstart'
     },
     {
       id: 'cursor',

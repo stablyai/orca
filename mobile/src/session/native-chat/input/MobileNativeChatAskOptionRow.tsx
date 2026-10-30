@@ -1,6 +1,8 @@
-import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { Pressable, Text, View } from 'react-native'
 import { Check } from 'lucide-react-native'
 import { colors, radii, spacing, typography } from '../../../theme/mobile-theme'
+import { themedStyleSheet } from '../../../theme/themed-styles'
+import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 
 export function MobileNativeChatAskOptionRow({
   label,
@@ -17,6 +19,7 @@ export function MobileNativeChatAskOptionRow({
   disabled: boolean
   onPress: () => void
 }): React.JSX.Element {
+  useMobileColorScheme()
   return (
     <Pressable
       accessibilityRole={multi ? 'checkbox' : 'radio'}
@@ -47,7 +50,7 @@ export function MobileNativeChatAskOptionRow({
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   option: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -93,4 +96,4 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     fontSize: typography.metaSize
   }
-})
+}))

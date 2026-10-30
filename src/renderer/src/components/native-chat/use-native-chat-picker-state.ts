@@ -16,25 +16,22 @@ import {
 } from 'react'
 import type { AgentType } from '../../../../shared/agent-status-types'
 import { getNativeChatAgentProfile } from '../../../../shared/native-chat-agent-profiles'
-import {
-  classifyNativeChatSend,
-  type NativeChatSendClassification,
-  type NativeChatSessionSkill,
-  type SlashCommandSuggestion
+import type {
+  NativeChatSessionSkill,
+  SlashCommandSuggestion
 } from '../../../../shared/native-chat/input/native-chat-slash-commands'
-import { isStructuredAgentSessionComposerCommand } from '../../../../shared/structured-agent-session-composer'
 import {
   applyMentionSuggestion,
+  applyPickerSuggestion,
+  classifyNativeChatSend,
   deriveComposerAutocomplete,
   editReplacesTriggerToken,
   isSkillPickerTriggered,
-  type ComposerAutocomplete
-} from './native-chat-composer-state'
-import { applyPickerSuggestion } from '../../../../shared/native-chat/input/native-chat-picker-triggers'
-import {
-  classifyPickerCommands,
-  type NativeChatPickerItem
-} from '../../../../shared/native-chat/input/native-chat-picker-items'
+  type ComposerAutocomplete,
+  type NativeChatPickerItem,
+  type NativeChatSendClassification
+} from '../../../../shared/native-chat-composer-autocomplete'
+import { nativeChatPickerCommands } from '../../../../shared/native-chat-skill-visibility'
 import { useNativeChatSkills } from './use-native-chat-skills'
 import {
   emitNativeChatPickerItemAccepted,
@@ -68,9 +65,11 @@ export function useNativeChatPickerState(args: {
   disabled: boolean
   isComposing: () => boolean
   /** Skill names the running session reports; undefined keeps the host disk scan. */
+  commandAvailable?: (name: string) => boolean
   sessionSkills?: readonly NativeChatSessionSkill[]
   /** Refresh host catalogs on every / or $ menu opening, even in resting chats. */
   onPickerOpened?: () => void
+  onPickerDemand?: (open: boolean) => void
   textareaRef: RefObject<NativeChatComposerInput | null>
   setDraft: (value: string) => void
   setCaret: Dispatch<SetStateAction<number>>
@@ -87,7 +86,9 @@ export function useNativeChatPickerState(args: {
     disabled,
     isComposing,
     sessionSkills,
+    commandAvailable,
     onPickerOpened,
+    onPickerDemand,
     textareaRef,
     setDraft,
     setCaret,
@@ -101,13 +102,8 @@ export function useNativeChatPickerState(args: {
   const skillPickerTriggered = !disabled && isSkillPickerTriggered(draft.slice(0, caret), profile)
   const discovery = useNativeChatSkills(agent, terminalTabId, skillPickerTriggered)
   const pickerCommands = useMemo(
-    () =>
-      classifyPickerCommands(agentCommands, discovery.skills, {
-        // A chat that keeps scanned skills (OpenCode) may report each as a command too.
-        reportMayListSkills: profile?.keepsScannedSkills === true,
-        isSendCommand: (name) => isStructuredAgentSessionComposerCommand(`/${name}`, agent)
-      }),
-    [agent, agentCommands, discovery.skills, profile]
+    () => nativeChatPickerCommands(agent, agentCommands, discovery.skills),
+    [agent, agentCommands, discovery.skills]
   )
   const listboxId = `native-chat-picker-${useId().replaceAll(':', '')}`
   const dismissalContext = `${draftScopeKey}:${agent}`
@@ -126,7 +122,8 @@ export function useNativeChatPickerState(args: {
             profile,
             discovery,
             dismissed?.context === dismissalContext ? dismissed.triggerKey : null,
-            sessionSkills
+            sessionSkills,
+            commandAvailable
           ),
     [
       caret,
@@ -138,7 +135,8 @@ export function useNativeChatPickerState(args: {
       pickerCommands,
       profile,
       recalledFromHistory,
-      sessionSkills
+      sessionSkills,
+      commandAvailable
     ]
   )
 
@@ -160,6 +158,12 @@ export function useNativeChatPickerState(args: {
       onPickerOpened?.()
     }
   }, [agent, autocomplete, dismissalContext, onPickerOpened])
+
+  const menuOpen = autocomplete.mode === 'slash'
+  useEffect(() => {
+    onPickerDemand?.(menuOpen)
+    return () => onPickerDemand?.(false)
+  }, [dismissalContext, menuOpen, onPickerDemand])
 
   // The editor may be ahead of this render when a key lands just before the pick.
   const liveDraft = useCallback((): [string, number] => {
@@ -233,13 +237,23 @@ export function useNativeChatPickerState(args: {
         profile,
         discovery,
         null,
-        sessionSkills
+        sessionSkills,
+        commandAvailable
       )
       if (next.mode === 'none' || next.triggerKey !== dismissed.triggerKey) {
         setDismissed(null)
       }
     },
-    [dismissalContext, dismissed, discovery, draft, pickerCommands, profile, sessionSkills]
+    [
+      dismissalContext,
+      dismissed,
+      discovery,
+      draft,
+      pickerCommands,
+      profile,
+      sessionSkills,
+      commandAvailable
+    ]
   )
 
   const classifySend = useCallback(

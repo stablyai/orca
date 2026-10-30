@@ -1,3 +1,6 @@
+import { isRenderableImageUri } from '../visual/mobile-native-chat-image-preview'
+import type { Translate } from '../../../i18n/mobile-i18n'
+import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import {
   ActivityIndicator,
   Image,
@@ -7,19 +10,27 @@ import {
   Text,
   View
 } from 'react-native'
-import { FileText, X } from 'lucide-react-native'
+import { FileText, Image as ImageIcon, X } from 'lucide-react-native'
 import { colors, radii, spacing } from '../../../theme/mobile-theme'
+import { themedStyleSheet } from '../../../theme/themed-styles'
+import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 import { formatPreviewByteLength } from '../../../files/mobile-file-preview-response'
 import type { PendingNativeChatImage } from './mobile-native-chat-image-attachment'
 import type { PendingNativeChatFile } from './mobile-native-chat-file-attachment'
 
 const THUMB_SIZE = 58
 
-function composerFileMeta(file: Pick<PendingNativeChatFile, 'name' | 'mime' | 'byteLength'>) {
+function composerFileMeta(
+  file: Pick<PendingNativeChatFile, 'name' | 'mime' | 'byteLength'>,
+  t: Translate
+) {
   const extension = /\.([a-z0-9]{1,8})$/i.exec(file.name)?.[1]
   const subtype = /^[^/]+\/([a-z0-9]{1,8})$/i.exec(file.mime)?.[1]
-  const type = (extension ?? subtype ?? 'File').toUpperCase()
-  return `${type} · ${formatPreviewByteLength(file.byteLength)}`
+  const type = (extension ?? subtype ?? t('chat.composerAttachments.file', 'File')).toUpperCase()
+  return t('chat.composerAttachments.fileMeta', '{{type}} · {{size}}', {
+    type,
+    size: formatPreviewByteLength(file.byteLength)
+  })
 }
 
 export function MobileNativeChatComposerAttachments({
@@ -33,6 +44,8 @@ export function MobileNativeChatComposerAttachments({
   onRemoveImage?: (id: string) => void
   onRemoveFile?: (id: string) => void
 }): React.JSX.Element | null {
+  useMobileColorScheme()
+  const t = useMobileTranslation()
   if (images.length === 0 && files.length === 0) {
     return null
   }
@@ -46,9 +59,29 @@ export function MobileNativeChatComposerAttachments({
     >
       {images.map((image) => (
         <View key={image.id} style={styles.thumb}>
-          <Image source={{ uri: image.previewUri }} style={styles.thumbImage} resizeMode="cover" />
+          {isRenderableImageUri(image.previewUri) ? (
+            <Image
+              source={{ uri: image.previewUri }}
+              style={styles.thumbImage}
+              resizeMode="cover"
+            />
+          ) : (
+            <View
+              style={styles.fileIcon}
+              accessible
+              accessibilityLabel={
+                image.path.split(/[\\/]/).at(-1) ||
+                t('chat.composerAttachments.attachedImage', 'Attached image')
+              }
+            >
+              <ImageIcon size={17} color={colors.textSecondary} strokeWidth={2} />
+            </View>
+          )}
           {onRemoveImage ? (
-            <RemoveBadge label="Remove image" onPress={() => onRemoveImage(image.id)} />
+            <RemoveBadge
+              label={t('chat.composerAttachments.removeImage', 'Remove image')}
+              onPress={() => onRemoveImage(image.id)}
+            />
           ) : null}
         </View>
       ))}
@@ -62,16 +95,28 @@ export function MobileNativeChatComposerAttachments({
               {file.name}
             </Text>
             <Text style={styles.fileMeta} numberOfLines={1}>
-              {composerFileMeta(file)}
+              {composerFileMeta(file, t)}
             </Text>
           </View>
           {file.path === null ? (
-            <View style={styles.uploading} accessibilityLabel={`Uploading ${file.name}`}>
-              <ActivityIndicator size="small" color={colors.textPrimary} />
+            <View
+              style={styles.uploading}
+              accessibilityLabel={t(
+                'chat.composerAttachments.uploadingFile',
+                'Uploading {{name}}',
+                { name: file.name }
+              )}
+            >
+              <ActivityIndicator size="small" color={colors.onAccent} />
             </View>
           ) : null}
           {onRemoveFile ? (
-            <RemoveBadge label={`Remove ${file.name}`} onPress={() => onRemoveFile(file.id)} />
+            <RemoveBadge
+              label={t('chat.composerAttachments.removeFile', 'Remove {{name}}', {
+                name: file.name
+              })}
+              onPress={() => onRemoveFile(file.id)}
+            />
           ) : null}
         </View>
       ))}
@@ -80,6 +125,7 @@ export function MobileNativeChatComposerAttachments({
 }
 
 function RemoveBadge({ label, onPress }: { label: string; onPress: () => void }) {
+  useMobileColorScheme()
   return (
     <Pressable accessibilityLabel={label} style={styles.remove} onPress={onPress} hitSlop={8}>
       <X size={11} color={colors.textPrimary} strokeWidth={3} />
@@ -87,7 +133,7 @@ function RemoveBadge({ label, onPress }: { label: string; onPress: () => void })
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   strip: {
     flexGrow: 0,
     marginBottom: 10
@@ -165,4 +211,4 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: colors.composerSurface
   }
-})
+}))

@@ -1,4 +1,5 @@
 import type { ConnectionPresentationModel } from './use-mobile-tasks-connection-presentation'
+import { translate } from '../i18n/mobile-i18n'
 import { isBrokenCheck } from '../../../src/shared/pr-checks-fix-prompt'
 import {
   SHOW_MOBILE_PROJECT_REVIEW_PANELS,
@@ -55,11 +56,15 @@ export function renderMobileTasksProjectReviewPanels(model: ConnectionPresentati
     <>
       <View style={styles.detailSection}>
         <View style={styles.detailSectionHeader}>
-          <Text style={styles.detailSectionTitle}>Reviewers</Text>
+          <Text style={styles.detailSectionTitle}>
+            {translate('tasks.projectReviewPanels.reviewers', 'Reviewers')}
+          </Text>
           <Text style={styles.detailSectionMeta}>{getGitHubReviewSummary(projectRowDetail)}</Text>
         </View>
         {getGitHubReviewerRows(projectRowDetail).length === 0 ? (
-          <Text style={styles.detailMuted}>No reviewers requested.</Text>
+          <Text style={styles.detailMuted}>
+            {translate('tasks.projectReviewPanels.noReviewers', 'No reviewers requested.')}
+          </Text>
         ) : (
           getGitHubReviewerRows(projectRowDetail).map((reviewer) => (
             <View key={reviewer.login} style={styles.reviewerRow}>
@@ -85,12 +90,16 @@ export function renderMobileTasksProjectReviewPanels(model: ConnectionPresentati
         {projectAssignableUsersLoading ? (
           <View style={styles.detailLoadingInline}>
             <ActivityIndicator size="small" color={colors.textSecondary} />
-            <Text style={styles.detailMuted}>Loading reviewers...</Text>
+            <Text style={styles.detailMuted}>
+              {translate('tasks.projectReviewPanels.loadingReviewers', 'Loading reviewers...')}
+            </Text>
           </View>
         ) : projectAssignableUsersError ? (
           <Text style={styles.detailError}>{projectAssignableUsersError}</Text>
         ) : projectReviewerCandidates.length === 0 ? (
-          <Text style={styles.detailMuted}>No reviewer suggestions found.</Text>
+          <Text style={styles.detailMuted}>
+            {translate('tasks.projectReviewPanels.noSuggestions', 'No reviewer suggestions found.')}
+          </Text>
         ) : (
           <View style={styles.chipRow}>
             {projectReviewerCandidates.map((user) => {
@@ -115,7 +124,7 @@ export function renderMobileTasksProjectReviewPanels(model: ConnectionPresentati
           style={styles.input}
           value={projectReviewersDraft}
           onChangeText={setProjectReviewersDraft}
-          placeholder="Request reviewers"
+          placeholder={translate('tasks.projectReviewPanels.requestReviewers', 'Request reviewers')}
           placeholderTextColor={colors.textMuted}
           autoCapitalize="none"
         />
@@ -124,40 +133,50 @@ export function renderMobileTasksProjectReviewPanels(model: ConnectionPresentati
           disabled={projectMutating || splitReviewerList(projectReviewersDraft).length === 0}
           onPress={() => void requestProjectGitHubReviewers(projectRowItem)}
         >
-          <Text style={styles.inlineSaveText}>Request review</Text>
+          <Text style={styles.inlineSaveText}>
+            {translate('tasks.projectReviewPanels.requestReview', 'Request review')}
+          </Text>
         </Pressable>
       </View>
 
       {projectRowType(projectRowItem) === 'pr' ? (
         <View style={styles.detailSection}>
           <View style={styles.detailSectionHeader}>
-            <Text style={styles.detailSectionTitle}>Checks</Text>
+            <Text style={styles.detailSectionTitle}>
+              {translate('tasks.projectReviewPanels.checks', 'Checks')}
+            </Text>
             <View style={styles.inlineActionRow}>
               <Pressable
                 style={styles.inlineSaveButtonCompact}
                 disabled={projectMutating}
                 onPress={() => void refreshProjectGitHubChecks(projectRowItem)}
               >
-                <Text style={styles.inlineSaveText}>Refresh</Text>
+                <Text style={styles.inlineSaveText}>{translate('common.refresh', 'Refresh')}</Text>
               </Pressable>
               <Pressable
                 style={styles.inlineSaveButtonCompact}
                 disabled={projectMutating || !projectRowDetail.checks.some(isBrokenCheck)}
                 onPress={() => void rerunProjectGitHubChecks(projectRowItem, true)}
               >
-                <Text style={styles.inlineSaveText}>Rerun failed</Text>
+                <Text style={styles.inlineSaveText}>
+                  {translate('tasks.projectReviewPanels.rerunFailed', 'Rerun failed')}
+                </Text>
               </Pressable>
               <Pressable
                 style={styles.inlineSaveButtonCompact}
                 disabled={projectMutating || projectRowDetail.checks.length === 0}
                 onPress={() => void rerunProjectGitHubChecks(projectRowItem, false)}
               >
-                <Text style={styles.inlineSaveText}>Rerun all</Text>
+                <Text style={styles.inlineSaveText}>
+                  {translate('tasks.projectReviewPanels.rerunAll', 'Rerun all')}
+                </Text>
               </Pressable>
             </View>
           </View>
           {projectRowDetail.checks.length === 0 ? (
-            <Text style={styles.detailMuted}>No checks found.</Text>
+            <Text style={styles.detailMuted}>
+              {translate('tasks.projectReviewPanels.noChecks', 'No checks found.')}
+            </Text>
           ) : (
             projectRowDetail.checks.map((check) => (
               <Pressable
@@ -182,7 +201,9 @@ export function renderMobileTasksProjectReviewPanels(model: ConnectionPresentati
 
       {projectRowDetail.files.length > 0 ? (
         <View style={styles.detailSection}>
-          <Text style={styles.detailSectionTitle}>Changed files</Text>
+          <Text style={styles.detailSectionTitle}>
+            {translate('tasks.projectReviewPanels.changedFiles', 'Changed files')}
+          </Text>
           {projectRowDetail.files.map((file) => (
             <View key={file.path} style={styles.fileCard}>
               <Pressable
@@ -197,7 +218,9 @@ export function renderMobileTasksProjectReviewPanels(model: ConnectionPresentati
                     : ''}
                 </Text>
                 <Text style={styles.detailSectionMeta}>
-                  {expandedPrFilePath === file.path ? 'Hide' : 'View'}
+                  {expandedPrFilePath === file.path
+                    ? translate('tasks.projectReviewPanels.hideFile', 'Hide')
+                    : translate('tasks.projectReviewPanels.viewFile', 'View')}
                 </Text>
               </Pressable>
               <Pressable
@@ -206,7 +229,9 @@ export function renderMobileTasksProjectReviewPanels(model: ConnectionPresentati
                 onPress={() => void toggleProjectGitHubFileViewed(projectRowItem, file)}
               >
                 <Text style={styles.inlineSaveText}>
-                  {file.viewerViewedState === 'VIEWED' ? 'Mark unviewed' : 'Mark viewed'}
+                  {file.viewerViewedState === 'VIEWED'
+                    ? translate('tasks.projectReviewPanels.markUnviewed', 'Mark unviewed')
+                    : translate('tasks.projectReviewPanels.markViewed', 'Mark viewed')}
                 </Text>
               </Pressable>
               {expandedPrFilePath === file.path ? (
@@ -215,7 +240,9 @@ export function renderMobileTasksProjectReviewPanels(model: ConnectionPresentati
                     <ActivityIndicator size="small" color={colors.textSecondary} />
                   ) : prFileContents[file.path]?.originalIsBinary ||
                     prFileContents[file.path]?.modifiedIsBinary ? (
-                    <Text style={styles.detailMuted}>Binary file.</Text>
+                    <Text style={styles.detailMuted}>
+                      {translate('tasks.projectReviewPanels.binaryFile', 'Binary file.')}
+                    </Text>
                   ) : prFileContents[file.path] ? (
                     <GitHubPrFileDiff
                       filePath={file.path}
@@ -233,7 +260,12 @@ export function renderMobileTasksProjectReviewPanels(model: ConnectionPresentati
                       }
                     />
                   ) : (
-                    <Text style={styles.detailMuted}>File contents unavailable.</Text>
+                    <Text style={styles.detailMuted}>
+                      {translate(
+                        'tasks.projectReviewPanels.fileUnavailable',
+                        'File contents unavailable.'
+                      )}
+                    </Text>
                   )}
                 </View>
               ) : null}

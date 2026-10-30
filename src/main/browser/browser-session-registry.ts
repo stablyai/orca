@@ -17,15 +17,12 @@ import {
 } from './browser-session-cookie-staging'
 import {
   BROWSER_SESSION_META_FILE_NAME,
+  forgetBrowserSessionProfileMeta,
   loadBrowserSessionMeta,
   persistBrowserSessionMeta
 } from './browser-session-meta-store'
 import type { BrowserSessionMeta } from './browser-session-meta-store'
-import {
-  forgetBrowserSessionPartitionConfiguration,
-  installBrowserSessionPartitionPolicies,
-  retireBrowserSessionUserAgentPolicy
-} from './browser-session-partition-policies'
+import { installBrowserSessionPartitionPolicies } from './browser-session-partition-policies'
 import {
   isValidPersistedBrowserSessionProfile,
   inspectRetiredBrowserSessionProfileUserAgentModes
@@ -34,14 +31,18 @@ import {
   clearBrowserRoutePartitionPolicies,
   installBrowserRoutePartitionPolicies
 } from './browser-session-route-policies'
-import { retireProxySessionApplication } from '../network/proxy-settings'
-import { invalidateBrowserSessionProxyApplication } from './browser-session-proxy'
-import { retireFailedBrowserSessionProfile } from './browser-session-profile-retirement'
-import { cancelBrowserWebAuthnAccountRequestsForSession } from './browser-webauthn-account-picker'
+import {
+  retireDeletedBrowserSessionProfile,
+  retireFailedBrowserSessionProfile
+} from './browser-session-profile-retirement'
 import { getCanonicalUserDataPath } from '../persistence/loading-store/user-data-path'
 import { markBrowserIdentityMigrationNoticePending } from './browser-identity-mode-store'
 import { forgetBrowserSitePermissions } from './browser-site-permission-store'
 import { forgetBrowserSiteDisplay } from './browser-site-display-store'
+import { attachBrowserExtensionsToProfileSession } from './extensions/browser-extension-session-loader'
+
+type ExtensionIdListKey = 'enabledExtensionIdsByProfileId' | 'pinnedExtensionIdsByProfileId'
+type ExtensionIdListUpdate = (byProfile: Record<string, string[]>) => Record<string, string[]>
 
 export type BrowserSessionRegistryProfileOptions = {
   orcaProfileId: string
@@ -57,6 +58,7 @@ class BrowserSessionRegistry {
   private defaultPartition = ORCA_BROWSER_PARTITION
   // Why: profiles change from IPC, the CLI and managed-profile owners; open windows and paired clients only learn of it here.
   onProfilesChanged: (() => void) | null = null
+  onProfileDeleted: ((profileId: string) => Promise<void>) | null = null
 
   constructor() {
     this.resetDefaultProfile()
@@ -129,7 +131,7 @@ class BrowserSessionRegistry {
       }
     }
     if (meta.profiles.length > 0) {
-      this.hydrateFromPersisted(meta.profiles)
+      this.hydrateFromPersisted(meta.profiles, meta.enabledExtensionIdsByProfileId)
     }
 
     // Hydration skips the default profile, so install its policies separately.
@@ -137,6 +139,36 @@ class BrowserSessionRegistry {
     void installBrowserSessionPartitionPolicies(defaultProfile).catch(() => {
       console.warn('[proxy] Failed to apply proxy to browser partition', defaultProfile.partition)
     })
+    this.attachExtensions(defaultProfile, meta.enabledExtensionIdsByProfileId.default ?? [])
+  }
+
+  // Why here and not in the partition installer: that installer also serves route, SSH and
+  // doc-preview partitions, and release 1 runs extensions only in local browser profiles.
+  private attachExtensions(
+    profile: BrowserSessionProfile,
+    enabledExtensionIds = this.getEnabledExtensionIds(profile.id)
+  ): void {
+    attachBrowserExtensionsToProfileSession(profile, enabledExtensionIds)
+  }
+
+  getEnabledExtensionIds(profileId: string): string[] {
+    return this.loadPersistedMeta().enabledExtensionIdsByProfileId[profileId] ?? []
+  }
+
+  updateEnabledExtensionIds(update: ExtensionIdListUpdate): void {
+    this.updateExtensionIdList('enabledExtensionIdsByProfileId', update)
+  }
+
+  getPinnedExtensionIds(profileId: string): string[] {
+    return this.loadPersistedMeta().pinnedExtensionIdsByProfileId[profileId] ?? []
+  }
+
+  updatePinnedExtensionIds(update: ExtensionIdListUpdate): void {
+    this.updateExtensionIdList('pinnedExtensionIdsByProfileId', update)
+  }
+
+  private updateExtensionIdList(key: ExtensionIdListKey, update: ExtensionIdListUpdate): void {
+    this.persistMeta({ [key]: update(this.loadPersistedMeta()[key]) })
   }
 
   applyPendingCookieImport(): void {
@@ -226,6 +258,7 @@ class BrowserSessionRegistry {
     }
     this.profiles.set(id, profile)
     this.persistProfiles()
+    this.attachExtensions(profile)
     this.onProfilesChanged?.()
     return profile
   }
@@ -259,33 +292,10 @@ class BrowserSessionRegistry {
     this.onProfilesChanged?.()
     forgetBrowserSitePermissions(profileId)
     forgetBrowserSiteDisplay(profileId)
-    const meta = this.loadPersistedMeta()
-    const pendingCookieImports = { ...meta.pendingCookieImports }
-    delete pendingCookieImports[profile.partition]
-    const defaultPendingImport = pendingCookieImports[this.defaultPartition]
-    this.persistMeta({
-      pendingCookieImports,
-      pendingCookieDbPath: typeof defaultPendingImport === 'string' ? defaultPendingImport : null
-    })
-
-    try {
-      const sess = session.fromPartition(profile.partition)
-      forgetBrowserSessionPartitionConfiguration(profile.partition)
-      retireBrowserSessionUserAgentPolicy(sess)
-      invalidateBrowserSessionProxyApplication(sess)
-      const release = retireProxySessionApplication(sess)
-      // Persistent service workers can outlive WebContents; retain retired-session deny policies.
-      cancelBrowserWebAuthnAccountRequestsForSession(sess)
-      try {
-        await release
-      } catch {
-        console.warn('[proxy] Failed to release proxy from browser partition', profile.partition)
-      }
-      await sess.clearStorageData()
-      await sess.clearCache()
-    } catch {
-      // Removed profiles remain blocked by the webview allowlist even if storage cleanup fails.
-    }
+    this.persistMeta(
+      forgetBrowserSessionProfileMeta(this.loadPersistedMeta(), profile, this.defaultPartition)
+    )
+    await retireDeletedBrowserSessionProfile(profile, () => this.onProfileDeleted?.(profileId))
     return true
   }
 
@@ -314,7 +324,10 @@ class BrowserSessionRegistry {
     }
   }
 
-  hydrateFromPersisted(profiles: BrowserSessionProfile[]): void {
+  hydrateFromPersisted(
+    profiles: BrowserSessionProfile[],
+    enabledExtensionIdsByProfileId = this.loadPersistedMeta().enabledExtensionIdsByProfileId
+  ): void {
     for (const profile of profiles) {
       if (!isValidPersistedBrowserSessionProfile(profile, this.activeOrcaProfileId)) {
         continue
@@ -324,6 +337,7 @@ class BrowserSessionRegistry {
         void installBrowserSessionPartitionPolicies(profile).catch(() => {
           console.warn('[proxy] Failed to apply proxy to browser partition', profile.partition)
         })
+        this.attachExtensions(profile, enabledExtensionIdsByProfileId[profile.id] ?? [])
       }
     }
   }

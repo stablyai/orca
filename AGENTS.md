@@ -5,6 +5,10 @@
 - **Test**: `pnpm test [path/to/file.test.ts]`; affected only: `pnpm test:changed [path] --maxWorkers=2` ([details](.github/CONTRIBUTING.md#targeting-local-tests))
 - **Lint**: `oxlint`; format: `pnpm format`
 
+# Ensure main is always releasable
+
+Never break main. Use stacks or collapse PRs before merge
+
 # Design System
 
 All UI work — layout, color, typography, spacing, component selection, UX behavior — must follow [`docs/STYLEGUIDE.md`](./docs/STYLEGUIDE.md). Use the tokens defined in `src/renderer/src/assets/main.css` (the canonical source) and the shadcn primitives in `src/renderer/src/components/ui/`. Don't invent new color values, font sizes, or shadow tiers when a documented one already covers the role. Read the `docs/styleguide/` deep dive it links only when your change touches that topic. When STYLEGUIDE.md is silent, follow the resolution order in its final section.
@@ -66,4 +70,4 @@ For a failed GitHub Actions run, inspect the failed jobs and retry with `gh run 
 
 # Tests
 
-Avoid adding low-value tests. These might be fine for development but offer low value when checked in. [Anti-patterns](./docs/agents-md-refs/test-antipatterns.md)
+Avoid adding low-value tests. These might be fine for development but offer negative value when checked in. [Anti-patterns](./docs/agents-md-refs/test-antipatterns.md)

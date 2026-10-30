@@ -1,4 +1,4 @@
-import { emitChange, syncTaskCheckboxesDisabled } from './editor-content'
+import { emitChange } from './editor-content'
 import {
   rememberSelection,
   restoreRememberedSelection,
@@ -17,6 +17,48 @@ const TASK_LIST_HTML =
 
 const CODE_BLOCK_HTML = '<pre data-language=""><code>code</code></pre><p><br></p>'
 
+function drawsContent(node: Node): boolean {
+  return (
+    /[^ \t\r\n]/.test(node.textContent ?? '') ||
+    ((node instanceof Element || node instanceof DocumentFragment) &&
+      node.querySelector('img') !== null) ||
+    (node instanceof Element && node.tagName.toLowerCase() === 'img')
+  )
+}
+
+// Native insertHTML merges the fragment's first block into a block with content before the caret, so the PRE becomes prose.
+function caretFollowsContent(scope: RichMarkdownEditorScope): boolean {
+  const selection = scope.getSelection()
+  if (!selection || selection.rangeCount === 0 || !selection.isCollapsed) {
+    return false
+  }
+  const caret = selection.getRangeAt(0)
+  const editor = editorElement(scope)
+  if (caret.startContainer === editor) {
+    const previous = editor.childNodes.item(caret.startOffset - 1)
+    return (
+      previous !== null &&
+      !(previous instanceof Element && previous.closest('table')) &&
+      drawsContent(previous)
+    )
+  }
+  const anchor =
+    caret.startContainer instanceof Element
+      ? caret.startContainer
+      : caret.startContainer.parentElement
+  if (!anchor || !editor.contains(anchor) || anchor.closest('table, pre')) {
+    return false
+  }
+  const block = anchor.closest('p, div, li, h1, h2, h3, h4, h5, h6, blockquote')
+  if (!block || block === editor || !editor.contains(block)) {
+    return false
+  }
+  const before = scope.getDocument().createRange()
+  before.setStart(block, 0)
+  before.setEnd(caret.startContainer, caret.startOffset)
+  return drawsContent(before.cloneContents())
+}
+
 function exec(scope: RichMarkdownEditorScope, command: string, value?: string) {
   scope.getDocument().execCommand(command, false, value)
 }
@@ -29,6 +71,19 @@ function acceptsCommands(scope: RichMarkdownEditorScope, generation: number): bo
     scope.documentGeneration === generation &&
     editorElement(scope).getAttribute('contenteditable') === 'true'
   )
+}
+
+function canFormatCodeBlock(scope: RichMarkdownEditorScope): boolean {
+  const selection = scope.getSelection()
+  if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
+    return true
+  }
+  const range = selection.getRangeAt(0)
+  return !Array.from(
+    editorElement(scope).querySelectorAll(
+      'blockquote,ul,ol,table,img,input,hr,[contenteditable="false"]'
+    )
+  ).some((node) => range.intersectsNode(node.closest('p,h1,h2,h3,h4,h5,h6,pre') ?? node))
 }
 
 // Link/Image await page URL modal; while waiting host may replace/lock/stop document, so capture generation and revalidate after answer.
@@ -64,7 +119,18 @@ const COMMANDS: Record<
   taskList: (scope) => exec(scope, 'insertHTML', TASK_LIST_HTML),
   quote: (scope) => exec(scope, 'formatBlock', 'blockquote'),
   inlineCode: (scope) => wrapSelection(scope, 'code'),
-  codeBlock: (scope) => exec(scope, 'insertHTML', CODE_BLOCK_HTML),
+  codeBlock: (scope) => {
+    if (scope.getSelection()?.isCollapsed === false) {
+      exec(scope, 'formatBlock', 'pre')
+    } else {
+      // A leading break ends the caret's line first; the stray root <br> it leaves saves as nothing.
+      exec(
+        scope,
+        'insertHTML',
+        caretFollowsContent(scope) ? `<br>${CODE_BLOCK_HTML}` : CODE_BLOCK_HTML
+      )
+    }
+  },
   link: (scope) => insertUrl(scope, 'link', 'createLink'),
   image: (scope) => insertUrl(scope, 'image', 'insertImage')
 }
@@ -79,6 +145,9 @@ export async function runCommand(
     return
   }
   restoreSelectionOrEnd(scope)
+  if (command === 'codeBlock' && !canFormatCodeBlock(scope)) {
+    return
+  }
   const pending = COMMANDS[command]?.(scope)
   if (pending) {
     await pending
@@ -87,6 +156,5 @@ export async function runCommand(
       return
     }
   }
-  syncTaskCheckboxesDisabled(scope)
   emitChange(scope)
 }

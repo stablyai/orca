@@ -3,7 +3,7 @@ import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import type { AgentSessionQueuedMessageMoveResult } from '../../../../shared/agent-session-wire'
 import { structuredAgentSessionHostKey } from '@/runtime/structured-agent-session-host-capability'
-import type { QueuedMessageCard } from './structured-agent-session-queued-cards'
+import type { QueuedMessageCard } from '../../../../shared/structured-agent-session-queued-cards'
 import type { QueuedEditTransport } from './use-structured-agent-session-queued-edit'
 import type { CaptureStructuredAgentSessionPresentation } from './use-structured-agent-session-mutate'
 

@@ -1,3 +1,4 @@
+import { isTerminalInputPaused, TerminalInputPausedError } from '../../../terminal-input-admission'
 import { assertLegacyAiVaultResumeCommandAllowed } from '../../../../ai-vault/structured-session-ownership'
 import { InvalidArgumentError, defineMethod } from '../../core'
 import { isTerminalQueryReply } from '../../../../../shared/terminal-query-reply'
@@ -9,7 +10,7 @@ import {
   assertTerminalSendTextWithinLimit,
   commitMobileInputFloorClaim,
   getTerminalSendGuardRefusedReason,
-  isTerminalInputLockedForClient,
+  terminalInputSourceForClient,
   isTerminalSendGuardNotWritable,
   resolveMobileFloorClientId,
   type MobileInputFloorClaimHolder
@@ -40,6 +41,7 @@ export const TERMINAL_SEND_METHODS = [
       params,
       {
         runtime,
+        caller,
         clientId,
         signal,
         orchestrationMutation,
@@ -48,6 +50,7 @@ export const TERMINAL_SEND_METHODS = [
         replayedMutationReceipt
       }
     ) => {
+      const inputSource = terminalInputSourceForClient(params.client, caller)
       await assertTerminalSendTextWithinLimit(params.text)
       await assertTerminalSendTextWithinLimit(params.resolvedLaunchDraft?.text)
       if (params.text) {
@@ -96,11 +99,12 @@ export const TERMINAL_SEND_METHODS = [
       ) {
         return refusedSend(params.terminal)
       }
-      if (leaf?.ptyId && isTerminalInputLockedForClient(runtime, leaf.ptyId, params.client)) {
+      if (leaf?.ptyId && isTerminalInputPaused(runtime, leaf.ptyId, inputSource)) {
         return refusedSend(params.terminal)
       }
       if (
         leaf?.ptyId &&
+        inputSource === 'desktop' &&
         params.client?.type === 'desktop' &&
         params.claimViewport === true &&
         params.viewport &&
@@ -123,7 +127,7 @@ export const TERMINAL_SEND_METHODS = [
           true
         )
         // Without a stream, sends cannot safely claim ownership; refuse stale geometry.
-        if (!claim.updated || isTerminalInputLockedForClient(runtime, leaf.ptyId, params.client)) {
+        if (!claim.updated || isTerminalInputPaused(runtime, leaf.ptyId, inputSource)) {
           return refusedSend(params.terminal)
         }
       }
@@ -142,9 +146,6 @@ export const TERMINAL_SEND_METHODS = [
                 handle: params.terminal,
                 assertWritable: () => {
                   assertTerminalSendExactPtyBinding(runtime, params.terminal, ptyId)
-                  if (ptyId && isTerminalInputLockedForClient(runtime, ptyId, params.client)) {
-                    throw new Error('terminal_guard_not_writable')
-                  }
                 }
               })
             }
@@ -196,8 +197,9 @@ export const TERMINAL_SEND_METHODS = [
         result = useSettledAgentPrompt
           ? await runtime.sendTerminalAgentPrompt(params.terminal, params.text!, {
               inputKind: 'driving',
+              inputSource,
               beforeWrite,
-              signal,
+              observationSignal: signal,
               ...(orchestrationMutation
                 ? {
                     acceptQueued: true,
@@ -219,6 +221,7 @@ export const TERMINAL_SEND_METHODS = [
               },
               {
                 beforeWrite,
+                inputSource,
                 signal,
                 // Why: a wire write carries no provenance beyond a client's own query reply.
                 inputKind: params.inputKind === 'query-reply' ? 'query-reply' : 'driving',
@@ -238,7 +241,7 @@ export const TERMINAL_SEND_METHODS = [
         if (refusedReason) {
           return refusedSend(params.terminal, refusedReason)
         }
-        if (isTerminalSendGuardNotWritable(error)) {
+        if (error instanceof TerminalInputPausedError || isTerminalSendGuardNotWritable(error)) {
           return refusedSend(params.terminal)
         }
         throw error

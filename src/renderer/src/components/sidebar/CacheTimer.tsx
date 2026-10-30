@@ -9,6 +9,7 @@ import {
   getPromptCacheCountdownForPane,
   type PromptCacheCountdownSelection
 } from './prompt-cache-timer-selection'
+import { translate } from '@/i18n/i18n'
 
 /** Resolve the soonest-expiring Claude cache once for both row visibility and countdown rendering. */
 export function usePromptCacheCountdownStartedAt(worktreeId: string, active = true): number | null {
@@ -70,8 +71,15 @@ export default function CacheTimer({
   const warning = !expired && remainingMs <= 60_000
 
   const tooltipText = expired
-    ? 'The next message will re-send the full context as uncached tokens'
-    : `Prompt cache expires in ${label}`
+    ? translate(
+        'auto.components.sidebar.CacheTimer.expiredTooltip',
+        'The next message will re-send the full context as uncached tokens'
+      )
+    : translate(
+        'auto.components.sidebar.CacheTimer.expiresIn',
+        'Prompt cache expires in {{time}}',
+        { time: label }
+      )
 
   return (
     <Tooltip>

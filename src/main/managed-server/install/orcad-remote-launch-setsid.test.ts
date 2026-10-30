@@ -78,9 +78,14 @@ describe('the WSL launch (setsid)', () => {
     }
     expect(seen(undefined)).toBe('glibc.malloc.mmap_threshold=16384')
     expect(seen('glibc.malloc.arena_max=2')).toBe('glibc.malloc.arena_max=2')
+    // An empty value tunes nothing, so it counts as unset.
+    expect(seen('')).toBe('glibc.malloc.mmap_threshold=16384')
     expect(() =>
       orcadLaunchCommand(host, spec('/d/orcad-1'), 'setsid', [['X', "a'b", 'keep-existing']])
     ).toThrow('orcad_launch_env_default_invalid')
+    expect(() =>
+      orcadLaunchCommand(host, spec('/d/orcad-1'), 'setsid', [['BAD NAME', 'x', 'keep-existing']])
+    ).toThrow('orcad_launch_env_name_invalid')
   })
 
   it('keeps the SSH launch byte-for-byte when no detach is named', () => {

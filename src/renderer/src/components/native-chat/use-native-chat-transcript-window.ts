@@ -139,7 +139,12 @@ export function useNativeChatTranscriptWindow({
       setScrollMargin((current) => (current === offset ? current : offset))
     }
   }, [scrollRef])
-  useLayoutEffect(readScrollMargin)
+  // A hidden pane is display:none: its offset walk would only force layout on every retained chat's render.
+  useLayoutEffect(() => {
+    if (isVisible) {
+      readScrollMargin()
+    }
+  })
 
   useLayoutEffect(() => {
     const container = scrollRef.current

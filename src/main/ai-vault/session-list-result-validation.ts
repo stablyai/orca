@@ -1,5 +1,4 @@
 import { z } from 'zod'
-import { isAiVaultProjectKey } from '../../shared/ai-vault-project-key'
 import {
   AI_VAULT_AGENTS,
   AI_VAULT_SCOPE_PATHS_MAX_COUNT,
@@ -9,6 +8,7 @@ import {
   type AiVaultSession
 } from '../../shared/ai-vault-types'
 import { normalizeExecutionHostId } from '../../shared/execution-host'
+import { aiVaultScanIssueText } from '../../shared/ai-vault-scan-issue-copy'
 
 const aiVaultAgentSet = new Set<string>(AI_VAULT_AGENTS)
 
@@ -59,7 +59,6 @@ const aiVaultSessionSchema = z.object({
     .max(AI_VAULT_SCOPE_PATHS_MAX_COUNT)
     .optional()
     .catch(undefined),
-  projectOwnerKey: z.string().refine(isAiVaultProjectKey).nullable().optional().catch(undefined),
   branch: z.string().nullable(),
   model: z.string().nullable(),
   filePath: z.string(),
@@ -100,7 +99,14 @@ const aiVaultScanIssueSchema = z.object({
     .union([z.enum(['host', 'scope', 'notice']), z.string().transform(() => 'scope' as const)])
     .optional(),
   path: z.string(),
-  message: z.string()
+  message: z.string(),
+  // Optional localization hints; malformed ones fall back to the English message.
+  messageCode: z.string().optional().catch(undefined),
+  messageParams: z
+    .record(z.string(), z.union([z.string(), z.number()]))
+    .optional()
+    .catch(undefined),
+  messageDetail: z.string().optional().catch(undefined)
 })
 
 const aiVaultListResultEnvelopeSchema = z
@@ -166,7 +172,9 @@ export function parseAiVaultListResult(value: unknown): AiVaultListResult {
     issues.push({
       agent: 'codex',
       path: 'aiVault.listSessions',
-      message: `Skipped ${invalidCount} invalid Agent Session History result ${invalidCount === 1 ? 'entry' : 'entries'}.`
+      ...aiVaultScanIssueText('invalidResultsSkipped', {
+        params: { count: invalidCount }
+      })
     })
   }
   return {

@@ -177,8 +177,7 @@ export function SshPane({ addTargetIntentSignal }: SshPaneProps): React.JSX.Elem
     const resolution = resolveSshHostRemoval({
       targetId: target.id,
       repos: useAppStore.getState().repos,
-      worktrees: getAllWorktreesFromState(useAppStore.getState()),
-      sshConnectionStates: useAppStore.getState().sshConnectionStates
+      worktrees: getAllWorktreesFromState(useAppStore.getState())
     })
     if (resolution.workspaceCount > 0) {
       setHostRemoveTarget({ targetId: target.id, label: target.label })

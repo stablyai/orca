@@ -3,7 +3,7 @@ import type { ParsedFileLinkLocation } from '../../../src/shared/file-link-locat
 import { useWorkspaceRouteHandoff } from '../navigation/workspace-route-handoff'
 import { triggerSelection } from '../platform/haptics'
 import { openMobileFileTap, type FileTapSessionTab } from './mobile-file-tap-open'
-import { openMobileNativeChatFileTap } from './mobile-native-chat-open-file'
+import { openMobileNativeChatFileTap } from './native-chat/visual/mobile-native-chat-open-file'
 import type { RpcOperationSender } from '../transport/rpc-operation-sender'
 
 type MobileFileTapHandlerOptions<T extends FileTapSessionTab> = {

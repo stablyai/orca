@@ -4,10 +4,12 @@ import {
   BRIDGE_FAULT_GRANT,
   BRIDGE_PROTOCOL_VERSION,
   BRIDGE_RPC_ENVELOPE_GRANT,
+  type BridgeColorScheme,
   type BridgeConnectionSnapshot,
   type BridgeHostMessage,
   type BridgeInitHost,
-  type BridgeInitRoute
+  type BridgeInitRoute,
+  type BridgeUiLocale
 } from './bridge-envelope'
 import {
   sameSafeAreaInsets,
@@ -30,6 +32,8 @@ export function createBridgeInitFrame(args: {
   pageRoutes: readonly string[]
   safeAreaInsets?: BridgeSafeAreaInsets
   keyboardInset?: number
+  colorScheme?: BridgeColorScheme
+  uiLocale?: BridgeUiLocale
   // Omit absent manifest pairs so older routing behavior remains available.
   pageRouteGrants?: readonly { pathname: string; grants: readonly string[] }[]
   granted: readonly string[]
@@ -61,6 +65,10 @@ export function createBridgeInitFrame(args: {
     ...(args.keyboardInset === undefined || args.keyboardInset === 0
       ? {}
       : { keyboardInset: args.keyboardInset }),
+    // Omit dark: it is what pages assume when an older shell sends nothing.
+    ...(args.colorScheme === 'light' ? { colorScheme: 'light' as const } : {}),
+    // Sent even for English: an absent field lets the page fall back to the WebView's language.
+    ...(args.uiLocale === undefined ? {} : { uiLocale: args.uiLocale }),
     pageRoutes: [...args.pageRoutes],
     // Copy entries so no frame retains access to the shell’s held route-grant objects.
     ...(args.pageRouteGrants === undefined

@@ -4,7 +4,6 @@ import { getAgentLabel } from './agent-title-identity'
 import { detectAgentStatusFromTitle } from './agent-title-status'
 import { memoizeTitleClassification } from './terminal-title-classification-memo'
 import { resolveExplicitTerminalTitleAgentType } from './terminal-title-agent-type'
-
 // Count the leaf titleHasAgentName regex to measure unchanged-title work across store writes.
 vi.mock('./agent-name-token-match', async (importOriginal) => {
   const actual = await importOriginal<typeof AgentNameTokenMatchModule>()

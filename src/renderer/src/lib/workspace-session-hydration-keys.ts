@@ -9,6 +9,8 @@ import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
 export type WorkspaceSessionHydrationOptions = {
   additionalValidWorkspaceKeys?: readonly WorkspaceKey[]
   replaceWorkspaceKeys?: readonly string[]
+  /** Workspaces of projects a WSL host now owns: only their native chat tabs hydrate. */
+  wslMovedChatWorkspaceKeys?: readonly string[]
 }
 
 // Worktree-keyed fields carrying restorable chrome — a repo appears here only if it has live
@@ -168,5 +170,10 @@ export function addAdditionalValidWorkspaceKeys(
 ): void {
   for (const key of options?.additionalValidWorkspaceKeys ?? []) {
     validWorkspaceIds.add(key)
+  }
+  // A moved project's terminals, editors and browser tabs live on its host now; tabs hydration
+  // keeps only its chats. Its local-partition keys are never the host's own workspaces.
+  for (const key of options?.wslMovedChatWorkspaceKeys ?? []) {
+    validWorkspaceIds.delete(key)
   }
 }

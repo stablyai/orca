@@ -1,7 +1,10 @@
-import { Pressable, StyleSheet } from 'react-native'
+import { Pressable } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Plus } from 'lucide-react-native'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { colors, spacing } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 
 // Export diameter so worktree list reserves matching padding and last row stays tappable.
 export const FAB_SIZE = 48
@@ -13,6 +16,8 @@ type NewWorkspaceFabProps = {
 
 // Phone-only FAB sits above home indicator and outside list-row hit area.
 export function NewWorkspaceFab({ onPress, disabled }: NewWorkspaceFabProps): React.JSX.Element {
+  useMobileColorScheme()
+  const t = useMobileTranslation()
   const insets = useSafeAreaInsets()
   return (
     <Pressable
@@ -25,7 +30,7 @@ export function NewWorkspaceFab({ onPress, disabled }: NewWorkspaceFabProps): Re
       onPress={onPress}
       disabled={disabled}
       accessibilityRole="button"
-      accessibilityLabel="New workspace"
+      accessibilityLabel={t('components.newWorkspaceFab.newWorkspace', 'New workspace')}
       hitSlop={8}
     >
       <Plus size={24} color={colors.bgBase} strokeWidth={2.75} />
@@ -33,7 +38,7 @@ export function NewWorkspaceFab({ onPress, disabled }: NewWorkspaceFabProps): Re
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   fab: {
     position: 'absolute',
     right: spacing.lg,
@@ -56,4 +61,4 @@ const styles = StyleSheet.create({
   fabDisabled: {
     opacity: 0.5
   }
-})
+}))

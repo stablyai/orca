@@ -88,7 +88,7 @@ describe('a worker launch that throws after its session exists', () => {
         taskId: 'task_1',
         params: WorkerStartParams.parse({ from: 'term_coord', task: 'task_1' }),
         requestedWorktree: 'id:wt_existing',
-        creationWorktree: undefined,
+        creationTarget: undefined,
         resolvedWorktree: { id: 'wt_existing', repoId: 'repo_1' },
         mode: STRUCTURED,
         agent: 'claude',

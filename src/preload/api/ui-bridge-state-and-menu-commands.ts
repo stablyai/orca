@@ -45,6 +45,13 @@ export const uiStateAndMenuCommandsApi = {
   },
   consumePendingSkillShare: (): Promise<string | null> =>
     ipcRenderer.invoke('ui:consumePendingSkillShare'),
+  onOpenPluginInstallLink: (callback: (link: string) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, link: string): void => callback(link)
+    ipcRenderer.on('ui:openPluginInstallLink', listener)
+    return () => ipcRenderer.removeListener('ui:openPluginInstallLink', listener)
+  },
+  consumePendingPluginInstallLink: (): Promise<string | null> =>
+    ipcRenderer.invoke('ui:consumePendingPluginInstallLink'),
   onOpenMarkdownFiles: (callback: (documents: MarkdownDocument[]) => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, documents: MarkdownDocument[]): void =>
       callback(documents)
@@ -156,6 +163,7 @@ export const uiStateAndMenuCommandsApi = {
       sessionProfileId?: string | null
       sessionPartition?: string
       activate?: boolean
+      fallbackWorktreeId?: string
     }) => void
   ): (() => void) => {
     const listener = (
@@ -168,6 +176,7 @@ export const uiStateAndMenuCommandsApi = {
         sessionProfileId?: string | null
         sessionPartition?: string
         activate?: boolean
+        fallbackWorktreeId?: string
       }
     ) => callback(data)
     ipcRenderer.on('browser:requestTabCreate', listener)
@@ -175,6 +184,9 @@ export const uiStateAndMenuCommandsApi = {
   },
   replyTabCreate: (reply: { requestId: string; browserPageId?: string; error?: string }): void => {
     ipcRenderer.send('browser:tabCreateReply', reply)
+  },
+  browserTabRequestsReady: (): void => {
+    ipcRenderer.send('browser:tabRequestsReady')
   },
   onRequestRemoteCliBrowserScope: (
     callback: (data: RemoteCliBrowserScopeQuery) => void

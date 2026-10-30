@@ -183,7 +183,7 @@ describe('a session page opened on its own, leaving for the host route', () => {
     page.handoff.replace(hop)
     expect(router.replace).not.toHaveBeenCalled()
     expect(page.navigations()).toEqual([
-      { v: BRIDGE_PROTOCOL_VERSION, type: 'notify', name: 'navigate', href: hop }
+      { v: BRIDGE_PROTOCOL_VERSION, type: 'notify', name: 'navigate', href: hop, replace: true }
     ])
     expect(routeViewOf(ROUTES, '/h/host-1', true).ownsHostArea).toBe(true)
   })

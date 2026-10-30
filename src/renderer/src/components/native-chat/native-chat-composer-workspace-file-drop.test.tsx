@@ -245,9 +245,10 @@ describe('native chat workspace file drops', () => {
     cleanup()
   })
 
-  it('consumes a nested editor drop once and inserts top-level paths at the caret', () => {
+  it('consumes a nested editor drop once and inserts top-level paths at the caret', async () => {
     render(<ComposerProbe initialDraft="$rev tail" />)
-    act(() => {
+    // Tiptap mounts node-view portals from a microtask.
+    await act(async () => {
       latestInput!.insertSkill!(0, 4, '$review')
     })
     expect(editor().querySelectorAll('[data-native-chat-skill]')).toHaveLength(1)
@@ -260,6 +261,7 @@ describe('native chat workspace file drops', () => {
     ])
     transfer.setData('text/plain', 'must not be inserted by ProseMirror')
     const accepted = dispatchDragEvent('drop', editor(), transfer)
+    await act(async () => {})
 
     expect(accepted).toBe(false)
     expect(screen.getByTestId('draft').textContent).toBe(

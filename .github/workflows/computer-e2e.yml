@@ -78,7 +78,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-22.04, windows-latest]
-    runs-on: ${{ fromJSON('{"ubuntu-22.04":"blacksmith-4vcpu-ubuntu-2204"}')[matrix.os] || matrix.os }}
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v6
         with:
@@ -136,7 +136,7 @@ jobs:
         run: node config/scripts/windows-daemon-workspace-close-repro.mjs
   linux:
     if: github.event_name != 'pull_request'
-    runs-on: blacksmith-4vcpu-ubuntu-2204
+    runs-on: ubuntu-22.04
     env:
       ORCA_COMPUTER_E2E: '1'
       ACCESSIBILITY_ENABLED: '1'

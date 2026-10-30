@@ -5,7 +5,9 @@ import {
   type BridgeClientMessage
 } from './bridge-envelope'
 import { BRIDGE_HAPTICS_GRANT, BRIDGE_HAPTICS_NOTIFY } from './bridge-haptics-notify'
+import { BRIDGE_LIVENESS_PROBE_NOTIFY } from './bridge-liveness-probe-notify'
 import { BRIDGE_BACK_CLAIM_NOTIFY } from './bridge-page-back'
+import { BRIDGE_PAGE_LOCATION } from './bridge-page-location'
 import { BRIDGE_PAGE_PAINTED } from './bridge-page-painted'
 import { BRIDGE_ROUTE_PARAM_CLEAR } from './bridge-route-update'
 
@@ -19,12 +21,14 @@ const BRIDGE_NOTIFY_GRANTS: Readonly<Record<BridgeNotifyName, string | null>> = 
   [BRIDGE_ROUTE_PARAM_CLEAR]: null,
   [BRIDGE_PAGE_PAINTED]: null,
   [BRIDGE_BACK_CLAIM_NOTIFY]: null,
+  [BRIDGE_PAGE_LOCATION]: null,
   navigate: 'navigate',
   [BRIDGE_NAVIGATE_BACK_NOTIFY]: 'navigate',
   storage: 'storage',
   [BRIDGE_EXTERNAL_LINK_GRANT]: BRIDGE_EXTERNAL_LINK_GRANT,
   [BRIDGE_FAULT_GRANT]: BRIDGE_FAULT_GRANT,
-  [BRIDGE_HAPTICS_NOTIFY]: BRIDGE_HAPTICS_GRANT
+  [BRIDGE_HAPTICS_NOTIFY]: BRIDGE_HAPTICS_GRANT,
+  [BRIDGE_LIVENESS_PROBE_NOTIFY]: null
 }
 
 export type BridgeNotifyRefusal = 'before-ready' | 'ungranted'

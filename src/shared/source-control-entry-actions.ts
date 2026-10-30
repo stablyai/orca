@@ -19,3 +19,19 @@ export function canDiscardStatusEntry(entry: GitStatusEntry): boolean {
     (entry.area === 'unstaged' || entry.area === 'untracked')
   )
 }
+
+export type ConflictResolution = 'mark_resolved' | 'keep_file' | 'keep_deletion'
+
+/** Staging the worktree is Git's resolution; a missing worktree file can only resolve as a deletion. */
+export function getConflictResolutions(entry: GitStatusEntry): ConflictResolution[] {
+  if (entry.conflictStatus !== 'unresolved' || !entry.conflictKind || entry.submoduleRoot) {
+    return []
+  }
+  if (entry.status === 'deleted') {
+    return ['keep_deletion']
+  }
+  if (entry.conflictKind === 'deleted_by_us' || entry.conflictKind === 'deleted_by_them') {
+    return ['keep_file', 'keep_deletion']
+  }
+  return ['mark_resolved']
+}

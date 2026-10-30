@@ -45,50 +45,6 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllGlobals())
 
 describe('captured Jira detail owners', () => {
-  it('reuses local IPC request arguments for every target entry point', async () => {
-    const owner = { kind: 'local' } as const
-    await jiraGetIssueForTarget(owner, 'ENG-1', 'site-1')
-    await jiraIssueCommentsForTarget(owner, 'ENG-1', 'site-1')
-    await jiraUpdateIssueForTarget(owner, 'ENG-1', { title: 'Edited' }, 'site-1')
-    await jiraAddIssueCommentForTarget(owner, 'ENG-1', 'Comment', 'site-1')
-    await jiraListTransitionsForTarget(owner, 'ENG-1', 'site-1')
-    await jiraListPrioritiesForTarget(owner, 'site-1')
-    await jiraListAssignableUsersForTarget(owner, 'ENG-1', 'Ada', 'site-1')
-
-    expect(localMethods.getIssue).toHaveBeenCalledWith({
-      key: 'ENG-1',
-      siteId: 'site-1',
-      mediaFormat: 'reference'
-    })
-    expect(localMethods.issueComments).toHaveBeenCalledWith({
-      key: 'ENG-1',
-      siteId: 'site-1',
-      mediaFormat: 'reference'
-    })
-    expect(localMethods.updateIssue).toHaveBeenCalledWith({
-      key: 'ENG-1',
-      siteId: 'site-1',
-      updates: { title: 'Edited' }
-    })
-    expect(localMethods.addIssueComment).toHaveBeenCalledWith({
-      key: 'ENG-1',
-      siteId: 'site-1',
-      body: 'Comment'
-    })
-    expect(localMethods.listTransitions).toHaveBeenCalledWith({
-      key: 'ENG-1',
-      siteId: 'site-1',
-      strict: true
-    })
-    expect(localMethods.listPriorities).toHaveBeenCalledWith({ siteId: 'site-1' })
-    expect(localMethods.listAssignableUsers).toHaveBeenCalledWith({
-      key: 'ENG-1',
-      siteId: 'site-1',
-      query: 'Ada'
-    })
-    expect(runtimeCall).not.toHaveBeenCalled()
-  })
-
   it('preserves remote owner, timeouts, and assignable-user query bounds', async () => {
     runtimeCall.mockImplementation(async (args: { method: string }) =>
       args.method === 'status.get'

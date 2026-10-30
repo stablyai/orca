@@ -1,4 +1,4 @@
-import { onMock } from '../pty-ipc-mock-registry'
+import { onMock } from './pty-ipc-mock-registry'
 
 type IpcHandlerMap = Map<string, (_event: unknown, args: unknown) => unknown>
 type MainWindowDouble = {

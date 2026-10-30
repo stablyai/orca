@@ -1,3 +1,5 @@
+import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
+
 /** Fence host mirroring only after renderer byte-derived status proves its claim; otherwise two writers flap the same pane row between working/generated titles and host defaults. */
 type RendererOwnedAgentStatusPane = {
   environmentId: string
@@ -37,6 +39,15 @@ export function markRendererOwnedAgentStatusWrite(paneKey: string): void {
 /** True once this renderer both claimed the pane and actually wrote its status. */
 export function isClientAuthoritativeAgentStatusPane(paneKey: string): boolean {
   return panesByPaneKey.get(paneKey)?.hasClientWrite === true
+}
+
+/** A byte write replacing an adopted host row cannot be ordered against the host's clock. */
+export function resolveRendererOwnedAgentStatusTiming(
+  existing: Pick<AgentStatusEntry, 'mirroredEvidenceReceivedAt'> | undefined
+): { allowOlderTimestamp: true } | undefined {
+  return existing?.mirroredEvidenceReceivedAt !== undefined
+    ? { allowOlderTimestamp: true }
+    : undefined
 }
 
 export function _getRendererOwnedAgentStatusPaneCountForTest(): number {

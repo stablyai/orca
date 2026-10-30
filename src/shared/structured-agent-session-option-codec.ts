@@ -1,4 +1,4 @@
-import type { SessionOptionValue } from './native-chat-session-options'
+import type { SessionOptionValue } from './native-chat/input/native-chat-session-options'
 
 const STRUCTURED_BOOLEAN_OPTION_IDS = new Set(['fastMode'])
 

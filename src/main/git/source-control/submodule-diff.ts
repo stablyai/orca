@@ -54,6 +54,7 @@ export async function buildSubmoduleInnerCommitRangeDiff(
   let modifiedContent = ''
   let originalIsBinary = false
   let modifiedIsBinary = false
+  let tooLarge = false
   try {
     const left = await readGitBlobAtOidPath(submoduleWorktreePath, fromOid, innerPath, options)
     originalContent = left.content
@@ -61,12 +62,14 @@ export async function buildSubmoduleInnerCommitRangeDiff(
     const right = await readGitBlobAtOidPath(submoduleWorktreePath, toOid, innerPath, options)
     modifiedContent = right.content
     modifiedIsBinary = right.isBinary
+    tooLarge = left.tooLarge === true || right.tooLarge === true
   } catch {}
   return buildDiffResult(
     originalContent,
     modifiedContent,
     originalIsBinary,
     modifiedIsBinary,
-    innerPath
+    innerPath,
+    tooLarge
   )
 }

@@ -17,6 +17,7 @@ import WorkspaceKanbanLaneCardList from './WorkspaceKanbanLaneCardList'
 import { serializeWorkspaceLaneFullIds } from './workspace-kanban-filtered-drop-index'
 import { getWorkspaceStatusVisualMeta } from './workspace-status'
 import { translate } from '@/i18n/i18n'
+import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 
 type WorkspaceKanbanStatusLaneProps = {
   status: WorkspaceStatusDefinition
@@ -75,6 +76,7 @@ function WorkspaceKanbanStatusLane({
   onColumnResizeStart,
   onColumnResizeKeyDown
 }: WorkspaceKanbanStatusLaneProps): React.JSX.Element {
+  useUiLanguageRevision()
   const laneScrollRef = useRef<HTMLDivElement | null>(null)
   const meta = getWorkspaceStatusVisualMeta(status)
   // Only filtered-away cards justify No matches; intrinsically empty lanes remain Empty.
@@ -90,7 +92,11 @@ function WorkspaceKanbanStatusLane({
       undefined
     )
   }, [fullWorktreeIds, hasQuery, items])
-  const createTooltip = `New workspace in ${status.label}`
+  const createTooltip = translate(
+    'auto.components.sidebar.WorkspaceKanbanStatusLane.newWorkspaceIn',
+    'New workspace in {{status}}',
+    { status: status.label }
+  )
   const createButton = (
     <Button
       type="button"

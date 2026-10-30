@@ -110,33 +110,6 @@ export function registerReposCatalogMergeIdentityTests(): void {
   })
 
   describe('catalog merge referential stability', () => {
-    it('keeps the same projectGroups array when a refetch changes nothing', async () => {
-      const store = createTestStore()
-
-      await store.getState().fetchProjectGroups(catalogOwner(store))
-      const first = store.getState().projectGroups
-      expect(first).toEqual([{ ...projectGroup, executionHostId: 'local' }])
-
-      await store.getState().fetchProjectGroups(catalogOwner(store))
-
-      expect(store.getState().projectGroups).toBe(first)
-    })
-
-    it('keeps the same folderWorkspaces array (and entries) when a refetch changes nothing', async () => {
-      const store = createTestStore()
-      store.setState({ projectGroups: [{ ...projectGroup, executionHostId: 'local' }] })
-
-      await store.getState().fetchFolderWorkspaces(catalogOwner(store))
-      const first = store.getState().folderWorkspaces
-      expect(first).toHaveLength(1)
-      const firstEntry = first[0]
-
-      await store.getState().fetchFolderWorkspaces(catalogOwner(store))
-
-      expect(store.getState().folderWorkspaces).toBe(first)
-      expect(store.getState().folderWorkspaces[0]).toBe(firstEntry)
-    })
-
     it('appends new entries and replaces changed ones while keeping order', async () => {
       const store = createTestStore()
 
@@ -210,55 +183,6 @@ export function registerReposCatalogMergeIdentityTests(): void {
 
   // No-op arrays must preserve sidebar refill cache or stale-folder checks silently fail open.
   describe('folder path status cache retention across catalog fetches', () => {
-    it('keeps cached path statuses when a project-group refetch changes nothing', async () => {
-      const store = createTestStore()
-      await store.getState().fetchProjectGroups(catalogOwner(store))
-      store.setState({ folderWorkspacePathStatuses: cachedPathStatuses })
-
-      await store.getState().fetchProjectGroups(catalogOwner(store))
-
-      expect(store.getState().folderWorkspacePathStatuses).toBe(cachedPathStatuses)
-    })
-
-    it('clears cached path statuses when the project-group catalog changes', async () => {
-      const store = createTestStore()
-      await store.getState().fetchProjectGroups(catalogOwner(store))
-      store.setState({ folderWorkspacePathStatuses: cachedPathStatuses })
-
-      projectGroupsList.mockImplementation(async () => [
-        clone(projectGroup),
-        clone(secondProjectGroup)
-      ])
-      await store.getState().fetchProjectGroups(catalogOwner(store))
-
-      expect(store.getState().folderWorkspacePathStatuses).toEqual({})
-    })
-
-    it('keeps cached path statuses when a folder-workspace refetch changes nothing', async () => {
-      const store = createTestStore()
-      store.setState({ projectGroups: [{ ...projectGroup, executionHostId: 'local' }] })
-      await store.getState().fetchFolderWorkspaces(catalogOwner(store))
-      store.setState({ folderWorkspacePathStatuses: cachedPathStatuses })
-
-      await store.getState().fetchFolderWorkspaces(catalogOwner(store))
-
-      expect(store.getState().folderWorkspacePathStatuses).toBe(cachedPathStatuses)
-    })
-
-    it('clears cached path statuses when a folder workspace path changes', async () => {
-      const store = createTestStore()
-      store.setState({ projectGroups: [{ ...projectGroup, executionHostId: 'local' }] })
-      await store.getState().fetchFolderWorkspaces(catalogOwner(store))
-      store.setState({ folderWorkspacePathStatuses: cachedPathStatuses })
-
-      folderWorkspacesList.mockImplementation(async () => [
-        clone({ ...folderWorkspace, folderPath: '/parent/folder-1-renamed' })
-      ])
-      await store.getState().fetchFolderWorkspaces(catalogOwner(store))
-
-      expect(store.getState().folderWorkspacePathStatuses).toEqual({})
-    })
-
     it('keeps cached path statuses when a repo refetch changes nothing', async () => {
       const store = createTestStore()
       await store.getState().fetchRepos(catalogOwner(store))

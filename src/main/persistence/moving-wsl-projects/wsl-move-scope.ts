@@ -5,8 +5,11 @@ import { resolveFolderWorkspaceHost } from '../../../shared/folder-workspace-exe
 import type { FolderWorkspace } from '../../../shared/folder-workspace-types'
 import type { ProjectGroup } from '../../../shared/project-group-types'
 import type { Repo } from '../../../shared/repo-types'
-import { isDrvfsLinuxPath, resolveWslRepoWorktreeBasePath } from '../../../shared/wsl-paths'
-import { wslUncPathToLinux } from './wsl-move-path-rewriter'
+import {
+  isDrvfsLinuxPath,
+  resolveWslRepoWorktreeBasePath,
+  wslUncPathToLinux
+} from '../../../shared/wsl-paths'
 
 export type WslMoveScopeRefusal =
   /** Distro access does not make Windows-drive projects Linux-owned. */
@@ -27,7 +30,7 @@ type WslMoveScopeState = {
 export function collectWslMoveScope(state: WslMoveScopeState, distro: string): WslMoveScope {
   const scope: WslMoveScope = { repoIds: [], folderWorkspaceIds: [], refused: [] }
   for (const repo of state.repos) {
-    const paths = repoPaths(repo)
+    const paths = wslMoveRepoPaths(repo)
     // Partly in-distro repos must refuse visibly rather than disappear from the preview.
     if (!paths.some((path) => wslUncPathToLinux(path, distro) !== null)) {
       continue
@@ -61,7 +64,7 @@ export function collectWslMoveScope(state: WslMoveScopeState, distro: string): W
   return scope
 }
 
-function repoPaths(repo: Repo): string[] {
+export function wslMoveRepoPaths(repo: Repo): string[] {
   const base = repo.worktreeBasePath
     ? resolveWslRepoWorktreeBasePath(repo.path, repo.worktreeBasePath)
     : undefined

@@ -25,7 +25,7 @@ export type TuiAgentConfig = {
   detectCmd: string
   /** Additional executable names that identify the same agent on PATH. */
   detectCmdAliases?: readonly string[]
-  /** Other commands that must also be present before this agent counts as installed. */
+  /** Other commands that must also be present before this agent counts as installed. Distro CLIs only: a WSL-host launch refuses Windows-only ones. */
   detectRequiredCommands?: readonly string[]
   /** Detection runtimes where this launch mode is not available as a detected agent. */
   detectUnsupportedRuntimes?: readonly TuiAgentDetectionRuntime[]

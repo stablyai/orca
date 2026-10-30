@@ -114,6 +114,8 @@ export type RemoteRuntimeSharedControlConnectionOptions = {
   onDiagnosticsChanged?: (diagnostics: RemoteRuntimeSharedConnectionDiagnostics) => void
   /** Any inbound frame, ping or pong on the current socket. */
   onAnswered?: () => void
+  /** Each socket that becomes ready, including after every reconnect. */
+  onReady?: () => void
   reconnectStableResetMs?: number
   /** Every socket close with its cause, e.g. for the diagnostics trace. */
   onSocketClosed?: (record: SharedControlSocketCloseRecord) => void

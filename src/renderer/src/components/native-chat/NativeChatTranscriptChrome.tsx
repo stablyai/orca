@@ -17,7 +17,7 @@ import {
 } from '@/components/editor/useLocalImageSrc'
 import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
 import { copyableNativeChatImageSrc, keepPreviewOpenForChatMenu } from './native-chat-image-copy'
-import { isNativeChatPastedImagePath } from './native-chat-image-paste'
+import { isNativeChatPastedImagePath } from '../../../../shared/native-chat-image-label'
 import { nativeChatImageLabel } from './native-chat-image-label'
 import { chatImageAccess } from '@/lib/local-file-access'
 
@@ -202,7 +202,7 @@ export function NativeChatImageAttachments({
 }: {
   blocks: NativeChatBlock[]
   runtimeContext?: RuntimeFileOperationArgs | null
-  /** Keep legacy terminal chips unchanged until that lane opts into previews. */
+  /** Callers without an image owner get label-only chips. */
   enablePreview?: boolean
 }): React.JSX.Element | null {
   const images = blocks.filter((block) => block.type === 'image-ref')
@@ -214,7 +214,11 @@ export function NativeChatImageAttachments({
     return (
       <div className="mb-2 flex flex-wrap gap-1.5">
         {images.map((image) => {
-          const label = image.alt ?? image.path ?? image.url ?? 'Image'
+          const label =
+            image.alt ??
+            image.path ??
+            image.url ??
+            translate('components.native-chat.transcript.imageFallback', 'Image')
           const imageKeyBase = `${label}-${image.url ?? ''}-${image.path ?? ''}`
           const occurrence = imageKeyCounts.get(imageKeyBase) ?? 0
           imageKeyCounts.set(imageKeyBase, occurrence + 1)
@@ -241,7 +245,11 @@ export function NativeChatImageAttachments({
   return (
     <div className="mb-2 flex flex-wrap gap-1.5">
       {images.map((image) => {
-        const label = image.alt ?? image.path ?? image.url ?? 'Image'
+        const label =
+          image.alt ??
+          image.path ??
+          image.url ??
+          translate('components.native-chat.transcript.imageFallback', 'Image')
         const imageKeyBase = `${label}-${image.url ?? ''}-${image.path ?? ''}`
         const occurrence = imageKeyCounts.get(imageKeyBase) ?? 0
         imageKeyCounts.set(imageKeyBase, occurrence + 1)
@@ -316,8 +324,9 @@ export function ProviderFrameRow({
         frame?.payload.truncated ? (
           <span>
             ·{' '}
-            {translate('components.native-chat.providerFrame.byteLength', '{{value0}} bytes', {
-              value0: frame.payload.byteLength
+            {translate('components.native-chat.providerFrame.byteCount', '{{count}} bytes', {
+              count: frame.payload.byteLength,
+              defaultValue_one: '{{count}} byte'
             })}
           </span>
         ) : null

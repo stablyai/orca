@@ -1,4 +1,4 @@
-import type { NativeChatAppearanceSettings } from '../../../shared/native-chat-appearance-settings'
+import type { NativeChatAppearanceSettings } from '../../../shared/native-chat/native-chat-appearance-settings'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { UI_ZOOM_MAX } from '../../../shared/ui-zoom-level'
 import { resolveZoomTarget } from './resolve-zoom-target'

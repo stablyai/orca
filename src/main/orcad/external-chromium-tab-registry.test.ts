@@ -18,14 +18,14 @@ function fakeSession(): ExternalChromiumBrowserSession {
 
 describe('external Chromium tab registry', () => {
   it('scopes a folder workspace through the browser-workspace resolver', async () => {
-    const resolveWorktreeSelector = vi.fn(async () => {
+    const resolveWorkspaceSelector = vi.fn(async () => {
       throw new Error('selector_not_found')
     })
     const host: Pick<
       RuntimeBrowserCommandHost,
-      'resolveWorktreeSelector' | 'resolveBrowserWorkspace'
+      'resolveWorkspaceSelector' | 'resolveBrowserWorkspace'
     > = {
-      resolveWorktreeSelector,
+      resolveWorkspaceSelector,
       resolveBrowserWorkspace: async () => ({ id: 'folder:docs' })
     }
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: these tab paths read only the two selector resolvers and optional notifiers.
@@ -40,6 +40,6 @@ describe('external Chromium tab registry', () => {
       .parse(await registry.listTabs(commandHost, { worktree: 'id:folder:docs' }))
 
     expect(listed.tabs.map((tab) => tab.browserPageId)).toEqual([created.browserPageId])
-    expect(resolveWorktreeSelector).not.toHaveBeenCalled()
+    expect(resolveWorkspaceSelector).not.toHaveBeenCalled()
   })
 })

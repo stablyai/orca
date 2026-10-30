@@ -34,11 +34,8 @@ function searchClient(
 }
 
 export const aiVaultApi = {
-  searchSessions: (
-    request: AiVaultSearchRequest,
-    executionHostScope?: ExecutionHostScope,
-    isActive?: () => boolean
-  ) => searchClient(executionHostScope).searchSessions(request, isActive),
+  searchSessions: (request: AiVaultSearchRequest, executionHostScope?: ExecutionHostScope) =>
+    searchClient(executionHostScope).searchSessions(request),
   searchStatus: (executionHostScope?: ExecutionHostId) =>
     searchClient(executionHostScope).searchStatus(),
   setSearchEnabled: (

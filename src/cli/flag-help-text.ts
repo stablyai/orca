@@ -2,6 +2,7 @@ export const FLAG_HELP_TEXT: Record<string, string> = {
   'external-worktree-visibility':
     '--external-worktree-visibility show|hide|inherit  Override or inherit non-Orca worktree visibility',
   agent: '--agent <id>          Launch a known TUI agent in the first terminal',
+  'agent-wait': "--agent-wait           Add each agent row's terminal wait verdict to JSON output",
   'base-branch': '--base-branch <ref>    Base branch/ref to create the worktree from',
   command: '--command <text>       Command to run in the terminal on startup',
   comment: '--comment <text>       Comment stored in Orca metadata',
@@ -42,6 +43,7 @@ export const FLAG_HELP_TEXT: Record<string, string> = {
   limit: '--limit <n>            Maximum number of rows to return',
   local: '--local                Target the current project instead of the global install',
   skill: '--skill <name>         Bundled skill to act on; repeat for several',
+  'max-elements': '--max-elements <n>    Show at most n elements of the accessibility tree',
   mode: '--mode <mode>          Mode such as edit, diff, or both',
   model: '--model <id>          Provider model id for a new agent launch',
   effort: '--effort <level>      Reasoning effort for the selected model',
@@ -102,6 +104,8 @@ export const FLAG_HELP_TEXT: Record<string, string> = {
   relations: '--relations            Include blocking, related, and duplicate links',
   activity: '--activity             Include issue field-change history',
   full: '--full                 Include all supported V1 issue context within caps',
+  'full-tree':
+    '--full-tree           Return the whole accessibility tree instead of changes since the last snapshot',
   'reuse-session':
     '--reuse-session        Reuse the previous live session for existing-workspace runs',
   'fresh-session': '--fresh-session        Disable session reuse for future runs',

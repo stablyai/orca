@@ -102,6 +102,7 @@ export default function CombinedDiffViewer({
   })
   const restore = useCombinedDiffViewRestore({
     entrySet,
+    file,
     gitStatusEntries,
     registry,
     setGeneration,
@@ -109,12 +110,12 @@ export default function CombinedDiffViewer({
     setSections,
     setSideBySide: preferences.setSideBySide,
     succession: buildCombinedDiffViewTabSuccession(file.id, viewStateScopeId),
-    viewStateKey,
-    worktreeId: file.worktreeId
+    viewStateKey
   })
   const { loadSection, loadDeferredSection } = useCombinedDiffSectionLoader({
     entrySet,
     file,
+    generation,
     registry,
     sectionCount: sections.length,
     setSectionHeights,

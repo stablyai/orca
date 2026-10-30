@@ -10,7 +10,6 @@ import {
   resolveGitHubApiRepositoryCandidates
 } from '../../github-api-repository'
 import { mapPRState } from '../../mappers'
-import { noteRepositoryRateLimitSpend } from '../../rate-limit'
 import { ownerRepoFromPullRequestUrl } from './../github-exec-scope'
 import { prRefreshUpstreamError } from './../gh-error-predicates'
 import {
@@ -32,7 +31,6 @@ import {
   createImplicitDefaultBranchPRPolicy,
   type ImplicitDefaultBranchPRContext
 } from './implicit-default-branch-pr'
-import { PR_BRANCH_LOOKUP_BUCKETS } from './pr-lookup-rate-limit'
 import type { HostedReviewLocalGitOptions } from './../github-exec-scope'
 export async function resolvePRForBranchOutcome(input: {
   repoPath: string
@@ -64,10 +62,6 @@ export async function resolvePRForBranchOutcome(input: {
   // Without local cwd, unresolved connection-backed lookups could follow ambient GH_REPO/GH_HOST.
   if (connectionId && candidates.length === 0) {
     return { kind: 'no-pr', fetchedAt: Date.now() }
-  }
-  // Renderer-direct lookups bypass coordinator accounting; debit both paths here.
-  for (const bucket of PR_BRANCH_LOOKUP_BUCKETS) {
-    noteRepositoryRateLimitSpend(headRepo ?? candidates[0], bucket, 1, ghOptions)
   }
   let data: PullRequestLookupData | null = null
   let dataRepo: OwnerRepo | null = null

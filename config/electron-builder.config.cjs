@@ -209,12 +209,22 @@ const macUsageDescriptions = {
     'Orca allows terminal-launched developer tools to access Bluetooth devices when you request it.',
   NSBluetoothPeripheralUsageDescription:
     'Orca allows terminal-launched developer tools to access Bluetooth devices when you request it.',
+  NSCalendarsUsageDescription:
+    'Orca allows terminal-launched developer tools to access your calendars when you request it.',
+  NSCalendarsFullAccessUsageDescription:
+    'Orca allows terminal-launched developer tools to access your calendars when you request it.',
   NSCameraUsageDescription: "Application requests access to the device's camera.",
+  NSContactsUsageDescription:
+    'Orca allows terminal-launched developer tools to access your contacts when you request it.',
   NSLocationUsageDescription:
     'Orca allows terminal-launched developer tools to access location when you request it.',
   NSLocalNetworkUsageDescription:
     'Orca allows terminal-launched developer tools to discover and connect to local development servers when you request it.',
   NSMicrophoneUsageDescription: "Application requests access to the device's microphone.",
+  NSRemindersUsageDescription:
+    'Orca allows terminal-launched developer tools to access your reminders when you request it.',
+  NSRemindersFullAccessUsageDescription:
+    'Orca allows terminal-launched developer tools to access your reminders when you request it.',
   NSAudioCaptureUsageDescription:
     'Orca allows terminal-launched developer tools to capture desktop audio when you request it.',
   NSBonjourServices: ['_http._tcp', '_https._tcp'],
@@ -331,6 +341,7 @@ module.exports = {
     'out/main/wsl-transcript-fs-process-entry.js',
     'out/main/foreign-sqlite-reader-entry.js',
     'out/main/plugin-host-entry.js',
+    'out/main/browser-extension-native-host-supervisor-entry.js',
     'out/main/computer-sidecar.js',
     'out/main/parcel-watcher-process-entry.js',
     'out/main/orcad/orcad-local-serve-selection-entry.js',

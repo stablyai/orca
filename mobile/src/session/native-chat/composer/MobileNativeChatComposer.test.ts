@@ -2,12 +2,18 @@ import { createElement, createRef, StrictMode, type ComponentProps, type ReactNo
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { Keyboard, type TextInput } from 'react-native'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import {
+  useMobileNativeChatDraft,
+  setMobileNativeChatDraftText
+} from './mobile-native-chat-draft-store'
 import { radii, spacing } from '../../../theme/mobile-theme'
 import { MobileNativeChatComposer as NativeChatComposer } from './MobileNativeChatComposer'
 import {
   findAllByHostType,
   findByHostType
 } from '../../../test-support/react-test-renderer-host-nodes'
+
+import { captureMobileNativeChatTextDestination } from './mobile-native-chat-draft-inputs'
 
 const getNoComposerEditGeneration = () => 0
 
@@ -108,6 +114,42 @@ describe('MobileNativeChatComposer', () => {
         String(node.type) === 'Pressable' && node.props.accessibilityLabel === 'Send message'
     )
   }
+
+  it('appends dictation until a selection is read, then replaces the selection it started on', async () => {
+    const scope = 'dictation-ordinary'
+    setMobileNativeChatDraftText(scope, 'Ok')
+    function Registered() {
+      const value = useMobileNativeChatDraft(scope)
+      return createElement(MobileNativeChatComposer, {
+        value,
+        draftScopeKey: scope,
+        onChangeText: (text) => setMobileNativeChatDraftText(scope, text),
+        onSend: async () => true,
+        sendSurfaceId: scope,
+        getSendCompletionGeneration: () => 0
+      })
+    }
+    await act(async () => {
+      renderer = create(createElement(Registered))
+    })
+    const input = () => findByHostType(renderer!.root, 'TextInput')
+    const say = (text: string) =>
+      act(() => void captureMobileNativeChatTextDestination()!.insert(text))
+    const select = (start: number, end: number) =>
+      input().props.onSelectionChange({ nativeEvent: { selection: { start, end }, text: 'Ok hi' } })
+    act(() => input().props.onFocus())
+    say('hi')
+    act(() => select(3, 5))
+    const destination = captureMobileNativeChatTextDestination()!
+    // A tap elsewhere while talking doesn't move where the words land.
+    act(() => {
+      select(0, 0)
+      destination.insert('there')
+    })
+    expect(input().props.value).toBe('Ok there')
+    say('now')
+    expect(input().props.value).toBe('Ok there now')
+  })
 
   it('reports an accepted send without owning route-scoped draft cleanup', async () => {
     const onChangeText = vi.fn()
@@ -411,9 +453,9 @@ describe('MobileNativeChatComposer', () => {
       act(async () => renderer!.root.findByProps({ accessibilityLabel: label }).props.onPress())
     expect(findAllByHostType(renderer!.root, 'BottomDrawer')).toHaveLength(0)
     await act(async () => field().props.onFocus())
-    await press('Model, Model effort')
+    await press('Model, Model')
     await act(async () => field().props.onBlur())
-    await press('effort, Not set')
+    await press('Effort, Not set')
     await press('Back to models')
     await press('Close picker')
     await act(async () => findByHostType(renderer!.root, 'BottomDrawer').props.onHidden())
@@ -510,6 +552,35 @@ describe('MobileNativeChatComposer', () => {
       input().props.onSelectionChange({ nativeEvent: { selection: { end: 7 } } })
     )
     expect(input().props.selection).toBeUndefined()
+  })
+
+  it.each([
+    ['then /cl', '/clear', 'then /clear '],
+    ['see @do', 'docs/my notes.md', 'see @"docs/my notes.md" ']
+  ])('completes the mid-prompt token in %j like desktop', async (value, label, expected) => {
+    const onChangeText = vi.fn()
+    await act(async () => {
+      renderer = create(
+        createElement(MobileNativeChatComposer, {
+          value,
+          onChangeText,
+          onSend: vi.fn().mockResolvedValue(true),
+          sendSurfaceId: 'tab-a',
+          getSendCompletionGeneration: getCurrentSendCompletionGeneration,
+          agent: 'claude',
+          filePaths: ['docs/my notes.md']
+        })
+      )
+    })
+    const input = findByHostType(renderer!.root, 'TextInput')
+    await act(async () =>
+      input.props.onSelectionChange({ nativeEvent: { selection: { end: value.length } } })
+    )
+    const row = renderer!.root.find(
+      (node) => node.props.accessibilityLabel === label && node.props.onPress !== undefined
+    )
+    await act(async () => row.props.onPress())
+    expect(onChangeText).toHaveBeenCalledWith(expected)
   })
 
   it('serves the active agent’s shared command catalog with descriptions', async () => {

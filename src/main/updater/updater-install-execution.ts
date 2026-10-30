@@ -10,12 +10,13 @@ import { getMacUpdateRunningInstances } from '../macos-update-running-instances'
 import { commitServeSupervisorPark } from './serve-supervisor-install-park'
 import { armUpdateInstallExitWatchdog } from '../update-install-exit-watchdog'
 import { getLinuxPackageType } from '../linux-update-package-type'
-import { LINUX_PACKAGE_MARKER_UNUSABLE_MESSAGE } from '../linux-package-downloaded-status'
+import { updaterCodedMessage } from '../../shared/updater-failure-copy'
 import { recordUpdaterLifecycle } from '../updater-lifecycle-diagnostics'
 import { requestServeUpdateHandoff, failServeUpdateHandoff } from '../serve-update-handoff'
 import { UpdaterMacInstallPreflight } from './updater-mac-install-preflight'
 import { prepareThisProcessShipItStaging } from './shipit-leftover-recovery'
 import { MAC_DEFERRED_STAGING_TIMEOUT_MS } from './updater-state'
+import { wslMoveInstallHold } from './updater-wsl-move-install-hold'
 
 export abstract class UpdaterInstallExecution extends UpdaterMacInstallPreflight {
   protected async performQuitAndInstall(): Promise<void> {
@@ -53,7 +54,19 @@ export abstract class UpdaterInstallExecution extends UpdaterMacInstallPreflight
       this.sendToMainWindow('updater:quitAndInstallAborted')
       this.sendInstallFailureStatus({
         state: 'error',
-        message: LINUX_PACKAGE_MARKER_UNUSABLE_MESSAGE,
+        ...updaterCodedMessage('linuxPackageMarkerUnusable'),
+        ...(pendingVersion ? { version: pendingVersion } : {})
+      })
+      return
+    }
+    const wslHold = wslMoveInstallHold()
+    if (wslHold) {
+      recordUpdaterLifecycle(wslHold.lifecycleEvent, { version: pendingVersion || null })
+      this.sendToMainWindow('updater:quitAndInstallAborted')
+      this.sendInstallFailureStatus({
+        state: 'error',
+        message: wslHold.message,
+        retryAction: 'install',
         ...(pendingVersion ? { version: pendingVersion } : {})
       })
       return

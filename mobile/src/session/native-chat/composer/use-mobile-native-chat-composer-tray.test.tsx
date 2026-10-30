@@ -57,9 +57,11 @@ vi.mock('../../../hooks/use-now', () => ({ useNow: () => 100_000 }))
 
 const CARD = {
   messageId: 'waiting-1',
+  position: 1,
   text: 'next',
+  line: 'next',
   state: 'waiting' as const,
-  paused: false,
+  hold: 'turn' as const,
   needsAttention: false,
   caption: null,
   attribution: null
@@ -206,3 +208,7 @@ describe('useMobileNativeChatComposerTray', () => {
     expect(duplicateKeys).toEqual([])
   })
 })
+
+vi.mock('../../MobileQueuedMessageComposer', () => ({
+  MobileQueuedMessageComposer: 'QueuedMessageComposer'
+}))

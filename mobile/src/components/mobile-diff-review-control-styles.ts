@@ -1,8 +1,9 @@
 import { StyleSheet } from 'react-native'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
 import { TEXT_INPUT_FONT_SIZE } from '../platform/text-input-font-size'
 
-export const mobileDiffReviewControlStyles = StyleSheet.create({
+export const mobileDiffReviewControlStyles = themedStyleSheet(() => ({
   footer: {
     position: 'absolute',
     left: 0,
@@ -128,4 +129,4 @@ export const mobileDiffReviewControlStyles = StyleSheet.create({
     gap: spacing.sm,
     marginTop: spacing.md
   }
-})
+}))

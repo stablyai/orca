@@ -4,7 +4,7 @@ import { resolveAgentSessionOptionLaunch } from './agent-session-option-launch'
 import {
   resolveNativeChatSessionOptionDefaults,
   updateNativeChatSessionOptionDefaults
-} from './native-chat-session-option-defaults'
+} from './native-chat/input/native-chat-session-option-defaults'
 
 describe('agent session option catalog', () => {
   it('returns no catalog for unknown agents', () => {

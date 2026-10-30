@@ -1,3 +1,4 @@
+import { structuredAgentSessionPaneKey } from '../../../../shared/structured-agent-session-projection'
 import { isStructuredTab } from '../../../../shared/structured-agent-session-tab'
 import type { Tab } from '../../../../shared/tab-types'
 
@@ -27,4 +28,22 @@ export function getStructuredAgentSessionTabs(
   }
   structuredTabsByUnifiedTabsSnapshot.set(unifiedTabsByWorktree, tabs)
   return tabs
+}
+
+const paneTabs = new WeakMap<Record<string, Tab[]>, ReadonlyMap<string, StructuredTab>>()
+export function getStructuredAgentSessionTabsByPaneKey(
+  tabs: Record<string, Tab[]>
+): ReadonlyMap<string, StructuredTab> {
+  const cached = paneTabs.get(tabs)
+  if (cached) {
+    return cached
+  }
+  const result = new Map(
+    getStructuredAgentSessionTabs(tabs).map((tab) => [
+      structuredAgentSessionPaneKey(tab.id, tab.entityId),
+      tab
+    ])
+  )
+  paneTabs.set(tabs, result)
+  return result
 }

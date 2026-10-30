@@ -13,6 +13,12 @@ vi.mock('@/lib/app-keyboard-router', () => ({
     window.removeEventListener(type, handler, { capture: true })
 }))
 
+vi.mock('@/lib/agent-session/structured-agent-session-busy', async () => ({
+  admitStructuredAgentSession: (
+    await import('@/store/slices/store-session-test-harness')
+  ).admissionFromBusy(() => false)
+}))
+
 vi.mock('zustand/react/shallow', () => ({
   // Why: zustand resolves the real react (unmocked in node_modules); the memo wrapper is inert here.
   useShallow: (selector: unknown) => selector
@@ -137,6 +143,8 @@ vi.mock('@/lib/connection-context', async () => {
 vi.mock('@/lib/create-untitled-markdown', () => ({
   createUntitledMarkdownFileWithTemplateSelection: vi.fn()
 }))
+// Why inline and sync: the shortcuts spec imports this module to assert the launch destination.
+vi.mock('@/lib/launch-agent-in-new-tab', () => ({ launchAgentInNewTab: vi.fn(() => null) }))
 vi.mock('@/lib/ipc-error', async () => {
   return (await import('./floating-terminal-panel-test-module-mocks')).createIpcErrorModule()
 })
