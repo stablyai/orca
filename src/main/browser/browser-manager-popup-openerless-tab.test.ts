@@ -76,12 +76,14 @@ function popupContents(opener: Pick<Electron.WebFrameMain, 'frameTreeNodeId'> | 
 
 const guestSession = { marker: 'synthetic-opener-session' }
 const rendererSendMock = vi.fn()
+const guestDownloadURLMock = vi.fn()
 
 function attachClickedGuest(pageUrl = 'https://app.example.com/'): WindowOpenHandler {
   const guest = {
     id: 2200,
     session: guestSession,
     getURL: vi.fn(() => pageUrl),
+    downloadURL: guestDownloadURLMock,
     isDestroyed: vi.fn(() => false),
     isCurrentlyAudible: vi.fn(() => false),
     getType: vi.fn(() => 'webview'),
@@ -267,5 +269,34 @@ describe('target=_blank links to local files', () => {
       origin: 'null',
       action: 'blocked'
     })
+  })
+})
+
+describe('target=_blank links during an agent download', () => {
+  const link = { frameName: '', features: '', disposition: 'foreground-tab' }
+
+  beforeEach(() => {
+    resetBrowserManagerMocks(browserMocks)
+    resetBrowserManagerState()
+    rendererSendMock.mockReset()
+    guestDownloadURLMock.mockReset()
+  })
+
+  it('downloads the link on the claiming page instead of opening a tab', () => {
+    const handler = attachClickedGuest()
+    const claim = browserManager.claimNextDownload(2200, '/work/out/report.csv')
+
+    expect(handler({ url: 'https://app.example.com/report.csv', ...link })).toEqual({
+      action: 'deny'
+    })
+    expect(guestDownloadURLMock).toHaveBeenCalledWith('https://app.example.com/report.csv')
+    expect(routedTabs()).toEqual([])
+
+    claim.release()
+    handler({ url: 'https://app.example.com/next', ...link })
+    expect(routedTabs()).toEqual([
+      { browserPageId: 'browser-1', url: 'https://app.example.com/next' }
+    ])
+    expect(guestDownloadURLMock).toHaveBeenCalledOnce()
   })
 })

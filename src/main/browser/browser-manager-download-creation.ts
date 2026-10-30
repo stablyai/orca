@@ -52,7 +52,10 @@ export abstract class BrowserManagerDownloadCreation extends BrowserManagerQueri
     this.requestedSavePaths.set(item, savePath)
   }
 
-  /** Agent `download`: saves the next download this page (or its popups) starts to `savePath`. */
+  /**
+   * Agent `download`: saves the next download this page (or its popups) starts to `savePath`.
+   * New-tab links opened meanwhile are downloaded in place instead of opening a tab.
+   */
   claimNextDownload(guestWebContentsId: number, savePath: string): BrowserDownloadClaim {
     const started = Promise.withResolvers<boolean>()
     const finished = Promise.withResolvers<BrowserDownloadFinishedEvent>()
@@ -71,6 +74,10 @@ export abstract class BrowserManagerDownloadCreation extends BrowserManagerQueri
         }
       }
     }
+  }
+
+  protected hasDownloadClaim(guestWebContentsId: number): boolean {
+    return this.downloadClaimsByGuestId.has(guestWebContentsId)
   }
 
   handleGuestWillDownload(args: { guestWebContentsId: number; item: Electron.DownloadItem }): void {
