@@ -48,7 +48,7 @@ export function mockBrowserManager(
   } as unknown as BrowserManager
 }
 
-type MockEmitterListener = (...args: never[]) => void
+type MockEmitterListener = (...args: any[]) => void
 
 export type MockWebContentsDebugger = {
   isAttached: Mock<() => boolean>

@@ -1,3 +1,4 @@
+import { EventEmitter } from 'node:events'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 const { execFileMock, webContentsFromIdMock, existsSyncMock, readFileSyncMock, stdinWrites } =
@@ -201,12 +202,11 @@ describe('AgentBrowserBridge', () => {
     ['the page its cross-site frame messages', undefined]
   ])('sets the files on the input a picker button opens in %s', async (_case, chooserSession) => {
     const file = import.meta.filename
-    const listeners: Parameters<typeof wc.debugger.on>[1][] = []
-    wc.debugger.on.mockImplementation((event, listener) => {
-      if (event === 'message') {
-        listeners.push(listener)
-      }
-    })
+    const debuggerEvents = new EventEmitter()
+    wc.debugger.on.mockImplementation((event, listener) => void debuggerEvents.on(event, listener))
+    wc.debugger.removeListener.mockImplementation(
+      (event, listener) => void debuggerEvents.removeListener(event, listener)
+    )
     wc.debugger.sendCommand.mockImplementation(async (method, params) => {
       const declaration =
         typeof params === 'object' && params !== null && 'functionDeclaration' in params
@@ -214,8 +214,8 @@ describe('AgentBrowserBridge', () => {
           : null
       if (declaration === FILE_UPLOAD_TARGET_FUNCTION) {
         // The page reports the picker its click opened on the frame's own session.
-        const event = [{}, 'Page.fileChooserOpened', { backendNodeId: 7 }, chooserSession ?? '']
-        listeners.forEach((listener) => Reflect.apply(listener, undefined, event))
+        const session = chooserSession ?? ''
+        debuggerEvents.emit('message', {}, 'Page.fileChooserOpened', { backendNodeId: 7 }, session)
         return { result: { value: false } }
       }
       if (method === 'DOM.resolveNode') {
@@ -246,7 +246,7 @@ describe('AgentBrowserBridge', () => {
       { enabled: false },
       'frame-session'
     ])
-    expect(wc.debugger.removeListener).toHaveBeenCalledWith('message', listeners[0])
+    expect(debuggerEvents.listenerCount('message')).toBe(0)
   })
 
   it.each([
