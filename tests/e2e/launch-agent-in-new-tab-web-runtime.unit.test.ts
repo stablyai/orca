@@ -1,3 +1,13 @@
+// @vitest-environment happy-dom
+import { createElement, useState } from 'react'
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { useTabAgentMenuLaunch } from '@/components/tab-bar/QuickLaunchButton'
+import { resetHostStructuredAgentsForTests } from '@/runtime/host-structured-agents'
+import { replaceRuntimeEnvironmentRevisions } from '@/runtime/runtime-environment-revision'
+import { STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY } from '../../src/shared/protocol-version'
+import { AGENT_SESSION_AGENTS_METHOD } from '../../src/shared/agent-session/agent-session-registered-agents'
+import { pasteDraftWhenAgentReady } from '@/lib/agent-paste-draft'
+import { newAgentPromptOutcome } from '@/lib/new-agent-prompt-outcome'
 import { newAgentLaunchRequestId } from '@/lib/agent-launch-request-id'
 import type * as TerminalOperation from '@/runtime/web-runtime-terminal-create-operation'
 import type * as WebEnvironment from '@/runtime/web-runtime-session-environment'
@@ -22,9 +32,10 @@ const mocks = vi.hoisted(() => ({
 }))
 
 const choices: AgentLaunchChoices = {}
-const hostStatuses = new Map<string, { status: { hostPlatform: string; capabilities: string[] } }>([
-  ['web-runtime', { status: { hostPlatform: 'linux', capabilities: [] } }]
-])
+const hostStatuses = new Map<
+  string,
+  { status: { hostPlatform: string; capabilities: string[]; runtimeId?: string } }
+>([['web-runtime', { status: { hostPlatform: 'linux', capabilities: [] } }]])
 const store = {
   activeRepoId: 'repo-1',
   activeWorktreeId: 'wt-1',
@@ -33,6 +44,7 @@ const store = {
     agentCmdOverrides: {} as Record<string, string>,
     agentDefaultArgs: {} as Record<string, string>,
     agentDefaultEnv: {} as Record<string, Record<string, string>>,
+    experimentalNativeChat: false,
     activeRuntimeEnvironmentId: 'web-runtime' as string | null
   },
   projects: [{ id: 'repo-1', localWindowsRuntimePreference: { kind: 'inherit-global' as const } }],
@@ -106,19 +118,26 @@ vi.mock('@/runtime/web-runtime-session-environment', async (importOriginal) => (
   ...(await importOriginal<typeof WebEnvironment>()),
   isWebRuntimeSessionActive: vi.fn(() => true)
 }))
-afterEach(() => vi.unstubAllGlobals())
+afterEach(() => {
+  cleanup()
+  vi.unstubAllGlobals()
+  vi.useRealTimers()
+})
 
 describe('launchAgentInNewTab paired web runtime', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mocks.actualOperation = false
     clearHostAgentMenuSettingsForTests()
+    resetHostStructuredAgentsForTests()
+    replaceRuntimeEnvironmentRevisions([{ id: 'web-runtime', createdAt: 1 }])
     mocks.capability.mockResolvedValue(false)
     store.settings = {
       agentLaunchChoices: {},
       agentCmdOverrides: {},
       agentDefaultArgs: {},
       agentDefaultEnv: {},
+      experimentalNativeChat: false,
       activeRuntimeEnvironmentId: 'web-runtime'
     }
     store.runtimeStatusByEnvironmentId = new Map([
@@ -185,7 +204,9 @@ describe('launchAgentInNewTab paired web runtime', () => {
     expect(mocks.setActiveTabType).toHaveBeenCalledTimes(activate && status === 'created' ? 1 : 0)
     expect(mocks.toastError).toHaveBeenCalledTimes(status === 'failed' ? 1 : 0)
     if (status === 'failed') {
-      expect(mocks.toastError).toHaveBeenCalledExactlyOnceWith('The host refused the launch.')
+      expect(mocks.toastError).toHaveBeenCalledExactlyOnceWith(
+        expect.stringMatching(/Claude.*Check the workspace connection/)
+      )
     }
     // A local tab closes locally (the host close no-ops), so a launch leaves it alone.
     expect(mocks.closeTab).not.toHaveBeenCalled()
@@ -274,11 +295,11 @@ describe('launchAgentInNewTab paired web runtime', () => {
     })
     await expect(refused?.terminalCompletion).resolves.toEqual({
       delivered: false,
-      failureNotified: false,
-      outcome: { status: 'failed', message: '' }
+      failureNotified: true,
+      outcome: { status: 'failed', message: expect.stringContaining('Claude') }
     })
     expect(mocks.createWebRuntimeSessionTerminal).toHaveBeenCalledTimes(dispatched)
-    expect(mocks.toastError).not.toHaveBeenCalled()
+    expect(mocks.toastError).toHaveBeenCalledOnce()
   })
 
   it.each(['deadline', 'prepared', 'authoritative', 'old'] as const)(
@@ -425,6 +446,235 @@ describe('launchAgentInNewTab paired web runtime', () => {
       }
     }
   )
+
+  it('settles ordinary QuickLaunch preparation independently of prompt observers', async () => {
+    mocks.actualOperation = true
+    const dispatch = vi.fn(async (request) => ({
+      ok: true,
+      result:
+        request.method === 'session.tabs.createTerminal'
+          ? { tab: { id: 'host-tab', leafId: 'leaf' } }
+          : {}
+    }))
+    Object.assign(window, { api: { runtimeEnvironments: { call: dispatch } } })
+    let pick = false
+    function QuickLaunch() {
+      const launch = useTabAgentMenuLaunch({
+        worktreeId: 'wt-1',
+        groupId: 'group-1',
+        onFocusTerminal: vi.fn()
+      })
+      return createElement(
+        'button',
+        {
+          onClick: () =>
+            launch(
+              { kind: 'cli', agent: 'claude', executionHostId: 'runtime:web-runtime' },
+              pick
+                ? { agent: 'claude', surface: 'terminal', choices: { model: 'opus' } }
+                : undefined
+            )
+        },
+        'Launch Claude'
+      )
+    }
+    render(createElement(QuickLaunch))
+    store.settings.agentDefaultArgs = { claude: "--model 'opus" }
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Launch Claude' })))
+    expect(mocks.toastError).toHaveBeenCalledExactlyOnceWith(
+      expect.stringMatching(/Claude.*try again/)
+    )
+    expect(dispatch).not.toHaveBeenCalled()
+    mocks.toastError.mockClear()
+    store.settings.agentDefaultArgs = {}
+    store.settings.agentCmdOverrides = { claude: 'claude --model sonnet' }
+    pick = true
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Launch Claude' })))
+    expect(mocks.toastError).toHaveBeenCalledOnce()
+    expect(dispatch).not.toHaveBeenCalled()
+    mocks.toastError.mockClear()
+    pick = false
+    store.settings.agentLaunchChoices = { claude: { model: 'opus' } }
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Launch Claude' })))
+    expect(
+      dispatch.mock.calls.filter(([r]) => r.method === 'session.tabs.createTerminal')
+    ).toHaveLength(1)
+    expect(
+      dispatch.mock.calls.find(([r]) => r.method === 'session.tabs.createTerminal')?.[0].params
+        .command
+    ).toContain('sonnet')
+    expect(mocks.toastError).not.toHaveBeenCalled()
+    mocks.capability.mockRejectedValueOnce(new Error('private transport detail'))
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Launch Claude' })))
+    expect(mocks.toastError).toHaveBeenCalledExactlyOnceWith(
+      expect.stringMatching(/Claude.*try again/)
+    )
+    expect(mocks.createTab).not.toHaveBeenCalled()
+  })
+
+  it.each(['submit-after-ready', 'draft'] as const)(
+    'retains the %s prompt with one preparation notice',
+    async (promptDelivery) => {
+      store.settings.agentDefaultArgs = { claude: "--model 'opus" }
+      const handoff = vi.fn()
+      function PromptLaunch() {
+        const [prompt, setPrompt] = useState('keep this task')
+        const launch = useTabAgentMenuLaunch({
+          worktreeId: 'wt-1',
+          groupId: 'group-1',
+          onFocusTerminal: vi.fn(),
+          prompt,
+          promptDelivery,
+          onPromptDelivered: () => setPrompt(''),
+          onPromptHandedOff: handoff
+        })
+        return createElement(
+          'div',
+          {},
+          createElement('textarea', { 'aria-label': 'Task', value: prompt, readOnly: true }),
+          createElement(
+            'button',
+            {
+              onClick: () =>
+                launch({ kind: 'cli', agent: 'claude', executionHostId: 'runtime:web-runtime' })
+            },
+            'Launch task'
+          )
+        )
+      }
+      render(createElement(PromptLaunch))
+      await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Launch task' })))
+      expect(mocks.toastError).toHaveBeenCalledExactlyOnceWith(
+        expect.stringMatching(/Claude.*try again/)
+      )
+      expect(screen.getByRole('textbox', { name: 'Task' })).toHaveProperty(
+        'value',
+        'keep this task'
+      )
+      expect(mocks.createWebRuntimeSessionTerminal).not.toHaveBeenCalled()
+      expect(mocks.createTab).not.toHaveBeenCalled()
+      expect(handoff).toHaveBeenCalledTimes(promptDelivery === 'draft' ? 0 : 1)
+      if (promptDelivery !== 'draft') {
+        await expect(handoff.mock.calls[0][0]).resolves.toEqual({ delivered: false })
+      }
+    }
+  )
+
+  it.each(['created', 'cancelled', 'late-answer'] as const)(
+    'runs the real host wait and single terminal re-entry through %s settlement',
+    async (mode) => {
+      vi.useFakeTimers()
+      mocks.actualOperation = true
+      mocks.capability.mockResolvedValue(true)
+      store.settings.experimentalNativeChat = true
+      store.runtimeStatusByEnvironmentId.get('web-runtime')!.status = {
+        hostPlatform: 'linux',
+        runtimeId: 'runtime-1',
+        capabilities: [
+          AGENT_LAUNCH_CHOICES_CAPABILITY,
+          STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY
+        ]
+      }
+      const listing = Promise.withResolvers<{ agents: [] }>()
+      const settings = Promise.withResolvers<{
+        settings: ReturnType<typeof projectAgentLaunchSettings>
+      }>()
+      mocks.hostRpc.mockImplementation((_target, method) =>
+        method === AGENT_SESSION_AGENTS_METHOD ? listing.promise : settings.promise
+      )
+      const dispatch = vi.fn(async (request) => ({
+        ok: true,
+        result:
+          request.method === 'terminal.createAgentSession'
+            ? { terminal: { tabId: 'host-tab', paneKey: 'host-tab:leaf' } }
+            : {}
+      }))
+      stubRuntimeEnvironmentBridge({ call: dispatch })
+      const { launchAgentInNewTab } =
+        await import('../../src/renderer/src/lib/launch-agent-in-new-tab')
+      // OpenCode has no built-in structured fallback without the owning host's catalog.
+      const result = launchAgentInNewTab({
+        requestId: newAgentLaunchRequestId(),
+        agent: 'opencode',
+        worktreeId: 'wt-1'
+      })
+      expect(mocks.hostRpc).toHaveBeenCalledWith(
+        expect.anything(),
+        AGENT_SESSION_AGENTS_METHOD,
+        {},
+        expect.anything()
+      )
+      expect(dispatch).not.toHaveBeenCalled()
+      if (mode === 'late-answer') {
+        await vi.advanceTimersByTimeAsync(3_000)
+      } else {
+        listing.resolve({ agents: [] })
+      }
+      await vi.advanceTimersByTimeAsync(0)
+      expect(
+        mocks.hostRpc.mock.calls.filter(([, method]) => method !== AGENT_SESSION_AGENTS_METHOD)
+      ).toHaveLength(1)
+      if (mode === 'cancelled') {
+        replaceRuntimeEnvironmentRevisions([{ id: 'web-runtime', createdAt: 2 }])
+      } else {
+        settings.resolve({
+          settings: projectAgentLaunchSettings({
+            agentLaunchChoices: { opencode: { model: 'provider/model' } }
+          })
+        })
+      }
+      await vi.advanceTimersByTimeAsync(0)
+      await expect(result?.structuredSettlement).resolves.toMatchObject({
+        kind: mode === 'cancelled' ? 'cancelled' : 'terminal'
+      })
+      const creates = () =>
+        dispatch.mock.calls.filter(([r]) => r.method === 'terminal.createAgentSession')
+      expect(creates()).toHaveLength(mode === 'cancelled' ? 0 : 1)
+      listing.resolve({ agents: [] })
+      settings.resolve({ settings: projectAgentLaunchSettings({ agentLaunchChoices: {} }) })
+      await vi.advanceTimersByTimeAsync(4_000)
+      expect(creates()).toHaveLength(mode === 'cancelled' ? 0 : 1)
+      expect(mocks.toastError).not.toHaveBeenCalled()
+      expect(mocks.createTab).not.toHaveBeenCalled()
+    }
+  )
+
+  it('retains the prompt and reports once when delivery rejects after an accepted create', async () => {
+    mocks.actualOperation = true
+    const dispatch = vi.fn(async () => ({
+      ok: true,
+      result: { tab: { id: 'host-tab', leafId: 'leaf' } }
+    }))
+    stubRuntimeEnvironmentBridge({ call: dispatch })
+    vi.mocked(pasteDraftWhenAgentReady).mockRejectedValueOnce(new Error('paste transport failed'))
+    const { launchAgentInNewTab } =
+      await import('../../src/renderer/src/lib/launch-agent-in-new-tab')
+    const result = launchAgentInNewTab({
+      requestId: newAgentLaunchRequestId(),
+      agent: 'claude',
+      worktreeId: 'wt-1',
+      requestedSurface: 'terminal',
+      prompt: 'keep this task',
+      promptDelivery: 'submit-after-ready'
+    })
+    await expect(result?.terminalCompletion).resolves.toMatchObject({
+      outcome: { status: 'created' },
+      delivered: false,
+      failureNotified: true
+    })
+    expect(result?.promptDeliveryResult).toBeDefined()
+    await expect(
+      newAgentPromptOutcome({ delivery: result!.promptDeliveryResult! })
+    ).resolves.toEqual({ delivered: false })
+    expect(mocks.toastError).toHaveBeenCalledExactlyOnceWith(
+      expect.stringMatching(/opened a terminal for Claude.*Send the prompt/)
+    )
+    expect(store.seedNativeChatLaunchPrompt).toHaveBeenCalledWith(
+      expect.objectContaining({ text: 'keep this task' })
+    )
+    expect(store.markNativeChatLaunchPromptFailed).toHaveBeenCalledOnce()
+    expect(dispatch.mock.calls).toHaveLength(1)
+  })
 
   it('forwards prompt launch env and captured config to the host runtime', async () => {
     store.settings.agentDefaultArgs = { codex: '--model gpt-5 --reasoning-effort high' }

@@ -65,7 +65,7 @@ export function agentLaunchSettingsRollbackUpdates(
       continue
     }
     for (const field of touched) {
-      const restored = { ...current[field], ...rollback[field] }
+      const restored = { ...(rollback[field] ?? current[field]) }
       if (before[field] && Object.hasOwn(before[field], agent)) {
         Object.assign(restored, { [agent]: before[field]?.[agent] })
       } else {

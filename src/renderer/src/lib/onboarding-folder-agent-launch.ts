@@ -1,4 +1,7 @@
-import { ensureAgentLaunchPreferences } from '@/components/settings/use-host-agent-launch-preferences'
+import {
+  ensureAgentLaunchPreferences,
+  type AgentLaunchPreferences
+} from '@/components/settings/use-host-agent-launch-preferences'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import type { OnboardingState } from '../../../shared/onboarding-state-types'
 import type { TuiAgent } from '../../../shared/tui-agent'
@@ -57,10 +60,18 @@ export async function resolveDismissedOnboardingFolderAgentLaunch(args: {
   if (!context) {
     return { agent, plan }
   }
-  const preferences = await ensureAgentLaunchPreferences(args.store, {
-    kind: 'folder',
-    worktreeId: args.worktreeId
-  })
+  let preferences: AgentLaunchPreferences
+  try {
+    preferences = await ensureAgentLaunchPreferences(args.store, {
+      kind: 'folder',
+      worktreeId: args.worktreeId
+    })
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'AbortError') {
+      return { agent, plan }
+    }
+    throw error
+  }
   const startup = buildOnboardingFolderAgentStartup(
     args.store.settings
       ? {

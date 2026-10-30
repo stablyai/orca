@@ -43,7 +43,7 @@ export function AgentChoiceMenu({
               type="button"
               variant="outline"
               size="xs"
-              aria-label={current}
+              aria-label={`${label}: ${current}`}
               className="min-w-0 max-w-full"
             >
               <span className="truncate text-xs">{current}</span>

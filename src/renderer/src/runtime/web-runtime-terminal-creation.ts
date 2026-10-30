@@ -61,7 +61,7 @@ export async function createWebRuntimeAgentSessionTerminal(
     agent: args.agent,
     submit: args.submitPrompt,
     forcePaste: args.forcePromptPaste
-  })
+  }).catch(() => false)
   return { outcome: created.outcome, promptDelivered }
 }
 

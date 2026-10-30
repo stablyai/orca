@@ -499,7 +499,7 @@ it('offers the selected paired native-only program editor and writes effort with
   expect(within(row).queryByRole('textbox', { name: 'Arguments' })).toBeNull()
   expect(within(row).queryByRole('textbox', { name: 'Command' })).toBeNull()
   expect(screen.queryByRole('radiogroup', { name: 'Open Antigravity as' })).toBeNull()
-  const effort = within(row).getByRole('button', { name: 'Default' })
+  const effort = within(row).getByRole('button', { name: 'Reasoning effort: Default' })
   await userEvent.click(effort)
   const option = screen.getAllByRole('menuitemradio').find((item) => item.textContent === 'High')
   if (!option) {

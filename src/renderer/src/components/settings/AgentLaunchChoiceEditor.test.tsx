@@ -11,6 +11,7 @@ import {
   type AgentLaunchSettingsSource
 } from '../../../../shared/agent-launch-settings'
 import { resolveAgentPermission } from '../../../../shared/tui-agent-permission-choice'
+import { AgentChoiceControls } from './SourceControlActionModelPicker'
 
 vi.stubGlobal(
   'ResizeObserver',
@@ -21,6 +22,24 @@ vi.stubGlobal(
   }
 )
 afterEach(cleanup)
+
+it('names rendered row triggers by purpose and current value through defaults, selection and disabling', () => {
+  const props = { agent: 'claude' as const, layout: 'rows' as const, onChange: vi.fn() }
+  const view = render(<AgentChoiceControls {...props} value={{}} />)
+  expect(
+    screen.getByRole('button', { name: 'Model: Agent default' }).hasAttribute('disabled')
+  ).toBe(false)
+  expect(screen.getByRole('button', { name: 'Effort: Default' })).toBeTruthy()
+  view.rerender(
+    <AgentChoiceControls
+      {...props}
+      value={{ model: 'opus', options: { effort: 'high' } }}
+      disabled
+    />
+  )
+  expect(screen.getByRole('button', { name: 'Model: Opus' }).hasAttribute('disabled')).toBe(true)
+  expect(screen.getByRole('button', { name: 'Effort: High' }).hasAttribute('disabled')).toBe(true)
+})
 const initial: AgentLaunchSettingsSource = {
   agentPermissionDefault: 'ask',
   agentDefaultArgs: { claude: '--verbose' },
@@ -143,7 +162,7 @@ it('saves a dirty Arguments edit with a menu choice once, and shares pending sta
   const input = screen.getByRole('textbox', { name: 'Arguments' })
   fireEvent.change(input, { target: { value: '--model sonnet --verbose changed' } })
   input.focus()
-  await userEvent.click(screen.getByRole('button', { name: 'Opus' }))
+  await userEvent.click(screen.getByRole('button', { name: 'Model: Opus' }))
   expect(save).not.toHaveBeenCalled()
   await userEvent.click(screen.getByRole('menuitemradio', { name: 'Haiku' }))
   await waitFor(() => expect(save).toHaveBeenCalledTimes(1))
@@ -164,7 +183,7 @@ it('saves a dirty Arguments edit with a menu choice once, and shares pending sta
     patch: undefined,
     userArgs: ''
   })
-  expect(screen.getByRole('button', { name: 'Haiku' }).hasAttribute('disabled')).toBe(true)
+  expect(screen.getByRole('button', { name: 'Model: Haiku' }).hasAttribute('disabled')).toBe(true)
   await act(async () => pending.resolve())
   await waitFor(() => expect(input).toHaveProperty('value', ''))
 })
@@ -178,7 +197,9 @@ it.each([
     const save = vi.fn(async () => {})
     render(<Fixture save={save} />)
     fireEvent.change(screen.getByRole('textbox', { name: 'Arguments' }), { target: { value: raw } })
-    await userEvent.click(screen.getByRole('button', { name: label }))
+    await userEvent.click(
+      screen.getByRole('button', { name: `${label === 'Opus' ? 'Model' : 'Effort'}: ${label}` })
+    )
     await userEvent.click(screen.getByRole('menuitemradio', { name: label }))
     await waitFor(() => expect(save).toHaveBeenCalledTimes(1))
     expect(save).toHaveBeenCalledWith({
