@@ -626,3 +626,48 @@ it.each([false, true])(
     })
   }
 )
+
+it('starts a seeded chat worker on its model and thinking level by flags, sending no RPC switch', async () => {
+  const models = await readPiRpcModelOptions({ request: async () => ({ models: [gpt5] }) })
+  const seed = { model: 'openai-codex/gpt-6.1-sol', effort: 'low' }
+  const h = await setup({
+    create: true,
+    seed,
+    catalog: models,
+    native: { model: { ...gpt5, id: 'gpt-6.1-terra' }, seededLaunch: seed },
+    firstMessage: 'worker task'
+  })
+  await vi.waitFor(() => expect(h.script.spawns()).toBe(1))
+  expect(h.script.launchArgs()[0]).toEqual([
+    '--mode',
+    'rpc',
+    '--model',
+    'openai-codex/gpt-6.1-sol',
+    '--thinking',
+    'low'
+  ])
+  h.script.releaseHandshake()
+  await vi.waitFor(() => expect(h.script.prompts()).toEqual(['worker task']))
+  expect(stateInputs(h.script)).toMatchObject([
+    { command: 'prompt', params: { message: 'worker task', effort: 'low' } }
+  ])
+  await expect(h.host.readOptions(HOST_TEST_SESSION)).resolves.toMatchObject({
+    current: { model: 'openai-codex/gpt-6.1-sol', effort: 'low' }
+  })
+
+  expect(
+    (
+      await h.host.setOption(h.caller, {
+        envelope: envelope('agentSession.setOption', { key: 'effort', value: 'high' }),
+        key: 'effort',
+        value: 'high'
+      })
+    ).ok
+  ).toBe(true)
+  expect((await sendText(h.host, h.caller, 'after picker')).ok).toBe(true)
+  await vi.waitFor(() => expect(h.script.prompts()).toHaveLength(2))
+  expect(stateInputs(h.script).slice(1)).toMatchObject([
+    { command: 'set_thinking_level', params: { level: 'high' } },
+    { command: 'prompt', params: { message: 'after picker', effort: 'high' } }
+  ])
+})

@@ -117,6 +117,34 @@ describe('orchestration worker launch preferences', () => {
     ).toThrow('does not support effort turbo')
   })
 
+  it('passes a Pi provider/id model and thinking level through the launch catalog', () => {
+    const model = 'openai-codex/gpt-6.1-terra'
+    const launch = resolveWorkerLaunchPreferences({ agent: 'pi', model, effort: 'medium' })
+    expect(launch).toEqual({
+      preferences: { model, effort: 'medium' },
+      receipt: {
+        requested: { agent: 'pi', model, effort: 'medium' },
+        effective: { agent: 'pi', model, effort: 'medium' }
+      }
+    })
+    expect(resolveAgentSessionOptionLaunch('pi', launch.preferences, [], false).args).toEqual([
+      '--model',
+      model,
+      '--thinking',
+      'medium'
+    ])
+  })
+
+  it('rejects Pi effort values outside its thinking levels', () => {
+    expect(() =>
+      resolveWorkerLaunchPreferences({
+        agent: 'pi',
+        model: 'openai-codex/gpt-6.1-terra',
+        effort: 'turbo'
+      })
+    ).toThrow('does not support effort turbo')
+  })
+
   it('refuses an OpenCode model on an unsupported execution host', () => {
     expect(() =>
       resolveWorkerLaunchPreferences({ agent: 'opencode', model: 'meta/muse-spark-1.3' })

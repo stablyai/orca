@@ -124,6 +124,34 @@ describe('Pi host launch resolution', () => {
     })
   })
 
+  it('starts a new conversation on the seeded model and thinking level, never a resumed one', async () => {
+    const h = await setup()
+    const options = { model: 'openai-codex/gpt-6.1-terra', effort: 'medium' }
+    vi.spyOn(h.store, 'requireWritableRecord').mockReturnValue({ ...h.record, options })
+    const launch = await h.resolver(identity)
+    expect(launch.launchIntent).toEqual(options)
+    expect(buildPiRpcLaunch(launch).args).toEqual([
+      '--mode',
+      'rpc',
+      '--model',
+      'openai-codex/gpt-6.1-terra',
+      '--thinking',
+      'medium'
+    ])
+
+    const file = join(root, 'seeded.jsonl')
+    await writeFile(file, `${JSON.stringify({ type: 'session', cwd: h.workspace })}\n`)
+    vi.spyOn(h.store, 'requireWritableRecord').mockReturnValue({
+      ...h.record,
+      options,
+      providerHandleChain: [h.prior(file)]
+    })
+    const resumed = await h.resolver(identity)
+    expect(resumed.sessionFile).toBe(file)
+    expect(resumed.extraArgs).toBeUndefined()
+    expect(resumed.launchIntent).toBeUndefined()
+  })
+
   it('resolves Pi again after one environment refresh when the snapshot has no Pi', async () => {
     const h = await setup()
     let path = '/before-install'

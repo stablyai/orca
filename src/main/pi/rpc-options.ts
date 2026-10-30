@@ -120,6 +120,13 @@ export class PiRpcOptionObservations {
     this.observed = { models: [], current: piRpcStateOptions(state) }
   }
 
+  /** Launch flags already applied these, so dispatch finds them current and never rewrites them. */
+  adoptLaunchIntent(launchIntent: Readonly<Record<string, string>> | undefined): void {
+    for (const [key, value] of Object.entries(launchIntent ?? {})) {
+      this.proof.current.set(key, value)
+    }
+  }
+
   prepare(): (options: AgentSessionOptionsResult) => boolean {
     const writes = new Map(this.proof.writes)
     const consumed = new Map(this.proof.current)

@@ -27,6 +27,7 @@ import {
 import type { StructuredAgentLaunchPartResolver } from '../runtime/structured-agent-launch-composition'
 import { isWindowsProcessStartTimeAvailable } from '../windows/windows-process-table'
 import { sessionIdFromFileName } from '../ai-vault/session-scanner-accumulator'
+import { resolveAgentSessionOptionLaunch } from '../../shared/agent-session-option-launch'
 import {
   PI_RPC_SESSION_ENV_TO_DELETE,
   withoutPiCallerEnv,
@@ -38,6 +39,8 @@ export type PiRpcResolvedLaunch = PiRpcLaunchOptions & {
   replacement?: 'unsaved' | 'restore-failed'
   /** Conversation files, newest first; empty for a new conversation. */
   lineage?: readonly string[]
+  /** Model and effort the launch flags already applied; RPC skips writing them again. */
+  launchIntent?: Readonly<Record<string, string>>
 }
 export type PiRpcLaunchPartDeps = {
   resolveCommand?: typeof resolveCliCommand
@@ -204,11 +207,16 @@ export function piRpcLaunchPart(
     if (launchVersion.status === 'tooOld') {
       throw AgentCliInstallationError.tooOld('pi', launchVersion)
     }
+    // A new conversation starts on the seeded pick; a resumed or forked one keeps its own.
+    const seeded = sessionFile || forkFile ? null : piRpcSeededLaunch(record.options)
     return {
       launch: {
         command,
         prefixArgs,
         fullAccess: deps.resolveFullAccess?.() ?? true,
+        ...(seeded && seeded.extraArgs.length > 0
+          ? { extraArgs: seeded.extraArgs, launchIntent: seeded.launchIntent }
+          : {}),
         previous,
         ...(sessionFile || forkFile
           ? { lineage: piConversationFiles(record.providerHandleChain) }
@@ -221,6 +229,28 @@ export function piRpcLaunchPart(
       inheritedEnvToDelete: PI_RPC_SESSION_ENV_TO_DELETE
     }
   }
+}
+
+/** The `--model`/`--thinking` argv for a seeded model and effort, and the values it applies. */
+export function piRpcSeededLaunch(options: Readonly<Record<string, string>> | undefined): {
+  extraArgs: string[]
+  launchIntent: Record<string, string>
+} {
+  const { model, effort } = options ?? {}
+  const { args, appliedValues } = resolveAgentSessionOptionLaunch(
+    'pi',
+    { ...(model ? { model } : {}), ...(effort ? { effort } : {}) },
+    [],
+    false
+  )
+  const launchIntent: Record<string, string> = {}
+  for (const key of ['model', 'effort'] as const) {
+    const value = appliedValues[key]
+    if (typeof value === 'string') {
+      launchIntent[key] = value
+    }
+  }
+  return { extraArgs: args, launchIntent }
 }
 
 /** Follow resumes and directory forks to the original session; forks preserve entry IDs. */

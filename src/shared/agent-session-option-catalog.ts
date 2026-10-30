@@ -14,6 +14,7 @@ import {
 import { GROK_SESSION_OPTION_CATALOG } from './agent-session-option-catalog-grok'
 import { MUSE_SESSION_OPTION_CATALOG } from './agent-session-option-catalog-muse'
 import { OMP_SESSION_OPTION_CATALOG } from './agent-session-option-catalog-omp'
+import { PI_LAUNCH_OPTION_CATALOG } from './agent-session-option-catalog-pi'
 import type {
   AgentSessionOptionCatalog,
   AgentSessionOptionCatalogMap,
@@ -43,6 +44,12 @@ const CATALOGS: AgentSessionOptionCatalogMap = {
   grok: GROK_SESSION_OPTION_CATALOG,
   muse: MUSE_SESSION_OPTION_CATALOG,
   omp: OMP_SESSION_OPTION_CATALOG
+}
+
+// Launch serialization only; these agents expose no terminal Native Chat option surface.
+const LAUNCH_ONLY_CATALOGS: AgentSessionOptionCatalogMap = {
+  opencode: OPENCODE_LAUNCH_OPTION_CATALOG,
+  pi: PI_LAUNCH_OPTION_CATALOG
 }
 
 export function getAgentSessionOptionCatalog(agent: AgentType): AgentSessionOptionCatalog | null {
@@ -103,5 +110,5 @@ export function sessionOptionValueIsValid(value: unknown): value is SessionOptio
 export function getAgentSessionOptionLaunchCatalog(
   agent: AgentType
 ): AgentSessionOptionCatalog | null {
-  return agent === 'opencode' ? OPENCODE_LAUNCH_OPTION_CATALOG : getAgentSessionOptionCatalog(agent)
+  return LAUNCH_ONLY_CATALOGS[agent] ?? getAgentSessionOptionCatalog(agent)
 }

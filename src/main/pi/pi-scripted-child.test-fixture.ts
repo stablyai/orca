@@ -6,6 +6,7 @@ import { JsonlRpcResponseError, type JsonlRpcRecord } from '../jsonl-rpc/peer'
 import type { ProviderProcessLaunch } from '../provider-process/provider-process-launch'
 import type { ScriptedAgentChild } from '../runtime/structured-agent-scripted-child.test-fixture'
 import type { PiRpcConnection } from './rpc-session'
+import { piRpcSeededLaunch } from './rpc-launch-resolution'
 
 type PiScriptOptions = {
   signedOut?: boolean
@@ -17,6 +18,8 @@ type PiScriptOptions = {
   }
   /** Recorded native responses for requested levels, rather than a second clamp implementation. */
   appliedEfforts?: Readonly<Record<string, string>>
+  /** The record's seeded model and effort, launched as flags on a new conversation. */
+  seededLaunch?: Readonly<Record<string, string>>
 }
 
 class ScriptedPiConnection implements PiRpcConnection {
@@ -52,6 +55,16 @@ class ScriptedPiConnection implements PiRpcConnection {
     private readonly inputs: { command: string; params: Record<string, unknown> }[] = []
   ) {
     this.model = options.model ?? this.model
+    // As Pi does, start on the launch's --model and --thinking.
+    const model = launch.args[launch.args.indexOf('--model') + 1]
+    if (launch.args.includes('--model') && model) {
+      const slash = model.indexOf('/')
+      this.model = { ...this.model, provider: model.slice(0, slash), id: model.slice(slash + 1) }
+    }
+    const thinking = launch.args[launch.args.indexOf('--thinking') + 1]
+    if (launch.args.includes('--thinking') && thinking) {
+      this.effort = thinking
+    }
     this.pid = 42_000 + number
     const sessionIndex = launch.args.indexOf('--session')
     this.file =
@@ -223,6 +236,8 @@ export type ScriptedPiChild = ScriptedAgentChild & {
   /** Every request command and prompt any spawn received, in order. */
   wire(): readonly string[]
   inputs(): readonly { command: string; params: Record<string, unknown> }[]
+  /** Each spawn's argv, in order. */
+  launchArgs(): readonly (readonly string[])[]
   signIn(): void
   setNativeEffort(level: string): void
 }
@@ -232,6 +247,7 @@ export const piScriptedChild = (options: PiScriptOptions = {}): ScriptedPiChild 
   const received: string[] = []
   const wire: string[] = []
   const inputs: { command: string; params: Record<string, unknown> }[] = []
+  const launchArgs: string[][] = []
   let resumed = 0
   let closed = 0
   let signedOut = options.signedOut ?? false
@@ -257,10 +273,12 @@ export const piScriptedChild = (options: PiScriptOptions = {}): ScriptedPiChild 
                 observedAt: Date.now()
               }
             : null,
-          ...(handle ? { sessionFile: handle.nativeId } : {})
+          ...(handle ? { sessionFile: handle.nativeId } : {}),
+          ...(!handle && options.seededLaunch ? piRpcSeededLaunch(options.seededLaunch) : {})
         }
       },
       openPiConnection: (launch, handlers) => {
+        launchArgs.push([...launch.args])
         if (launch.args.includes('--session')) {
           resumed += 1
         }
@@ -291,6 +309,7 @@ export const piScriptedChild = (options: PiScriptOptions = {}): ScriptedPiChild 
     closes: () => closed,
     wire: () => wire,
     inputs: () => inputs,
+    launchArgs: () => launchArgs,
     setNativeEffort: (level) => children.at(-1)?.setNativeEffort(level),
     signIn: () => {
       signedOut = false
