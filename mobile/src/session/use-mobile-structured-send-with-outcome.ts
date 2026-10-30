@@ -2,6 +2,7 @@ import { selectAgentSessionCurrentRequests } from '../../../src/shared/agent-ses
 
 import { useCallback } from 'react'
 import { runningStructuredAgentSessionTurnId } from '../../../src/shared/structured-agent-session-live-turn'
+import { mobileStructuredAgentSessionWorking } from './mobile-structured-agent-session-working'
 import { structuredSessionBackgroundTasksView } from '../../../src/shared/structured-session-background-tasks-view'
 import { agentSessionVisibleFailureFacts } from '../../../src/shared/agent-session-visible-failures'
 import { tuiAgentDisplayName } from '../../../src/shared/tui-agent-display-names'
@@ -161,7 +162,7 @@ export function useMobileStructuredSendWithOutcome(args: {
           const turnId = runningStructuredAgentSessionTurnId(state)
           const tasks = structuredSessionBackgroundTasksView(state.backgroundTasks, turnId)
           return {
-            working: turnId !== null || queueSendsNext,
+            working: mobileStructuredAgentSessionWorking(state) || queueSendsNext,
             prompt: Boolean(
               actionableStructuredApproval(state) || actionableStructuredQuestion(state)
             ),
@@ -223,8 +224,7 @@ export function useMobileStructuredSendWithOutcome(args: {
         // Resolved from the chat as it is now: a hold-menu choice made mid-turn may land after it.
         ...(mobileStructuredSendQueues(queueCapable, queueFollowUps, stateRef.current, {
           alternate: intent?.alternate,
-          isWorking:
-            runningStructuredAgentSessionTurnId(stateRef.current) !== null || queueSendsNext,
+          isWorking: mobileStructuredAgentSessionWorking(stateRef.current) || queueSendsNext,
           stopping
         })
           ? { delivery: 'queue-if-active' as const }

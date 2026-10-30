@@ -65,12 +65,18 @@ describe('mobile structured queued messages', () => {
   let renderer: ReactTestRenderer | null = null
   let hook: ReturnType<typeof useMobileStructuredAgentSession> | null = null
   let listener: ((value: unknown) => void) | null = null
+  let preferenceListener: ((value: unknown) => void) | null = null
   let stored: Map<string, string>
   const onSendError = vi.fn()
   const appendText = vi.fn((_text: string) => true)
   const sendRequest = vi.fn<RpcClient['sendRequest']>()
   const subscribe = vi.fn<RpcClient['subscribe']>((_method, _params, onData) => {
-    listener = onData
+    if (_method === 'agentSession.subscribe') {
+      listener = onData
+    }
+    if (_method === 'runtime.clientEvents.subscribe') {
+      preferenceListener = onData
+    }
     return vi.fn()
   })
   const client: RpcClient = {
@@ -125,6 +131,7 @@ describe('mobile structured queued messages', () => {
     renderer = null
     hook = null
     listener = null
+    preferenceListener = null
   }
 
   function calls(method: string) {
@@ -277,35 +284,92 @@ describe('mobile structured queued messages', () => {
       expect('delivery' in requestOf('agentSession.send').params).toBe(false)
     })
 
-    it('a hold-menu choice other than Steer queues only while the agent works', async () => {
-      sendRequest.mockImplementation(async (method) => {
-        if (method === 'settings.get') {
-          return ok({ settings: {} })
-        }
-        if (method === 'agentSession.send') {
-          return mutationOk({
-            clientMessageId: 'client-1',
-            submission: acceptedSubmission('client-1')
-          })
-        }
-        return normalReply(method)
-      })
-      await mountSession(CAPABLE)
-      await act(async () => {})
-      await act(async () => {
-        await hook!.sendWithOutcome('idle', undefined, undefined, undefined, [], {
-          alternate: true
+    it.each(['steer', 'queue'] as const)(
+      'pre-turn host Working honors default and explicit choice (%s)',
+      async (behavior) => {
+        sendRequest.mockImplementation(async (method) => {
+          if (method === 'settings.get') {
+            return ok({ settings: { nativeChatFollowUpBehavior: behavior } })
+          }
+          if (method === 'agentSession.send') {
+            return mutationOk({
+              clientMessageId: 'client-1',
+              submission: acceptedSubmission('client-1')
+            })
+          }
+          return normalReply(method)
         })
+        await mountSession(CAPABLE, {
+          ...snapshotEvent(),
+          working: true,
+          latestTurn: null,
+          nextQueuedMessageId: null
+        })
+        await act(async () => {})
+        expect(hook!.isWorking).toBe(true)
+        expect(hook!.sendMenu).toBe(behavior)
+        for (const alternate of [false, true]) {
+          await act(async () => {
+            await hook!.sendWithOutcome(
+              'pre-turn',
+              undefined,
+              undefined,
+              undefined,
+              [],
+              alternate ? { alternate: true } : undefined
+            )
+          })
+          expect(requestOf('agentSession.send', alternate ? 1 : 0).params.delivery).toBe(
+            (behavior === 'queue') !== alternate ? 'queue-if-active' : undefined
+          )
+        }
+        // A sheet opened during work sends against the current idle state.
+        await act(async () =>
+          listener?.({
+            ...snapshotEvent(),
+            working: false,
+            latestTurn: null,
+            nextQueuedMessageId: null
+          })
+        )
+        await act(async () => {
+          await hook!.sendWithOutcome('now idle', undefined, undefined, undefined, [], {
+            alternate: true
+          })
+        })
+        expect(requestOf('agentSession.send', 2).params.delivery).toBeUndefined()
+      }
+    )
+
+    it('sends using a changed host preference in the same connected chat', async () => {
+      sendRequest.mockImplementation(async (method) =>
+        method === 'agentSession.send'
+          ? mutationOk({ clientMessageId: 'client-1', submission: acceptedSubmission('client-1') })
+          : normalReply(method)
+      )
+      await mountSession(CAPABLE, {
+        ...snapshotEvent(),
+        working: true,
+        latestTurn: null,
+        nextQueuedMessageId: null
       })
-      expect('delivery' in requestOf('agentSession.send', 0).params).toBe(false)
-      act(() => listener?.(snapshotEvent({ runningTurn: true })))
+      expect(hook!.sendMenu).toBe('queue')
+      await act(async () => {
+        await hook!.sendWithOutcome('queue by default')
+      })
+      expect(requestOf('agentSession.send').params.delivery).toBe('queue-if-active')
+      await act(async () =>
+        preferenceListener?.({ type: 'nativeChatFollowUpBehaviorChanged', behavior: 'steer' })
+      )
       expect(hook!.sendMenu).toBe('steer')
       await act(async () => {
-        await hook!.sendWithOutcome('busy', undefined, undefined, undefined, [], {
-          alternate: true
-        })
+        await hook!.sendWithOutcome('now steer')
       })
-      expect(requestOf('agentSession.send', 1).params.delivery).toBe('queue-if-active')
+      expect(requestOf('agentSession.send', 1).params.delivery).toBeUndefined()
+      expect(
+        subscribe.mock.calls.filter(([method]) => method === 'agentSession.subscribe')
+      ).toHaveLength(1)
+      expect(calls('settings.get')).toHaveLength(1)
     })
 
     it('keeps today’s request exactly against an incapable host', async () => {
