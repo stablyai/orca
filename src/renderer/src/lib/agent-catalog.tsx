@@ -46,10 +46,7 @@ export function AgentIcon({
   agent: TerminalAgent | null | undefined
   size?: number
 }): React.JSX.Element {
-  // Why: render a neutral question-mark glyph when the agent identity is not
-  // yet known. Before, the caller coerced null → 'claude', which caused Codex
-  // panes to briefly show the Claude icon until the first hook callback
-  // arrived.
+  // Unknown identity gets a neutral glyph so Codex panes cannot briefly display Claude’s icon before hooks arrive.
   if (!agent) {
     return <AgentLetterIcon letter="?" size={size} />
   }
@@ -81,14 +78,10 @@ export function AgentIcon({
     return <OpenCodeIcon size={size} />
   }
   const catalogEntry = getAgentCatalog().find((a) => a.id === agent)
-  // Why: prefer the favicon bundled at build time so the icon renders without a
-  // live network request — Google's favicon service is unreachable in some
-  // regions and offline, which left these icons broken (#8451).
-  // Why: recognition-only DSB shares the bundled DeepSeek mark.
+  // Prefer bundled favicons for offline use and regions where Google’s service is unreachable (#8451).
   const iconAgent = agent === 'dsb' ? 'dsh' : agent
   const bundledFaviconUrl = AGENT_FAVICON_ASSETS[iconAgent]
-  // Why: one resolved src for guard + attribute so empty `iconUrl` cannot pass
-  // a truthy `||` check while `??` still renders a broken `<img src="">`.
+  // Resolve src once so empty iconUrl cannot pass a truthy fallback guard yet render src="".
   const iconSrc = catalogEntry?.iconUrl ?? bundledFaviconUrl
   if (iconSrc) {
     return (
@@ -103,9 +96,7 @@ export function AgentIcon({
     )
   }
   if (catalogEntry?.faviconDomain) {
-    // Why: agents without a published SVG icon or bundled favicon fall back to
-    // their site favicon via Google's favicon service — same source the README
-    // uses for the agent badge list.
+    // Use Google’s favicon service only when no SVG or bundled favicon exists, as in the README badges.
     return (
       <img
         src={`https://www.google.com/s2/favicons?domain=${catalogEntry.faviconDomain}&sz=64`}

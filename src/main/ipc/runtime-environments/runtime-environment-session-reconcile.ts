@@ -1,8 +1,6 @@
 /** Crashes and older unlink flows can leave runtime session partitions that listings advertise as orphaned hosts. */
-import { existsSync } from 'node:fs'
 import { parseExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host'
-import { listEnvironments } from '../../../shared/runtime-environment-store'
-import { getEnvironmentStorePath } from '../../../shared/runtime-environment-store-file'
+import { readEnvironmentStoreRecords } from '../../../shared/runtime-environment-store-records'
 
 type SessionHostStore = {
   getWorkspaceSessionHostIds: () => ExecutionHostId[]
@@ -14,15 +12,19 @@ export function reconcileOrphanedRuntimeSessions(
   store: SessionHostStore,
   userDataPath: string
 ): ExecutionHostId[] {
-  // Missing or unreadable registry data cannot prove a server was removed.
-  if (!existsSync(getEnvironmentStorePath(userDataPath))) {
-    return []
-  }
   let known: Set<string>
   try {
-    known = new Set(listEnvironments(userDataPath).map((environment) => environment.id))
-  } catch (error) {
-    console.warn('[runtime-environments] skipped orphaned session reconcile:', error)
+    // Raw records, not the listing: newer-format and overlay-hidden servers are still saved.
+    const records = readEnvironmentStoreRecords(userDataPath, { requireStoreFile: true })
+    if (records.unreadable.some((record) => record.id === undefined)) {
+      return []
+    }
+    known = new Set([
+      ...records.environments.map((environment) => environment.id),
+      ...records.unreadable.map((record) => record.id ?? '')
+    ])
+  } catch {
+    // Missing or unreadable registry data cannot prove a server was removed.
     return []
   }
   // Runtime sessions are written only after their server is registered.

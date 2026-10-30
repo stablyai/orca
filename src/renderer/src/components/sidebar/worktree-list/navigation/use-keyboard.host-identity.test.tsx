@@ -115,8 +115,7 @@ afterEach(() => {
 
 describe('worktree keyboard cycling with a resolved active host', () => {
   it('steps to the next row when the active host resolved to local but rows are unqualified', () => {
-    // Why: a sidebar click activates with the repo-resolved host (`local`), while
-    // local rows carry no hostId; a raw identity compare misses and wraps to the top.
+    // Clicks resolve local host ownership; raw hostless identities would miss the active row and wrap to the top.
     renderProbe('b', 'local')
 
     press('down')

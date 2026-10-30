@@ -1,6 +1,4 @@
-// Whether this launch has made its one resume decision: nothing offered, ask, or resume (from then
-// on the store's `resuming` names the chats). Until then an opted-in launch may still resume any of
-// this machine's chats, so nothing else offers to carry one on.
+// Suppress competing continuation offers until the launch makes its resume decision and publishes resuming ids.
 
 import { useSyncExternalStore } from 'react'
 import { useAppStore } from '../store'
@@ -28,8 +26,7 @@ export function markNativeChatLaunchResumeDecided(): void {
   }
 }
 
-/** Whether this launch may still resume this machine's chats on its own: "resume automatically" is
- *  on, or its setting has not loaded yet, and the launch has not decided. */
+/** Pending until launch decides while automatic resume is enabled or its setting has not loaded. */
 export function useNativeChatLaunchResumePending(): boolean {
   const launchDecided = useSyncExternalStore(subscribe, getDecided, getDecided)
   const autoResume = useAppStore((state) => state.settings?.nativeChatResumeWorkOnRestart)

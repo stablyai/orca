@@ -7,8 +7,7 @@ import { onScreenHostId } from '@/store/slices/workspace-attention/workspace-unr
 import { presenceRemainingMs, subscribeAutoAckPresenceSignals } from './agent-auto-ack-presence'
 import type { AutoAckTabTarget } from './agent-auto-ack-targets'
 
-// While the user is active, a host's copy of the view is resent this often: its presence trails the
-// window's by at most this, and a host that lost the connection (and so the view) learns it again.
+// Refresh while present so host presence trails by at most this interval and reconnect relearns the view.
 const REFRESH_MS = 10_000
 
 type HostView = {
@@ -32,7 +31,6 @@ export type ClientWorkspaceViewReporter = {
     workspaceIds: readonly string[],
     targets: readonly AutoAckTabTarget[]
   ) => void
-  /** Trusted input arrived. */
   renewPresence: () => void
 }
 
@@ -40,10 +38,7 @@ function targetKey(target: RuntimeClientTarget): string {
   return target.kind === 'local' ? 'local' : `environment:${target.environmentId}`
 }
 
-/**
- * Tells each host that owns an on-screen workspace what this window shows of it, so the host
- * raises no unread flag there. A host whose workspaces left the screen is sent an empty view.
- */
+/** Report each host’s on-screen workspaces to suppress viewed unread flags; send empty when its workspaces leave the screen. */
 export function createClientWorkspaceViewReporter(
   send: (target: RuntimeClientTarget, view: ClientWorkspaceView) => Promise<unknown> = (
     target,
@@ -79,8 +74,7 @@ export function createClientWorkspaceViewReporter(
       } else {
         sent.delete(key)
       }
-      // An older host has no reportView; a failed send, empty or not, is retried no sooner than
-      // REFRESH_MS, so input never turns into a stream of doomed calls.
+      // Rate-limit failed/missing reportView retries, including empty reports, so trusted input cannot flood older hosts.
       void send(target, {
         workspaceIds: view?.workspaceIds ?? [],
         tabIds: view?.tabIds ?? [],

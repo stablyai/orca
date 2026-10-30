@@ -20,7 +20,7 @@ import {
   upsertHookTrustEntries,
   type CodexTrustEntry
 } from './config-toml-trust'
-import { codexAppServerCapabilityCache } from './codex-app-server-capability-cache'
+import { codexAppServerCapabilityCache } from './app-server/codex-app-server-capability-cache'
 import { _internals as trustGrantInternals } from './codex-hook-trust-grant'
 import {
   readCodexTrustGrantLedgerHome,

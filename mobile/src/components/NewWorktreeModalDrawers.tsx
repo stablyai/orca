@@ -1,6 +1,7 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { Plus } from 'lucide-react-native'
 import { getRepoExecutionHostId } from '../../../src/shared/execution-host'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import type { SmartModeAvailabilityInput } from '../tasks/mobile-smart-source-modes'
 import type { PasteRepoCandidate } from '../tasks/smart-source-paste-intent'
 import type { useMobileComposerSource } from '../tasks/use-mobile-composer-source'
@@ -54,6 +55,7 @@ export function NewWorktreeModalDrawers(props: {
   onSkipSetupTrust: () => void
   onCloseSetupTrust: () => void
 }) {
+  const t = useMobileTranslation()
   return (
     <>
       <SmartWorkspaceSourceDrawer
@@ -77,7 +79,7 @@ export function NewWorktreeModalDrawers(props: {
 
       <PickerListDrawer
         visible={props.visible && props.drawerView === 'project'}
-        title="Project"
+        title={t('components.newWorktreeModalDrawers.project', 'Project')}
         items={props.projectPickerItems}
         selectedId={props.selectedProjectId ?? ''}
         onSelect={(item) => props.onRepoChange(item.repo)}
@@ -113,7 +115,7 @@ export function NewWorktreeModalDrawers(props: {
 
       <PickerListDrawer
         visible={props.visible && props.drawerView === 'runTarget'}
-        title="Run on"
+        title={t('components.newWorktreeModalDrawers.runOn', 'Run on')}
         items={props.runTargetPickerItems}
         selectedId={props.selectedRepo ? getRepoExecutionHostId(props.selectedRepo) : ''}
         onSelect={(item) => props.onRepoChange(item.repo)}
@@ -123,7 +125,7 @@ export function NewWorktreeModalDrawers(props: {
 
       <PickerListDrawer
         visible={props.visible && props.drawerView === 'agent'}
-        title="Agent"
+        title={t('components.newWorktreeModalDrawers.agent', 'Agent')}
         items={props.pickerAgentOptions}
         selectedId={props.selectedAgent.id}
         onSelect={props.onAgentChange}

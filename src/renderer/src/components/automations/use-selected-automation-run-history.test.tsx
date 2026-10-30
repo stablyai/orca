@@ -1,11 +1,6 @@
 // @vitest-environment happy-dom
 
-/**
- * A refused history read is an answer too. It used to be dropped on the floor,
- * which left the previous automation's ID in place — so the pane showed zero
- * runs for a question the host never answered, and anything waiting on this
- * read waited forever.
- */
+/** Settle refused history reads explicitly so previous selection cannot masquerade as zero runs and waiters always complete. */
 
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
@@ -188,8 +183,7 @@ describe('useSelectedAutomationRunHistory', () => {
 
     await render(input)
 
-    // The ID alone is unique only inside one authority, so the outcome carries
-    // the owner and the pane can refuse a result read for a different host.
+    // Carry owner identity with outcomes so the pane can reject a same-ID result from another host.
     expect(settled(input).at(-1)?.ownerKey).toBe(ownerKey(owner))
   })
 

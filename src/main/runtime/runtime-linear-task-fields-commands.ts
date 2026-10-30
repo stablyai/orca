@@ -19,10 +19,12 @@ import { RuntimeLinearLabelWriteCommands } from './runtime-linear-label-write-co
 export class RuntimeLinearTaskFieldCommands extends RuntimeLinearLabelWriteCommands {
   public async getLinearTeamStatesForWrite(
     teamId: string,
-    workspaceId: string
+    workspaceId: string,
+    signal?: AbortSignal
   ): Promise<Awaited<ReturnType<typeof getLinearTeamStatesOrThrow>>> {
+    signal?.throwIfAborted()
     try {
-      return await getLinearTeamStatesOrThrow(teamId, workspaceId)
+      return await getLinearTeamStatesOrThrow(teamId, workspaceId, signal)
     } catch (error) {
       throw this.mapLinearReadFailure(error)
     }
@@ -32,21 +34,22 @@ export class RuntimeLinearTaskFieldCommands extends RuntimeLinearLabelWriteComma
     input: string,
     states: Awaited<ReturnType<typeof getLinearTeamStatesOrThrow>>
   ): Awaited<ReturnType<typeof getLinearTeamStatesOrThrow>>[number] | null {
-    const normalized = input.toLocaleLowerCase()
+    const normalized = input.toLowerCase()
     const exact = states.find(
-      (state) =>
-        state.id.toLocaleLowerCase() === normalized || state.name.toLocaleLowerCase() === normalized
+      (state) => state.id.toLowerCase() === normalized || state.name.toLowerCase() === normalized
     )
-    // Why: Linear MCP accepts lifecycle types; keep explicit IDs/names authoritative when they collide.
-    return exact ?? states.find((state) => state.type.toLocaleLowerCase() === normalized) ?? null
+    // Accept MCP lifecycle types, but explicit ids/names win collisions.
+    return exact ?? states.find((state) => state.type.toLowerCase() === normalized) ?? null
   }
 
   public async readLinearAgentIssueWriteRecord(
     issueId: string,
-    workspaceId: string
+    workspaceId: string,
+    signal?: AbortSignal
   ): Promise<NonNullable<Awaited<ReturnType<typeof getLinearIssueByUuidForAgent>>>> {
+    signal?.throwIfAborted()
     const issue = await this.readLinearWriteLookup(() =>
-      getLinearIssueByUuidForAgent(issueId, workspaceId)
+      getLinearIssueByUuidForAgent(issueId, workspaceId, signal)
     )
     if (!issue) {
       throw linearError('linear_issue_not_found', 'Linear issue was not found.')
@@ -57,7 +60,8 @@ export class RuntimeLinearTaskFieldCommands extends RuntimeLinearLabelWriteComma
   public async buildLinearTaskUpdate(
     params: LinearIssueTaskUpdateRequest,
     current: NonNullable<Awaited<ReturnType<typeof getLinearIssueByUuidForAgent>>>,
-    workspaceId: string
+    workspaceId: string,
+    signal?: AbortSignal
   ): Promise<{
     fields: {
       assigneeId?: string | null
@@ -68,9 +72,10 @@ export class RuntimeLinearTaskFieldCommands extends RuntimeLinearLabelWriteComma
     }
     labels?: { id: string; name: string }[]
   } | null> {
+    signal?.throwIfAborted()
     if (params.operation === 'assignee') {
       const assigneeId = params.assigneeMe
-        ? (await this.getLinearViewerForWrite(workspaceId)).id
+        ? (await this.getLinearViewerForWrite(workspaceId, signal)).id
         : params.assigneeId
       if (assigneeId === undefined) {
         throw linearError('linear_invalid_assignee', 'Pass --me, --to-id, or clear assignee.')
@@ -101,7 +106,7 @@ export class RuntimeLinearTaskFieldCommands extends RuntimeLinearLabelWriteComma
       if (!mode || inputs.length === 0) {
         throw linearError('linear_invalid_label', 'Pass at least one --label.')
       }
-      const labels = await this.resolveLinearLabelsForIssue(current, inputs, workspaceId)
+      const labels = await this.resolveLinearLabelsForIssue(current, inputs, workspaceId, signal)
       const requestedIds = labels.map((label) => label.id)
       const existingIds = current.labelIds ?? current.labels?.map((label) => label.id) ?? []
       const nextIds =
@@ -121,8 +126,10 @@ export class RuntimeLinearTaskFieldCommands extends RuntimeLinearLabelWriteComma
   public async buildLinearSaveUpdate(
     params: LinearSaveIssueRequest,
     current: NonNullable<Awaited<ReturnType<typeof getLinearIssueByUuidForAgent>>>,
-    workspaceId: string
+    workspaceId: string,
+    signal?: AbortSignal
   ): Promise<LinearIssueUpdate> {
+    signal?.throwIfAborted()
     const fields: LinearIssueUpdate = {}
     if (params.title !== undefined) {
       fields.title = params.title
@@ -140,7 +147,7 @@ export class RuntimeLinearTaskFieldCommands extends RuntimeLinearLabelWriteComma
       fields.dueDate = params.dueDate
     }
     if (params.state !== undefined) {
-      const states = await this.getLinearTeamStatesForWrite(current.team.id, workspaceId)
+      const states = await this.getLinearTeamStatesForWrite(current.team.id, workspaceId, signal)
       const state = this.resolveLinearAgentState(params.state, states)
       if (!state) {
         throw linearError(
@@ -154,13 +161,18 @@ export class RuntimeLinearTaskFieldCommands extends RuntimeLinearLabelWriteComma
       fields.assigneeId =
         params.assignee === null
           ? null
-          : await this.resolveLinearAssignee(params.assignee, current.team.id, workspaceId)
+          : await this.resolveLinearAssignee(params.assignee, current.team.id, workspaceId, signal)
     }
     if (params.labels !== undefined) {
       if (params.labels.length === 0) {
         fields.labelIds = []
       } else {
-        const labels = await this.resolveLinearLabelsForIssue(current, params.labels, workspaceId)
+        const labels = await this.resolveLinearLabelsForIssue(
+          current,
+          params.labels,
+          workspaceId,
+          signal
+        )
         fields.labelIds = labels.map((label) => label.id)
       }
     }
@@ -169,10 +181,14 @@ export class RuntimeLinearTaskFieldCommands extends RuntimeLinearLabelWriteComma
         params.project === null
           ? null
           : (
-              await this.resolveLinearCreateProject(params.project, {
-                id: current.team.id,
-                workspaceId
-              })
+              await this.resolveLinearCreateProject(
+                params.project,
+                {
+                  id: current.team.id,
+                  workspaceId
+                },
+                signal
+              )
             ).id
     }
     if (params.parentId !== undefined) {
@@ -180,11 +196,14 @@ export class RuntimeLinearTaskFieldCommands extends RuntimeLinearLabelWriteComma
         params.parentId === null
           ? null
           : (
-              await this.resolveLinearAgentWriteTarget({
-                input: params.parentId,
-                workspaceId,
-                context: params.context
-              })
+              await this.resolveLinearAgentWriteTarget(
+                {
+                  input: params.parentId,
+                  workspaceId,
+                  context: params.context
+                },
+                signal
+              )
             ).issue.id
       if (fields.parentId === current.id) {
         throw linearError('linear_invalid_parent', 'An issue cannot be its own parent.')
@@ -195,28 +214,30 @@ export class RuntimeLinearTaskFieldCommands extends RuntimeLinearLabelWriteComma
   public async resolveLinearAssignee(
     input: string,
     teamId: string,
-    workspaceId: string
+    workspaceId: string,
+    signal?: AbortSignal
   ): Promise<string> {
-    if (input.toLocaleLowerCase() === 'me') {
-      return (await this.getLinearViewerForWrite(workspaceId)).id
+    signal?.throwIfAborted()
+    if (input.toLowerCase() === 'me') {
+      return (await this.getLinearViewerForWrite(workspaceId, signal)).id
     }
-    // Why: caller-supplied IDs were accepted directly before save-issue; avoid a paginated member scan on that existing fast path.
+    // Keep the existing direct-id fast path; avoid a paginated member scan.
     if (isLinearUuid(input)) {
       return input
     }
     let members: Awaited<ReturnType<typeof getLinearTeamMembersOrThrow>>
     try {
-      members = await getLinearTeamMembersOrThrow(teamId, workspaceId)
+      members = await getLinearTeamMembersOrThrow(teamId, workspaceId, signal)
     } catch (error) {
       throw this.mapLinearReadFailure(error)
     }
-    const normalized = input.toLocaleLowerCase()
+    const normalized = input.toLowerCase()
     const matches = members.filter(
       (member) =>
-        member.id.toLocaleLowerCase() === normalized ||
-        member.displayName.toLocaleLowerCase() === normalized ||
-        member.name?.toLocaleLowerCase() === normalized ||
-        member.email?.toLocaleLowerCase() === normalized
+        member.id.toLowerCase() === normalized ||
+        member.displayName.toLowerCase() === normalized ||
+        member.name?.toLowerCase() === normalized ||
+        member.email?.toLowerCase() === normalized
     )
     if (matches.length === 1) {
       return matches[0].id
@@ -228,12 +249,16 @@ export class RuntimeLinearTaskFieldCommands extends RuntimeLinearLabelWriteComma
         : `Multiple team members exactly matched "${input}".`
     )
   }
-  public async resolveLinearAgentWriteTarget(params: {
-    input?: string
-    current?: boolean
-    workspaceId?: string
-    context?: LinearCurrentIssueContextHints
-  }): Promise<LinearAgentWriteTarget> {
+  public async resolveLinearAgentWriteTarget(
+    params: {
+      input?: string
+      current?: boolean
+      workspaceId?: string
+      context?: LinearCurrentIssueContextHints
+    },
+    signal?: AbortSignal
+  ): Promise<LinearAgentWriteTarget> {
+    signal?.throwIfAborted()
     const result = await readLinearIssueContext(
       {
         input: params.input,
@@ -249,7 +274,8 @@ export class RuntimeLinearTaskFieldCommands extends RuntimeLinearLabelWriteComma
         depth: 0,
         context: params.context
       },
-      (context) => this.linearResolveCurrentIssue(context)
+      (context) => this.linearResolveCurrentIssue(context, signal),
+      signal
     )
     return { issue: result.issue, workspaceId: result.meta.resolved.workspaceId }
   }

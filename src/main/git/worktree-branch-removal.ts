@@ -1,3 +1,4 @@
+import { pruneGitWorktrees } from './worktree-prune-guard'
 import {
   branchHasNoUnmergedChangesWithLazyTargetRefresh,
   getBranchCleanupTargetRefs,
@@ -83,7 +84,7 @@ async function deleteLocalBranchAfterWorktreeRemoval(
 
   try {
     // Prune only when stale admin data may block branch deletion.
-    await gitExecFileAsync(['worktree', 'prune'], gitExecOptions(repoPath, options))
+    await pruneGitWorktrees(gitExecOptions(repoPath, options))
   } catch (error) {
     console.warn(`[git] Failed to prune worktrees before deleting branch "${branchName}"`, error)
     return 'checked-out'

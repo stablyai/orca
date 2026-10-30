@@ -15,8 +15,7 @@ export function TerminalSurface({
   const retainBrowserGuestPaint = useAnyBrowserGuestNeedsPaint(!renderedActiveWorktreeId)
   return (
     <div
-      // Why: already out of flow via the workbench container when hidden, so retention only
-      // has to drop `hidden` — it does not need to leave the flex column a second time.
+      // The workbench already removes hidden content from flow; only keep this ancestor paintable.
       className={`flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden${
         renderedActiveWorktreeId
           ? ''

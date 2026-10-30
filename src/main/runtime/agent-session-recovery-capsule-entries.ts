@@ -1,8 +1,4 @@
-// The shape of the recovery capsule on disk, and how a stored set of records is read back.
-//
-// Split from the capsule so the file format — offer entries, failure records, the legacy v1 layout
-// — can be read on its own. Every value parsed here re-enters from a file this process did not
-// necessarily write, including one written by an older or newer build.
+// Parse recovery offers/failures, including legacy layouts, from files written by independently versioned hosts.
 
 import {
   readAgentSessionRefusalReference,
@@ -36,8 +32,7 @@ const failureSchema = z.object({
   latestPrompt: z.string().max(MAX_FAILURE_FIELD_LENGTH),
   latestUserItemId: z.string().max(MAX_FAILURE_FIELD_LENGTH).nullable()
 })
-// Failures sit under their own optional key rather than as a third entry state: an older build's
-// entry parser rejects an unknown state and would lose every offer, but it ignores an unknown key.
+// Keep failures in a separate optional key: older builds reject new entry states but ignore unknown keys.
 const capsuleSchema = z.object({
   version: z.literal(2),
   entries: z.array(z.unknown()),
@@ -45,22 +40,18 @@ const capsuleSchema = z.object({
   failed: z.unknown().optional()
 })
 
-/** What an acted-on offer left behind when the agent did not carry on. Current only while nothing
- *  newer happened in that chat; also dies with a dismissal, a successful retry, or a newer
- *  teardown of the same chat. */
+/** Failure guidance remains until user action, successful retry, dismissal or a newer teardown supersedes it. */
 export type AgentSessionResumeFailureRecord = {
   marker: AgentSessionResumeMarker
   failedAt: number
   outcome: AgentSessionResumeFailureOutcome
-  /** The refusal code, as it always was; the renderer's guidance keys on it. */
+  /** Refusal code used by renderer guidance. */
   reason: string
-  /** The refusal's details beside the code; absent on older records and non-refusals. A record
-   *  an unreleased build wrote with a `cause` instead reads as having none. */
+  /** Optional refusal details; older/non-refusal rows and retired cause fields provide none. */
   details?: AgentSessionAnyRefusalDetails
-  /** The prompt the offer quoted, snapshotted because the session may no longer be readable. */
+  /** Snapshot the offered prompt because its source session may become unreadable. */
   latestPrompt: string
-  /** The chat's newest user message when this was filed, as the marker records it at teardown. A
-   *  different newest message means the user has since acted in that chat. */
+  /** A changed latest-user id proves the user acted since this failure was filed. */
   latestUserItemId: string | null
 }
 
@@ -112,8 +103,7 @@ function parseEntry(value: unknown): RecoveryEntry {
   }
 }
 
-// Failures are advisory, so one this build cannot read (say, a newer outcome) is dropped, and gone
-// after the next write, rather than costing every offer and every later teardown record.
+// Advisory failures may be dropped on downgrade; unreadable failure shapes must not lose offers or block teardown writes.
 function parseFailures(value: unknown): AgentSessionResumeFailureRecord[] {
   return (Array.isArray(value) ? value : []).flatMap((failure: unknown) => {
     const parsed = failureSchema.safeParse(failure)
@@ -122,7 +112,6 @@ function parseFailures(value: unknown): AgentSessionResumeFailureRecord[] {
       return []
     }
     const { details: stored, ...rest } = parsed.data
-    // `reason` is the refusal code, so the details are read against it.
     const details = readAgentSessionRefusalReference({
       code: rest.reason,
       details: stored
@@ -165,8 +154,7 @@ export function normalizeState(
     if (bySession.has(entry.marker.sessionId)) {
       throw new Error('agent_session_recovery_capsule_duplicate_session')
     }
-    // The action lease, not an offer expiry: an offer has none. A reservation whose action died
-    // is re-derived back to pending so a crashed resume cannot strand the offer forever.
+    // Only action reservations expire; offers do not. Reclaim crashed actions so they cannot strand offers.
     const reclaimed =
       entry.state === 'in-progress' &&
       entry.startedAt !== undefined &&
@@ -187,11 +175,10 @@ export function normalizeState(
     const entry = bySession.get(failure.marker.sessionId)
     if (entry?.state === 'pending') {
       if (!sameWitness(entry.marker, failure.marker)) {
-        // A newer teardown of the same chat: it was working again, so the old verdict is stale.
+        // A newer teardown means the chat resumed; discard the old failure verdict.
         continue
       }
-      // A retry of this failure that rolled back or whose lease lapsed. It stays a failure, never a
-      // pending offer that an unselective "resume all" would silently re-run.
+      // Failed retries stay failures after rollback/lease expiry; resume-all must not silently run them again.
       bySession.delete(failure.marker.sessionId)
     }
     failed.push(failure)
@@ -206,16 +193,13 @@ export function shouldReplaceMarker(
   if (incoming.recordedAt !== current.recordedAt) {
     return incoming.recordedAt > current.recordedAt
   }
-  // A single teardown may publish the same witness more than once. Different teardown IDs at the
-  // same clock value have no ordering signal, so keep the first one rather than let a late writer
-  // regress a newer witness from another host.
+  // Equal timestamps across teardown ids cannot establish order; accept repeats only for the same witness.
   return incoming.teardownId === current.teardownId
 }
 
-/** Records "dismiss all" leaves as they were: this host does not list them (a newer Orca's chats). */
+/** Preserve records this host cannot list so a compatible build can act on them. */
 export type KeepRecord = (marker: AgentSessionResumeMarker) => boolean
 
-/** What a "dismiss all" keeps, and how many pending offers it ends. */
 export function splitDismissedAll(
   state: Pick<RecoveryCapsuleState, 'entries' | 'failed'>,
   keep: KeepRecord

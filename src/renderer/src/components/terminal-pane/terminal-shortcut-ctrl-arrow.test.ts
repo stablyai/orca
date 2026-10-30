@@ -18,8 +18,7 @@ function event(overrides: Partial<TerminalShortcutEvent>): TerminalShortcutEvent
 }
 
 describe('non-mac Ctrl+Left/Right word-nav', () => {
-  // Linux and remote/WSL readline shells don't bind the \e[1;5D / \e[1;5C that
-  // xterm.js emits, so translate to \eb / \ef (same bytes as our Alt+Arrow rule).
+  // Readline needs Esc+b/f rather than xterm’s Ctrl+Arrow escapes on Linux/remote/WSL.
   it('translates Ctrl+←/→ on Linux to readline \\eb / \\ef', () => {
     expect(
       resolveTerminalShortcutAction(
@@ -35,11 +34,7 @@ describe('non-mac Ctrl+Left/Right word-nav', () => {
     ).toEqual({ type: 'sendInput', data: '\x1bf' })
   })
 
-  // Local Windows ConPTY shells (PowerShell/cmd via PSReadLine) already bind
-  // Ctrl+←/→ to word-nav and self-insert a stray "b"/"f" when fed \eb/\ef
-  // (Escape→RevertLine + self-insert), so the policy must defer to xterm's
-  // native \e[1;5D / \e[1;5C there. Signalled via the isLocalWindowsConptyPane
-  // getter (7th arg).
+  // Local ConPTY/PSReadLine binds Ctrl+Arrow natively; Esc+b/f would self-insert stray letters.
   it('does NOT translate Ctrl+←/→ for a local Windows ConPTY pane', () => {
     expect(
       resolveTerminalShortcutAction(
@@ -65,9 +60,7 @@ describe('non-mac Ctrl+Left/Right word-nav', () => {
     ).toBeNull()
   })
 
-  // A Windows client SSH'd into Linux (or running WSL) is NOT a local native
-  // Windows ConPTY, so the getter returns false and the readline translation
-  // must still apply — otherwise word-nav silently breaks on the remote shell.
+  // Windows clients driving Linux/WSL still need readline encoding; host, not client, decides.
   it('still translates Ctrl+←/→ on Windows when the pane is not local ConPTY (SSH/WSL)', () => {
     expect(
       resolveTerminalShortcutAction(
@@ -94,8 +87,7 @@ describe('non-mac Ctrl+Left/Right word-nav', () => {
   })
 
   it('does not translate Ctrl+Arrow on macOS (reserved by OS)', () => {
-    // Mac uses Cmd+Arrow for line-nav and Option+Arrow for word-nav.
-    // Ctrl+Arrow is the macOS Mission Control / Spaces chord.
+    // macOS reserves Ctrl+Arrow for Spaces; Cmd/Option handle line/word navigation.
     expect(
       resolveTerminalShortcutAction(
         event({ key: 'ArrowLeft', code: 'ArrowLeft', ctrlKey: true }),
@@ -132,5 +124,31 @@ describe('non-mac Ctrl+Left/Right word-nav', () => {
         false
       )
     ).toBeNull()
+  })
+})
+
+describe('Alt+Left/Right on a local Windows ConPTY pane (#29177)', () => {
+  const resolveOnWindows = (key: string, localConpty: boolean) =>
+    resolveTerminalShortcutAction(
+      event({ key, code: key, altKey: true }),
+      false,
+      undefined,
+      undefined,
+      true,
+      undefined,
+      () => localConpty
+    )
+
+  // ConPTY parses \eb/\ef into Alt+B/F key records, which Codex only treats as agent
+  // switching on macOS and PSReadLine doesn't treat as Alt+←/→. Deferring lets xterm send
+  // \e[1;3D/C, the form Windows Terminal sends and Git for Windows' inputrc binds to word-nav.
+  it('defers to xterm so the pane receives the native Alt+arrow encoding', () => {
+    expect(resolveOnWindows('ArrowLeft', true)).toBeNull()
+    expect(resolveOnWindows('ArrowRight', true)).toBeNull()
+  })
+
+  it('still translates to readline word-nav on SSH/WSL panes', () => {
+    expect(resolveOnWindows('ArrowLeft', false)).toEqual({ type: 'sendInput', data: '\x1bb' })
+    expect(resolveOnWindows('ArrowRight', false)).toEqual({ type: 'sendInput', data: '\x1bf' })
   })
 })

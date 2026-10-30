@@ -125,7 +125,6 @@ describe('cancelling a managed stop', () => {
     listener.close()
     expect(onRequest).not.toHaveBeenCalled()
     expect(String(report.mock.calls[0]?.[1])).toContain('orcad_managed_stop_canceled')
-    // Left in place, it would make every later transaction's completion answer unverifiable.
     expect(existsSync(orcadManagedStopRequestPath(request.instance))).toBe(false)
   })
 

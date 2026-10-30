@@ -11,8 +11,8 @@ import {
 import { redactPtyIdForDiagnostics } from '../../../../shared/pty-delivery-diagnostics'
 import { recordCrashBreadcrumb } from '../../../crash-reporting/crash-breadcrumb-store'
 import { terminalOutputBacklogCapChars } from '../../../../shared/terminal-scrollback-policy'
-import { isHiddenPtyDeliveryGateEnabled } from '../../pty-hidden-delivery-gate'
-import type { PendingPtyData } from '../../pty-pending-data-drain-contract'
+import { isHiddenPtyDeliveryGateEnabled } from './pty-hidden-delivery-gate'
+import type { PendingPtyData } from './pty-pending-data-drain-contract'
 import { DROPPED_QUERY_SALVAGE_MAX_CHARS } from './constants'
 import type { PtyIpcSession } from '../session'
 
@@ -107,7 +107,8 @@ export function appendPendingPtyData(
   preservesSeq: boolean,
   containsBackgroundOutput: boolean,
   rawLength = data.length,
-  transformed = false
+  transformed = false,
+  gapEscapeState?: string
 ): PendingPtyData {
   // Once dropped, keep bounded query/mode state while the restore sentinel supersedes ordinary output.
   if (existing?.droppedOutput === true) {
@@ -140,7 +141,8 @@ export function appendPendingPtyData(
       ...(typeof startSeq === 'number' ? { startSeq } : {}),
       ...(rawLength !== data.length ? { rawLength } : {}),
       ...(transformed ? { transformed: true } : {}),
-      ...(nextContainsBackgroundOutput ? { containsBackgroundOutput: true } : {})
+      ...(nextContainsBackgroundOutput ? { containsBackgroundOutput: true } : {}),
+      ...(gapEscapeState ? { gapEscapeState } : {})
     }
     return dropOversizedPendingPtyData(session, id, pending)
   }
@@ -150,7 +152,9 @@ export function appendPendingPtyData(
     ...(!preservesSeq || existing.transformed || transformed
       ? { rawLength: existingRawLength + rawLength, transformed: true as const }
       : {}),
-    ...(nextContainsBackgroundOutput ? { containsBackgroundOutput: true } : {})
+    ...(nextContainsBackgroundOutput ? { containsBackgroundOutput: true } : {}),
+    // Describes the batch start; a gap inside an existing batch has no start to label.
+    ...(existing.gapEscapeState ? { gapEscapeState: existing.gapEscapeState } : {})
   }
   if (typeof existing.startSeq === 'number') {
     next.startSeq = existing.startSeq

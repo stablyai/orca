@@ -4,9 +4,7 @@ export const WEB_TERMINAL_SURFACE_TAB_PREFIX = 'web-terminal-'
 export const HOST_TERMINAL_SURFACE_SEPARATOR = '::'
 
 export function toWebTerminalSurfaceTabId(hostSurfaceId: string): string {
-  // Why: host session surface ids use `tab::leaf`, but renderer pane keys
-  // reserve `:` as the tab/leaf delimiter. Keep host identity while making a
-  // local tab id that can safely flow through makePaneKey().
+  // Host IDs use tab::leaf; encode colons because renderer pane keys reserve them as tab/leaf delimiters.
   return `${WEB_TERMINAL_SURFACE_TAB_PREFIX}${encodeURIComponent(hostSurfaceId)}`
 }
 

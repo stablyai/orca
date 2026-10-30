@@ -34,7 +34,7 @@ describe('short-lived Codex app-server invocations on Windows', () => {
     const invocations: CodexAppServerInvocation[] = []
     const probe = createCodexModelCatalogProbe({
       resolveEnvironment: async () => ({ PATH: 'C:\\bin' }),
-      resolveCommand: () => NPM_CODEX_SHIM,
+      resolveCommand: () => ({ command: NPM_CODEX_SHIM, prefixArgs: [] }),
       runSession: async (invocation, body) => {
         invocations.push(invocation)
         return body({

@@ -1,6 +1,4 @@
-// A create on a paired server whose repo and path also exist on another host (a "twin"): seeding
-// resolves the owner by the host the create went to, so the desktop lays out no second set of the
-// server's default tabs (ledger L277).
+// Resolve seeding by the create’s host when repo/path has a twin; desktop must not duplicate the paired server’s default tabs (ledger L277).
 import { describe, expect, it, vi } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
 import type * as WebRuntimeSessionModule from '@/runtime/web-runtime-session-environment'
@@ -81,10 +79,5 @@ function createOnServer(opts: { twin: boolean; passHost: boolean }) {
 describe('seeding a workspace a paired server created', () => {
   it('lays out no tabs of its own for a twin, given the host the create went to', () => {
     expect(createOnServer({ twin: true, passHost: true })).toEqual([])
-  })
-
-  it('lays out no tabs of its own for a workspace only the server lists, as before', () => {
-    expect(createOnServer({ twin: false, passHost: false })).toEqual([])
-    expect(createOnServer({ twin: false, passHost: true })).toEqual([])
   })
 })

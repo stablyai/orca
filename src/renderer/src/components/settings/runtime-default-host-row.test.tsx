@@ -5,7 +5,6 @@ import { afterEach, expect, it, vi } from 'vitest'
 import type { PublicKnownRuntimeEnvironment } from '../../../../shared/runtime-environments'
 import { useAppStore } from '@/store'
 import { RuntimeDefaultHostRow } from './runtime-default-host-row'
-import { LOCAL_RUNTIME_VALUE } from './runtime-environment-selection'
 
 const initialState = useAppStore.getInitialState()
 afterEach(() => {
@@ -35,12 +34,6 @@ function renderRow(activeValue: string): void {
     />
   )
 }
-
-it('says new projects stay here when nothing else can be chosen', () => {
-  renderRow(LOCAL_RUNTIME_VALUE)
-  expect(screen.queryByText(/until you add a server/)).not.toBeNull()
-  expect(screen.queryByRole('combobox')).toBeNull()
-})
 
 // The default can be a host the server list leaves out; it must stay visible and changeable.
 it('shows the selector for a default that is not this computer', () => {

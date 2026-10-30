@@ -12,6 +12,88 @@ import { terminalTitleBlocksExplicitAgentStatus } from './runtime-worktree-statu
 import type { HookLiveAgentRow } from './runtime-terminal-contracts'
 import type { RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'
 
+type HookTurnFacts = Pick<
+  AgentStatusEntry,
+  'state' | 'agentType' | 'mainAgent' | 'restoredUnconfirmed'
+>
+
+function workingHookOwnsIdleTitleInterval(
+  status: HookTurnFacts,
+  observedAt: number,
+  pty: RuntimePtyWorktreeRecord | null
+): boolean {
+  return (
+    status.state === 'working' &&
+    pty?.lastAgentStatus === 'idle' &&
+    !terminalTitleBlocksExplicitAgentStatus(pty.lastOscTitle) &&
+    (codexHookReportsRunningTurn(status, observedAt, pty) ||
+      observedAt >
+        Math.max(
+          pty.lastAgentStatusRichInvalidatedAtEpochMs ?? 0,
+          pty.lastAgentStatusStartedAtEpochMs ?? 0
+        )) &&
+    Date.now() - observedAt <= AGENT_STATUS_STALE_AFTER_MS
+  )
+}
+
+// Why: Codex's title follows the thread it displays, so a /side chat goes idle while the main
+// turn runs; its end arrives by hook or host rollout, and the stale bound covers older hosts.
+// A hook from before the PTY's current process describes that process's predecessor.
+function codexHookReportsRunningTurn(
+  status: HookTurnFacts,
+  observedAt: number,
+  pty: RuntimePtyWorktreeRecord | null
+): boolean {
+  const mainState = status.mainAgent?.state
+  return (
+    status.agentType === 'codex' &&
+    status.restoredUnconfirmed !== true &&
+    mainState !== undefined &&
+    mainState !== 'done' &&
+    observedAt > (pty?.providerGenerationResetAtEpochMs ?? 0)
+  )
+}
+
+// Why: only a completed turn's reply is final; mid-turn hook snapshots carry tool stdout.
+function completedTurnFields(
+  status: AgentStatusEntry
+): Pick<
+  AgentStatusEntry,
+  'lastAssistantMessage' | 'lastAssistantMessageIsToolOutput' | 'interrupted'
+> {
+  if (status.state !== 'done') {
+    return {}
+  }
+  return {
+    ...(status.lastAssistantMessage
+      ? {
+          lastAssistantMessage: status.lastAssistantMessage,
+          ...(status.lastAssistantMessageIsToolOutput != null
+            ? { lastAssistantMessageIsToolOutput: status.lastAssistantMessageIsToolOutput }
+            : {})
+        }
+      : {}),
+    ...(status.interrupted != null ? { interrupted: status.interrupted } : {})
+  }
+}
+
+export function demoteRuntimeMobileAgentStatus(
+  status: AgentStatusEntry,
+  pty: RuntimePtyWorktreeRecord | null
+): AgentStatusEntry {
+  return {
+    state: 'done',
+    prompt: '',
+    updatedAt: pty?.lastOscTitleEpochMs ?? status.updatedAt,
+    stateStartedAt: pty?.lastAgentStatusStartedAtEpochMs ?? status.stateStartedAt,
+    paneKey: status.paneKey,
+    stateHistory: [],
+    agentType: status.agentType,
+    ...completedTurnFields(status),
+    ...(status.providerSession ? { providerSession: status.providerSession } : {})
+  }
+}
+
 export function renewRuntimeMobileAgentStatusFromPtyTitle(
   status: AgentStatusEntry | null,
   pty: RuntimePtyWorktreeRecord | null,
@@ -37,6 +119,7 @@ export function renewRuntimeMobileAgentStatusFromPtyTitle(
     return status
   }
   const richStatusCanOwnTitleInterval =
+    codexHookReportsRunningTurn(status, agentStatusAuthorityObservedAt(status), pty) ||
     pty.lastAgentStatusRichInvalidatedAtEpochMs === null ||
     agentStatusAuthorityObservedAt(status) > pty.lastAgentStatusRichInvalidatedAtEpochMs
   const titleEvidenceAt = pty.lastOscTitleEpochMs
@@ -59,13 +142,18 @@ export function renewRuntimeMobileAgentStatusFromPtyTitle(
     ...(status.worktreeId ? { worktreeId: status.worktreeId } : {}),
     ...(status.tabId ? { tabId: status.tabId } : {}),
     ...(status.terminalTitle ? { terminalTitle: status.terminalTitle } : {}),
-    ...(status.providerSession ? { providerSession: status.providerSession } : {})
+    ...(status.providerSession ? { providerSession: status.providerSession } : {}),
+    ...(state === 'done' ? completedTurnFields(status) : {})
   })
   const titleConfirmsState =
     (pty.lastAgentStatus === 'working' && status.state === 'working') ||
     (pty.lastAgentStatus === 'permission' &&
       (status.state === 'blocked' || status.state === 'waiting'))
   if (!titleConfirmsState) {
+    // A repaint of the idle interval preceding this hook is not a new turn boundary.
+    if (workingHookOwnsIdleTitleInterval(status, agentStatusAuthorityObservedAt(status), pty)) {
+      return status
+    }
     if (
       richStatusCanOwnTitleInterval &&
       agentStatusAuthorityObservedAt(status) >= titleEvidenceAt
@@ -73,9 +161,7 @@ export function renewRuntimeMobileAgentStatusFromPtyTitle(
       return status
     }
     if (pty.lastAgentStatus === null && !terminalTitleBlocksExplicitAgentStatus(pty.lastOscTitle)) {
-      // Why: an earlier title-only `working` was published at a later stamp; returning the
-      // older hook stamp makes clients keep that `working` forever (#28102). updatedAt is
-      // the ordering clock, so advance it while evidenceObservedAt keeps freshness honest.
+      // Advance updatedAt past prior title-only working so clients accept the hook; preserve evidenceObservedAt for freshness (#28102).
       return status.state !== 'working' && titleEvidenceAt > status.updatedAt
         ? {
             ...status,
@@ -212,8 +298,10 @@ export function resolveRuntimeHookLiveAgentRow(
   if (live.payload.interactivePrompt != null) {
     return live
   }
-  // This is the pane's only wall-clock title timestamp comparable to when the hook evidence
-  // was observed; replay delivery order must not make old evidence outrank a newer title.
+  if (workingHookOwnsIdleTitleInterval(live.payload, agentStatusAuthorityObservedAt(live), pty)) {
+    return live
+  }
+  // Compare hook evidence against the pane's PTY wall-clock title, never replay delivery order.
   return !nonAgentTitle &&
     agentStatusAuthorityObservedAt({
       updatedAt: live.updatedAt,

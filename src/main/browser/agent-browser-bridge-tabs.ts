@@ -102,6 +102,7 @@ export abstract class AgentBrowserBridgeTabs extends AgentBrowserBridgeState {
       const certificateFailure = this.browserManager.getBrowserPageCertificateFailure(tabId)
       result.push({
         browserPageId: tabId,
+        profileId: this.browserManager.getSessionProfileIdForTab(tabId) ?? 'default',
         index: index++,
         // Failed pages report chrome-error:// instead of the requested URL.
         url: loadError?.validatedUrl ?? wc.getURL() ?? '',

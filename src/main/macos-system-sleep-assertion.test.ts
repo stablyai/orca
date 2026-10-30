@@ -32,10 +32,14 @@ describe('MacosSystemSleepAssertion', () => {
 
     assertion.start('status-change')
 
-    expect(spawn).toHaveBeenCalledWith('/usr/bin/caffeinate', ['-i', '-s'], {
-      stdio: 'ignore',
-      windowsHide: true
-    })
+    expect(spawn).toHaveBeenCalledWith(
+      '/usr/bin/caffeinate',
+      ['-i', '-s', '-w', String(process.pid)],
+      {
+        stdio: 'ignore',
+        windowsHide: true
+      }
+    )
   })
 
   it('is a no-op off macOS', () => {
@@ -217,6 +221,30 @@ describe('MacosSystemSleepAssertion', () => {
     assertion.start('status-change')
 
     expect(logger.warn).toHaveBeenCalledTimes(2)
+    expect(logger.debug).toHaveBeenCalledTimes(1)
+    assertion.dispose()
+  })
+
+  it('warns once while each respawned caffeinate exits right away', () => {
+    const logger = createLogger()
+    const children = [new FakeCaffeinateProcess(), new FakeCaffeinateProcess()]
+    const spawn = vi.fn(() => children[spawn.mock.calls.length - 1])
+    let now = 1_000
+    const assertion = new MacosSystemSleepAssertion({
+      logger,
+      now: () => now,
+      platform: 'darwin',
+      spawn
+    })
+
+    for (const child of children) {
+      assertion.start('status-change')
+      child.emit('exit', 1, null)
+      now += MACOS_SYSTEM_SLEEP_ASSERTION_RETRY_MS + 1
+    }
+
+    expect(spawn).toHaveBeenCalledTimes(2)
+    expect(logger.warn).toHaveBeenCalledTimes(1)
     expect(logger.debug).toHaveBeenCalledTimes(1)
     assertion.dispose()
   })

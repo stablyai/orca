@@ -50,7 +50,7 @@ export function selectStructuredAgentSessionOperationChild(
       readiness: StructuredAgentSessionStartReadiness | null
     } {
   const child = context.sessions.get(sessionId)?.child
-  if (!child || child.close) {
+  if (context.startFlights.get(sessionId) || !child || child.close) {
     return { ok: true, child: null, readiness: null }
   }
   const identity = { generation: child.generation, fence: child.fence }

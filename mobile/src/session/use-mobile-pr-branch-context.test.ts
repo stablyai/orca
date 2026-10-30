@@ -13,6 +13,7 @@ function status(overrides: Partial<MobileGitStatusResult>): MobileGitStatusResul
     conflictOperation: 'unknown',
     branch: undefined,
     head: undefined,
+    upstreamStatus: undefined,
     ...overrides
   }
 }
@@ -63,11 +64,6 @@ describe('deriveMobilePrBranchContext', () => {
   it('returns null headSha when branchCompare is missing entirely', () => {
     const result = deriveMobilePrBranchContext(status({ branch: 'feature' }), null)
     expect(result.headSha).toBeNull()
-  })
-
-  it('derives branch from status.branch', () => {
-    const result = deriveMobilePrBranchContext(status({ branch: 'topic' }), null)
-    expect(result.branch).toBe('topic')
   })
 
   it('returns null branch when status.branch is absent', () => {

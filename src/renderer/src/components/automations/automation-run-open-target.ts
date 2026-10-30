@@ -1,6 +1,6 @@
 import type { AutomationRun } from '../../../../shared/automations-types'
 import { makePaneKey, parsePaneKey } from '../../../../shared/stable-pane-id'
-import { parseRemoteRuntimePtyId } from '../../../../shared/remote-runtime-pty-id'
+import { parseRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 import {
   isWebTerminalSurfaceTabId,
   toWebTerminalSurfaceTabId
@@ -78,11 +78,7 @@ export type AutomationRunTerminalState = {
   ptyIdsByTabId: Readonly<Record<string, readonly string[] | undefined>>
 }
 
-/**
- * The run's pane in this client. A run on a paired server names the server's tab, pane and PTY;
- * this client shows that pane as a mirrored tab whose PTY id is the server's terminal handle, so
- * the server's PTY id cannot be compared and the mirrored pane must carry a PTY from that server.
- */
+/** Paired runs name server tab/pane/PTY identities; local mirrors use server terminal handles, so require a PTY from that server instead of comparing its internal PTY ID. */
 export function resolveAutomationRunTerminalTarget(
   run: AutomationRun,
   terminals: AutomationRunTerminalState,

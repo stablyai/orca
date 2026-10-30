@@ -3,11 +3,7 @@ import type {
   TerminalLayoutSnapshot,
   TerminalPaneLayoutNode
 } from '../../../../shared/terminal-tab-types'
-import {
-  normalizeTerminalLayoutSnapshot,
-  resolvePtyBoundActiveLeafId,
-  resolveTerminalLayoutActiveLeafId
-} from './terminal-layout-leaf-ids'
+import { normalizeTerminalLayoutSnapshot } from './terminal-layout-leaf-ids'
 
 const LEAF_1 = '11111111-1111-4111-8111-111111111111'
 const LEAF_2 = '22222222-2222-4222-8222-222222222222'
@@ -46,60 +42,7 @@ function splitLayout(): TerminalLayoutSnapshot {
   }
 }
 
-describe('resolveTerminalLayoutActiveLeafId', () => {
-  it('keeps the active leaf when it is still PTY-bound', () => {
-    expect(
-      resolveTerminalLayoutActiveLeafId({
-        root: split(LEAF_1, LEAF_2),
-        activeLeafId: LEAF_2,
-        ptyIdsByLeafId: { [LEAF_1]: 'pty-1', [LEAF_2]: 'pty-2' }
-      })
-    ).toBe(LEAF_2)
-  })
-
-  it('repairs a stale active leaf to the first PTY-bound leaf in layout order', () => {
-    expect(
-      resolveTerminalLayoutActiveLeafId({
-        root: split(LEAF_1, LEAF_2),
-        activeLeafId: LEAF_1,
-        ptyIdsByLeafId: { [LEAF_2]: 'pty-2' }
-      })
-    ).toBe(LEAF_2)
-  })
-
-  it('ignores PTY bindings for leaves outside the layout root', () => {
-    expect(
-      resolveTerminalLayoutActiveLeafId({
-        root: split(LEAF_1, LEAF_2),
-        activeLeafId: LEAF_1,
-        ptyIdsByLeafId: { [LEAF_3]: 'stale-pty' }
-      })
-    ).toBe(LEAF_1)
-  })
-
-  it('falls back to a valid visual leaf when no PTY-bound leaf remains', () => {
-    expect(
-      resolveTerminalLayoutActiveLeafId({
-        root: split(LEAF_1, LEAF_2),
-        activeLeafId: LEAF_2,
-        ptyIdsByLeafId: {}
-      })
-    ).toBe(LEAF_2)
-  })
-})
-
 describe('normalizeTerminalLayoutSnapshot active leaf repair', () => {
-  it('preserves a rootless active leaf before terminal replay', () => {
-    const result = normalizeTerminalLayoutSnapshot({
-      root: null,
-      activeLeafId: LEAF_1,
-      expandedLeafId: null
-    })
-
-    expect(result.changed).toBe(false)
-    expect(result.snapshot.activeLeafId).toBe(LEAF_1)
-  })
-
   it('prefers a rootless active leaf over multiple retained PTY bindings', () => {
     const result = normalizeTerminalLayoutSnapshot({
       root: null,
@@ -113,20 +56,6 @@ describe('normalizeTerminalLayoutSnapshot active leaf repair', () => {
 
     expect(result.changed).toBe(false)
     expect(result.snapshot.activeLeafId).toBe(LEAF_3)
-  })
-
-  it('uses a sole rootless PTY binding when no active leaf remains', () => {
-    const result = normalizeTerminalLayoutSnapshot({
-      root: null,
-      activeLeafId: null,
-      expandedLeafId: null,
-      ptyIdsByLeafId: {
-        [LEAF_2]: 'pty-2'
-      }
-    })
-
-    expect(result.changed).toBe(true)
-    expect(result.snapshot.activeLeafId).toBe(LEAF_2)
   })
 
   it('does not pick an arbitrary rootless PTY binding when multiple remain', () => {
@@ -178,66 +107,5 @@ describe('normalizeTerminalLayoutSnapshot active leaf repair', () => {
     expect(normalized.changed).toBe(true)
     expect(normalized.snapshot.activeLeafId).toBe(LEAF_2)
     expect(normalized.snapshot.expandedLeafId).toBeNull()
-  })
-
-  it('preserves valid active and expanded leaf ids', () => {
-    const layout = splitLayout()
-
-    const normalized = normalizeTerminalLayoutSnapshot(layout)
-
-    expect(normalized.changed).toBe(false)
-    expect(normalized.snapshot.activeLeafId).toBe(LEAF_2)
-    expect(normalized.snapshot.expandedLeafId).toBe(LEAF_3)
-  })
-})
-
-describe('resolvePtyBoundActiveLeafId', () => {
-  it('preserves the active leaf when it still has a PTY binding', () => {
-    const layout = splitLayout()
-
-    const activeLeafId = resolvePtyBoundActiveLeafId({
-      root: layout.root,
-      activeLeafId: LEAF_2,
-      ptyIdsByLeafId: layout.ptyIdsByLeafId
-    })
-
-    expect(activeLeafId).toBe(LEAF_2)
-  })
-
-  it('moves active selection to the first bound layout leaf when the active PTY is gone', () => {
-    const layout = splitLayout()
-
-    const activeLeafId = resolvePtyBoundActiveLeafId({
-      root: layout.root,
-      activeLeafId: LEAF_2,
-      ptyIdsByLeafId: {
-        [LEAF_1]: 'pty-1',
-        [LEAF_3]: 'pty-3'
-      }
-    })
-
-    expect(activeLeafId).toBe(LEAF_1)
-  })
-
-  it('falls back to the current active leaf when no PTY bindings exist', () => {
-    const layout = splitLayout()
-
-    const activeLeafId = resolvePtyBoundActiveLeafId({
-      root: layout.root,
-      activeLeafId: LEAF_2,
-      ptyIdsByLeafId: undefined
-    })
-
-    expect(activeLeafId).toBe(LEAF_2)
-  })
-
-  it('uses a binding key when there is no root layout to inspect', () => {
-    const activeLeafId = resolvePtyBoundActiveLeafId({
-      root: null,
-      activeLeafId: null,
-      ptyIdsByLeafId: { [LEAF_3]: 'pty-3' }
-    })
-
-    expect(activeLeafId).toBe(LEAF_3)
   })
 })

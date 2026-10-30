@@ -26,8 +26,8 @@ vi.mock('../../hooks', () => ({
   parseOrcaYaml: () => ({ issueCommand: 'shared' })
 }))
 vi.mock('../../issue-command-file', () => ({
-  readIssueCommand: mocks.localRead,
-  writeIssueCommand: mocks.localWrite
+  readIssueCommandUnlessWslStopped: mocks.localRead,
+  writeIssueCommandUnlessWslStopped: mocks.localWrite
 }))
 vi.mock('../../project-runtime-git-options', () => ({
   getLocalProjectWorktreeGitOptions: () => ({})
@@ -47,8 +47,7 @@ vi.mock('../../../shared/setup-script-imports', () => ({
   }
 }))
 vi.mock('../../effective-hook-config', () => ({
-  getEffectiveSetupRunPolicy: () => 'manual',
-  getDefaultTabCommandTrustContent: () => undefined
+  getEffectiveSetupRunPolicy: () => 'manual'
 }))
 import { RuntimeRepositoryHooksCommands } from '../../runtime/runtime-repository-hooks-commands'
 import { RuntimeRepositoryIssueCommand } from '../../runtime/runtime-repository-issue-command'

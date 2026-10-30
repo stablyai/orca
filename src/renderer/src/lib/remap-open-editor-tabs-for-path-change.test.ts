@@ -198,8 +198,7 @@ describe('remapOpenEditorTabsForPathChange', () => {
   })
 
   it('leaves a same-path tab on a different execution host untouched', async () => {
-    // Two SSH connections both have /repo/a.md open with separate dirty drafts.
-    // Renaming on connA's host must not retarget connB's tab (a distinct file).
+    // Same paths on distinct SSH owners are different files; connA rename must preserve connB drafts/tabs.
     const state = useAppStore.getState()
     useAppStore.setState({
       repos: [
@@ -242,7 +241,6 @@ describe('remapOpenEditorTabsForPathChange', () => {
     expect(result.ok).toBe(true)
 
     const files = useAppStore.getState().openFiles
-    // connA's tab moved; connB's tab kept its id, path, AND its dirty draft.
     expect(files.find((f) => f.worktreeId === 'wt-a')!.filePath).toBe('/repo/b.md')
     const tabB = files.find((f) => f.worktreeId === 'wt-b')!
     expect(tabB.id).toBe(idB)
@@ -252,9 +250,7 @@ describe('remapOpenEditorTabsForPathChange', () => {
   })
 
   it('selects a Windows tab whose path differs only in case from the move root', async () => {
-    // Windows paths are case-insensitive: an open tab at C:\Repo\Src\a.ts must be
-    // retargeted when the move root is c:\repo\src — otherwise the rename lands on
-    // disk while the tab is stranded on the vanished source path.
+    // Windows case-insensitive roots must retarget tabs or disk rename leaves them on vanished source paths.
     const state = useAppStore.getState()
     state.openFile(
       {
@@ -286,9 +282,7 @@ describe('remapOpenEditorTabsForPathChange', () => {
   })
 
   it('rebuilds the moved path across WSL UNC aliases without fabricating segments', async () => {
-    // The shared matcher equates \\wsl$\Ubuntu and \\wsl.localhost\ubuntu (same
-    // filesystem), but they differ in raw length — a raw slice(fromPath.length)
-    // would corrupt the destination. Segment-count reconstruction must not.
+    // WSL UNC aliases match despite different lengths; reconstruct by segments, never raw fromPath.length slices.
     const state = useAppStore.getState()
     state.openFile(
       {
@@ -319,8 +313,7 @@ describe('remapOpenEditorTabsForPathChange', () => {
   })
 
   it('preserves a legal backslash in a POSIX/SSH filename (no separator invention)', async () => {
-    // Backslash is legal filename data on POSIX; the move must not treat it as a
-    // separator or emit one into the destination.
+    // POSIX backslashes are filename data, never separators in either source or destination.
     const state = useAppStore.getState()
     state.openFile(
       {
@@ -346,7 +339,6 @@ describe('remapOpenEditorTabsForPathChange', () => {
 
   it('preserves a legal POSIX backslash in a cross-worktree tab relative path', async () => {
     const state = useAppStore.getState()
-    // Anchor the move to wt-1 / local host.
     state.openFile(
       {
         filePath: '/repo/src/keep.ts',
@@ -358,7 +350,6 @@ describe('remapOpenEditorTabsForPathChange', () => {
       },
       { suppressActiveRuntimeFallback: true }
     )
-    // Floating tab for a POSIX file whose name contains a literal backslash.
     state.openFile(
       {
         filePath: '/repo/src/a\\b.txt',
@@ -383,8 +374,7 @@ describe('remapOpenEditorTabsForPathChange', () => {
       .getState()
       .openFiles.find((f) => f.worktreeId === FLOATING_TERMINAL_WORKTREE_ID)!
     expect(floating.filePath).toBe('/repo/dst/a\\b.txt')
-    // The backslash stays filename data in the recomputed relativePath — it must
-    // NOT have been folded into a `a/b.txt` separator.
+    // Preserve literal backslashes in relativePath instead of splitting a/b.txt.
     expect(floating.relativePath.includes('a\\b.txt')).toBe(true)
     expect(floating.relativePath.includes('a/b.txt')).toBe(false)
   })
@@ -435,7 +425,6 @@ describe('remapOpenEditorTabsForPathChange', () => {
       owner: localMoveOwner('wt-1')
     })
 
-    // POSIX flavor: the separator stays `/`; the ancestor backslash is untouched.
     expect(useAppStore.getState().openFiles[0]!.filePath).toBe('/srv/team\\repo/dst/a.ts')
   })
 
@@ -460,7 +449,6 @@ describe('remapOpenEditorTabsForPathChange', () => {
       owner: localMoveOwner('wt-1')
     })
 
-    // Nested suffix preserved, no dropped or doubled separator.
     expect(useAppStore.getState().openFiles[0]!.filePath).toBe('C:\\Repo\\Dst\\deep\\a.ts')
   })
 
@@ -524,8 +512,7 @@ describe('remapOpenEditorTabsForPathChange', () => {
 
     const moved = useAppStore.getState().openFiles.find((f) => f.filePath === newPath)
     expect(moved).toBeTruthy()
-    // The re-homed tab must keep the identity that lets the watcher distinguish
-    // the move echo from a real external write, and any pre-existing conflict.
+    // Preserve move-echo identity and existing conflict so watchers distinguish rename from external writes.
     expect(moved?.lastKnownDiskSignature).toBe('sig-abc')
     expect(moved?.externalMutation).toBe('changed')
     expect(moved?.isDirty).toBe(true)

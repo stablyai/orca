@@ -1,67 +1,61 @@
-/**
- * Appends an actionable Tailscale recommendation to remote-runtime connection
- * failures, mirroring `withMacTailscaleDnsHint`. Lives in `shared` as a pure,
- * dependency-free function so both the main process (desktop transport) and the
- * renderer (web client) can route their user-facing errors through it without
- * leaking presentation copy into the shared error constructors (which the CLI,
- * logs, and mobile typecheck also consume).
- */
+/** Pure guidance shared by desktop/web presentation paths; keep copy out of error constructors consumed by CLI/logs/mobile. */
 
 const TAILSCALE_DOWNLOAD_URL = 'https://tailscale.com/download'
 
-// Why: only the "runtime is unreachable" family of failures has a Tailscale
-// remedy; auth/protocol errors pass through untouched.
+// Only unreachable-runtime errors have a Tailscale remedy; preserve auth/protocol errors.
 const REMOTE_RUNTIME_UNREACHABLE_RE =
   /could not connect to the remote orca runtime|remote orca runtime closed the connection|timed out (?:waiting for|while connecting to) the remote orca runtime/i
 
 const TAILSCALE_MAGIC_DNS_SUFFIX_RE = /(?:^|\.)ts\.net$/i
-// Why: gate the CGNAT check on a full IPv4 literal — the range regex alone also
-// matches DNS names like `100.64.0.1.example.com`, which aren't Tailscale IPs.
+// Require an IPv4 literal so CGNAT-shaped DNS names do not qualify.
 const IPV4_LITERAL_RE =
   /^(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(?:\.(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}$/
 // Tailscale assigns node IPs from the 100.64.0.0/10 CGNAT range (second octet 64–127).
 const TAILSCALE_CGNAT_RE = /^100\.(?:6[4-9]|[7-9]\d|1[01]\d|12[0-7])\./
-// Tailscale also assigns each node an IPv6 address from the fd7a:115c:a1e0::/48 ULA
-// block, and pairing endpoints can carry an IPv6 literal (see resolvePairingEndpoint).
+// Pairing also accepts Tailscale’s fd7a:115c:a1e0::/48 IPv6 literals.
 const TAILSCALE_IPV6_RE = /^fd7a:115c:a1e0:/i
+const SAFE_HOST_RE =
+  /^(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)*|[0-9a-f:]+)$/i
 
 function extractHost(endpoint: string): string | null {
   let host: string | null
   try {
     host = new URL(endpoint).hostname || null
   } catch {
-    // Why: a bare host (no scheme) isn't a valid URL; strip any scheme and take
-    // the authority up to the first port/path/query delimiter.
+    // Accept bare hosts by extracting authority before the port/path/query delimiter.
     host = endpoint.replace(/^[a-z]+:\/\//i, '').split(/[/:?#]/, 1)[0] || null
   }
   if (!host) {
     return null
   }
-  // Why: WHATWG URL keeps IPv6 literals bracketed (`[fd7a:…]`) and FQDNs can carry
-  // a trailing dot; normalize both so the host checks below see a bare address/name.
+  // Normalize URL-preserved IPv6 brackets and FQDN trailing dots before matching.
   return host.replace(/^\[|\]$/g, '').replace(/\.$/, '') || null
 }
 
-export function isTailscaleEndpoint(endpoint: string | null | undefined): boolean {
-  if (!endpoint) {
-    return false
+/** The endpoint's host when it is a Tailscale address (what `tailscale ping` takes); else null. */
+export function tailscaleHostOfEndpoint(endpoint: string | null | undefined): string | null {
+  const host = endpoint ? extractHost(endpoint) : null
+  // Why strict: the host is pasted into a shell, so only DNS-label or IP-literal characters pass.
+  if (!host || !SAFE_HOST_RE.test(host)) {
+    return null
   }
-  const host = extractHost(endpoint)
-  if (!host) {
-    return false
-  }
-  return (
-    TAILSCALE_MAGIC_DNS_SUFFIX_RE.test(host) ||
+  return TAILSCALE_MAGIC_DNS_SUFFIX_RE.test(host) ||
     (IPV4_LITERAL_RE.test(host) && TAILSCALE_CGNAT_RE.test(host)) ||
     TAILSCALE_IPV6_RE.test(host)
-  )
+    ? host
+    : null
 }
 
-/**
- * Why: a server already reached over Tailscale fails for tailnet-specific reasons, so "use
- * Tailscale" would be useless — point at the real causes. Already-paired devices keep their
- * saved token across server restarts, so re-pairing only matters when adding a new device.
- */
+/** A command, never translated: the user pastes it into a shell. */
+export function tailscalePingCommand(host: string): string {
+  return `tailscale ping ${host}`
+}
+
+export function isTailscaleEndpoint(endpoint: string | null | undefined): boolean {
+  return tailscaleHostOfEndpoint(endpoint) !== null
+}
+
+/** Tailnet endpoints need reachability guidance; saved tokens survive restarts, so re-pair only for new devices. */
 const TAILNET_ENDPOINT_HINT =
   "The server may be offline on your tailnet, or its Tailscale Funnel reverted to tailnet-only. Confirm it's reachable; re-pair only when adding a new device, since already-paired devices reconnect with their saved token."
 
@@ -74,9 +68,7 @@ export function withRemoteRuntimeTailscaleHint(
   if (!REMOTE_RUNTIME_UNREACHABLE_RE.test(message)) {
     return message
   }
-  // Why: keep the hint idempotent so a message routed through this helper twice (e.g. a
-  // re-wrapped error response) isn't suffixed with duplicate guidance. Keyed on the hints
-  // themselves, not on the word — messages now carry an endpoint whose host can contain it.
+  // Deduplicate exact hint suffixes; the endpoint itself may contain “tailscale”.
   if (message.endsWith(TAILNET_ENDPOINT_HINT) || message.endsWith(OTHER_NETWORK_HINT)) {
     return message
   }

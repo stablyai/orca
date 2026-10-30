@@ -1,13 +1,4 @@
-/**
- * Gate: the hidden-worktree retention budget must bound mounted tabs once the
- * daemon recovers.
- *
- * Models the field shape: a capability outage settles every local pty
- * unknown, the daemon then recovers, and the session keeps accumulating
- * hidden worktrees. If the settled verdicts are permanent, every tab stays
- * eviction-exempt, force-park frees nothing, and retained mounted tabs grow
- * linearly with visited worktrees — unbounded mounts by design.
- */
+// Model capability outage → daemon recovery → growing hidden inventory; permanently settled unknowns would retain every tab despite the force-park budget.
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { PTY_SESSION_ID_SEPARATOR } from '../../../../shared/pty-session-id-format'
 import {
@@ -123,8 +114,7 @@ describe('hidden-worktree retention with recovered capability', () => {
       retainedMountedTabs += tabs.length - evictable.size
     }
 
-    // The invariant a bounded system must hold; permanent settle-false keeps
-    // every tab exempt and retained grows linearly with visited worktrees.
+    // Recovered capabilities must release exemptions or hidden mounts grow with every visited workspace.
     expect(retainedMountedTabs).toBeLessThanOrEqual(
       TERMINAL_HIDDEN_WORKTREE_RETENTION_LIMIT * TABS_PER_WORKTREE
     )

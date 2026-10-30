@@ -85,7 +85,7 @@ export function resolveMessageRun(
       `Dispatch ${dispatch.id} belongs to Run ${dispatch.run_id}, not ${run.id}.`
     )
   }
-  // Why: a payload-named or lifecycle Dispatch scopes the message; lifecycle validation owns Task/Dispatch mismatches.
+  // Payload/lifecycle Dispatch scopes mail; lifecycle validation checks Task/Dispatch mismatch.
   if (
     run &&
     !params.to &&
@@ -94,13 +94,13 @@ export function resolveMessageRun(
   ) {
     const taskId = parseMessageTaskId(params.payload)
     const task = taskId ? db.getTask(taskId) : undefined
-    // Why: a nested coordinator (worker of the inferred Run) reporting on its own child Run's Task keeps reaching its parent.
+    // Nested coordinators reporting child-Run Tasks still reach their parent.
     const senderCoordinatesTaskRun =
       dispatch !== undefined &&
       task?.run_id != null &&
       db.runsBoundToCoordinator(params.sender).some((bound) => bound.id === task.run_id)
     if (task?.run_id && task.run_id !== run.id && !senderCoordinatesTaskRun) {
-      // Why: a Dispatch-bound sender cannot target another Run (dispatch_run_mismatch), so only offer its own.
+      // Offer Dispatch-bound senders only their own Run; another would fail dispatch_run_mismatch.
       const nextStep = dispatch
         ? `rerun with --run ${run.id} to send to your Dispatch ${dispatch.id}'s Run.`
         : `rerun with --run ${task.run_id} to reach the Task's Run, or --run ${run.id} to keep the inferred Run.`
@@ -141,7 +141,7 @@ export function legacyWorkerDeliveryContract(
 export function interruptedAcknowledgedCheck(
   runId: string,
   acknowledged: string,
-  reason: 'consumer_fenced' | 'outcome_unknown' | 'waiter_exists'
+  reason: 'consumer_fenced' | 'outcome_unknown'
 ): Record<string, unknown> {
   return {
     runId,
@@ -156,10 +156,7 @@ export function interruptedAcknowledgedCheck(
   }
 }
 
-/**
- * A `remote` Run row is only this host's mirror of a Run that lives on its coordinator's computer;
- * mail written into it reaches no one (#32292).
- */
+/** Remote Run rows are local mirrors; mail stored there reaches nobody (#32292). */
 export function rejectRemotelyHomedRun(
   db: ReturnType<OrcaRuntimeService['getOrchestrationDb']>,
   runId: string

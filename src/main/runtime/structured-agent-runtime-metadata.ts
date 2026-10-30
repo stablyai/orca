@@ -40,7 +40,7 @@ function acpChatProgram(spec: AcpLaunchSpec): StructuredAgentChatProgram {
     resolve: (shellEnv, commandSettings) => {
       const env = { ...shellEnv, ...spec.env }
       const options = { commandSettings, dataDirectory: getProfileUserDataPath() }
-      return { command: resolveAcpLaunchCommand(spec, env, options), env }
+      return { ...resolveAcpLaunchCommand(spec, env, options), env }
     },
     ...(managedRuntime ? { installable: () => managedRuntime.pin() !== null } : {})
   }
@@ -52,7 +52,7 @@ function cliChatProgram(agent: 'claude' | 'codex'): StructuredAgentChatProgram {
       const homePath = env.HOME ?? env.USERPROFILE
       const pathEnv = env.PATH ?? env.Path ?? null
       const options = { pathEnv, ...(homePath ? { homePath } : {}) }
-      return { command: resolveStructuredAgentCommand(agent, commandSettings, options), env }
+      return { ...resolveStructuredAgentCommand(agent, commandSettings, options), env }
     }
   }
 }
@@ -68,11 +68,11 @@ function acpMetadata(spec: AcpLaunchSpec): StructuredAgentRuntimeMetadata {
           launchCheck: {
             resolveLaunch: (shellEnv, commandSettings) => {
               const env = { ...shellEnv, ...spec.env }
-              const command = resolveAcpLaunchCommand(spec, env, {
+              const invocation = resolveAcpLaunchCommand(spec, env, {
                 commandSettings,
                 dataDirectory: null
               })
-              return { command, env }
+              return { ...invocation, env }
             },
             minimumVersions
           }
@@ -91,18 +91,20 @@ async function resolveCodexAccountHomePath(
   services: StructuredAgentAccountHomeServices
 ): Promise<string> {
   const { launchEnv, purpose, workspacePath } = request
-  if (purpose === 'launch' && workspacePath) {
-    await applyStructuredCodexWorkspaceTrust({
-      workspacePath: await workspacePath(),
-      launchEnv,
-      settings: services.workspaceTrustSettings()
-    })
-  }
-  return resolveStructuredCodexAccountHomePath({
+  const codexHome = await resolveStructuredCodexAccountHomePath({
     launchEnv,
     resolveLaunchHome:
       purpose === 'launch' ? services.prepareCodexLaunchHome : services.readCodexLaunchHome
   })
+  if (purpose === 'launch' && workspacePath) {
+    await applyStructuredCodexWorkspaceTrust({
+      workspacePath: await workspacePath(),
+      launchEnv,
+      codexHome,
+      settings: services.workspaceTrustSettings()
+    })
+  }
+  return codexHome
 }
 
 // One roster supplies both metadata readers and the host's synchronous adapter factories.

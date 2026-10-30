@@ -6,7 +6,9 @@ import {
   getRequiredStringFlag
 } from '../../flags'
 import { ORCHESTRATION_RUN_PAGE_LIMIT } from '../../../shared/orchestration-run-pagination'
+import type { RunRemovedWork } from '../../../shared/orchestration-removed-work'
 import { callOrchestrationMutation } from './mutation-request'
+import { formatRemovedWorkListing, formatRunRemovedWorkLine } from './removed-work-format'
 import { resolveCoordinatorTerminalHandle } from './terminal-identity'
 
 export const ORCHESTRATION_RUN_HANDLERS: Record<string, CommandHandler> = {
@@ -67,6 +69,8 @@ export const ORCHESTRATION_RUN_HANDLERS: Record<string, CommandHandler> = {
   },
 
   'orchestration run-show': async ({ flags, client, json }) => {
+    const cursor = getOptionalStringFlag(flags, 'cursor')
+    const removed = flags.has('removed') || cursor !== undefined
     const result = await client.call<{
       run: {
         id: string
@@ -75,13 +79,18 @@ export const ORCHESTRATION_RUN_HANDLERS: Record<string, CommandHandler> = {
         legacy: number
         created_at: string
       }
-    }>('orchestration.runShow', { id: getRequiredStringFlag(flags, 'id') })
-    printResult(
-      result,
-      json,
-      (r) =>
-        `${r.run.id}${r.run.legacy ? ' [legacy, inspect only]' : ''} ${r.run.objective}\n` +
-        `consumer generation ${r.run.consumer_generation}; created ${r.run.created_at}`
+      removedWork?: RunRemovedWork
+    }>('orchestration.runShow', {
+      id: getRequiredStringFlag(flags, 'id'),
+      ...(removed ? { removed: true } : {}),
+      ...(cursor ? { cursor } : {})
+    })
+    printResult(result, json, (r) =>
+      removed
+        ? formatRemovedWorkListing(r.run.id, r.removedWork, cursor)
+        : `${r.run.id}${r.run.legacy ? ' [legacy, inspect only]' : ''} ${r.run.objective}\n` +
+          `consumer generation ${r.run.consumer_generation}; created ${r.run.created_at}` +
+          `${formatRunRemovedWorkLine(r.run.id, r.removedWork)}`
     )
   }
 }

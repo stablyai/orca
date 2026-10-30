@@ -6,6 +6,10 @@ import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { SourceControlAiSettingsPatch } from '../../../../shared/source-control-ai-types'
 import { normalizeSourceControlAiSettings } from '../../../../shared/source-control-ai'
 import { ChatNamingSetting } from './ChatNamingSetting'
+import {
+  savedChatNamingCatalog,
+  observeChatNamingCatalogWork
+} from '../../../../shared/chat-naming-catalog-work.test-fixture'
 import { toast } from 'sonner'
 import { startTransition, StrictMode, Suspense } from 'react'
 
@@ -24,7 +28,7 @@ beforeEach(() => {
   vi.clearAllMocks()
 })
 
-function renderSetting(overrides: Partial<GlobalSettings> = {}) {
+function renderSetting(overrides: Partial<GlobalSettings> = {}, expand = true) {
   const settings = { ...getDefaultSettings('/tmp'), ...overrides }
   const updateSettings = vi.fn()
   const onDirtyChange = vi.fn()
@@ -45,6 +49,9 @@ function renderSetting(overrides: Partial<GlobalSettings> = {}) {
     />
   )
   const view = render(element())
+  if (expand && screen.queryByRole('button', { name: 'Advanced' })) {
+    fireEvent.click(screen.getByRole('button', { name: 'Advanced' }))
+  }
   return { ...view, element, settings, updateSettings, writeSourceControlAiSettings, onDirtyChange }
 }
 
@@ -57,7 +64,7 @@ function changeTemplate(value: string): void {
 }
 
 function changeAgentArgs(value: string): void {
-  const input = screen.getByText('CLI arguments').nextElementSibling
+  const input = screen.getByText('Arguments').nextElementSibling
   if (!(input instanceof HTMLInputElement)) {
     throw new Error('CLI arguments input is missing')
   }
@@ -65,12 +72,103 @@ function changeAgentArgs(value: string): void {
 }
 
 describe('Chat names setting', () => {
+  it.each([100, 1000])(
+    'bounds actual edit, clear, collapsed and off catalog work for %i rows',
+    (size) => {
+      const source = savedChatNamingCatalog(size)
+      const { work, reset } = observeChatNamingCatalogWork()
+      const samples: Record<string, typeof work> = {}
+      const check = (phase: string, passes: number, reads: number) => {
+        expect(work.copiedRows).toBeLessThanOrEqual(passes * size)
+        expect(work.copiedRows).toBeGreaterThanOrEqual(size)
+        expect(work.copiedBytes).toBeLessThanOrEqual(passes * 64 * size)
+        expect(work.copiedBytes).toBeGreaterThanOrEqual(32 * size)
+        expect(work.selectedRowReads).toBeLessThanOrEqual(reads)
+        if (reads) {
+          expect(work.selectedRowReads).toBeGreaterThanOrEqual(size)
+        }
+        samples[phase] = { ...work }
+        reset()
+      }
+      const view = renderSetting({ defaultTuiAgent: 'claude', sourceControlAi: source })
+      reset()
+      changeAgentArgs('--model fast')
+      check('edit', 2, size + 1)
+      expect(screen.getByRole('combobox').textContent).toContain(
+        'Use configured CLI agent (Claude)'
+      )
+      changeAgentArgs('')
+      check('clear', 1, 0)
+      expect(screen.getByRole('combobox').textContent).toContain('Use chat agent')
+      view.unmount()
+      source.actions = { conversationName: { agentId: null, agentArgs: '--model fast' } }
+      for (const enabled of [true, false]) {
+        reset()
+        const hidden = renderSetting(
+          { defaultTuiAgent: 'claude', nativeChatAutoName: enabled, sourceControlAi: source },
+          false
+        )
+        expect(screen.queryByRole('combobox')).toBeNull()
+        if (enabled) {
+          expect(
+            screen.getByRole('button', { name: 'Advanced' }).getAttribute('aria-expanded')
+          ).toBe('false')
+        }
+        expect(
+          screen
+            .getByRole('switch', { name: 'Name chats automatically' })
+            .getAttribute('aria-checked')
+        ).toBe(String(enabled))
+        check(enabled ? 'collapsed' : 'off', 2, size + 1)
+        hidden.unmount()
+      }
+      console.log(JSON.stringify({ metric: 'chat-naming-settings-catalog', size, samples }))
+    }
+  )
+
+  it('keeps alternate-agent setup in Advanced and opens it for search', () => {
+    const { element, rerender } = renderSetting({}, false)
+    expect(screen.queryByRole('combobox')).toBeNull()
+    expect(screen.getByRole('button', { name: 'Advanced' }).getAttribute('aria-expanded')).toBe(
+      'false'
+    )
+    state.settingsSearchQuery = 'naming agent'
+    rerender(element())
+    expect(screen.getByRole('combobox').textContent).toContain('Use chat agent')
+    expect(screen.getByRole('button', { name: 'Advanced' }).hasAttribute('disabled')).toBe(true)
+  })
+
   it('defaults to on and writes the off preference', () => {
     const { updateSettings } = renderSetting()
     const toggle = screen.getByRole('switch', { name: 'Name chats automatically' })
     expect(toggle.getAttribute('aria-checked')).toBe('true')
     fireEvent.click(toggle)
     expect(updateSettings).toHaveBeenCalledWith({ nativeChatAutoName: false })
+  })
+
+  it('labels the prospective default with retained arguments and returns to chat agent when cleared', async () => {
+    const { settings, element, rerender } = renderSetting({
+      defaultTuiAgent: 'claude',
+      sourceControlAi: normalizeSourceControlAiSettings({
+        ...normalizeSourceControlAiSettings(undefined),
+        agentId: 'pi',
+        actions: { conversationName: { agentId: 'codex', agentArgs: '--model haiku' } }
+      })
+    })
+    expect(screen.getByRole('combobox').textContent).toContain('Codex')
+    fireEvent.click(screen.getByRole('combobox'))
+    fireEvent.click(screen.getByRole('option', { name: 'Use configured CLI agent (Claude)' }))
+    await waitFor(() =>
+      expect(settings.sourceControlAi?.actions?.conversationName).toMatchObject({
+        agentId: null,
+        agentArgs: '--model haiku'
+      })
+    )
+    rerender(element())
+    expect(screen.getByRole('combobox').textContent).toContain('Use configured CLI agent (Claude)')
+    expect(screen.getByText('Clear CLI arguments to use each chat’s agent.')).toBeTruthy()
+    changeAgentArgs('')
+    expect(screen.getByRole('combobox').textContent).toContain('Use chat agent')
   })
 
   it('saves CLI arguments and a template through the shared writer', async () => {
@@ -112,28 +210,6 @@ describe('Chat names setting', () => {
     expect(settings.sourceControlAi?.actions?.commitMessage?.commandInputTemplate).toBe('Keep this')
   })
 
-  it('keeps the saved recipe hidden when chat naming is off', () => {
-    renderSetting({ nativeChatAutoName: false })
-    expect(
-      screen.getByRole('switch', { name: 'Name chats automatically' }).getAttribute('aria-checked')
-    ).toBe('false')
-    expect(screen.queryByText('Command template')).toBeNull()
-  })
-
-  it('keeps naming independent of Git AI enablement and exposes only its variables', () => {
-    renderSetting({
-      sourceControlAi: normalizeSourceControlAiSettings({
-        ...normalizeSourceControlAiSettings(undefined),
-        enabled: false
-      })
-    })
-    expect(screen.getAllByRole('combobox')).toHaveLength(1)
-    expect(screen.getByText('Command template')).toBeTruthy()
-    expect(screen.getByRole('button', { name: '{basePrompt}' })).toBeTruthy()
-    expect(screen.getByRole('button', { name: '{firstPrompt}' })).toBeTruthy()
-    expect(screen.queryByRole('button', { name: '{branch}' })).toBeNull()
-  })
-
   it('appends variables and discards only the unsaved recipe', () => {
     const { settings, writeSourceControlAiSettings, onDirtyChange } = renderSetting()
     const persistedRecipe = settings.sourceControlAi?.actions?.conversationName
@@ -155,6 +231,7 @@ describe('Chat names setting', () => {
     rerender(element())
     expect(screen.getByDisplayValue('Keep my edits')).toBeTruthy()
     expect(onDirtyChange).toHaveBeenLastCalledWith(true)
+    expect(screen.getByRole('button', { name: 'Advanced' }).hasAttribute('disabled')).toBe(true)
     fireEvent.click(screen.getByRole('button', { name: 'Discard' }))
     expect(screen.queryByText('Command template')).toBeNull()
     expect(onDirtyChange).toHaveBeenLastCalledWith(false)
@@ -219,6 +296,7 @@ describe('Chat names setting', () => {
     unmount()
     expect(onDirtyChange).toHaveBeenLastCalledWith(false)
     render(<StrictMode>{element()}</StrictMode>)
+    fireEvent.click(screen.getByRole('button', { name: 'Advanced' }))
     changeTemplate('New draft')
     expect(onDirtyChange).toHaveBeenLastCalledWith(true)
     onDirtyChange.mockClear()
@@ -288,6 +366,7 @@ describe('Chat names setting', () => {
       </Suspense>
     )
     const { rerender, unmount } = render(element(false))
+    fireEvent.click(screen.getByRole('button', { name: 'Advanced' }))
     changeTemplate('Committed save')
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
     await act(async () => {

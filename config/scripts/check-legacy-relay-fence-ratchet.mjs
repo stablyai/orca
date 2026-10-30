@@ -4,9 +4,7 @@ import { pathToFileURL } from 'node:url'
 import { readTrackedSources, runEntryRatchet } from './ratchet-baseline.mjs'
 import { collectModuleSpecifiers } from './static-module-specifiers.mjs'
 
-// COMPAT(legacy-relay-bridge): fences what the 2027-01-15 relay retirement deletes. Everything
-// that exists only for released relay hosts lives in LEGACY_FOLDER; files outside it that import
-// it, or carry the COMPAT tag, are the seams that retirement edits. Both lists may only shrink.
+// COMPAT(legacy-relay-bridge): retirement (2027-01-15) deletes LEGACY_FOLDER and edits its external importers/tagged seams; both lists may only shrink.
 
 const LEGACY_FOLDER = 'src/main/ssh/legacy-relay'
 const SCAN_ROOTS = ['src', 'tests', 'config', 'mobile/src']
@@ -19,7 +17,6 @@ function isOutsideFolder(rel) {
   return !rel.startsWith(`${LEGACY_FOLDER}/`)
 }
 
-/** True when a relative specifier from `file` lands inside the legacy folder. */
 export function importsLegacyFolder(file, specifier) {
   const normalized = specifier.replaceAll('\\', '/')
   if (!normalized.startsWith('.')) {

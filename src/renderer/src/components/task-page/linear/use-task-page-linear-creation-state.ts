@@ -4,7 +4,7 @@ import { useTeamMembers, useTeamLabels, useTeamStates } from '@/hooks/useIssueMe
 import { useTaskCreationDraftRetention } from '@/components/use-task-creation-draft-retention'
 import { useNewLinearIssueProjects } from '../../use-new-linear-issue-projects'
 import { useContextualTour } from '@/components/contextual-tours/use-contextual-tour'
-import { writeNewLinearIssueDraft, writeNewLinearProjectDraft } from '../../task-page-draft-storage'
+import { writeNewLinearIssueDraft, writeNewLinearProjectDraft } from '../task-page-draft-storage'
 import { defaultScopeSource } from '@/lib/default-creation-host'
 export function useTaskPageLinearCreationState(model: TaskPageJiraListProjectionModel) {
   const {
@@ -20,7 +20,6 @@ export function useTaskPageLinearCreationState(model: TaskPageJiraListProjection
     selectedLinearProject,
     availableTeams
   } = model
-  // New Linear project dialog state
   const [newLinearProjectOpen, setNewLinearProjectOpen] = useState(false)
   const [newLinearProjectName, setNewLinearProjectName] = useState('')
   const [newLinearProjectDescription, setNewLinearProjectDescription] = useState('')
@@ -63,7 +62,6 @@ export function useTaskPageLinearCreationState(model: TaskPageJiraListProjection
     writeDraft: writeNewLinearProjectDraft
   })
 
-  // New Linear issue dialog state
   const [newLinearIssueOpen, setNewLinearIssueOpen] = useState(false)
   const [newLinearIssueTitle, setNewLinearIssueTitle] = useState('')
   const [newLinearIssueBody, setNewLinearIssueBody] = useState('')

@@ -20,13 +20,7 @@ import { registerPersistedPtySpawn } from '../../ipc/pty/pane/spawn-registration
 import { clearProviderPtyState } from '../../ipc/pty/provider/state-cleanup'
 import { ptyOwnership, ptyIncarnationById } from '../../ipc/pty/provider/ownership-state'
 import { ptySizes } from '../../ipc/pty/delivery/visibility-state'
-import {
-  paneSpawnReservationsByOwnerKey,
-  reservePaneSpawn,
-  reserveIdlePaneSpawn,
-  resolvePaneSpawnReservation,
-  type PaneSpawnReservation
-} from '../../ipc/pty/pane/spawn-reservation'
+import { reservePaneSpawn, resolvePaneSpawnReservation } from '../../ipc/pty/pane/spawn-reservation'
 
 vi.mock('../../telemetry/client', () => ({ track: vi.fn() }))
 vi.mock('../../telemetry/cohort-classifier', () => ({
@@ -73,8 +67,6 @@ it.each(
       runtime.beginPtyRegistration(binding.ptyId, binding.incarnationId)
     }
     let commit: () => Promise<unknown>
-    const reservationKey = JSON.stringify([connectionId, binding.worktreeId, binding.leafId])
-    let reservation: PaneSpawnReservation | undefined
     if (owner) {
       const provider = new LocalPtyProvider()
       vi.spyOn(provider, 'spawn').mockResolvedValue({
@@ -93,7 +85,7 @@ it.each(
             renderer: controller === 'ipc',
             spawnOptions: { cols: 80, rows: 24 }
           })
-        )?.result
+        )?.outcome
     } else if (controller === 'runtime') {
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only commit runs; its runtime/store are real and preflight-only dependencies are unreachable.
       const deps = { runtime, store, options: {} } as PtyRuntimeControllerDeps
@@ -112,21 +104,14 @@ it.each(
       ctx.stablePaneOwner = owner
       ctx.metadataLeafId = binding.leafId
       ctx.validatedLeafId = binding.leafId
-      reservation = reservePaneSpawn(reservationKey)
-      ctx.paneSpawnReservationKey = reservationKey
-      ctx.paneSpawnReservation = reservation
       commit = () => commitPtyIpcSpawn(ctx)
     }
     const gate = authority.pause()
-    const pending =
-      controller === 'ipc'
-        ? expect(commit()).resolves.toMatchObject({
-            id: binding.ptyId,
-            incarnationId: binding.incarnationId
-          })
-        : expect(commit()).rejects.toThrow('agent_session_exited_during_start')
+    const pending = expect(commit()).resolves.toMatchObject({
+      kind: 'registration-exited',
+      result: { id: binding.ptyId, incarnationId: binding.incarnationId }
+    })
     await gate.started.promise
-    const nextReservation = reservation ? reserveIdlePaneSpawn(reservationKey) : undefined
     clearProviderPtyState(binding.ptyId)
     ptyOwnership.delete(binding.ptyId)
     await runtime.onPtyExit(binding.ptyId, exitCode, binding.incarnationId, {
@@ -137,13 +122,6 @@ it.each(
     expect(ptyOwnership.has(binding.ptyId)).toBe(false)
     expect(ptyIncarnationById.has(binding.ptyId)).toBe(false)
     expect(ptySizes.has(binding.ptyId)).toBe(false)
-    if (reservation) {
-      await expect(reservation.promise).resolves.toMatchObject({ id: binding.ptyId })
-      const next = await nextReservation
-      expect(next).not.toBe(reservation)
-      resolvePaneSpawnReservation(reservationKey, next, { id: 'next-spawn' })
-      expect(paneSpawnReservationsByOwnerKey.has(reservationKey)).toBe(false)
-    }
     const session = readState().workspaceSession
     expect(
       session.terminalLayoutsByTabId[binding.tabId]?.ptyIdsByLeafId?.[binding.leafId]
@@ -331,7 +309,7 @@ it.each(['success', 'new-exit', 'old-exit'] as const)(
     gate.finish.resolve()
     const result = await settled
     if (event === 'new-exit') {
-      expect.soft(result.error?.message).toBe('agent_session_exited_during_start')
+      expect.soft(result.value?.outcome?.kind).toBe('registration-exited')
       expect
         .soft(
           readState().workspaceSession.terminalLayoutsByTabId[binding.tabId]?.ptyIdsByLeafId?.[
@@ -342,7 +320,6 @@ it.each(['success', 'new-exit', 'old-exit'] as const)(
       const resolve = () =>
         runtime.resolveTerminalPane(`${binding.tabId}:${binding.leafId}`, binding.worktreeId)
       if (ORCA_LAYOUT_OWNER_IS_MAIN) {
-        // The failed start withdrew the tab from main's layout: there is no such pane any more.
         expect.soft(resolve).toThrow('terminal_not_found')
       } else {
         expect.soft(resolve().connected).toBe(false)
@@ -413,7 +390,7 @@ it.each(['joined', 'fresh'] as const)(
         ctx.result = result
         ctx.hostSessionBinding = { store, ...binding }
         ctx.metadataLeafId = binding.leafId
-        return commitRuntimePtySpawn(ctx)
+        return (await commitRuntimePtySpawn(ctx)).result
       }
     })
     if (reservation) {

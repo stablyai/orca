@@ -1,6 +1,7 @@
 import { describe, expect, it, vi, type Mock } from 'vitest'
 import { createMockSubprocess } from './daemon-pty-adapter-test-harness'
 import { TerminalHost, type TerminalHostOptions } from './terminal-host'
+import { killWithDescendantSweep } from '../pty-descendant-termination'
 
 // Prevent fake PIDs from reaching real process-table probes.
 vi.mock('../pty-descendant-termination', () => ({
@@ -60,8 +61,11 @@ describe('TerminalHost listing of a session it is killing', () => {
     vi.mocked(handles[0]!.kill).mockImplementation(() => {
       throw new Error('EPERM')
     })
+    vi.mocked(killWithDescendantSweep).mockImplementationOnce(async (_pid, killRoot) => {
+      killRoot()
+    })
 
-    expect(() => host.kill(sessionId)).toThrow('EPERM')
+    await expect(host.kill(sessionId)).rejects.toThrow('EPERM')
 
     expect(host.listSessions()).toMatchObject([{ sessionId, state: 'running', isAlive: true }])
     handles[0]!._simulateExit(0)

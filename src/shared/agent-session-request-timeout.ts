@@ -1,5 +1,4 @@
-// A provider request Orca stopped waiting for, carried on a start failure so a reader can say
-// which step stalled and for how long instead of a bare "couldn't start".
+// Carry timed-out provider start steps so readers can name the stalled method and deadline.
 
 export type AgentSessionRequestTimeout = {
   /** The provider's protocol method, e.g. `thread/start`; never its params. */

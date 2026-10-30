@@ -21,8 +21,7 @@ describe('the catalog reads both arms of the host union', () => {
   })
 
   it('reads an unchanged poll, which carries no rows at all', () => {
-    // RuntimeWorktreePsUnchangedResult is `{ unchanged, snapshotId }`; requiring `worktrees` would
-    // refuse every conditional poll the snapshot client makes.
+    // Conditional unchanged replies contain no rows; requiring worktrees would reject valid polls.
     const unchanged = reads(worktreeCatalogSchema, { unchanged: true, snapshotId: 's-1' })
     expect(unchanged.unchanged).toBe(true)
     expect(unchanged.worktrees).toBe(undefined)

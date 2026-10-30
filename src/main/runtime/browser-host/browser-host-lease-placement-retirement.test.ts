@@ -143,7 +143,6 @@ describe('browser host lease placement retirement', () => {
     const firstPlacement = leases.placeClientPage('page-a', 'host-a')
     const replacementHost = attachHost(leases, 'host-a', { connectionId: 'connection-b' })
 
-    // The replacing attach fenced the first lease, which released its page outright.
     expect(leases.getPlacement('page-a')).toBeUndefined()
     const replacement = leases.placeClientPage('page-a', 'host-a')
 
@@ -182,7 +181,6 @@ describe('browser host lease placement retirement', () => {
     const first = attachHost(leases, 'host-a')
     const replacement = attachHost(leases, 'host-a', { connectionId: 'connection-b' })
 
-    // Why: releasing a superseded handle must never unregister the lease that replaced it.
     first.release()
 
     expect(leases.select('host-a')).toBe(replacement.lease)

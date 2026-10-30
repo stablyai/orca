@@ -118,6 +118,20 @@ describe('AgentHookServer ingestStructuredStatus', () => {
     expect(server.getStatusSnapshot()[0]?.observation?.origin).toBe('structured')
   })
 
+  it('keeps a logical start owned between physical children without changing the latest turn', () => {
+    const server = new AgentHookServer()
+    const starting = summary({ status: 'idle', hostExecutionPhase: 'starting' })
+    server.ingestStructuredStatus(starting, SUBJECT)
+    server.ingestStructuredStatus(starting, SUBJECT)
+    expect(server.getStatusSnapshot()[0]).toMatchObject({
+      structuredHost: 'owned',
+      state: 'done',
+      stateStartedAt: OBSERVED_AT
+    })
+    server.ingestStructuredStatus({ ...starting, hostExecutionPhase: 'ready' }, SUBJECT)
+    expect(server.getStatusSnapshot()[0]).toMatchObject({ structuredHost: 'owned', state: 'done' })
+  })
+
   it('maps attention to blocked and idle to done', () => {
     const server = new AgentHookServer()
     server.ingestStructuredStatus(summary({ status: 'attention' }), SUBJECT)

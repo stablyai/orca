@@ -7,6 +7,7 @@ import { sendGuestCdpCommand } from './guest-cdp-command'
 import { AgentBrowserBridgeUtilityCommands } from './agent-browser-bridge-utility-commands'
 import { ORCA_TAB_SESSION_PREFIX } from './agent-browser-orphan-sweep'
 import { captureRemoteCliBrowserWorkBound } from '../runtime/desktop-browser-bridge/remote-cli-browser-scope'
+import { throwIfSignalAborted, waitForPromiseWithSignal } from '../../shared/abort-signal-reason'
 
 export abstract class AgentBrowserBridgeCaptureCommands extends AgentBrowserBridgeUtilityCommands {
   async screenshot(
@@ -17,11 +18,11 @@ export abstract class AgentBrowserBridgeCaptureCommands extends AgentBrowserBrid
     const screenshotFormat = format === 'jpeg' ? 'jpeg' : 'png'
     return this.enqueueTargetedCommand(worktreeId, browserPageId, async (sessionName) => {
       return this.readScreenshotFromResult(
-        await this.execAgentBrowser(sessionName, [
-          'screenshot',
-          '--screenshot-format',
-          screenshotFormat
-        ]),
+        await this.execAgentBrowser(
+          sessionName,
+          ['screenshot', '--screenshot-format', screenshotFormat],
+          { cliArgv: true }
+        ),
         screenshotFormat
       )
     })
@@ -59,7 +60,8 @@ export abstract class AgentBrowserBridgeCaptureCommands extends AgentBrowserBrid
   async evaluate(
     expression: string,
     worktreeId?: string,
-    browserPageId?: string
+    browserPageId?: string,
+    signal?: AbortSignal
   ): Promise<BrowserEvalResult> {
     // Capture the host's scope before the queue can run this command elsewhere.
     const bound = captureRemoteCliBrowserWorkBound()
@@ -67,18 +69,23 @@ export abstract class AgentBrowserBridgeCaptureCommands extends AgentBrowserBrid
       worktreeId,
       browserPageId,
       async (_sessionName, target) => {
+        throwIfSignalAborted(signal)
         const wc = this.requireTargetWebContents(target)
         let releaseDebugger = (): void => {}
         try {
           releaseDebugger = acquireElectronDebugger(wc).release
+          // A caller leaving frees the page queue but does not terminate its script.
           // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Runtime.evaluate with returnByValue always answers this CDP shape; unchanged from before the bound.
-          const { result, exceptionDetails } = (await bound(
-            sendGuestCdpCommand(wc, 'Runtime.evaluate', {
-              expression,
-              returnByValue: true,
-              awaitPromise: true
-            }),
-            () => void wc.debugger.sendCommand('Runtime.terminateExecution').catch(() => {})
+          const { result, exceptionDetails } = (await waitForPromiseWithSignal(
+            bound(
+              sendGuestCdpCommand(wc, 'Runtime.evaluate', {
+                expression,
+                returnByValue: true,
+                awaitPromise: true
+              }),
+              () => void wc.debugger.sendCommand('Runtime.terminateExecution').catch(() => {})
+            ),
+            signal
           )) as {
             result: { value?: unknown; description?: string }
             exceptionDetails?: { text: string; exception?: { description?: string } }

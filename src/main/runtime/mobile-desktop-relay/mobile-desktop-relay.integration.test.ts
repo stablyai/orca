@@ -21,7 +21,7 @@ import {
   DelegatedMobileDeviceSyncParamsSchema
 } from '../../../shared/delegated-mobile-device-contract'
 import { decodeTerminalStreamFrame } from '../../../shared/terminal-stream-protocol'
-import { sendRemoteRuntimeRequest } from '../../../shared/remote-runtime-client'
+import { sendRemoteRuntimeRequest } from '../../../shared/remote-runtime/remote-runtime-client'
 import { mintBrowserScreencastSubscriptionId } from '../browser-screencast-subscription-id'
 import { OrcaRuntimeService } from '../orca-runtime'
 import { setRuntimeBrowserCommandsFactory } from '../runtime-browser-commands-factory'
@@ -89,7 +89,6 @@ vi.mock('../../git/worktree', () => {
   }
 })
 
-/** Exposes the per-terminal phone seats the runtime keeps behind a protected map. */
 class SeatObservableRuntime extends OrcaRuntimeService {
   seatClientIds(ptyId: string): string[] {
     return [...(this.mobileSubscribers.get(ptyId)?.keys() ?? [])]
@@ -160,7 +159,6 @@ describe('mobile desktop relay: phone -> desktop -> server', () => {
     return parsePairingCode(offer.pairingUrl)!
   }
 
-  /** A server, and a desktop whose only configured server is it, as `env-1`. */
   async function startTopology() {
     const host = await startRuntime()
     const desktopSpawns: string[] = []
@@ -198,7 +196,6 @@ describe('mobile desktop relay: phone -> desktop -> server', () => {
           params,
           5_000
         )
-        // An older server: the same status without the delegated-devices capability.
         return method === 'status.get' && !state.capable && response.ok
           ? {
               ...response,
@@ -330,7 +327,7 @@ describe('mobile desktop relay: phone -> desktop -> server', () => {
 
   it('relays a terminal subscribe, its binary stream, input and a query reply as the phone delegated device', async () => {
     const { host, desktop, children, syncedNames, handle } = await startTopology()
-    // A phone another desktop relays to this one is that desktop's to relay, never re-relayed.
+    // Never re-relay a phone another desktop relayed here.
     const registry = desktop.server.getDeviceRegistry()!
     const otherDesktop = registry.getDevice(
       pair(desktop.server, 'runtime', 'Other Mac').pairedDeviceId!
@@ -341,7 +338,6 @@ describe('mobile desktop relay: phone -> desktop -> server', () => {
     const phone = await connectPhone(desktop.server, 'iPhone')
 
     const streamId = await subscribe(phone, handle)
-    // Host and desktop share a process counter here, so compare against the id the host sent.
     const hostStreamId = z
       .object({
         id: z.literal('sub'),
@@ -353,7 +349,6 @@ describe('mobile desktop relay: phone -> desktop -> server', () => {
           .find((frame) => frame.id === 'sub' && frame.result?.type === 'subscribed')
       ).result.streamId
     expect(streamId).not.toBe(hostStreamId)
-    // The snapshot arrives as binary frames under the id the phone was given, never the host's.
     await vi.waitFor(() =>
       expect(
         phone.binaries.some((bytes) => decodeTerminalStreamFrame(bytes)?.streamId === streamId)
@@ -364,7 +359,7 @@ describe('mobile desktop relay: phone -> desktop -> server', () => {
     ).toBe(false)
     expect(syncedNames).toEqual([[`iPhone via ${desktop.runtime.readMachineName()}`]])
     const delegated = children()[0]!
-    // The host seats the phone's delegated device, never the desktop's token for it.
+    // Seat the delegated phone, never the desktop token.
     expect(host.runtime.seatClientIds('pty-shared')).toEqual([delegated.token])
 
     phone.send('in', 'terminal.send', {
@@ -374,7 +369,7 @@ describe('mobile desktop relay: phone -> desktop -> server', () => {
     })
     expect(isOk(await phone.next('in'))).toBe(true)
     expect(host.writes).toContain('ls')
-    // terminal.send cross-checks client.id against the socket's device: only a swapped token passes.
+    // terminal.send cross-checks client.id against socket identity; only the delegated token passes.
     phone.send('query', 'terminal.send', {
       terminal: handle,
       text: '\x1b[0n',
@@ -416,11 +411,10 @@ describe('mobile desktop relay: phone -> desktop -> server', () => {
       ok: true,
       result: { clientCapabilities: ['relay.test.v1'] }
     })
-    // The server applied it to the relayed phone's socket; its answer stays with the relay.
     await vi.waitFor(() =>
       expect(
         passthroughOpens.hostReplies.some((frame) =>
-          // The server lists client-placed browser tabs only to callers declaring it.
+          // Client-placed tabs require the declared capability.
           frame.includes('"clientCapabilities":["relay.test.v1","browser.clientHost.v1"]')
         )
       ).toBe(true)
@@ -452,7 +446,6 @@ describe('mobile desktop relay: phone -> desktop -> server', () => {
     const revoked = children()[0]!
 
     await host.server.revokeMobileDevice(revoked.deviceId)
-    // The open stream ends as unavailable, never as an unpaired phone.
     expect(errorCode(await phone.next('sub', (frame) => frame.ok === false))).toBe(
       'remote_runtime_unavailable'
     )
@@ -461,7 +454,6 @@ describe('mobile desktop relay: phone -> desktop -> server', () => {
     expect(errorCode(await phone.next('after-1'))).toBe('remote_runtime_unavailable')
     phone.send('after-2', 'terminal.list', {})
     expect(errorCode(await phone.next('after-2'))).toBe('remote_runtime_unavailable')
-    // One refused attempt, then no retries of the dead token.
     expect(passthroughOpens.count - opensBefore).toBe(1)
 
     state.retire('env-1')
@@ -480,7 +472,6 @@ describe('mobile desktop relay: phone -> desktop -> server', () => {
     expect(isOk(targeted)).toBe(true)
     expect(targeted.result).toEqual((await phone.next('settings:untargeted')).result)
     expect(passthroughOpens.count).toBe(opensBefore)
-    // An execution-host method under the same target still relays.
     phone.send('list', 'terminal.list', {})
     expect(isOk(await phone.next('list'))).toBe(true)
     expect(passthroughOpens.count).toBe(opensBefore + 1)
@@ -505,7 +496,6 @@ describe('mobile desktop relay: phone -> desktop -> server', () => {
       url: 'http://example.test/'
     })
     expect(isOk(await phone.next('hosted'))).toBe(true)
-    // The server's workspace selector means nothing here; the page id alone names the page.
     expect(desktopGoto).toHaveBeenCalledWith({ page: 'hosted-page', url: 'http://example.test/' })
     expect(hostGoto).not.toHaveBeenCalled()
 
@@ -618,7 +608,6 @@ describe('mobile desktop relay: phone -> desktop -> server', () => {
     phone.send('garbled', 'terminal.create', create, 'runtime:')
     expect(errorCode(await phone.next('garbled'))).toBe('invalid_argument')
     expect(desktopSpawns).toEqual([])
-    // No target, `local` and the desktop's own SSH hosts are today's local call.
     const opensBefore = passthroughOpens.count
     phone.send('absent', 'terminal.list', {}, null)
     phone.send('local', 'terminal.list', {}, 'local')

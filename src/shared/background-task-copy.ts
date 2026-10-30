@@ -1,5 +1,6 @@
-// The words of the background-tasks strip, in English. Desktop translates each piece whole with
-// this as its fallback; mobile says it as is, so the two never word one roster differently.
+// Share whole English translation pieces for desktop/mobile roster wording.
+
+import { englishCopyText, type CopyValues, type CountedCopy } from './counted-copy-english'
 
 export const BACKGROUND_TASK_COPY = {
   monitoring: 'Monitoring background tasks',
@@ -12,34 +13,32 @@ export const BACKGROUND_TASK_COPY = {
   monitor: 'Background monitor',
   task: 'Background task',
   detailsUnavailable: 'Task details are unavailable for this session.',
-  countAgentsOne: '1 agent',
-  countAgentsMany: '{{value0}} agents',
-  countShellOne: '1 shell',
-  countShellMany: '{{value0}} shells',
+  countAgents: { one: '{{count}} agent', other: '{{count}} agents' },
+  countShell: { one: '{{count}} shell', other: '{{count}} shells' },
   countShellCommandOne: '1 shell command',
-  countMonitorsOne: '1 monitor',
-  countMonitorsMany: '{{value0}} monitors',
-  countWorkflowsOne: '1 workflow',
-  countWorkflowsMany: '{{value0}} workflows',
-  countTasksOne: '1 task',
-  countTasksMany: '{{value0}} tasks',
-  headerTotal: '{{value0}} background tasks',
+  countMonitors: { one: '{{count}} monitor', other: '{{count}} monitors' },
+  countWorkflows: { one: '{{count}} workflow', other: '{{count}} workflows' },
+  countTasks: { one: '{{count}} task', other: '{{count}} tasks' },
+  headerTotal: { one: '{{count}} background task', other: '{{count}} background tasks' },
   stateWorking: 'working',
-  stateWorkingCount: '{{value0}} working',
+  stateWorkingCount: { one: '{{value0}} working', other: '{{value0}} working' },
   stateMonitoring: 'monitoring',
-  stateMonitoringCount: '{{value0}} monitoring',
+  stateMonitoringCount: { one: '{{value0}} monitoring', other: '{{value0}} monitoring' },
   stateWaiting: 'waiting',
-  stateWaitingCount: '{{value0}} waiting',
+  stateWaitingCount: { one: '{{value0}} waiting', other: '{{value0}} waiting' },
   stateBlocked: 'blocked',
-  stateBlockedCount: '{{value0}} blocked',
+  stateBlockedCount: { one: '{{value0}} blocked', other: '{{value0}} blocked' },
   stateDone: 'done',
-  stateDoneCount: '{{value0}} done',
+  stateDoneCount: { one: '{{value0}} done', other: '{{value0}} done' },
   stateIdle: 'stopped',
-  stateIdleCount: '{{value0}} stopped',
+  stateIdleCount: { one: '{{value0}} stopped', other: '{{value0}} stopped' },
   // Settled unknown or out of contact: claims neither an exit nor a coming update.
   stateUnverifiable: 'status unavailable',
   // After a count, "status unavailable" needs a "with".
-  stateUnverifiableCount: '{{value0}} with status unavailable',
+  stateUnverifiableCount: {
+    one: '{{value0}} with status unavailable',
+    other: '{{value0}} with status unavailable'
+  },
   reasonWaiting: 'needs approval',
   reasonBlocked: 'failed',
   groupAgents: 'Agents',
@@ -47,14 +46,14 @@ export const BACKGROUND_TASK_COPY = {
   groupMonitors: 'Monitors',
   groupWorkflows: 'Workflows',
   groupTasks: 'Tasks'
-} as const
+} as const satisfies Record<string, string | CountedCopy>
 
 export type BackgroundTaskCopyId = keyof typeof BACKGROUND_TASK_COPY
 
-/** What a piece's `{{value0}}` stands for: a count, or a phrase already said. */
-export type BackgroundTaskCopyValues = { value0: string | number }
+/** Counted pieces need `count`; `value0` is the counted phrase or number the state describes. */
+export type BackgroundTaskCopyValues = CopyValues
 
-/** One piece in the reader's language, its placeholder filled. */
+/** One piece in the reader's language, its placeholders filled. */
 export type BackgroundTaskSay = (
   id: BackgroundTaskCopyId,
   values?: BackgroundTaskCopyValues
@@ -62,7 +61,4 @@ export type BackgroundTaskSay = (
 
 /** Any surface without translations. */
 export const sayBackgroundTaskEnglish: BackgroundTaskSay = (id, values) =>
-  values === undefined
-    ? BACKGROUND_TASK_COPY[id]
-    : // A replacer function, so a task's own `$&` is never read as a pattern.
-      BACKGROUND_TASK_COPY[id].replaceAll('{{value0}}', () => String(values.value0))
+  englishCopyText(BACKGROUND_TASK_COPY[id], values)

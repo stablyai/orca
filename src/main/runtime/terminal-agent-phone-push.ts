@@ -1,12 +1,4 @@
-// The execution host's own phone push for hook-reported terminal agents, while no desktop window
-// runs on it: a turn that finished (or failed) and an agent that needs input.
-//
-// WHY ONLY WITHOUT A WINDOW: a window runs its own detection and pushes this host's phones through
-// main, as it always has. A host with no window (`orca serve`, `orcad`, a desktop whose window is
-// closed) had nobody to make the call, so the phones heard nothing. Here the host makes it with the
-// window's own rules, timing and wording; while a window owns the host, it stays silent.
-//
-// The phone suppresses an alert for what it is showing itself, so the host never guesses who looks.
+// Push hook-agent finish/input alerts from windowless execution hosts using desktop rules. A window already pushes these phones; the phone suppresses its own visible chat.
 import type { AgentPaneChange } from '../agent-hooks/agent-transition-detector'
 import { agentMainAgentVerdict } from '../../shared/agent-main-agent-verdict'
 import { buildAgentNotificationId } from '../../shared/agent-notification-id'
@@ -100,7 +92,7 @@ export class TerminalAgentPhonePush {
   }
 
   private send(news: PaneNews): void {
-    // Decided when the alert would go out: a window that took over by then announces it itself.
+    // Recheck window ownership at delivery to avoid duplicating a newly opened window's push.
     if (this.deps.hasWindow() || this.deps.isWorkspaceMuted(news.worktreeId)) {
       return
     }

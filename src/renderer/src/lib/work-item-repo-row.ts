@@ -8,10 +8,7 @@ export type WorkItemRepoRef = {
   repoHostId?: ExecutionHostId
 }
 
-/**
- * The repo row that returned a work item. A stamped item resolves on its own host, so a twin id
- * never lends it the other host's row; an unstamped one keeps the by-id row a repo map gives.
- */
+/** Resolve stamped work items on their returning host so twins cannot borrow another row; legacy unstamped items retain by-ID repo-map behavior. */
 export function getWorkItemRepo(repos: readonly Repo[], item: WorkItemRepoRef): Repo | undefined {
   let byId: Repo | undefined
   let rowCount = 0

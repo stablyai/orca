@@ -1,8 +1,6 @@
 import type { SecretboxOpen } from './mobile-e2ee-v2-framing'
 
-// Why: desktop/CLI (Node), web and mobile each keep their own NaCl box and
-// base64 adapters (size limits, Hermes typed-array quirks, no Buffer in a
-// browser), so the shared handshake core takes them as a parameter.
+// Inject platform adapters for Node, browser and Hermes NaCl/base64 differences, size limits and Buffer availability.
 export type PairedE2EEKeyPair = { publicKey: Uint8Array; secretKey: Uint8Array }
 
 export type PairedE2EEV2KeySchedule = {
@@ -25,8 +23,7 @@ export type PairedE2EEPrimitives = {
   openLegacyText: (frame: string, sharedKey: Uint8Array) => string | null
   sealLegacyBinary: (plaintext: Uint8Array, sharedKey: Uint8Array) => Uint8Array<ArrayBuffer>
   openLegacyBinary: (frame: Uint8Array, sharedKey: Uint8Array) => Uint8Array | null
-  // Why optional: only the phone swaps these, for native code on every inbound v2 frame, since
-  // Hermes JS is ~100x slower than V8. Absent, the session uses tweetnacl, re-encode and TextDecoder.
+  // Phone-only native overrides avoid Hermes’ ~100x slower JS; absent overrides use tweetnacl, re-encoding and TextDecoder.
   openSecretbox?: SecretboxOpen
   // Null for anything but canonical padded base64.
   decodeCanonicalBase64?: (value: string) => Uint8Array | null

@@ -1,10 +1,7 @@
 import { expect, test } from './helpers/orca-app'
 import { launchHeadlessPairedRuntimeHost } from './helpers/headless-paired-runtime-host'
 
-// Why (#10333): a windowless `orca serve` host answered every focus-requested
-// create with "No renderer window available", so `terminal create --focus` had
-// no workaround. Drive the real RPC a remote CLI sends, against a real serve
-// process, so the degrade is proven on the topology that broke.
+// A real windowless serve host must degrade focus-requested terminal creation without refusing for lack of a renderer (#10333).
 test('creates a focus-requested terminal against a headless serve host', async ({
   testRepoPath
 }) => {
@@ -29,8 +26,7 @@ test('creates a focus-requested terminal against a headless serve host', async (
       )
       .not.toBe('')
 
-    // Exactly what `orca --environment <remote> terminal create --worktree <wt>
-    // --command "echo test" --focus --json` puts on the wire.
+    // Match the RPC sent by remote terminal create --focus.
     const created = await host.client.call<{
       terminal: { handle: string; worktreeId: string; ptyId?: string }
     }>('terminal.create', {
@@ -43,8 +39,7 @@ test('creates a focus-requested terminal against a headless serve host', async (
     expect(created.result.terminal.handle).toMatch(/^term_/)
     expect(created.result.terminal.worktreeId).toBe(worktreeId)
 
-    // Why: a handle the host cannot resolve back to a live PTY would be a
-    // hollow pass — confirm the degraded create really produced a terminal.
+    // Require a resolvable terminal handle so degraded create cannot pass without a real PTY.
     const listedTerminals = await host.client.call<{
       terminals: { handle: string }[]
     }>('terminal.list', { worktree: `id:${worktreeId}` })

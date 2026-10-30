@@ -24,16 +24,16 @@ vi.mock('node:fs/promises', () => ({
   realpath: realpathMock
 }))
 
-vi.mock('electron', () => ({
-  shell: { trashItem: trashItemMock }
-}))
-
 vi.mock('../wsl-unc-delete', () => ({
   tryDeleteWslUncPath: tryDeleteWslUncPathMock,
   WslDeleteValidationError: WslDeleteValidationErrorMock
 }))
 
-import { deleteAiVaultSessionFile } from './session-delete'
+import { deleteAiVaultSessionFile as deleteWithRemover } from './session-delete'
+
+// The desktop's Trash remover; the executor itself is remover-agnostic.
+const deleteAiVaultSessionFile = (args: Parameters<typeof deleteWithRemover>[0]) =>
+  deleteWithRemover(args, (removal) => trashItemMock(removal.path))
 
 const HOME = join('/tmp', 'orca-ai-vault-delete-exec-fixture-home')
 const GEMINI_ROOT = join(HOME, '.gemini', 'tmp')
@@ -167,7 +167,7 @@ describe('deleteAiVaultSessionFile', () => {
     expect(tryDeleteWslUncPathMock).not.toHaveBeenCalled()
   })
 
-  it('delegates a WSL UNC file to tryDeleteWslUncPath (non-recursive) and never calls trashItem', async () => {
+  it('uses a successful WSL-helper result before local file trash', async () => {
     const filePath = join(GEMINI_ROOT, 'project-a', 'session-1.json')
     tryDeleteWslUncPathMock.mockResolvedValue(true)
 
@@ -182,7 +182,7 @@ describe('deleteAiVaultSessionFile', () => {
     expect(trashItemMock).not.toHaveBeenCalled()
   })
 
-  it('deletes a WSL UNC directory-shaped session recursively, never via trashItem', async () => {
+  it('requests recursive helper removal for a directory-shaped session', async () => {
     // WSL UNC volumes cannot use Trash and may give unreliable 9P stats.
     tryDeleteWslUncPathMock.mockResolvedValue(true)
 

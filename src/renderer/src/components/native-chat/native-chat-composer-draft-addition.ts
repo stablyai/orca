@@ -1,9 +1,9 @@
-// What is added to a draft without replacing it: text given back (Stop, a queued card's Edit) and
-// images given back or attached. Kept as data, so the same addition can be made again on a draft
-// loaded later, or replayed from the journal after a crash.
+// Keep additions replayable so late hydration and crash recovery merge returned text/images without replacing the draft.
 
+import type { JSONContent } from '@tiptap/react'
+import { promptTextContent, appendPromptDocumentText } from './native-chat-prompt-document-text'
 import { appendReturnedDraftText } from '../../../../shared/returned-draft-text'
-import { appendPromptDocumentText } from './native-chat-prompt-document-text'
+import { isLoneStructuredAgentSessionConversationCommand } from '../../../../shared/structured-agent-session-composer'
 import { basename } from '@/lib/path'
 import type {
   NativeChatComposerDraft,
@@ -12,6 +12,8 @@ import type {
 
 export type NativeChatComposerDraftAddition = {
   readonly text?: string
+  readonly document?: JSONContent
+  readonly pastedTextFiles?: Readonly<Record<string, string>>
   readonly images?: readonly NativeChatComposerDraftImage[]
   /** Only an image the user attaches takes the place of a placeholder with its file name. */
   readonly fromUser?: boolean
@@ -21,9 +23,7 @@ export type NativeChatComposerDraftAddition = {
   readonly fills?: readonly string[]
 }
 
-/** Gives each image the user attached that takes the place of a placeholder with its file name
- *  that placeholder's id, which its chips name. Decided once, on the draft the user attached it
- *  to, so a replay fills that place or finds it filled, and tells every other image by its id. */
+/** Assign matching placeholder ids once at attach time so replay preserves chip identity and fills each slot only once. */
 export function placeNativeChatComposerDraftAddition(
   draft: NativeChatComposerDraft,
   addition: NativeChatComposerDraftAddition
@@ -45,31 +45,44 @@ export function placeNativeChatComposerDraftAddition(
   return fills.length === 0 ? addition : { ...addition, images, fills }
 }
 
-/**
- * The draft's text and images with the addition made. Text follows the shared returned-text rule,
- * which never adds a paragraph the draft already ends with; an image the draft holds is not added
- * again, so a replay after a crash makes the addition once.
- */
+/** Deduplicate returned text and image identities so replay after a crash applies the addition once. */
 export function withNativeChatComposerDraftAddition(
   draft: NativeChatComposerDraft,
   addition: NativeChatComposerDraftAddition
-): Pick<NativeChatComposerDraft, 'text' | 'images' | 'document'> {
+): Pick<NativeChatComposerDraft, 'text' | 'images' | 'document' | 'pastedTextFiles'> {
   const fills = new Set(addition.fills)
-  // Image ids are unique to a message or attach, so one the draft holds means it was added already,
-  // whatever was typed since.
+  // An existing unique image id proves the addition already landed, regardless of later typing.
   if (
     addition.images?.some(({ id }) => !fills.has(id) && draft.images.some((held) => held.id === id))
   ) {
-    return { text: draft.text, images: draft.images, document: draft.document }
+    return {
+      text: draft.text,
+      images: draft.images,
+      document: draft.document,
+      pastedTextFiles: draft.pastedTextFiles
+    }
   }
-  const text = appendReturnedDraftText(draft.text, addition.text ?? '')
+  const returned = addition.text ?? ''
+  const kept = draft.text.trimEnd()
+  const replaces = kept === '' || isLoneStructuredAgentSessionConversationCommand(kept)
+  let text = appendReturnedDraftText(draft.text, returned)
+  const returnedBlocks = addition.document?.content ?? []
+  const heldBlocks = draft.document?.content ?? promptTextContent(draft.text).content ?? []
+  // Equal visible tokens do not establish equal selected files.
+  if (
+    addition.document &&
+    returned.trim() &&
+    text === draft.text &&
+    JSON.stringify(heldBlocks.slice(-returnedBlocks.length)) !== JSON.stringify(returnedBlocks)
+  ) {
+    text = `${kept}\n\n${returned}`
+  }
   const images = [...draft.images]
   let at = addition.before ? images.findIndex((held) => held.id === addition.before) : -1
-  for (const { id, path, connectionId } of addition.images ?? []) {
-    const image = { id, path, ...(connectionId ? { connectionId } : {}) }
+  for (const image of addition.images ?? []) {
+    const { id } = image
     const held = images.findIndex((candidate) => candidate.id === id)
     if (fills.has(id) && held !== -1) {
-      // One already filled stays as it is.
       if (images[held].unavailableName !== undefined) {
         images[held] = image
       }
@@ -79,5 +92,31 @@ export function withNativeChatComposerDraftAddition(
       images.splice(at++, 0, image)
     }
   }
-  return { text, images, document: appendPromptDocumentText(draft.document, draft.text, text) }
+  const document =
+    text === draft.text
+      ? draft.document
+      : addition.document
+        ? replaces
+          ? addition.document
+          : {
+              type: 'doc',
+              content: [
+                ...(appendPromptDocumentText(
+                  draft.document ?? promptTextContent(draft.text),
+                  draft.text,
+                  kept
+                )?.content ?? []),
+                { type: 'paragraph' },
+                ...returnedBlocks
+              ]
+            }
+        : replaces
+          ? promptTextContent(text)
+          : appendPromptDocumentText(draft.document, draft.text, text)
+  return {
+    text,
+    images,
+    document,
+    pastedTextFiles: { ...draft.pastedTextFiles, ...addition.pastedTextFiles }
+  }
 }

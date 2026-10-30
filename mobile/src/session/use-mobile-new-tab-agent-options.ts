@@ -16,7 +16,6 @@ import {
 import type { MobileNewTabAgentOption } from './mobile-new-tab-agent-options'
 import type { MobileNewTabAgentLoadState } from './mobile-session-route-types'
 
-/** Loads the agents the New Tab drawer and the diff-notes picker offer while either is open. */
 export function useMobileNewTabAgentOptions(args: {
   client: RpcClient | null
   connState: ConnectionState
@@ -29,7 +28,7 @@ export function useMobileNewTabAgentOptions(args: {
 }): void {
   const { client, connState, hostId, worktreeId, open, setLoadState, setOptions } = args
   const hostRefusesOtherRuntime = hostRefusesOtherRuntimeWorkspace(args.hostCapabilities)
-  // Why the execution host: servers relayed by one paired desktop can share a workspace id.
+  // Include execution host because relayed servers can share workspace ids.
   const workspaceKey = composeWorktreeHostIdentity(useWorkspaceExecutionHost(), worktreeId)
   const observedTargetsRef = useRef(new Set<string>())
   useEffect(() => {
@@ -41,8 +40,7 @@ export function useMobileNewTabAgentOptions(args: {
 
     let stale = false
     const cached = getCachedNewTabAgentInventory(hostId, workspaceKey)
-    // Why mirrored, not imported: useDetectedAgents' rule reads desktop's store. A screen reuses a
-    // settled detection, and the first open on a new screen refreshes a known list or detects again.
+    // Mirror the desktop detection rule locally because its hook depends on the desktop store.
     const observedTargets = observedTargetsRef.current
     const target = `${hostId}\u0000${workspaceKey}\u0000${hostRefusesOtherRuntime}`
     const observed = observedTargets.has(target)
@@ -72,7 +70,7 @@ export function useMobileNewTabAgentOptions(args: {
       if (otherRuntime) {
         deleteCachedNewTabAgentInventory(hostId, workspaceKey)
       }
-      // Why keep the cached list otherwise: a failed refresh does not uninstall the agents it showed.
+      // Failed refresh does not uninstall previously listed agents.
       if (otherRuntime || !cached) {
         setOptions([])
         setLoadState(otherRuntime ? 'other-runtime' : 'error')

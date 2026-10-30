@@ -1,10 +1,12 @@
 import { useMemo, useState } from 'react'
 import { Button } from '@/components/ui/button'
-import { translate } from '@/i18n/i18n'
+import { getIntlLocale, translate } from '@/i18n/i18n'
 import { buildResourcePtyRows, groupResourcePtyRows } from './resource-pty-view-model'
 import { ResourcePtyList } from './ResourcePtyList'
 import type { useResourceSessionInventory } from './use-resource-session-inventory'
 import type { useResourcePtyActions } from './use-resource-pty-actions'
+
+const EMPTY_PTY_ROWS: ReturnType<typeof buildResourcePtyRows> = []
 
 type Props = Omit<Parameters<typeof buildResourcePtyRows>[0], 'sessions'> & {
   active: boolean
@@ -37,25 +39,27 @@ export function ResourcePtyPanel({
             runtimePaneTitlesByTabId,
             sessions
           })
-        : [],
+        : EMPTY_PTY_ROWS,
     [active, sessions, bindings, worktrees, repos, projectGroups, runtimePaneTitlesByTabId]
   )
   const groups = useMemo(() => groupResourcePtyRows(rows), [rows])
-  const unbound = rows.filter((row) => row.binding === 'unbound').length
+  const unbound = useMemo(
+    () => rows.reduce((count, row) => count + Number(row.binding === 'unbound'), 0),
+    [rows]
+  )
   return (
-    <div className="flex h-[420px] flex-col">
-      <div className="space-y-2 border-b border-border px-3 py-2">
+    <div className="flex h-full min-h-0 flex-col">
+      <div className="shrink-0 space-y-2 border-b border-border px-3 py-2">
         <div className="text-xs text-muted-foreground">
           {inventory.observedAt === null
             ? translate('resourceManager.pty.thisComputer', 'This computer')
             : translate(
-                sessions.length === 1
-                  ? 'resourceManager.pty.localOwnedCount_one'
-                  : 'resourceManager.pty.localOwnedCount_other',
-                sessions.length === 1
-                  ? '{{count}} Orca PTY on this computer'
-                  : '{{count}} Orca PTYs on this computer',
-                { count: sessions.length }
+                'resourceManager.pty.localOwnedCount',
+                '{{count}} Orca PTYs on this computer',
+                {
+                  count: sessions.length,
+                  defaultValue_one: '{{count}} Orca PTY on this computer'
+                }
               )}
           {inventory.observedAt !== null && unbound > 0 && (
             <span>
@@ -69,13 +73,13 @@ export function ResourcePtyPanel({
         {inventory.observedAt !== null && (
           <div className="text-xs text-muted-foreground">
             {translate('resourceManager.pty.observedTime', 'Last observed {{time}}', {
-              time: new Date(inventory.observedAt).toLocaleTimeString()
+              time: new Date(inventory.observedAt).toLocaleTimeString(getIntlLocale())
             })}
           </div>
         )}
       </div>
       {inventory.sessionsError && (
-        <div role="alert" className="px-3 py-2 text-xs text-destructive">
+        <div role="alert" className="shrink-0 px-3 py-2 text-xs text-destructive">
           {translate(
             'resourceManager.pty.failed',
             'Unverifiable: local terminals could not be refreshed. Last-observed terminals are shown.'

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type React from 'react'
 import {
   areSelectionsEqual,
@@ -21,8 +21,7 @@ export type ListMultiSelection<T> = {
   selectForContextMenu: (item: T) => readonly T[]
 }
 
-// Click/Cmd/Shift multi-select keyed by id over `items` in render order. `getKey` and
-// `getScope` must keep one identity across renders.
+// Keep getKey/getScope identities stable while selecting by render order.
 export function useListMultiSelection<T>({
   items,
   getKey,
@@ -33,9 +32,7 @@ export function useListMultiSelection<T>({
   /** Pointerdowns outside this element clear the selection. */
   getScope: () => Element | null
 }): ListMultiSelection<T> {
-  // Why: order-preserving item rebuilds must not give this array a new identity —
-  // updateSelectionForGesture depends on it, and a fresh identity there defeats
-  // React.memo bail-out for every row on epoch bumps.
+  // Reuse equal ordered-ID arrays so gesture callbacks stay stable and row memoization survives epoch bumps.
   const visibleKeys = useReusedArrayIdentity(
     useMemo(() => Array.from(new Set(items.map((item) => getKey(item)))), [items, getKey])
   )
@@ -51,9 +48,7 @@ export function useListMultiSelection<T>({
     setSelectionAnchorKey(prunedSelection.anchorId)
   }
 
-  // Why identity reuse: the empty/unchanged-selection case must keep one array
-  // identity — selectForContextMenu and drag-start handlers depend on this
-  // array, and row memo bail-out depends on those staying stable.
+  // Reuse empty/unchanged selections so context-menu/drag callbacks and row memoization remain stable.
   const selectedItems = useReusedArrayIdentity(
     useMemo(() => {
       if (selectedKeys.size === 0) {
@@ -90,13 +85,25 @@ export function useListMultiSelection<T>({
     }
   }, [selectedKeys.size, getScope])
 
+  // Why read through a ref: every plain click replaces the selection, and selection-keyed callbacks would re-render every memoized row.
+  const latestSelectionRef = useRef({
+    visibleKeys,
+    selectedKeys,
+    selectionAnchorKey,
+    selectedItems
+  })
+  useLayoutEffect(() => {
+    latestSelectionRef.current = { visibleKeys, selectedKeys, selectionAnchorKey, selectedItems }
+  })
+
   const updateSelectionForGesture = useCallback(
     (event: Pick<React.MouseEvent, 'metaKey' | 'ctrlKey' | 'shiftKey'>, item: T): boolean => {
+      const latest = latestSelectionRef.current
       const intent = getSelectionIntent(event, navigator.userAgent.includes('Mac'))
       const result = updateSelection({
-        visibleIds: visibleKeys,
-        previousSelectedIds: selectedKeys,
-        previousAnchorId: selectionAnchorKey,
+        visibleIds: latest.visibleKeys,
+        previousSelectedIds: latest.selectedKeys,
+        previousAnchorId: latest.selectionAnchorKey,
         targetId: getKey(item),
         intent
       })
@@ -105,20 +112,21 @@ export function useListMultiSelection<T>({
       // Plain click navigates; modifier gestures are selection-only so a batch can build without switching away.
       return intent !== 'replace'
     },
-    [getKey, visibleKeys, selectedKeys, selectionAnchorKey]
+    [getKey]
   )
 
   const selectForContextMenu = useCallback(
     (item: T): readonly T[] => {
+      const latest = latestSelectionRef.current
       const key = getKey(item)
-      if (selectedKeys.has(key) && selectedKeys.size > 1) {
-        return selectedItems
+      if (latest.selectedKeys.has(key) && latest.selectedKeys.size > 1) {
+        return latest.selectedItems
       }
       setSelectedKeys(new Set([key]))
       setSelectionAnchorKey(key)
       return [item]
     },
-    [getKey, selectedKeys, selectedItems]
+    [getKey]
   )
 
   return {

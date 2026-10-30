@@ -8,11 +8,7 @@ import type { DispatchContextRow, RunRow, TaskRow } from '../../../../orchestrat
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import { resolveDispatchCreator } from '../runs/dispatch-creator'
 
-/**
- * The Run a worker-start lands in, and who may start it. The Run's coordinator starts workers in
- * it; a worker on an active Dispatch starts helpers in the Run it works for, as itself, so the
- * helpers report to it and its own mailbox never moves.
- */
+/** Coordinators start workers in their Run; active workers start helpers as themselves so reports return to their Dispatch without moving its mailbox. */
 export function resolveWorkerStartRun(
   runtime: OrcaRuntimeService,
   args: {
@@ -32,8 +28,7 @@ export function resolveWorkerStartRun(
     }
     return { run: coordinated }
   }
-  // Same resolution that stamps the helper's creator, so authority and reporting always agree.
-  // It returns only an active, delegated Dispatch; a remote one has no row on this host.
+  // Use the same active delegated Dispatch for authority and creator/reporting identity; remote Dispatches have no local row.
   const creatorId = db.resolveCreatorDispatchId(
     resolveDispatchCreator(runtime, args.from, args.callerSession)
   )
@@ -52,17 +47,14 @@ export function resolveWorkerStartRun(
   return { run, helperCreator: creator }
 }
 
-/**
- * What a worker may start: a fresh helper in a terminal Orca launches for it, on this host, or a
- * retry of its own helper's latest attempt. Never the coordinator's Tasks or another party's pane.
- */
+/** Workers may launch fresh local helpers or retry their own helper's latest Attempt, never coordinator Tasks or another party's pane. */
 export function assertHelperStartScope(
   db: OrchestrationDb,
   creator: DispatchContextRow,
   args: { task: TaskRow | undefined; params: { on?: string; terminal?: string } }
 ): void {
   if (args.params.on || args.params.terminal) {
-    // Why --on: remote reports land in the Run home's Run mailbox, so the helper could not report back.
+    // Remote reports reach the Run home mailbox, so a helper there could not report to its creator.
     throw new OrchestrationError(
       'invalid_argument',
       'A worker starts helpers in a new agent on this host; omit --on and --terminal. No effects were applied.',

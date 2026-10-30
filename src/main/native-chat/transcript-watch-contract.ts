@@ -28,6 +28,7 @@ export type SubscribeNativeChatTranscriptArgs = ResolveSessionFileOptions & {
     lifecycle?: NativeChatTurnLifecycle
   ) => void
   initialLimit?: number
+  sourceOrder?: boolean
   filePath?: string
   debounceMs?: number
   resolvePollIntervalMs?: number

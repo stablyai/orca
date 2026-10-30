@@ -17,10 +17,7 @@ export type BrowserChromeFoldedTool = {
   count?: number
   /** Present for toggle tools, including false, so the menu preserves their pressed state. */
   active?: boolean
-  /**
-   * Run only after the menu has closed and skip its focus return. A tool that opens its own
-   * popover needs this: focus landing back on the ⋯ trigger would dismiss that popover at once.
-   */
+  /** Run after menu close without focus return; focusing the overflow trigger would immediately dismiss a tool’s new popover. */
   deferUntilMenuClose?: boolean
 }
 
@@ -68,8 +65,7 @@ function FoldedToolRow({
     <DropdownMenuItem
       disabled={tool.disabled}
       onSelect={onSelect}
-      // Why: keeps toggle semantics without the checkbox item's reserved leading column,
-      // which would misalign this row's icon against the plain rows in the same menu.
+      // Preserve checkbox semantics without a reserved check column that would misalign icons.
       {...(tool.active === undefined
         ? {}
         : { role: 'menuitemcheckbox', 'aria-checked': tool.active })}
@@ -87,8 +83,7 @@ export function BrowserChromeFoldedMenuItems({
   if (tools.length === 0) {
     return null
   }
-  // Why: the element/markup toggles fold first and carry on/off state, so they read as their own
-  // section ahead of the one-shot actions below rather than as one flat tool list.
+  // Separate stateful toggles from one-shot actions after tools fold into overflow.
   const toggleTools = tools.filter((tool) => tool.active !== undefined)
   const actionTools = tools.filter((tool) => tool.active === undefined)
   return (

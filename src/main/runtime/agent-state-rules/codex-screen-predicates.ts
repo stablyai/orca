@@ -1,17 +1,17 @@
 import { isUnblockedAfter } from './blocked-text-layer'
 
-// Why both shapes: 0.150-0.157 paint `model: loading` in a box, 0.158 a bare `loading` under the title.
+// 0.150–0.157 box model: loading; 0.158 shows bare loading below the title.
 const CODEX_HEADER_LOADING_RE = /(?:model|directory):\s+loading|^\s*loading\s*$/m
-// Why a line cap: 0.158 draws no box, so nothing else ends its header before the chat.
+// 0.158 has no box boundary before chat.
 const CODEX_HEADER_LINES = 6
-// Why the whole line: a pager, a `cat`ed transcript, or chat can quote the placeholder mid-line.
+// Whole-line matching excludes placeholders quoted in chat/pagers.
 const CODEX_EMPTY_COMPOSER_RE = /^\u203A ask codex to do anything\s*$/
-// Why not "working": reasoning summaries replace it, and a remapped key still ends this way.
+// Reasoning summaries replace working; remapped interrupt keys retain this suffix.
 const CODEX_BUSY_STATUS_MARKER = 'to interrupt)'
-// Why only a tip: it is the one line Codex draws between its status row and the composer (120x40 corpus).
+// Only the tip separates status from composer in the 120x40 corpus.
 const CODEX_STATUS_TIP_PREFIX = '└ tip:'
 
-// Why the header only: chat below it can mention "OpenAI Codex" or `model: loading`.
+// Chat can quote header markers and loading text.
 function findCodexHeader(screen: string): { index: number; text: string } | null {
   const index = screen.indexOf('openai codex')
   if (index === -1) {
@@ -25,11 +25,7 @@ function findCodexHeader(screen: string): { index: number; text: string } | null
   return { index, text }
 }
 
-/**
- * The named screen predicate `codex-header-ready`: the 0.150-0.157 header, loaded, with no blocker
- * painted below it. Why the screen: Codex repaints that header by cell diff (`ESC[5;3Hdir
- * ESC[5;7Hctory:`), which only a grid reassembles; the line-folded wait text reads `dirctory:`.
- */
+/** Cell-diff header repaints require the grid; folded text cannot reconstruct them. */
 export function isCodexHeaderReadyScreen(screen: string): boolean {
   const header = findCodexHeader(screen)
   return (
@@ -41,15 +37,9 @@ export function isCodexHeaderReadyScreen(screen: string): boolean {
   )
 }
 
-/**
- * The named screen predicate `codex-composer-ready`: the empty composer with no busy status row
- * just above it and no header load. Codex 0.158 dropped `model:`/`directory:`, and a long session
- * scrolls the header away, so this is its only version-stable rest body. No dialog check: every
- * Codex dialog replaces the composer, while an answer ending "Would you like to…?" must not block
- * the lane. The mid-turn guard is quiescence, fed by the ~100 ms title spinner and status timer;
- * `tui.animations=false` (set by a screen reader), `tui.effects.progress=false`, or a
- * `tui.terminal_title` without activity/spinner removes it.
- */
+/** 0.158 lacks model/directory headers; long sessions can scroll the header away.
+ * Dialogs replace the composer, so quoted questions must not block it. Mid-turn safety relies on quiescence;
+ * tui.animations=false, tui.effects.progress=false or a tui.terminal_title without activity/spinner removes it. */
 export function isCodexComposerReadyScreen(screen: string): boolean {
   const lines = screen.split('\n')
   const composer = lines.findLastIndex((line) => CODEX_EMPTY_COMPOSER_RE.test(line))
@@ -60,7 +50,7 @@ export function isCodexComposerReadyScreen(screen: string): boolean {
   return header === null || !CODEX_HEADER_LOADING_RE.test(header.text)
 }
 
-// Why only the row above the composer: a finished answer (or one above 0.158's timestamp) can quote it.
+// Earlier answers can quote the busy marker; inspect only the adjacent status row.
 function hasBusyStatusRowAbove(lines: readonly string[], composer: number): boolean {
   const above = lines.slice(0, composer).filter((line) => line.trim() !== '')
   const row = above.at(-1)?.trimStart().startsWith(CODEX_STATUS_TIP_PREFIX)

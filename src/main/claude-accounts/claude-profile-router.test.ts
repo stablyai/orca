@@ -1,3 +1,4 @@
+import { runProcess } from '@orca/process-host'
 import { spawnSync } from 'node:child_process'
 import {
   chmodSync,
@@ -30,8 +31,15 @@ import { getPosixClaudeShellFunction } from '../../shared/claude-shell-function'
 import { ClaudeProfileRouter, type ClaudeProfileRouterSettings } from './claude-profile-router'
 import {
   claudeProfileHistoryDirs,
+  getClaudeObservedConfigDirs,
+  installClaudeObservedConfigDirs,
   installClaudeProfileRouter
 } from './claude-profile-installed-router'
+import { ClaudeObservedConfigDirs } from './claude-observed-config-dirs'
+
+vi.mock('@orca/process-host', () => ({ runProcess: vi.fn() }))
+const command = vi.hoisted(() => ({ path: '/unused-claude' }))
+vi.mock('../codex-cli/command', () => ({ resolveClaudeCommand: () => command.path }))
 
 const shell = vi.hoisted(() => ({ hang: false }))
 vi.mock('../startup/login-shell-environment', () => ({
@@ -52,6 +60,7 @@ afterEach(() => {
   vi.useRealTimers()
   shell.hang = false
   installClaudeProfileRouter(undefined)
+  installClaudeObservedConfigDirs(undefined)
   roots.splice(0).forEach((root) => rmSync(root, { recursive: true, force: true }))
 })
 
@@ -152,6 +161,49 @@ function claudeShellProbe(root: string): (env: Record<string, string>, rc?: stri
 }
 
 describe('ClaudeProfileRouter', () => {
+  it.each([
+    ['launcher 0.1.0\n2.1.310 (Claude Code)', '2.1.310'],
+    ['11.17.0', undefined]
+  ] as const)(
+    'passes identified version or unknown to enabled profile setup: %s',
+    async (stdout, version) => {
+      const f = fixture()
+      f.settings.agentStatusHooksEnabled = true
+      command.path = join(f.root, 'claude')
+      vi.mocked(runProcess).mockResolvedValue({
+        stdout,
+        stderr: '',
+        code: 0,
+        signal: null,
+        timedOut: false
+      })
+      const runSetup = vi.fn(async () => ({
+        outcome: 'prepared' as const,
+        warnings: [],
+        surfaces: {}
+      }))
+      const router = new ClaudeProfileRouter({
+        getSettings: () => f.settings,
+        dataRoot: f.dataRoot,
+        userHome: f.userHome,
+        env: {},
+        runSetup
+      })
+      await router.prepareAccount('a')
+      await router.prepareAccount('b')
+      expect(runSetup).toHaveBeenCalledTimes(2)
+      for (const accountId of ['a', 'b']) {
+        expect(runSetup).toHaveBeenCalledWith(
+          expect.objectContaining({
+            profile: expect.objectContaining({ accountId }),
+            hooks: true,
+            claudeVersion: version
+          })
+        )
+      }
+    }
+  )
+
   it('runs an account with no login of its own on System default while that is signed in to it', async () => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
     const f = fixture()
@@ -547,4 +599,50 @@ describe('ClaudeProfileRouter', () => {
       expect(claudeProfileHistoryDirs('projects')).toEqual([join(f.home('a'), 'projects')])
     }
   )
+
+  it('lists history under the CLAUDE_CONFIG_DIR only the login shell exports', () => {
+    const configDir = join(tmpdir(), `claude-router-own-${process.pid}`)
+    roots.push(configDir)
+    mkdirSync(join(configDir, 'projects'), { recursive: true })
+    installClaudeProfileRouter(fixture({ CLAUDE_CONFIG_DIR: configDir }).router)
+    expect(claudeProfileHistoryDirs('projects')).toEqual([join(configDir, 'projects')])
+  })
+
+  it('lists history under a wrapper CLAUDE_CONFIG_DIR seen in a hook, after restart too', () => {
+    const f = fixture()
+    const projects = join(f.root, '.claude-work', 'projects')
+    const file = join(f.root, 'observed.json')
+    mkdirSync(join(projects, '-proj'), { recursive: true })
+    const observe = () => new ClaudeObservedConfigDirs(file, () => ({}))
+    installClaudeObservedConfigDirs(observe())
+    expect(claudeProfileHistoryDirs('projects')).toEqual([])
+    getClaudeObservedConfigDirs()?.observeTranscriptPath(join(projects, '-proj', 'id.jsonl'))
+    installClaudeObservedConfigDirs(observe())
+    expect(claudeProfileHistoryDirs('projects')).toEqual([projects])
+  })
+
+  it("lists history under the CLAUDE_CONFIG_DIR set in Orca's Claude launch environment", () => {
+    const f = fixture()
+    const configDir = join(f.root, '.claude-settings')
+    mkdirSync(join(configDir, 'projects'), { recursive: true })
+    const agentDefaultEnv = { claude: { CLAUDE_CONFIG_DIR: configDir } }
+    installClaudeObservedConfigDirs(
+      new ClaudeObservedConfigDirs(join(f.root, 'observed.json'), () => ({ agentDefaultEnv }))
+    )
+    expect(claudeProfileHistoryDirs('projects')).toEqual([join(configDir, 'projects')])
+  })
+
+  it('ignores non-transcript paths and keeps at most 32 observed folders', () => {
+    const f = fixture()
+    const dirs = new ClaudeObservedConfigDirs(join(f.root, 'observed.json'), () => ({}))
+    mkdirSync(join(f.root, 'other', 'sessions', '-proj'), { recursive: true })
+    dirs.observeTranscriptPath(join(f.root, 'other', 'sessions', '-proj', 'id.jsonl'))
+    expect(dirs.list()).toEqual([])
+    for (let index = 0; index < 33; index += 1) {
+      mkdirSync(join(f.root, `c${index}`, 'projects', '-proj'), { recursive: true })
+      dirs.observeTranscriptPath(join(f.root, `c${index}`, 'projects', '-proj', 'id.jsonl'))
+    }
+    expect(dirs.list()).toHaveLength(32)
+    expect(dirs.list()[0]).toBe(join(f.root, 'c32'))
+  })
 })

@@ -1,7 +1,4 @@
-// Why: the fs bridge is POSIX-by-design — it resolves every path with
-// `posix.resolve` against a POSIX guest home. On win32 `posix.resolve` of a
-// Windows tmpdir yields an invalid path, so the whole suite is skipped there
-// (the bridge only ever runs inside a Linux WSL guest).
+// POSIX guest paths cannot resolve Windows temp roots; run this Linux-only bridge suite off Windows.
 import { mkdtempSync, rmSync, statSync } from 'node:fs'
 import { posix } from 'node:path'
 import { tmpdir } from 'node:os'
@@ -30,8 +27,7 @@ describe.skipIf(process.platform === 'win32')('registerWslHookFsHandlers (WSL fs
   beforeEach(() => {
     home = mkdtempSync(posix.join(tmpdir(), 'wsl-fs-home-'))
     handlers = new Map<string, MethodHandler>()
-    // Capture handlers from a minimal fake dispatcher — registration only ever
-    // calls onRequest, so a real RelayDispatcher is unnecessary.
+    // Registration needs only onRequest; capture handlers without starting a real dispatcher.
     const dispatcher = {
       onRequest: (method: string, handler: MethodHandler) => {
         handlers.set(method, handler)

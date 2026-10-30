@@ -1,7 +1,4 @@
-// Ruling 2 (L80): with the switch on, main keeps or closes an SSH pane whose shell the host says
-// ended exactly as the window does, by the exit code alone (pty-exit-hibernate's isProvenProcessExit):
-// a negative code keeps the bound leaf, a failed code keeps the leaf behind its card, and both let
-// recovery start a shell in that leaf; a clean exit closes the pane.
+// Main matches window SSH exit-code rules: negative and failed exits retain recoverable panes; clean exits close them (L80 ruling 2).
 import { describe, expect, it, vi } from 'vitest'
 
 vi.mock('../../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))

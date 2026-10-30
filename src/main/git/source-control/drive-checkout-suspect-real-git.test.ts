@@ -5,11 +5,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as CheckoutGitConfig from '../wsl-windows-checkout-git-config'
 import type * as GitRunner from '../runner'
 import { runProcess } from '@orca/process-host'
-import { createDebouncedBatch } from '../../ipc/filesystem-watcher-batch-control'
-import { watcherLifecycleState } from '../../ipc/filesystem-watcher-lifecycle-state'
-import { getLocalWatcherRoot } from '../../ipc/filesystem-watcher-paths'
-import type { WatchedRoot } from '../../ipc/filesystem-watcher-wsl'
-import { notifyLocalWatcherEvents } from '../../ipc/local-watcher-event-observers'
+import { createDebouncedBatch } from '../../ipc/filesystem/watchers/filesystem-watcher-batch-control'
+import { watcherLifecycleState } from '../../ipc/filesystem/watchers/filesystem-watcher-lifecycle-state'
+import { getLocalWatcherRoot } from '../../ipc/filesystem/watchers/filesystem-watcher-paths'
+import type { WatchedRoot } from '../../ipc/filesystem/watchers/filesystem-watcher-wsl'
+import { notifyLocalWatcherEvents } from '../../ipc/filesystem/watchers/local-watcher-event-observers'
 
 const mocks = vi.hoisted(() => {
   const state: { minimalRepos: Set<string>; streamedArgs: string[][] } = {

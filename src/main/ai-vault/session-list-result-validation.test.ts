@@ -134,6 +134,23 @@ describe('parseAiVaultListResult', () => {
     expect(parsed.issues.some((issue) => issue.message.includes('invalid'))).toBe(false)
   })
 
+  it('carries issue copy codes from a remote host and drops only malformed ones', () => {
+    const coded = {
+      agent: 'codex',
+      path: '\\\\wsl.localhost\\Ubuntu',
+      message: 'English',
+      messageCode: 'wslDistroNotRunning',
+      messageParams: { distro: 'Ubuntu' }
+    }
+    const parsed = parseAiVaultListResult({
+      sessions: [validSession()],
+      issues: [coded, { ...coded, messageCode: 7, messageParams: { distro: {} } }],
+      scannedAt: '2026-07-27T00:00:00.000Z'
+    })
+
+    expect(parsed.issues).toEqual([coded, { agent: 'codex', path: coded.path, message: 'English' }])
+  })
+
   it('leaves an unkinded issue unkinded so real skipped transcripts still count', () => {
     const parsed = parseAiVaultListResult({
       sessions: [validSession()],

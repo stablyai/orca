@@ -36,8 +36,7 @@ const OptionalServiceAccountSchema = z.preprocess(
   z.string().email().optional()
 )
 
-// 0 disables the window and restores the fail-on-first-error readiness answer. An unset variable
-// arrives as '' from Cloud Run, which z.coerce would read as 0 rather than as the default.
+// Cloud Run unset values arrive as empty strings, which coerce to 0 (fail-first readiness) instead of the grace default.
 const readinessGraceSchema = (defaultMs: number) =>
   z.preprocess(
     (value) => (value === '' ? undefined : value),

@@ -328,9 +328,7 @@ describe('buildWorkspaceSessionPayload', () => {
     expect(payload.activeBrowserTabIdByWorktree?.['wt-1']).toBeNull()
   })
 
-  // Why: the handle map is in-memory only. Without stamping the remote page identity onto the row
-  // that reaches disk, a relaunch has nothing to rebuild the handle from and the restored tab
-  // silently downgrades to a fresh server page.
+  // Stamp remote page identity onto persisted rows; in-memory handles cannot rebuild after relaunch and would downgrade to fresh server pages.
   it('stamps the remote page identity of a client-hosted browser page onto its persisted row', () => {
     const payload = buildWorkspaceSessionPayload(
       createSnapshot({
@@ -372,8 +370,7 @@ describe('buildWorkspaceSessionPayload', () => {
     ).toBeUndefined()
   })
 
-  // Why: a row restored from a previous quit has no placement until the host republishes it, so
-  // reading client hosting off the placement alone would lose the marker on a second quit.
+  // Restored rows can precede placement; persist their client-hosted marker through a second quit.
   it('keeps the client-hosted marker on a restored row the host has not republished yet', () => {
     const payload = buildWorkspaceSessionPayload(
       createSnapshot({

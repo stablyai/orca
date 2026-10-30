@@ -387,6 +387,7 @@ describe('createGitHubPullRequest', () => {
       ok: false,
       code: 'already_exists',
       error: 'A pull request already exists for this branch.',
+      reason: 'existing_review',
       existingReview: {
         number: 44,
         url: 'https://github.com/acme/widgets/pull/44'
@@ -432,7 +433,8 @@ describe('createGitHubPullRequest', () => {
     ).resolves.toEqual({
       ok: false,
       code: 'validation',
-      error: 'Create PR failed: choose a different base branch before creating a pull request.'
+      error: 'Create PR failed: choose a different base branch before creating a pull request.',
+      reason: 'same_base_branch'
     })
 
     expect(ghExecFileAsyncMock).not.toHaveBeenCalled()

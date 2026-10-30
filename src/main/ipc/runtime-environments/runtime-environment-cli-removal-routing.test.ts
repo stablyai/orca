@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { encodePairingOffer } from '../../../shared/pairing'
 import { REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY } from '../../../shared/protocol-version'
-import type { RemoteRuntimeSubscription } from '../../../shared/remote-runtime-client'
+import type { RemoteRuntimeSubscription } from '../../../shared/remote-runtime/remote-runtime-client'
 import {
   addEnvironmentFromPairingCode,
   getEnvironmentStorePath,
@@ -33,7 +33,7 @@ const { subscribeMock, supportsMock } = vi.hoisted(() => ({
 }))
 
 vi.mock('electron', () => ({ BrowserWindow: { getAllWindows: () => [] } }))
-vi.mock('../../../shared/remote-runtime-client', async (importOriginal) => ({
+vi.mock('../../../shared/remote-runtime/remote-runtime-client', async (importOriginal) => ({
   ...(await importOriginal()),
   subscribeRemoteRuntimeRequest: subscribeMock
 }))

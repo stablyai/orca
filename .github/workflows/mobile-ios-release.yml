@@ -1,8 +1,6 @@
 name: Mobile iOS Release
 
-# Why a separate workflow from Android: iOS releases go through App Store
-# review, which can take days. Decoupling the triggers lets an Android release
-# ship immediately without waiting on iOS, and vice versa.
+# Release iOS independently so App Store review cannot block Android.
 on:
   push:
     tags:
@@ -28,19 +26,13 @@ permissions:
 
 jobs:
   ios-build:
-    # GitHub-hosted macOS runner: required for Xcode. Expo SDK 55's
-    # expo-modules-core declares swift_version 6.0 and uses Swift 6 syntax
-    # (@MainActor isolation). Xcode 16.x (macos-15) can't even parse it
-    # ("unknown attribute 'MainActor'"), so we need Xcode 26.x → macos-26.
+    # Use macos-26/Xcode 26 for Expo SDK 55’s Swift 6 syntax/isolation; Xcode 16 runners cannot parse it.
     runs-on: macos-26
     # Archive + upload is ~30–40m when healthy; 90m leaves margin for setup.
     timeout-minutes: 90
 
     env:
-      # Why: this job and ios-distribute resolve gems ~25 minutes apart, so both
-      # must install the committed Gemfile.lock exactly. Frozen turns a lockfile
-      # drift into a setup failure instead of two different fastlane versions in
-      # one release.
+      # Freeze Gemfile.lock in both jobs; installs ~25min apart must not resolve different fastlane versions.
       BUNDLE_FROZEN: 'true'
 
     outputs:
@@ -106,12 +98,7 @@ jobs:
         working-directory: mobile/ios
         run: bundle exec pod install
 
-      # Why: `-allowProvisioningUpdates` + the App Store Connect API key can
-      # create/refresh provisioning profiles, but it cannot recreate the
-      # distribution certificate's PRIVATE KEY across runs. So we import a
-      # pre-exported distribution .p12 (created once via Apple Developer) into a
-      # throwaway keychain. The keychain is ephemeral to the runner and torn
-      # down with the VM; nothing secret is written to the repo.
+      # Import exported distribution .p12 into ephemeral runner keychain: provisioning updates/API key cannot recreate its private key.
       - name: Import distribution certificate
         env:
           IOS_DIST_CERT_P12: ${{ secrets.IOS_DIST_CERT_P12 }}

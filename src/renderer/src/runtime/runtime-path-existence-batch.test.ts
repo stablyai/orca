@@ -59,6 +59,12 @@ it('old paired host retains scalar stats on that runtime and does not call the n
       ([args]) => args.method === 'files.stat' && args.selector === 'owner-a'
     )
   ).toBe(true)
+  expect(runtimeEnvironmentCall.mock.calls.map(([args]) => args.params)).toEqual(
+    paths.map((path) => ({
+      worktree: 'id:folder-1',
+      relativePath: path.slice('/folder/'.length)
+    }))
+  )
   expect(fsPathExists).not.toHaveBeenCalled()
 })
 it('new method missing after capability discovery falls back only for method_not_found', async () => {

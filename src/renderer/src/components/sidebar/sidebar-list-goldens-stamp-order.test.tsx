@@ -1,9 +1,6 @@
 // @vitest-environment happy-dom
 
-/**
- * The same goldens with ORCA_SIDEBAR_INPUTS=main, where Recent and Smart read the owning host's
- * sort stamps; plus every Smart tier, which only a stamping host writes.
- */
+/** Run the same goldens with host-owned Recent/Smart stamps and every stamped Smart tier. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { cleanup } from '@testing-library/react'
 import { useAppStore } from '@/store'
@@ -27,8 +24,7 @@ const GOLDEN_DIR = './__goldens__/sidebar-list-stamp-order'
 
 defineSidebarListGoldens(GOLDEN_DIR)
 
-// One row per tier and tie: an unread Done and a seen one (which rests), two Working rows (the
-// older one resumed after an approval keeps the ask's time), and Rest rows that only Recent orders.
+// Cover unread Done, resumed Working timestamps, and Rest ordering ties.
 const TIERS: Record<string, SmartStampFields & { isUnread?: boolean }> = {
   Zeta: { smartTier: 'needs-you', smartAt: GOLDEN_NOW - 600_000 },
   'feat-a': { smartTier: 'done', smartAt: GOLDEN_NOW - 60_000, isUnread: true },

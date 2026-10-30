@@ -65,8 +65,7 @@ export function renderExperimentalSettingsSection(
         'New features that are still taking shape. Give them a try.'
       )}
       searchEntries={navigation.getSectionSearchEntries('experimental')}
-      // Why: Option-click the page title unlocks the hidden staff group
-      // (session-only) — same idiom as Option-click on the Updates header.
+      // Option-click unlocks hidden staff controls for this session, matching Updates.
       onTitleClick={(event) => {
         if (event.altKey) {
           model.setHiddenExperimentalUnlocked((previous) => !previous)

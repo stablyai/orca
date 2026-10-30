@@ -17,7 +17,6 @@ function makeTarget(overrides: Partial<SshTarget> = {}): SshTarget {
   }
 }
 
-/** Minimal in-memory store exposing only what re-adoption touches. */
 function makeFakeStore(tombstones: RemovedSshTargetTombstone[]) {
   const reassigned: { oldId: string; newId: string }[] = []
   let current = [...tombstones]
@@ -57,7 +56,7 @@ describe('readoptOrphanedWorkspacesForTarget', () => {
       { oldTargetId: 'ssh-old', newTargetId: 'ssh-new', repoIds: ['repo-1'] }
     ])
     expect(fake.reassigned).toEqual([{ oldId: 'ssh-old', newId: 'ssh-new' }])
-    expect(fake.remaining()).toHaveLength(0) // tombstone consumed
+    expect(fake.remaining()).toHaveLength(0)
   })
 
   it('re-adopts on matching host+user+port when no alias', () => {
@@ -77,7 +76,7 @@ describe('readoptOrphanedWorkspacesForTarget', () => {
     )
     expect(readoptions).toEqual([])
     expect(fake.reassigned).toEqual([])
-    expect(fake.remaining()).toHaveLength(1) // tombstone left for a future match
+    expect(fake.remaining()).toHaveLength(1)
   })
 
   it('matches host/user/port case-insensitively', () => {
@@ -95,8 +94,7 @@ describe('readoptOrphanedWorkspacesForTarget', () => {
   })
 
   it('does NOT re-adopt across two different aliases that share host+user+port', () => {
-    // prod-deploy removed; prod-admin re-added — same box, different alias.
-    // These are deliberately distinct targets and must not steal workspaces.
+    // Distinct aliases must not steal each other's workspaces even on the same endpoint.
     const fake = makeFakeStore([
       tombstone({ configHost: 'prod-deploy', host: 'prod.example.com', username: 'deploy' })
     ])
@@ -106,13 +104,11 @@ describe('readoptOrphanedWorkspacesForTarget', () => {
     )
     expect(readoptions).toEqual([])
     expect(fake.reassigned).toEqual([])
-    expect(fake.remaining()).toHaveLength(1) // tombstone preserved
+    expect(fake.remaining()).toHaveLength(1)
   })
 
   it('does NOT re-adopt a different account/port on the same host (implicit alias)', () => {
-    // Manual adds default configHost to host, so both carry configHost === host.
-    // That is NOT a real alias — matching on it alone would ignore port/username
-    // and reattach workspaces to the wrong SSH account on the same machine.
+    // Manual configHost=host is no alias; require account/port matching to avoid attaching to the wrong account.
     const fake = makeFakeStore([
       tombstone({
         configHost: 'dev.example.com',
@@ -156,8 +152,7 @@ describe('readoptOrphanedWorkspacesForTarget', () => {
   })
 
   it('still re-adopts via tuple when the re-added target has no alias', () => {
-    // Manual re-add (no configHost) of a host that was config-managed: fall back
-    // to the tuple since one side lacks an alias to distinguish it.
+    // One side lacks a real alias, so endpoint identity may match a previously config-managed host.
     const fake = makeFakeStore([
       tombstone({ configHost: 'devbox', host: 'dev.example.com', username: 'tim' })
     ])

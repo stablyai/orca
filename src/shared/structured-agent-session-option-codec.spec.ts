@@ -13,13 +13,24 @@ describe('structured agent session option codec', () => {
   })
 
   it('rejects string booleans on the UI side and non-canonical strings on the wire side', () => {
-    expect(encodeStructuredAgentSessionOptionValue('fastMode', 'true')).toBeNull()
-    expect(decodeStructuredAgentSessionOptionValue('fastMode', 'TRUE')).toBeNull()
-    expect(decodeStructuredAgentSessionOptionValue('fastMode', '1')).toBeNull()
+    for (const value of ['true', 'false']) {
+      expect(encodeStructuredAgentSessionOptionValue('fastMode', value)).toBeNull()
+    }
+    for (const value of ['TRUE', '1', 'False', ' true', 'false ', '', '0']) {
+      expect(decodeStructuredAgentSessionOptionValue('fastMode', value)).toBeNull()
+    }
   })
 
-  it('passes existing string options through unchanged', () => {
-    expect(encodeStructuredAgentSessionOptionValue('model', 'gpt-example')).toBe('gpt-example')
-    expect(decodeStructuredAgentSessionOptionValue('effort', 'high')).toBe('high')
+  it('preserves string options in both directions and rejects boolean values', () => {
+    for (const [id, value] of [
+      ['model', 'gpt-example'],
+      ['effort', 'high'],
+      ['serviceTier', 'flex']
+    ] as const) {
+      expect(encodeStructuredAgentSessionOptionValue(id, value)).toBe(value)
+      expect(decodeStructuredAgentSessionOptionValue(id, value)).toBe(value)
+      expect(encodeStructuredAgentSessionOptionValue(id, true)).toBeNull()
+      expect(encodeStructuredAgentSessionOptionValue(id, false)).toBeNull()
+    }
   })
 })

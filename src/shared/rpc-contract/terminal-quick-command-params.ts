@@ -47,8 +47,7 @@ export const TerminalQuickCommandUpdateItem = z.union([
 
 export const TerminalQuickCommandsUpdate = z
   .object({
-    // Why: a single host-side mutation preserves unrelated desktop/mobile edits
-    // and avoids retransmitting the full, multi-megabyte list for every small change.
+    // Mutate host-side to preserve unrelated desktop/mobile edits and avoid resending multi-megabyte lists.
     mutation: z.union([
       z
         .object({

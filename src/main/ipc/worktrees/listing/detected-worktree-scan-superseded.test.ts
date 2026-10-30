@@ -29,8 +29,13 @@ const {
   listDetectedGitWorktrees
 } = await import('./detected-worktree-scan-cache')
 
-// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the scan reads only id, path and connectionId off the repo row.
-const repo = { id: 'repo-1', path: '/repos/one', displayName: 'one' } as Repo
+const repo: Repo = {
+  id: 'repo-1',
+  path: '/repos/one',
+  displayName: 'one',
+  badgeColor: '#000',
+  addedAt: 0
+}
 // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the scan calls only the expectation capture; the metadata prune it feeds is mocked above.
 const store = {
   captureNativeLocalWorktreeMetadataScanExpectation: () => ({ repo: { id: repo.id }, metadata: [] })

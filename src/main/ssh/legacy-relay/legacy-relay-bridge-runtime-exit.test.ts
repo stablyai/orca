@@ -5,11 +5,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { toAppSshPtyId } from '../../../shared/ssh-pty-id'
 import type { SshRemotePtyLease } from '../../../shared/ssh-types'
-import type { SshConnection } from '../connection/ssh-connection'
 import { getRemoteHostPlatform } from '../ssh-remote-platform'
 import type { PtyRuntimeControllerDeps } from '../../ipc/pty/runtime/controller-deps'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import { LEGACY_RELAY_BRIDGE_CHANNELS } from '../../../shared/legacy-relay-bridge-contract'
+import { unusedSshConnection } from '../unused-host-transport.test-fixture'
 
 const TARGET = 'ssh-box'
 const RELAY_PTY = 'pty2:epoch:1'
@@ -83,8 +83,7 @@ let runtime: {
 }
 
 async function startBridge(): Promise<void> {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the mocked endpoints and client never touch the connection.
-  const connection = {} as SshConnection
+  const connection = unusedSshConnection()
   registerLegacyRelayBridgeIpc({
     store: {
       getSshRemotePtyLeases: () => leases,

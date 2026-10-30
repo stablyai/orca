@@ -1,3 +1,8 @@
+import {
+  agentSessionLeaseFixture,
+  agentSessionRecordFixture
+} from '../../shared/agent-session-record.test-fixture'
+import { agentSessionConversationView } from '../../shared/agent-session-conversation-view'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const hostRef: { current: unknown } = { current: null }
@@ -21,8 +26,7 @@ const SESSION_ID = 'a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d'
 
 const getAuthority =
   OrcaRuntimeWithGetOrchestrationDispatchAuthority.prototype.getOrchestrationDispatchAuthority
-// Both borrowed from the real prototype through their public surface: a stubbed copy of the
-// method under test would pin nothing.
+// Use the production prototype methods; stubbing the implementation would not exercise attestation.
 const verifyCaller =
   OrcaRuntimeWithVerifyOrchestrationCompatibilityCaller.prototype
     .verifyOrchestrationCompatibilityCaller
@@ -31,10 +35,12 @@ function registerStructuredWorker(): string {
   hostRef.current = {
     deps: {
       store: {
-        getRecord: () => ({
-          location: { executionHostId: 'local', wslDistro: null },
-          lease: { runtimeKind: 'native', claimStatus: 'live', runtimeFence: 1 }
-        })
+        getConversation: () =>
+          agentSessionConversationView(
+            agentSessionRecordFixture(
+              agentSessionLeaseFixture({ sessionId: SESSION_ID, runtimeFence: 1 })
+            )
+          )
       }
     }
   }
@@ -60,9 +66,7 @@ function runtimeStub(overrides: Record<string, unknown> = {}) {
       getAuthority.call(runtimeStub(overrides), handle),
     orchestrationCompatibilityHostMatches: () => true,
     attestAgentHookCompatibilityAuthorityFn: undefined,
-    // `freeze...` is protected and is reached only on the SUCCESS path, which every test here
-    // asserts is never taken. Leaving it off the stub means a regression that does reach it fails
-    // loudly instead of quietly returning a frozen authority.
+    // Omit the protected success-only freeze method so bypassing refusal fails loudly.
     ...overrides
   }
 }

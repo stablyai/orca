@@ -18,24 +18,8 @@ function closeResources(): void {
   resources.clear()
 }
 
-/**
- * A frame the page cannot serialize, which is a send that failed and not an exception.
- *
- * `sendFrame` never throws, and every caller below it depends on that: `sendRequest` opens the id
- * before it posts and abandons it on the way out, so a throw escaping the post skips the abandon and
- * holds one of sixty-four in-flight slots for the life of the page. Sixty-four such calls and the
- * client refuses every request afterwards with nothing on screen to say why.
- *
- * Measured on this tree with serialization outside the `try`: one cyclic `params` left 63 of the 64
- * slots usable, raised no diagnostic at all, and rejected the caller with a bare `TypeError` from
- * `JSON.stringify` rather than the send failure the contract names. The cases below are that
- * difference, and they red on the serialization moving back out.
- *
- * `params` is the surface, not a hypothetical: every value in a page frame is one a screen handed
- * in, and a cycle, a `BigInt` or a throwing `toJSON` all reach here the same way.
- */
+// Keep serialization inside sendFrame’s catch: cyclic params, BigInt or throwing toJSON must abandon the opened request id and report send failure, never leak one of 64 slots.
 
-/** A `params` `JSON.stringify` refuses. The self-reference is the whole fixture. */
 function cyclicParams(): Record<string, unknown> {
   const params: Record<string, unknown> = { worktree: 'id:wt-1' }
   params.self = params
@@ -80,13 +64,10 @@ describe('a request frame the page cannot serialize', () => {
       (error: unknown) => error
     )
 
-    // The name rather than the text: what matters is that the caller is told the frame never left,
-    // by the same error every other undelivered frame raises.
     expect(rejection instanceof Error ? rejection.name : String(rejection)).toBe(
       'BridgeSendFailedError'
     )
     expect(pair.diagnostics.map((entry) => entry.kind)).toEqual(['send-failed'])
-    // Nothing reached the shell, and nothing was left half-sent for it to answer.
     expect(pair.readToShell().filter((message) => message.type === 'request')).toEqual([])
   })
 
@@ -97,8 +78,7 @@ describe('a request frame the page cannot serialize', () => {
       await pair.flush()
       void pair.client.sendRequest('git.status', params()).catch(() => undefined)
 
-      // The whole cap, not one short of it. 63 here is the defect: the id opened for the frame that
-      // never serialized is still in the pending map, and nothing will ever settle it.
+      // Assert all 64 slots remain usable; leaking the unserializable request leaves only 63.
       const clean = createFakeBridgePortPair()
       await clean.flush()
       expect(await acceptedRequestCount(clean.client)).toBe(BRIDGE_MAX_PENDING_REQUESTS)

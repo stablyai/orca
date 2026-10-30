@@ -1,10 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { GitHubPRStack } from '../../../../shared/github/pull-request-types'
-import {
-  getGitHubPRStackMergeBlocker,
-  getGitHubPRStackMergeScope,
-  isGitHubPRStackMergeQueueRequired
-} from './github-pr-stack-merge'
+import { isGitHubPRStackMergeQueueRequired } from '../../../../shared/github/pull-request-stack-merge'
+import { getGitHubPRStackMergeBlocker, getGitHubPRStackMergeScope } from './github-pr-stack-merge'
 
 function makeStack(): GitHubPRStack {
   return {

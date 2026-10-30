@@ -15,15 +15,8 @@ export function buildRetiredWorktreeNamesRefreshKey(
   return [...(existingWorktreePaths ?? [])].sort().join('\0')
 }
 
-/** Names already spent in a repo, including workspaces that have since been deleted.
- *
- *  Why a targeted request rather than the workspace catalog: the catalog is served by `worktree.ps`,
- *  which carries rows only. Retired names are needed just while the create sheet is open and only
- *  for one repo, so this asks for exactly that.
- *
- *  `refreshKey` must change on every workspace-list mutation. Caching rules live in
- *  `retired-name-cache` so this and the desktop hook cannot drift on what a failure means, and no
- *  loading state is reported because create is never gated on this fetch. */
+// worktree.ps has no retired names; fetch only this repo while its create sheet is open.
+// Change refreshKey on every catalog mutation; shared retired-name-cache rules keep failure behavior aligned with desktop.
 export function useRetiredWorktreeNames(
   client: RpcClient | null | undefined,
   repoId: string | null | undefined,
@@ -47,8 +40,7 @@ export function useRetiredWorktreeNames(
       .request(client, { repo: `id:${activeRepoId}` })
       .then((reply) => {
         const names = retiredWorktreeNamesRead.interpret(reply)
-        // A refusal is not a failure here: it settles as an empty registry, which un-retires the
-        // repo's names until the next refresh. Preserved from main, not repaired.
+        // Refusal intentionally settles as an empty registry; transport rejection preserves the previous names.
         settle(
           readRetiredNameRegistryForRepo(names.accepted ? names.value : undefined, activeRepoId)
         )

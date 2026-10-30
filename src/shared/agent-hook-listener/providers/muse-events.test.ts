@@ -127,7 +127,7 @@ describe('Muse hook events', () => {
     })
   })
 
-  // Why: a SubagentStart that predates this listener (restart, relay reconnect) is never seen.
+  // Restart/reconnect can lose the child's SubagentStart.
   it('drops child-session hooks whose turn id equals their session id without SubagentStart', () => {
     normalizeAndAccept(state, 'muse', {
       ...main,

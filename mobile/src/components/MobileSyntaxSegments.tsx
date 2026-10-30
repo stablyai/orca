@@ -1,8 +1,11 @@
-import { StyleSheet, Text, type TextStyle } from 'react-native'
+import { Text, type TextStyle } from 'react-native'
 import type { MobileSyntaxSegment, MobileSyntaxTokenKind } from '../session/mobile-file-syntax'
 import { colors } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 
 export function MobileSyntaxSegments({ segments }: { segments: MobileSyntaxSegment[] }) {
+  useMobileColorScheme()
   return (
     <>
       {segments.map((segment, index) => (
@@ -14,7 +17,7 @@ export function MobileSyntaxSegments({ segments }: { segments: MobileSyntaxSegme
   )
 }
 
-const syntaxTokenStyles: Record<MobileSyntaxTokenKind, TextStyle> = StyleSheet.create({
+const syntaxTokenStyles: Record<MobileSyntaxTokenKind, TextStyle> = themedStyleSheet(() => ({
   plain: {
     color: colors.textPrimary
   },
@@ -42,4 +45,4 @@ const syntaxTokenStyles: Record<MobileSyntaxTokenKind, TextStyle> = StyleSheet.c
   meta: {
     color: colors.syntaxMeta
   }
-})
+}))

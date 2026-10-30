@@ -1,19 +1,5 @@
-/**
- * The route module behind each declared page route, which is what a closure is read from.
- *
- * `MOBILE_WEB_PAGE_ROUTES` names URL patterns and the bundler walks files, so something has to
- * join the two. Shared rather than restated in each census for the reason
- * `mobile-web-app-external-link-seam.mjs` is: a second copy is a list that stops growing when the
- * first one does, and every census over it goes quietly green on a route nobody added.
- *
- * Extensionless is deliberate on neither side: the `.tsx` is named because that is the file on
- * disk, and the builder's own `resolveExtensions` picks the `.web.tsx` sibling ahead of it exactly
- * as it would for the page.
- *
- * `pageRouteModulesCoverTheManifest` is the guard that holds this map to the manifest; every
- * census that reads it asserts that too, so a route registered without a row here is a route no
- * closure census reads.
- */
+// One route-to-module map prevents censuses drifting independently from manifest; callers assert pageRouteModulesCoverTheManifest.
+// Keep explicit .tsx paths: builder resolveExtensions selects .web.tsx siblings as it does for shipped pages.
 export const PAGE_ROUTE_MODULES = new Map([
   ['/h/[hostId]', 'app/h/[hostId]/index.tsx'],
   ['/h/[hostId]/agent-history/[worktreeId]', 'app/h/[hostId]/agent-history/[worktreeId].tsx'],
@@ -27,7 +13,6 @@ export const PAGE_ROUTE_MODULES = new Map([
   ['/h/[hostId]/session/[worktreeId]', 'app/h/[hostId]/session/[worktreeId].tsx']
 ])
 
-/** The map's pathnames and the manifest's, each sorted, for a caller to compare. */
 export function pageRouteModulesCoverTheManifest(routes) {
   return {
     mapped: [...PAGE_ROUTE_MODULES.keys()].sort(),

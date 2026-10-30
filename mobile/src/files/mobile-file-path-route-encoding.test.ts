@@ -23,7 +23,6 @@ const HAZARD_PATHS = [
   'a%b.ts'
 ]
 
-/** The path as the other side reads it back out of the query it arrived in. */
 function relativePathFromHref(href: string): string | null {
   const query = href.slice(href.indexOf('?') + 1)
   return new URLSearchParams(query).get('relativePath')
@@ -64,8 +63,7 @@ describe.each(HAZARD_PATHS)('a file path the route carries: %s', (relativePath) 
 
 describe('what the route vocabulary does refuse', () => {
   it('refuses the same path spelled as a segment, which is why it never is one', () => {
-    // The counterfactual the cases above depend on: if the segment rule admitted these, the
-    // encoding would not be what is keeping them safe and this file would prove nothing.
+    // Prove these inputs fail segment validation; otherwise the encoding cases above establish no protection.
     for (const relativePath of ['../etc/passwd', 'src/my file.ts', 'a#b.ts']) {
       expect(BRIDGE_ROUTE_PATHNAME_PATTERN.test(`/h/host-1/files/preview/${relativePath}`)).toBe(
         false

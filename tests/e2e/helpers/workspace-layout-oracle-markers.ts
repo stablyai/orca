@@ -1,5 +1,3 @@
-/** Liveness: a marker echoed into each visible pane's terminal must show up in that pane. */
-
 import type { Page } from '@stablyai/playwright-test'
 import type { RuntimeClient } from '../../../src/cli/runtime/client'
 
@@ -9,10 +7,7 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
-/**
- * Writes a unique marker into every bound pane the window shows and requires it to appear in
- * that pane's terminal (read from the xterm accessibility tree in the DOM). No pane is a failure.
- */
+// Require each bound pane to echo its unique marker in that pane’s accessibility DOM; no panes is a failure.
 export async function checkPaneMarkers(
   page: Page,
   client: RuntimeClient,

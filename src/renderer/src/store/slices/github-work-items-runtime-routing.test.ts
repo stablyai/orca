@@ -131,6 +131,58 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
     ).toMatchObject({ repoId: 'caller-repo-id', number: 17 })
   })
 
+  it('sends the runtime work-item RPC the runtime repo id when an SSH row shares its path', async () => {
+    runtimeEnvironmentCall.mockResolvedValueOnce({
+      id: 'rpc-shared-path-work-items',
+      ok: true,
+      result: {
+        items: [
+          { type: 'issue', number: 18, title: 'Shared path', url: 'https://example.test/18' }
+        ],
+        sources: { issues: { owner: 'up', repo: 'r' }, prs: { owner: 'up', repo: 'r' } }
+      },
+      _meta: { runtimeId: 'remote-runtime' }
+    })
+    const store = createTestStore()
+    store.setState((state) => ({
+      ...state,
+      settings: null,
+      repos: [
+        {
+          id: 'ssh-repo-id',
+          path: '/shared/repo',
+          displayName: 'ssh repo',
+          badgeColor: 'blue',
+          addedAt: 1,
+          connectionId: 'ssh-1',
+          executionHostId: 'ssh:ssh-1'
+        },
+        {
+          id: 'runtime-repo-id',
+          path: '/shared/repo',
+          displayName: 'runtime repo',
+          badgeColor: 'blue',
+          addedAt: 1,
+          executionHostId: 'runtime:env-1'
+        }
+      ]
+    }))
+
+    await store.getState().fetchWorkItems('runtime-repo-id', '/shared/repo', 24, '')
+
+    expect(mockApi.gh.listWorkItems).not.toHaveBeenCalled()
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
+      selector: 'env-1',
+      method: 'github.listWorkItems',
+      params: {
+        repo: 'runtime-repo-id',
+        limit: 24,
+        query: undefined
+      },
+      timeoutMs: 30_000
+    })
+  })
+
   it('routes work item fetches through an explicit GitHub source context', async () => {
     runtimeEnvironmentCall.mockResolvedValueOnce({
       id: 'rpc-work-items-source-context',

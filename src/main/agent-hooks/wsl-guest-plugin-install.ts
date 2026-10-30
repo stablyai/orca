@@ -1,5 +1,6 @@
 import type { SshChannelMultiplexer } from '../ssh/ssh-channel-multiplexer'
 import { AGENT_HOOK_INSTALL_PLUGINS_METHOD } from '../../shared/agent-hook-relay'
+import { isRecord } from '../../shared/agent-status-child-work-value-guards'
 import { selectOpenCodePluginSources } from './opencode-plugin-settings'
 import type { ManagedHookDetectionSettings } from './managed-hook-detection-commands'
 import type { PluginSources } from '../../wsl-guest/plugin-overlay'
@@ -12,7 +13,15 @@ type GuestPluginInstallDeps = {
 
 /** Only none invalidates cached overlay paths; unavailable preserves them across old guests and teardown. */
 export type GuestOverlayResult =
-  | { kind: 'dir'; dir?: string; dir2?: string; piDir?: string; ompDir?: string }
+  | {
+      kind: 'dir'
+      dir?: string
+      dir2?: string
+      piDir?: string
+      ompDir?: string
+      claudeDir?: string
+      claudeConfig?: string
+    }
   | { kind: 'none' }
   | { kind: 'unavailable' }
 
@@ -23,24 +32,32 @@ export async function requestGuestOpenCodeOverlayDir(
   launchKind?: 'pi' | 'omp'
 ): Promise<GuestOverlayResult> {
   try {
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Runtime validation or the local test fixture establishes the asserted shape.
-    const res = (await mux.request(AGENT_HOOK_INSTALL_PLUGINS_METHOD, {
+    const res = await mux.request(AGENT_HOOK_INSTALL_PLUGINS_METHOD, {
       ...selectOpenCodePluginSources(deps.pluginSources(), deps.managedHookSettings?.() ?? null),
       ...(launchKind ? { launchKind } : {})
-    })) as {
-      overlayDirs?: { opencode?: unknown; opencode2?: unknown; pi?: unknown; omp?: unknown }
-    }
-    const dir = res?.overlayDirs?.opencode
-    const dir2 = res?.overlayDirs?.opencode2
-    const piDir = res?.overlayDirs?.pi
-    const ompDir = res?.overlayDirs?.omp
+    })
+    const overlayDirs: Record<string, unknown> =
+      isRecord(res) && isRecord(res.overlayDirs) ? res.overlayDirs : {}
+    const dir = overlayDirs.opencode
+    const dir2 = overlayDirs.opencode2
+    const piDir = overlayDirs.pi
+    const ompDir = overlayDirs.omp
     const opencodeDir = typeof dir === 'string' && dir.length > 0 ? dir : undefined
     const opencode2Dir = typeof dir2 === 'string' && dir2.length > 0 ? dir2 : undefined
     const guestPiDir = typeof piDir === 'string' && piDir.length > 0 ? piDir : undefined
     const guestOmpDir = typeof ompDir === 'string' && ompDir.length > 0 ? ompDir : undefined
-    return opencodeDir || opencode2Dir || guestPiDir || guestOmpDir
+    const claudeDir =
+      typeof overlayDirs.claudeAgentView === 'string' && overlayDirs.claudeAgentView.startsWith('/')
+        ? overlayDirs.claudeAgentView
+        : undefined
+    const claudeConfig =
+      typeof overlayDirs.claudeConfig === 'string' && overlayDirs.claudeConfig.startsWith('/')
+        ? overlayDirs.claudeConfig
+        : undefined
+    return opencodeDir || opencode2Dir || guestPiDir || guestOmpDir || claudeDir
       ? {
           kind: 'dir',
+          ...(claudeDir && claudeConfig ? { claudeDir, claudeConfig } : {}),
           ...(opencodeDir ? { dir: opencodeDir } : {}),
           ...(opencode2Dir ? { dir2: opencode2Dir } : {}),
           ...(guestPiDir ? { piDir: guestPiDir } : {}),
@@ -49,8 +66,7 @@ export async function requestGuestOpenCodeOverlayDir(
       : { kind: 'none' }
   } catch (err) {
     // Older guests lack the handler (-32601); connection loss and disposal are routine teardown.
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Runtime validation or the local test fixture establishes the asserted shape.
-    const code = (err as { code?: unknown })?.code
+    const code = isRecord(err) ? err.code : undefined
     if (code === -32601 || code === 'CONNECTION_LOST' || code === 'DISPOSED' || mux.isDisposed()) {
       return { kind: 'unavailable' }
     }

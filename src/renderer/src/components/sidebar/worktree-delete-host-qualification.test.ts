@@ -1,22 +1,4 @@
-/**
- * STA-4343, end to end from the sidebar: the exact reported user path.
- *
- *   1. The same repo sits at the same path on two hosts, so both publish the id
- *      `repoId::path`. The sidebar now renders one row per host.
- *   2. The user OPENS the local workspace, which sets `activeWorktreeId`.
- *   3. The user deletes the sidebar row that belongs to the SSH host.
- *   4. Before this fix, removal routing short-circuited to the ACTIVE host and
- *      destroyed the LOCAL checkout and its uncommitted work.
- *
- * The same repo at the same path on two hosts is TWO workspaces, so the confirmed
- * SSH row IS deletable: it is deleted, and the local checkout survives untouched.
- *
- * This drives the real sidebar funnel (`runWorktreeDelete` /
- * `runWorktreeDeletesInParallel`) into the real store action, so it covers the
- * caller carrying the confirmed host as well as the chokepoint enforcing it. The
- * only fakes are the removal transports, and they ACTUALLY delete the temp
- * directory of the host they are routed to — see the shared fixture.
- */
+/** Delete a confirmed SSH twin while its local twin is active; real transport fixtures remove only the routed host’s temp directory. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import * as fs from 'node:fs'
 import type { AppState } from '@/store/types'
@@ -65,12 +47,9 @@ vi.mock('./delete-worktree-failure-toast', () => ({
   showDeleteWorktreeFailureToast: vi.fn()
 }))
 
+import { toast } from 'sonner'
 import { showDeleteWorktreeFailureToast } from './delete-worktree-failure-toast'
 import { runWorktreeDelete, runWorktreeDeletesInParallel } from './delete-worktree-flow'
-
-function failureToastCount(): number {
-  return vi.mocked(showDeleteWorktreeFailureToast).mock.calls.length
-}
 
 function rowOnHost(hostId: ExecutionHostId): Worktree {
   return makeWorktree({
@@ -83,12 +62,7 @@ function rowOnHost(hostId: ExecutionHostId): Worktree {
   })
 }
 
-/**
- * Seeds both hosts' rows for the colliding id. Both render in the sidebar now, so
- * `confirmedRowHostId` is the row the user actually clicked — the OTHER host's row
- * is seeded first on purpose, so a delete that falls back to the id-keyed
- * (first-wins) lookup instead of the confirmed row lands on the wrong one.
- */
+/** Seed the other host first so an ID-only lookup would target the wrong checkout. */
 function seedCollidingSidebar(
   store: ReturnType<typeof createTestStore>,
   confirmedRowHostId: ExecutionHostId
@@ -127,7 +101,7 @@ beforeEach(() => {
 afterEach(cleanupHostCheckouts)
 
 describe('STA-4343 sidebar delete: the confirmed row decides the host', () => {
-  it('deletes the SSH row and leaves the ACTIVE local checkout on disk', async () => {
+  it('offers to forget the confirmed SSH row and leaves the ACTIVE local checkout on disk', () => {
     const local = createHostCheckout(LOCAL_HOST)
     const ssh = createHostCheckout(SSH_HOST)
     const routedHostIds: string[] = []
@@ -139,23 +113,16 @@ describe('STA-4343 sidebar delete: the confirmed row decides the host', () => {
     const store = storeRef.current as ReturnType<typeof createTestStore>
     seedCollidingSidebar(store, SSH_HOST)
 
-    // Right-click the SSH sidebar row → Delete Workspace (confirmation skipped).
     runWorktreeDelete(WORKTREE_ID, { expectedHostId: SSH_HOST })
-    // Settle on either outcome so the disk assertion below is what reports a
-    // regression, rather than a spy that was never reached.
-    await vi.waitFor(() => expect(routedHostIds.length + failureToastCount()).toBeGreaterThan(0))
 
-    expect(
-      fs.existsSync(local.markerPath),
-      `the ACTIVE local checkout must survive deleting the SSH row; removal was routed to hostId=${routedHostIds.join(',') || '<none>'}`
-    ).toBe(true)
-    // The confirmed row is its own workspace, so it is deleted for real.
-    expect(fs.existsSync(ssh.markerPath), 'the confirmed SSH checkout must be gone').toBe(false)
-    expect(routedHostIds).toEqual([SSH_HOST])
-    expect(showDeleteWorktreeFailureToast).not.toHaveBeenCalled()
-    // Only the confirmed host's row leaves the sidebar; the local one stays.
-    expect(store.getState().worktreesByRepo.repo1).toHaveLength(1)
-    expect(store.getState().worktreesByRepo.repo1?.[0]?.hostId).toBe(LOCAL_HOST)
+    // This app serves no ssh: host (#34677); only the SSH row's own records may be forgotten.
+    expect(store.getState().openModal).toHaveBeenCalledWith(
+      'forget-ssh-workspace',
+      expect.objectContaining({ resolution: { kind: 'saved', targetId: 'ssh-1' } })
+    )
+    expect(routedHostIds).toEqual([])
+    expect(fs.existsSync(local.markerPath)).toBe(true)
+    expect(store.getState().worktreesByRepo.repo1).toHaveLength(2)
   })
 
   it('routes the batch delete path to the confirmed host too', async () => {
@@ -170,7 +137,6 @@ describe('STA-4343 sidebar delete: the confirmed row decides the host', () => {
     const store = storeRef.current as ReturnType<typeof createTestStore>
     seedCollidingSidebar(store, SSH_HOST)
 
-    // force: the most destructive, least re-checked path.
     const deletedTargets = await runWorktreeDeletesInParallel([rowOnHost(SSH_HOST)], {
       force: true
     })
@@ -230,13 +196,34 @@ describe('STA-4343 sidebar delete: the confirmed row decides the host', () => {
     runWorktreeDelete(WORKTREE_ID, { expectedHostId: LOCAL_HOST })
     await vi.waitFor(() => expect(routedHostIds).toEqual([LOCAL_HOST]))
 
-    // Confirming the row that IS the active local host deletes it, as asked.
     expect(fs.existsSync(local.markerPath)).toBe(false)
     expect(fs.existsSync(ssh.markerPath)).toBe(true)
     expect(showDeleteWorktreeFailureToast).not.toHaveBeenCalled()
   })
 
-  it('still deletes an ordinary single-host SSH workspace for real', async () => {
+  it('deletes neither checkout when two hosts share the id and no host is named', async () => {
+    const local = createHostCheckout(LOCAL_HOST)
+    const ssh = createHostCheckout(SSH_HOST)
+    const routedHostIds: string[] = []
+    installRemovalTransports(
+      { remove: mockApi.worktrees.remove, runtimeCall: runtimeEnvironmentCall },
+      { [LOCAL_HOST]: local.root, [SSH_HOST]: ssh.root },
+      routedHostIds
+    )
+    const store = storeRef.current as ReturnType<typeof createTestStore>
+    seedCollidingSidebar(store, SSH_HOST)
+
+    runWorktreeDelete(WORKTREE_ID)
+    await vi.waitFor(() => expect(toast.info).toHaveBeenCalled())
+
+    expect(fs.existsSync(local.markerPath), 'the local checkout must survive').toBe(true)
+    expect(fs.existsSync(ssh.markerPath), 'the SSH checkout must survive').toBe(true)
+    expect(routedHostIds).toEqual([])
+    expect(store.getState().worktreesByRepo.repo1).toHaveLength(2)
+  })
+
+  // #34677: nothing would serve the delete, so offer only Remove from Orca.
+  it('never sends a destructive delete for an SSH workspace no server serves', async () => {
     const ssh = createHostCheckout(SSH_HOST)
     const routedHostIds: string[] = []
     installRemovalTransports(
@@ -244,31 +231,32 @@ describe('STA-4343 sidebar delete: the confirmed row decides the host', () => {
       { [SSH_HOST]: ssh.root },
       routedHostIds
     )
-    const store = storeRef.current as ReturnType<typeof createTestStore>
+    const store = createTestStore()
+    storeRef.current = store
     store.setState({
       repos: [
         {
           id: 'repo1',
           path: '/repo1',
           displayName: 'Repo 1',
+          badgeColor: '#000000',
+          addedAt: 0,
           executionHostId: SSH_HOST,
           connectionId: 'ssh-1'
         }
       ],
       worktreesByRepo: { repo1: [rowOnHost(SSH_HOST)] },
-      activeWorktreeId: null,
-      activeView: 'terminal',
-      activePendingCreationId: null,
-      settings: { skipDeleteWorktreeConfirm: true },
-      sshConnectionStates: new Map([['ssh-1', { targetId: 'ssh-1', status: 'connected' }]]),
       sshTargetLabels: new Map([['ssh-1', 'SSH One']]),
       worktreeLineageById: {}
-    } as unknown as Partial<AppState>)
+    })
 
     runWorktreeDelete(WORKTREE_ID)
-    await vi.waitFor(() => expect(routedHostIds).toEqual([SSH_HOST]))
 
-    expect(fs.existsSync(ssh.markerPath)).toBe(false)
-    expect(showDeleteWorktreeFailureToast).not.toHaveBeenCalled()
+    expect(store.getState().openModal).toHaveBeenCalledWith(
+      'forget-ssh-workspace',
+      expect.objectContaining({ resolution: { kind: 'saved', targetId: 'ssh-1' } })
+    )
+    expect(routedHostIds).toEqual([])
+    expect(fs.existsSync(ssh.markerPath)).toBe(true)
   })
 })

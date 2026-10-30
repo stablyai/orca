@@ -11,7 +11,6 @@ vi.mock('@/store/slices/workspace-attention/workspace-unread-flag', () => ({
   onScreenHostId: () => null
 }))
 vi.mock('@/store/slices/worktrees/listing/worktree-owner-target', () => ({
-  // `server:` workspaces belong to a paired server; the rest to this app.
   tryRuntimeTargetForWorktreeOwner: (_state: unknown, workspaceId: string) =>
     workspaceId.startsWith('server:')
       ? { kind: 'environment', environmentId: 'env-1' }
@@ -64,7 +63,6 @@ describe('createClientWorkspaceViewReporter', () => {
     report.update(STATE, ['local-wt', 'server:wt', 'unowned'], targets)
     expect(sent).toHaveLength(2)
 
-    // The server's workspace left the screen: it hears an empty view, once.
     report.update(STATE, ['local-wt'], targets.slice(0, 1))
     report.update(STATE, ['local-wt'], targets.slice(0, 1))
     expect(sent.slice(2)).toEqual([
@@ -133,7 +131,6 @@ describe('createClientWorkspaceViewReporter', () => {
     await Promise.resolve()
     expect(sent).toHaveLength(3)
 
-    // The workspace left the screen and the empty view failed: it is resent too.
     fail = true
     report.update(STATE, [], [])
     await Promise.resolve()

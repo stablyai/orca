@@ -1,4 +1,4 @@
-import type { CodexAppServerHostKey } from './codex-app-server-capability-cache'
+import type { CodexAppServerHostKey } from './app-server/codex-app-server-capability-cache'
 
 // Use legacy trust during the host cooldown so a hung server cannot delay every pane.
 export const CODEX_TRUST_GRANT_TRANSIENT_RETRY_INTERVAL_MS = 5 * 60_000

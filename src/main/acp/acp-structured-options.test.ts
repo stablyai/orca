@@ -1,7 +1,14 @@
 import { readFileSync } from 'node:fs'
-import { describe, expect, it } from 'vitest'
-import { AcpStructuredOptions } from './acp-structured-options'
+import { describe, expect, it, vi } from 'vitest'
+import { AcpStructuredOptions, readAcpLiveOptions } from './acp-structured-options'
+import { writeAcpSessionOption } from './acp-session-option-write'
+import { grokModelEfforts } from './acp-dialects/grok-model-catalog'
 import { GROK_ACP_DIALECT } from './acp-dialects/grok-dialect'
+import { OMP_ACP_DIALECT } from './acp-dialects/omp-dialect'
+import { OPENCODE_ACP_DIALECT } from './acp-dialects/opencode-dialect'
+import type { AcpCommandOptionsFixtureModule } from '../../shared/mobile-queued-edit-host.test-fixture-contract'
+
+const mobileProducer = { AcpStructuredOptions } satisfies AcpCommandOptionsFixtureModule
 
 const configOptions = [
   {
@@ -29,25 +36,143 @@ const configOptions = [
 ]
 
 describe('ACP session options', () => {
-  it('keeps the session’s picks out of the catalog facts', () => {
-    const options = new AcpStructuredOptions()
-    options.adoptSession({ configOptions })
-    const { models, current } = options.read()
-    // Current values supply an effort menu, never a catalog default.
-    expect(models).toEqual([
-      { id: 'model-a', label: 'Model A', isDefault: false, efforts: [] },
-      {
-        id: 'model-b',
-        label: 'Model B',
-        isDefault: false,
-        efforts: [
-          { value: 'low', label: 'Low' },
-          { value: 'high', label: 'High' }
-        ]
+  it.each([10, 100])(
+    'projects %i live models once while retaining current/report values',
+    async (count) => {
+      const modelEfforts = vi.fn(grokModelEfforts)
+      const options = new mobileProducer.AcpStructuredOptions({ ...GROK_ACP_DIALECT, modelEfforts })
+      options.adoptSession({
+        configOptions: [
+          ...configOptions.slice(1),
+          {
+            id: 'permission',
+            name: 'Permission',
+            category: 'mode',
+            type: 'select',
+            currentValue: 'default',
+            options: [{ value: 'default', name: 'Default' }]
+          }
+        ],
+        models: {
+          currentModelId: 'model-0',
+          availableModels: Array.from({ length: count }, (_, index) => ({
+            modelId: `model-${index}`,
+            name: `Model ${index}`,
+            _meta: {
+              supportsReasoningEffort: true,
+              reasoningEfforts: [{ value: 'medium', default: true }]
+            }
+          }))
+        }
+      })
+      const read = vi.spyOn(options, 'read')
+      const session = {
+        options,
+        connection: {
+          initialize: async () => ({
+            protocolVersion: 1,
+            agentCapabilities: { promptCapabilities: { image: true } }
+          })
+        }
       }
-    ])
-    expect(current).toEqual({ model: 'model-b', effort: 'high', confirmed: ['model', 'effort'] })
-  })
+      for (const mapping of [{ ask: 'default' }, undefined]) {
+        read.mockClear()
+        modelEfforts.mockClear()
+        const result = await readAcpLiveOptions(session, mapping)
+        expect({
+          reads: read.mock.calls.length,
+          modelProjections: modelEfforts.mock.calls.length
+        }).toEqual({
+          reads: 1,
+          modelProjections: count
+        })
+        expect(result.current).toEqual({
+          model: 'model-0',
+          effort: 'high',
+          confirmed: ['model', 'effort'],
+          reportedPermissionMode: mapping ? 'ask' : null
+        })
+        expect(result.models).toHaveLength(count)
+        expect(
+          result.models.every(
+            (model) =>
+              !model.isDefault &&
+              model.defaultEffort === 'medium' &&
+              model.efforts?.[0]?.value === 'medium'
+          )
+        ).toBe(true)
+        expect(result.catalogListing.models).toBe(result.models)
+        expect(result.catalogListing.configuredDefault).toBeUndefined()
+        expect(result.acceptsImages).toBe(true)
+      }
+    }
+  )
+
+  it.each([OPENCODE_ACP_DIALECT, OMP_ACP_DIALECT])(
+    'keeps native menus and observations separate from applied inputs',
+    async (dialect) => {
+      const options = new AcpStructuredOptions(dialect)
+      options.adoptSession({
+        configOptions,
+        models: { currentModelId: 'legacy', availableModels: [] }
+      })
+      const { models, current } = options.read()
+      // Current values supply an effort menu, never a catalog default.
+      expect(models).toEqual([
+        { id: 'model-a', label: 'Model A', isDefault: false, efforts: [], effortsKnown: false },
+        {
+          id: 'model-b',
+          label: 'Model B',
+          isDefault: false,
+          efforts: [
+            { value: 'low', label: 'Low' },
+            { value: 'high', label: 'High' }
+          ]
+        }
+      ])
+      expect(current).toEqual({ model: 'model-b', effort: 'high', confirmed: ['model', 'effort'] })
+      options.notePick('model')
+      options.adoptModel('')
+      options.adoptConfigOptions(null)
+      options.adoptConfigOptions(undefined)
+      expect(options.reported()).toEqual({ model: 'model-b', effort: 'high' })
+      options.adoptConfigOptions(configOptions)
+      expect([...options.appliedInput]).toEqual([])
+      await writeAcpSessionOption(
+        {
+          setConfigOption: async () => ({ configOptions }),
+          setModel: async () => ({})
+        },
+        options,
+        options.write('model', 'raw/retired')!,
+        {
+          agent: 'test',
+          key: 'model',
+          value: 'raw/retired',
+          timeoutMs: 1000
+        }
+      )
+      expect([...options.appliedInput]).toEqual([['model', 'raw/retired']])
+      const reports = [
+        { model: 'model-a' },
+        { model: 'model-b', effort: 'high' },
+        {},
+        { model: 'model-b', effort: 'high' }
+      ]
+      for (const [index, next] of [
+        [{ ...configOptions[0]!, currentValue: 'model-a' }],
+        configOptions,
+        [],
+        configOptions
+      ].entries()) {
+        options.adoptConfigOptions(next)
+        expect([...options.appliedInput]).toEqual([['model', 'raw/retired']])
+        expect(options.reported()).toEqual(reports[index])
+      }
+      options.adoptSession({ configOptions })
+      expect([...options.appliedInput]).toEqual([])
+    }
+  )
 
   it('reads each model’s own menu where the agent advertises one', () => {
     const options = new AcpStructuredOptions(GROK_ACP_DIALECT)

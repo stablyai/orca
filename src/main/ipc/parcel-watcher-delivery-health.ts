@@ -1,10 +1,10 @@
-import type { WatcherProcessCrashFuse } from './parcel-watcher-crash-fuse'
+import type { WatcherProcessCrashFuse } from './filesystem/watcher-process/parcel-watcher-crash-fuse'
 import {
   CANARY_STALL_BACKOFF_INITIAL_MS,
   CANARY_STALL_BACKOFF_MAX_MS,
   type WatcherDeliveryHealth
 } from './parcel-watcher-delivery-canary'
-import type { WatcherProcessSubscriptionRecord } from './parcel-watcher-process-subscription'
+import type { WatcherProcessSubscriptionRecord } from './filesystem/watcher-process/parcel-watcher-process-subscription'
 
 /** Rescan roots during OS event stalls with backoff, then once on recovery; the child keeps its streams. */
 export class WatcherDeliveryHealthMonitor {

@@ -1,4 +1,4 @@
-import type { CodexAppServerConnection } from './codex-app-server-connection'
+import type { CodexAppServerConnection } from './app-server/codex-app-server-connection-types'
 import type { CodexJournalTranslationAdmission } from './codex-structured-journal-translation'
 import type { CodexSession } from './codex-structured-session-state'
 

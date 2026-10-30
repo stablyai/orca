@@ -1,6 +1,7 @@
 import type {
   GitHubProjectField,
   GitHubProjectFieldValue,
+  GitHubProjectLinkedPullRequests,
   GitHubProjectIteration,
   GitHubProjectLabel,
   GitHubProjectSingleSelectOption,
@@ -112,6 +113,10 @@ export type RawFieldValue = {
   date?: string
   labels?: { nodes?: RawLabel[] }
   users?: { nodes?: RawUser[] }
+  pullRequests?: {
+    totalCount?: number
+    nodes?: ({ number?: number; title?: string; url?: string } | null)[]
+  }
 }
 
 export function normalizeFieldValue(
@@ -176,5 +181,26 @@ export function normalizeFieldValue(
     default:
       // Ignore future field types rather than treating compatible schema additions as drift.
       return null
+  }
+}
+
+export function normalizeLinkedPullRequests(raw: RawFieldValue): GitHubProjectLinkedPullRequests {
+  const pullRequests = (raw.pullRequests?.nodes ?? []).flatMap((node) =>
+    !node || typeof node.number !== 'number'
+      ? []
+      : [
+          {
+            number: node.number,
+            title: typeof node.title === 'string' ? node.title : '',
+            url: typeof node.url === 'string' ? node.url : ''
+          }
+        ]
+  )
+  return {
+    pullRequests,
+    totalCount:
+      typeof raw.pullRequests?.totalCount === 'number'
+        ? raw.pullRequests.totalCount
+        : pullRequests.length
   }
 }

@@ -1,5 +1,4 @@
-// Stored data older builds can leave disagreeing with itself. Each case is one fixed Loader rule
-// from the design (section 7); everything the rule does not name must survive unchanged.
+// Exercise each legacy Loader normalization; fields outside its rule must survive unchanged.
 
 import { describe, expect, it } from 'vitest'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../execution-host'
@@ -43,7 +42,6 @@ function twoTabs(): WorkspaceSessionState {
   ])
 }
 
-/** Which on-disk fields the load's change report names, as `table.field`. */
 const changed = (loaded: ReturnType<typeof load>): string[] =>
   [...new Set(loaded.changes.map((change) => `${change.table}.${change.field}`))].sort()
 
@@ -109,7 +107,6 @@ describe('Loader precedence for stored data that disagrees with itself, and its 
       ['tab-a', 1]
     ])
     expect(rules(saved)).toEqual([])
-    // Tab-bar entries are written in the one tab order too.
     expect(saved.unifiedTabs![GIT_KEY]!.map((tab) => [tab.id, tab.sortOrder])).toEqual([
       ['tab-b', 0],
       ['tab-a', 1]
@@ -164,8 +161,7 @@ describe('Loader precedence for stored data that disagrees with itself, and its 
     expect(changed(loaded)).toEqual(
       expect.arrayContaining(['row.*', 'terminalEntry.*', 'group.*', 'group.tabOrder', 'row.ptyId'])
     )
-    // tab-b's pane layout outlived its row: carried as stored, outside the model, so the disk
-    // rules still report it.
+    // The orphaned pane layout stays outside the model, so disk rules still report it.
     expect(checkWorkspaceLayoutModelRules([loaded.layout])).toEqual([])
     expect(rules(saveWorkspaceLayout(loaded))).toEqual(['pane_without_tab'])
   })
@@ -221,7 +217,6 @@ describe('Loader precedence for stored data that disagrees with itself, and its 
     expect(moved.root).toEqual({ type: 'leaf', leafId: fresh })
     expect(moved.ptyIdsByLeafId).toEqual({})
     expect(moved.titlesByLeafId).toEqual({ [fresh]: 'logs' })
-    // Everything keyed by the old pane follows it, so no record or view entry is orphaned.
     expect(moved).toMatchObject({
       activeLeafId: fresh,
       expandedLeafId: fresh,
@@ -486,7 +481,6 @@ describe('Loader precedence for stored data that disagrees with itself, and its 
     expect(loaded.changes).toEqual([])
     const saved = saveWorkspaceLayout(loaded)
     expect(onDisk(saved)).toEqual(onDisk(stored))
-    // Carried, not repaired: the rules check still reports it.
     expect(rules(saved)).toEqual(['pane_without_tab'])
   })
 })

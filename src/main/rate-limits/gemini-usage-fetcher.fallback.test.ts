@@ -13,12 +13,7 @@ const { readFileMock, extractCredsMock } = vi.hoisted(() => ({
 }))
 const fetchMock = vi.fn()
 
-// Why: mock the CLI-credential extractor at the module boundary. The extractor
-// is a self-contained dependency with a simple async contract (returns a
-// { clientId, clientSecret } record or null). Mocking it here keeps these
-// tests focused on the oauth_creds.json refresh → loadCodeAssist → quota
-// flow rather than on filesystem plumbing, and avoids having to keep pace
-// with extractor internals when they change.
+// Mock extraction at its module boundary so tests cover refresh/quota behavior independently of install layouts.
 vi.mock('./gemini-cli-oauth-extractor', () => ({
   extractOAuthClientCredentials: extractCredsMock
 }))
@@ -27,7 +22,7 @@ vi.mock('node:fs/promises', () => ({
   readFile: readFileMock
 }))
 
-// Why: the refresh path saves credentials; it must never write the real ~/.gemini.
+// Refresh must never write the developer's real ~/.gemini.
 vi.mock('../integration-credential-file', () => ({
   writeCredentialFileAtomic: vi.fn().mockReturnValue(true)
 }))
@@ -140,8 +135,6 @@ describe('fetchGeminiRateLimits fallback oauth creds', () => {
       }
       throw { code: 'ENOENT' }
     })
-    // Simulate: no Gemini CLI installed, so the extractor returns null and
-    // tryRefreshTokenFromBundle can't obtain client credentials to refresh.
     extractCredsMock.mockResolvedValue(null)
 
     const result = await fetchGeminiRateLimits(true)
@@ -153,10 +146,7 @@ describe('fetchGeminiRateLimits fallback oauth creds', () => {
   })
 
   it('returns error when loadCodeAssist cannot resolve a project for oauth_creds path', async () => {
-    // Why: when the fallback (oauth_creds.json) path has no project embedded
-    // and loadCodeAssist fails, we surface a clear "project ID not found"
-    // error rather than silently posting an empty project to the quota API —
-    // an empty project causes a 400 that looks like an auth failure.
+    // Missing project must fail before quota API calls; posting empty project produces a misleading auth-like 400.
     readFileMock.mockImplementation(async (filePath: string) => {
       if (filePath.includes('auth.json')) {
         return JSON.stringify({})
@@ -180,7 +170,6 @@ describe('fetchGeminiRateLimits fallback oauth creds', () => {
     expect(result.status).toBe('unavailable')
     expect(result.error).toContain('disabled')
     expect(readFileMock).not.toHaveBeenCalled()
-    // No network calls should have been made.
     expect(fetchMock).not.toHaveBeenCalled()
   })
 })

@@ -1,4 +1,6 @@
 import { randomUUID } from 'node:crypto'
+import { agentJournalSubmissionKey } from '../../shared/agent-session-journal-item-key'
+import { claudePromptUuidForSubmission } from './structured/claude-structured-session-id'
 import { isAbortSignalReason } from '../../shared/abort-signal-reason'
 import {
   forgetRetiredWaiter,
@@ -8,7 +10,10 @@ import {
 } from './claude-structured-dispatch-waiters'
 import type { AgentJournalMessageItem } from '../../shared/agent-session-journal-types'
 import type { AgentSessionDispatchOutcome } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
-import type { ClaudeDispatchWaiter, ClaudeSession } from './claude-structured-session-state'
+import type {
+  ClaudeDispatchWaiter,
+  ClaudeSession
+} from './structured/claude-structured-session-state'
 import type { ClaudeLateDispatchSettlement } from './claude-replay-turn-resolution'
 import {
   claudeDispatchContentKey,
@@ -30,7 +35,10 @@ import {
   claudeUserMessageWasProvablyUnwritten
 } from './claude-agent-sdk-user-message-queue'
 import { AgentSessionPreDispatchError } from '../native-chat/agent-session-wire/structured-agent-session-operation-settlement'
-import { isAgentSessionOptionRejectedError } from '../native-chat/agent-session-wire/structured-agent-session-option-error'
+import {
+  ClaudeEffortValidationError,
+  isAgentSessionOptionRejectedError
+} from '../native-chat/agent-session-wire/structured-agent-session-option-error'
 import { ClaudeControlRequestError } from './claude-stream-json-connection'
 
 const MAX_ACTIVE_DISPATCH_WAITERS = 64
@@ -113,6 +121,7 @@ function claudeWriteFailureRejection(error: unknown): AgentJournalDispatchReject
 export async function dispatchClaudeTurn(
   session: ClaudeSession,
   input: {
+    sessionId?: string
     clientMessageId?: string
     body: AgentJournalMessageItem
     requestedAt?: number
@@ -132,7 +141,14 @@ export async function dispatchClaudeTurn(
   }
   // Classify the mapped trailing prompt so command detection matches what Claude receives.
   const acceptsResult = claudeDispatchInvokesSlashCommand(content)
-  const sentUuid = input.sentUuid ?? randomUUID()
+  const sentUuid =
+    input.sentUuid ??
+    (input.sessionId && input.clientMessageId
+      ? claudePromptUuidForSubmission(
+          input.sessionId,
+          agentJournalSubmissionKey(input.clientMessageId)
+        )
+      : randomUUID())
   const arm = () => {
     ++session.dispatchSequence
     // Invalidate context reports requested before this send.
@@ -176,6 +192,12 @@ export async function dispatchClaudeTurn(
         isAbortSignalReason(input.signal, error)
       ) {
         throw error
+      }
+      if (error instanceof ClaudeEffortValidationError) {
+        return {
+          state: 'rejected',
+          ...claudeDispatchRejection(agentSessionFailureFact('claudeEffortInvalid'))
+        }
       }
       if (isAgentSessionOptionRejectedError(error)) {
         return {

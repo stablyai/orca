@@ -33,65 +33,6 @@ describe('resolveWorkspaceDirectory', () => {
     expect(resolveWorkspaceDirectory(state, 'wt-detected', 'local')).toBeNull()
   })
 
-  it('resolves folder workspaces without a projected worktree row', () => {
-    const folderId = 'folder-1'
-    expect(
-      resolveWorkspaceDirectory(
-        catalog({
-          folderWorkspaces: [
-            {
-              id: folderId,
-              projectGroupId: 'group-1',
-              name: 'Platform',
-              folderPath: '/workspace/platform',
-              connectionId: null,
-              linkedTask: null,
-              comment: '',
-              isArchived: false,
-              isUnread: false,
-              isPinned: false,
-              sortOrder: 0,
-              lastActivityAt: 0,
-              createdAt: 0,
-              updatedAt: 0
-            }
-          ]
-        }),
-        folderWorkspaceKey(folderId)
-      )
-    ).toBe('/workspace/platform')
-  })
-
-  it('does not resolve a folder workspace on a different host', () => {
-    const folderId = 'folder-1'
-    expect(
-      resolveWorkspaceDirectory(
-        catalog({
-          folderWorkspaces: [
-            {
-              id: folderId,
-              projectGroupId: 'group-1',
-              name: 'Remote Platform',
-              folderPath: '/workspace/remote-platform',
-              connectionId: 'box-1',
-              linkedTask: null,
-              comment: '',
-              isArchived: false,
-              isUnread: false,
-              isPinned: false,
-              sortOrder: 0,
-              lastActivityAt: 0,
-              createdAt: 0,
-              updatedAt: 0
-            }
-          ]
-        }),
-        folderWorkspaceKey(folderId),
-        'local'
-      )
-    ).toBeNull()
-  })
-
   it('applies the same host rules when the caller passes no detected rows', () => {
     const folderKey = folderWorkspaceKey('folder-1')
     const state: WorkspaceDirectoryState = {

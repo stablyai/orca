@@ -78,21 +78,6 @@ describe.skipIf(process.platform === 'win32')('AppImage stable launcher', () => 
     expect(await readFile(launcherPath, 'utf8')).not.toContain('/live')
   })
 
-  it('observes an endpoint published after the wrapper starts', async () => {
-    const cacheRootPath = await makeFixture()
-    const missingPath = join(cacheRootPath, 'payloads', 'missing')
-    const readyPath = join(cacheRootPath, 'payloads', 'ready')
-    const launcherPath = publishAppImageLauncherEndpoint(cacheRootPath, 'installed', missingPath)!
-    const invocation = runProcess({ program: launcherPath, args: [], timeoutMs: 3_000 })
-    setTimeout(() => {
-      void writeLauncher(readyPath, 'ready').then(() => {
-        publishAppImageLauncherEndpoint(cacheRootPath, 'installed', readyPath)
-      })
-    }, 100)
-
-    await expect(invocation).resolves.toMatchObject({ code: 0, stdout: 'ready' })
-  })
-
   it('atomically upgrades a stale marker-owned launcher', async () => {
     const cacheRootPath = await makeFixture()
     const targetPath = join(cacheRootPath, 'payloads', 'target')

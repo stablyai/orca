@@ -2,9 +2,7 @@ import process from 'node:process'
 import { pathToFileURL } from 'node:url'
 import { readTrackedSources, runCountRatchet } from './ratchet-baseline.mjs'
 
-// Ratchet on worktree ids built by hand (`${repo.id}::${path}`) instead of through the composers in
-// src/shared/worktree/id.ts. About 22 hand-built ids each pick whichever path spelling is at hand,
-// which is how one worktree ends up with two ids (#30150). Counts per file may only go down.
+// Ratchet hand-built worktree IDs downward: inconsistent path spellings give one worktree multiple IDs (#30150); use shared/worktree/id.ts composers.
 
 const BASELINE_PATH = 'config/worktree-id-composer-baseline.txt'
 const SCAN_ROOTS = ['src', 'mobile/src']

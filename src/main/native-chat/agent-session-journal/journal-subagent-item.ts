@@ -6,8 +6,8 @@ import type {
   AgentJournalItemIdentity,
   AgentJournalMessageItem
 } from '../../../shared/agent-session-journal-types'
-import { subagentFallbackText } from '../../../shared/native-chat-subagent-items'
-import { MAX_SUBAGENT_FIELD_CHARS } from '../../../shared/native-chat-subagent-summary'
+import { subagentFallbackText } from '../../../shared/native-chat/transcript/native-chat-subagent-items'
+import { MAX_SUBAGENT_FIELD_CHARS } from '../../../shared/native-chat/transcript/native-chat-subagent-summary'
 import { isSubagentBlock, type NativeChatSubagentBlock } from '../../../shared/native-chat-types'
 import { boundSubagentEntryId } from '../subagent-entry-id-bounds'
 

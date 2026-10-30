@@ -155,9 +155,7 @@ describe('applyBinderOwnerships', () => {
 
   it('takes the newest row worktree when a pane remints', () => {
     const state = createHookListenerState()
-    // Registry insertion order puts the stale row first; the live remint row
-    // carries a different worktree and must win, matching the round's
-    // newest-wins pane dedupe.
+    // Insert stale first so a reminted pane’s newer worktree must win.
     const applied = applyBinderOwnerships(
       state,
       [

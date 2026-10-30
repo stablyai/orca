@@ -1,5 +1,4 @@
-// Desktop words for the background-tasks roster: the shared grouping and state words
-// (`shared/background-task-roster.ts`) said in the reader's language.
+// Localize the shared background-task grouping and state vocabulary.
 
 import type {
   AgentSessionBackgroundTask,

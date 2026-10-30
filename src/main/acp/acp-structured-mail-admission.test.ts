@@ -45,7 +45,8 @@ it('holds mail without interrupting an answerable ACP question', async () => {
       dispatchId: null,
       operationId,
       expectedRuntimeFence,
-      body
+      body,
+      holdWhileWorking: false
     })
   ).toEqual({ kind: 'held' })
   const after = await host.journalSnapshot(SESSION)

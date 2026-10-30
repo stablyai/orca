@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { createRemoteRuntimeClientHandshake } from '../../remote-runtime-client-handshake'
+import { createRemoteRuntimeClientHandshake } from '../remote-runtime-client-handshake'
 import {
   parseRemoteRuntimeRpcFrame,
   remoteRuntimeAuthReplyError,

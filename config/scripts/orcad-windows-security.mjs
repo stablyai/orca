@@ -9,10 +9,7 @@ const { PE_MACHINE, describePeMachine, readPeMachine } = createRequire(import.me
   './windows-pe-machine.cjs'
 )
 
-/**
- * A Windows slot's ACL addon. Required, not optional: orcad's data-root privacy check fails
- * closed without it, so a slot missing it would never start on Windows.
- */
+// ACL addon is required: missing it makes orcad’s data-root privacy check fail closed before Windows startup.
 export function stageOrcadWindowsSecurity(
   root,
   outputDir,

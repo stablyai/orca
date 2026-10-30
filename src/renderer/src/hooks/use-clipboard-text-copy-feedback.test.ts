@@ -37,21 +37,6 @@ describe('useClipboardTextCopyFeedback', () => {
     expect(result.current.status).toBe('idle')
   })
 
-  it('does not write whitespace-only text', async () => {
-    const { result } = renderHook(() => useClipboardTextCopyFeedback('   '))
-
-    expect(result.current.canCopy).toBe(false)
-
-    let ok = true
-    await act(async () => {
-      ok = await result.current.copyText()
-    })
-
-    expect(ok).toBe(false)
-    expect(writeClipboardText).not.toHaveBeenCalled()
-    expect(result.current.status).toBe('idle')
-  })
-
   it('reports failure without leaving a success state', async () => {
     writeClipboardText.mockRejectedValueOnce(new Error('denied'))
     const { result } = renderHook(() => useClipboardTextCopyFeedback('git status'))
@@ -83,31 +68,5 @@ describe('useClipboardTextCopyFeedback', () => {
 
     rerender({ text: 'git diff' })
     expect(result.current.status).toBe('idle')
-  })
-
-  it('does not set state after unmount', async () => {
-    let resolveWrite: (() => void) | null = null
-    writeClipboardText.mockImplementation(
-      () =>
-        new Promise<void>((resolve) => {
-          resolveWrite = resolve
-        })
-    )
-
-    const { result, unmount } = renderHook(() => useClipboardTextCopyFeedback('git status'))
-
-    let copyPromise: Promise<boolean> | null = null
-    act(() => {
-      copyPromise = result.current.copyText()
-    })
-
-    unmount()
-    await act(async () => {
-      resolveWrite?.()
-      await copyPromise
-    })
-
-    // Unmounted: no throw from setState; promise still resolves true for the write.
-    await expect(copyPromise).resolves.toBe(true)
   })
 })

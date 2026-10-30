@@ -1,5 +1,4 @@
-// Main's `layout.apply` for renderer tests that run with either build switch: each command goes
-// through the RPC's schema, as main receives it, and is answered applied. A switch-off run sends none.
+// Renderer-test main validates each layout.apply against its RPC schema and answers applied; switch-off sends none.
 import type { z } from 'zod'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import { LayoutApplyParams } from '../../../shared/rpc-contract/workspace-layout-params'

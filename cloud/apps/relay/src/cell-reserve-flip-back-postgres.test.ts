@@ -7,9 +7,7 @@ import { openRelayDatabase, type RelayDatabase } from './database.js'
 import { openDelayedPostgresDatabase, type StatementDelay } from './test-fixtures/delayed-postgres-database.js'
 import { RESERVE_MODE_CELL_ID, startReserveModeCell } from './test-fixtures/reserve-mode-cell.js'
 
-// E-mix on PostgreSQL: a reserve-mode cell flipped back to db leases every control it admitted
-// from memory, disconnecting nobody, with the pool mostly left to DB-path work and one
-// relay_cells write per tick, even with a cross-region round trip on every statement.
+// PostgreSQL flip-back keeps controls connected, reserves most pool capacity for DB work and folds cell deltas per tick even across cross-region round trips (E-mix).
 
 const databaseUrl = process.env.ORCA_RELAY_TEST_POSTGRES_URL
 const describePostgres = databaseUrl ? describe : describe.skip

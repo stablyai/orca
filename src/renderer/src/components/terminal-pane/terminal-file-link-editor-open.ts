@@ -8,6 +8,7 @@ import type {
   EditorOpenResult
 } from '@/store/slices/editor/types/editor-open-link-intent'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
+import { flashRevealedEditorView } from '@/components/tab-group/editor-reveal-flash'
 
 /** An explicit group request may only end in an editor in the scope it was captured from. */
 export function isExplicitEditorScopeKept(
@@ -43,17 +44,27 @@ export function openLinkedFileInEditor(
   isCurrentRequest: () => boolean
 ): EditorOpenResult | null {
   const language = detectLanguage(file.filePath)
+  const existingViews = useAppStore.getState().unifiedTabsByWorktree?.[file.worktreeId] ?? []
   // Why on shown: a layout-owner build draws a new view only with main's frame.
   const reveal = (shown: EditorOpenResult | null): void => {
-    if (!shown || position.line === null) {
+    if (!shown) {
+      return
+    }
+    // Why: a link to an already-active tab otherwise changes nothing on screen.
+    if (
+      isCurrentRequest() &&
+      existingViews.some((tab) => tab.id === shown.viewStateId && tab.entityId === shown.fileId)
+    ) {
+      flashRevealedEditorView(shown.viewStateId)
+    }
+    if (position.line === null) {
       return
     }
     if (language === 'markdown') {
       // Why: rich Markdown has no line-based reveal consumer; line links must mount Monaco.
       useAppStore.getState().setMarkdownViewMode(shown.fileId, 'source')
     }
-    // Why: another view of the same document keeps its cursor, and a newer click (even one
-    // without a line) supersedes this reveal until the editor consumes it.
+    // Reveal only in this view; other document views keep their cursors, and later clicks supersede this request.
     scheduleEditorLineReveal(
       useAppStore.getState,
       file.filePath,

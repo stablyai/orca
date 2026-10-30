@@ -55,8 +55,7 @@ describe('localHostedBrowserPageRequest', () => {
     expect(localHostedBrowserPageRequest(request(method, params), environmentId, hosts)).toBeNull()
   })
 
-  // Why: a relayed browser method that names its page some other way would silently reach the
-  // server, which cannot serve a client-placed page.
+  // Alternate page selectors must not route client-rendered pages to servers unable to serve them.
   it('covers every relayed browser method that targets an existing page', () => {
     for (const method of RELAYED_BROWSER_METHODS) {
       const schema = PARAMS_SCHEMAS.get(method)
@@ -70,7 +69,7 @@ describe('localHostedBrowserPageRequest', () => {
         keys: Object.keys(params)
       })
       const local = localHostedBrowserPageRequest(request(method, params), 'env-1', hosts)
-      // tabCreate's page names the page to create, so creation always stays on the server.
+      // tabCreate names a new page, whose placement belongs to the server.
       expect({ method, local: local !== null }).toEqual({
         method,
         local: method !== 'browser.tabCreate'

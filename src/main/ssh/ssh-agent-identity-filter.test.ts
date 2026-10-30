@@ -21,15 +21,16 @@ vi.mock('os', () => ({
   homedir: () => '/home/testuser'
 }))
 
-vi.mock('ssh2', () => {
+vi.mock('./ssh2-module-load', () => {
   class MockBaseAgent {}
-  return {
+  const ssh2 = {
     BaseAgent: MockBaseAgent,
     createAgent: (...args: unknown[]) => mocks.createAgent(...args),
     utils: {
       parseKey: (...args: unknown[]) => mocks.parseKey(...args)
     }
   }
+  return { loadSsh2: () => ssh2 }
 })
 
 import { createIdentityFilteredAgent } from './ssh-agent-identity-filter'

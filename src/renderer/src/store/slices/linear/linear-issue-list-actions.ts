@@ -208,8 +208,7 @@ export function createLinearIssueListActions(
         })
         .catch((error) => {
           console.warn('[linear] listLinearIssues failed:', error)
-          // Why: capability mismatch is actionable (update remote runtime). Swallowing
-          // it as [] would look like "no issues match filters" and hide the fix.
+          // Surface capability mismatch as actionable runtime update, never misleading empty filter matches.
           if (isLinearIssueAttributeFilterUnsupportedError(error)) {
             throw error
           }

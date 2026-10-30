@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import type { ReactNode } from 'react'
-import { render, screen, fireEvent, cleanup } from '@testing-library/react'
+import { act, render, screen, fireEvent, cleanup } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { WorktreeCardDetailsHover } from './WorktreeCardMeta'
 import type { Worktree, WorkspaceAttachment } from '../../../../shared/worktree/types'
@@ -173,7 +173,7 @@ describe('workspace linked references in hover details', () => {
     expect(screen.queryByText('Used for checks')).toBeNull()
     expect(screen.getAllByLabelText('Checks: Passing')).toHaveLength(1)
   })
-  it('offers Orca link destinations without activating the parent and dismisses hover', () => {
+  it('offers Orca link destinations without activating the parent or dismissing hover', () => {
     const openUrl = vi.fn()
     Object.defineProperty(window, 'api', { configurable: true, value: { shell: { openUrl } } })
     const parentClick = vi.fn()
@@ -189,8 +189,35 @@ describe('workspace linked references in hover details', () => {
     expect(screen.getByRole('button', { name: /System Browser/ })).toBeTruthy()
     expect(parentClick).not.toHaveBeenCalled()
     expect(container.querySelector('[data-hover-open]')?.getAttribute('data-hover-open')).toBe(
-      'false'
+      'true'
     )
+  })
+  it('dismisses the link chooser when an outside click stops propagation', async () => {
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      value: { shell: { openUrl: vi.fn() } }
+    })
+    render(
+      <>
+        <Fixture onManage={vi.fn()} />
+        <button onClick={(event) => event.stopPropagation()}>Other card</button>
+      </>
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Hover workspace' }))
+    fireEvent.click(screen.getByRole('link', { name: 'Open MR !42' }))
+    // Why: Radix arms its outside-pointerdown listener a tick after opening.
+    await act(() => new Promise((resolve) => setTimeout(resolve, 0)))
+    const otherCard = screen.getByRole('button', { name: 'Other card' })
+    fireEvent.pointerDown(otherCard)
+    fireEvent.click(otherCard)
+    expect(screen.queryByRole('button', { name: /System Browser/ })).toBeNull()
+  })
+  it('lists the most recently linked references first', () => {
+    render(<Fixture onManage={vi.fn()} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Hover workspace' }))
+    const links = screen.getAllByRole('link').map((link) => link.getAttribute('href'))
+    expect(links.indexOf(attachments[1].url)).toBeLessThan(links.indexOf(attachments[0].url))
+    expect(links.indexOf(attachments[3].url)).toBeLessThan(links.indexOf(attachments[2].url))
   })
   it('opens link management from either section header and dismisses hover', () => {
     const onManage = vi.fn()

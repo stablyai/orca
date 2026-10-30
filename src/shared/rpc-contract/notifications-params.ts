@@ -8,17 +8,8 @@ export const NotificationUnsubscribeParams = z.object({
     .pipe(z.string().min(1, 'Missing subscriptionId'))
 })
 
-// Why: notifications.getMissedSince is the catch-up RPC for mobile reconnect
-// (#8129). The client passes the highest seq it has already delivered; the
-// runtime returns only notifications dispatched after that seq. Because the
-// desktop assigns a monotonic seq to every dispatched notification, the cut is
-// exact and idempotent — re-requesting with the same watermark can never
-// return an already-delivered event, so reconnects never duplicate local
-// pushes (the adversarial-review gate for #8129).
-// `epoch` names the counter lifetime lastSeenSeq came from (#8591). The desktop's
-// seq restarts at 0 on every launch while the client's watermark is persisted, so
-// without it a post-restart watermark silently cuts away everything. Optional: a
-// client that predates the field keeps the seq-only cut.
+// Catch up after the delivered sequence (#8129); epoch identifies its counter lifetime across desktop restarts
+// (#8591). Old clients retain seq-only cuts; replaying a watermark cannot duplicate already-delivered sequences.
 export const NotificationGetMissedSinceParams = z.object({
   lastSeenSeq: z.number().int().min(0, 'lastSeenSeq must be a non-negative integer'),
   epoch: z.string().optional(),
@@ -47,11 +38,9 @@ export const NotificationRegisterPushParams = z
     apnsEnvironment: z.enum(MOBILE_PUSH_APNS_ENVIRONMENTS).optional(),
     filter: NotificationPushFilterParams
   })
-  // Why strict: the device identity is added by the handler, so a caller-supplied
-  // `deviceId` must be an error, not a key silently dropped.
+  // Device identity is handler-owned; reject caller-supplied deviceId instead of silently dropping it.
   .strict()
-  // Why: an APNs token is only routable against the environment it was minted in,
-  // so a missing environment must fail loudly rather than default to production.
+  // APNs tokens require their minting environment; never default a missing one to production.
   .refine((params) => params.platform !== 'ios' || params.apnsEnvironment !== undefined, {
     message: 'apnsEnvironment is required for ios'
   })

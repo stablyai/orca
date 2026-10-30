@@ -11,13 +11,13 @@ import {
 } from '../agent-hooks/managed-hook-script-refresh'
 import {
   buildWindowsHookEnvironmentGuardLines,
-  buildWindowsHookStdinDrainEpilogue
+  WINDOWS_HOOK_STDIN_DRAIN_COMMAND
 } from '../agent-hooks/hook-stdin-contract'
 import {
   resolveBundledWindowsNativeHookExecutable,
   WINDOWS_NATIVE_HOOK_EXECUTABLE_NAME
 } from '../agent-hooks/windows-native-hook-executable'
-import { WINDOWS_CLAUDE_BACKGROUND_JOB_GUARD } from './hook-script'
+import { WINDOWS_CLAUDE_BACKGROUND_JOB_GUARD } from '../agent-hooks/claude-background-job-guard'
 
 const PAYLOAD_FILE_NAME = 'claude-hook-impl.cmd'
 
@@ -85,7 +85,8 @@ export function getWindowsClaudeHookEntry(): string {
     'echo {}',
     ...buildWindowsHookEnvironmentGuardLines(),
     WINDOWS_CLAUDE_BACKGROUND_JOB_GUARD,
-    ...buildWindowsHookStdinDrainEpilogue(),
+    WINDOWS_HOOK_STDIN_DRAIN_COMMAND,
+    'exit /b 0',
     ''
   ].join('\r\n')
 }

@@ -74,7 +74,6 @@ function scenario(
             : AGENT_LAUNCH_METHODS.filter((method) => method.name === 'agent.launch').map(
                 (method) => ({
                   ...method,
-                  // Older hosts accept the method but strip this optional field before running it.
                   params: AgentLaunchFields.omit({ operationId: true })
                 })
               )

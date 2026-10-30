@@ -14,18 +14,10 @@ import {
   LINK_LOST
 } from './mobile-web-shell-session-test-fixtures'
 
-/**
- * A download that failed falls back to the generation on disk, and that generation's routes are
- * what it must be judged by — including its grants.
- *
- * The newer manifest is read before the download is attempted, so without this the session keeps
- * the newer bundle's grants and opens the older page under them: a cached route that never
- * declared the clipboard would be granted it by a manifest it is not running.
- */
+// Fallback must restore cached routes/grants; the replacement manifest must not grant old bytes capabilities they never declared.
 describe('falling back to the cached generation after a failed download', () => {
   const cachedOnlyNavigate: CachedGeneration = { ...CACHED, routes: PAGE_ROUTES }
-  // A build of its own, because that is what makes the download happen: a manifest under the id
-  // the cache already holds is the same assets, and the session opens them without paging.
+  // Use a distinct build id to force download instead of the same-build cache path.
   const manifestWithClipboard: MobileWebShellManifestFacts = manifestFacts({
     ...MANIFEST_WIRE,
     buildId: 'd'.repeat(64),
@@ -44,7 +36,6 @@ describe('falling back to the cached generation after a failed download', () => 
   })
 
   it('carries a verb declared in the manifest through to the session grants', () => {
-    // Project manifest facts through the actual reducer and route policy.
     const step = run(afterCacheRead(null).session, {
       type: 'manifest-read',
       manifest: manifestFacts({
@@ -56,15 +47,7 @@ describe('falling back to the cached generation after a failed download', () => 
   })
 })
 
-/**
- * The route/grant pairs the page is told about must survive the download path, not only the two
- * paths that open a generation already on disk.
- *
- * `init.pageRouteGrants` is how the page decides an in-page hop is covered. A session that reaches
- * `ready` without them carries the default (or the previous generation's), the page reads every
- * target as listed-with-no-entry, and hands every hop to the shell. That is the first install and
- * every update after it.
- */
+// Carry pageRouteGrants through downloads too; otherwise first installs/updates treat every target as unpaired and hand all hops to native.
 describe('the route grants a downloaded generation is activated under', () => {
   const TWO_ROUTES = [
     { pathname: '/h/[hostId]', grants: ['navigate', 'storage'] },
@@ -105,8 +88,7 @@ describe('the route grants a downloaded generation is activated under', () => {
   })
 
   it("replaces the previous generation's entries when the generation changes", () => {
-    // The session already holds the older bundle's pairs, so the assertion fails on a stale field
-    // rather than only on the empty default.
+    // Seed older pairs so a missed update exposes stale grants as well as empty defaults.
     const first = run(afterCacheRead(CACHED).session, { type: 'manifest-read', manifest: MANIFEST })
     expect(first.session.pageRouteGrants).toEqual(PAGE_ROUTES)
     const step = activate(

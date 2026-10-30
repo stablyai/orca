@@ -1,10 +1,10 @@
 import { useCallback, useMemo } from 'react'
+import { extractPendingMessageReplyAsk } from '../../../src/shared/native-chat/input/native-chat-ask'
 import {
-  extractPendingMessageReplyAsk,
   formatAskAnswer,
-  type AskAnswerSelection,
-  type AskPrompt
-} from '../../../src/shared/native-chat-ask'
+  type AskAnswerSelection
+} from '../../../src/shared/native-chat-ask-answer'
+import type { AskPrompt } from '../../../src/shared/native-chat/input/native-chat-ask-types'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import type { useMobileStructuredAgentSession } from './use-mobile-structured-agent-session'
 
@@ -13,8 +13,7 @@ export type MobileStructuredAskSession = Pick<
   'permission' | 'question' | 'sendWithOutcome'
 >
 
-/** A structured chat's question the agent asked without waiting (Codex's async one), pending
- *  until the next user message and answered by an ordinary send that leaves the draft alone. */
+// Keep nonblocking structured questions pending until the next user message; answer by ordinary send without touching the draft.
 export function useMobileStructuredAsyncQuestion(args: {
   structured: MobileStructuredAskSession | null
   messages: readonly NativeChatMessage[]

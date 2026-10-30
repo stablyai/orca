@@ -1,5 +1,5 @@
 import WebSocket from 'ws'
-import { RemoteRuntimeClientError } from '../../remote-runtime-client-error'
+import { RemoteRuntimeClientError } from '../remote-runtime-client-error'
 import { createWsOutboundBackpressureQueue } from '../../ws-outbound-backpressure-queue'
 
 export type RemoteRuntimeOutboundSocketMemory = {
@@ -25,14 +25,8 @@ const SUBSCRIPTION_REQUEST_SOFT_CAP_BYTES = 1024 * 1024
 const SUBSCRIPTION_REQUEST_MAX_QUEUED_BYTES = 16 * 1024 * 1024
 const SUBSCRIPTION_REQUEST_MAX_QUEUED_FRAMES = 64
 
-/**
- * The subscription's outbound side: one backpressure queue for binary stream frames, one for
- * request frames, and the socket-memory admission both answer to.
- *
- * Why: client input (keystrokes) must never be dropped under backpressure. Hold encrypted frames
- * in order while bufferedAmount is over the cap and drain as it clears; a wedged link (hard cap)
- * fails the socket so the renderer resubscribes and replays a fresh snapshot.
- */
+/** Queue encrypted input in order under backpressure; never drop keystrokes.
+ * A hard-cap failure forces resubscribe and snapshot replay; both queues share socket-memory admission. */
 export class RemoteRuntimeSubscriptionOutbound {
   private socketMemory: RemoteRuntimeOutboundSocketMemory | null = null
   private socketMemoryCloseSource: WebSocket | null = null

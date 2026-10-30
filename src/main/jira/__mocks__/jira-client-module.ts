@@ -50,10 +50,9 @@ export async function loadJiraClientModule(
   })
 
   // Split modules must share one graph, request queue and credential cache per reset.
-  const [client, queue, api] = await Promise.all([
-    import('../client'),
-    import('../request-queue'),
-    import('../authenticated-request')
-  ])
+  // Why sequential: concurrent first imports can bypass Vitest's still-pending vi.doMock('os').
+  const client = await import('../client')
+  const queue = await import('../request-queue')
+  const api = await import('../authenticated-request')
   return { ...client, ...queue, ...api }
 }

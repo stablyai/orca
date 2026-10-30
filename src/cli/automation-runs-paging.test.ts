@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { AutomationRun } from '../shared/automations-types'
 import { paginateAutomationRuns } from '../shared/automation-run-cursor'
-import { REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES } from '../shared/remote-runtime-memory-limits'
+import { REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES } from '../shared/remote-runtime/remote-runtime-memory-limits'
 import {
   AUTOMATION_RUNS_PAGE_SIZE,
   readAllAutomationRuns,

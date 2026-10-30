@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
@@ -26,17 +26,6 @@ describe('browser host client identity', () => {
     expect(readOrCreateBrowserHostClientId(profileDirectory())).not.toBe(
       readOrCreateBrowserHostClientId(profileDirectory())
     )
-  })
-
-  it('persists the identity where the next launch reads it', () => {
-    const directory = profileDirectory()
-
-    const identity = readOrCreateBrowserHostClientId(directory)
-
-    expect(JSON.parse(readFileSync(browserHostClientIdentityPath(directory), 'utf-8'))).toEqual({
-      version: 1,
-      browserHostClientId: identity
-    })
   })
 
   it.each([

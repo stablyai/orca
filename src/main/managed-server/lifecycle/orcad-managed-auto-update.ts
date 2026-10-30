@@ -56,7 +56,7 @@ export function autoUpdateManagedOrcadEnvironment(
       return { outcome: 'skipped', reason: 'migrating' }
     }
     const context = await resolveLinkedOrcadContext(managed.environment, managed.deployment)
-    const candidateVersion = await bundledOrcadVersion(context.serverTarget)
+    const candidateVersion = await bundledManagedOrcadVersion(context.serverTarget)
     const plan = planManagedOrcadAutoUpdate({
       record: context.activationRecord,
       candidateVersion,
@@ -105,7 +105,8 @@ type OrcadTarget = Parameters<typeof materializeOrcadArtifact>[0]
 // Packaged templates cannot change during this session; avoid repeated hashing.
 const bundledVersions = new Map<OrcadTarget, Promise<string | null>>()
 
-function bundledOrcadVersion(target: OrcadTarget): Promise<string | null> {
+/** This build's orcad version for `target`; null when the build bundles none for it. */
+export function bundledManagedOrcadVersion(target: OrcadTarget): Promise<string | null> {
   let version = bundledVersions.get(target)
   if (!version) {
     version = materializeOrcadArtifact(target).then(readLocalFullVersion, (error: unknown) => {

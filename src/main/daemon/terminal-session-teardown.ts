@@ -1,4 +1,5 @@
 import { killWithDescendantSweep } from '../pty-descendant-termination'
+import { excludeShellBackgroundJobs } from '../pty-shell-job-preservation'
 import { terminateShutdownDescendants } from './terminal-descendant-shutdown'
 import type { Session } from './session'
 
@@ -68,16 +69,22 @@ export class TerminalSessionTeardown {
   }
 
   killSession(sessionId: string, session: Session, immediate: boolean): void | Promise<void> {
-    if (session.launchAgent) {
-      return this.killAgentSession(sessionId, session, immediate)
+    if (!session.launchAgent && !immediate && process.platform === 'win32') {
+      // The PTY job would also end `start /b` and GUI children, which a graceful close leaves running.
+      if (session.beginTermination()) {
+        session.signalTerminationRoot()
+        session.scheduleForceDisposeFallback()
+      }
+      return
     }
-    if (immediate) {
-      // Track the async probe so a concurrent create waits instead of treating the terminating ID as absent (#18046).
-      return this.track(sessionId, session, immediate, () =>
-        this.forceKillPlainShellSession(sessionId, session)
-      )
+    // Hand-typed agents carry no launch metadata, yet their detached tools outlive the shell's SIGHUP.
+    if (session.launchAgent || !immediate) {
+      return this.killAfterDescendantSnapshot(sessionId, session, immediate)
     }
-    session.kill()
+    // Track the async probe so a concurrent create waits instead of treating the terminating ID as absent (#18046).
+    return this.track(sessionId, session, immediate, () =>
+      this.forceKillPlainShellSession(sessionId, session)
+    )
   }
 
   private track(
@@ -122,7 +129,7 @@ export class TerminalSessionTeardown {
     await session.forceKillAndWaitForExit()
   }
 
-  private killAgentSession(
+  private killAfterDescendantSnapshot(
     sessionId: string,
     session: Session,
     immediate: boolean
@@ -166,7 +173,11 @@ export class TerminalSessionTeardown {
             ownsRoot: () => this.sessions.get(sessionId) === session && session.isAlive,
             terminateOwnedTree: () => session.terminateOwnedTree(),
             terminateDescendants: (snapshot) => {
-              entry.descendantVerification = terminateShutdownDescendants(snapshot)
+              entry.descendantVerification = terminateShutdownDescendants(
+                session.launchAgent || entry.immediate
+                  ? snapshot
+                  : excludeShellBackgroundJobs(snapshot, session.shellIsRootChild)
+              )
               return entry.descendantVerification
             },
             awaitEscalation: () => entry.immediate

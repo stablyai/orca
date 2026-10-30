@@ -40,6 +40,7 @@ function setEmptyUngroupedProjectState(filterRepoIds: string[] = []): void {
 
   mockStore.state = {
     ...makeFolderWorkspacePathStatusMockState(),
+    startupWorktreeRefreshCompleted: true,
     activeModal: '',
     activeView: 'terminal',
     activeWorktreeId: null,
@@ -94,7 +95,6 @@ function setEmptyUngroupedProjectState(filterRepoIds: string[] = []): void {
   }
 }
 
-// Why: describe title is shared across the split files so test full names stay stable.
 describe('WorktreeList lineage child card renderer', () => {
   beforeAll(async () => {
     await loadWorktreeList()
@@ -122,5 +122,14 @@ describe('WorktreeList lineage child card renderer', () => {
     expect(markup).toContain('No workspaces found')
     expect(markup).toContain('Clear Filters')
     expect(markup).not.toContain('empty-project')
+  })
+
+  it('waits for discovery before reporting that no workspaces were found', async () => {
+    setEmptyUngroupedProjectState(['another-repo'])
+    mockStore.state.startupWorktreeRefreshCompleted = false
+    const markup = await renderWorktreeListMarkup()
+
+    expect(markup).not.toContain('No workspaces found')
+    expect(markup).toContain('Clear Filters')
   })
 })

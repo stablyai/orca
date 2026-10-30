@@ -5,8 +5,11 @@ import { readDaemonAppliedPtySize, type DaemonAppliedPtySize } from './daemon-pt
 import { FinalCheckpointWaitExpiredError } from './daemon-pty-lifecycle-errors'
 import { DaemonPtySessionInput } from './daemon-pty-session-input'
 import { remainingDaemonRequestTimeoutMs } from './daemon-request-deadline'
+import { readDaemonLiveSleepCwd } from './daemon-live-sleep-cwd'
 import type { ColdRestoreInfo } from './history-reader'
 import { normalizeWslColdRestoreCwd } from './wsl-cold-restore-cwd'
+import { logSleepFolderRead, readDaemonWslSleepCwdWithFacts } from './daemon-wsl-sleep-cwd'
+import * as unlistedSession from './daemon-unlisted-session'
 import { SessionNotFoundError, type ListSessionsResult } from './types'
 import { resolveSafePtyDefaultCwd } from '../providers/pty-default-cwd'
 import type { PtySpawnResult } from '../providers/pty-provider-contract'
@@ -14,8 +17,14 @@ import type { PtySpawnResult } from '../providers/pty-provider-contract'
 export const LIVENESS_PROBE_TIMEOUT_MS = 2_000
 
 const MAX_TOMBSTONES = 1000
+// A busy daemon must not eat the final checkpoint's share of the Sleep deadline.
 
 export abstract class DaemonPtySessionControl extends DaemonPtySessionInput {
+  protected abstract adoptListedSessionForSleep(
+    sessionId: string,
+    deadlineMs?: number
+  ): Promise<void>
+
   async attach(id: string): Promise<Pick<PtySpawnResult, 'providerSequence' | 'lastTitle'> | void> {
     await this.ensureConnected()
     if (!this.canDelegateBackgroundToDaemon) {
@@ -85,6 +94,18 @@ export abstract class DaemonPtySessionControl extends DaemonPtySessionInput {
     }
   }
 
+  /** Whether this daemon lists the session at all, alive or not; null when it can't answer. */
+  listsSession(id: string): Promise<boolean | null> {
+    return unlistedSession.readDaemonSessionListing(this.client, id, LIVENESS_PROBE_TIMEOUT_MS)
+  }
+
+  /** The daemons that share this history dir and can answer for it; a router widens this. */
+  private listingDaemons: () => readonly unlistedSession.SessionListingDaemon[] = () => [this]
+
+  shareSessionListingWith(daemons: () => readonly unlistedSession.SessionListingDaemon[]): void {
+    this.listingDaemons = daemons
+  }
+
   async shutdown(
     id: string,
     opts: { immediate?: boolean; keepHistory?: boolean; deadlineMs?: number }
@@ -92,11 +113,16 @@ export abstract class DaemonPtySessionControl extends DaemonPtySessionInput {
     if (opts.keepHistory && this.disconnectOnlyPromise) {
       throw new Error('Cannot keep history after daemon disconnect has started')
     }
-    const shutdown = this.withHistorySpawnLock(id, () => this.shutdownWithHistoryLock(id, opts))
     if (!opts.keepHistory) {
-      await shutdown
+      await this.withHistorySpawnLock(id, () => this.shutdownWithHistoryLock(id, opts))
       return
     }
+    const shutdown = Promise.resolve().then(async () => {
+      // Outside the spawn lock, which adopting the session's history takes itself.
+      await this.ensureConnected(opts.deadlineMs)
+      await this.adoptListedSessionForSleep(id, opts.deadlineMs).catch(() => {})
+      await this.withHistorySpawnLock(id, () => this.shutdownWithHistoryLock(id, opts))
+    })
     this.keepHistoryShutdowns.add(shutdown)
     try {
       await shutdown
@@ -113,9 +139,38 @@ export abstract class DaemonPtySessionControl extends DaemonPtySessionInput {
     await this.ensureConnected(opts.deadlineMs)
     // Sleep may precede the first periodic checkpoint; persist the screen before killing.
     if (opts.keepHistory) {
+      const sleepWslDistro = this.wslDistrosBySessionId.get(id)
+      const sleepPaneKey = this.wslPaneKeysBySessionId.get(id)
+      const live = this.activeSessionIds.has(id)
+      const startedAt = Date.now()
+      const read =
+        sleepWslDistro && sleepPaneKey
+          ? // A live pane's own wsl.exe keeps its distro running.
+            await readDaemonWslSleepCwdWithFacts(
+              { paneKey: sleepPaneKey, wslDistro: sleepWslDistro, live },
+              opts.deadlineMs
+            )
+          : { cwd: live ? await readDaemonLiveSleepCwd(this.client, id, opts.deadlineMs) : null }
+      const sleepCwd = read.cwd
+      // Device runs need to see why a WSL pane woke at its spawn folder (awin 5e).
+      const sleepFolder = {
+        wslDistro: sleepWslDistro,
+        paneKey: sleepPaneKey,
+        live,
+        elapsedMs: Date.now() - startedAt
+      }
+      logSleepFolderRead(id, read, sleepFolder)
       const committed = await this.runExclusiveCheckpoint(
         async () => {
-          await this.checkpointSessions([id], { final: true, teardown: true })
+          // Set inside: a caller past its deadline leaves this checkpoint running without it.
+          if (sleepCwd) {
+            this.probedShellCwds.set(id, sleepCwd)
+          }
+          try {
+            await this.checkpointSessions([id], { final: true, teardown: true })
+          } finally {
+            this.probedShellCwds.delete(id)
+          }
         },
         { callerDeadlineMs: opts.deadlineMs }
       )
@@ -152,11 +207,31 @@ export abstract class DaemonPtySessionControl extends DaemonPtySessionInput {
         this.historyManager?.suspendSession(id)
       }
     }
-    await this.client.request(
-      'kill',
-      { sessionId: id, immediate: opts.immediate ?? false },
-      remainingDaemonRequestTimeoutMs(opts.deadlineMs)
-    )
+    try {
+      await this.client.request(
+        'kill',
+        { sessionId: id, immediate: opts.immediate ?? false },
+        remainingDaemonRequestTimeoutMs(opts.deadlineMs)
+      )
+    } catch (error) {
+      // Gone is known for a session this adapter lost, or (after a relaunch forgot that) one whose
+      // history is unended and that no daemon sharing the history dir may still run.
+      if (
+        opts.keepHistory ||
+        !(error instanceof SessionNotFoundError) ||
+        !(
+          this.hostLossSessionIds.has(id) ||
+          (await unlistedSession.isUnlistedLostSession(
+            id,
+            this.historyReader,
+            this.runtimeDir,
+            this.listingDaemons()
+          ))
+        )
+      ) {
+        throw error
+      }
+    }
     await this.completeShutdownWithHistoryLock(id, opts)
   }
 
@@ -165,7 +240,9 @@ export abstract class DaemonPtySessionControl extends DaemonPtySessionInput {
     id: string,
     opts: { keepHistory?: boolean }
   ): Promise<void> {
+    this.ptyInventory.retire(id, this.ptyInventory.currentIncarnation(id))
     this.activeSessionIds.delete(id)
+    this.hostLossSessionIds.delete(id)
     this.clearSessionAwaitingDaemonRecovery(id)
     this.dirtySessionVersions.delete(id)
     if (!opts.keepHistory) {
@@ -183,6 +260,7 @@ export abstract class DaemonPtySessionControl extends DaemonPtySessionInput {
     this.stopCheckpointTimerIfIdle()
     this.initialCwds.delete(id)
     this.wslDistrosBySessionId.delete(id)
+    this.wslPaneKeysBySessionId.delete(id)
     // Explicit close removes history; sleep preserves it for wake-time recovery.
     if (this.historyManager && !opts.keepHistory) {
       await this.historyManager

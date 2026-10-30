@@ -1,5 +1,18 @@
+import type { BrowserSessionCookieApi } from './browser-session-cookie-api'
+import type { BrowserDevToolsDockBounds } from '../../shared/browser-devtools-dock'
 import type { BrowserSetAnnotationViewportBridgeArgs } from '../../shared/browser-annotation-viewport-bridge'
+import type {
+  BrowserAgentActivityEvent,
+  BrowserAgentCursorEvent
+} from '../../shared/browser-agent-activity-contract'
 import type { ManagedBrowserProfileOwner } from '../../shared/browser-profile-scope'
+import type { BrowserExtensionToolbarApi } from './browser-extension-toolbar-api'
+import type { BrowserExtensionContextMenuApi } from './browser-extension-context-menu-api'
+import type { BrowserExtensionWebStoreApi } from './browser-extension-webstore-api'
+import type {
+  BrowserExtensionActionResult,
+  BrowserExtensionListResult
+} from '../../shared/browser-extension-types'
 import type {
   BrowserPageSiteDisplay,
   BrowserSiteColorScheme
@@ -47,7 +60,8 @@ import type {
   BrowserDownloadProgressEvent,
   BrowserDownloadRequestedEvent,
   BrowserPermissionDeniedEvent,
-  BrowserPopupEvent
+  BrowserPopupEvent,
+  BrowserTargetUrlChangedEvent
 } from '../../shared/browser-guest-events'
 import type {
   BrowserCertificateFailure,
@@ -97,11 +111,23 @@ export type BrowserApi = {
   onPagePromptRequest: (callback: (request: BrowserPagePromptRequest) => void) => () => void
   onPagePromptClosed: (callback: (event: { requestId: string }) => void) => () => void
   respondPagePrompt: (response: BrowserPagePromptResponse) => Promise<BrowserPagePromptResult>
-  /** `inspectAt` (guest viewport coordinates) selects the element there. */
+  /** Docks DevTools in the pane unless `detach`; `inspectAt` (the context-menu point, in window coordinates) selects the element there. */
   openDevTools: (args: {
     browserPageId: string
     inspectAt?: { x: number; y: number }
+    detach?: boolean
   }) => Promise<boolean>
+  closeDevTools: (args: { browserPageId: string }) => Promise<void>
+  /** Places docked DevTools over the pane's slot (renderer CSS px); null hides them, and with
+   *  `snapshot` resolves to their last frame as a data URL. */
+  setDevToolsDockBounds: (args: {
+    browserPageId: string
+    bounds: BrowserDevToolsDockBounds | null
+    snapshot?: boolean
+  }) => Promise<string | null>
+  onDevToolsDockChanged: (
+    callback: (event: { browserPageId: string; docked: boolean }) => void
+  ) => () => void
   addWordToDictionary: (args: { browserPageId: string; word: string }) => Promise<boolean>
   copyImageAt: (args: {
     browserPageId: string
@@ -122,6 +148,7 @@ export type BrowserApi = {
     browserPageId: string
     colorScheme: BrowserSiteColorScheme | null
   }) => Promise<BrowserPageSiteDisplay | null>
+  setPageAudioMuted: (args: { browserPageId: string; muted: boolean }) => Promise<boolean>
   reportViewportScrollState?: (args: {
     browserPageId: string
     state: BrowserViewportScrollState
@@ -138,6 +165,9 @@ export type BrowserApi = {
   onCertificateFailureChanged: (
     callback: (event: { browserPageId: string; failure: BrowserCertificateFailure | null }) => void
   ) => () => void
+  onAudioStateChanged: (
+    callback: (event: { browserPageId: string; audible: boolean }) => void
+  ) => () => void
   proceedCertificate: (args: {
     browserPageId: string
     challengeId: string
@@ -153,6 +183,7 @@ export type BrowserApi = {
   onContextMenuDismissed: (
     callback: (event: BrowserContextMenuDismissedEvent) => void
   ) => () => void
+  onTargetUrlChanged: (callback: (event: BrowserTargetUrlChangedEvent) => void) => () => void
   onNavigationUpdate: (
     callback: (event: { browserPageId: string; url: string; title: string }) => void
   ) => () => void
@@ -167,6 +198,11 @@ export type BrowserApi = {
     callback: (data: { browserPageId: string; token: string; active: boolean }) => void
   ) => () => void
   agentInputFocusGuardReady: (token: string, composing: boolean) => void
+  /** Main marks the pages an agent drives; the tab strip badges them. */
+  onAgentActivity: (callback: (data: BrowserAgentActivityEvent) => void) => () => void
+  /** Main shows the agent's pointer before its input; `agentCursorArrived` answers awaited moves. */
+  onAgentCursor: (callback: (data: BrowserAgentCursorEvent) => void) => () => void
+  agentCursorArrived: (sequence: number) => void
   onPaneFocus: (
     callback: (data: { worktreeId: string | null; browserPageId: string }) => void
   ) => () => void
@@ -206,7 +242,6 @@ export type BrowserApi = {
   identitySet: (mode: BrowserUserAgentMode) => Promise<BrowserIdentityModeSetResult | null>
   sessionDeleteProfile: (args: { profileId: string }) => Promise<boolean>
   sessionImportCookies: (args: { profileId: string }) => Promise<BrowserCookieImportResult>
-  sessionResolvePartition: (args: { profileId: string | null }) => Promise<string | null>
   sessionDetectBrowsers: () => Promise<DetectedBrowserInfo[]>
   /** Null when the environment's pages are not client-hosted on this desktop. */
   sessionDetectBrowsersForClientHost: (args: {
@@ -228,7 +263,6 @@ export type BrowserApi = {
   sessionClientRouteImportSources: (args: {
     environmentId: string
   }) => Promise<Record<string, BrowserSessionProfileSource>>
-  sessionClearDefaultCookies: () => Promise<boolean>
   /** Site permissions are local to this computer and browser profile. */
   sitePermissionsList: (args: { profileId: string }) => Promise<BrowserSitePermissionEntry[]>
   /** Null forgets the answer so the site is asked again. */
@@ -239,7 +273,40 @@ export type BrowserApi = {
     decision: BrowserSitePermissionDecision | null
   }) => Promise<BrowserSitePermissionEntry[]>
   notifyActiveTabChanged: (args: { browserPageId: string }) => Promise<boolean>
-}
+  extensionsList: (args: { profileId: string }) => Promise<BrowserExtensionListResult>
+  extensionsSetEnabled: (args: {
+    profileId: string
+    extensionId: string
+    enabled: boolean
+  }) => Promise<BrowserExtensionActionResult>
+  extensionsRemove: (args: {
+    profileId: string
+    extensionId: string
+  }) => Promise<BrowserExtensionActionResult>
+  extensionsLoadUnpacked: (args: {
+    profileId: string
+    directory: string
+  }) => Promise<BrowserExtensionActionResult>
+  /** Re-copies an unpacked extension's folder and restarts it in every profile. */
+  extensionsReload: (args: {
+    profileId: string
+    extensionId: string
+  }) => Promise<BrowserExtensionActionResult>
+  extensionsOpenOptions: (args: {
+    profileId: string
+    extensionId: string
+  }) => Promise<BrowserExtensionActionResult>
+  /** Asks about a held store update's new access, then installs it. */
+  extensionsReviewUpdate: (args: {
+    profileId: string
+    extensionId: string
+  }) => Promise<BrowserExtensionActionResult>
+  /** Installs, updates, removals, load errors or held updates changed; refetch the list. */
+  onExtensionsChanged: (callback: () => void) => () => void
+} & BrowserExtensionToolbarApi &
+  BrowserExtensionWebStoreApi &
+  BrowserExtensionContextMenuApi &
+  BrowserSessionCookieApi
 
 export type DetectedBrowserProfileInfo = {
   name: string

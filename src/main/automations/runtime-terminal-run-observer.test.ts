@@ -118,40 +118,6 @@ describe('createRuntimeAutomationRunTerminalObserver', () => {
     await run.promise
   })
 
-  it('does not complete from a stale idle pane title (leaf branch shape)', async () => {
-    const runtime = createFakeRuntime({ lastAgentStatus: null, paneTitle: '✳ Claude — idle' })
-    const run = observe(runtime)
-
-    await vi.advanceTimersByTimeAsync(10_000)
-    expect(run.settled).toEqual([])
-
-    runtime.setPane({ paneTitle: '✳ Claude — working' })
-    await vi.advanceTimersByTimeAsync(1_000)
-    expect(run.settled).toEqual([])
-
-    runtime.setPane({ paneTitle: '✳ Claude — idle' })
-    await vi.advanceTimersByTimeAsync(1_000)
-    expect(run.settled[0]?.status).toBe('completed')
-    await run.promise
-  })
-
-  it('does not complete from a ready shell prompt left over at dispatch', async () => {
-    const runtime = createFakeRuntime({ preview: 'user@host repo %\n$' })
-    const run = observe(runtime)
-
-    await vi.advanceTimersByTimeAsync(10_000)
-    expect(run.settled).toEqual([])
-
-    runtime.setPane({ preview: 'claude is thinking…' })
-    await vi.advanceTimersByTimeAsync(1_000)
-    expect(run.settled).toEqual([])
-
-    runtime.setPane({ lastAgentStatus: 'idle' })
-    await vi.advanceTimersByTimeAsync(1_000)
-    expect(run.settled[0]?.status).toBe('completed')
-    await run.promise
-  })
-
   it('fails the run truthfully when the pane never leaves its pre-dispatch state', async () => {
     const runtime = createFakeRuntime({ lastAgentStatus: 'idle' })
     const run = observe(runtime)

@@ -36,6 +36,7 @@ type DetectedBrowserEntry = {
   selectedProfile: string
 }
 import { BROWSER_VIEWPORT_PRESETS } from '../../../../../shared/browser-viewport-presets'
+import { browserViewportPresetLabel } from './browser-viewport-preset-label'
 import { translate } from '@/i18n/i18n'
 import {
   BrowserChromeFoldedMenuItems,
@@ -162,8 +163,7 @@ export function BrowserToolbarMenuDropdown({
         <DropdownMenuSub
           onOpenChange={(open) => {
             if (open) {
-              // Why: macOS treats other browsers' profile folders as app
-              // data. Only probe them when the user opens the import menu.
+              // Defer macOS app-data profile probes until the user opens Import.
               onFetchDetectedBrowsers()
             }
           }}
@@ -250,11 +250,7 @@ export function BrowserToolbarMenuDropdown({
           </DropdownMenuSubTrigger>
           <DropdownMenuPortal>
             <DropdownMenuSubContent data-browser-page-menu-id={browserPageId}>
-              {/* Why: Viewport is a "pick one of N" control, so use a radio group
-                  for proper a11y semantics (role="menuitemradio", aria-checked).
-                  The "Default" option represents a null preset (no override),
-                  encoded as the sentinel string 'default' because
-                  DropdownMenuRadioGroup values must be strings. */}
+              {/* Use radio semantics for viewport selection; encode null as default because Radix values must be strings. */}
               <DropdownMenuRadioGroup
                 value={viewportPresetId ?? 'default'}
                 onValueChange={(v) =>
@@ -270,7 +266,7 @@ export function BrowserToolbarMenuDropdown({
                 <DropdownMenuSeparator />
                 {BROWSER_VIEWPORT_PRESETS.map((preset) => (
                   <DropdownMenuRadioItem key={preset.id} value={preset.id}>
-                    <span className="truncate">{preset.label}</span>
+                    <span className="truncate">{browserViewportPresetLabel(preset)}</span>
                   </DropdownMenuRadioItem>
                 ))}
               </DropdownMenuRadioGroup>

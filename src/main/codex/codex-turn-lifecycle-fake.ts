@@ -1,6 +1,6 @@
 // Models Codex 0.157 turn_processor.rs and bespoke_event_handling.rs ordering, with pre-0.148 reply mode.
 
-import { CodexAppServerRequestError } from './codex-app-server-connection'
+import { CodexAppServerRequestError } from './app-server/codex-app-server-request-error'
 
 type Notify = (method: string, params: unknown) => void
 

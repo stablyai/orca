@@ -1,11 +1,4 @@
-/**
- * E2E tests for pane layout chrome: the header split button, the divider that
- * splitting creates, drag resizing, and the space a closed pane gives back.
- *
- * User Prompt:
- * - resizing terminal panes works
- * - closing panes works
- */
+// Require split chrome, divider resize and reclaimed space after pane close.
 
 import { test, expect } from './helpers/orca-app'
 import {
@@ -19,8 +12,7 @@ import {
 import { readVisiblePaneContents } from './helpers/terminal-pane-geometry'
 import { registerTerminalPaneMountReadiness } from './helpers/terminal-pane-mount-readiness'
 
-// Why: keep the suite serial so the headful pane tests never ask Playwright to
-// open multiple visible Electron windows at once.
+// Serialize headful scenarios; visible-window runs require an isolated display.
 test.describe.configure({ mode: 'serial' })
 test.describe('Terminal Panes', () => {
   registerTerminalPaneMountReadiness()
@@ -42,14 +34,8 @@ test.describe('Terminal Panes', () => {
     expect(Number(hoverStyle.opacity)).toBeGreaterThan(0.9)
   })
 
-  /**
-   * User Prompt:
-   * - resizing terminal panes works
-   */
   test('shows a pane divider after splitting', async ({ orcaPage }) => {
-    // Why: headless Playwright cannot exercise the real pointer-capture resize
-    // path reliably, so the default suite only verifies the precondition for
-    // resizing: splitting creates a visible divider for the active layout.
+    // Default hidden runs assert split/divider preconditions; real pointer-capture resize needs an isolated visible-window run.
     const panesBefore = await countVisibleTerminalPanes(orcaPage)
     await splitActiveTerminalPane(orcaPage, 'vertical')
     await waitForPaneCount(orcaPage, panesBefore + 1)
@@ -59,25 +45,13 @@ test.describe('Terminal Panes', () => {
     })
   })
 
-  /**
-   * User Prompt:
-   * - resizing terminal panes works (headful variant)
-   *
-   * Why this test must be headful: the pane divider's drag handler calls
-   * setPointerCapture(e.pointerId) on pointerdown. Pointer capture requires
-   * a valid pointer ID from a real pointing-device event, which Playwright's
-   * mouse API only produces when the Electron window is visible. In headless
-   * mode setPointerCapture silently fails, pointermove never fires on the
-   * divider, and the resize has no effect. Run with:
-   *   ORCA_E2E_HEADFUL=1 pnpm run test:e2e
-   */
+  // Real pointer capture needs a valid pointing-device id, unreliable in hidden Electron.
+  // Run ORCA_BACKGROUND_LAUNCH=1 ORCA_E2E_HEADFUL=1 pnpm run test:e2e only on an isolated display or CI.
   test('@headful can resize terminal panes by real mouse drag', async ({ orcaPage }) => {
-    // Split the terminal to create a resizable divider
     const panesBefore = await countVisibleTerminalPanes(orcaPage)
     await splitActiveTerminalPane(orcaPage, 'vertical')
     await waitForPaneCount(orcaPage, panesBefore + 1)
 
-    // Get the pane widths before resize
     const paneWidthsBefore = await orcaPage.evaluate(() => {
       const xterms = document.querySelectorAll('.xterm')
       return Array.from(xterms)
@@ -86,13 +60,11 @@ test.describe('Terminal Panes', () => {
     })
     expect(paneWidthsBefore.length).toBeGreaterThanOrEqual(2)
 
-    // Find the vertical pane divider and drag it
     const divider = orcaPage.locator('.pane-divider.is-vertical').first()
     await expect(divider).toBeVisible({ timeout: 3_000 })
     const box = await divider.boundingBox()
     expect(box).not.toBeNull()
 
-    // Drag the divider 150px to the right to resize panes
     const startX = box!.x + box!.width / 2
     const startY = box!.y + box!.height / 2
     await orcaPage.mouse.move(startX, startY)
@@ -100,7 +72,6 @@ test.describe('Terminal Panes', () => {
     await orcaPage.mouse.move(startX + 150, startY, { steps: 20 })
     await orcaPage.mouse.up()
 
-    // Verify pane widths changed
     await expect
       .poll(
         async () => {
@@ -169,14 +140,9 @@ test.describe('Terminal Panes', () => {
     }
   })
 
-  /**
-   * User Prompt:
-   * - closing panes works
-   */
   test('closing a split pane removes it and remaining pane fills space', async ({ orcaPage }) => {
     const panesBefore = await countVisibleTerminalPanes(orcaPage)
 
-    // Split the terminal
     await splitActiveTerminalPane(orcaPage, 'vertical')
     await waitForPaneCount(orcaPage, panesBefore + 1)
 
@@ -186,7 +152,6 @@ test.describe('Terminal Panes', () => {
     await closeActiveTerminalPane(orcaPage)
     await waitForPaneCount(orcaPage, panesAfterSplit - 1)
 
-    // The remaining pane should fill the available space
     const paneWidth = await orcaPage.evaluate(() => {
       const xterms = document.querySelectorAll('.xterm')
       const visible = Array.from(xterms).find(
@@ -194,8 +159,7 @@ test.describe('Terminal Panes', () => {
       ) as HTMLElement | null
       return visible?.getBoundingClientRect().width ?? 0
     })
-    // Why: threshold is kept low to account for headless mode where the
-    // window is 1200px wide (not maximized) and the sidebar takes space.
+    // Allow 1200px hidden-window width minus sidebar rather than assuming maximized space.
     expect(paneWidth).toBeGreaterThan(200)
   })
 })

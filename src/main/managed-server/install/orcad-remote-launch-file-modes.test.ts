@@ -28,6 +28,10 @@ let home: string
 let baseDir: string
 let slotDir: string
 
+function writeEntry(dir: string, before = ''): void {
+  writeFileSync(join(dir, 'orcad.js'), `${before}console.log(${JSON.stringify(READY_LINE)})\n`)
+}
+
 function mode(path: string): number {
   return statSync(path).mode & 0o777
 }
@@ -35,8 +39,8 @@ function mode(path: string): number {
 async function launchUnderLoginUmask(): Promise<void> {
   const command = orcadLaunchCommand(posix, {
     remoteInstallDir: slotDir,
-    // Missing runtime marker selects the legacy stub entry.
-    nodePath: '/bin/sh',
+    // No runtime marker selects the legacy host runtime; /bin/sh rejects V8 flags, so a JS one stands in.
+    nodePath: process.execPath,
     fullVersion: '0.2.0+bb01',
     userDataDir: join(home, '.orca'),
     bindHost: '127.0.0.1',
@@ -59,7 +63,7 @@ describe.skipIf(process.platform === 'win32')('orcad launch file modes', () => {
     mkdirSync(slotDir, { recursive: true, mode: 0o755 })
     chmodSync(baseDir, 0o755)
     chmodSync(slotDir, 0o755)
-    writeFileSync(join(slotDir, 'orcad.js'), `printf '%s\\n' '${READY_LINE}'\n`)
+    writeEntry(slotDir)
   })
 
   afterEach(() => {
@@ -92,9 +96,9 @@ describe.skipIf(process.platform === 'win32')('orcad launch file modes', () => {
 
   // Daemon children create user files and must retain login umask (#31125).
   it('runs the daemon itself at the login umask', async () => {
-    writeFileSync(
-      join(slotDir, 'orcad.js'),
-      `mkdir daemon-dir && : > daemon-file && printf '%s\\n' '${READY_LINE}'\n`
+    writeEntry(
+      slotDir,
+      "require('node:fs').mkdirSync('daemon-dir'); require('node:fs').writeFileSync('daemon-file', '');"
     )
 
     await launchUnderLoginUmask()
@@ -110,7 +114,7 @@ describe.skipIf(process.platform === 'win32')('orcad launch file modes', () => {
     slotDir = join(home, 'custom-slot')
     mkdirSync(slotDir, { mode: 0o755 })
     chmodSync(home, 0o755)
-    writeFileSync(join(slotDir, 'orcad.js'), `printf '%s\\n' '${READY_LINE}'\n`)
+    writeEntry(slotDir)
 
     await launchUnderLoginUmask()
 
