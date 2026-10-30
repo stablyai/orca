@@ -30,21 +30,6 @@ import {
 } from '../permissions/agent-permission-override-notice'
 
 let localAgentLaunchSettingsWriteTail: Promise<void> | null = null
-let localAgentPostPasteSubmitInputAcknowledgements: Partial<
-  Record<TuiAgent, AgentPostPasteSubmitInput>
-> = {}
-
-export function resetLocalAgentPostPasteSubmitInputAcknowledgementsForTests(): void {
-  localAgentPostPasteSubmitInputAcknowledgements = {}
-}
-
-function discardPublishedPostPasteSubmitInputAcknowledgements(settings: GlobalSettings): void {
-  for (const [candidate, input] of Object.entries(localAgentPostPasteSubmitInputAcknowledgements)) {
-    if (isTuiAgent(candidate) && settings.agentPostPasteSubmitInputs?.[candidate] === input) {
-      delete localAgentPostPasteSubmitInputAcknowledgements[candidate]
-    }
-  }
-}
 
 export function AgentLaunchSettingsSection({
   settings,
@@ -198,20 +183,13 @@ function LocalAgentLaunchSettings({
     value: AgentPostPasteSubmitInput
   ): Promise<void> =>
     enqueue(async () => {
-      await write(agent, (current) => {
-        discardPublishedPostPasteSubmitInputAcknowledgements(current)
-        return {
-          agentPostPasteSubmitInputs: {
-            ...current.agentPostPasteSubmitInputs,
-            ...localAgentPostPasteSubmitInputAcknowledgements,
-            [agent]: value
-          }
+      const latest = await window.api.settings.get().catch(failed(agent))
+      await write(agent, () => ({
+        agentPostPasteSubmitInputs: {
+          ...latest.agentPostPasteSubmitInputs,
+          [agent]: value
         }
-      })
-      localAgentPostPasteSubmitInputAcknowledgements = {
-        ...localAgentPostPasteSubmitInputAcknowledgements,
-        [agent]: value
-      }
+      }))
     })
 
   return (
