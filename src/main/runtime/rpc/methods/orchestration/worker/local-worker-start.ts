@@ -1,6 +1,5 @@
+import { prepareLocalWorkerAgentParams } from './local-worker-agent-preflight'
 import { createLocalWorkerStartDispatch } from './local-worker-start-dispatch'
-import { probeWorkerOpenCodeModelLaunchSupport } from './worker-opencode-model-preflight'
-import { resolveWorkerConfiguredAgentParams } from './worker-configured-agent-preflight'
 import { waitForWorkerAgentReady } from '../../../../launched-agent-composer-readiness'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import { describeTerminalWaitBlockedReason } from '../../../../../../shared/terminal-wait-blocked-reason-legacy-alias'
@@ -12,6 +11,8 @@ import type {
 } from '../../../../orchestration/orchestration-caller-identity'
 import { resolveDispatchCallerWorktreeId } from '../../orchestration-caller-workspace'
 import {
+  decideWorkerStartMode,
+  readWorkerStartModeSettings,
   resolveWorkerStartModeOnHost,
   type WorkerStartModeReceipt
 } from '../../orchestration-worker-start-mode'
@@ -66,31 +67,16 @@ export async function startLocalWorker(args: {
       repo: params.repo,
       callerWorktreeId
     })
-  const launchParams = await resolveWorkerConfiguredAgentParams(runtime, params, async () => {
-    const callerWorkspaceId = await resolveDispatchCallerWorktreeId(
+  const { launchParams, defaultSelection, openCodeModelLaunchSupported } =
+    await prepareLocalWorkerAgentParams({
       runtime,
-      params.from,
-      callerSession
-    )
-    return createsWorktree
-      ? { repo: (await creationTargetFor(callerWorkspaceId)).repoSelector }
-      : {
-          worktree: requestedWorktree === 'current' ? `id:${callerWorkspaceId}` : requestedWorktree
-        }
-  })
-  let openCodeModelLaunchSupported = false
-  if (!createsWorktree && launchParams.agent === 'opencode' && launchParams.model) {
-    const callerWorkspaceId = await resolveDispatchCallerWorktreeId(
-      runtime,
-      params.from,
-      callerSession
-    )
-    openCodeModelLaunchSupported = await probeWorkerOpenCodeModelLaunchSupport(
-      runtime,
-      launchParams,
-      { worktree: requestedWorktree === 'current' ? `id:${callerWorkspaceId}` : requestedWorktree }
-    )
-  }
+      db,
+      params,
+      callerSession,
+      requestedWorktree,
+      createsWorktree,
+      creationTargetFor
+    })
 
   const { agent, launch } = prepareLocalWorkerStart({
     params: launchParams,
@@ -98,6 +84,8 @@ export async function startLocalWorker(args: {
     runtime,
     openCodeModelLaunchSupported
   })
+  const agentSelection =
+    defaultSelection ?? (agent ? { agent, source: 'explicit' as const } : undefined)
 
   const coordinatorWorktreeId = await resolveDispatchCallerWorktreeId(
     runtime,
@@ -130,7 +118,13 @@ export async function startLocalWorker(args: {
       resolvedWorktreeId: resolvedWorktree?.id
     })
   }
-  const hostMode = resolveWorkerStartModeOnHost(runtime, args.mode, resolvedWorktree?.id, agent)
+  const selectedMode = defaultSelection
+    ? decideWorkerStartMode({
+        params: { ...launchParams, agent: defaultSelection.agent },
+        settings: readWorkerStartModeSettings(runtime)
+      })
+    : args.mode
+  const hostMode = resolveWorkerStartModeOnHost(runtime, selectedMode, resolvedWorktree?.id, agent)
   let mode = chatWorkerMode(await hostMode, chat)
 
   const started = createLocalWorkerStartDispatch(args, {
@@ -141,6 +135,7 @@ export async function startLocalWorker(args: {
     resolvedWorktreeId: resolvedWorktree?.id,
     repoSelector: creationTarget?.repoSelector,
     agent,
+    agentSelection,
     launchReceipt: launch.receipt
   })
   releaseRetriedWorkerTerminal(runtime, db, params)
@@ -296,5 +291,7 @@ export async function startLocalWorker(args: {
       task: task.spec
     })
   }
-  return result
+  return agentSelection && result && typeof result === 'object'
+    ? { ...result, agentSelection }
+    : result
 }

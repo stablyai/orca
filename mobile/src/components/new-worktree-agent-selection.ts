@@ -65,19 +65,24 @@ export function resolveNewWorktreeAgentSelection({
   selectedAgent,
   agentOverridden,
   runtimeSettings,
-  detectedAgentIds
+  detectedAgentIds,
+  resolvedDefaultAgent
 }: {
   visible: boolean
   selectedAgent: NewWorktreeAgentOption
   agentOverridden: boolean
   runtimeSettings: NewWorktreeRuntimeSettings | null
   detectedAgentIds: Set<string> | null
+  resolvedDefaultAgent?: TuiAgent | null
 }): { selectedAgent: NewWorktreeAgentOption; agentOverridden: boolean } {
   if (!visible) {
     return { selectedAgent, agentOverridden }
   }
 
-  const preferred = pickPreferredNewWorktreeAgent(runtimeSettings, detectedAgentIds)
+  const preferred =
+    resolvedDefaultAgent === undefined
+      ? pickPreferredNewWorktreeAgent(runtimeSettings, detectedAgentIds)
+      : newWorktreeAgentOptionFor(resolvedDefaultAgent)
   if (!agentOverridden) {
     return { selectedAgent: preferred, agentOverridden: false }
   }

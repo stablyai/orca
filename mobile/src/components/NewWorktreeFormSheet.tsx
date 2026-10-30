@@ -35,6 +35,8 @@ export function NewWorktreeFormSheet(props: {
   sshGate: WorkspaceSshGate
   composer: Composer
   selectedAgent: NewWorktreeAgentOption
+  agentLabel: string
+  agentError: string | null
   showAdvanced: boolean
   note: string
   setupCommand: string | null
@@ -126,11 +128,12 @@ export function NewWorktreeFormSheet(props: {
               <Text style={styles.fieldButtonText} numberOfLines={1}>
                 {props.sshGate.requiresConnection
                   ? t('components.newWorktreeFormSheet.connectTargetFirst', 'Connect target first')
-                  : props.selectedAgent.label}
+                  : props.agentLabel}
               </Text>
               <ChevronDown size={14} color={colors.textMuted} />
             </Pressable>
           </View>
+          {props.agentError ? <Text style={styles.error}>{props.agentError}</Text> : null}
 
           <Pressable
             style={styles.advancedToggle}

@@ -301,6 +301,11 @@ describe('repos:add + repos:clone', () => {
           ]
         : []
     })
+    mockStore.updateProject.mockImplementation(() => ({
+      id: 'github:github.acme.test/acme/orca',
+      displayName: 'Orca',
+      defaultTuiAgent: 'codex'
+    }))
 
     const result = await handlers.get('projectHostSetups:setupExistingFolder')!(null, {
       projectId: 'github:github.acme.test/acme/orca',
@@ -312,7 +317,8 @@ describe('repos:add + repos:clone', () => {
       },
       hostId: 'local',
       path: '/tmp/orca-local',
-      kind: 'git'
+      kind: 'git',
+      defaultTuiAgent: 'codex'
     })
 
     expect(added[0]?.upstream).toEqual({
@@ -321,6 +327,10 @@ describe('repos:add + repos:clone', () => {
       host: 'github.acme.test'
     })
     expect(result).toHaveProperty('project.id', 'github:github.acme.test/acme/orca')
+    expect(mockStore.updateProject).toHaveBeenCalledWith('github:github.acme.test/acme/orca', {
+      defaultTuiAgent: 'codex'
+    })
+    expect(result).toHaveProperty('project.defaultTuiAgent', 'codex')
   })
 
   it('rolls back a new repo when the supplied identity does not match the project', async () => {

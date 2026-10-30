@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import type { Project, ProjectHostSetup } from '../../../shared/project-types'
 import type { Repo } from '../../../shared/repo-types'
-import { getProjectHostSetupProjectionFromState } from './project-host-setup-selector'
+import {
+  getProjectHostSetupProjectionFromState,
+  selectCanonicalProjects
+} from './project-host-setup-selector'
 
 type CollectionCounters = {
   map: number
@@ -9,6 +12,22 @@ type CollectionCounters = {
   iterator: number
   length: number
 }
+
+it.each(['codex', 'blank', null] as const)(
+  'retains the saved default %s when a host project ID is canonicalized',
+  (defaultTuiAgent) => {
+    const repo = { ...makeRepo('repo-1'), upstream: { owner: 'acme', repo: 'app' } }
+    const state = {
+      repos: [repo],
+      projects: [{ ...makeProject('repo:repo-1', repo.id), defaultTuiAgent }],
+      projectHostSetups: [makeSetup(repo.id, 'repo:repo-1')]
+    }
+    const projects = selectCanonicalProjects(state)
+    expect(projects).toMatchObject([{ id: 'github:acme/app', defaultTuiAgent }])
+    expect(selectCanonicalProjects(state)).toBe(projects)
+    expect(state.projects[0].id).toBe('repo:repo-1')
+  }
+)
 
 function countCollectionReads<T>(items: readonly T[]): {
   value: readonly T[]

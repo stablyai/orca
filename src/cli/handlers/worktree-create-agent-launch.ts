@@ -11,7 +11,12 @@ import {
   formatAgentLaunch,
   hasLaunchModelFlags,
   getAgentLaunchCapabilities,
+  frozenDefaultRecoveryArgs,
+  parseCliAgent,
+  readCliAgentLaunch,
+  resolveCliDefaultAgent,
   type CliAgentLaunch,
+  type ResolvedCliDefaultAgent,
   SURFACE_UNSUPPORTED_MESSAGE
 } from '../agent-launch-request'
 import { formatWorktreeShow, printResult } from '../format'
@@ -20,6 +25,44 @@ import { printLineageSummary } from './worktree-lineage-summary'
 import { printHookWarning } from './worktree-removal-warnings'
 import { withSetupDecisionRecovery } from './worktree-setup-decision-recovery'
 import { withCliAgentLaunchRecovery } from '../agent-launch-recovery'
+import { getPresentStringFlag } from '../flags'
+import type { TuiAgent } from '../../shared/tui-agent'
+
+export function getOptionalStartupAgent(
+  flags: Map<string, string | boolean>
+): TuiAgent | 'default' | undefined {
+  const agent = getPresentStringFlag(flags, 'agent')
+  if (agent === undefined) {
+    const needsAgent = ['prompt', 'model', 'effort', 'surface', 'retry-launch'].find((name) =>
+      flags.has(name)
+    )
+    if (needsAgent) {
+      throw new RuntimeClientError('invalid_argument', `--${needsAgent} requires --agent`)
+    }
+    return undefined
+  }
+  return agent === 'default' ? 'default' : parseCliAgent(agent)
+}
+
+export async function createWorktreeWithDefaultAgent(args: {
+  client: RuntimeClient
+  flags: Map<string, string | boolean>
+  create: Record<string, unknown>
+  repoTarget: { repo: string; repoHostId?: string }
+  json: boolean
+  rawArgs?: readonly string[]
+}): Promise<void> {
+  const capabilities = await getAgentLaunchCapabilities(args.client)
+  const resolvedAgent = await resolveCliDefaultAgent(args.client, args.repoTarget, capabilities)
+  const launch = readCliAgentLaunch(args.flags, resolvedAgent.agent, { createsWorktree: true })
+  await createWorktreeWithAgent({
+    ...args,
+    launch,
+    rawArgs: frozenDefaultRecoveryArgs(args.rawArgs, resolvedAgent.agent),
+    capabilities: capabilities ?? undefined,
+    resolvedAgent
+  })
+}
 
 type WorktreeAgentLaunchResult = Pick<
   RuntimeWorktreeCreateResult,
@@ -27,7 +70,7 @@ type WorktreeAgentLaunchResult = Pick<
 > & {
   /** Absent only when the host could not show the worktree it just created. */
   worktree?: RuntimeWorktreeRecord
-  launch: AgentLaunchResult
+  launch: AgentLaunchResult & { resolvedAgent?: ResolvedCliDefaultAgent }
 }
 
 export async function createWorktreeWithAgent(args: {
@@ -37,9 +80,11 @@ export async function createWorktreeWithAgent(args: {
   launch: CliAgentLaunch
   json: boolean
   rawArgs?: readonly string[]
+  capabilities?: readonly string[]
+  resolvedAgent?: ResolvedCliDefaultAgent
 }): Promise<void> {
-  const { client, flags, create, launch, json, rawArgs } = args
-  const capabilities = await getAgentLaunchCapabilities(client)
+  const { client, flags, create, launch, json, rawArgs, resolvedAgent } = args
+  const capabilities = args.capabilities ?? (await getAgentLaunchCapabilities(client))
   if (
     !capabilities?.includes(AGENT_LAUNCH_LOCAL_PRESENTATION_RUNTIME_CAPABILITY) ||
     (launch.prompt && !capabilities.includes(AGENT_LAUNCH_PROMPT_CARRY_RUNTIME_CAPABILITY))
@@ -101,7 +146,7 @@ export async function createWorktreeWithAgent(args: {
           workspaceLineage: worktree.workspaceLineage ?? null
         }
       : { lineage: null }),
-    launch: launched.result
+    launch: { ...launched.result, ...(resolvedAgent ? { resolvedAgent } : {}) }
   }
   printLineageSummary(result, json)
   printResult({ ...launched, result }, json, (value) =>

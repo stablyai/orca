@@ -107,7 +107,31 @@ describe('RepositoryPane search entries', () => {
     const entries = getRepositoryPaneSearchEntries(repo)
 
     expect(entries.filter(({ title }) => title === 'Project Icon')).toHaveLength(1)
+    expect(entries.filter(({ title }) => title === 'Default agent')).toHaveLength(1)
     expect(entries.filter(({ title }) => title === 'Default Worktree Base')).toHaveLength(1)
+  })
+
+  it('offers the project default for folder workspaces too', () => {
+    useAppStore.setState({ settings: getDefaultSettings('/tmp') })
+    const html = renderToStaticMarkup(
+      React.createElement(
+        TooltipProvider,
+        null,
+        React.createElement(RepositoryPane, {
+          repo: { ...repo, kind: 'folder' },
+          project,
+          yamlHooks: null,
+          hasHooksFile: false,
+          hooksInspectionReady: true,
+          mayNeedUpdate: false,
+          updateRepo: vi.fn(),
+          removeProject: vi.fn(),
+          updateProject: vi.fn()
+        })
+      )
+    )
+    expect(html).toContain('Default agent')
+    expect(html).toContain('Current global default')
   })
 
   it('omits project runtime search for remote or unsupported repos', () => {

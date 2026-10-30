@@ -5,6 +5,7 @@ import {
 } from '../../../shared/project-host-setup-projection'
 import { resolveProjectHostSetupProjection } from '../../../shared/project-host-setup-hydration'
 import type { AppState } from './types'
+import { carryProjectStateThroughIdentityChange } from '../../../shared/project-identity-succession'
 
 const derivedProjectionByRepos = new WeakMap<AppState['repos'], ProjectHostSetupProjection>()
 // Catalog writers replace these readonly arrays; their identities are the invalidation boundary.
@@ -54,3 +55,24 @@ export function getProjectHostSetupProjectionFromState(
   bySetups.set(setups, projection)
   return projection
 }
+
+const canonicalProjectsByProjection = new WeakMap<ProjectHostSetupProjection, readonly Project[]>()
+
+export function selectCanonicalProjects(
+  state: Parameters<typeof getProjectHostSetupProjectionFromState>[0]
+): readonly Project[] {
+  const projection = getProjectHostSetupProjectionFromState(state)
+  let projects = canonicalProjectsByProjection.get(projection)
+  if (!projects) {
+    projects = carryProjectStateThroughIdentityChange(
+      projection.projects,
+      state.projects ?? projection.projects
+    ).projects
+    canonicalProjectsByProjection.set(projection, projects)
+  }
+  return projects
+}
+
+export const selectCanonicalProjectHostSetups = (
+  state: Parameters<typeof getProjectHostSetupProjectionFromState>[0]
+) => getProjectHostSetupProjectionFromState(state).setups

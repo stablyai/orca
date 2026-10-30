@@ -6,6 +6,7 @@ import { WorkspaceAttachmentsSchema } from '../../../shared/workspace-attachment
 import { isWorkspaceLinkedItemSourceContextMatch } from '../../../shared/workspace-linked-item-source-context'
 import { DiffCommentSchema } from '../../../shared/diff-comment-schema'
 import { normalizeExecutionHostId } from '../../../shared/execution-host'
+import { ProjectUpdate } from '../../../shared/rpc-contract/project-runtime-params'
 
 export const ProjectGroupCreateArgs = z.object({
   name: z.string().min(1),
@@ -31,6 +32,7 @@ export const ProjectGroupSelectorArgs = z.object({
 
 export const ProjectHostSetupExistingFolderIpcArgs = z.object({
   projectId: z.string().min(1),
+  defaultTuiAgent: ProjectUpdate.shape.updates.shape.defaultTuiAgent,
   projectProviderIdentity: z
     .object({
       provider: z.literal('github'),
@@ -46,22 +48,7 @@ export const ProjectHostSetupExistingFolderIpcArgs = z.object({
   setupMethod: z.enum(['imported-existing-folder', 'cloned']).optional()
 })
 
-const LocalWindowsRuntimePreferenceIpcArgs = z.discriminatedUnion('kind', [
-  z.object({ kind: z.literal('inherit-global') }),
-  z.object({ kind: z.literal('windows-host') }),
-  z.object({
-    kind: z.literal('wsl'),
-    distro: z.string().min(1),
-    git: z.literal('windows-host').optional()
-  })
-])
-
-export const ProjectUpdateIpcArgs = z.object({
-  projectId: z.string().min(1),
-  updates: z.object({
-    localWindowsRuntimePreference: LocalWindowsRuntimePreferenceIpcArgs.optional()
-  })
-})
+export const ProjectUpdateIpcArgs = ProjectUpdate
 
 const IpcExecutionHostId = z
   .string()
@@ -85,6 +72,7 @@ export const ProjectGroupMoveProjectArgs = z.object({
 
 export const ProjectHostSetupCreateIpcArgs = z.object({
   projectId: z.string().min(1),
+  defaultTuiAgent: ProjectUpdate.shape.updates.shape.defaultTuiAgent,
   hostId: IpcExecutionHostId,
   setupId: z.string().min(1).optional(),
   path: z.string().optional(),

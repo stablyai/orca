@@ -5,6 +5,7 @@ import type { WorkerStartInput } from './worker-start-schema'
 import type { startLocalWorker } from './local-worker-start'
 import { resolveDispatchCreator } from '../runs/dispatch-creator'
 import { parseTaskDeps } from './task-deps-argument'
+import type { WorkerDefaultAgentSelection } from './worker-configured-agent-preflight'
 
 export function createLocalWorkerStartDispatch(
   {
@@ -25,6 +26,7 @@ export function createLocalWorkerStartDispatch(
     resolvedWorktreeId,
     repoSelector,
     agent,
+    agentSelection,
     launchReceipt
   }: {
     params: WorkerStartInput
@@ -34,6 +36,7 @@ export function createLocalWorkerStartDispatch(
     resolvedWorktreeId: string | undefined
     repoSelector: string | undefined
     agent: TuiAgent | undefined
+    agentSelection?: WorkerDefaultAgentSelection
     launchReceipt: OrchestrationWorkerLaunchReceipt
   }
 ) {
@@ -46,6 +49,7 @@ export function createLocalWorkerStartDispatch(
     baseBranch: params.baseBranch ?? null,
     terminal: params.terminal ?? null,
     agent: agent ?? null,
+    agentSelection: agentSelection ?? null,
     launch: launchReceipt,
     timeoutMs: params.timeoutMs ?? 60_000,
     setup: createsWorktree ? (params.setup ?? 'run') : 'not_applicable',

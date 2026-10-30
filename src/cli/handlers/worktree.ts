@@ -28,9 +28,12 @@ import {
   resolveCurrentWorktreeSelector
 } from '../selectors'
 import type { HostScopedWorktreeSelection } from '../caller-host-worktree-selection'
-import type { TuiAgent } from '../../shared/tui-agent'
-import { parseCliAgent, readCliAgentLaunch } from '../agent-launch-request'
-import { createWorktreeWithAgent } from './worktree-create-agent-launch'
+import { readCliAgentLaunch, rejectDefaultLaunchRetry } from '../agent-launch-request'
+import {
+  createWorktreeWithAgent,
+  createWorktreeWithDefaultAgent,
+  getOptionalStartupAgent
+} from './worktree-create-agent-launch'
 import { printLineageSummary } from './worktree-lineage-summary'
 import { projectWorktreePsTerminalVerdict } from '../worktree-ps-terminal-verdict'
 import {
@@ -54,20 +57,6 @@ import {
   getCreateReferenceInputs,
   resolveReferenceInputs
 } from '../reference-input'
-
-function getOptionalStartupAgent(flags: Map<string, string | boolean>): TuiAgent | undefined {
-  const agent = getPresentStringFlag(flags, 'agent')
-  if (agent === undefined) {
-    const needsAgent = ['prompt', 'model', 'effort', 'surface', 'retry-launch'].find((name) =>
-      flags.has(name)
-    )
-    if (needsAgent) {
-      throw new RuntimeClientError('invalid_argument', `--${needsAgent} requires --agent`)
-    }
-    return undefined
-  }
-  return parseCliAgent(agent)
-}
 
 function getOptionalSetupDecision(
   flags: Map<string, string | boolean>
@@ -142,10 +131,13 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
     const explicitParentWorktree = explicitParent.parentWorktree
     const explicitParentWorkspace = explicitParent.parentWorkspace
     const startupAgent = getOptionalStartupAgent(flags)
-    // Read before any request, so a bad prompt, model or effort creates nothing.
-    const agentLaunch = startupAgent
-      ? readCliAgentLaunch(flags, startupAgent, { createsWorktree: true })
-      : undefined
+    if (startupAgent === 'default') {
+      rejectDefaultLaunchRetry(flags)
+    }
+    const agentLaunch =
+      startupAgent && startupAgent !== 'default'
+        ? readCliAgentLaunch(flags, startupAgent, { createsWorktree: true })
+        : undefined
     const setupDecision = getOptionalSetupDecision(flags)
     const noParent = flags.get('no-parent') === true
     const envParentWorkspace =
@@ -201,6 +193,10 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
       callerTerminalHandle,
       // Always request CLI provenance, including hand-typed creates without a terminal handle.
       cliProvenanceRequest: callerTerminalHandle ? { callerTerminalHandle } : {}
+    }
+    if (startupAgent === 'default') {
+      await createWorktreeWithDefaultAgent({ client, flags, create, repoTarget, json, rawArgs })
+      return
     }
     if (agentLaunch) {
       await createWorktreeWithAgent({ client, flags, create, launch: agentLaunch, json, rawArgs })

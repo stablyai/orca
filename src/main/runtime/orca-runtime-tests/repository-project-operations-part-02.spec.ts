@@ -28,18 +28,23 @@ import {
   store
 } from '../orca-runtime-test-fixtures.spec'
 import { normalizeRuntimePathSeparators } from '../../../shared/cross-platform-path'
+import type { Repo } from '../../../shared/repo-types'
 
 describe('OrcaRuntimeService', () => {
   it('adopts public clone repos into host-qualified project setup', async () => {
     const destination = await mkdtemp(join(tmpdir(), 'orca-runtime-project-clone-'))
     const clonePath = join(destination, 'orca')
     const spawnSpy = vi.spyOn(gitRunner, 'gitSpawnAfterWindowsEnvironmentReady')
-    const repos: Record<string, unknown>[] = []
+    const repos: Repo[] = []
+    const updateProject = vi.fn((id: string, updates: { defaultTuiAgent?: string }) => ({
+      ...projectHostSetupProjectionFromRepos(repos).projects.find((project) => project.id === id),
+      ...updates
+    }))
     getRepoUpstreamMock.mockResolvedValue({ owner: 'stablyai', repo: 'orca' })
     const runtimeStore = {
       ...store,
       getRepos: () => [...repos] as never,
-      addRepo: (repo: Record<string, unknown>) => {
+      addRepo: (repo: Repo) => {
         repos.push(repo)
       },
       getRepo: (id: string) => repos.find((repo) => repo.id === id) as never,
@@ -52,6 +57,7 @@ describe('OrcaRuntimeService', () => {
         return repos[index] as never
       },
       getProjects: () => projectHostSetupProjectionFromRepos(repos as never).projects as never,
+      updateProject,
       getProjectHostSetups: () =>
         projectHostSetupProjectionFromRepos(repos as never).setups as never
     }
@@ -79,7 +85,8 @@ describe('OrcaRuntimeService', () => {
         hostId: 'runtime:env-1',
         path: clonePath,
         kind: 'git',
-        setupMethod: 'cloned'
+        setupMethod: 'cloned',
+        defaultTuiAgent: 'codex'
       })
 
       expect(repos).toHaveLength(1)
@@ -94,6 +101,10 @@ describe('OrcaRuntimeService', () => {
         hostId: 'runtime:env-1',
         setupMethod: 'cloned'
       })
+      expect(updateProject).toHaveBeenCalledWith('github:stablyai/orca', {
+        defaultTuiAgent: 'codex'
+      })
+      expect(result.project.defaultTuiAgent).toBe('codex')
     } finally {
       spawnSpy.mockRestore()
       await rm(destination, { recursive: true, force: true })

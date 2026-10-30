@@ -111,7 +111,7 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
       'Pass --branch to name the Git branch without the configured prefix (a taken name gets a numeric suffix); --base-branch selects the starting ref instead.',
       '--no-parent only affects Orca lineage; omit --base-branch to use the repo default base, or pass the default base ref explicitly for independent top-level work.',
       'By default this creates the worktree and its first terminal without switching the active Orca view.',
-      'Pass --agent to start an agent with the worktree, as a chat or a terminal per your Chat UI setting, exactly as a new agent tab does; --prompt sends initial work to it. --model and --effort pick its model and reasoning effort, and --surface chat|terminal picks chat or terminal for this launch instead of your setting.',
+      'Pass --agent default to resolve the target project default on the execution host, or --agent <id> for an explicit one-launch override. A configured agent unavailable on that host or Blank Terminal fails before creation. Omitting --agent creates a worktree without an agent; --prompt requires --agent. Launches follow your Chat UI setting; --model and --effort pick a model and reasoning effort, and --surface chat|terminal picks the surface for this launch.',
       'After a lost agent launch reply, re-issue the same command from the same directory on the same host with --retry-launch <operationId> from the error. Never retry as a fresh launch; older hosts require inspecting the workspace first.',
       'With --agent --json, result.launch says what started: launch.outcome.kind (structured chat or terminal), launch.outcome.handle, and launch.receipt.detail for why. An Orca host older than this returns the terminal agent handle in result.agentTerminalHandle instead.',
       'Repo-defined setup hooks follow the repository setup policy; pass --setup run to force them.',
@@ -120,12 +120,12 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
       'Use --pr for GitHub pull requests; --gitlab-issue and --gitlab-mr write separate GitLab links. GitLab URLs must match the stored source project or remote; they cannot select a foreign project.'
     ],
     examples: [
-      'orca worktree create --name agent-task --agent codex --prompt "hi" --json',
+      'orca worktree create --name agent-task --agent default --prompt "hi" --json',
       'orca worktree create --name design --no-parent --agent codex --model gpt-6-astra --effort high --prompt "Write the design doc" --json',
       'orca worktree create --repo id:<repoId> --name related-task --json',
       'orca worktree create --project github:stablyai/orca --host runtime:03ef704c-b180-4b10-998d-e28fbd5de9a3 --name benchmark --json',
       'orca worktree create --repo id:<repoId> --name linear-task --linear-issue https://linear.app/stably/issue/STA-335/test-issue --json',
-      'orca worktree create --repo id:<repoId> --name agent-task --agent codex --prompt "hi" --json',
+      'orca worktree create --repo id:<repoId> --name agent-task --agent default --prompt "hi" --json',
       'orca worktree create --repo id:<repoId> --name folder-child --parent-worktree folder:<folderId> --json',
       'orca worktree create --repo id:<repoId> --name related-task --parent-worktree active --json',
       'orca worktree create --repo id:<repoId> --name independent-task --no-parent --json'

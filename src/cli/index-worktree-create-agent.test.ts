@@ -44,6 +44,7 @@ import { main } from './index'
 import { buildWorktree, okFixture, queueFixtures, worktreeListFixture } from './test-fixtures'
 import { useWorktreeAwarenessEnvironment } from './index-test-harness'
 import { agentLaunchFixture, agentLaunchHostFixture } from './agent-launch-test-fixtures'
+import { RuntimeRpcFailureError } from './runtime-client'
 
 describe('orca cli worktree awareness', () => {
   useWorktreeAwarenessEnvironment({
@@ -166,6 +167,205 @@ describe('orca cli worktree awareness', () => {
       handle: 'agent_1'
     })
     expect(printed.result.launch.warning).toBe('The inferred parent contexts conflict.')
+  })
+
+  it('resolves the target project default before creating a cross-project worktree', async () => {
+    queueFixtures(
+      callMock,
+      worktreeListFixture([buildWorktree('/tmp/a', 'main', 'abc', 'repo-a')]),
+      okFixture('req_project_setups', {
+        setups: [
+          {
+            id: 'setup-b',
+            projectId: 'project-b',
+            repoId: 'repo-b',
+            hostId: 'runtime:target-host',
+            path: '/tmp/b',
+            setupState: 'ready'
+          }
+        ]
+      }),
+      agentLaunchHostFixture(['project.default-agent.v1']),
+      okFixture('req_default', {
+        agent: 'claude',
+        source: 'project',
+        projectId: 'project-b',
+        projectName: 'B'
+      }),
+      agentLaunchFixture('repo-b::/tmp/b/child'),
+      okFixture('req_show', {
+        worktree: buildWorktree('/tmp/b/child', 'child', 'abc', 'repo-b')
+      })
+    )
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    await main(
+      [
+        'worktree',
+        'create',
+        '--project-host-setup',
+        'setup-b',
+        '--name',
+        'child',
+        '--agent',
+        'default',
+        '--json'
+      ],
+      '/tmp/a/src'
+    )
+    expect(callMock).toHaveBeenCalledWith('agent.resolveDefault', {
+      repo: 'id:repo-b',
+      repoHostId: 'runtime:target-host'
+    })
+    expect(callMock).toHaveBeenCalledWith(
+      'agent.launchReplay',
+      expect.objectContaining({
+        agent: 'claude',
+        target: expect.objectContaining({
+          kind: 'create-worktree',
+          create: expect.objectContaining({
+            repo: 'id:repo-b',
+            repoHostId: 'runtime:target-host',
+            cwdParentWorktree: 'id:repo-a::/tmp/a'
+          })
+        })
+      })
+    )
+    expect(JSON.parse(String(logSpy.mock.calls[0]?.[0])).result.launch.resolvedAgent).toEqual({
+      agent: 'claude',
+      source: 'project',
+      projectId: 'project-b',
+      projectName: 'B'
+    })
+  })
+
+  it('rejects a blank default before worktree creation', async () => {
+    queueFixtures(
+      callMock,
+      agentLaunchHostFixture(['project.default-agent.v1']),
+      okFixture('req_default', { agent: null, source: 'project', projectId: 'project-b' })
+    )
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const priorExitCode = process.exitCode
+    await main(
+      [
+        'worktree',
+        'create',
+        '--repo',
+        'id:repo-b',
+        '--name',
+        'child',
+        '--agent',
+        'default',
+        '--no-parent',
+        '--json'
+      ],
+      '/tmp/a'
+    )
+    expect(process.exitCode).toBe(1)
+    process.exitCode = priorExitCode
+    const message = JSON.parse(String(logSpy.mock.calls[0]?.[0])).error.message
+    expect(message).toContain('Blank Terminal')
+    expect(message).toContain('create the workspace without --agent')
+    expect(
+      callMock.mock.calls.some(
+        ([method]) => method === 'worktree.create' || method === 'agent.launchReplay'
+      )
+    ).toBe(false)
+  })
+
+  it('rejects default on an older host before worktree creation', async () => {
+    queueFixtures(callMock, agentLaunchHostFixture())
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const priorExitCode = process.exitCode
+    await main(
+      [
+        'worktree',
+        'create',
+        '--repo',
+        'id:repo-b',
+        '--name',
+        'child',
+        '--agent',
+        'default',
+        '--no-parent',
+        '--json'
+      ],
+      '/tmp/a'
+    )
+    expect(process.exitCode).toBe(1)
+    process.exitCode = priorExitCode
+    expect(JSON.parse(String(logSpy.mock.calls[0]?.[0])).error.code).toBe('incompatible_runtime')
+    expect(
+      callMock.mock.calls.some(
+        ([method]) => method === 'worktree.create' || method === 'agent.launchReplay'
+      )
+    ).toBe(false)
+  })
+
+  it('propagates target-host unavailable agent refusal before worktree creation', async () => {
+    queueFixtures(callMock, agentLaunchHostFixture(['project.default-agent.v1']))
+    callMock.mockRejectedValueOnce(
+      new RuntimeRpcFailureError({
+        id: 'req_default',
+        ok: false,
+        error: { code: 'invalid_argument', message: 'Codex is unavailable on target host B.' },
+        _meta: { runtimeId: 'runtime-1' }
+      })
+    )
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const priorExitCode = process.exitCode
+    await main(
+      [
+        'worktree',
+        'create',
+        '--repo',
+        'id:repo-b',
+        '--name',
+        'child',
+        '--agent',
+        'default',
+        '--no-parent',
+        '--json'
+      ],
+      '/tmp/a'
+    )
+    expect(process.exitCode).toBe(1)
+    process.exitCode = priorExitCode
+    expect(JSON.parse(String(logSpy.mock.calls[0]?.[0])).error.message).toContain(
+      'Codex is unavailable on target host B'
+    )
+    expect(
+      callMock.mock.calls.some(
+        ([method]) => method === 'worktree.create' || method === 'agent.launchReplay'
+      )
+    ).toBe(false)
+  })
+
+  it('refuses a default retry before any target lookup', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const priorExitCode = process.exitCode
+    await main(
+      [
+        'worktree',
+        'create',
+        '--repo',
+        'id:repo-b',
+        '--name',
+        'child',
+        '--agent',
+        'default',
+        '--retry-launch',
+        'previous-operation',
+        '--json'
+      ],
+      '/tmp/a'
+    )
+    expect(process.exitCode).toBe(1)
+    process.exitCode = priorExitCode
+    expect(JSON.parse(String(logSpy.mock.calls[0]?.[0])).error.message).toContain(
+      'previous recoveryCommand'
+    )
+    expect(callMock).not.toHaveBeenCalled()
   })
 
   it('rejects an empty retry identity before creating a worktree', async () => {

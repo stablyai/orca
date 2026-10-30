@@ -9,7 +9,8 @@ import {
   AGENT_LAUNCH_PROMPT_CARRY_RUNTIME_CAPABILITY,
   AGENT_LAUNCH_LOCAL_PRESENTATION_RUNTIME_CAPABILITY,
   AGENT_LAUNCH_REPLAY_REQUIRED_RUNTIME_CAPABILITY,
-  AGENT_LAUNCH_SURFACE_RUNTIME_CAPABILITY
+  AGENT_LAUNCH_SURFACE_RUNTIME_CAPABILITY,
+  PROJECT_DEFAULT_AGENT_RUNTIME_CAPABILITY
 } from '../shared/agent-launch-runtime-capability'
 import { createStructuredAgentSessionOperationId } from '../shared/structured-agent-session-mutation'
 import { parseAgentSessionOperationTimestamp } from '../shared/agent-session-host-authority'
@@ -38,6 +39,86 @@ export type CliAgentLaunch = {
   sessionOptions?: Record<string, string>
   operationId?: string
   surface?: AgentLaunchSurface
+}
+
+export type ResolvedCliDefaultAgent = {
+  agent: TuiAgent
+  source: 'project' | 'global' | 'automatic'
+  projectId?: string
+  projectName?: string
+}
+
+export async function resolveCliDefaultAgent(
+  client: RuntimeClient,
+  target: { repo: string; repoHostId?: string } | { worktree: string },
+  capabilities: readonly string[] | null
+): Promise<ResolvedCliDefaultAgent> {
+  if (!capabilities?.includes(PROJECT_DEFAULT_AGENT_RUNTIME_CAPABILITY)) {
+    throw new RuntimeClientError(
+      'incompatible_runtime',
+      'This Orca execution host cannot resolve project default agents. Update Orca on that host, or pass an explicit --agent.'
+    )
+  }
+  let result: RuntimeRpcSuccess<{
+    agent: TuiAgent | null
+    source: ResolvedCliDefaultAgent['source']
+    projectId?: string
+    projectName?: string
+  }>
+  try {
+    result = await client.call('agent.resolveDefault', target)
+  } catch (error) {
+    if (error instanceof RuntimeClientError && error.code === 'method_not_found') {
+      throw new RuntimeClientError(
+        'incompatible_runtime',
+        'This Orca execution host cannot resolve project default agents. Update Orca on that host, or pass an explicit --agent.'
+      )
+    }
+    throw error
+  }
+  const resolved = result.result
+  if (resolved.agent === null) {
+    const name = resolved.projectName ?? resolved.projectId ?? 'the target workspace'
+    const recovery =
+      'repo' in target ? 'create the workspace without --agent' : 'update the project default agent'
+    throw new RuntimeClientError(
+      'invalid_argument',
+      resolved.source === 'automatic'
+        ? `No enabled agent is available on the execution host for ${name}. Install an agent, choose an explicit --agent, or ${recovery}.`
+        : `The effective default for ${name} is Blank Terminal. Choose an explicit --agent or ${recovery}.`
+    )
+  }
+  return { ...resolved, agent: resolved.agent }
+}
+
+export function frozenDefaultRecoveryArgs(
+  rawArgs: readonly string[] | undefined,
+  agent: TuiAgent
+): readonly string[] | undefined {
+  if (!rawArgs) {
+    return undefined
+  }
+  const args = [...rawArgs]
+  for (let index = 0; index < args.length; index++) {
+    if (args[index] === '--agent' && args[index + 1] === 'default') {
+      args[index + 1] = agent
+      break
+    }
+    if (args[index] === '--agent=default') {
+      args[index] = `--agent=${agent}`
+      break
+    }
+  }
+  return args
+}
+
+export function rejectDefaultLaunchRetry(flags: Flags): void {
+  if (flags.has('retry-launch')) {
+    throw new RuntimeClientError(
+      'invalid_argument',
+      'Retry a default launch with the resolved agent from the previous recoveryCommand. --agent default could select a different agent after project settings change.'
+    )
+  }
 }
 
 function readSurfaceFlag(flags: Flags): AgentLaunchSurface | undefined {
@@ -156,13 +237,29 @@ export async function callAgentLaunch(
   return { ...result, result: { ...result.result, ...(operationId ? { operationId } : {}) } }
 }
 
-export function formatAgentLaunch(result: AgentLaunchResult & { operationId?: string }): string {
+export function formatAgentLaunch(
+  result: AgentLaunchResult & {
+    operationId?: string
+    resolvedAgent?: ResolvedCliDefaultAgent
+  }
+): string {
   const { outcome, receipt } = result
   return [
     `agent: ${outcome.kind === 'structured' ? 'chat session' : 'terminal'}`,
     `handle: ${outcome.handle}`,
     ...(outcome.kind === 'structured' ? [`sessionId: ${outcome.sessionId}`] : []),
     `worktreeId: ${result.worktreeId}`,
+    ...(result.resolvedAgent
+      ? [
+          `resolvedAgent: ${result.resolvedAgent.agent}`,
+          `selectionSource: ${result.resolvedAgent.source}`,
+          ...(result.resolvedAgent.projectName || result.resolvedAgent.projectId
+            ? [
+                `targetProject: ${result.resolvedAgent.projectName ?? result.resolvedAgent.projectId}`
+              ]
+            : [])
+        ]
+      : []),
     ...(result.operationId ? [`operationId: ${result.operationId}`] : []),
     `why: ${receipt.detail}`,
     ...(result.prompt ? [`prompt: ${result.prompt.outcome}`] : []),

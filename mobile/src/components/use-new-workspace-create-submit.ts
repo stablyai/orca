@@ -19,6 +19,7 @@ import type { WorkspaceSshGate } from '../tasks/workspace-ssh-gate'
 import type { useMobileComposerSource } from '../tasks/use-mobile-composer-source'
 import type { WorktreeCreateIdempotencySupport } from '../tasks/worktree-create-idempotency-policy'
 import {
+  newWorktreeAgentOptionFor,
   pickPreferredNewWorktreeAgent,
   type NewWorktreeAgentOption,
   type NewWorktreeRuntimeSettings
@@ -27,6 +28,7 @@ import type { MobileWorkspaceRepo, SetupRunPolicy } from './new-worktree-modal-t
 import type { SetupTrustPrompt } from './SetupHookTrustDrawer'
 import type { NewWorktreeDrawerView } from './use-new-worktree-drawer-navigation'
 import { getSuggestedCreatureName } from './worktree-name-suggestion'
+import { resolveMobileNewWorkspaceDefaultAgent } from './new-workspace-project-default-agent'
 
 type CreateOptions = {
   setupOverride?: Exclude<WorkspaceCreateSetupDecision, 'inherit'>
@@ -40,6 +42,7 @@ export function useNewWorkspaceCreateSubmit(args: {
   repos: readonly MobileWorkspaceRepo[]
   selectedRepo: MobileWorkspaceRepo | null
   selectedAgent: NewWorktreeAgentOption
+  agentOverridden: boolean
   setSelectedAgent: (agent: NewWorktreeAgentOption) => void
   setAgentOverridden: (overridden: boolean) => void
   runtimeSettings: NewWorktreeRuntimeSettings | null
@@ -90,6 +93,11 @@ export function useNewWorkspaceCreateSubmit(args: {
         args.setError(`Connect ${selectedRepo.displayName} before creating a workspace.`)
         return
       }
+      const selectedAgent = args.agentOverridden
+        ? args.selectedAgent
+        : newWorktreeAgentOptionFor(
+            (await resolveMobileNewWorkspaceDefaultAgent(client, selectedRepo)).agent
+          )
       let latestRuntimeSettings = args.runtimeSettings
       try {
         const settingsReply = await settingsRead.request(client)
@@ -103,8 +111,9 @@ export function useNewWorkspaceCreateSubmit(args: {
         // The runtime validates the same setting before spawning.
       }
       if (
-        args.selectedAgent.id !== '__blank__' &&
-        !isMobileTuiAgentEnabled(args.selectedAgent.id, latestRuntimeSettings?.disabledTuiAgents)
+        args.agentOverridden &&
+        selectedAgent.id !== '__blank__' &&
+        !isMobileTuiAgentEnabled(selectedAgent.id, latestRuntimeSettings?.disabledTuiAgents)
       ) {
         args.setSelectedAgent(
           pickPreferredNewWorktreeAgent(latestRuntimeSettings, args.detectedAgentIds)
@@ -158,8 +167,7 @@ export function useNewWorkspaceCreateSubmit(args: {
         return
       }
 
-      const createdWithAgentId =
-        args.selectedAgent.id !== '__blank__' ? args.selectedAgent.id : undefined
+      const createdWithAgentId = selectedAgent.id !== '__blank__' ? selectedAgent.id : undefined
       const trimmedNote = args.note.trim() || undefined
       const selection = args.composer.createSelection
       const result = selection
@@ -168,7 +176,7 @@ export function useNewWorkspaceCreateSubmit(args: {
             selection,
             targetRepoId: selectedRepo.id,
             setupDecision,
-            agent: { choice: normalizeWorkspaceAgent(args.selectedAgent.id) ?? 'blank' },
+            agent: { choice: normalizeWorkspaceAgent(selectedAgent.id) ?? 'blank' },
             workspaceName: trimmedName || undefined,
             note: trimmedNote,
             nameIsAutoManaged: args.composer.isNameAutoManaged,

@@ -12,14 +12,16 @@ sharing unsafe.
 
 ```text
 # Current workspace; setup is not rerun.
-ORCA orchestration worker-start --task <task_id> --worktree current --agent codex --json
+ORCA orchestration worker-start --task <task_id> --worktree current --agent default --json
 
 # Stacked child worktree.
-ORCA orchestration worker-start --task <task_id> --worktree new-child --agent codex --setup run --json
+ORCA orchestration worker-start --task <task_id> --worktree new-child --agent default --setup run --json
 
 # Independent top-level worktree.
-ORCA orchestration worker-start --task <task_id> --worktree new-top-level --agent codex --setup run --json
+ORCA orchestration worker-start --task <task_id> --worktree new-top-level --repo <target_repo_selector> --agent default --setup run --json
 ```
+
+`--agent default` uses the project that owns the selected workspace or target repository, not the coordinator's project. Select an exact `--repo` for cross-project new work; pass an explicit agent ID when the user names one.
 
 `--name` is optional: without it Orca picks a name as it does for an unnamed
 workspace, and the start output names the workspace it created.
@@ -52,7 +54,7 @@ The Run and Tasks remain authoritative on the current server. `--on` selects
 only the worker's execution server and appears only on `worker-start`:
 
 ```text
-ORCA orchestration worker-start --task <task_id> --on <environment> --worktree new-top-level --repo <exact_remote_repo_selector> --name <name> --agent codex --setup run --json
+ORCA orchestration worker-start --task <task_id> --on <environment> --worktree new-top-level --repo <exact_remote_repo_selector> --name <name> --agent default --setup run --json
 ```
 
 Remote `current` and `new-child` are invalid because they are ambiguous across

@@ -193,6 +193,15 @@ export function registerProjectHostSetupHandlers(mainWindow: BrowserWindow, stor
           args.setupMethod,
           args.projectProviderIdentity
         )
+        if (args.defaultTuiAgent !== undefined) {
+          const project = store.updateProject(aligned.project.id, {
+            defaultTuiAgent: args.defaultTuiAgent
+          })
+          if (!project) {
+            throw new Error(`Project not found: ${aligned.project.id}`)
+          }
+          aligned = { ...aligned, project }
+        }
       } catch (err) {
         // Failed linking must not leave a newly registered repo or authorization root.
         if (!result.alreadyExisted) {

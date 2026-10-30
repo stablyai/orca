@@ -30,6 +30,7 @@ import { RepositoryWindowsRuntimeSection } from './execution/RepositoryWindowsRu
 import { matchesRepositoryIdentitySearch } from './identity/repository-identity-search'
 import { RepositoryWorktreeDefaultsSection } from './execution/RepositoryWorktreeDefaultsSection'
 import { RepositoryJiraProjectSection } from './RepositoryJiraProjectSection'
+import { ProjectDefaultAgentSetting } from '../ProjectDefaultAgentSetting'
 import { getProjectRuntimeSessionSummary } from './execution/repository-runtime-session-summary'
 import { getRepoOwnerWorktreeVisibilityDefaults } from '../../../store/worktree-visibility-defaults-by-host'
 
@@ -169,6 +170,7 @@ export function RepositoryPane({
   const identityEntryTitles = new Set([
     translate('auto.components.settings.repository.search.7e1e456a95', 'Display Name'),
     translate('auto.components.settings.repository.search.b24f00294a', 'Project Icon'),
+    translate('settings.projectDefaultAgent.title', 'Default agent'),
     translate('components.RepositoryJiraProjectSection.title', 'Default Jira project'),
     translate('auto.components.settings.repository.search.githubAccount', 'GitHub Account'),
     translate(
@@ -182,6 +184,9 @@ export function RepositoryPane({
     translate('auto.components.settings.repository.search.c5266c2c9d', 'Remove Project')
   ])
   const identityEntries = allEntries.filter((entry) => identityEntryTitles.has(entry.title))
+  const defaultAgentEntry = allEntries.find(
+    (entry) => entry.title === translate('settings.projectDefaultAgent.title', 'Default agent')
+  )
   const sparsePresetEntries = allEntries.filter((entry) =>
     ['Sparse Checkout Presets'].includes(entry.title)
   )
@@ -296,6 +301,25 @@ export function RepositoryPane({
         >
           <RepositoryIconPicker repo={repo} updateRepo={updateSelectedRepo} />
         </SearchableSetting>
+
+        {project && updateProject ? (
+          <SearchableSetting
+            title={translate('settings.projectDefaultAgent.title', 'Default agent')}
+            description={translate(
+              'settings.projectDefaultAgent.description',
+              'Choose the agent used for new workspaces in this project.'
+            )}
+            keywords={defaultAgentEntry?.keywords}
+            forceVisible={forceFullPaneForRepoMatch}
+          >
+            <ProjectDefaultAgentSetting
+              project={project}
+              globalDefault={settings?.defaultTuiAgent}
+              executionHostId={selectedHostId}
+              updateProject={updateProject}
+            />
+          </SearchableSetting>
+        ) : null}
 
         <RepositoryJiraProjectSection
           key={`${selectedHostId}:${repo.id}`}

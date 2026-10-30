@@ -509,6 +509,7 @@ import {
   PreflightDetectRemoteWindowsTerminalCapabilities,
   PreflightProjectAgentDetection
 } from './preflight-params'
+import { AgentResolveDefault } from './project-default-agent-params'
 import {
   ProjectHostSetupClone,
   ProjectHostSetupCreate,
@@ -750,6 +751,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'accounts.zcodePlanSaveApiKey': UsageCredentialApiKeyParams,
   'agent.launch': AgentLaunch,
   'agent.launchReplay': AgentLaunchReplay,
+  'agent.resolveDefault': AgentResolveDefault,
   'agentHooks.prepareCodexForWslPane': PrepareCodexForWslPaneParams,
   'agentSession.acknowledgeAttention': AcknowledgeAttentionParams,
   'agentSession.agents': AgentsParams,

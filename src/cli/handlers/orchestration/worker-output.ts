@@ -8,6 +8,12 @@ export type LegacyWorkerReadResult = {
 }
 
 export type WorkerStartReceipt = {
+  agentSelection?: {
+    agent: string
+    source: 'project' | 'global' | 'automatic' | 'explicit'
+    projectId?: string
+    projectName?: string
+  }
   mode?: { detail: string }
   taskId: string
   dispatchId: string
@@ -22,6 +28,12 @@ export type WorkerStartReceipt = {
 
 export function formatWorkerStart(value: WorkerStartReceipt): string {
   const lines = [`Worker ${value.dispatchId} [${value.state}] for ${value.taskId}`]
+  if (value.agentSelection) {
+    const project = value.agentSelection.projectName ?? value.agentSelection.projectId
+    lines.push(
+      `Agent: ${value.agentSelection.agent} (${value.agentSelection.source}${project ? `, target project ${project}` : ''})`
+    )
+  }
   // Show the mode that actually ran so a fallback from the user's default is visible.
   if (value.mode) {
     lines.push(value.mode.detail)

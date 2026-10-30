@@ -53,6 +53,12 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS = [
         )
       }
       const createsWorktree = params.worktree === 'new-top-level'
+      if (params.agent === 'default') {
+        throw new OrchestrationError(
+          'invalid_argument',
+          'Federated attachment needs the concrete agent resolved on this worker host by worker-start. Update the coordinator and retry. No effects were applied.'
+        )
+      }
       const { agent, launch } = await prepareFederationWorkerLaunchOnHost({
         params,
         createsWorktree,

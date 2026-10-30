@@ -883,6 +883,24 @@
         "sameAsAgent": "Same as {{agent}}"
       }
     },
+    "projectDefaultAgent": {
+      "title": "Default agent",
+      "targetGlobalLoading": "Loading target host global default…",
+      "targetGlobalUnavailable": "Target host global setting unavailable",
+      "blankTerminal": "Blank Terminal",
+      "auto": "Automatic selection",
+      "saveFailed": "Project default agent could not be saved. Update the target host and try again.",
+      "saved": "Project default agent saved",
+      "inherit": "Inherit global",
+      "effectiveGlobal": "Current global default: {{value0}}",
+      "futureLaunches": "Applies to new workspaces and agent launches in this project.",
+      "description": "Choose the agent used for new workspaces in this project.",
+      "keywordAgent": "agent",
+      "keywordDefault": "default agent",
+      "keywordBlank": "blank terminal",
+      "keywordInherit": "inherit global",
+      "retry": "Retry save"
+    },
     "ssh": {
       "status": {
         "disconnected": "Disconnected",
@@ -2575,7 +2593,10 @@
       },
       "NewWorkspaceComposerModal": {
         "createWorktree": "Create worktree",
-        "createWorkspace": "Create workspace"
+        "createWorkspace": "Create workspace",
+        "targetDefaultChanged": "The target project default changed. Check its agent and retry.",
+        "folderDefaultAmbiguous": "This folder workspace has no single target project. Choose an explicit agent.",
+        "resolvingTargetDefault": "Resolving target project default…"
       },
       "PullRequestConfirmation": {
         "closeTitle": "Close PR #{{number}}?",

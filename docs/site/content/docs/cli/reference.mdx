@@ -97,7 +97,7 @@ orca worktree ps --json
 orca worktree current --json
 orca worktree show --worktree active --json
 orca worktree create --repo id:<repoId> --name fix-login --json
-orca worktree create --name child-task --agent codex --prompt "Investigate the flaky login test" --json
+orca worktree create --name child-task --agent default --prompt "Investigate the flaky login test" --json
 orca worktree set --worktree active --comment "reproduced failure; testing token refresh fix" --json
 orca worktree set --worktree active --workspace-status in-review --unread --json
 orca worktree rm --worktree id:<worktreeId> --force --json
@@ -113,11 +113,11 @@ Agent startup flags:
 
 ```bash
 orca worktree create --name review-api --agent claude --setup run --json
-orca worktree create --name quick-check --agent codex --prompt "Summarize the diff" --setup skip --json
+orca worktree create --name quick-check --agent default --prompt "Summarize the diff" --setup skip --json
 orca worktree create --name hidden-setup --setup inherit --json
 ```
 
-`--agent` launches the selected agent in the first terminal. `--prompt` sends initial work to that agent. `--setup run|skip|inherit` controls repo setup hooks; `inherit` follows the repo policy.
+`--agent default` resolves the target project's default on its execution host; use an explicit agent ID to override it for one launch. An unavailable configured agent, Blank Terminal, or an older host without default resolution fails before workspace creation. Omitting `--agent` creates a workspace without starting an agent, and `--prompt` requires an agent choice. `--setup run|skip|inherit` controls repo setup hooks; `inherit` follows the repo policy.
 
 Link issues and reviews using the existing workspace metadata:
 

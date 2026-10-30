@@ -6,7 +6,40 @@ import {
 } from './quick-workspace-agent-selection'
 
 describe('resolveQuickWorkspaceAgentSelection', () => {
-  it('replaces an unavailable override with the preferred quick agent', () => {
+  it('uses the preferred quick agent until the user picks an override', () => {
+    expect(
+      resolveQuickWorkspaceAgentSelection({
+        quickAgentOverride: undefined,
+        preferredQuickAgent: 'claude',
+        detectedAgentIds: ['claude', 'codex'],
+        disabledTuiAgents: []
+      })
+    ).toEqual({ quickAgent: 'claude', quickAgentOverride: undefined })
+  })
+
+  it('keeps explicit blank overrides stable', () => {
+    expect(
+      resolveQuickWorkspaceAgentSelection({
+        quickAgentOverride: null,
+        preferredQuickAgent: 'claude',
+        detectedAgentIds: ['claude'],
+        disabledTuiAgents: []
+      })
+    ).toEqual({ quickAgent: null, quickAgentOverride: null })
+  })
+
+  it('keeps an available user override', () => {
+    expect(
+      resolveQuickWorkspaceAgentSelection({
+        quickAgentOverride: 'codex',
+        preferredQuickAgent: 'claude',
+        detectedAgentIds: new Set(['claude', 'codex']),
+        disabledTuiAgents: []
+      })
+    ).toEqual({ quickAgent: 'codex', quickAgentOverride: 'codex' })
+  })
+
+  it('clears an unavailable override so the preferred default still receives host preflight', () => {
     expect(
       resolveQuickWorkspaceAgentSelection({
         quickAgentOverride: 'codex',
@@ -14,7 +47,7 @@ describe('resolveQuickWorkspaceAgentSelection', () => {
         detectedAgentIds: ['claude'],
         disabledTuiAgents: []
       })
-    ).toEqual({ quickAgent: 'claude', quickAgentOverride: 'claude' })
+    ).toEqual({ quickAgent: 'claude', quickAgentOverride: undefined })
   })
 })
 

@@ -4,6 +4,7 @@ import { getOptionalStringFlag, getPresentStringFlag } from '../../flags'
 import { RuntimeClientError } from '../../runtime-client'
 import type { RuntimeStatus } from '../../../shared/runtime-types'
 import { ORCHESTRATION_WORKER_LAUNCH_PREFERENCES_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
+import { PROJECT_DEFAULT_AGENT_RUNTIME_CAPABILITY } from '../../../shared/agent-launch-runtime-capability'
 import { callOrchestrationMutation } from './mutation-request'
 import { getOptionalPositiveIntegerValueFlag } from './numeric-flags'
 import { isDevCliInvocation } from './runtime-compatibility'
@@ -16,9 +17,20 @@ export const ORCHESTRATION_WORKER_LAUNCH_HANDLER: Record<string, CommandHandler>
     const terminal = getPresentStringFlag(flags, 'terminal')
     const model = getOptionalStringFlag(flags, 'model')
     const effort = getOptionalStringFlag(flags, 'effort')
-    if (model || effort) {
+    const requestedAgent = getOptionalStringFlag(flags, 'agent')
+    if (model || effort || requestedAgent === 'default') {
       const status = await client.call<RuntimeStatus>('status.get')
       if (
+        requestedAgent === 'default' &&
+        !status.result.capabilities?.includes(PROJECT_DEFAULT_AGENT_RUNTIME_CAPABILITY)
+      ) {
+        throw new RuntimeClientError(
+          'incompatible_runtime',
+          'The connected Orca runtime does not support project default agents. Update or restart Orca and try again.'
+        )
+      }
+      if (
+        (model || effort) &&
         !status.result.capabilities?.includes(
           ORCHESTRATION_WORKER_LAUNCH_PREFERENCES_RUNTIME_CAPABILITY
         )
@@ -60,7 +72,7 @@ export const ORCHESTRATION_WORKER_LAUNCH_HANDLER: Record<string, CommandHandler>
       displayName: getOptionalStringFlag(flags, 'display-name'),
       comment: getOptionalStringFlag(flags, 'comment'),
       setup: getOptionalStringFlag(flags, 'setup'),
-      agent: getOptionalStringFlag(flags, 'agent'),
+      agent: requestedAgent,
       model,
       effort,
       terminal,
