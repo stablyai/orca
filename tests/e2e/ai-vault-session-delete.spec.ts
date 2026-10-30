@@ -5,11 +5,7 @@ import { expect, test } from './helpers/orca-app'
 import type { AiVaultSession } from '../../src/shared/ai-vault-types'
 import type { AiVaultDeleteSessionResult } from '../../src/shared/ai-vault-session-deletion'
 
-// Exercises the real on-disk delete against an isolated, disposable HOME (the
-// E2E harness redirects os.homedir() there). The unit tests mock lstat/realpath/
-// trashItem; this proves the whole IPC path actually removes files — and, for a
-// directory-shaped agent, that the companion tree goes while the rewind buffer
-// stays. Runs on Linux CI.
+// Exercise real IPC deletion in isolated HOME, including companion-tree removal while preserving rewind data.
 
 function jsonl(records: unknown[]): string {
   return `${records.map((record) => JSON.stringify(record)).join('\n')}\n`

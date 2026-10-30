@@ -1,6 +1,3 @@
-// One live ACP agent connection and what Orca keeps beside it, and how its traffic and its
-// process's exit reach the journal and the host.
-
 import { agentSessionFailureFact, providerDiagnostic } from '../../shared/agent-session-failure'
 import { agentSessionFailureWords } from '../../shared/agent-session-failure-words'
 import type {
@@ -11,6 +8,7 @@ import {
   UNVERIFIABLE_TURN_VERDICT,
   type StructuredAgentSessionTurnVerdict
 } from '../native-chat/agent-session-wire/structured-agent-session-stale-turn-verdict'
+import { providerExitStatusText } from '../provider-process/provider-process-exit-status'
 import type { AcpLaunchSpec } from './acp-launch-specs'
 import type { AcpChildStops } from './acp-dialects/acp-dialect'
 import { acpAgentName } from './acp-structured-agent-definitions'
@@ -30,17 +28,15 @@ export type AcpStructuredSession = {
   acquisitionGeneration: string
   spec: AcpLaunchSpec
   childStops?: AcpChildStops
-  /** The agent's process and its protocol, one owner. */
   connection: AcpStructuredConnection
   lane: AcpStructuredLane
   prompts: AcpStructuredPrompts
   options: AcpStructuredOptions
   turns: AcpStructuredTurns
-  /** Orca asked this child to stop; its exit is then a requested close. */
   closeRequested: boolean
-  /** Why nothing this child says reaches the journal any more; null while it does. */
+  /** Null while provider events can still reach the journal. */
   journalClosed: string | null
-  /** Its exit is proven and the host was told. */
+  /** Exit was proven and reported to the host. */
   ended: boolean
   exitObservedAt: number | null
   unbindReadingControl?: () => void
@@ -48,8 +44,7 @@ export type AcpStructuredSession = {
   open: (signal: AbortSignal) => Promise<StructuredAgentSessionProviderOpenResult>
 }
 
-/** Every agent frame goes through here once the lane exists: options and commands first, so a
- *  read right after the frame sees them, then the journal. `reattaching`: see `asReattachHistory`. */
+/** Update options before journaling so synchronous reads see the latest frame. */
 export function routeAcpSessionEvent(
   session: Pick<AcpStructuredSession, 'lane' | 'options'>,
   event: AcpSessionEvent,
@@ -76,8 +71,7 @@ export function routeAcpSessionEvent(
   )
 }
 
-/** While a chat reattaches, everything the agent sends is replayed history, whatever the agent
- *  marked: marked as replay, the translator drops it and keeps only its usage. */
+/** Treat all reattach traffic as history, even without provider replay marks. */
 export function asReattachHistory(params: unknown): unknown {
   if (typeof params !== 'object' || params === null || Array.isArray(params)) {
     return params
@@ -87,12 +81,7 @@ export function asReattachHistory(params: unknown): unknown {
   return { ...params, _meta: { ...marked, isReplay: true } }
 }
 
-/**
- * Nothing more this child says reaches the journal, once: on its exit, or when its connection broke
- * while it may still run. Open requests die, held sends never left Orca, the running send's fate is
- * unknown, and the running turn ends as `verdict` says: `unverifiable` while the child may still
- * run (the host's settlement of its proven exit revises it), interrupted at a proven exit.
- */
+/** Close journaling once; unproven exits remain unverifiable until the host settles them. */
 export function closeAcpSessionJournal(
   session: AcpStructuredSession,
   reason: string,
@@ -113,8 +102,6 @@ export function closeAcpSessionJournal(
   session.unbindReadingControl?.()
 }
 
-/** The child's proven exit, once: the journal closes if it has not, and the host hears `ended` so
- *  it releases the session. */
 export function endAcpStructuredSession(
   session: AcpStructuredSession,
   observedAt: number,
@@ -127,15 +114,16 @@ export function endAcpStructuredSession(
   session.events?.observeExit?.(undefined, observedAt)
   session.exitObservedAt = observedAt
   const stderr = session.connection.stderrTail()
-  // Read at the proven exit: a crash usually ends the agent's stdout before its exit is observed,
-  // so the connection's close comes first, but the agent's own last words are what explain it.
+  const how = providerExitStatusText(session.connection.exitStatus)
+  // Process exit can follow stream loss; keep that earlier reason when stderr is absent.
+  const lead =
+    session.journalClosed !== null && !stderr
+      ? session.journalClosed
+      : `${session.spec.agent} ACP agent exited`
   const reason = session.closeRequested
     ? `${session.spec.agent} ACP agent closed by Orca`
-    : session.journalClosed !== null && !stderr
-      ? session.journalClosed
-      : `${session.spec.agent} ACP agent exited${stderr ? `: ${stderr}` : ''}`
-  // A death of its own ended the running turn at the exit, as the host's exit settlement reads it
-  // (`exitedRootTurnScope`). A close Orca asked for leaves it `unverifiable`; that settlement revises it.
+    : `${lead}${how ? ` ${how}` : ''}${stderr ? `: ${stderr}` : ''}`
+  // Spontaneous exit interrupts now; requested close leaves the host to revise an unverifiable turn.
   closeAcpSessionJournal(
     session,
     reason,
@@ -145,9 +133,13 @@ export function endAcpStructuredSession(
       : { state: 'interrupted', completedAt: observedAt },
     observedAt
   )
-  const detail = stderr ? providerDiagnostic(stderr, 'person') : undefined
+  // The tail spans the whole run, so a startup warning can still be in it: a log, not the cause.
+  const detail = providerDiagnostic([how, stderr].filter(Boolean).join('\n'), 'log')
   onEvent?.({
     type: 'ended',
+    ...(session.connection.lastCloseResult?.killDelivered && !session.connection.exited
+      ? { deathEvidenceKind: 'kill-delivered' as const }
+      : {}),
     sessionId: session.sessionId,
     reason,
     failure: session.closeRequested

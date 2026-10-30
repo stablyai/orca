@@ -77,8 +77,7 @@ describe('remote install namespace', () => {
   })
 
   it('keeps the relay listing pattern byte-identical to the one it shipped with', () => {
-    // The literal that was hardcoded in `listRelayBaseDirsCommand` before it was
-    // parameterized. A drift here changes what an existing host's GC can see.
+    // Preserve the shipped listing scope: widening it changes which existing directories GC can see.
     expect(remoteInstallListingRegexSource(RELAY_INSTALL_MODEL)).toBe(
       String.raw`^relay-(v?[0-9]+\.[0-9]+\.[0-9]+(\+[0-9a-f]+)?)(\.gc-tombstone\.[0-9]+\.[0-9]+)?$`
     )

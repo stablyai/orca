@@ -1,5 +1,5 @@
-import { EventEmitter } from 'node:events'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { createFakeSpawnedChild } from '../../shared/__fixtures__/fake-spawned-child'
 
 const { execFileMock, execFileSyncMock, spawnMock } = vi.hoisted(() => ({
   execFileMock: vi.fn(),
@@ -57,20 +57,8 @@ function fencedProbeStdout(command: unknown, payload: string): string {
 
 const LOGIN_ENVIRONMENT_FIELDS = `${LOGIN_ENVIRONMENT.path}\0${LOGIN_ENVIRONMENT.gitPath}\0${LOGIN_ENVIRONMENT.home}`
 
-type MockChild = EventEmitter & {
-  stdout: EventEmitter
-  stderr: EventEmitter
-  pid: number
-  kill: ReturnType<typeof vi.fn>
-}
-
-function createMockChild(): MockChild {
-  const child = new EventEmitter() as MockChild
-  child.stdout = new EventEmitter()
-  child.stderr = new EventEmitter()
-  child.pid = 1234
-  child.kill = vi.fn()
-  return child
+function createMockChild() {
+  return createFakeSpawnedChild(1234)
 }
 
 async function withPlatform<T>(platform: NodeJS.Platform, run: () => Promise<T>): Promise<T> {
@@ -320,7 +308,13 @@ describe('WSL direct Git reads', () => {
           return command
         }
         const terminator = createMockChild()
-        queueMicrotask(() => terminator.emit('close', 0, null))
+        queueMicrotask(() => {
+          // The kill first confirms the distro still runs, so it cannot boot a stopped one (E9).
+          if (args?.includes('--running')) {
+            terminator.stdout.emit('data', Buffer.from(`${DISTRO}\n`))
+          }
+          terminator.emit('close', 0, null)
+        })
         return terminator
       })
       const controller = new AbortController()
@@ -338,8 +332,10 @@ describe('WSL direct Git reads', () => {
 
       await expect(pending).rejects.toMatchObject({ name: 'AbortError' })
       expect(command.kill).not.toHaveBeenCalled()
-      expect(spawnMock.mock.calls[1]?.[1]?.join(' ')).toContain('kill -TERM')
-      expect(spawnMock.mock.calls[1]?.[1]).toContain('4321')
+      const kill = spawnMock.mock.calls.find(([, args]) =>
+        String(args?.join(' ')).includes('kill -TERM')
+      )
+      expect(kill?.[1]).toContain('4321')
     })
   })
 
@@ -369,8 +365,6 @@ describe('WSL direct Git reads', () => {
     })
   })
 
-  // A UNC worktree names its distro in the path, so a read there needs no resolved WSL project
-  // runtime to skip the shell -- requiring one is what kept every diff read on the login shell.
   it('takes the direct read route for an override-less WSL UNC cwd', async () => {
     await withPlatform('win32', async () => {
       seedWslGitReadEnvironmentForTests(DISTRO, LOGIN_ENVIRONMENT)
@@ -388,8 +382,6 @@ describe('WSL direct Git reads', () => {
     })
   })
 
-  // The classifier already recognizes `show`, so the blob reads behind every diff take the
-  // direct route from the cwd alone -- no caller-supplied distro, no explicit opt-in.
   it('takes the direct read route for an unclassified-caller blob read on a UNC cwd', async () => {
     await withPlatform('win32', async () => {
       seedWslGitReadEnvironmentForTests(DISTRO, LOGIN_ENVIRONMENT)
@@ -403,8 +395,6 @@ describe('WSL direct Git reads', () => {
     })
   })
 
-  // Kicking the probe off and resolving without it left the reads issued before it
-  // answered on the login shell -- the slow route, chosen by nothing but timing.
   it('waits for a cold probe so the first read already skips the shell', async () => {
     await withPlatform('win32', async () => {
       execFileMock.mockImplementation((_command, args, _options, callback) => {
@@ -435,7 +425,6 @@ describe('WSL direct Git reads', () => {
       try {
         execFileMock.mockImplementation((_command, args, _options, callback) => {
           const child = createMockChild()
-          // The probe never answers; only the git command itself does.
           if (!String(args).includes('_orca_git_path')) {
             queueMicrotask(() => callback?.(null, 'ok', ''))
           }
@@ -448,8 +437,6 @@ describe('WSL direct Git reads', () => {
         await vi.advanceTimersByTimeAsync(WSL_GIT_READ_ENVIRONMENT_WAIT_MS)
         await pending
 
-        // Exactly the routing this read had before the wait existed: an unanswered
-        // probe must cost the bound and nothing else.
         const resolved = execFileMock.mock.calls.at(-1)?.[1] ?? []
         expect(resolved.slice(3, 5)).toEqual(['bash', '-c'])
         expect(resolved).not.toContain('/usr/bin/env')
@@ -459,8 +446,6 @@ describe('WSL direct Git reads', () => {
     })
   })
 
-  // Once the route is disabled the answer is already known, so paying for a timer and two
-  // extra microtask hops on every later read is pure overhead on the host this PR targets.
   it('stops deferring reads once the direct route is disabled for the distro', async () => {
     await withPlatform('win32', async () => {
       seedWslGitReadEnvironmentForTests(DISTRO, LOGIN_ENVIRONMENT)
@@ -493,7 +478,6 @@ describe('WSL direct Git reads', () => {
     await withPlatform('win32', async () => {
       vi.useFakeTimers()
       try {
-        // The probe never answers, so only the abort can end the wait.
         execFileMock.mockImplementation(() => createMockChild())
         const controller = new AbortController()
 

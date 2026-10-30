@@ -63,7 +63,6 @@ describe('installServeNativeQuitGuard', () => {
 
     quitProcess()
     expect(electron.quit).toHaveBeenCalledOnce()
-    // will-quit's second pass calls app.quit() again.
     expect(emitBeforeQuit().preventDefault).not.toHaveBeenCalled()
     expect(emitBeforeQuit().preventDefault).not.toHaveBeenCalled()
     expect(closeDesktopWindows).not.toHaveBeenCalled()

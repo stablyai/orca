@@ -3,7 +3,9 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { RpcClient } from '../transport/rpc-client'
 import { FakeSession } from '../transport/mobile-endpoint-supervisor-test-fakes'
+import { createStableLogicalRpcClient } from '../transport/stable-logical-rpc-client'
 import { useNewWorktreeRuntimeCapabilities } from './worktree-create-capability'
+import { createWorkspaceFromComposerSource } from './source-workspace-create'
 
 function connection() {
   let generation = 1
@@ -113,6 +115,36 @@ describe('capability probe recovery', () => {
     expect(current?.tasksSupported).toBe(true)
     expect(host.sendRequest).toHaveBeenCalledTimes(2)
   })
+  it('keeps a pending create probe when the same host switches from LAN to relay', async () => {
+    const lan = new FakeSession('connected')
+    lan.getLastConnectedAt = () => 1
+    let dropLan: ((reason: Error) => void) | undefined
+    lan.sendRequest.mockImplementation(
+      () =>
+        new Promise((_resolve, reject) => {
+          dropLan = reject
+        })
+    )
+    const relay = connection()
+    relay.sendRequest.mockResolvedValue({
+      id: 'relay',
+      ok: true,
+      result: { capabilities: ['agent.launch.v2', 'worktree.create-idempotency.v1'] },
+      _meta: { runtimeId: 'test' }
+    })
+    const logical = createStableLogicalRpcClient(lan, 'lan')
+    await render(logical)
+    const launch = current?.getAgentLaunchSupport()
+    const branchIntent = current?.getBranchIntentSupport('open-existing-v2')
+    const idempotency = current?.getWorktreeCreateCutoverSupport()
+    await act(async () => {
+      await logical.migrateTo(relay.client, 'relay')
+      dropLan?.(new Error('socket closed'))
+    })
+    await expect(launch).resolves.toEqual({ replay: false })
+    await expect(branchIntent).resolves.toBe(false)
+    await expect(idempotency).resolves.toBeTruthy()
+  })
   it.each(['before', 'after'])(
     'ignores a prior connection reply resolved %s the current reply',
     async (order) => {
@@ -136,7 +168,13 @@ describe('capability probe recovery', () => {
       const oldReply: Awaited<ReturnType<typeof host.sendRequest>> = {
         id: 'old',
         ok: true,
-        result: { capabilities: ['mobile.tasks.v1', 'worktree.create-idempotency.v1'] },
+        result: {
+          capabilities: [
+            'mobile.tasks.v1',
+            'worktree.create-idempotency.v1',
+            'worktree.open-existing-branch.v2'
+          ]
+        },
         _meta: { runtimeId: 'old' }
       }
       const newReply: Awaited<ReturnType<typeof host.sendRequest>> = {
@@ -157,11 +195,12 @@ describe('capability probe recovery', () => {
       }
       expect(current?.tasksSupported).toBe(false)
       await expect(current?.getWorktreeCreateCutoverSupport()).resolves.toBe(false)
+      await expect(current?.getBranchIntentSupport('open-existing-v2')).resolves.toBe(false)
       expect(host.sendRequest).toHaveBeenCalledTimes(2)
     }
   )
 
-  it('shares one pending status barrier between create callers and the sheet', async () => {
+  it('shares one pending status barrier with branch creation without a second status request', async () => {
     const host = connection()
     let resolve: ((value: Awaited<ReturnType<typeof host.sendRequest>>) => void) | undefined
     host.sendRequest.mockImplementationOnce(
@@ -174,19 +213,75 @@ describe('capability probe recovery', () => {
     const first = current?.getWorktreeCreateCutoverSupport()
     const second = current?.getWorktreeCreateCutoverSupport()
     const launch = current?.getAgentLaunchSupport()
+    const branchIntent = current?.getBranchIntentSupport('open-existing-v2')
+    host.sendRequest.mockResolvedValue({
+      id: 'created',
+      ok: true,
+      result: { worktree: { id: 'new-branch-workspace' } },
+      _meta: { runtimeId: 'test' }
+    })
+    const creation = createWorkspaceFromComposerSource({
+      client: host.client,
+      selection: {
+        kind: 'branch',
+        refName: 'refs/remotes/origin/topic',
+        baseBranch: 'origin/topic',
+        localBranchName: 'topic',
+        reuse: true
+      },
+      targetRepoId: 'repo',
+      workspaceName: undefined,
+      note: undefined,
+      agent: { choice: 'blank' },
+      setupDecision: 'skip',
+      worktreeCreateIdempotency: current!.getWorktreeCreateCutoverSupport(),
+      agentLaunchSupported: current!.getAgentLaunchSupport(),
+      branchIntentSupported: current!.getBranchIntentSupport('open-existing-v2')
+    })
     expect(host.sendRequest).toHaveBeenCalledTimes(1)
     await act(async () =>
       resolve?.({
         id: 'shared',
         ok: true,
-        result: { capabilities: ['mobile.tasks.v1', 'worktree.create-idempotency.v1'] },
+        result: {
+          capabilities: [
+            'mobile.tasks.v1',
+            'worktree.create-idempotency.v1',
+            'worktree.open-existing-branch.v2-request.v1'
+          ]
+        },
         _meta: { runtimeId: 'test' }
       })
     )
     await expect(first).resolves.toBeTruthy()
     await expect(second).resolves.toBeTruthy()
     await expect(launch).resolves.toBe(false)
+    await expect(branchIntent).resolves.toBe(true)
+    await expect(creation).resolves.toMatchObject({ worktreeId: 'new-branch-workspace' })
+    expect(host.sendRequest.mock.calls.map(([method]) => method)).toEqual([
+      'status.get',
+      'worktree.create'
+    ])
+    expect(host.sendRequest).toHaveBeenLastCalledWith(
+      'worktree.create',
+      expect.objectContaining({ branchIntent: 'open-existing-v2' }),
+      expect.anything()
+    )
     expect(current?.tasksSupported).toBe(true)
+  })
+
+  it('retains create-new support on an older V2 host without granting V2 reuse', async () => {
+    const host = connection()
+    host.sendRequest.mockResolvedValue({
+      id: 'status',
+      ok: true,
+      result: { capabilities: ['worktree.open-existing-branch.v2'] },
+      _meta: { runtimeId: 'test' }
+    })
+    await render(host.client)
+    await expect(current?.getBranchIntentSupport('create-new')).resolves.toBe(true)
+    await expect(current?.getBranchIntentSupport('open-existing-v2')).resolves.toBe(false)
+    expect(host.sendRequest).toHaveBeenCalledTimes(1)
   })
 
   it('cancels backoff while disabled and cannot rearm after unmount', async () => {

@@ -1,5 +1,3 @@
-// Send identity outlives the ledger policy; /clear still refuses a first run at its arrival.
-
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import { AGENT_SESSION_MAX_NEW_OPERATION_AGE_MS } from '../../../shared/agent-session-host-authority'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
@@ -48,7 +46,6 @@ function sendParams(text: string, clientOperationId?: string) {
   }
 }
 
-/** An id minted more than a day ago, which no ledger row holds any more. */
 function expiredParams(text: string) {
   return sendParams(
     text,
@@ -86,7 +83,7 @@ describe('send without ledger policy', () => {
         refusal: { details: { reason: 'journalWrittenByNewerOrca' } }
       })
     } finally {
-      // Teardown stops the live child, which writes.
+      // Restore writes for teardown’s child-stop settlement.
       Object.defineProperty(database, 'readOnly', { value: false })
     }
   })
@@ -133,7 +130,7 @@ describe('a /clear in flight', () => {
     const journal = hostJournal()
     const append = journal.appendSubmission.bind(journal)
     const held = Promise.withResolvers<void>()
-    // An earlier send holds the session's queue, so attempt 1 waits there when the clear arrives.
+    // Hold the earlier send so clear arrives before the queued retry runs.
     vi.spyOn(journal, 'appendSubmission').mockImplementationOnce(async (...args) => {
       await held.promise
       return append(...args)

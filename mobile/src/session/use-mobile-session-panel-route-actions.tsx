@@ -3,6 +3,7 @@ import type { LayoutChangeEvent } from 'react-native'
 import { Bot } from 'lucide-react-native'
 import { getCachedWorktrees, setCachedWorktrees } from '../cache/worktree-cache'
 import { MobileAgentIcon } from '../components/MobileAgentIcon'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import {
   useWorkspaceExecutionHost,
   workspaceRouteHref,
@@ -41,6 +42,7 @@ import {
 import type { MobileSessionPresentationModel } from './use-mobile-session-presentation'
 
 export function useMobileSessionPanelRouteActions(scope: MobileSessionPresentationModel) {
+  const t = useMobileTranslation()
   const executionHost = useWorkspaceExecutionHost()
   const {
     hostId,
@@ -79,30 +81,51 @@ export function useMobileSessionPanelRouteActions(scope: MobileSessionPresentati
     handleCreateTerminal
   } = scope
   const noop = () => {}
+  const otherRuntimeAgentRow = {
+    id: 'otherServerAgents',
+    label: t('session.usePanelRouteActions.otherServerAgents', 'Agents on Another Server'),
+    hint: t('session.usePanelRouteActions.pairServerHint', 'Pair that server directly'),
+    icon: Bot,
+    disabled: true,
+    onPress: noop
+  }
   const buildAgentRows = <T,>(
     errorHint: string,
     mapOption: (option: (typeof createTabAgentOptions)[number]) => T
   ) =>
     createTabAgentLoadState === 'loading'
-      ? [{ label: 'Detecting Agents', icon: Bot, disabled: true, loading: true, onPress: noop }]
+      ? [
+          {
+            id: 'detectingAgents',
+            label: t('session.usePanelRouteActions.detectingAgents', 'Detecting Agents'),
+            icon: Bot,
+            disabled: true,
+            loading: true,
+            onPress: noop
+          }
+        ]
       : createTabAgentOptions.length > 0
         ? createTabAgentOptions.map(mapOption)
         : createTabAgentLoadState === 'loaded'
-          ? [{ label: 'No Enabled Agents', icon: Bot, disabled: true, onPress: noop }]
+          ? [
+              {
+                id: 'noEnabledAgents',
+                label: t('session.usePanelRouteActions.noEnabledAgents', 'No Enabled Agents'),
+                icon: Bot,
+                disabled: true,
+                onPress: noop
+              }
+            ]
           : createTabAgentLoadState === 'other-runtime'
-            ? [
-                {
-                  label: 'Agents on Another Server',
-                  hint: 'Pair that server directly',
-                  icon: Bot,
-                  disabled: true,
-                  onPress: noop
-                }
-              ]
+            ? [otherRuntimeAgentRow]
             : createTabAgentLoadState === 'error'
               ? [
                   {
-                    label: 'Agent Presets Unavailable',
+                    id: 'presetsUnavailable',
+                    label: t(
+                      'session.usePanelRouteActions.presetsUnavailable',
+                      'Agent Presets Unavailable'
+                    ),
                     hint: errorHint,
                     icon: Bot,
                     disabled: true,
@@ -110,25 +133,34 @@ export function useMobileSessionPanelRouteActions(scope: MobileSessionPresentati
                   }
                 ]
               : []
-  const createTabAgentActions = buildAgentRows('Check the host connection', (option) => ({
-    label: option.label,
-    renderIcon: () => <MobileAgentIcon agentId={option.agent} size={16} />,
-    onPress: () => {
-      setShowCreateTabDrawer(false)
-      void handleCreateTerminal(option.agent)
-    }
-  }))
+  const createTabAgentActions = buildAgentRows(
+    t('session.usePanelRouteActions.checkHostHint', 'Check the host connection'),
+    (option) => ({
+      id: `agent:${option.agent}`,
+      label: option.label,
+      renderIcon: () => <MobileAgentIcon agentId={option.agent} size={16} />,
+      onPress: () => {
+        setShowCreateTabDrawer(false)
+        void handleCreateTerminal(option.agent)
+      }
+    })
+  )
   const sendDiffNotesAgentActions =
     pendingDiffNotesDelivery === null
       ? []
-      : buildAgentRows('Copy notes instead', (option) => ({
-          label: option.label,
-          hint: 'New agent session',
-          icon: Bot,
-          onPress: () => {
-            const delivery = pendingDiffNotesDelivery
-            setPendingDiffNotesDelivery(null)
-            if (delivery) {
+      : buildAgentRows(
+          t('session.usePanelRouteActions.copyNotesHint', 'Copy notes instead'),
+          (option) => ({
+            id: `agent:${option.agent}`,
+            label: option.label,
+            hint: t('session.usePanelRouteActions.newSessionHint', 'New agent session'),
+            icon: Bot,
+            onPress: () => {
+              const delivery = pendingDiffNotesDelivery
+              setPendingDiffNotesDelivery(null)
+              if (!delivery) {
+                return
+              }
               void sendDiffNotesToNewAgent(delivery, async () => {
                 await handleCreateTerminal(option.agent, {
                   initialPrompt: delivery.prompt,
@@ -136,8 +168,8 @@ export function useMobileSessionPanelRouteActions(scope: MobileSessionPresentati
                 })
               })
             }
-          }
-        }))
+          })
+        )
 
   const handleSessionContentRowLayout = useCallback((event: LayoutChangeEvent) => {
     const width = Math.round(event.nativeEvent.layout.width)
@@ -157,6 +189,7 @@ export function useMobileSessionPanelRouteActions(scope: MobileSessionPresentati
         hostId,
         worktreeId,
         name: worktreeName || '',
+        // Source-control/PR origin enables dismissal after diff open; Files must not inherit it.
         ...(action.panel === 'sourceControl' || action.panel === 'pr' ? { origin: 'session' } : {}),
         ...descriptor.params,
         ...workspaceRouteParams(executionHost)

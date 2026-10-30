@@ -1,14 +1,8 @@
 import type { AgentPromptTurnStartEvidence } from './agent-prompt-submission-verification'
 
-/**
- * Per-PTY ledger that decides which queued prompt owns an observed turn start.
- *
- * Turn evidence is PTY-wide, so without an owner one observed turn would settle every queued
- * prompt that shares its baseline. Registrations stay in arrival order per PTY: the oldest
- * eligible request claims the next turn, and a claimed turn can never change hands.
- */
+/** Attribute each PTY-wide turn to the oldest eligible queued prompt; one turn cannot settle multiple requests. */
 
-// A stalled request is only dropped when its PTY or generation goes away, so cap the backlog.
+// Stalled entries persist until PTY/generation removal; bound the backlog.
 const REQUESTS_PER_PTY_LIMIT = 1_024
 
 export type AgentPromptRequestBaseline = {
@@ -81,8 +75,7 @@ export class AgentPromptRequestCorrelation {
     const request = requests.find(
       (candidate) => candidate.generation === generation && candidate.requestId === requestId
     )
-    // A receipt restored after a runtime restart has no in-memory registration;
-    // leave it queued rather than attributing an unrelated turn to it.
+    // Restart-restored receipts lack registrations; keep queued rather than claim an unrelated turn.
     if (
       !request ||
       request.baselineWorkingSequence !== baselineWorkingSequence ||
@@ -129,8 +122,7 @@ export class AgentPromptRequestCorrelation {
       ) {
         continue
       }
-      // A candidate with a later baseline can run out of free sequences while an
-      // earlier-baselined one still has room, so keep scanning the queue.
+      // A later baseline may have no free sequence while an earlier one still can claim; keep scanning.
       const claim = this.nextFreeClaim(
         ptyId,
         generation,

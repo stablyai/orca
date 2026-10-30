@@ -10,9 +10,9 @@ import {
   nativeChatComposerTargetIsRemote,
   type NativeChatResolvedTarget
 } from './native-chat-composer-target'
-import type { NativeChatPickerItem } from './native-chat-composer-state'
+import type { NativeChatPickerItem } from '../../../../shared/native-chat-composer-autocomplete'
 import type { NativeChatSendLifecycle } from './use-native-chat-send-lifecycle'
-import type { NativeChatPtySessionOptionsSurface } from './native-chat-pty-session-options'
+import type { NativeChatPtySessionOptionsSurface } from '../../../../shared/native-chat-pty-session-options'
 import {
   answerNativeChatCommandInComposer,
   type NativeChatLocalCommandAnswer
@@ -83,9 +83,7 @@ export function useNativeChatPickerCommandDispatch(args: {
           : sendNativeChatMessage(target.ptyId, text)
       )
       emitNativeChatPickerItemAccepted({ agent, itemKind: 'command' })
-      // Why: picker dispatch is a catalog-verified command send; it must leave
-      // the same telemetry and composer state as the typed path — including
-      // disarming attachments, or a stale image rides the next prompt.
+      // Match typed-command telemetry and composer cleanup; stale attachments must not ride the next prompt.
       emitNativeChatSendClassified({ agent, outcome: 'command' })
       onSlashCommand?.(text)
       sessionOptionsSurface?.recordOutgoingCommand(text)

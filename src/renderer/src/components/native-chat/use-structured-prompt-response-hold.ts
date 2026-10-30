@@ -6,10 +6,7 @@ type PromptItem = Parameters<Respond>[0]
 
 const promptKey = (item: PromptItem): string => `${item.itemId}:${item.revision}`
 
-/**
- * Holds a prompt card from the press until the host refuses the response. An accepted one stays
- * held: the host retires that prompt, and a second response to it would only be refused.
- */
+/** Hold from response press until refusal; acceptance keeps the hold until the host retires the prompt to prevent duplicate responses. */
 export function useStructuredPromptResponseHold(respond: Respond): {
   respond: Respond
   holds: (item: PromptItem) => boolean

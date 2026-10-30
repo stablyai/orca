@@ -135,7 +135,6 @@ describe('createCoalescedPollRunner', () => {
       await flushMicrotasks()
       expect(task).toHaveBeenCalledTimes(1)
 
-      // Ticks during the backoff window must not start a run early.
       await vi.advanceTimersByTimeAsync(3000)
       runner.run()
       await vi.advanceTimersByTimeAsync(171_998)
@@ -244,7 +243,6 @@ describe('createCoalescedPollRunner', () => {
       await vi.advanceTimersByTimeAsync(1)
       expect(task).toHaveBeenCalledTimes(2)
 
-      // The superseded tick timer must not fire an extra run later.
       calls[1]?.resolve()
       await flushMicrotasks()
       await vi.advanceTimersByTimeAsync(600_000)

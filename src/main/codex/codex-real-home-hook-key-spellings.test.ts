@@ -36,9 +36,6 @@ import { getRealHomeHookKeySourcePaths } from './codex-real-home-hooks-json'
 import { cleanupLegacyManagedHookRepresentations } from './codex-hook-legacy-cleanup'
 import { getCodexManagedHookInstallMaterial } from './hook-service'
 
-// Why this file: Codex keys ~/.codex/hooks.json as spelled on its default home
-// and resolved when CODEX_HOME names it, so a symlinked home has two keys.
-
 let root: string
 let home: string
 let userDataDir: string
@@ -76,8 +73,7 @@ function linkCodexHomeToDotfiles(): string {
 }
 
 beforeEach(() => {
-  // Why realpath: the temp dir itself may sit under a symlink (macOS /var), which
-  // would give every home in this file a second spelling.
+  // Resolve macOS /var symlinks so only the fixture home supplies alternate spellings.
   root = realpathSync.native(mkdtempSync(join(tmpdir(), 'orca-real-home-spellings-')))
   home = join(root, 'home')
   mkdirSync(home)
@@ -234,8 +230,7 @@ describe('both spellings of a symlinked ~/.codex', () => {
   it('keeps both files when an approval would break config.toml', async () => {
     linkCodexHomeToDotfiles()
     writeFileSync(hooksPath(), `${JSON.stringify({ hooks: {} }, null, 2)}\n`)
-    // Why no write: an appended [hooks.state."k"] table would turn this inline
-    // form into a file Codex cannot load.
+    // Appending a hooks.state table would conflict with this inline declaration.
     const original = 'model = "m"\nhooks = { state = {} }\n'
     writeFileSync(tomlPath(), original)
     vi.spyOn(console, 'warn').mockImplementation(() => {})

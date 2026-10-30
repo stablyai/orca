@@ -4,8 +4,7 @@ const { ipcHandlers } = vi.hoisted(() => ({
   ipcHandlers: new Map<string, (...args: unknown[]) => unknown>()
 }))
 
-// Why the partial mock: `ipcMain` is undefined outside an Electron process, and the
-// snapshot-pull producer only exists as an `ipcMain.handle` body. Everything else stays real.
+// Partially mock Electron: snapshot-pull is registered through ipcMain.handle, which is absent outside Electron.
 vi.mock('electron', async (importOriginal) => ({
   ...((await importOriginal()) as Record<string, unknown>),
   ipcMain: {
@@ -70,8 +69,7 @@ function censusRuntime(): OrcaRuntimeService {
     paneKey === PANE_KEY ? TERMINAL_HANDLE : undefined
   )
   vi.spyOn(runtime, 'getAgentStatusOrchestrationContextForPaneKey').mockReturnValue(undefined)
-  // The incarnation is the third fact the real terminal registry owns for a bound pane; the
-  // census seeds no resource row, so no durable incarnation contradicts it.
+  // Terminal registry owns incarnation; this census has no durable resource row to contradict it.
   vi.spyOn(runtime, 'getTerminalProcessIncarnation').mockImplementation((handle) =>
     handle === TERMINAL_HANDLE ? PROCESS_INCARNATION : null
   )

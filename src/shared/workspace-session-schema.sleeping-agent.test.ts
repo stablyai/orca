@@ -148,6 +148,35 @@ describe('parseWorkspaceSession sleeping agents', () => {
     }
   })
 
+  it("preserves a Claude session's effort level through hydration", () => {
+    const providerSession = { key: 'session_id', id: 'claude-session', effort: 'max' }
+    const result = parseWorkspaceSession({
+      activeRepoId: null,
+      activeWorktreeId: null,
+      activeTabId: null,
+      tabsByWorktree: {},
+      terminalLayoutsByTabId: {},
+      sleepingAgentSessionsByPaneKey: {
+        'tab1:pane-1': {
+          paneKey: 'tab1:pane-1',
+          tabId: 'tab1',
+          worktreeId: 'wt',
+          agent: 'claude',
+          providerSession,
+          prompt: '',
+          state: 'done',
+          capturedAt: 10,
+          updatedAt: 10,
+          origin: 'live'
+        }
+      }
+    })
+
+    expect(
+      result.ok && result.value.sleepingAgentSessionsByPaneKey?.['tab1:pane-1']?.providerSession
+    ).toEqual(providerSession)
+  })
+
   it('preserves the AI Vault OMP resume file through hydration', () => {
     const result = parseWorkspaceSession({
       activeRepoId: null,

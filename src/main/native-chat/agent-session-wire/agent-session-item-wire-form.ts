@@ -1,9 +1,5 @@
-// One journal item as every client receives it.
-//
-// The journal keeps tool output and diffs whole. A client is sent a head of each and the item is
-// marked `shortened`; it fetches the whole item with `agentSession.item` when the user asks. Every
-// other field is sent as kept. An item still past a page is shortened to fit and marked
-// rather than replaced, so its row and its "show full" stay readable.
+// Send bounded tool/diff heads with shortened markers; agentSession.item retrieves full stored content.
+// Shorten other oversized content visibly while retaining row identity and full-content access.
 
 import type {
   AgentJournalBoundedPayload,
@@ -22,13 +18,10 @@ import {
 } from './agent-session-history-page-bounds'
 import { jsonBytes, shortenJsonStringsToFit } from './json-string-shortening'
 
-/** Each tool output or diff as sent: the head older clients have always been sent. */
 export const AGENT_SESSION_WIRE_PAYLOAD_HEAD_BYTES = 16 * 1024
 
-/** Preserve every ordinary message that already fits a desktop page. */
 const CLIENT_ITEM_MAX_BYTES = HISTORY_PAGE_CONTENT_BUDGET_BYTES
 
-/** The payload as sent; itself when its head already fits. */
 function wirePayload(payload: AgentJournalBoundedPayload): AgentJournalBoundedPayload {
   // UTF-8 spends at most three bytes per UTF-16 unit, so most heads fit without encoding.
   if (
@@ -56,8 +49,7 @@ function wireBody(body: AgentJournalItemBody): AgentJournalItemBody {
   return body
 }
 
-/** `item` fitted to `maxBytes`: its long strings shortened and the item marked. Null when even
- *  that cannot fit, which the page answers with its too-large marker. */
+/** Shorten visibly to fit; null means the page must use an oversized-item marker. */
 export function shortenedAgentJournalItem(
   item: AgentJournalRenderItem,
   maxBytes: number,
@@ -85,10 +77,9 @@ function wireItem(item: AgentJournalRenderItem): HistoryItemForm {
   return { item: fitted, bytes: fitted === sent ? bytes : jsonBytes(fitted) }
 }
 
-// Items are immutable per revision, so a catch-up or a second subscriber reuses the sent form.
+// Revision objects are immutable, so readers/subscribers may reuse wire forms.
 const sentForms = new WeakMap<AgentJournalRenderItem, HistoryItemForm>()
 
-/** What a client is sent of `item`. */
 export function agentJournalItemForWire(item: AgentJournalRenderItem): HistoryItemForm {
   let sent = sentForms.get(item)
   if (sent === undefined) {
@@ -98,7 +89,6 @@ export function agentJournalItemForWire(item: AgentJournalRenderItem): HistoryIt
   return sent
 }
 
-/** How a desktop or paired client reads history: each item in its sent form. */
 export const CLIENT_HISTORY_READER: HistoryReader = {
   form: agentJournalItemForWire,
   budgetBytes: HISTORY_PAGE_CONTENT_BUDGET_BYTES

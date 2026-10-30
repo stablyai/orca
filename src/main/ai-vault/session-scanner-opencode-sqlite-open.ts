@@ -1,36 +1,18 @@
 import { basename } from 'node:path'
 import type { AiVaultScanIssue } from '../../shared/ai-vault-types'
 import { isWslUncPath } from '../../shared/wsl-paths'
+import {
+  aiVaultScanIssueText,
+  type AiVaultScanIssueText
+} from '../../shared/ai-vault-scan-issue-copy'
 import SyncDatabase from '../sqlite/sync-database'
 import { classifySqliteReadFailure } from '../sqlite/sqlite-read-failure'
 import { errorMessage } from './session-scanner-values'
 
-// Why (#15036): the read used to inherit sqlite3's 0 ms busy timeout, so a
-// genuinely contended open failed in ~1 ms. WAL readers almost never block on a
-// writer, so this is insurance rather than the fix -- it stays a single bounded
-// open, with no retry loop on top of sqlite's own busy handler.
+// Allow bounded contention waits for native reads without adding retries atop SQLite’s busy handler (#15036).
 const OPENCODE_SQLITE_BUSY_TIMEOUT_MS = 1_500
 
-/**
- * Open one OpenCode database for reading.
- *
- * Read-only, plus `query_only` as a belt-and-suspenders guard so a bug in a
- * SELECT list can never mutate the user's opencode.db.
- * @param dbPath - Absolute path to an opencode.db file.
- * @returns An open handle the caller must close.
- */
-/**
- * Busy timeout for one database.
- *
- * Zero over the WSL share because waiting there is provably useless: Windows
- * cannot take SQLite's locks over \\wsl.localhost at all, so the open fails
- * whatever the timeout. Measured on a real host, the wait is not even bounded
- * by the value — timeout 1500 took ~2400 ms and timeout 5000 took ~7250 ms,
- * while 0 failed in ~21 ms. Paying that per database, per scan, buys nothing
- * and enough such databases would spend the list worker's whole 30 s deadline.
- * @param dbPath - Absolute path to an opencode.db file.
- * @returns Milliseconds to let SQLite's busy handler wait.
- */
+/** WSL-share locks fail even when idle; waiting wastes the worker deadline and can exceed the requested timeout. */
 export function openCodeBusyTimeoutMs(dbPath: string): number {
   return isWslUncPath(dbPath) ? 0 : OPENCODE_SQLITE_BUSY_TIMEOUT_MS
 }
@@ -48,18 +30,13 @@ export function openOpenCodeDatabaseReadonly(dbPath: string): SyncDatabase {
     try {
       db.close()
     } catch {
-      // Why: close must not hide the query_only setup failure.
+      // Preserve the query_only setup failure if closing also fails.
     }
     throw error
   }
 }
 
-/**
- * Run one synchronous read against an OpenCode database.
- * @param args.dbPath - Absolute path to an opencode.db file.
- * @param args.read - Synchronous reader; its result must be fully materialized.
- * @returns The reader's value; rethrows whatever SQLite raised.
- */
+/** Materialize the read synchronously; the database closes before this function returns. */
 export function readOpenCodeDatabase<T>(args: {
   dbPath: string
   read: (db: SyncDatabase) => T
@@ -72,16 +49,7 @@ export function readOpenCodeDatabase<T>(args: {
   }
 }
 
-/**
- * Describe a whole-database read failure as a scan issue.
- *
- * Kinded so the panel renders this copy instead of counting a failed *source*
- * as a skipped *transcript*; `scope` rather than a new member — see
- * `aiVaultScanIssueSchema` in session-list-result-validation.ts.
- * @param dbPath - Absolute path to the opencode.db that could not be read.
- * @param error - The thrown value from the read.
- * @returns A kinded scan issue with actionable copy.
- */
+/** Report a failed database as one scope issue instead of counting it as a skipped transcript. */
 export function openCodeDatabaseScanIssue(
   dbPath: string,
   error: unknown,
@@ -89,30 +57,31 @@ export function openCodeDatabaseScanIssue(
 ): AiVaultScanIssue {
   const name = basename(dbPath)
   const label = agent === 'zcode' ? 'ZCode' : 'OpenCode'
-  // `fileMustExist` already proved the database file is there before SQLite ran,
-  // so this needs no fs probe of its own — an extra sync stat on a 9p share is
-  // exactly the hang the WSL transcript gate exists to prevent.
+  // Avoid an extra synchronous existence probe that could hang on a WSL share.
   const kind = classifySqliteReadFailure({ error, databaseFileExists: true })
-  // Why: measured against a real distro. Windows cannot take SQLite's file locks
-  // over \\wsl.localhost at all — an idle, never-WAL, nothing-attached database
-  // answers SQLITE_BUSY just the same, and a 5 s busy timeout does not change it,
-  // while the identical bytes copied to local disk open fine. So on this share a
-  // lock-family error never means "a writer holds it", and no timeout can help.
+  // WSL-share lock errors do not establish writer contention; idle databases exhibit the same failure.
   const overWslShare = isWslUncPath(dbPath)
-  const detail =
+  const text =
     kind === 'contended' && !overWslShare
-      ? `${label} is writing to ${name} right now, so its history was skipped. It is read again on the next refresh.`
+      ? aiVaultScanIssueText('openCodeDatabaseBusy', {
+          params: { label, name }
+        })
       : kind === 'unreadable'
-        ? `${label} history in ${name} could not be read: ${errorMessage(error)}`
-        : unreadableShareDetail(dbPath, name, label)
-  return { agent, kind: 'scope', path: dbPath, message: detail }
+        ? aiVaultScanIssueText('openCodeDatabaseUnreadable', {
+            params: { label, name },
+            detail: errorMessage(error)
+          })
+        : unreadableShareText(dbPath, name, label)
+  return { agent, kind: 'scope', path: dbPath, ...text }
 }
 
-function unreadableShareDetail(dbPath: string, name: string, label: string): string {
-  // A known limitation, not a failure the user can act on: nothing they do on
-  // the Windows side makes the share hand out SQLite's locks. Deliberately not
-  // "flush the write-ahead log" either — checkpointing changes nothing here.
+function unreadableShareText(dbPath: string, name: string, label: string): AiVaultScanIssueText {
+  // WSL-share locking cannot be repaired by checkpointing; reserve WAL advice for other filesystems.
   return isWslUncPath(dbPath)
-    ? `${label} sessions inside WSL can't be searched from Windows yet.`
-    : `${label} history in ${name} could not be read. Its write-ahead log cannot be opened read-only on this filesystem. Exit ${label} cleanly to flush the log.`
+    ? aiVaultScanIssueText('openCodeWslDatabaseUnsupported', {
+        params: { label }
+      })
+    : aiVaultScanIssueText('openCodeWriteAheadLogUnreadable', {
+        params: { label, name }
+      })
 }

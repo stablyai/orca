@@ -1,70 +1,88 @@
 import { realpath, stat } from 'node:fs/promises'
 import { claudeVersionReaches, probeClaudeCliVersion } from './claude-hook-event-versions'
 
-/** A launch flag an older Claude CLI exits on, and the first published CLI whose parser defines it.
- *  Versions were found by reading published packages, not by running them. */
 export type ClaudeCliFlag = { readonly option: string; readonly firstVersion: string }
 
-// Why 2.1.94: 2.1.93 was never published.
 export const CLAUDE_THINKING_DISPLAY_FLAG: ClaudeCliFlag = {
   option: '--thinking-display',
   firstVersion: '2.1.94'
 }
 
-// Why 2.0.25: 2.0.24's parser has no such option.
 export const CLAUDE_PLUGIN_DIR_FLAG: ClaudeCliFlag = {
   option: '--plugin-dir',
   firstVersion: '2.0.25'
 }
 
-/** How long a launch waits on a binary nothing is known about yet. A warm probe answers in tens of
- *  milliseconds; this covers a cold disk, a node install and an antivirus scan, paid once per key
- *  during a start that already takes seconds. */
+export const CLAUDE_EFFORT_FLAG: ClaudeCliFlag = {
+  option: '--effort',
+  firstVersion: '2.1.38'
+}
+
+/** The control request behind live effort and Fast changes; older CLIs never answer it. */
+export const CLAUDE_APPLY_FLAG_SETTINGS_CONTROL: ClaudeCliFlag = {
+  option: 'apply_flag_settings',
+  firstVersion: '2.1.50'
+}
+
+// Allow cold CLI startup without blocking for the full probe kill timeout.
 export const CLAUDE_CLI_FLAG_PROBE_BUDGET_MS = 1_500
 
-/** A probe still running by now is killed, and its binary gets no flag. */
 export const CLAUDE_CLI_FLAG_PROBE_KILL_AFTER_MS = 10_000
 
-/** Commander's refusal, exactly: any other startup failure says nothing about a flag. */
+/** Reads a version an earlier check or prewarm already learned. */
+export const CLAUDE_CACHED_FLAG_CHECK_BUDGET_MS = 250
+
+// Only an explicit unknown-option diagnostic proves flag rejection.
 const UNKNOWN_OPTION_DIAGNOSTIC = /unknown option '(--[a-z][a-z0-9-]*)'/
 
-// One small entry per binary per workspace it launched in; enough for every worktree in active use.
 const MAX_REMEMBERED = 32
 
 export type ClaudeCliLaunch = {
   command: string
+  prefixArgs?: readonly string[]
   cwd: string
   env: Record<string, string>
 }
 
 type ClaudeVersionProbe = (
   command: string,
-  launch: { cwd: string; env: Record<string, string>; timeoutMs: number }
+  launch: {
+    cwd: string
+    env: Record<string, string>
+    timeoutMs: number
+    prefixArgs?: readonly string[]
+  }
 ) => Promise<string | null>
 
+/** `unknown` when the version could not be read in budget: neither support nor its absence is proven. */
+export type ClaudeCliFlagFact = 'supported' | 'unsupported' | 'unknown'
+
+/** One launch's binary and cwd, bound for checks after it resolved. */
+export type ClaudeCliFlagCheck = (
+  flag: ClaudeCliFlag,
+  budgetMs?: number,
+  startProbe?: boolean
+) => Promise<ClaudeCliFlagFact>
+
 export type ClaudeCliFlagSupport = {
-  /**
-   * Whether this launch's CLI takes `flag`. A binary not yet known is probed once for its version
-   * with the launch's own cwd and env, waited on for at most the budget (the caller's, or the
-   * default) from when its probe began; past it the answer is no for this launch only. Every flag
-   * shares that one probe.
-   */
-  supports: (
+  /** Share probes by binary and cwd; budget expiry leaves the flag unknown for this launch only. */
+  check: (
     flag: ClaudeCliFlag,
     launch: ClaudeCliLaunch,
     budgetMs?: number,
-    /** False answers from what is known or already being asked, never starting a new probe. */
+    /** False consults cached facts or an existing probe without starting another. */
     startProbe?: boolean
-  ) => Promise<boolean>
-  /** Starts the version probe for a binary nothing is known about yet, without waiting on it, so a
-   *  later launch finds the answer. Never throws. */
+  ) => Promise<ClaudeCliFlagFact>
+  /** Warm the version cache without waiting; failures remain retryable. */
   prewarm: (launch: ClaudeCliLaunch) => void
-  /** A child that exited refusing a flag: that binary, in that workspace, never gets it again. */
-  observeExit: (launch: Pick<ClaudeCliLaunch, 'command' | 'cwd'>, error: Error) => void
+  /** Remember explicit flag rejection for this binary and cwd. */
+  observeExit: (
+    launch: Pick<ClaudeCliLaunch, 'command' | 'prefixArgs' | 'cwd'>,
+    error: Error
+  ) => void
 }
 
-/** Which binary a command is in a workspace right now: a shim answers per project, and a
- *  self-update swaps the link's target or the file. */
+// Key by resolved file, mtime and cwd to handle self-updates and project-specific shims.
 async function claudeBinaryKey(command: string, cwd: string): Promise<string | null> {
   try {
     const target = await realpath(command)
@@ -74,7 +92,6 @@ async function claudeBinaryKey(command: string, cwd: string): Promise<string | n
   }
 }
 
-/** The promise's value if it settles within `ms`, else undefined. */
 async function within<T>(pending: Promise<T>, ms: number): Promise<T | undefined> {
   let timer: ReturnType<typeof setTimeout> | undefined
   const expired = new Promise<undefined>((resolve) => {
@@ -88,7 +105,6 @@ async function within<T>(pending: Promise<T>, ms: number): Promise<T | undefined
   }
 }
 
-/** `version` undefined: not known yet. */
 type BinaryFacts = { version?: string; refused: Set<string> }
 
 export function createClaudeCliFlagSupport(
@@ -104,9 +120,12 @@ export function createClaudeCliFlagSupport(
     now: () => performance.now()
   }
 ): ClaudeCliFlagSupport {
+  const keyOf = async (launch: Pick<ClaudeCliLaunch, 'command' | 'prefixArgs' | 'cwd'>) => {
+    const key = await deps.keyOf(launch.command, launch.cwd)
+    return key === null ? null : JSON.stringify([key, launch.prefixArgs ?? []])
+  }
   const known = new Map<string, BinaryFacts>()
   const probing = new Map<string, { settled: Promise<void>; startedAt: number }>()
-  /** The key's facts, marked most recently used; the bound drops the binaries launched least recently. */
   const touch = (key: string): BinaryFacts => {
     const facts = known.get(key) ?? { refused: new Set<string>() }
     known.delete(key)
@@ -119,9 +138,7 @@ export function createClaudeCliFlagSupport(
     }
     return facts
   }
-  // Only a version is remembered, for the binary's life. A probe that gave none (killed, failed to
-  // spawn, unparseable) is forgotten, so the next launch asks again: a latched failure would cost
-  // the flag exactly when probes are slowest, at boot. A refusal is remembered on its own.
+  // Failed probes stay retryable; cache only versions and explicit flag rejections.
   const settle = (key: string, version: string | null): void => {
     if (version !== null) {
       touch(key).version = version
@@ -129,18 +146,21 @@ export function createClaudeCliFlagSupport(
   }
   const versionOf = (key: string): string | undefined =>
     known.has(key) ? touch(key).version : undefined
-  const answer = (key: string, flag: ClaudeCliFlag): boolean => {
+  const answer = (key: string, flag: ClaudeCliFlag): ClaudeCliFlagFact => {
     const facts = known.get(key)
-    return (
-      facts?.version !== undefined &&
-      !facts.refused.has(flag.option) &&
-      claudeVersionReaches(facts.version, flag.firstVersion)
-    )
+    if (facts?.refused.has(flag.option)) {
+      return 'unsupported'
+    }
+    if (facts?.version === undefined) {
+      return 'unknown'
+    }
+    return claudeVersionReaches(facts.version, flag.firstVersion) ? 'supported' : 'unsupported'
   }
   const probe = (key: string, launch: ClaudeCliLaunch) => {
     const settled = deps
       .probe(launch.command, {
         cwd: launch.cwd,
+        prefixArgs: launch.prefixArgs,
         env: launch.env,
         timeoutMs: CLAUDE_CLI_FLAG_PROBE_KILL_AFTER_MS
       })
@@ -155,26 +175,26 @@ export function createClaudeCliFlagSupport(
   }
 
   return {
-    supports: async (flag, launch, budgetMs = deps.budgetMs, startProbe = true) => {
-      // The launch never waits longer than the budget, finding the binary included.
+    check: async (flag, launch, budgetMs = deps.budgetMs, startProbe = true) => {
+      // Include binary lookup in the launch's wait budget.
       const deadline = deps.now() + budgetMs
-      const key = await within(deps.keyOf(launch.command, launch.cwd), budgetMs)
+      const key = await within(keyOf(launch), budgetMs)
       if (key === undefined || key === null) {
-        return false
+        return 'unknown'
       }
       if (versionOf(key) !== undefined) {
         return answer(key, flag)
       }
       const running = probing.get(key) ?? (startProbe ? probe(key, launch) : undefined)
       if (!running) {
-        return false
+        return answer(key, flag)
       }
-      // The probe's own budget, too: one already past it is not waited on again.
+      // An already-running probe does not get a fresh wait budget.
       await within(running.settled, Math.min(running.startedAt + budgetMs, deadline) - deps.now())
       return answer(key, flag)
     },
     prewarm: (launch) => {
-      void deps.keyOf(launch.command, launch.cwd).then(
+      void keyOf(launch).then(
         (key) => {
           if (key !== null && versionOf(key) === undefined && !probing.has(key)) {
             probe(key, launch)
@@ -188,7 +208,7 @@ export function createClaudeCliFlagSupport(
       if (!option) {
         return
       }
-      void deps.keyOf(launch.command, launch.cwd).then((key) => {
+      void keyOf(launch).then((key) => {
         if (key !== null) {
           touch(key).refused.add(option)
         }
@@ -197,5 +217,4 @@ export function createClaudeCliFlagSupport(
   }
 }
 
-/** One per process: every structured launch on this host shares what it learned. */
 export const claudeCliFlagSupport = createClaudeCliFlagSupport()

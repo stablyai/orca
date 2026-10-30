@@ -63,8 +63,7 @@ export function useWorkspaceCleanupUnverifiedRemoval({
         },
         onRowFailed: (failure) => {
           clearQueuedDeleteState(failure.worktreeId, failure.executionHostId)
-          // A preflight/timeout failure can arrive before the background
-          // batch settles; drop the optimistic deleting overlay immediately.
+          // Clear optimistic deleting immediately on preflight/timeout failure, before batch settlement.
           if (mountedRef.current) {
             setDeletionPhaseByIdentity((current) => withoutIdentity(current, identity))
           }

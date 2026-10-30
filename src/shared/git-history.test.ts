@@ -307,11 +307,9 @@ describe('git history loader', () => {
 })
 
 describe('symbolic full-name resolution', () => {
-  // Why: `rev-parse --verify` swallows --end-of-options, but --symbolic-full-name
-  // deliberately echoes it. Taking the first line made every branch and tag fall
-  // through gitHistoryRefFromFullName's prefix checks into the "commits" category.
+  // --symbolic-full-name echoes --end-of-options (unlike --verify); treating it as the ref misclassified branches/tags as commits.
   function executorEmitting(symbolicStdout: string): GitHistoryExecutor {
-    return vi.fn(async (args: string[]) => {
+    return vi.fn<GitHistoryExecutor>(async (args: string[]) => {
       if (args[0] === 'rev-parse' && args.includes('--symbolic-full-name')) {
         return { stdout: symbolicStdout }
       }
@@ -328,7 +326,7 @@ describe('symbolic full-name resolution', () => {
         return { stdout: logRecord({ hash: HEAD_OID, message: 'only' }) }
       }
       return { stdout: '' }
-    }) as unknown as GitHistoryExecutor
+    })
   }
 
   it('categorizes a branch when git echoes the option marker', async () => {

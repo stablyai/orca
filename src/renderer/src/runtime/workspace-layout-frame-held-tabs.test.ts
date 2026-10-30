@@ -114,11 +114,9 @@ async function boot() {
   stream.onPosition!(seq)
   sync.start()
   await settle()
-  /** Main's answer to the window's command, with the frame holding the window's change. */
   const answer = async (
     index: number,
     reply: LayoutApplyReply = okReply,
-    /** Main's change the window has not drawn: a change main applies first. */
     mainChange: (layout: PublishedWorkspaceLayout) => void = () => {}
   ): Promise<void> => {
     const frame = publishedOf(buildWorkspaceSessionPayload(store.getState()))
@@ -299,7 +297,6 @@ describe('a change main applies first, with frames flowing', () => {
       contentType: 'editor',
       isPreview: true
     })
-    // Main holds the tab: its frame carries the window's copy.
     seq += 1
     stream.onFrame!(
       frames.records(GIT_KEY, publishedOf(buildWorkspaceSessionPayload(store.getState())), seq)
@@ -323,7 +320,6 @@ describe('a change main applies first, with frames flowing', () => {
     await answer(pin, okReply, (layout) => {
       layout.tabs.find((item) => item.id === tab.id)!.isPinned = true
     })
-    // Main's frame draws the pin; the window does not pin it again.
     expect(windowPin).not.toHaveBeenCalled()
     expect(callsOf('promotePreviewTab')).toHaveLength(1)
     expect(entry()).toMatchObject({ isPinned: true, isPreview: true })
@@ -352,7 +348,6 @@ describe('a change main applies first, with frames flowing', () => {
     const agent = () =>
       store.getState().unifiedTabsByWorktree[GIT_KEY]!.find((item) => item.id === 'tab-agent')!
     expect(agent().viewMode).toBe('terminal')
-    // Main owns the workspace: the paired-server mirror is not asked.
     expect(effects.mirrorViewMode).not.toHaveBeenCalled()
     expect(effects.chatToggled).toHaveBeenCalledTimes(1)
     expect(effects.chatToggled).toHaveBeenCalledWith(
@@ -365,32 +360,29 @@ describe('a change main applies first, with frames flowing', () => {
     sync.close()
   })
 
-  it('settles a generated title once main’s frame shows it, so the next one is sent', async () => {
-    const { store, sync, answer } = await boot()
+  it('sends main no generated title, and shows the one main derived from its frame alone', async () => {
+    const { store, sync } = await boot()
     store.setState({ settings: { ...store.getState().settings!, tabAutoGenerateTitle: true } })
     const leafId = store.getState().terminalLayoutsByTabId['tab-unbound']!.activeLeafId!
     const paneKey = makePaneKey('tab-unbound', leafId)
-    store.getState().setGeneratedTabTitleFromAgentPrompt(paneKey, 'Refactor the auth middleware')
     const renames = () => callsOf('renameTabs')
-    expect(renames()).toHaveLength(1)
-    const title = renames()[0]!.command.renames![0]!.title
-    // Unanswered: a later prompt for the same tab waits for the first.
-    store.getState().setGeneratedTabTitleFromAgentPrompt(paneKey, 'Fix the flaky login test')
-    expect(renames()).toHaveLength(1)
-
-    const writes = writesOf(store, (state) => state.tabsByWorktree)
-    await answer(rpc.calls.indexOf(renames()[0]!), okReply, (layout) => {
-      layout.tabs.find((item) => item.id === 'tab-unbound')!.generatedTitle = title
-    })
-    writes.stop()
-    const row = store.getState().tabsByWorktree[GIT_KEY]!.find((item) => item.id === 'tab-unbound')!
-    expect(row.generatedTitle).toBe(title)
-    // Main's frame is the title's one store write.
-    expect(writes.count()).toBe(1)
+    store.getState().setGeneratedTabTitleFromAgentPrompt(paneKey, 'Refactor the auth middleware')
     store.getState().setGeneratedTabTitleFromAgentPrompt(paneKey, 'Fix the flaky login test', {
       replaceExistingGeneratedTitle: true
     })
-    expect(renames()).toHaveLength(2)
+    expect(renames()).toEqual([])
+
+    const writes = writesOf(store, (state) => state.tabsByWorktree)
+    const frame = publishedOf(buildWorkspaceSessionPayload(store.getState()))
+    frame.tabs.find((item) => item.id === 'tab-unbound')!.generatedTitle = 'Refactor the auth'
+    stream.onFrame!(frames.records(GIT_KEY, frame, ++seq))
+    stream.onPosition!(seq)
+    await settle()
+    writes.stop()
+    const row = store.getState().tabsByWorktree[GIT_KEY]!.find((item) => item.id === 'tab-unbound')!
+    expect(row.generatedTitle).toBe('Refactor the auth')
+    expect(writes.count()).toBe(1)
+    expect(renames()).toEqual([])
     sync.close()
   })
 

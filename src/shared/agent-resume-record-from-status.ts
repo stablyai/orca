@@ -1,5 +1,4 @@
-// How an agent's status becomes its pane's resume record: the window's rule, shared so main can
-// apply it to the statuses its hook server accepts for panes the window never opened.
+// Share status-to-resume rules with main so accepted hook statuses can checkpoint panes no window opened.
 
 import { agentVerdictFields } from './agent-main-agent-verdict'
 import {
@@ -18,7 +17,6 @@ import {
 } from './agent-resume-record-equivalence'
 import { isCompletedPiCompatibleAgentWithLiveRecoveryRecord } from './live-resume-anchor-record'
 
-/** The status fields a resume record is made from. */
 export type ResumeRecordStatus = Pick<
   AgentStatusEntry,
   | 'paneKey'
@@ -36,7 +34,6 @@ export type ResumeRecordStatus = Pick<
   | 'worktreeId'
 >
 
-/** The pane's tab, when its workspace holds it. */
 export type ResumeRecordTab = { id: string; title?: string }
 
 export function copyLaunchConfig(config: SleepingAgentLaunchConfig): SleepingAgentLaunchConfig {
@@ -130,10 +127,7 @@ export function recordLaunchConfigForStatus(
     : undefined
 }
 
-/**
- * The checkpoint a live status leaves: how its agent resumes if the pane's terminal is lost. A
- * finished turn leaves none unless it can still be resumed; then the turn's text is dropped.
- */
+/** Checkpoint live sessions for terminal loss; finished resumable sessions retain identity but drop turn text. */
 export function liveResumeRecord(args: {
   entry: ResumeRecordStatus
   retainsResumableIdentity: boolean
@@ -159,7 +153,6 @@ export function liveResumeRecord(args: {
     : null
 }
 
-/** What a live status does to its pane's record: replaces it, drops it, or leaves it. */
 export function liveResumeRecordChange(
   existing: SleepingAgentSessionRecord | undefined,
   live: SleepingAgentSessionRecord | null
@@ -170,10 +163,7 @@ export function liveResumeRecordChange(
   return existing ? 'clear' : null
 }
 
-/**
- * The record a quit or periodic capture writes for one live status, or null to leave the pane's
- * record. A quit keeps a running agent resumable; a periodic capture never replaces a quit's.
- */
+/** Quit captures keep running agents resumable; periodic capture must not replace a quit record. Null leaves the existing record. */
 export function capturedResumeRecord(args: {
   entry: ResumeRecordStatus
   existing: SleepingAgentSessionRecord | undefined

@@ -28,9 +28,7 @@ type ParsedWrite = {
   payload?: { data?: string }
 }
 
-// A held pass arms a zero-payload data event whose kernel-flush callback
-// refills the queue; it carries no content, so assertions about delivered
-// output must ignore it.
+// Ignore empty refill frames when asserting delivered content.
 function nonSentinelWrites(streamSocket: { write: ReturnType<typeof vi.fn> }): ParsedWrite[] {
   return streamSocket.write.mock.calls
     .map(([line]) => JSON.parse(String(line)) as ParsedWrite)
@@ -180,7 +178,6 @@ describe('DaemonStreamDataBatcher', () => {
       expect(nonSentinelWrites(streamSocket)).toHaveLength(0)
       expect(batcher.queuedCharsForClient('client-1')).toBe(bulk.length)
 
-      // Socket drained (server routes 'drain' to flush): held bulk writes.
       streamSocket.writableLength = 0
       batcher.flush('client-1')
       expect(writtenData(streamSocket)).toBe(bulk)
@@ -207,8 +204,7 @@ describe('DaemonStreamDataBatcher', () => {
       const written = nonSentinelWrites(streamSocket)
       expect(written).toHaveLength(1)
       expect(written[0]?.sessionId).toBe('session-typing')
-      // The bulk stays held — order across sessions has no contract, and the
-      // deep socket is exactly what the echo must not queue behind.
+      // Cross-session writes may overtake held bulk; byte order is required only within a session.
       expect(batcher.queuedCharsForClient('client-1')).toBe(64 * 1024)
     } finally {
       vi.useRealTimers()
@@ -222,11 +218,10 @@ describe('DaemonStreamDataBatcher', () => {
 
       streamSocket.writableLength = 128 * 1024
       batcher.enqueue('client-1', 'session-flood', 'x'.repeat(256 * 1024))
-      // Non-interactive small output (echo that missed the 100ms fast-path).
+      // Omit the interactive fast path to exercise small-session bypass.
       batcher.enqueue('client-1', 'session-typing', 'echo-line')
       vi.advanceTimersByTime(2)
 
-      // The flood holds; the tiny session's bytes must NOT wait behind it.
       const written = nonSentinelWrites(streamSocket)
       expect(written.some((m) => m.sessionId === 'session-typing')).toBe(true)
       expect(writtenData(streamSocket)).toContain('echo-line')
@@ -243,19 +238,17 @@ describe('DaemonStreamDataBatcher', () => {
       const { batcher, streamSocket } = createBatcher()
 
       streamSocket.writableLength = 128 * 1024
-      // Same session: big entry then (non-adjacent) small entry.
+      // Interleave another session to prevent adjacent entries from coalescing.
       batcher.enqueue('client-1', 'session-a', 'x'.repeat(256 * 1024))
       batcher.enqueue('client-1', 'session-b', 'other')
       batcher.enqueue('client-1', 'session-a', 'tail')
       vi.advanceTimersByTime(2)
       const written = streamSocket.write.mock.calls.map(([line]) => String(line)).join('')
-      // session-a held its first entry, so its tail must be held too.
       expect(written).not.toContain('tail')
 
       streamSocket.writableLength = 0
       batcher.flush('client-1')
       expect(writtenData(streamSocket)).toContain('x'.repeat(64))
-      // Full reassembly, in order, once drained.
       const aPayload = streamSocket.write.mock.calls
         .map(
           ([line]) =>
@@ -278,7 +271,6 @@ describe('DaemonStreamDataBatcher', () => {
 
       batcher.enqueue('client-1', 'session-bulk', bulk)
       vi.advanceTimersByTime(2)
-      // Two slices: 64K then the 5-char remainder; payload reassembles intact.
       expect(streamSocket.write).toHaveBeenCalledTimes(2)
       expect(writtenData(streamSocket)).toBe(bulk)
     } finally {
@@ -293,7 +285,7 @@ describe('DaemonStreamDataBatcher', () => {
       const first = 'a'.repeat(70 * 1024)
 
       batcher.enqueue('client-1', 'session-bulk', first)
-      // First slice write fills the socket past the gate; the remainder holds.
+      // Fill the gate after the first slice so the remainder must be held.
       streamSocket.write.mockImplementation(() => {
         streamSocket.writableLength = 200 * 1024
         return false
@@ -320,8 +312,6 @@ describe('DaemonStreamDataBatcher', () => {
       streamSocket.writableLength = 128 * 1024
       batcher.enqueue('client-1', 'session-bulk', huge)
       vi.advanceTimersByTime(2)
-      // Deep socket, but holding would exceed the valve: old write-through
-      // behavior wins over bounded echo latency.
       expect(writtenData(streamSocket).length).toBeGreaterThan(0)
     } finally {
       vi.useRealTimers()
@@ -332,7 +322,6 @@ describe('DaemonStreamDataBatcher', () => {
     vi.useFakeTimers()
     try {
       const { batcher, streamSocket } = createBatcher()
-      // Position an astral char to straddle the 64K slice boundary.
       const bulk = `${'a'.repeat(64 * 1024 - 1)}😀${'b'.repeat(10)}`
 
       batcher.enqueue('client-1', 'session-bulk', bulk)
@@ -352,7 +341,6 @@ describe('DaemonStreamDataBatcher', () => {
       const { batcher, streamSocket } = createBatcher({
         isSessionDroppable: (sessionId) => sessionId === 'session-bg'
       })
-      // Two enqueues that together cross the 1MB cap.
       batcher.enqueue('client-1', 'session-bg', 'a'.repeat(900 * 1024))
       batcher.enqueue('client-1', 'session-bg', 'b'.repeat(300 * 1024))
       expect(batcher.queuedCharsForClient('client-1')).toBe(512 * 1024)
@@ -372,7 +360,6 @@ describe('DaemonStreamDataBatcher', () => {
         .map((m) => m.payload.data ?? '')
         .join('')
       expect(delivered.length).toBe(512 * 1024)
-      // Keep-TAIL: the newest bytes survive.
       expect(delivered.endsWith('b'.repeat(300 * 1024))).toBe(true)
     } finally {
       vi.useRealTimers()
@@ -383,8 +370,7 @@ describe('DaemonStreamDataBatcher', () => {
     vi.useFakeTimers()
     try {
       const { batcher, streamSocket } = createBatcher({ isSessionDroppable: () => true })
-      // Deep socket: data holds; a gap entry (~100B) may still write through —
-      // it always precedes the kept tail, so a second drop mints a second gap.
+      // Hold gaps and data so repeated drops exercise queued gap accounting.
       streamSocket.writableLength = 128 * 1024
       batcher.enqueue('client-1', 'session-bg', 'a'.repeat(1024 * 1024 + 1))
       batcher.enqueue('client-1', 'session-bg', 'b'.repeat(600 * 1024))
@@ -407,7 +393,6 @@ describe('DaemonStreamDataBatcher', () => {
       const deliveredChars = dataMessages.reduce((sum, m) => sum + (m.payload.data?.length ?? 0), 0)
       expect(deliveredChars).toBeLessThanOrEqual(1024 * 1024)
       expect(gapChars + deliveredChars).toBe(1024 * 1024 + 1 + 1200 * 1024)
-      // The newest bytes always survive.
       expect(dataMessages.at(-1)?.payload.data?.endsWith('c')).toBe(true)
     } finally {
       vi.useRealTimers()
@@ -422,7 +407,6 @@ describe('DaemonStreamDataBatcher', () => {
         isSessionDroppable: () => true,
         salvageDroppedData: (dropped) => (dropped.includes(dsr) ? dsr : '')
       })
-      // The DSR probe sits in the oldest (dropped) region.
       batcher.enqueue('client-1', 'session-bg', `flood${dsr}${'x'.repeat(900 * 1024)}`)
       batcher.enqueue('client-1', 'session-bg', 'y'.repeat(300 * 1024))
       vi.advanceTimersByTime(2)
@@ -435,7 +419,6 @@ describe('DaemonStreamDataBatcher', () => {
           }
       )
       expect(messages[0]?.event).toBe('dataGap')
-      // The salvaged query rides right after the gap, before the kept tail.
       expect(messages[1]?.event).toBe('data')
       expect(messages[1]?.payload.data).toBe(dsr)
       expect(messages[1]?.payload.sequenceChars).toBe(0)
@@ -457,16 +440,13 @@ describe('DaemonStreamDataBatcher', () => {
     vi.useFakeTimers()
     try {
       const { batcher, streamSocket } = createBatcher({ isSessionDroppable: () => true })
-      streamSocket.writableLength = 128 * 1024 // deep socket: queues accumulate
-      // 17 backgrounded sessions × 768KB — each below the single-session cap,
-      // but a reveal would have to drain the ~13MB aggregate (measured 2.5s
-      // hidden-restore). The global budget thins each to ~2MB/17 ≈ 120KB.
+      streamSocket.writableLength = 128 * 1024
+      // Keep every session below its individual cap while exceeding the shared tail budget.
       for (let s = 0; s < 17; s++) {
         batcher.enqueue('client-1', `session-${s}`, '#'.repeat(768 * 1024))
       }
       const totalQueued = batcher.queuedCharsForClient('client-1')
       expect(totalQueued).toBeLessThan(3 * 1024 * 1024)
-      // Every session still keeps at least a full screen of newest tail.
       streamSocket.writableLength = 0
       batcher.flush('client-1')
       const perSession = new Map<string, number>()
@@ -565,8 +545,6 @@ describe('DaemonStreamDataBatcher', () => {
       batcher.enqueue('client-1', 'session-bg', 'DONE')
       vi.advanceTimersByTime(2)
 
-      // Reveal never discards: a finished program's last output must reach
-      // main's model (restore reads it). The normal drain loop delivers it.
       streamSocket.writableLength = 0
       batcher.flush('client-1')
       expect(batcher.queuedCharsForClient('client-1')).toBe(0)
@@ -593,13 +571,11 @@ describe('DaemonStreamDataBatcher', () => {
       streamSocket.writableLength = 128 * 1024
       batcher.enqueue('client-1', 'session-bulk', 'x'.repeat(64 * 1024))
       vi.advanceTimersByTime(2)
-      // Held pass → exactly one sentinel armed; further held passes don't stack.
       expect(flushCallbacks).toHaveLength(1)
       batcher.flush('client-1')
       expect(flushCallbacks).toHaveLength(1)
 
-      // Kernel flushed the in-flight bytes (socket now shallow): the sentinel
-      // callback resumes the held bulk with no 'drain' event involved.
+      // Complete the refill frame without a drain event to exercise callback-driven flushing.
       streamSocket.writableLength = 0
       flushCallbacks[0]()
       expect(writtenData(streamSocket)).toBe('x'.repeat(64 * 1024))

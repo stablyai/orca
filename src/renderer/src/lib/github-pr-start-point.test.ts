@@ -23,75 +23,6 @@ describe('resolveGitHubPrStartPointForRepo', () => {
     })
   })
 
-  it('resolves local PR heads through worktree IPC with PR branch hints', async () => {
-    vi.mocked(window.api.worktrees.resolvePrBase).mockResolvedValue({
-      baseBranch: 'abc123',
-      compareBaseRef: 'refs/remotes/origin/main',
-      branchNameOverride: 'feature/fix',
-      pushTarget: { remoteName: 'origin', branchName: 'feature/fix' }
-    })
-
-    await expect(
-      resolveGitHubPrStartPointForRepo({
-        repoId: 'repo-1',
-        prNumber: 42,
-        target: { kind: 'local' as const },
-        headRefName: 'feature/fix',
-        baseRefName: 'main',
-        isCrossRepository: false
-      })
-    ).resolves.toMatchObject({
-      baseBranch: 'abc123',
-      branchNameOverride: 'feature/fix'
-    })
-
-    expect(window.api.worktrees.resolvePrBase).toHaveBeenCalledWith({
-      repoId: 'repo-1',
-      prNumber: 42,
-      headRefName: 'feature/fix',
-      baseRefName: 'main',
-      isCrossRepository: false
-    })
-    expect(callRuntimeRpc).not.toHaveBeenCalled()
-  })
-
-  it('routes runtime-owned PR head resolution through runtime RPC', async () => {
-    vi.mocked(callRuntimeRpc).mockResolvedValue({
-      baseBranch: 'def456',
-      compareBaseRef: 'refs/remotes/origin/develop',
-      branchNameOverride: 'feature/runtime',
-      pushTarget: { remoteName: 'fork', branchName: 'feature/runtime' }
-    })
-
-    await expect(
-      resolveGitHubPrStartPointForRepo({
-        repoId: 'repo-runtime',
-        prNumber: 7,
-        target: { kind: 'environment' as const, environmentId: 'env-1' },
-        headRefName: 'feature/runtime',
-        baseRefName: 'develop',
-        isCrossRepository: true
-      })
-    ).resolves.toMatchObject({
-      baseBranch: 'def456',
-      branchNameOverride: 'feature/runtime'
-    })
-
-    expect(callRuntimeRpc).toHaveBeenCalledWith(
-      { kind: 'environment', environmentId: 'env-1' },
-      'worktree.resolvePrBase',
-      {
-        repo: 'repo-runtime',
-        prNumber: 7,
-        headRefName: 'feature/runtime',
-        baseRefName: 'develop',
-        isCrossRepository: true
-      },
-      { timeoutMs: 30_000 }
-    )
-    expect(window.api.worktrees.resolvePrBase).not.toHaveBeenCalled()
-  })
-
   it('throws resolver errors so submit can abort before creating from the wrong base', async () => {
     vi.mocked(window.api.worktrees.resolvePrBase).mockResolvedValue({
       error: 'Could not resolve PR head.'
@@ -104,5 +35,32 @@ describe('resolveGitHubPrStartPointForRepo', () => {
         target: { kind: 'local' }
       })
     ).rejects.toThrow('Could not resolve PR head.')
+  })
+
+  it('marks creating from a PR as a user act, locally and on a paired host (E9)', async () => {
+    const startPoint = { baseBranch: 'origin/main' }
+    vi.mocked(window.api.worktrees.resolvePrBase).mockResolvedValue(startPoint)
+    vi.mocked(callRuntimeRpc).mockResolvedValue(startPoint)
+
+    await resolveGitHubPrStartPointForRepo({
+      repoId: 'repo-1',
+      prNumber: 7,
+      target: { kind: 'local' }
+    })
+    await resolveGitHubPrStartPointForRepo({
+      repoId: 'repo-1',
+      prNumber: 7,
+      target: { kind: 'environment', environmentId: 'env-1' }
+    })
+
+    expect(window.api.worktrees.resolvePrBase).toHaveBeenCalledWith(
+      expect.objectContaining({ wakeWslDistro: true })
+    )
+    expect(callRuntimeRpc).toHaveBeenCalledWith(
+      expect.anything(),
+      'worktree.resolvePrBase',
+      expect.objectContaining({ wakeWslDistro: true }),
+      expect.anything()
+    )
   })
 })

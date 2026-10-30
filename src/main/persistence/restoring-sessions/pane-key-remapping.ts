@@ -3,7 +3,6 @@ import { isTerminalLeafId, makePaneKey, parsePaneKey } from '../../../shared/sta
 
 type PaneLeafRemap = Map<string, Map<string, string>>
 
-/** Resolves the pane key a legacy entry should move to, or `null` when it stays put. */
 function resolveRemappedPaneKey(
   paneKey: string,
   leafIdByInputLeafIdByTabId: PaneLeafRemap
@@ -27,9 +26,7 @@ function remapPaneKeys<T extends number>(
   values: Record<string, T> | undefined,
   leafIdByInputLeafIdByTabId: PaneLeafRemap
 ): { values: Record<string, T> | undefined; changed: boolean } {
-  // Why the classify-first pass: these maps grow with every pane ever opened and this runs on
-  // every session write, but post-migration no key is ever rewritten. Rebuilding the whole
-  // object only to discard it was pure garbage; the rewrite below is unchanged.
+  // Classify first to avoid rebuilding large unchanged maps on every session write.
   if (
     !values ||
     !Object.keys(values).some(
@@ -41,7 +38,7 @@ function remapPaneKeys<T extends number>(
 
   const next: Record<string, T> = {}
   for (const [paneKey, value] of Object.entries(values)) {
-    // Carry values over when a legacy leaf is promoted to a UUID; keep the max on collision.
+    // Promoted UUID keys retain the largest value on collision.
     const target = resolveRemappedPaneKey(paneKey, leafIdByInputLeafIdByTabId) ?? paneKey
     const existing = next[target]
     next[target] = existing === undefined ? value : (Math.max(existing, value) as T)

@@ -62,6 +62,301 @@ describe('local detected agent context lifecycle', () => {
     })
   })
 
+  it('keeps complete Settings inventory separate from automatic probes in either completion order', async () => {
+    const store = createTestStore([])
+    const resolveDetection = new Map<boolean, (ids: string[]) => void>()
+    detectAgents.mockImplementation(
+      (args) =>
+        new Promise<string[]>((resolve) => {
+          resolveDetection.set(args?.enabledOnly === true, resolve)
+        })
+    )
+    const automatic = store.getState().ensureDetectedAgents()
+    const settings = store.getState().ensureAllDetectedAgents()
+    expect(store.getState().ensureAllDetectedAgents()).toBe(settings)
+    resolveDetection.get(true)?.(['claude'])
+    await automatic
+    expect(store.getState().localDetectedAgentIdsByContext['host\u0000all-agents']).toBeNull()
+    resolveDetection.get(false)?.(['claude', 'kiro'])
+    await settings
+    expect(store.getState().detectedAgentIds).toEqual(['claude'])
+    expect(store.getState().localDetectedAgentIdsByContext['host\u0000all-agents']).toEqual([
+      'claude',
+      'kiro'
+    ])
+    await expect(store.getState().ensureAllDetectedAgents()).resolves.toEqual(['claude', 'kiro'])
+    expect(detectAgents).toHaveBeenCalledTimes(2)
+
+    store.getState().clearLocalDetectedAgents()
+    const nextAutomatic = store.getState().ensureDetectedAgents()
+    const nextSettings = store.getState().ensureAllDetectedAgents()
+    resolveDetection.get(false)?.(['codex', 'kiro'])
+    await nextSettings
+    resolveDetection.get(true)?.(['codex'])
+    await nextAutomatic
+    expect(store.getState().localDetectedAgentIdsByContext['host\u0000all-agents']).toEqual([
+      'codex',
+      'kiro'
+    ])
+    expect(store.getState().detectedAgentIds).toEqual(['codex'])
+  })
+
+  it('sends a refresh click as a wake instead of joining a background refresh', async () => {
+    const store = createTestStore([makeRepo('repo-1')])
+    let finishBackground: (value: unknown) => void = () => {}
+    refreshAgents.mockReturnValueOnce(
+      new Promise((resolve) => {
+        finishBackground = resolve
+      })
+    )
+
+    const background = store.getState().refreshDetectedAgents()
+    // The background call may be refused for a stopped WSL distro; the click must reach main itself.
+    const click = store.getState().refreshDetectedAgents(undefined, { wakeWslDistro: true })
+    const again = store.getState().refreshDetectedAgents()
+
+    expect(refreshAgents).toHaveBeenCalledTimes(2)
+    expect(refreshAgents).toHaveBeenLastCalledWith(expect.objectContaining({ wakeWslDistro: true }))
+    finishBackground({ agents: ['claude'], pathSource: 'process_env', pathFailureReason: 'none' })
+    await Promise.all([background, click, again])
+  })
+
+  it('retries a refused list as a wake when an agent picker opens, without joining a background probe', async () => {
+    const store = createTestStore([makeRepo('repo-1')])
+    detectAgents.mockRejectedValueOnce(new Error("WSL distro 'Ubuntu' is not running."))
+    await store.getState().ensureDetectedAgents()
+    expect(store.getState().readLocalAgentInventory().state).toBe('failed')
+
+    let finishBackground: (ids: string[]) => void = () => {}
+    detectAgents
+      .mockReturnValueOnce(
+        new Promise<string[]>((resolve) => {
+          finishBackground = resolve
+        })
+      )
+      .mockResolvedValueOnce(['codex'])
+    const background = store.getState().ensureDetectedAgents()
+    const picker = store.getState().ensureDetectedAgentsForPicker()
+
+    expect(detectAgents).toHaveBeenCalledTimes(3)
+    expect(detectAgents).toHaveBeenLastCalledWith(expect.objectContaining({ wakeWslDistro: true }))
+    await expect(picker).resolves.toEqual(['codex'])
+    // The background probe settles later but no longer owns the context.
+    finishBackground([])
+    await background
+    expect(store.getState().readLocalAgentInventory()).toEqual({
+      ids: ['codex'],
+      state: 'successful'
+    })
+    // A known list is reused: opening the picker again probes nothing.
+    await store.getState().ensureDetectedAgentsForPicker()
+    expect(detectAgents).toHaveBeenCalledTimes(3)
+  })
+
+  it('marks only an E9 refusal as refused, so a picker never retries real failures', async () => {
+    const store = createTestStore([makeRepo('repo-1')])
+    detectAgents.mockRejectedValueOnce(
+      new Error(
+        "Error invoking remote method 'preflight:detectAgents': WslDistroStoppedError: WSL distro 'Ubuntu' is not running. Retry, or open a terminal in it, to start it."
+      )
+    )
+    await store.getState().ensureDetectedAgents()
+    expect(store.getState().isLocalAgentInventoryRefused()).toBe(true)
+
+    detectAgents.mockRejectedValueOnce(new Error('wsl.exe timed out'))
+    await store.getState().ensureDetectedAgents()
+    expect(store.getState().readLocalAgentInventory().state).toBe('failed')
+    expect(store.getState().isLocalAgentInventoryRefused()).toBe(false)
+  })
+
+  it('forgets a refusal when the local inventory is cleared', async () => {
+    const store = createTestStore([makeRepo('repo-1')])
+    detectAgents.mockRejectedValueOnce(new Error("WSL distro 'Ubuntu' is not running."))
+    await store.getState().ensureDetectedAgents()
+    expect(store.getState().isLocalAgentInventoryRefused()).toBe(true)
+
+    store.getState().clearLocalDetectedAgents()
+    expect(store.getState().isLocalAgentInventoryRefused()).toBe(false)
+  })
+
+  it('re-detects re-enabled agents and prevents pre-change requests from restoring caches', async () => {
+    const store = createTestStore([])
+    let finishOld: (ids: string[]) => void = () => {}
+    detectAgents.mockReturnValueOnce(
+      new Promise<string[]>((resolve) => {
+        finishOld = resolve
+      })
+    )
+    const stale = store.getState().ensureDetectedAgents()
+    const settings = store.getState().settings!
+    store.setState({ settings: { ...settings, disabledTuiAgents: ['kiro'] } })
+    detectAgents.mockResolvedValueOnce(['claude'])
+    await store.getState().ensureDetectedAgents()
+    finishOld(['kiro'])
+    await stale
+    expect(store.getState().detectedAgentIds).toEqual(['claude'])
+    store.setState({ settings: { ...settings, disabledTuiAgents: [] } })
+    expect(store.getState().detectedAgentIds).toBeNull()
+    detectAgents.mockResolvedValueOnce(['claude', 'kiro'])
+    await expect(store.getState().ensureDetectedAgents()).resolves.toEqual(['claude', 'kiro'])
+    expect(detectAgents).toHaveBeenCalledTimes(3)
+  })
+
+  it('separates automatic refresh from a complete Settings refresh and fences late detects', async () => {
+    const store = createTestStore([])
+    let finishOld: (ids: string[]) => void = () => {}
+    detectAgents.mockReturnValueOnce(
+      new Promise<string[]>((resolve) => {
+        finishOld = resolve
+      })
+    )
+    const stale = store.getState().ensureAllDetectedAgents()
+    refreshAgents.mockResolvedValueOnce({ agents: ['claude', 'kiro'] })
+    await expect(store.getState().refreshAllDetectedAgents()).resolves.toEqual(['claude', 'kiro'])
+    expect(refreshAgents.mock.lastCall?.[0]?.enabledOnly).not.toBe(true)
+    finishOld(['claude'])
+    await stale
+    expect(store.getState().localDetectedAgentIdsByContext['host\u0000all-agents']).toEqual([
+      'claude',
+      'kiro'
+    ])
+    expect(store.getState().detectedAgentIds).toEqual(['claude', 'kiro'])
+    refreshAgents.mockResolvedValueOnce({ agents: ['claude'] })
+    await store.getState().refreshDetectedAgents()
+    expect(refreshAgents).toHaveBeenLastCalledWith(expect.objectContaining({ enabledOnly: true }))
+    expect(store.getState().detectedAgentIds).toEqual(['claude'])
+    expect(store.getState().localDetectedAgentIdsByContext['host\u0000all-agents']).toEqual([
+      'claude',
+      'kiro'
+    ])
+    expect(store.getState().isDetectingLocalAgentsByContext).toEqual({})
+    expect(store.getState().isRefreshingLocalAgentsByContext).toEqual({})
+  })
+
+  it.each([
+    { refreshFails: false, detectFinishesFirst: false },
+    { refreshFails: false, detectFinishesFirst: true },
+    { refreshFails: true, detectFinishesFirst: false },
+    { refreshFails: true, detectFinishesFirst: true }
+  ])(
+    'settles both loading modes when a full refresh supersedes detects ($refreshFails, $detectFinishesFirst)',
+    async ({ refreshFails, detectFinishesFirst }) => {
+      const store = createTestStore([])
+      const enabledDetection = Promise.withResolvers<string[]>()
+      const fullDetection = Promise.withResolvers<string[]>()
+      const fullRefresh = Promise.withResolvers<{ agents: string[] }>()
+      detectAgents
+        .mockReturnValueOnce(enabledDetection.promise)
+        .mockReturnValueOnce(fullDetection.promise)
+      refreshAgents.mockReturnValueOnce(fullRefresh.promise)
+      const enabled = store.getState().ensureDetectedAgents()
+      const full = store.getState().ensureAllDetectedAgents()
+      const refreshed = store.getState().refreshAllDetectedAgents()
+
+      expect(store.getState().isDetectingAgents).toBe(false)
+      expect(store.getState().isDetectingLocalAgentsByContext).toEqual({})
+      expect(store.getState().isRefreshingLocalAgentsByContext).toEqual({
+        host: true,
+        'host\u0000all-agents': true
+      })
+      const finishDetections = async () => {
+        enabledDetection.resolve(['claude'])
+        fullDetection.resolve(['claude', 'kiro'])
+        await Promise.all([enabled, full])
+      }
+      if (detectFinishesFirst) {
+        await finishDetections()
+        expect(store.getState().isRefreshingAgents).toBe(true)
+      }
+      if (refreshFails) {
+        fullRefresh.reject(new Error('shell unavailable'))
+      } else {
+        fullRefresh.resolve({ agents: ['codex', 'kiro'] })
+      }
+      await refreshed
+      if (!detectFinishesFirst) {
+        await finishDetections()
+      }
+
+      expect(store.getState().localDetectedAgentIdsByContext).toEqual({
+        host: refreshFails ? [] : ['codex', 'kiro'],
+        'host\u0000all-agents': refreshFails ? [] : ['codex', 'kiro']
+      })
+      expect(store.getState().isDetectingLocalAgentsByContext).toEqual({})
+      expect(store.getState().isRefreshingLocalAgentsByContext).toEqual({})
+      expect(store.getState().isDetectingAgents).toBe(false)
+      expect(store.getState().isRefreshingAgents).toBe(false)
+    }
+  )
+
+  it('publishes a complete refresh to automatic readers without letting their late probe overwrite it', async () => {
+    const store = createTestStore([])
+    store.setState({ settings: { ...store.getState().settings!, disabledTuiAgents: ['kiro'] } })
+    let finishOld: (ids: string[]) => void = () => {}
+    detectAgents.mockReturnValueOnce(
+      new Promise<string[]>((resolve) => {
+        finishOld = resolve
+      })
+    )
+    const old = store.getState().ensureDetectedAgents()
+    let finishRefresh: (result: { agents: string[] }) => void = () => {}
+    refreshAgents.mockReturnValueOnce(
+      new Promise((resolve) => {
+        finishRefresh = resolve
+      })
+    )
+    const settings = store.getState().refreshAllDetectedAgents()
+    const automatic = store.getState().ensureDetectedAgents()
+    expect(store.getState().refreshDetectedAgents()).toBe(automatic)
+    finishOld(['claude'])
+    await old
+    finishRefresh({ agents: ['codex', 'kiro'] })
+    await expect(settings).resolves.toEqual(['codex', 'kiro'])
+    await expect(automatic).resolves.toEqual(['codex'])
+    expect(store.getState().detectedAgentIds).toEqual(['codex'])
+    expect(store.getState().localDetectedAgentIdsByContext['host\u0000all-agents']).toEqual([
+      'codex',
+      'kiro'
+    ])
+    expect(store.getState().isRefreshingLocalAgentsByContext).toEqual({})
+    expect(refreshAgents).toHaveBeenCalledTimes(1)
+  })
+
+  it('preserves both inventories on full refresh failure without treating a partial list as complete', async () => {
+    const store = createTestStore([])
+    detectAgents.mockResolvedValueOnce(['claude'])
+    await store.getState().ensureDetectedAgents()
+    refreshAgents.mockRejectedValueOnce(new Error('shell unavailable'))
+    await expect(store.getState().refreshAllDetectedAgents()).resolves.toEqual([])
+    expect(store.getState().detectedAgentIds).toEqual(['claude'])
+    expect(store.getState().localDetectedAgentIdsByContext['host\u0000all-agents']).toEqual([])
+    expect(store.getState().readLocalAgentInventory().state).toBe('failed')
+    expect(store.getState().isRefreshingLocalAgentsByContext).toEqual({})
+    detectAgents.mockResolvedValueOnce(['claude', 'kiro'])
+    await expect(store.getState().ensureAllDetectedAgents()).resolves.toEqual(['claude', 'kiro'])
+    expect(store.getState().localDetectedAgentIdsByContext.host).toEqual(['claude'])
+  })
+
+  it('detaches both modes of a full refresh when disabled preferences change', async () => {
+    const store = createTestStore([])
+    let finishOld: (result: { agents: string[] }) => void = () => {}
+    refreshAgents.mockReturnValueOnce(
+      new Promise((resolve) => {
+        finishOld = resolve
+      })
+    )
+    const oldSettings = store.getState().refreshAllDetectedAgents()
+    const oldAutomatic = store.getState().ensureDetectedAgents()
+    store.setState({ settings: { ...store.getState().settings!, disabledTuiAgents: ['kiro'] } })
+    detectAgents.mockResolvedValueOnce(['codex'])
+    await store.getState().ensureDetectedAgents()
+    finishOld({ agents: ['claude', 'kiro'] })
+    await Promise.all([oldSettings, oldAutomatic])
+    expect(store.getState().detectedAgentIds).toEqual(['codex'])
+    expect(store.getState().localDetectedAgentIdsByContext['host\u0000all-agents']).toBeUndefined()
+    expect(store.getState().isRefreshingLocalAgentsByContext).toEqual({})
+  })
+
   it('deduplicates Floating-first callers without cached or settlement broadcast fanout', async () => {
     let resolveDetection: (agents: string[]) => void = () => {}
     detectAgents.mockReturnValueOnce(
@@ -99,11 +394,13 @@ describe('local detected agent context lifecycle', () => {
     const projects = store.getState().projects
     detectAgents.mockResolvedValueOnce(['grok']).mockResolvedValueOnce([])
     await store.getState().ensureNativeDetectedAgents()
-    expect(detectAgents).toHaveBeenNthCalledWith(1, undefined)
+    expect(detectAgents).toHaveBeenNthCalledWith(1, { enabledOnly: true })
     await store.getState().ensureDetectedAgents()
     await store.getState().refreshDetectedAgents()
     expect(readNativeDetectedAgents(store.getState())).toEqual(['grok'])
     expect(store.getState().detectedAgentIds).toEqual(['codex'])
+    const inventory = store.getState().readLocalAgentInventory(FLOATING_TERMINAL_WORKTREE_ID)
+    expect(inventory).toEqual({ ids: ['grok'], state: 'successful' })
     store.setState({ projects: [] })
     refreshAgents.mockRejectedValueOnce(new Error('native refresh failed'))
     await expect(store.getState().refreshDetectedAgents()).resolves.toEqual(['grok'])
@@ -130,6 +427,37 @@ describe('local detected agent context lifecycle', () => {
     store.setState({ projects: [] })
     await store.getState().refreshDetectedAgents()
     expect(readNativeDetectedAgents(store.getState())).toEqual(['codex'])
+  })
+
+  it('reacquires requested native inventory across preference changes and fences retired native probes', async () => {
+    const store = createTestStore([makeRepo('repo-1')])
+    const firstDetection = Promise.withResolvers<string[]>()
+    const disabledDetection = Promise.withResolvers<string[]>()
+    const reenabledDetection = Promise.withResolvers<string[]>()
+    detectAgents
+      .mockReturnValueOnce(firstDetection.promise)
+      .mockReturnValueOnce(disabledDetection.promise)
+      .mockReturnValueOnce(reenabledDetection.promise)
+    const first = store.getState().ensureNativeDetectedAgents()
+    const settings = store.getState().settings!
+
+    store.setState({ settings: { ...settings, disabledTuiAgents: ['pi'] } })
+    store.setState({ settings: { ...settings, disabledTuiAgents: [] } })
+    expect(detectAgents.mock.calls).toEqual([
+      [{ enabledOnly: true }],
+      [{ enabledOnly: true }],
+      [{ enabledOnly: true }]
+    ])
+    reenabledDetection.resolve(['pi', 'codex'])
+    await vi.waitFor(() =>
+      expect(readNativeDetectedAgents(store.getState())).toEqual(['pi', 'codex'])
+    )
+    disabledDetection.resolve(['codex'])
+    firstDetection.resolve(['claude'])
+    await first
+    expect(readNativeDetectedAgents(store.getState())).toEqual(['pi', 'codex'])
+    expect(store.getState().detectedAgentIds).toBeNull()
+    expect(store.getState().isDetectingLocalAgentsByContext).toEqual({})
   })
 
   it('evicts removed project contexts without retaining settled loading entries', async () => {
@@ -261,8 +589,8 @@ describe('local detected agent context lifecycle', () => {
     await expect(
       store.getState().refreshDetectedAgents(FLOATING_TERMINAL_WORKTREE_ID)
     ).resolves.toEqual([])
-    resolveDetection(['stale'])
-    await expect(supersededDetect).resolves.toEqual(['stale'])
+    resolveDetection(['grok'])
+    await expect(supersededDetect).resolves.toEqual(['grok'])
 
     await expect(
       store.getState().ensureDetectedAgents(FLOATING_TERMINAL_WORKTREE_ID)

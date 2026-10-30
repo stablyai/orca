@@ -5,7 +5,7 @@ import type {
   GitHubProjectTable
 } from '../../../../shared/github/project-types'
 
-// Why: optimistic field value so the patched row re-renders immediately; best-effort, overwritten by the authoritative payload on next refresh.
+// Patch field optimistically for immediate render; next authoritative refresh replaces it.
 export function optimisticFieldValueFromMutation(
   table: GitHubProjectTable,
   fieldId: string,
@@ -108,7 +108,7 @@ export function rollbackRowIfPresent(
   rowId: string,
   previousRow: GitHubProjectRow
 ): void {
-  // Why: skip rollback when the entry moved (rapid project switch) or the row is gone, else stale data would surface in the newly selected project.
+  // Rollback only the same entry/row; project switches must not receive stale data.
   const entry = get().projectViewCache[cacheKey]
   if (!entry?.data) {
     return

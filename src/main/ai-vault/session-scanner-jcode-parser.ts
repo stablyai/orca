@@ -4,12 +4,12 @@ import type { ExecutionHostId } from '../../shared/execution-host'
 import type { FileWithMtime } from './session-scanner-types'
 import type { TranscriptMessageSink } from './session-transcript-consumers'
 import {
-  addPreviewContent,
   createAccumulator,
   finalizeSession,
   sessionIdFromFileName,
   updateTimeline
 } from './session-scanner-accumulator'
+import { addSessionContent } from './session-scanner-messages'
 import {
   arrayValue,
   asRecord,
@@ -22,7 +22,6 @@ import { numberValue } from './session-scanner-token-values'
 type ParserSessionOptions = {
   executionHostId?: ExecutionHostId
   executionHostPlatform?: NodeJS.Platform | null
-  // Why: where decoded messages go when the caller is streaming a transcript reader.
   messages?: TranscriptMessageSink
 }
 
@@ -32,12 +31,7 @@ const PREVIEW_ROLE_BY_MESSAGE_ROLE: Record<string, 'user' | 'assistant' | 'tool'
   tool: 'tool'
 }
 
-/** Messages jcode itself renders as internal rather than conversation.
- *
- *  `display_role` is `System | BackgroundTask` (StoredDisplayRole in
- *  crates/jcode-session-types/src/lib.rs), and a scheduled run opens with a
- *  `[Scheduled task]` user turn. Counting either inflates the message count and can
- *  take over the title and preview. */
+/** Internal display roles and scheduled runs must not seed conversation counts, titles or previews. */
 function isInjectedContextMessage(message: Record<string, unknown>): boolean {
   if (message.display_role === 'system' || message.display_role === 'background_task') {
     return true
@@ -49,7 +43,6 @@ function isInjectedContextMessage(message: Record<string, unknown>): boolean {
   return text.startsWith('[Scheduled task]') || text.startsWith('<system-reminder>')
 }
 
-/** Sum of a stored message's usage, matching the other parsers' input+output total. */
 function jcodeMessageTokens(message: Record<string, unknown>): number {
   const usage = asRecord(message.token_usage)
   return usage ? numberValue(usage.input_tokens) + numberValue(usage.output_tokens) : 0
@@ -78,7 +71,6 @@ export function parseJcodeSessionContent(
   try {
     parsed = JSON.parse(content)
   } catch {
-    // Why: a partially written session doc must not abort the scan; skip it.
     return null
   }
   const record = asRecord(parsed)
@@ -94,8 +86,7 @@ export function parseJcodeSessionContent(
     messages: options.messages
   })
   accumulator.model = extractString(record.model)
-  // Why before the message walk: a session the user named keeps that name, rather
-  // than being retitled from whatever its first prompt happened to say.
+  // Seed explicit titles before messages so the first prompt cannot replace them.
   accumulator.title =
     normalizeTitleText(extractString(record.custom_title) ?? '') ||
     normalizeTitleText(extractString(record.title) ?? '') ||
@@ -104,10 +95,7 @@ export function parseJcodeSessionContent(
   updateTimeline(accumulator, record.created_at)
   updateTimeline(accumulator, record.updated_at)
 
-  // Why: parse only the durable `messages` array. The live `.journal.jsonl`
-  // sibling is intentionally ignored: its writes do not bump this file's mtime,
-  // so a merged read would go stale against the parse cache until the session
-  // doc is rewritten (checkpoint/close).
+  // Ignore the live journal: its appends do not change the document signature used by the parse cache.
   for (const message of arrayValue(record.messages)) {
     consumeJcodeMessage(accumulator, message)
   }
@@ -134,5 +122,5 @@ function consumeJcodeMessage(
   }
   accumulator.messageCount++
   accumulator.totalTokens += jcodeMessageTokens(messageRecord)
-  addPreviewContent(accumulator, role, content, messageRecord.timestamp)
+  addSessionContent(accumulator, role, content, messageRecord.timestamp)
 }

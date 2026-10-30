@@ -2,7 +2,8 @@
 
 import '@testing-library/jest-dom/vitest'
 
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, screen } from '@testing-library/react'
+import { render } from './native-chat-tooltip-test-harness'
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 
 // Why: these fixtures have neither inline visual owners nor sender navigation.
@@ -24,7 +25,6 @@ afterEach(() => {
   expect(unusedChatLeaves.inlineVisual).not.toHaveBeenCalled()
   expect(unusedChatLeaves.openSender).not.toHaveBeenCalled()
 })
-import { TooltipProvider } from '@/components/ui/tooltip'
 import { NativeChatOrcaStopContext } from './native-chat-orca-stop-context'
 import { agentSessionFailureWords } from '../../../../shared/agent-session-failure-words'
 import type {
@@ -60,8 +60,7 @@ const usageLimitView = {
 {
   const TURN_MS = 12_000
 
-  // Each turn ends differently. The journal is where each end is recorded, and the lifecycle is
-  // seeded rather than produced, since a crash settles as `interrupted` only once the host proves it.
+  // Seed lifecycle separately: the host must confirm a crash before it settles as interrupted.
   const TURNS: { id: string; end: Pick<AgentJournalTurnItem, 'state' | 'outcome'> }[] = [
     { id: 'user-finished', end: { state: 'completed', outcome: 'success' } },
     { id: 'user-crashed', end: { state: 'interrupted' } },
@@ -149,7 +148,6 @@ const usageLimitView = {
   }
 
   describe('NativeChatMessageList folded turn headers', () => {
-    // A crash-cut turn reads like a finished one; the chat's notice row is what says it stopped.
     it('says a crash-cut turn worked like a finished one and a stopped turn was interrupted', () => {
       render(
         <NativeChatMessageList
@@ -169,7 +167,6 @@ const usageLimitView = {
         ['Worked for 12s', 'false'],
         ['Interrupted after 12s', 'false']
       ])
-      // The turn's detail stays inside the fold.
       expect(screen.queryByText('narration user-crashed')).toBeNull()
       expect(screen.getByText('answer user-crashed')).toBeInTheDocument()
     })
@@ -259,7 +256,7 @@ const usageLimitView = {
   }
 
   it.each(['claude', 'codex', 'grok'] as const)(
-    'keeps a collapsed %s quota failure and Continue visible',
+    'keeps a collapsed %s quota warning visible without a continuation action',
     (agent) => {
       continueUsageLimit.mockClear()
       const items: AgentJournalRenderItem[] = [
@@ -302,22 +299,20 @@ const usageLimitView = {
         }
       ]
       render(
-        <TooltipProvider>
-          <NativeChatOrcaStopContext.Provider value={usageLimitView}>
-            <NativeChatMessageList
-              session={{
-                ...session,
-                agent,
-                status: 'ready',
-                messages: projectStructuredAgentSessionMessages(items, [], [])
-              }}
-              journalItems={items}
-              settledTurns={selectStructuredAgentSettledTurns(items)}
-              isWorking={false}
-              expandSignal={false}
-            />
-          </NativeChatOrcaStopContext.Provider>
-        </TooltipProvider>
+        <NativeChatOrcaStopContext.Provider value={usageLimitView}>
+          <NativeChatMessageList
+            session={{
+              ...session,
+              agent,
+              status: 'ready',
+              messages: projectStructuredAgentSessionMessages(items, [], [])
+            }}
+            journalItems={items}
+            settledTurns={selectStructuredAgentSettledTurns(items)}
+            isWorking={false}
+            expandSignal={false}
+          />
+        </NativeChatOrcaStopContext.Provider>
       )
       expect(screen.getByRole('button', { name: 'Toggle turn details' })).toHaveAttribute(
         'aria-expanded',
@@ -326,15 +321,12 @@ const usageLimitView = {
       expect(screen.queryByText('Earlier work')).toBeNull()
       expect(screen.getByText(/hit its session limit/)).toBeVisible()
       expect(screen.getByText('Details')).toBeVisible()
-      const button = screen.getByRole('button', { name: 'Continue' })
-      expect(button).toBeVisible()
-      fireEvent.click(button)
-      expect(continueUsageLimit).toHaveBeenCalledOnce()
+      expect(screen.queryByRole('button', { name: 'Continue' })).toBeNull()
+      expect(screen.queryByText(/Send a message once it resets/)).toBeNull()
     }
   )
 
-  // The turn still runs while a Stop ends it, so its bar keeps the running clock; only the tail line
-  // says the turn is stopping, and the bar settles to "Interrupted after" once the turn ends.
+  // Stop leaves the bar’s clock running until settlement; only the tail says Stopping.
   describe("the turn bar while a person's Stop ends the turn", () => {
     it('keeps the running clock above the Stopping tail line', () => {
       const transcript = (stopping: boolean) => (
@@ -361,8 +353,7 @@ const usageLimitView = {
     })
   })
 
-  // Where the host does not queue sends, one made while Stopping is held until the turn ends: it is
-  // drawn after the Stopping line, not inside the turn being stopped.
+  // Hosts without queueing hold sends after the Stopping line until the turn ends.
   describe('a message sent while Stopping, before the host has handed it over', () => {
     const pending = {
       id: 'pending-send',
@@ -401,7 +392,6 @@ const usageLimitView = {
       expect(sent.compareDocumentPosition(working)).toBe(Node.DOCUMENT_POSITION_FOLLOWING)
     })
 
-    // Sent just before the Stop, the host steers it into the turn: it stays there, never jumping.
     it('keeps a send made before the Stop in the turn', () => {
       const { sentWhileStopping: _made, ...beforeStop } = pending
       render(

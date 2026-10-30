@@ -4,7 +4,6 @@ import { syncSinglePty } from '../orca-runtime-test-fixtures.spec'
 import { createSideEffectRuntime } from '../orca-runtime-test-scenario-builders.spec'
 import { DECORATIVE_TITLE_FACT_HEARTBEAT_MS } from '../decorative-title-fact-emission'
 
-// Orca's own synthetic agent spinner: one frame per pane every 80ms while an agent works.
 const SPINNER_FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏']
 const SPINNER_INTERVAL_MS = 80
 const EPOCH = 1_700_000_000_000
@@ -31,7 +30,7 @@ describe('decorative title fact throttle', () => {
     const { runtime, batches } = createSideEffectRuntime()
     syncSinglePty(runtime)
 
-    const ticks = 125 // 10s of Orca's 80ms synthetic spinner timer
+    const ticks = 125
     for (let tick = 0; tick < ticks; tick += 1) {
       vi.setSystemTime(new Date(EPOCH + tick * SPINNER_INTERVAL_MS))
       runtime.ingestSyntheticTitleFrame(
@@ -41,15 +40,13 @@ describe('decorative title fact throttle', () => {
     }
 
     const facts = titleFacts(batches)
-    // Every frame carried the same underlying title, so the renderer learns nothing new past
-    // the heartbeat: 125 pty:sideEffect messages collapse to one per heartbeat window.
+    // Identical underlying titles add no information between heartbeats.
     const elapsedMs = ticks * SPINNER_INTERVAL_MS
     expect(facts.length).toBeLessThanOrEqual(
       Math.ceil(elapsedMs / DECORATIVE_TITLE_FACT_HEARTBEAT_MS)
     )
     expect(facts.length).toBeLessThan(ticks / 5)
-    // The heartbeat must not thin out below what the renderer's 1500ms hook-done quiet window
-    // needs to cancel a milestone `done` — three working frames per window.
+    // Three working frames per 1500ms are needed to cancel renderer milestone-done quiet windows.
     expect(facts.length).toBeGreaterThanOrEqual(Math.floor(elapsedMs / 1_500) * 3)
     for (const fact of facts) {
       expect(fact.normalizedTitle.endsWith('Claude Code')).toBe(true)
@@ -61,7 +58,6 @@ describe('decorative title fact throttle', () => {
     syncSinglePty(runtime)
 
     runtime.ingestSyntheticTitleFrame('pty-1', '\x1b]0;⠋ Claude Code\x07')
-    // Two more decorative ticks — still well inside the heartbeat window, so they are dropped.
     vi.setSystemTime(new Date(EPOCH + SPINNER_INTERVAL_MS))
     runtime.ingestSyntheticTitleFrame('pty-1', '\x1b]0;⠙ Claude Code\x07')
     vi.setSystemTime(new Date(EPOCH + 2 * SPINNER_INTERVAL_MS))
@@ -79,7 +75,7 @@ describe('decorative title fact throttle', () => {
   })
 
   it('propagates a changed working label immediately even while the spinner rotates', () => {
-    // Why: only the spinner glyph is decoration. Grok/Pi-style label churn is real content.
+    // Only spinner glyphs are decorative; Grok/Pi label churn changes content.
     const { runtime, batches } = createSideEffectRuntime()
     syncSinglePty(runtime)
 
@@ -94,8 +90,7 @@ describe('decorative title fact throttle', () => {
   })
 
   it('keeps main-side tracked title state current for every suppressed frame', () => {
-    // Why: mobile/remote snapshots read the tracked record, not the fact stream — suppressing
-    // the fact must not freeze what a phone or a paired client is shown.
+    // Mobile/remote read tracked records; suppressed facts must not freeze those snapshots.
     const { runtime } = createSideEffectRuntime()
     syncSinglePty(runtime)
 

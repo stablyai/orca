@@ -4,6 +4,7 @@ import {
   buildTabCreateMenuOptions,
   findMatchingTabCreateMenuOptions,
   isTabCreateMenuQueryTooLarge,
+  withPluginNewFileMenuOptions,
   type TabCreateMenuOption
 } from './tab-create-menu-options'
 
@@ -89,6 +90,45 @@ describe('tab create menu options', () => {
     expect(
       findMatchingTabCreateMenuOptions('new terminal', options).map((option) => option.shell)
     ).toEqual(['powershell.exe', 'cmd.exe'])
+  })
+
+  it("offers a plugin's new files wherever New Markdown is, matched by name or extension", () => {
+    const drawing = {
+      key: 'stablyai.orca-excalidraw/drawing',
+      pluginKey: 'stablyai.orca-excalidraw',
+      pluginName: 'Excalidraw',
+      id: 'drawing',
+      title: 'New Excalidraw drawing',
+      extension: '.excalidraw'
+    }
+    const context = {
+      terminalOnly: false,
+      hasNewBrowser: false,
+      hasOpenMarkdown: true,
+      hasSimulator: false,
+      simulatorIsGoTo: false
+    }
+    const options = withPluginNewFileMenuOptions(
+      buildTabCreateMenuOptions({ ...context, hasNewMarkdown: true }),
+      [drawing]
+    )
+    expect(options.map((option) => option.kind)).toEqual([
+      'new-terminal',
+      'new-markdown',
+      'new-plugin-file',
+      'open-markdown'
+    ])
+    for (const query of ['excalidraw', '.excalidraw', 'new excalidraw drawing']) {
+      expect(findMatchingTabCreateMenuOptions(query, options)[0]?.pluginNewFile, query).toBe(
+        drawing
+      )
+    }
+    expect(
+      withPluginNewFileMenuOptions(
+        buildTabCreateMenuOptions({ ...context, hasNewMarkdown: false }),
+        [drawing]
+      ).some((option) => option.kind === 'new-plugin-file')
+    ).toBe(false)
   })
 
   it('returns no matches for an empty query', () => {

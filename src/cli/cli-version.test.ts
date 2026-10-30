@@ -2,7 +2,7 @@ import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { readOrcaCliBuildCommit, readOrcaCliVersion } from './cli-version'
+import { readOrcaCliVersion } from './cli-version'
 
 const temporaryDirectories: string[] = []
 
@@ -22,7 +22,6 @@ describe('CLI version', () => {
     )
 
     expect(readOrcaCliVersion(runtimeDir)).toBe('1.4.178-rc.2')
-    expect(readOrcaCliBuildCommit(runtimeDir)).toBe('b'.repeat(40))
   })
 
   it('rejects missing, malformed, and non-string versions', async () => {

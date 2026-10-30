@@ -1,8 +1,5 @@
-// Why: jcode hooks carry no user-prompt field, so the listener reads the last
-// user message from jcode's on-disk session state: the live `.journal.jsonl`
-// append log first (authoritative while the session is active), then the
-// consolidated `session_*.json` document. Bounded like the Grok/Command Code
-// transcript readers so hook events stay cheap on multi-megabyte sessions.
+// jcode hooks lack prompts: read the authoritative live journal first, then consolidated session JSON.
+// Bound reads like Grok/Command Code so multi-MB transcripts cannot stall hook handling.
 import { createHash } from 'node:crypto'
 import { readFileSync, statSync } from 'node:fs'
 import { homedir } from 'node:os'
@@ -34,8 +31,7 @@ function isSafeJcodeSessionId(value: unknown): value is string {
   if (trimmed.length === 0 || trimmed.length > JCODE_SESSION_ID_MAX_LENGTH) {
     return false
   }
-  // Why: session ids embed a timestamp and a hex suffix; reject anything with
-  // separators or control characters so no path traversal reaches the fs.
+  // Session IDs contain timestamps/hex; reject separators/controls before filesystem access to prevent traversal.
   return /^[A-Za-z0-9_.:-]+$/.test(trimmed)
 }
 
@@ -89,9 +85,7 @@ function buildInteractionKey(source: 'journal' | 'json', sessionId: string, salt
   ].join('-')
 }
 
-/** Absolute byte offset of `lines[index]`. Why not the region-local index: the scan
- *  window slides as the journal grows, so the same record would key differently on a
- *  later read and a repeated turn_end would slip past the same-hash dedupe. */
+/** Use absolute byte offsets: growing journals shift EOF windows, so region-local line keys would bypass repeated-turn_end dedupe. */
 function lineByteOffset(lines: readonly string[], index: number, regionPosition: number): number {
   let offset = regionPosition
   for (let i = 0; i < index; i += 1) {

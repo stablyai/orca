@@ -14,6 +14,7 @@ export type RuntimeServiceCommandSurface = {
   listAiVaultSessions: RuntimeAiVaultCommands['list']
   resolveAiVaultSessionTitles: RuntimeAiVaultCommands['resolveTitles']
   prepareAiVaultSessionResume: RuntimeAiVaultCommands['prepare']
+  deleteAiVaultSession: RuntimeAiVaultCommands['delete']
   setSessionSearchEnabled: RuntimeSessionSearchSettingsController['setEnabled']
   onClientEvent: RuntimeClientEventBus['on']
   notifyNativeChatLaunchDraftResolved: RuntimeNativeChatDraftResolutions['notify']
@@ -30,6 +31,7 @@ export type RuntimeServiceCommandSurface = {
   onNotificationDispatched: RuntimeMobileNotificationController['onDispatched']
   getMobileNotificationListenerCount: RuntimeMobileNotificationController['getListenerCount']
   dispatchMobileNotification: RuntimeMobileNotificationController['dispatch']
+  reportDesktopClientPresence: RuntimeMobileNotificationController['reportDesktopClientPresence']
   getMissedNotificationsSince: RuntimeMobileNotificationController['getMissedSince']
   configureNotificationDismissalStore: RuntimeMobileNotificationController['configureDismissalStore']
   closeNotificationDismissals: RuntimeMobileNotificationController['closeDismissals']
@@ -80,7 +82,6 @@ export type RuntimeServiceCommandSurface = {
   feedMobileDictation: RuntimeMobileDictationController['feed']
   finishMobileDictation: RuntimeMobileDictationController['finish']
   cancelMobileDictation: RuntimeMobileDictationController['cancel']
-  cancelMobileDictationForConnection: RuntimeMobileDictationController['cancelForConnection']
   getAllBrowserDrivers: RuntimeBrowserDriverController['getAll']
   reclaimBrowserForDesktop: RuntimeBrowserDriverController['reclaimForDesktop']
   notifyMessageArrived(handle: string, messageType?: string): void
@@ -121,6 +122,7 @@ export function installRuntimeServiceCommandSurface(
     listAiVaultSessions: vault.list.bind(vault),
     resolveAiVaultSessionTitles: vault.resolveTitles.bind(vault),
     prepareAiVaultSessionResume: vault.prepare.bind(vault),
+    deleteAiVaultSession: vault.delete.bind(vault),
     setSessionSearchEnabled: sessionSearchSettings.setEnabled.bind(sessionSearchSettings),
     onClientEvent: events.on.bind(events),
     notifyNativeChatLaunchDraftResolved: drafts.notify.bind(drafts),
@@ -138,6 +140,7 @@ export function installRuntimeServiceCommandSurface(
     onNotificationDispatched: notifications.onDispatched.bind(notifications),
     getMobileNotificationListenerCount: notifications.getListenerCount.bind(notifications),
     dispatchMobileNotification: notifications.dispatch.bind(notifications),
+    reportDesktopClientPresence: notifications.reportDesktopClientPresence.bind(notifications),
     getMissedNotificationsSince: notifications.getMissedSince.bind(notifications),
     configureNotificationDismissalStore: notifications.configureDismissalStore.bind(notifications),
     closeNotificationDismissals: notifications.closeDismissals.bind(notifications),
@@ -191,7 +194,6 @@ export function installRuntimeServiceCommandSurface(
     feedMobileDictation: dictation.feed.bind(dictation),
     finishMobileDictation: dictation.finish.bind(dictation),
     cancelMobileDictation: dictation.cancel.bind(dictation),
-    cancelMobileDictationForConnection: dictation.cancelForConnection.bind(dictation),
     getAllBrowserDrivers: browsers.getAll.bind(browsers),
     reclaimBrowserForDesktop: browsers.reclaimForDesktop.bind(browsers),
     waitForMessage: waiters.wait.bind(waiters),

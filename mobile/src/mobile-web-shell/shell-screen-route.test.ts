@@ -32,21 +32,16 @@ describe('the route a switch hands the shell', () => {
   })
 
   it('is nothing when a file path is longer than a param may be', () => {
-    // Not hypothetical: this is the shape a Windows long path arrives in, and the first assertion
-    // is what says the schema really refuses it. Without the guard the screen hands it over,
-    // bridge-host drops the route to null, and the page paints "Update Orca to open this
-    // workspace" over a native screen that works.
+    // Use a real Windows long path: without a length guard the bridge drops init.route to null and shows an update refusal over a working native screen.
     const route = previewRoute(`/logs/${'a'.repeat(BRIDGE_MAX_ROUTE_PARAM_CHARS)}.txt`)
     expect(BridgeInitRouteSchema.safeParse(route).success).toBe(false)
     expect(shellScreenRoute(route)).toBeNull()
   })
 
   it('is nothing when a worktree id is not a segment the page will route', () => {
-    // The C1.8 class: `..` survives encodeURIComponent, and the page resolves a dot segment out of
-    // the `/h/` prefix it is supposed to stay inside.
+    // Dot segments survive encodeURIComponent and escape the intended /h/ prefix when resolved.
     const route = { pathname: '/h/host-1/files/..', params: { name: 'Files' } }
-    // The schema first, as the length case does: without it a `null` here would also be what a
-    // guard that refused everything produces.
+    // Prove schema refusal too so an always-null guard cannot pass.
     expect(BridgeInitRouteSchema.safeParse(route).success).toBe(false)
     expect(shellScreenRoute(route)).toBeNull()
   })
@@ -61,11 +56,7 @@ describe('the route a switch hands the shell', () => {
 })
 
 describe('the key a shell screen remounts on', () => {
-  /**
-   * The key has to be the URL the page would end up at, because that is what it would be showing.
-   * `shellRouteHref` is the page's own serializer and cannot be imported into a native route file —
-   * it lives beside the page's RPC client — so the copy is pinned equal here rather than trusted.
-   */
+  // Pin native remount keys to the page serializer’s URL; importing its RPC-adjacent module into native routes would cross the platform boundary.
   it.each<BridgeInitRoute>([
     { pathname: '/h/host-1/files/wt-1' },
     { pathname: '/h/host-1/files/wt-1', params: { name: 'my worktree' } },

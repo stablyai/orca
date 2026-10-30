@@ -9,8 +9,7 @@ export function renderSnapshot(
   const bounds = snapshot.windowBounds
   const treeText = renderTreeText(snapshot)
   const focusedElementId = normalizedFocusedElementId(snapshot)
-  // Why: Linux/Windows providers may downscale screenshots to cap IPC payloads,
-  // while window bounds remain the unscaled coordinate space for actions.
+  // Screenshots may be downscaled while action coordinates retain the original window bounds.
   const screenshotWidth =
     positiveRoundedNumber(snapshot.screenshotWidth) ?? Math.max(1, Math.round(bounds?.width ?? 1))
   const screenshotHeight =
@@ -27,8 +26,7 @@ export function renderSnapshot(
     : null
   return {
     snapshot: {
-      // Why: bridge elements can be large; keep them cached internally for actions
-      // instead of returning duplicated metadata in every agent-facing snapshot.
+      // Cache large element metadata for actions instead of duplicating it in agent responses.
       id: snapshot.snapshotId ?? fallbackSnapshotId(snapshot),
       app: {
         name: snapshot.app.name,

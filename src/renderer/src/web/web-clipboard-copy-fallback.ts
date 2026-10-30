@@ -1,6 +1,4 @@
-// Why: navigator.clipboard only exists in secure contexts. The web client served
-// over plain HTTP can copy through a copy event inside a user gesture without
-// exposing the copied text in the page DOM.
+// Plain HTTP lacks navigator.clipboard; copy within a user gesture without putting copied text in the DOM.
 export function copyClipboardTextViaExecCommand(text: string, doc: Document = document): boolean {
   if (typeof doc.execCommand !== 'function' || typeof doc.addEventListener !== 'function') {
     return false
@@ -11,8 +9,7 @@ export function copyClipboardTextViaExecCommand(text: string, doc: Document = do
       return
     }
     event.clipboardData.setData('text/plain', text)
-    // Why bubble + stop: xterm's listener on terminal.element overwrites text/plain,
-    // and preventDefault alone does not stop it or any later window-level handler.
+    // xterm overwrites text/plain during bubbling; preventDefault cannot block later handlers, so stop them too.
     event.stopImmediatePropagation()
     event.preventDefault()
     served = true

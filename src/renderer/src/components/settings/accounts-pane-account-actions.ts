@@ -64,19 +64,18 @@ export function createCodexAccountActionRunner(
     setCodexAction
   } = context
   const syncCodexAccounts = async (next: CodexRateLimitAccountsState): Promise<void> => {
-    // Why: only the roster is the shown owner's; the toast and follow-up still describe this action.
+    // Scope roster updates to the shown owner; action toasts/follow-ups still belong to the original operation.
     if (isCurrentAccountOwner()) {
       setCodexAccounts(next)
       setCodexAccountsLoaded(true)
     }
-    // Why: remote mutations never change local GlobalSettings account fields.
+    // Remote account mutations do not change local GlobalSettings.
     if (!isRemoteAccountScope) {
       await fetchSettings()
     }
   }
 
-  // Why: remote Windows flattens host and WSL rows, so mutation follow-up must
-  // compare the selected row's runtime slot instead of the forced host view.
+  // Remote Windows combines host/WSL rows; compare the selected row’s runtime slot, not the forced host view.
   return async (action, operation, actionRuntime = accountRuntime): Promise<void> => {
     const previousActiveAccountId = getProviderAccountActiveIdForView(codexAccounts, actionRuntime)
     setCodexAction(action)
@@ -93,20 +92,14 @@ export function createCodexAccountActionRunner(
           action === `reauth:${nextActiveAccountId}`) ||
         (action.startsWith('remove:') && previousActiveAccountId !== nextActiveAccountId)
       if (shouldPromptRestart) {
-        // Why: `add` creates the managed home against the machine's own distro,
-        // so the slot it wrote is the created account's — not this row's, which
-        // may still say "WSL default". Found by diffing the roster rather than
-        // by the row's active id, which resolves to null once two distro slots
-        // are filled and would send the notice to the wrong lane.
+        // Find the newly created account’s concrete distro from the roster diff; the row may say WSL default and active-ID lookup becomes ambiguous across distro slots.
         const newAccounts =
           action === 'adding'
             ? next.accounts.filter(
                 (account) => !codexAccounts.accounts.some((prior) => prior.id === account.id)
               )
             : []
-        // Why exactly one: an unloaded prior roster makes every account look new,
-        // and picking one of those would aim the notice at an unrelated lane.
-        // Falling back to the row is the pre-existing behaviour, not a new risk.
+        // Require exactly one addition; unloaded prior rosters make all accounts look new, so retain the existing row fallback when ambiguous.
         const addedAccount = newAccounts.length === 1 ? newAccounts[0] : undefined
         void markLiveCodexSessionsForRestart({
           previousAccountLabel: resolveCodexRestartPromptAccountLabel(
@@ -117,21 +110,18 @@ export function createCodexAccountActionRunner(
             next.accounts,
             nextActiveAccountId
           ),
-          // Why: two accounts can share an email, so the labels alone cannot
-          // tell the store whether this switch lands back on the launch account.
+          // Emails can repeat; use IDs to detect returning to the launch account.
           previousAccountId: previousActiveAccountId ?? null,
           nextAccountId: nextActiveAccountId ?? null,
-          // Why: the mutation wrote this row's slot only, so panes on any other
-          // lane still launch under the account they already had.
+          // Only this runtime slot changed; other lanes retain their launch accounts.
           owner: accountOwner,
           target: addedAccount ? getProviderAccountRuntime(addedAccount) : actionRuntime,
-          // Why: clearing a distro-less WSL row nulls every distro slot at once.
+          // Clearing distro-less WSL resets every distro slot.
           clearsEveryWslDistro: action === 'select:system'
         })
       }
     } catch (error) {
-      // Why: cancelling — from the Cancel button, or by asking for a new login
-      // that supersedes this one — is the user's own doing, not a failure.
+      // Explicit cancellation and superseding logins are user actions, not failures.
       if (isCodexAccountCancellation(error)) {
         return
       }
@@ -217,7 +207,6 @@ export function createClaudeAccountActionRunner(
         )
       }
       if (switched) {
-        // Why: the restart dialog and confirmation already name the new account.
         void handleRunningClaudeSessionsAfterSwitch({
           owner: accountOwner,
           target: actionRuntime,

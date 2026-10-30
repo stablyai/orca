@@ -144,7 +144,7 @@ describe('legacy agent-status adapter', () => {
     expect(adapter.view.get('immutable')?.payload.prompt).toBe('work')
   })
 
-  it('preserves Map insertion order across refresh, explicit reorder and relocation', () => {
+  it('preserves and advances listing order across refresh, explicit reorder and relocation', () => {
     let nextOrder = 40
     const adapter = createAgentStatusLegacyAdapter({ nextListingOrder: () => nextOrder++ })
     adapter.admit('main-status-update', AGENT_STATUS_2A_CURRENT_PRODUCER_MODE, status('pane'))

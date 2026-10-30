@@ -1,9 +1,15 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { describe, expect, it, vi } from 'vitest'
-import type { AgentSessionOptionsResult } from '../../../src/shared/agent-session-wire'
+import type {
+  AgentSessionOptionResult,
+  AgentSessionOptionsResult
+} from '../../../src/shared/agent-session-wire'
 import type { RpcClient } from '../transport/rpc-client'
-import type { StructuredAgentSessionMutate } from './mobile-structured-agent-session-rpc'
+import type {
+  StructuredAgentSessionMutate,
+  StructuredAgentSessionMutationResult
+} from './mobile-structured-agent-session-rpc'
 import { useMobileStructuredAgentOptions } from './use-mobile-structured-agent-options'
 
 function optionsFor(permissionMode?: string): AgentSessionOptionsResult {
@@ -13,7 +19,6 @@ function optionsFor(permissionMode?: string): AgentSessionOptionsResult {
   }
 }
 
-/** Answers each options read with the next mode in `modes`, repeating the last. */
 function optionsClient(...modes: (string | undefined)[]) {
   let reads = 0
   const client: RpcClient = {
@@ -51,6 +56,7 @@ type ProbeProps = {
   optionStamp: string
   agent?: string
   hostAdvertisesPermissionModes?: boolean | null
+  permissionOwn?: boolean
 }
 
 const mutate: StructuredAgentSessionMutate = vi.fn()
@@ -64,12 +70,18 @@ async function mountOptions(props: ProbeProps) {
       sessionId: 'session-1',
       enabled: true,
       fence: probe.fence,
+      turnId: null,
       mutate,
       optionStamp: probe.optionStamp,
       hostSupport:
         probe.hostAdvertisesPermissionModes === null
           ? null
-          : { permissionModes: probe.hostAdvertisesPermissionModes ?? true }
+          : {
+              sendOptions: false,
+              permissionModes: probe.hostAdvertisesPermissionModes ?? true,
+              permissionOwn: probe.permissionOwn,
+              statusFeed: false
+            }
     })
     return null
   }
@@ -84,6 +96,7 @@ async function mountOptions(props: ProbeProps) {
   })
   await settle()
   return {
+    pending: () => rendered.current?.pendingOptionId,
     offered: () => {
       const entry = rendered.current?.optionSnapshot.find(
         (descriptor) => descriptor.id === 'permissionMode'
@@ -102,11 +115,15 @@ async function mountOptions(props: ProbeProps) {
       })
       await settle()
     },
-    pick: async (mode: string) => {
+    pick: async (mode: string, waitForResult = false) => {
+      let result!: Promise<boolean>
       await act(async () => {
-        void rendered.current?.setStructuredOption('permissionMode', mode)
+        result = rendered.current!.setStructuredOption('permissionMode', mode)
       })
       await settle()
+      if (waitForResult) {
+        return result
+      }
     },
     unmount: () => act(async () => renderer?.unmount())
   }
@@ -123,6 +140,9 @@ describe('the permission pill against a host predating per-chat modes', () => {
     })
     expect(options.permission()).toBe('host')
     expect(options.offered()).toEqual(['host'])
+    vi.mocked(mutate).mockClear()
+    expect(await options.pick('own', true)).toBe(false)
+    expect(mutate).not.toHaveBeenCalled()
     await options.unmount()
   })
 
@@ -146,11 +166,50 @@ describe('the permission pill against a host predating per-chat modes', () => {
       hostAdvertisesPermissionModes: null
     })
     expect(options.permission()).toBeNull()
+    vi.mocked(mutate).mockClear()
+    expect(await options.pick('own', true)).toBe(false)
+    expect(mutate).not.toHaveBeenCalled()
     await options.unmount()
   })
 })
 
 describe('the permission mode on the phone', () => {
+  it('writes only a concrete per-chat choice even when it matches the report for Own', async () => {
+    vi.mocked(mutate).mockReset()
+    vi.mocked(mutate).mockResolvedValue({
+      status: 'accepted',
+      value: { options: { permissionMode: 'full-access' } },
+      sameFence: true
+    })
+    const client: RpcClient = {
+      ...optionsClient().client,
+      sendRequest: async () => ({
+        id: 'rpc-1',
+        ok: true,
+        result: {
+          ...optionsFor('own'),
+          current: {
+            model: 'gpt-live',
+            permissionMode: 'own',
+            reportedPermissionMode: 'full-access'
+          }
+        },
+        _meta: { runtimeId: 'runtime-1' }
+      })
+    }
+    const options = await mountOptions({ client, fence: 1, optionStamp: '', permissionOwn: true })
+    expect(options.permission()).toBe('full-access')
+    expect(options.offered()).not.toContain('own')
+    await options.pick('full-access')
+    expect(mutate).toHaveBeenCalledExactlyOnceWith(
+      'agentSession.setOption',
+      'agentSession.setOption',
+      { key: 'permissionMode', value: 'full-access' }
+    )
+    await options.unmount()
+    vi.mocked(mutate).mockReset()
+  })
+
   it('re-reads once when the host status moves, so a desktop pick shows here', async () => {
     const rpc = optionsClient('ask', 'full-access')
     const options = await mountOptions({
@@ -177,14 +236,39 @@ describe('the permission mode on the phone', () => {
   })
 
   it('shows a pick at once while its write waits behind a start, and stays pickable', async () => {
-    vi.mocked(mutate).mockImplementation(() => new Promise(() => {}))
+    const first =
+      Promise.withResolvers<StructuredAgentSessionMutationResult<AgentSessionOptionResult>>()
+    const second =
+      Promise.withResolvers<StructuredAgentSessionMutationResult<AgentSessionOptionResult>>()
+    vi.mocked(mutate)
+      .mockReset()
+      .mockReturnValueOnce(first.promise)
+      .mockReturnValueOnce(second.promise)
     const rpc = optionsClient('ask')
     const options = await mountOptions({ client: rpc.client, fence: 1, optionStamp: '' })
+    const send = rpc.client.sendRequest
+    rpc.client.sendRequest = (method, params, config) =>
+      method === 'agentSession.options' ? new Promise(() => {}) : send(method, params, config)
     await options.pick('full-access')
     expect(options.permission()).toBe('full-access')
     await options.pick('auto')
     expect(options.permission()).toBe('auto')
     expect(vi.mocked(mutate)).toHaveBeenCalledTimes(2)
+    for (const [reply, value] of [
+      [second, 'auto'],
+      [first, 'full-access']
+    ] as const) {
+      await act(async () =>
+        reply.resolve({
+          status: 'accepted',
+          value: { key: 'permissionMode', value, options: { permissionMode: value } },
+          sameFence: true
+        })
+      )
+      expect(options.pending()).toBeNull()
+      expect(options.offered()).toContain('auto')
+      expect(options.permission()).toBe('auto')
+    }
     await options.unmount()
   })
 
@@ -197,7 +281,6 @@ describe('the permission mode on the phone', () => {
   })
 })
 
-/** A host whose account listing lands only after the chat's first options read. */
 function listingLandsLaterClient() {
   let landed = false
   let land: () => void = () => {}
@@ -214,7 +297,6 @@ function listingLandsLaterClient() {
       await lands
       return { origin: 'probe', fetchedAt: 1, models: rows }
     }
-    // At rest, a read before the listing lands answers from the agent's built-in list.
     return landed
       ? { models: rows, current: { model: 'opus[1m]', permissionMode: 'ask' } }
       : {
@@ -244,7 +326,7 @@ function listingLandsLaterClient() {
 }
 
 describe('Approve for me on a phone chat opened before its account was listed', () => {
-  it('is offered once the listing lands', async () => {
+  it('is offered before and after the listing lands', async () => {
     const host = listingLandsLaterClient()
     const options = await mountOptions({
       client: host.client,
@@ -252,10 +334,10 @@ describe('Approve for me on a phone chat opened before its account was listed', 
       optionStamp: '',
       agent: 'claude'
     })
-    expect(options.offered()).toEqual(['ask', 'accept-edits', 'full-access'])
+    expect(options.offered()).toEqual(['ask', 'accept-edits', 'auto', 'full-access'])
     host.land()
     await options.rerender({})
-    expect(options.offered()).toContain('auto')
+    expect(options.offered()).toEqual(['ask', 'accept-edits', 'auto', 'full-access'])
     await options.unmount()
   })
 })

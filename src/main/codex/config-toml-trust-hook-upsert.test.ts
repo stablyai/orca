@@ -99,7 +99,6 @@ describe('upsertHookTrustEntries', () => {
     expect(written).not.toContain('STALE')
     expect(written).toContain('[unrelated]')
     expect(written).toContain('value = 42')
-    // Why: we only own the [hooks.state."<key>"] block — [features] must be untouched.
     expect(written).toContain('[features]\nhooks = true')
   })
 
@@ -156,7 +155,6 @@ describe('upsertHookTrustEntries', () => {
       new RegExp(`\\[hooks\\.state\\.'${escapeRegex(key)}'\\]`, 'g')
     )
     expect(duplicateKeyOccurrences).toHaveLength(1)
-    // The unrelated key was not upserted and stays in its original escaped form.
     expect(written).toContain(`[hooks.state."${escapeTomlString(unrelatedKey)}"]`)
     expect(written).toContain('trusted_hash = "sha256:KEEP"')
     expect(written).toContain('enabled = false')
@@ -242,7 +240,6 @@ describe('upsertHookTrustEntries', () => {
     }
     upsertHookTrustEntries(configPath, [entry])
     const firstWrite = readFileSync(configPath, 'utf-8')
-    // Why: a no-op upsert must not roll .bak forward, or repeated calls destroy the last recoverable copy.
     rmSync(`${configPath}.bak`, { force: true })
     upsertHookTrustEntries(configPath, [entry])
     expect(existsSync(`${configPath}.bak`)).toBe(false)
@@ -250,7 +247,6 @@ describe('upsertHookTrustEntries', () => {
   })
 
   it('replaces a stale block written with CRLF line endings without duplicating', () => {
-    // Why: regression — \r\n in the existing config made the header pattern miss and append a duplicate.
     const key = '/x/hooks.json:pre_tool_use:0:0'
     const original = [
       '[features]',
@@ -307,7 +303,6 @@ describe('upsertHookTrustEntries', () => {
     expect(written).not.toContain('STALE')
     expect(written).toContain(`[hooks.state."${neighborKey}"]`)
     expect(written).toContain('trusted_hash = "sha256:NEIGHBOR"')
-    // Neighbor's `enabled = true` should still be paired with NEIGHBOR's hash.
     const neighborIdx = written.indexOf(`[hooks.state."${neighborKey}"]`)
     expect(written.slice(neighborIdx)).toMatch(/enabled = true[\s\S]*sha256:NEIGHBOR/)
   })
@@ -331,7 +326,6 @@ describe('upsertHookTrustEntries', () => {
     expect(written).toContain('foo = 1')
   })
 
-  // Why: TOML allows literal-string quoted keys, so header detection must respect `]` inside `'...'`.
   it('preserves an unrelated table whose literal-string key contains a `]`', () => {
     const key = '/x/hooks.json:pre_tool_use:0:0'
     const original = [
@@ -481,7 +475,6 @@ describe('upsertHookTrustEntries', () => {
   })
 
   it('treats `\\"""` inside a multi-line basic string as an escaped quote, not a close', () => {
-    // Why: `\"` escapes in a multi-line basic string must not be misread as closing early.
     const original = [
       'prompt = """',
       'use \\"\\"\\" carefully',
@@ -510,7 +503,6 @@ describe('upsertHookTrustEntries', () => {
   })
 
   it('escapes literal `"` and `\\` in non-Windows source paths inside the trust block header', () => {
-    // Why: a backslash in a POSIX path is a literal filename char, so escape it instead of normalizing.
     const entry: CodexTrustEntry = {
       sourcePath: '/x/with"quote\\and\\back/hooks.json',
       eventLabel: 'pre_tool_use',
@@ -527,7 +519,6 @@ describe('upsertHookTrustEntries', () => {
   })
 
   it('overwrites an existing block whose header has leading whitespace (TOML allows indent)', () => {
-    // Why: regression — buildHeaderPattern required column-0 headers but the reader accepts indented ones.
     const key = '/x/hooks.json:pre_tool_use:0:0'
     const original = ` [hooks.state."${key}"]\nenabled = true\ntrusted_hash = "sha256:OLD"\n`
     writeFileSync(configPath, original, 'utf-8')
@@ -549,7 +540,6 @@ describe('upsertHookTrustEntries', () => {
   })
 
   it('preserves `enabled = false` when the user hand-edited it before reinstall', () => {
-    // Why: regression — auto-install used to clobber a hand-disabled hook back to enabled = true.
     const key = '/x/hooks.json:pre_tool_use:0:0'
     const original = `[hooks.state."${key}"]\nenabled = false\ntrusted_hash = "sha256:OLD"\n`
     writeFileSync(configPath, original, 'utf-8')
@@ -570,7 +560,6 @@ describe('upsertHookTrustEntries', () => {
   })
 
   it('overwrites an existing block when the file ends without a trailing newline', () => {
-    // Why: regression — buildHeaderPattern required a trailing newline, appending a duplicate at EOF.
     const key = '/x/hooks.json:pre_tool_use:0:0'
     const original = `[hooks.state."${key}"]\nenabled = true\ntrusted_hash = "sha256:OLD"`
     writeFileSync(configPath, original, 'utf-8')
@@ -592,7 +581,6 @@ describe('upsertHookTrustEntries', () => {
   })
 
   it('overwrites an existing block whose header has an inline comment', () => {
-    // Why: regression — buildHeaderPattern missed TOML-valid trailing comments and appended a duplicate block.
     const key = '/x/hooks.json:pre_tool_use:0:0'
     const original = `[hooks.state."${key}"] # user note\nenabled = true\ntrusted_hash = "sha256:OLD"\n`
     writeFileSync(configPath, original, 'utf-8')
@@ -614,7 +602,6 @@ describe('upsertHookTrustEntries', () => {
   })
 
   it('finds and replaces a legacy forward-slash block when Orca upserts with native backslash key', () => {
-    // Why: Codex 0.140 exposes Windows keys with either separator depending on cwd, so replace both.
     const backslashPath = 'C:\\Users\\Rod\\AppData\\Roaming\\orca\\hooks.json'
     const legacyKey = `${backslashPath.replace(/\\/g, '/')}:session_start:0:0`
     const original = [
@@ -643,7 +630,6 @@ describe('upsertHookTrustEntries', () => {
   })
 
   it('produces exactly one Windows separator pair after two consecutive upserts', () => {
-    // Why: idempotency guard — repeated auto-install must not accumulate duplicate blocks.
     const entry: CodexTrustEntry = {
       sourcePath: 'C:\\Users\\Rod\\AppData\\Roaming\\orca\\hooks.json',
       eventLabel: 'session_start',
@@ -660,7 +646,6 @@ describe('upsertHookTrustEntries', () => {
   })
 
   it('falls back to TOML basic-string headers when a Windows path contains an apostrophe', () => {
-    // Why: TOML literal-string keys can't hold apostrophes, but Windows profile paths can.
     const entry: CodexTrustEntry = {
       sourcePath: "C:\\Users\\O'Connor\\AppData\\Roaming\\orca\\hooks.json",
       eventLabel: 'session_start',
@@ -682,7 +667,6 @@ describe('upsertHookTrustEntries', () => {
   })
 
   it('finds a Codex-written block with lowercased username when Orca key has mixed-case username', () => {
-    // Why: realpathSync.native casing can differ from what Codex wrote, so case-fold to replace not duplicate.
     const lowercasePath = 'C:\\Users\\rod\\AppData\\Roaming\\orca\\hooks.json'
     const mixedCasePath = 'C:\\Users\\Rod\\AppData\\Roaming\\orca\\hooks.json'
     const literalKey = `${lowercasePath}:session_start:0:0`
@@ -710,7 +694,6 @@ describe('upsertHookTrustEntries', () => {
   })
 })
 describe('upsertHookTrustEntries with array-of-tables boundaries', () => {
-  // Why: [[array.of.tables]] must count as a block boundary, else upsert/remove eats past array entries.
   it('stops the replacement at a following [[array.of.tables]] header', () => {
     const key = '/x/hooks.json:pre_tool_use:0:0'
     const original = [

@@ -88,7 +88,6 @@ describe('Ports panel for a folder workspace on a managed SSH server', () => {
     )
     expect(screen.queryByText('No workspace selected')).toBeNull()
     expect(screen.getByRole('button', { name: /Add/ })).toBeTruthy()
-    // The server's listener reaches the (collapsed) External section.
     expect(screen.getByRole('button', { name: /External\s*1/ })).toBeTruthy()
   })
 })

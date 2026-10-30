@@ -18,6 +18,7 @@ export type ChecksPanelManualRefreshInput = Pick<
   | 'fetchPRForBranch'
   | 'gitStatusSnapshot'
   | 'ownerTarget'
+  | 'ownerCopyHostId'
   | 'panelContextKey'
   | 'panelContextKeyRef'
   | 'pollIntervalRef'

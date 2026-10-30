@@ -27,14 +27,9 @@ export type ServeSupervisorDecision =
   /** This child asked to install an update: wait for the new bundle, then serve from it. */
   | { kind: 'await-install'; handoff: InstallRequestedHandoff }
 
-/**
- * What the CLI supervisor does after its serve child exits. Pure, so the restart rules can be
- * model-tested apart from process and file I/O; the loop in serve-update-supervisor only acts.
- */
 export function decideAfterServeChildExit(input: {
   exit: ServeChildExit
   expectedHandoff: InstallRequestedHandoff | null
-  /** The handoff on disk after the exit; null when there is none or no handoff path. */
   handoff: ServeUpdateHandoffState | null
   hasHandoffPath: boolean
 }): ServeSupervisorDecision {

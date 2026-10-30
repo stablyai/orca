@@ -1,4 +1,4 @@
-import { randomBytes } from 'node:crypto'
+import { createHash } from 'node:crypto'
 import { gunzipSync } from 'fflate'
 import { describe, expect, it } from 'vitest'
 import { encodeMobileWebBundleRange } from '../../../src/main/runtime/rpc/methods/mobile-web-bundle-range-encoding'
@@ -14,8 +14,6 @@ function scriptRange(): Buffer {
   return Buffer.from(text.slice(0, MOBILE_WEB_BUNDLE_RANGE_BYTES))
 }
 
-// The host deflates with node's zlib and the phone inflates with fflate: two implementations that
-// must agree on every range the host can send.
 describe('a host-encoded range decoded by the phone', () => {
   it('inflates node gzip output with fflate to the same bytes', async () => {
     const raw = scriptRange()
@@ -29,7 +27,11 @@ describe('a host-encoded range decoded by the phone', () => {
   })
 
   it('leaves incompressible bytes as identity, which needs no decoder', async () => {
-    const raw = randomBytes(4096)
+    const raw = Buffer.concat(
+      Array.from({ length: 128 }, (_, index) =>
+        createHash('sha256').update(`range-${index}`).digest()
+      )
+    )
     const encoded = await encodeMobileWebBundleRange(raw)
 
     expect(encoded.encoding).toBe('identity')

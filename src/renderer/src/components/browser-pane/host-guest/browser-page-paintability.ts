@@ -2,8 +2,7 @@ export type BrowserPagePaintabilityState = {
   isActive: boolean
   isAutomationVisible: boolean
   isMobileDriven: boolean
-  // Why: a paired desktop/web/CLI client streaming this page takes no presence lock, so without
-  // its own term the guest is parked display:none and the screencast it subscribed to goes dark.
+  // Paired viewers take no presence lock; their own term prevents display:none from stopping the stream.
   hasRemoteViewer: boolean
 }
 

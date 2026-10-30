@@ -13,8 +13,7 @@ import { readBearer } from './relay-token-verifier.js'
 
 const MAX_BODY_BYTES = 16 * 1024
 
-// The directors' rehome credential, as the seat feed uses. Unlike the feed these write, but a
-// director can already place any host through the database, so they grant nothing new.
+// Reuse director rehome credentials for writes; directors can already place any host via DB, so these grant no new authority.
 export function registerCellReserveRoutes(
   app: Hono,
   config: RelayConfig,

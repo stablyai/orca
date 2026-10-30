@@ -1,10 +1,5 @@
-// daemon-relocation-spike — empirically finds the minimal file set that lets a
-// COPIED Orca.exe (ELECTRON_RUN_AS_NODE=1), launched from outside the install
-// dir, host the terminal daemon + a real ConPTY session while holding no open
-// handles into the app dir. See README.md.
-//
-// Requires a packaged win-unpacked build (runs on Windows CI). Use --selftest to
-// validate the pure logic anywhere without a build.
+// Find minimal copied run-as-node Orca files for real ConPTY without install-dir handles; Windows packaged build required.
+// --selftest validates pure logic anywhere; see README.md.
 
 import { randomUUID } from 'node:crypto'
 import { existsSync, readFileSync, readdirSync, rmSync } from 'node:fs'
@@ -21,8 +16,7 @@ import { runSelftest } from './selftest.mjs'
 const HERE = import.meta.dirname
 const FALLBACK_PROTOCOL_VERSION = 18
 
-// Read PROTOCOL_VERSION from the daemon source so the spike client never drifts
-// out of sync with the running daemon's handshake.
+// Read protocol version from source so spike handshake matches the daemon.
 function resolveProtocolVersion() {
   try {
     const typesPath = join(HERE, '..', '..', 'src', 'main', 'daemon', 'types.ts')
@@ -43,9 +37,7 @@ function makeSocketPath() {
   return join(process.env.TMPDIR ?? '/tmp', `orca-daemon-spike-${randomUUID().slice(0, 12)}.sock`)
 }
 
-/** Print a recursive listing of the copied daemon-host tree so the mirrored
- *  layout (daemon-entry + node-pty at their require-resolvable paths) is
- *  verifiable from the CI log. Depth-limited to keep output readable. */
+// Print a depth-limited copy listing so CI can verify require-resolvable entry/node-pty layout.
 function printHostTree(hostRoot, maxDepth = 6) {
   console.log(`\n--- copied daemon-host tree: ${hostRoot} ---`)
   if (!existsSync(hostRoot)) {
@@ -75,8 +67,7 @@ function printHostTree(hostRoot, maxDepth = 6) {
   walk(hostRoot, 0)
 }
 
-/** Dump the tail of the daemon's captured stdout/stderr — the actual crash
- *  reason when it exits before ready. */
+// Print captured log tails for daemon exits before ready.
 function printDaemonLogs(workDir, tailLines = 60) {
   for (const name of ['daemon.log', 'daemon-stdout.log', 'daemon-stderr.log']) {
     const p = join(workDir, name)
@@ -91,8 +82,7 @@ function printDaemonLogs(workDir, tailLines = 60) {
   }
 }
 
-/** Print the raw-frame diagnostics the client collects so a failed ConPTY
- *  round-trip is classifiable from the CI log alone. */
+// Print raw-frame diagnostics to classify failed ConPTY round-trips from CI logs.
 function printEchoDiagnostics(d) {
   if (!d) {
     console.log('  (no diagnostics captured)')
@@ -193,8 +183,7 @@ async function runLaunch(opts) {
     report.ready = true
     console.log(`daemon ready (pid=${launched.pid})`)
 
-    // Probe loaded modules BEFORE shutdown — the daemon and its node-pty native
-    // are mapped at this point.
+    // Probe mappings before shutdown while daemon/native modules remain loaded.
     const handles = assessDaemonHandles(launched.pid, appDir, hostExePath)
     report.mainModuleOk = handles.mainModuleOk
     report.appDirModules = handles.appDirModules
@@ -208,12 +197,9 @@ async function runLaunch(opts) {
 
     const nonce = randomUUID().slice(0, 8)
     const marker = `SPIKE-OK-${nonce}`
-    // Match the marker only when it appears alone at line start (executed
-    // output), not inside the echoed `echo <marker>` input line.
+    // Match line-start standalone marker, excluding echoed echo commands.
     const expectRe = new RegExp(`(?:^|\\r?\\n)${marker}(?:\\r|\\n)`)
-    // `echo <marker>` is shell-agnostic (cmd / powershell / pwsh / bash); force
-    // powershell.exe so the CI runner's ambient COMSPEC can't pick a shell that
-    // behaves differently under ConPTY.
+    // Force powershell.exe rather than ambient COMSPEC for consistent ConPTY behavior.
     const echo = await runPtyEcho({
       socketPath,
       tokenPath,
@@ -227,8 +213,7 @@ async function runLaunch(opts) {
     console.log('pty echo diagnostics:')
     printEchoDiagnostics(echo.diagnostics)
   } catch (err) {
-    // Recover the handle from a pre-ready rejection so `finally` can stop a
-    // daemon that started but never signaled ready.
+    // Recover child handle from pre-ready rejection so finally can stop it.
     child = child ?? err?.child ?? null
     report.error = err instanceof Error ? err.message : String(err)
     console.error(`\nFAILURE: ${report.error}`)

@@ -56,17 +56,7 @@ function describeFrame(
   }
 }
 
-/**
- * Pair one client build to one host build over an in-process transport that copies
- * the production routing exactly:
- *
- *  - client -> host: the HOST decodes with its own codec and drops the frame when
- *    the opcode is unknown (`runtime-rpc.ts` `handleWebSocketBinaryMessage`);
- *  - host -> client: raw bytes reach the client, which decodes with ITS codec.
- *
- * That asymmetry is the whole point: a frame only survives if the receiving build
- * understands it, so a new opcode against an old peer disappears silently.
- */
+// Decode each direction with the receiving build’s codec, matching production’s silent drop of unknown opcodes.
 export function createTerminalWireLink(args: {
   hostBuild: TerminalWireBuild
   clientBuild: TerminalWireBuild
@@ -110,8 +100,7 @@ export function createTerminalWireLink(args: {
         live = null
       }
       abort.abort()
-      // The socket layer runs the host's registered teardown on close; without it
-      // the multiplex handler never settles and the harness would hang, not fail.
+      // Run socket-close teardown or the multiplex handler hangs instead of reporting failure.
       hostStub.closeConnection(connectionId)
     }
     closeHostSideByConnection.set(connectionId, closeHostSide)

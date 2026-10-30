@@ -45,7 +45,7 @@ export const BROWSER_COOKIE_HANDLERS: Record<string, CommandHandler> = {
   },
   'cookie set': async ({ flags, client, cwd, json }) => {
     const name = getRequiredStringFlag(flags, 'name')
-    // CookieSet.value accepts '' (clearing a cookie's value is a real operation).
+    // An empty cookie value clears its content without removing the cookie.
     const value = getRequiredStringFlagAllowingEmpty(flags, 'value')
     const params: Record<string, unknown> = { name, value }
     const domain = getOptionalStringFlag(flags, 'domain')

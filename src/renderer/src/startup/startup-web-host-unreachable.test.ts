@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { RemoteRuntimeClientError } from '../../../shared/remote-runtime-client-error'
+import { RemoteRuntimeClientError } from '../../../shared/remote-runtime/remote-runtime-client-error'
 import { isWebHostUnreachableAtStartup } from './startup-web-host-unreachable'
 
 vi.mock('sonner', () => ({ toast: vi.fn() }))

@@ -7,6 +7,7 @@ import {
   createMockWebContents,
   getSendCommandMethods,
   sendAndReceive,
+  mockAsWebContents,
   type MockWebContents
 } from './cdp-ws-proxy-test-harness'
 
@@ -47,8 +48,7 @@ describe('CdpWsProxy loopback request guard', () => {
 
   beforeEach(async () => {
     mock = createMockWebContents()
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the mock implements every WebContents member the proxy calls.
-    proxy = new CdpWsProxy(mock.webContents as never, () => () => {})
+    proxy = new CdpWsProxy(mockAsWebContents(mock), () => () => {})
     endpoint = await proxy.start()
   })
 

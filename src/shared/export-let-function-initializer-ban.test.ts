@@ -1,3 +1,5 @@
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { beforeAll, describe, expect, it } from 'vitest'
 import type { parseAst as ParseAstFn } from 'vite' with { 'resolution-mode': 'import' }
@@ -10,15 +12,9 @@ beforeAll(async () => {
   ;({ parseAst } = await import('vite'))
 })
 
-/**
- * Ban `export let fn = <function>` tree-wide: rolldown const-folds the
- * initializer into call sites and drops the setter's reassignment, so the
- * bridged closure silently never runs in the built app (dev is fine). Use a
- * module-local null-initialized impl var behind exported wrapper functions
- * instead (see src/main/ipc/pty/delivery/debug.ts); null-initialized
- * `export let` slots compile correctly and stay allowed. Detection uses
- * vite/rolldown's own oxc parser so this test sees exactly what the bundler sees.
- */
+/** Rolldown folds function-initialized export let bindings into callers, ignoring setter reassignments in built apps.
+ * Use local null-initialized impl slots behind exported wrappers (src/main/ipc/pty/delivery/debug.ts); null-initialized exports remain allowed.
+ * Use the bundler’s own Oxc parser to detect this hazard. */
 
 type AstNode = {
   type: string
@@ -52,7 +48,6 @@ function unwrapInitializer(node: AstNode): AstNode {
       current = current.expression
       continue
     }
-    // A sequence evaluates to its last expression — that's what gets folded.
     const sequenceTail =
       current.type === 'SequenceExpression' ? current.expressions?.at(-1) : undefined
     if (sequenceTail) {
@@ -153,13 +148,26 @@ describe('function-initialized export let ban', () => {
   })
 
   const repoRoot = resolve(__dirname, '..', '..')
-  // Tests are not rolldown-bundled (scanSourceTree excludes them by default);
-  // several drive the banned shape on purpose.
+  // Tests deliberately exercise banned shapes and are not Rolldown-bundled; scanSourceTree excludes them.
   const files = scanSourceTree(join(repoRoot, 'src'))
 
-  it('scans a plausible number of files', () => {
-    // A broken root or extension list would make the guard silently vacuous.
-    expect(files.length).toBeGreaterThan(500)
+  it('scans shipped sources and excludes hazardous test fixtures', () => {
+    expect(
+      files.some(({ relativePath }) => relativePath === 'main/ipc/pty/delivery/debug.ts')
+    ).toBe(true)
+    const root = mkdtempSync(join(tmpdir(), 'orca-export-let-'))
+    try {
+      writeFileSync(join(root, 'bridge.ts'), 'export let bridge = () => {}')
+      writeFileSync(join(root, 'bridge.test.ts'), 'export let fixture = () => {}')
+
+      const offenders = scanSourceTree(root).flatMap(({ relativePath, source }) =>
+        findFunctionInitializedExportLets(relativePath, source)
+      )
+
+      expect(offenders).toEqual([{ name: 'bridge', line: 1 }])
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
   })
 
   it('has no function-initialized export let in shipped code', () => {

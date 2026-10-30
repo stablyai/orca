@@ -2,9 +2,12 @@ import { useRef, type ReactNode } from 'react'
 import { ActivityIndicator, View, Text, Pressable, StyleSheet } from 'react-native'
 import { Edit3, Trash2, type LucideIcon } from 'lucide-react-native'
 import { colors, spacing, typography } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { BottomDrawer } from './BottomDrawer'
 
 export type ActionSheetAction = {
+  id?: string
   label: string
   icon?: LucideIcon
   renderIcon?: () => ReactNode
@@ -46,6 +49,7 @@ type ContentProps = {
 }
 
 export function ActionSheetContent({ title, message, children, actions, onClose }: ContentProps) {
+  useMobileColorScheme()
   return (
     <>
       {(title || message) && (
@@ -66,7 +70,7 @@ export function ActionSheetContent({ title, message, children, actions, onClose 
           const Icon = iconForAction(action.label, action.destructive, action.icon)
           const customIcon = action.renderIcon?.()
           return (
-            <View key={action.label}>
+            <View key={action.id ?? action.label}>
               {i > 0 && <View style={styles.separator} />}
               <Pressable
                 style={({ pressed }) => [
@@ -130,8 +134,7 @@ export function ActionSheetModal({ visible, title, message, children, actions, o
       visible={visible}
       onClose={onClose}
       onAfterClose={() => {
-        // Why: iOS cannot present a second native modal until the action
-        // sheet's native window has fully unmounted.
+        // Wait for iOS sheet window to unmount before presenting another native modal.
         const pendingAction = pendingActionRef.current
         pendingActionRef.current = null
         pendingAction?.()
@@ -150,7 +153,7 @@ export function ActionSheetModal({ visible, title, message, children, actions, o
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   header: {
     paddingHorizontal: spacing.xs,
     paddingBottom: spacing.sm
@@ -208,4 +211,4 @@ const styles = StyleSheet.create({
     fontSize: typography.metaSize,
     color: colors.textMuted
   }
-})
+}))

@@ -21,7 +21,7 @@ export function useFileExplorerDragEdgeScroll(
     }
   }, [])
 
-  // requestAnimationFrame + small per-frame deltas avoids choppy jumps from irregular dragover events
+  // Use rAF deltas to avoid choppy scrolling from irregular dragover events.
   const tickDragEdgeScroll = useCallback(() => {
     edgeScrollRafRef.current = null
     const viewport = scrollRef.current

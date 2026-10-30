@@ -13,6 +13,7 @@ import { loadWorkspaceLayoutWithoutReport } from '../../../../shared/workspace-l
 import { nameBasedLoadContext } from '../../../../shared/workspace-layout/workspace-layout-minted-ids'
 import { publishWorkspaceLayout } from '../../../../shared/workspace-layout/workspace-layout-published'
 import { LEAF_1, LEAF_2, splitLayout } from './terminal-pane-tab-detach-fixture'
+import { LOCAL_LAYOUT_APPLY_ORIGIN } from '@/runtime/server-layout-apply-routes'
 
 const mocks = vi.hoisted(() => ({
   send: vi.fn<typeof sendLayoutCommandToOwner>(),
@@ -187,7 +188,7 @@ describe('a drag-out whose new tab main’s frame drew first', () => {
   it('shows the pane in the tab the frame drew instead of making a second one', async () => {
     const store = storeWithFrameDrawnMove()
     mocks.send.mockImplementation((_worktreeId, _command, handlers) => {
-      handlers.apply({ tabId: MOVED, ptyId: 'pty-right' })
+      handlers.apply({ tabId: MOVED, ptyId: 'pty-right' }, LOCAL_LAYOUT_APPLY_ORIGIN)
       return true
     })
 
@@ -216,7 +217,7 @@ describe('a drag-out whose new tab main’s frame drew first', () => {
   it('leaves the tab where main’s frame placed it, asked for an index', async () => {
     const store = storeWithFrameDrawnMove()
     mocks.send.mockImplementation((_worktreeId, _command, handlers) => {
-      handlers.apply({ tabId: MOVED, ptyId: 'pty-right' })
+      handlers.apply({ tabId: MOVED, ptyId: 'pty-right' }, LOCAL_LAYOUT_APPLY_ORIGIN)
       return true
     })
 
@@ -242,7 +243,7 @@ describe('a drag-out whose new tab main’s frame drew first', () => {
     const store = storeWithChatSplit()
     mocks.send.mockImplementation((_worktreeId, _command, handlers) => {
       drawMainMove(store)
-      handlers.apply({ tabId: MOVED, ptyId: 'pty-right' })
+      handlers.apply({ tabId: MOVED, ptyId: 'pty-right' }, LOCAL_LAYOUT_APPLY_ORIGIN)
       return true
     })
 
@@ -269,7 +270,7 @@ describe('a drag-out whose new tab main’s frame drew first', () => {
     const store = storeWithUnboundSplit()
     mocks.send.mockImplementation((_worktreeId, command, handlers) => {
       drawMainMove(store, command.type === 'movePaneToNewTab' ? command.windowDetach : undefined)
-      handlers.apply({ tabId: MOVED, ptyId: null })
+      handlers.apply({ tabId: MOVED, ptyId: null }, LOCAL_LAYOUT_APPLY_ORIGIN)
       return true
     })
 

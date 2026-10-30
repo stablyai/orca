@@ -50,7 +50,7 @@ export type WorkspaceCleanupReviewLookup = {
 
 export {
   filterWorkspaceCleanupCandidates,
-  getWorkspaceCleanupGitLabel,
+  getWorkspaceCleanupGitState,
   getWorkspaceCleanupSearchText,
   hasWorkspaceCleanupLocalContext,
   sortWorkspaceCleanupCandidates

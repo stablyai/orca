@@ -1,5 +1,4 @@
-// Why: every save-path scenario with two tabs (two workspaces) showing one Monaco model. Shared
-// text, baseline and conflict state must stay in step across both tabs.
+// Keep text, disk baseline and conflict state synchronized across workspaces sharing one Monaco model.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   ORCA_EDITOR_EXTERNAL_FILE_CHANGE_EVENT,
@@ -70,7 +69,6 @@ function openSharedTabs(disk: string) {
   return { store, a, b, edit, tab }
 }
 
-/** The toast's Undo action, as the test calls it. */
 type ClickAction = { onClick: () => void }
 
 function isClickAction(value: unknown): value is ClickAction {
@@ -125,7 +123,7 @@ describe('two tabs sharing one model', () => {
     }
   )
 
-  it('Keep moves the sibling baseline only, never its text', async () => {
+  it('Keep keeps the one shared draft on every view and moves the record baseline', async () => {
     stubGuardedDisk({ [GUARDED_PATH]: 'B' })
     const { store, a, b, edit, tab } = openSharedTabs('A')
     edit(a.id, 'mine')
@@ -135,7 +133,7 @@ describe('two tabs sharing one model', () => {
     keepTabEditsOverExternalChange(store.getState().openFiles[0])
     await vi.advanceTimersByTimeAsync(0)
 
-    expect(store.getState().editorDrafts[b.id]).toBeUndefined()
+    expect(store.getState().editorDrafts[b.id]).toBe('mine')
     expect(tab(b.id)?.lastKnownDiskSignature).toBe(getDiskBaselineSignature('B'))
     expect(sameBaseline(store)).toBe(true)
   })
@@ -234,7 +232,7 @@ describe('two tabs sharing one model', () => {
     }
   })
 
-  it("never touches a rich-markdown sibling's pending typing; at worst its save is refused", async () => {
+  it('a rich view typing during a source view save leaves the record dirty, then saves', async () => {
     const md = '/repo/notes.md'
     let released = false
     let release = (): void => undefined
@@ -265,15 +263,13 @@ describe('two tabs sharing one model', () => {
       })
     }
     const [code, rich] = store.getState().openFiles
-    // The first tab shows Monaco source; the second keeps the default rich view.
     store.getState().setMarkdownViewMode(code.id, 'source')
     for (const tab of [code, rich]) {
       store.getState().setLastKnownDiskSignature(tab.id, getDiskBaselineSignature('A'))
     }
     store.getState().setEditorDraft(code.id, 'source edit')
     store.getState().markFileDirty(code.id, true)
-    store.getState().setEditorDraft(rich.id, 'rich typing')
-    store.getState().markFileDirty(rich.id, true)
+    expect(store.getState().editorDrafts[rich.id]).toBe('source edit')
 
     const cleanup = attachEditorAutosaveController(store)
     try {
@@ -282,18 +278,20 @@ describe('two tabs sharing one model', () => {
         await vi.advanceTimersByTimeAsync(0)
       }
       expect(disk.writeFile).toHaveBeenCalledTimes(1)
-      store.getState().setEditorDraft(rich.id, 'rich typing, more')
+      store.getState().setEditorDraft(rich.id, 'source edit, more')
       release()
       await slowSave
       expect(disk.files.get(md)).toBe('source edit')
-      expect(store.getState().editorDrafts[rich.id]).toBe('rich typing, more')
-      expect(
-        store.getState().openFiles.find((tab) => tab.id === rich.id)?.lastKnownDiskSignature
-      ).toBe(getDiskBaselineSignature('A'))
+      const view = (id: string) => store.getState().openFiles.find((tab) => tab.id === id)
+      for (const id of [code.id, rich.id]) {
+        expect(store.getState().editorDrafts[id]).toBe('source edit, more')
+        expect(view(id)?.isDirty).toBe(true)
+        expect(view(id)?.lastKnownDiskSignature).toBe(getDiskBaselineSignature('source edit'))
+      }
 
-      await expect(requestEditorFileSave({ fileId: rich.id })).rejects.toThrow(/changed on disk/)
-      expect(store.getState().editorDrafts[rich.id]).toBe('rich typing, more')
-      expect(disk.files.get(md)).toBe('source edit')
+      await requestEditorFileSave({ fileId: rich.id })
+      expect(disk.files.get(md)).toBe('source edit, more')
+      expect(view(code.id)?.isDirty).toBe(false)
     } finally {
       cleanup()
     }
@@ -332,13 +330,19 @@ describe('two tabs sharing one model', () => {
     expect(tab(b.id)?.externalMutation).toBeUndefined()
   })
 
-  it('Undo of Reload yields to a sibling that typed since, touching neither tab', () => {
+  it.each([
+    ['in the other workspace', false],
+    ['in the other workspace while it shows the Changes view', true]
+  ])('Undo of Reload yields to typing since %s, on every view', (_name, changesView) => {
     const { store, a, b, edit, tab } = openSharedTabs('A')
     edit(a.id, 'mine')
-    edit(b.id, 'mine')
     const toastMock = vi.mocked(toast)
     toastMock.mockClear()
     reloadTabContentFromDisk(store.getState().openFiles[0], vi.fn())
+    if (changesView) {
+      // Changes uses the same record, so switching views must not change sharing.
+      store.getState().setEditorViewMode(b.id, 'changes')
+    }
     edit(b.id, 'typed after reload')
 
     const undo: unknown = toastMock.mock.calls[0]?.[1]?.action
@@ -347,71 +351,27 @@ describe('two tabs sharing one model', () => {
       undo.onClick()
     }
 
-    expect(store.getState().editorDrafts[a.id]).toBeUndefined()
+    expect(store.getState().editorDrafts[a.id]).toBe('typed after reload')
     expect(store.getState().editorDrafts[b.id]).toBe('typed after reload')
     expect(tab(b.id)?.externalMutation).toBeUndefined()
   })
 
-  it('Undo of Reload yields to typing in a workspace tab that joined the model after the reload', () => {
-    const { store, a, b, edit } = openSharedTabs('A')
-    store.getState().setEditorViewMode(b.id, 'changes')
-    edit(a.id, 'mine')
-    const toastMock = vi.mocked(toast)
-    toastMock.mockClear()
-    reloadTabContentFromDisk(store.getState().openFiles[0], vi.fn())
-    // The other workspace's tab switches to the code view, joining the model, and types.
-    store.getState().setEditorViewMode(b.id, 'edit')
-    edit(b.id, 'typed in the joined tab')
-
-    const undo: unknown = toastMock.mock.calls[0]?.[1]?.action
-    expect(isClickAction(undo)).toBe(true)
-    if (isClickAction(undo)) {
-      undo.onClick()
-    }
-
-    expect(store.getState().editorDrafts[a.id]).toBeUndefined()
-    expect(store.getState().editorDrafts[b.id]).toBe('typed in the joined tab')
-  })
-
-  it('Undo of Reload leaves alone a reloaded tab that left the model and typed', () => {
-    const { store, a, b, edit, tab } = openSharedTabs('A')
-    edit(a.id, 'mine')
-    const toastMock = vi.mocked(toast)
-    toastMock.mockClear()
-    reloadTabContentFromDisk(store.getState().openFiles[0], vi.fn())
-    // The other workspace's tab switches to the Changes view, leaving the model, and types.
-    store.getState().setEditorViewMode(b.id, 'changes')
-    edit(b.id, 'typed in the Changes view')
-
-    const undo: unknown = toastMock.mock.calls[0]?.[1]?.action
-    expect(isClickAction(undo)).toBe(true)
-    if (isClickAction(undo)) {
-      undo.onClick()
-    }
-
-    expect(store.getState().editorDrafts[a.id]).toBe('mine')
-    expect(store.getState().editorDrafts[b.id]).toBe('typed in the Changes view')
-    expect(tab(b.id)?.externalMutation).toBeUndefined()
-  })
-
-  it('never reaches a Changes-view tab through Keep or Reload', async () => {
+  it('Keep and Reload reach a Changes-view tab too: it shows the same record', async () => {
     stubGuardedDisk({ [GUARDED_PATH]: 'B' })
     const { store, a, b, edit, tab } = openSharedTabs('A')
     store.getState().setEditorViewMode(b.id, 'changes')
     edit(a.id, 'mine')
-    edit(b.id, 'changes edit')
     store.getState().setExternalMutation(a.id, 'changed')
-    store.getState().setExternalMutation(b.id, 'changed')
+    expect(tab(b.id)?.externalMutation).toBe('changed')
     mocks.readRuntimeFileContent.mockResolvedValue({ content: 'B', isBinary: false })
 
     keepTabEditsOverExternalChange(store.getState().openFiles[0])
     await vi.advanceTimersByTimeAsync(0)
-    expect(tab(b.id)?.lastKnownDiskSignature).toBe(getDiskBaselineSignature('A'))
-    expect(tab(b.id)?.externalMutation).toBe('changed')
+    expect(tab(b.id)?.lastKnownDiskSignature).toBe(getDiskBaselineSignature('B'))
+    expect(tab(b.id)?.externalMutation).toBeUndefined()
 
-    const reloadContent = vi.fn()
-    reloadTabContentFromDisk(store.getState().openFiles[0], reloadContent)
-    expect(reloadContent.mock.calls.map(([file]) => file.id)).toEqual([a.id])
-    expect(store.getState().editorDrafts[b.id]).toBe('changes edit')
+    reloadTabContentFromDisk(store.getState().openFiles[0], vi.fn())
+    expect(store.getState().editorDrafts[b.id]).toBeUndefined()
+    expect(tab(b.id)?.isDirty).toBe(false)
   })
 })

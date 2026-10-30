@@ -1,4 +1,3 @@
-// The common-dir check decides whether a create is confirmed, so a false accept adopts a foreign repo.
 import { describe, expect, it } from 'vitest'
 import { areWorktreePathsEqual } from './worktree-path-comparison'
 
@@ -31,7 +30,6 @@ describe('comparing git common dirs', () => {
     expect(areWorktreePathsEqual('/repo/.GIT', '/repo/.git', 'linux')).toBe(false)
   })
 
-  // macOS git reports a repo under /tmp by its /private/tmp realpath; it is the same object store.
   it('treats /tmp and /private/tmp as one directory on macOS only', () => {
     expect(areWorktreePathsEqual('/private/tmp/r/.git', '/tmp/r/.git', 'darwin')).toBe(true)
     expect(areWorktreePathsEqual('/private/tmp/r/.git', '/tmp/r/.git', 'linux')).toBe(false)

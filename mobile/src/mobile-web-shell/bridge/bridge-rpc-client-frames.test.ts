@@ -6,11 +6,8 @@ import {
   BRIDGE_MAX_PENDING_REQUESTS,
   BRIDGE_MAX_SUBSCRIPTIONS
 } from './bridge-caps'
-import { BRIDGE_MAX_UNACKED_BYTES, BRIDGE_MAX_UNACKED_FRAMES } from '../bridge-host-subscriptions'
-import {
-  BRIDGE_ACK_INTERVAL_BYTES,
-  BRIDGE_ACK_INTERVAL_FRAMES
-} from './bridge-client-subscriptions'
+import { createFakeBridgePortPair } from './bridge-port-pair-test-harness'
+import { BRIDGE_ACK_INTERVAL_FRAMES } from './bridge-client-subscriptions'
 import { BRIDGE_PROTOCOL_VERSION, type BridgeHostMessage } from './bridge-envelope'
 import {
   BRIDGE_READY_RETRY_MAX_MS,
@@ -58,8 +55,7 @@ describe('bridge client handshake', () => {
 
   it('asks no less often than the ceiling, however long the shell stays quiet', () => {
     const page = createPageClient()
-    // Past the ceiling: doubling from the floor reaches it in six steps. An unclamped backoff is
-    // the same thing for a minute and then a page that gives up on a shell booting behind it.
+    // Keep widening backoff capped; an unclamped delay eventually gives up on a shell still booting.
     vi.advanceTimersByTime(BRIDGE_READY_RETRY_MAX_MS * 4)
     const asked = page.sent.length
     vi.advanceTimersByTime(BRIDGE_READY_RETRY_MAX_MS)
@@ -82,7 +78,6 @@ describe('bridge client handshake', () => {
     const answer = page.client.sendRequest('worktree.ps')
     page.client.subscribe('terminal.stream', {}, onData)
     const id = idOf(page, 1)
-    // Every `ready` is answered, so a page that re-asked before the first init landed hears two.
     page.deliver(INIT)
     page.deliver(eventFrame(id, 1, 'still live'))
     expect(onData.mock.calls).toEqual([['still live']])
@@ -101,8 +96,7 @@ describe('bridge client handshake', () => {
     const onData = vi.fn()
     const answer = page.client.sendRequest('worktree.ps')
     page.client.subscribe('terminal.stream', {}, onData)
-    // A rebuilt host under the same page: its tables are empty, so nothing the page still holds
-    // would ever be answered or ended from there.
+    // A replacement session owns none of the old shell’s requests or streams; they must all settle locally.
     page.deliver({ ...INIT, sessionId: 'session-b' })
     const error = await answer.catch((thrown: unknown) => thrown)
     expect(readError(error).name).toBe('BridgeShellReplacedError')
@@ -123,15 +117,13 @@ describe('bridge client handshake', () => {
       sessionId: 'session-a',
       buildId: 'build-a',
       grants: INIT.grants,
-      // A shell too old to name a screen, which is a state the page has an answer for.
       route: null,
-      // And one that names no page routes, so the page hands every navigation back.
       pageRoutes: [],
       pageRouteGrants: null,
-      // And no insets, which is the shell that reserves the bar strips outside the view.
       safeAreaInsets: { top: 0, right: 0, bottom: 0, left: 0 },
       keyboardInset: 0,
-      // And no host and no stored keys, which is what `host-store.web.ts` then answers with.
+      colorScheme: 'dark',
+      uiLocale: null,
       host: null,
       storage: {},
       storageOversize: [],
@@ -140,8 +132,7 @@ describe('bridge client handshake', () => {
   })
 
   it('posts nothing, and says so, when the shell granted no navigate', () => {
-    // An older shell: `notify` is a closed union there, so the frame would be refused whole. The
-    // page has to learn that before it decides it has navigated, which is why this answers.
+    // Without navigate, older shells reject the whole notify; return false before the caller treats its tap as navigation.
     const page = createPageClient()
     page.deliver({ ...INIT, grants: { ...INIT.grants, native: [] } })
     const before = page.sent.length
@@ -232,15 +223,7 @@ describe('bridge client before a session', () => {
   })
 })
 
-/**
- * A frame the page received and then failed to handle (ruling 34 addendum).
- *
- * On iOS the host's post is `callAsyncJavaScript`, which rejects when the page's synchronous
- * `onmessage` throws — with the document still mounted. That reads to the shell exactly like a
- * frame that never arrived, and the shell tracks nothing about posts, so nothing would ever send
- * it again. It is not a lost frame either: the page had it, its own listener failed, and a retry
- * would fail the same way. The page catches it and says so.
- */
+// Catch page-listener throws locally: iOS callAsyncJavaScript would otherwise reject an already-delivered frame. Retrying cannot fix the same listener failure (ruling 34 addendum).
 describe('a listener of the page that throws on a frame it received', () => {
   it('is reported once, leaves the client usable, and never escapes the delivery', () => {
     const page = createPageClient()
@@ -253,12 +236,9 @@ describe('a listener of the page that throws on a frame it received', () => {
       ...INIT,
       route: { pathname: '/h/host-a/session/wt-1', params: { paneKey: 'pane-1' } }
     }
-    // What `__deliver` does on the device: one synchronous call, whose throw would reject the post.
     expect(() => page.deliver(moved)).not.toThrow()
     expect(page.diagnostics).toEqual([{ kind: 'inbound-listener-threw', error: thrown }])
-    // And the next frame is read: the failure was the listener's, not the channel's. This one is
-    // refused by the reader, which is a diagnostic the channel could only raise while it still
-    // works.
+    // Read the next frame too, proving the listener failed rather than the channel.
     page.deliver(eventFrame('unknown-exchange-id-0', 1, 'x'))
     expect(page.diagnostics.map((entry) => entry.kind)).toEqual([
       'inbound-listener-threw',
@@ -499,7 +479,6 @@ describe('bridge client caps', () => {
     page.start()
     live = false
     const onData = vi.fn()
-    // Every one of these is a slot the shell was never told about, and nothing will ever end it.
     for (let index = 0; index < BRIDGE_MAX_SUBSCRIPTIONS; index += 1) {
       page.client.subscribe('terminal.stream', {}, onData)
     }
@@ -507,7 +486,6 @@ describe('bridge client caps', () => {
     expect(onData.mock.calls.at(-1)?.[0]).toEqual({ type: 'error', message: expect.any(String) })
     expect(page.diagnostics).toHaveLength(BRIDGE_MAX_SUBSCRIPTIONS)
     live = true
-    // Short of this, the page is at its cap for the life of the document: only a reload clears it.
     const dispose = page.client.subscribe('terminal.stream', {}, vi.fn())
     dispose()
     expect(page.frames().filter((frame) => frame.type === 'cancel')).toHaveLength(1)
@@ -527,10 +505,24 @@ describe('bridge client caps', () => {
 })
 
 describe('bridge client acks', () => {
-  it('stays well inside the window the shell ends a stream at', () => {
-    // The shell's own numbers, not a copy of them: a window narrowed there has to fail here.
-    expect(BRIDGE_ACK_INTERVAL_FRAMES * 4).toBeLessThanOrEqual(BRIDGE_MAX_UNACKED_FRAMES)
-    expect(BRIDGE_ACK_INTERVAL_BYTES * 4).toBeLessThanOrEqual(BRIDGE_MAX_UNACKED_BYTES)
+  it('keeps a byte-heavy stream alive beyond the host window', async () => {
+    const pair = createFakeBridgePortPair()
+    try {
+      await pair.flush()
+      const seen: unknown[] = []
+      pair.client.subscribe('worktree.events', {}, (payload) => seen.push(payload))
+      await pair.flush()
+      const payload = 'x'.repeat(BRIDGE_MAX_MESSAGE_BYTES - 1024)
+      for (let index = 0; index < 16; index += 1) {
+        pair.rpc.streams[0]?.emit(payload)
+        await pair.flush()
+      }
+      expect(seen).toEqual(Array.from({ length: 16 }, () => payload))
+      expect(pair.rpc.streams[0]?.unsubscribes).toBe(0)
+    } finally {
+      pair.client.close()
+      pair.host.dispose()
+    }
   })
 
   it('acks the last seq it read once the frame interval is due', () => {
@@ -569,9 +561,7 @@ describe('bridge client acks', () => {
     })
     const id = idOf(page, 0)
     for (let seq = 1; seq <= BRIDGE_ACK_INTERVAL_FRAMES; seq += 1) {
-      // Reported rather than thrown (ruling 34 addendum), and counted either way: the window is
-      // the shell's to reopen, and a page that let the throw out would reject the host's post for
-      // a frame it had already taken.
+      // Ack even if listeners throw; the frame arrived and must not wedge the shell window or reject native delivery.
       expect(() => page.deliver(eventFrame(id, seq, seq))).not.toThrow()
     }
     expect(
@@ -599,7 +589,6 @@ describe('bridge client acks', () => {
     const dispose = page.client.subscribe('terminal.stream', {}, vi.fn())
     const id = idOf(page, 0)
     page.deliver({ v: BRIDGE_PROTOCOL_VERSION, type: 'end', id, reason: 'closed' })
-    // The screen unmounts on its own schedule, which is routinely after the shell gave up.
     dispose()
     expect(page.frames().filter((frame) => frame.type === 'cancel')).toEqual([])
   })
@@ -612,9 +601,7 @@ describe('bridge client acks', () => {
     const id = idOf(page, 0)
     page.deliver({ v: BRIDGE_PROTOCOL_VERSION, type: 'end', id, reason: 'overflow' })
     page.deliver(eventFrame(id, 1, 'after the end'))
-    // The terminal result is the only thing a consumer hears. `host-worktree-refresh.ts` reads it
-    // to clear the flag that says the event stream is live; without it the list never refreshes
-    // again, because frames that stop arriving look exactly like a stream with nothing to say.
+    // Notify terminal errors so host-worktree-refresh clears its live-stream flag; silent cessation looks like a quiet stream and stops future refresh.
     expect(onData.mock.calls).toEqual([[{ type: 'error', message: expect.any(String) }]])
     expect(page.diagnostics).toEqual([{ kind: 'stream-ended', reason: 'overflow' }])
     expect(page.frames().filter((frame) => frame.type === 'cancel')).toEqual([])
@@ -626,7 +613,6 @@ describe('bridge client acks', () => {
     const onData = vi.fn()
     const dispose = page.client.subscribe('terminal.stream', {}, onData)
     dispose()
-    // The caller that disposed is the one that would hear it, and it has already moved on.
     expect(onData).not.toHaveBeenCalled()
     expect(page.frames().filter((frame) => frame.type === 'cancel')).toHaveLength(1)
   })
@@ -668,8 +654,7 @@ describe('bridge client binary frames', () => {
       format: 'png',
       metadata: { imageWidth: 8 },
       image,
-      // The page's data URI wants base64 and this is the base64 the shell sent, so the web frame
-      // path reads it instead of encoding `image` back into the same string every frame.
+      // Reuse wire base64 for the data URI rather than re-encode image bytes every frame.
       b64
     })
   })

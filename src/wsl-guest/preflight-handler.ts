@@ -131,10 +131,8 @@ export class PreflightHandler {
     }
   }
 
-  // Why: SSH exec channels give the relay a minimal environment without shell
-  // startup files sourced. Ask the user's configured shell so agent dirs added
-  // by zsh/bash/fish startup hooks match the remote terminal experience.
-  // Windows has no POSIX shell on native OpenSSH hosts, so use where.exe there.
+  // SSH exec lacks shell startup env; probe the configured shell so agent lookup matches interactive terminals.
+  // Native Windows OpenSSH has no POSIX shell; use where.exe there.
 }
 
 async function probeCommandVersion(executablePath: string): Promise<string | null> {
@@ -268,8 +266,7 @@ function buildPosixCommandLookupSpec(command: string, shell: string): CommandLoo
 function buildShCommandLookupScript(command: string): string {
   // Why: login shells may define aliases or functions that mask the PATH executable.
   return [
-    // Why: WSL appends the Windows PATH, so a Windows-only npm shim would
-    // otherwise read as a guest install; same skip as host-side WSL detection.
+    // Skip Windows-mount shims appended by WSL, matching host-side guest-agent detection.
     buildPosixCommandPathLookupScript(
       { kind: 'literal', value: command },
       { skipWindowsMountDirs: true }
@@ -322,8 +319,7 @@ function pickTrustedPosixShell(
 
 function getShellCommandMode(shell: string): '-lc' | '-ilc' {
   const shellName = path.posix.basename(shell).toLowerCase()
-  // Why: bash/zsh/fish users commonly add package-manager bins from interactive
-  // startup files. POSIX sh/dash may not support interactive login flags.
+  // Use interactive login startup for bash/zsh/fish package-manager paths; sh/dash may support only login mode.
   return shellName === 'sh' || shellName === 'dash' ? '-lc' : '-ilc'
 }
 

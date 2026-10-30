@@ -27,9 +27,7 @@ export class PushHostSessionStore {
     const createdAt = this.now()
     const expiresAt = createdAt + PUSH_LIMITS.sessionTtlMs
     await this.database.transaction(async (transaction) => {
-      // Why: a desktop holds one session at a time and only re-proves once it is
-      // gone, so an earlier row is dead weight. It also bounds the table to one
-      // row per host however many proofs a self-minted identity answers.
+      // One active session per desktop bounds rows even for self-minted hosts that flood proofs.
       await transaction.lockQuotaScope(`orca-push-session:${hostFingerprint}`)
       await transaction.query('DELETE FROM push_sessions WHERE host_fingerprint = ?', [
         hostFingerprint

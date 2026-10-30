@@ -3,22 +3,12 @@ import type {
   MobileRichMarkdownEditorMessage
 } from '../mobile-rich-markdown-editor-contract'
 
-/**
- * The seams between the editor document and the page component that mounts it. The page owns the
- * host-facing three (messages, the URL prompt, the keyboard inset) and passes them every time:
- * `window.ReactNativeWebView` on the page is the *shell's* bridge, and `window.prompt` returns null
- * in both shells. The window reads below are what the remaining seams default to.
- */
+// Page supplies message/URL-prompt/keyboard seams: window.ReactNativeWebView is shell bridge and window.prompt returns null in both shells; other seams default to live window reads.
 
 /** Which URL a command is asking the user for. */
 export type RichMarkdownUrlPromptKind = 'link' | 'image'
 
-/**
- * Where the covered height comes from, and what says it may have changed.
- *
- * Null on the page, because the screen measures its own keyboard and a second report would lift
- * its bar twice.
- */
+// Keyboard cover source/listener is null on page: screen measures same viewport and duplicate report would double-lift bar.
 export type RichMarkdownKeyboardInsetReader = {
   /** The height the keyboard covers right now, in CSS pixels. */
   measure: () => number
@@ -54,14 +44,7 @@ export type RichMarkdownEditorHostSeams = {
   getSelection: () => Selection | null
   /** `editor-commands`, `editor-selection`: the document ranges, elements and `execCommand` come from. */
   getDocument: () => Document
-  /**
-   * `editor-surface`: where this document's own markup is, which is the last thing two of them
-   * shared.
-   *
-   * The surface's id is in the markup every mount plants, so a page-wide read hands both documents
-   * whichever came first in the tree — and a stack transition keeps the outgoing screen mounted
-   * while the incoming one starts. Null reads the whole document, at the call.
-   */
+  // Scope editor-surface lookup to mount root because transitions overlap hosts with same id; null reads whole document at call time.
   root: ParentNode | null
 }
 
@@ -72,11 +55,7 @@ export type RichMarkdownEditorHost = Pick<
 > &
   Partial<Pick<RichMarkdownEditorHostSeams, 'clearTimer' | 'getSelection' | 'getDocument' | 'root'>>
 
-/**
- * What each command asks for, which is the whole of what the prompt kind means.
- *
- * Exported because the page asks it through a modal.
- */
+// Export command prompt kind so page modal asks correct URL question.
 export const RICH_MARKDOWN_URL_PROMPT_LABELS: Record<RichMarkdownUrlPromptKind, string> = {
   link: 'Link URL',
   image: 'Image URL'

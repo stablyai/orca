@@ -9,7 +9,7 @@ import {
   type ManagedOrcadRestoreUpdateDeps
 } from './orcad-managed-update-on-restore'
 
-// The retry decision is read under the host's lifecycle lock, so the stub's last call answers it.
+// Read the last locked retry decision rather than an earlier overlapping attempt.
 const failedBeforeOf = (autoUpdate: ManagedServerUpdateDeps['autoUpdate']) =>
   vi.mocked(autoUpdate).mock.lastCall?.[1].failedBefore()
 

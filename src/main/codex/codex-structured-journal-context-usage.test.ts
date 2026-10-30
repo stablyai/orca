@@ -1,6 +1,3 @@
-// Codex's token usage frames through the real path a context fact takes:
-// translator → deferred sink queue → on-disk journal → the reader the composer ring uses.
-
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -83,7 +80,6 @@ async function session() {
     await journals.closeAll()
     await rm(root, { recursive: true, force: true })
   })
-  /** One app-server child's translator; a second one is the child a resume starts. */
   const connect = () => {
     const deferred = createDeferredStructuredAgentSessionEventSink(testEventSinkLogging())
     deferred.bind({ journal, fence: 1, publish: () => {} })
@@ -92,7 +88,7 @@ async function session() {
       sink: deferred.sink,
       sessionId: SESSION,
       primaryThreadId: () => THREAD,
-      // Lets the echo of a send revise its turn's row, as a dispatched send's does.
+      // Supply dispatch timing so echoes can revise the turn row.
       dispatchRequestOrigin: () => ({ requestedAt: 900, sequence: 0 })
     })
     const on = (method: string, params: Record<string, unknown>, threadId = THREAD) =>
@@ -108,7 +104,6 @@ async function session() {
       on,
       tokenUsage: (turnId: string, tokenUsage: unknown, threadId = THREAD) =>
         on('thread/tokenUsage/updated', { turnId, tokenUsage }, threadId),
-      /** What the ring reads once everything queued has reached the journal. */
       contextUsage: async () => {
         await expect(deferred.drained()).resolves.toEqual({ ok: true })
         return selectStructuredAgentContextUsage(journal.snapshot().items)
@@ -135,12 +130,11 @@ describe('Codex context usage in the journal', () => {
       usedTokens: 17611,
       windowTokens: 258400,
       percentage: 7,
-      // Codex's own reading, so the ring does not call it an estimate.
       estimated: false,
       categories: []
     })
 
-    // The response's own size, not the thread's running spend, against the window sent with it.
+    // Context usage measures the response, not cumulative thread spend.
     tokenUsage('turn-1', AFTER_TOOL_CALL)
     expect(await contextUsage()).toMatchObject({ usedTokens: 17684, windowTokens: 475000 })
 
@@ -175,7 +169,7 @@ describe('Codex context usage in the journal', () => {
     tokenUsage('turn-1', FINAL_RESPONSE)
     on('turn/completed', { turn: { id: 'turn-1', status: 'completed' } })
 
-    // The host opens the command's turn; the provider turn Codex starts for it writes none.
+    // The host owns the command's turn row; the provider turn creates none.
     const identity: AgentJournalItemIdentity = {
       provider: 'orca',
       clientMessageId: 'command-turn:cmd-1'
@@ -225,7 +219,7 @@ describe('Codex context usage in the journal', () => {
     const { on, tokenUsage, contextUsage } = await session()
     on('turn/started', { turn: { id: 'turn-1' } })
     tokenUsage('turn-1', FINAL_RESPONSE)
-    // Not a turn this child saw open, so it lands on the newest row, which is turn-1's.
+    // An unknown turn falls back to the newest row.
     tokenUsage('turn-nobody-opened', AFTER_COMPACTION)
 
     on('turn/completed', { turn: { id: 'turn-1', status: 'completed' } })
@@ -239,7 +233,6 @@ describe('Codex context usage in the journal', () => {
     tokenUsage('turn-1', FIRST_RESPONSE)
     on('turn/completed', { turn: { id: 'turn-1', status: 'completed' } })
 
-    // The child a resume starts rewrites every turn the thread returns.
     const resumed = connect()
     resumed.translator.restoreThread(THREAD, {
       turns: [{ id: 'turn-1', status: 'completed', startedAt: 1, completedAt: 2, items: [] }]
@@ -247,7 +240,7 @@ describe('Codex context usage in the journal', () => {
     expect(await resumed.turnRecord('turn-1')).toMatchObject({ completedAt: 2_000 })
     expect(await resumed.contextUsage()).toMatchObject({ usedTokens: 17611, windowTokens: 258400 })
 
-    // It knows no open turn, and the turn Codex names may be keyed by a command instead.
+    // After resume, the provider's turn ID may differ from the saved command row's ID.
     resumed.tokenUsage('turn-before-restart', FINAL_RESPONSE)
     expect(await resumed.contextUsage()).toMatchObject({ usedTokens: 17714, windowTokens: 475000 })
   })

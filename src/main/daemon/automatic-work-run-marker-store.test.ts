@@ -72,7 +72,7 @@ describe('AutomaticWorkRunMarker', () => {
     const stopped = open()
     stopped.arm()
     stopped.recordStopRequested()
-    // No markCleanExit: the teardown died (e.g. SIGBUS as the scope stop took its mount).
+    // Omit markCleanExit to simulate teardown dying before completion.
     expect(JSON.parse(readFileSync(path, 'utf8'))).toMatchObject({ state: 'clean-exit' })
     expect(open(20).mode).toEqual({ kind: 'normal' })
   })

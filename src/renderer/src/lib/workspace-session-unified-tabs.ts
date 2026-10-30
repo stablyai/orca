@@ -1,4 +1,4 @@
-import { structuredLaunchSlotIds } from './structured-agent-session-launch-persistence'
+import { structuredLaunchSlotIds } from './agent-session/launch/structured-agent-session-launch-persistence'
 import type { Tab, TabGroup, TabGroupLayoutNode } from '../../../shared/tab-types'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
 import type { WorkspaceSessionSnapshot } from './workspace-session'

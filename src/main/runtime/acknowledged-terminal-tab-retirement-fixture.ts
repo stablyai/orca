@@ -178,7 +178,6 @@ export function createAcknowledgedTabRetirementFixture(bound = false) {
     splitTerminal: () => {},
     renameTerminal: () => {},
     focusTerminal: () => {},
-    sleepWorktree: () => {},
     terminalFitOverrideChanged: () => {},
     terminalDriverChanged: () => {}
   })

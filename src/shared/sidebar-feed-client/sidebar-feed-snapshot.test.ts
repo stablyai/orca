@@ -6,7 +6,7 @@ import { indexSidebarFeed } from '../sidebar-list/sidebar-feed-index'
 import { composeWorktreeHostIdentity } from '../worktree/host-qualified-identity'
 import { WorkspaceRowsSnapshotSchema, type WorkspaceRow } from '../sidebar-list/workspace-rows'
 import { SidebarFeedReader, type SidebarFeedReaderRead } from './sidebar-feed-reader'
-import { installSidebarFeedSnapshot, type SidebarFeedSnapshot } from './sidebar-feed-snapshot'
+import type { SidebarFeedSnapshot } from './sidebar-feed-snapshot'
 
 const WORKSPACES = 1000
 
@@ -114,11 +114,5 @@ describe('sidebar feed snapshot', () => {
     expect(rederived.map((entry) => entry.identity)).toEqual([identity(7)])
     // A domain the change did not touch keeps its map.
     expect(after.domains.review).toBe(before.domains.review)
-  })
-
-  it('keeps the snapshot itself when the install is the same', async () => {
-    const host = await readHost()
-    const snapshot = host.snapshot()
-    expect(installSidebarFeedSnapshot(snapshot.installed, snapshot)).toBe(snapshot)
   })
 })

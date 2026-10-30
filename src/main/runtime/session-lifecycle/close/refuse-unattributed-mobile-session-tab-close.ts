@@ -1,7 +1,7 @@
-import { OrcaRuntimeWithApplyMobileSessionTabNavigation } from '../projection/apply-mobile-session-tab-navigation'
+import { OrcaRuntimeWithResumeAgentSessionInWorkspace } from '../projection/resume-agent-session-in-workspace'
 import type { RuntimeMobileSessionTabCloseResult } from '../../../../shared/runtime-types'
 
-export abstract class OrcaRuntimeWithRefuseUnattributedMobileSessionTabClose extends OrcaRuntimeWithApplyMobileSessionTabNavigation {
+export abstract class OrcaRuntimeWithRefuseUnattributedMobileSessionTabClose extends OrcaRuntimeWithResumeAgentSessionInWorkspace {
   async refuseUnattributedMobileSessionTabClose(
     worktreeSelector: string,
     tabId: string
@@ -16,8 +16,7 @@ export abstract class OrcaRuntimeWithRefuseUnattributedMobileSessionTabClose ext
     if (!tabExists) {
       throw new Error('tab_not_found')
     }
-    // Why: a legacy client may already have hidden its mirror; a new snapshot
-    // restores it without granting an unattributed request destructive authority.
+    // Legacy clients may hide their mirror first; republish it without authorizing an unattributed destructive close.
     this.republishMobileSessionTabsSnapshot(snapshot.worktree)
     return {
       closed: true,

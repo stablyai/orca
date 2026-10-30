@@ -12,6 +12,7 @@ import { resolveEditorModelOwner } from '@/components/editor/editor-model-owner'
 import { isRemovedRuntimeHostId } from '../../stale-runtime-host-rows'
 import { folderWorkspaceKey } from '../../../../../../shared/workspace-scope'
 import { selectFolderWorkspaces, selectWorktreesByRepo } from '../../../workspace-record-selectors'
+import type { EditorBufferKeepRequest } from '../../editor/buffers/editor-buffer-kept'
 
 /** Text retained only until the removal notice is dismissed or recovered. */
 export type ClosedUnsavedFile = { fileId: string; filePath: string; content: string }
@@ -20,9 +21,13 @@ export type ClosedUnsavedFile = { fileId: string; filePath: string; content: str
 export type ConfirmedUnsavedDiscards = ReadonlyMap<string, string>
 
 let pendingNotice: {
+  token: number
+  /** A closing write may have kept records under this token. */
+  keeps: boolean
   files: Map<string, { file: ClosedUnsavedFile; workspace: string }>
   discarded: Set<string>
 } | null = null
+let lastNoticeToken = 0
 
 /** Snapshots the listed text; only the confirmed removal's own teardown may discard it. */
 export function confirmUnsavedDiscard(
@@ -76,16 +81,14 @@ function workspaceLabel(s: AppState, worktreeId: string): string {
   return worktree?.displayName ?? folder?.name ?? worktreeId
 }
 
-/**
- * Captures the unsaved text of tabs a purge closes and offers it back. Runs inside purge updaters,
- * so one toast per microtask waits for the commit and merges every purge of the batch. Text still
- * equal to `confirmed` is dropped, for this batch only.
- */
+/** Retain unsaved text/models until notice recovery/dismissal; microtask merges committed purge notices. Drop only text exactly confirmed for discard in this batch; return keep token for closing writes. */
 export function noticeRemovedUnsavedFiles(
   s: AppState,
   removedFileIds: ReadonlySet<string>,
   confirmed?: ConfirmedUnsavedDiscards
-): void {
+): EditorBufferKeepRequest | undefined {
+  const keep = new Set<string>()
+  let notice: NonNullable<typeof pendingNotice> | null = null
   try {
     for (const file of removedFileIds.size > 0 ? lastViewUnsavedFiles(s, removedFileIds) : []) {
       const content = currentUnsavedText(s, file)
@@ -95,31 +98,54 @@ export function noticeRemovedUnsavedFiles(
         })
         continue
       }
-      const notice = (pendingNotice ??= startNotice())
+      notice = pendingNotice ??= startNotice()
       if (confirmed?.get(file.id) === content) {
         notice.files.delete(file.id)
         notice.discarded.add(file.id)
-      } else if (!notice.discarded.has(file.id) && !notice.files.has(file.id)) {
+        continue
+      }
+      if (notice.discarded.has(file.id)) {
+        continue
+      }
+      if (!notice.files.has(file.id)) {
         notice.files.set(file.id, {
           file: { fileId: file.id, filePath: file.filePath, content },
           workspace: workspaceLabel(s, file.worktreeId)
         })
       }
+      // Why every call: a removal closes tabs over several writes, each carrying its own request.
+      for (const id of unsavedTextViewIds(s, file)) {
+        keep.add(id)
+      }
     }
   } catch (error) {
     console.error('[editor] capturing unsaved edits from a removed workspace failed', error)
   }
+  if (!notice || keep.size === 0) {
+    return undefined
+  }
+  notice.keeps = true
+  return { viewIds: keep, notice: notice.token }
 }
 
 function startNotice(): NonNullable<typeof pendingNotice> {
   queueMicrotask(showPendingNotice)
-  return { files: new Map(), discarded: new Set() }
+  lastNoticeToken += 1
+  return { token: lastNoticeToken, keeps: false, files: new Map(), discarded: new Set() }
 }
 
 function showPendingNotice(): void {
-  const entries = [...(pendingNotice?.files.values() ?? [])]
+  const notice = pendingNotice
   pendingNotice = null
+  if (!notice) {
+    return
+  }
+  const { token } = notice
+  const entries = [...notice.files.values()]
   if (entries.length === 0) {
+    if (notice.keeps) {
+      releaseNotice(token)
+    }
     return
   }
   const closed = entries.map((entry) => entry.file)
@@ -129,7 +155,17 @@ function showPendingNotice(): void {
     filePaths: closed.map((file) => file.filePath)
   })
   // Why lazy: keeps toast and editor-open code out of the store's import graph.
-  void import('@/components/editor/closed-unsaved-files-toast').then((module) =>
-    module.showClosedUnsavedFilesToast(closed, label)
+  void import('@/components/editor/closed-unsaved-files-toast')
+    .then((module) => module.showClosedUnsavedFilesToast(closed, label, token))
+    .catch((error) => {
+      console.error('[editor] showing the unsaved edits notice failed', error)
+      // Why: with no notice to dismiss, nothing else would ever release the kept records.
+      releaseNotice(token)
+    })
+}
+
+function releaseNotice(token: number): void {
+  void import('@/store').then(({ useAppStore }) =>
+    useAppStore.getState().releaseKeptEditorBuffers(token)
   )
 }

@@ -64,7 +64,7 @@ export function activateMultiplexStream(
     const widthChanged = stream.isMobile && event.cols !== stream.lastResizeCols
     if (widthChanged) {
       stream.lastResizeCols = event.cols
-      // Why: re-serialize+replay the full scrollback at the new cols so restored hard-wrapped lines rewrap; live output resumes after the snapshot lands.
+      // Replay full scrollback at new columns to rewrap restored hard lines before live output resumes.
       void sendMobileResizeRestream(
         runtime,
         ptyId,
@@ -84,7 +84,7 @@ export function activateMultiplexStream(
             state.sendResizedFrame(stream, event)
           }
         })
-        // Why: on re-stream failure, still emit the geometry-only Resized frame so the client never misses the resize.
+        // Still emit geometry-only Resized when snapshot replay fails.
         .catch(() => {
           if (
             !isMultiplexStreamAttached(state, stream) ||

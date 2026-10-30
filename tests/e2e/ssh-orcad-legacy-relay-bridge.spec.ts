@@ -1,17 +1,7 @@
-/**
- * Upgrading from 1.4.224 keeps the terminals its relay still runs, on a real Docker SSH host:
- *
- * A 1.4.224 relay runs detached with a live shell for this desktop's target, and another one for
- * another desktop's target. The upgraded desktop connects: the host converts to orcad (never
- * refused), the old shell answers typing in its old tab through the bridge, a new terminal opens on
- * orcad, the bridge survives a dropped SSH connection, and when the old shell exits its pane and
- * lease retire. The other desktop's relay and its shell are never touched.
- *
- * When another desktop on the same login already moved that terminal's project to the host's
- * server, the host stays unmoved but connected, and the old tab keeps its shell until it exits.
- *
- * COMPAT(legacy-relay-bridge): revisit 2027-01-15, with src/main/ssh/legacy-relay/.
- */
+// Upgrade a live detached 1.4.224 relay to managed orcad while preserving its original tab/shell across SSH loss and explicit disconnect.
+// Retire the pane/lease only on exit; never touch another desktop’s relay. If its project already moved, keep connected without moving until the shell exits.
+// COMPAT(legacy-relay-bridge): revisit 2027-01-15, with src/main/ssh/legacy-relay/.
+import { mkdirSync, truncateSync, writeFileSync } from 'node:fs'
 import type { ElectronApplication, Page, TestInfo } from '@stablyai/playwright-test'
 import { z } from 'zod'
 import { expect, test } from './helpers/orca-app'
@@ -19,7 +9,20 @@ import { waitForSessionReady } from './helpers/store'
 import { createRestartSession } from './helpers/orca-restart'
 import { managedServer, reconnect, serverCall } from './helpers/orcad-convert-flow'
 import { seedRelayEraProfile } from './helpers/orcad-upgrade-profile'
-import { readPersistedProfileState } from './helpers/persisted-profile-state'
+import {
+  mutateStoppedProfileState,
+  readPersistedProfileState
+} from './helpers/persisted-profile-state'
+import { workspaceSessionStateSchema } from '../../src/shared/workspace-session-schema'
+import {
+  getProfileTerminalScrollbackSnapshotRoot,
+  getTerminalScrollbackSnapshotPath,
+  makeTerminalScrollbackSnapshotRef
+} from '../../src/main/terminal-scrollback-snapshots'
+import { TERMINAL_SCROLLBACK_STORE_BYTE_LIMIT } from '../../src/shared/terminal-scrollback-limits'
+import { getOrcaProfileDataFile } from '../../src/shared/profile-state-storage-paths'
+import { DEFAULT_LOCAL_ORCA_PROFILE_ID } from '../../src/shared/orca-profiles'
+import { getOrcadSshDeployment } from '../../src/shared/runtime-environments'
 import { toSshExecutionHostId } from '../../src/shared/execution-host'
 import { toAppSshPtyId } from '../../src/shared/ssh-pty-id'
 import {
@@ -107,9 +110,24 @@ function launchUpgraded(session: ReturnType<typeof createRestartSession>) {
   })
 }
 
-test('terminals a 1.4.224 relay keeps running stay usable in their old tabs after upgrading', async ({
-  testRepoPath
-}, testInfo: TestInfo) => {
+function writeOverLimitScrollbackSnapshot(userDataDir: string, ref: string): void {
+  const snapshotRoot = getProfileTerminalScrollbackSnapshotRoot(
+    getOrcaProfileDataFile(DEFAULT_LOCAL_ORCA_PROFILE_ID, userDataDir)
+  )
+  const path = getTerminalScrollbackSnapshotPath(ref, { snapshotRoot })
+  if (!path) {
+    throw new Error(`Expected a valid scrollback ref, got ${ref}`)
+  }
+  mkdirSync(snapshotRoot, { recursive: true })
+  writeFileSync(path, '')
+  truncateSync(path, TERMINAL_SCROLLBACK_STORE_BYTE_LIMIT + 1)
+}
+
+async function verifyRunningRelayUpgrade(
+  testRepoPath: string,
+  testInfo: TestInfo,
+  unreadableScrollback = false
+): Promise<void> {
   test.setTimeout(25 * 60_000)
   host = startDockerSshHostTarget(testInfo)
   const targetId = `ssh-bridge-${Date.now()}`
@@ -143,6 +161,37 @@ test('terminals a 1.4.224 relay keeps running stay usable in their old tabs afte
       { targetId, relayPtyId: ours.relayPtyId }
     )
     const terminalTabId = seeded.terminalTabId!
+    if (unreadableScrollback) {
+      const ref = makeTerminalScrollbackSnapshotRef(terminalTabId, seeded.terminalLeafId)
+      // A missing file is no history at all; an over-limit one is saved history Orca cannot read.
+      writeOverLimitScrollbackSnapshot(session.userDataDir, ref)
+      mutateStoppedProfileState(session.userDataDir, (state) => {
+        const partitions = z
+          .record(z.string(), workspaceSessionStateSchema)
+          .parse(state.workspaceSessionsByHostId)
+        const layout =
+          partitions[toSshExecutionHostId(targetId)]?.terminalLayoutsByTabId[terminalTabId]
+        if (!layout) {
+          throw new Error('Expected the released terminal layout')
+        }
+        layout.scrollbackRefsByLeafId = { [seeded.terminalLeafId]: ref }
+        state.workspaceSessionsByHostId = partitions
+        state.sshRemotePtyLeases = [
+          ...z.array(z.unknown()).parse(state.sshRemotePtyLeases),
+          {
+            targetId,
+            ptyId: `old-${ours.relayPtyId}`,
+            tabId: 'closed-tab',
+            leafId: seeded.terminalLeafId,
+            worktreeId: seeded.worktreeId,
+            state: 'expired',
+            supersededBy: ours.relayPtyId,
+            createdAt: Date.now(),
+            updatedAt: Date.now()
+          }
+        ]
+      })
+    }
 
     const upgraded = await launchUpgraded(session)
     app = upgraded.app
@@ -163,7 +212,28 @@ test('terminals a 1.4.224 relay keeps running stay usable in their old tabs afte
       }
     )
 
-    // Never refused: the host converts while its relay terminal is live.
+    if (unreadableScrollback) {
+      await expect
+        .poll(() => managedServer(page, targetId), { timeout: 120_000 })
+        .toMatchObject({ kind: 'relay', reason: 'refused', canLeaveBehind: true })
+      // The refusal toast offers it too; this is the pane's own button.
+      const move = page
+        .getByRole('button', { name: 'Move anyway…', exact: true })
+        .and(page.locator(':not([data-sonner-toast] button)'))
+      await expect(move).toBeVisible()
+      await page.screenshot({
+        path: testInfo.outputPath('unreadable-history-recovery-offered.png')
+      })
+      await move.click()
+      const dialog = page.getByRole('dialog')
+      await expect(dialog).toContainText('saved terminal history Orca could not read')
+      await page.screenshot({
+        path: testInfo.outputPath('unreadable-history-recovery-confirm.png'),
+        animations: 'disabled'
+      })
+      await dialog.getByRole('button', { name: 'Move anyway', exact: true }).click()
+    }
+
     await expect
       .poll(() => managedServer(page, targetId), { timeout: 8 * 60_000 })
       .toMatchObject({ kind: 'managed' })
@@ -172,7 +242,7 @@ test('terminals a 1.4.224 relay keeps running stay usable in their old tabs afte
       .toEqual([expect.objectContaining({ ptyId: bridgedPtyId, state: 'live' })])
 
     const environment = (await page.evaluate(() => window.api.runtimeEnvironments.list())).find(
-      (entry) => entry.orcadDeployment?.sshTargetId === targetId
+      (entry) => getOrcadSshDeployment(entry)?.sshTargetId === targetId
     )
     if (!environment) {
       throw new Error('Converted host is missing from the environment catalog')
@@ -279,7 +349,6 @@ test('terminals a 1.4.224 relay keeps running stay usable in their old tabs afte
     await expectTerminalAccessibilityText(page, storeTabId, 'GOT:after-upgrade')
     await page.screenshot({ path: testInfo.outputPath('bridged-terminal.png') })
 
-    // A new terminal opens on orcad.
     const fresh = await createPairedHostTerminal(page, environment.id, seeded.worktreeId, 'bash')
     await openPairedClientTab(page, seeded.worktreeId, fresh.webTabId)
     await callEnvironment(page, environment.id, 'terminal.send', {
@@ -290,8 +359,7 @@ test('terminals a 1.4.224 relay keeps running stay usable in their old tabs afte
     await expectTerminalAccessibilityText(page, fresh.webTabId, 'QA_ORCAD_NEW')
     expect(await listDockerRelayPtys(host, relay, ours.sockPath)).toEqual([ours.relayPtyId])
 
-    // Clicking back to the old tab shows the old shell, and the managed server never starts a
-    // second, unseen shell of its own for that pane.
+    // Returning to the old tab must retain its shell without a hidden managed replacement.
     await page
       .locator(`[data-testid="sortable-tab"][data-tab-id=${JSON.stringify(storeTabId)}]`)
       .click()
@@ -333,8 +401,7 @@ test('terminals a 1.4.224 relay keeps running stay usable in their old tabs afte
       )
       .toBe(true)
 
-    // A deliberate disconnect hangs the bridge up without an exit; after reconnecting, the old
-    // tab attaches to the new bridge and shows the shell's output again.
+    // Explicit disconnect replaces only the bridge; reconnect must reattach the same live relay shell.
     await reconnect(page, targetId)
     await expect
       .poll(() => bridgedPanes(page), { timeout: BRIDGE_TIMEOUT_MS, intervals: [2_000] })
@@ -392,7 +459,15 @@ test('terminals a 1.4.224 relay keeps running stay usable in their old tabs afte
     }
     await session.dispose()
   }
-})
+}
+
+test('terminals a 1.4.224 relay keeps running stay usable in their old tabs after upgrading', async ({
+  testRepoPath
+}, testInfo) => verifyRunningRelayUpgrade(testRepoPath, testInfo))
+
+test('unreadable saved scrollback can be skipped while the original relay shell keeps working', async ({
+  testRepoPath
+}, testInfo) => verifyRunningRelayUpgrade(testRepoPath, testInfo, true))
 
 test('a relay terminal in a project another desktop already moved keeps working until it exits (STA-10604)', async ({
   testRepoPath
@@ -416,7 +491,6 @@ test('a relay terminal in a project another desktop already moved keeps working 
   const desktopB = createRestartSession(testInfo, { ORCA_ORCAD_TEMPLATE_PATH: TEMPLATE_SOURCE! })
   let app: ElectronApplication | null = null
   try {
-    // 1. Desktop A already runs the host's managed server, holding the same repository.
     const a = await desktopA.launch()
     app = a.app
     await waitForSessionReady(a.page)
@@ -433,7 +507,6 @@ test('a relay terminal in a project another desktop already moved keeps working 
     await desktopA.close(app)
     app = null
 
-    // 2. Desktop B upgrades with that repository and a live relay terminal in it.
     const first = await desktopB.launch()
     app = first.app
     await waitForSessionReady(first.page)
@@ -493,7 +566,6 @@ test('a relay terminal in a project another desktop already moved keeps working 
     await expectTerminalAccessibilityText(page, terminalTabId, 'GOT:still-bridged')
     await page.screenshot({ path: testInfo.outputPath('unmoved-bridged-terminal.png') })
 
-    // 3. Once the old shell exits, the next connect links the project to A's server.
     await typeIntoActiveTerminal(page, 'quit')
     await expect.poll(() => bridgedPanes(page), { timeout: 60_000 }).toEqual([])
     await reconnect(page, targetId)
@@ -577,8 +649,7 @@ test('a bridged tab closed while disconnected stops its shell even after a resta
       .poll(() => bridgedPanes(page), { timeout: BRIDGE_TIMEOUT_MS })
       .toEqual([expect.objectContaining({ ptyId: bridgedPtyId, state: 'live' })])
 
-    // Disconnected, the tab closes through both of its routes: the renderer's PTY kill, which
-    // finds no SSH provider, and then the bridge transport's own close.
+    // Close while disconnected exercises both renderer PTY kill without a provider and the bridge transport close.
     await page.evaluate((id) => window.api.ssh.disconnect({ targetId: id }), targetId)
     await page.evaluate(async (ptyId) => {
       await window.api.pty.kill(ptyId)

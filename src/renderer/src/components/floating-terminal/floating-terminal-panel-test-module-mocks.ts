@@ -83,8 +83,7 @@ export function createImeInputContextRefreshModule(): Pick<
   }
 }
 
-// closeFloatingItemConfirmed routes terminals through closeTerminalTab (own pin guard + F9
-// force-reenter) and non-terminals through guardPinnedTabClose; mock both to assert routing.
+// Mock each close authority to verify terminal routing and non-terminal pin guards.
 export function createTerminalTabActionsModule(): Pick<
   FloatingTerminalPanelMocks,
   'closeTerminalTab'

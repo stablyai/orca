@@ -105,7 +105,7 @@ describe('OpenCode Go credential state', () => {
     const state = service.getState()
     expect(state.opencodeGo?.status).toBe('error')
     expect(state.opencodeGo?.error).toBe(DECRYPT_ERROR)
-    // Why: the bar must stay visible to surface how to fix the saved key.
+    // Keep saved-key failures visible so users can fix credentials.
     expect(state.opencodeGoApiKeyConfigured).toBe(true)
   })
 

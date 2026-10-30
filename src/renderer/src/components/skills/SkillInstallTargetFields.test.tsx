@@ -90,13 +90,11 @@ describe('SkillInstallTargetFields', () => {
     const searchInput = screen.getByPlaceholderText('Search workspaces...')
     expect(searchInput).toBeInTheDocument()
 
-    // Type query to filter
     fireEvent.change(searchInput, { target: { value: 'feature' } })
 
     expect(screen.getByText('feature-skills ·')).toBeInTheDocument()
     expect(screen.queryByText('orca-main ·')).toBeNull()
 
-    // Click matching item
     fireEvent.click(screen.getByText('feature-skills ·'))
     expect(onWorkspaceChange).toHaveBeenCalledWith('wt-2')
   })

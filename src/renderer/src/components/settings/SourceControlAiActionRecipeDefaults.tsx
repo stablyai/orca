@@ -12,8 +12,10 @@ import { CUSTOM_AGENT_ID } from '../../../../shared/commit-message-agent-spec'
 import type { CustomAgentId } from '../../../../shared/commit-message-agent-spec'
 import {
   SOURCE_CONTROL_ACTION_IDS,
-  setSourceControlActionDefault,
-  type SourceControlActionId
+  setSourceControlActionAgentDefault,
+  type SourceControlActionRecipe,
+  type SourceControlActionId,
+  type SourceControlAiActionDefaults
 } from '../../../../shared/source-control-ai-actions'
 import { Label } from '../ui/label'
 import { useAppStore } from '@/store'
@@ -23,12 +25,14 @@ import {
   type SourceControlActionRecipeOverrideSummary
 } from '../../../../shared/source-control-launch-agent-selection'
 import { SearchableSetting } from './SearchableSetting'
-import { getRepositorySourceControlAiActionRecipeSectionId } from './repository-settings-targets'
+import { getRepositorySourceControlAiActionRecipeSectionId } from './repository/repository-settings-targets'
 import { matchesSettingsSearch } from './settings-search'
 import { SourceControlActionRecipeRow } from './SourceControlActionRecipeRow'
 import { SourceControlActionRepoOverrideNote } from './SourceControlActionRepoOverrideNote'
+import { retireActionLaunchPreferences } from './source-control-ai-action-recipe-draft'
 import { useSourceControlActionRecipeDraftState } from './source-control-action-recipe-draft-state'
 import { translate } from '@/i18n/i18n'
+import { useSourceControlActionAgentInventory } from './use-source-control-action-agent'
 
 type SourceControlAiActionRecipeDefaultsProps = {
   config: SourceControlAiSettings
@@ -95,9 +99,11 @@ export function SourceControlAiActionRecipeDefaults({
   searchQuery,
   writeConfig
 }: SourceControlAiActionRecipeDefaultsProps): React.JSX.Element | null {
+  useSourceControlActionAgentInventory(
+    config.enabled && matchesSettingsSearch(searchQuery, ACTION_RECIPES_SEARCH_ENTRY)
+  )
   const allRepos = useRepos()
-  // Recomputes on every keystroke in the sibling recipe textareas otherwise, so
-  // memoize the filter and the O(actions × repos) override scan on `repos`.
+  // Memoize the O(actions × repos) override scan so sibling recipe typing cannot repeat it.
   const repos = useMemo(() => allRepos.filter((repo) => !isFolderRepo(repo)), [allRepos])
   const overrideSummaries = useMemo(
     () =>
@@ -116,6 +122,8 @@ export function SourceControlAiActionRecipeDefaults({
     savingActionTemplateIds,
     onActionTemplateChange,
     onActionAgentArgsChange,
+    onActionLaunchPreferencesChange,
+    retireActionAgentDocument,
     saveActionTemplateDraft,
     discardActionTemplateDraft,
     appendVariable
@@ -126,9 +134,31 @@ export function SourceControlAiActionRecipeDefaults({
     writeConfig
   })
 
+  const writeActionDefault = async (
+    update: (actions: SourceControlAiActionDefaults | undefined) => SourceControlAiActionDefaults
+  ): Promise<boolean> => {
+    try {
+      await writeConfig((current) => {
+        return { actions: update(current.actions) }
+      })
+      return true
+    } catch (error) {
+      console.error('Failed to save Source Control AI action agent default', error)
+      toast.error(
+        translate(
+          'auto.components.settings.SourceControlAiActionRecipeDefaults.b5f46664d3',
+          'Failed to save Source Control AI action default: {{value0}}',
+          { value0: error instanceof Error ? error.message : 'Unknown error' }
+        )
+      )
+      return false
+    }
+  }
+
   const onActionAgentChange = async (
     actionId: SourceControlActionId,
-    value: string
+    value: string,
+    choice?: Pick<SourceControlActionRecipe, 'surface'>
   ): Promise<void> => {
     const agentId =
       value === '__default_agent__'
@@ -136,27 +166,22 @@ export function SourceControlAiActionRecipeDefaults({
         : value === CUSTOM_AGENT_ID
           ? CUSTOM_AGENT_ID
           : (value as TuiAgent)
-    let previousActions = config.actions
-    try {
-      await writeConfig((current) => {
-        previousActions = current.actions
-        return {
-          actions: setSourceControlActionDefault(current.actions, actionId, { agentId })
-        }
-      })
-    } catch (error) {
-      console.error('Failed to save Source Control AI action agent default', error)
-      try {
-        await writeConfig({ actions: previousActions })
-      } catch (rollbackError) {
-        console.error('Failed to roll back Source Control AI action agent default', rollbackError)
+    const changed = config.actions?.[actionId]?.agentId !== agentId
+    const captured = actionRecipeDraftState.values[actionId].launchPreferences
+    const saved = await writeActionDefault((actions) => {
+      const next = setSourceControlActionAgentDefault(actions, actionId, agentId)
+      if (choice) {
+        const { surface: _previous, ...recipe } = next[actionId] ?? {}
+        next[actionId] = { ...recipe, ...(choice.surface ? { surface: choice.surface } : {}) }
       }
-      toast.error(
-        translate(
-          'auto.components.settings.SourceControlAiActionRecipeDefaults.b5f46664d3',
-          'Failed to save Source Control AI action default: {{value0}}',
-          { value0: error instanceof Error ? error.message : 'Unknown error' }
-        )
+      return next
+    })
+    if (saved && changed) {
+      retireActionAgentDocument(actionId, agentId)
+    }
+    if (saved && changed && captured) {
+      onActionLaunchPreferencesChange(actionId, (current) =>
+        retireActionLaunchPreferences(current, captured, agentId)
       )
     }
   }
@@ -213,12 +238,17 @@ export function SourceControlAiActionRecipeDefaults({
                   onReviewRepo={(repoId) => openRepoSourceControlAiSettings(repoId, actionId)}
                 />
               }
-              onAgentChange={(id, value) => void onActionAgentChange(id, value)}
+              surface={recipe?.surface}
+              onAgentChange={(id, value, choice) => void onActionAgentChange(id, value, choice)}
+              launchPreferences={actionRecipeDraftState.values[actionId].launchPreferences}
+              onLaunchPreferencesChange={(id, value, userArgs, nodes) =>
+                void onActionLaunchPreferencesChange(id, value, userArgs, nodes)
+              }
               onTemplateChange={onActionTemplateChange}
               onAgentArgsChange={onActionAgentArgsChange}
               onAppendVariable={appendVariable}
               onDiscard={discardActionTemplateDraft}
-              onSave={(id) => void saveActionTemplateDraft(id)}
+              onSave={(id) => void saveActionTemplateDraft(id).catch(console.error)}
             />
           )
         })}

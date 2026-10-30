@@ -8,14 +8,7 @@ import {
   type SshWorkspaceBrowserRouteErrorKind
 } from '../use-ssh-workspace-browser-route'
 
-/**
- * Fail-closed mount gate for SSH workspaces: pages render only on the
- * proxy-verified route partition. While it prepares (or after it fails) no
- * webview may exist at all — an unrouted fallback would silently browse from
- * the local machine instead of the SSH host. The only unrouted paths are the
- * explicit ones: the global setting or the per-target "browse from this
- * device" choice below.
- */
+/** Require a proxy-verified partition before mounting SSH browser guests; local egress is allowed only through explicit global or per-target opt-outs. */
 export function SshRoutedBrowserPageGate({
   worktreeId,
   sessionProfileId,
@@ -37,9 +30,7 @@ export function SshRoutedBrowserPageGate({
     if (mountable) {
       return
     }
-    // Why (review P1-1): chrome unmount only PARKS guests to survive worktree
-    // switches; a guest created before routing engaged would keep loading with
-    // local egress behind the card unless it is destroyed outright.
+    // Chrome unmount only parks guests; destroy pre-route guests so they cannot keep browsing with local egress behind the gate.
     for (const pageId of pageIds) {
       void destroyPersistentWebview(pageId)
     }
@@ -66,8 +57,7 @@ export function SshRoutedBrowserPageGate({
               {errorDescription(state.errorKind)}
             </div>
             {state.errorKind === 'unknown' ? (
-              // Why: raw error strings are for bug reports, not users — present
-              // but collapsed, so the card stays plain-language first.
+              // Keep raw diagnostic errors collapsed beneath plain-language recovery.
               <details className="max-w-full text-xs leading-5 text-muted-foreground">
                 <summary className="cursor-pointer select-none">
                   {translate('browser.sshRoute.showDetails', 'Show details')}

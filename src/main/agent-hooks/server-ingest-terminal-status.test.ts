@@ -164,9 +164,7 @@ describe('AgentHookServer ingestTerminalStatus', () => {
     expect(server.getStatusSnapshot()[0]?.turnCompletedAt).toBeUndefined()
   })
 
-  // Why: the OSC 9999 payload cannot carry a provider session, so letting it overwrite the row
-  // erased the session id from persisted rows and from headless `orca serve` — which serves these
-  // rows straight to mobile — leaving Chat UI with no transcript to subscribe to (#10630).
+  // OSC lacks provider session identity; overwriting it would break mobile transcript subscriptions after restart.
   it('keeps the cached provider session when an OSC status completes the turn', () => {
     const server = new AgentHookServer()
     const providerSession = { key: 'session_id' as const, id: 'claude-session-1' }
@@ -188,10 +186,7 @@ describe('AgentHookServer ingestTerminalStatus', () => {
     expect(server.getStatusSnapshot()[0]).toMatchObject({ state: 'done', providerSession })
   })
 
-  // Why: an OSC ping that names no agent — or the literal 'unknown', which
-  // resolveAgentStatusIdentity treats identically — makes no claim about the pane's identity, so it
-  // must not read as a mismatch. Missing this stripped the session from persisted and headless rows
-  // while the live renderer kept it, blanking mobile chat only after a restart (#10630).
+  // Missing or unknown OSC agent identity cannot contradict the cached provider session.
   it.each([undefined, 'unknown' as const])(
     'keeps the cached provider session when an OSC status claims agentType %s',
     (agentType) => {
@@ -478,7 +473,7 @@ describe('the main agent fact across an OSC repaint', () => {
       mainAgent: { state: 'done', stateStartedAt: 10 }
     })
 
-    // OSC cannot date a turn edge: a different state is a main agent it has no fact about.
+    // OSC has no main-agent turn evidence to date a turn edge.
     server.ingestTerminalStatus({
       paneKey: PANE,
       connectionId: 'conn-1',

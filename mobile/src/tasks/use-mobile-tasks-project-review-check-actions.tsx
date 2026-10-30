@@ -127,8 +127,6 @@ export function useMobileTasksProjectReviewCheckActions(model: ProjectMetadataAc
           },
           { timeoutMs: 30_000 }
         )
-        // The reader answers an array of readable rows, so the hand-rolled shape test this call
-        // site kept is gone: a reply that is not one now names the method it came from.
         const checks = githubPullRequestChecksRead.interpret(reply)
         setProjectRowDetail((current) =>
           current?.provider === 'github' ? { ...current, checks } : current

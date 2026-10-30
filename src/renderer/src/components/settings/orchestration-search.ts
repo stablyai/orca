@@ -6,12 +6,29 @@ import {
   getNestedWorkerDepthSearchKeywords,
   getNestedWorkerDepthTitle
 } from './nested-worker-depth-copy'
+import {
+  getChatErrorEscalationDescription,
+  getChatErrorEscalationSearchKeywords,
+  getChatErrorEscalationTitle
+} from './chat-error-escalation-copy'
+import {
+  getOrchestrationHeartbeatDescription,
+  getOrchestrationHeartbeatSearchKeywords,
+  getOrchestrationHeartbeatTitle
+} from './orchestration-heartbeat-copy'
 
 type OrchestrationPaneSearchOptions = {
-  includeNestedWorkerDepth?: boolean
+  includeLocalRuntimeSettings?: boolean
 }
 
 const NESTED_WORKER_DEPTH_SEARCH_ENTRY_ID = 'nested-worker-depth'
+const CHAT_ERROR_ESCALATION_SEARCH_ENTRY_ID = 'chat-error-escalation'
+const HEARTBEAT_SEARCH_ENTRY_ID = 'worker-heartbeats'
+const LOCAL_RUNTIME_SEARCH_ENTRY_IDS: ReadonlySet<string | undefined> = new Set([
+  NESTED_WORKER_DEPTH_SEARCH_ENTRY_ID,
+  HEARTBEAT_SEARCH_ENTRY_ID,
+  CHAT_ERROR_ESCALATION_SEARCH_ENTRY_ID
+])
 
 const getAllOrchestrationPaneSearchEntries = createLocalizedCatalog(() => [
   {
@@ -85,16 +102,26 @@ const getAllOrchestrationPaneSearchEntries = createLocalizedCatalog(() => [
     title: getNestedWorkerDepthTitle(),
     description: getNestedWorkerDepthDescription(),
     keywords: getNestedWorkerDepthSearchKeywords()
+  },
+  {
+    id: HEARTBEAT_SEARCH_ENTRY_ID,
+    title: getOrchestrationHeartbeatTitle(),
+    description: getOrchestrationHeartbeatDescription(),
+    keywords: getOrchestrationHeartbeatSearchKeywords()
+  },
+  {
+    id: CHAT_ERROR_ESCALATION_SEARCH_ENTRY_ID,
+    title: getChatErrorEscalationTitle(),
+    description: getChatErrorEscalationDescription(),
+    keywords: getChatErrorEscalationSearchKeywords()
   }
 ])
 
 export function getOrchestrationPaneSearchEntries({
-  includeNestedWorkerDepth = true
+  includeLocalRuntimeSettings = true
 }: OrchestrationPaneSearchOptions = {}) {
   const entries = getAllOrchestrationPaneSearchEntries()
-  return includeNestedWorkerDepth
+  return includeLocalRuntimeSettings
     ? entries
-    : entries.filter(
-        (entry) => !('id' in entry) || entry.id !== NESTED_WORKER_DEPTH_SEARCH_ENTRY_ID
-      )
+    : entries.filter((entry) => !('id' in entry) || !LOCAL_RUNTIME_SEARCH_ENTRY_IDS.has(entry.id))
 }

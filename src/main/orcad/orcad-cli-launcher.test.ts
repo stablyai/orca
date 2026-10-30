@@ -54,19 +54,23 @@ describe('orcad profile CLI launcher', () => {
         throw new Error('CLI launcher is missing')
       }
       const args = ['orchestration', 'send', 'a body\nwith "quotes" and $HOME']
-      const result = await runProcess({
-        program: launcher,
-        args,
-        env: {
-          ...process.env,
-          ORCA_USER_DATA_PATH: '/another/owner',
-          ELECTRON_RUN_AS_NODE: '1',
-          NODE_OPTIONS: '--require /missing/inherited/preload'
-        },
-        timeoutMs: 5000
-      })
-      expect(result.code).toBe(0)
-      expect(JSON.parse(result.stdout)).toEqual({ profile: roots.profile, args })
+      const launchers =
+        process.platform === 'linux' ? [launcher, join(dirname(launcher), 'orca-ide')] : [launcher]
+      for (const program of launchers) {
+        const result = await runProcess({
+          program,
+          args,
+          env: {
+            ...process.env,
+            ORCA_USER_DATA_PATH: '/another/owner',
+            ELECTRON_RUN_AS_NODE: '1',
+            NODE_OPTIONS: '--require /missing/inherited/preload'
+          },
+          timeoutMs: 5000
+        })
+        expect(result.code).toBe(0)
+        expect(JSON.parse(result.stdout)).toEqual({ profile: roots.profile, args })
+      }
     }
   )
 
@@ -123,6 +127,24 @@ describe('orcad profile CLI launcher', () => {
     expect(getOrcadCliLauncherPath()).toBeNull()
   })
 
+  describe('on a Linux host', () => {
+    beforeEach(() => {
+      Object.defineProperty(process, 'platform', { configurable: true, value: 'linux' })
+    })
+
+    it('refreshes both CLI names when the runtime switches server slots', async () => {
+      await writeCli()
+      await prepareOrcadCliLauncher()
+      roots.install = join(directory, 'updated server')
+      await writeCli()
+      await prepareOrcadCliLauncher()
+      const binDir = join(roots.profile, 'cli', 'bin')
+      const script = await readFile(join(binDir, 'orca-ide'), 'utf8')
+      expect(script).toContain(roots.install)
+      expect(script).toBe(await readFile(join(binDir, 'orca'), 'utf8'))
+    })
+  })
+
   describe('on a Windows host', () => {
     beforeEach(() => {
       Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
@@ -153,7 +175,7 @@ describe('orcad profile CLI launcher', () => {
           ''
         ].join('\n')
       )
-      // cmd.exe reparses `%*`, so no batch or PowerShell proxy may shadow the exe.
+      // Batch/PowerShell proxies can reparse cmd.exe arguments instead of preserving them.
       expect((await readdir(binDir())).sort()).toEqual(
         [ORCAD_WINDOWS_CLI_LAUNCHER_CONFIG_FILENAME, 'orca.exe'].sort()
       )

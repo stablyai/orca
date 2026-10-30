@@ -20,9 +20,7 @@ type Props = {
   rootClassName?: string
 }
 
-// Why: see docs/mobile-presence-lock.md. Driving state preserves output streaming
-// so the chip mode lets users keep watching; held-fit state has no live output to
-// preserve, so it stays loud until Restore.
+// Driving preserves streamed output and permits a collapsed chip; held-fit has no live output and stays prominent until Restore (docs/mobile-presence-lock.md).
 export function MobileDriverOverlay({
   driver,
   hasFitOverride,
@@ -44,8 +42,7 @@ export function MobileDriverOverlay({
   const setOverlayRootRef = useCallback((node: HTMLDivElement | null): void => {
     mountedRef.current = node !== null
     if (node) {
-      // Why: take-back/restore can resolve after the overlay renders null; a
-      // later mobile session must not inherit stale disabled state.
+      // Reset pending state after take-back/restore so a later mobile session cannot inherit disabled actions.
       setActionPending(false)
       setAllActionPending(false)
     }
@@ -206,19 +203,14 @@ function LoudOverlay({
     },
     [outerRootRef]
   )
-  // Why: focus the recovery action on mount only when the user isn't already
-  // typing into another input (composer, command palette, settings field).
-  // Unconditional autoFocus yanks focus on every overlay mount, so a phone
-  // taking the floor while the desktop user is typing elsewhere would route
-  // the next Space/Enter into Take back / Restore. See PR #1899 follow-up.
+  // Focus recovery only outside editable inputs; unconditional autofocus could turn someone’s next Space/Enter into Take back or Restore.
   useEffect(() => {
     const paneScope = rootRef.current?.parentElement
     if (shouldFocusMobileDriverAction(document.activeElement, document.body, paneScope)) {
       actionRef.current?.focus()
     }
   }, [])
-  // Why: terminal output is still useful status while mobile owns input, so the
-  // lock UI must not add a pane-wide scrim or blur over the live stream.
+  // Keep live output readable while mobile owns input; omit pane-wide scrims and blur.
   return (
     <div
       ref={setRootRef}
@@ -260,7 +252,6 @@ function LoudOverlay({
                 {allActionLabel}
               </Button>
             ) : null}
-            {/* Focus is moved to this button only when no user input is active; see effect above. */}
             <Button
               ref={actionRef}
               type="button"

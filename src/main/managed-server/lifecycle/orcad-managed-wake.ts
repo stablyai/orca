@@ -1,8 +1,4 @@
-/**
- * Starting a managed orcad that is installed and activated but not running, most often one
- * that stopped itself after idling. A stopped server is just "not running": it is neither a
- * failure nor evidence about terminals, which the daemon owns and which outlive orcad.
- */
+// Orcad exit does not prove terminal exit: the terminal daemon can outlive the server.
 import { ORCAD_FENCE_OWNER_FILENAME } from '../activation/orcad-activation-fence-scope'
 import type { ServeReadiness } from '../../server/serve-readiness'
 import { readOrcadActivationRecord } from '../activation/orcad-activation-record-store'
@@ -30,26 +26,70 @@ import {
   type OrcadSlotOptions
 } from '../../ssh/orcad-recovery-slot'
 
-export type OrcadManagedWake =
+type OrcadManagedWake =
   | { outcome: 'serving' | 'not-activated' | 'unverifiable' }
-  /** An update, rollback or recovery holds the host; it owns which slot serves. */
   | { outcome: 'fenced' }
   | { outcome: 'started'; readiness: ServeReadiness }
-  /** An abandoned update or rollback that recovery could not finish without an operator. */
   | { outcome: 'recovery-refused'; reason: string }
 
-/** Launches the active slot only on proven exit; a live or unprovable process is left alone. */
+/** Start only proven-stopped active slots; leave live or unverifiable processes alone. */
 export function wakeStoppedManagedOrcad(
   options: OrcadSlotOptions,
   onStarting: () => void = () => {}
 ): Promise<OrcadManagedWake> {
+  return serializedWake(options, (host) => wakeAfterPrior(options, host, onStarting))
+}
+
+/**
+ * WSL's same-version connect: one fence both confirms `expectActive` is still the active slot
+ * and starts it if proven stopped. 'replan' means another version is active now; 'fenced' that
+ * the fence was busy. Either way the caller takes the full deploy and wake.
+ */
+export function wakeExpectedOrcadUnderOneFence(
+  options: OrcadSlotOptions,
+  expectActive: string
+): Promise<OrcadManagedWake | { outcome: 'replan' }> {
+  return serializedWake(options, async (host) => {
+    // An earlier wake's dropped fence is reclaimed only by the full wake, which knows its token.
+    if (interruptedWakes.has(host)) {
+      return { outcome: 'fenced' }
+    }
+    // Record ownership before acquisition, as the wake does: a dropped reply leaves a fence only it can reclaim.
+    const token = randomUUID()
+    interruptedWakes.set(host, token)
+    const result = await withOrcadActivationLock(
+      options,
+      async (): Promise<OrcadManagedWake | { outcome: 'replan' }> => {
+        if ((await readOrcadActivationRecord(options)).active !== expectActive) {
+          return { outcome: 'replan' }
+        }
+        const liveness = await slotLiveness(options, orcadSlotDir(options, expectActive))
+        if (!orcadLivenessProvenExited(liveness)) {
+          return { outcome: liveness === 'LIVE' ? 'serving' : 'unverifiable' }
+        }
+        const identity = await resolveOrcadSlotIdentity(options, expectActive)
+        return { outcome: 'started', readiness: await ensureOrcadSlotServing(options, identity) }
+      },
+      (): OrcadManagedWake => ({ outcome: 'fenced' }),
+      token
+    )
+    if (interruptedWakes.get(host) === token) {
+      interruptedWakes.delete(host)
+    }
+    return result
+  })
+}
+
+function serializedWake<T>(
+  options: OrcadSlotOptions,
+  run: (host: string) => Promise<T>
+): Promise<T> {
   const host = wakeHostKey(options)
-  // Registered before any remote step: a wake on a dropped connection settles first, so a
-  // reconnected wake never races it to the fence and finds its fence unexplained.
+  // Serialize per host before remote work so reconnect cannot race an earlier wake's unexplained fence.
   const prior = runningWakes.get(host)
-  const wake = (async (): Promise<OrcadManagedWake> => {
+  const wake = (async (): Promise<T> => {
     await prior?.catch(() => {})
-    return wakeAfterPrior(options, host, onStarting)
+    return run(host)
   })()
   runningWakes.set(host, wake)
   void wake
@@ -62,7 +102,6 @@ export function wakeStoppedManagedOrcad(
   return wake
 }
 
-/** One wake, after any earlier one for the same host has settled. */
 async function wakeAfterPrior(
   options: OrcadSlotOptions,
   host: string,
@@ -74,10 +113,10 @@ async function wakeAfterPrior(
   }
   const liveness = await slotLiveness(options, orcadSlotDir(options, before.active))
   if (!orcadLivenessProvenExited(liveness)) {
+    await forgetSettledInterruptedWake(options, host, liveness === 'LIVE')
     return { outcome: liveness === 'LIVE' ? 'serving' : 'unverifiable' }
   }
   if (!(await orcadActivationFenceExists(options))) {
-    // The fence this client left is gone by some other route; any later one belongs to another run.
     interruptedWakes.delete(host)
   } else if (!(await releaseOwnInterruptedWakeFence(options, host))) {
     const recovered = await recoverAbandonedFence(options, onStarting)
@@ -85,15 +124,13 @@ async function wakeAfterPrior(
       return recovered
     }
   }
-  // Claimed before the fence and written by the command that creates it: a drop at any point
-  // after the fence lands leaves one this client can prove its own. Kept on any failure, since a
-  // release over a dropped connection fails quietly; the next wake re-proves it on the host.
+  // Record ownership before acquisition: dropped replies can leave fences only this token can reclaim.
   const token = randomUUID()
   interruptedWakes.set(host, token)
   const result = await withOrcadActivationLock(
     options,
     async (): Promise<OrcadManagedWake> => {
-      // Re-read under the fence: another client may have activated or started a slot meanwhile.
+      // Other clients may change the active slot; reread under the fence.
       const active = (await readOrcadActivationRecord(options)).active
       if (!active) {
         return { outcome: 'not-activated' }
@@ -105,18 +142,13 @@ async function wakeAfterPrior(
     (): OrcadManagedWake => ({ outcome: 'fenced' }),
     token
   )
-  // Released, or never acquired.
   if (interruptedWakes.get(host) === token) {
     interruptedWakes.delete(host)
   }
   return result
 }
 
-/**
- * An update or rollback whose client quit or crashed leaves a journal nobody finishes, so a later
- * reboot would serve nothing until a manual Recover (P1-A). Recovery takes only a stale,
- * previous-boot or exited-own fence; a run still working answers busy. Null: the fence is gone.
- */
+/** Recover abandoned journals under stale, previous-boot or proven-exited fences; busy runs retain ownership. */
 async function recoverAbandonedFence(
   options: OrcadSlotOptions,
   onStarting: () => void
@@ -128,7 +160,7 @@ async function recoverAbandonedFence(
     case 'pending':
       return { outcome: 'fenced' }
     case 'refused':
-      // A step the host did not answer is retried on the fence recheck, like a busy fence.
+      // Retry unverifiable recovery at the next fence check, as with a busy owner.
       return recovery.code === ORCAD_RECOVERY_UNVERIFIABLE_CODE
         ? { outcome: 'fenced' }
         : { outcome: 'recovery-refused', reason: recovery.reason }
@@ -141,9 +173,8 @@ async function recoverAbandonedFence(
   }
 }
 
-const runningWakes = new Map<string, Promise<OrcadManagedWake>>()
+const runningWakes = new Map<string, Promise<unknown>>()
 
-// The owner token of a fence this client's own wake may have left when its connection dropped.
 const interruptedWakes = new Map<string, string>()
 
 function wakeOwnerPath(options: OrcadSlotOptions): string {
@@ -159,9 +190,40 @@ function wakeHostKey(options: OrcadSlotOptions): string {
 }
 
 /**
- * Releases only the fence carrying this client's own interrupted wake token and no journal; the
- * slot was just proven exited and orcad's instance lock bars a double start.
+ * A serving slot skips the fence branch that clears an interrupted wake's token, which would
+ * keep the one-fence wake off until restart. Forget it once its fence is gone or another owner's;
+ * an unanswered probe proves neither, so the token stays. A fence still ours whose dropped launch
+ * did start the slot (proven LIVE, no journal) is released, or deploys would wait for it to age out.
  */
+async function forgetSettledInterruptedWake(
+  options: OrcadSlotOptions,
+  host: string,
+  slotLive: boolean
+): Promise<void> {
+  const token = interruptedWakes.get(host)
+  if (!token) {
+    return
+  }
+  try {
+    const owner = (await orcadActivationFenceExists(options))
+      ? await readBoundedOrcadRemoteRecord(options, wakeOwnerPath(options), 64)
+      : null
+    const ours = owner?.state === 'present' && owner.raw.trim() === token
+    if (ours && slotLive && !(await readOrcadActivationTransaction(options))) {
+      // The release command re-proves the owner token on the host before removing anything.
+      await releaseOrcadActivationFence(options, token)
+    } else if (ours || owner?.state === 'absent') {
+      return
+    }
+    if (interruptedWakes.get(host) === token) {
+      interruptedWakes.delete(host)
+    }
+  } catch {
+    // Unverifiable: keep the token for the next wake.
+  }
+}
+
+/** Reclaim only this client's journal-free interrupted fence after proving slot exit. */
 async function releaseOwnInterruptedWakeFence(
   options: OrcadSlotOptions,
   host: string
@@ -170,7 +232,7 @@ async function releaseOwnInterruptedWakeFence(
   if (!token || (await readOrcadActivationTransaction(options))) {
     return false
   }
-  // Only a fence carrying this process's own token: a fresh fence another client took has none yet.
+  // A new owner may not have written its token yet; absence cannot prove this fence ours.
   const owner = await readBoundedOrcadRemoteRecord(options, wakeOwnerPath(options), 64)
   if (owner.state !== 'present' || owner.raw.trim() !== token) {
     interruptedWakes.delete(host)

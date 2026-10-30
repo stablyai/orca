@@ -1,23 +1,17 @@
+import { isDrvfsLinuxPath, toWindowsWslUncPath } from '../../../shared/wsl-paths'
 import { parseWslPath, toWindowsWslPath } from '../../wsl'
 
-/**
- * Translate Windows-style path arguments to Linux paths for commands run in WSL.
- *
- * Why: callers pass Windows paths as git arguments, which WSL git can't read.
- * UNC paths (\\wsl.localhost\…) become native Linux; drive paths (C:\…) → /mnt/c/…
- */
+/** Windows arguments need Linux spellings for WSL Git: UNC paths become native and drives map under /mnt. */
 export function translateArgsForWsl(args: string[]): string[] {
   return args.map(translateArgForWsl)
 }
 
 export function translateArgForWsl(arg: string): string {
-  // WSL UNC path → native linux path
   const wslInfo = parseWslPath(arg)
   if (wslInfo) {
     return wslInfo.linuxPath
   }
 
-  // Windows drive path (e.g. C:\Users\...) → /mnt/c/Users/...
   const driveMatch = arg.match(/^([A-Za-z]):[/\\](.*)$/)
   if (driveMatch) {
     const driveLetter = driveMatch[1].toLowerCase()
@@ -28,10 +22,7 @@ export function translateArgForWsl(arg: string): string {
   return arg
 }
 
-/**
- * Translate absolute Linux paths in git output back to Windows UNC paths.
- * Why: git-in-WSL emits Linux-native paths, but Orca reads files via Node fs, which needs Windows UNC.
- */
+/** Map Linux worktree output to UNC paths Node can open on Windows. */
 export function translateWslOutputPaths(
   output: string,
   originalCwd: string,
@@ -43,8 +34,9 @@ export function translateWslOutputPaths(
     return output
   }
 
-  // Rewrite absolute Linux paths in structured git output (e.g. "worktree /home/user/repo/feature") to Windows UNC.
+  // A repo saved under the distro's view of a drive keeps that spelling: its worktree ids use it.
+  const toWindows = wsl && isDrvfsLinuxPath(wsl.linuxPath) ? toWindowsWslUncPath : toWindowsWslPath
   return output.replace(/(?<=worktree )(\/.+)$/gm, (_match, linuxPath: string) =>
-    toWindowsWslPath(linuxPath, distro)
+    toWindows(linuxPath, distro)
   )
 }

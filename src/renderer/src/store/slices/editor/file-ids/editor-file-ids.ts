@@ -183,16 +183,3 @@ export function getOpenedEditFileIdAfterOpen(
     )?.id ?? filePath
   )
 }
-
-/** The id a conflict-review overview shows a file under: an open edit tab's, so its unsaved edits show. */
-export function conflictOverviewFileId(
-  openFiles: readonly OpenFile[],
-  worktreeId: string,
-  filePath: string
-): string {
-  return (
-    openFiles.find(
-      (file) => file.filePath === filePath && file.worktreeId === worktreeId && file.mode === 'edit'
-    )?.id ?? filePath
-  )
-}

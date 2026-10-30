@@ -4,7 +4,7 @@ import {
   readDataFile,
   testState,
   writeDataFile
-} from './persistence-test-harness'
+} from './persistence/persistence-test-harness'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import * as crypto from 'node:crypto'
 import { mkdtempSync, rmSync } from 'node:fs'

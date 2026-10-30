@@ -3,6 +3,7 @@ const { createRequire } = require('node:module')
 const { join } = require('node:path')
 const {
   assertNodePtyJobOwnership,
+  assertNativeHostJobOwnership,
   conptyDeniesCygwinBreakaway,
   nodePtyAddonPath,
   staleConptySourceBuildError
@@ -10,14 +11,7 @@ const {
 const { normalizeNodePtyWindowsArch } = require('../packaged-runtime-node-modules.cjs')
 const { PE_MACHINE, describePeMachine, readPeMachine } = require('./windows-pe-machine.cjs')
 
-/**
- * Every conpty.node the packaged tree can hand `loadNativeModule`, in its order.
- *
- * Why the order matters: the loader swallows each require failure and falls
- * through, so a wrong-arch or otherwise unloadable build hands the pane to the
- * next candidate. First loadable wins, and the published prebuild is always the
- * last one standing.
- */
+// Follow loader order: it swallows failed requires, first loadable candidate wins and upstream prebuild is last fallback.
 function packagedConptyCandidates(resourcesDir, targetArch) {
   const nodePtyDir = join(resourcesDir, 'node_modules', 'node-pty')
   const layouts = [
@@ -25,8 +19,7 @@ function packagedConptyCandidates(resourcesDir, targetArch) {
     { segments: ['build', 'Debug'], prebuilt: false },
     { segments: ['prebuilds', `win32-${targetArch}`], prebuilt: true }
   ]
-  // Each layout is tried relative to node-pty's root, then to lib/, before the
-  // next layout -- the unbundled then bundled pair node-pty's loader walks.
+  // Match node-pty’s root/lib pair for each layout before advancing to next.
   return layouts.flatMap(({ segments, prebuilt }) =>
     [nodePtyDir, join(nodePtyDir, 'lib')].map((root) => ({
       path: join(root, ...segments, 'conpty.node'),
@@ -63,27 +56,10 @@ function verifyPackagedNodePtyJobOwnership(resourcesDir, options = {}) {
   console.log('[verify-packaged-node-pty] OK — packaged ConPTY owns process trees')
 }
 
-/**
- * The half of the packaged check that survives a cross-host build.
- *
- * The export check has to load the addon, so it cannot run when the packaging
- * host is not the target platform/arch -- and that skip is how a Windows
- * release built elsewhere could ship a node-pty that leaks every MSYS pane
- * child out of its job. Reading the binary needs neither.
- *
- * It resolves the addon the way the loader does rather than reading one path:
- * only the PE machine field separates a cross-arch package that built correctly
- * from one whose rebuild silently emitted the host's arch, and the first is a
- * correct package whose leftover prebuild is never reached. See the table in
- * docs/reference/windows-msys-job-breakaway.md.
- *
- * Nothing loadable is fatal, not skipped: that package has no ConPTY backend,
- * which a gate must not shrug at.
- */
+// Inspect first target-loadable PE candidate on every build host: export checks cannot run cross-host, but byte/architecture checks can.
+// Correct cross-arch build wins over unused upstream fallback; no loadable candidate is fatal. See windows-msys-job-breakaway.md.
 function verifyPackagedConptyBreakawayMarker(resourcesDir, targetArch, options = {}) {
-  // Deliberately no host-platform gate: the caller has already established that
-  // the *target* is Windows, and gating on the host is the very skip this
-  // closes.
+  // Gate by Windows target, never host: host-platform restriction would reopen cross-host skip.
   const architecture = normalizeNodePtyWindowsArch(targetArch)
   const candidates = packagedConptyCandidates(resourcesDir, architecture)
   const exists = options.exists ?? existsSync
@@ -119,6 +95,7 @@ function verifyPackagedConptyBreakawayMarker(resourcesDir, targetArch, options =
   }
   const addonPath = loaded.path
   if (conptyDeniesCygwinBreakaway(addonPath)) {
+    assertNativeHostJobOwnership(addonPath)
     console.log(
       `[verify-packaged-node-pty] OK — win32-${architecture} loads ${addonPath}, which denies ` +
         'MSYS job breakaway'
@@ -128,9 +105,7 @@ function verifyPackagedConptyBreakawayMarker(resourcesDir, targetArch, options =
   if (!loaded.prebuilt) {
     throw staleConptySourceBuildError(addonPath)
   }
-  // Past here the app falls back to the published prebuild, which never carries
-  // the patch. Why it fell back decides the remedy, and the three are different
-  // enough that naming the wrong one wastes the reader's build.
+  // Upstream fallback is unpatched; distinguish missing/wrong-arch/stale-source reasons so remedy matches actual build failure.
   const unusableSourceBuilds = inspected.filter((candidate) => !candidate.prebuilt)
   if (unusableSourceBuilds.some((candidate) => candidate.machine === null)) {
     throw new Error(
@@ -172,13 +147,7 @@ function verifyPackagedConptyBreakawayMarker(resourcesDir, targetArch, options =
   )
 }
 
-/**
- * The whole Windows verdict for one packaged slice.
- *
- * Both halves live here rather than in the afterPack hook so that "the marker
- * sweep runs even when the export check cannot" is a tested claim instead of
- * the shape of an if/else somebody could re-nest.
- */
+// Keep marker sweep and host-load check together so cross-host coverage cannot disappear through hook if/else nesting.
 function verifyPackagedWindowsNodePty(resourcesDir, targetArch, options = {}) {
   ;(options.verifyMarker ?? verifyPackagedConptyBreakawayMarker)(resourcesDir, targetArch)
   const hostPlatform = options.hostPlatform ?? process.platform

@@ -28,7 +28,6 @@ describe('grantDirAcl', () => {
   })
 
   afterEach(() => {
-    // Neither grant may start a process: no icacls, no whoami.
     expect(runProcess).not.toHaveBeenCalled()
     expect(runProcessSync).not.toHaveBeenCalled()
     setWindowsSecurityForTests(null)
@@ -50,7 +49,6 @@ describe('grantDirAcl', () => {
     ])
   })
 
-  // Callers retry their write after the grant and re-throw the original EPERM if it still fails.
   it('throws a failed grant so the caller can surface its original error', async () => {
     fake.failing.add('C:\\Orca')
 

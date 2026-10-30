@@ -3,7 +3,7 @@ import { renderHook } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { CatalogModel } from '../../../../shared/agent-session-option-catalog'
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'
-import { createNativeChatPtySessionOptions } from './native-chat-pty-session-options'
+import { createNativeChatPtySessionOptions } from '../../../../shared/native-chat-pty-session-options'
 import { clearNativeChatSessionOptionCacheForTests } from './native-chat-session-option-cache'
 import {
   answerNativeChatLocalCommand,
@@ -72,6 +72,7 @@ function liveSurface(models?: CatalogModel[]) {
     scopeKey: 'pty-context',
     ...(models ? { initialModels: models } : {}),
     mode: 'live',
+    modelLabel: 'Model',
     reportedValues: { model: 'openai-codex/gpt-5.5' },
     dispatchCommand: vi.fn()
   })!
@@ -188,6 +189,7 @@ describe('host-answered /context in the composer', () => {
   function composerArgs(answerCommandLocally: NativeChatLocalCommandAnswer) {
     return {
       agent: 'omp' as const,
+      draftScopeKey: 'terminal-test-scope',
       disabled: false,
       isDispatchingSessionOption: false,
       resolveTarget: () => target,

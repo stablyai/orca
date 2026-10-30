@@ -17,7 +17,6 @@ vi.mock('@/lib/agent-status', async (importOriginal) => {
   return { ...actual, detectAgentStatusFromTitle: vi.fn().mockReturnValue(null) }
 })
 
-// Main's answer to the window's layout commands, as a switch-on build sends them.
 vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
   (
     await import('@/runtime/layout-apply-test-transport.test-fixture')
@@ -90,7 +89,6 @@ describe('a server file keeps its id across a restart', () => {
     const tabIds = (store.getState().unifiedTabsByWorktree[WT_A] ?? []).map((tab) => tab.id)
 
     const session = buildWorkspaceSessionPayload(store.getState())
-    // Restore renames nothing the saved tabs name, so no tab remounts.
     const restored = buildHydratedEditorSessionState(session, new Set([WT_A, WT_B]), WT_A)
     expect(restored.state.openFiles.map((file) => file.id)).toEqual([fileId])
     expect(restored.editorFileIdMigrationsByWorktree[WT_A]?.has(fileId)).not.toBe(true)
@@ -158,7 +156,7 @@ describe('a server file keeps its id across a restart', () => {
     expect(restarted.openFiles.map((file) => file.id).sort()).toEqual([localId, serverId].sort())
   })
 
-  it('keeps the same server path in two workspaces apart, before and after a restart', async () => {
+  it('keeps the same server path in two workspaces as two tabs of one record, through a restart', async () => {
     const store = prepareStore()
     const main = await drawTabsFromMain(store)
     const idA = openServerFile(store, WT_A, ENV)
@@ -175,7 +173,7 @@ describe('a server file keeps its id across a restart', () => {
     const restarted = restart(store)
     expect(editorEntityIds(restarted, WT_A)).toEqual([idA])
     expect(editorEntityIds(restarted, WT_B)).toEqual([idB])
-    expect(restarted.editorDrafts[idA]).toBe('draft a')
+    expect(restarted.editorDrafts[idA]).toBe('draft b')
     expect(restarted.editorDrafts[idB]).toBe('draft b')
   })
 

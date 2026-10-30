@@ -16,7 +16,7 @@ import { DestroyedGuestTestContents } from './browser-manager-destroyed-guest-te
 
 const manager = new BrowserManager()
 
-/** Emits what Electron emits when the page asks to confirm leaving; true means the page leaves. */
+/** Electron leaves only when will-prevent-unload is prevented. */
 function askToLeave(guest: DestroyedGuestTestContents): boolean {
   let leaves = false
   guest.emit('will-prevent-unload', { preventDefault: () => (leaves = true) })
@@ -27,7 +27,7 @@ afterEach(() => {
   manager.unregisterAll()
 })
 
-// Why: without an answer Electron keeps the page, so every link on it looked dead (#28732).
+// Electron otherwise keeps the page and makes navigation appear unresponsive (#28732).
 it('lets browsing and workspace-document pages leave when they ask to confirm', () => {
   const browsing = new DestroyedGuestTestContents(1)
   manager.attachGuestPolicies(browsing.asWebContents())

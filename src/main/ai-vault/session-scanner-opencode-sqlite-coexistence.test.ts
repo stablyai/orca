@@ -6,8 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { scanAiVaultSessions } from './session-scanner'
 import Database from '../sqlite/sync-database'
 
-// Why: this source-level integration suite has no built worker entry. Keep its
-// SQLite fixtures inline explicitly; production fails closed if the bundle is absent.
+// Source tests lack a worker bundle; inline fixtures here while production still fails closed without it.
 vi.mock('./session-scanner-opencode-sqlite-worker-spawn', async () => {
   const [{ listOpenCodeSqliteSessions }, { parseOpenCodeSqliteSession }] = await Promise.all([
     import('./session-scanner-opencode-sqlite-list'),
@@ -17,7 +16,6 @@ vi.mock('./session-scanner-opencode-sqlite-worker-spawn', async () => {
   return {
     listOpenCode2SqliteSessionsViaWorker: listOpenCode2SqliteSessions,
     listOpenCodeSqliteSessionsViaWorker: listOpenCodeSqliteSessions,
-    // ZCode reuses the OpenCode SQLite lister; the worker only varies the agent it stamps.
     listZcodeSqliteSessionsViaWorker: (args: Parameters<typeof listOpenCodeSqliteSessions>[0]) =>
       listOpenCodeSqliteSessions({ ...args, agent: 'zcode' }),
     parseOpenCodeSqliteSessionViaWorker: parseOpenCodeSqliteSession
@@ -157,7 +155,6 @@ describe('scanAiVaultSessions — OpenCode SQLite + legacy file coexistence', ()
     tempRoots.push(root)
     const roots = isolatedScanRoots(root)
 
-    // Legacy file session under storage/session/<projectId>/<sessionId>.json
     await mkdir(join(roots.opencodeStorageDir, 'session', 'project'), { recursive: true })
     await mkdir(join(roots.opencodeStorageDir, 'message', 'legacy-session'), { recursive: true })
     await writeFile(
@@ -179,7 +176,7 @@ describe('scanAiVaultSessions — OpenCode SQLite + legacy file coexistence', ()
       })
     )
 
-    // SQLite session — same sessionId as the legacy file (dedup should keep SQLite)
+    // Match the legacy ID so SQLite must replace the stale file candidate.
     const { db, path: dbPath } = createTempOpenCodeDb()
     applyOpenCodeSchema(db)
     db.prepare(
@@ -200,7 +197,6 @@ describe('scanAiVaultSessions — OpenCode SQLite + legacy file coexistence', ()
     ).run(JSON.stringify({ type: 'text', text: 'sqlite hello' }))
     db.close()
 
-    // A second SQLite-only session
     const { db: db2, path: dbPath2 } = createTempOpenCodeDb()
     applyOpenCodeSchema(db2)
     db2
@@ -226,7 +222,6 @@ describe('scanAiVaultSessions — OpenCode SQLite + legacy file coexistence', ()
     const sessionIds = opencodeSessions.map((s) => s.sessionId).sort()
     expect(sessionIds).toEqual(['legacy-session', 'sqlite-only'])
 
-    // Why: dedup keeps the SQLite entry (newer time_updated, source of truth)
     const legacyEntry = opencodeSessions.find((s) => s.sessionId === 'legacy-session')
     expect(legacyEntry).toBeDefined()
     expect(legacyEntry!.title).toBe('SQLite session')

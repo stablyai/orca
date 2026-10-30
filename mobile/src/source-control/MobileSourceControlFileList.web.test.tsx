@@ -44,6 +44,7 @@ function fileListState(count: number, dirty: boolean): FileListState {
     sections: dirty
       ? [
           {
+            id: 'unstaged',
             area: 'unstaged',
             title: 'Changes',
             data: [
@@ -53,6 +54,7 @@ function fileListState(count: number, dirty: boolean): FileListState {
                 status: 'modified',
                 canOpen: true,
                 canStage: true,
+                canUnstage: false,
                 canDiscard: true,
                 stageActionId: 'stage:src/uncommitted.ts',
                 unstageActionId: 'unstage:src/uncommitted.ts',

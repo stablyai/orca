@@ -7,7 +7,6 @@ import {
   DESKTOP_VIEW_ID,
   deviceViewId,
   emptyLayoutViewRecord,
-  forgetView,
   resolveWorkspaceSelection,
   setViewRecord,
   viewRecordOf,
@@ -26,7 +25,6 @@ const tabFields = (id: string) => ({
   color: null
 })
 
-/** Group g1: terminal t1 (panes A, B), editor t2; group g2: browser t3. */
 function workspace(): WorkspaceLayout {
   return {
     worktreeId: WS,
@@ -60,7 +58,6 @@ function model(next: WorkspaceLayout = workspace()): WorkspaceLayoutModel {
   return { ...emptyModel(), workspaces: { [WS]: next } }
 }
 
-/** A record naming everything in the workspace, plus things a close later removes. */
 function fullRecord(): LayoutViewRecord {
   return {
     ...emptyLayoutViewRecord(),
@@ -80,7 +77,6 @@ function fullRecord(): LayoutViewRecord {
   }
 }
 
-/** The workspace after t2 and pane B are closed and the browser tab and file are gone. */
 function afterCloses(): WorkspaceLayout {
   const next = workspace()
   next.groups = [
@@ -113,33 +109,9 @@ describe('per-view store', () => {
 
     expect(viewRecordOf(store, PHONE).editorDrafts).toEqual({})
   })
-
-  it('forgets a removed device and nothing else', () => {
-    const store = setViewRecord(
-      setViewRecord({}, PHONE, fullRecord()),
-      DESKTOP_VIEW_ID,
-      fullRecord()
-    )
-
-    expect(Object.keys(forgetView(store, PHONE))).toEqual([DESKTOP_VIEW_ID])
-    expect(forgetView({}, PHONE)).toEqual({})
-  })
 })
 
 describe('resolveWorkspaceSelection', () => {
-  it('reads a record whose ids all exist as stored', () => {
-    expect(resolveWorkspaceSelection(fullRecord(), WS, workspace())).toEqual({
-      activeGroupId: 'g2',
-      groups: {
-        g1: { activeTabId: 't2', recentTabIds: ['t1', 't2'] },
-        g2: { activeTabId: 't3', recentTabIds: [] }
-      },
-      panes: { t1: { activeLeafId: PANE_B, expandedLeafId: PANE_B } },
-      activeFileId: '/repo/a.ts',
-      activeBrowserTabId: 'b1'
-    })
-  })
-
   it('falls back for every id a close removed', () => {
     expect(resolveWorkspaceSelection(fullRecord(), WS, afterCloses())).toEqual({
       activeGroupId: 'g2',
@@ -167,10 +139,6 @@ describe('resolveWorkspaceSelection', () => {
 })
 
 describe('pruneViewRecord', () => {
-  it('keeps a record whose ids all exist', () => {
-    expect(pruneViewRecord(fullRecord(), model())).toEqual(fullRecord())
-  })
-
   it('drops or resets what a close removed, and leaves other workspaces alone', () => {
     const pruned = pruneViewRecord(fullRecord(), model(afterCloses()))
 

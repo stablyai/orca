@@ -1,9 +1,5 @@
-// The restart-resume offer: list it, act on it, or turn it down.
-//
-// Each method reaches for records on disk this process may not have opened yet, so each builds the
-// host the way hold and reveal do. Listing takes nothing live and spends no live offer; acting goes
-// through the host's single resume path, which re-derives eligibility rather than trusting the ids
-// it is given. Every method acts only on offers for agents the calling client can show.
+// Build durable-record access lazily and scope every restart offer action to agents this client renders.
+// Listing spends no offer; resume re-derives eligibility from host state, never trusts supplied ids.
 
 import { defineMethod } from '../core'
 import {
@@ -35,8 +31,7 @@ export const STRUCTURED_AGENT_SESSION_RESTART_RESUME_METHODS = [
     }
   }),
   defineMethod({
-    // Explicitly abandons the markers without resuming. Closing the dialog is a snooze and does
-    // not call this method, so the status-bar entry can reopen the offer later.
+    // Explicit dismissal abandons markers; dialog close only snoozes so the status-bar offer remains.
     name: 'agentSession.restartResumableDismiss',
     permission: 'workspace',
     params: RestartResumableParams,
@@ -47,8 +42,7 @@ export const STRUCTURED_AGENT_SESSION_RESTART_RESUME_METHODS = [
       const audience = structuredAgentsReadBy(ctx, host.knownAgentIds())
       const dismissed = await host.restartResume.dismiss(params.sessionIds, audience)
       if (params.sessionIds === undefined) {
-        // The dismissal removed every pending and in-flight record this client sees, so a second
-        // read would only add a new failure point after the user's explicit dismissal.
+        // Dismissal already removed everything this client sees; another read adds only a post-success failure point.
         return { dismissed, sessions: [], failed: [] }
       }
       return {
@@ -59,9 +53,7 @@ export const STRUCTURED_AGENT_SESSION_RESTART_RESUME_METHODS = [
     }
   }),
   defineMethod({
-    // Reattach AND ask each reattached agent to carry on — what the desktop prompt calls resuming,
-    // and what an opted-in launch runs without asking. Separate from `restartResume`, which sends
-    // nothing, but reachable from a setting rather than only from a button.
+    // Reattach and ask agents to continue, for prompt/settings resume; legacy restartResume sends nothing.
     name: 'agentSession.restartContinue',
     permission: 'workspace',
     params: RestartResumeParams,
@@ -76,9 +68,7 @@ export const STRUCTURED_AGENT_SESSION_RESTART_RESUME_METHODS = [
     }
   }),
   defineMethod({
-    // Continue on a reply an Orca stop cut off: the same continuation, bound to the cut turn
-    // instead of an offer. Clients gate it on AGENT_SESSION_CONTINUE_INTERRUPTED_RUNTIME_CAPABILITY.
-    // It names one chat the client shows, as a send does, so no agent audience applies.
+    // Continue the exact interrupted turn, separate from restart offers; clients negotiate its capability and name a readable chat.
     name: 'agentSession.continueInterrupted',
     permission: 'workspace',
     params: ContinueInterruptedParams,
@@ -89,9 +79,7 @@ export const STRUCTURED_AGENT_SESSION_RESTART_RESUME_METHODS = [
     }
   }),
   defineMethod({
-    // Reattach only, no send. Reattaching is nothing now — an agent starts only for work — so this
-    // answers that nothing was resumed. No Orca surface calls it, but it is a PUBLISHED wire
-    // method, so dropping it is a wire removal an older client would meet as an unknown method.
+    // Keep published legacy reattach-only RPC answering no resume: agents now start only for work, and removal would break old clients.
     name: 'agentSession.restartResume',
     permission: 'workspace',
     params: RestartResumeParams,

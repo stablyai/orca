@@ -92,9 +92,7 @@ describe('PushGatewaySession', () => {
     const harness = createSessionHarness()
     expect(tokenOf(await harness.session.ensure(null))).toBe('session-1')
 
-    // A request that 401ed on session-1 forces a fresh handshake.
     expect(tokenOf(await harness.session.ensure('session-1'))).toBe('session-2')
-    // A second request whose 401 also named session-1 must keep the new token.
     expect(tokenOf(await harness.session.ensure('session-1'))).toBe('session-2')
     expect(harness.challenges()).toBe(2)
   })
@@ -155,7 +153,6 @@ describe('PushGatewaySession', () => {
     const harness = createSessionHarness({ sessionStatus: 429 })
 
     expect(await harness.session.ensure(null)).toEqual({ ok: false, reason: 'unreachable' })
-    // Cached for a minute, so the next dispatch does not spend more of the bucket.
     expect(await harness.session.ensure(null)).toEqual({ ok: false, reason: 'unreachable' })
     expect(harness.challenges()).toBe(1)
   })

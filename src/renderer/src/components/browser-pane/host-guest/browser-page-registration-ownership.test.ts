@@ -1,6 +1,9 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { BrowserLoadError } from '../../../../../shared/browser-workspace-types'
+import type {
+  BrowserLoadError,
+  BrowserWorkspace
+} from '../../../../../shared/browser-workspace-types'
 import {
   createBrowserPageWebviewGuestSession,
   type BrowserPageWebviewGuestSession
@@ -11,6 +14,7 @@ import {
   registeredWebContentsIds,
   webviewRegistry
 } from './webview-registry'
+import { useAppStore } from '@/store'
 
 vi.mock('../describe-page/browser-page-load-error', () => ({ browserPageExists: () => true }))
 
@@ -32,6 +36,7 @@ const registrations = vi.fn(() => {
 const isRegistered = vi.fn(async () => true)
 const repair = vi.fn(async () => true)
 const unregister = vi.fn(async () => true)
+const notifyActiveTabChanged = vi.fn(async () => true)
 type RegistrationTestPage = {
   id: string
   webview: Electron.WebviewTag
@@ -121,6 +126,7 @@ beforeEach(() => {
   isRegistered.mockReset().mockResolvedValue(true)
   repair.mockReset().mockResolvedValue(true)
   unregister.mockClear()
+  notifyActiveTabChanged.mockClear()
   Object.defineProperty(window, 'api', {
     configurable: true,
     value: {
@@ -129,6 +135,7 @@ beforeEach(() => {
         unregisterGuest: unregister,
         isGuestRegistered: isRegistered,
         repairGuestRegistration: repair,
+        notifyActiveTabChanged,
         setViewportOverride: vi.fn(async () => true)
       }
     }
@@ -355,5 +362,45 @@ describe('renderer registration completion ownership', () => {
     await flush()
     expect(page.loadFailure.current).toBe(failure)
     expect(page.update).not.toHaveBeenCalled()
+  })
+})
+
+describe('active page after launch', () => {
+  function restoreActiveWorkspace(activePageId: string): void {
+    const workspace: BrowserWorkspace = {
+      id: 'browser-1',
+      worktreeId: 'wt-1',
+      activePageId,
+      url: 'https://example.test',
+      title: '',
+      loading: false,
+      faviconUrl: null,
+      canGoBack: false,
+      canGoForward: false,
+      loadError: null,
+      createdAt: 0
+    }
+    useAppStore.setState({
+      activeBrowserTabId: 'browser-1',
+      browserTabsByWorktree: { 'wt-1': [workspace] }
+    })
+  }
+
+  it('tells main which page is active once a restored active page registers', async () => {
+    restoreActiveWorkspace('page')
+    const page = createSession('page', 1)
+    page.session.handleDidAttach()
+    replies[0].resolve(true)
+    await flush()
+    expect(notifyActiveTabChanged).toHaveBeenCalledWith({ browserPageId: 'page' })
+  })
+
+  it('stays quiet when a background page registers', async () => {
+    restoreActiveWorkspace('other-page')
+    const page = createSession('page', 1)
+    page.session.handleDidAttach()
+    replies[0].resolve(true)
+    await flush()
+    expect(notifyActiveTabChanged).not.toHaveBeenCalled()
   })
 })

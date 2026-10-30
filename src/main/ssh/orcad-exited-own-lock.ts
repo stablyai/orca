@@ -1,12 +1,4 @@
-/**
- * A lock this desktop's own earlier process took and exited without releasing (BUG-23): the
- * activation fence, or a version dir's install lock a quit left mid-upload. The steal takes it
- * without the 20-minute wait, but only through its own arbitration and only while the lock is the
- * same instance and still names the exited holder's token. Process exit alone is not enough: sshd
- * keeps pty-less steps running, so the lock must also be quiet for three heartbeats and, for the
- * fence, there must be no state-mutation lock at all; the steal then holds that lock across the
- * takeover, and a mutation rechecks its fence once it holds it, so the two never overlap.
- */
+/** Reclaim this desktop's exited-holder lock early only with unchanged token/instance and three quiet heartbeats (BUG-23). sshd can outlive the desktop: fence takeover also requires an absent mutation lock, holds it during the steal, and makes admitted mutations recheck ownership. */
 import {
   ORCAD_FENCE_OWNER_FILENAME,
   posixOrcadFenceOwnedTest
@@ -33,11 +25,10 @@ import { quotePosixShell } from '../../shared/shell-argument-quoting'
 import type { InstallLockExitedOwnerProof } from '../managed-server/install/remote-install-lock'
 import { isWindowsRemoteHost, joinRemotePath } from './ssh-remote-platform'
 
-// Keeps the Windows command line short; an older token left out only waits out the stale window.
+// Bound Windows command length; omitted older tokens simply wait for normal stale-lock arbitration.
 const MAX_WINDOWS_CANDIDATES = 16
 
-/** `baseDir` is `~/.orca-remote`; `guardsStateMutation` means a live state mutation there keeps the lock. */
-export type ExitedOwnLockScope = { baseDir: string; guardsStateMutation: boolean }
+type ExitedOwnLockScope = { baseDir: string; guardsStateMutation: boolean }
 
 export function exitedOwnLockProof(
   target: OrcadRemoteExecTarget,
@@ -51,7 +42,7 @@ export function exitedOwnLockProof(
   }
 }
 
-/** Read-only: the token of an exited holder of this desktop the lock still names, or null. */
+/** Return an exited local holder's token only while the lock still names it; null leaves normal stale-lock arbitration. */
 export async function findExitedOwnLockToken(
   target: OrcadRemoteExecTarget,
   lockDir: string,
@@ -97,7 +88,7 @@ async function findOnPosix(
   return (await execOrcadRemote(target, command)).trim() === 'EXITED_OWNER' ? token : null
 }
 
-/** The host script reads the owner itself, so one node.exe answers with the token it found. */
+/** Read ownership in the host script so one node.exe invocation returns the proven token. */
 async function findOnWindows(
   target: OrcadRemoteExecTarget,
   lockDir: string,
@@ -109,7 +100,7 @@ async function findOnWindows(
     scope.guardsStateMutation ? '1' : '0',
     ...exited
   ])
-  // Too long for sshd's cmd.exe: no proof, so the stale window applies.
+  // Overlong sshd/cmd.exe commands cannot prove ownership; retain the normal stale window.
   if (command.length > CMD_EXE_COMMAND_LINE_MAX_CHARS) {
     return null
   }
@@ -129,7 +120,7 @@ function exitedOwnLockCheckCommand(
     `${posixOrcadFenceOwnedTest(lock)} && ${quiet(quotePosixShell(lock.lockDir))} || exit 0;`,
     ...(mutationLock
       ? [
-          // Any mutation lock refuses, as the steal does: it can only take an absent one.
+          // Refuse any mutation lock, matching the steal's absent-lock requirement.
           `[ -e ${quotePosixShell(mutationLock)} ] && exit 0;`
         ]
       : []),

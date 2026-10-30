@@ -14,8 +14,7 @@ import {
 import { cancelledJournalPromptBody } from './journal-prompt-body-bounds'
 import { endedJournalReasoning } from './journal-reasoning-row'
 
-/** True while an item is still awaiting the row that settles it, so a sink can
- *  treat that row as lifecycle-critical rather than sheddable under pressure. */
+/** Unsettled lifecycle rows must not be shed under pressure. */
 export function requiresTerminalSettlement(body: AgentJournalItemBody): boolean {
   if (body.kind === 'tool-call') {
     return body.state === 'running'
@@ -26,7 +25,7 @@ export function requiresTerminalSettlement(body: AgentJournalItemBody): boolean 
   return isRunningAgentJournalTurn(body)
 }
 
-/** A message still open, ended by a sweep that cannot know when it stopped: no time is claimed. */
+/** Unknown end time must remain unstamped. */
 export function endedUnseenMessageBody(body: AgentJournalItemBody): AgentJournalMessageItem | null {
   if (body.kind !== 'message' || body.state !== 'running') {
     return null
@@ -35,10 +34,7 @@ export function endedUnseenMessageBody(body: AgentJournalItemBody): AgentJournal
   return { ...open, ...endedJournalReasoning() }
 }
 
-/** The row that settles an item no one will finish: a running tool call ends as `end` (how its
- *  turn or session ended) says, a pending prompt is cancelled. Null for an item that needs none.
- *  A null `end` ends no call: another writer settled the turn, and its calls stay the provider's.
- *  Turn rows are each writer's own to end. */
+/** Settle abandoned calls/prompts; null end leaves calls to their provider, and turn rows to their writer. */
 export function terminalAgentJournalBody(
   body: AgentJournalItemBody,
   end: AgentJournalRunningCallEnd | null
@@ -52,10 +48,7 @@ export function terminalAgentJournalBody(
   return null
 }
 
-/** How a call still running when its turn ends ends: as that turn's journal row ends. A row another
- *  writer settled first (a person's Stop) stands, so its calls take that row's state, not the
- *  settler's own verdict; a row still running, and work outside any turn, take the settler's `end`.
- *  Every settler that ends running calls asks this, so a call never disagrees with its turn. */
+/** Calls inherit already-settled turn outcomes; otherwise use the settler's end. */
 export function runningCallEnd(
   turnScope: AgentJournalTurnScope | undefined,
   itemBody: (itemId: string) => AgentJournalItemBody | null | undefined,

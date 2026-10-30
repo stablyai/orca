@@ -1,12 +1,8 @@
 import { StyleSheet } from 'react-native'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
 
-// Styles for the hub's segmented control and the branch-card PR chip. Split from
-// mobile-source-control-styles.ts so neither file crosses the line limit.
-export const hubStyles = StyleSheet.create({
-  // Full-width tab bar under the hub header. Edge-to-edge, no inset track and no
-  // inner padding — segments share height evenly so the control doesn't float in a
-  // pill frame with gaps above/below the active cell.
+export const hubStyles = themedStyleSheet(() => ({
   segments: {
     flexDirection: 'row',
     alignItems: 'stretch',
@@ -21,7 +17,7 @@ export const hubStyles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: spacing.xs,
-    // Reserved so active underline doesn't change layout height.
+    // Reserve underline height so selection cannot shift layout.
     borderBottomWidth: 2,
     borderBottomColor: 'transparent'
   },
@@ -39,8 +35,6 @@ export const hubStyles = StyleSheet.create({
   segmentTextActive: {
     color: colors.textPrimary
   },
-  // The PR chip sits below the count row inside the branch card, separated by a
-  // hairline so it reads as a distinct, tappable status line.
   chip: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -91,7 +85,6 @@ export const hubStyles = StyleSheet.create({
     fontSize: typography.metaSize,
     fontWeight: '600'
   },
-  // Pushes the chevron to the trailing edge without a fixed-width spacer.
   chipSpacer: {
     flex: 1,
     minWidth: spacing.sm
@@ -106,21 +99,14 @@ export const hubStyles = StyleSheet.create({
     color: colors.textMuted,
     fontSize: typography.metaSize
   },
-  // Wraps the Changes-only controls (commit-failure/error notice, create-PR entry,
-  // bulk Stage/Unstage row) that used to live inside the summary card, now that the
-  // card is shared across segments and holds only branch status.
   changesControls: {
     paddingHorizontal: spacing.lg,
     marginTop: spacing.xs
   },
-  // Fills the remaining space below the header/segments/card so each segment's
-  // scroll view (SectionList / PR sidebar / history list) expands and scrolls.
   tabBody: {
     flex: 1
   },
-  // Keep a previously-visited segment mounted (scroll + fetch state) without
-  // participating in layout while another segment is active.
   tabBodyHidden: {
     display: 'none'
   }
-})
+}))

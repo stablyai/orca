@@ -1,6 +1,3 @@
-// An offer across a failed attempt and its retry, and across builds: the message Resume sends
-// depends on the marker alone, and each action sends its own.
-
 import { expect, it } from 'vitest'
 import { AgentSessionRecoveryCapsule } from '../../runtime/agent-session-recovery-capsule'
 import { AGENT_SESSION_RESTART_CONTINUATION_MESSAGE } from '../../../shared/agent-session-restart-continuation'
@@ -11,9 +8,6 @@ import {
   HOST_TEST_SESSION as SESSION
 } from './structured-agent-session-host-test-data'
 
-// The first attempt's start failed, so its continuation was rejected and never reached the agent.
-// A retry is a new action with a new message, not a replay of the rejected one, and it is
-// delivered with the same body.
 it("delivers a retry as a new continuation after the first one's start failed", async () => {
   const { host, acquire, dispatch, marker } = await interruptedRestart('children')
   if (!marker) {
@@ -39,8 +33,7 @@ it("delivers a retry as a new continuation after the first one's start failed", 
   expect(retried.failed).toEqual([])
 })
 
-// A marker from a build that recorded only a working lead: no snapshot, so no activity to name,
-// and the original wording.
+// Legacy markers lack activity snapshots and use the original continuation wording.
 it('offers and continues a marker with no snapshot', async () => {
   const { host, root, dispatch, marker } = await interruptedRestart('children')
   if (!marker) {

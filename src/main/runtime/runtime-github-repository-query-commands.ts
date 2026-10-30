@@ -85,7 +85,8 @@ export class RuntimeGitHubRepositoryQueryCommands {
     repoSelector: string,
     ownerRepo: { owner: string; repo: string; host?: string },
     number: number,
-    type: 'issue' | 'pr'
+    type: 'issue' | 'pr',
+    options: { preview?: boolean } = {}
   ): Promise<Awaited<ReturnType<typeof getWorkItemByOwnerRepo>>> {
     const repo = await this.deps.resolveRepo(repoSelector)
     return getWorkItemByOwnerRepo(
@@ -94,7 +95,8 @@ export class RuntimeGitHubRepositoryQueryCommands {
       number,
       type,
       getRepoRoutingConnectionId(repo),
-      ...this.deps.getLocalGitArgs(repo)
+      this.deps.getLocalGitArgs(repo)[0],
+      options
     )
   }
 

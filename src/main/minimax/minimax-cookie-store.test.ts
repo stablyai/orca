@@ -223,8 +223,6 @@ describe('minimax-cookie-store', () => {
       expect(store.getMiniMaxSessionCookieProtection()).toBe('sealed')
     })
 
-    // Pre-envelope files carry no kind, so the legacy sniff decides — the same one the
-    // reader uses, so the warning cannot disagree with how the bytes are interpreted.
     it('reports a legacy pre-envelope cookie header as plaintext', async () => {
       existsSyncMock.mockReturnValue(true)
       readFileSyncMock.mockReturnValue(Buffer.from('sessionId=abc123; other=1', 'utf8'))

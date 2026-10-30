@@ -65,7 +65,10 @@ export function useAutomationDraftEffects({
     if (!createOpen || draft.workspaceMode !== 'new_per_run' || !draft.projectId) {
       return
     }
-    void loadAutomationYamlHooksForRepo(draft.projectId, createDestinationHostId)
+    // Opening the create dialog is no act on the repo's WSL distro (E9); save re-checks in the foreground.
+    void loadAutomationYamlHooksForRepo(draft.projectId, createDestinationHostId, {
+      background: true
+    })
   }, [
     createOpen,
     createDestinationHostId,

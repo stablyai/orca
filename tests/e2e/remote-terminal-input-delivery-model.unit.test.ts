@@ -9,15 +9,8 @@ import { resetRemoteRuntimeTerminalMultiplexersForTests } from '../../src/render
 import { createRemoteRuntimePtyTransport } from '../../src/renderer/src/components/terminal-pane/remote-runtime-pty-transport'
 import { iterateTerminalInputChunks } from '../../src/shared/terminal-input'
 
-/*
- * Model-based check of remote terminal input delivery: the real pane transport, multiplexer and
- * input journal talk to the real host dispatcher and input ledger over a link that loses, buffers
- * and late-delivers frames, while the host PTY refuses writes or loses their settlement and the
- * host runtime restarts. Invariant: the PTY receives every input the pane did not give up on,
- * each byte once and in order; a withdrawn paste contributes nothing unless its bytes had already
- * reached the host, and nothing typed before it is lost. Once the link is healthy, everything
- * settles with no further resends.
- */
+// Exercise real transport/multiplexer/journal → host dispatcher/ledger across lossy, buffered, late-delivered frames, refused writes and runtime restarts.
+// Require remaining input exactly once/in order; withdrawn bytes may arrive only if already handed off, and healthy links must settle without resends.
 
 const SCHEDULES_PER_BLOCK = 250
 const BLOCKS = 8
@@ -216,8 +209,7 @@ async function runSchedule(seed: number, stats: Stats): Promise<void> {
       disconnected = state.phase === 'disconnected'
       if (disconnected) {
         stats.gaveUp += 1
-        // Why: once auto-recovery gives up, unapplied input is dropped; only bytes a lingering
-        // connection already carries may still arrive.
+        // After recovery gives up, drop unapplied input; only already-buffered connection bytes may still arrive.
         const applied = ptyWrites.join('')
         for (const op of ops) {
           if (op.status === 'required' && !applied.includes(op.text)) {
@@ -349,7 +341,6 @@ async function runSchedule(seed: number, stats: Stats): Promise<void> {
     await vi.advanceTimersByTimeAsync(chance(0.1) ? 2000 + random() * 20_000 : random() * 400)
   }
 
-  // Heal: the network and the host are healthy again.
   faultsEnabled = false
   link.unreachable = false
   link.ackLoss = 0
@@ -365,7 +356,6 @@ async function runSchedule(seed: number, stats: Stats): Promise<void> {
   await vi.advanceTimersByTimeAsync(60_000)
   expect(transport.isConnected()).toBe(true)
 
-  // No permanent stall: every accepted write settled, and nothing is still being resent.
   const unsettled = ops.filter((op) => op.accepted && op.result === 'pending').map((op) => op.id)
   expect(unsettled, `seed ${seed} accepted writes never settled`).toEqual([])
   const sentBefore = inputFramesSent
@@ -376,7 +366,6 @@ async function runSchedule(seed: number, stats: Stats): Promise<void> {
 
   const arrived = checkPty(ptyWrites.join(''), ops, seed)
   for (const op of ops) {
-    // A write the pane reported applied really reached the PTY, whole.
     if (op.result === true && !arrived.has(op.id)) {
       expect(arrived.has(op.id), `seed ${seed} op ${op.id} reported applied`).toBe(true)
     }

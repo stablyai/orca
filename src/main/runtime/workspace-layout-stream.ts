@@ -1,11 +1,5 @@
-// The read-only layout stream behind `layout.subscribe`: each workspace's published layout,
-// re-projected from the Store's sessions after writes while anyone subscribes. A write that names
-// its partition re-projects only that partition. Each pane's live terminal title is laid over the
-// cached projection, so a title change costs no projection. With no subscriber it does no work.
-//
-// A layout-owner build publishes once per main operation (one durable mutation: a `layout.apply`,
-// a binding write, a repair), as one records frame of what changed; writes no operation scopes
-// (a window save) publish when their task ends. A window-owned build sends a frame per workspace.
+// Reproject changed Store partitions only while subscribed; overlay live titles without reloading.
+// Main-owned layouts emit one records frame per operation, coalescing unscoped writes per task; window-owned layouts emit whole workspaces.
 
 import { randomUUID } from 'node:crypto'
 import type { ExecutionHostId } from '../../shared/execution-host'
@@ -24,7 +18,7 @@ import type {
 } from '../../shared/workspace-layout/workspace-layout-stream-frames'
 import type { RuntimeStore } from './runtime-store-contract'
 import { withLiveTitles } from './published-pane-live-titles'
-import { paneStartFactsOf, withPaneStartFacts, type PaneStartFactOf } from './pane-start-statuses'
+import { paneStartFactsOf, withPaneStartFacts, type PaneFactSources } from './pane-start-statuses'
 import {
   workspaceLayoutFrameObserver,
   workspaceLayoutPartitionReadObserver
@@ -37,20 +31,17 @@ import {
 
 type LayoutListener = (event: WorkspaceLayoutStreamEvent) => void
 
-/** A main operation's end, or the end of a task's unscoped writes: the partitions it may have
- *  written; null when any may have changed. */
+/** Partitions written by an operation or task; null when unscoped. */
 export type LayoutOperationCommit = { hostIds: readonly ExecutionHostId[] | null }
 
-/** What a workspace was last sent as: its projection's JSON and its panes' live titles. */
 type Shown = {
   json: string
   liveTitles: string
   layout: PublishedWorkspaceLayout
-  /** Its records, indexed when a later layout is first diffed against it; null: it goes whole. */
+  /** Null sends a whole layout; otherwise index records lazily on the next diff. */
   records?: IndexedLayoutRecords | null
 }
 
-/** What a reader beside the stream uses instead of a Loader pass of its own. */
 export type WorkspaceLayoutReads = Pick<
   WorkspaceLayoutStream,
   'onLayoutOperationCommitted' | 'readPartition'
@@ -70,42 +61,33 @@ export class WorkspaceLayoutStream {
   private readonly listeners = new Set<LayoutListener>()
   private readonly commitListeners = new Set<(commit: LayoutOperationCommit) => void>()
   private readonly projection: WorkspaceLayoutProjection
-  /** Workspace key → what listeners last received for it, live titles included. */
   private shown = new Map<string, Shown>()
   private stopWatching: (() => void) | null = null
-  /** From the first subscriber to the last: only then is anything projected. */
   private projecting = false
-  /** A write may have changed what subscribers hold: the next flush re-projects stale partitions. */
   private dirty = false
-  /** Partitions written since commit listeners last heard. */
   private touched: DirtyPartitions | null = null
   private liveTitlesDirty = false
   private flushQueued = false
   private failureLogged = false
-  /** The last change frame's position; never reset, so a reply's position outlives resubscribes. */
+  /** Never reset: replies can retain positions across resubscriptions. */
   private seq = 0
-  /** Names this stream for the process's life: a reader seeing another one missed frames. */
+  /** A different epoch tells readers they missed this process's frames. */
   private readonly epoch = ORCA_LAYOUT_OWNER_IS_MAIN ? randomUUID() : undefined
 
   constructor(
-    private readonly deps: {
+    private readonly deps: PaneFactSources & {
       store: () => StreamStore | null
-      /** The partition that owns a workspace key; null when none does. */
       homeHostId: (key: string) => ExecutionHostId | null
-      /** The title a terminal shows now; null when it has none. */
       liveTitle: (ptyId: string) => string | null
-      paneStartFact?: PaneStartFactOf
     }
   ) {
     this.projection = new WorkspaceLayoutProjection(deps)
   }
 
-  /** Every workspace's layout now, then each change until `unsubscribe`. */
   subscribe(listener: LayoutListener): {
     snapshot: { key: string; layout: PublishedWorkspaceLayout }[]
-    /** The position the snapshot holds. */
     seq: number
-    /** A layout-owner build's stream epoch; its records frames carry it. */
+    /** Present only in main-owned layouts. */
     epoch?: string
     unsubscribe: () => void
   } {
@@ -115,7 +97,7 @@ export class WorkspaceLayoutStream {
       this.shown = new Map()
       this.dirty = true
     }
-    // A change not yet published reaches existing listeners first, so the snapshot is current.
+    // Flush pending changes before adding the subscriber so its snapshot is current.
     this.flush()
     this.listeners.add(listener)
     this.watch()
@@ -138,10 +120,7 @@ export class WorkspaceLayoutStream {
     }
   }
 
-  /**
-   * Each main operation's end once its writes are in, with the partitions it may have written,
-   * and each task's unscoped writes. Heard with or without a layout subscriber.
-   */
+  /** Observe committed operations/tasks even without layout subscribers. */
   onLayoutOperationCommitted(listener: (commit: LayoutOperationCommit) => void): () => void {
     this.commitListeners.add(listener)
     this.watch()
@@ -151,12 +130,7 @@ export class WorkspaceLayoutStream {
     }
   }
 
-  /**
-   * One session partition's loaded model (layout, view and facts), the one the stream publishes
-   * from: shared while anyone listens (cached until a write may change it), else loaded per call.
-   * READ-ONLY: the stream and every other reader see the same object; tests freeze it. Null with
-   * no Store.
-   */
+  /** Shared read-only partition while subscribed, otherwise loaded per call; tests freeze it. Null without a Store. */
   readPartition(hostId: ExecutionHostId): LoadedWorkspaceLayout | null {
     const loaded = this.projection.loaded(hostId, this.stopWatching !== null)
     if (loaded) {
@@ -165,7 +139,6 @@ export class WorkspaceLayoutStream {
     return loaded
   }
 
-  /** Some terminal's title may have changed; republishes only the panes whose title did. */
   markLiveTitlesDirty(): void {
     if (!this.projecting) {
       return
@@ -174,7 +147,6 @@ export class WorkspaceLayoutStream {
     this.schedule()
   }
 
-  /** The position holding every write made so far: a pending flush is sent first. */
   settledSeq(): number {
     this.flush()
     return this.seq
@@ -199,7 +171,7 @@ export class WorkspaceLayoutStream {
     } else if (!wanted && this.stopWatching) {
       this.stopWatching()
       this.stopWatching = null
-      // Unwatched writes would go unseen: nothing projected may be read again.
+      // Discard projections when unwatched writes can no longer invalidate them.
       this.projection.clear()
     }
   }
@@ -234,7 +206,7 @@ export class WorkspaceLayoutStream {
       try {
         this.reconcile(dirty)
       } catch (error) {
-        // The cache may be part-updated; the next write re-projects every partition.
+        // A partial cache update requires reprojection of every partition on the next write.
         this.projection.forgetPartitions()
         this.logFailure('projection', error)
       }
@@ -258,7 +230,6 @@ export class WorkspaceLayoutStream {
     }
   }
 
-  /** Every pane's live title, in tab and pane order; null for a pane with none. */
   private liveTitlesOf(layout: PublishedWorkspaceLayout): (string | null)[] {
     return layout.tabs.flatMap((tab) =>
       (tab.terminal?.panes ?? []).map((pane) =>
@@ -280,7 +251,7 @@ export class WorkspaceLayoutStream {
     const changed: string[] = []
     for (const [key, { layout, json }] of next) {
       const titles = this.liveTitlesOf(layout)
-      // Switch point: a pane's start status is live state, laid over as its title is.
+      // Switch point: a pane's start facts are live state, laid over as its title is.
       const starts = ORCA_LAYOUT_OWNER_IS_MAIN ? paneStartFactsOf(layout, this.deps) : null
       const liveTitles = JSON.stringify(starts ? [titles, starts] : titles)
       const previous = before.get(key)
@@ -349,14 +320,14 @@ export class WorkspaceLayoutStream {
 
   private deliverEach(events: WorkspaceLayoutEvent[]): void {
     for (const unsequenced of events) {
-      // Numbered as sent, so a failed projection never skips a position a reply could name.
+      // Assign sequence numbers only when sending so failures cannot leave gaps.
       this.deliver({ ...unsequenced, seq: ++this.seq })
     }
   }
 
   private deliver(event: WorkspaceLayoutStreamEvent): void {
     for (const listener of this.listeners) {
-      // One failing listener must not cost the others an event the stream has now published.
+      // Isolate listener failures so peers still receive the published frame.
       try {
         listener(event)
       } catch (error) {

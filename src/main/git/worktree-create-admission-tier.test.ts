@@ -22,7 +22,6 @@ import { finalizePreparedWorktree } from './worktree-create-preparation'
 
 const HEAD = 'a'.repeat(40)
 
-/** Options every call to `git` carried, keyed by the subcommand the args name. */
 function optionsForCommand(match: string): Record<string, unknown>[] {
   return gitExecFileAsyncMock.mock.calls
     .filter((call) => call[0].join(' ').includes(match))

@@ -1,6 +1,4 @@
-// The ids today's `session.tabs.*` payload gives its rows, and the way back from a row id an old
-// client sends to the model tab (and pane) it names. Rows keep today's ids so old clients' keys and
-// selections stay valid (wire rule 3).
+// Resolve compatible published row IDs back to model tabs/panes without changing older client keys/selections (wire rule 3).
 
 import type { LayoutTab, WorkspaceLayout } from '../workspace-layout-model'
 import { layoutContainsLeafId } from '../terminal-pane-tree'
@@ -11,10 +9,7 @@ export { projectSessionTabs } from './old-client-session-tabs-projection'
 
 export type SessionTabRowTarget = { tab: LayoutTab; leafId?: string }
 
-/**
- * What a row id names. `<terminal>::<pane>` names a pane, a bare terminal id its tab (the close
- * handler reads the intent the same way); browser workspace ids and chat row ids name their tab.
- */
+/** terminal::pane names a pane, bare terminal names its tab; browser-workspace and chat row IDs name tabs. */
 export function resolveSessionTabRow(
   workspace: WorkspaceLayout,
   rowId: string

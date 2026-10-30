@@ -3,11 +3,17 @@ import {
   runtimeEnvironmentIdForWorkspaceOwner,
   runtimeEnvironmentIdUnlessTwin
 } from '@/lib/resolve-owner'
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
-import { afterLayoutFrame } from '@/runtime/layout-frame-position'
+import { callLayoutApply } from '@/runtime/layout-apply-call'
 import { holdTabPaneTree } from '@/runtime/layout-owner-pane-intents'
 import { holdDrawnTabs, type DrawnTabHold } from '@/runtime/layout-owner-drawn-tab-holds'
-import { releaseLayoutApplyHolds } from '@/runtime/layout-apply-hold-release'
+import { holdsPaneTree, releaseLayoutApplyHolds } from '@/runtime/layout-apply-hold-release'
+import { handleServerLayoutReply, serverLayoutApplyFor } from '@/runtime/server-layout-apply'
+import type { ServerMoveDrawnTabs } from '@/runtime/server-layout-apply'
+import {
+  LOCAL_LAYOUT_APPLY_ORIGIN,
+  type LayoutApplyOrigin
+} from '@/runtime/server-layout-apply-routes'
+import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-resume'
 import type { SplitRatioIntent } from '../../../shared/workspace-layout/split-ratio-intents'
 import type { PaneSide } from '../../../shared/workspace-layout/terminal-pane-tree'
@@ -40,7 +46,14 @@ export type WindowLayoutCommand =
   | { type: 'movePane'; tabId: string; leafId: string; targetLeafId: string; side: PaneSide }
   | { type: 'setPaneRatios'; tabId: string; ratios: SplitRatioIntent[] }
   | { type: 'setChatPane'; tabId: string; leafId: string | null }
-  | { type: 'moveTab'; tabId: string; toGroupId: string; index: number; isPinned?: boolean }
+  | {
+      type: 'moveTab'
+      tabId: string
+      toGroupId: string
+      index: number
+      afterTabId?: string | null
+      isPinned?: boolean
+    }
   | { type: 'splitGroup'; tabId: string; besideGroupId: string; direction: GroupSide }
   | { type: 'setGroupRatios'; ratios: SplitRatioIntent[] }
   | { type: 'closeTabs'; tabIds: [string]; recordClose?: 'user' | 'cleanup' }
@@ -151,24 +164,12 @@ export type WindowLayoutCommand =
 export type WindowRefusalCode = Extract<LayoutApplyReply, { ok: false }>['code'] | 'call_failed'
 
 export type LayoutApplyHandlers = {
-  apply: (result: LayoutCommandResult) => void
+  apply: (result: LayoutCommandResult, origin: LayoutApplyOrigin) => void
   asToday: () => void
   refused?: (code: WindowRefusalCode) => void
   /** The window already drew the change: frames keep its tabs as drawn until the answer is in. */
   drawn?: true
 }
-
-/** Commands that change one tab's panes: frames wait to redraw that tab until the answer is in. */
-const PANE_COMMANDS: ReadonlySet<WindowLayoutCommand['type']> = new Set([
-  'splitPane',
-  'closePane',
-  'renamePane',
-  'equalizePanes',
-  'movePane',
-  'setPaneRatios',
-  'setChatPane',
-  'movePaneToNewTab'
-])
 
 /** The tabs, by workspace, that a command the window already drew changes. */
 function drawnTabHolds(worktreeId: string, command: WindowLayoutCommand): DrawnTabHold[] {
@@ -184,8 +185,7 @@ function drawnTabHolds(worktreeId: string, command: WindowLayoutCommand): DrawnT
       return [{ workspace: worktreeId, ids: [command.tabId] }]
     case 'setGroupRatios':
       return [{ workspace: worktreeId, ids: [], groupLayout: true }]
-    // Pane commands hold their tab's pane tree; records are not drawn from frames; editor, browser,
-    // chat and simulator opens and page changes are sent before the window draws them.
+    // Pane commands hold their drawn tree; records are not frame-drawn. Editor/browser/chat/simulator opens and page changes send before drawing.
     case 'openBrowserTab':
     case 'openBrowserPage':
     case 'closeBrowserPage':
@@ -213,59 +213,57 @@ function drawnTabHolds(worktreeId: string, command: WindowLayoutCommand): DrawnT
   }
 }
 
-/**
- * A layout command in a layout-owner build: main applies it first, then, once the window has the
- * frame with main's change, `apply` shows main's result. `asToday` runs instead only when a paired
- * server may hold the tab (#18202). Any other refusal (main's copy lacking the target too), and a
- * call that threw, is logged and `refused`: main's frame stays what is drawn, since a window save
- * no longer carries the change. False when a paired server owns the workspace's layout; the
- * caller acts as today.
- */
+/** Main applies first; apply shows its result after the matching frame. Only possible paired-server ownership permits asToday (#18202); other refusals/thrown calls log and retain main’s drawing because window saves no longer persist changes. Frame-drawn paired workspaces route SERVER_ROUTED_LAYOUT_COMMANDS to their own main; other cases return false for existing caller behavior. */
 export function sendLayoutApply(
-  state: Parameters<typeof runtimeEnvironmentIdUnlessTwin>[0],
+  state: Parameters<typeof runtimeEnvironmentIdUnlessTwin>[0] & ServerMoveDrawnTabs,
   worktreeId: string,
   command: WindowLayoutCommand,
   handlers: LayoutApplyHandlers
 ): boolean {
-  // Why: the same owner test that mirrors a workspace's tabs from a paired server; a focused
-  // server must not claim a workspace whose row names no owner. A twin stays on main's path: it
-  // edits this window's layout, not either host, as the terminal-create path does.
-  if (runtimeEnvironmentIdUnlessTwin(state, worktreeId)) {
+  // Use mirror ownership, never server focus: hostless rows are local. Twins retain local-main handling rather than choosing either host, matching terminal creation.
+  const environmentId = runtimeEnvironmentIdUnlessTwin(state, worktreeId)
+  // A paired server's workspace: its main takes the intent when its frames draw the workspace.
+  const server = environmentId
+    ? serverLayoutApplyFor(environmentId, worktreeId, command, state)
+    : null
+  if (environmentId && !server) {
     return false
   }
   const hold =
-    PANE_COMMANDS.has(command.type) && 'tabId' in command ? holdTabPaneTree(command.tabId) : null
+    holdsPaneTree(command.type) && 'tabId' in command ? holdTabPaneTree(command.tabId) : null
   const tabHolds = handlers.drawn ? drawnTabHolds(worktreeId, command) : []
   const tabHold = tabHolds.length > 0 ? holdDrawnTabs(tabHolds) : null
   const release = releaseLayoutApplyHolds(command.type, [hold, tabHold])
-  void callRuntimeRpc<LayoutApplyReply>({ kind: 'local' }, 'layout.apply', {
-    command: { ...command, workspace: worktreeId }
-  })
-    .then(
-      (reply) =>
-        afterLayoutFrame(reply.frameSeq, () => {
-          try {
-            handleReply(state, worktreeId, command, reply, handlers)
-          } finally {
-            release()
-          }
-        }),
-      (error: unknown) => {
-        // Why: a thrown write is rolled back. An indeterminate disk write is not, and may leave a
-        // pane main minted, which its frame then draws.
-        console.warn(`[layout-owner] ${command.type} refused: call_failed`, errorMessage(error))
-        try {
-          handlers.refused?.('call_failed')
-        } finally {
-          release()
-        }
+  const target: RuntimeClientTarget = server
+    ? { kind: 'environment', environmentId: server.route.environmentId }
+    : { kind: 'local' }
+  callLayoutApply(target, worktreeId, server?.command ?? command, (reply) => {
+    try {
+      if (server) {
+        handleServerLayoutReply(server, command.type, reply, handlers)
+      } else if (reply) {
+        handleReply(state, worktreeId, command, reply, handlers)
+      } else {
+        handlers.refused?.('call_failed')
       }
-    )
-    // A throwing handler is not a failed call; it must not run the fallback too.
-    .catch((error: unknown) => {
-      console.warn(`[layout-owner] ${command.type} handler threw:`, errorMessage(error))
-    })
+    } finally {
+      release()
+    }
+  })
   return true
+}
+
+/**
+ * Sends one intent to a paired server's main, never this window's: a workspace's editor tabs
+ * handed over before that server's frames draw it (H5d).
+ */
+export function sendToServerMain(
+  environmentId: string,
+  worktreeId: string,
+  command: WindowLayoutCommand,
+  answer: (reply: LayoutApplyReply | null) => void
+): void {
+  callLayoutApply({ kind: 'environment', environmentId }, worktreeId, command, answer)
 }
 
 function handleReply(
@@ -276,7 +274,7 @@ function handleReply(
   handlers: LayoutApplyHandlers
 ): void {
   if (reply.ok) {
-    handlers.apply(reply.result)
+    handlers.apply(reply.result, LOCAL_LAYOUT_APPLY_ORIGIN)
   } else if (refusalActsAsToday(state, worktreeId, reply.code)) {
     handlers.asToday()
   } else {
@@ -285,21 +283,15 @@ function handleReply(
   }
 }
 
-/** A refusal the window answers as today: a twin's, which main may route to a paired server. */
+/** A refusal the window answers as today: a twin's, which main may route to a paired server, whose
+ *  layout the window still mirrors. */
 export function refusalActsAsToday(
   state: Parameters<typeof runtimeEnvironmentIdUnlessTwin>[0],
   worktreeId: string,
   code: WindowRefusalCode
 ): boolean {
-  return code === 'host_not_owned' && mayBePairedServers(state, worktreeId)
-}
-
-/** A twin: main may route it to a paired server, whose layout the window still mirrors. */
-function mayBePairedServers(
-  state: Parameters<typeof runtimeEnvironmentIdUnlessTwin>[0],
-  worktreeId: string
-): boolean {
   return (
+    code === 'host_not_owned' &&
     runtimeEnvironmentIdForWorkspaceOwner(state, { workspaceId: worktreeId }).kind !== 'resolved'
   )
 }
@@ -317,8 +309,4 @@ export function recordLayoutApply(
     asToday: keepWindowCopy,
     drawn: true
   })
-}
-
-function errorMessage(error: unknown): unknown {
-  return error instanceof Error ? error.message : error
 }

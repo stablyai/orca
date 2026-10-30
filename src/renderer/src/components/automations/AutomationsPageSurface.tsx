@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react'
 import { translate } from '@/i18n/i18n'
+import { LoadingSpinner } from '@/components/LoadingSpinner'
 import { AutomationEditorDialog } from './AutomationEditorDialog'
 import { AutomationsDetailPane } from './AutomationsDetailPane'
 import { AutomationsPageSkeleton } from './AutomationsPageSkeleton'
@@ -116,18 +117,21 @@ export function AutomationsPageSurface({
     setPageView('run')
   }
   const showAutomationsList = (): void => {
+    setPendingAutomationRunNavigation(null)
     setPageView('automations')
     setSelectedAutomationRunPageId(null)
     setIsDetailOpen(false)
     setActivePaneTab('overview')
   }
   const showRunsDashboard = (): void => {
+    setPendingAutomationRunNavigation(null)
     setPageView('runs')
     setSelectedAutomationRunPageId(null)
     setIsDetailOpen(false)
     setActivePaneTab('overview')
   }
   const showAutomationDetails = (): void => {
+    setPendingAutomationRunNavigation(null)
     setPageView('automations')
     setSelectedAutomationRunPageId(null)
     setIsDetailOpen(true)
@@ -228,6 +232,17 @@ export function AutomationsPageSurface({
           setPendingAutomationRunNavigation={setPendingAutomationRunNavigation}
           setIsDetailOpen={setIsDetailOpen}
         />
+      ) : pageView === 'run' && store.pendingAutomationRunNavigation?.runId ? (
+        <div
+          role="status"
+          className="flex min-h-0 flex-1 items-center justify-center gap-2 text-sm text-muted-foreground"
+        >
+          <LoadingSpinner className="size-4" />
+          {translate(
+            'auto.components.automations.AutomationRunsDashboard.loading',
+            'Loading runs…'
+          )}
+        </div>
       ) : pageView === 'run' && selectedAutomationRunPage ? (
         <AutomationRunDetailsPage
           automation={selected}

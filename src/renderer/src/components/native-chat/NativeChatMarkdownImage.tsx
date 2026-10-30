@@ -26,12 +26,12 @@ import { runtimeTargetEnvironmentId } from '@/runtime/runtime-client-target'
 import { basename } from '@/lib/path'
 import { translate } from '@/i18n/i18n'
 import type { LinkAction } from '@/components/link-actions/link-action-request'
-import { jiraImageReference } from '../../../../shared/jira-attachment-image'
+import { jiraImageReference } from '../../../../shared/jira/jira-attachment-image'
 import { filesystemPathToFileUri } from '../../../../shared/file-uri-path'
 import {
   createNativeChatFileHref,
   routeNativeChatHref
-} from '../../../../shared/native-chat-href-routing'
+} from '../../../../shared/native-chat/native-chat-href-routing'
 import { NativeChatMarkdownImageOwnerContext } from './native-chat-markdown-image-owner'
 import { nativeChatLinkActions } from './native-chat-link-target-actions'
 import { copyableNativeChatImageSrc, keepPreviewOpenForChatMenu } from './native-chat-image-copy'

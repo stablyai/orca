@@ -70,14 +70,18 @@ function findByType(node: unknown, type: string): ReactElementLike {
 }
 
 describe('BrowserAnnotationSendMenuContent', () => {
-  it('uses the review notes send content so existing agent sessions are selectable', () => {
+  it('forwards annotation content and delivery callbacks to the review notes menu', () => {
     const onPromptDelivered = vi.fn()
+    const onPromptHandedOff = vi.fn()
     const tree = expand(
       <BrowserAnnotationSendMenuContent
         worktreeId="wt-1"
         groupId="group-1"
         prompt="browser annotation prompt"
+        includePageDetails={false}
+        onIncludePageDetailsChange={vi.fn()}
         onPromptDelivered={onPromptDelivered}
+        onPromptHandedOff={onPromptHandedOff}
       />
     )
 
@@ -87,7 +91,8 @@ describe('BrowserAnnotationSendMenuContent', () => {
       prompt: 'browser annotation prompt',
       promptDelivery: 'submit-after-ready',
       launchSource: 'notes_send',
-      onPromptDelivered
+      onPromptDelivered,
+      onPromptHandedOff
     })
   })
 })

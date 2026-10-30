@@ -11,7 +11,8 @@ import { JiraLinkedWorkspaceAction } from './JiraLinkedWorkspaceAction'
 import type { Worktree } from '../../../shared/worktree/types'
 import { jiraListColumnVisibility, type JiraListColumn } from './jira-list-columns'
 import { JiraIssueCell, JiraPriorityText, unassignedLabel } from './task-page-jira-issue-cells'
-import type { JiraIssue, JiraProjectStatusOrder } from '../../../shared/jira-types'
+import type { JiraIssue, JiraProjectStatusOrder } from '../../../shared/jira/jira-types'
+import { openAppHttpLink } from '@/lib/app-http-link-open'
 
 export type TaskPageJiraIssueSection = {
   key: string
@@ -249,7 +250,7 @@ function JiraIssueRow({
                 size="icon-xs"
                 onClick={(event) => {
                   event.stopPropagation()
-                  window.api.shell.openUrl(issue.url)
+                  openAppHttpLink(issue.url, { event })
                 }}
                 aria-label={translate(
                   'auto.components.TaskPage.4ac8ff2275',

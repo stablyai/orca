@@ -17,7 +17,6 @@ import {
   restoreTerminalTestGlobals
 } from './pty-connection-test-environment'
 
-/** What remountTerminalTabForRecovery answers now that it reports admission. */
 const REMOUNTED = { remounted: true as const, generation: 1 }
 const TAB_MISSING = { remounted: false as const, declinedBy: 'tab-missing' as const }
 const AUTOMATIC_REQUEST = expect.objectContaining({ trigger: 'automatic' })
@@ -105,10 +104,7 @@ export function registerPtyConnectionHiddenDeliveryGateTests(): void {
         return { transport, pane, dataCallback: capturedDataCallback.current!, binding }
       }
 
-      // STA-4042 root: the restore-needed marker is the ONE point where "bytes
-      // were dropped" is known. The emulator carries state across chunks just like
-      // the cross-chunk parser the handler already resets, so the gap is closed
-      // here rather than left to each recovery path to remember.
+      // Only the restore-needed marker proves a byte gap; reset emulator state here with the cross-chunk parser (STA-4042).
       it('closes the emulator state gap when a drop is announced', async () => {
         enableMainAuthority()
         const deps = createDeps({ isVisibleRef: { current: false } })
@@ -160,7 +156,6 @@ export function registerPtyConnectionHiddenDeliveryGateTests(): void {
 
         expect(getMainBufferSnapshot).not.toHaveBeenCalled()
 
-        // Reveal rides the visible-resume backlog recovery hook.
         ;(deps.isVisibleRef as { current: boolean }).current = true
         const { requestTerminalBacklogRecovery } =
           await import('@/lib/pane-manager/pane-terminal-output-scheduler')
@@ -277,7 +272,6 @@ export function registerPtyConnectionHiddenDeliveryGateTests(): void {
         requestTerminalBacklogRecovery(pane.terminal as never)
         await flushAsyncTicks(20)
 
-        // Restore stays skipped (a dead pipeline can't parse the snapshot), but recovery got exactly one re-kick.
         expect(getMainBufferSnapshot).not.toHaveBeenCalled()
         expect(remountTerminalTabForRecovery).toHaveBeenCalledTimes(2)
         expect(remountTerminalTabForRecovery).toHaveBeenLastCalledWith('tab-1', AUTOMATIC_REQUEST)
@@ -325,11 +319,10 @@ export function registerPtyConnectionHiddenDeliveryGateTests(): void {
         transportOptions.onPtySpawn?.('pty-id')
         const factsHandler = await import('./terminal-side-effect-facts-handler')
 
-        // Why: Phase 6 deleted the 10s codex window — codex startups gate like any hidden pane; main answers their startup probes.
+        // Hidden Codex startups use the ordinary delivery gate; main owns startup query replies.
         dataCallback('startup probe output\r\n')
         expect(setHiddenRendererPty).toHaveBeenCalledWith('pty-id', true)
 
-        // The fact records the subscription for gate-managed PTYs; it never answers it (#9993).
         factsHandler._dispatchTerminalSideEffectBatchForTest({
           ptyId: 'pty-id',
           seq: 8,
@@ -394,10 +387,7 @@ export function registerPtyConnectionHiddenDeliveryGateTests(): void {
       })
 
       it('retires the fact-registered subscription when the TUI withdraws it', async () => {
-        // The counterpart to the test above. A gated pane never sees the withdrawal bytes
-        // (main drops them) and the chunk scanner is disabled for it, so this fact is the only
-        // observer that can retire the subscription. Left registered, the next theme flip
-        // pushes CSI 997 at the shell that replaced the TUI.
+        // Gated panes never receive withdrawal bytes; only this fact can retire a subscription before theme flips send replies to the replacement shell.
         enableMainAuthority()
         const paneMode2031Ref = { current: new Map<number, boolean>() }
         const paneLastThemeModeRef = { current: new Map<number, 'dark' | 'light'>() }
@@ -405,7 +395,6 @@ export function registerPtyConnectionHiddenDeliveryGateTests(): void {
           isVisibleRef: { current: false },
           paneMode2031Ref,
           paneLastThemeModeRef,
-          // Exactly what use-terminal-pane-lifecycle wires up for this callback.
           recordPaneMode2031Subscription: (paneId: number, subscribedMode: 'dark' | 'light') => {
             paneMode2031Ref.current.set(paneId, true)
             paneLastThemeModeRef.current.set(paneId, subscribedMode)
@@ -435,7 +424,6 @@ export function registerPtyConnectionHiddenDeliveryGateTests(): void {
       })
 
       it('leaves the chunk scanner silent on a gate-managed PTY', async () => {
-        // Main's '2031-subscribe' fact already records these; nothing on this path replies.
         enableMainAuthority()
         const deps = createDeps({ isVisibleRef: { current: false } })
         const { transport, dataCallback } = await connectHiddenPane(deps)
@@ -474,7 +462,7 @@ export function registerPtyConnectionHiddenDeliveryGateTests(): void {
           startup: { command: 'codex' }
         })
         const { transport } = await connectHiddenPane(deps)
-        // Why: the 10s codex startup window is gone — codex spawns are main-owned from byte zero (main pin: pty.test.ts DA1-from-model).
+        // Codex startup is main-owned from byte zero; no temporary renderer reply window remains (pty.test.ts DA1-from-model).
         expect(transport.connect).toHaveBeenCalledWith(
           expect.objectContaining({ initiallyHidden: true })
         )
@@ -567,7 +555,7 @@ export function registerPtyConnectionHiddenDeliveryGateTests(): void {
         expect(getMainBufferSnapshot).toHaveBeenCalledTimes(1)
 
         try {
-          // Why (rc.7.perf): a second drop marker while the first snapshot serializes is self-backpressure; must NOT re-fetch.
+          // A second drop during snapshot serialization is self-backpressure and must not fetch again (rc.7.perf).
           vi.useFakeTimers()
           _dispatchPtyModelRestoreNeededForTest({
             id: 'pty-id',

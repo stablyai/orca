@@ -6,7 +6,6 @@ import { parseWorktreePreparationOwnerPid } from '../../shared/worktree/create-p
 /** Existence only: the hook's content is never read. */
 export type PostCheckoutHookPresence = 'present' | 'absent' | 'custom_hooks_path' | 'unknown'
 
-/** What the create event says about the repo, read from its `.git` directory. */
 export type CreateEventRepoFacts = {
   postCheckoutHook: PostCheckoutHookPresence
   /** Entries in the index header, i.e. tracked files; absent when the count is missing or unreliable. */
@@ -19,7 +18,7 @@ const PROBE_TIMEOUT_MS = 2_000
 // Shorter than the whole probe, so a slow per-worktree read cannot cost the other facts.
 const WORKTREE_COUNT_TIMEOUT_MS = 1_500
 
-/** A hung network or WSL mount must not hold the caller; every answer here is best-effort. */
+/** Mount reads are best-effort and must not hold the caller indefinitely. */
 async function withTimeout<T>(operation: Promise<T>, ms: number, fallback: T): Promise<T> {
   let timer: ReturnType<typeof setTimeout> | undefined
   const timeout = new Promise<T>((resolve) => {
@@ -34,12 +33,8 @@ async function withTimeout<T>(operation: Promise<T>, ms: number, fallback: T): P
 }
 
 /**
- * Reads, from files only and never by spawning Git, whether `git worktree add` in this repo will
- * run a repo-local post-checkout hook, how many files the repo tracks, and how many worktrees it has.
- *
- * A `core.hooksPath` in the repo's config is reported as such rather than followed, and global or
- * included config is not read, so a hooks path set there reads as `absent`. A `.git` file (a repo
- * registered from a linked worktree or submodule) needs Git to resolve, so it yields no facts.
+ * Read repo-local facts without spawning Git; linked-worktree/submodule .git files yield none.
+ * Report local core.hooksPath without following it; global/included configuration is not read.
  */
 export function probeCreateEventRepoFacts(
   repoPath: string,
@@ -80,11 +75,7 @@ async function readFacts(
   }
 }
 
-/**
- * The worktree count from Git's registry of linked worktrees, since the create itself no longer
- * lists them. Like the listing, an entry whose lock reason names an Orca preparation is a prepared
- * checkout, not the user's worktree, whichever process or crash left it.
- */
+/** Exclude prepared checkouts from every process, including crash leftovers. */
 async function readWorktreeCount(gitDir: string): Promise<number | undefined> {
   const registry = path.join(gitDir, 'worktrees')
   try {
@@ -108,11 +99,7 @@ async function readWorktreeCount(gitDir: string): Promise<number | undefined> {
 /** `core.sparseCheckout` or `index.sparse` set to anything Git reads as true, bare key included. */
 const SPARSE_CHECKOUT_ON = /^\s*sparse(checkout)?\s*(=(?!\s*(false|no|off|0)\s*$).*)?$/im
 
-/**
- * The entry count from the index header (`DIRC`, version, big-endian count), which is the same in
- * every index version. A split index keeps entries elsewhere and a sparse index collapses them into
- * directories, so with either possible (any sparse checkout) the count is left out.
- */
+/** Read DIRC entry count; omit split/sparse indexes because their header count is not the tracked-file total. */
 async function readIndexEntryCount(
   gitDir: string,
   config: string | null
