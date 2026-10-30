@@ -1,4 +1,3 @@
-import { sharedPromiseSettlementWaiters } from '../../../../src/shared/promise-settlement-waiters'
 import type { SendRequestOptions } from '../../transport/rpc-client'
 import { markRpcDeliveryUnknown } from '../../transport/rpc-delivery-ambiguity'
 import type { RpcResponse } from '../../transport/types'
@@ -39,16 +38,70 @@ export class BridgeClientRequests {
     options: SendRequestOptions | undefined,
     cancel: () => void
   ): Promise<RpcResponse> {
-    return options?.signal
-      ? sharedPromiseSettlementWaiters(response).wait({
-          signal: options.signal,
-          timeoutMs: options.timeoutMs ?? 30_000,
-          onAbandon: () => {
-            this.fail(id, new Error('Request abandoned'))
-            cancel()
+    const signal = options?.signal
+    if (!signal) {
+      return response
+    }
+    return new Promise((resolve, reject) => {
+      // Pending-map removal precedes raw reaction delivery; an abort in between must still win.
+      let terminal = false
+      let timer: ReturnType<typeof setTimeout> | undefined
+      const cleanup = () => {
+        if (timer !== undefined) {
+          clearTimeout(timer)
+        }
+        signal.removeEventListener('abort', onAbort)
+      }
+      const abandon = (error: Error) => {
+        if (terminal) {
+          return
+        }
+        terminal = true
+        cleanup()
+        this.fail(id, new Error('Request abandoned'))
+        cancel()
+        reject(error)
+      }
+      const onAbort = () =>
+        abandon(Object.assign(new Error('Promise settlement wait aborted'), { name: 'AbortError' }))
+      void response.then(
+        (value) => {
+          if (!terminal) {
+            terminal = true
+            cleanup()
+            resolve(value)
           }
-        })
-      : response
+        },
+        (error: unknown) => {
+          if (!terminal) {
+            terminal = true
+            cleanup()
+            reject(error)
+          }
+        }
+      )
+      if (signal.aborted) {
+        onAbort()
+        return
+      }
+      timer = setTimeout(
+        () => abandon(new Error('Promise settlement wait timed out')),
+        Math.max(1, options?.timeoutMs ?? 30_000)
+      )
+      const handle: unknown = timer
+      if (
+        typeof handle === 'object' &&
+        handle !== null &&
+        'unref' in handle &&
+        typeof handle.unref === 'function'
+      ) {
+        handle.unref()
+      }
+      signal.addEventListener('abort', onAbort, { once: true })
+      if (signal.aborted) {
+        onAbort()
+      }
+    })
   }
 
   acceptReply(message: BridgeReplyMessage): void {

@@ -44,6 +44,7 @@ export type BridgePortPair<TRpc extends RpcClient = FakeRpcClient> = {
   flush: () => Promise<void>
   // Flush init synchronously only for first-render recording; every other exchange must retain asynchronous lane delivery.
   drainNow: () => number
+  deliverToPage: (json: string) => void
   readToShell: () => BridgeClientMessage[]
   readToPage: () => BridgeHostMessage[]
 }
@@ -57,6 +58,7 @@ export type BridgePortPairOptions<TRpc extends RpcClient> = {
   storage?: Readonly<Record<string, string>>
   storageOversize?: readonly string[]
   // Test-only frame rewrite lets golden replay isolate narrower-reader behavior from payload changes; product transport never rewrites in-flight frames.
+  holdToPage?: (json: string) => boolean
   rewriteToPage?: (json: string) => string
   routeGrants?: readonly string[]
   sessionEstablished?: boolean
@@ -176,7 +178,9 @@ export function createBridgePortPair<TRpc extends RpcClient>(
 
   const rewrite = options.rewriteToPage ?? ((json: string) => json)
   const toPage = createLane((json) => {
-    receiveOnPage?.(rewrite(json))
+    if (!options.holdToPage?.(json)) {
+      receiveOnPage?.(rewrite(json))
+    }
   })
   const host = createBridgeHost({
     client: rpc,
@@ -279,6 +283,7 @@ export function createBridgePortPair<TRpc extends RpcClient>(
       throw new Error('the port pair never went quiet')
     },
     drainNow: () => toShell.drainNow() + toPage.drainNow(),
+    deliverToPage: (json) => receiveOnPage?.(rewrite(json)),
     readToShell: () => readAll(toShell.sent, readBridgeClientMessage),
     readToPage: () => readAll(toPage.sent, readBridgeHostMessage)
   }

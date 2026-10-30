@@ -1,4 +1,3 @@
-import { throwIfSignalAborted } from '../../../../src/shared/abort-signal-reason'
 import type { RpcClient, SendRequestOptions } from '../../transport/rpc-client'
 import type { ConnectionState, RpcResponse, RpcSuccess } from '../../transport/types'
 import {
@@ -18,7 +17,8 @@ import {
   BridgeClientNotReadyError,
   BridgeRequestOversizedError,
   BridgeSendFailedError,
-  BridgeShellReplacedError
+  BridgeShellReplacedError,
+  throwIfBridgeSignalAborted
 } from './bridge-client-errors'
 import type { BridgeHapticsKind } from './bridge-haptics-notify'
 import { createBridgeInboundFrameReader } from './bridge-client-inbound-frames'
@@ -225,7 +225,7 @@ export function createBridgeRpcClient(options: BridgeRpcClientOptions): BridgeRp
       )
     }
     const [method, params, requestOptions] = args
-    throwIfSignalAborted(requestOptions?.signal)
+    throwIfBridgeSignalAborted(requestOptions?.signal)
     requestOptions?.beforeSend?.()
     const id = nextId()
     const response = new Promise<RpcResponse>((resolve, reject) => {

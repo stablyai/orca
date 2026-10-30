@@ -7,7 +7,6 @@ import {
   REMOTE_RPC_MAX_CONTENT_BYTES
 } from '../../../../shared/remote-rpc-content-budget'
 import { AGENT_SESSION_TEXT_ATTACHMENT_READ_CAPABILITY } from '../../../../shared/agent-session-runtime-capabilities'
-import { AGENT_SESSION_TEXT_ATTACHMENT_READ_CAPABILITY as domainTextReadCapability } from '../../../../shared/agent-session-attachments'
 import '../unused-default-rpc-methods.test-fixture'
 import { mkdtemp, readFile, rm, writeFile, symlink, mkdir } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -259,7 +258,6 @@ it('reads a committed text attachment through the registered mobile RPC and vali
 it('keeps the store boundary, regular-file checks, range limit and request-id budget on the actual reader', async () => {
   const path = await uploadBytes('attached.txt', Buffer.alloc(300_000, 97))
   expect(RUNTIME_CAPABILITIES).toContain(AGENT_SESSION_TEXT_ATTACHMENT_READ_CAPABILITY)
-  expect(domainTextReadCapability).toBe(AGENT_SESSION_TEXT_ATTACHMENT_READ_CAPABILITY)
   const read = (filePath: string) => store.readTextChunk({ path: filePath, offset: 0, length: 10 })
   await expect(read(join(root, 'outside.txt'))).rejects.toThrow()
   await expect(

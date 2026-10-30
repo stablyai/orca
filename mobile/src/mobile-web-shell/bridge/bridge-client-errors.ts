@@ -85,3 +85,11 @@ export class BridgeRpcEnvelopeInvalidError extends Error {
     this.name = 'BridgeRpcEnvelopeInvalidError'
   }
 }
+
+export function throwIfBridgeSignalAborted(signal?: AbortSignal): void {
+  if (signal?.aborted) {
+    throw signal.reason instanceof Error
+      ? signal.reason
+      : Object.assign(new Error('The operation was aborted.'), { name: 'AbortError' })
+  }
+}

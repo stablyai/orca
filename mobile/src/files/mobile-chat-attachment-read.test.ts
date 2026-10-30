@@ -8,6 +8,10 @@ import { createStableLogicalRpcClient } from '../transport/stable-logical-rpc-cl
 import { scopeRpcClientToExecutionHost } from '../transport/execution-host-scoped-rpc-client'
 import type { SendRequestOptions } from '../transport/rpc-client'
 import type { RpcRequestFrame } from '../transport/rpc-envelope-fields'
+import { createFakeBridgePortPair } from '../mobile-web-shell/bridge/bridge-port-pair-test-harness'
+import { BridgeReplyAssembler } from '../mobile-web-shell/bridge/bridge-reply-chunking'
+import { INIT } from '../mobile-web-shell/bridge/bridge-page-client-test-harness'
+import { readBridgeHostMessage } from '../mobile-web-shell/bridge/bridge-envelope'
 
 function fixture() {
   const state = new RpcClientConnectionState({
@@ -174,3 +178,191 @@ it('preserves old-host Retry, malformed reply refusal, final-send ownership and 
   retry.dispose()
   f.logical.close()
 })
+
+it.each(['abort', 'deadline'] as const)(
+  'runs real source/reader/bridge assembly through %s and same-reader Retry',
+  async (end) => {
+    vi.useFakeTimers()
+    const held: string[] = []
+    let holdId: string | undefined
+    let capable = true
+    let runtimeId = 'runtime-a'
+    const bytes = Buffer.from('original line with @"raw path"\n'.repeat(20_000))
+    const pair = createFakeBridgePortPair({
+      holdToPage: (json) => {
+        const frame = readBridgeHostMessage(json)
+        if (frame.ok && frame.message.type === 'reply' && frame.message.id === holdId) {
+          held.push(json)
+          return true
+        }
+        return false
+      }
+    })
+    const accept = vi.spyOn(BridgeReplyAssembler.prototype, 'accept')
+    let answered = 0
+    const answerNext = () => {
+      const request = pair.rpc.requests[answered++]
+      if (!request) {
+        throw new Error('no physical request to answer')
+      }
+      let result: unknown = {
+        capabilities: capable ? [AGENT_SESSION_TEXT_ATTACHMENT_READ_CAPABILITY] : []
+      }
+      if (request.method === 'agentSessionAttachment.readTextChunk') {
+        const params = request.args[1]
+        if (
+          !params ||
+          typeof params !== 'object' ||
+          !('path' in params) ||
+          !('offset' in params) ||
+          !('length' in params) ||
+          typeof params.offset !== 'number' ||
+          typeof params.length !== 'number'
+        ) {
+          throw new Error('invalid real range request')
+        }
+        expect(params.path).toBe('/original-source35636')
+        const content = bytes.subarray(params.offset, params.offset + params.length)
+        result = {
+          snapshot: 'a'.repeat(64),
+          size: bytes.length,
+          contentBase64: content.toString('base64'),
+          bytesRead: content.length,
+          eof: params.offset + content.length === bytes.length
+        }
+      }
+      request.resolve({ id: `host${answered}`, ok: true, result, _meta: { runtimeId } })
+    }
+    const serve = async () => {
+      for (let turn = 0; turn < 24; turn++) {
+        await pair.flush()
+        while (answered < pair.rpc.requests.length) {
+          answerNext()
+        }
+      }
+      await pair.flush()
+    }
+    try {
+      await pair.flush()
+      const read = createMobileChatAttachmentReader(pair.client)
+      const source = () => new AttachmentTextSource('/original-source35636', read)
+      const a = source()
+      const abandoned = a.page(0).catch((error: unknown) => error)
+      await pair.flush()
+      answerNext() // Real typed status admission precedes the body request.
+      await pair.flush()
+      const frame = pair.readToShell().findLast((message) => message.type === 'request')
+      if (frame?.type !== 'request') {
+        throw new Error('missing body frame')
+      }
+      holdId = frame.id
+      answerNext()
+      await pair.flush()
+      const whole = readBridgeHostMessage(held[0]!)
+      if (!whole.ok || whole.message.type !== 'reply' || !('payload' in whole.message)) {
+        throw new Error('missing held reply')
+      }
+      const serialized = JSON.stringify(whole.message.payload)
+      const split = Math.floor(serialized.length / 2)
+      const parts = [serialized.slice(0, split), serialized.slice(split)].map((chunk, i) =>
+        JSON.stringify({ v: 1, type: 'reply', id: holdId, part: { i, of: 2 }, chunk })
+      )
+      pair.deliverToPage(parts[0]!)
+      expect(accept.mock.results.at(-1)?.value).toEqual({ status: 'pending' })
+      if (end === 'deadline') {
+        await vi.advanceTimersByTimeAsync(1_000)
+      }
+      const b = source()
+      const bOutput = b.copyText()
+      await pair.flush()
+      if (end === 'abort') {
+        a.dispose()
+      } else {
+        await vi.advanceTimersByTimeAsync(14_001)
+      }
+      expect(await abandoned).toBeInstanceOf(Error)
+      expect(a.snapshot).toBeUndefined()
+      expect(a.size).toBeNull()
+      await pair.flush()
+      expect(
+        pair.readToShell().some((message) => message.type === 'cancel' && message.id === holdId)
+      ).toBe(true)
+      pair.deliverToPage(parts[1]!)
+      pair.deliverToPage(parts[0]!) // An unsolicited old first part must also discard itself.
+      holdId = undefined
+      await serve()
+      expect(await bOutput).toBe(bytes.toString())
+      expect(a.snapshot).toBeUndefined()
+      a.dispose()
+      const reopened = source()
+      const output = reopened.copyText()
+      await serve()
+      expect(await output).toBe(bytes.toString())
+      expect(reopened.snapshot).toBe('a'.repeat(64))
+      const beforePages = pair.rpc.requests.filter(
+        (request) => request.method === 'agentSessionAttachment.readTextChunk'
+      ).length
+      for (const page of [0, 1, 2, 0]) {
+        const view = reopened.page(page)
+        await serve()
+        expect((await view).segments.length).toBeLessThanOrEqual(256)
+      }
+      expect(
+        pair.rpc.requests.filter(
+          (request) => request.method === 'agentSessionAttachment.readTextChunk'
+        )
+      ).toHaveLength(beforePages + 4)
+      // Real status refusal, then the same reader's legitimate Retry with the authoritative shared scalar.
+      capable = false
+      const before = pair.rpc.requests.filter(
+        (request) => request.method === 'agentSessionAttachment.readTextChunk'
+      ).length
+      const unsupported = source()
+        .page(0)
+        .catch((error: unknown) => error)
+      await serve()
+      expect(await unsupported).toMatchObject({
+        message: expect.stringContaining('cannot open text attachments yet')
+      })
+      expect(
+        pair.rpc.requests.filter(
+          (request) => request.method === 'agentSessionAttachment.readTextChunk'
+        )
+      ).toHaveLength(before)
+      capable = true
+      const retry = source()
+      const retryOutput = retry.copyText()
+      await serve()
+      expect(await retryOutput).toBe(bytes.toString())
+      runtimeId = 'replacement-runtime'
+      const stale = reopened.page(1).catch((error: unknown) => error)
+      await serve()
+      expect(await stale).toMatchObject({ message: expect.stringContaining('host changed') })
+      expect(reopened.snapshot).toBe('a'.repeat(64))
+      expect(reopened.size).toBe(bytes.length)
+      const closed = source()
+        .page(0)
+        .catch((error: unknown) => error)
+      await pair.flush()
+      pair.deliverToPage(JSON.stringify({ ...INIT, sessionId: 'replacement-shell' }))
+      await serve()
+      expect(await closed).toMatchObject({ name: 'BridgeShellReplacedError' })
+      const replacement = new AttachmentTextSource(
+        '/original-source35636',
+        createMobileChatAttachmentReader(pair.client)
+      )
+      const replacementOutput = replacement.copyText()
+      await serve()
+      expect(await replacementOutput).toBe(bytes.toString())
+      replacement.dispose()
+      b.dispose()
+      reopened.dispose()
+      retry.dispose()
+    } finally {
+      pair.client.close()
+      pair.host.dispose()
+      vi.restoreAllMocks()
+      vi.useRealTimers()
+    }
+  }
+)
