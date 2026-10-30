@@ -53,23 +53,47 @@ export abstract class AgentBrowserBridgeLifecycle extends AgentBrowserBridgeRawP
       this.pendingInterceptRestore.set(sessionName, [...session.activeInterceptPatterns])
     }
     await this.destroySession(sessionName)
-    if (oldWebContentsId != null && this.activeWebContentsId === oldWebContentsId) {
-      this.activeWebContentsId = newWebContentsId
-    }
-    if (
-      owningWorktreeId &&
-      oldWebContentsId != null &&
-      this.activeWebContentsPerWorktree.get(owningWorktreeId) === oldWebContentsId
-    ) {
-      this.activeWebContentsPerWorktree.set(owningWorktreeId, newWebContentsId)
-    }
-    for (const [key, heldWebContentsId] of this.heldPersonSelections) {
-      if (heldWebContentsId === oldWebContentsId) {
-        this.heldPersonSelections.set(key, newWebContentsId)
-      }
+    if (oldWebContentsId != null) {
+      this.retargetRouting(oldWebContentsId, newWebContentsId)
     }
     this.options.onTabsChanged?.(owningWorktreeId ?? undefined)
   }
+  // A closed popup ends its session and hands the agent back to its opener, not the first listed tab.
+  protected watchPopupClose(webContentsId: number): void {
+    if (this.watchedPopupWebContentsIds.has(webContentsId)) {
+      return
+    }
+    const popup = this.findPopupPage(webContentsId)
+    const contents = popup ? this.getWebContents(webContentsId) : null
+    if (!popup || !contents) {
+      return
+    }
+    this.watchedPopupWebContentsIds.add(webContentsId)
+    contents.once('destroyed', () => {
+      this.watchedPopupWebContentsIds.delete(webContentsId)
+      const openerWebContentsId = this.browserManager.getGuestWebContentsId(
+        popup.openerBrowserPageId
+      )
+      // A person's tab pick held while the agent drove the popup must keep waiting on the opener.
+      if (
+        openerWebContentsId !== null &&
+        this.retargetRouting(webContentsId, openerWebContentsId)
+      ) {
+        this.browserManager.handOverAgentActivity(popup.browserPageId, popup.openerBrowserPageId)
+      }
+      const closeSession = (): void => void this.onPageClosed(popup.browserPageId)
+      // The click that makes a popup close itself reports its own result, not a kill.
+      const running = this.sessions.get(
+        `${ORCA_TAB_SESSION_PREFIX}${popup.browserPageId}`
+      )?.activeProcess
+      if (running) {
+        running.once('close', closeSession)
+      } else {
+        closeSession()
+      }
+    })
+  }
+
   protected async ensureSession(
     sessionName: string,
     browserPageId: string,
@@ -133,6 +157,7 @@ export abstract class AgentBrowserBridgeLifecycle extends AgentBrowserBridgeRawP
         webContentsId,
         activeProcess: null
       })
+      this.watchPopupClose(webContentsId)
     }
 
     // Proxy sockets outlive individual remote requests and must not inherit their revocable scope.

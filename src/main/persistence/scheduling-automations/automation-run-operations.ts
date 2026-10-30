@@ -198,6 +198,10 @@ export function updateAutomationRun(
   const updated: AutomationRun = {
     ...current,
     status: result.status,
+    sessionKind: result.sessionKind ?? current.sessionKind,
+    chatSessionId: Object.hasOwn(result, 'chatSessionId')
+      ? (result.chatSessionId ?? null)
+      : current.chatSessionId,
     workspaceId,
     workspaceDisplayName:
       workspaceDisplayName ??

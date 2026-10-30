@@ -10,6 +10,11 @@ import {
   parseAgentBrowserJsonOutput
 } from '../browser/agent-browser-batch-command'
 import { BROWSER_UNAVAILABLE_ERROR_CODE } from '../../shared/runtime-types'
+import { Screenshot } from '../../shared/rpc-contract/browser-observation-params'
+import {
+  agentBrowserScreenshotArgs,
+  readAgentBrowserScreenshot
+} from '../browser/agent-browser-screenshot-arguments'
 import { runProcess } from '@orca/process-host'
 
 const COMMAND_TIMEOUT_MS = 90_000
@@ -29,7 +34,6 @@ const AgentBrowserTab = z.object({
   url: z.string()
 })
 const AgentBrowserTabsResult = z.object({ tabs: z.array(AgentBrowserTab).optional() })
-const AgentBrowserScreenshotResult = z.object({ path: z.string().min(1) })
 const AgentBrowserEnvelope = z.object({
   success: z.boolean(),
   data: z.unknown().optional(),
@@ -150,12 +154,14 @@ export class ExternalChromiumBrowserSession {
   }
 
   async screenshot(params: Record<string, unknown>, full: boolean): Promise<unknown> {
-    const format = params.format === 'jpeg' ? 'jpeg' : 'png'
-    const command = ['screenshot', ...(full ? ['--full'] : []), '--screenshot-format', format]
-    const result = AgentBrowserScreenshotResult.parse(await this.run(command, { cliArgv: true }))
-    const data = (await readFile(result.path)).toString('base64')
-    await rm(result.path, { force: true }).catch(() => undefined)
-    return { data, format }
+    const options = Screenshot.parse(params)
+    const raw = await this.run(
+      agentBrowserScreenshotArgs(options, { outputDir: this.profilePath, fullPage: full }),
+      { cliArgv: true }
+    )
+    return readAgentBrowserScreenshot(raw, options.format ?? 'png', (bytes) =>
+      bytes.toString('base64')
+    )
   }
 
   async pdf(): Promise<unknown> {
@@ -204,7 +210,7 @@ export class ExternalChromiumBrowserSession {
     }
     let envelope: z.infer<typeof AgentBrowserEnvelope>
     try {
-      envelope = AgentBrowserEnvelope.parse(parseAgentBrowserJsonOutput(result.stdout))
+      envelope = AgentBrowserEnvelope.parse(parseAgentBrowserJsonOutput(result.stdout, options))
     } catch {
       const detail = result.stderr.trim() || `exit ${String(result.code)}`
       throw new BrowserError('browser_error', `Browser command failed: ${detail.slice(0, 1000)}`)

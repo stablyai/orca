@@ -29,6 +29,7 @@ import {
   readAgentLaunchPreferencesForWorkspace
 } from '../settings/use-host-agent-launch-preferences'
 import { useAgentLaunchPickerInventory } from '../agent/use-agent-launch-picker-inventory'
+import { agentMenuShortcutLabels } from './agent-menu-shortcut-labels'
 import { useNewTabAgentMenuRows } from './use-new-tab-agent-menu-rows'
 
 const rpc = vi.hoisted(() => ({ call: vi.fn(), supports: vi.fn() }))
@@ -131,6 +132,16 @@ it.each(['wt', 'folder:f1'])(
       expectedEnvironmentRuntimeId: 'runtime-1'
     })
     expect(useAppStore.getState().settings?.disabledTuiAgents).toEqual(['codex'])
+    expect([
+      ...agentMenuShortcutLabels(
+        id,
+        {
+          'tab.newAgent.codex': ['Mod+Shift+X'],
+          'tab.newAgent.opencode': ['Mod+Shift+O']
+        },
+        'darwin'
+      )
+    ]).toEqual([['codex', '⌘⇧X']])
   }
 )
 
