@@ -3,6 +3,7 @@ import type { PersistedState } from '../../../shared/persisted-state-types'
 import { automationRunFailure } from '../../../shared/automation-run-failure-copy'
 import {
   listAutomationRunsPage,
+  recordAutomationRunReport,
   recordRepeatedAutomationSkip,
   updateAutomationRun,
   type AutomationRunOperations
@@ -145,5 +146,66 @@ describe('automation run failure codes', () => {
     })
     expect(state.automationRuns[0]).not.toHaveProperty('errorCode')
     expect(state.automationRuns[0]).not.toHaveProperty('errorParams')
+  })
+})
+
+describe('agent-reported automation run results', () => {
+  function dispatchedRun(): AutomationRunOperations {
+    const state = stateWithRuns([{ id: 'r1', createdAt: 1 }])
+    state.automationRuns[0] = {
+      ...state.automationRuns[0],
+      status: 'dispatched',
+      trigger: 'scheduled',
+      scheduledFor: 1
+    }
+    state.automations = []
+    return {
+      state,
+      flush: () => {},
+      recordManualRun: () => {},
+      getWorkspaceDisplayName: () => null
+    }
+  }
+
+  it('records the agent-reported failure when the agent then finishes cleanly', () => {
+    const operations = dispatchedRun()
+    recordAutomationRunReport(operations, 'r1', {
+      kind: 'failure',
+      message: 'Linear access was denied'
+    })
+    recordAutomationRunReport(operations, 'r1', {
+      kind: 'warning',
+      key: 'linear',
+      message: 'Linear issues were not included',
+      impact: null,
+      evidence: null
+    })
+
+    const finished = updateAutomationRun(operations, { runId: 'r1', status: 'completed' })
+
+    expect(finished).toMatchObject({
+      status: 'dispatch_failed',
+      error: 'Linear access was denied',
+      warnings: [expect.objectContaining({ key: 'linear' })]
+    })
+    expect(finished.finishedAt).toEqual(expect.any(Number))
+  })
+
+  it('keeps an observed failure over the agent report and stamps the first finish only', () => {
+    const operations = dispatchedRun()
+    recordAutomationRunReport(operations, 'r1', { kind: 'failure', message: 'No access' })
+    const failed = updateAutomationRun(operations, {
+      runId: 'r1',
+      status: 'dispatch_failed',
+      error: 'Agent was interrupted'
+    })
+    const rewritten = updateAutomationRun(operations, {
+      runId: 'r1',
+      status: 'dispatch_failed',
+      error: 'Agent was interrupted'
+    })
+
+    expect(rewritten.error).toBe('Agent was interrupted')
+    expect(rewritten.finishedAt).toBe(failed.finishedAt)
   })
 })

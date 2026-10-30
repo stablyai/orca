@@ -16,8 +16,14 @@ export const AUTOMATION_EXTRA_AGENT_ARGS_RUNTIME_CAPABILITY =
 // Surface-only hosts retain this capability when the complete picker setup contract ships.
 export const AUTOMATION_SURFACE_RUNTIME_CAPABILITY = 'automations.surface.v1' as const
 
+// Older hosts lack agent warning, failure and output reporting for runs.
+export const AUTOMATION_RUN_RESULTS_RUNTIME_CAPABILITY = 'automations.run-results.v1' as const
+export const AUTOMATION_RUN_RESULTS_UPDATE_REQUIRED_MESSAGE =
+  'Reporting automation results requires a newer Orca on the host running this automation.'
+
 export const AUTOMATION_RUNTIME_CAPABILITIES = [
   AUTOMATION_SURFACE_RUNTIME_CAPABILITY,
+  AUTOMATION_RUN_RESULTS_RUNTIME_CAPABILITY,
   AUTOMATION_LIST_HOST_SCOPE_RUNTIME_CAPABILITY,
   AUTOMATION_OWNER_FENCING_RUNTIME_CAPABILITY,
   AUTOMATION_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY,

@@ -9,6 +9,12 @@ import {
   requiredString
 } from './rpc-param-primitives'
 import { normalizeExecutionHostId } from '../execution-host'
+import {
+  MAX_AUTOMATION_RUN_EVIDENCE_LENGTH,
+  MAX_AUTOMATION_RUN_MESSAGE_LENGTH,
+  MAX_AUTOMATION_RUN_OUTPUT_TITLE_LENGTH,
+  MAX_AUTOMATION_RUN_WARNING_KEY_LENGTH
+} from '../automation-run-results'
 import { isValidAutomationSchedule } from '../automation-schedule-parsing'
 import {
   MAX_AUTOMATION_PRECHECK_TIMEOUT_SECONDS,
@@ -245,4 +251,36 @@ export const AutomationUpdate = z.object({
   updates: AutomationUpdateFields,
   expectedOwner: ExpectedOwner,
   destination: Destination
+})
+
+const boundedText = (name: string, max: number) =>
+  requiredString(`Missing ${name}`).pipe(
+    z.string().max(max, `The ${name} is longer than ${max} characters.`)
+  )
+const optionalBoundedText = (name: string, max: number) =>
+  OptionalString.pipe(
+    z.string().max(max, `The ${name} is longer than ${max} characters.`).optional()
+  )
+
+export const AutomationRunWarningReport = z.object({
+  key: boundedText('warning key', MAX_AUTOMATION_RUN_WARNING_KEY_LENGTH),
+  message: optionalBoundedText('message', MAX_AUTOMATION_RUN_MESSAGE_LENGTH),
+  impact: optionalBoundedText('impact', MAX_AUTOMATION_RUN_MESSAGE_LENGTH),
+  evidence: optionalBoundedText('evidence', MAX_AUTOMATION_RUN_EVIDENCE_LENGTH),
+  resolve: OptionalBoolean
+})
+
+export const AutomationRunFailureReport = z.object({
+  message: boundedText('message', MAX_AUTOMATION_RUN_MESSAGE_LENGTH)
+})
+
+export const AutomationRunOutputAttach = z.object({
+  title: boundedText('title', MAX_AUTOMATION_RUN_OUTPUT_TITLE_LENGTH),
+  format: z.enum(['html', 'markdown'], { message: 'Attach an .html or .md file.' }),
+  content: z.string({ message: 'Missing file content' })
+})
+
+export const AutomationRunOutputRead = z.object({
+  runId: requiredString('Missing run id'),
+  outputId: requiredString('Missing output id')
 })

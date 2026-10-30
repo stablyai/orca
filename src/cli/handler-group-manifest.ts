@@ -62,6 +62,12 @@ export const HANDLER_GROUPS: readonly HandlerGroup[] = [
     load: async () => (await import('./handlers/automations.js')).AUTOMATION_HANDLERS
   },
   {
+    name: 'automation-run-results',
+    keys: ['automations warn', 'automations fail', 'automations attach'],
+    load: async () =>
+      (await import('./handlers/automation-run-results.js')).AUTOMATION_RUN_RESULT_HANDLERS
+  },
+  {
     name: 'project',
     keys: [
       'project list',

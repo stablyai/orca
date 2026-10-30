@@ -143,6 +143,24 @@ export async function resolveOrchestrationSessionCaller(
   }
 }
 
+/** A live agent session on this host named by an injected Orca session id; same-user identity, not a credential. */
+export async function readLiveAgentSessionCaller(
+  runtime: OrcaRuntimeService,
+  claimed: string,
+  method: string
+): Promise<AgentSessionRecord> {
+  if (!isOrcaSessionId(claimed)) {
+    throw new OrchestrationError(
+      CODES.unknown,
+      'The caller named an ID that is not an Orca session ID. No effects were applied.',
+      NO_EFFECTS
+    )
+  }
+  const record = await readSessionRecord(runtime, claimed)
+  assertSessionCanAct(claimed, record, method)
+  return record
+}
+
 async function readSessionRecord(
   runtime: OrcaRuntimeService,
   sessionId: string

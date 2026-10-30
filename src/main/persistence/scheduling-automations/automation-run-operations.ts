@@ -14,6 +14,11 @@ import {
   pruneAutomationRuns
 } from '../../../shared/automation-run-retention'
 import {
+  applyAutomationRunReport,
+  type AutomationRunReport,
+  type AutomationRunReportOutcome
+} from '../../../shared/automation-run-results'
+import {
   compareAutomationRunsNewestFirst,
   paginateAutomationRuns
 } from '../../../shared/automation-run-cursor'
@@ -180,10 +185,10 @@ function resultErrorCodeFields(
 
 export function updateAutomationRun(
   operations: AutomationRunOperations,
-  result: AutomationDispatchResult
+  input: AutomationDispatchResult
 ): AutomationRun {
   const index = (operations.state.automationRuns ?? []).findIndex(
-    (entry) => entry.id === result.runId
+    (entry) => entry.id === input.runId
   )
   if (index === -1) {
     throw new Error('Automation run not found.')
@@ -191,6 +196,17 @@ export function updateAutomationRun(
   const now = Date.now()
   const previous = operations.state.automationRuns[index]
   const { errorCode: _code, errorParams: _params, ...current } = previous
+  // An agent-reported failure outranks the clean exit that follows it.
+  const result: AutomationDispatchResult =
+    input.status === 'completed' && previous.reportedFailure
+      ? {
+          ...input,
+          status: 'dispatch_failed',
+          error: previous.reportedFailure.message,
+          errorCode: null,
+          errorParams: null
+        }
+      : input
   const workspaceId = result.workspaceId ?? current.workspaceId
   const workspaceDisplayName = Object.hasOwn(result, 'workspaceDisplayName')
     ? normalizeAutomationRunWorkspaceDisplayName(result.workspaceDisplayName ?? null)
@@ -227,7 +243,10 @@ export function updateAutomationRun(
     ...resultErrorCodeFields(result, previous),
     startedAt: current.startedAt ?? now,
     dispatchedAt:
-      result.status === 'dispatched' ? (result.dispatchedAt ?? now) : current.dispatchedAt
+      result.status === 'dispatched' ? (result.dispatchedAt ?? now) : current.dispatchedAt,
+    ...(current.finishedAt !== undefined || isFinalAutomationRunStatus(result.status)
+      ? { finishedAt: current.finishedAt ?? now }
+      : {})
   }
   // Replace the array to invalidate identity-keyed list projections.
   operations.state.automationRuns = operations.state.automationRuns.map((run) =>
@@ -241,6 +260,28 @@ export function updateAutomationRun(
   touchAutomation(operations.state, updated.automationId, now)
   operations.flush()
   return updated
+}
+
+export function recordAutomationRunReport(
+  operations: AutomationRunOperations,
+  runId: string,
+  report: AutomationRunReport
+): AutomationRunReportOutcome {
+  const previous = (operations.state.automationRuns ?? []).find((entry) => entry.id === runId)
+  if (!previous) {
+    throw new Error('Automation run not found.')
+  }
+  const outcome = applyAutomationRunReport(previous, report, Date.now())
+  if (!outcome.ok) {
+    return outcome
+  }
+  // Replace the array to invalidate identity-keyed list projections.
+  operations.state.automationRuns = operations.state.automationRuns.map((run) =>
+    run.id === runId ? outcome.run : run
+  )
+  operations.recordAutomationRunsMutation?.(operations.state.automationRuns)
+  operations.flush()
+  return outcome
 }
 
 export function snapshotAutomationRunWorkspaceDisplayName(

@@ -5,6 +5,7 @@ import { ORCAD_MIGRATION_METHODS } from './orcad-migration'
 import { SESSION_TERMINAL_SCROLLBACK_METHODS } from './session-terminal-scrollback'
 import { AI_VAULT_METHODS } from './ai-vault'
 import { AUTOMATION_METHODS } from './automations'
+import { AUTOMATION_RUN_RESULT_METHODS } from './automation-run-results'
 import { REPO_METHODS } from './repo'
 import { WORKTREE_METHODS } from './worktree'
 import { REFERENCE_METHODS } from './reference'
@@ -85,6 +86,7 @@ export const ALL_RPC_METHODS = [
   ...AI_VAULT_METHODS,
   ...ARTIFACT_METHODS,
   ...AUTOMATION_METHODS,
+  ...AUTOMATION_RUN_RESULT_METHODS,
   ...REPO_METHODS,
   ...WORKTREE_METHODS,
   ...REFERENCE_METHODS,

@@ -45,6 +45,7 @@ import {
   resolveWorkerStartReadinessTimeoutMs
 } from '../../shared/orchestration-timing-budgets'
 import { MAX_TIMER_DELAY_MS } from '../../shared/timer-delay'
+import { AUTOMATION_RUN_CALLER_METHODS } from '../../shared/automation-run-results'
 import {
   buildOrchestrationRecoveryCommand,
   resolveOrchestrationCliExecutable
@@ -125,13 +126,15 @@ export class RuntimeClient {
       }
       return attachDurableMutationRecovery(error, orchestrationRequestId, originalCommand, method)
     }
-    const compatibilityEnvelope = method.startsWith('orchestration.')
-      ? {
-          ...this.orchestrationCompatibility,
-          compatibilityInvocationId:
-            orchestrationRequestId ?? this.orchestrationCompatibility.compatibilityInvocationId
-        }
-      : {}
+    // Automation result reports identify their run by the caller's own session.
+    const compatibilityEnvelope =
+      method.startsWith('orchestration.') || AUTOMATION_RUN_CALLER_METHODS.has(method)
+        ? {
+            ...this.orchestrationCompatibility,
+            compatibilityInvocationId:
+              orchestrationRequestId ?? this.orchestrationCompatibility.compatibilityInvocationId
+          }
+        : {}
     const envelope = {
       orchestrationCapability: options?.orchestrationCapability,
       orchestrationContractVersion: method.startsWith('orchestration.')
