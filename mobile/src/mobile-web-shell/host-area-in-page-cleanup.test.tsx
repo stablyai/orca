@@ -25,6 +25,7 @@ vi.mock('../session/mobile-session-styles', () => ({ styles: { container: {}, ka
 vi.mock('../session/MobileSessionHeader', () => ({ MobileSessionHeader: () => null }))
 vi.mock('../session/MobileSessionContentRow', () => ({ MobileSessionContentRow: () => null }))
 vi.mock('../session/MobileSessionSheets', () => ({ MobileSessionSheets: () => null }))
+vi.mock('../session/MobileWorkerAutoCloseStrip', () => ({ MobileWorkerAutoCloseStrip: () => null }))
 vi.mock('expo-router', async () => {
   const { useEffect } = await import('react')
   return { useFocusEffect: (effect: () => () => void) => useEffect(effect, [effect]) }

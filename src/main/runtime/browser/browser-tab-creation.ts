@@ -1,6 +1,7 @@
 import { createBrowserTabInRenderer } from './browser-tab-renderer-create'
 import type { RuntimeNavigationTarget } from '../../../shared/runtime-navigation'
 import type { BrowserPageCreationPlacement } from '../../../shared/browser-client-host-placement'
+import type { BrowserTabSplitDirection } from '../../../shared/browser-tab-split-direction'
 import {
   publishCreatedBrowserSessionTab,
   resolveBrowserTabCreateFocus
@@ -45,6 +46,8 @@ export class RuntimeBrowserTabCreation {
       navigation?: RuntimeNavigationTarget
       targetGroupId?: string
       placement?: BrowserPageCreationPlacement
+      split?: BrowserTabSplitDirection
+      splitFromTabId?: string
     },
     caller?: { pairedDeviceId?: string; clientKind?: 'mobile' | 'runtime' }
   ): Promise<{ browserPageId: string }> {
@@ -64,6 +67,16 @@ export class RuntimeBrowserTabCreation {
       throw new BrowserError(
         'invalid_argument',
         `Browser profile ${params.profileId} was not found`
+      )
+    }
+    // Why reject rather than ignore: a caller asking for a split pane should learn it got none.
+    if (
+      params.split &&
+      (params.placement?.kind === 'client' || !this.host.getAvailableAuthoritativeWindow())
+    ) {
+      throw new BrowserError(
+        'invalid_argument',
+        'Opening a browser tab in a split pane needs an Orca desktop window on this host.'
       )
     }
     if (params.placement?.kind === 'client') {
@@ -116,7 +129,9 @@ export class RuntimeBrowserTabCreation {
       params.profileId,
       params.profileId ? sessionPartition : undefined,
       focus.focusesHost,
-      params.page
+      params.page,
+      undefined,
+      params.split ? { direction: params.split, fromTabId: params.splitFromTabId } : undefined
     )
 
     // Wait for operability, but retain the created id if mounting times out.

@@ -73,6 +73,8 @@ vi.mock('@/i18n/i18n', () => ({
 
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
 
+vi.mock('./use-allow-auto-close', () => ({ useAllowAutoClose: () => undefined }))
+
 vi.mock('./TabSessionSurfaceSwitchMenuItems', () => ({
   TabSessionSurfaceSwitchMenuItems: ({
     tab,
@@ -123,6 +125,7 @@ function renderMenu(overrides: Partial<ComponentProps<typeof SortableTabContextM
   act(() => {
     root.render(
       <SortableTabContextMenu
+        open
         tab={{ id: 'term-1', worktreeId: 'wt-1', color: null }}
         unifiedTabId="tab-1"
         groupId="group-1"

@@ -192,12 +192,10 @@ export default function SortableTab({
     onActivate(tab.id)
   }, [onActivate, tab.id])
   // Why: defer activation to pointer-up so a drag doesn't switch tabs or steal focus mid-gesture (tab-strip-pointer-activation).
-  const { onPointerDown: onTabPointerDown, retirePendingActivation } = useTabStripPointerActivation(
-    {
-      onActivate: handleActivate,
-      disabled: isEditing
-    }
-  )
+  const { onPointerDown, retirePendingActivation } = useTabStripPointerActivation({
+    onActivate: handleActivate,
+    disabled: isEditing
+  })
   const handleMenuOpenChange = useTabContextMenuOpening(setMenuOpen, retirePendingActivation)
   const slotProps = useTabStripSlotProps(tab.id, isActive)
   const tabTitle = tab.customTitle ?? tab.title
@@ -222,7 +220,7 @@ export default function SortableTab({
         handleRenameOpen()
       }}
       onPointerDown={(e) => {
-        onTabPointerDown(
+        onPointerDown(
           e,
           dragListeners?.onPointerDown as ((event: React.PointerEvent<Element>) => void) | undefined
         )
@@ -402,6 +400,7 @@ export default function SortableTab({
       </ContextMenuTrigger>
 
       <SortableTabContextMenu
+        open={menuOpen}
         sessionSwitchOpening={openingId}
         onSessionSwitchComplete={onComplete}
         tab={tab}

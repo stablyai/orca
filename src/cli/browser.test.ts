@@ -255,6 +255,60 @@ describe('orca cli browser page targeting', () => {
     )
   })
 
+  it('asks for a split beside the calling terminal tab with --split', async () => {
+    vi.stubEnv('ORCA_TAB_ID', 'terminal-tab-1')
+    queueFixtures(callMock, okFixture('req_create', { browserPageId: 'page-4' }))
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(
+      ['tab', 'create', '--url', 'https://example.com', '--split', 'right', '--worktree', 'all'],
+      '/tmp/not-an-orca-worktree'
+    )
+
+    expect(callMock).toHaveBeenCalledWith(
+      'browser.tabCreate',
+      {
+        url: 'https://example.com',
+        worktree: undefined,
+        profileId: undefined,
+        split: 'right',
+        splitFromTabId: 'terminal-tab-1'
+      },
+      { timeoutMs: 60_000 }
+    )
+    vi.unstubAllEnvs()
+  })
+
+  it('leaves the caller tab out of a plain tab create', async () => {
+    vi.stubEnv('ORCA_TAB_ID', 'terminal-tab-1')
+    queueFixtures(callMock, okFixture('req_create', { browserPageId: 'page-5' }))
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(['tab', 'create', '--worktree', 'all'], '/tmp/not-an-orca-worktree')
+
+    expect(callMock.mock.calls[0][1]).not.toHaveProperty('split')
+    expect(callMock.mock.calls[0][1]).not.toHaveProperty('splitFromTabId')
+    vi.unstubAllEnvs()
+  })
+
+  it('rejects an unknown --split direction before calling the runtime', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    await main(['tab', 'create', '--split', 'sideways'], '/tmp/not-an-orca-worktree')
+
+    expect(callMock).not.toHaveBeenCalled()
+    expect(errorSpy).toHaveBeenCalledWith('--split must be right, left, down, or up')
+  })
+
+  it('rejects --split with no direction instead of opening a plain tab', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    await main(['tab', 'create', '--split='], '/tmp/not-an-orca-worktree')
+
+    expect(callMock).not.toHaveBeenCalled()
+    expect(errorSpy).toHaveBeenCalledWith('Missing value for --split')
+  })
+
   it('opens browser-launch URLs on the client hosting the current worktree', async () => {
     queueFixtures(
       callMock,

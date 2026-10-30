@@ -1,3 +1,6 @@
+import { openExistingStructuredSession } from '@/lib/open-existing-structured-session'
+import { ALL_TUI_AGENTS } from '../../../../shared/tui-agent-display-names'
+import { isStructuredAgentSessionIdFor } from '../../../../shared/structured-agent-session-create'
 import type { AutomationRun } from '../../../../shared/automations-types'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
@@ -15,7 +18,7 @@ import {
 import { getAutomationRunViewState } from './automation-run-view-state'
 import type { AutomationsPageActionContext } from './automations-page-action-context'
 
-/** Opens the original run terminal when its host-qualified workspace is alive. */
+/** Opens the recorded run session on its owning host. */
 export function createAutomationRunWorkspaceAction({ store, list }: AutomationsPageActionContext) {
   const { repoForRow, worktreeForRow } = store
   const { selectedRow } = list
@@ -50,6 +53,17 @@ export function createAutomationRunWorkspaceAction({ store, list }: AutomationsP
       toast.error(runViewState.statusLabel)
       return
     }
+    if (runViewState.availability === 'chat' && run.chatSessionId) {
+      const agent = ALL_TUI_AGENTS.find((entry) =>
+        isStructuredAgentSessionIdFor(entry, run.chatSessionId!)
+      )
+      if (!agent || !activateAndRevealWorktree(run.workspaceId)) {
+        toast.error(workspaceUnavailableMessage())
+        return
+      }
+      void openRunChat(run.workspaceId, run.chatSessionId, ownerEnvironmentId)
+      return
+    }
     const paneRef = parsePaneKey(run.terminalPaneKey ?? '')
     if (runViewState.availability === 'terminal' && !terminalTarget) {
       if (!ownerEnvironmentId || !paneRef) {
@@ -82,6 +96,38 @@ export function createAutomationRunWorkspaceAction({ store, list }: AutomationsP
     }
     toast.message(runViewState.statusLabel)
   }
+}
+
+async function openRunChat(
+  worktreeId: string,
+  sessionId: string,
+  environmentId: string | null
+): Promise<void> {
+  try {
+    await openExistingStructuredSession(
+      { workspaceId: worktreeId, sessionId },
+      {
+        target: environmentId ? { kind: 'environment', environmentId } : { kind: 'local' },
+        present: (outcome) => {
+          if (outcome !== 'activated') {
+            runChatUnavailable()
+          }
+        },
+        onError: runChatUnavailable
+      }
+    )
+  } catch {
+    // The initiating interaction owns error feedback, including when this click joins it.
+  }
+}
+
+function runChatUnavailable(): void {
+  toast.message(
+    translate(
+      'components.automations.runChatUnavailable',
+      'Run chat is unavailable. Showing its workspace; any saved output remains in Run Details.'
+    )
+  )
 }
 
 function workspaceUnavailableMessage(): string {

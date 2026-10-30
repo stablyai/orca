@@ -23,6 +23,7 @@ export const open = defineFixture({
             <button ref={trigger}>Tab</button>
           </ContextMenuTrigger>
           <SortableTabContextMenu
+            open
             tab={{ id: 'tab-1', worktreeId: 'wt-1', color: null }}
             unifiedTabId="tab-1"
             groupId="group-1"

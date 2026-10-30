@@ -16,6 +16,7 @@ import { ORCHESTRATION_HANDLERS } from './orchestration'
 import { RuntimeClientError } from '../runtime-client'
 import { printResult } from '../format'
 import { okFixture } from '../test-fixtures'
+import { ORCHESTRATION_ASK_RETURNS_AT_ONCE_RUNTIME_CAPABILITY } from '../../shared/protocol-version'
 
 beforeEach(() => {
   callMock.mockReset()
@@ -617,6 +618,25 @@ describe('orchestration timeout flag validation', () => {
         '--resume msg_question --timeout-ms 30000'
     )
     expect(process.exitCode).toBe(1)
+  })
+
+  it('asks without waiting only when the Orca it talks to advertises it', async () => {
+    process.env.ORCA_TERMINAL_HANDLE = 'term_worker'
+    const askedWith = async (capabilities: string[]) => {
+      callMock.mockReset()
+      callMock.mockImplementation(async (method: string) =>
+        method === 'status.get'
+          ? { result: { capabilities } }
+          : { result: { answer: null, messageId: 'msg_q', threadId: 'msg_q', timedOut: false } }
+      )
+      await invokeAsk(new Map<string, string | boolean>([['question', 'Proceed?']]))
+      return callMock.mock.calls.find(([method]) => method === 'orchestration.ask')?.[1]
+    }
+
+    expect(await askedWith([ORCHESTRATION_ASK_RETURNS_AT_ONCE_RUNTIME_CAPABILITY])).toMatchObject({
+      wait: false
+    })
+    expect(await askedWith([])).not.toHaveProperty('wait')
   })
 
   it('uses the parsed ask timeout for both runtime wait and client timeout', async () => {

@@ -231,11 +231,9 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
 
   const { handleContainerKeyDown, keyboardPreview } = useWorktreeListKeyboardNavigation({
     rows,
-    renderRows,
     activeWorktreeId,
     activeWorkspaceExecutionHostId: props.activeWorkspaceExecutionHostId,
     pinnedDisplayPolicy,
-    virtualizer: virtualization.virtualizer,
     scrollRef,
     activeModal: props.activeModal,
     markDirectScrollInput

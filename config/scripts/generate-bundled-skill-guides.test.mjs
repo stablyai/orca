@@ -32,8 +32,7 @@ const GUIDE_REFERENCES = {
     'low-level-topology.md',
     'messaging-and-gates.md',
     'placement-and-remote.md',
-    'recovery-and-cleanup.md',
-    'worker-contract.md'
+    'recovery-and-cleanup.md'
   ],
   'orca-cli': ['artifacts.md', 'automations.md', 'browser.md', 'plugins.md', 'skill-sharing.md'],
   'orca-per-workspace-env': [

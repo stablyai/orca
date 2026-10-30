@@ -1,4 +1,4 @@
-import { Pencil, Pin, PinOff, SquareTerminal, X } from 'lucide-react'
+import { Pencil, Pin, PinOff, SquareTerminal, Timer, X } from 'lucide-react'
 import {
   ContextMenuItem,
   ContextMenuSeparator,
@@ -13,6 +13,7 @@ import { TerminalTabSplitMenuSection } from './TerminalTabSplitMenuSection'
 import { TabSessionSurfaceSwitchMenuItems } from './TabSessionSurfaceSwitchMenuItems'
 import type { NativeChatTabSession } from './tab-session-history-switch'
 import { CopyTabIdMenuItem } from './CopyTabIdMenuItem'
+import { useAllowAutoClose } from './use-allow-auto-close'
 import { CloseSplitPaneMenuItem } from './CloseSplitPaneMenuItem'
 
 const TAB_COLORS = [
@@ -83,6 +84,7 @@ type SortableTabContextMenuProps = {
   unifiedTabId: string
   groupId: string
   isActive: boolean
+  open: boolean
   tabCount: number
   hasTabsToRight: boolean
   hasTabsToLeft: boolean
@@ -112,6 +114,7 @@ export function SortableTabContextMenu({
   unifiedTabId,
   groupId,
   isActive,
+  open,
   tabCount,
   isPinned,
   onSessionSwitchComplete,
@@ -137,6 +140,14 @@ export function SortableTabContextMenu({
   const renameShortcut = useOptionalShortcutLabel('tab.rename')
   // Keep the route back from chat even while switching terminals into chat is disabled.
   const showTerminalViewSwitch = canToggleViewMode && isChatView && onToggleViewMode !== undefined
+
+  // Shown only on an orchestration worker the user kept open; returns it to auto-close.
+  const onAllowAutoClose = useAllowAutoClose({
+    open,
+    tabId: tab.id,
+    worktreeId: tab.worktreeId,
+    sessionId: nativeChat?.sessionId
+  })
 
   return (
     <ContextMenuContent
@@ -183,6 +194,15 @@ export function SortableTabContextMenu({
           ? translate('auto.components.tab.bar.SortableTabContextMenu.417722e9c2', 'Unpin Tab')
           : translate('auto.components.tab.bar.SortableTabContextMenu.60f958ec75', 'Pin Tab')}
       </ContextMenuItem>
+      {onAllowAutoClose ? (
+        <ContextMenuItem onSelect={onAllowAutoClose}>
+          <Timer className="size-3.5 shrink-0" />
+          {translate(
+            'components.tab.bar.SortableTabContextMenu.allowAutoClose',
+            'Allow Auto-Close'
+          )}
+        </ContextMenuItem>
+      ) : null}
       <CopyTabIdMenuItem menuKind="context" unifiedTabId={unifiedTabId} />
       <ContextMenuSeparator />
       <ContextMenuItem onSelect={() => !isPinned && onClose(tab.id)} disabled={isPinned}>
