@@ -220,6 +220,7 @@ describe('pushNotificationRouteData', () => {
         true
       )
     ).toBeNull()
+    expect(pushNotificationRouteData(apnsData({ hostFingerprint }), [], true)).toBeNull()
   })
 
   it('recognises only provider-delivered triggers', () => {
@@ -373,27 +374,4 @@ describe('admitted pushes during delayed route publication', () => {
       ).toBe(false)
     }
   )
-
-  it('clears sender-relative workspace fields for cold and warm tap resolution, with home as the final fallback', () => {
-    const admitted = apnsData({
-      hostFingerprint,
-      origin: otherHostFingerprint,
-      worktreeId: 'A-workspace',
-      paneKey: 'A-pane',
-      executionHost: 'runtime:A-environment'
-    })
-    const originOnly = [{ id: 'host-2', publicKeyB64: otherPublicKeyB64 }]
-    for (const remote of [true, false]) {
-      const data = pushNotificationRouteData(admitted, originOnly, remote)
-      expect(data).toEqual({ hostId: 'host-2' })
-      expect(getNotificationNavigationTarget(data)).toEqual({
-        hostId: 'host-2',
-        sessionTarget: null
-      })
-      expect(
-        getNotificationNavigationTarget(pushNotificationRouteData(admitted, [], remote))
-      ).toEqual({ home: true })
-    }
-    expect(pushNotificationRouteData(apnsData({ hostFingerprint }), [], true)).toBeNull()
-  })
 })

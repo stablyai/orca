@@ -12,7 +12,7 @@ function readNonEmptyString(value: unknown): string | null {
   return typeof value === 'string' && value.trim().length > 0 ? value : null
 }
 
-// Host-only taps need no stack coordination; sessionTarget identifies deep workspace destinations.
+// Only sessionTarget carries a workspace destination; coarse taps retire any pending workspace.
 export type NotificationNavigationTarget =
   | Readonly<{ home: true; hostId?: never; sessionTarget?: never; credentialRecovery?: never }>
   | Readonly<{

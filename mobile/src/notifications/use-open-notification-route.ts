@@ -1,7 +1,10 @@
 import { useCallback } from 'react'
 import { useRouter } from 'expo-router'
 import { hostStackHostRoute } from '../navigation/host-stack-navigation'
-import { useOpenHostStackRoute } from '../navigation/use-open-host-stack-route'
+import {
+  cancelPendingHostStackRoute,
+  useOpenHostStackRoute
+} from '../navigation/use-open-host-stack-route'
 import {
   notificationCredentialRecoveryRoute,
   type NotificationNavigationTarget
@@ -13,17 +16,18 @@ export function useOpenNotificationRoute(): (target: NotificationNavigationTarge
 
   return useCallback(
     (target) => {
+      const recoveryRoute = notificationCredentialRecoveryRoute(target)
+      if (target.sessionTarget && !recoveryRoute) {
+        openHostStackRoute(target.hostId, target.sessionTarget)
+        return
+      }
+      cancelPendingHostStackRoute()
       if ('home' in target) {
         router.push('/')
         return
       }
-      const recoveryRoute = notificationCredentialRecoveryRoute(target)
       if (recoveryRoute) {
         router.push(recoveryRoute)
-        return
-      }
-      if (target.sessionTarget) {
-        openHostStackRoute(target.hostId, target.sessionTarget)
         return
       }
       router.push(hostStackHostRoute(target.hostId))

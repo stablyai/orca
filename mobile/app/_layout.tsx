@@ -25,6 +25,8 @@ import {
 import { startPushTokenSync } from '../src/notifications/push-registration'
 import { ensureDesktopNotificationChannel } from '../src/notifications/desktop-notification-channel'
 import { loadHostCatalog } from '../src/transport/host-store'
+import { loadStoredHostProfiles } from '../src/transport/host-metadata-store'
+import { hostListMutationsSettled } from '../src/transport/host-list-mutation-queue'
 import { extractPairingCodeFromUrl } from '../src/transport/pairing'
 import { recoverMobileRelayPairing } from '../src/transport/mobile-relay-pairing-recovery'
 import { appUpdateChecker } from '../src/app-update/app-update-runtime'
@@ -108,6 +110,7 @@ export default function RootLayout() {
   // Notification taps arrive through expo-notifications, not Linking; route both cold and warm responses to their host/worktree.
   useEffect(() => {
     let disposed = false
+    let currentResponse: Notifications.NotificationResponse | null = null
 
     function clearLastNotificationResponse() {
       try {
@@ -126,7 +129,18 @@ export default function RootLayout() {
     }
 
     async function getNavigationTarget(notification: Notifications.Notification) {
-      const hosts = await loadHostCatalog().catch(() => null)
+      const hosts = await loadHostCatalog()
+        .then(async (catalog) => {
+          // Native credential reads may outlive removal or re-pairing; metadata still owns membership.
+          await hostListMutationsSettled()
+          const current = await loadStoredHostProfiles()
+          if (!current) {
+            return null
+          }
+          const keys = new Map(current.map((profile) => [profile.id, profile.publicKeyB64]))
+          return catalog.filter((host) => keys.get(host.id) === host.publicKeyB64)
+        })
+        .catch(() => null)
       const data = readNativeNotificationData(notification.request)
       // Gateway pushes identify hosts by key fingerprint; without catalog resolution, never fall back to their raw hostId.
       const routeData = pushNotificationRouteData(
@@ -153,6 +167,7 @@ export default function RootLayout() {
         return
       }
       handledNotificationIdsRef.current.add(notificationId)
+      currentResponse = response
       // RootLayout never unmounts; bound tap dedup with FIFO eviction.
       if (handledNotificationIdsRef.current.size > 256) {
         const oldest = handledNotificationIdsRef.current.values().next().value
@@ -162,10 +177,11 @@ export default function RootLayout() {
       }
 
       const target = await getNavigationTarget(response.notification)
-      clearLastNotificationResponse()
-      if (disposed) {
+      if (disposed || currentResponse !== response) {
         return
       }
+      currentResponse = null
+      clearLastNotificationResponse()
       if (target) {
         openNotificationRoute(target)
       }
@@ -181,6 +197,7 @@ export default function RootLayout() {
     })
     return () => {
       disposed = true
+      currentResponse = null
       sub.remove()
     }
   }, [openNotificationRoute])
