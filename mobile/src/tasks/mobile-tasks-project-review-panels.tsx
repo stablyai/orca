@@ -16,7 +16,7 @@ import {
   colors,
   Pressable,
   Check,
-  TextInput,
+  TextField,
   Linking,
   ExternalLink
 } from './mobile-tasks-dependencies'
@@ -120,12 +120,10 @@ export function renderMobileTasksProjectReviewPanels(model: ConnectionPresentati
             })}
           </View>
         )}
-        <TextInput
-          style={styles.input}
+        <TextField
           value={projectReviewersDraft}
           onChangeText={setProjectReviewersDraft}
           placeholder={translate('tasks.projectReviewPanels.requestReviewers', 'Request reviewers')}
-          placeholderTextColor={colors.textMuted}
           autoCapitalize="none"
         />
         <Pressable

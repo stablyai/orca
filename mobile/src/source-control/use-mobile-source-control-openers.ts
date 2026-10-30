@@ -105,7 +105,10 @@ export function useMobileSourceControlOpeners(params: Params) {
         const diffReply = await sourceFileDiffOpenRun.request(client, {
           worktree: `id:${worktreeId}`,
           relativePath: entry.path,
-          staged: entry.area === 'staged'
+          staged: entry.area === 'staged',
+          ...(entry.area === 'staged' && entry.status === 'renamed' && entry.oldPath
+            ? { oldPath: entry.oldPath }
+            : {})
         })
         // Headless hosts have no editor tabs; use git.diff on the review screen.
         if (isRendererUnavailableReply(diffReply)) {

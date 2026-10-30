@@ -179,7 +179,9 @@ export function buildNativeChatTranscriptSlots(
     )
     const drawsRow =
       receipt !== undefined ||
-      (!folded && nativeChatRowRendersContent(message.blocks) && message.id !== liveReasoningId)
+      (!folded &&
+        (message.agentStart || nativeChatRowRendersContent(message.blocks)) &&
+        message.id !== liveReasoningId)
     const roster = sectionSlots.rosterAt(message.id)
     if (drawsRow || status !== undefined || turnDiff !== undefined) {
       slots.push({

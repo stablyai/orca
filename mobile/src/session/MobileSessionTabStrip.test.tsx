@@ -14,10 +14,15 @@ vi.mock('lucide-react-native', () => ({
   FileText: 'Icon',
   Globe: 'Icon',
   Plus: 'Icon',
-  SquareTerminal: 'Icon'
+  SquareTerminal: 'Icon',
+  Columns2: 'Icon',
+  Rows2: 'Icon',
+  Check: 'Icon',
+  LayoutGrid: 'Icon'
 }))
 vi.mock('../platform/haptics', () => ({ triggerMediumImpact: () => {} }))
 vi.mock('../hooks/use-now', () => ({ useNow: () => 0 }))
+vi.mock('../components/ActionSheetModal', () => ({ ActionSheetModal: () => null }))
 vi.mock('../components/MobileAgentIcon', () => ({ MobileAgentIcon: () => null }))
 vi.mock('../components/AgentStateDot', () => ({ AgentStateDot: () => null }))
 vi.mock('./MobileSessionHeaderIconButton', () => ({ MobileSessionHeaderIconButton: () => null }))

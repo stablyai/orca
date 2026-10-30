@@ -16,6 +16,8 @@ import { installedPluginControls, type InstalledRowHandlers } from '../list/Plug
 import { PluginChips } from '../list/PluginChips'
 import type { PluginPagePreview } from '../state/use-plugin-catalog'
 import type { PluginLogsState } from '../state/use-plugin-logs'
+import { pluginPublisherNotice } from '../presentation/plugin-publisher-trust'
+import { PluginNotOfficialWarning } from '../review/PluginNotOfficialWarning'
 
 type PluginDetailPageProps = {
   entry: PluginListEntry
@@ -95,6 +97,14 @@ export function PluginDetailPage({
     : null
   const version = plugin?.version ?? preview?.manifest.version ?? entry.version
   const description = plugin?.description ?? preview?.manifest.description ?? entry.description
+
+  const publisherNotice = pluginPublisherNotice({
+    official: entry.official,
+    execution: model.execution,
+    manifest: model.manifest,
+    // Why null without a release or host types: an empty list would read as "no translations".
+    types: plugin ? (plugin.types ?? null) : listing?.release ? entry.types : null
+  })
 
   let alert: React.ReactNode = null
   if (plugin?.blockedByKillList) {
@@ -257,6 +267,16 @@ export function PluginDetailPage({
           {controls ? controls.more : null}
         </div>
       </div>
+      {publisherNotice !== 'none' ? (
+        // Why above the consent: it is part of the install decision, read before the access list.
+        <div className="mt-4">
+          <PluginNotOfficialWarning
+            notice={publisherNotice}
+            publisher={entry.publisher}
+            moment={plugin ? 'installed' : 'install'}
+          />
+        </div>
+      ) : null}
       {action.body}
       {description ? <p className="mt-4 max-w-prose text-sm leading-6">{description}</p> : null}
       {alert}

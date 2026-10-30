@@ -1,6 +1,6 @@
 import { ListChecks } from 'lucide-react-native'
 import { MobileAgentSessionHistoryIcon } from '../agent-history/MobileAgentSessionHistoryIcon'
-import { ActionSheetModal } from '../components/ActionSheetModal'
+import { ActionSheetModal, type ActionSheetAction } from '../components/ActionSheetModal'
 import { colors } from '../theme/mobile-theme'
 import type { RecentSessionCardRecord } from './recent-session-cards'
 import { RecentSessionCardsSection } from './RecentSessionCardsSheet'
@@ -9,6 +9,7 @@ import { useMobileTranslation } from '../i18n/use-mobile-translation'
 
 type MobileSessionHeaderMoreActionsSheetProps = {
   visible: boolean
+  additionalActions?: ActionSheetAction[]
   showRecentSessionCards?: boolean
   recentSessionCards?: readonly RecentSessionCardRecord[]
   jumpingRecentCardKey?: string | null
@@ -24,6 +25,7 @@ type MobileSessionHeaderMoreActionsSheetProps = {
 
 export function MobileSessionHeaderMoreActionsSheet({
   visible,
+  additionalActions,
   showRecentSessionCards,
   recentSessionCards,
   jumpingRecentCardKey,
@@ -42,6 +44,7 @@ export function MobileSessionHeaderMoreActionsSheet({
     <ActionSheetModal
       visible={visible}
       actions={[
+        ...(additionalActions ?? []),
         ...(showAgentSessionHistory
           ? [
               {

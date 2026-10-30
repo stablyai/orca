@@ -3,7 +3,8 @@ import {
   BottomDrawer,
   View,
   Text,
-  TextInput,
+  MessageBox,
+  TextField,
   colors,
   Pressable,
   ActivityIndicator,
@@ -51,15 +52,13 @@ export function renderMobileTasksWorkspaceSparseDrawer(model: ConnectionPresenta
               <Text style={styles.detailSectionTitle}>
                 {translate('tasks.workspaceTrustDrawers.nameLabel', 'Name')}
               </Text>
-              <TextInput
-                style={styles.input}
+              <TextField
                 value={workspaceSparseDraft.name}
                 onChangeText={(name) => setWorkspaceSparseDraft({ ...workspaceSparseDraft, name })}
                 placeholder={translate(
                   'tasks.workspaceTrustDrawers.namePlaceholder',
                   'Renderer UI'
                 )}
-                placeholderTextColor={colors.textMuted}
                 autoCapitalize="none"
                 autoCorrect={false}
                 maxLength={80}
@@ -69,18 +68,15 @@ export function renderMobileTasksWorkspaceSparseDrawer(model: ConnectionPresenta
               <Text style={styles.detailSectionTitle}>
                 {translate('tasks.workspaceTrustDrawers.directoriesLabel', 'Directories')}
               </Text>
-              <TextInput
-                style={[styles.input, styles.bodyInput, styles.monoInput]}
+              <MessageBox
                 value={workspaceSparseDraft.directoriesText}
                 onChangeText={(directoriesText) =>
                   setWorkspaceSparseDraft({ ...workspaceSparseDraft, directoriesText })
                 }
                 placeholder={'src/renderer\npackages/ui'}
-                placeholderTextColor={colors.textMuted}
                 autoCapitalize="none"
                 autoCorrect={false}
-                multiline
-                textAlignVertical="top"
+                monospace
               />
             </View>
             <Text style={workspaceSparseDraftError ? styles.detailError : styles.detailMuted}>

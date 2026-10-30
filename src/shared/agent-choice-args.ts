@@ -6,7 +6,8 @@ import {
   PERMISSION_LAUNCH_GRAMMARS
 } from './agent-permission-args'
 import { agentPermissionArgs } from './tui-agent-permission-choice'
-import { tokenizeStartupCommand } from './tui-agent-startup-shell'
+import { readAgentChoiceSettings, agentChoiceSettingsOccurrences } from './agent-choice-settings'
+import { quoteStartupArg, tokenizeStartupCommand } from './tui-agent-startup-shell'
 import type { TuiAgent } from './tui-agent'
 import { agentChoiceConfigValue } from './agent-choice-cli-apply'
 
@@ -17,6 +18,7 @@ type ChoiceOccurrence = {
   end: number
   lift: boolean
   owned: boolean
+  replacement?: string
 }
 
 /** All candidates and cuts refer to the same original text in every execution grammar. */
@@ -36,6 +38,46 @@ export function analyzeAgentChoiceArgs(agent: TuiAgent, text: string) {
   const first = originals[0]
   const occurrences: ChoiceOccurrence[] = []
   const seen = new Set<string>()
+  const opaqueKeys = new Set<string>()
+  const effectiveSettings = new Map<
+    (typeof forms)[number]['form'],
+    ReturnType<typeof agentChoiceSettingsOccurrences>[number] | undefined
+  >()
+  for (const { key, form } of forms) {
+    if (form.kind !== 'settings') {
+      continue
+    }
+    const effective = first
+      ? agentChoiceSettingsOccurrences(agent, form.names, first.parsed.tokens).at(-1)
+      : undefined
+    effectiveSettings.set(form, effective)
+    if (
+      !first ||
+      (effective &&
+        (!readAgentChoiceSettings(effective.value) ||
+          !first.analysis.optionIndices.has(effective.index) ||
+          first.analysis.roles[effective.index] === 'uncertain' ||
+          !originals.every((original) => {
+            if (!original) {
+              return false
+            }
+            const start = first.parsed.spans[effective.index].start
+            const at = original.offsets.get(start) ?? -1
+            return (
+              at >= 0 &&
+              Array.from({ length: effective.consumed }, (_, offset) => offset).every(
+                (offset) =>
+                  original.parsed.spans[at + offset]?.end ===
+                    first.parsed.spans[effective.index + offset].end &&
+                  original.parsed.tokens[at + offset] ===
+                    first.parsed.tokens[effective.index + offset]
+              )
+            )
+          })))
+    ) {
+      opaqueKeys.add(key)
+    }
+  }
   if (first && originals.every((original) => original !== null)) {
     for (let index = 0; index < first.parsed.tokens.length; index++) {
       const token = first.parsed.tokens[index]
@@ -50,6 +92,7 @@ export function analyzeAgentChoiceArgs(agent: TuiAgent, text: string) {
         let count = 1
         let value = ''
         let lift = false
+        let replacement: string | undefined
         if (form.kind === 'recipe') {
           count = form.words.length
           if (!form.words.every((word, offset) => first.parsed.tokens[index + offset] === word)) {
@@ -82,6 +125,20 @@ export function analyzeAgentChoiceArgs(agent: TuiAgent, text: string) {
             (!inline || name.startsWith('--')) &&
             !!value &&
             !value.startsWith('-')
+          if (form.kind === 'settings') {
+            const effective = effectiveSettings.get(form)
+            if (effective?.index !== index || opaqueKeys.has(key)) {
+              continue
+            }
+            const settings = readAgentChoiceSettings(value)
+            const choice = settings?.[form.key]
+            if (!settings || (typeof choice !== 'boolean' && typeof choice !== 'string')) {
+              continue
+            }
+            const { [form.key]: _removed, ...remaining } = settings
+            replacement = `${name} ${quoteStartupArg(JSON.stringify(remaining), 'posix')}`
+            value = String(choice)
+          }
           if (form.kind === 'config') {
             const configValue = agentChoiceConfigValue(value, form.key)
             if (configValue === undefined) {
@@ -117,7 +174,15 @@ export function analyzeAgentChoiceArgs(agent: TuiAgent, text: string) {
         })
         if (!seen.has(`${key}:${start}`)) {
           seen.add(`${key}:${start}`)
-          occurrences.push({ key, value, start, end, lift: lift && agreed, owned: agreed })
+          occurrences.push({
+            key,
+            value,
+            start,
+            end,
+            lift: lift && agreed,
+            owned: agreed,
+            ...(replacement !== undefined ? { replacement } : {})
+          })
         }
       }
     }
@@ -130,10 +195,13 @@ export function analyzeAgentChoiceArgs(agent: TuiAgent, text: string) {
     if (ranges.some((range, index) => index > 0 && range.start < ranges[index - 1].end)) {
       return null
     }
+    const replacements = new Map(
+      ranges.filter((range) => range.replacement).map((range) => [range.start, range.replacement])
+    )
     const chunks: string[] = []
     let cursor = 0
-    for (const { start, end } of ranges) {
-      chunks.push(text.slice(cursor, start))
+    for (const { start, end, replacement } of ranges) {
+      chunks.push(text.slice(cursor, start), replacement ?? '')
       cursor = end
     }
     chunks.push(text.slice(cursor))
@@ -151,11 +219,22 @@ export function analyzeAgentChoiceArgs(agent: TuiAgent, text: string) {
         return !!range && span.start >= range.start && span.end <= range.end
       })
       const kept = original.parsed.tokens.filter((_, index) => !removed[index])
+      const expected = original.parsed.tokens.flatMap((token, index) => {
+        if (!removed[index]) {
+          return [token]
+        }
+        const text = replacements.get(original.parsed.spans[index].start)
+        if (!text) {
+          return []
+        }
+        const replacement = tokenizeStartupCommand(text, PERMISSION_LAUNCH_GRAMMARS[grammarIndex])
+        return replacement.ok ? replacement.tokens : []
+      })
       const parsed = tokenizeStartupCommand(args, PERMISSION_LAUNCH_GRAMMARS[grammarIndex])
       if (
         !parsed.ok ||
-        kept.length !== parsed.tokens.length ||
-        !kept.every((token, index) => token === parsed.tokens[index])
+        expected.length !== parsed.tokens.length ||
+        !expected.every((token, index) => token === parsed.tokens[index])
       ) {
         return false
       }
@@ -171,5 +250,5 @@ export function analyzeAgentChoiceArgs(agent: TuiAgent, text: string) {
     })
     return proven ? args : null
   }
-  return { occurrences, cut }
+  return { occurrences, cut, opaqueKeys }
 }

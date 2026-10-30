@@ -1,9 +1,11 @@
-import { useMemo } from 'react'
-import { ActivityIndicator, Pressable, Text, TextInput, View } from 'react-native'
+import { useMemo, useState } from 'react'
+import { ActivityIndicator, Pressable, Text, View } from 'react-native'
 import { Minus, MoreHorizontal, Plus, Sparkles } from 'lucide-react-native'
 import { colors, spacing } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
+import { MessageBox } from '../components/composer-input/MessageBox'
+import { composerInputStyles } from '../components/composer-input/composer-input-styles'
 import { MobileSourceControlCreatePrEntry } from './MobileSourceControlCreatePrEntry'
 import { MobileCommitFailurePanel } from './MobileCommitFailurePanel'
 import { KEYBOARD_COMMIT_BAR_CLEARANCE } from './mobile-source-control-screen-state'
@@ -12,6 +14,8 @@ import type { MobileSourceControlState } from './use-mobile-source-control-state
 import type { MobileSourceControlPrimaryAction } from './mobile-source-control-primary-action'
 import { styles } from './mobile-source-control-styles'
 import { hubStyles } from './mobile-source-control-hub-styles'
+
+const INITIAL_COMMIT_BAR_HEIGHT = 180
 
 type Props = {
   state: Omit<MobileSourceControlState, 'primaryActionArgs'>
@@ -50,6 +54,7 @@ export function MobileSourceControlContent({ state, primaryAction }: Props) {
     cancelGenerateCommitMessage,
     openFile,
     openBranchDiff,
+    resolveConflict,
     runGitAction
   } = state
   const ioBusy = busyAction !== null || openingPath !== null || openingBranchPath !== null
@@ -61,12 +66,17 @@ export function MobileSourceControlContent({ state, primaryAction }: Props) {
   const generateDisabled = busyAction !== null || generateBlockedByMessage
   const createPrHeroActive =
     createPrAction.visible && !createPrAction.disabled && !createPrAction.pushFirst
+  // Measured, because the commit box grows as the message wraps; the first frame uses a one-line bar.
+  const [commitBarHeight, setCommitBarHeight] = useState(INITIAL_COMMIT_BAR_HEIGHT)
+  const listBottomInset = commitBarHeight + spacing.lg
   const fileList = useMemo(
     () => (
       <MobileSourceControlFileList
+        bottomInset={listBottomInset}
         state={{
           sections,
           openFile,
+          resolveConflict,
           runGitAction,
           setDiscardTarget,
           shouldShowBranchCompareSection: state.shouldShowBranchCompareSection,
@@ -82,8 +92,10 @@ export function MobileSourceControlContent({ state, primaryAction }: Props) {
       />
     ),
     [
+      listBottomInset,
       sections,
       openFile,
+      resolveConflict,
       runGitAction,
       setDiscardTarget,
       state.shouldShowBranchCompareSection,
@@ -193,6 +205,7 @@ export function MobileSourceControlContent({ state, primaryAction }: Props) {
       )}
 
       <View
+        onLayout={(event) => setCommitBarHeight(event.nativeEvent.layout.height)}
         style={[
           styles.commitBar,
           {
@@ -201,93 +214,95 @@ export function MobileSourceControlContent({ state, primaryAction }: Props) {
           }
         ]}
       >
-        <View style={styles.commitRow}>
-          {stagedCount === 0 ? (
-            <View
-              style={[styles.commitInput, styles.commitInputDisabled]}
-              accessibilityRole="text"
-              accessibilityState={{ disabled: true }}
-              accessibilityLabel={t(
-                'sourceControl.content.commitMessageDisabled',
-                'Commit message disabled. No staged files.'
-              )}
-            >
-              <Text style={styles.commitInputDisabledText}>
-                {t('sourceControl.content.noStagedFiles', 'No staged files')}
-              </Text>
-            </View>
-          ) : (
-            <TextInput
-              style={styles.commitInput}
-              value={commitMessage}
-              onChangeText={setCommitMessage}
-              placeholder={t('sourceControl.content.commitMessagePlaceholder', 'Commit message')}
-              placeholderTextColor={colors.textMuted}
-              editable={busyAction === null && openingPath === null && openingBranchPath === null}
-              returnKeyType="done"
-              onSubmitEditing={primaryAction.onPress}
-            />
-          )}
-          {shouldShowGenerateButton ? (
+        <MessageBox
+          value={stagedCount === 0 ? '' : commitMessage}
+          onChangeText={setCommitMessage}
+          placeholder={
+            stagedCount === 0
+              ? t('sourceControl.content.noStagedFiles', 'No staged files')
+              : t('sourceControl.content.commitMessagePlaceholder', 'Commit message')
+          }
+          editable={stagedCount > 0 && !ioBusy}
+          accessibilityLabel={
+            stagedCount === 0
+              ? t(
+                  'sourceControl.content.commitMessageDisabled',
+                  'Commit message disabled. No staged files.'
+                )
+              : undefined
+          }
+          leading={
+            shouldShowGenerateButton ? (
+              <Pressable
+                style={({ pressed }) => [
+                  composerInputStyles.controlButton,
+                  generateDisabled && composerInputStyles.disabled,
+                  pressed && composerInputStyles.pressed
+                ]}
+                // Keep commit-message AI with commit actions so Stage All remains unambiguous.
+                disabled={generateDisabled}
+                accessibilityState={{ disabled: generateDisabled }}
+                accessibilityHint={
+                  generateBlockedByMessage
+                    ? t('sourceControl.content.regenerateHint', 'Clear the message to regenerate.')
+                    : undefined
+                }
+                onPress={() =>
+                  generatingMessage ? cancelGenerateCommitMessage() : void generateCommitMessage()
+                }
+                accessibilityLabel={
+                  generatingMessage
+                    ? t(
+                        'sourceControl.content.cancelGeneration',
+                        'Cancel commit message generation'
+                      )
+                    : t('sourceControl.content.generateMessage', 'Generate commit message with AI')
+                }
+              >
+                {generatingMessage ? (
+                  <ActivityIndicator size="small" color={colors.textSecondary} />
+                ) : (
+                  <Sparkles size={17} color={colors.textSecondary} strokeWidth={2} />
+                )}
+              </Pressable>
+            ) : null
+          }
+          trailing={
             <Pressable
               style={({ pressed }) => [
-                styles.generateButton,
-                generateDisabled && styles.commitButtonDisabled,
-                pressed && styles.commitButtonPressed
+                styles.commitButton,
+                createPrHeroActive && styles.commitButtonSecondary,
+                primaryAction.disabled && styles.commitButtonDisabled,
+                pressed && composerInputStyles.pressed
               ]}
-              // Keep commit-message AI with commit actions so Stage All remains unambiguous.
-              disabled={generateDisabled}
-              accessibilityState={{ disabled: generateDisabled }}
-              accessibilityHint={
-                generateBlockedByMessage
-                  ? t('sourceControl.content.regenerateHint', 'Clear the message to regenerate.')
-                  : undefined
-              }
-              onPress={() =>
-                generatingMessage ? cancelGenerateCommitMessage() : void generateCommitMessage()
-              }
-              accessibilityLabel={
-                generatingMessage
-                  ? t('sourceControl.content.cancelGeneration', 'Cancel commit message generation')
-                  : t('sourceControl.content.generateMessage', 'Generate commit message with AI')
-              }
+              onPress={primaryAction.onPress}
+              disabled={primaryAction.disabled}
+              accessibilityLabel={primaryAction.accessibilityLabel}
+              accessibilityHint={primaryAction.accessibilityHint}
             >
-              {generatingMessage ? (
-                <ActivityIndicator size="small" color={colors.textSecondary} />
+              {primaryAction.loading ? (
+                <ActivityIndicator
+                  size="small"
+                  color={
+                    createPrHeroActive || primaryAction.disabled
+                      ? colors.textPrimary
+                      : colors.bgBase
+                  }
+                />
               ) : (
-                <Sparkles size={16} color={colors.textSecondary} strokeWidth={2.1} />
+                <Text
+                  style={[
+                    styles.commitButtonText,
+                    createPrHeroActive && styles.commitButtonSecondaryText,
+                    primaryAction.disabled && styles.commitButtonDisabledText
+                  ]}
+                >
+                  {primaryAction.label}
+                </Text>
               )}
             </Pressable>
-          ) : null}
-          <Pressable
-            style={({ pressed }) => [
-              styles.commitButton,
-              createPrHeroActive && styles.commitButtonSecondary,
-              primaryAction.disabled && styles.commitButtonDisabled,
-              pressed && styles.commitButtonPressed
-            ]}
-            onPress={primaryAction.onPress}
-            disabled={primaryAction.disabled}
-            accessibilityLabel={primaryAction.accessibilityLabel}
-            accessibilityHint={primaryAction.accessibilityHint}
-          >
-            {primaryAction.loading ? (
-              <ActivityIndicator
-                size="small"
-                color={createPrHeroActive ? colors.textPrimary : colors.bgBase}
-              />
-            ) : (
-              <Text
-                style={[
-                  styles.commitButtonText,
-                  createPrHeroActive && styles.commitButtonSecondaryText
-                ]}
-              >
-                {primaryAction.label}
-              </Text>
-            )}
-          </Pressable>
-        </View>
+          }
+        />
       </View>
     </>
   )

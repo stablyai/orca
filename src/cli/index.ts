@@ -16,6 +16,7 @@ import {
 } from './execution-host-flag'
 import { fetchSshTargetSummaries, listSshTargets } from './host-selector-alternatives'
 import { reportCliError } from './cli-error'
+import { cliErrorExitCode } from './cli-exit-code'
 import { printHelp } from './help'
 import type { RuntimeClient } from './runtime-client'
 import { COMMAND_SPECS } from './specs'
@@ -171,7 +172,7 @@ export async function main(
         (typeof hostFlag === 'string' && hostFlag.startsWith('runtime:')) ||
         Boolean(process.env.ORCA_ENVIRONMENT?.trim() || process.env.ORCA_PAIRING_CODE?.trim())
     })
-    process.exitCode = 1
+    process.exitCode = cliErrorExitCode(error, parsed.commandPath)
   }
 }
 
