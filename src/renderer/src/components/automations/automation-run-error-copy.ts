@@ -76,6 +76,8 @@ const COPY: Record<
     translate('automations.runFailures.destinationChanged', EN.destinationChanged),
   hooksReviewBlocked: () =>
     translate('automations.runFailures.hooksReviewBlocked', EN.hooksReviewBlocked),
+  codexBootstrapFailed: () =>
+    translate('automations.runFailures.codexBootstrapFailed', EN.codexBootstrapFailed),
   agentNeverStarted: () =>
     translate('automations.runFailures.agentNeverStarted', EN.agentNeverStarted),
   agentNoCompletion: () =>

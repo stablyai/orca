@@ -212,6 +212,9 @@ export function updateAutomationRun(
     terminalPtyId: Object.hasOwn(result, 'terminalPtyId')
       ? normalizeAutomationRunTerminalPtyId(result.terminalPtyId)
       : normalizeAutomationRunTerminalPtyId(current.terminalPtyId),
+    terminalOutputBoundary: Object.hasOwn(result, 'terminalOutputBoundary')
+      ? result.terminalOutputBoundary
+      : current.terminalOutputBoundary,
     outputSnapshot: Object.hasOwn(result, 'outputSnapshot')
       ? normalizeAutomationRunOutputSnapshot(result.outputSnapshot)
       : normalizeAutomationRunOutputSnapshot(current.outputSnapshot),

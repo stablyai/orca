@@ -9,6 +9,7 @@ const mockLaunchAgentBackgroundSession = vi.fn()
 const mockFindReusableAutomationSession = vi.fn()
 const mockObserveExistingAutomationSession = vi.fn()
 const mockSubmitPromptToAgentPty = vi.fn()
+const mockCaptureAutomationTerminalOutputBoundary = vi.fn()
 const mockCreateWorktree = vi.fn()
 const mockMarkDispatchResult = vi.fn()
 const mockOnDispatchRequested = vi.fn()
@@ -145,6 +146,7 @@ vi.mock('@/lib/automation-session-reuse', () => ({
 }))
 
 vi.mock('@/lib/automation-session-observer', () => ({
+  captureAutomationTerminalOutputBoundary: mockCaptureAutomationTerminalOutputBoundary,
   observeExistingAutomationSession: mockObserveExistingAutomationSession
 }))
 
@@ -216,6 +218,7 @@ describe('useAutomationDispatchEvents setup launch', () => {
     mockSshNeedsPassphrasePrompt.mockResolvedValue(false)
     mockSshGetState.mockResolvedValue({ status: 'connected' })
     mockSshConnect.mockResolvedValue({ status: 'connected' })
+    mockCaptureAutomationTerminalOutputBoundary.mockResolvedValue(null)
     mockSubmitPromptToAgentPty.mockResolvedValue(true)
     vi.stubGlobal('window', {
       api: {

@@ -1,3 +1,8 @@
+import type {
+  TerminalOutputBoundary,
+  TerminalOutputSince
+} from '../../../../shared/runtime-terminal-contracts'
+import { normalizeTerminalChunk } from '../../terminal-ansi-normalization'
 import type { AgentStatusOrchestrationContext } from '../../../../shared/agent-status-types'
 import type { OrchestrationDb } from '../../orchestration/db/orchestration-db'
 import { OrcaRuntimeWithVerifyOrchestrationCompatibilityCaller } from '../../orchestration/terminal-authority/verify-orchestration-compatibility-caller'
@@ -177,13 +182,45 @@ export abstract class OrcaRuntimeWithGetOrchestrationDispatchAuthority extends O
     return ptyId ? (this.terminalFileUriHostnameByPtyId.get(ptyId) ?? null) : null
   }
 
-  protected recordRecentPtyOutput(ptyId: string, data: string): void {
+  captureTerminalOutputBoundary(
+    handle: string,
+    freshLaunch = false
+  ): TerminalOutputBoundary | null {
+    const ptyId = this.resolveLeafForHandle(handle)?.ptyId
+    if (!ptyId) {
+      return null
+    }
+    let buffer = this.recentPtyOutputById.get(ptyId)
+    if (!buffer) {
+      buffer = new RecentPtyOutputBuffer()
+      this.recentPtyOutputById.set(ptyId, buffer)
+    }
+    const boundary = buffer.boundary()
+    return freshLaunch ? { ...boundary, offset: 0 } : boundary
+  }
+
+  readTerminalOutputSince(
+    handle: string,
+    boundary: TerminalOutputBoundary
+  ): TerminalOutputSince<string[]> | null {
+    const ptyId = this.resolveLeafForHandle(handle)?.ptyId
+    const raw = ptyId ? this.recentPtyOutputById.get(ptyId)?.readSince(boundary) : null
+    return raw == null
+      ? null
+      : { output: normalizeTerminalChunk(raw.output).text.split(/\r?\n/), complete: raw.complete }
+  }
+
+  protected recordRecentPtyOutput(ptyId: string, data: string, historical = false): void {
     let recentOutputBuffer = this.recentPtyOutputById.get(ptyId)
     if (!recentOutputBuffer) {
       recentOutputBuffer = new RecentPtyOutputBuffer()
       this.recentPtyOutputById.set(ptyId, recentOutputBuffer)
     }
-    recentOutputBuffer.append(data)
+    if (historical) {
+      recentOutputBuffer.appendHistorical(data)
+    } else {
+      recentOutputBuffer.append(data)
+    }
   }
 
   // Why: remote clients cannot resolve this runtime's WSL project preference,

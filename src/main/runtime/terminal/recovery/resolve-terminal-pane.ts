@@ -259,7 +259,11 @@ export abstract class OrcaRuntimeWithResolveTerminalPane extends OrcaRuntimeWith
         ? await this.readRenderedScreen(pty.pty.ptyId, read, opts)
         : await this.withVisibleSnapshotFallback(pty.pty.ptyId, read, opts, providerSnapshot)
       this.assertLiveTerminalHandleTargetsPty(handle, pty.pty.ptyId)
-      return labelTerminalReadSource(visibleRead)
+      const outputBoundary = this.captureTerminalOutputBoundary(handle)
+      return {
+        ...labelTerminalReadSource(visibleRead),
+        ...(outputBoundary ? { outputBoundary } : {})
+      }
     }
 
     const { leaf } = this.getLiveLeafForHandle(handle)
@@ -281,7 +285,11 @@ export abstract class OrcaRuntimeWithResolveTerminalPane extends OrcaRuntimeWith
       ? await this.readRenderedScreen(leaf.ptyId, read, opts)
       : await this.withVisibleSnapshotFallback(leaf.ptyId, read, opts, providerSnapshot)
     this.assertLiveTerminalHandleTargetsPty(handle, leaf.ptyId)
-    return labelTerminalReadSource(visibleRead)
+    const outputBoundary = this.captureTerminalOutputBoundary(handle)
+    return {
+      ...labelTerminalReadSource(visibleRead),
+      ...(outputBoundary ? { outputBoundary } : {})
+    }
   }
 
   protected async readRenderedScreen(

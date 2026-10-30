@@ -2,7 +2,10 @@ import { listAutomationRunsForTarget } from '@/components/automations/automation
 import { translate } from '@/i18n/i18n'
 import { submitPromptToAgentPty } from '@/lib/agent-paste-draft'
 import { launchAgentBackgroundSession } from '@/lib/launch-agent-background-session'
-import { observeExistingAutomationSession } from '@/lib/automation-session-observer'
+import {
+  captureAutomationTerminalOutputBoundary,
+  observeExistingAutomationSession
+} from '@/lib/automation-session-observer'
 import { findReusableAutomationSession } from '@/lib/automation-session-reuse'
 import type { AutomationTerminalOwnership } from '@/lib/automation-terminal-ownership'
 import { useAppStore } from '@/store'
@@ -107,6 +110,10 @@ export async function handleAutomationDispatchRequest({
         if (releaseTab) {
           completion.setReuseDispatchTabRelease(releaseTab)
           try {
+            const terminalOutputBoundary = await captureAutomationTerminalOutputBoundary({
+              ...reusableSession,
+              worktreeId: worktree.id
+            })
             const submitted = await submitPromptToAgentPty({
               tabId: reusableSession.tabId,
               ptyId: reusableSession.ptyId,
@@ -150,6 +157,7 @@ export async function handleAutomationDispatchRequest({
                 terminalSessionId: reusableSession.tabId,
                 terminalPaneKey: reusableSession.paneKey,
                 terminalPtyId: reusableSession.ptyId,
+                terminalOutputBoundary,
                 precheckResult: resolved.context.precheckResult,
                 error: null
               })
@@ -203,6 +211,12 @@ export async function handleAutomationDispatchRequest({
         terminalSessionId: launchedTabId,
         terminalPaneKey: result.paneKey,
         terminalPtyId: result.ptyId,
+        terminalOutputBoundary: await captureAutomationTerminalOutputBoundary({
+          paneKey: result.paneKey,
+          ptyId: result.ptyId,
+          worktreeId: worktree.id,
+          freshLaunch: true
+        }),
         precheckResult: resolved.context.precheckResult,
         error: null
       })

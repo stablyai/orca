@@ -32,6 +32,7 @@ describe('judgeIdleAgentTurn', () => {
   it('fails when the shell refused the agent command', () => {
     expect(judge([], ['zsh: command not found: claude'])).toEqual({
       kind: 'failed',
+      reason: 'missing-command',
       missingCommandLine: 'zsh: command not found: claude'
     })
   })

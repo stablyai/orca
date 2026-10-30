@@ -85,7 +85,10 @@ export async function runHeadlessAutomationDispatch(
     workspaceDisplayName: launch.workspaceDisplayName ?? null,
     terminalSessionId: launch.terminalSessionId,
     terminalPaneKey: launch.terminalPaneKey ?? null,
-    terminalPtyId: launch.terminalPtyId ?? null
+    terminalPtyId: launch.terminalPtyId ?? null,
+    ...(launch.terminalOutputBoundary
+      ? { terminalOutputBoundary: launch.terminalOutputBoundary }
+      : {})
   }
   const updated = runs.updateRun({
     runId: run.id,

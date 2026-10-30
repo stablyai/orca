@@ -295,3 +295,76 @@ describe('observeExistingAutomationSession', () => {
     expect(state.setAgentStatus).not.toHaveBeenCalled()
   })
 })
+
+describe('capturing automation output provenance', () => {
+  it.each([false, true])(
+    'captures the host boundary for a fresh launch: %s',
+    async (freshLaunch) => {
+      mockCallRuntimeRpc.mockReset()
+      mockCallRuntimeRpc
+        .mockResolvedValueOnce({ terminal: { handle: 'term-1' } })
+        .mockResolvedValueOnce({
+          terminal: { outputBoundary: { generation: 'host-1', offset: 80 } }
+        })
+      const { captureAutomationTerminalOutputBoundary } =
+        await import('./automation-session-observer')
+      expect(
+        await captureAutomationTerminalOutputBoundary({
+          paneKey: PANE_KEY,
+          ptyId: 'pty-1',
+          worktreeId: 'wt-1',
+          freshLaunch
+        })
+      ).toEqual({ generation: 'host-1', offset: freshLaunch ? 0 : 80 })
+      expect(mockCallRuntimeRpc).toHaveBeenNthCalledWith(
+        1,
+        { kind: 'local' },
+        'terminal.resolvePane',
+        {
+          paneKey: PANE_KEY,
+          worktreeId: 'wt-1'
+        }
+      )
+    }
+  )
+
+  it('captures the boundary from the remote owner, independent of the selected host', async () => {
+    mockCallRuntimeRpc.mockReset()
+    mockCallRuntimeRpc.mockResolvedValueOnce({
+      terminal: { outputBoundary: { generation: 'remote-1', offset: 90 } }
+    })
+    const { captureAutomationTerminalOutputBoundary } =
+      await import('./automation-session-observer')
+    expect(
+      await captureAutomationTerminalOutputBoundary({
+        paneKey: PANE_KEY,
+        ptyId: 'remote:env-1@@terminal-9',
+        worktreeId: 'wt-1'
+      })
+    ).toEqual({ generation: 'remote-1', offset: 90 })
+    expect(mockCallRuntimeRpc).toHaveBeenCalledWith(
+      { kind: 'environment', environmentId: 'env-1' },
+      'terminal.read',
+      {
+        terminal: 'terminal-9',
+        limit: 1
+      }
+    )
+  })
+
+  it('leaves bootstrap evidence unproven on an older execution host', async () => {
+    mockCallRuntimeRpc.mockReset()
+    mockCallRuntimeRpc
+      .mockResolvedValueOnce({ terminal: { handle: 'term-1' } })
+      .mockResolvedValueOnce({ terminal: { tail: ['old failure'] } })
+    const { captureAutomationTerminalOutputBoundary } =
+      await import('./automation-session-observer')
+    expect(
+      await captureAutomationTerminalOutputBoundary({
+        paneKey: PANE_KEY,
+        ptyId: 'pty-1',
+        worktreeId: 'wt-1'
+      })
+    ).toBeNull()
+  })
+})

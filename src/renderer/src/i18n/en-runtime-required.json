@@ -1277,6 +1277,7 @@
       "hostUpdateRequired": "Update Orca on this host to use extra arguments."
     },
     "runFailures": {
+      "codexBootstrapFailed": "Codex could not read its account during startup. Open Codex on this host and check account access. After Codex starts successfully, use Run now to retry this automation.",
       "agentNeverStarted": "Automation agent never started after the prompt was submitted.",
       "agentNoCompletion": "Automation agent did not report completion.",
       "automationChanged": "The automation changed before this run could launch.",

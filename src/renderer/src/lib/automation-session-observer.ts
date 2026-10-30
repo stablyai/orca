@@ -1,3 +1,8 @@
+import type {
+  TerminalOutputBoundary,
+  RuntimeTerminalRead,
+  RuntimeTerminalResolvePane
+} from '../../../shared/runtime-terminal-contracts'
 import { subscribeToPtyData } from '@/components/terminal-pane/pty-data-sidecar-subscriptions'
 import { subscribeToPtyExit } from '@/components/terminal-pane/pty-dispatcher'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
@@ -101,5 +106,46 @@ export async function observeExistingAutomationSession(args: {
   return () => {
     unsubscribeData()
     unsubscribeExit()
+  }
+}
+
+/** Capture before a reused prompt; fresh PTYs own their output from offset zero. */
+export async function captureAutomationTerminalOutputBoundary(args: {
+  paneKey: string
+  ptyId: string
+  worktreeId: string
+  freshLaunch?: boolean
+}): Promise<TerminalOutputBoundary | null> {
+  try {
+    const owner = isRemoteRuntimePtyId(args.ptyId) ? getRemoteRuntimePtyOwner(args.ptyId) : null
+    if (isRemoteRuntimePtyId(args.ptyId) && !owner) {
+      return null
+    }
+    const target = owner?.target ?? { kind: 'local' as const }
+    const handle =
+      owner?.terminal ??
+      (
+        await callRuntimeRpc<{ terminal: RuntimeTerminalResolvePane }>(
+          target,
+          'terminal.resolvePane',
+          {
+            paneKey: args.paneKey,
+            worktreeId: args.worktreeId
+          }
+        )
+      ).terminal.handle
+    const { terminal } = await callRuntimeRpc<{ terminal: RuntimeTerminalRead }>(
+      target,
+      'terminal.read',
+      {
+        terminal: handle,
+        limit: 1
+      }
+    )
+    const boundary = terminal.outputBoundary
+    return boundary ? { ...boundary, ...(args.freshLaunch ? { offset: 0 } : {}) } : null
+  } catch {
+    // Missing output provenance on older or disconnected hosts cannot prove a bootstrap failure.
+    return null
   }
 }

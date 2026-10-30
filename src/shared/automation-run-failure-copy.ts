@@ -30,6 +30,8 @@ export const AUTOMATION_RUN_FAILURE_COPY = {
   destinationChanged: 'The automation destination changed before this run could launch.',
   hooksReviewBlocked:
     'The agent is waiting for someone to review new or changed hooks ("Hooks need review"). Open this run and trust them, or remove them. Scheduled runs keep going and succeed once nothing needs review.',
+  codexBootstrapFailed:
+    'Codex could not read its account during startup. Open Codex on this host and check account access. After Codex starts successfully, use Run now to retry this automation.',
   agentNeverStarted: 'Automation agent never started after the prompt was submitted.',
   agentNoCompletion: 'Automation agent did not report completion.',
   watchTimedOut: 'Orca stopped watching this run after 6h without a completion signal.',

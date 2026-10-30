@@ -18,6 +18,7 @@ const CHAT_DEFAULT_ON = { experimentalNativeChat: true }
 
 function harness(options: { startupTerminal?: Record<string, unknown> | null } = {}) {
   const runtime = {
+    captureTerminalOutputBoundary: vi.fn(() => ({ generation: 'output-1', offset: 20 })),
     requireStore: () => ({ getSettings: () => CHAT_DEFAULT_ON }),
     getStructuredAgentSessionCreateSupport: vi.fn(async () => ({ supported: true })),
     createManagedWorktree: vi.fn(async (_args: Record<string, unknown>) => ({
@@ -208,13 +209,17 @@ describe('headless automation agent launch', () => {
       unprovableHost: 'write-unless-shell'
     })
     expect(runtime.launchAgentTerminal).not.toHaveBeenCalled()
+    expect(runtime.captureTerminalOutputBoundary.mock.invocationCallOrder[0]).toBeLessThan(
+      deliverTerminalAgentLaunchPrompt.mock.invocationCallOrder[0]
+    )
     expect(launched).toEqual({
       workspaceId: 'wt-1',
       workspaceDisplayName: 'repo',
       terminalHandle: 'term_prev',
       terminalSessionId: 'tab-prev',
       terminalPaneKey: 'tab-prev:leaf-1',
-      terminalPtyId: 'pty-prev'
+      terminalPtyId: 'pty-prev',
+      terminalOutputBoundary: { generation: 'output-1', offset: 20 }
     })
   })
 

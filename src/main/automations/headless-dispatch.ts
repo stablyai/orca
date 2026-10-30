@@ -13,6 +13,7 @@ export type HeadlessAutomationDispatchLaunch = {
   workspaceDisplayName?: string | null
   terminalSessionId: string | null
   terminalPaneKey?: string | null
+  terminalOutputBoundary?: AutomationRun['terminalOutputBoundary']
   terminalPtyId?: string | null
   completion?: Promise<
     {

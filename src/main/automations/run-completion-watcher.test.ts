@@ -1,3 +1,4 @@
+import { RecentPtyOutputBuffer } from '../runtime/recent-pty-output-buffer'
 import { closeTestStores, createStore, testState } from '../persistence/persistence-test-harness'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdtempSync, rmSync } from 'node:fs'
@@ -7,6 +8,8 @@ import type { Repo } from '../../shared/repo-types'
 import type { Automation, AutomationRun } from '../../shared/automations-types'
 import type { AutomationsChangedPayload } from '../../shared/runtime-client-events'
 import { AutomationService } from './service'
+import { createRuntimeAutomationRunTerminalObserver } from './runtime-terminal-run-observer'
+import { codexBootstrapFailureTail } from './codex-bootstrap-failure.test-fixture'
 import type {
   AutomationRunCompletionObservation,
   AutomationRunTerminalObserver
@@ -41,12 +44,12 @@ const makeRepo = (overrides: Partial<Repo> = {}): Repo => ({
 
 type TestStore = Awaited<ReturnType<typeof createStore>>
 
-function createAutomation(store: TestStore): Automation {
+function createAutomation(store: TestStore, agentId: Automation['agentId'] = 'claude'): Automation {
   store.addRepo(makeRepo())
   return store.createAutomation({
     name: 'Nightly check',
     prompt: 'Check the repo',
-    agentId: 'claude',
+    agentId,
     projectId: 'r1',
     workspaceMode: 'existing',
     workspaceId: 'wt1',
@@ -107,6 +110,97 @@ describe('authority-owned automation run completion', () => {
       expect(readRun(store, automation.id, run.id).status).toBe('completed')
     })
     service.stop()
+  })
+
+  it('persists a typed Codex startup failure and retains its terminal for recovery', async () => {
+    const store = await createStore()
+    const automation = createAutomation(store, 'codex')
+    const output = new RecentPtyOutputBuffer()
+    const terminalOutputBoundary = output.boundary()
+    output.append(codexBootstrapFailureTail.join('\n'))
+    const service = new AutomationService(store, {
+      headlessDispatcher: async () => ({ ...LAUNCH_TARGET, terminalOutputBoundary }),
+      terminalObserver: createRuntimeAutomationRunTerminalObserver(
+        {
+          getTerminalHandleForPaneKey: () => 'handle-1',
+          waitForTerminal: async () => ({ satisfied: true }),
+          readTerminal: async () => ({ tail: codexBootstrapFailureTail }),
+          readTerminalOutputSince: (_handle, boundary) => {
+            const raw = output.readSince(boundary)
+            return raw === null ? null : { output: raw.output.split('\n'), complete: raw.complete }
+          }
+        },
+        { getAgentStatusRowsForPane: () => [], agentCommandsForRun: () => ['codex'] }
+      )
+    })
+
+    const run = await service.runNow(automation.id)
+    await vi.waitFor(() => {
+      expect(readRun(store, automation.id, run.id)).toMatchObject({
+        ...LAUNCH_TARGET,
+        status: 'dispatch_failed',
+        errorCode: 'codexBootstrapFailed',
+        error: expect.stringContaining('Run now'),
+        outputSnapshot: expect.objectContaining({
+          content: expect.stringContaining('workspace routing discovery failed')
+        })
+      })
+    })
+    expect(store.listAutomationRuns(automation.id)).toHaveLength(1)
+    service.stop()
+  })
+
+  it('keeps a restored run dispatched when its saved launch boundary is unreadable', async () => {
+    const store = await createStore()
+    const automation = createAutomation(store, 'codex')
+    store.updateAutomation(automation.id, { enabled: false })
+    const run = store.createAutomationRun(automation, Date.now(), 'manual')
+    const terminalOutputBoundary = new RecentPtyOutputBuffer().boundary()
+    store.updateAutomationRun({
+      runId: run.id,
+      status: 'dispatched',
+      ...LAUNCH_TARGET,
+      terminalOutputBoundary,
+      error: null
+    })
+    await closeTestStores()
+    const restored = await createStore()
+    expect(readRun(restored, automation.id, run.id).terminalOutputBoundary).toEqual(
+      terminalOutputBoundary
+    )
+    const output = new RecentPtyOutputBuffer()
+    output.append(codexBootstrapFailureTail.join('\n'))
+    let done = false
+    const service = new AutomationService(restored, {
+      terminalObserver: createRuntimeAutomationRunTerminalObserver(
+        {
+          getTerminalHandleForPaneKey: () => 'handle-1',
+          waitForTerminal: async () => ({ satisfied: true }),
+          readTerminal: async () => ({ tail: codexBootstrapFailureTail }),
+          readTerminalOutputSince: (_handle, boundary) => {
+            const raw = output.readSince(boundary)
+            return raw === null ? null : { output: raw.output.split('\n'), complete: raw.complete }
+          }
+        },
+        {
+          getAgentStatusRowsForPane: () =>
+            done ? [{ state: 'done', stateStartedAt: Date.now() }] : [],
+          agentCommandsForRun: () => ['codex']
+        }
+      )
+    })
+    vi.useFakeTimers()
+    try {
+      service.start()
+      await vi.advanceTimersByTimeAsync(3 * 60 * 1000)
+      expect(readRun(restored, automation.id, run.id).status).toBe('dispatched')
+      done = true
+      await vi.advanceTimersByTimeAsync(1_000)
+      expect(readRun(restored, automation.id, run.id).status).toBe('completed')
+    } finally {
+      service.stop()
+      vi.useRealTimers()
+    }
   })
 
   it('leaves a headless dispatched run alone when the authority cannot observe it', async () => {

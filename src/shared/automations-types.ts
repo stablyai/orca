@@ -1,3 +1,4 @@
+import type { TerminalOutputBoundary } from './runtime-terminal-contracts'
 import type { TuiAgent } from './tui-agent'
 import type { SetupDecision } from './worktree/create-types'
 import type { TaskSourceContext, WorkspaceRunContext } from './task-source-context'
@@ -149,6 +150,7 @@ export type AutomationRun = {
   /** Retain the executed pane/PTY because terminal tabs may later point elsewhere. */
   terminalPaneKey: string | null
   terminalPtyId: string | null
+  terminalOutputBoundary?: TerminalOutputBoundary | null
   outputSnapshot: AutomationRunOutputSnapshot | null
   precheckResult: AutomationPrecheckResult | null
   usage: AutomationRunUsage | null
@@ -237,6 +239,7 @@ export type AutomationDispatchResult = {
   terminalSessionId?: string | null
   terminalPaneKey?: string | null
   terminalPtyId?: string | null
+  terminalOutputBoundary?: TerminalOutputBoundary | null
   outputSnapshot?: AutomationRunOutputSnapshot | null
   precheckResult?: AutomationPrecheckResult | null
   usage?: AutomationRunUsage | null

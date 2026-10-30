@@ -130,7 +130,8 @@ export async function launchHeadlessAutomationAgent(
     terminalHandle: terminal.handle,
     terminalSessionId: terminal.tabId ?? null,
     terminalPaneKey: terminal.paneKey ?? null,
-    terminalPtyId: terminal.ptyId ?? null
+    terminalPtyId: terminal.ptyId ?? null,
+    terminalOutputBoundary: runtime.captureTerminalOutputBoundary(terminal.handle, true)
   }
 }
 
@@ -161,8 +162,11 @@ async function sendToReusableSession(
       return handle ? { handle, previous } : null
     }
   })
+  if (!session) {
+    return null
+  }
+  const terminalOutputBoundary = runtime.captureTerminalOutputBoundary(session.handle)
   if (
-    !session ||
     !(await deliverTerminalAgentLaunchPrompt({
       runtime,
       handle: session.handle,
@@ -182,7 +186,8 @@ async function sendToReusableSession(
     terminalHandle: session.handle,
     terminalSessionId: session.previous.terminalSessionId,
     terminalPaneKey: session.previous.terminalPaneKey,
-    terminalPtyId: session.previous.terminalPtyId
+    terminalPtyId: session.previous.terminalPtyId,
+    terminalOutputBoundary
   }
 }
 

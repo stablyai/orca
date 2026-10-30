@@ -1,3 +1,7 @@
+import type {
+  TerminalOutputBoundary,
+  TerminalOutputSince
+} from '../../shared/runtime-terminal-contracts'
 import { createHeadlessAutomationOutputSnapshotBuffer } from './headless-dispatch'
 import type {
   AutomationRunCompletionObservation,
@@ -30,6 +34,10 @@ const HELD_DONE_SETTLE_MS = 30_000
 const OBSERVE_DEADLINE_MS = 6 * 60 * 60 * 1000
 
 export type AutomationRunTerminalHost = {
+  readTerminalOutputSince?(
+    handle: string,
+    boundary: TerminalOutputBoundary
+  ): TerminalOutputSince<readonly string[]> | null
   getTerminalHandleForPaneKey(paneKey: string): string | null
   waitForTerminal(
     handle: string,
@@ -56,15 +64,22 @@ async function judgeIdleTail(
   tail: readonly string[],
   evidence: AutomationRunAgentEvidence,
   run: AutomationRun,
-  runStartedAt: number
+  runStartedAt: number,
+  launchTail: TerminalOutputSince<readonly string[]> | null | undefined
 ): Promise<AutomationRunCompletionObservation | null> {
-  const verdict = judgeIdleRun(evidence, run, tail, runStartedAt, Date.now())
+  const verdict = judgeIdleRun(evidence, run, tail, runStartedAt, Date.now(), launchTail)
   if (verdict.kind === 'wait') {
     return null
   }
   return verdict.kind === 'completed'
     ? { status: 'completed', outputSnapshot: snapshotOf(tail), error: null }
-    : { status: 'dispatch_failed', outputSnapshot: snapshotOf(tail), error: verdict.error }
+    : {
+        status: 'dispatch_failed',
+        outputSnapshot: snapshotOf(tail),
+        error: verdict.error,
+        errorCode: verdict.errorCode,
+        errorParams: verdict.errorParams
+      }
 }
 
 /** Rejudge unchanged idle output: an idle shell may never emit another idle edge. */
@@ -82,7 +97,16 @@ async function settleIdlePane(
     if (tail.join('\n') !== idleTail) {
       return null
     }
-    const observation = await judgeIdleTail(tail, judged.evidence, judged.run, runStartedAt)
+    const launchTail = judged.run.terminalOutputBoundary
+      ? (runtime.readTerminalOutputSince?.(handle, judged.run.terminalOutputBoundary) ?? null)
+      : undefined
+    const observation = await judgeIdleTail(
+      tail,
+      judged.evidence,
+      judged.run,
+      runStartedAt,
+      launchTail
+    )
     if (observation) {
       return observation
     }

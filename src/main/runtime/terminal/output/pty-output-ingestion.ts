@@ -30,7 +30,7 @@ export abstract class OrcaRuntimeWithOnPtyData extends OrcaRuntimeWithPreparePty
     ptyId: string,
     data: string
   ): ProcessedAgentStatusChunk
-  protected abstract recordRecentPtyOutput(ptyId: string, data: string): void
+  protected abstract recordRecentPtyOutput(ptyId: string, data: string, historical?: boolean): void
   protected abstract shouldAnswerQueriesForLiveChunk(ptyId: string): boolean
   abstract maybeHydrateHeadlessFromRenderer(ptyId: string): Promise<boolean> | null
   protected abstract trackHeadlessTerminalData(
