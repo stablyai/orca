@@ -22,7 +22,7 @@ Every call is checked against the capabilities the user approved, and params are
 | [`secrets.delete`](#secretsdelete) | `secrets:own` | worker | yes | 1.0 | Removes a secret from the plugin's encrypted secrets file. |
 | [`settings.get`](#settingsget) | `settings:own` | worker | no | 1.0 | Reads every setting the plugin owns. |
 | [`settings.set`](#settingsset) | `settings:own` | worker | yes | 1.0 | Writes one setting the plugin owns. |
-| [`commands.execute`](#commandsexecute) | `commands:execute` | worker, panel | yes | 1.1 | Runs one of this plugin's own commands and returns its JSON value, or null when it returns nothing. |
+| [`commands.execute`](#commandsexecute) | `commands:execute` | panel | yes | 1.1 | Runs one of this plugin's own commands and returns its JSON value, or null when it returns nothing. |
 
 ### `workspace.readContext`
 

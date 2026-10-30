@@ -520,9 +520,26 @@ describe('PluginService commands.execute from a panel', () => {
     const harness = await commandsHarness(pluginManifest)
 
     await expect(
-      harness.service.executeHostCall(pluginKey, 'commands.execute', { commandId: 'run' }, 'panel')
+      harness.service.executeHostCall(
+        pluginKey,
+        'commands.execute',
+        { commandId: 'run', params: { account: 'work' } },
+        'panel'
+      )
     ).resolves.toEqual({ ok: true, value: { value: null } })
     expect(harness.factory).toHaveBeenCalledTimes(1)
+    expect(harness.workers[0]!.invokeCommand).toHaveBeenCalledWith('run', { account: 'work' })
+  })
+
+  it('refuses a disabled plugin before any worker starts', async () => {
+    const pluginManifest = commandsManifest([{ id: 'run', title: 'Run' }])
+    const harness = await commandsHarness(pluginManifest)
+    harness.setDisabled([pluginKey])
+
+    await expect(
+      harness.service.executeHostCall(pluginKey, 'commands.execute', { commandId: 'run' }, 'panel')
+    ).resolves.toMatchObject({ ok: false, code: 'consent_required' })
+    expect(harness.factory).not.toHaveBeenCalled()
   })
 
   it('rejects a command the plugin does not contribute', async () => {

@@ -6,6 +6,8 @@ import {
   PLUGIN_TERMINAL_ID_MAX_LENGTH,
   PLUGIN_WORKSPACE_LABEL_MAX_LENGTH,
   PLUGIN_WORKSPACE_TERMINAL_LIMIT,
+  jsonByteLength,
+  PLUGIN_COMMAND_RESULT_MAX_BYTES,
   pluginJsonValueSchema,
   type PluginHostMethodName,
   type PluginHostMethodSpec,
@@ -184,6 +186,9 @@ const HANDLERS: Record<PluginHostMethodName, BoundPluginHostMethod> = {
       const json = pluginJsonValueSchema.safeParse(result)
       if (!json.success) {
         throw new Error(`command ${commandId} returned a value that is not JSON`)
+      }
+      if (jsonByteLength(json.data) > PLUGIN_COMMAND_RESULT_MAX_BYTES) {
+        throw new Error(`command ${commandId} result exceeds 256 KiB`)
       }
       return { value: json.data }
     }

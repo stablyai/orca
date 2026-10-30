@@ -95,7 +95,7 @@ const settingsSetResult = z.object({ ok: z.literal(true) })
 
 export const PLUGIN_COMMAND_PARAMS_MAX_BYTES = 16 * 1024
 export const PLUGIN_COMMAND_RESULT_MAX_BYTES = 256 * 1024
-const jsonByteLength = (value: unknown): number =>
+export const jsonByteLength = (value: unknown): number =>
   new TextEncoder().encode(JSON.stringify(value)).byteLength
 
 const commandsExecuteParams = z.strictObject({
@@ -268,7 +268,7 @@ export const PLUGIN_HOST_API = {
     scope: 'plugin-private',
     capability: 'commands:execute',
     mutation: true,
-    surfaces: ['worker', 'panel'],
+    surfaces: ['panel'],
     params: commandsExecuteParams,
     result: commandsExecuteResult
   })
