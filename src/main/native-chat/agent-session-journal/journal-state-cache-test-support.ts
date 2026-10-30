@@ -1,8 +1,11 @@
 import type Database from '../../sqlite/sync-database'
 import type { JournalReducerState } from './journal-reducer'
-import { journalEntryJson, journalStateCollections } from './journal-state-layout'
+import {
+  journalEntryJson,
+  journalStateCollections,
+  journalStateScalars
+} from './journal-state-layout'
 import { clearJournalSavedState, writeJournalProjectionScalars } from './journal-projection-table'
-import { journalStateScalars } from './journal-state-layout'
 import { readJournalSavedView } from './journal-saved-state'
 
 /** The decoded saved view, or null when it is absent or unreadable. */
