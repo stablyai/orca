@@ -3,6 +3,7 @@ import { TerminalInputSequenceLedger } from '../../../../main/runtime/rpc/method
 import {
   createRemoteRuntimeInputJournal,
   REMOTE_RUNTIME_INPUT_ACK_STALL_MS,
+  REMOTE_RUNTIME_INPUT_JOURNAL_MAX_CODE_UNITS,
   REMOTE_RUNTIME_INPUT_REFUSAL_ROUNDS_BEFORE_ESCALATION,
   REMOTE_RUNTIME_INPUT_RESEND_BACKOFF_MS,
   type RemoteRuntimeInputJournal,
@@ -154,6 +155,43 @@ it('retains a current scoped neighbor through ordinary catch-up, gap/refusal, an
   await h.settle()
   expect(h.writes).toEqual(['B:scoped-current', 'B:ordinary-new'])
   expect(h.recovery).not.toHaveBeenCalled()
+  expect(vi.getTimerCount()).toBe(0)
+
+  const budget = hostHarness()
+  oldCurrent = true
+  const retained = 'survivor💡'
+  const budgetSeqs = budget.journal.send(budget.stream, a, [
+    { text: 'discard-ordinary', queryReply: false },
+    { text: 'discard-stale', queryReply: false, source: old },
+    { text: retained, queryReply: false, source: current }
+  ])
+  const droppedWaits = budgetSeqs.slice(0, 2).map((seq) => budget.journal.whenAcknowledged(seq))
+  const survivorSettled = vi.fn()
+  void budget.journal.whenAcknowledged(budgetSeqs[2]).then(survivorSettled)
+  await budget.settle()
+  oldCurrent = false
+  budget.journal.resume(budget.connect(b), b)
+  await budget.settle()
+  expect(await Promise.all(droppedWaits)).toEqual([false, false])
+  const filler = 'x'.repeat(REMOTE_RUNTIME_INPUT_JOURNAL_MAX_CODE_UNITS - retained.length)
+  const [fillerSeq] = budget.journal.send(budget.stream, b, [{ text: filler, queryReply: false }])
+  await budget.settle()
+  expect(survivorSettled).not.toHaveBeenCalled()
+  const [overflowSeq] = budget.journal.send(budget.stream, b, [{ text: '!', queryReply: false }])
+  await budget.settle()
+  expect(survivorSettled).toHaveBeenCalledExactlyOnceWith(false)
+  const retryStart = budget.frames.length
+  budget.allow()
+  budget.journal.resume(budget.connect(b), b)
+  await budget.settle()
+  expect(budget.frames.slice(retryStart)).toEqual(
+    [budgetSeqs[2], fillerSeq, overflowSeq].map((seq) => ({ target: 'B', seq, text: '' }))
+  )
+  expect(budget.writes).toEqual([])
+  budget.journal.send(budget.stream, b, [{ text: 'after-budget', queryReply: false }])
+  await budget.settle()
+  expect(budget.writes).toEqual(['B:after-budget'])
+  expect(budget.recovery).not.toHaveBeenCalled()
   expect(vi.getTimerCount()).toBe(0)
 })
 
