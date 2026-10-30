@@ -1,10 +1,10 @@
 import { join } from 'node:path'
-import { mkdirSync } from 'node:fs'
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import { vi } from 'vitest'
 import { runProcess } from '@orca/process-host'
 import { releaseModuleExport } from '../../../../tests/e2e/cross-version-wire/release-module-export'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
-import type { Store } from '../../persistence'
+import type { createProfileStateStore } from '../../persistence/profile-state/profile-state-store-factory'
 import type { getDefaultPersistedState } from '../../../shared/constants'
 import type { OrcaRuntimeService } from '../orca-runtime'
 import type { OrcaRuntimeRpcServer } from '../runtime-rpc'
@@ -39,7 +39,9 @@ export async function observationRuntime(options: {
   capture: ObservationCapture
 }) {
   const profile = join(options.scratch, options.id, 'profile')
+  const newProfile = !existsSync(profile)
   mkdirSync(profile, { recursive: true })
+  const dataFile = join(profile, 'state.json')
   const archivePath = join(
     import.meta.dirname,
     '../../../../tests/e2e/cross-version-wire/release-checkout.ts'
@@ -117,32 +119,37 @@ export async function observationRuntime(options: {
       { path: '/observation/w1', head: 'abc', branch: 'main', isBare: false, isMainWorktree: true }
     ]
   }))
-  const StoreClass = await load<typeof Store>('src/main/persistence.ts', 'Store')
+  const createStore = await load<typeof createProfileStateStore>(
+    'src/main/persistence/profile-state/profile-state-store-factory.ts',
+    'createProfileStateStore'
+  )
+  if (typeof createStore !== 'function') {
+    throw new Error('Observation requires the archived writable profile factory')
+  }
   const defaults = await load<typeof getDefaultPersistedState>(
     'src/shared/constants.ts',
     'getDefaultPersistedState'
   )
-  const state = defaults(profile)
-  state.repos = [
-    {
-      id: 'observation',
-      path: '/observation',
-      displayName: 'Observation',
-      badgeColor: 'blue',
-      addedAt: 1
+  if (newProfile) {
+    const state = defaults(profile)
+    state.repos = [
+      {
+        id: 'observation',
+        path: '/observation',
+        displayName: 'Observation',
+        badgeColor: 'blue',
+        addedAt: 1
+      }
+    ]
+    state.settings.notifications = {
+      ...state.settings.notifications,
+      enabled: options.id !== 'B',
+      agentTaskComplete: true,
+      terminalBell: true,
+      mutedNotificationSourceIds: []
     }
-  ]
-  state.settings.notifications = {
-    ...state.settings.notifications,
-    enabled: options.id !== 'B',
-    agentTaskComplete: true,
-    terminalBell: true,
-    mutedNotificationSourceIds: []
+    writeFileSync(dataFile, JSON.stringify(state), { flag: 'wx' })
   }
-  const store = new StoreClass({
-    dataFile: join(profile, 'state.json'),
-    serializedState: JSON.stringify(state)
-  })
   const Runtime = await load<typeof OrcaRuntimeService>(
     'src/main/runtime/orca-runtime.ts',
     'OrcaRuntimeService'
@@ -151,7 +158,6 @@ export async function observationRuntime(options: {
     'src/main/runtime/runtime-rpc.ts',
     'OrcaRuntimeRpcServer'
   )
-  const runtime = new Runtime(store)
   const methods: RpcAnyMethodDeclaration[] = []
   for (const [file, symbol] of [
     ['status', 'STATUS_METHODS'],
@@ -175,14 +181,13 @@ export async function observationRuntime(options: {
       ))
     )
   }
-  const server = new Rpc({
-    runtime,
+  const store = createStore({
     userDataPath: profile,
-    methods,
-    enableWebSocket: true,
-    wsPort: options.port ?? 0,
-    pinnedBindHost: '127.0.0.1'
-  })
+    dataFile,
+    databaseFile: join(profile, 'profile-state.db'),
+    profileId: options.id
+  }).store
+  let ownedServer: OrcaRuntimeRpcServer | undefined
   const subscribed = Promise.withResolvers<void>()
   const releaseSpies: (() => void)[] = []
   let host: StructuredAgentSessionHost | undefined
@@ -204,17 +209,35 @@ export async function observationRuntime(options: {
         )
         reset()
       })
-      await closing.run(() => server.setMobileDesktopRelayHosts(null))
-      await closing.run(() => server.stop())
+      await closing.run(() => ownedServer?.setMobileDesktopRelayHosts(null))
+      await closing.run(() => ownedServer?.stop())
       await closing.run(() => host?.flushAllStreamedEvents())
       await closing.run(() => uninstall?.(null))
       await closing.run(() => database?.close())
       for (const restore of releaseSpies) {
         await closing.run(restore)
       }
+      await closing.run(() => store.flushFinalOrThrowAsync())
+      await closing.run(() => store.freezeWritesAsync())
       closing.finish()
     })())
   try {
+    if (
+      typeof store.flushFinalOrThrowAsync !== 'function' ||
+      typeof store.freezeWritesAsync !== 'function'
+    ) {
+      throw new Error('Observation requires archived throwing checkpoint and awaited close')
+    }
+    const runtime = new Runtime(store)
+    const server = new Rpc({
+      runtime,
+      userDataPath: profile,
+      methods,
+      enableWebSocket: true,
+      wsPort: options.port ?? 0,
+      pinnedBindHost: '127.0.0.1'
+    })
+    ownedServer = server
     await server.start()
     const Service = await load<typeof DesktopPushService>(
       'src/main/runtime/push/desktop-push-service.ts',
