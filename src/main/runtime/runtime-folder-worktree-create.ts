@@ -1,3 +1,4 @@
+import { formatTerminalStartFailure } from '../../shared/terminal-start-failure'
 import { readableWslDistroHoldText } from '../../shared/wsl-distro-stopped-hold'
 import { paneIdentity } from './runtime-terminal-pane-identity'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
@@ -189,7 +190,8 @@ export async function createRuntimeFolderWorktree(args: {
       }
     } catch (error) {
       const message = readableWslDistroHoldText(
-        error instanceof Error ? error.message : String(error)
+        formatTerminalStartFailure(error) ??
+          (error instanceof Error ? error.message : String(error))
       )
       warning = `Failed to create the startup terminal for ${worktree.path}: ${message}`
       console.warn(`[worktree-create] ${warning}`)
@@ -223,7 +225,8 @@ export async function createRuntimeFolderWorktree(args: {
       await deps.createTerminal(`id:${worktree.id}`, { surfaceOwner: false })
     } catch (error) {
       const message = readableWslDistroHoldText(
-        error instanceof Error ? error.message : String(error)
+        formatTerminalStartFailure(error) ??
+          (error instanceof Error ? error.message : String(error))
       )
       const initialWarning = `Failed to create the initial terminal for ${worktree.path}: ${message}`
       warning = warning

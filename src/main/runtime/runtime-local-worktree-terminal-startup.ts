@@ -1,3 +1,4 @@
+import { formatTerminalStartFailure } from '../../shared/terminal-start-failure'
 import { readableWslDistroHoldText } from '../../shared/wsl-distro-stopped-hold'
 import { paneIdentity } from './runtime-terminal-pane-identity'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
@@ -305,7 +306,9 @@ function appendFailure(
   kind: 'startup' | 'initial',
   error: unknown
 ): string {
-  const message = readableWslDistroHoldText(error instanceof Error ? error.message : String(error))
+  const message = readableWslDistroHoldText(
+    formatTerminalStartFailure(error) ?? (error instanceof Error ? error.message : String(error))
+  )
   const failure = `failed to create the ${kind} terminal for ${path}: ${message}`
   const combined = warning
     ? `${warning} Also ${failure}`
