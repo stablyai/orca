@@ -1386,6 +1386,27 @@
         "title": "Windows ドライブ上のフォルダーはこのコンピューターで追加してください",
         "descriptionWithPath": "{{value0}} は Windows ドライブ上にあります。WSL の Git はそこで誤った改行コードの変更を報告し、Windows から行った編集を見逃し、検索も遅くなります。",
         "description": "このフォルダーは Windows ドライブ上にあります。WSL の Git はそこで誤った改行コードの変更を報告し、Windows から行った編集を見逃し、検索も遅くなります。"
+      },
+      "plane": {
+        "usage": {
+          "examples": {
+            "readTicket": "リンクされた Issue を確認",
+            "readTicketSummary": "作業を開始する前に、リンクされた Plane Issue の完全なコンテキストを取得します。",
+            "readTicketPrompt": "{{value0}} を使用してこのワークツリーにリンクされた Plane Issue を確認し、開始前にゴールと受け入れ基準を要約してください。",
+            "postUpdate": "進捗状況を投稿",
+            "postUpdateSummary": "進捗状況または完了の概要を Plane Issue にコメントします。",
+            "postUpdatePrompt": "{{value0}} を使用して、何が変更されどのように検証されたかを含む完了報告を、リンクされた Plane Issue に投稿してください。",
+            "moveState": "Issue のステータスを進める",
+            "moveStateSummary": "作業の進行に合わせて Plane のワークフローステータスを進めます。",
+            "moveStatePrompt": "変更作業が進行中になったため、{{value0}} を使用してリンクされた Plane Issue を In Progress または In Review に移動してください。",
+            "triagePriority": "トリアージして優先度を設定",
+            "triagePrioritySummary": "スコープの明確化に合わせて Plane Issue の優先度やステータスを更新します。",
+            "triagePriorityPrompt": "{{value0}} を使用してリンクされた Plane Issue をトリアージし、優先度を urgent/high/medium/low に更新してステータスを調整してください。",
+            "createFollowup": "フォローアップ Issue を作成",
+            "createFollowupSummary": "開発中に見つかった後回しの作業や関連するバグについて、新しい Plane Issue を起票します。",
+            "createFollowupPrompt": "{{value0}} を使用して、後回しになったフォローアップ作業用の新しい Plane Issue を作成してください。"
+          }
+        }
       }
     },
     "hooks": {
@@ -1516,7 +1537,9 @@
         "automationsDescription": "Agent の作業をスケジュールし、自動化をサイドバーに表示するかどうかを選択します。",
         "shareSkillsTitle": "スキルを共有する",
         "shareSkillsDescription": "非公開リンクを使用してスキルを共有してください。持っている人なら誰でもインストールできます。",
-        "floatingWorkspaceWebDescription": "グローバルターミナルと markdown タブ。"
+        "floatingWorkspaceWebDescription": "グローバルターミナルと markdown タブ。",
+        "planeTitle": "Plane",
+        "planeDescription": "Orca での Plane の仕組み、セットアップチェックリスト、Agent スキル、プロンプト例。"
       },
       "useAppMenuPaste": {
         "pasteTooLarge": "貼り付け内容が大きすぎます。"
@@ -5548,7 +5571,8 @@
           "fee535205b": "タスク",
           "d599269755": "サイドバーから非表示",
           "artifacts": "アーティファクト",
-          "skills": "スキル"
+          "skills": "スキル",
+          "openPlaneTasks": "Plane タスクを開く"
         },
         "SidebarRepositoryFilterSection": {
           "d3a9c4cea1": "クリア",
@@ -8244,7 +8268,9 @@
           "linearDescription": "Orca での Linear の仕組み、セットアップチェックリスト、Agent スキル、プロンプト例。",
           "tasksDescription": "プロバイダーを接続し、Linear スキルをインストールして、タスクに表示する項目を選択します。",
           "remoteServersDescription": "別のマシンで Orca を実行し、ここから作業します。",
-          "noSettingsFoundForQuery": "検索条件に一致する設定が見つかりませんでした:「{{value0}}」"
+          "noSettingsFoundForQuery": "検索条件に一致する設定が見つかりませんでした:「{{value0}}」",
+          "planeTitle": "Plane",
+          "planeDescription": "Orca での Plane の仕組み、セットアップチェックリスト、Agent スキル、プロンプト例。"
         },
         "SettingsFormControls": {
           "42a4d15a30": "一致するフォントがありません。",
@@ -8487,7 +8513,9 @@
           "integrationsHint": "すべてのプロバイダーの認証情報は次の場所でも管理できます：",
           "integrationsLink": "連携",
           "skillHint": "。Linear の接続後、使用例は設定 → Linear で確認できます。",
-          "incompleteBannerBodyWithLinear": "使用しないプロバイダーを非表示にするか、カードを展開して手順を完了してください。Linear では API アクセス、Agent スキル、タスクへの表示が必要です。"
+          "incompleteBannerBodyWithLinear": "使用しないプロバイダーを非表示にするか、カードを展開して手順を完了してください。Linear では API アクセス、Agent スキル、タスクへの表示が必要です。",
+          "plane": "Plane",
+          "planeDescription": "Plane Cloud またはセルフホストの Plane を接続し、タスクに表示します。"
         },
         "TerminalAppearanceSection": {
           "a14a427ae4": "ペイン分割線の太さ。",
@@ -9792,7 +9820,10 @@
             "7166b9090c": "gh CLI を介した GitHub 認証。",
             "f16e41cc72": "GitHub 連携",
             "760e2446e0": "保存された API トークンまたは環境変数を使用した Bitbucket クラウド認証。",
-            "af5ae87847": "アクセストークン"
+            "af5ae87847": "アクセストークン",
+            "plane_title": "Plane 連携",
+            "plane_description": "Plane Cloud またはセルフホストを接続して Issue を参照・リンクします。",
+            "plane_keyword": "Plane"
           }
         },
         "jira": {
@@ -10284,7 +10315,8 @@
             "setup": "セットアップ",
             "apiKey": "APIキー",
             "skill": "スキル",
-            "connect": "接続"
+            "connect": "接続",
+            "plane": "Plane"
           }
         },
         "terminal": {
@@ -10745,7 +10777,9 @@
                 "connectedSiteSingular": "{{count}} 件のサイトに接続済み",
                 "connectedSitePlural": "{{count}} 件のサイトに接続済み",
                 "connectedWorkspaceSingular": "{{count}} 件のワークスペースに接続済み",
-                "connectedWorkspacePlural": "{{count}} 件のワークスペースに接続済み"
+                "connectedWorkspacePlural": "{{count}} 件のワークスペースに接続済み",
+                "checkingPlane": "設定アクションを表示する前に Plane のアクセス権を確認しています。",
+                "addPlaneAccess": "API トークンを使用して Plane Cloud またはセルフホスト環境に接続します。"
               }
             }
           }
@@ -12666,6 +12700,72 @@
         },
         "pluginTryAction": {
           "incompleteLanguage": "この言語パックは未完成の部分が多いため、切り替えられません。"
+        },
+        "PlaneAgentSkillPane": {
+          "title": "Plane",
+          "description": "Orca で Plane の Issue を参照し、リンク済みワークスペースを開始して、/orca-plane で Agent から更新できます。",
+          "skillTitle": "Plane スキル",
+          "howToUse": "プロンプト例",
+          "howToUseDescription": "カードをクリックするとプロンプトをコピーできます。スキルのインストール後、Plane にリンクしたワークツリーで使用してください。",
+          "manageConnectionHint": "接続済みの Plane ワークスペースと API キーは次の場所で確認できます：",
+          "manageConnectionLink": "連携"
+        },
+        "PlaneAgentSkillGuide": {
+          "setupConnectTitle": "1. Plane に接続",
+          "setupConnectBody": "Orca が Issue を一覧表示し、リンク済みワークスペースを開くための個人 API キー。",
+          "manageKeys": "キーを管理",
+          "addAccess": "アクセスを追加",
+          "setupSkillTitle": "2. Agent スキルをインストール",
+          "setupSkillBody": "Agent が /orca-plane で課題の参照、更新、トリアージ、プル／MR の添付を行えるようにします。",
+          "setupVisibleTitle": "3. タスクに Plane を表示",
+          "setupVisibleBody": "Plane をタスクのソース選択とサイドバーのショートカットに表示します。",
+          "openTaskSources": "タスクソース",
+          "setupTitle": "セットアップチェックリスト",
+          "setupBody": "タスクと Agent の一連の流れには 3 つの手順が必要です。初回設定はタスクソースでも行えます。",
+          "setupReady": "設定完了",
+          "setupProgress": "{{total}} 件中 {{done}} 件が完了",
+          "notesTitle": "知っておくと便利",
+          "notesIntro": "Plane の接続とスキルのインストール後に役立つポイントです。",
+          "noteLinkedTitle": "Plane の Issue から開始",
+          "noteLinkedBody": "チケット操作は、タスクから作成したワークツリーで最も効果的です。Issue がコンテキストとしてリンクされたままになります。",
+          "noteSlashTitle": "/orca-plane を指定",
+          "noteSlashBody": "チャットで /orca-plane を使うか自然言語で依頼すると、そのターンで Agent がスキルを読み込みます。",
+          "noteInstanceTitle": "Cloud とセルフホスト",
+          "noteInstanceBody": "Plane Cloud（app.plane.so）とカスタムセルフホストの Plane インスタンスの両方をサポートします。",
+          "noteVisibilityTitle": "非表示にしても接続は維持",
+          "noteVisibilityBody": "タスクソースで Plane を非表示にしても、選択肢から外れるだけで、キーやスキルは削除されません。",
+          "setupChecking": "確認中…"
+        },
+        "TaskSourcePlaneSetup": {
+          "connectTitle": "Plane に接続",
+          "connectDescription": "Orca が Issue を参照し、そのコンテキストでワークスペースを開けるように個人 API キーを追加します。",
+          "manageAccess": "キーを管理",
+          "addAccess": "Plane アクセスを追加",
+          "connectedHint": "ワークスペースとキーはアクティブな実行環境に保存されます。アクセスはいつでも追加できます。",
+          "recheck": "接続を再確認",
+          "skillTitle": "Plane Agent スキルをインストール",
+          "skillDescription": "Agent が /orca-plane で課題の参照、更新の投稿、状態変更、プル／MR の添付を行えるようにします。",
+          "skillBlocked": "先に Plane に接続してから、Agent 用スキルをインストールしてください。",
+          "skillPanelTitle": "Plane スキル",
+          "showDescription": "Plane をタスクのソース選択とサイドバーのショートカットに表示します。"
+        },
+        "plane": {
+          "agent": {
+            "skill": {
+              "search": {
+                "title": "Plane",
+                "description": "Plane スキルの状態、使用例、タスクソース設定へのリンク。",
+                "plane": "Plane",
+                "tickets": "チケット",
+                "issues": "Issue",
+                "skill": "スキル",
+                "orcaPlane": "orca-plane"
+              }
+            }
+          },
+          "cloud": "Plane Cloud",
+          "connectionFailed": "接続に失敗しました",
+          "cardFooter": "Plane Cloud またはセルフホスト環境から直接、Issue の参照やチケットのコンテキストを持つワークツリーを開きます。"
         }
       },
       "right": {
@@ -17491,6 +17591,20 @@
                 }
               }
             }
+          },
+          "plane": {
+            "connectTitle": "Plane ワークスペースを接続",
+            "connectDescription": "独立したワークツリーで Plane の Issue を直接参照、追跡、作業開始できます。",
+            "connectButton": "Plane に接続",
+            "selectWorkspace": "ワークスペースを選択",
+            "allProjects": "すべてのプロジェクト",
+            "refreshIssues": "Issue を更新",
+            "openInPlane": "Plane で開く",
+            "noIssuesFound": "Issue が見つかりません",
+            "createIssueHint": "Plane で Issue を作成するとここに表示されます。",
+            "backlog": "バックログ",
+            "openInWorktree": "ワークツリーで開く",
+            "viewInPlane": "Plane で表示"
           }
         }
       },
@@ -18126,6 +18240,23 @@
           "noTabGroup": "「{{action}}」を実行できません。利用可能なタブグループがありません。",
           "noMovableChat": "「{{action}}」を実行できません。移動できるアクティブなチャットがありません。",
           "clientUnsupported": "「{{action}}」を実行できません。このクライアントとランタイムは対応していません。"
+        }
+      },
+      "plane": {
+        "connect": {
+          "dialog": {
+            "title": "Plane に接続",
+            "description": "Plane ワークスペースを接続して、Issue の参照やチケットのコンテキストを持つワークツリーを開きます。",
+            "deploymentType": "デプロイタイプ",
+            "planeCloud": "Plane Cloud",
+            "selfHosted": "セルフホスト",
+            "instanceUrl": "インスタンス URL",
+            "instanceUrlPlaceholder": "https://plane.yourcompany.com",
+            "personalApiToken": "個人用 API トークン",
+            "createApiToken": "API トークンを作成",
+            "apiTokenPlaceholder": "plane_api_...",
+            "connecting": "接続中..."
+          }
         }
       }
     },
@@ -20689,7 +20820,9 @@
   },
   "common": {
     "retry": "再試行",
-    "cancel": "キャンセル"
+    "cancel": "キャンセル",
+    "connect": "接続",
+    "disconnect": "切断"
   },
   "fileExplorer": {
     "root": {

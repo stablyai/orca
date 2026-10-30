@@ -1386,6 +1386,27 @@
         "title": "Windows 드라이브 폴더는 이 컴퓨터에서 추가하세요",
         "descriptionWithPath": "{{value0}}은(는) Windows 드라이브에 있습니다. WSL의 Git은 그곳에서 잘못된 줄 끝 변경을 보고하고, Windows에서 한 편집을 놓치며, 검색도 느립니다.",
         "description": "이 폴더는 Windows 드라이브에 있습니다. WSL의 Git은 그곳에서 잘못된 줄 끝 변경을 보고하고, Windows에서 한 편집을 놓치며, 검색도 느립니다."
+      },
+      "plane": {
+        "usage": {
+          "examples": {
+            "readTicket": "연결된 이슈 읽기",
+            "readTicketSummary": "작업을 시작하기 전에 연결된 Plane 이슈의 전체 컨텍스트를 가져옵니다.",
+            "readTicketPrompt": "{{value0}}을(를) 사용하여 이 워크스페이스에 연결된 Plane 이슈를 읽고, 시작하기 전에 목표와 승인 기준을 요약하세요.",
+            "postUpdate": "진행 상황 업데이트 게시",
+            "postUpdateSummary": "진행 상황이나 완료 요약을 Plane 이슈에 댓글로 남깁니다.",
+            "postUpdatePrompt": "{{value0}}을(를) 사용하여 변경 사항과 검증 방법을 포함한 완료 업데이트를 연결된 Plane 이슈에 게시하세요.",
+            "moveState": "이슈 상태 진행",
+            "moveStateSummary": "작업 진행에 따라 Plane 워크플로 상태를 진행합니다.",
+            "moveStatePrompt": "작업이 진행 중이므로 {{value0}}을(를) 사용하여 연결된 Plane 이슈를 In Progress 또는 In Review로 이동하세요.",
+            "triagePriority": "트리아지 및 우선순위 설정",
+            "triagePrioritySummary": "범위가 명확해짐에 따라 Plane 이슈의 우선순위 또는 상태를 업데이트합니다.",
+            "triagePriorityPrompt": "{{value0}}을(를) 사용하여 연결된 Plane 이슈를 트리아지하고 우선순위를 urgent/high/medium/low로 업데이트한 뒤 상태를 조정하세요.",
+            "createFollowup": "후속 이슈 생성",
+            "createFollowupSummary": "개발 중 발견된 보류 작업이나 관련 버그에 대한 새 Plane 이슈를 생성합니다.",
+            "createFollowupPrompt": "{{value0}}을(를) 사용하여 보류된 후속 작업을 위한 새 Plane 이슈를 생성하세요."
+          }
+        }
       }
     },
     "hooks": {
@@ -1516,7 +1537,9 @@
         "artifactsDescription": "팀과 HTML 및 Markdown 파일을 공유하고 공개 링크를 관리하세요.",
         "shareSkillsTitle": "스킬 공유",
         "shareSkillsDescription": "비공개 링크로 기술을 공유하세요. 가지고 있는 사람이라면 누구나 설치할 수 있습니다.",
-        "floatingWorkspaceWebDescription": "전역 터미널 및 markdown 탭."
+        "floatingWorkspaceWebDescription": "전역 터미널 및 markdown 탭.",
+        "planeTitle": "Plane",
+        "planeDescription": "Orca에서 Plane이 작동하는 방식, 설정 체크리스트, 에이전트 스킬 및 예시 프롬프트입니다."
       },
       "useAppMenuPaste": {
         "pasteTooLarge": "붙여넣기 내용이 너무 큽니다."
@@ -5548,7 +5571,8 @@
           "fee535205b": "작업",
           "d599269755": "사이드바에서 숨기기",
           "artifacts": "아티팩트",
-          "skills": "스킬"
+          "skills": "스킬",
+          "openPlaneTasks": "Plane 작업 열기"
         },
         "SidebarRepositoryFilterSection": {
           "d3a9c4cea1": "지우기",
@@ -8207,7 +8231,9 @@
           "linearDescription": "Orca에서 Linear가 작동하는 방식, 설정 체크리스트, 에이전트 스킬, 프롬프트 예시입니다.",
           "tasksDescription": "제공업체를 연결하고 Linear 스킬을 설치한 다음 작업에 표시할 항목을 선택하세요.",
           "remoteServersDescription": "다른 컴퓨터에서 Orca를 실행하고 여기에서 작업하세요.",
-          "noSettingsFoundForQuery": "\"{{value0}}\"에 대한 설정을 찾을 수 없습니다."
+          "noSettingsFoundForQuery": "\"{{value0}}\"에 대한 설정을 찾을 수 없습니다.",
+          "planeTitle": "Plane",
+          "planeDescription": "Orca에서 Plane이 작동하는 방식, 설정 체크리스트, 에이전트 스킬 및 예시 프롬프트입니다."
         },
         "SettingsFormControls": {
           "42a4d15a30": "일치하는 글꼴이 없습니다.",
@@ -8450,7 +8476,9 @@
           "integrationsHint": "모든 제공업체의 자격 증명은 다음에서도 관리할 수 있습니다:",
           "integrationsLink": "연동",
           "skillHint": ". Linear를 연결한 후 사용 예시는 설정 → Linear에서 확인할 수 있습니다.",
-          "incompleteBannerBodyWithLinear": "사용하지 않는 제공업체를 숨기거나 카드를 펼쳐 단계를 완료하세요. Linear에는 API 액세스, 에이전트 스킬, 작업에 표시가 필요합니다."
+          "incompleteBannerBodyWithLinear": "사용하지 않는 제공업체를 숨기거나 카드를 펼쳐 단계를 완료하세요. Linear에는 API 액세스, 에이전트 스킬, 작업에 표시가 필요합니다.",
+          "plane": "Plane",
+          "planeDescription": "Plane Cloud 또는 자체 호스팅 Plane을 연결하고 작업에 표시합니다."
         },
         "TerminalAppearanceSection": {
           "a14a427ae4": "창 구분선의 두께입니다.",
@@ -9755,7 +9783,10 @@
             "7166b9090c": "gh CLI를 통한 GitHub 인증.",
             "f16e41cc72": "GitHub 연동",
             "760e2446e0": "저장된 API 토큰 또는 환경 변수를 사용한 Bitbucket 클라우드 인증.",
-            "af5ae87847": "액세스 토큰"
+            "af5ae87847": "액세스 토큰",
+            "plane_title": "Plane 연동",
+            "plane_description": "Plane Cloud 또는 자체 호스팅을 연결하여 이슈를 탐색하고 연결하세요.",
+            "plane_keyword": "Plane"
           }
         },
         "jira": {
@@ -10247,7 +10278,8 @@
             "setup": "설정",
             "apiKey": "API 키",
             "skill": "스킬",
-            "connect": "연결"
+            "connect": "연결",
+            "plane": "Plane"
           }
         },
         "terminal": {
@@ -10745,7 +10777,9 @@
                 "connectedSiteSingular": "사이트 {{count}}개 연결됨",
                 "connectedSitePlural": "사이트 {{count}}개 연결됨",
                 "connectedWorkspaceSingular": "워크스페이스 {{count}}개 연결됨",
-                "connectedWorkspacePlural": "워크스페이스 {{count}}개 연결됨"
+                "connectedWorkspacePlural": "워크스페이스 {{count}}개 연결됨",
+                "checkingPlane": "설정 작업을 표시하기 전에 Plane 액세스를 확인하는 중입니다.",
+                "addPlaneAccess": "API 토큰을 사용하여 Plane Cloud 또는 자체 호스팅 인스턴스를 연결하세요."
               }
             }
           }
@@ -12666,6 +12700,72 @@
         },
         "pluginTryAction": {
           "incompleteLanguage": "이 언어 팩은 번역이 너무 불완전해서 전환할 수 없습니다."
+        },
+        "PlaneAgentSkillPane": {
+          "title": "Plane",
+          "description": "Orca에서 Plane 이슈를 탐색하고 연결된 워크스페이스를 시작하며 /orca-plane로 에이전트가 이슈를 업데이트할 수 있습니다.",
+          "skillTitle": "Plane 스킬",
+          "howToUse": "프롬프트 예시",
+          "howToUseDescription": "카드를 클릭해 프롬프트를 복사하세요. 스킬을 설치한 후 Plane에 연결된 워크스페이스에서 사용하세요.",
+          "manageConnectionHint": "연결된 Plane 워크스페이스와 API 키는 다음에서 확인할 수 있습니다.",
+          "manageConnectionLink": "연동"
+        },
+        "PlaneAgentSkillGuide": {
+          "setupConnectTitle": "1. Plane 연결",
+          "setupConnectBody": "Orca가 이슈를 나열하고 연결된 워크스페이스를 열 수 있도록 하는 개인 API 키입니다.",
+          "manageKeys": "키 관리",
+          "addAccess": "액세스 추가",
+          "setupSkillTitle": "2. 에이전트 스킬 설치",
+          "setupSkillBody": "에이전트가 /orca-plane로 이슈 읽기, 업데이트, 분류, 풀 또는 머지 리퀘스트 첨부를 할 수 있게 합니다.",
+          "setupVisibleTitle": "3. 작업에 Plane 표시",
+          "setupVisibleBody": "작업 소스 선택기와 사이드바 바로 가기에 Plane를 표시합니다.",
+          "openTaskSources": "작업 소스",
+          "setupTitle": "설정 체크리스트",
+          "setupBody": "작업과 에이전트의 전체 흐름에는 세 단계가 모두 필요합니다. 최초 설정은 작업 소스에서도 진행할 수 있습니다.",
+          "setupReady": "설정 완료",
+          "setupProgress": "{{total}}개 중 {{done}}개 완료",
+          "notesTitle": "알아두면 좋은 점",
+          "notesIntro": "Plane를 연결하고 스킬을 설치한 후 참고할 내용입니다.",
+          "noteLinkedTitle": "Plane 이슈에서 시작",
+          "noteLinkedBody": "작업에서 만든 워크스페이스는 이슈가 컨텍스트로 연결되어 있어 이슈 작업이 가장 원활합니다.",
+          "noteSlashTitle": "/orca-plane 언급",
+          "noteSlashBody": "채팅에서 /orca-plane를 사용하거나 자연어로 요청하면 해당 턴에 에이전트가 스킬을 불러옵니다.",
+          "noteInstanceTitle": "Cloud 및 자체 호스팅",
+          "noteInstanceBody": "Plane Cloud(app.plane.so)와 맞춤형 자체 호스팅 Plane 인스턴스를 모두 지원합니다.",
+          "noteVisibilityTitle": "숨겨도 연결은 유지",
+          "noteVisibilityBody": "작업 소스에서 Plane를 숨기면 선택기에서만 제거됩니다. 키나 스킬은 삭제되지 않습니다.",
+          "setupChecking": "확인 중…"
+        },
+        "TaskSourcePlaneSetup": {
+          "connectTitle": "Plane 연결",
+          "connectDescription": "Orca가 이슈를 탐색하고 이슈 컨텍스트로 워크스페이스를 열 수 있도록 개인 API 키를 추가하세요.",
+          "manageAccess": "키 관리",
+          "addAccess": "Plane 액세스 추가",
+          "connectedHint": "워크스페이스와 키는 활성 런타임에 저장됩니다. 언제든 액세스를 더 추가할 수 있습니다.",
+          "recheck": "연결 다시 확인",
+          "skillTitle": "Plane 에이전트 스킬 설치",
+          "skillDescription": "에이전트가 /orca-plane로 이슈 읽기, 업데이트 게시, 상태 변경, 풀 또는 머지 리퀘스트 첨부를 할 수 있게 합니다.",
+          "skillBlocked": "먼저 Plane를 연결한 다음 에이전트용 스킬을 설치하세요.",
+          "skillPanelTitle": "Plane 스킬",
+          "showDescription": "작업 소스 선택기와 사이드바 바로 가기에 Plane를 표시합니다."
+        },
+        "plane": {
+          "agent": {
+            "skill": {
+              "search": {
+                "title": "Plane",
+                "description": "Plane 스킬 상태, 사용 예시, 작업 소스 설정 링크입니다.",
+                "plane": "Plane",
+                "tickets": "티켓",
+                "issues": "이슈",
+                "skill": "스킬",
+                "orcaPlane": "orca-plane"
+              }
+            }
+          },
+          "cloud": "Plane Cloud",
+          "connectionFailed": "연결 실패",
+          "cardFooter": "Plane Cloud 또는 자체 호스팅 인스턴스에서 직접 이슈를 탐색하고 티켓 컨텍스트로 워크스페이스를 엽니다."
         }
       },
       "right": {
@@ -17491,6 +17591,20 @@
                 }
               }
             }
+          },
+          "plane": {
+            "connectTitle": "Plane 워크스페이스 연결",
+            "connectDescription": "격리된 워크스페이스에서 직접 Plane 이슈를 탐색하고 추적하며 작업을 시작하세요.",
+            "connectButton": "Plane 연결",
+            "selectWorkspace": "워크스페이스 선택",
+            "allProjects": "모든 프로젝트",
+            "refreshIssues": "이슈 새로고침",
+            "openInPlane": "Plane에서 열기",
+            "noIssuesFound": "이슈를 찾을 수 없음",
+            "createIssueHint": "여기에 표시하려면 Plane에서 이슈를 생성하세요.",
+            "backlog": "백로그",
+            "openInWorktree": "워크스페이스에서 열기",
+            "viewInPlane": "Plane에서 보기"
           }
         }
       },
@@ -18126,6 +18240,23 @@
           "noTabGroup": "“{{action}}” 실행 불가 — 사용 가능한 탭 그룹이 없습니다.",
           "noMovableChat": "“{{action}}” 실행 불가 — 이동 가능한 활성 채팅이 없습니다.",
           "clientUnsupported": "“{{action}}” 실행 불가 — 이 클라이언트와 런타임에서 지원하지 않습니다."
+        }
+      },
+      "plane": {
+        "connect": {
+          "dialog": {
+            "title": "Plane 연결",
+            "description": "Plane 워크스페이스를 연결하여 이슈를 탐색하고 티켓 컨텍스트로 워크스페이스를 엽니다.",
+            "deploymentType": "배포 유형",
+            "planeCloud": "Plane Cloud",
+            "selfHosted": "자체 호스팅",
+            "instanceUrl": "인스턴스 URL",
+            "instanceUrlPlaceholder": "https://plane.yourcompany.com",
+            "personalApiToken": "개인 API 토큰",
+            "createApiToken": "API 토큰 생성",
+            "apiTokenPlaceholder": "plane_api_...",
+            "connecting": "연결 중..."
+          }
         }
       }
     },
@@ -20689,7 +20820,9 @@
   },
   "common": {
     "retry": "다시 시도",
-    "cancel": "취소"
+    "cancel": "취소",
+    "connect": "연결",
+    "disconnect": "연결 해제"
   },
   "fileExplorer": {
     "root": {

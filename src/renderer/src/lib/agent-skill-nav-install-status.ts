@@ -2,6 +2,7 @@ import type { BundledSkillPlan } from '../../../shared/bundled-skill-plan'
 import type { DiscoveredSkill } from '../../../shared/skills'
 import type { SettingsNavInstallStatus } from './settings-navigation-types'
 import { getLinearAgentSkillUpdateTarget } from './linear-agent-skill-update-target'
+import { getPlaneAgentSkillUpdateTarget } from './plane-agent-skill-update-command'
 import { getSkillFreshnessDisplayStatus } from './skill-freshness-display-status'
 
 type AgentSkillNavInstallStatusInput = {
@@ -33,5 +34,14 @@ export function getLinearAgentSkillNavInstallStatus(
 ): SettingsNavInstallStatus {
   // Use the card’s installed name, including legacy-only linear-tickets installs.
   const updateTarget = getLinearAgentSkillUpdateTarget(input.skills, input.installed)
+  return getAgentSkillNavInstallStatus({ ...input, name: updateTarget.skillName })
+}
+
+export function getPlaneAgentSkillNavInstallStatus(
+  input: Omit<AgentSkillNavInstallStatusInput, 'name'> & {
+    skills: readonly DiscoveredSkill[]
+  }
+): SettingsNavInstallStatus {
+  const updateTarget = getPlaneAgentSkillUpdateTarget(input.skills, input.installed)
   return getAgentSkillNavInstallStatus({ ...input, name: updateTarget.skillName })
 }
