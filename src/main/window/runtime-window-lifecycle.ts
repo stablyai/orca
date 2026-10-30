@@ -113,7 +113,8 @@ export function registerRuntimeWindowLifecycle(
           resolve({
             tabId: reply.tabId!,
             title: reply.title,
-            ...(reply.identity ? { identity: reply.identity } : {})
+            ...(reply.identity ? { identity: reply.identity } : {}),
+            ...(reply.closed ? { closed: reply.closed } : {})
           })
         }
         ipcMain.on('terminal:tabCreateReply', handler)

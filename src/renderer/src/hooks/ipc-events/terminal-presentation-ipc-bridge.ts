@@ -145,7 +145,8 @@ export function registerTerminalPresentationIpcBridge(unsubs: (() => void)[]): v
                         ...(cwd ? { startupCwd: cwd } : {})
                       }
                 ))
-          placeCreatedTerminalTab(worktreeId, tab.id, { afterTabId, replaced })
+          const closedReplaced =
+            placeCreatedTerminalTab(worktreeId, tab.id, { afterTabId, replaced }) && replaces
           // Different reused IDs break the PTY’s baked-in paneKey attribution; warn in dev.
           if (tabId !== undefined && tab.id !== tabId) {
             console.warn(
@@ -260,7 +261,8 @@ export function registerTerminalPresentationIpcBridge(unsubs: (() => void)[]): v
               requestId,
               tabId: tab.id,
               title: title ?? tab.title,
-              ...(identity ? { identity } : {})
+              ...(identity ? { identity } : {}),
+              ...(closedReplaced ? { closed: [closedReplaced.tabId] } : {})
             })
           }
         } catch (err) {

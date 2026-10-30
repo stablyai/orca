@@ -1,4 +1,3 @@
-import { closeMobileSessionTabInStore } from '@/runtime/mobile-session-tab-close'
 import { useAppStore } from '../store'
 import { insertTabIdIntoOrder } from '../../../shared/workspace-layout/tab-order'
 
@@ -9,8 +8,16 @@ export function findUnifiedTab(worktreeId: string, tabId: string) {
   )
 }
 
-/** A same-slot switch's window write: the new tab takes the replaced tab's index, then the replaced tab closes. */
-export function replaceUnifiedTab(worktreeId: string, tabId: string, replacedTabId: string): void {
+/**
+ * A same-slot switch's window write: the new tab takes the replaced tab's index and pin, then the
+ * replaced tab closes as layout only; its host already stopped what it showed. Returns whether
+ * the replaced tab closed.
+ */
+export function replaceUnifiedTab(
+  worktreeId: string,
+  tabId: string,
+  replacedTabId: string
+): boolean {
   const state = useAppStore.getState()
   const tabs = state.unifiedTabsByWorktree[worktreeId] ?? []
   const tab = tabs.find((candidate) => candidate.id === tabId || candidate.entityId === tabId)
@@ -19,14 +26,21 @@ export function replaceUnifiedTab(worktreeId: string, tabId: string, replacedTab
     candidate.tabOrder.includes(replacedTabId)
   )
   if (!tab || !replaced || !group || tab.id === replaced.id) {
-    return
+    return false
   }
   const order = group.tabOrder.filter((id) => id !== tab.id)
   order.splice(order.indexOf(replaced.id), 0, tab.id)
   if (group.tabOrder.includes(tab.id)) {
     state.reorderUnifiedTabs(group.id, order, { recordInteraction: false })
   }
-  closeMobileSessionTabInStore(useAppStore.getState(), worktreeId, replaced.id)
+  if (replaced.isPinned && !tab.isPinned) {
+    state.pinTab(tab.id, { recordInteraction: false })
+  }
+  return (
+    useAppStore
+      .getState()
+      .closeUnifiedTab(replaced.id, { replaced: true, recordInteraction: false }) !== null
+  )
 }
 
 export function insertUnifiedTabAfterAnchor(
@@ -66,19 +80,23 @@ export function insertUnifiedTabAfterAnchor(
   state.reorderUnifiedTabs(group.id, order, { recordInteraction: false })
 }
 
-/** Where a main-created terminal tab goes: into a replaced tab's slot, else after its anchor. */
+/** Where a main-created terminal tab goes: into a replaced tab's slot, else after its anchor.
+ *  Returns whether a replaced tab closed. */
 export function placeCreatedTerminalTab(
   worktreeId: string,
   tabId: string,
   placement: { afterTabId?: string; replaced?: { id: string } }
-): void {
+): boolean {
   if (placement.replaced) {
-    replaceUnifiedTab(worktreeId, tabId, placement.replaced.id)
-    return
+    return replaceUnifiedTab(worktreeId, tabId, placement.replaced.id)
+  }
+  if (!placement.afterTabId) {
+    return false
   }
   const created = findUnifiedTab(worktreeId, tabId)
-  const anchor = placement.afterTabId && findUnifiedTab(worktreeId, placement.afterTabId)
+  const anchor = findUnifiedTab(worktreeId, placement.afterTabId)
   if (created && anchor) {
     insertUnifiedTabAfterAnchor(worktreeId, created.id, anchor.id)
   }
+  return false
 }

@@ -98,7 +98,13 @@ export type RuntimeNotifier = {
       replaces?: ReplacedTab
     }
   ):
-    | Promise<{ tabId: string; title?: string | null; identity?: TerminalRevealIdentity }>
+    | Promise<{
+        tabId: string
+        title?: string | null
+        identity?: TerminalRevealIdentity
+        /** Tabs the same window write closed: a replace's replaced tab. */
+        closed?: string[]
+      }>
     | { tabId: string; title?: string | null; identity?: TerminalRevealIdentity }
     | void
   /** Shows an agent launch's tab before its process exists; the pane attaches when it does. */

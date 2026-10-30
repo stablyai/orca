@@ -90,7 +90,10 @@ export async function executeStructuredSessionTerminalSwitch(
     activate: true,
     focusWindow: agentLaunchMovesHostWindow(ctx)
   })
-  await host.setSessionTabVisibility(sessionId, false)
+  // A chat tab the layout owner kept stays listed; only a replaced one leaves the saved tabs.
+  if (placed.replaced) {
+    await host.setSessionTabVisibility(sessionId, false)
+  }
   return {
     status: 'completed',
     sessionId,

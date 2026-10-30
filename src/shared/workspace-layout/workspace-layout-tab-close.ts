@@ -1,13 +1,22 @@
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../layout-owner-switch'
 import { filterRecord, withoutKey } from './stored-record-fields'
 import { editorTabShowsFile, keptAfterEditorClose } from './workspace-layout-editor-tab-file'
-import { applied, findTab, leafIdsOf, type Applied } from './workspace-layout-command-steps'
+import {
+  applied,
+  findTab,
+  leafIdsOf,
+  placeNewTab,
+  replacedTabSlot,
+  type Applied
+} from './workspace-layout-command-steps'
 import type {
   CommandOf,
   LayoutCommandResult,
-  LayoutEffects
+  LayoutContext,
+  LayoutEffects,
+  ReplacedTab
 } from './workspace-layout-command-types'
-import type { WorkspaceLayout, WorkspaceLayoutModel } from './workspace-layout-model'
+import type { LayoutTab, WorkspaceLayout, WorkspaceLayoutModel } from './workspace-layout-model'
 import { removeTabFromWorkspace, withWorkspace } from './workspace-layout-removal'
 
 /** Removes a tab and its content record; a terminal tab's pane data goes with it. */
@@ -64,4 +73,38 @@ export function closeReplacedTab(
     { ...result, closed: [replaced] },
     effects
   )
+}
+
+/** A pinned slot stays pinned: the tab that fills it takes the replaced tab's pin. */
+export function withReplacedPin<T extends LayoutTab>(
+  workspace: WorkspaceLayout,
+  command: { replaces?: ReplacedTab },
+  tab: T
+): T {
+  const replaced = command.replaces && findTab(workspace, command.replaces.tabId)
+  return replaced?.isPinned ? { ...tab, isPinned: true } : tab
+}
+
+/** A replace whose tab already exists (its parked spawn admitted it): it moves into the slot. */
+export function moveIntoReplacedSlot(
+  held: Extract<Applied, { ok: true }>,
+  command: CommandOf<'createTerminalTab'>,
+  context: LayoutContext
+): Applied {
+  const { model, result, effects } = held
+  const workspace = model.workspaces[command.workspace]
+  const tab = workspace && result.tabId ? findTab(workspace, result.tabId) : undefined
+  const replaced = command.replaces?.tabId
+  if (!workspace || !tab || !replaced || replaced === tab.id || !findTab(workspace, replaced)) {
+    return held
+  }
+  const without = removeTabFromWorkspace(workspace, tab.id)
+  const placed = placeNewTab(
+    without,
+    command.workspace,
+    withReplacedPin(without, command, tab),
+    replacedTabSlot(without, command),
+    context
+  )
+  return closeReplacedTab(withWorkspace(model, command.workspace, placed), command, result, effects)
 }

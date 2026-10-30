@@ -85,6 +85,7 @@ export function createTabsCloseActions(
             worktreeId,
             sessionId: tab.entityId,
             provisional,
+            replaced: opts?.replaced === true,
             layoutOwner: state,
             // Switch point: main's frames draw this machine's chats, so main opens it again.
             ...(ORCA_LAYOUT_OWNER_IS_MAIN &&

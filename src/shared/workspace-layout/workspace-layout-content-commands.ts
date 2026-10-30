@@ -18,11 +18,8 @@ import type {
   WorkspaceLayoutModel
 } from './workspace-layout-model'
 import { withWorkspace } from './workspace-layout-removal'
-import {
-  closeReplacedTab,
-  placeContentTab,
-  promotePreviewTab
-} from './workspace-layout-tab-commands'
+import { placeContentTab, promotePreviewTab } from './workspace-layout-tab-commands'
+import { closeReplacedTab, withReplacedPin } from './workspace-layout-tab-close'
 
 function contentTab(
   context: LayoutContext,
@@ -236,9 +233,16 @@ export function openAgentSessionTab(
     agentSessionAgent: command.agent
   })
   const target = withSendersGroup(model, command.workspace, command.groupId)
-  const slot = replacedTabSlot(workspaceOrEmpty(target, command.workspace), command)
+  const slotWorkspace = workspaceOrEmpty(target, command.workspace)
+  const slot = replacedTabSlot(slotWorkspace, command)
   return closeReplacedTab(
-    placeContentTab(target, command.workspace, tab, slot, context).model,
+    placeContentTab(
+      target,
+      command.workspace,
+      withReplacedPin(slotWorkspace, command, tab),
+      slot,
+      context
+    ).model,
     command,
     { tabId: tab.id }
   )

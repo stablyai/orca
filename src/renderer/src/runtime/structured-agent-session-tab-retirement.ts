@@ -116,17 +116,43 @@ function reacceptHostSessionTabs(
   )
 }
 
+/** A chat tab another tab replaced: the host owns the conversation, so this only drops local readers
+ *  and holds the tab closed until the host's own frame omits it. */
+export function retireReplacedStructuredAgentSessionTab(args: {
+  target: RuntimeClientTarget
+  worktreeId: string
+  sessionId: string
+}): void {
+  retireStructuredAgentSessionReadOwner(args.sessionId, args.target)
+  forgetStructuredSessionSelection(args.sessionId, args.target)
+  const intentOwner = captureWebSessionIntentOwner(
+    structuredAgentSessionFocusOwner(args.target).environmentId
+  )
+  recordWebSessionCloseIntent(
+    intentOwner,
+    args.worktreeId,
+    `agent-session:${args.sessionId}`,
+    Date.now()
+  )
+}
+
 /** Mark cancellation before removing the row so a late host publication cannot resurrect it. */
 export function beginStructuredAgentSessionTabClose(args: {
   target: RuntimeClientTarget
   worktreeId: string
   sessionId: string
   provisional: boolean
+  /** Another tab took this one's slot: the host stopped the chat and keeps its conversation. */
+  replaced?: boolean
   layoutOwner: StructuredLaunchSlotOwner
   onError?: (error: unknown) => void
   /** Main dropped the tab before the host answered: a host still listing the chat shows it again. */
   reopen?: () => void
 }): void {
+  if (args.replaced) {
+    retireReplacedStructuredAgentSessionTab(args)
+    return
+  }
   forgetUnlistedCreatedChat(args.worktreeId, args.sessionId)
   if (args.provisional) {
     markStructuredAgentSessionLaunchCancelled(

@@ -39,26 +39,13 @@ export abstract class OrcaRuntimeWithSwitchTerminalPlacement extends OrcaRuntime
       throw new Error('terminal_handle_stale')
     }
     const layoutTabId = chatTabId(args.chatSessionId)
-    let replaced = false
-    if (ORCA_LAYOUT_OWNER_IS_MAIN) {
-      const reply = await this.applyLayoutCommand({
-        type: 'createTerminalTab',
-        workspace: workspaceId,
-        tabId,
-        leafId,
-        adopt: {
-          ptyId: pty.ptyId,
-          ...(pty.incarnationId ? { incarnationId: pty.incarnationId } : {})
-        },
-        replaces: { tabId: layoutTabId }
-      })
-      if (!reply.ok) {
-        throw new Error(reply.code)
-      }
-      replaced = reply.result.closed?.includes(layoutTabId) === true
-    } else if (this.getAvailableAuthoritativeWindow() && this.notifier?.revealTerminalSession) {
+    const snapshotTabId = `agent-session:${args.chatSessionId}`
+    // Whether the chat left is the layout owner's answer, never assumed.
+    let replaced: boolean
+    const windowOwnsLayout = !ORCA_LAYOUT_OWNER_IS_MAIN && this.getAvailableAuthoritativeWindow()
+    if (windowOwnsLayout && this.notifier?.revealTerminalSession) {
       const windowTabId = args.windowTabId ?? layoutTabId
-      await this.notifier.revealTerminalSession(workspaceId, {
+      const reply = await this.notifier.revealTerminalSession(workspaceId, {
         ptyId: pty.ptyId,
         title: terminal.title,
         ...(pty.launchAgent ? { launchAgent: pty.launchAgent } : {}),
@@ -76,19 +63,33 @@ export abstract class OrcaRuntimeWithSwitchTerminalPlacement extends OrcaRuntime
             }
           : {})
       })
-      replaced = true
+      replaced = reply?.closed?.includes(windowTabId) === true
+    } else {
+      // Main's layout model, or a windowless host's saved layout: the same one command.
+      const reply = await this.applyLayoutCommand({
+        type: 'createTerminalTab',
+        workspace: workspaceId,
+        tabId,
+        leafId,
+        adopt: {
+          ptyId: pty.ptyId,
+          ...(pty.incarnationId ? { incarnationId: pty.incarnationId } : {}),
+          recordedPaneKey: `${tabId}:${leafId}`
+        },
+        replaces: { tabId: layoutTabId }
+      })
+      if (!reply.ok) {
+        throw new Error(reply.code)
+      }
+      replaced = reply.result.closed?.includes(layoutTabId) === true
     }
-    const snapshotTabId = `agent-session:${args.chatSessionId}`
-    const listed = this.mobileSessionTabsByWorktree
-      .get(workspaceId)
-      ?.tabGroups?.some((group) => group.tabOrder.includes(snapshotTabId))
     this.publishPtyBackedMobileSessionTerminal(workspaceId, pty, {
       tabId,
       leafId,
       title: terminal.title,
       activate: args.activate,
-      replaces: snapshotTabId
+      ...(replaced ? { replaces: snapshotTabId } : {})
     })
-    return { tabId, leafId, replaced: replaced || listed === true }
+    return { tabId, leafId, replaced }
   }
 }

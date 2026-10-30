@@ -31,9 +31,14 @@ import {
 import { admitsInitialSurface } from './workspace-layout-initial-surface'
 import { adoptedLeaf, appliedHeldAdoption } from './workspace-layout-terminal-adoption'
 import { withWorkspace } from './workspace-layout-removal'
-import { closeReplacedTab, closeTab } from './workspace-layout-tab-close'
+import {
+  closeReplacedTab,
+  closeTab,
+  moveIntoReplacedSlot,
+  withReplacedPin
+} from './workspace-layout-tab-close'
 
-export { closeReplacedTab, closeTab } from './workspace-layout-tab-close'
+export { closeTab } from './workspace-layout-tab-close'
 
 type RefusedClose = NonNullable<LayoutCommandResult['refused']>[number]
 
@@ -47,7 +52,7 @@ export function createTerminalTab(
   }
   const held = command.adopt && appliedHeldAdoption(model, command.workspace, command.adopt)
   if (held) {
-    return held
+    return held.ok && command.replaces ? moveIntoReplacedSlot(held, command, context) : held
   }
   const workspace = workspaceOrEmpty(model, command.workspace)
   const terminals = workspace.tabs.flatMap((tab) => (tab.kind === 'terminal' ? [tab] : []))
@@ -71,7 +76,7 @@ export function createTerminalTab(
   const placed = placeNewTab(
     workspace,
     command.workspace,
-    tab,
+    withReplacedPin(workspace, command, tab),
     replacedTabSlot(workspace, command),
     context
   )
