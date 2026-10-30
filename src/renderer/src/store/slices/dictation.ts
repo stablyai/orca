@@ -2,13 +2,17 @@ import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import type { DictationState, SpeechModelState } from '../../../../shared/speech-types'
 
+type PendingDictationAutoSend = { deadline: number }
+
 export type DictationSlice = {
   dictationState: DictationState
   partialTranscript: string
+  pendingDictationAutoSend: PendingDictationAutoSend | null
   activeModelId: string | null
   modelStates: SpeechModelState[]
   setDictationState: (state: DictationState) => void
   setPartialTranscript: (text: string) => void
+  setPendingDictationAutoSend: (pending: PendingDictationAutoSend | null) => void
   setActiveModelId: (id: string | null) => void
   setModelStates: (states: SpeechModelState[]) => void
   refreshModelStates: () => Promise<void>
@@ -42,11 +46,13 @@ export const createDictationSlice: StateCreator<AppState, [], [], DictationSlice
   return {
     dictationState: 'idle',
     partialTranscript: '',
+    pendingDictationAutoSend: null,
     activeModelId: null,
     modelStates: [],
 
     setDictationState: (state) => set({ dictationState: state }),
     setPartialTranscript: (text) => set({ partialTranscript: text }),
+    setPendingDictationAutoSend: (pending) => set({ pendingDictationAutoSend: pending }),
     setActiveModelId: (id) => set({ activeModelId: id }),
     setModelStates,
 
