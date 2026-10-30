@@ -8,6 +8,8 @@ vi.mock('node:fs/promises', { spy: true })
 
 import { dir, now, stamp, kill, prompt, pane } from './claude-helper-kill.test-fixture'
 
+const actual = await vi.importActual<{ open: typeof open }>('node:fs/promises')
+
 it('advances finite N/10N payload, depth, scalar and fact work with bounded batches and ordered yielding', async () => {
   const measurements: {
     N: number
@@ -35,7 +37,6 @@ it('advances finite N/10N payload, depth, scalar and fact work with bounded batc
     actualReadBytes: number
     opens: number
   }[] = []
-  const actual = await vi.importActual<{ open: typeof open }>('node:fs/promises')
   for (const N of [10, 100]) {
     const descriptors: Awaited<ReturnType<typeof open>>[] = []
     vi.mocked(open).mockImplementation(async (...args) => {

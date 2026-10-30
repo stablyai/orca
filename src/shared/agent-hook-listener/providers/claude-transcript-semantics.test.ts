@@ -10,6 +10,10 @@ import {
   type ClaudeHelperTranscriptEvidence
 } from './claude-helper-transcript-evidence'
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
 let dir: string
 const now = Date.parse('2026-10-29T12:00:00Z')
 const stamp = (offset: number) => new Date(now + offset).toISOString()
@@ -158,7 +162,7 @@ it('matches complete JSON evidence on captured and adversarial final values with
   for (const line of raw) {
     try {
       const value: unknown = JSON.parse(line)
-      if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+      if (isRecord(value)) {
         originals.push(value)
       }
     } catch {
