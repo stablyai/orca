@@ -234,7 +234,7 @@ describe('worktree create from a worktree another host shares an id with', () =>
           })
         )
       }
-      // A unique project does not elect a different implicit lineage parent.
+      // A unique project retains the legacy parent hint and carries the unresolved owners.
       callMock.mockReset()
       queueFixtures(
         callMock,
@@ -250,7 +250,8 @@ describe('worktree create from a worktree another host shares an id with', () =>
         'worktree.create',
         expect.objectContaining({
           repo: 'id:repo-a',
-          cwdParentWorktree: `id:${sibling.id}`
+          cwdParentWorktree: `id:${sibling.id}`,
+          cwdParentAmbiguous: true
         })
       )
     } finally {
@@ -368,7 +369,10 @@ describe('worktree create from a worktree another host shares an id with', () =>
               warnings: []
             })
           )
-          await main(['worktree', 'create', '--name', 'child', '--json'], join(path, 'src'))
+          await main(
+            ['worktree', 'create', '--name', 'child', '--no-parent', '--json'],
+            join(path, 'src')
+          )
           sortSpy.mockRestore()
           expect(callMock).toHaveBeenCalledWith('worktree.list', { limit: 10_000 })
           expect(callMock.mock.calls.filter(([method]) => method === 'worktree.list')).toHaveLength(
@@ -392,7 +396,7 @@ describe('worktree create from a worktree another host shares an id with', () =>
               'worktree.create',
               expect.objectContaining({
                 repo: 'id:repo-a',
-                cwdParentWorktree: `id:repo-a::${path}::workspace:0`
+                noParent: true
               })
             )
             expect(operations.comparisons).toBe(0)

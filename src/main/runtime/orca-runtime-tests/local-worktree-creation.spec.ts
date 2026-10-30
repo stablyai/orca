@@ -83,12 +83,15 @@ describe('OrcaRuntimeService', () => {
     const result = await runtime.createManagedWorktree({
       repoSelector: 'id:folder-repo',
       name: 'folder-session',
+      lineage: { cwdParentWorktree: 'id:stale', cwdParentAmbiguous: true },
       displayName: '\u0000\u202e',
       displayNameKind: 'user',
       createdWithAgent: 'codex',
       startup: { command: 'codex', viewMode: 'chat' }
     })
 
+    expect(result.lineage).toBeUndefined()
+    expect(result.worktree.lineage).toBeNull()
     expect(addWorktreeMock).not.toHaveBeenCalled()
     expect(createTerminal).toHaveBeenCalledWith(
       `id:${result.worktree.id}`,

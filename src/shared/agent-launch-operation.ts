@@ -29,10 +29,15 @@ export type AgentLaunchFingerprintInput = {
 
 /** Compute on the host; trusting a caller digest permits false matches. */
 export function computeAgentLaunchFingerprint(input: AgentLaunchFingerprintInput): string {
+  let target = input.target
+  if (target.kind === 'create-worktree') {
+    const { cwdParentAmbiguous: _observation, ...create } = target.create
+    target = { ...target, create }
+  }
   return canonicalAgentSessionDigest({
     method: 'agent.launch',
     agent: input.agent,
-    target: input.target,
+    target,
     prompt: input.prompt,
     sessionOptions: input.sessionOptions,
     chatOptions: input.chatOptions,

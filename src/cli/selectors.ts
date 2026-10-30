@@ -13,6 +13,8 @@ import {
   resolveCallerPaneWorktreeSelector,
   selectWorktreeCreateCwdContext,
   selectEnclosingWorktreeSelectionOnHost,
+  selectorPurpose,
+  type WorkspaceSelectionPurpose,
   type HostScopedWorktreeSelection
 } from './caller-host-worktree-selection'
 
@@ -58,9 +60,7 @@ export async function resolveCallerDistroPathSelector(
   ) {
     return selector
   }
-  const worktrees = await client.call<RuntimeWorktreeListResult>('worktree.list', {
-    limit: 10_000
-  })
+  const worktrees = await client.call<RuntimeWorktreeListResult>('worktree.list', { limit: 10_000 })
   const match = worktrees.result.worktrees.find((worktree) =>
     isLinuxMountedPath
       ? isWslUncPathForLinuxMountedPath(worktree.path, linuxPath)
@@ -75,11 +75,8 @@ export async function normalizeWorktreeSelectorForCaller(
   cwd: string,
   client: RuntimeClient
 ): Promise<string> {
-  return await resolveCallerDistroPathSelector(
-    normalizeWorktreeSelector(selector, cwd),
-    cwd,
-    client
-  )
+  const normalized = normalizeWorktreeSelector(selector, cwd)
+  return resolveCallerDistroPathSelector(normalized, cwd, client)
 }
 
 function assertLocalCwdWorktreeSelector(selector: string, client: RuntimeClient): void {
@@ -95,26 +92,27 @@ function assertLocalCwdWorktreeSelector(selector: string, client: RuntimeClient)
 
 export async function resolveCurrentWorktreeSelector(
   cwd: string,
-  client: RuntimeClient
+  client: RuntimeClient,
+  purpose: WorkspaceSelectionPurpose = 'worktree'
 ): Promise<string> {
-  return (await resolveCurrentWorktreeSelection(cwd, client)).selector
+  return (await resolveCurrentWorktreeSelection(cwd, client, purpose)).selector
 }
 
 export async function resolveCurrentWorktreeSelection(
   cwd: string,
-  client: RuntimeClient
+  client: RuntimeClient,
+  purpose: WorkspaceSelectionPurpose = 'worktree'
 ): Promise<HostScopedWorktreeSelection> {
   assertLocalCwdWorktreeSelector('current', client)
 
-  const worktrees = await client.call<RuntimeWorktreeListResult>('worktree.list', {
-    limit: 10_000
-  })
+  const worktrees = await client.call<RuntimeWorktreeListResult>('worktree.list', { limit: 10_000 })
   // Preserve the repo id: duplicate registrations can make a bare path selector ambiguous.
   const selection = selectEnclosingWorktreeSelectionOnHost(
     worktrees.result.worktrees,
     cwd,
     getCallerExecutionHostId(),
-    process.env.ORCA_WORKTREE_ID
+    process.env.ORCA_WORKTREE_ID,
+    purpose
   )
   if (!selection) {
     throw new RuntimeClientError(
@@ -128,11 +126,12 @@ export async function resolveCurrentWorktreeSelection(
 export async function resolveWorktreeCreateCwdContext(
   cwd: string,
   client: RuntimeClient,
-  inferRepo: boolean
-): Promise<{ parentWorktree?: HostScopedWorktreeSelection; repoId?: string }> {
+  inferRepo: boolean,
+  inferParent = true
+): Promise<ReturnType<typeof selectWorktreeCreateCwdContext>> {
   assertLocalCwdWorktreeSelector('current', client)
   const worktrees = await client.call<RuntimeWorktreeListResult>('worktree.list', { limit: 10_000 })
-  return selectWorktreeCreateCwdContext(worktrees.result.worktrees, cwd, inferRepo)
+  return selectWorktreeCreateCwdContext(worktrees.result.worktrees, cwd, inferRepo, inferParent)
 }
 
 export async function getOptionalWorktreeSelector(
@@ -147,7 +146,7 @@ export async function getOptionalWorktreeSelector(
   }
   if (value === 'active' || value === 'current') {
     assertLocalCwdWorktreeSelector(value, client)
-    return await resolveCurrentWorktreeSelector(cwd, client)
+    return await resolveCurrentWorktreeSelector(cwd, client, selectorPurpose(name))
   }
   return await normalizeWorktreeSelectorForCaller(value, cwd, client)
 }
@@ -161,16 +160,32 @@ export async function getRequiredWorktreeSelector(
   const value = getRequiredStringFlag(flags, name)
   if (value === 'active' || value === 'current') {
     assertLocalCwdWorktreeSelector(value, client)
-    return await resolveCurrentWorktreeSelector(cwd, client)
+    return await resolveCurrentWorktreeSelector(cwd, client, selectorPurpose(name))
   }
   return await normalizeWorktreeSelectorForCaller(value, cwd, client)
+}
+
+async function optionalCurrentWorktreeSelector(
+  cwd: string,
+  client: RuntimeClient,
+  purpose: WorkspaceSelectionPurpose = 'worktree'
+) {
+  try {
+    return await resolveCurrentWorktreeSelector(cwd, client, purpose)
+  } catch (error) {
+    if (error instanceof RuntimeClientError && error.code === 'selector_ambiguous') {
+      throw error
+    }
+    return undefined
+  }
 }
 
 // Remote commands leave worktree unset to use server-side focus.
 export async function getBrowserWorktreeSelector(
   flags: Map<string, string | boolean>,
   cwd: string,
-  client: RuntimeClient
+  client: RuntimeClient,
+  purpose: WorkspaceSelectionPurpose = 'worktree'
 ): Promise<string | undefined> {
   const value = getOptionalStringFlag(flags, 'worktree')
   if (value === 'all') {
@@ -179,31 +194,27 @@ export async function getBrowserWorktreeSelector(
   if (value) {
     if (value === 'active' || value === 'current') {
       assertLocalCwdWorktreeSelector(value, client)
-      return await resolveCurrentWorktreeSelector(cwd, client)
+      return await resolveCurrentWorktreeSelector(cwd, client, purpose)
     }
     return await normalizeWorktreeSelectorForCaller(value, cwd, client)
   }
   if (client.isRemote) {
     return undefined
   }
-  try {
-    return await resolveCurrentWorktreeSelector(cwd, client)
-  } catch {
-    return undefined
-  }
+  return optionalCurrentWorktreeSelector(cwd, client, purpose)
 }
 
 export async function getTerminalHandle(
   flags: Map<string, string | boolean>,
   cwd: string,
   client: RuntimeClient,
-  options: { requireUnambiguous?: boolean } = {}
+  options: { requireUnambiguous?: boolean; purpose?: WorkspaceSelectionPurpose } = {}
 ): Promise<string> {
   const explicit = getPresentStringFlag(flags, 'terminal')
   if (explicit) {
     return explicit
   }
-  const worktree = await getBrowserWorktreeSelector(flags, cwd, client)
+  const worktree = await getBrowserWorktreeSelector(flags, cwd, client, options.purpose)
   const response = await client.call<{ handle: string }>('terminal.resolveActive', {
     worktree,
     ...(options.requireUnambiguous ? { requireUnambiguous: true } : {})
@@ -218,9 +229,7 @@ export async function getBrowserCommandTarget(
 ): Promise<BrowserCliTarget> {
   const page = getOptionalStringFlag(flags, 'page')
   if (!page) {
-    return {
-      worktree: await getBrowserWorktreeSelector(flags, cwd, client)
-    }
+    return { worktree: await getBrowserWorktreeSelector(flags, cwd, client) }
   }
 
   const explicitWorktree = getOptionalStringFlag(flags, 'worktree')
@@ -229,10 +238,7 @@ export async function getBrowserCommandTarget(
   }
   if (explicitWorktree === 'active' || explicitWorktree === 'current') {
     assertLocalCwdWorktreeSelector(explicitWorktree, client)
-    return {
-      page,
-      worktree: await resolveCurrentWorktreeSelector(cwd, client)
-    }
+    return { page, worktree: await resolveCurrentWorktreeSelector(cwd, client) }
   }
   return {
     page,
@@ -299,11 +305,7 @@ export async function getEmulatorWorktreeSelector(
   if (folderWorkspaceId?.startsWith('folder:')) {
     return folderWorkspaceId
   }
-  try {
-    return await resolveCurrentWorktreeSelector(cwd, client)
-  } catch {
-    return undefined
-  }
+  return optionalCurrentWorktreeSelector(cwd, client)
 }
 
 export async function getEmulatorCommandTarget(

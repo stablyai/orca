@@ -30,7 +30,7 @@ A handoff is done when the new worktree id and agent handle have been reported a
 
 Do not use `orca orchestration task-create`, `orca orchestration dispatch --inject`, or `orca orchestration check --wait` for full handoffs. `task-create` is also forbidden because it records coordinator-owned tracking state; if a task row is needed, the user asked for supervised orchestration. Deliver the prompt with the agent launch, or with terminal commands for an agent that is already running.
 
-For local work in the caller’s project, omit `--repo` and `--project`. Pass one only to target another project; do not pick a repo from a list for same-project work. The project comes from the caller’s directory, not the project visible in the app. Paired-server calls require an explicit server-side target.
+For local work in the caller’s project, omit `--repo` and `--project`. Pass one to target another project or when Orca asks you to disambiguate; do not pick a repo from a list for unambiguous same-project work. The project comes from the caller’s directory, not the project visible in the app. Paired-server calls require an explicit server-side target.
 
 Independent new-worktree handoff:
 
@@ -73,6 +73,8 @@ An Orca worktree is Orca's tracked view of a repo checkout, its metadata, termin
 Its id is a two-part address, `<repoId>::<worktreePath>`, such as `repo-123::/Users/me/orca/fix-login`. Copy the whole `id` field from `ORCA worktree create --json` or `ORCA worktree list --json`. `repo-123` alone names only the repo.
 
 For local creation, omit `--repo` and `--project` to stay in the caller's project. Use `--parent-worktree active` for a child of the current workspace. Project selection and parent selection are separate: a native folder parent supplies lineage, not a Git destination, so pass an explicit Git target when creating from a folder outside any managed checkout. Otherwise, pass `--repo` or `--project` only when deliberately creating in another project, or when Orca asks you to disambiguate. Outside any Orca-managed project, pass an explicit target. With a paired server, discover and use that server's exact target instead of the local cwd.
+
+If several Orca workspaces share the checkout and no caller identity selects one, workspace-specific commands ask you to choose an exact selector. Inspect a listed workspace with `ORCA worktree show --worktree <exact-selector> --json`, then use the command’s workspace target flag. For an implicit-create refusal, use `ORCA worktree list --limit 10000 --json` with the same server and host selection; match path and host, increasing --limit if truncated. Pass `--parent-worktree <exact-selector>` or deliberately use `--no-parent` on a fresh request without --retry-launch. Retrying the refused ID returns its original explanation. Pass each exact selector as one argument quoted for your shell. Native folder choices are shown in the local error; exact show inspection is supported, while native folders are not enumerated by worktree list. Implicit creation checks this only when the host actually uses the directory’s parent context; older hosts retain their existing implicit-parent behavior.
 
 Same-project creation:
 

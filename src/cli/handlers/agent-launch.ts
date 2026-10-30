@@ -26,7 +26,7 @@ export const AGENT_LAUNCH_HANDLERS: Record<string, CommandHandler> = {
     const selector = flags.get('worktree')
     const current = selector === undefined || selector === 'active' || selector === 'current'
     const worktree = current
-      ? await resolveCurrentAgentWorkspaceSelector(cwd, client)
+      ? await resolveCurrentAgentWorkspaceSelector(cwd, client, { agent: launch.agent })
       : await getRequiredWorktreeSelector(flags, 'worktree', cwd, client)
     const capabilities = await getAgentLaunchCapabilities(client)
     if (!capabilities) {

@@ -98,6 +98,7 @@ export type RuntimeManagedWorktreeCreateArgs = {
     envParentWorkspace?: string
     parentWorktree?: string
     cwdParentWorktree?: string
+    cwdParentAmbiguous?: true
     noParent?: boolean
     callerTerminalHandle?: string
     comment?: string

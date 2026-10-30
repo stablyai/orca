@@ -1,6 +1,7 @@
 import { expect, vi } from 'vitest'
 import type { Mock } from 'vitest'
 import type * as GitUsernameModule from '../../git/git-username'
+import type * as Filesystem from 'node:fs/promises'
 import type * as WslUncAccessGateModule from '../../wsl/wsl-unc-access-gate'
 import type * as FilesystemPathContainmentModule from '../../ipc/filesystem/filesystem-path-containment'
 import { reviewHeadRemoteRefComponent } from '../../../shared/review-head-tracking-ref'
@@ -12,6 +13,11 @@ import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-typ
 import { setWorktreeWatcherRemoval } from '../../ipc/worktree-watcher-removal'
 
 type TestMock = Mock
+
+vi.mock('node:fs/promises', async (importOriginal) => {
+  const actual = await importOriginal<typeof Filesystem>()
+  return { ...actual, mkdir: vi.fn(actual.mkdir) }
+})
 
 const reconcileClaudeAgentViewMock = vi.hoisted(() => vi.fn(async () => {}))
 vi.mock('../../claude/agent-view-service', () => ({

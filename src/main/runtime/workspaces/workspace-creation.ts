@@ -1,3 +1,8 @@
+import {
+  RuntimeLineageError,
+  LINEAGE_PARENT_AMBIGUOUS,
+  formatAmbiguousCwdParentMessage
+} from '../runtime-worktree-lineage-resolution'
 import type { Repo } from '../../../shared/repo-types'
 import type {
   WorktreeLineageInput,
@@ -133,7 +138,17 @@ export abstract class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWi
     }
     const lineageInput =
       args.lineage || args.comment ? { ...args.lineage, comment: args.comment } : undefined
-    const lineageResolution = await this.resolveLineageForWorktreeCreate(lineageInput, repo)
+    const lineageResolution = await this.resolveLineageForWorktreeCreate(lineageInput, repo).catch(
+      (error: unknown) => {
+        if (error instanceof RuntimeLineageError && error.code === LINEAGE_PARENT_AMBIGUOUS) {
+          throw new RuntimeLineageError(
+            error.code,
+            formatAmbiguousCwdParentMessage(args.startupAgent ?? args.createdWithAgent)
+          )
+        }
+        throw error
+      }
+    )
     if (createRoute.kind === 'runtime') {
       throw new ExecutionHostNotDispatchableError(createRoute.hostId)
     }

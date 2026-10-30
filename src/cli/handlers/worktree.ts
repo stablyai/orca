@@ -27,7 +27,6 @@ import {
   resolveWorktreeCreateCwdContext,
   resolveCurrentWorktreeSelector
 } from '../selectors'
-import type { HostScopedWorktreeSelection } from '../caller-host-worktree-selection'
 import type { TuiAgent } from '../../shared/tui-agent'
 import { parseCliAgent, readCliAgentLaunch } from '../agent-launch-request'
 import { createWorktreeWithAgent } from './worktree-create-agent-launch'
@@ -123,7 +122,7 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
   },
   'worktree current': async ({ client, cwd, json }) => {
     const result = await client.call<{ worktree: RuntimeWorktreeRecord }>('worktree.show', {
-      worktree: await resolveCurrentWorktreeSelector(cwd, client)
+      worktree: await resolveCurrentWorktreeSelector(cwd, client, 'current')
     })
     printResult(result, json, formatWorktreeShow)
   },
@@ -145,22 +144,19 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
       : undefined
     const setupDecision = getOptionalSetupDecision(flags)
     const noParent = flags.get('no-parent') === true
-    const envParentWorkspace =
-      !noParent && !explicitParentWorkspace && !explicitParentWorktree
-        ? getEnvParentWorkspace()
-        : undefined
-    let cwdParentWorktree: HostScopedWorktreeSelection | undefined
-    let inferredRepoId: string | undefined
+    const inferParent = !explicitParentWorktree && !explicitParentWorkspace && !noParent
+    const envParentWorkspace = inferParent ? getEnvParentWorkspace() : undefined
+    let cwdContext: Awaited<ReturnType<typeof resolveWorktreeCreateCwdContext>> = {}
     const needsCwdRepoInference = !flags.has('repo') && !hasWorkspaceProjectTarget(flags)
-    if (
-      (!explicitParentWorktree && !explicitParentWorkspace && !noParent) ||
-      needsCwdRepoInference
-    ) {
+    if (inferParent || needsCwdRepoInference) {
       try {
         // Cwd preserves parent/repo inference when agent shells lose ORCA_TERMINAL_HANDLE.
-        const context = await resolveWorktreeCreateCwdContext(cwd, client, needsCwdRepoInference)
-        cwdParentWorktree = context.parentWorktree
-        inferredRepoId = context.repoId
+        cwdContext = await resolveWorktreeCreateCwdContext(
+          cwd,
+          client,
+          needsCwdRepoInference,
+          inferParent
+        )
       } catch (error) {
         if (
           needsCwdRepoInference &&
@@ -169,14 +165,14 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
         ) {
           throw error
         }
-        cwdParentWorktree = undefined
+        cwdContext = {}
       }
     }
     const linearIssueLink = getOptionalLinearIssueLinkFlag(flags, 'linear-issue')
     const activate = flags.get('activate') === true || flags.get('run-hooks') === true
     const name = getRequiredStringFlag(flags, 'name')
-    const repoTarget: CliRepoTarget = inferredRepoId
-      ? { repo: `id:${inferredRepoId}` }
+    const repoTarget: CliRepoTarget = cwdContext.repoId
+      ? { repo: `id:${cwdContext.repoId}` }
       : await getCreateRepoTarget(flags, undefined, client)
     await assertGitLabLinkFlagProjectsMatch(flags, client, repoTarget)
     const linkedItems = referenceInputs
@@ -205,7 +201,11 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
       parentWorktree: explicitParentWorktree,
       ...(explicitParentWorkspace ? { parentWorkspace: explicitParentWorkspace } : {}),
       ...(envParentWorkspace ? { envParentWorkspace } : {}),
-      ...(cwdParentWorktree ? { cwdParentWorktree: cwdParentWorktree.selector } : {}),
+      ...(cwdContext.parentWorktree
+        ? { cwdParentWorktree: cwdContext.parentWorktree.selector }
+        : {}),
+      // Older hosts ignore the observation and keep this first-row cwd parent.
+      ...(cwdContext.parentAmbiguous ? { cwdParentAmbiguous: cwdContext.parentAmbiguous } : {}),
       noParent,
       callerTerminalHandle,
       // Always request CLI provenance, including hand-typed creates without a terminal handle.
