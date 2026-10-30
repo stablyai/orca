@@ -5,7 +5,8 @@ import type { PtyProcessInspectionOptions } from '../providers/pty-process-inspe
 import type { SessionInfo, TakePendingOutputResult, TerminalSnapshot } from './types'
 import type { CreateOrAttachResult } from './terminal-host-create-contract'
 import type { TerminalHostOptions } from './terminal-host-options'
-import { disposeTerminalHostSessions } from './terminal-host-disposal'
+import { recordTerminalHostSessionExit } from './terminal-host-session-exit'
+import { disposeTerminalHostSessions, killLiveSessionGroupsSync } from './terminal-host-disposal'
 import { getAliveTerminalHostSession } from './terminal-host-session-access'
 import { writeSessionInput } from './session-input-path'
 import { TerminalSessionTeardown } from './terminal-session-teardown'
@@ -23,7 +24,6 @@ import { createOrAttachTerminalSession } from './terminal-host-session-create'
 import { TerminalAttachCanceledError } from './daemon-errors'
 import { waitForTerminalAttachOperation } from './terminal-attach-cancellation'
 import { randomUUID } from 'node:crypto'
-import { pruneRetiredPtyIncarnations } from '../../shared/retired-pty-incarnations'
 import { inspectTerminalHostSession } from './terminal-host-process-inspection'
 import type { TerminalHostProcessInspection } from './terminal-host-process-inspection'
 import {
@@ -41,7 +41,6 @@ export type { CreateOrAttachOptions, CreateOrAttachResult } from './terminal-hos
 export type { TerminalHostOptions } from './terminal-host-options'
 
 const DEFAULT_MAX_TOMBSTONES = 1000
-const REMOTE_FOREGROUND_TOMBSTONE_RETENTION_MS = 2_000
 
 export class TerminalHost {
   private sessions = new Map<string, Session>()
@@ -133,15 +132,12 @@ export class TerminalHost {
   }
 
   private handleSessionExit(sessionId: string, generation: string | undefined): void {
-    const session = this.sessions.get(sessionId)
-    if (session) {
-      pruneRetiredPtyIncarnations(this.retiredIncarnations)
-      this.retiredIncarnations.set(sessionId, {
-        incarnationId: session.incarnationId,
-        code: session.exitCode ?? 0,
-        expiresAt: Date.now() + REMOTE_FOREGROUND_TOMBSTONE_RETENTION_MS
-      })
-    }
+    recordTerminalHostSessionExit(
+      sessionId,
+      this.sessions.get(sessionId),
+      this.retiredIncarnations,
+      this.reportReadinessEvent
+    )
     this.agentSessionOwners.release(sessionId, generation)
     this.agentSessionGenerations.forget(sessionId, generation)
     this.reapSession(sessionId)
@@ -317,12 +313,23 @@ export class TerminalHost {
     return hasLiveTerminalHostSessions(this.sessions)
   }
 
+  /** Last resort when shutdown overruns its deadline: an async group sweep may not have signalled yet. */
+  killLiveSessionGroupsSync(): void {
+    killLiveSessionGroupsSync(this.sessions.values())
+  }
+
   dispose(): Promise<void> {
     this.creationFenced = true
     if (this.disposePromise) {
       return this.disposePromise
     }
-    const disposePromise = this.disposeSessions()
+    const disposePromise = disposeTerminalHostSessions({
+      pendingCreations: this.pendingCreations,
+      sessionTeardown: this.sessionTeardown,
+      sessions: this.sessions,
+      onFinalCheckpoint: this.onFinalCheckpoint,
+      killedTombstones: this.killedTombstones
+    })
     this.disposePromise = disposePromise
     void disposePromise.catch(() => {
       // Keep failed native owners retryable on the next shutdown request.
@@ -331,15 +338,5 @@ export class TerminalHost {
       }
     })
     return disposePromise
-  }
-
-  private disposeSessions(): Promise<void> {
-    return disposeTerminalHostSessions({
-      pendingCreations: this.pendingCreations,
-      sessionTeardown: this.sessionTeardown,
-      sessions: this.sessions,
-      onFinalCheckpoint: this.onFinalCheckpoint,
-      killedTombstones: this.killedTombstones
-    })
   }
 }

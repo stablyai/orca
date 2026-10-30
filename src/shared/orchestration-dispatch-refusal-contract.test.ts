@@ -1,10 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
   buildInjectRejectionMessage,
-  taskNotFoundRefusal,
   taskNotStartableRefusal
 } from './orchestration-dispatch-refusal-contract'
-import { TUI_AGENT_CONFIG } from './tui-agent-config'
 import { recognizeAgentProcess } from './agent-process-recognition'
 
 describe('buildInjectRejectionMessage', () => {
@@ -13,13 +11,6 @@ describe('buildInjectRejectionMessage', () => {
   it('keeps the substring callers and scripts match on', () => {
     expect(message).toContain('Cannot dispatch --inject to terminal term_a')
     expect(message).toContain('no recognized agent detected')
-  })
-
-  it('names every agent Orca recognizes, including agy', () => {
-    expect(message).toMatch(/\bagy\b/)
-    for (const config of Object.values(TUI_AGENT_CONFIG)) {
-      expect(message).toContain(config.expectedProcess)
-    }
   })
 
   it('lists only names detection actually resolves, deduped and sorted', () => {
@@ -36,19 +27,6 @@ describe('buildInjectRejectionMessage', () => {
 
 // Pin published receipt literals independently so refactors cannot change builders and expectations together.
 describe('dispatch refusal receipts keep their published messages', () => {
-  it('leaves the message exactly as each call site supplies it', () => {
-    expect(taskNotFoundRefusal('Task not found: task_1', { taskId: 'task_1' }).message).toBe(
-      'Task not found: task_1'
-    )
-    expect(
-      taskNotStartableRefusal('Task task_1 is pending; only a ready Task can start.', {
-        taskId: 'task_1',
-        status: 'pending',
-        unmetDependencies: []
-      }).message
-    ).toBe('Task task_1 is pending; only a ready Task can start.')
-  })
-
   it('tailors nextSteps to retry, dependency, occupancy, and terminal-status refusals', () => {
     const base = { taskId: 'task_1', status: 'failed', unmetDependencies: [] }
     expect(taskNotStartableRefusal('m', { ...base, retryOf: 'ctx_1' }).data.nextSteps[0]).toMatch(

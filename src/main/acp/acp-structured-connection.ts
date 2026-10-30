@@ -17,12 +17,13 @@ export type AcpStructuredConnection = Pick<
   | 'pid'
   | 'exited'
   | 'stderrTail'
+  | 'exitStatus'
   | 'onExit'
   | 'pauseReading'
   | 'resumeReading'
   | 'close'
   | 'processTreeUnproven'
->
+> & { readonly lastCloseResult?: AcpAgentConnection['lastCloseResult'] }
 
 export type ConnectAcpAgent<Connection = AcpStructuredConnection> = (
   launch: ProviderProcessLaunch,

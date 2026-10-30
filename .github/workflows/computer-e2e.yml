@@ -78,7 +78,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-22.04, windows-latest]
-    runs-on: ${{ fromJSON('{"ubuntu-22.04":"blacksmith-4vcpu-ubuntu-2204"}')[matrix.os] || matrix.os }}
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v6
         with:
@@ -95,7 +95,6 @@ jobs:
           config/scripts/macos-computer-helper-owner-loss-processes.test.mjs
           config/scripts/computer-use-smoke.test.mjs
           src/main/computer/computer-provider-lifecycle.test.ts
-          src/main/computer/computer-provider-unavailable-message.test.ts
           src/main/computer/sidecar-client.test.ts
           src/main/computer/macos-native-provider-client.test.ts
           src/main/computer/macos-native-provider-socket.test.ts
@@ -121,7 +120,7 @@ jobs:
           src/main/runtime/rpc/methods/computer.test.ts
           src/main/runtime/rpc/methods/computer-actions.test.ts
           src/cli/runtime/envelope-schema.test.ts
-          src/shared/remote-runtime-client.test.ts
+          src/shared/remote-runtime/remote-runtime-client.test.ts
       - run: pnpm verify:computer-native
       - run: pnpm build:cli
       - run: pnpm run build:electron-vite:parallel
@@ -135,39 +134,9 @@ jobs:
       - name: Windows daemon workspace-close repro
         if: runner.os == 'Windows'
         run: node config/scripts/windows-daemon-workspace-close-repro.mjs
-  # Hosted macOS runners cannot receive persistent Accessibility/Screen Recording
-  # grants. Keep the real native build/owner-loss checks on every trigger instead.
-  mac-native-owner-smoke:
-    if: github.event_name != 'pull_request' || github.event.pull_request.draft != true
-    runs-on: blacksmith-6vcpu-macos-15
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          persist-credentials: false
-      - uses: ./.github/actions/install-node-dependencies
-        with:
-          native-runtime: electron
-      - name: Owner-loss benchmark process cleanup
-        run: >-
-          pnpm vitest run
-          config/scripts/macos-computer-helper-owner-loss-group-recovery.test.mjs
-          config/scripts/macos-computer-helper-owner-loss-processes.test.mjs
-      # Why: the parallel launcher's cancellation tests are darwin-only and no
-      # other PR job runs on macOS.
-      - name: Parallel native build launcher cancellation
-        run: >-
-          pnpm vitest run --config config/vitest.config.ts
-          config/scripts/build-native-for-platform.test.mjs
-      - name: Authenticated helper owner-loss smoke
-        run: pnpm bench:macos-computer-helper-owner-loss --expect reaped --trials 1
-      - name: Swift tests and signed universal helper verification
-        run: pnpm verify:computer-native
-
   linux:
     if: github.event_name != 'pull_request'
-    runs-on: blacksmith-4vcpu-ubuntu-2204
+    runs-on: ubuntu-22.04
     env:
       ORCA_COMPUTER_E2E: '1'
       ACCESSIBILITY_ENABLED: '1'

@@ -1,4 +1,5 @@
 import type { WorkspaceAttachmentMutation } from '../../shared/workspace-attachment-mutation'
+import { refuseWslHostWindowsDrivePath } from './wsl-host-windows-drive-guard'
 import type { FolderWorkspace } from '../../shared/folder-workspace-types'
 import type { ProjectGroup } from '../../shared/project-group-types'
 import type { Repo } from '../../shared/repo-types'
@@ -176,6 +177,10 @@ export class RuntimeProjectGroupController {
         : group?.parentPath
     if (!group || !folderPath) {
       throw new FolderWorkspaceCreateRefusedError('folder_workspace_project_group_not_found')
+    }
+    if (folderPath === input.folderPath) {
+      // An explicit folder on a WSL host must not be a Windows drive; refused before any store write.
+      await refuseWslHostWindowsDrivePath(folderPath)
     }
     const status = await getFolderWorkspacePathStatusForPath({
       folderPath,

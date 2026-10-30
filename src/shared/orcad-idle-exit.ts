@@ -28,3 +28,12 @@ export const OrcadIdleStopRecordSchema = z.object({
 })
 
 export type OrcadIdleStopRecord = z.infer<typeof OrcadIdleStopRecordSchema>
+
+/**
+ * In a WSL distro's data root (`~/.orca`): orcad's pid, written on an idle stop that left no
+ * terminal daemon. The distro holder ends once that pid exits, so WSL may stop the idle distro.
+ */
+export const ORCAD_WSL_HOLDER_RELEASE_FILENAME = 'wsl-holder-release'
+
+/** Beside the release request: the first few things keeping an idle distro held, one line. */
+export const ORCAD_WSL_HOLDER_BLOCKED_FILENAME = 'wsl-holder-blocked'

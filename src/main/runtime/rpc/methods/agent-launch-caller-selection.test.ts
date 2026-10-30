@@ -25,11 +25,6 @@ const deliverTerminalPrompt = vi.hoisted(() => vi.fn(async () => true))
 vi.mock('./agent-launch-terminal-prompt', () => ({
   deliverTerminalAgentLaunchPrompt: deliverTerminalPrompt
 }))
-const commitChatPrompt = vi.hoisted(() => vi.fn(async () => 'message-1'))
-vi.mock('./agent-launch-structured-prompt', () => ({
-  commitStructuredAgentSessionLaunchPrompt: commitChatPrompt
-}))
-
 const { AGENT_LAUNCH_METHODS } = await import('./agent-launch')
 const AGENT_LAUNCH = methodNamed(AGENT_LAUNCH_METHODS, 'agent.launch')
 const AGENT_LAUNCH_REPLAY = methodNamed(AGENT_LAUNCH_METHODS, 'agent.launchReplay')
@@ -70,7 +65,6 @@ function chatActivation(): unknown {
 
 beforeEach(() => {
   deliverTerminalPrompt.mockClear()
-  commitChatPrompt.mockClear()
   createStructuredSession
     .mockReset()
     .mockResolvedValue({ ok: true, value: { sessionId: 'sess-1' } })
@@ -104,10 +98,7 @@ describe('a paired client launching into an existing workspace', () => {
   })
 
   // Prompt delivery can take a minute; caller navigation must not wait.
-  it.each([
-    ['terminal', {}, deliverTerminalPrompt],
-    ['chat', STRUCTURED_PREFERENCE, commitChatPrompt]
-  ] as const)(
+  it.each([['terminal', {}, deliverTerminalPrompt]] as const)(
     'selects the new %s for the caller before its prompt is delivered',
     async (_surface, settings, deliver) => {
       const runtime = selectionRuntime({ settings, terminalPaneKey: PANE_KEY })

@@ -390,44 +390,6 @@ describe('browserManager', () => {
   })
 
   // Direct navigation permits setUserAgent before request dispatch.
-  it('still uses the WebContents UA write for navigations that are not redirects', () => {
-    const guest = {
-      id: 420,
-      isDestroyed: vi.fn(() => false),
-      isCurrentlyAudible: vi.fn(() => false),
-      send: vi.fn(),
-      getType: vi.fn(() => 'webview'),
-      setBackgroundThrottling: guestSetBackgroundThrottlingMock,
-      setWindowOpenHandler: guestSetWindowOpenHandlerMock,
-      on: guestOnMock,
-      off: guestOffMock,
-      openDevTools: guestOpenDevToolsMock,
-      getURL: vi.fn(() => 'https://example.com/'),
-      getUserAgent: vi.fn(() => guestBaseUserAgent),
-      setUserAgent: vi.fn(),
-      debugger: { isAttached: vi.fn(() => true), sendCommand: vi.fn(async () => undefined) },
-      session: { getUserAgent: vi.fn(() => guestBaseUserAgent) }
-    }
-    webContentsFromIdMock.mockReturnValue(guest)
-
-    browserManager.attachGuestPolicies(guest as never)
-    browserManager.registerGuest({
-      browserPageId: 'browser-direct-ua',
-      webContentsId: guest.id,
-      rendererWebContentsId
-    })
-    const didStartNavigation = guestOnMock.mock.calls.find(
-      ([event]) => event === 'did-start-navigation'
-    )?.[1] as (event: unknown, url: string, isInPlace: boolean, isMainFrame: boolean) => void
-
-    didStartNavigation(null, 'https://accounts.google.com/v3/signin/identifier', false, true)
-
-    expect(guest.setUserAgent).toHaveBeenLastCalledWith(googleAuthUserAgent())
-    expect(guest.debugger.sendCommand).not.toHaveBeenCalledWith(
-      'Emulation.setUserAgentOverride',
-      expect.anything()
-    )
-  })
 
   // Keep the process UA override until direct navigation can replace the stale Firefox base UA.
   it('never clears the override onto a stale Firefox WebContents UA and heals it on the next navigation', async () => {

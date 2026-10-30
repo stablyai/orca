@@ -1,10 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import type { AgentSessionOptionsResult } from './agent-session-wire'
-import { sortNativeChatSessionOptions } from './native-chat-session-option-snapshot'
+import { sortNativeChatSessionOptions } from './native-chat/input/native-chat-session-option-snapshot'
 import {
+  canSetStructuredAgentSessionOption,
   applyStructuredAgentSessionOptions,
-  commitStructuredAgentSessionOption,
-  commitStructuredAgentSessionOptionValues,
   createStructuredAgentSessionOptionState,
   structuredAgentSessionOptionPicks,
   structuredAgentSessionOptionSnapshot
@@ -38,7 +37,7 @@ function live(agent: string, current: AgentSessionOptionsResult['current'], auto
 }
 
 describe('the permission mode picker', () => {
-  it('keeps old-host fallback while capable hosts display only the nullable report', () => {
+  it('shows the saved mode until a report, except for own, which waits for the report', () => {
     const pr1 = live('codex', { permissionMode: 'ask' })
     expect(permission({ ...pr1, permissionOwnSupported: null })?.settable).toBe(false)
     expect(permission({ ...pr1, permissionOwnSupported: false })).toMatchObject({
@@ -56,7 +55,52 @@ describe('the permission mode picker', () => {
         }
       })
     }
-    expect(permission({ ...capable, permissionMode: 'ask' })?.settable).toBe(false)
+    // A resumed chat with no running agent shows its saved mode and can change it.
+    expect(permission({ ...capable, permissionMode: 'full-access' })).toMatchObject({
+      settable: true,
+      valueSource: 'applied',
+      kind: { currentValue: 'full-access' }
+    })
+    expect(
+      permission({ ...capable, permissionMode: 'full-access', reportedPermissionMode: null })
+    ).toMatchObject({ settable: false, kind: { currentValue: undefined } })
+  })
+
+  it('admits supported Own reset through the same descriptor/readiness predicate', () => {
+    const state = { ...live('codex', { permissionMode: 'ask' }), permissionOwnSupported: true }
+    expect(canSetStructuredAgentSessionOption(state, 'permissionMode', 'own')).toBe(true)
+    for (const permissionOwnSupported of [false, null]) {
+      const unsupported = { ...state, permissionOwnSupported }
+      expect(canSetStructuredAgentSessionOption(unsupported, 'permissionMode', 'own')).toBe(false)
+      expect(canSetStructuredAgentSessionOption(unsupported, 'permissionMode', 'full-access')).toBe(
+        permissionOwnSupported === false
+      )
+    }
+    expect(canSetStructuredAgentSessionOption(state, 'permissionMode', 'invalid')).toBe(false)
+    expect(canSetStructuredAgentSessionOption(state, 'permissionMode', 'own', [], true)).toBe(false)
+    expect(
+      canSetStructuredAgentSessionOption(
+        state,
+        'permissionMode',
+        'own',
+        structuredAgentSessionOptionSnapshot(state),
+        false
+      )
+    ).toBe(false)
+    expect(
+      canSetStructuredAgentSessionOption(
+        { ...state, pendingId: 'permissionMode' },
+        'permissionMode',
+        'own'
+      )
+    ).toBe(false)
+    expect(
+      canSetStructuredAgentSessionOption(
+        { ...state, reportedPermissionMode: null },
+        'permissionMode',
+        'own'
+      )
+    ).toBe(false)
   })
 
   it('shows the seeded mode before the agent starts, beside the quiet model pill', () => {
@@ -75,47 +119,6 @@ describe('the permission mode picker', () => {
     })
   })
 
-  it('shows nothing for a host that states no mode, or an agent with none', () => {
-    expect(permission(live('codex', {}))).toBeUndefined()
-    expect(permission(live('pi', { permissionMode: 'ask' }))).toBeUndefined()
-  })
-
-  it("offers Codex's three modes with its own descriptions", () => {
-    const descriptor = permission(live('codex', { permissionMode: 'ask' }))
-    expect(descriptor?.kind.type === 'select' && descriptor.kind.choices).toEqual([
-      {
-        value: 'ask',
-        label: 'Ask for approval',
-        description: 'Edits files and runs commands in this workspace; asks before anything else'
-      },
-      { value: 'auto', label: 'Approve for me', description: 'Reviews approval requests for you' },
-      {
-        value: 'full-access',
-        label: 'Full access',
-        description: 'Never asks; can edit any file and use the network'
-      }
-    ])
-  })
-
-  it('offers all Claude modes regardless of catalog support, and shows the host mode as stated', () => {
-    for (const autoMode of [true, false, undefined]) {
-      const descriptor = permission(live('claude', { permissionMode: 'ask' }, autoMode))
-      expect(
-        descriptor?.kind.type === 'select' && descriptor.kind.choices.map((c) => c.value)
-      ).toEqual(['ask', 'accept-edits', 'auto', 'full-access'])
-    }
-    expect(permission(live('claude', { permissionMode: 'auto' }, false))).toMatchObject({
-      kind: { currentValue: 'auto' }
-    })
-    const state = createStructuredAgentSessionOptionState('claude')
-    const descriptor = permission(
-      structuredAgentSessionOptionView(state, { permissionMode: 'ask' }, {})
-    )
-    expect(
-      descriptor?.kind.type === 'select' && descriptor.kind.choices.map((c) => c.value)
-    ).toContain('auto')
-  })
-
   it("shows a held pick over the host's value, and the host's over the seed", () => {
     const state = live('codex', { permissionMode: 'auto' })
     const seed = { permissionMode: 'ask' }
@@ -125,19 +128,6 @@ describe('the permission mode picker', () => {
     expect(
       permission(structuredAgentSessionOptionView(state, seed, { permissionMode: 'full-access' }))
     ).toMatchObject({ kind: { currentValue: 'full-access' } })
-  })
-
-  it('takes a settled pick, and the record a write answers with', () => {
-    const state = live('codex', { permissionMode: 'ask' })
-    expect(commitStructuredAgentSessionOption(state, 'permissionMode', 'auto').permissionMode).toBe(
-      'auto'
-    )
-    expect(
-      commitStructuredAgentSessionOptionValues(state, {
-        model: 'model-a',
-        permissionMode: 'full-access'
-      }).permissionMode
-    ).toBe('full-access')
   })
 
   it('stays out of the per-model option pill and out of the saved selection', () => {

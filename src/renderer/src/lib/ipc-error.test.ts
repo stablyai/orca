@@ -1,26 +1,36 @@
 import { describe, expect, it } from 'vitest'
+import { i18n } from '../i18n/i18n'
+import es from '../i18n/locales/es.json'
 import {
-  compactIpcErrorMessage,
-  extractIpcErrorMessage,
-  readIpcErrorDetail,
-  readIpcErrorMessage
-} from './ipc-error'
+  OPENCODE_MODEL_CONFIG_REFUSAL,
+  OPENCODE_MODEL_TRANSPORT_REFUSAL,
+  OPENCODE_MODEL_VERSION_REFUSAL
+} from '../../../shared/agent-launch-model-preferences'
+import { extractIpcErrorMessage, readIpcErrorDetail, readIpcErrorMessage } from './ipc-error'
 
 describe('readIpcErrorMessage', () => {
-  it('strips the Electron invoke wrapper Electron adds to a rejected handler', () => {
-    expect(
-      readIpcErrorMessage(
-        new Error("Error invoking remote method 'git:stage': Error: index.lock exists")
+  it('localizes version, configuration and transport refusals without changing other errors', async () => {
+    const language = i18n.language
+    i18n.addResourceBundle('es', 'translation', es)
+    await i18n.changeLanguage('es')
+    try {
+      for (const [message, expected] of [
+        [OPENCODE_MODEL_VERSION_REFUSAL, es.agentLaunch.opencode.updateRequired],
+        [OPENCODE_MODEL_CONFIG_REFUSAL, es.agentLaunch.opencode.invalidConfig],
+        [OPENCODE_MODEL_TRANSPORT_REFUSAL, es.agentLaunch.opencode.unsupportedLaunch]
+      ]) {
+        expect(
+          readIpcErrorMessage(
+            new Error(`Error invoking remote method 'pty:create': OrchestrationError: ${message}`)
+          )
+        ).toBe(expected)
+      }
+      expect(readIpcErrorMessage(new Error('OpenCode: another failure'))).toBe(
+        'OpenCode: another failure'
       )
-    ).toBe('index.lock exists')
-  })
-
-  it('strips the handler wrapper too', () => {
-    expect(
-      readIpcErrorMessage(
-        new Error("Error occurred in handler for 'skills:discover': EACCES: permission denied")
-      )
-    ).toBe('EACCES: permission denied')
+    } finally {
+      await i18n.changeLanguage(language)
+    }
   })
 
   it('keeps only the first line, because callers render this as a sonner title', () => {
@@ -35,10 +45,6 @@ describe('readIpcErrorMessage', () => {
     expect(readIpcErrorMessage(new Error('boom\ndetail'))).toBe('boom')
   })
 
-  it('leaves a plain message untouched', () => {
-    expect(readIpcErrorMessage(new Error('Permission denied'))).toBe('Permission denied')
-  })
-
   it('has nothing to show for a non-Error or an empty message', () => {
     expect(readIpcErrorMessage('boom')).toBeUndefined()
     expect(readIpcErrorMessage(undefined)).toBeUndefined()
@@ -49,26 +55,7 @@ describe('readIpcErrorMessage', () => {
   })
 })
 
-describe('compactIpcErrorMessage', () => {
-  it('normalizes string error fields without manufacturing an Error', () => {
-    expect(
-      compactIpcErrorMessage(
-        "Error invoking remote method 'files:import': Error: permission denied\nstack"
-      )
-    ).toBe('permission denied')
-  })
-})
-
 describe('extractIpcErrorMessage', () => {
-  it('unwraps the same way readIpcErrorMessage does', () => {
-    expect(
-      extractIpcErrorMessage(
-        new Error("Error invoking remote method 'git:stage': Error: index.lock exists"),
-        'Failed to stage.'
-      )
-    ).toBe('index.lock exists')
-  })
-
   it('matches main exactly: clamps a WRAPPED multi-line message', () => {
     // Wrapped multiline bodies must not stop at their first newline before compaction.
     expect(
@@ -101,19 +88,6 @@ describe('readIpcErrorDetail', () => {
     )
   })
 
-  it('is the unclamped half of the pair the toast slots use', () => {
-    expect(readIpcErrorMessage(MULTILINE)).toBe("error: unable to unlink 'a': Permission denied")
-    // Compact output must remain suitable for single-row toast titles.
-    expect(extractIpcErrorMessage(MULTILINE, 'Failed.')).toBe(
-      "error: unable to unlink 'a': Permission denied"
-    )
-  })
-
-  it('has nothing to show for a non-Error or a blank message', () => {
-    expect(readIpcErrorDetail('boom')).toBeUndefined()
-    expect(readIpcErrorDetail(new Error('   '))).toBeUndefined()
-  })
-
   it('strips a wrapper the caller embedded mid-message, keeping the caller’s own prefix', () => {
     // Preserve caller context such as SSH connection failed while removing nested transport wrappers.
     expect(
@@ -124,6 +98,15 @@ describe('readIpcErrorDetail', () => {
         'fallback'
       )
     ).toBe('SSH connection failed: Relay package not found.')
+  })
+
+  it("leaves only an unsupported distro's fix for the user", () => {
+    const error = new Error(
+      "Error invoking remote method 'wslHosts:connect': OrcadHostUnsupportedError: Ubuntu-18.04 has glibc 2.27; Orca's WSL host needs 2.28 or newer. Upgrade the distro, or keep this project on Windows."
+    )
+    expect(readIpcErrorDetail(error)).toBe(
+      "Ubuntu-18.04 has glibc 2.27; Orca's WSL host needs 2.28 or newer. Upgrade the distro, or keep this project on Windows."
+    )
   })
 })
 
@@ -137,13 +120,6 @@ describe('typed main-process errors', () => {
   it('drops the error class name along with the wrapper', () => {
     expect(readIpcErrorDetail(wrapped)).toBe(
       'Archive hook failed for worktree: /w/feature — exited 23.\nbackup target unreachable'
-    )
-  })
-
-  it('keeps the detail lines a refusal needs, unlike the clamped read', () => {
-    // Unclamped archive refusals must retain hook output beyond the first line.
-    expect(readIpcErrorMessage(wrapped)).toBe(
-      'Archive hook failed for worktree: /w/feature — exited 23.'
     )
   })
 

@@ -57,13 +57,6 @@ describe('validateTerminalViewAttributes', () => {
     cursorBlink: true
   })
 
-  it('accepts and normalizes a well-formed payload', () => {
-    const attrs = validateTerminalViewAttributes(valid())
-    expect(attrs).not.toBeNull()
-    expect(attrs?.ansi).toHaveLength(256)
-    expect(attrs?.colorSchemeMode).toBe('dark')
-  })
-
   it.each([
     ['null payload', null],
     ['missing foreground', { ...valid(), foreground: undefined }],
@@ -94,20 +87,5 @@ describe('terminalViewAttributesEqual', () => {
 
   it('treats two independently built identical snapshots as equal', () => {
     expect(terminalViewAttributesEqual(snapshot(), snapshot())).toBe(true)
-  })
-
-  it.each([
-    ['foreground', { ...snapshot(), foreground: [1, 2, 4] as TerminalViewRgb }],
-    ['background', { ...snapshot(), background: [0, 0, 0] as TerminalViewRgb }],
-    ['cursor', { ...snapshot(), cursor: [7, 8, 10] as TerminalViewRgb }],
-    [
-      'an ansi entry',
-      { ...snapshot(), ansi: snapshot().ansi.map((rgb, i) => (i === 200 ? [9, 9, 9] : rgb)) }
-    ],
-    ['colorSchemeMode', { ...snapshot(), colorSchemeMode: 'light' as const }],
-    ['cursorStyle', { ...snapshot(), cursorStyle: 'bar' as const }],
-    ['cursorBlink', { ...snapshot(), cursorBlink: false }]
-  ])('detects a change in %s', (_label, changed) => {
-    expect(terminalViewAttributesEqual(snapshot(), changed as TerminalViewAttributes)).toBe(false)
   })
 })

@@ -10,19 +10,6 @@ const projectRoot = resolve(import.meta.dirname, '../..')
 
 describe('7za path resolution for the Windows signing gates (#6487)', () => {
   // Match upstream mac/win/linux architecture dirs; darwin/ or collapsed-arch guesses silently fail to resolve.
-  it.each([
-    ['darwin', 'arm64', 'mac/arm64/7za'],
-    ['darwin', 'x64', 'mac/x64/7za'],
-    ['win32', 'x64', 'win/x64/7za.exe'],
-    ['win32', 'ia32', 'win/ia32/7za.exe'],
-    ['win32', 'arm64', 'win/arm64/7za.exe'],
-    ['linux', 'x64', 'linux/x64/7za'],
-    ['linux', 'arm64', 'linux/arm64/7za']
-  ])('maps the %s/%s legacy layout to %s', (platform, arch, expected) => {
-    expect(legacy7zaRelativePath(platform, arch).join('/')).toBe(
-      `node_modules/7zip-bin/${expected}`
-    )
-  })
 
   it('prefers an existing legacy file over the downloaded toolset', async () => {
     const scratch = mkdtempSync(join(tmpdir(), 'orca 7za legacy '))

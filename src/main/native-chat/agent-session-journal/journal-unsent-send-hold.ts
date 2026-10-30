@@ -65,7 +65,7 @@ export async function holdUnsentSends(
     fence: number
     hold: UnsentSendHold
     /** Settle handed-over sends instead when failed initialization proves none ran. */
-    unrun?: true
+    unrun?: true | ((submission: AgentJournalSubmission) => boolean)
   }
 ): Promise<number | null> {
   const { hold } = input
@@ -73,7 +73,7 @@ export async function holdUnsentSends(
     .submissions()
     .filter((entry) =>
       input.unrun
-        ? isUnansweredHandedOverSubmission(entry)
+        ? isUnansweredHandedOverSubmission(entry) && (input.unrun === true || input.unrun(entry))
         : isQueuedAgentJournalSubmission(entry) &&
           (hold.cause === 'hostRestarted'
             ? journal.wroteBeforeOpen(entry.acceptedSequence)

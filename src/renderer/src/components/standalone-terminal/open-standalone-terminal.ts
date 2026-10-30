@@ -31,6 +31,7 @@ export type StandaloneTerminalArgs = {
   getSettings: () => GlobalSettings | null
   getMacOptionAsAlt: () => MacOptionAsAlt
   getTerminalInput: () => DashboardCardTerminalInput | null
+  requestClose?: () => void
 }
 
 export type StandaloneTerminal = {
@@ -92,6 +93,7 @@ export function openStandaloneTerminal(args: StandaloneTerminalArgs): Standalone
     pasteClipboardText: (activeElement, source) => void pasteClipboardText(activeElement, source),
     // Why: route through terminal.input so the chord's bytes carry core's user-input signal, like typed keys.
     sendInput: (data) => terminal.input(data),
+    requestClose: args.requestClose,
     getShortcutContext: () => ({
       clientPlatform: getShortcutPlatform(),
       macOptionAsAlt: args.getMacOptionAsAlt(),

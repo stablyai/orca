@@ -1,5 +1,5 @@
 /** terminal-stream-id renumbers result/header ids; none carries no id (one phone screencast at a time).
- * Refuse phone-binary-frames because the relay cannot forward their input; census tests cover new streams. */
+ * Refuse phone-binary-frames because the relay cannot forward their input. */
 export type RelayedStreamCarrier = 'terminal-stream-id' | 'none' | 'phone-binary-frames'
 
 export const RELAYED_STREAM_CARRIERS: ReadonlyMap<string, RelayedStreamCarrier> = new Map([

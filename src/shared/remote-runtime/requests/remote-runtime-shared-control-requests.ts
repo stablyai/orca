@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { abortSignalReason } from '../../abort-signal-reason'
-import { serializeRemoteRuntimeRpcRequest } from '../../remote-runtime-memory-limits'
+import { serializeRemoteRuntimeRpcRequest } from '../remote-runtime-memory-limits'
 import {
   prepareRemoteRuntimeRequest,
   releaseRemoteRuntimePreparedRequest,

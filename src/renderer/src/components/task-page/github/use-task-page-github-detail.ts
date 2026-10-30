@@ -8,13 +8,13 @@ import { useShallow } from 'zustand/react/shallow'
 import {
   selectTaskPageWorkItemsCacheEntries,
   findTaskPageDialogWorkItem
-} from '@/components/task-page-cache-selectors'
+} from '@/components/task-page/task-page-cache-selectors'
 import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
 import type { GitLabWorkItem } from '../../../../../shared/gitlab-types'
 import {
   getTaskPageRepoCacheInput,
   getTaskPageRepoSourceContext
-} from '../../task-page-source-context'
+} from '../task-page-source-context'
 import { startGitHubListScrollRestore } from './task-page-github-list-scroll-restore'
 
 function getTaskPageScrollTop(
@@ -24,7 +24,30 @@ function getTaskPageScrollTop(
   return scrollRef.current?.scrollTop ?? fallback
 }
 
-export function useTaskPageGitHubDetail(model: TaskPageGitHubListStateModel) {
+type TaskPageGitHubDetailInput = Pick<
+  TaskPageGitHubListStateModel,
+  | 'pageData'
+  | 'openTaskPage'
+  | 'repos'
+  | 'selectedRepos'
+  | 'primaryRepo'
+  | 'setGithubMode'
+  | 'gitlabDialogItem'
+  | 'setGitlabDialogItem'
+  | 'appliedTaskSearch'
+  | 'githubPerRepoPageLimit'
+  | 'githubResumeContextKey'
+  | 'pages'
+  | 'currentPage'
+  | 'currentPageRef'
+  | 'githubListScrollRef'
+  | 'githubListScrollTopRef'
+  | 'pendingGithubScrollRestoreRef'
+  | 'githubListRestoreWriteRef'
+  | 'taskListPositionRef'
+>
+
+export function useTaskPageGitHubDetail<Model extends TaskPageGitHubDetailInput>(model: Model) {
   const {
     pageData,
     openTaskPage,
@@ -261,4 +284,6 @@ export function useTaskPageGitHubDetail(model: TaskPageGitHubListStateModel) {
   nextModel.openGitLabDetailPage = openGitLabDetailPage
   return nextModel
 }
-export type TaskPageGitHubDetailModel = ReturnType<typeof useTaskPageGitHubDetail>
+export type TaskPageGitHubDetailModel = ReturnType<
+  typeof useTaskPageGitHubDetail<TaskPageGitHubListStateModel>
+>

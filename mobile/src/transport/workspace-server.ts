@@ -17,7 +17,12 @@ export function useWorkspaceServer(args: {
   executionHost: ExecutionHostId | undefined
 }): {
   routeHost: ExecutionHostId | undefined | null
-  server: { client: RpcClient | null; state: ConnectionState; gates: HostStatusGates } | null
+  server: {
+    client: RpcClient | null
+    state: ConnectionState
+    gates: HostStatusGates
+    desktopCapabilities: readonly string[]
+  } | null
 } {
   const { client, connState, desktopCapabilities, executionHost } = args
   const routeHost = workspaceRouteExecutionHost(client, desktopCapabilities, executionHost)
@@ -32,7 +37,8 @@ export function useWorkspaceServer(args: {
   const gates = useHostStatusGates({ hostId: undefined, client: serverClient, connState: state })
   return {
     routeHost,
-    server: routeHost === undefined ? null : { client: serverClient, state, gates }
+    server:
+      routeHost === undefined ? null : { client: serverClient, state, gates, desktopCapabilities }
   }
 }
 

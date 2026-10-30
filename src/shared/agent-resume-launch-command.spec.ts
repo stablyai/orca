@@ -565,3 +565,32 @@ describe('buildAgentResumeStartupPlan claude selector guard', () => {
     expect(restored?.launchConfig.agentCommand).toBe("claude '--resume'")
   })
 })
+
+describe('buildAgentResumeStartupPlan claude effort', () => {
+  it.each(SHELLS)(
+    "resumes at the session's effort after a stale launch flag ($platform/$shell)",
+    ({ platform, shell }) => {
+      const session = { ...providerSession, effort: 'max' }
+      const restored = buildAgentResumeStartupPlan({
+        agent: 'claude',
+        providerSession: session,
+        cmdOverrides: {},
+        agentArgs: '--effort low',
+        platform,
+        shell
+      })
+      const command = restored?.launchCommand ?? ''
+      const tokens = tokenizeStartupCommand(command, shell)
+      // Claude keeps the last --effort it parses.
+      expect(tokens.ok && tokens.tokens.slice(-6)).toEqual([
+        '--effort',
+        'low',
+        '--effort',
+        'max',
+        ...RESUME
+      ])
+      // The saved launch recipe stays the user's own.
+      expect(restored?.launchConfig.agentArgs).toBe('--effort low')
+    }
+  )
+})

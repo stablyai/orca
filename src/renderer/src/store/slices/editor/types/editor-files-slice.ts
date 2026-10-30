@@ -85,6 +85,13 @@ export type EditorFilesSlice = {
     onShown?: (result: EditorOpenResult | null) => void
   ) => EditorOpenResult | null
   openNewMarkdownInActiveWorkspace: (groupId: string) => Promise<void>
+  /** Creates a plugin's new-file type at the active workspace root and opens it. */
+  openNewPluginFileInActiveWorkspace: (
+    newFile: { pluginKey: string; id: string; title: string; extension: string },
+    groupId?: string
+  ) => Promise<void>
+  /** Creates an untitled file of `extension` holding `content` at the active workspace root. */
+  openSampleFileInActiveWorkspace: (sample: { extension: string; content: string }) => Promise<void>
   // Why: sequences openFile/setMarkdownViewMode/reveal around an async Monaco remount. See docs/markdown-internal-link-opening-design.md.
   activateMarkdownLink: (
     rawHref: string | undefined,
@@ -131,6 +138,8 @@ export type EditorFilesSlice = {
   setExternalMutation: (fileId: string, mutation: 'deleted' | 'renamed' | 'changed' | null) => void
   /** `undefined` un-records a baseline a failed operation stamped provisionally. */
   setLastKnownDiskSignature: (fileId: string, signature: string | undefined) => void
+  /** Host grant for a file outside every workspace; grants lapse, so reads and saves renew them. */
+  setTerminalArtifactGrant: (fileId: string, grantId: string) => void
   clearSelfMoveEcho: (fileId: string) => void
   /** Atomically migrate path/ID-keyed editor state without close/reopen; stale/colliding moves leave state unchanged. */
   rekeyOpenFilesForPathChange: (args: {

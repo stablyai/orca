@@ -3,7 +3,7 @@ import {
   NATIVE_CHAT_COMPOSER_PLACEHOLDER,
   NATIVE_CHAT_TURN_STATUS_COPY
 } from '../../../../shared/native-chat-turn-status'
-import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime-pty-id'
+import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 
 export type NativeChatResolvedTarget = {
   ptyId: string

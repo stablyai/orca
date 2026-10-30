@@ -269,9 +269,9 @@ export class ScriptedRpcTransport {
     return null
   }
 
-  outstanding(name: string): boolean {
+  outstanding(name: string): { params: unknown } | undefined {
     const binding = this.bindings.get(this.aliases.get(name) ?? name)
-    return binding !== undefined && !binding.completed
+    return binding && !binding.completed ? binding : undefined
   }
 
   bind(alias: string, name: string, params: unknown): void {

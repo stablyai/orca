@@ -80,8 +80,7 @@ export function useSshBulkRemove(args: {
       const resolution = resolveSshHostRemoval({
         targetId: target.id,
         repos: state.repos,
-        worktrees,
-        sshConnectionStates: state.sshConnectionStates
+        worktrees
       })
       return resolution.workspaceCount > 0 ? 'workspaces' : null
     })

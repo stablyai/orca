@@ -10,6 +10,7 @@ import type { CliWriterObservation } from '../agent-hooks/server/cli-writer-obse
 import { getFreshShellForegroundSnapshot } from '../../shared/process-table-snapshot-reader'
 import { collectDescendantsFromIndex, getProcessTableIndex } from '../../shared/process-table-index'
 import { isShellProcess } from '../../shared/shell-process-detection'
+import { MACOS_LOGIN_PATH } from '../providers/macos-tcc-login-shell'
 import type { PtyIncarnationId } from '../../shared/pty-incarnation'
 import type { AgentProcessIdentity } from '../../shared/agent-process-presence'
 import { probeAgentProcessPresence } from '../../shared/agent-process-presence-probe'
@@ -48,14 +49,20 @@ export type CliWriterHost = {
 /** Unlike foreground ownership, any job left in the shell's session refuses, background and suspended too. */
 export async function posixCliWriterShellAlone(rootPid: number): Promise<boolean> {
   const index = getProcessTableIndex(await getFreshShellForegroundSnapshot())
+  const executable = (command: string) => command.trim().replace(/^-/, '').split(/\s+/, 1)[0] ?? ''
   const root = index.byPid.get(rootPid)
-  const executable = root?.command.trim().replace(/^-/, '').split(/\s+/, 1)[0] ?? ''
+  // macOS panes spawn under login(1), which stays as the shell's parent; it is launch plumbing.
+  const launched =
+    root && executable(root.command) === MACOS_LOGIN_PATH
+      ? (index.childrenByPpid.get(rootPid) ?? [])
+      : undefined
+  const shell = launched ? (launched.length === 1 ? launched[0] : undefined) : root
   return (
-    !!root &&
-    isShellProcess(executable) &&
-    root.stat.includes('+') &&
+    !!shell &&
+    isShellProcess(executable(shell.command)) &&
+    shell.stat.includes('+') &&
     // A session leader below the shell has left this terminal (a prompt's zpty worker); its jobs never do.
-    collectDescendantsFromIndex(index, rootPid, (row) => row.stat.includes('s')).length === 0
+    collectDescendantsFromIndex(index, shell.pid, (row) => row.stat.includes('s')).length === 0
   )
 }
 

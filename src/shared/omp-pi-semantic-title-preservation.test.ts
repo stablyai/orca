@@ -1,7 +1,7 @@
 /** OMP/Pi titles use π, never OMP/Pi. Verified oh-my-pi utils/title-generator.ts DEFAULT_TERMINAL_TITLE/buildTerminalTitleWithState
  * (native π frame label); Orca’s injected pi/titlebar-extension-source.ts instead emits π - session - cwd with 80ms braille frames.
  * Orca manufactured OMP/Pi flicker via synthetic profile labels and normalization that discarded session/cwd (#16093).
- * Disable synthesizeWorkingTitle only: terminal-state synthesis still publishes pane identity. Normalize rotating braille while preserving labels. */
+ * OMP disables terminal-title synthesis so its session titles survive every state. Normalize rotating braille while preserving labels. */
 import { describe, expect, it } from 'vitest'
 import { detectAgentStatusFromTitle, normalizeTerminalTitle } from './agent-title-status'
 import { isDecorativeAgentTitleFrameChange } from './agent-decorative-title-signature'
@@ -63,7 +63,10 @@ describe('detectAgentStatusFromTitle reads the π state separator', () => {
     ['π > fixing the sidebar', 'idle'],
     ['π ⠋ fixing the sidebar', 'working'],
     ['⠋ π - fixing the sidebar - orca', 'working'],
-    ['π: fixing the sidebar', 'idle']
+    ['π: fixing the sidebar', 'idle'],
+    // Session names are free text; only the synthetic label means permission.
+    ['π - fix action required banner - orca', 'idle'],
+    ['OMP - fix action required banner - orca', 'idle']
   ])('classifies %s as %s', (title, expected) => {
     expect(detectAgentStatusFromTitle(title)).toBe(expected)
   })

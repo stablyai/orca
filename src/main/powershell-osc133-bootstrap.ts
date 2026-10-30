@@ -59,6 +59,19 @@ ${getPowerShellAgentWrappers()}
         $result
     }
 
+    # Local ConPTY delivers real Alt+Left/Right (#29177); mirror Alt+B/F so Emacs-mode word motion survives.
+    if ($Global:__OrcaOsc133State.HasPSReadLine) {
+        & {
+            $bound = Get-PSReadLineKeyHandler -Bound -ErrorAction SilentlyContinue
+            foreach ($pair in ('LeftArrow', 'b'), ('RightArrow', 'f')) {
+                $source = $bound | Where-Object Key -ceq "Alt+$($pair[1])" | Select-Object -First 1
+                if ($source -and -not ($bound | Where-Object Key -eq "Alt+$($pair[0])")) {
+                    try { Set-PSReadLineKeyHandler -Chord "Alt+$($pair[0])" -Function $source.Function } catch {}
+                }
+            }
+        }
+    }
+
     if ($Global:__OrcaOsc133State.HasPSReadLine -and
         $null -ne $Global:__OrcaOsc133State.OriginalReadLine) {
         function Global:PSConsoleHostReadLine {
@@ -70,14 +83,19 @@ ${getPowerShellAgentWrappers()}
 }
 `
 
-// Strip source comments to leave command-line space for appended startup commands.
+// Strip comments and indentation to leave command-line space for appended startup commands (no multi-line strings).
 const POWERSHELL_OSC133_BOOTSTRAP_PAYLOAD = POWERSHELL_OSC133_BOOTSTRAP.replace(
   /^[ \t]*#.*\n/gm,
   ''
-)
+).replace(/^[ \t]+/gm, '')
 
 export function getPowerShellOsc133Bootstrap(): string {
   return POWERSHELL_OSC133_BOOTSTRAP_PAYLOAD
+}
+
+// Startup commands run before the first prompt, which suppresses 133;D; mark them like typed commands.
+export function getPowerShellOsc133StartupCommandMark(): string {
+  return 'if (Test-Path variable:global:__OrcaOsc133State) { [Console]::Write("$([char]27)]133;C$([char]7)"); $Global:__OrcaOsc133State.HasSeenPrompt = $true }'
 }
 
 export function isPowerShellExecutableName(shellName: string): boolean {

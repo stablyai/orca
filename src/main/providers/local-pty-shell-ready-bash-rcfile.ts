@@ -14,6 +14,7 @@ import {
   SHELL_STARTUP_IDENTITY_MARKER_BLOCK
 } from '../shell-templates'
 import { SHELL_READY_MARKER_ESCAPED } from './local-pty-shell-ready-marker'
+import { BASH_WSL_CWD_REPORT_BLOCK } from '../wsl-shell-cwd-report'
 
 export function getBashShellReadyRcfileContent(): string {
   return `# Orca bash shell-ready wrapper
@@ -55,6 +56,7 @@ ${getPosixOmpShellWrapper()}
 # Profile scripts must not replace Orca's runtime CODEX_HOME.
 [[ -n "\${ORCA_CODEX_HOME:-}" ]] && export CODEX_HOME="\${ORCA_CODEX_HOME}"
 ${getPosixCodexShellLaunchPreflight() + getPosixClaudeShellFunction()}
+${BASH_WSL_CWD_REPORT_BLOCK}
 # OSC 133 C/D clears agent status after interrupted CLIs exit without sending Stop/SessionEnd hooks.
 __orca_initializing_wrapper=1
 __orca_osc133_precmd() {
@@ -65,6 +67,7 @@ __orca_osc133_precmd() {
     unset __orca_in_command
   fi
   printf "\\033]133;A\\007"
+  __orca_wsl_cwd_report
   return "$exit_code"
 }
 __orca_osc133_prompt_done() {

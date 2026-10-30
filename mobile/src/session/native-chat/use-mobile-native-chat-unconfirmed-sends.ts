@@ -5,7 +5,7 @@ import type { NativeChatMessage } from '../../../../src/shared/native-chat-types
 import {
   findLandedUnconfirmedSends,
   type UnconfirmedSend
-} from '../mobile-native-chat-draft-reconcile'
+} from './composer/mobile-native-chat-draft-reconcile'
 import type { MobileNativeChatSendOrigin } from './mobile-native-chat-pending-echo'
 
 export const UNCONFIRMED_SEND_DEADLINE_MS = 20_000
@@ -47,7 +47,7 @@ export function useMobileNativeChatUnconfirmedSends(args: {
         pendingKey: origin.pendingKey,
         text,
         normalizedText: origin.normalizedText,
-        baselineTailMessageId: origin.baselineTailMessageId,
+        baselineTailMessageId: origin.boundary.afterMessageId ?? null,
         deadline: null
       }
       // The confirming transcript event can arrive before the lost-ack RPC settles.

@@ -9,176 +9,141 @@ import type { NativeChatBlock } from '../../../../shared/native-chat-types'
 /** Extraction requires literal keys/fallbacks; parity tests keep these clauses aligned with mobile’s shared record. */
 function clause(category: NativeChatToolCategory, count: number, live: boolean): string {
   const one = count === 1
-  const value0 = { value0: count }
   if (live) {
-    return liveClause(category, one, value0)
+    return liveClause(category, count)
   }
   switch (category) {
     case 'read':
-      return one
-        ? translate('components.native-chat.tool.runReadOne', 'Read 1 file')
-        : translate('components.native-chat.tool.runReadMany', 'Read {{value0}} files', value0)
+      return translate('components.native-chat.tool.runRead', 'Read {{count}} files', {
+        count,
+        defaultValue_one: 'Read {{count}} file'
+      })
     case 'search':
-      return one
-        ? translate('components.native-chat.tool.runSearchOne', 'Searched 1 time')
-        : translate(
-            'components.native-chat.tool.runSearchMany',
-            'Searched {{value0}} times',
-            value0
-          )
+      return translate('components.native-chat.tool.runSearch', 'Searched {{count}} times', {
+        count,
+        defaultValue_one: 'Searched {{count}} time'
+      })
     case 'listFiles':
-      return one
-        ? translate('components.native-chat.tool.runListFilesOne', 'Listed 1 directory')
-        : translate(
-            'components.native-chat.tool.runListFilesMany',
-            'Listed {{value0}} directories',
-            value0
-          )
+      return translate('components.native-chat.tool.runListFiles', 'Listed {{count}} directories', {
+        count,
+        defaultValue_one: 'Listed {{count}} directory'
+      })
     case 'unknown':
-      return one
-        ? translate('components.native-chat.tool.runCommandOne', 'Ran 1 command')
-        : translate('components.native-chat.tool.runCommandMany', 'Ran {{value0}} commands', value0)
+      return translate('components.native-chat.tool.runCommand', 'Ran {{count}} commands', {
+        count,
+        defaultValue_one: 'Ran {{count}} command'
+      })
     case 'fileChange':
-      return one
-        ? translate('components.native-chat.tool.runFileChangeOne', 'Edited 1 file')
-        : translate(
-            'components.native-chat.tool.runFileChangeMany',
-            'Edited {{value0}} files',
-            value0
-          )
+      return translate('components.native-chat.tool.runFileChange', 'Edited {{count}} files', {
+        count,
+        defaultValue_one: 'Edited {{count}} file'
+      })
     case 'webSearch':
-      return one
-        ? translate('components.native-chat.tool.runWebSearchOne', 'Searched the web 1 time')
-        : translate(
-            'components.native-chat.tool.runWebSearchMany',
-            'Searched the web {{value0}} times',
-            value0
-          )
+      return translate(
+        'components.native-chat.tool.runWebSearch',
+        'Searched the web {{count}} times',
+        { count, defaultValue_one: 'Searched the web {{count}} time' }
+      )
     case 'browser':
       return one
         ? translate('components.native-chat.tool.runBrowserOne', 'Used the browser')
-        : translate(
-            'components.native-chat.tool.runBrowserMany',
-            'Used the browser {{value0}} times',
-            value0
-          )
+        : translate('components.native-chat.tool.runBrowser', 'Used the browser {{count}} times', {
+            count,
+            defaultValue_one: 'Used the browser {{count}} time'
+          })
     case 'mcpToolCall':
-      return one
-        ? translate('components.native-chat.tool.runIntegrationOne', 'Used 1 integration')
-        : translate(
-            'components.native-chat.tool.runIntegrationMany',
-            'Used {{value0}} integrations',
-            value0
-          )
+      return translate(
+        'components.native-chat.tool.runIntegration',
+        'Used {{count}} integrations',
+        { count, defaultValue_one: 'Used {{count}} integration' }
+      )
     case 'subAgentActivity':
-      return one
-        ? translate('components.native-chat.tool.runAgentOne', 'Ran 1 agent')
-        : translate('components.native-chat.tool.runAgentMany', 'Ran {{value0}} agents', value0)
+      return translate('components.native-chat.tool.runAgent', 'Ran {{count}} agents', {
+        count,
+        defaultValue_one: 'Ran {{count}} agent'
+      })
     case 'todoList':
       return one
         ? translate('components.native-chat.tool.runPlanOne', 'Updated the plan')
-        : translate(
-            'components.native-chat.tool.runPlanMany',
-            'Updated the plan {{value0}} times',
-            value0
-          )
+        : translate('components.native-chat.tool.runPlan', 'Updated the plan {{count}} times', {
+            count,
+            defaultValue_one: 'Updated the plan {{count}} time'
+          })
     case 'other':
-      return one
-        ? translate('components.native-chat.tool.runToolOne', 'Used 1 tool')
-        : translate('components.native-chat.tool.runToolMany', 'Used {{value0}} tools', value0)
+      return translate('components.native-chat.tool.runTool', 'Used {{count}} tools', {
+        count,
+        defaultValue_one: 'Used {{count}} tool'
+      })
   }
 }
 
-function liveClause(
-  category: NativeChatToolCategory,
-  one: boolean,
-  value0: { value0: number }
-): string {
+function liveClause(category: NativeChatToolCategory, count: number): string {
+  const one = count === 1
   switch (category) {
     case 'read':
-      return one
-        ? translate('components.native-chat.tool.runLiveReadOne', 'Reading 1 file')
-        : translate(
-            'components.native-chat.tool.runLiveReadMany',
-            'Reading {{value0}} files',
-            value0
-          )
+      return translate('components.native-chat.tool.runLiveRead', 'Reading {{count}} files', {
+        count,
+        defaultValue_one: 'Reading {{count}} file'
+      })
     case 'search':
-      return one
-        ? translate('components.native-chat.tool.runLiveSearchOne', 'Searching 1 time')
-        : translate(
-            'components.native-chat.tool.runLiveSearchMany',
-            'Searching {{value0}} times',
-            value0
-          )
+      return translate('components.native-chat.tool.runLiveSearch', 'Searching {{count}} times', {
+        count,
+        defaultValue_one: 'Searching {{count}} time'
+      })
     case 'listFiles':
-      return one
-        ? translate('components.native-chat.tool.runLiveListFilesOne', 'Listing 1 directory')
-        : translate(
-            'components.native-chat.tool.runLiveListFilesMany',
-            'Listing {{value0}} directories',
-            value0
-          )
+      return translate(
+        'components.native-chat.tool.runLiveListFiles',
+        'Listing {{count}} directories',
+        { count, defaultValue_one: 'Listing {{count}} directory' }
+      )
     case 'unknown':
-      return one
-        ? translate('components.native-chat.tool.runLiveCommandOne', 'Running 1 command')
-        : translate(
-            'components.native-chat.tool.runLiveCommandMany',
-            'Running {{value0}} commands',
-            value0
-          )
+      return translate('components.native-chat.tool.runLiveCommand', 'Running {{count}} commands', {
+        count,
+        defaultValue_one: 'Running {{count}} command'
+      })
     case 'fileChange':
-      return one
-        ? translate('components.native-chat.tool.runLiveFileChangeOne', 'Editing 1 file')
-        : translate(
-            'components.native-chat.tool.runLiveFileChangeMany',
-            'Editing {{value0}} files',
-            value0
-          )
+      return translate('components.native-chat.tool.runLiveFileChange', 'Editing {{count}} files', {
+        count,
+        defaultValue_one: 'Editing {{count}} file'
+      })
     case 'webSearch':
-      return one
-        ? translate('components.native-chat.tool.runLiveWebSearchOne', 'Searching the web 1 time')
-        : translate(
-            'components.native-chat.tool.runLiveWebSearchMany',
-            'Searching the web {{value0}} times',
-            value0
-          )
+      return translate(
+        'components.native-chat.tool.runLiveWebSearch',
+        'Searching the web {{count}} times',
+        { count, defaultValue_one: 'Searching the web {{count}} time' }
+      )
     case 'browser':
       return one
         ? translate('components.native-chat.tool.runLiveBrowserOne', 'Using the browser')
         : translate(
-            'components.native-chat.tool.runLiveBrowserMany',
-            'Using the browser {{value0}} times',
-            value0
+            'components.native-chat.tool.runLiveBrowser',
+            'Using the browser {{count}} times',
+            { count, defaultValue_one: 'Using the browser {{count}} time' }
           )
     case 'mcpToolCall':
-      return one
-        ? translate('components.native-chat.tool.runLiveIntegrationOne', 'Using 1 integration')
-        : translate(
-            'components.native-chat.tool.runLiveIntegrationMany',
-            'Using {{value0}} integrations',
-            value0
-          )
+      return translate(
+        'components.native-chat.tool.runLiveIntegration',
+        'Using {{count}} integrations',
+        { count, defaultValue_one: 'Using {{count}} integration' }
+      )
     case 'subAgentActivity':
-      return one
-        ? translate('components.native-chat.tool.runLiveAgentOne', 'Running 1 agent')
-        : translate(
-            'components.native-chat.tool.runLiveAgentMany',
-            'Running {{value0}} agents',
-            value0
-          )
+      return translate('components.native-chat.tool.runLiveAgent', 'Running {{count}} agents', {
+        count,
+        defaultValue_one: 'Running {{count}} agent'
+      })
     case 'todoList':
       return one
         ? translate('components.native-chat.tool.runLivePlanOne', 'Updating the plan')
         : translate(
-            'components.native-chat.tool.runLivePlanMany',
-            'Updating the plan {{value0}} times',
-            value0
+            'components.native-chat.tool.runLivePlan',
+            'Updating the plan {{count}} times',
+            { count, defaultValue_one: 'Updating the plan {{count}} time' }
           )
     case 'other':
-      return one
-        ? translate('components.native-chat.tool.runLiveToolOne', 'Using 1 tool')
-        : translate('components.native-chat.tool.runLiveToolMany', 'Using {{value0}} tools', value0)
+      return translate('components.native-chat.tool.runLiveTool', 'Using {{count}} tools', {
+        count,
+        defaultValue_one: 'Using {{count}} tool'
+      })
   }
 }
 
@@ -191,7 +156,7 @@ const LOCALIZED_WORDS: NativeChatToolRunSentenceWords = {
     }),
   list: (leading, last) =>
     translate('components.native-chat.tool.runList', '{{value0}}, and {{value1}}', {
-      value0: leading,
+      value0: leading.join(translate('components.native-chat.tool.runListSeparator', ', ')),
       value1: last
     })
 }

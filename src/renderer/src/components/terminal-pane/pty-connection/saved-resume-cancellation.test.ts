@@ -3,7 +3,7 @@ import type { AgentStatusEntry } from '../../../../../shared/agent-status-types'
 import type {
   AgentLaunchConfigRegistryEntry,
   AgentLaunchConfigRegistrationMetadata
-} from '@/store/slices/agent-status-contract'
+} from '@/store/slices/agent-status/agent-status-contract'
 import type { ColdRestoreAgentResumeStartup } from './fresh-spawn-types'
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
 import { bindSettlePaneSerializer } from './pane-serializer-settle'
@@ -335,6 +335,8 @@ it.each([10, 100])('counts real saved-startup cancellation map work at %i entrie
       agentStatusByPaneKey: counted(population('tab:leaf', status)),
       tabsByWorktree: { wt: tabs }
     })
+    const accepted = vi.fn()
+    const disposeAccepted = store.getState().subscribeAgentStatusChanges(accepted)
     const context = captureTerminalLaunchContext(session, startup)
     const successor = { ...startup, resumeSource: { cancelled: false } }
     const successorRegistration = { ...registration, registeredAt: 2 }
@@ -363,6 +365,13 @@ it.each([10, 100])('counts real saved-startup cancellation map work at %i entrie
     try {
       expect(applyTerminalLaunchResult(session, result, context, 'creator')).toBe(true)
       expect(source.cancelled).toBe(true)
+      if (newer) {
+        expect(accepted).not.toHaveBeenCalled()
+      } else {
+        expect(accepted).toHaveBeenCalledExactlyOnceWith([
+          { paneKey: 'tab:leaf', previous: status, current: undefined }
+        ])
+      }
       // Four independent whole-map spreads, once each; this is work per result, not a latency bound.
       expect([enumerated, copied, notifications, tabVisits]).toEqual(
         newer ? [0, 0, 0, 0] : [4 * size, 4 * size, 4, size]
@@ -390,6 +399,7 @@ it.each([10, 100])('counts real saved-startup cancellation map work at %i entrie
       applyTerminalLaunchResult(session, result, context, 'creator')
       expect([enumerated, copied, notifications, tabVisits]).toEqual([0, 0, 0, 0])
     } finally {
+      disposeAccepted()
       unsubscribe()
     }
   }

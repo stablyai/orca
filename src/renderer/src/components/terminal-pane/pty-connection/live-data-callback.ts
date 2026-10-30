@@ -20,6 +20,7 @@ export function bindLiveDataCallback(session: ConnectPanePtySession): void {
     if (streamGeneration !== session.transportStreamGeneration) {
       return
     }
+    const arrivedData = data
     if (session.deferredReattachLiveData !== null) {
       const ackCredit = takeCurrentTerminalDeliveryCredit()
       session.deferredReattachLiveData.enqueue({
@@ -156,7 +157,11 @@ export function bindLiveDataCallback(session: ConnectPanePtySession): void {
         if (pendingForegroundQuery?.statefulQueryData) {
           session.queueLiveChunkDuringRestore(pendingForegroundQuery.statefulQueryData)
         }
-        session.queueLiveChunkDuringRestore(orderedRendererData, rendererMeta)
+        session.queueLiveChunkDuringRestore(
+          orderedRendererData,
+          // The gap label describes the chunk's original first byte only.
+          orderedRendererData === arrivedData ? rendererMeta : withoutGapEscapeState(rendererMeta)
+        )
         session.requestHiddenOutputRestoreIfNeeded()
       } else if (session.hiddenOutputRestoreInFlight) {
         session.hiddenOutputRestoreNeeded = true
@@ -186,4 +191,13 @@ export function bindLiveDataCallback(session: ConnectPanePtySession): void {
       }
     }
   )
+}
+
+function withoutGapEscapeState(meta: PtyDataMeta | undefined): PtyDataMeta | undefined {
+  if (!meta?.gapEscapeState) {
+    return meta
+  }
+  const next = { ...meta }
+  delete next.gapEscapeState
+  return next
 }

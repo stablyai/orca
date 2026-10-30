@@ -1,4 +1,8 @@
 /** D2: each accepted loopback socket owns a pinned-Node wsl.exe stdio bridge. Avoid WSL localhost forwarding, whose startup refusal window and network-mode dependence make it unreliable. */
+import {
+  observeWslOrcadBridgeChannel,
+  type WslOrcadBridgeChannelEvents
+} from './wsl-orcad-bridge-activity'
 import type { OrcadHostTransport } from '../ssh/orcad-host-transport'
 import {
   ORCAD_STDIO_BRIDGE_DEPENDENCIES,
@@ -6,14 +10,19 @@ import {
   type OrcadStdioBridgeDependencies
 } from '../managed-server/lifecycle/orcad-stdio-bridge-provider'
 import type { StartedPortForward } from '../ssh/port-forwarding/ssh-port-forward-provider'
+import { assertWslUncPathRunning } from './wsl-unc-access-gate'
 
 export type WslOrcadStdioBridgeOptions = {
   environmentId: string
+  /** The distro each bridge child runs in; a dial is refused while it is stopped (E9). */
+  distro: string
   /** orcad's loopback port inside the distro. */
   remotePort: number
   /** 0 picks a free one. */
   localPort: number
   label: string
+  /** Each bridged socket's lifetime, for the liveness watch that rides the desktop's sockets. */
+  events?: WslOrcadBridgeChannelEvents
 }
 
 export function listenWslOrcadStdioBridge(
@@ -21,6 +30,7 @@ export function listenWslOrcadStdioBridge(
   options: WslOrcadStdioBridgeOptions,
   dependencies: OrcadStdioBridgeDependencies = ORCAD_STDIO_BRIDGE_DEPENDENCIES
 ): Promise<StartedPortForward> {
+  const { distro, events } = options
   return startOrcadStdioBridge(
     transport,
     {
@@ -32,7 +42,16 @@ export function listenWslOrcadStdioBridge(
       remotePort: options.remotePort,
       label: options.label
     },
-    dependencies
+    {
+      ...dependencies,
+      openChannel: async (conn, bridge) => {
+        // A dial (a client's reconnect, a runtime call, the watch) is never a user act, and each
+        // spawns wsl.exe, which boots a stopped distro. A user act boots it by connecting first.
+        await assertWslUncPathRunning('', distro)
+        const channel = await dependencies.openChannel(conn, bridge)
+        return events ? observeWslOrcadBridgeChannel(channel, events) : channel
+      }
+    }
   )
 }
 

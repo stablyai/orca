@@ -24,16 +24,16 @@ vi.mock('node:fs/promises', () => ({
   realpath: realpathMock
 }))
 
-vi.mock('electron', () => ({
-  shell: { trashItem: trashItemMock }
-}))
-
 vi.mock('../wsl-unc-delete', () => ({
   tryDeleteWslUncPath: tryDeleteWslUncPathMock,
   WslDeleteValidationError: WslDeleteValidationErrorMock
 }))
 
-import { deleteAiVaultSessionFile } from './session-delete'
+import { deleteAiVaultSessionFile as deleteWithRemover } from './session-delete'
+
+// The desktop's Trash remover; the executor itself is remover-agnostic.
+const deleteAiVaultSessionFile = (args: Parameters<typeof deleteWithRemover>[0]) =>
+  deleteWithRemover(args, (removal) => trashItemMock(removal.path))
 
 const HOME = join('/tmp', 'orca-ai-vault-delete-exec-fixture-home')
 const GEMINI_ROOT = join(HOME, '.gemini', 'tmp')

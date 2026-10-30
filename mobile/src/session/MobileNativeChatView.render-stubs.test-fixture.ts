@@ -11,6 +11,7 @@ const pageScroller = vi.hoisted(() => ({
   getBoundingClientRect: () => ({ top: 0, bottom: 500 }),
   getAttribute: () => null,
   querySelectorAll: () => [],
+  querySelector: () => null,
   addEventListener: () => {},
   removeEventListener: () => {}
 }))
@@ -65,9 +66,16 @@ export function gestureHandlerStub() {
 
 export async function composerStub() {
   const React = await import('react')
-  const { MobileNativeChatStopButton } = await import('./MobileNativeChatStopButton')
+  const { MobileNativeChatStopButton } =
+    await import('./native-chat/input/MobileNativeChatStopButton')
+  const { useMobileNativeChatDraft } =
+    await import('./native-chat/composer/mobile-native-chat-draft-store')
   return {
-    MobileNativeChatComposer: (props: {
+    MobileNativeChatDraftComposer: ({
+      draftKey,
+      ...props
+    }: {
+      draftKey: string | null
       onSend: (text: string) => Promise<boolean>
       disabled?: boolean
       placeholder?: string
@@ -75,7 +83,12 @@ export async function composerStub() {
     }) =>
       React.createElement(
         'Composer',
-        { ...props, accessibilityLabel: 'Send message', onPress: () => props.onSend('hi') },
+        {
+          ...props,
+          value: useMobileNativeChatDraft(draftKey),
+          accessibilityLabel: 'Send message',
+          onPress: () => props.onSend('hi')
+        },
         props.stop ? React.createElement(MobileNativeChatStopButton, props.stop) : null
       )
   }

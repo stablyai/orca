@@ -104,6 +104,7 @@ async function chatAtRest(repoConfig: {
   )
   const modelCatalog = createAgentModelCatalogService({
     store,
+    getConversation: (sessionId) => rig.store.getConversation(sessionId) ?? undefined,
     getRecord: (sessionId) => rig.store.getRecord(sessionId) ?? undefined,
     drivesRecord: () => true,
     resolveAccountHome: async () => rig.store.getRecord(SESSION)!.accountHome,
@@ -123,6 +124,7 @@ async function chatAtRest(repoConfig: {
     agentReadsProjectModelConfig,
     workspaceMayOverrideDefaultModel
   })
+  await rig.restart({ modelCatalog })
   if (repoConfig.complete) {
     await modelCatalog.read({
       agent: 'codex',
@@ -131,7 +133,6 @@ async function chatAtRest(repoConfig: {
       waitForListing: true
     })
   }
-  await rig.restart({ modelCatalog })
   setStructuredAgentSessionHost(rig.host)
   rig.adapter.acquire.mockClear()
   return modelCatalog
@@ -192,10 +193,7 @@ describe('options at rest in a repo with no config of its own', () => {
     expect(current).toMatchObject({ ok: true })
     expect(current).not.toHaveProperty('result.current.model')
     expect(current).not.toHaveProperty('result.current.effort')
-    expect(await catalog.read({ agent: 'codex', savedOnly: true })).toMatchObject({
-      models: [{ id: 'gpt-5.5', isDefault: false }],
-      listingNamesConfiguredModel: false
-    })
+    expect(await catalog.read({ agent: 'codex', savedOnly: true })).toEqual({ origin: 'unknown' })
     expect(rig.store.getRecord(SESSION)!.options).toEqual({})
   })
 })

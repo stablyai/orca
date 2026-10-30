@@ -131,6 +131,51 @@ describe('shared agent-hook-listener', () => {
     expect(resumedElsewhere?.providerSession?.cwd).toBe('/elsewhere')
   })
 
+  it("records a Claude session's live effort and keeps it across hooks that omit it", () => {
+    const sessionId = '88888888-8888-4888-8888-888888888888'
+    const prompt = normalizeAndAccept(state, 'claude', {
+      hook_event_name: 'UserPromptSubmit',
+      session_id: sessionId,
+      prompt: 'go'
+    })
+    normalizeAndAccept(state, 'claude', {
+      hook_event_name: 'PreToolUse',
+      session_id: sessionId,
+      tool_name: 'Bash',
+      effort: { level: 'max' }
+    })
+    // Subagent hooks name the parent session but report the subagent's own effort.
+    const subagent = normalizeAndAccept(state, 'claude', {
+      hook_event_name: 'PostToolUse',
+      session_id: sessionId,
+      agent_id: 'agent-1',
+      tool_name: 'Read',
+      effort: { level: 'low' }
+    })
+    const nextPrompt = normalizeAndAccept(state, 'claude', {
+      hook_event_name: 'UserPromptSubmit',
+      session_id: sessionId,
+      prompt: 'again'
+    })
+    // /clear starts a new session id in the same process, which keeps its effort.
+    const cleared = normalizeAndAccept(state, 'claude', {
+      hook_event_name: 'SessionStart',
+      source: 'clear',
+      session_id: '99999999-9999-4999-8999-999999999999'
+    })
+    const otherSession = normalizeAndAccept(state, 'claude', {
+      hook_event_name: 'SessionStart',
+      source: 'startup',
+      session_id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+    })
+
+    expect(prompt?.providerSession?.effort).toBeUndefined()
+    expect(subagent?.providerSession?.effort).toBe('max')
+    expect(nextPrompt?.providerSession?.effort).toBe('max')
+    expect(cleared?.providerSession?.effort).toBe('max')
+    expect(otherSession?.providerSession?.effort).toBeUndefined()
+  })
+
   it('resets stale Claude turn state when SessionStart announces a new session on the pane', () => {
     normalizeAndAccept(state, 'claude', { hook_event_name: 'UserPromptSubmit', prompt: 'fix bug' })
     normalizeAndAccept(state, 'claude', {

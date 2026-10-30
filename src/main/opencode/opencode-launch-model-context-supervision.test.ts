@@ -62,9 +62,7 @@ describe.runIf(process.platform !== 'win32')('supervised OpenCode launch-context
     const pids = await rig.readPids()
 
     expect(context).toEqual({
-      primaryAgent: 'build',
-      availableModels: ['provider/model'],
-      primaryModel: null
+      primaryAgent: 'build'
     })
     expect(existsSync(rig.signalFile) && readFileSync(rig.signalFile, 'utf8')).toBe('SIGTERM')
     expect(alive(pids.provider)).toBe(false)

@@ -1,3 +1,7 @@
+import {
+  textGenerationFailure,
+  textGenerationFailureCodeFields
+} from '../../../shared/text-generation-failure-copy'
 import { ipcMain } from 'electron'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import type { ResolvedSourceControlAiGenerationParams } from '../../../shared/source-control-ai'
@@ -59,7 +63,11 @@ export function registerFilesystemGitCommitGenerationHandlers(
             await getRepoForSourceControlAi(store, args)
           )
       if (!resolvedSettings.ok) {
-        return { success: false, error: resolvedSettings.error }
+        return {
+          success: false,
+          error: resolvedSettings.error,
+          ...textGenerationFailureCodeFields(resolvedSettings)
+        }
       }
       if (args.connectionId) {
         return { success: false, error: SSH_HOST_NOT_SERVED_MESSAGE }
@@ -80,11 +88,11 @@ export function registerFilesystemGitCommitGenerationHandlers(
         console.error('[filesystem] Failed to read staged commit context:', error)
         return {
           success: false,
-          error: 'Failed to read staged changes.'
+          ...textGenerationFailure('stagedChangesReadFailed')
         }
       }
       if (!context) {
-        return { success: false, error: 'No staged changes to summarize.' }
+        return { success: false, ...textGenerationFailure('noStagedChanges') }
       }
       context = withLinkedIssueDraftContext(
         context,

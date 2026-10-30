@@ -4,6 +4,7 @@ import { useClipboardWriter } from '../platform/clipboard'
 import { triggerError } from '../platform/haptics'
 import { Check, Copy, Pencil, Play, Trash2 } from 'lucide-react-native'
 import { colors, spacing, typography } from '../theme/mobile-theme'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { MobileAgentIcon } from '../components/MobileAgentIcon'
 import type { TerminalQuickCommand } from '../../../src/shared/terminal-quick-command-types'
 import {
@@ -11,6 +12,8 @@ import {
   getTerminalQuickCommandBody,
   isAgentQuickCommand
 } from '../terminal/quick-commands'
+import { themedStyleSheet } from '../theme/themed-styles'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 
 type QuickCommandRowProps = {
   command: TerminalQuickCommand
@@ -34,6 +37,8 @@ export function QuickCommandRow({
   onDelete,
   disabled
 }: QuickCommandRowProps) {
+  useMobileColorScheme()
+  const t = useMobileTranslation()
   const clipboard = useClipboardWriter()
   const isAgent = isAgentQuickCommand(command)
   const body = getTerminalQuickCommandBody(command)
@@ -96,12 +101,12 @@ export function QuickCommandRow({
   const copyDisabled = disabled || !canCopy
   const copyLabel =
     copyStatus === 'copied'
-      ? 'Copied'
+      ? t('common.copied', 'Copied')
       : copyStatus === 'failed'
-        ? "Couldn't copy"
+        ? t('session.quickCommandRow.copyFailed', "Couldn't copy")
         : canCopy
-          ? `Copy ${command.label}`
-          : 'Nothing to copy'
+          ? t('session.quickCommandRow.copyCommand', 'Copy {{label}}', { label: command.label })
+          : t('session.quickCommandRow.nothingToCopy', 'Nothing to copy')
   const copyIconColor =
     copyStatus === 'copied'
       ? colors.statusGreen
@@ -116,7 +121,9 @@ export function QuickCommandRow({
         disabled={disabled}
         onPress={() => onLaunch(command)}
         accessibilityRole="button"
-        accessibilityLabel={`Run ${command.label}`}
+        accessibilityLabel={t('session.quickCommandRow.runCommand', 'Run {{label}}', {
+          label: command.label
+        })}
       >
         <View style={styles.rowIcon}>
           {isAgent ? (
@@ -157,7 +164,9 @@ export function QuickCommandRow({
         style={({ pressed }) => [styles.rowAction, pressed && !disabled && styles.pressed]}
         disabled={disabled}
         onPress={() => onEdit(command)}
-        accessibilityLabel={`Edit ${command.label}`}
+        accessibilityLabel={t('session.quickCommandRow.editCommand', 'Edit {{label}}', {
+          label: command.label
+        })}
       >
         <Pencil size={15} color={colors.textSecondary} />
       </Pressable>
@@ -165,7 +174,9 @@ export function QuickCommandRow({
         style={({ pressed }) => [styles.rowAction, pressed && !disabled && styles.pressed]}
         disabled={disabled}
         onPress={() => onDelete(command)}
-        accessibilityLabel={`Delete ${command.label}`}
+        accessibilityLabel={t('session.quickCommandRow.deleteCommand', 'Delete {{label}}', {
+          label: command.label
+        })}
       >
         <Trash2 size={15} color={colors.statusRed} />
       </Pressable>
@@ -173,7 +184,7 @@ export function QuickCommandRow({
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   pressed: { backgroundColor: colors.bgRaised },
   disabled: { opacity: 0.45 },
   row: { flexDirection: 'row', alignItems: 'center' },
@@ -200,4 +211,4 @@ const styles = StyleSheet.create({
   rowPreview: { fontSize: 12, color: colors.textSecondary, marginTop: 1 },
   mono: { fontFamily: typography.monoFamily },
   rowAction: { width: 40, height: 44, alignItems: 'center', justifyContent: 'center' }
-})
+}))

@@ -1,8 +1,9 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { TerminalAttachmentLaunchResult } from '../../../../shared/terminal-attachment-launch-result'
 import type { ConnectPanePtySession } from './pty-connection/connect-pane-pty-session'
-import type { AgentLaunchConfigRegistryEntry } from '@/store/slices/agent-status-contract'
+import type { AgentLaunchConfigRegistryEntry } from '@/store/slices/agent-status/agent-status-contract'
 import { bindCaptureTransportOutputCallbacks } from './pty-connection/transport-output-callbacks'
+import { bindReplacedProcessInputModes } from './pty-connection/replaced-process-input-modes'
 import { bindSettlePaneSerializer } from './pty-connection/pane-serializer-settle'
 import { applyTerminalLaunchResult } from './pty-connection/terminal-launch-result-policy'
 import {
@@ -136,6 +137,7 @@ it.each([
     } as unknown as ConnectPanePtySession
     installSavedResumeStartupCancellation(session)
     bindSettlePaneSerializer(session)
+    bindReplacedProcessInputModes(session)
     session.reportRemoteRendererSerializerReady = callbacksReady
     bindCaptureTransportOutputCallbacks(session)
     const output = session.captureTransportOutputCallbacks(vi.fn(), null)

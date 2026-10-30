@@ -17,9 +17,10 @@ const POSIX_VERSION_MANAGER_BIN_DIRS = [
   '"/home/linuxbrew/.linuxbrew/bin"',
   '"/nix/var/nix/profiles/default/bin"',
   '"$HOME/.nix-profile/bin"',
-  // Why both: the opencode and Pi installers' own defaults, which no version manager owns (#829).
+  // Installer-owned defaults no version manager covers: opencode, Pi (#829), Grok (#17590).
   '"$HOME/.opencode/bin"',
-  '"$HOME/.vite-plus/bin"'
+  '"$HOME/.vite-plus/bin"',
+  '"$HOME/.grok/bin"'
 ].join(' ')
 
 /** Append behind login PATH so stale fallback nvm installs cannot shadow the user’s selected binary. */

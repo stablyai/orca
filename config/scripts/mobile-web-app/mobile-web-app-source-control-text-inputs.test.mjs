@@ -66,6 +66,27 @@ describe('the size a text input declares, as the census reads it', () => {
     }
   })
 
+  it('reads a themed stylesheet the way it reads StyleSheet.create', () => {
+    const root = plant({
+      'src/ui/Field.tsx': [
+        "import { styles } from './field-styles'",
+        'export const Field = () => <TextInput style={styles.input} />'
+      ].join('\n'),
+      'src/ui/field-styles.ts': [
+        'export const styles = themedStyleSheet(() => ({',
+        '  input: { fontSize: 14 }',
+        '}))'
+      ].join('\n')
+    })
+    try {
+      const closure = { local: ['src/ui/Field.tsx', 'src/ui/field-styles.ts'] }
+      expect(textInputFontSizeOffenders(root, closure)).toEqual(['src/ui/field-styles.ts:2'])
+      expect(unresolvedTextInputStyles(root, closure)).toEqual([])
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
   it('follows a spread into the module that really holds the key', () => {
     // Follow spread styles across modules; stopping at first import would miss actual screens’ {...base,...list} sizes.
     const root = plant({

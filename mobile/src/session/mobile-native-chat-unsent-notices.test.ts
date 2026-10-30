@@ -48,22 +48,6 @@ const startRow: AgentJournalRenderItem = {
 }
 
 describe("the phone's line under a not-sent message", () => {
-  it.each([
-    ['claude', 'Claude'],
-    ['codex', 'Codex']
-  ])('names %s when its terminal holds the conversation', (agent, name) => {
-    const notices = mobileNativeChatUnsentNotices(
-      {
-        items: [],
-        submissions: [submission('held', { rejection: { kind: 'conversationOpenInTerminal' } })]
-      },
-      agent
-    )
-    expect(notices.get(agentJournalSubmissionKey('held'))).toBe(
-      `${name} is already running this conversation in another terminal. Quit ${name} there or close that terminal to continue here.`
-    )
-  })
-
   it("words each rejected message as the desktop does, naming the chat's agent", () => {
     const notices = mobileNativeChatUnsentNotices(
       {

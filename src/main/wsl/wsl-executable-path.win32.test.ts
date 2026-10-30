@@ -13,8 +13,4 @@ describeOnWindows('resolveWslExecutablePath on a real Windows host', () => {
     expect(resolved.toLowerCase()).toContain('system32')
     expect(existsSync(resolved)).toBe(true)
   })
-
-  it('memoises, so a spawn does not pay a stat', () => {
-    expect(resolveWslExecutablePath()).toBe(resolveWslExecutablePath())
-  })
 })

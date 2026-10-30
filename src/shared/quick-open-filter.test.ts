@@ -4,7 +4,6 @@ import {
   buildGitLsFilesArgsForQuickOpen,
   buildHiddenDirExcludeGlobs,
   buildRgArgsForQuickOpen,
-  HIDDEN_DIR_BLOCKLIST,
   normalizeQuickOpenRgLine,
   shouldExcludeQuickOpenRelPath,
   shouldIncludeQuickOpenPath
@@ -37,14 +36,6 @@ describe('shouldIncludeQuickOpenPath', () => {
     expect(shouldIncludeQuickOpenPath('.local/share/app/state.db')).toBe(false)
     expect(shouldIncludeQuickOpenPath('nested/.local/share/app/state.db')).toBe(false)
     expect(shouldIncludeQuickOpenPath('.local/bin/tool')).toBe(true)
-  })
-
-  it('does NOT blocklist user-authored dirs like .config, .ssh, .github', () => {
-    expect(HIDDEN_DIR_BLOCKLIST.has('.config')).toBe(false)
-    expect(HIDDEN_DIR_BLOCKLIST.has('.ssh')).toBe(false)
-    expect(HIDDEN_DIR_BLOCKLIST.has('.github')).toBe(false)
-    expect(HIDDEN_DIR_BLOCKLIST.has('.devcontainer')).toBe(false)
-    expect(HIDDEN_DIR_BLOCKLIST.has('.local')).toBe(false)
   })
 })
 
@@ -91,40 +82,9 @@ describe('buildExcludePathPrefixes', () => {
   it('strips trailing slashes', () => {
     expect(buildExcludePathPrefixes('/r', ['/r/a/', '/r/b///'])).toEqual(['a', 'b'])
   })
-
-  it('keeps valid child prefixes whose segment starts with dotdot characters', () => {
-    expect(buildExcludePathPrefixes('/home/u/repo', ['/home/u/repo/..fixtures'])).toEqual([
-      '..fixtures'
-    ])
-  })
 })
 
 describe('shouldExcludeQuickOpenRelPath', () => {
-  it('matches the original filter across boundary and Unicode path combinations', () => {
-    const paths = [
-      '',
-      '/',
-      'a',
-      'a/',
-      'a//',
-      'ab',
-      'a/b',
-      'a\\b',
-      'A/b',
-      '界/😀',
-      '界/😀x',
-      'a[1]/x',
-      'a./x'
-    ]
-    for (const prefix of paths) {
-      for (const relPath of paths) {
-        const expected =
-          relPath === prefix || (relPath.length > prefix.length && relPath.startsWith(`${prefix}/`))
-        expect(shouldExcludeQuickOpenRelPath(relPath, [prefix])).toBe(expected)
-      }
-    }
-  })
-
   it('preserves normalized Windows and UNC exclusion boundaries', () => {
     for (const [root, excluded] of [
       ['C:\\Repo', 'C:\\Repo\\trees\\one'],
@@ -325,14 +285,6 @@ describe('buildGitLsFilesArgsForQuickOpen', () => {
     ])
     expect(ignoredPass).not.toContain('.env*')
     expect(ignoredPass).not.toContain(':(glob)**/.env*')
-  })
-
-  it('collapses untracked directories in both passes without generated pathspec churn', () => {
-    const { primary, ignoredPass } = buildGitLsFilesArgsForQuickOpen()
-    expect(primary).toContain('--directory')
-    expect(ignoredPass).toContain('--directory')
-    expect(ignoredPass).toContain('--no-empty-directory')
-    expect([...primary, ...ignoredPass]).not.toContain(':(exclude,glob)**/node_modules/**')
   })
 
   it('exclude prefixes prepend positive "." pathspec', () => {

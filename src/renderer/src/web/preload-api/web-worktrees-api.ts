@@ -64,6 +64,7 @@ export function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees
         baseBranch: args.baseBranch,
         compareBaseRef: args.compareBaseRef,
         branchNameOverride: args.branchNameOverride,
+        ...(args.branchIntent ? { branchIntent: args.branchIntent } : {}),
         linkedIssue: args.linkedIssue,
         linkedPR: args.linkedPR,
         ...(args.linkedItems !== undefined ? { linkedItems: args.linkedItems } : {}),
@@ -121,21 +122,37 @@ export function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees
         baseBranch
       })
     },
-    resolvePrBase: async ({ repoId, prNumber, headRefName, baseRefName, isCrossRepository }) =>
+    resolvePrBase: async ({
+      repoId,
+      prNumber,
+      headRefName,
+      baseRefName,
+      isCrossRepository,
+      wakeWslDistro
+    }) =>
       callRuntimeResult('worktree.resolvePrBase', {
         repo: repoId,
         prNumber,
         headRefName,
         baseRefName,
-        isCrossRepository
+        isCrossRepository,
+        ...(wakeWslDistro ? { wakeWslDistro } : {})
       }),
-    resolveMrBase: async ({ repoId, mrIid, sourceBranch, targetBranch, isCrossRepository }) =>
+    resolveMrBase: async ({
+      repoId,
+      mrIid,
+      sourceBranch,
+      targetBranch,
+      isCrossRepository,
+      wakeWslDistro
+    }) =>
       callRuntimeResult('worktree.resolveMrBase', {
         repo: repoId,
         mrIid,
         sourceBranch,
         targetBranch,
-        isCrossRepository
+        isCrossRepository,
+        ...(wakeWslDistro ? { wakeWslDistro } : {})
       }),
     // Each workspace sleeps on the paired host, which runs its terminals, chats and VM.
     sleep: async ({ targets, markChatsAsleep }) =>

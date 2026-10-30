@@ -1,7 +1,8 @@
 // Persist whole memory records, journal unconfirmed changes on unload, and adopt other windows’ confirmed writes.
 
 import { basename } from '@/lib/path'
-import { isNativeChatKeptPastePath, isNativeChatPastedImagePath } from './native-chat-image-paste'
+import { isNativeChatKeptPastePath } from './native-chat-image-paste'
+import { isNativeChatPastedImagePath } from '../../../../shared/native-chat-image-label'
 import { isAgentSessionAttachmentStorePath } from '../../../../shared/agent-session-attachments'
 import {
   dirtyScopes,

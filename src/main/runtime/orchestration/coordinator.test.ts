@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { OrchestrationDb } from './db'
 import { reconcileLifecycleMessage } from './lifecycle-reconciliation'
 import { Coordinator } from './coordinator'
+import { warnStaleDispatches } from './coordinator-task-dispatch'
 import type { CoordinatorRuntime } from './coordinator-runtime-contract'
 import { dispatchPreambleSendOptions, type DispatchPreambleSendOptions } from './preamble'
 import { DISPATCH_STALE_THRESHOLD } from './coordinator-stale-base-flag'
@@ -577,6 +578,26 @@ describe('Coordinator', () => {
     await settleCoordinatorRun(runPromise)
 
     expect(logs.some((l) => /has not sent a heartbeat/.test(l) && l.includes(task.id))).toBe(true)
+    expect(db.getTask(task.id)?.status).toBe('dispatched')
+  })
+
+  it('warns after 30 minutes, not 11, with a 15-minute heartbeat interval', () => {
+    db = new OrchestrationDb(':memory:')
+    vi.useFakeTimers({ toFake: ['Date'] })
+    const now = Date.parse('2026-10-26T12:00:00Z')
+    vi.setSystemTime(now)
+    const task = db.createTask({ runId, spec: 'work' })
+    const dispatch = createRootDispatch(db, task.id, 'term_worker')
+    db.db
+      .prepare('UPDATE dispatch_contexts SET dispatched_at = ? WHERE id = ?')
+      .run(new Date(now - 60 * 60_000).toISOString(), dispatch.id)
+    const onLog = vi.fn()
+    for (const age of [11, 30, 31]) {
+      db.recordHeartbeat(dispatch.id, new Date(now - age * 60_000).toISOString())
+      warnStaleDispatches(db, onLog, 15)
+      expect(onLog).toHaveBeenCalledTimes(age > 30 ? 1 : 0)
+    }
+    expect(onLog).toHaveBeenCalledWith(expect.stringContaining('heartbeat in ~30 min'))
     expect(db.getTask(task.id)?.status).toBe('dispatched')
   })
 

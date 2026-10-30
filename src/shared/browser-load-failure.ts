@@ -13,6 +13,7 @@ export type BrowserLoadFailureKind =
   | 'timeout'
   | 'reset'
   | 'route-down'
+  | 'blocked'
   | 'other'
 
 /** `poll`: re-attempt the load with backoff. `online`: re-attempt when the network returns. */
@@ -44,6 +45,9 @@ export const BROWSER_LOAD_FAILURE_COPY = {
   routeDownTitle: "Can't reach the SSH host",
   routeDownDescription:
     "This page loads through the workspace's SSH host, which isn't connected right now.",
+  blockedTitle: '{{host}} is blocked',
+  blockedDescription:
+    'An extension blocked this page. To open it, allow this site in the extension, then retry.',
   otherTitle: "Can't reach {{host}}",
   otherTitleWithoutHost: "Can't load this page",
   waiting: 'Reloads when the server responds',
@@ -65,6 +69,7 @@ const KIND_COPY: Record<
   timeout: { title: 'timeoutTitle', description: null },
   reset: { title: 'resetTitle', description: null },
   'route-down': { title: 'routeDownTitle', description: 'routeDownDescription' },
+  blocked: { title: 'blockedTitle', description: 'blockedDescription' },
   other: { title: 'otherTitle', description: null }
 }
 
@@ -98,6 +103,8 @@ export function formatBrowserLoadFailureText(
 }
 
 const REFUSED = -102
+// ERR_BLOCKED_BY_CLIENT: an extension's blocking rule cancelled the load.
+const BLOCKED_BY_EXTENSION = -20
 const OFFLINE = -106
 const DNS_CODES = [-105, -137]
 const TIMEOUT_CODES = [-7, -118]
@@ -144,6 +151,9 @@ function classifyKind(
   if (code === OFFLINE) {
     return 'offline'
   }
+  if (code === BLOCKED_BY_EXTENSION) {
+    return 'blocked'
+  }
   if (DNS_CODES.includes(code)) {
     return 'dns'
   }
@@ -181,6 +191,10 @@ export function describeBrowserLoadFailure(
     recovery,
     errorName: /^(?:net::)?(ERR_[A-Z_]+)$/.exec(loadError.description)?.[1] ?? null
   }
+}
+
+export function isBrowserLoadBlockedByExtension(loadError: BrowserLoadError): boolean {
+  return loadError.code === BLOCKED_BY_EXTENSION
 }
 
 /** Chromium's net errors run from -1 to -999; certificate errors and Orca's own codes have their own pages. */

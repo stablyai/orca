@@ -4,7 +4,10 @@ import { resolveEditorModelOwner } from '@/components/editor/editor-model-owner'
 import { isLocalWindowsDesktopClient } from '@/lib/desktop-window-chrome'
 import { resolveContinuedRuntimeEnvironmentRevision } from '@/runtime/runtime-environment-revision'
 import { parseExecutionHostId } from '../../../../../../shared/execution-host'
-import { normalizeRuntimePathSeparators } from '../../../../../../shared/cross-platform-path'
+import {
+  isCaseInsensitiveRuntimeRoot,
+  normalizeRuntimePathSeparators
+} from '../../../../../../shared/cross-platform-path'
 
 /** The physical file an edit tab shows. Renderer-local; the workspace is never part of it. */
 export type EditorBufferIdentity = {
@@ -30,6 +33,13 @@ export function editorBufferPathKey(filePath: string, windows: boolean): string 
   return serverEnd === -1
     ? slashed.toLowerCase()
     : `${slashed.slice(0, serverEnd).toLowerCase()}${slashed.slice(serverEnd)}`
+}
+
+/** Path key for matching external changes under a root: drive/`\\` roots fold like buffer identity, `//` and WSL stay byte-exact. */
+export function externalChangePathKeyFor(rootPath: string): (filePath: string) => string {
+  return isCaseInsensitiveRuntimeRoot(rootPath)
+    ? (filePath) => editorBufferPathKey(filePath, false)
+    : (filePath) => filePath
 }
 
 type EditorPathOwner = { environmentId: string | null; hostId: string | null }

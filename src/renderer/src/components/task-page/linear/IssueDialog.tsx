@@ -1,5 +1,5 @@
 import { ImeInput } from '@/lib/ime-text-field'
-import type { TaskPageComposerActionsModel } from '../../use-task-page-composer-actions'
+import type { TaskPageComposerActionsModel } from '../use-task-page-composer-actions'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
 import { isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
 import { translate } from '@/i18n/i18n'
@@ -132,7 +132,9 @@ export function TaskPageLinearIssueDialog({
 
         <div className="flex items-center justify-between border-t border-border/60 px-6 py-4 bg-muted/5">
           <span className="text-[10px] text-muted-foreground/60 font-medium">
-            {submitShortcutLabel} {translate('auto.components.TaskPage.fc0d8a1fa4', 'to submit.')}
+            {translate('auto.components.TaskPage.shortcutToSubmit', '{{shortcut}} to submit.', {
+              shortcut: submitShortcutLabel
+            })}
           </span>
           <div className="flex items-center gap-2">
             <Button

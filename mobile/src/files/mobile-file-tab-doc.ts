@@ -22,6 +22,7 @@ export type MobileFileTabDocRequest = {
   worktreeId: string
   relativePath: string
   diffSource?: 'staged' | 'unstaged' | 'branch' | 'commit'
+  ignoreTrimWhitespace?: boolean
 }
 
 export async function resolveMobileFileTabDoc(
@@ -44,7 +45,9 @@ export async function resolveMobileFileTabDoc(
       }
       return { status: 'ready', kind: 'image', dataUri }
     }
-    const diff = buildMobileDiffLines(result.originalContent, result.modifiedContent)
+    const diff = buildMobileDiffLines(result.originalContent, result.modifiedContent, {
+      ignoreTrimWhitespace: request.ignoreTrimWhitespace
+    })
     return { status: 'ready', kind: 'diff', lines: diff.lines, truncated: diff.truncated }
   }
 

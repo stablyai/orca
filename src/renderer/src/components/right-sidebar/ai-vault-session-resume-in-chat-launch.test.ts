@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { StructuredAgentLaunchSettlement } from '@/lib/structured-agent-launch-settlement'
+import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { AiVaultSession } from '../../../../shared/ai-vault-types'
 
 type BeginArgs = { beforeOpen?: (sessionId: string) => boolean | void }
@@ -9,21 +10,36 @@ type Launch = {
   tab: { id: string }
 }
 
-const mocks = vi.hoisted(() => ({
-  beginStructuredAgentSessionProvisionalLaunch: vi.fn<(args: BeginArgs) => Launch | null>(),
-  prepareAiVaultSessionForResume: vi.fn<() => Promise<{ sessionId: string }>>(),
-  activateAndRevealWorkspace: vi.fn<(workspaceId: string) => unknown>(),
-  toastError: vi.fn<(message: string) => void>(),
-  admitStructuredLaunchOnHost:
-    vi.fn<(target: unknown, worktree: string, agent: string) => Promise<{ kind: string }>>(),
-  sleeping: false,
-  navigationIndex: 0,
-  activeWorktreeId: 'other-worktree'
-}))
+const mocks = vi.hoisted(() => {
+  const state: { owner: ExecutionHostId | null } = { owner: 'local' }
+  return {
+    beginStructuredAgentSessionProvisionalLaunch: vi.fn<(args: BeginArgs) => Launch | null>(),
+    prepareAiVaultSessionForResume: vi.fn<() => Promise<{ sessionId: string }>>(),
+    activateAndRevealWorkspace: vi.fn<(workspaceId: string) => unknown>(),
+    toastError: vi.fn<(message: string) => void>(),
+    admitStructuredLaunchOnHost:
+      vi.fn<(target: unknown, worktree: string, agent: string) => Promise<{ kind: string }>>(),
+    ...state,
+    sleeping: false,
+    navigationIndex: 0,
+    activeWorktreeId: 'other-worktree'
+  }
+})
 
 vi.mock('@/lib/agent-session/structured-agent-session-provisional-tab', () => ({
   beginStructuredAgentSessionProvisionalLaunch: mocks.beginStructuredAgentSessionProvisionalLaunch,
-  structuredLaunchOwner: () => ({ executionHostId: 'local', target: { kind: 'local' } })
+  structuredLaunchOwner: (plan: { executionHostId?: ExecutionHostId }) => {
+    const executionHostId = plan.executionHostId ?? mocks.owner
+    return executionHostId
+      ? {
+          executionHostId,
+          target:
+            executionHostId === 'local'
+              ? { kind: 'local' }
+              : { kind: 'environment', environmentId: executionHostId.slice('runtime:'.length) }
+        }
+      : null
+  }
 }))
 vi.mock('@/lib/structured-agent-session-host-admission', () => ({
   admitStructuredLaunchOnHost: mocks.admitStructuredLaunchOnHost
@@ -73,6 +89,7 @@ const session: AiVaultSession = {
 describe('resumeAiVaultSessionInNewChat', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mocks.owner = 'local'
     mocks.sleeping = false
     mocks.navigationIndex = 0
     mocks.activeWorktreeId = 'other-worktree'
@@ -88,28 +105,106 @@ describe('resumeAiVaultSessionInNewChat', () => {
     })
   })
 
-  it('reveals the workspace and opens chat before provider settlement', async () => {
-    let settle!: (value: StructuredAgentLaunchSettlement) => void
-    const settlement = new Promise<StructuredAgentLaunchSettlement>((resolve) => {
-      settle = resolve
-    })
-    mocks.beginStructuredAgentSessionProvisionalLaunch.mockImplementation((args) => {
-      args.beforeOpen?.('session-1')
-      return { sessionId: 'session-1', tab: { id: 'agent-session:session-1' }, settlement }
-    })
-
-    await resumeAiVaultSessionInNewChat(session, 'codex', 'worktree-1', 'resume-click')
-
-    expect(mocks.beginStructuredAgentSessionProvisionalLaunch).toHaveBeenCalledWith(
-      expect.objectContaining({
-        plan: expect.objectContaining({ resumeFrom: { providerSessionId: 'provider-1' } }),
-        hooks: {}
+  it('keeps the recording server when workspace selection changes during preparation', async () => {
+    mocks.owner = 'runtime:server-1'
+    let finish!: (value: { sessionId: string }) => void
+    mocks.prepareAiVaultSessionForResume.mockReturnValue(
+      new Promise((resolve) => {
+        finish = resolve
       })
     )
-    expect(mocks.activateAndRevealWorkspace).toHaveBeenCalledWith('worktree-1')
-    expect(mocks.toastError).not.toHaveBeenCalled()
-    settle({ kind: 'structured', sessionId: 'session-1' })
+    mocks.admitStructuredLaunchOnHost.mockResolvedValue({ kind: 'admitted' })
+    const launched = resumeAiVaultSessionInNewChat(
+      { ...session, executionHostId: 'runtime:server-1' },
+      'opencode2',
+      'worktree-1',
+      'resume-click'
+    )
+    mocks.owner = 'runtime:server-2'
+    mocks.activeWorktreeId = 'worktree-1'
+    finish({ sessionId: 'provider-1' })
+    await launched
+    expect(mocks.activateAndRevealWorkspace).toHaveBeenCalledWith('worktree-1', {
+      executionHostId: 'runtime:server-1'
+    })
+    expect(mocks.admitStructuredLaunchOnHost).toHaveBeenCalledWith(
+      { kind: 'environment', environmentId: 'server-1' },
+      'id:worktree-1',
+      'opencode2'
+    )
+    expect(mocks.beginStructuredAgentSessionProvisionalLaunch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        plan: expect.objectContaining({ executionHostId: 'runtime:server-1' })
+      })
+    )
   })
+
+  it.each(['local', 'runtime:server-2', null] as const)(
+    'refuses a recording-host mismatch before preparing history: %s',
+    async (owner) => {
+      mocks.owner = owner
+      await resumeAiVaultSessionInNewChat(
+        { ...session, executionHostId: 'runtime:server-1' },
+        'codex',
+        'worktree-1',
+        'resume-click'
+      )
+      expect(mocks.prepareAiVaultSessionForResume).not.toHaveBeenCalled()
+      expect(mocks.beginStructuredAgentSessionProvisionalLaunch).not.toHaveBeenCalled()
+      expect(mocks.toastError).toHaveBeenCalledOnce()
+    }
+  )
+
+  it.each(['ssh:relay', 'runtime:unresolved-owner'] as const)(
+    'does not prepare a conversation from a non-runtime owner: %s',
+    async (executionHostId) => {
+      mocks.owner = executionHostId
+      await resumeAiVaultSessionInNewChat(
+        { ...session, executionHostId },
+        'codex',
+        'worktree-1',
+        'resume-click'
+      )
+      expect(mocks.prepareAiVaultSessionForResume).not.toHaveBeenCalled()
+      expect(mocks.beginStructuredAgentSessionProvisionalLaunch).not.toHaveBeenCalled()
+    }
+  )
+
+  it.each([false, true])(
+    'reveals the workspace and opens chat before provider settlement (aliases: %s)',
+    async (aliases) => {
+      const source = {
+        ...session,
+        cwd: '/private/var/example',
+        ...(aliases ? { cwdAliases: ['/var/example'], sessionId: 'provider-1' } : {})
+      }
+      let settle!: (value: StructuredAgentLaunchSettlement) => void
+      const settlement = new Promise<StructuredAgentLaunchSettlement>((resolve) => {
+        settle = resolve
+      })
+      mocks.beginStructuredAgentSessionProvisionalLaunch.mockImplementation((args) => {
+        args.beforeOpen?.('session-1')
+        return { sessionId: 'session-1', tab: { id: 'agent-session:session-1' }, settlement }
+      })
+
+      await resumeAiVaultSessionInNewChat(source, 'codex', 'worktree-1', 'resume-click')
+
+      expect(mocks.prepareAiVaultSessionForResume).toHaveBeenCalledWith(source)
+      expect(mocks.beginStructuredAgentSessionProvisionalLaunch).toHaveBeenCalledWith(
+        expect.objectContaining({
+          plan: expect.objectContaining({ resumeFrom: { providerSessionId: 'provider-1' } }),
+          hooks: {}
+        })
+      )
+      expect(mocks.activateAndRevealWorkspace).toHaveBeenCalledWith('worktree-1', {
+        executionHostId: 'local'
+      })
+      expect(mocks.toastError).not.toHaveBeenCalled()
+      expect(source.cwd).toBe('/private/var/example')
+      expect(source.sessionId).toBe(aliases ? 'provider-1' : session.sessionId)
+      settle({ kind: 'structured', sessionId: 'session-1' })
+    }
+  )
 
   // Where `opencode` is 1.x, only the OpenCode 2 chat can load a 2.x conversation.
   it.each([

@@ -1,4 +1,6 @@
 import type { UsageRateLimitFailureKind } from '../../shared/rate-limit-types'
+import { stripTerminalControl } from '../../shared/terminal-control-stripping'
+import { redactString } from '../observability/redactor'
 
 const AGY_ERROR_PREFIX = 'AGY_ERROR:'
 
@@ -16,6 +18,11 @@ const SIGNED_OUT_PHRASES = [
   'no credentials',
   'authentication required'
 ] as const
+
+const AGY_MESSAGE_MAX_LENGTH = 160
+// Start at a boundary to avoid quadratic retries inside long, unbroken diagnostics.
+const EMAIL_PATTERN = /(^|[\s@])[^\s@]+@[^\s@]+\.[^\s@]+/g
+const TOKEN_LIKE_PATTERN = /[\w-]{32,}/g
 
 export type AntigravityUsageFailure = {
   failureKind: UsageRateLimitFailureKind
@@ -84,4 +91,22 @@ export function classifyAntigravityUsageFailure(output: string): AntigravityUsag
 // agy 1.4.2 prints this after opening a browser OAuth page, then waits up to 60 s for it.
 export function stderrShowsInteractiveSignIn(stderr: string): boolean {
   return stderr.includes('Authentication required. Please visit the URL')
+}
+
+/** One bounded line of agy's error text, safe to show in the status bar. */
+export function formatAgyErrorForDisplay(text: string): string | null {
+  const line = redactString(stripTerminalControl(text))
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(EMAIL_PATTERN, '$1[email]')
+    .replace(TOKEN_LIKE_PATTERN, '[redacted]')
+  if (!line) {
+    return null
+  }
+  const chars = Array.from(line)
+  if (chars.length <= AGY_MESSAGE_MAX_LENGTH) {
+    return line
+  }
+  const kept = chars.slice(0, AGY_MESSAGE_MAX_LENGTH - 1).join('')
+  return `${kept.trimEnd()}…`
 }

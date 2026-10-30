@@ -10,6 +10,7 @@ import { runtimeHostContactForEntry } from '../../../../shared/runtime-host-cont
 import { isTuiAgent } from '../../../../shared/tui-agent-config'
 import { isNativeChatEnabled } from '../../../../shared/structured-native-chat-launch-route'
 import { useAppStore } from '@/store'
+import { useAgentPickerRefusedWake } from './use-agent-picker-refused-wake'
 import {
   buildAgentLaunchRouteInput,
   workspaceKindForWorktreeId,
@@ -27,8 +28,7 @@ import { useHostStructuredAgentAvailability } from '@/runtime/use-host-structure
 import {
   buildNewTabAgentMenuRows,
   hostChatAnswer,
-  type HostChatAnswer,
-  type NewTabAgentMenuRow
+  type HostChatAnswer
 } from '@/lib/new-tab-agent-menu-rows'
 import {
   readLocalRuntimeCapabilityObservation,
@@ -52,7 +52,7 @@ export type NewTabAgentMenuModel =
   | { state: 'loading'; placeholderCount: number }
   | {
       state: 'settled'
-      rows: NewTabAgentMenuRow[]
+      rows: ReturnType<typeof buildNewTabAgentMenuRows>
       detection: UseDetectedAgentsResult
       /** The default these rows were ordered by, so the new-agent badge marks the same agent. */
       defaultTuiAgent?: GlobalSettings['defaultTuiAgent']
@@ -82,15 +82,20 @@ export type AgentMenuRowsTarget = {
 export function useNewTabAgentMenuRows(
   target: string | AgentMenuRowsTarget,
   open: boolean,
-  detectionTarget: AgentDetectionTarget | undefined
+  detectionTarget: AgentDetectionTarget | undefined,
+  options?: AgentMenuObservationOptions
 ): NewTabAgentMenuModel {
-  return useAgentMenuObservation(target, open, detectionTarget).model
+  return useAgentMenuObservation(target, open, detectionTarget, options).model
 }
+
+/** `wakeOnOpen`: `open` is the user opening this picker, a user act that may start its WSL distro. */
+export type AgentMenuObservationOptions = { wakeOnOpen?: boolean }
 
 export function useAgentMenuObservation(
   target: string | AgentMenuRowsTarget | null,
   open: boolean,
-  detectionTarget: AgentDetectionTarget | undefined
+  detectionTarget: AgentDetectionTarget | undefined,
+  options?: AgentMenuObservationOptions
 ) {
   const worktreeId = typeof target === 'string' ? target : target?.workspace.worktreeId
   const launchCwd = typeof target === 'string' ? undefined : target?.launchCwd
@@ -101,6 +106,7 @@ export function useAgentMenuObservation(
   )
   // Why: acquiring while the workspace is shown means the first open already knows its agents.
   const acquired = useDetectedAgents(open || worktreeShown ? detectionTarget : undefined)
+  useAgentPickerRefusedWake(options?.wakeOnOpen === true && open, detectionTarget)
   // Closing the menu or leaving the workspace must not erase the known inventory.
   const storedIds = useAppStore((state) =>
     detectionTarget ? readDetectedAgentsForTarget(state, detectionTarget) : null
@@ -195,8 +201,7 @@ export function useAgentMenuObservation(
   ].filter(isTuiAgent)
   const inventoryFailed =
     detection.detectedIds === null && (detection.detectionFailed || detection.needsServerUpdate)
-  const localAcquiring =
-    localCapabilities.state === 'unlearned' || localCapabilities.state === 'pending'
+  const localAcquiring = ['unlearned', 'pending'].includes(localCapabilities.state)
   const capabilityPending =
     input.hostCapabilities == null && (local ? localAcquiring : facts.checking)
   const hostCatalogPending =
@@ -224,15 +229,18 @@ export function useAgentMenuObservation(
           availability?.state === 'pending' ||
           hostCatalogPending ||
           localCatalogPending)))
+  // Workspace preparation is shared by answers, while agent and published verdict stay per question.
+  let answerContext = launchCwd ? undefined : input
   const answerFor = (agent: TuiAgent): HostChatAnswer => {
     if (unresolvedTarget) {
       return 'not-yet-known'
     }
-    const route = buildAgentLaunchRouteInput(state, {
+    answerContext ??= buildAgentLaunchRouteInput(state, {
       agent,
       workspace,
       ...(launchCwd ? { tuiCustomization: { cwd: launchCwd } } : {})
     })
+    const route = { ...answerContext, agent }
     const preliminary = hostChatAnswer(roster ? { ...route, hostStructuredAgents: roster } : route)
     if (!roster || !['yes', 'not-yet-known', 'not-on-host'].includes(preliminary)) {
       return preliminary
@@ -259,8 +267,11 @@ export function useAgentMenuObservation(
         placeholderCount: Math.max(chatAgents.length, detection.detectedIds?.length ?? 0, 2)
       }
     : { state: 'settled', rows, detection, defaultTuiAgent: settings?.defaultTuiAgent }
+  const { defaultTuiAgent, disabledTuiAgents } = settings ?? {}
   return {
     model,
+    preferences: { defaultTuiAgent, disabledTuiAgents },
+    preferencesPending,
     detection,
     contextKey: JSON.stringify([workspace, launchCwd, facts]),
     selectionFor: (agent: TuiAgent | null, surface?: AgentLaunchSurface) => {

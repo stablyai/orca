@@ -1,3 +1,4 @@
+import { continuingStructuredAgentSessionInput } from './structured-agent-session-handing-over'
 import { randomUUID } from 'node:crypto'
 import { setTimeout as delay } from 'node:timers/promises'
 import { throwIfSignalAborted, waitForPromiseWithSignal } from '../../../shared/abort-signal-reason'
@@ -200,7 +201,10 @@ export function structuredAgentSessionStartStillQueued(
     session?.journal
       .submissions()
       .some(
-        (entry) => entry.clientMessageId === startedFor && isQueuedAgentJournalSubmission(entry)
+        (entry) =>
+          entry.clientMessageId === startedFor &&
+          (isQueuedAgentJournalSubmission(entry) ||
+            continuingStructuredAgentSessionInput(session.journal, startedFor))
       ) === true
   )
 }

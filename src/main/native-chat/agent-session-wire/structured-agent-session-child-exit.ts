@@ -1,4 +1,4 @@
-// First-hand root-exit proof ends the child record in finally. Attempt/report every bookkeeping step;
+// First-hand writer death evidence ends the child record in finally. Attempt/report every bookkeeping step;
 // expected changes presentation, never whether the dead child remains recorded.
 
 import {
@@ -16,6 +16,7 @@ import type {
 import { recordProviderChildEnd } from './structured-agent-session-provider-child'
 import {
   releaseStoredStructuredAgentSessionOwnerAfterExit,
+  upgradeStoredStructuredAgentSessionOwnerExitEvidence,
   type StructuredAgentSessionLeaseStore
 } from './structured-agent-session-lease-release'
 import type { StructuredAgentSessionSinkBarrier } from './structured-agent-session-event-sink'
@@ -37,6 +38,7 @@ import type { StructuredAgentSessionStartFlights } from './structured-agent-sess
 import type { StructuredAgentSessionStartupAttempts } from './structured-agent-session-startup-attempt'
 
 export type StructuredAgentSessionChildExit = {
+  deathEvidenceKind?: 'kill-delivered'
   heldSends?: ReadonlySet<string>
   expected: boolean
   /** Log only; failure supplies user-facing wording. */
@@ -69,7 +71,7 @@ export type StructuredAgentSessionChildExitContext<
   startupAttempts?: Pick<StructuredAgentSessionStartupAttempts, 'childEnded'>
   /** Retain exits between background-start spawn and publication. */
   startFlights?: Pick<StructuredAgentSessionStartFlights, 'deferExit' | 'ownsChild'>
-  abortOpen?: (sessionId: string) => void
+  abortBound?: (sessionId: string) => void
   serialize: <T>(sessionId: string, task: () => Promise<T>) => Promise<T>
   now: () => number
   logger: StructuredAgentSessionLogger
@@ -99,6 +101,11 @@ export function settleStructuredAgentSessionChildExit<
       return
     }
     if (!child || child.fence !== event.fence || child.generation !== event.acquisitionGeneration) {
+      await upgradeStoredStructuredAgentSessionOwnerExitEvidence(
+        context.store,
+        event,
+        context.now()
+      )
       return
     }
     await endExitedStructuredAgentSessionChildUnderSerialize(
@@ -115,6 +122,7 @@ export function structuredAgentSessionEndedEventExit(
 ): StructuredAgentSessionChildExit {
   return {
     expected: event.cause === 'requested-close',
+    ...(event.deathEvidenceKind ? { deathEvidenceKind: event.deathEvidenceKind } : {}),
     reason: event.reason,
     ...(event.failure ? { failure: event.failure } : {}),
     ...(event.observedAt === undefined ? {} : { observedAt: event.observedAt }),
@@ -134,15 +142,16 @@ export async function endExitedStructuredAgentSessionChildUnderSerialize<
   if (!session || session.child !== child) {
     return
   }
-  const { expected } = exit
   const close = child.close
-  // Only observed exit time may end a running turn.
+  const expected = exit.expected && close?.failure?.kind !== 'hostFault'
+  const failure = close?.failure?.kind === 'hostFault' ? close.failure : exit.failure
+  // Use the first death observation when settling the running turn.
   const observation = child.exitObservation?.()
   const observedAt = observation?.observedAt ?? exit.observedAt ?? context.now()
   // Host phase classifies startup failure even if adapters omit the flag.
   const exitedDuringStartup = child.phase === 'starting'
-  if (child.phase === 'starting') {
-    context.abortOpen?.(sessionId)
+  if (child.phase === 'starting' || !expected) {
+    context.abortBound?.(sessionId)
   }
   // Personal Stop cancels startup; host Stop fails it; preserve the close initiator.
   const startClose = expected && exitedDuringStartup ? close?.cause : undefined
@@ -150,7 +159,7 @@ export async function endExitedStructuredAgentSessionChildUnderSerialize<
     ? startClose === 'host-stop'
       ? (exit.failure ?? close?.failure ?? agentSessionFailureFact('hostStopped'))
       : undefined
-    : exit.failure
+    : failure
   // Unanswered startup sends never ran: cancel on Stop, preserve personal text on quit/close, fail host stops.
   const unrunRejection =
     startClose === 'user-stop' ? agentSessionFailureFact('cancelled') : undefined
@@ -173,6 +182,7 @@ export async function endExitedStructuredAgentSessionChildUnderSerialize<
     ...(startFailure ? { failure: startFailure } : {}),
     duringStartup: exitedDuringStartup,
     rootGone: true,
+    ...(exit.deathEvidenceKind ? { deathEvidenceKind: exit.deathEvidenceKind } : {}),
     ...(expected && close ? { endedAt: close.requestedAt } : {})
   })
   context.generationEnded(sessionId)
@@ -277,7 +287,8 @@ export async function endExitedStructuredAgentSessionChildUnderSerialize<
         expectedFence: child.fence,
         now: context.now(),
         exitObservedAt: observedAt,
-        exitReason: exit.reason
+        exitReason: exit.reason,
+        ...(exit.deathEvidenceKind ? { deathEvidenceKind: exit.deathEvidenceKind } : {})
       })
       released = true
     } catch (error) {

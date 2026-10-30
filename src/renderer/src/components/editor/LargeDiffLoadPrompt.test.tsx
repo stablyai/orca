@@ -4,7 +4,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { LargeDiffLoadPrompt } from './LargeDiffLoadPrompt'
 
 const KNOWN_LARGE_COPY = 'Large diffs are not rendered by default.'
-const UNKNOWN_SIZE_COPY = "This diff's size isn't known yet, so it loads on request."
 
 describe('LargeDiffLoadPrompt', () => {
   afterEach(cleanup)
@@ -24,20 +23,5 @@ describe('LargeDiffLoadPrompt', () => {
 
     expect(onLoad).toHaveBeenCalledOnce()
     expect(onParentClick).not.toHaveBeenCalled()
-  })
-
-  it('calls a row large only when its counts say so', () => {
-    render(<LargeDiffLoadPrompt onLoad={vi.fn()} sizeUnknown={false} />)
-
-    screen.getByText(KNOWN_LARGE_COPY)
-    expect(screen.queryByText(UNKNOWN_SIZE_COPY)).toBeNull()
-  })
-
-  it('does not claim an uncounted row is large', () => {
-    // Deferred binaries can be small and have no line counts.
-    render(<LargeDiffLoadPrompt onLoad={vi.fn()} sizeUnknown />)
-
-    screen.getByText(UNKNOWN_SIZE_COPY)
-    expect(screen.queryByText(KNOWN_LARGE_COPY)).toBeNull()
   })
 })

@@ -49,8 +49,11 @@ export function externalAutomationUncheckedNotice(
     )
   }
   return translate(
-    'auto.components.automations.externalScope.uncheckedHosts',
+    'auto.components.automations.externalScope.uncheckedHostCount',
     'External automation managers on {{count}} hosts could not be checked.',
-    { count: labels.length }
+    {
+      count: labels.length,
+      defaultValue_one: 'External automation managers on {{count}} host could not be checked.'
+    }
   )
 }

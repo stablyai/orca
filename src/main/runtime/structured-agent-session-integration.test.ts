@@ -31,7 +31,7 @@ import type { OrcaRuntimeService } from './orca-runtime'
 import { readPersistedTestAgentSessionStoreText } from './agent-session-record-store-test-harness'
 import type { RpcRequest, RpcResponse } from './rpc/core'
 import { RpcDispatcher } from './rpc/dispatcher'
-import type { NativeChatShellEnvironmentPolicy } from '../../shared/native-chat-shell-environment'
+import type { NativeChatShellEnvironmentPolicy } from '../../shared/native-chat/native-chat-shell-environment'
 import { STRUCTURED_AGENT_SESSION_METHODS } from './rpc/methods/structured-agent-session'
 import {
   ensureStructuredAgentSessionHost,
@@ -93,8 +93,14 @@ function fakeCodex(): CodexScript {
       resumedThreadId: null,
       pid: 4321,
       closed: false,
+      get closeResult(): CodexAppServerConnection['closeResult'] {
+        return connection.closed ? { root: 'exited', tree: 'exited' } : null
+      },
       request: async (method, params) => {
         connection.calls.push({ method, params })
+        if (method === 'thread/goal/get') {
+          return { goal: null }
+        }
         if (method === 'thread/start') {
           return { thread: { id: THREAD, path: '/rollouts/integration.jsonl' } }
         }
@@ -176,7 +182,7 @@ function envelope(method: string, fields: Record<string, unknown>, fence: number
 function attachParams(fence: number | null) {
   const params = {
     location: {
-      executionHostId: 'local',
+      executionHostId: 'local' as const,
       wslDistro: null,
       workspaceId: WORKSPACE,
       workspaceKind: 'git-worktree' as const
@@ -187,23 +193,13 @@ function attachParams(fence: number | null) {
     runtimeKind: 'native' as const,
     providerHandle: { kind: 'codex' as const, threadId: THREAD }
   }
-  const envelope = {
+  const mutation = envelope('agentSession.attach', {}, fence)
+  mutation.payloadFingerprint = computeAgentSessionPayloadFingerprint({
+    method: 'agentSession.attach',
     sessionId: SESSION,
-    clientOperationId: operationId(),
-    expectedRuntimeFence: fence,
-    payloadFingerprint: ''
-  }
-  return {
-    ...params,
-    envelope: {
-      ...envelope,
-      payloadFingerprint: computeAgentSessionPayloadFingerprint({
-        method: 'agentSession.attach',
-        sessionId: SESSION,
-        fields: attachFingerprintFields({ ...params, envelope } as never)
-      })
-    }
-  }
+    fields: attachFingerprintFields({ ...params, envelope: mutation })
+  })
+  return { ...params, envelope: mutation }
 }
 
 function createIntentParams() {
@@ -302,10 +298,13 @@ async function readKnownOptions(): Promise<RpcResponse> {
     expect(result).toMatchObject({
       ok: true,
       result: {
-        models: [{ id: 'gpt-live', defaultEffort: 'medium' }],
+        models: [{ id: 'gpt-live' }],
         current: { model: 'gpt-live' }
       }
     })
+    if (result.ok) {
+      expect(result.result).not.toHaveProperty('models.0.defaultEffort')
+    }
     return result
   })
 }
@@ -340,7 +339,7 @@ beforeEach(async () => {
         hostId: 'local',
         claimKeyId: 'key-1',
         resolveWorkspacePath: async (workspaceId) => `/repos/${workspaceId}`,
-        resolveCodexCommand: () => '/usr/local/bin/codex',
+        resolveCodexCommand: () => ({ command: '/usr/local/bin/codex', prefixArgs: [] }),
         runCodexCatalogSession: scriptedCodexCatalogSession,
         resolveAgentAccountHome: async () => ({ variable: 'CODEX_HOME', path: '/home/dev/.codex' }),
         resolveLaunchArgs: () => [],
@@ -624,10 +623,11 @@ describe('a structured codex session over agentSession.*', () => {
       turnId: TURN
     })
     expect(cancelled).toEqual({ turnId: TURN, cancelled: true })
-    expect(codex.live().calls.at(-1)).toMatchObject({
-      method: 'turn/interrupt',
-      params: { threadId: THREAD, turnId: TURN }
-    })
+    expect(codex.live().calls.slice(-3)).toEqual([
+      { method: 'thread/goal/get', params: { threadId: THREAD } },
+      { method: 'turn/interrupt', params: { threadId: THREAD, turnId: TURN } },
+      { method: 'thread/goal/get', params: { threadId: THREAD } }
+    ])
 
     // Disconnect reaps the subscription while retaining the session and child.
     await call('agentSession.unsubscribe', { sessionId: SESSION })
@@ -650,6 +650,9 @@ describe('a structured codex session over agentSession.*', () => {
     // Stop closes the old child; takeover advances the fence and resumes the proven thread.
     const reaped = codex.live()
     await vi.waitFor(() => expect(reaped.closed).toBe(true))
+    await getStructuredAgentSessionHost()
+      ?.collaboratorsForTests()
+      .serialize(SESSION, async () => {})
     const stoppedFence =
       getStructuredAgentSessionHost()?.deps.store.getRecord(SESSION)?.lease.runtimeFence ?? fence
     const resumed = await ok<{ fence: number; page: { items: AgentJournalRenderItem[] } }>(

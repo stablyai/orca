@@ -53,6 +53,11 @@ export const STRUCTURED_CALLS: {
     result: { ok: true, replayed: false }
   },
   {
+    method: 'agentSession.queuedMessageMove',
+    hostMethod: 'queuedMessageMove',
+    result: { ok: true, value: { messageId: 'queued-1', status: 'moved' } }
+  },
+  {
     method: 'agentSession.queuedMessagesResume',
     hostMethod: 'queuedMessagesResume',
     result: { ok: true, replayed: false }
@@ -109,6 +114,15 @@ export const STRUCTURED_CALLS: {
     method: 'agentSession.options',
     hostMethod: 'readOptions',
     result: { current: { model: 'gpt-live' } }
+  },
+  {
+    method: 'agentSession.continuationContext',
+    hostMethod: 'continuationContext',
+    result: {
+      status: 'current',
+      capturedText: 'Saved context',
+      transcriptPath: '/handoff/chat.txt'
+    }
   },
   {
     method: 'agentSession.modelCatalog',

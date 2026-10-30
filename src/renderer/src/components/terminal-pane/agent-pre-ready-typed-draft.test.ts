@@ -55,6 +55,15 @@ vi.mock('@/runtime/sync-runtime-graph', () => ({ scheduleRuntimeGraphSync }))
 
 vi.mock('@/lib/agent-draft-readiness', () => ({ waitForAgentDraftInputReady }))
 
+const { requestTerminalPaneRecovery } = vi.hoisted(() => ({
+  requestTerminalPaneRecovery: vi.fn(async () => undefined)
+}))
+
+vi.mock('./terminal-pane-recovery', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  requestTerminalPaneRecovery
+}))
+
 const pairedRoute = vi.hoisted(() => {
   const route: { runtimeEnvironmentId: string | null } = { runtimeEnvironmentId: null }
   return route
@@ -489,6 +498,25 @@ describe('agent pane keys typed before its PTY binds', () => {
     await flushAsyncTicks(20)
     expect(waitForAgentDraftInputReady).not.toHaveBeenCalled()
     expect(sendAgentDraftPasteContent).not.toHaveBeenCalled()
+    pane.dispose()
+  })
+
+  // Why: a first connect hung past its grace must still let typing arm recovery.
+  it('still requests recovery for keys held while the first connect hangs past its grace', async () => {
+    const pane = connectAgentPane()
+    await flushAsyncTicks(20)
+
+    pane.type('a')
+    expect(requestTerminalPaneRecovery).not.toHaveBeenCalled()
+
+    const now = Date.now()
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(now + 61_000)
+    try {
+      pane.type('b')
+      expect(requestTerminalPaneRecovery).toHaveBeenCalledTimes(1)
+    } finally {
+      clock.mockRestore()
+    }
     pane.dispose()
   })
 

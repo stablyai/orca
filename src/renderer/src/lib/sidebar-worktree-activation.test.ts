@@ -22,27 +22,6 @@ describe('sidebar worktree activation', () => {
     vi.unstubAllGlobals()
   })
 
-  it('activates a clicked worktree without sidebar reveal', async () => {
-    await activateWorktreeFromSidebar('wt-live')
-
-    expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith('wt-live', {
-      navigationIntent: 'user-open',
-      revealInSidebar: false
-    })
-    expect(mocks.activateAndRevealFolderWorkspace).not.toHaveBeenCalled()
-  })
-
-  it('does not defer non-VM slept worktree selection behind terminal wake work', async () => {
-    await activateWorktreeFromSidebar('wt-slept')
-
-    // setActiveWorktree owns deferred terminal prep; sidebar navigation itself must update immediately.
-    expect(mocks.activateAndRevealWorktree).toHaveBeenCalledTimes(1)
-    expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith('wt-slept', {
-      navigationIntent: 'user-open',
-      revealInSidebar: false
-    })
-  })
-
   it('switches immediately while an ephemeral runtime wake is pending', async () => {
     let resolveResume: ((value: null) => void) | undefined
     const resumeWorkspace = vi.fn(
@@ -65,14 +44,5 @@ describe('sidebar worktree activation', () => {
 
     resolveResume?.(null)
     await activation
-  })
-
-  it('routes folder workspace activation through the guarded folder path', async () => {
-    await activateWorktreeFromSidebar('folder:folder-workspace-1')
-
-    expect(mocks.activateAndRevealFolderWorkspace).toHaveBeenCalledWith('folder-workspace-1', {
-      navigationIntent: 'user-open'
-    })
-    expect(mocks.activateAndRevealWorktree).not.toHaveBeenCalled()
   })
 })

@@ -4,6 +4,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from '../../orca-runtime'
 import { OrchestrationDb } from '../../orchestration/db'
 import { ORCHESTRATION_METHODS } from './orchestration'
+import { OrchestrationError } from '../../orchestration/orchestration-error'
+import { OPENCODE_MODEL_VERSION_REFUSAL } from '../../../../shared/agent-launch-model-preferences'
 
 const STRUCTURED_HANDLE = 'structworker_abc'
 // A real Orca session ID: a minted worker's preamble names it by this, not its handle.
@@ -217,6 +219,28 @@ describe('worker-start honours the settings default', () => {
       expect.objectContaining({ launchPreferences: { model: 'opus', effort: 'high' } })
     )
   })
+
+  it.each([false, true])(
+    'keeps OpenCode version refusal before worker effects with native default %s',
+    async (experimentalNativeChat) => {
+      const dispatch = vi.spyOn(db, 'createStartingWorkerDispatch')
+      vi.spyOn(runtime, 'probeOrchestrationOpenCodeModelLaunchSupport').mockRejectedValue(
+        new OrchestrationError('capability_unsupported', OPENCODE_MODEL_VERSION_REFUSAL)
+      )
+      await expect(
+        startWorker(
+          { ...STRUCTURED_DEFAULT, experimentalNativeChat },
+          { agent: 'opencode', model: 'opencode/fledge-alpha-free' }
+        )
+      ).rejects.toMatchObject({
+        code: 'capability_unsupported',
+        message: OPENCODE_MODEL_VERSION_REFUSAL
+      })
+      expect(dispatch).not.toHaveBeenCalled()
+      expect(createExistingWorktreeWorkerTerminal).not.toHaveBeenCalled()
+      expect(createStructuredWorkerSessionForWorktree).not.toHaveBeenCalled()
+    }
+  )
 
   it('creates a new worktree WITHOUT an agent terminal and gives it a structured session', async () => {
     // Agent-first new worktrees previously made structured mode unreachable.

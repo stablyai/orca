@@ -1,5 +1,5 @@
 import path from 'node:path'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../shared/constants'
 import type { Worktree } from '../../../shared/worktree/types'
 import { resetWebRuntimeWakeTerminalRespawnForTests } from '@/runtime/web-runtime-wake-terminal-respawn'
@@ -9,6 +9,7 @@ import { useAppStore } from '@/store'
 import { ensureWebRuntimeWorktreeTerminalAfterWake } from './web-runtime-worktree-terminal-after-wake'
 import { toast } from 'sonner'
 import { stubRuntimeEnvironmentBridge } from '../runtime/runtime-environment-bridge-fixture'
+import { loadWebRuntimeSessionTabsApplyModulesForTests } from '@/runtime/web-runtime-session-snapshot'
 
 vi.mock('sonner', () => ({ toast: { error: vi.fn() } }))
 
@@ -16,6 +17,9 @@ const initialAppStoreState = useAppStore.getState()
 const WORKTREE_PATH = path.join('workspace', 'feature')
 const REPO_PATH = path.join('workspace', 'repo')
 const ORCA_WORKSPACES_PATH = path.join('workspace', '.orca-workspaces')
+
+// The post-create refresh lazy-loads real session-tabs modules; load them before vi.waitFor's 1s budget starts.
+beforeAll(loadWebRuntimeSessionTabsApplyModulesForTests)
 
 afterEach(() => {
   vi.clearAllMocks()

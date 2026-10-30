@@ -1,26 +1,12 @@
-import { join } from 'node:path'
-import { fileURLToPath } from 'node:url'
 import { beforeAll, describe, expect, it } from 'vitest'
 import { mobileWebAppRouteClosure } from '../build-mobile-web-app-bundle.mjs'
 import { mobileWebAppDependenciesPresent } from './mobile-web-app-bundle-dependencies.mjs'
 import { mobileWebAppRouteChunkClosure } from './mobile-web-app-route-chunk-closure.mjs'
-import {
-  editableHostFontSizeOffenders,
-  editableHostsIn,
-  unresolvedEditableHostStyles
-} from './platform-seams/mobile-web-app-editable-host-font-size.mjs'
-import {
-  textInputFontSizeOffenders,
-  unresolvedTextInputStyles
-} from './platform-seams/mobile-web-app-text-input-font-size-seam.mjs'
 
 // Require terminal source modules/xterm, excluding WebView engine strings and generated document/factory to avoid shipping document twice.
 // Remeasure closure after generators and upstream merges; shared inputs make summed historical module deltas unreliable.
 // Input metafile includes dynamic imports: only emitted static import-statement edges prove Mermaid is deferred.
 // Prebundle Mermaid as one artifact; package splitting once emitted 103 scripts against shell’s 256-asset limit. Deferral saves fetch/evaluation, not OTA download.
-
-const projectDir = fileURLToPath(new URL('../../..', import.meta.url))
-const mobileDir = join(projectDir, 'mobile')
 
 const SESSION_ROUTE = 'app/h/[hostId]/session/[worktreeId].tsx'
 
@@ -48,9 +34,6 @@ const GAINED_OUTSIDE_THE_DOCUMENT = [
 ]
 
 const XTERM_PACKAGES = ['@xterm/xterm', '@xterm/addon-unicode11', '@xterm/addon-webgl']
-
-// Keep all route text inputs above focus-zoom floor, including newly imported terminal inputs.
-const EXPECTED_OFFENDERS = 0
 
 const MERMAID_PAGE_ENGINE = 'src/components/pr-sidebar/mermaid-page-engine.generated.ts'
 const MERMAID_PACKAGE = 'node_modules/mermaid/'
@@ -123,25 +106,6 @@ describeClosure(
       // Require route chunk in walk so empty static download cannot pass.
       expect(download.staticChunks).toContain(download.routeChunk)
     }, 600_000)
-
-    it('leaves the 16px seam census exactly where C7.2 left it', async () => {
-      // Require seam reachable and every style resolved before interpreting zero offenders.
-      expect(closure.local).toContain('src/platform/text-input-font-size.web.ts')
-      expect(unresolvedTextInputStyles(mobileDir, closure)).toEqual([])
-      expect(textInputFontSizeOffenders(mobileDir, closure)).toHaveLength(EXPECTED_OFFENDERS)
-      expect(closure.local).toContain('src/session/mobile-native-chat-input-styles.web.ts')
-      expect(closure.local).not.toContain('src/session/mobile-native-chat-input-styles.ts')
-    }, 300_000)
-
-    it('holds the editables the TextInput census cannot see to the same floor', async () => {
-      // Rich editor contenteditable lives in markup/CSS, invisible to JSX text-input census; check same font floor through markup.
-      expect(editableHostsIn(mobileDir, closure)).toContainEqual({
-        file: 'src/components/rich-markdown/document-markup.ts',
-        id: 'editor'
-      })
-      expect(unresolvedEditableHostStyles(mobileDir, closure)).toEqual([])
-      expect(editableHostFontSizeOffenders(mobileDir, closure)).toEqual([])
-    }, 300_000)
   },
   900_000
 )

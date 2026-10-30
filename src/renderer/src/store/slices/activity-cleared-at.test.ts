@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
 import { AGENT_STATUS_HYDRATE_MAX_AGE_MS } from '../../../../shared/agent-status-freshness'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
-import type { RetainedAgentEntry } from './agent-status'
+import type { RetainedAgentEntry } from './agent-status/agent-status-contract'
 import { createTestStore } from './store-test-helpers'
 import {
   sanitizeAcknowledgedAgentsByPaneKey,

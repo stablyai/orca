@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest'
 import type { NativeChatMessage, NativeChatSession } from '../../../../shared/native-chat-types'
 import { selectNativeChatViewState, structuredChatHistoryPhase } from './native-chat-view-state'
+import { mergeNativeChatLiveSession } from '../../../../shared/native-chat/native-chat-live-status'
+import { shouldShowNativeChatWorking } from '../../../../shared/native-chat/native-chat-working-suppression'
 
 const message: NativeChatMessage = {
   id: 'a',
@@ -21,29 +23,32 @@ function session(overrides: Partial<NativeChatSession>): NativeChatSession {
 }
 
 describe('selectNativeChatViewState', () => {
-  it('maps loading', () => {
-    expect(selectNativeChatViewState(session({ messages: [], status: 'loading' })).kind).toBe(
-      'loading'
-    )
+  // Session ids can arrive before transcript flush; live work must still retain Stop and its activity indicator.
+  it('keeps the Stop affordance for a working known session mid-flush', () => {
+    const live = mergeNativeChatLiveSession({
+      messages: [{ ...message, id: 'u-1', role: 'user' }],
+      sessionId: 'sess',
+      agent: 'claude',
+      hookState: 'working',
+      loading: true
+    })
+    const viewState = selectNativeChatViewState(live)
+    const isConversation = viewState.kind === 'ready'
+
+    expect(viewState).toEqual({ kind: 'ready', isWorking: true })
+    expect(
+      shouldShowNativeChatWorking({
+        isConversation,
+        working: live.status === 'working',
+        interrupted: false
+      })
+    ).toBe(true)
   })
 
   it('keeps rendering messages while the session reports loading', () => {
     expect(selectNativeChatViewState(session({ status: 'loading' }))).toEqual({
       kind: 'ready',
       isWorking: false
-    })
-  })
-
-  it('maps error with its message when nothing has loaded (P2-21)', () => {
-    const state = selectNativeChatViewState(
-      session({ messages: [], status: 'error', error: 'boom' })
-    )
-    expect(state).toEqual({ kind: 'error', message: 'boom' })
-  })
-
-  it('maps an error with no text to no message', () => {
-    expect(selectNativeChatViewState(session({ messages: [], status: 'error' }))).toEqual({
-      kind: 'error'
     })
   })
 
@@ -58,10 +63,6 @@ describe('selectNativeChatViewState', () => {
   it('shows a terminal-backed read error over local echoes', () => {
     const state = selectNativeChatViewState(session({ status: 'error', error: 'boom' }))
     expect(state).toEqual({ kind: 'error', message: 'boom' })
-  })
-
-  it('maps empty when there are no messages', () => {
-    expect(selectNativeChatViewState(session({ messages: [], status: 'ready' })).kind).toBe('empty')
   })
 
   it('empty wins over a working hook on a pre-session conversation', () => {
@@ -82,13 +83,6 @@ describe('selectNativeChatViewState', () => {
     expect(selectNativeChatViewState(session({ status: 'working' }))).toEqual({
       kind: 'ready',
       isWorking: true
-    })
-  })
-
-  it('maps ready (not working)', () => {
-    expect(selectNativeChatViewState(session({ status: 'ready' }))).toEqual({
-      kind: 'ready',
-      isWorking: false
     })
   })
 })

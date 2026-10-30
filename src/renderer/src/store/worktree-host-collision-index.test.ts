@@ -2,6 +2,7 @@
 import { describe, expect, it } from 'vitest'
 import type { Worktree } from '../../../shared/worktree/types'
 import type { AppState } from './types'
+import { getWorktreeOnHostFromState } from './selectors'
 import {
   getIndexedAllWorktrees,
   getIndexedWorktreeMap,
@@ -77,5 +78,23 @@ describe('id-keyed worktree projections keep distinct hosts distinct', () => {
     expect(getIndexedWorktreeMap(worktreesByRepo).get(SHARED_ID)).toBe(
       buildWorktreeByIdIndex(worktreesByRepo).get(SHARED_ID)
     )
+  })
+})
+
+describe('getWorktreeOnHostFromState refuses a lookup that still matches two copies', () => {
+  const colliding = { worktreesByRepo: byRepo(localRow, sshRow) }
+
+  it('answers undefined for an unqualified id two hosts share', () => {
+    expect(getWorktreeOnHostFromState(colliding, SHARED_ID, undefined)).toBeUndefined()
+  })
+
+  it('answers the named host copy', () => {
+    expect(getWorktreeOnHostFromState(colliding, SHARED_ID, 'ssh:build-box')).toBe(sshRow)
+  })
+
+  it('answers a lone copy without a host', () => {
+    expect(
+      getWorktreeOnHostFromState({ worktreesByRepo: byRepo(sshRow) }, SHARED_ID, undefined)
+    ).toBe(sshRow)
   })
 })

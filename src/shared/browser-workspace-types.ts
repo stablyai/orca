@@ -1,3 +1,5 @@
+import type { BrowserCookieImportFailure } from './browser-cookie-import-failure-copy'
+import type { GoogleCookieClearLocalReceipt } from './browser-google-cookie-clear'
 import type { ManagedBrowserProfileOwner } from './browser-profile-scope'
 export type BrowserHistoryEntry = {
   url: string
@@ -145,6 +147,7 @@ export type BrowserSessionProfileSource = {
     | 'safari'
     | 'comet'
     | 'helium'
+    | 'vivaldi'
     | 'manual'
   profileName?: string
   importedAt: number
@@ -160,6 +163,8 @@ export type BrowserSessionProfile = {
   owner?: ManagedBrowserProfileOwner
 }
 
+export type LinuxCookieKeyFailure = 'secret-tool-missing' | 'keyring-locked' | 'key-unavailable'
+
 export type BrowserCookieImportSummary = {
   totalCookies: number
   importedCookies: number
@@ -173,21 +178,21 @@ export type BrowserCookieImportSummary = {
     preservedRelatedCookies: number
   }
   domains: string[]
-  warning?:
-    | {
-        code: 'restart-fallback-unavailable'
-        loadedCookies: number
-        failedCookies: number
-      }
-    | {
-        // Capture decrypt failure cause before null merges unreadable and corrupt rows, preventing false successful-empty imports.
-        code: 'cookies-undecryptable'
-        failedCookies: number
-        otherFailedCookies?: number
-        reason: 'app-bound-encryption' | 'linux-keyring-unavailable' | 'unknown'
-      }
+  warning?: {
+    // Capture decrypt failure cause before null merges unreadable and corrupt rows, preventing false successful-empty imports.
+    code: 'cookies-undecryptable'
+    failedCookies: number
+    otherFailedCookies?: number
+    reason: 'app-bound-encryption' | 'linux-keyring-unavailable' | 'unknown'
+    keyringFailure?: { cause: LinuxCookieKeyFailure; browser: string }
+  }
 }
 
 export type BrowserCookieImportResult =
-  | { ok: true; profileId: string; summary: BrowserCookieImportSummary }
-  | { ok: false; reason: string }
+  | {
+      ok: true
+      profileId: string
+      summary: BrowserCookieImportSummary
+      googleCookieClearTarget?: GoogleCookieClearLocalReceipt
+    }
+  | BrowserCookieImportFailure

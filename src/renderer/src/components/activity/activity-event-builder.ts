@@ -1,5 +1,7 @@
+import { getStructuredAgentSessionTabsByPaneKey } from '@/components/native-chat/structured-agent-session-tabs'
+import { parseAgentStatusPaneIdentity } from '../../../../shared/agent-status-worktree-attribution'
 import { freshActivityLiveAgentState } from './activity-event-state'
-import type { RetainedAgentEntry } from '@/store/slices/agent-status'
+import type { RetainedAgentEntry } from '@/store/slices/agent-status/agent-status-contract'
 import type {
   AgentStatusEntry,
   AgentStatusOrchestrationContext,
@@ -8,7 +10,6 @@ import type {
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { StructuredChatTabNames } from '@/runtime/structured-chat-tab-name'
 import type { Repo } from '../../../../shared/repo-types'
-import { parsePaneKey } from '../../../../shared/stable-pane-id'
 import type { Tab } from '../../../../shared/tab-types'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import type { Worktree } from '../../../../shared/worktree/types'
@@ -83,7 +84,12 @@ export function buildActivityEvents(
   }
 
   for (const [paneKey, entry] of Object.entries(args.agentStatusByPaneKey)) {
-    const parsed = parsePaneKey(paneKey)
+    const parsed = parseAgentStatusPaneIdentity(
+      paneKey,
+      args.unifiedTabsByWorktree
+        ? getStructuredAgentSessionTabsByPaneKey(args.unifiedTabsByWorktree).get(paneKey)
+        : undefined
+    )
     if (!parsed) {
       continue
     }

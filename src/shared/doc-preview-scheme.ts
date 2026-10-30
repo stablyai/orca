@@ -10,6 +10,18 @@ export const DOC_PREVIEW_AUTHORIZE_DIRECTORY_CHANNEL = 'docPreview:authorizeDire
 export const DOC_PREVIEW_EXTERNAL_LINK_CHANNEL = 'docPreview:externalLink'
 /** Renderer/main only: accept trusted anchor reports exclusively from live grant-bound preview guests; never expose this channel to paired clients. */
 export const DOC_PREVIEW_LINK_CLICK_CHANNEL = 'docPreview:linkClick'
+
+export type DocPreviewLinkModifiers = {
+  metaKey: boolean
+  ctrlKey: boolean
+  shiftKey: boolean
+}
+
+export type DocPreviewExternalLink = {
+  url: string
+  grantId?: string
+  modifiers?: DocPreviewLinkModifiers
+}
 /** The one out-of-band route from the preview's main-side fences to the shell hosting it. */
 export const DOC_PREVIEW_LOAD_FAILURE_CHANNEL = 'docPreview:loadFailure'
 

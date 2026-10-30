@@ -40,7 +40,7 @@ export function beginPaneDragFromPointerDown(
     window.removeEventListener('pointermove', onPointerMoveOuter, true)
     window.removeEventListener('pointerup', onPointerUpOuter, true)
     window.removeEventListener('pointercancel', onPointerCancelOuter, true)
-    window.removeEventListener('blur', onWindowBlur, true)
+    window.removeEventListener('blur', onWindowBlur)
     activePointerId = null
     if (state.cleanupActiveDrag === cleanupDrag) {
       state.cleanupActiveDrag = null
@@ -132,7 +132,8 @@ export function beginPaneDragFromPointerDown(
   window.addEventListener('pointermove', onPointerMoveOuter, true)
   window.addEventListener('pointerup', onPointerUpOuter, true)
   window.addEventListener('pointercancel', onPointerCancelOuter, true)
-  window.addEventListener('blur', onWindowBlur, true)
+  // Not capture: a capturing window listener also hears element blurs, so focus moving between panes ended the drag.
+  window.addEventListener('blur', onWindowBlur)
 
   return () => cleanupDrag(false)
 }

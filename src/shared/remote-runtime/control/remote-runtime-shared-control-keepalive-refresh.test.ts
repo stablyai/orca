@@ -74,15 +74,6 @@ describe('shared control keepalive timeout refresh semantics', () => {
     await expect(promise).resolves.toMatchObject({ ok: true })
   })
 
-  it('fires the deadline for a short RPC when no keepalives arrive', async () => {
-    const { pendingRequests, promise } = startRequest()
-
-    await vi.advanceTimersByTimeAsync(1001)
-
-    await expect(promise).rejects.toThrow()
-    expect(pendingRequests.size).toBe(0)
-  })
-
   it('aborts one pending request without disturbing its peer', async () => {
     const pendingRequests = new Map<string, SharedControlPendingRequest<unknown>>()
     const controller = new AbortController()

@@ -1,7 +1,12 @@
+import { readLaunchPermissionChoice } from './tui-agent-permission-choice'
 import type { GlobalSettings } from './global-settings-types'
-import type { SessionOptionValue } from './native-chat-session-options'
+import type { SessionOptionValue } from './native-chat/input/native-chat-session-options'
 import type { TuiAgent } from './tui-agent'
-import { resolveTuiAgentLaunchArgs, resolveTuiAgentLaunchEnv } from './tui-agent-launch-defaults'
+import {
+  agentLaunchPermissionSettings,
+  resolveTuiAgentLaunchArgs,
+  resolveTuiAgentLaunchEnv
+} from './tui-agent-launch-defaults'
 import { resolveStartupShell, type AgentStartupShell } from './tui-agent-startup-shell'
 import { hasExtraAgentArgs, mergeExtraAgentArgs } from './automation-extra-agent-args'
 import { resolveLocalWindowsAgentStartupShell } from './windows-terminal-shell'
@@ -49,10 +54,17 @@ export function resolveAgentStartupPlanInputs(args: {
   /** Orca types into this launch after start (worker, automation, handoff), not a user. */
   suppressStartupUpdatePrompt?: boolean
 }): AgentStartupPlanInputs {
-  const { agent, settings, platform, isRemote, sessionOptions } = args
+  const { agent, platform, isRemote, sessionOptions } = args
+  const settings = agentLaunchPermissionSettings(agent, args.settings, sessionOptions)
   // Test absence: launch overrides win and null explicitly means no arguments.
   let agentArgs =
-    args.agentArgs !== undefined ? args.agentArgs : resolveTuiAgentLaunchArgs(agent, settings)
+    args.agentArgs !== undefined
+      ? args.agentArgs
+      : resolveTuiAgentLaunchArgs(
+          agent,
+          settings,
+          readLaunchPermissionChoice(sessionOptions) ? 'own' : undefined
+        )
   const shell =
     args.shell ??
     resolveLocalWindowsAgentStartupShell({

@@ -1,7 +1,11 @@
-import { memo, useCallback, useEffect, useState } from 'react'
-import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from 'react-native'
+import { memo, useCallback, useEffect, useMemo, useState } from 'react'
+import { ActivityIndicator, FlatList, Pressable, Text, View } from 'react-native'
 import { ChevronDown, ChevronRight } from 'lucide-react-native'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { translate } from '../i18n/mobile-i18n'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import type { ConnectionState } from '../transport/types'
 import type { RpcClient } from '../transport/rpc-client'
 import { useForceReconnect } from '../transport/host-client-hooks'
@@ -14,6 +18,7 @@ import {
   type MobileCommitRow
 } from './mobile-git-history'
 import { resolveMobileHistoryScreenView } from './mobile-history-screen-state'
+import type { MobileGitHistoryResult } from './git-history-reply-schema'
 
 type CommitFilesState = {
   files?: MobileGitChangedFile[]
@@ -39,8 +44,15 @@ export const MobileGitHistoryList = memo(function MobileGitHistoryList({
   bottomInset,
   refreshNonce = 0
 }: Props) {
+  const colorScheme = useMobileColorScheme()
+  const t = useMobileTranslation()
   const forceReconnect = useForceReconnect()
-  const [rows, setRows] = useState<MobileCommitRow[] | null>(null)
+  // Keep the fetched page, not formatted rows, so relative times follow a language switch.
+  const [rows, setRows] = useState<{ result: MobileGitHistoryResult; nowMs: number } | null>(null)
+  const commitRows = useMemo(
+    () => (rows ? mapMobileCommitRows(rows.result, rows.nowMs) : null),
+    [rows, t]
+  )
   const [error, setError] = useState<string | null>(null)
   const [reloadNonce, setReloadNonce] = useState(0)
   const [expanded, setExpanded] = useState<string | null>(null)
@@ -67,11 +79,15 @@ export const MobileGitHistoryList = memo(function MobileGitHistoryList({
       try {
         const result = await fetchMobileGitHistory(client, worktreeId)
         if (active) {
-          setRows(mapMobileCommitRows(result, Date.now()))
+          setRows({ result, nowMs: Date.now() })
         }
       } catch (err) {
         if (active) {
-          setError(err instanceof Error ? err.message : 'Failed to load history')
+          setError(
+            err instanceof Error
+              ? err.message
+              : translate('sourceControl.gitHistoryList.loadFailed', 'Failed to load history')
+          )
         }
       }
     })()
@@ -121,7 +137,13 @@ export const MobileGitHistoryList = memo(function MobileGitHistoryList({
             ...prev,
             [commitId]: {
               files: prev[commitId]?.files,
-              error: err instanceof Error ? err.message : 'Unable to load commit files'
+              error:
+                err instanceof Error
+                  ? err.message
+                  : translate(
+                      'sourceControl.gitHistoryList.loadFilesFailed',
+                      'Unable to load commit files'
+                    )
             }
           }))
         }
@@ -166,7 +188,10 @@ export const MobileGitHistoryList = memo(function MobileGitHistoryList({
                   {connected || retryAction ? (
                     <Pressable
                       style={styles.retryButton}
-                      accessibilityLabel="Retry commit files"
+                      accessibilityLabel={t(
+                        'sourceControl.gitHistoryList.retryFiles',
+                        'Retry commit files'
+                      )}
                       onPress={() => {
                         if (connState !== 'connected') {
                           retryAction?.()
@@ -175,7 +200,7 @@ export const MobileGitHistoryList = memo(function MobileGitHistoryList({
                         }
                       }}
                     >
-                      <Text style={styles.retryText}>Retry</Text>
+                      <Text style={styles.retryText}>{t('common.retry', 'Retry')}</Text>
                     </Pressable>
                   ) : null}
                 </View>
@@ -184,12 +209,16 @@ export const MobileGitHistoryList = memo(function MobileGitHistoryList({
                 connected ? (
                   <ActivityIndicator size="small" color={colors.textSecondary} />
                 ) : (
-                  <Text style={styles.empty}>Waiting for desktop...</Text>
+                  <Text style={styles.empty}>
+                    {t('sourceControl.gitHistoryList.waitingForDesktop', 'Waiting for desktop...')}
+                  </Text>
                 )
               ) : null}
               {files !== undefined ? (
                 files.length === 0 ? (
-                  <Text style={styles.empty}>No file changes</Text>
+                  <Text style={styles.empty}>
+                    {t('sourceControl.gitHistoryList.noFileChanges', 'No file changes')}
+                  </Text>
                 ) : (
                   files.map((file) => (
                     <View key={file.path} style={styles.fileRow}>
@@ -209,20 +238,26 @@ export const MobileGitHistoryList = memo(function MobileGitHistoryList({
         </View>
       )
     },
-    [connected, connState, expanded, filesById, retryAction, toggleCommit]
+    [colorScheme, connected, connState, expanded, filesById, retryAction, toggleCommit, t]
   )
 
-  const view = resolveMobileHistoryScreenView({ connected, rows, error })
+  const view = resolveMobileHistoryScreenView({ connected, rows: commitRows, error })
 
   if (view.kind === 'error' || view.kind === 'waiting') {
     return (
       <View style={styles.state}>
         <Text style={styles.stateText}>
-          {view.kind === 'waiting' ? 'Waiting for desktop...' : view.message}
+          {view.kind === 'waiting'
+            ? t('sourceControl.gitHistoryList.waitingForDesktop', 'Waiting for desktop...')
+            : view.message}
         </Text>
         {retry ? (
-          <Pressable style={styles.retryButton} onPress={retry} accessibilityLabel="Retry">
-            <Text style={styles.retryText}>Retry</Text>
+          <Pressable
+            style={styles.retryButton}
+            onPress={retry}
+            accessibilityLabel={t('common.retry', 'Retry')}
+          >
+            <Text style={styles.retryText}>{t('common.retry', 'Retry')}</Text>
           </Pressable>
         ) : null}
       </View>
@@ -238,13 +273,16 @@ export const MobileGitHistoryList = memo(function MobileGitHistoryList({
   if (view.kind === 'empty') {
     return (
       <View style={styles.state}>
-        <Text style={styles.stateText}>No commits.</Text>
+        <Text style={styles.stateText}>
+          {t('sourceControl.gitHistoryList.noCommits', 'No commits.')}
+        </Text>
       </View>
     )
   }
   return (
     <FlatList
       data={view.rows}
+      extraData={colorScheme}
       renderItem={renderCommit}
       keyExtractor={(row) => row.id}
       contentContainerStyle={{ paddingBottom: spacing.lg + bottomInset }}
@@ -252,7 +290,7 @@ export const MobileGitHistoryList = memo(function MobileGitHistoryList({
   )
 })
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   state: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: spacing.lg },
   stateText: { color: colors.textMuted, fontSize: typography.bodySize },
   retryButton: {
@@ -292,4 +330,4 @@ const styles = StyleSheet.create({
   add: { color: colors.gitDecorationAdded },
   del: { color: colors.gitDecorationDeleted },
   empty: { color: colors.textMuted, fontSize: typography.metaSize }
-})
+}))

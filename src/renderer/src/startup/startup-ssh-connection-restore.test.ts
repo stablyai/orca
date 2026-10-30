@@ -88,6 +88,20 @@ describe('restoreSshConnectionsForStartup', () => {
     ])
   })
 
+  it('leaves a host opted out of reconnect on launch disconnected', async () => {
+    installWindowApi([{ ...target('ssh-off'), reconnectOnLaunch: false }, target('ssh-on')])
+    harness.connect.mockImplementation(async (targetId: string) => connectedState(targetId))
+
+    await restoreSshConnectionsForStartup({
+      connectionIds: ['ssh-off', 'ssh-on'],
+      setDeferredSshReconnectTargets: harness.setDeferredSshReconnectTargets,
+      removeDeferredSshReconnectTarget: harness.removeDeferredSshReconnectTarget,
+      publishSshConnectionState: harness.publishSshConnectionState
+    })
+
+    expect(harness.connect.mock.calls).toEqual([['ssh-on']])
+  })
+
   it('does not wait on a target that owns no immediately-mounted pane', async () => {
     vi.useFakeTimers()
     installWindowApi([target('ssh-active'), target('ssh-asleep')])

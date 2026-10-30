@@ -142,6 +142,12 @@ export function findCsiFinalByteIndex(data: string, offset: number): number {
   return -1
 }
 
+export const PRIMARY_DEVICE_ATTRIBUTES_QUERY_SEQUENCES = ['\x1b[c', '\x1b[0c'] as const
+
+export function isPrimaryDeviceAttributesQuerySequence(sequence: string): boolean {
+  return PRIMARY_DEVICE_ATTRIBUTES_QUERY_SEQUENCES.some((query) => query === sequence)
+}
+
 export function isStatelessRendererReplyCsiQuery(sequence: string): boolean {
   if (sequence.endsWith('c')) {
     return true

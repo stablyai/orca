@@ -55,17 +55,20 @@ vi.mock('react-native-gesture-handler', () => {
     GestureHandlerRootView: 'GestureHandlerRootView'
   }
 })
-vi.mock('react-native-reanimated', () => ({
-  default: { View: 'AnimatedView', ScrollView: 'AnimatedScrollView' },
-  useSharedValue: (initial: number) => ({ value: initial }),
-  useAnimatedStyle: () => ({}),
-  useAnimatedScrollHandler: () => () => {},
-  withSpring: (to: number) => to,
-  withTiming: (to: number) => to,
-  runOnJS: (fn: () => void) => fn,
-  interpolate: () => 0,
-  Extrapolation: { CLAMP: 'clamp' }
-}))
+vi.mock('react-native-reanimated', async () => {
+  const React = await import('react')
+  return {
+    default: { View: 'AnimatedView', ScrollView: 'AnimatedScrollView' },
+    useSharedValue: (initial: number) => React.useRef({ value: initial }).current,
+    useAnimatedStyle: (style: () => object) => style(),
+    useAnimatedScrollHandler: () => () => {},
+    withSpring: (to: number) => to,
+    withTiming: (to: number) => to,
+    runOnJS: (fn: () => void) => fn,
+    interpolate: () => 0,
+    Extrapolation: { CLAMP: 'clamp' }
+  }
+})
 
 import { MountedBottomDrawer } from './mounted-bottom-drawer'
 import { publishShellKeyboardSource } from '../platform/keyboard-occlusion.web'
@@ -78,11 +81,16 @@ function setWindowHeight(height: number): void {
   window.dispatchEvent(new Event('resize'))
 }
 
-function renderFillSheet(): ReactTestRenderer {
+function renderSheet(fillAvailable = true): ReactTestRenderer {
   let renderer!: ReactTestRenderer
   act(() => {
     renderer = create(
-      <MountedBottomDrawer visible fillAvailable onClose={() => {}} onHidden={() => {}}>
+      <MountedBottomDrawer
+        visible
+        fillAvailable={fillAvailable}
+        onClose={() => {}}
+        onHidden={() => {}}
+      >
         {null}
       </MountedBottomDrawer>
     )
@@ -96,12 +104,15 @@ function sheetStyle(renderer: ReactTestRenderer): Record<string, unknown> {
   return Object.assign({}, ...style.filter((entry) => typeof entry === 'object' && entry !== null))
 }
 
-describe('a fill-mode sheet on the page', () => {
-  afterEach(() => setWindowHeight(RESTING_HEIGHT))
+describe('a sheet on the page', () => {
+  afterEach(() => {
+    publishShellKeyboardSource(null)
+    setWindowHeight(RESTING_HEIGHT)
+  })
 
   it('mounts against react-native-web, whose Keyboard has no metrics()', () => {
     setWindowHeight(RESTING_HEIGHT)
-    const renderer = renderFillSheet()
+    const renderer = renderSheet()
     expect(sheetStyle(renderer).marginBottom).toBe(0)
     act(() => renderer.unmount())
   })
@@ -118,7 +129,7 @@ describe('a fill-mode sheet on the page', () => {
     })
     try {
       setWindowHeight(RESTING_HEIGHT)
-      const renderer = renderFillSheet()
+      const renderer = renderSheet()
       act(() => {
         height = IME_HEIGHT
         listeners.forEach((listener) => listener(IME_HEIGHT))
@@ -137,5 +148,13 @@ describe('a fill-mode sheet on the page', () => {
     } finally {
       publishShellKeyboardSource(null)
     }
+  })
+
+  it('lifts a content-sized sheet over a keyboard already up, which sends no new event', () => {
+    publishShellKeyboardSource({ read: () => IME_HEIGHT, subscribe: () => () => {} })
+    setWindowHeight(RESTING_HEIGHT)
+    const renderer = renderSheet(false)
+    expect(sheetStyle(renderer).transform).toEqual([{ translateY: -IME_HEIGHT }])
+    act(() => renderer.unmount())
   })
 })

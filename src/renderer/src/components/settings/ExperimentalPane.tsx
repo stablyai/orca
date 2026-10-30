@@ -11,6 +11,7 @@ import { translate } from '@/i18n/i18n'
 import { NativeChatExperimentalSetting } from './NativeChatExperimentalSetting'
 import { AgentDashboardExperimentalSetting } from './AgentDashboardExperimentalSetting'
 import { EphemeralVmsExperimentalSetting } from './EphemeralVmsExperimentalSetting'
+import { BrowserExtensionsExperimentalSetting } from './BrowserExtensionsExperimentalSetting'
 import { WslHostsExperimentalSetting } from './WslHostsExperimentalSetting'
 import { wslHostsAvailable } from '../sidebar/use-wsl-hosts-enabled'
 import {
@@ -245,7 +246,7 @@ export function ExperimentalPane({
               <p className="text-xs text-muted-foreground">
                 {translate(
                   'auto.components.settings.ExperimentalPane.newWorktreeCardStyle.copy',
-                  'Previews updated worktree-card layout and metadata behavior, including hover/context-menu ownership and status presentation.'
+                  'Preview updated worktree-card layout, metadata placement, card-display menu options, and status presentation.'
                 )}
               </p>
             </div>
@@ -266,6 +267,8 @@ export function ExperimentalPane({
       ) : null}
 
       <EphemeralVmsExperimentalSetting settings={settings} updateSettings={updateSettings} />
+
+      <BrowserExtensionsExperimentalSetting settings={settings} updateSettings={updateSettings} />
 
       {wslHostsAvailable() ? (
         <WslHostsExperimentalSetting settings={settings} updateSettings={updateSettings} />

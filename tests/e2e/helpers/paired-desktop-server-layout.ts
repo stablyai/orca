@@ -2,7 +2,7 @@
 import type { Page } from '@stablyai/playwright-test'
 import { pairedRuntimeConnectionFromOffer } from '../../../src/shared/paired-runtime-connection'
 import { decodePairingOffer } from '../../../src/shared/pairing'
-import { subscribeRemoteRuntimeRequest } from '../../../src/shared/remote-runtime-client'
+import { subscribeRemoteRuntimeRequest } from '../../../src/shared/remote-runtime/remote-runtime-client'
 import { toWebTerminalSurfaceTabId } from '../../../src/shared/terminal-surface-id'
 import type { PublishedWorkspaceLayout } from '../../../src/shared/workspace-layout/workspace-layout-published'
 import { readWorkspaceLayoutStreamFrame } from '../../../src/shared/workspace-layout/workspace-layout-stream-frames'

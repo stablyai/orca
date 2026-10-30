@@ -51,6 +51,13 @@ const textField: GitHubProjectField = {
   dataType: 'TEXT'
 }
 
+const numberField: GitHubProjectField = {
+  kind: 'field',
+  id: 'F_points',
+  name: 'Story Points',
+  dataType: 'NUMBER'
+}
+
 function makeRow(
   id: string,
   position: number,
@@ -316,6 +323,19 @@ describe('groupRows', () => {
       ['alice', ['alice']],
       ['No Assignees', ['empty-list', 'no-value']]
     ])
+  })
+
+  it('orders number-field groups by value, not by the rendered label', () => {
+    const view = { ...makeView(numberField), groupByFields: [numberField] }
+    const rows = [8, 10, -2, 2, -10, 1].map((points, index) =>
+      makeRow(`p${index}`, index, {
+        F_points: { kind: 'number', fieldId: 'F_points', number: points }
+      })
+    )
+
+    const groups = groupRows(makeTable(view, rows), rows)
+
+    expect(groups.map((group) => group.label)).toEqual(['-10', '-2', '1', '2', '8', '10'])
   })
 
   it('places the empty group last', () => {

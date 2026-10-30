@@ -2,6 +2,10 @@ import { ipcMain, type BrowserWindow } from 'electron'
 import type { Store } from '../../persistence'
 import { SshConnectionStore } from '../../ssh/connection/ssh-connection-store'
 import { awaitSignInForCredentialHosts } from './ssh-sign-in-requirement'
+import {
+  holdLaunchReconnectOptOuts,
+  resetLaunchReconnectOptOutsForTests
+} from './ssh-host-user-disconnect'
 import { SshConnectionManager } from '../../ssh/connection/ssh-connection-manager'
 import { SshPortForwardManager } from '../../ssh/port-forwarding/ssh-port-forward'
 import { quitTeardownStartGate } from '../../quit-teardown-start-gate'
@@ -119,6 +123,7 @@ export function registerSshHandlers(
     setConnectionManager(new SshConnectionManager(callbacks))
     // Window re-registration must not re-gate hosts already signed in during this process.
     awaitSignInForCredentialHosts(getSshTargetRegistryStore()!)
+    holdLaunchReconnectOptOuts(getSshTargetRegistryStore()!.listTargets())
   }
   setPortForwardManager(portForwardManager ?? new SshPortForwardManager())
   portForwardManager!.setCallbacks({
@@ -190,6 +195,7 @@ export async function resetSshHandlerStateForTests(): Promise<void> {
   credentialRequestedForTarget.clear()
   resetSshCredentialDeclinesForTests()
   resetSshUserDisconnectsForTests()
+  resetLaunchReconnectOptOutsForTests()
   quitTeardownStartGate.resetForTests()
   resetSshShutdownDrain()
 

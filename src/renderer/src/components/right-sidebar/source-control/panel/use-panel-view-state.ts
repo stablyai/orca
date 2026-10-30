@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useRef, useState } from 'react'
 import { BoundedMap } from '../../../../../../shared/bounded-map'
-import { resolveSourceControlGroupOrder } from '../listing/section-order'
+import { resolveSourceControlGroupOrder } from '../../../../../../shared/source-control-section-order'
 import { getNextSourceControlViewMode } from './header-toolbar'
 import { normalizeSourceControlViewMode } from '../commit/commit-drafts'
 import type { SourceControlStoreActions } from '../listing/use-store-actions'

@@ -1,4 +1,4 @@
-import { useCallback, useLayoutEffect, useRef } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef } from 'react'
 import type {
   MobileWebShellBridgeMessagePayload,
   OrcaMobileWebShellViewHandle
@@ -7,7 +7,7 @@ import { useHostClient } from '../transport/host-client-hooks'
 import { createBridgeDiagnosticReporter } from './bridge-diagnostic-log'
 import { bridgeDiagnosticLine, frameWithoutHostLine } from './shell-bridge-log-lines'
 import { recordShellLifecycleLine } from './shell-lifecycle-line-recorder'
-import type { BridgeInitRoute } from './bridge/bridge-envelope'
+import type { BridgeColorScheme, BridgeInitRoute, BridgeUiLocale } from './bridge/bridge-envelope'
 import type { BridgeClearableRouteParam } from './bridge/bridge-route-update'
 import type { BridgeSafeAreaInsets } from './bridge/bridge-safe-area-insets'
 import type { BridgeHapticsKind } from './bridge/bridge-haptics-notify'
@@ -57,12 +57,14 @@ export type MobileWebShellBridgeArgs = {
   route: BridgeInitRoute
   safeAreaInsets: BridgeSafeAreaInsets
   keyboardInset: number
+  colorScheme: BridgeColorScheme
+  uiLocale: BridgeUiLocale
   pageRoutes: readonly string[]
   pageRouteGrants: readonly { pathname: string; grants: readonly string[] }[]
   // Effective session grants include the served-route union when this page owns the host area.
   routeGrants: readonly string[]
   ownsHostArea?: boolean
-  onNavigate: (href: string) => void
+  onNavigate: (href: string, replace: boolean) => void
   onExternalLink: (url: string) => void
   onHaptic: (kind: BridgeHapticsKind) => void
   serveNativeVerb: (verb: BridgeNativeVerb, params: unknown) => Promise<unknown>
@@ -76,6 +78,7 @@ export type MobileWebShellBridgeArgs = {
   onPagePainted: () => void
   // Document resets explicitly publish false so retired pages cannot retain Back.
   onPageBackClaim: (claimed: boolean) => void
+  onPageLocation: (href: string) => void
   onRouteParamClear: (param: BridgeClearableRouteParam, value: string) => void
   onRouteRefused: (issue: string) => void
   onBinaryFramesDropped: (total: number) => void
@@ -119,6 +122,8 @@ export function useMobileWebShellBridge(args: MobileWebShellBridgeArgs): MobileW
       route: latest.route,
       safeAreaInsets: latest.safeAreaInsets,
       keyboardInset: latest.keyboardInset,
+      colorScheme: latest.colorScheme,
+      uiLocale: latest.uiLocale,
       pageRoutes: latest.pageRoutes,
       pageRouteGrants: latest.pageRouteGrants,
       routeGrants: latest.routeGrants,
@@ -141,7 +146,7 @@ export function useMobileWebShellBridge(args: MobileWebShellBridgeArgs): MobileW
           recordShellLifecycleLine(latest.hostId, line)
         }
       }),
-      onNavigate: (href) => argsRef.current.onNavigate(href),
+      onNavigate: (href, replace) => argsRef.current.onNavigate(href, replace),
       onNavigateBack: () => argsRef.current.onNavigateBack(),
       onExternalLink: (url) => argsRef.current.onExternalLink(url),
       onHaptic: (kind) => argsRef.current.onHaptic(kind),
@@ -154,7 +159,8 @@ export function useMobileWebShellBridge(args: MobileWebShellBridgeArgs): MobileW
       onBinaryFramesDropped: (total) => argsRef.current.onBinaryFramesDropped(total),
       onPageReady: () => argsRef.current.onPageReady(),
       onPagePainted: () => argsRef.current.onPagePainted(),
-      onPageBackClaim: (claimed) => argsRef.current.onPageBackClaim(claimed)
+      onPageBackClaim: (claimed) => argsRef.current.onPageBackClaim(claimed),
+      onPageLocation: (href) => argsRef.current.onPageLocation(href)
     })
     hostRef.current = { sessionId, host }
     // Reset host-owned drop totals on rebuild so a new lower count cannot look like frames being recovered.
@@ -166,6 +172,23 @@ export function useMobileWebShellBridge(args: MobileWebShellBridgeArgs): MobileW
       host.dispose()
     }
   }, [buildId, client, sessionId, snapshot])
+
+  // A rebuilt host already starts from the latest scheme; this re-sends init when it changes under a live page.
+  const colorScheme = args.colorScheme
+  useEffect(() => {
+    const mounted = hostRef.current
+    if (mounted !== null && mounted.sessionId === sessionId) {
+      mounted.host.publishColorScheme(colorScheme)
+    }
+  }, [colorScheme, sessionId])
+
+  const uiLocale = args.uiLocale
+  useEffect(() => {
+    const mounted = hostRef.current
+    if (mounted !== null && mounted.sessionId === sessionId) {
+      mounted.host.publishUiLocale(uiLocale)
+    }
+  }, [uiLocale, sessionId])
 
   return {
     bridgeEnabled: ready !== null,

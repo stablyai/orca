@@ -56,6 +56,7 @@ type JsonRpcResponse = {
 }
 
 export type CodexAppServerRpc = {
+  signal?: AbortSignal
   /** Per-call deadline within the session deadline; absent/null uses only the session deadline. */
   request: (
     method: string,
@@ -87,6 +88,7 @@ export async function runCodexAppServerSession<T>(
   body: (rpc: CodexAppServerRpc) => Promise<T>,
   spawnImpl: CodexAppServerSpawn = spawnCodexAppServerProcess
 ): Promise<T> {
+  invocation.signal?.throwIfAborted()
   // Strip CODEX_HOME after the overlay so default-home grants target the real ~/.codex.
   const childEnv = resolveProviderChildEnv(invocation, process.env)
   const pairedEnv = invocation.cliPath
@@ -111,6 +113,7 @@ export async function runCodexAppServerSession<T>(
   )
   const { child } = managed
 
+  const lifetime = new AbortController()
   let exited = false
   let exitCode: number | null = null
   let nextRequestId = 1
@@ -172,6 +175,7 @@ export async function runCodexAppServerSession<T>(
     rejectDeadline = reject
   })
   function endSession(error: Error): void {
+    lifetime.abort(error)
     timedOut = true
     // A supervised child is stopped by the finally below, which this rejection runs at once.
     if (!managed.supervised) {
@@ -292,7 +296,7 @@ export async function runCodexAppServerSession<T>(
         clientInfo: { name: 'orca_desktop', title: 'Orca', version: '0.0.0' }
       })
       notify('initialized')
-      return body({ request: requestRpc, notify })
+      return body({ request: requestRpc, notify, signal: lifetime.signal })
     }
     // Killing the child cannot settle a callback awaiting unrelated work; race the whole callback.
     return await Promise.race([session(), deadlinePromise])
@@ -309,6 +313,7 @@ export async function runCodexAppServerSession<T>(
     }
     throw error
   } finally {
+    lifetime.abort()
     // A session past its deadline is wedged; its stdin end would only add a grace.
     if (timedOut && managed.supervised && !exited) {
       try {

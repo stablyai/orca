@@ -4,14 +4,15 @@ import type { GlobalSettings } from './global-settings-types'
 import { isTuiAgent } from './tui-agent-config'
 import { YOLO_TUI_AGENT_ARGS, YOLO_TUI_AGENT_ENV } from './tui-agent-permissions'
 import {
-  agentPermissionArgs,
+  readLaunchPermissionChoice,
+  type AgentPermissionChoice,
   agentPermissionEnv,
   hasTypedAgentPermission,
   PERMISSION_CHOICE_AGENTS,
   resolveAgentPermission,
   sanitizeAgentPermissionUpdates
 } from './tui-agent-permission-choice'
-import { agentArgsSetPermission } from './tui-agent-permission-lift'
+import { projectAgentLaunchProfile } from './agent-launch-profile'
 import {
   resolveStartupShell,
   tokenizeStartupCommand,
@@ -32,6 +33,22 @@ export type AgentLaunchProfileSettings = Partial<
     'agentDefaultArgs' | 'agentDefaultEnv' | 'agentPermissionDefault' | 'agentPermissionOverrides'
   >
 >
+
+/** Launch intent overrides only Orca's injected permission, preserving the user's args and env. */
+export function agentLaunchPermissionSettings<T extends AgentLaunchProfileSettings>(
+  agent: TuiAgent,
+  settings: T,
+  sessionOptions: Readonly<Record<string, unknown>> | undefined
+) {
+  const choice = readLaunchPermissionChoice(sessionOptions)
+  return choice
+    ? {
+        ...settings,
+        agentPermissionDefault: settings?.agentPermissionDefault ?? 'own',
+        agentPermissionOverrides: { ...settings?.agentPermissionOverrides, [agent]: choice }
+      }
+    : settings
+}
 
 // What an untouched agent ran with before permissions were stored as a choice; legacy text only.
 export const DEFAULT_TUI_AGENT_ARGS: Partial<Record<TuiAgent, string>> &
@@ -151,21 +168,20 @@ function ownArgs(agent: string, settings: AgentLaunchProfileSettings | null | un
   return typeof value === 'string' ? value : undefined
 }
 
+export { agentPermissionArgsForLaunch } from './agent-permission-args'
 /** Compose stored permission flags with user arguments, letting explicit user permission text win. Older host text already includes its flags. */
 export function resolveTuiAgentLaunchArgs(
   agent: string,
-  settings: AgentLaunchProfileSettings | null | undefined
+  settings: AgentLaunchProfileSettings | null | undefined,
+  permissionChoice?: AgentPermissionChoice
 ): string {
-  const own = ownArgs(agent, settings)
-  if (!hasTypedAgentPermission(settings) || !isTuiAgent(agent)) {
-    return own ?? getTuiAgentDefaultArgs(agent)
+  if (!isTuiAgent(agent)) {
+    return ownArgs(agent, settings) ?? getTuiAgentDefaultArgs(agent)
   }
-  const user = own?.trim() ?? ''
-  const flag = agentPermissionArgs(agent, resolveAgentPermission(agent, settings).choice)
-  if (!flag || agentArgsSetPermission(agent, user)) {
-    return user
-  }
-  return user ? `${flag} ${user}` : flag
+  return projectAgentLaunchProfile(agent, settings, {
+    target: 'terminal',
+    ...(permissionChoice ? { choices: { permissionMode: permissionChoice } } : {})
+  }).args
 }
 
 /** Legacy missing Arguments use Orca’s bypass default; Manual stores an explicit empty value that overrides it. */

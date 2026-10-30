@@ -66,3 +66,35 @@ export function showOsc52ClipboardFailedToast(): void {
   // Latch only after successful display, as for blocked writes.
   hasShownOsc52ClipboardFailedToast = true
 }
+
+const OSC52_CLIPBOARD_COPY_RETRY_TOAST_ID = 'osc52-clipboard-copy-retry'
+
+/** Browsers refuse clipboard writes without a recent gesture; the Copy click supplies one. Not latched: each refusal replaces the last. */
+export function showOsc52ClipboardCopyRetryToast(
+  text: string,
+  writeClipboardText: (text: string) => Promise<void>
+): void {
+  toast.error(
+    translate(
+      'auto.components.terminal.pane.osc52.clipboard.failed.toast.de286dcfe1',
+      'Terminal copy needs a click'
+    ),
+    {
+      id: OSC52_CLIPBOARD_COPY_RETRY_TOAST_ID,
+      description: translate(
+        'auto.components.terminal.pane.osc52.clipboard.failed.toast.84c938ffa2',
+        'The browser blocked a copy from the terminal app. Click Copy to put the text on your clipboard.'
+      ),
+      duration: 30_000,
+      action: {
+        label: translate(
+          'auto.components.terminal.pane.osc52.clipboard.failed.toast.a73165c6c5',
+          'Copy'
+        ),
+        onClick: () => {
+          void writeClipboardText(text).catch(showOsc52ClipboardFailedToast)
+        }
+      }
+    }
+  )
+}

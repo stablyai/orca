@@ -54,7 +54,7 @@ it.each([10, 100])(
     const server = await startOrcadWithLifecycle(
       async (register) => {
         register(async () => {
-          expect(close.mock.calls).toEqual(ids.map((id) => [id]))
+          expect(close.mock.calls).toEqual(ids.map((id) => [id, undefined]))
           expect(record).toHaveBeenCalledTimes(1)
           expect(record.mock.calls[0]?.[0]).toHaveLength(size)
           expect(

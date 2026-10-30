@@ -128,7 +128,7 @@ export function admitAttachOrRefuse(
 }
 
 export function journalIdentityFor(
-  record: AgentSessionRecord,
+  record: Pick<AgentSessionRecord, 'sessionId' | 'providerHandleChain' | 'providerContextBoundary'>,
   params: AgentSessionAttachParams
 ): AgentSessionJournalIdentity {
   const active = activeProviderContext(record)

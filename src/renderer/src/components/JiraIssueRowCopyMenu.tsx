@@ -19,6 +19,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { translate } from '@/i18n/i18n'
 import type { JiraIssue } from '../../../shared/jira/jira-types'
 import { copyJiraTextToClipboard } from './jira-issue-workspace-actions'
+import type { IssueCopyTarget } from './issue-copy-target-messages'
 import { buildJiraIssuePrompt } from './jira-prompt-templates'
 import { Popover, PopoverAnchor } from '@/components/ui/popover'
 import { JiraPromptTemplatePopover } from './JiraPromptTemplatePopover'
@@ -35,21 +36,21 @@ export function JiraIssueRowCopyMenu({
   const setAnchor = (element: HTMLDivElement | null) => {
     anchorRef.current = element
   }
-  const actions = [
+  const actions: { label: string; text: string; copyTarget: IssueCopyTarget }[] = [
     {
       label: translate('auto.components.JiraIssueWorkspace.38839801e8', 'Copy key'),
       text: issue.key,
-      copiedLabel: 'Key'
+      copyTarget: 'key'
     },
     {
       label: translate('auto.components.JiraIssueWorkspace.779bb91ee0', 'Copy URL'),
       text: issue.url,
-      copiedLabel: 'URL'
+      copyTarget: 'url'
     },
     {
       label: translate('auto.components.JiraIssueWorkspace.0cc62bd690', 'Copy prompt'),
       text: buildJiraIssuePrompt(issue),
-      copiedLabel: 'Prompt'
+      copyTarget: 'prompt'
     }
   ]
   const Item = children ? ContextMenuItem : DropdownMenuItem
@@ -58,8 +59,8 @@ export function JiraIssueRowCopyMenu({
     <>
       {actions.map((action) => (
         <Item
-          key={action.copiedLabel}
-          onSelect={() => void copyJiraTextToClipboard(action.text, action.copiedLabel)}
+          key={action.copyTarget}
+          onSelect={() => void copyJiraTextToClipboard(action.text, action.copyTarget)}
         >
           <Clipboard className="size-3.5" />
           {action.label}

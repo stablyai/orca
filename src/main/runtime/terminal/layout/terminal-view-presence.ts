@@ -48,9 +48,19 @@ export abstract class OrcaRuntimeWithNotifyRemoteTerminalViewPresenceChanged ext
     }
   }
 
-  /** Remote views own delivered query replies; pause readers return dropped output to main. Release is idempotent. */
-  registerRemoteTerminalViewSubscriber(ptyId: string, isOutputPaused?: () => boolean): () => void {
-    return this.terminalViewSubscribers.registerRemote(ptyId, isOutputPaused)
+  /** Remote views own delivered query replies; paused streams and unelected phones leave them to main. Release is idempotent. */
+  registerRemoteTerminalViewSubscriber(
+    ptyId: string,
+    isOutputPaused?: () => boolean,
+    mobileClientId?: string
+  ): () => void {
+    const isSilent =
+      mobileClientId === undefined
+        ? isOutputPaused
+        : () =>
+            isOutputPaused?.() === true ||
+            !this.isMobileTerminalQueryReplyAuthority(ptyId, mobileClientId)
+    return this.terminalViewSubscribers.registerRemote(ptyId, isSilent)
   }
 
   /** Live local daemon sessions with no ingested bytes need attachment; existing headless state or snapshot reconciliation means attach already began. */
@@ -72,9 +82,14 @@ export abstract class OrcaRuntimeWithNotifyRemoteTerminalViewPresenceChanged ext
     return this.terminalViewSubscribers.hasRaw(ptyId)
   }
 
-  /** Whether a remote view will receive this PTY's output now, and so answers its queries. */
+  /** A pane or remote view uses this PTY; main's own ingestion stream does not count. */
+  hasTerminalViewer(ptyId: string): boolean {
+    return this.getLeavesForPty(ptyId).length > 0 || this.hasRawTerminalViewSubscriber(ptyId)
+  }
+
+  /** Whether a remote view answers this PTY's queries now. */
   hasRemoteTerminalViewSubscriber(ptyId: string): boolean {
-    return this.terminalViewSubscribers.hasRemoteReceivingOutput(ptyId)
+    return this.terminalViewSubscribers.hasRemoteAnsweringQueries(ptyId)
   }
 
   isMobileTerminalQueryReplyAuthority(ptyId: string, clientId: string): boolean {
@@ -154,19 +169,14 @@ export abstract class OrcaRuntimeWithNotifyRemoteTerminalViewPresenceChanged ext
   /** Raw keystroke pass-through for the pop-out dashboard's terminal preview.
    *  Honors the mobile-presence lock like the main window's pty:write path. */
   async writeTerminalPreviewInput(ptyId: string, data: string): Promise<boolean> {
-    if (data.length === 0 || this.getDriver(ptyId).kind === 'mobile') {
+    if (data.length === 0) {
       return false
     }
     try {
       await assertTerminalInputWithinLimitWithYield(data)
       await this.writeTerminalInputChunks(ptyId, data, {
         inputKind: 'driving',
-        // Why: a phone can claim the floor while a paste yields between chunks.
-        beforeWrite: () => {
-          if (this.getDriver(ptyId).kind === 'mobile') {
-            throw new Error('terminal_mobile_driver_active')
-          }
-        }
+        inputSource: 'desktop'
       })
       return true
     } catch {

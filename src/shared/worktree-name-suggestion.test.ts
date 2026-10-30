@@ -1,10 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { MARINE_CREATURES } from './marine-creatures'
-import {
-  normalizeSuggestedName,
-  selectSuggestedCreatureName,
-  suggestionPathBasename
-} from './worktree-name-suggestion'
+import { selectSuggestedCreatureName, suggestionPathBasename } from './worktree-name-suggestion'
 
 const pickFirst = () => 0
 const lower = (index: number) => MARINE_CREATURES[index].toLowerCase()
@@ -19,20 +15,8 @@ describe('suggestionPathBasename', () => {
 })
 
 describe('selectSuggestedCreatureName', () => {
-  it('returns a name absent from the used set', () => {
-    // Check exclusion rather than a pool index that could pass without validating collisions.
-    const used = [lower(0), lower(1), lower(2)]
-    const suggested = selectSuggestedCreatureName(used)
-    expect(used).not.toContain(suggested)
-  })
-
   it('skips used names when picking the first available', () => {
     expect(selectSuggestedCreatureName([lower(0)], pickFirst)).toBe(lower(1))
-  })
-
-  it('normalizes the used set so case and padding cannot smuggle a name back in', () => {
-    const suggested = selectSuggestedCreatureName([`  ${MARINE_CREATURES[0].toUpperCase()} `])
-    expect(suggested).not.toBe(lower(0))
   })
 
   it('degrades to a suffixed tier once every base name is spent', () => {
@@ -64,17 +48,5 @@ describe('selectSuggestedCreatureName', () => {
 
   it('ignores a nonsense watermark rather than skipping the pool', () => {
     expect(selectSuggestedCreatureName([], pickFirst, -4)).toBe(lower(0))
-  })
-
-  it('returns a lowercase name to match branch convention', () => {
-    const suggested = selectSuggestedCreatureName([], pickFirst)
-    expect(suggested).toBe(suggested.toLowerCase())
-    expect(MARINE_CREATURES).toContain(suggested.charAt(0).toUpperCase() + suggested.slice(1))
-  })
-})
-
-describe('normalizeSuggestedName', () => {
-  it('trims and lowercases', () => {
-    expect(normalizeSuggestedName('  Nautilus  ')).toBe('nautilus')
   })
 })

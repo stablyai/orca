@@ -35,15 +35,19 @@ export async function prepareOrcadCliLauncher(): Promise<void> {
     launcherPath = await prepareWindowsLauncher(installRoot, entry, userDataPath, binDir)
     return
   }
-  const path = join(binDir, 'orca')
   const script = buildUnixCliLauncher(process.execPath, entry, userDataPath, 'node')
   await mkdir(binDir, { recursive: true })
-  const current = await readFile(path, 'utf8').catch(() => null)
-  if (current !== script) {
-    writeFileAtomically(path, script, { mode: 0o700 })
+  // Older clients type the Linux desktop `orca-ide claude-teams` into server terminals.
+  const names = process.platform === 'linux' ? ['orca', 'orca-ide'] : ['orca']
+  for (const name of names) {
+    const path = join(binDir, name)
+    const current = await readFile(path, 'utf8').catch(() => null)
+    if (current !== script) {
+      writeFileAtomically(path, script, { mode: 0o700 })
+    }
+    await chmod(path, 0o700)
   }
-  await chmod(path, 0o700)
-  launcherPath = path
+  launcherPath = join(binDir, 'orca')
 }
 
 export function buildWindowsCliLauncherConfig(

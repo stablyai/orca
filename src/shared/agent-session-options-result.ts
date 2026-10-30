@@ -8,7 +8,12 @@ import type {
   AgentSessionModelOption
 } from './agent-session-wire'
 
-/** Additive read-only choices/effective next-turn values; older hosts may reject this without changing structured v1 writes. */
+export type AgentSessionAcceptedInputSources = Partial<
+  Record<'model' | 'effort' | 'fastMode' | 'serviceTier', 'saved' | 'seeded' | 'policy'>
+>
+
+/** Provider-reported choices and effective next-turn values. Additive read-only
+ *  surface so older hosts can reject it without changing structured v1 writes. */
 export type AgentSessionOptionsResult = {
   rewind?: AgentSessionRewindSupport
   conversationCommands?: readonly AgentSessionConversationCommand[]
@@ -27,15 +32,19 @@ export type AgentSessionOptionsResult = {
   /** Session/account/transport support. Absent means unknown, never unsupported. */
   fastModeSupport?: AgentSessionFastModeSupport
   current: {
+    /** Accepted input origins; an empty map excludes all display-only observations. */
+    acceptedInputSources?: AgentSessionAcceptedInputSources
     model?: string
     effort?: string
+    /** Child-scoped actual for display only; effort remains accepted raw input. */
+    reportedEffort?: string
     /** Canonical preference for the next turn. Explicit false is meaningful. */
     fastMode?: boolean
     /** Next-turn service tier id where the model lists `serviceTiers`; `default` is standard. */
     serviceTier?: string
     /** The permission mode a start runs now; absent from a host or agent with no picker. */
     permissionMode?: string
-    /** Agent report for own settings: null means reported but not a named Orca mode. */
+    /** Current startup report or accepted fresh-turn policy: null means reported but not a named Orca mode. */
     reportedPermissionMode?: string | null
     /** Provider-reported effective routing, distinct from the next-turn preference. */
     fastModeState?: AgentSessionFastModeState

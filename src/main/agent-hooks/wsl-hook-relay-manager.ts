@@ -15,7 +15,7 @@ import {
   type WslHookRelayManagerDeps
 } from './wsl-hook-relay-deps'
 import { wireWslRelayLink } from './wsl-hook-relay-link'
-import { WslRelayRecovery } from './wsl-hook-relay-recovery'
+import type { WslRelayRecovery } from './wsl-hook-relay-recovery'
 import { wslHookRelayStateKey } from './wsl-hook-relay-state-key'
 import { SshChannelMultiplexer, type MultiplexerTransport } from '../ssh/ssh-channel-multiplexer'
 import { AGENT_HOOK_REQUEST_REPLAY_METHOD } from '../../shared/agent-hook-relay'
@@ -29,14 +29,17 @@ import {
   wslRuntimeHomePathsEqual
 } from '../codex/managed-wsl-codex-home-registry'
 import {
+  createWslRelayRecoveryForManager,
   markWslRelayFailed,
   resolveWslDefaultDistro,
   resumeWslStoppedRelays
 } from './wsl-hook-relay-state-machine'
 import type { WslRelayDistroState } from './wsl-hook-relay-state'
+import { createWslRelayIdleStopForManager, type WslRelayIdleStop } from './wsl-hook-relay-idle-stop'
 export class WslHookRelayManager {
   private deps: WslHookRelayManagerDeps
   private recovery: WslRelayRecovery
+  private idle: WslRelayIdleStop
   private states = new Map<string, WslRelayDistroState>()
   private stoppedByHooksOff = new Map<string, string | undefined>()
   private defaultDistro: string | null = null
@@ -44,19 +47,12 @@ export class WslHookRelayManager {
   private warnedBundleMissing = false
   constructor(deps: Partial<WslHookRelayManagerDeps> = {}) {
     this.deps = { ...defaultWslHookRelayDeps, ...deps }
-    this.recovery = new WslRelayRecovery({
-      isDistroRunning: (distro) => this.deps.isDistroRunning(distro),
-      warn: (message) => this.deps.warn(message),
-      isDisposed: () => this.disposed,
-      isCurrent: (state) => this.states.get(wslHookRelayStateKey(state.distro)) === state,
-      restart: (distro) => this.ensureForDistro(distro, this.stateFor(distro)?.codexHomePath),
-      dropState: (state) => {
-        const key = wslHookRelayStateKey(state.distro)
-        if (this.states.get(key) === state) {
-          this.states.delete(key)
-        }
-      }
+    const owner = { deps: () => this.deps, states: this.states, isDisposed: () => this.disposed }
+    this.recovery = createWslRelayRecoveryForManager({
+      ...owner,
+      ensure: (...args) => this.ensureForDistro(...args)
     })
+    this.idle = createWslRelayIdleStopForManager({ ...owner, recovery: this.recovery })
   }
   setManagedHookSettingsResolver(resolve: WslHookRelayManagerDeps['managedHookSettings']): void {
     this.deps.managedHookSettings = resolve
@@ -104,6 +100,7 @@ export class WslHookRelayManager {
   /** Nonpermanent disposal allows relays to restart when hooks are re-enabled. */
   disposeAll({ permanent = true }: { permanent?: boolean } = {}): void {
     this.disposed ||= permanent
+    this.idle.dispose(permanent)
     for (const state of this.states.values()) {
       this.recovery.clearTimers(state)
       state.mux?.dispose()
@@ -129,7 +126,13 @@ export class WslHookRelayManager {
     if (!distro || this.disposed) {
       return
     }
+    // Before the state check, so concurrent ensures still join one start. A passive restore's env
+    // prep ensures the relay before its hold (#35813): its wsl.exe must not start the distro (E9).
+    if ((await this.deps.blockedForExec(distro)) || this.disposed) {
+      return
+    }
     const key = wslHookRelayStateKey(distro)
+    this.idle.restoreParked(distro)
     const existing = this.states.get(key)
     if (requestedCodexHomePath) {
       recordManagedWslCodexHome(distro, requestedCodexHomePath)
@@ -234,7 +237,8 @@ export class WslHookRelayManager {
       mux,
       child,
       distro: state.distro,
-      ingest: this.deps.ingest,
+      ingest: this.idle.noteTraffic(state, this.deps.ingest),
+      beginSession: this.deps.beginRelaySession,
       receiveClaudeAgentView: (body) =>
         isWslHookRelayAllowed(this.deps) ? (this.deps.receiveClaudeAgentView?.(body) ?? {}) : {},
       warn: this.deps.warn,
@@ -278,6 +282,7 @@ export class WslHookRelayManager {
     }
     state.phase = 'running'
     state.connectedAt = Date.now()
+    this.idle.update(state)
     this.recovery.scheduleOneShotReinstall(state, REINSTALL_ONE_SHOT_DELAY_MS, () => {
       void maybeRerunWslRelayGuestInstall(this.deps, state)
     })

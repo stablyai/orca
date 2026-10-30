@@ -1,9 +1,6 @@
 import { agentPermissionHostPlatform, permissionEnvNameMatches } from './agent-permission-env'
-import type { AgentChatPermissionMode } from './agent-chat-permission-mode'
 import type { GlobalSettings } from './global-settings-types'
 import {
-  agentPermissionArgs,
-  agentPermissionChoices,
   agentPermissionEnv,
   hasTypedAgentPermission,
   normalizeAgentPermissionOverrides,
@@ -11,7 +8,8 @@ import {
   resolveAgentPermission,
   type AgentPermissionChoice
 } from './tui-agent-permission-choice'
-import { permissionRecipeCut } from './agent-permission-args'
+import { reconcileAgentChoiceArgs } from './agent-choice-reconciliation'
+import { planAgentCliArgsSuffix, type AgentStartupShell } from './tui-agent-startup-shell'
 export { agentArgsSetPermission } from './agent-permission-args'
 import type { TuiAgent } from './tui-agent'
 
@@ -19,18 +17,38 @@ import type { TuiAgent } from './tui-agent'
 export function liftAgentPermissionArgs(
   agent: TuiAgent,
   text: string | null | undefined
-): { choice: AgentChatPermissionMode | null; args: string } {
-  const original = text?.trim() ?? ''
-  for (const choice of agentPermissionChoices(agent)) {
-    if (choice === 'own') {
-      continue
-    }
-    const cut = permissionRecipeCut(agent, original, agentPermissionArgs(agent, choice))
-    if (cut) {
-      return { choice, args: cut.args }
-    }
+): { choice: AgentPermissionChoice | null; args: string } {
+  const result = reconcileAgentChoiceArgs({
+    agent,
+    userArgs: text?.trim() ?? '',
+    choices: {},
+    mode: 'load',
+    keys: new Set(['permissionMode'])
+  })
+  return { choice: result.choices.permissionMode ?? null, args: result.userArgs }
+}
+
+/** A recorded launch without Orca's permission flag; recorded text it cannot rebuild stays whole. */
+export function dropRecordedAgentPermissionArgs(
+  agent: TuiAgent,
+  recorded: { agentArgs?: string | null; agentCommand?: string | null },
+  shell: AgentStartupShell
+): { agentArgs?: string | null; agentCommand?: string | null } {
+  const lifted = liftAgentPermissionArgs(agent, recorded.agentArgs)
+  if (!lifted.choice) {
+    return recorded
   }
-  return { choice: null, args: original }
+  const command = recorded.agentCommand?.trim()
+  if (!command) {
+    return { ...recorded, agentArgs: lifted.args }
+  }
+  const before = planAgentCliArgsSuffix(recorded.agentArgs, shell)
+  const after = planAgentCliArgsSuffix(lifted.args, shell)
+  if (!before.ok || !after.ok || !command.endsWith(` ${before.suffix}`)) {
+    return recorded
+  }
+  const head = command.slice(0, -before.suffix.length).trimEnd()
+  return { agentArgs: lifted.args, agentCommand: after.suffix ? `${head} ${after.suffix}` : head }
 }
 
 /** Lift env bypass with execution-host name casing; unknown browser caches retain ambiguous spellings. */

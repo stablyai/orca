@@ -36,6 +36,7 @@ import { useCallback } from 'react'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { WorktreeCreationRequest } from '@/lib/pending-worktree-creation'
 import { useAppStore } from '@/store'
+import { isWorkspaceStatusAllowedOnHost } from '@/store/host-workspace-status-columns'
 import { settleComposerSubmit } from '@/lib/composer-submit-cancellation'
 import { runBackgroundWorktreeCreation } from '@/lib/worktree-creation-flow'
 import type { ComposerCreateHandoff } from '@/lib/composer-create-handoff'
@@ -114,6 +115,7 @@ export function useQuickCreationExecution(input: QuickCreationExecutionInput) {
         linkedLinearIssueWorkspaceId,
         linkedLinearIssueOrganizationUrlKey,
         effectiveBranchNameOverride,
+        branchIntent,
         submitBaseBranch,
         createDisplayName,
         pendingFirstAgentMessageRename,
@@ -221,8 +223,22 @@ export function useQuickCreationExecution(input: QuickCreationExecutionInput) {
         linkedLinearIssueWorkspaceId,
         linkedLinearIssueOrganizationUrlKey,
         branchNameOverride: effectiveBranchNameOverride,
+        branchIntent,
         parentWorktreeId,
-        workspaceStatus: resolvedInitialWorkspaceStatus,
+        // A lane's host-only column applies only when creating on that host.
+        workspaceStatus:
+          resolvedInitialWorkspaceStatus &&
+          isWorkspaceStatusAllowedOnHost(
+            useAppStore.getState(),
+            {
+              hostId: workspaceRunContext?.hostId ?? selectedRepoExecutionHostId,
+              runtimeOwnerEnvironmentId:
+                selectedRepoTarget?.kind === 'environment' ? selectedRepoTarget.environmentId : null
+            },
+            resolvedInitialWorkspaceStatus
+          )
+            ? resolvedInitialWorkspaceStatus
+            : undefined,
         linkedGitLabMR,
         linkedGitLabIssue,
         includeGitLabLinks: smartGitHubResolution.kind === 'none',

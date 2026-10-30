@@ -2,7 +2,8 @@
 
 import '@testing-library/jest-dom/vitest'
 
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, screen } from '@testing-library/react'
+import { render } from './native-chat-tooltip-test-harness'
 
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 
@@ -26,7 +27,7 @@ afterEach(() => {
   expect(unusedChatLeaves.openSender).not.toHaveBeenCalled()
 })
 
-import { subagentGroupFallbackText } from '../../../../shared/native-chat-subagent-summary'
+import { subagentGroupFallbackText } from '../../../../shared/native-chat/transcript/native-chat-subagent-summary'
 
 import type {
   NativeChatMessage,
@@ -72,6 +73,63 @@ import type {
     })
     afterAll(() => restoreViewport())
     afterEach(cleanup)
+    it.each([true, false])(
+      'copies selections across message roots from the transcript (math=%s)',
+      (math) => {
+        const sources = math
+          ? ['Before $x^2$ after.', 'Then \\(y_i\\).']
+          : ['Before plain after.', 'Then plain.']
+        const view = render(
+          <NativeChatMessageList
+            session={{
+              ...session,
+              messages: sources.map((text, index) => ({
+                id: `selection-${index}`,
+                role: 'assistant',
+                blocks: [{ type: 'text', text }],
+                timestamp: index + 1,
+                source: 'transcript'
+              }))
+            }}
+            isWorking={false}
+            expandSignal={false}
+          />
+        )
+        const transcript = view.container.querySelector('[data-native-chat-scroll]')
+        const paragraphs = view.container.querySelectorAll('[data-native-chat-quote-source] p')
+        if (!transcript || paragraphs.length !== 2) {
+          throw new Error('Missing transcript paragraphs')
+        }
+        const range = document.createRange()
+        range.setStart(paragraphs[0].firstChild ?? paragraphs[0], 0)
+        range.setEnd(paragraphs[1], paragraphs[1].childNodes.length)
+        const selection = document.getSelection()
+        selection?.removeAllRanges()
+        selection?.addRange(range)
+        for (const target of [paragraphs[0], transcript]) {
+          const setData = vi.fn()
+          const event = new Event('copy', { bubbles: true, cancelable: true })
+          Object.defineProperty(event, 'clipboardData', { value: { setData } })
+          fireEvent(target, event)
+          if (math) {
+            const copied = setData.mock.calls.find(([type]) => type === 'text/plain')?.[1]
+            expect(copied).toBe(sources.join('\n\n'))
+            expect(event.defaultPrevented).toBe(true)
+          } else {
+            expect(setData).not.toHaveBeenCalled()
+            expect(event.defaultPrevented).toBe(false)
+          }
+        }
+        const setData = vi.fn()
+        const handled = new Event('copy', { bubbles: true, cancelable: true })
+        handled.preventDefault()
+        Object.defineProperty(handled, 'clipboardData', { value: { setData } })
+        fireEvent(transcript, handled)
+        expect(setData).not.toHaveBeenCalled()
+        selection?.removeAllRanges()
+      }
+    )
+
     it('keeps a running tool live when transcript lifecycle metadata is absent', () => {
       render(
         <NativeChatMessageList

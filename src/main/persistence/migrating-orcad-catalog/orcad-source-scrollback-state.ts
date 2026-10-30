@@ -42,7 +42,12 @@ export function projectOrcadMigrationSessionScrollback(
   session: WorkspaceSessionState,
   storage?: TerminalScrollbackSnapshotStorage,
   /** "Move anyway" can retain untransferable history while moving its pane. */
-  leaveBehind = false
+  leaveBehind = false,
+  /**
+   * A WSL move's panes whose daemon checkpoint travels as a `terminal-history` blob: the host's
+   * daemon restores it, so no renderer snapshot or ref may also paint it.
+   */
+  daemonHistoryLeaf?: (tabId: string, leafId: string) => boolean
 ): ProjectedOrcadMigrationScrollback {
   const projected = structuredClone(session)
   const snapshots: OrcadMigrationTerminalScrollbackSnapshot[] = []
@@ -59,6 +64,10 @@ export function projectOrcadMigrationSessionScrollback(
       ...Object.keys(sourceLayout.scrollbackRefsByLeafId ?? {})
     ])
     for (const leafId of [...leafIds].sort(compareKeys)) {
+      // Its checkpoint is newer than any snapshot saved before, and the host restores it itself.
+      if (daemonHistoryLeaf?.(tabId, leafId)) {
+        continue
+      }
       const buffer = inlineLeafBuffer(localOnly, sourceLayout.buffersByLeafId, leafId)
       const sourceRef = sourceLayout.scrollbackRefsByLeafId?.[leafId]
       const ref = buffer ? makeTerminalScrollbackSnapshotRef(tabId, leafId) : sourceRef

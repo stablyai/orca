@@ -1,5 +1,7 @@
+import { seededPermissionMode } from '../../../../shared/native-chat/input/native-chat-session-option-defaults'
 // Resolve the host launch identity, then commit an at-rest create or the compatible acquired path.
 
+import { assertAgentPromptRequestActive } from '../../orca-runtime-core'
 import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from '../../../../shared/agent-chat-permission-mode'
 import { refuse, AgentSessionRefusalError } from '../../../../shared/agent-session-wire-refusals'
 import { computeAgentSessionPayloadFingerprint } from '../../../../shared/agent-session-mutation-envelope'
@@ -19,7 +21,6 @@ import type {
   StructuredAgentSessionFirstMessage
 } from '../../../../shared/structured-agent-session-create'
 import { structuredAgentSessionOptionOverridesRefusal } from '../../../native-chat/agent-session-wire/structured-agent-session-options-read'
-import { savedAgentSessionCatalogModels } from '../../../native-chat/agent-session-wire/structured-agent-session-pick-reply'
 import type { StructuredAgentSessionCreateOptions } from '../../../native-chat/agent-session-wire/structured-agent-session-create'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import {
@@ -27,15 +28,10 @@ import {
   type StructuredAgentCliSourceEvidence
 } from '../../../native-chat/structured-agent-cli-source'
 import type { StructuredAgentId } from '../../../../shared/agent-session-provider-handle'
-import {
-  resolveUncommittedStructuredCreate,
-  type StructuredCreateRefused
-} from './structured-agent-session-precommit-refusal'
+import { resolveUncommittedStructuredCreate } from './structured-agent-session-precommit-refusal'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import { structuredAgentSessionClosedBeforeCreate } from './structured-agent-session-close-before-create'
-import { structuredLaunchSeedOnSavedListing } from '../../session-tabs/structured-launch-seed-listing'
 import type { ChatTabPlacement } from '../../agent-session/agent-session-tab-layout'
-import { seedOptionsAdmittedOnSavedListing } from '../../agent-session-record-options'
 
 export type PreparedStructuredAgentSessionCreate = {
   host: StructuredAgentSessionHost
@@ -56,6 +52,7 @@ export function structuredAgentSessionCreateIntentFingerprint(params: {
   resumeFrom?: StructuredAgentSessionResumeSource
   tabId?: string
   firstMessage?: StructuredAgentSessionFirstMessage
+  optionsMode?: 'replace-model-selection'
   options?: Readonly<Record<string, string>>
 }): string {
   return computeAgentSessionPayloadFingerprint({
@@ -67,6 +64,7 @@ export function structuredAgentSessionCreateIntentFingerprint(params: {
       resumeFrom: params.resumeFrom,
       tabId: params.tabId,
       firstMessage: params.firstMessage,
+      optionsMode: params.optionsMode,
       options: params.options
     }
   })
@@ -84,6 +82,7 @@ export async function prepareStructuredAgentSessionCreateForWorktree(args: {
   resumeFrom?: StructuredAgentSessionResumeSource
   structuredAgentCliSourceEvidence?: StructuredAgentCliSourceEvidence
   /** Explicit picks override seed keys at rest; acquired in-process launches replace the seed. */
+  optionsMode?: 'replace-model-selection'
   options?: Readonly<Record<string, string>>
   /** Use the caller-reserved tab id at publication; absent, derive the legacy id. Keep it outside launch fingerprints. */
   tabId?: string
@@ -135,54 +134,22 @@ export async function prepareStructuredAgentSessionCreateForWorktree(args: {
       throw new AgentSessionRefusalError(refusal)
     }
   }
-  const {
-    agent: _resolvedAgent,
-    provider: _resolvedProvider,
-    hostLaunchDirectory,
-    ...resolvedAttach
-  } = resolved
+  const { agent: _agent, provider: _provider, hostLaunchDirectory, ...resolvedAttach } = resolved
   // Fingerprint explicit picks, never replay-varying defaults; explicit options replace saved seeds, while permission default stays chat-owned.
+  const overlays = atRest
+    ? args.optionsMode !== 'replace-model-selection'
+    : Object.keys(args.options ?? {}).every((id) => id === AGENT_CHAT_PERMISSION_MODE_OPTION_ID)
   const picked = args.options
-    ? atRest
+    ? overlays
       ? { ...resolved.options, ...args.options }
       : { ...seededPermissionMode(resolved.options), ...args.options }
     : resolved.options
-  // Resolve picker cwd once so seed selection and host admission read the same catalog.
-  let folder: Promise<string | null> | undefined
-  const catalogFolder = () =>
-    (folder ??= args.runtime
-      .resolveStructuredAgentSessionLocalWorkspacePath(args.worktree)
-      .catch(() => null))
-  // After fingerprinting, remap stale remembered model/effort against saved listing; never remap an explicit model.
-  const options = args.options?.model
-    ? picked
-    : await structuredLaunchSeedOnSavedListing(host, args.agent, picked, catalogFolder)
-  const catalogModels =
-    options && host.deps.modelCatalog
-      ? await savedAgentSessionCatalogModels(
-          host.deps,
-          resolved.provider,
-          args.envelope.sessionId,
-          await catalogFolder()
-        )
-      : undefined
-  // Fit remembered values to the saved row instead of refusing the create (#31493).
-  const admittedSeed =
-    options && catalogModels && !args.options?.model
-      ? seedOptionsAdmittedOnSavedListing(
-          resolved.provider,
-          options,
-          catalogModels,
-          new Set(Object.keys(args.options ?? {}))
-        )
-      : options
   return {
     host,
-    ...(catalogModels ? { catalogModels } : {}),
     ...(hostLaunchDirectory ? { hostLaunchDirectory } : {}),
     attachParams: {
       ...resolvedAttach,
-      ...(admittedSeed ? { options: admittedSeed } : {}),
+      ...(picked ? { options: picked } : {}),
       ...(args.tabId ? { surfaceTabId: args.tabId } : {}),
       provider: resolved.provider,
       agent: resolved.agent,
@@ -293,10 +260,13 @@ export async function createStructuredAgentSessionForWorktree(args: {
   worktree: string
   agent: StructuredAgentId
   activate: boolean
+  optionsMode?: 'replace-model-selection'
   options?: Readonly<Record<string, string>>
   tabId?: string
   /** Create without starting the agent; its first message starts it. */
   atRest?: true
+  firstMessage?: StructuredAgentSessionFirstMessage
+  signal?: AbortSignal
 }): Promise<AgentSessionMutationResult<AgentSessionAttachResult>> {
   // An at-rest create's ledger row is keyed by its intent, as a client's create is.
   const envelope = args.atRest
@@ -305,24 +275,17 @@ export async function createStructuredAgentSessionForWorktree(args: {
         payloadFingerprint: structuredAgentSessionCreateIntentFingerprint(args)
       }
     : args.envelope
-  const prepared: PreparedStructuredAgentSessionCreate | StructuredCreateRefused =
-    await resolveUncommittedStructuredCreate(() =>
-      prepareStructuredAgentSessionCreateForWorktree({ ...args, envelope })
-    )
+  const prepared = await resolveUncommittedStructuredCreate(() =>
+    prepareStructuredAgentSessionCreateForWorktree({ ...args, envelope })
+  )
   if ('refusal' in prepared) {
     return { ok: false, refusal: prepared.refusal }
   }
+  assertAgentPromptRequestActive(args.signal)
   return commitStructuredAgentSessionCreate({
     runtime: args.runtime,
     caller: args.caller,
     prepared,
     activate: args.activate
   })
-}
-
-function seededPermissionMode(
-  options: Readonly<Record<string, string>> | undefined
-): Record<string, string> {
-  const mode = options?.[AGENT_CHAT_PERMISSION_MODE_OPTION_ID]
-  return mode ? { [AGENT_CHAT_PERMISSION_MODE_OPTION_ID]: mode } : {}
 }

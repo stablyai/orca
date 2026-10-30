@@ -5,17 +5,19 @@ import type {
   AgentJournalSubmission
 } from './agent-session-journal-types'
 import { agentJournalSubmissionKey } from './agent-session-journal-item-key'
+import { selectAgentSessionCurrentRequests } from './agent-session-current-requests'
 import { isQueuedAgentJournalSubmission } from './agent-session-queued-submission'
 import { collapseProviderRetryRuns } from './native-chat/native-chat-provider-retry-runs'
 import {
   keepStoppedSendsInSendOrder,
   placeStoppedSends,
   withStopRowsAfterStoppedSends
-} from './native-chat-stopped-before-start'
+} from './native-chat/native-chat-stopped-before-start'
 import { compareNativeChatTranscriptMessages } from './native-chat-transcript-projection'
 import type { NativeChatMessage } from './native-chat-types'
 import { dispatchWasWithdrawn } from './structured-agent-session-dispatch-rejection'
 import { projectStructuredItemsToNativeChat } from './structured-agent-session-projection'
+import { isActionableStructuredAgentSessionPrompt } from './structured-agent-session-live-turn'
 import {
   agentSessionContextSequenceFor,
   isAgentSessionContextClear
@@ -204,4 +206,26 @@ function withRowsAtJournalPlaces(
     merged.push(row)
   }
   return merged.concat(placed.slice(next))
+}
+
+export type StructuredPromptItem = AgentJournalRenderItem & {
+  body: Extract<AgentJournalRenderItem['body'], { kind: 'approval' | 'question' }>
+}
+
+/** Offer pending prompts, respecting the host’s actionable-wait declaration when available. */
+export function pendingStructuredSessionPrompts({
+  journalItems,
+  currentRequests,
+  actionablePromptIds
+}: {
+  journalItems: readonly AgentJournalRenderItem[]
+  currentRequests?: readonly AgentJournalRenderItem[]
+  actionablePromptIds?: readonly string[]
+}): StructuredPromptItem[] {
+  return selectAgentSessionCurrentRequests({ items: journalItems, currentRequests }).filter(
+    (item): item is StructuredPromptItem =>
+      (item.body.kind === 'approval' || item.body.kind === 'question') &&
+      item.body.resolution.state === 'pending' &&
+      isActionableStructuredAgentSessionPrompt(item.itemId, actionablePromptIds)
+  )
 }

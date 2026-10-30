@@ -1,7 +1,10 @@
 import { useMemo, useState } from 'react'
-import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { Pressable, Text, View } from 'react-native'
 import { Code, Eye } from 'lucide-react-native'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { colors, spacing, typography } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { htmlPreviewWithInertLinks } from './html-preview-inert-links'
 import { useHtmlPreviewLinkGrant } from './use-html-preview-link-grant'
 
@@ -23,6 +26,8 @@ export const MOBILE_HTML_PREVIEW_SEALED_SANDBOX = ''
 // Inherited img/font/connect/script policies still constrain artifact; https images can report view through fixed author URL, but scripts cannot add dynamic data.
 // Shell Referrer-Policy:no-referrer is required: WebKit ignores iframe referrerPolicy for srcdoc images, unlike Chromium.
 export function MobileHtmlPreview({ html, renderSource }: MobileHtmlPreviewProps) {
+  const t = useMobileTranslation()
+  useMobileColorScheme()
   const [mode, setMode] = useState<'preview' | 'source'>('preview')
   // Read immutable session grants once after init, before page mounts.
   const linksOpen = useHtmlPreviewLinkGrant()
@@ -43,10 +48,13 @@ export function MobileHtmlPreview({ html, renderSource }: MobileHtmlPreviewProps
           // Set both native accessibilityState and web aria-selected: RN Web drops former without emitting latter.
           accessibilityState={{ selected: mode === 'preview' }}
           aria-selected={mode === 'preview'}
-          accessibilityLabel="Preview rendered HTML"
+          accessibilityLabel={t(
+            'components.htmlPreview.previewRenderedHtml',
+            'Preview rendered HTML'
+          )}
         >
           <Eye size={13} color={colors.textSecondary} strokeWidth={2.2} />
-          <Text style={styles.toggleText}>Preview</Text>
+          <Text style={styles.toggleText}>{t('components.htmlPreview.preview', 'Preview')}</Text>
         </Pressable>
         <Pressable
           style={[styles.toggle, mode === 'source' && styles.toggleActive]}
@@ -54,10 +62,10 @@ export function MobileHtmlPreview({ html, renderSource }: MobileHtmlPreviewProps
           accessibilityRole="tab"
           accessibilityState={{ selected: mode === 'source' }}
           aria-selected={mode === 'source'}
-          accessibilityLabel="View HTML source"
+          accessibilityLabel={t('components.htmlPreview.viewHtmlSource', 'View HTML source')}
         >
           <Code size={13} color={colors.textSecondary} strokeWidth={2.2} />
-          <Text style={styles.toggleText}>Source</Text>
+          <Text style={styles.toggleText}>{t('components.htmlPreview.source', 'Source')}</Text>
         </Pressable>
       </View>
       {/* Show author’s original source; inert-link rewrite is only this shell’s rendering policy. */}
@@ -68,10 +76,12 @@ export function MobileHtmlPreview({ html, renderSource }: MobileHtmlPreviewProps
 
 // Use DOM iframe: RN has no primitive. Set srcdoc attribute to parse untrusted content only inside sealed frame.
 function PreviewFrame({ html, linksOpen }: { html: string; linksOpen: boolean }) {
+  const t = useMobileTranslation()
+  useMobileColorScheme()
   return (
     <View style={styles.frame}>
       <iframe
-        title="HTML preview"
+        title={t('components.htmlPreview.title', 'HTML preview')}
         sandbox={linksOpen ? MOBILE_HTML_PREVIEW_SANDBOX : MOBILE_HTML_PREVIEW_SEALED_SANDBOX}
         srcDoc={html}
         style={IFRAME_STYLE}
@@ -91,7 +101,7 @@ const IFRAME_STYLE = {
   backgroundColor: '#ffffff'
 } as const
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   container: { flex: 1 },
   toolbar: {
     flexDirection: 'row',
@@ -117,4 +127,4 @@ const styles = StyleSheet.create({
   },
   toggleText: { color: colors.textSecondary, fontSize: typography.metaSize },
   frame: { flex: 1, backgroundColor: '#ffffff' }
-})
+}))

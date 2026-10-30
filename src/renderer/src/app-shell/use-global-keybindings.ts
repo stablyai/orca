@@ -2,17 +2,14 @@ import { useEffect, useLayoutEffect, useRef } from 'react'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { canShowRightSidebarForView } from '@/lib/right-sidebar-visibility'
-import { fileSearchClaimsTextKey } from '../lib/file-search-shortcut-policy'
 import { getSelectedTextForFileSearch } from '../lib/file-search-selection'
 import { registerAppCommandDispatcher } from '@/lib/app-command-dispatch'
 import { executePluginCommand } from '@/lib/plugin-command-execution'
-import { findPluginCommandForKeybinding } from '@/lib/plugin-command-keybindings'
 import {
-  isFloatingWorkspacePanelFocused,
-  isFloatingWorkspaceTerminalInputTarget,
-  matchFloatingWorkspacePanelChord,
-  shouldMinimizeFloatingWorkspacePanelOnCloseShortcut
-} from '@/lib/floating-workspace-terminal-actions'
+  findPluginCommandForKeybinding,
+  globalShortcutTargetYields
+} from '@/lib/plugin-command-keybindings'
+import { shouldMinimizeFloatingWorkspacePanelOnCloseShortcut } from '@/lib/floating-workspace-terminal-actions'
 import { showTerminalShortcutCaptureNotification } from '@/lib/terminal-shortcut-capture-notification'
 import {
   folderRelativePathToIncludeGlob,
@@ -20,12 +17,8 @@ import {
 } from '../components/right-sidebar/file-search-include-pattern'
 import { usePluginCommands } from '@/store/plugin-panels'
 import { useAppStore } from '../store'
-import {
-  keybindingMatchesAction,
-  type KeybindingActionId,
-  type KeybindingMatchOptions
-} from '../../../shared/keybindings'
-import { PLUGIN_COMMAND_ALIAS_ACTION_IDS } from '../../../shared/plugins/plugin-command-actions'
+import { keybindingMatchesAction, type KeybindingActionId } from '../../../shared/keybindings'
+import { PLUGIN_COMMAND_ALIAS_ACTION_IDS } from '../../../shared/plugins/contributions/plugin-command-actions'
 import {
   ModifierDoubleTapDetector,
   toModifierDoubleTapEvent
@@ -41,6 +34,7 @@ import {
 import type { AppChromeLayout } from './use-app-chrome-layout'
 import type { FloatingWorkspacePanelState } from './use-floating-workspace-panel'
 import { addAppKeyListener, removeAppKeyListener } from '@/lib/app-keyboard-router'
+import { isAgentTerminalPreviewTarget } from '../components/dashboard-popout/agent-terminal-preview-target'
 
 /** Register window listeners once; each key event reads the latest committed shortcut state through a ref. */
 export function useGlobalKeybindings(args: {
@@ -53,9 +47,8 @@ export function useGlobalKeybindings(args: {
   const terminalShortcutPolicy = useAppStore((s) => s.settings?.terminalShortcutPolicy)
   const pluginCommands = usePluginCommands()
 
-  const shortcutState: AppShortcutState = {
+  const shortcutState: Omit<AppShortcutState, 'activeWorktreeId'> = {
     activeView: layout.activeView,
-    activeWorktreeId: layout.activeWorktreeId,
     actions,
     creationLayoutActive: layout.creationLayoutActive,
     floatingTerminalEnabled: floatingWorkspace.enabled,
@@ -77,12 +70,17 @@ export function useGlobalKeybindings(args: {
   useEffect(() => {
     const doubleTapDetector = new ModifierDoubleTapDetector()
 
+    // The active worktree is read at dispatch: App deliberately does not re-render on workspace switches.
+    const readShortcutState = (): AppShortcutState => ({
+      ...shortcutStateRef.current,
+      activeWorktreeId: useAppStore.getState().activeWorktreeId
+    })
     const unregisterAppCommandDispatcher = registerAppCommandDispatcher((actionId) =>
-      (createAppCommandHandlers(shortcutStateRef.current).get(actionId) ?? (() => false))()
+      (createAppCommandHandlers(readShortcutState()).get(actionId) ?? (() => false))()
     )
 
     const dispatchShortcutInput = (input: ShortcutDispatchInput): void => {
-      const state = shortcutStateRef.current
+      const state = readShortcutState()
       const {
         activeView,
         activeWorktreeId,
@@ -157,6 +155,7 @@ export function useGlobalKeybindings(args: {
 
       // An empty floating workspace has no tab to close, so Cmd/Ctrl+W hides the overlay before other surfaces act.
       if (
+        !isAgentTerminalPreviewTarget(input.target) &&
         keybindingMatchesAction('tab.close', input, shortcutPlatform, keybindings, {
           context: 'app'
         }) &&
@@ -181,30 +180,13 @@ export function useGlobalKeybindings(args: {
         return
       }
 
-      // Skip editable surfaces so TipTap's Cmd+B bold works; this renderer-side fallback covers the blur→press IPC race (docs/markdown-cmd-b-bold-design.md).
-      if (fileSearchClaimsTextKey(input)) {
+      if (
+        globalShortcutTargetYields(input, shortcutPlatform, keybindings, {
+          context,
+          terminalShortcutPolicy
+        })
+      ) {
         return
-      }
-
-      // Let SSH/tmux control chords reach xterm; its helper textarea is not an ordinary editor.
-      if (isFloatingWorkspaceTerminalInputTarget(input.target)) {
-        return
-      }
-
-      // Suppress only chords the focused floating panel claims; let others fall through.
-      if (isFloatingWorkspacePanelFocused()) {
-        const floatingMatchOptions: KeybindingMatchOptions = { context, terminalShortcutPolicy }
-        if (
-          matchFloatingWorkspacePanelChord(
-            input,
-            shortcutPlatform,
-            null,
-            keybindings,
-            floatingMatchOptions
-          ) !== null
-        ) {
-          return
-        }
       }
 
       // Reviewed plugin chords beat built-in defaults only in app focus; terminal/editor/browser retain their own authority.
@@ -235,6 +217,9 @@ export function useGlobalKeybindings(args: {
         matchShortcut('sidebar.childWorkspaces.toggle') &&
         handlers.get('sidebar.childWorkspaces.toggle')?.()
       ) {
+        return
+      }
+      if (matchShortcut('view.plugins') && handlers.get('view.plugins')?.()) {
         return
       }
       for (const actionId of PLUGIN_COMMAND_ALIAS_ACTION_IDS) {

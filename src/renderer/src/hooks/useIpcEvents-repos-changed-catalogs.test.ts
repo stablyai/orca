@@ -35,6 +35,7 @@ describe('runtime host catalog refresh on reposChanged', () => {
         fetchRepos: vi.fn(() => Promise.resolve()),
         fetchRuntimeEnvironmentRepos,
         fetchProjectGroups,
+        fetchHostWorkspaceStatuses: vi.fn(),
         fetchFolderWorkspaces,
         fetchWorktrees: vi.fn(() => Promise.resolve()),
         fetchWorktreeLineage: vi.fn(() => Promise.resolve())
@@ -128,6 +129,7 @@ describe('runtime host catalog refresh on reposChanged', () => {
         fetchRepos: vi.fn(() => Promise.resolve()),
         fetchRuntimeEnvironmentRepos,
         fetchProjectGroups,
+        fetchHostWorkspaceStatuses: vi.fn(),
         fetchFolderWorkspaces,
         fetchWorktrees,
         fetchWorktreeLineage
@@ -193,6 +195,7 @@ describe('repo catalog refresh on repos:changed', () => {
       remountTerminalTabForRecovery,
       fetchRepos,
       fetchProjectGroups,
+      fetchHostWorkspaceStatuses: vi.fn(),
       fetchFolderWorkspaces
     }
 

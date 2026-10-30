@@ -14,11 +14,11 @@ import {
   getStageAllPaths,
   getUnstageAllPaths,
   isStageableStatusEntry
-} from './discard-all-sequence'
+} from '../../../../../../shared/source-control-discard-all-sequence'
 import type {
   SourceControlDisplaySectionId,
   SourceControlEntryGroups
-} from '../listing/section-order'
+} from '../../../../../../shared/source-control-section-order'
 import type { FlatEntry } from '../listing/use-selection'
 import type { GitStageWorktreeScope } from '../../../../../../shared/git-stage-worktree-scope'
 

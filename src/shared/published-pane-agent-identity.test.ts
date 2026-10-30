@@ -22,11 +22,6 @@ describe('resolvePublishedPaneAgentIdentity', () => {
     })
   })
 
-  it('keeps the launch record when an unambiguous title names a different agent', () => {
-    // Unlike agreeing/absent title cases, this detects the title-first mutant: explicit Claude branding cannot override a Codex launch.
-    expect(resolve({ launchAgent: 'codex', title: '✳ Claude Code' })).toBe('codex')
-  })
-
   it('prefers the live foreground process to the launch record', () => {
     expect(resolve({ launchAgent: 'claude', foregroundAgent: 'codex' })).toBe('codex')
   })

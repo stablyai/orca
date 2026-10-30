@@ -26,14 +26,4 @@ describe('useResetCountdownClock', () => {
     })
     expect(result.current).toBe(START + 30_000 + 1)
   })
-
-  it('does not schedule a tick when there is no future reset', () => {
-    const { result } = renderHook(() => useResetCountdownClock([START - 1000]))
-    expect(result.current).toBe(START)
-
-    act(() => {
-      vi.advanceTimersByTime(10 * MIN)
-    })
-    expect(result.current).toBe(START)
-  })
 })

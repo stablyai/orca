@@ -68,14 +68,18 @@ export class StructuredAgentSessionEventRecovery {
       holdUnrunSends: async (sessionId, fence, cause) => {
         const journal = this.context.sessions.get(sessionId)?.journal
         if (journal) {
-          await holdUnsentSends(journal, { fence, hold: { cause }, unrun: true })
+          await holdUnsentSends(journal, {
+            fence,
+            hold: { cause },
+            unrun: (s) => !finalizingStructuredAgentSessionInput(journal, s.clientMessageId)
+          })
         }
       },
       route: {
         runtimeState,
         acknowledgeRelease: (sessionId) => deps.adapter.acknowledgeSessionRelease?.(sessionId)
       },
-      abortOpen: (sessionId) => runtimeState.acquireAborts.abortOpen(sessionId)
+      abortBound: (sessionId) => runtimeState.acquireAborts.abortBound(sessionId)
     }
   }
 
@@ -97,19 +101,32 @@ export class StructuredAgentSessionEventRecovery {
       .serialize(sessionId, async () => {
         const stop =
           this.context.deps.adapter.forceCloseSession ?? this.context.deps.adapter.closeSession
-        if (
-          this.context.sessions.get(sessionId)?.child !== child ||
-          !stop ||
-          !(await stopAgentSessionProviderRoot(() => stop(sessionId)))
-        ) {
+        const session = this.context.sessions.get(sessionId)
+        if (!session || session.child !== child) {
+          return
+        }
+        const failure = agentSessionFailureFact('hostFault')
+        const reason = `journal sink failure: ${error instanceof Error ? error.message : String(error)}`
+        child.close = {
+          ...(child.close ?? {
+            cause: 'host-stop',
+            recorded: Promise.resolve(null),
+            requestedAt: session.journal.cursor()
+          }),
+          reason,
+          failure
+        }
+        const stopped = stop && (await stopAgentSessionProviderRoot(() => stop(sessionId)))
+        if (!stopped) {
           return
         }
         // End in this step so later close reports cannot misclassify journal-failure shutdown as quiet rest.
         await this.endExitedChildUnderSerialize(sessionId, child, {
           expected: false,
+          ...(stopped === 'kill-delivered' ? { deathEvidenceKind: stopped } : {}),
           heldSends: heldAtFailure,
-          reason: `journal sink failure: ${error instanceof Error ? error.message : String(error)}`,
-          failure: agentSessionFailureFact('hostFault')
+          reason,
+          failure
         })
       })
       .catch((error: unknown) =>
@@ -133,3 +150,4 @@ export class StructuredAgentSessionEventRecovery {
     await settleStructuredAgentSessionChildExit(this.exitContext, event)
   }
 }
+import { finalizingStructuredAgentSessionInput } from './structured-agent-session-handing-over'

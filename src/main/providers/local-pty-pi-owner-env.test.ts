@@ -75,4 +75,31 @@ describe('independent local terminal Pi ownership', () => {
     }
     expect(env).toMatchObject({ ...terminalEnv, APP_ENV: 'kept' })
   })
+
+  it('tells the daemon-off env builder whether this spawn is a passive restore (#35813)', async () => {
+    const seen: (boolean | undefined)[] = []
+    const getOptions = () => ({
+      buildSpawnEnv: (
+        _id: string,
+        baseEnv: Record<string, string>,
+        ctx?: { wslPassiveRestore?: boolean }
+      ) => {
+        seen.push(ctx?.wslPassiveRestore)
+        return baseEnv
+      }
+    })
+    await buildLocalPtySpawnEnvironment({
+      id: 'restored',
+      spawn: { cols: 80, rows: 24, wslPassiveRestore: true },
+      getOptions,
+      plan
+    })
+    await buildLocalPtySpawnEnvironment({
+      id: 'new',
+      spawn: { cols: 80, rows: 24 },
+      getOptions,
+      plan
+    })
+    expect(seen).toEqual([true, false])
+  })
 })

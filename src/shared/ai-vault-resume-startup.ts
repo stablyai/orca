@@ -31,6 +31,7 @@ import { assertOpenCodeCopyUsesLocalStore } from './opencode-launch-command'
 import { CLI_CONVERSATION_ADOPTING_AGENTS } from './structured-agent-cli-conversation-adoption'
 import type { GlobalSettings } from './global-settings-types'
 import { parseWslUncPath } from './wsl-paths'
+import { managedDataAccountResumeEnv } from './managed-data-account-resume'
 
 export type AiVaultResumeCommandSession = Pick<
   AiVaultSession,
@@ -56,6 +57,8 @@ export type AiVaultResumeLaunchSettings = Partial<Pick<GlobalSettings, 'agentCmd
 /** The platform and live shell a resume line is written for, and the Codex home it pins. */
 export type AiVaultResumeHostShell = {
   platform: NodeJS.Platform
+  /** OS that runs the agent when `platform` is only a quoting guess; null when unreported, absent when `platform`. */
+  agentHostPlatform?: NodeJS.Platform | null
   codexHome: string | null
   liveShell: AgentStartupShell | undefined
 }
@@ -133,9 +136,13 @@ export function buildAiVaultLocalResumeStartup(
       providerSession: localProviderSession,
       cmdOverrides: resumeCommandOverrides(args),
       platform,
+      agentHostPlatform: args.host.agentHostPlatform,
       shell: liveShell,
       agentArgs: args.agentArgs ?? resolveTuiAgentLaunchArgs(session.agent, settings),
-      agentEnv: resolveTuiAgentLaunchEnv(session.agent, settings, platform),
+      agentEnv: {
+        ...resolveTuiAgentLaunchEnv(session.agent, settings, platform),
+        ...managedDataAccountResumeEnv(session)
+      },
       resumeInLaunchCwd: true,
       ...(session.agent === 'omp' && resumeFilePath ? { ompResumeFilePath: resumeFilePath } : {})
     })
@@ -208,6 +215,7 @@ export function buildAiVaultForkStartup(
     providerSession,
     cmdOverrides: resumeCommandOverrides(args),
     platform,
+    agentHostPlatform: args.host.agentHostPlatform,
     shell: liveShell,
     agentArgs: resolveTuiAgentLaunchArgs(session.agent, settings),
     agentEnv: resolveTuiAgentLaunchEnv(session.agent, settings, platform),

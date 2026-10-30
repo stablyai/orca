@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 
+import { sourceControlActionRecipeEntry } from '../../../../../shared/source-control-action-selection'
 import type * as LaunchErrors from '@/lib/structured-agent-session-launch-errors'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeMobileSessionTabsResult } from '../../../../../shared/runtime-session-contracts'
@@ -230,9 +231,7 @@ describe('a new start beside an unconfirmed or retried chat', () => {
     const started = await runSourceControlAgentActionStart({
       selectedAgent: 'codex',
       trimmedCommandInput: 'Fix the failing check',
-      agentArgs: '',
-      agentArgsApply: false,
-      commandTemplate: '{basePrompt}',
+      recipe: sourceControlActionRecipeEntry({ commandInputTemplate: '{basePrompt}' }),
       saveTargetValue: 'none',
       actionId: 'resolveComments',
       settings: null,
@@ -342,5 +341,18 @@ describe('a new start beside an unconfirmed or retried chat', () => {
         .sessionId
     ).toBe(unconfirmed.sessionId)
     expect(mocks.createIntent).toHaveBeenCalledOnce()
+  })
+
+  it('never joins a resume of the same conversation id running on another host', async () => {
+    await leaveFirstLaunchUnconfirmed({ resume: true })
+
+    const remote = startStructuredAgentLaunch(WORKTREE_ID, 'codex', {
+      requestId: 'request-9',
+      resumeFrom,
+      executionHostId: 'runtime:server-1'
+    })
+
+    expect(remote.sessionId).not.toBe(unconfirmed.sessionId)
+    expect(mocks.createIntent).toHaveBeenCalledTimes(2)
   })
 })

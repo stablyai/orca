@@ -3,6 +3,8 @@ import { LSOF_NONBLOCKING_ARGS } from '../../shared/lsof-nonblocking-args'
 import { getProcessOutputFields } from '../../shared/process-output-field-scanner'
 import { readWindowsProcessTable } from '../windows/windows-process-table'
 import { runPortScanCommand } from './port-scan-command-client'
+import { parseDarwinNetstatListeners } from './darwin-netstat-listeners'
+import { loadDarwinProcessMetadata } from './darwin-process-metadata'
 import {
   partitionListenersNeedingMetadata,
   recallListenerMetadata,
@@ -96,7 +98,9 @@ export async function scanPlatformListeningPorts(
     rememberListenerMetadata(scan.ports)
     return scan
   }
-  return { ...scan, ports: scan.ports.map(recallListenerMetadata) }
+  return process.platform === 'darwin'
+    ? scan
+    : { ...scan, ports: scan.ports.map(recallListenerMetadata) }
 }
 
 async function dispatchPlatformListeningPortScan(
@@ -117,28 +121,45 @@ async function dispatchPlatformListeningPortScan(
 async function scanDarwinLsofPorts(
   options: WorkspacePortScanOptions
 ): Promise<PlatformListeningPortScan> {
-  const { stdout, spawnMs } = await runPortScanCommand('lsof', [
-    ...LSOF_NONBLOCKING_ARGS,
-    '-nP',
-    '-iTCP',
-    '-sTCP:LISTEN',
-    '-F',
-    // Socket identity distinguishes PID reuse on the same port for metadata caching.
-    'pcnd'
-  ])
-  const ports = parseLsofListeningOutput(stdout)
-  if (shouldSkipMetadataCommands(spawnMs, options)) {
-    return { ports, metadataAvailable: false }
-  }
-  // Reuse unchanged listener metadata to avoid the two expensive follow-up commands.
-  const { hydrated, pidsNeedingMetadata } = partitionListenersNeedingMetadata(ports, options)
-  if (pidsNeedingMetadata.size === 0) {
-    return { ports: hydrated, metadataAvailable: true }
-  }
-  const metadata = await loadDarwinProcessMetadata(pidsNeedingMetadata)
-  return {
-    ports: hydrated.map((port) => ({ ...metadata.get(port.pid ?? -1), ...port })),
-    metadataAvailable: true
+  const listeners = options.requireMetadata
+    ? null
+    : await runPortScanCommand('/usr/sbin/netstat', ['-aln', '-p', 'tcp'], 'listeners').catch(
+        () => null
+      )
+  try {
+    const { stdout, spawnMs } = await runPortScanCommand(
+      '/usr/sbin/lsof',
+      [
+        '-O',
+        ...LSOF_NONBLOCKING_ARGS,
+        '-nP',
+        '-iTCP',
+        '-sTCP:LISTEN',
+        '-F',
+        // Socket identity distinguishes PID reuse on the same port for metadata caching.
+        'pcnd'
+      ],
+      'attribution'
+    )
+    const ports = parseLsofListeningOutput(stdout)
+    if (shouldSkipMetadataCommands(spawnMs, options)) {
+      return { ports: ports.map(recallListenerMetadata), metadataAvailable: false }
+    }
+    // Reuse unchanged listener metadata to avoid the two expensive follow-up commands.
+    const { hydrated, pidsNeedingMetadata } = partitionListenersNeedingMetadata(ports, options)
+    if (pidsNeedingMetadata.size === 0) {
+      return { ports: hydrated, metadataAvailable: true }
+    }
+    const metadata = await loadDarwinProcessMetadata(pidsNeedingMetadata)
+    return {
+      ports: hydrated.map((port) => ({ ...metadata.get(port.pid ?? -1), ...port })),
+      metadataAvailable: true
+    }
+  } catch (error) {
+    if (options.requireMetadata || !listeners) {
+      throw error
+    }
+    return { ports: parseDarwinNetstatListeners(listeners.stdout), metadataAvailable: false }
   }
 }
 
@@ -246,54 +267,6 @@ async function loadLinuxProcessMetadata(pid: number): Promise<ProcessMetadata> {
     commandLine: cmdline?.split('\u0000').join(' ').trim() || undefined,
     cwd
   }
-}
-
-async function loadDarwinProcessMetadata(pids: Set<number>): Promise<Map<number, ProcessMetadata>> {
-  const result = new Map<number, ProcessMetadata>()
-  const pidList = Array.from(pids).join(',')
-  if (!pidList) {
-    return result
-  }
-
-  // The worker dispatches serially; concurrent commands would only queue (#11161).
-  const cwdOutput = await runPortScanCommand('lsof', [
-    ...LSOF_NONBLOCKING_ARGS,
-    '-a',
-    '-p',
-    pidList,
-    '-d',
-    'cwd',
-    '-Fn'
-  ]).catch(() => null)
-  const commandOutput = await runPortScanCommand('ps', [
-    '-p',
-    pidList,
-    '-o',
-    'pid=',
-    '-o',
-    'command='
-  ]).catch(() => null)
-
-  let currentPid: number | null = null
-  for (const line of cwdOutput?.stdout.split('\n') ?? []) {
-    if (line.startsWith('p')) {
-      const pid = Number.parseInt(line.slice(1), 10)
-      currentPid = Number.isFinite(pid) ? pid : null
-    } else if (line.startsWith('n') && currentPid != null) {
-      result.set(currentPid, { ...result.get(currentPid), cwd: line.slice(1) || undefined })
-    }
-  }
-
-  for (const line of commandOutput?.stdout.split('\n') ?? []) {
-    const match = line.match(/^\s*(\d+)\s+(.+)$/)
-    if (!match) {
-      continue
-    }
-    const pid = Number.parseInt(match[1], 10)
-    result.set(pid, { ...result.get(pid), commandLine: match[2].trim() || undefined })
-  }
-
-  return result
 }
 
 async function loadWindowsProcessMetadata(

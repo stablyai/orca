@@ -9,7 +9,7 @@ import { OrcaRuntimeRpcServer } from './runtime-rpc'
 import { DeviceRegistry } from './device-registry'
 import { DEVICE_REGISTRY_FILENAME } from './mobile-pairing-files'
 import { encodePairingOffer, parsePairingCode, type PairingOffer } from '../../shared/pairing'
-import { sendRemoteRuntimeRequest } from '../../shared/remote-runtime-client'
+import { sendRemoteRuntimeRequest } from '../../shared/remote-runtime/remote-runtime-client'
 import {
   DELEGATED_MOBILE_DEVICES_RUNTIME_CAPABILITY,
   DELEGATED_MOBILE_DEVICE_SYNC_METHOD,

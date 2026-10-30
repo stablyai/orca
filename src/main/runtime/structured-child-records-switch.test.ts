@@ -123,7 +123,7 @@ describe('the chat strip and the session list read the same host child records',
       resolveWorkspacePath: async () => root,
       resolveLaunchArgs: () => [],
       resolveClaudeAuthPolicy: () => ({ account: 'managed' }),
-      resolveCodexCommand: () => 'codex',
+      resolveCodexCommand: () => ({ command: 'codex', prefixArgs: [] }),
       resolveEnvironment: async () => ({ PATH: process.env.PATH }),
       ...scriptedCodexTransport(openConnection),
       statusSink

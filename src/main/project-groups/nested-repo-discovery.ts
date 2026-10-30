@@ -1,7 +1,9 @@
-import { readFile, readdir, stat } from 'node:fs/promises'
-import { basename, join } from 'node:path'
+import { lstat, readFile, readdir, realpath, stat } from 'node:fs/promises'
+import { basename, dirname, join, resolve } from 'node:path'
 import type { NestedRepoCandidate, NestedRepoScanResult } from '../../shared/project-group-types'
 import { isGitRepoAsync } from '../git/repo'
+import { awaitWindowsHostGitEnvironmentReady } from '../git/runner'
+import { parseWslUncPath } from '../../shared/wsl-paths'
 import {
   isIgnoredNestedRepoDirectory,
   normalizeNestedRepoScanOptions,
@@ -11,21 +13,90 @@ import {
   type TraversalFolder
 } from './nested-repo-scan-rules'
 
+async function probeGitMarkers(dirPath: string): Promise<{
+  hasGitMarker: boolean
+  possibleGitMarker: boolean
+}> {
+  let possibleGitMarker = false
+  const readMarker = async (name: string) => {
+    const path = join(dirPath, name)
+    try {
+      const entry = await lstat(path)
+      // Entry presence includes broken links and incomplete metadata; Git remains authoritative.
+      possibleGitMarker = true
+      return entry.isSymbolicLink() ? await stat(path).catch(() => null) : entry
+    } catch (error) {
+      if (
+        !error ||
+        typeof error !== 'object' ||
+        !('code' in error) ||
+        (error.code !== 'ENOENT' && error.code !== 'ENOTDIR')
+      ) {
+        possibleGitMarker = true
+      }
+      return null
+    }
+  }
+  const marker = await readMarker('.git')
+  if (marker?.isDirectory() === true || marker?.isFile() === true) {
+    return { hasGitMarker: true, possibleGitMarker: true }
+  }
+  const [head, objects, refs] = await Promise.all(['HEAD', 'objects', 'refs'].map(readMarker))
+  return {
+    hasGitMarker:
+      head?.isFile() === true && objects?.isDirectory() === true && refs?.isDirectory() === true,
+    possibleGitMarker
+  }
+}
+
 async function hasGitMarker(dirPath: string): Promise<boolean> {
+  return (await probeGitMarkers(dirPath)).hasGitMarker
+}
+
+async function mayNeedGitDiscovery(path: string, signal?: AbortSignal): Promise<boolean> {
+  if (signal?.aborted) {
+    return false
+  }
   try {
-    const marker = await stat(join(dirPath, '.git'))
-    if (marker.isDirectory() || marker.isFile()) {
+    if (process.platform === 'win32') {
+      // WSL can discover Git through its shell environment rather than this process's environment.
+      if (parseWslUncPath(path)) {
+        return true
+      }
+      await awaitWindowsHostGitEnvironmentReady({ cwd: path })
+    }
+    if (
+      process.env.GIT_DIR !== undefined ||
+      process.env.GIT_WORK_TREE !== undefined ||
+      process.env.GIT_COMMON_DIR !== undefined ||
+      Object.keys(process.env).some((key) =>
+        (process.platform === 'win32' ? key.toUpperCase() : key).startsWith('GIT_CONFIG')
+      )
+    ) {
       return true
     }
+    const roots = new Set([resolve(path), await realpath(path)])
+    for (const root of roots) {
+      let current = root
+      while (true) {
+        if (signal?.aborted) {
+          return false
+        }
+        const markers = await probeGitMarkers(current)
+        if (markers.possibleGitMarker) {
+          return true
+        }
+        const parent = dirname(current)
+        if (parent === current) {
+          break
+        }
+        current = parent
+      }
+    }
+    return false
   } catch {
-    // Continue to cheap bare-repository marker checks below.
+    return true
   }
-  const [head, objects, refs] = await Promise.all([
-    stat(join(dirPath, 'HEAD')).catch(() => null),
-    stat(join(dirPath, 'objects')).catch(() => null),
-    stat(join(dirPath, 'refs')).catch(() => null)
-  ])
-  return head?.isFile() === true && objects?.isDirectory() === true && refs?.isDirectory() === true
 }
 
 async function readLocalDirectory(dirPath: string): Promise<NestedRepoDirectoryEntry[]> {
@@ -58,7 +129,9 @@ export async function scanNestedRepos(args: {
     basename,
     hasGitMarker,
     isSelectedPathGitRepo: async (path: string) =>
-      (await isGitRepoAsync(path)) || (await hasGitMarker(path))
+      (await mayNeedGitDiscovery(path, args.signal)) &&
+      !args.signal?.aborted &&
+      ((await isGitRepoAsync(path)) || (await hasGitMarker(path)))
   }
   const buildResult = (selectedPathKind: NestedRepoScanResult['selectedPathKind']) => ({
     selectedPath: args.path,

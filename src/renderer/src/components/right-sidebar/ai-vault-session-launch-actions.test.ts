@@ -35,7 +35,7 @@ vi.mock('@/lib/ai-vault-session-resume-preparation', () => ({
   prepareAiVaultSessionForFork: mocks.prepareAiVaultSessionForFork,
   prepareAiVaultSessionForResume: mocks.prepareAiVaultSessionForResume,
   prepareAiVaultSessionForTerminalResume: mocks.prepareAiVaultSessionForTerminalResume,
-  dropDeletedSshResumeCwd: async (session: unknown) => session,
+  dropDeletedRemoteResumeCwd: async (session: unknown) => session,
   aiVaultCliForkHostTooOldMessage: () =>
     'Update Orca on the host that runs this chat to resume it in a new CLI.'
 }))

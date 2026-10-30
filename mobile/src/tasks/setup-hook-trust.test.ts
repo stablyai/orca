@@ -3,7 +3,6 @@ import {
   isSetupHookTrusted,
   normalizeSetupHookTrust,
   persistSetupHookTrustApproval,
-  trustedOrcaHooksWithSetupApproval,
   wasSetupHookPreviouslyApproved
 } from './setup-hook-trust'
 import type { PersistedTrustedOrcaHooks } from '../../../src/shared/orca-yaml-hook-types'
@@ -15,8 +14,8 @@ describe('setup hook trust', () => {
       'repo-1': { setup: { contentHash: 'hash-1', approvedAt: 1000 } }
     }
 
-    expect(isSetupHookTrusted(trust, 'repo-1', 'hash-1')).toBe(true)
-    expect(isSetupHookTrusted(trust, 'repo-1', 'hash-2')).toBe(false)
+    expect(isSetupHookTrusted(trust, [{ id: 'repo-1' }], 'repo-1', 'hash-1')).toBe(true)
+    expect(isSetupHookTrusted(trust, [{ id: 'repo-1' }], 'repo-1', 'hash-2')).toBe(false)
   })
 
   it('treats an always-trusted repo as trusted for changed setup scripts', () => {
@@ -24,53 +23,7 @@ describe('setup hook trust', () => {
       'repo-1': { all: { approvedAt: 1000 } }
     }
 
-    expect(isSetupHookTrusted(trust, 'repo-1', 'new-hash')).toBe(true)
-  })
-
-  it('preserves unrelated trust entries when approving setup', () => {
-    const trust: PersistedTrustedOrcaHooks = {
-      'repo-1': {
-        archive: { contentHash: 'archive-hash', approvedAt: 1000 }
-      }
-    }
-
-    expect(
-      trustedOrcaHooksWithSetupApproval({
-        trust,
-        repoId: 'repo-1',
-        contentHash: 'setup-hash',
-        alwaysTrust: false,
-        approvedAt: 2000
-      })
-    ).toEqual({
-      'repo-1': {
-        archive: { contentHash: 'archive-hash', approvedAt: 1000 },
-        setup: { contentHash: 'setup-hash', approvedAt: 2000 }
-      }
-    })
-  })
-
-  it('records always-trust without dropping existing script approvals', () => {
-    const trust: PersistedTrustedOrcaHooks = {
-      'repo-1': {
-        setup: { contentHash: 'setup-hash', approvedAt: 1000 }
-      }
-    }
-
-    expect(
-      trustedOrcaHooksWithSetupApproval({
-        trust,
-        repoId: 'repo-1',
-        contentHash: 'ignored-for-all',
-        alwaysTrust: true,
-        approvedAt: 2000
-      })
-    ).toEqual({
-      'repo-1': {
-        setup: { contentHash: 'setup-hash', approvedAt: 1000 },
-        all: { approvedAt: 2000 }
-      }
-    })
+    expect(isSetupHookTrusted(trust, [{ id: 'repo-1' }], 'repo-1', 'new-hash')).toBe(true)
   })
 
   it('persists and returns the approved trust state', async () => {
@@ -91,7 +44,7 @@ describe('setup hook trust', () => {
     })
 
     expect(persisted).toEqual({ trustedOrcaHooks: next })
-    expect(isSetupHookTrusted(next, 'repo-1', 'setup-hash')).toBe(true)
+    expect(isSetupHookTrusted(next, [{ id: 'repo-1' }], 'repo-1', 'setup-hash')).toBe(true)
   })
 
   it('detects previous setup approval and ignores incomplete trust payloads', () => {

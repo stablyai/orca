@@ -16,6 +16,7 @@ import type { PtyProcessInfo } from '../../providers/pty-provider-contract'
 import { deterministicAgentSessionUuid } from '../runtime-agent-launch-resolution'
 import { deriveRemoteRuntimeTerminalCreateHandle } from '../remote-runtime-terminal-create-identity'
 import type { RuntimePtyController } from '../runtime-pty-controller-contract'
+import { agentSessionConversationView } from '../../../shared/agent-session-conversation-view'
 import { AgentSessionRecordStore } from '../agent-session-record-store'
 import {
   agentSessionLeaseFixture,
@@ -178,7 +179,7 @@ describe('resumeAgentSessionInWorkspace', () => {
       chat.providerHandleChain[0]!.handle.nativeId = SESSION.id
       let nativeOpen = true
       const store: AgentSessionRecordStore = Object.create(AgentSessionRecordStore.prototype)
-      store.listRecords = () => [chat]
+      store.listConversations = () => [agentSessionConversationView(chat)]
       store.getVisibleSessionTabIndex = () => ({
         present: true,
         sessionIds: nativeOpen ? [chat.sessionId] : []

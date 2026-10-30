@@ -1,7 +1,10 @@
 import { constants, copyFile, lstat, mkdir, readdir, rm, stat, writeFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
 import { throwIfSignalAborted, waitForPromiseWithSignal } from '../../shared/abort-signal-reason'
-import { readAuthorizedDocPreviewFile } from '../../shared/doc-preview-file-access'
+import {
+  readAuthorizedDocPreviewFile,
+  readAuthorizedDocPreviewFileChunk
+} from '../../shared/doc-preview-file-access'
 import { renameLocalPathSerializedByDestination } from '../destination-serialized-local-rename'
 import type { resolveAuthorizedPath as ResolveAuthorizedPath } from '../ipc/filesystem/filesystem-auth'
 import { isENOENT } from '../ipc/filesystem/filesystem-path-containment'
@@ -21,6 +24,7 @@ import type {
   FileWriteResult
 } from '../../shared/file-write-disk-precondition'
 import { writeLocalTextFileWithDiskPrecondition } from '../ipc/filesystem/local-disk-write-precondition'
+import { windowsFsPath } from '../wsl/wsl-unc-drive-fs-path'
 
 export type LocalFilesystemProviderOptions = {
   /** Read lazily so a call that fails earlier never touches the store. */
@@ -30,7 +34,9 @@ export type LocalFilesystemProviderOptions = {
 }
 
 /** Local twins for runtime commands; reads/listing/watching retain call sites with different limits/shapes. */
-export type LocalFilesystemProvider = Required<Pick<IFilesystemProvider, 'listMarkdownDocuments'>> &
+export type LocalFilesystemProvider = Required<
+  Pick<IFilesystemProvider, 'listMarkdownDocuments' | 'readDocPreviewFileChunk'>
+> &
   Pick<
     IFilesystemProvider,
     | 'readDir'
@@ -60,10 +66,14 @@ export function createLocalFilesystemProvider(
   options: LocalFilesystemProviderOptions
 ): LocalFilesystemProvider {
   const { resolveAuthorizedPath } = options
-  const authorize = (path: string) => resolveAuthorizedPath(path, options.requireStore())
+  // Authorized in the caller's spelling; a UNC drive-mount path is opened by its drive path.
+  const authorize = async (path: string) =>
+    windowsFsPath(await resolveAuthorizedPath(path, options.requireStore()))
   // Rename/copy/delete must authorize the symlink itself, preserving its target.
-  const authorizeLink = (path: string) =>
-    resolveAuthorizedPath(path, options.requireStore(), { preserveSymlink: true })
+  const authorizeLink = async (path: string) =>
+    windowsFsPath(
+      await resolveAuthorizedPath(path, options.requireStore(), { preserveSymlink: true })
+    )
   const writeBase64 = async (filePath: string, contentBase64: string, append: boolean) => {
     const content = Buffer.from(contentBase64, 'base64')
     const authorizedPath = await authorize(filePath)
@@ -99,6 +109,7 @@ export function createLocalFilesystemProvider(
       )
     },
     readDocPreviewFile: readAuthorizedDocPreviewFile,
+    readDocPreviewFileChunk: readAuthorizedDocPreviewFileChunk,
     writeFile: async (filePath, content) => {
       await writeTextFile(filePath, content, undefined)
     },

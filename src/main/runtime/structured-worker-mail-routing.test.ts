@@ -1,3 +1,9 @@
+import {
+  agentSessionLeaseFixture,
+  agentSessionRecordFixture
+} from '../../shared/agent-session-record.test-fixture'
+import { agentSessionConversationView } from '../../shared/agent-session-conversation-view'
+import type { AgentSessionLease } from '../../shared/agent-session-record'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const hostRef: { current: unknown } = { current: null }
@@ -21,7 +27,7 @@ const getLivePaneKey = prototype.getLiveTerminalPaneKey
 const resolveActiveTerminal = prototype.resolveActiveTerminal
 
 function installRecord(
-  lease: { runtimeKind: string; claimStatus: string } | null,
+  lease: Pick<AgentSessionLease, 'runtimeKind' | 'claimStatus'> | null,
   tabListed = false
 ): void {
   hostRef.current = lease
@@ -32,10 +38,17 @@ function installRecord(
         }),
         deps: {
           store: {
-            getRecord: () => ({
-              location: { executionHostId: 'local', wslDistro: null },
-              lease: { ...lease, runtimeFence: 1, deathEvidence: null }
-            })
+            getConversation: () =>
+              agentSessionConversationView(
+                agentSessionRecordFixture(
+                  agentSessionLeaseFixture({
+                    ...lease,
+                    sessionId: SESSION_ID,
+                    runtimeFence: 1,
+                    deathEvidence: null
+                  })
+                )
+              )
           }
         },
         hasSession: () => lease.claimStatus === 'live'
@@ -107,7 +120,7 @@ describe('implicit sender resolution refuses to guess', () => {
     return {
       graphStatus: 'ready',
       assertGraphReady: () => {},
-      resolveWorktreeSelector: async () => ({ id: 'wt_1' }),
+      resolveWorkspaceSelector: async () => ({ id: 'wt_1' }),
       tabs: new Map(),
       leaves: new Map(
         leafIds.map((leafId) => [leafId, { tabId: 'tab_1', leafId, worktreeId: 'wt_1' }])
@@ -135,7 +148,7 @@ describe('implicit sender resolution refuses to guess', () => {
     // Keep a focused terminal in the starting graph so only the pre-ready identity guard can refuse this request.
     const preReady = {
       graphStatus: 'starting',
-      resolveWorktreeSelector: async () => ({ id: 'wt_1' }),
+      resolveWorkspaceSelector: async () => ({ id: 'wt_1' }),
       getMobileSessionTabsForWorktree: () => ({
         tabs: [{ type: 'terminal', isActive: true, status: 'ready', terminal: 'term_focused' }]
       }),

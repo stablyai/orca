@@ -31,13 +31,14 @@ import {
   WslHostDeploymentStoreInvalidError,
   type WslHostDeploymentRecord
 } from './wsl-host-deployment-store'
-import { WSL_HOSTS_INTERNAL_GATE_ENV } from './wsl-host-internal-gate'
+import { noteWslHostsServeOnly, WSL_HOSTS_INTERNAL_GATE_ENV } from './wsl-host-internal-gate'
 
 const pairing = {
   v: 2 as const,
   publicKeyB64: Buffer.alloc(32, 1).toString('base64'),
   deviceToken: 'private-device-token'
 }
+const WSL_PAIRING_KEY = Buffer.alloc(32, 2).toString('base64')
 const sshTunnel = {
   sshTargetId: 'target',
   sshTargetGeneration: 3,
@@ -87,7 +88,7 @@ describe('WSL host deployment store', () => {
       // Each pairing key identifies one server; duplicate keys are rejected.
       pairingCode: encodePairingOffer({
         ...pairing,
-        publicKeyB64: Buffer.alloc(32, 2).toString('base64'),
+        publicKeyB64: WSL_PAIRING_KEY,
         endpoint: `ws://127.0.0.1:${record.localPort}/runtime`
       }),
       now: 150
@@ -256,6 +257,18 @@ describe('WSL host deployment store', () => {
       )
     })
 
+    it('fails closed when the file itself is corrupt in serve-only too', () => {
+      vi.stubEnv(WSL_HOSTS_INTERNAL_GATE_ENV, '')
+      noteWslHostsServeOnly(true)
+      try {
+        addSshManaged()
+        writeFileSync(getWslHostDeploymentStorePath(userDataPath), '{"version":1,"deployments":{}}')
+        expect(() => listEnvironments(userDataPath)).toThrow(RuntimeEnvironmentStoreError)
+      } finally {
+        noteWslHostsServeOnly(false)
+      }
+    })
+
     it('keeps every other server listed when the file is corrupt and the gate is closed', () => {
       vi.stubEnv(WSL_HOSTS_INTERNAL_GATE_ENV, '')
       addSshManaged()
@@ -301,6 +314,26 @@ describe('WSL host deployment store', () => {
     const [environment] = listEnvironments(userDataPath)
     expect(environment?.id).toBe(wslId)
     expect(environment?.orcadDeployment).toBeUndefined()
+  })
+
+  it('ignores a record written for another server re-paired under the same id and port', () => {
+    const wslId = addWslManaged(
+      wslRecord({ pairingPublicKeyB64: Buffer.alloc(32, 3).toString('base64') })
+    )
+    const [environment] = listEnvironments(userDataPath)
+    expect(environment?.id).toBe(wslId)
+    expect(environment?.orcadDeployment).toBeUndefined()
+  })
+
+  it('overlays a record bound to the pairing key (keyless records keep port-only binding)', () => {
+    addWslManaged(wslRecord({ pairingPublicKeyB64: WSL_PAIRING_KEY }))
+    expect(listEnvironments(userDataPath)[0]?.orcadDeployment).toEqual({
+      kind: 'wsl',
+      distro: 'Ubuntu-24.04',
+      distroId: '0e3a7f2c-1b4d-4c5e-9f60-7a8b9c0d1e2f',
+      localPort: 42000,
+      remotePort: 6769
+    })
   })
 
   it('ignores a WSL record on a server that already has an SSH deployment', () => {

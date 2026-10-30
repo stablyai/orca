@@ -1,6 +1,7 @@
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import type { SshRemotePtyLease } from '../../../shared/ssh-types'
 import { makePaneKey } from '../../../shared/stable-pane-id'
+import { collectLeafIds } from '../../../shared/terminal-pane-layout-tree'
 import {
   terminalLeafMovePaneKeys,
   type TerminalLeafMoveRequest,
@@ -179,6 +180,12 @@ export function planTerminalLeafMove(
   })
   if (holders.length === 0) {
     return { result: { status: 'not_held' }, sessions: [] }
+  }
+  if (
+    request.keepsSourcePane &&
+    holders.some(({ sourceLayout }) => collectLeafIds(sourceLayout.root).length < 2)
+  ) {
+    return refuse('last_pane')
   }
   const boundPtyIds = new Set(
     holders.flatMap(({ sourceLayout }) => sourceLayout.ptyIdsByLeafId?.[leafId] ?? [])

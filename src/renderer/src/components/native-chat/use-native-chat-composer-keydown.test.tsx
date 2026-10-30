@@ -7,7 +7,7 @@ import {
   applyPickerSuggestion,
   deriveComposerAutocomplete,
   type ComposerAutocomplete
-} from './native-chat-composer-state'
+} from '../../../../shared/native-chat-composer-autocomplete'
 import { getNativeChatAgentProfile } from '../../../../shared/native-chat-agent-profiles'
 import { useNativeChatRecallPosition } from './use-native-chat-composer-recall'
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'

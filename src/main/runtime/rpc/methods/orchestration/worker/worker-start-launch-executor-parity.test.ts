@@ -1,3 +1,7 @@
+import {
+  agentSessionLeaseFixture,
+  agentSessionRecordFixture
+} from '../../../../../../shared/agent-session-record.test-fixture'
 /** Shared-executor starts must preserve durable effects/stage order, ask host support once and fail refused chats. */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -37,7 +41,7 @@ const TERMINAL: AgentLaunchModeReceipt = {
   reason: 'user_default',
   detail: 'Started a terminal agent worker, the default for new agent tabs in your settings.'
 }
-const COORDINATOR = { id: 'wt_coord', repoId: 'repo_1' }
+const CREATION_TARGET = { repoSelector: 'repo_1', parentWorktreeId: 'wt_coord' }
 const EXISTING = { id: 'wt_existing', repoId: 'repo_1' }
 
 function fakes() {
@@ -87,7 +91,7 @@ function place(
       ...(args.terminal ? { terminal: args.terminal } : {})
     }),
     requestedWorktree: args.existing ? 'id:wt_existing' : 'new-child',
-    creationWorktree: args.existing ? undefined : COORDINATOR,
+    creationTarget: args.existing ? undefined : CREATION_TARGET,
     resolvedWorktree: args.existing ? EXISTING : undefined,
     mode: args.mode,
     agent: args.terminal ? undefined : 'claude',
@@ -98,11 +102,14 @@ function place(
 }
 
 function installHost() {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a worker create reads only `subscribe` and the record's location.
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the host supplies subscribe and a complete writable record for the newly minted id.
   setStructuredAgentSessionHost({
     subscribe: () => () => {},
     deps: {
-      store: { getRecord: () => ({ location: { executionHostId: 'local', wslDistro: null } }) }
+      store: {
+        requireWritableRecord: (sessionId: string) =>
+          agentSessionRecordFixture(agentSessionLeaseFixture({ sessionId }))
+      }
     }
   } as never)
 }

@@ -1,3 +1,6 @@
+import { AGENT_SESSION_GOAL_CONTROL_COPY } from '../../shared/agent-session-goal-control-copy'
+import type { StructuredAgentSessionAdapter } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
+import { resolvedCodexGoalSettings } from './codex-structured-message-options'
 import { throwIfSignalAborted } from '../../shared/abort-signal-reason'
 import type { AgentSessionThreadGoalChange } from '../../shared/agent-session-thread-goal-wire'
 import { isCodexAppServerRequestError } from './app-server/codex-app-server-request-error'
@@ -61,4 +64,63 @@ export async function changeCodexThreadGoal(
     throw error
   }
   return { ok: true }
+}
+
+export async function changeCodexThreadGoalWithSettings(
+  session: CodexSession,
+  input: Parameters<NonNullable<StructuredAgentSessionAdapter['changeThreadGoal']>>[0],
+  timeoutMs: number | undefined,
+  current: () => boolean
+): Promise<{ ok: true } | { ok: false; rejected: string }> {
+  const generation = session.acquisitionGeneration
+  const startsWork =
+    input.change.kind === 'set' ||
+    (input.change.kind === 'status' && input.change.status === 'active')
+  try {
+    if (startsWork) {
+      const requested = resolvedCodexGoalSettings(session, input.executionOptions)
+      const previousApplied = session.appliedTurnOptions
+      const installed = await session.appliedSettings?.install(
+        session.connection,
+        session.threadId,
+        requested,
+        timeoutMs,
+        input.signal,
+        () => {
+          session.appliedTurnOptions = { ...session.appliedTurnOptions, ...requested }
+        },
+        () => {
+          session.appliedTurnOptions = previousApplied
+        },
+        () => {
+          const known = { ...previousApplied }
+          for (const key of ['model', 'effort'] as const) {
+            if (requested[key] !== undefined && requested[key] !== known[key]) {
+              delete known[key]
+            }
+          }
+          session.appliedTurnOptions = known
+        }
+      )
+      if (installed && !installed.ok) {
+        return installed
+      }
+    }
+    throwIfSignalAborted(input.signal)
+    if (
+      !current() ||
+      session.ended ||
+      session.fence !== input.fence ||
+      session.acquisitionGeneration !== generation
+    ) {
+      throw new Error('codex goal acquisition ended')
+    }
+  } catch (error) {
+    if (!startsWork) {
+      throw error
+    }
+    // No goal write has been issued, even if the preceding settings write is uncertain.
+    return { ok: false, rejected: AGENT_SESSION_GOAL_CONTROL_COPY.settingsUnconfirmed }
+  }
+  return changeCodexThreadGoal(session, input.change, input.replacesGoal, timeoutMs, input.signal)
 }

@@ -1,7 +1,8 @@
 import type * as pty from 'node-pty'
 import type { PhysicalExitTracker } from '../../shared/physical-exit-tracker'
 import type { PtyStartupIngress } from '../../shared/pty-startup-ingress'
-import type { TerminalExitCause } from '../../shared/terminal-exit-cause'
+import type { IPtyProvider } from './pty-provider-contract'
+import type { PtyDataEvent } from './pty-provider-events'
 import { getSpawnedShellName, normalizeLocalCallerSessionId } from './local-pty-launch-helpers'
 
 export type PtyShutdownOperation = {
@@ -15,20 +16,9 @@ export type PendingLocalPtySpawn = {
   cancellation: AbortController
 }
 
-export type DataCallback = (payload: {
-  id: string
-  data: string
-  sequenceChars?: number
-  transformed?: boolean
-  seq?: number
-}) => void
+export type DataCallback = (payload: PtyDataEvent) => void
 
-export type ExitCallback = (payload: {
-  id: string
-  code: number
-  incarnationId?: string
-  cause?: TerminalExitCause
-}) => void
+export type ExitCallback = Parameters<IPtyProvider['onExit']>[0]
 
 let ptyCounter = 0
 export const ptyProcesses = new Map<string, pty.IPty>()

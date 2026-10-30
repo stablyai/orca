@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type JSX } from 'react'
 import { toast } from 'sonner'
 import { getDefaultVoiceSettings } from '../../../../shared/constants'
-import { isInNativeChatUpgradeTipAudience } from '../../../../shared/native-chat-upgrade-tip-audience'
+import { isInNativeChatUpgradeTipAudience } from '../../../../shared/native-chat/native-chat-upgrade-tip-audience'
 import {
   ORCHESTRATION_ENABLED_STORAGE_KEY,
   ORCHESTRATION_SETUP_DISMISSED_STORAGE_KEY,
@@ -242,7 +242,13 @@ export default function FeatureTipsModal(): JSX.Element | null {
           closeModal()
           openCliSettings()
         } catch (error) {
-          const message = error instanceof Error ? error.message : 'Failed to install Orca CLI.'
+          const message =
+            error instanceof Error
+              ? error.message
+              : translate(
+                  'auto.components.feature.tips.FeatureTipsModal.cliInstallFailed',
+                  'Failed to install Orca CLI.'
+                )
           if (
             import.meta.env.DEV &&
             message.includes('Development mode uses a generated launcher for validation only')

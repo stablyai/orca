@@ -126,3 +126,29 @@ describe('non-mac Ctrl+Left/Right word-nav', () => {
     ).toBeNull()
   })
 })
+
+describe('Alt+Left/Right on a local Windows ConPTY pane (#29177)', () => {
+  const resolveOnWindows = (key: string, localConpty: boolean) =>
+    resolveTerminalShortcutAction(
+      event({ key, code: key, altKey: true }),
+      false,
+      undefined,
+      undefined,
+      true,
+      undefined,
+      () => localConpty
+    )
+
+  // ConPTY parses \eb/\ef into Alt+B/F key records, which Codex only treats as agent
+  // switching on macOS and PSReadLine doesn't treat as Alt+←/→. Deferring lets xterm send
+  // \e[1;3D/C, the form Windows Terminal sends and Git for Windows' inputrc binds to word-nav.
+  it('defers to xterm so the pane receives the native Alt+arrow encoding', () => {
+    expect(resolveOnWindows('ArrowLeft', true)).toBeNull()
+    expect(resolveOnWindows('ArrowRight', true)).toBeNull()
+  })
+
+  it('still translates to readline word-nav on SSH/WSL panes', () => {
+    expect(resolveOnWindows('ArrowLeft', false)).toEqual({ type: 'sendInput', data: '\x1bb' })
+    expect(resolveOnWindows('ArrowRight', false)).toEqual({ type: 'sendInput', data: '\x1bf' })
+  })
+})

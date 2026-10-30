@@ -69,7 +69,9 @@ describe('source-control reply schemas', () => {
       'oldPath',
       'path',
       'removed',
-      'status'
+      'status',
+      'submodule',
+      'submoduleRoot'
     ])
   })
 
@@ -179,7 +181,7 @@ describe('an enum arm this build does not know', () => {
     expect(entries).toHaveLength(1)
     expect(entries[0]?.area).toBeUndefined()
     expect(entries.some((entry) => entry.conflictStatus === 'unresolved')).toBe(true)
-    expect(buildMobileSourceControlSections(entries)).toHaveLength(0)
+    expect(buildMobileSourceControlSections(entries, 'changes-first')).toHaveLength(0)
     expect(isMobileGitStageableEntry(entries[0] ?? STATUS_ENTRY)).toBe(false)
     expect(countStagedEntries(entries)).toBe(0)
     expect(countUnstagedEntries(entries)).toBe(0)

@@ -50,14 +50,12 @@ export type StructuredAgentSessionSinkBarrier = { ok: true } | { ok: false; erro
 /** Omitted producer linkage means session/root agent. */
 export type StructuredAgentSessionAppendOptions = AgentJournalProducerLinkage & {
   lifecycle?: boolean
-  /** Root control events remain ordered even when ordinary input is paused. */
-  criticalRoot?: true
   observedAt?: number
 }
 
 export type StructuredAgentSessionPublishOptions = Pick<
   StructuredAgentSessionAppendOptions,
-  'lifecycle' | 'criticalRoot'
+  'lifecycle'
 > & {
   coalescingKey?: string
 }
@@ -154,7 +152,7 @@ export type StructuredAgentSessionEventTarget = {
 
 export type DeferredStructuredAgentSessionEventSink = {
   sink: StructuredAgentSessionEventSink
-  exitObservation(): Pick<StructuredAgentSessionExitObservation, 'heldSends' | 'observedAt'>
+  exitObservation(): Omit<StructuredAgentSessionExitObservation, 'record'>
   bind(target: StructuredAgentSessionEventTarget): void
   unbind(): void
   close(): void
@@ -200,6 +198,7 @@ export function createDeferredStructuredAgentSessionEventSink(deps: {
   onBackpressureChange?: (backpressured: boolean, state: StructuredAgentSessionSinkState) => void
 }): DeferredStructuredAgentSessionEventSink {
   const exit = new StructuredAgentSessionExitObservation()
+  const watermarks = { ...DEFAULT_WATERMARKS, ...deps.watermarks }
   const failed = (error: unknown): void => {
     deps.logger.error('writing provider events to the chat journal failed', {
       scope: 'journal-event-sink',
@@ -209,7 +208,7 @@ export function createDeferredStructuredAgentSessionEventSink(deps: {
     deps.onFailed?.(error)
   }
   const queue = new StructuredAgentSessionSinkQueue({
-    watermarks: { ...DEFAULT_WATERMARKS, ...deps.watermarks },
+    watermarks,
     onFailed: failed,
     ...(deps.readingControl ? { readingControl: deps.readingControl } : {}),
     ...(deps.onBackpressureChange ? { onBackpressureChange: deps.onBackpressureChange } : {})

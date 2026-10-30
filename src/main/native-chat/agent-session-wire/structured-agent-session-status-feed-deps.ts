@@ -1,4 +1,4 @@
-import type { AgentSessionRecord } from '../../../shared/agent-session-record'
+import type { AgentSessionConversationView } from '../../../shared/agent-session-conversation-view'
 import type {
   AgentSessionStatusEvent,
   AgentSessionStatusSummary
@@ -17,7 +17,10 @@ import { structuredSummaryConversationNaming } from './structured-agent-session-
 
 export type StatusFeedSession = {
   journal: AgentSessionJournal
-  params: { location: AgentSessionRecord['location']; provider: AgentSessionRecord['provider'] }
+  params: {
+    location: AgentSessionConversationView['location']
+    provider: AgentSessionConversationView['provider']
+  }
   child?: Pick<StructuredAgentSessionProviderChild, 'phase' | 'generation' | 'fence'> | null
   lastEndedChild?: Pick<StructuredAgentSessionEndedChild, 'fence' | 'rootGone'>
   operationalRevision?: number
@@ -27,8 +30,8 @@ export type StatusFeedSession = {
 export type StructuredAgentSessionStatusFeedDeps = {
   sessions: ReadonlyMap<string, StatusFeedSession>
   starting?: (sessionId: string) => boolean
-  getRecord: (sessionId: string) => AgentSessionRecord | null
-  listRecords?: () => AgentSessionRecord[]
+  getConversation: (sessionId: string) => AgentSessionConversationView | null
+  listConversations?: () => AgentSessionConversationView[]
   /** Absent means no replaced runtime. */
   replacedRuntime?: (sessionId: string) => { fence: number } | undefined
   now: () => number
@@ -39,6 +42,7 @@ export type StructuredAgentSessionStatusFeedDeps = {
     summary: AgentSessionStatusSummary,
     options: StructuredAgentSessionStatusObserverOptions
   ) => void
+  onPublished?: (summary: AgentSessionStatusSummary) => void
   /** Resolve after host field initialization; read child records from the sink holding their parent row. */
   statusSink?: () => StructuredAgentSessionStatusSink | undefined
   /** Republish changed child records; producer identifies their write path. */
@@ -66,8 +70,9 @@ export function structuredAgentSessionNamingSnapshot(
   deps: StructuredAgentSessionStatusFeedDeps,
   sessionId?: string
 ): AgentSessionStatusEvent {
-  const record = sessionId === undefined ? null : deps.getRecord(sessionId)
-  const records = sessionId === undefined ? (deps.listRecords?.() ?? []) : record ? [record] : []
+  const record = sessionId === undefined ? null : deps.getConversation(sessionId)
+  const records =
+    sessionId === undefined ? (deps.listConversations?.() ?? []) : record ? [record] : []
   const conversationNames = records.map((entry) => ({
     sessionId: entry.sessionId,
     conversationName: entry.conversationName ?? null,
@@ -100,6 +105,21 @@ export function notifyStructuredStatusObservers(
   } catch (error) {
     deps.logger.warn('status observer failed', {
       scope: 'status-observer',
+      sessionId: summary.sessionId,
+      error
+    })
+  }
+}
+
+export function notifyStructuredStatusPublication(
+  deps: StructuredAgentSessionStatusFeedDeps,
+  summary: AgentSessionStatusSummary
+): void {
+  try {
+    deps.onPublished?.(summary)
+  } catch (error) {
+    deps.logger.warn('saving chat status failed', {
+      scope: 'saved-status',
       sessionId: summary.sessionId,
       error
     })

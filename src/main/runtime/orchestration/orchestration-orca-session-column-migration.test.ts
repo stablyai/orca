@@ -13,6 +13,7 @@ import { SCHEMA_VERSION } from './db/contract-constants'
 import { formatOrcaSessionAddress } from '../../../shared/orca-session-address'
 import { testOrcaSessionId } from '../../../shared/orca-session-address-test-fixture'
 import { RUN_PANE_KEY_MATCH_SUFFIX_SQL } from './db/pane-key-match'
+import { DROP_REMOVED_WORK_TRIGGERS_SQL } from './db/reset/removed-orchestration-work-store'
 import {
   currentRunCoordinatorOrcaSessionId,
   currentRunCoordinatorOrcaSessionIdSql
@@ -133,7 +134,9 @@ function seedStructuredAndPtyRows(db: OrchestrationDb): SeededRows {
 function stripOrcaSessionSchema(path: string, version: number): void {
   const raw = new Database(path)
   raw.exec(`
+    ${DROP_REMOVED_WORK_TRIGGERS_SQL}
     DROP INDEX idx_runs_coordinator_orca_session_id;
+    DROP INDEX IF EXISTS idx_dispatch_session_presentation;
     DROP INDEX idx_dispatch_assignee_orca_session_id;
     DROP TRIGGER trg_runs_remember_coordinator_insert;
     DROP TRIGGER trg_runs_remember_coordinator_update;

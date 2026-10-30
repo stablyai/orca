@@ -2,7 +2,10 @@
 // Attribute only runtimes this host replaced; terminal claims and unknown owners provide no such evidence.
 
 import type { AgentSessionOrcaStopCause } from '../../../shared/agent-session-orca-stop'
-import type { AgentSessionStoreState } from '../agent-session-store-state'
+import {
+  listAgentSessionConversations,
+  type AgentSessionStoreState
+} from '../agent-session-store-state'
 
 export type AgentSessionReplacedRuntime = {
   /** The highest fence a replaced runtime granted; every lower fence was granted before it. */
@@ -18,7 +21,9 @@ export function agentSessionReplacedRuntimes(
   args: { hostId: string; incarnation: string }
 ): ReadonlyMap<string, AgentSessionReplacedRuntime> {
   const replaced = new Map<string, AgentSessionReplacedRuntime>()
-  for (const [sessionId, { lease }] of state.records) {
+  for (const { sessionId, ownerObservation: lease, currentFence } of listAgentSessionConversations(
+    state
+  )) {
     const owner = lease.ownerProcess
     // Exclude terminal claims, other hosts and this process's reinstalled runtime, which may still own a live transport.
     if (
@@ -29,7 +34,7 @@ export function agentSessionReplacedRuntimes(
     }
     const runtimeEnd = owner?.runtime ? state.runtimeEnds?.get(owner.runtime) : undefined
     replaced.set(sessionId, {
-      fence: lease.runtimeFence,
+      fence: currentFence,
       ...(owner ? { lastProvenAliveAt: lease.lastRenewedAt } : {}),
       ...(runtimeEnd ? { runtimeEnd } : {})
     })

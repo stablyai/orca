@@ -92,11 +92,15 @@ function updatePassthrough(
     : { ...config, terminal: { ...terminal, client_env_passthrough: next } }
 }
 
-export function installOrcaStatusConfig(config: HermesConfig): HermesConfig {
-  return updatePassthrough(enablePlugin(config), (names) => [
+function addOrcaPassthrough(config: HermesConfig): HermesConfig {
+  return updatePassthrough(config, (names) => [
     ...names,
     ...HERMES_CLIENT_ENV_PASSTHROUGH.filter((name) => !names.includes(name))
   ])
+}
+
+export function installOrcaStatusConfig(config: HermesConfig): HermesConfig {
+  return addOrcaPassthrough(enablePlugin(config))
 }
 
 export function removeOrcaStatusConfig(config: HermesConfig): HermesConfig {
@@ -159,4 +163,16 @@ export function getConfigEnablement(config: HermesConfig): {
     disabled: disabled.includes(HERMES_PLUGIN_NAME),
     detail: null
   }
+}
+
+/** A named profile's passthrough, refreshed only while the user keeps orca-status enabled there; null skips the profile. */
+export function refreshProfileOrcaStatusContent(content: string | null): {
+  content: string | null
+} {
+  const parsed = parseHermesConfig(content)
+  if (!parsed.ok) {
+    return { content: null }
+  }
+  const { enabled, disabled } = getConfigEnablement(parsed.config)
+  return enabled && !disabled ? updateConfigContent(content, addOrcaPassthrough) : { content: null }
 }

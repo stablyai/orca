@@ -25,6 +25,7 @@ export function appendPendingNativeChatImages(
 }
 
 export type UploadNativeChatImagesDeps = {
+  readonly canContinue?: () => boolean
   readonly client: MobileClipboardImageRpcSender
   readonly getConnectionId: () => Promise<string | null>
   readonly pickImages: (
@@ -43,6 +44,7 @@ export async function uploadMobileNativeChatImages(
   source: MobileImageSource,
   {
     client,
+    canContinue,
     getConnectionId,
     pickImages,
     onUploadStart,
@@ -52,10 +54,19 @@ export async function uploadMobileNativeChatImages(
   const picked = await pickImages(source)
   const uploaded: Omit<PendingNativeChatImage, 'id'>[] = []
   let connectionId: string | null = null
+  if (canContinue?.() === false) {
+    return uploaded
+  }
   for await (const image of picked) {
+    if (canContinue?.() === false) {
+      break
+    }
     if (uploaded.length === 0) {
       onUploadStart?.()
       connectionId = await getConnectionId()
+    }
+    if (canContinue?.() === false) {
+      break
     }
     const path = await saveMobileClipboardImageAsTempFile(client, image.base64, { connectionId })
     const previewUri = image.uri ?? `data:image/png;base64,${image.base64}`
@@ -65,6 +76,9 @@ export async function uploadMobileNativeChatImages(
     }
     uploaded.push(result)
     onImageUploaded?.(result)
+    if (canContinue?.() === false) {
+      break
+    }
   }
   return uploaded
 }

@@ -1,9 +1,10 @@
 import { app } from 'electron'
 import { quitProcess } from './process-quit-request'
-import { mkdirSync } from 'node:fs'
+import { existsSync, mkdirSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { getVersionManagerBinPaths } from '../codex-cli/command'
+import { isWindowsFnmDefaultAliasDir } from '../../shared/fnm-default-alias-dirs'
 import { getMainE2EConfig } from '../e2e-config'
 import { DISABLED_CHROMIUM_FEATURES } from './disabled-chromium-features'
 import { readHttp1CompatibilityMarker } from './http1-compatibility-marker'
@@ -151,13 +152,25 @@ export function patchPackagedProcessPath(): void {
         join(home, '.nix-profile/bin'),
         // GUI PATH omits agent-specific install directories (#829).
         join(home, '.opencode/bin'),
-        join(home, '.vite-plus/bin')
+        join(home, '.vite-plus/bin'),
+        join(home, '.grok/bin')
       )
+    }
+
+    if (process.platform === 'darwin' && existsSync('/opt/local/bin/port')) {
+      // MacPorts is rare, so gate on default-prefix `port`; last so it only fills gaps, never re-ranks seeded dirs.
+      appendPaths.push('/opt/local/bin', '/opt/local/sbin')
     }
   }
 
   // env-node shebangs require runtime shims; exclude generic user bins so arbitrary wrappers cannot shadow system tools.
-  prependPaths.push(...getVersionManagerBinPaths().filter((path) => !isGenericUserBinDir(path)))
+  for (const path of getVersionManagerBinPaths()) {
+    if (isWindowsFnmDefaultAliasDir(path)) {
+      appendPaths.push(path)
+    } else if (!isGenericUserBinDir(path)) {
+      prependPaths.push(path)
+    }
+  }
 
   const pathKey = process.platform === 'win32' && process.env.Path !== undefined ? 'Path' : 'PATH'
   const currentPath = process.env[pathKey] ?? ''

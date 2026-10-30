@@ -103,12 +103,20 @@ describe('tab agent launch options', () => {
 it('projects the same CLI label, unavailable reason and stable chat ID as static rows', () => {
   const unavailable = buildTabAgentLaunchOptionsFromRows([
     { kind: 'chat-unavailable', agent: 'claude', reason: 'ssh' },
-    { kind: 'cli', agent: 'claude' }
+    { kind: 'cli', agent: 'claude' },
+    { kind: 'cli', agent: 'codex', chat: true }
   ])
   expect(unavailable).toMatchObject([
     { id: 'chat:claude', label: 'Claude', reason: 'No chat over SSH', disabled: true },
-    { id: 'cli:claude', label: 'Claude (CLI)', disabled: false }
+    { id: 'cli:claude', label: 'Claude (CLI)', disabled: false },
+    { id: 'cli:codex', label: 'Codex (CLI)', disabled: false }
   ])
   // Typing the agent's name and pressing Enter launches its CLI, not the disabled chat.
   expect(findMatchingTabAgentLaunchOptions('claude', unavailable)[0]?.id).toBe('cli:claude')
+  expect(
+    findMatchingTabAgentLaunchOptions('codex', unavailable).map((option) => [
+      option.id,
+      option.row?.kind
+    ])
+  ).toEqual([['cli:codex', 'cli']])
 })

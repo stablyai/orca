@@ -7,6 +7,7 @@ import {
 function input(overrides: Partial<HostWorkspaceListStateInput>): HostWorkspaceListStateInput {
   return {
     connState: 'connected',
+    connectionVerdict: { kind: 'normal', label: 'Connected' },
     worktreesLoaded: true,
     displayCount: 0,
     sectionCount: 0,
@@ -53,6 +54,48 @@ describe('selectHostWorkspaceListState', () => {
         input({ connState: 'connecting', worktreesLoaded: false, catalogError: null })
       )
     ).toBe('loading')
+  })
+
+  it('reports an outage instead of spinning once the connection verdict escalates', () => {
+    expect(
+      selectHostWorkspaceListState(
+        input({
+          connState: 'reconnecting',
+          connectionVerdict: { kind: 'warning', label: "Can't connect" },
+          worktreesLoaded: false
+        })
+      )
+    ).toBe('unreachable')
+    expect(
+      selectHostWorkspaceListState(
+        input({
+          connState: 'disconnected',
+          connectionVerdict: { kind: 'normal', label: 'Disconnected' },
+          worktreesLoaded: false
+        })
+      )
+    ).toBe('unreachable')
+  })
+
+  it('keeps spinning through a relay redial and leaves a refused pairing to its banner', () => {
+    expect(
+      selectHostWorkspaceListState(
+        input({
+          connState: 'disconnected',
+          connectionVerdict: { kind: 'normal', label: 'Connecting via Relay…', dialing: true },
+          worktreesLoaded: false
+        })
+      )
+    ).toBe('loading')
+    expect(
+      selectHostWorkspaceListState(
+        input({
+          connState: 'disconnected',
+          connectionVerdict: { kind: 'auth-failed', label: 'Pairing invalid' },
+          worktreesLoaded: false
+        })
+      )
+    ).toBeNull()
   })
 
   it('renders nothing while disconnected with cached rows', () => {

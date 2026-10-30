@@ -26,6 +26,7 @@ import {
   AgentPermissionMenu,
   type AgentPermissionChoiceRow
 } from './AgentPermissionChoiceControls'
+import { openAppHttpLinkFromAnchor } from '@/lib/app-http-link-open'
 
 type AgentAvailability = 'enabled' | 'disabled'
 
@@ -177,7 +178,7 @@ export function AgentCatalogRow({
           </div>
         </div>
 
-        <div className="ml-auto flex shrink-0 items-center gap-1.5">
+        <div className="ml-auto flex max-w-full flex-wrap items-center justify-end gap-1.5">
           {permissionChoice?.source === 'agent' && (
             <div className="mr-3 flex h-7 items-center">
               <button
@@ -200,12 +201,12 @@ export function AgentCatalogRow({
               />
             </div>
           )}
-          <div className="grid grid-cols-[max-content_6.5rem_1.75rem_1.75rem] items-center gap-1.5">
-            <AgentAvailabilityControl
-              label={label}
-              isEnabled={isEnabled}
-              onSetEnabled={onSetEnabled}
-            />
+          <AgentAvailabilityControl
+            label={label}
+            isEnabled={isEnabled}
+            onSetEnabled={onSetEnabled}
+          />
+          <div className="grid grid-cols-[minmax(6.5rem,max-content)_1.75rem_1.75rem] items-center gap-1.5">
             <div className="flex justify-start">
               {isDetected && isEnabled && (
                 <Button
@@ -213,6 +214,7 @@ export function AgentCatalogRow({
                   variant={isDefault ? 'secondary' : 'ghost'}
                   size="xs"
                   onClick={onSetDefault}
+                  aria-pressed={isDefault}
                   title={
                     isDefault
                       ? translate('settings.agents.clearDefault', 'Clear default agent')
@@ -223,16 +225,15 @@ export function AgentCatalogRow({
                   }
                   className="h-7 w-full justify-center gap-1 text-xs"
                 >
-                  {isDefault && <Check className="size-3" />}
-                  {isDefault
-                    ? translate('auto.components.settings.AgentsPane.24e032fa34', 'Default')
-                    : translate('auto.components.settings.AgentsPane.959b67385b', 'Set default')}
+                  <Check className={cn('size-3', !isDefault && 'invisible')} />
+                  {translate('auto.components.settings.AgentsPane.24e032fa34', 'Default')}
                 </Button>
               )}
             </div>
             <a
               href={homepageUrl}
               target="_blank"
+              onClick={openAppHttpLinkFromAnchor}
               rel="noopener noreferrer"
               title={
                 isDetected
@@ -298,17 +299,20 @@ export function AgentCatalogRow({
                   defaultArgs={defaultArgs}
                   argsOverride={argsOverride}
                   onSaveArgs={onSaveArgs}
-                  permissionChip={
+                  choiceChips={
                     permissionChoice?.flag && !permissionChoice.argsSetPermission
-                      ? {
-                          label,
-                          flag: permissionChoice.flag,
-                          removeRecipe: (text) => {
-                            const lifted = liftAgentPermissionArgs(agentId, text)
-                            return lifted.choice !== null ? lifted.args : null
-                          },
-                          onRemove: () => permissionChoice.onSelect('own')
-                        }
+                      ? [
+                          {
+                            key: 'permissionMode',
+                            label,
+                            flag: permissionChoice.flag,
+                            onRemove: (text) => {
+                              const lifted = liftAgentPermissionArgs(agentId, text)
+                              permissionChoice.onSelect('own')
+                              return lifted.choice !== null ? lifted.args : text
+                            }
+                          }
+                        ]
                       : undefined
                   }
                   note={

@@ -103,7 +103,7 @@ describe('a Claude usage limit', () => {
       const limitRow = {
         kind: 'status',
         tone: 'warning',
-        text: 'Claude hit its session limit. Send a message once it resets to continue.',
+        text: 'Claude hit its session limit.',
         failure: {
           kind: 'usageLimitReached',
           usageLimit: { window: 'session', resetsAt: RESETS_AT_S * 1000 },

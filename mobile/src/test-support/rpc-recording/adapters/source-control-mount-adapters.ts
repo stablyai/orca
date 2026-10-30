@@ -65,14 +65,14 @@ export function sourceControlMountAdapters(
       return {
         action(name) {
           if (name === 'read') {
-            return link.fetchWorktreeLinkedPR(client, WORKTREE).then((value) => {
-              linkedPR = value
-              return value
+            return link.fetchWorktreeGitHubPRLink(client, WORKTREE).then((value) => {
+              linkedPR = value.linkedPR
+              return value.linkedPR
             })
           }
           const request =
             name === 'unlink'
-              ? link.unlinkMobilePr(client, WORKTREE)
+              ? link.unlinkMobilePr(client, WORKTREE, 12)
               : name === 'link-review'
                 ? link.linkMobileHostedReview(client, WORKTREE, 'gitlab', 12, {
                     baseRef: ' origin/release '

@@ -1,23 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
   nextSshTargetGeneration,
-  resolveSshTargetGenerationHighWaterMark,
-  sanitizeSshTargetGeneration
+  resolveSshTargetGenerationHighWaterMark
 } from './ssh-target-generation'
-
-describe('sanitizeSshTargetGeneration', () => {
-  it.each([0, -1, 1.5, Number.NaN, Number.POSITIVE_INFINITY, '3', null, undefined, {}])(
-    'rejects %p',
-    (value) => {
-      expect(sanitizeSshTargetGeneration(value)).toBeUndefined()
-    }
-  )
-
-  it('accepts issued generations', () => {
-    expect(sanitizeSshTargetGeneration(1)).toBe(1)
-    expect(sanitizeSshTargetGeneration(42)).toBe(42)
-  })
-})
 
 describe('resolveSshTargetGenerationHighWaterMark', () => {
   it('never reissues a generation an automation already captured', () => {

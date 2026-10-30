@@ -15,17 +15,51 @@ import {
   discoverSkillsOnTarget,
   resolveSkillDiscoveryTarget
 } from '../skills/skill-discovery-target'
+import { unavailableWhileWslDistroStopped } from '../skills/skill-discovery-stopped-wsl-roots'
+import { runAsWslUserAct, wslDistroForPath } from '../wsl/wsl-unc-access-gate'
 import { registerSkillCloudIpcHandlers } from './skill-cloud-ipc-handlers'
 import { handleMainWindowSkillIpc } from './skill-ipc-main-window'
 
 export function registerSkillsHandlers(store: Store, runtime?: OrcaRuntimeService): void {
+  const discoverResolved = async (
+    resolvedTarget: Awaited<ReturnType<typeof resolveSkillDiscoveryTarget>>,
+    refresh: boolean,
+    readStoppedWslRootsFor?: 'all' | readonly string[]
+  ): Promise<SkillDiscoveryResult> =>
+    discoverSkillsOnTarget(resolvedTarget, store.getRepos(), {
+      providerRootOverrides: await runtime?.resolveSkillDiscoveryProviderRoots(resolvedTarget),
+      refresh,
+      ...(readStoppedWslRootsFor ? { readStoppedWslRootsFor } : {})
+    })
+  // Passive UI mounts discovery, so it must not start a stopped WSL distro.
   const discover = async (target?: SkillDiscoveryTarget): Promise<SkillDiscoveryResult> => {
     const parsedTarget = target ? SkillDiscoveryTargetSchema.parse(target) : undefined
+    return unavailableWhileWslDistroStopped(
+      async () =>
+        discoverResolved(
+          await resolveSkillDiscoveryTarget(parsedTarget, { refuseStoppedWslDistro: true }),
+          parsedTarget?.refresh === true
+        ),
+      parsedTarget?.sourceKinds
+    )
+  }
+  // Share is a click on named skills: it may start their distro, as any user act may.
+  const discoverForUserAct = async (
+    target?: SkillDiscoveryTarget,
+    skillDirectories?: readonly string[]
+  ): Promise<SkillDiscoveryResult> => {
+    const parsedTarget = target ? SkillDiscoveryTargetSchema.parse(target) : undefined
     const resolvedTarget = await resolveSkillDiscoveryTarget(parsedTarget)
-    return discoverSkillsOnTarget(resolvedTarget, store.getRepos(), {
-      providerRootOverrides: await runtime?.resolveSkillDiscoveryProviderRoots(resolvedTarget),
-      refresh: parsedTarget?.refresh === true
-    })
+    const distro =
+      resolvedTarget.kind === 'wsl'
+        ? resolvedTarget.distro
+        : resolvedTarget.cwd
+          ? wslDistroForPath(resolvedTarget.cwd)
+          : null
+    return runAsWslUserAct(distro, () =>
+      // Only the chosen skills' roots may start a stopped distro; without folders, any may.
+      discoverResolved(resolvedTarget, parsedTarget?.refresh === true, skillDirectories ?? 'all')
+    )
   }
 
   handleMainWindowSkillIpc(
@@ -36,7 +70,7 @@ export function registerSkillsHandlers(store: Store, runtime?: OrcaRuntimeServic
   if (!runtime) {
     return
   }
-  registerSkillCloudIpcHandlers(runtime, discover)
+  registerSkillCloudIpcHandlers(runtime, discoverForUserAct)
 
   // Local host only; paired hosts plan Orca's skills over RPC.
   handleMainWindowSkillIpc(

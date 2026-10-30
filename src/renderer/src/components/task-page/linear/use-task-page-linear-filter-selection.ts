@@ -6,7 +6,7 @@ import {
   linearIssueAttributeFilterSignature
 } from '../../../../../shared/linear/issue-attribute-filter'
 import { setLinearWorkspaceIssueFilter } from '../../../../../shared/linear/issue-view-resume-state'
-import { LINEAR_ITEM_LIMIT } from '../../task-page-source-context'
+import { LINEAR_ITEM_LIMIT } from '../task-page-source-context'
 import {
   type LinearPrimaryTeamObservation,
   shouldClearTeamDerivedFacets,

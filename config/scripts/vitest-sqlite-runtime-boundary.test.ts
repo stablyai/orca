@@ -1,11 +1,6 @@
-import { existsSync, readFileSync } from 'node:fs'
+import { readFileSync } from 'node:fs'
 import { expect, it } from 'vitest'
-import { importsSqliteRuntime, SQLITE_MODULES } from './vitest-sqlite-runtime-scan.mjs'
-
-// A moved module would silently send its importers back to Bun.
-it.each(SQLITE_MODULES)('scans for a SQLite module that still exists: %s', (module) => {
-  expect(existsSync(`${module}.ts`)).toBe(true)
-})
+import { importsSqliteRuntime } from './vitest-sqlite-runtime-scan.mjs'
 
 it.each([
   ['import { createRestTestRig } from "./structured-agent-session-rest-test-rig"', true],

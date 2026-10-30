@@ -125,6 +125,14 @@ export function resolveRuntimePaneTitleLeafIdFromRoot(
   return leafIds[numericPaneId - FIRST_PANE_ID] ?? null
 }
 
+/** Numeric slots survive pane closes with gaps, so only absent durable leaf ids prove removal. */
+export function isRuntimePaneTitleOrphan(
+  runtimePaneId: string,
+  layoutLeafIds: ReadonlySet<string>
+): boolean {
+  return isTerminalLeafId(runtimePaneId) && !layoutLeafIds.has(runtimePaneId)
+}
+
 /**
  * Resolve a sparse live runtime pane slot through the tab's current PTY bindings.
  * PaneManager ids survive closes with gaps, while the live PTY list retains order.

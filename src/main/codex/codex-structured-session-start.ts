@@ -23,7 +23,11 @@ import {
 } from './codex-structured-session-options'
 import { CodexSkillReport } from './codex-structured-skill-report'
 import { codexAcquireCatalogAccess } from './codex-structured-acquire-catalog'
-import { reportedCodexThreadOptions } from './codex-structured-service-tier'
+import {
+  CODEX_DEFAULT_SERVICE_TIER,
+  reportedCodexThreadOptions
+} from './codex-structured-service-tier'
+import { readCodexConfiguredLaunchDefaults } from './codex-configured-launch-defaults'
 import {
   assertCodexConnectionOpen,
   codexSessionLifecycle,
@@ -106,6 +110,7 @@ export async function openCodexStructuredSession(
   )
   current()
   start.setPrimaryThreadId(opened.threadId)
+  attempt.window.appliedSettings.observe(opened)
   const restored = translator?.restoreThread(opened.threadId, opened.thread ?? {})
   if (restored && !restored.accepted) {
     throw AgentSessionAcquisitionRefusal.historyTooLarge(
@@ -134,6 +139,20 @@ export async function openCodexStructuredSession(
     )
     current()
   }
+  const configured =
+    opened.serviceTier === undefined
+      ? await waitForPromiseWithSignal(
+          readCodexConfiguredLaunchDefaults(connection, deps.requestTimeoutMs, launch.cwd),
+          openInput.signal
+        )
+      : null
+  current()
+  const serviceTier =
+    opened.serviceTier === undefined
+      ? configured
+        ? (configured.serviceTier ?? CODEX_DEFAULT_SERVICE_TIER)
+        : undefined
+      : (opened.serviceTier ?? CODEX_DEFAULT_SERVICE_TIER)
   const catalogAccess = codexAcquireCatalogAccess(deps, launch, sessionId)
   const session: CodexSession = {
     events: input.events,
@@ -142,11 +161,25 @@ export async function openCodexStructuredSession(
     ...codexSessionLifecycle(input.fence, generation),
     threadId: opened.threadId,
     historyMode: opened.historyMode,
+    permissions: {
+      acquiredMode: input.permissionMode ?? 'ask',
+      ...(opened.sandbox ? { acquiredSandbox: opened.sandbox } : {}),
+      launchSandboxIntact: true,
+      cwd: launch.cwd,
+      ...(launch.visuals ? { visualsFolder: launch.visuals.folder } : {})
+    },
     activeTurnIds: new Set(),
     abortedTurnIds: new Set(),
     prompts: attempt.window.prompts,
     options: restoredCodexSessionOptions(input.options),
     reportedOptions: reportedCodexThreadOptions(opened),
+    nativeDefaults: serviceTier ? { serviceTier } : {},
+    appliedTurnOptions: {
+      ...(opened.model ? { model: opened.model } : {}),
+      ...(opened.effort ? { effort: opened.effort } : {}),
+      ...(serviceTier ? { serviceTier } : {})
+    },
+    appliedSettings: attempt.window.appliedSettings,
     ...(catalogAccess ? { catalogAccess } : {}),
     dispatchEchoes: start.dispatchEchoes,
     translator,
@@ -158,9 +191,6 @@ export async function openCodexStructuredSession(
     forceCloseUnexpected: (reason) =>
       start.forceCloseUnexpected(sessionId, input.fence, generation, reason),
     ...(start.unbindReadingControl ? { unbindReadingControl: start.unbindReadingControl } : {})
-  }
-  if (opened.serviceTier) {
-    session.nativeDefaults = { ...session.nativeDefaults, serviceTier: opened.serviceTier }
   }
   current()
   sessions.set(sessionId, session)

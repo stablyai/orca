@@ -7,7 +7,7 @@ import { basename, dirname, join } from 'node:path'
 import {
   NATIVE_CHAT_VISUAL_MAX_BYTES,
   isNativeChatVisualFileName
-} from '../../shared/native-chat-visual-directive'
+} from '../../shared/native-chat/native-chat-visual-directive'
 import type {
   AgentSessionReadVisualResult,
   AgentSessionVisualReadError

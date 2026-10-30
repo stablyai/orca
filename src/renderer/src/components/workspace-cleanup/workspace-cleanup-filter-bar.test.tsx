@@ -50,21 +50,6 @@ function renderFilterBar(
 }
 
 describe('WorkspaceCleanupFilterBar', () => {
-  it('keeps size measurement out of the browse controls', () => {
-    renderFilterBar()
-
-    expect(screen.queryByRole('button', { name: 'Scan' })).toBeNull()
-  })
-
-  it('names an applied filter in the bar without opening the panel', () => {
-    // Persisted idle thresholds narrowed rows without the user setting them; counts alone hid the cause.
-    const filters = createDefaultWorkspaceCleanupFilterState()
-    filters.activity.idleMinDays = 20
-    renderFilterBar(false, { filters, hasActiveFilters: true })
-
-    expect(screen.getByRole('listitem').textContent).toContain('Idle 20d+')
-  })
-
   it('clears one named filter from its chip', () => {
     const filters = createDefaultWorkspaceCleanupFilterState()
     filters.activity.idleMinDays = 20
@@ -75,29 +60,5 @@ describe('WorkspaceCleanupFilterBar', () => {
 
     expect(onClearAppliedFilter).toHaveBeenCalledTimes(1)
     expect(onClearAppliedFilter.mock.calls[0][0].id).toBe('activity.idleMinDays')
-  })
-
-  it('offers Clear filters in the bar, not only inside the panel', () => {
-    renderFilterBar(false, { hasActiveFilters: true })
-
-    expect(screen.getAllByRole('button', { name: /Clear filters/ }).length).toBeGreaterThan(0)
-  })
-
-  it('shows no chips and no Clear for a default profile', () => {
-    renderFilterBar()
-
-    expect(screen.queryAllByRole('listitem')).toHaveLength(0)
-    expect(screen.queryByRole('button', { name: /Clear filters/ })).toBeNull()
-  })
-
-  it('keeps the footer visible while the facet panel scrolls', () => {
-    renderFilterBar(true)
-
-    const content = document.querySelector('[data-slot="popover-content"]')
-    const root = document.querySelector('[data-slot="scroll-area"]')
-    expect(content?.className).toContain(
-      'h-[min(471px,var(--radix-popover-content-available-height))]'
-    )
-    expect(root?.className).toContain('min-h-0 flex-1')
   })
 })

@@ -27,7 +27,7 @@ import {
   structuredAgentSessionRowStateStartedAt
 } from '../../../../shared/structured-agent-session-status-started-at'
 import { agentMainAgentVerdict } from '../../../../shared/agent-main-agent-verdict'
-import type { AgentStatusBatchTransaction } from '@/store/slices/agent-status-contract'
+import type { AgentStatusBatchTransaction } from '@/store/slices/agent-status/agent-status-contract'
 import type { StructuredTab } from './structured-agent-session-tabs'
 
 /** Copy modern child views verbatim; convert legacy host task lists and retain the legacy live-agent roster. */

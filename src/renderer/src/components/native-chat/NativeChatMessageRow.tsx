@@ -10,8 +10,9 @@ import type {
 import { deriveNativeChatRowContent } from '../../../../shared/native-chat-row-content'
 import { NativeChatReasoningRow } from './NativeChatReasoningRow'
 import { NativeChatNoticeRow } from './NativeChatNoticeRow'
-import { nativeChatNoticeBlock } from '../../../../shared/native-chat-notice'
-import { nativeChatBlocksInOwnWords } from './native-chat-stopped-before-start-row'
+import { nativeChatNoticeBlock } from '../../../../shared/native-chat/native-chat-notice'
+import { nativeChatStoppedBeforeStartLabel } from './native-chat-stopped-before-start-row'
+import { nativeChatBlocksInOwnWords } from '../../../../shared/native-chat/native-chat-stopped-before-start'
 import { ProviderFrameRow } from './NativeChatTranscriptChrome'
 import type { NativeChatDiffReveal } from './native-chat-turn-diffs'
 import type {
@@ -24,8 +25,8 @@ import { useNativeChatRowNavigation } from './use-native-chat-row-navigation'
 
 /** Unconfirmed sending status or a failed-delivery notice with an optional dismissal. */
 export type NativeChatDeliveryNotice =
-  | { sending: true; text?: never; onDismiss?: never }
-  | { sending?: never; text: string; onDismiss?: () => void }
+  | { sending: true; text?: never; onDismiss?: never; detail?: never }
+  | { sending?: never; text: string; onDismiss?: () => void; detail?: string }
 
 export type MessageRowProps = {
   message: NativeChatMessage
@@ -83,7 +84,7 @@ export const MessageRow = memo(function MessageRow(
     workRun
   } = props
   const rowRef = useRef<HTMLDivElement | null>(null)
-  const blocks = nativeChatBlocksInOwnWords(message.blocks)
+  const blocks = nativeChatBlocksInOwnWords(message.blocks, nativeChatStoppedBeforeStartLabel())
   // Share content derivation with slot selection so invisible rows cannot reserve transcript gaps.
   const content = deriveNativeChatRowContent(blocks)
   const { markdown, prose } = content

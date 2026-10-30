@@ -9,7 +9,9 @@ type NodeOsModule = typeof NodeOs
 const { existsSyncMock, homedirMock, userInfoMock } = vi.hoisted(() => ({
   existsSyncMock: vi.fn<(path: string) => boolean>(() => true),
   homedirMock: vi.fn<() => string>(() => '/home/env'),
-  userInfoMock: vi.fn<() => { homedir: string }>(() => ({ homedir: '/home/env' }))
+  userInfoMock: vi.fn<() => { homedir: string; username?: string }>(() => ({
+    homedir: '/home/env'
+  }))
 }))
 
 vi.mock('node:fs', () => ({ existsSync: existsSyncMock }))
@@ -21,6 +23,7 @@ vi.mock('node:os', async (importOriginal) => ({
 }))
 
 import {
+  parseSshGOutput,
   siteConfigMayRestrictHostKeys,
   splitIncludeArguments,
   sshGArgsForHost
@@ -75,6 +78,56 @@ describe('sshGArgsForHost', () => {
 })
 
 /** -F excludes user and system config; read site policy separately and fail closed on uncertainty. */
+describe('parseSshGOutput IdentityFile tokens', () => {
+  beforeEach(() => {
+    homedirMock.mockReset().mockReturnValue('/home/env')
+    userInfoMock.mockReset().mockReturnValue({ homedir: '/home/passwd', username: 'alice' })
+  })
+
+  const sshG = (...identityFiles: string[]): string =>
+    [
+      'host work',
+      ...identityFiles.map((file) => `identityfile ${file}`),
+      'user bob',
+      'hostname example.com',
+      'port 2200'
+    ].join('\n')
+
+  it('expands the tokens OpenSSH 10.3 leaves raw in ssh -G output', () => {
+    expect(parseSshGOutput(sshG('%d/keys/%h-%r-%p-%n-%u-%%.pem')).identityFile).toEqual([
+      '/home/passwd/keys/example.com-bob-2200-work-alice-%.pem'
+    ])
+  })
+
+  it('still expands a leading tilde', () => {
+    expect(parseSshGOutput(sshG('~/.ssh/id_work')).identityFile).toEqual([
+      join('/home/env', '.ssh', 'id_work')
+    ])
+  })
+
+  it('expands ${NAME} from the environment, and keeps the path raw when NAME is unset', () => {
+    vi.stubEnv('ORCA_TEST_KEYS', '/srv/keys-%r')
+    try {
+      expect(
+        parseSshGOutput(sshG('${ORCA_TEST_KEYS}/%r', '${ORCA_TEST_UNSET_VAR}/k')).identityFile
+      ).toEqual(['/srv/keys-%r/bob', '${ORCA_TEST_UNSET_VAR}/k'])
+    } finally {
+      vi.unstubAllEnvs()
+    }
+  })
+
+  it('reads `IdentityFile none` as no key, not a missing file', () => {
+    expect(parseSshGOutput(sshG('none')).identityFile).toEqual([])
+  })
+
+  it('keeps a path with a token it cannot resolve unchanged', () => {
+    expect(parseSshGOutput(sshG('%d/%C.pem', '/keys/100%')).identityFile).toEqual([
+      '%d/%C.pem',
+      '/keys/100%'
+    ])
+  })
+})
+
 describe('siteConfigMayRestrictHostKeys', () => {
   let dir: string
 

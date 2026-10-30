@@ -1,3 +1,4 @@
+import { agentSessionConversationView } from '../../shared/agent-session-conversation-view'
 import { prepareAdoptedTranscript } from '../native-chat/agent-session-wire/structured-agent-session-adopted-import'
 import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -106,7 +107,7 @@ describe('structured agent-session create intent', () => {
     const record = agentSessionRecordFixture()
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: early ownership admission only reads the host's record list.
     setStructuredAgentSessionHost({
-      deps: { store: { listRecords: () => [record] } }
+      deps: { store: { listConversations: () => [agentSessionConversationView(record)] } }
     } as unknown as StructuredAgentSessionHost)
     const runtime = new OrcaRuntimeService()
     const support = vi
@@ -139,7 +140,7 @@ describe('structured agent-session create intent', () => {
     const record = agentSessionRecordFixture()
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: early ownership admission only reads the host's record list.
     setStructuredAgentSessionHost({
-      deps: { store: { listRecords: () => [record] } }
+      deps: { store: { listConversations: () => [agentSessionConversationView(record)] } }
     } as unknown as StructuredAgentSessionHost)
     const runtime = new OrcaRuntimeService()
     const writers = vi.spyOn(runtime, 'assertStructuredAdoptionTerminalWritersExited')

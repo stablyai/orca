@@ -8,9 +8,9 @@ import {
   isSafeUnicodeWindowsBatchHookPath,
   MANAGED_HOOK_TIMEOUT_SECONDS,
   removeManagedCommands,
+  withPreviousManagedAsync,
   wrapWindowsPowerShellEncodedCommand,
   type HookCommandConfig,
-  type HookDefinition,
   type HooksConfig
 } from '../agent-hooks/installer-utils'
 import { quotePowerShellLiteral } from '../../shared/powershell-native-argument'
@@ -238,12 +238,10 @@ export function applyManagedHooks(
 
   for (const event of plan.install) {
     const current = nextHooks[event.eventName]
-    const cleaned = Array.isArray(current) ? removeManagedCommands(current, isManagedCommand) : []
-    const definition: HookDefinition = {
-      ...event.definition,
-      hooks: [hookForEvent(event.eventName)]
-    }
-    nextHooks[event.eventName] = [...cleaned, definition]
+    const previous = Array.isArray(current) ? current : []
+    const hook = withPreviousManagedAsync(hookForEvent(event.eventName), previous, isManagedCommand)
+    const cleaned = removeManagedCommands(previous, isManagedCommand)
+    nextHooks[event.eventName] = [...cleaned, { ...event.definition, hooks: [hook] }]
   }
 
   for (const event of plan.retire) {

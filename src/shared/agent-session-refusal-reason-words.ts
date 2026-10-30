@@ -91,7 +91,7 @@ const REASON_WORDS = {
     turnActive: causeWords('turnActive', 'wait', 'waitForTurn'),
     promptPending: causeWords('promptPending', 'actFirst', 'answerFirst'),
     backgroundTasksRunning: causeWords('backgroundTasksRunning', 'wait', 'waitForBackgroundTasks'),
-    messagesUnsettled: causeWords('agentStillWorking', 'wait', 'waitForTurn'),
+    messagesUnsettled: causeWords('messagesUnsettled', 'actFirst', 'settleEarlierMessage'),
     queueTooLarge: causeWords('queueTooLarge', 'actFirst', 'shrinkQueue'),
     // The rewind control words its own refusals; anywhere else says only that it did not happen.
     rewindRefused: codeWords('hostFinding'),
@@ -116,6 +116,8 @@ const REASON_WORDS = {
     claudeAccountSetupFailed: { fact: 'claudeAccountSetupFailed', action: 'retry' },
     agentCommandNotRunnable: { fact: 'agentCommandNotRunnable', action: 'actFirst' },
     runtimeNotInstalled: { fact: 'runtimeNotInstalled', action: 'actFirst' },
+    fullAccessAsRoot: { fact: 'fullAccessAsRoot', action: 'actFirst' },
+    launchPreparationFailed: { fact: 'launchPreparationFailed', action: 'retry' },
     conversationOpenInTerminal: { fact: 'conversationOpenInTerminal', action: 'actFirst' },
     conversationOpenElsewhere: { fact: 'conversationOpenElsewhere', action: 'actFirst' },
     attachFailed: codeWords('retry')

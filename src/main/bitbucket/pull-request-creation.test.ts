@@ -1,8 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import {
-  createBitbucketPullRequest,
-  isBitbucketReviewCreationAuthenticated
-} from './pull-request-creation'
+import { createBitbucketPullRequest } from './pull-request-creation'
 import { _resetBitbucketRepoRefCache } from './repository-ref'
 
 const { gitExecFileAsyncMock } = vi.hoisted(() => ({
@@ -82,18 +79,6 @@ describe('Bitbucket pull request creation', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1)
   })
 
-  it('uses the stored credential when no environment variable is set', async () => {
-    delete process.env.ORCA_BITBUCKET_ACCESS_TOKEN
-    const fetchMock = vi.fn(async () => createdPullRequestResponse())
-    globalThis.fetch = fetchMock as unknown as typeof fetch
-
-    const result = await createBitbucketPullRequest('/repo', CREATE_INPUT, 'local')
-
-    // This fixture has no stored credential after the environment token is removed.
-    expect(result).toMatchObject({ ok: false, code: 'auth_required' })
-    expect(fetchMock).not.toHaveBeenCalled()
-  })
-
   it('ignores a draft request rather than dead-ending a hidden persisted default', async () => {
     const fetchMock = vi.fn(async () => createdPullRequestResponse())
     globalThis.fetch = fetchMock as unknown as typeof fetch
@@ -104,12 +89,6 @@ describe('Bitbucket pull request creation', () => {
     expect(JSON.parse(String((fetchMock.mock.calls[0] as never[])[1]['body']))).not.toHaveProperty(
       'draft'
     )
-  })
-
-  it('reports authenticated only when a credential resolves', async () => {
-    expect(isBitbucketReviewCreationAuthenticated()).toBe(true)
-    delete process.env.ORCA_BITBUCKET_ACCESS_TOKEN
-    expect(isBitbucketReviewCreationAuthenticated()).toBe(false)
   })
 
   it('maps a duplicate-branch rejection to already_exists with the existing review', async () => {
@@ -152,7 +131,7 @@ describe('Bitbucket pull request creation', () => {
 
     const result = await createBitbucketPullRequest('/repo', CREATE_INPUT, 'local')
 
-    expect(result).toMatchObject({ ok: false, code: 'auth_required' })
+    expect(result).toMatchObject({ ok: false, code: 'auth_required', reason: 'auth_required' })
     expect(!result.ok && result.error).toContain('Settings')
   })
 

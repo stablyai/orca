@@ -11,6 +11,7 @@ import {
 import type { Project, ProjectHostSetup } from '../../../shared/project-types'
 import type { Repo } from '../../../shared/repo-types'
 import { resolveComposerRepoId } from './new-workspace-composer-repo'
+import { findSoleHostCopy } from '../../../shared/worktree/host-qualified-identity'
 
 export type WorkspaceCreationTarget = {
   projectId: string
@@ -163,7 +164,15 @@ export function resolveWorkspaceCreationTarget(
   if (projectHostSetupId) {
     const matchingSetups = allSetups.filter((entry) => entry.id === projectHostSetupId)
     const setupHostId = input.projectHostSetupHostId ?? (matchingSetups.length > 1 ? hostId : null)
-    const setup = matchingSetups.find((entry) => !setupHostId || entry.hostId === setupHostId)
+    // Unnamed: only actionable copies compete, so a lone runnable host still resolves.
+    const setup = findSoleHostCopy(
+      setupHostId
+        ? matchingSetups.filter((entry) => entry.hostId === setupHostId)
+        : matchingSetups.filter(
+            (entry) => !actionableHostIds || actionableHostIds.has(entry.hostId)
+          ),
+      (entry) => entry.hostId
+    )
     if (!setup) {
       return { status: 'unavailable', reason: 'setup-not-found' }
     }

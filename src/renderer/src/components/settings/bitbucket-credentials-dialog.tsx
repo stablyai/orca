@@ -18,6 +18,7 @@ import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { cn } from '@/lib/utils'
 import { hasRemoteProviderRuntime } from '@/lib/provider-runtime-context'
 import { preventOutsideDismissWhenDirty } from '@/lib/outside-dismiss-guard'
+import { bitbucketConnectErrorText } from '@/lib/bitbucket-connect-error-copy'
 import { translate } from '@/i18n/i18n'
 
 const API_TOKEN_DOCS_URL = 'https://support.atlassian.com/bitbucket-cloud/docs/using-api-tokens/'
@@ -142,7 +143,7 @@ export function BitbucketCredentialsDialog({
         return
       }
       setConnectState('error')
-      setConnectError(result.error)
+      setConnectError(bitbucketConnectErrorText(result))
     } catch (error) {
       if (mountedRef.current) {
         setConnectState('error')

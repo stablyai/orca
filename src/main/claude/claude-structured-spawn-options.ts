@@ -4,8 +4,9 @@ import type {
   ClaudeStructuredLaunch,
   ClaudeStructuredSdkOptions
 } from './claude-structured-launch-resolution'
-import type { ClaudeSession } from './claude-structured-session-state'
+import type { ClaudeSession } from './structured/claude-structured-session-state'
 import { restoredClaudeStructuredSessionOptions } from './claude-structured-options'
+import type { ClaudeCliFlagFact } from './claude-cli-flag-support'
 
 const EFFORT_LEVELS: ReadonlySet<string> = new Set<EffortLevel>([
   'low',
@@ -35,12 +36,14 @@ export type ClaudeStructuredSpawnOptions = {
   options: Map<string, string>
   /** Saved Fast must be applied before input when launch settings cannot carry it. */
   fastModeAtStart: boolean
-}
+} & Partial<Pick<ClaudeSession, 'cliFlag' | 'flagSettingsControl'>>
 
 /** Pass SDK-valid saved choices through; let the installed CLI reject unsupported values. */
 export function claudeStructuredSpawnOptions(input: {
   launch: Pick<ClaudeStructuredLaunch, 'options' | 'resumesTranscript'>
   saved: Readonly<Record<string, string>> | undefined
+  effortFlag: ClaudeCliFlagFact
+  flagSettingsControl: ClaudeCliFlagFact
 }): ClaudeStructuredSpawnOptions {
   const saved = restoredClaudeStructuredSessionOptions(input.saved)
   const options = new Map<string, string>()
@@ -52,24 +55,24 @@ export function claudeStructuredSpawnOptions(input: {
     sdkOptions = { ...withoutConfiguredFlag(sdkOptions, 'model'), model }
   }
   const effort = saved.get('effort')
-  if (effort !== undefined) {
-    if (isEffortLevel(effort)) {
-      options.set('effort', effort)
-      sdkOptions = { ...withoutConfiguredFlag(sdkOptions, 'effort'), effort }
-    }
+  // Without a proven flag, the first message's control applies saved effort where the CLI has one.
+  if (effort !== undefined && isEffortLevel(effort) && input.effortFlag === 'supported') {
+    options.set('effort', effort)
+    sdkOptions = { ...withoutConfiguredFlag(sdkOptions, 'effort'), effort }
   }
   const fastMode = saved.get('fastMode')
   if (fastMode !== undefined) {
     const decoded = decodeStructuredAgentSessionOptionValue('fastMode', fastMode)
     if (typeof decoded === 'boolean') {
-      options.set('fastMode', fastMode)
       // New sessions may require Fast opt-in before input; explicit --settings must remain intact.
       if (
         (!decoded || input.launch.resumesTranscript) &&
         !Object.hasOwn(sdkOptions.extraArgs ?? {}, 'settings')
       ) {
+        options.set('fastMode', fastMode)
         sdkOptions.settings = { fastMode: decoded }
-      } else {
+      } else if (input.flagSettingsControl !== 'unsupported') {
+        options.set('fastMode', fastMode)
         fastModeAtStart = true
       }
     }
@@ -81,26 +84,26 @@ export function adoptClaudeStructuredSpawnOptions(
   session: Pick<
     ClaudeSession,
     | 'translator'
-    | 'launchedModel'
-    | 'launchPermissionMode'
+    | 'launchIntent'
     | 'fastModeAtStart'
     | 'appliedInputOptions'
+    | 'cliFlag'
+    | 'flagSettingsControl'
   >,
   spawn: ClaudeStructuredSpawnOptions
 ): void {
-  session.launchedModel = spawn.options.get('model') ?? null
-  const configuredModel = spawn.sdkOptions.extraArgs?.model
-  const modelInput = typeof configuredModel === 'string' ? configuredModel : spawn.sdkOptions.model
-  session.launchPermissionMode = Object.hasOwn(
-    spawn.sdkOptions.extraArgs ?? {},
-    'dangerously-skip-permissions'
-  )
-    ? 'bypassPermissions'
-    : spawn.sdkOptions.permissionMode
-  if (modelInput !== undefined) {
-    session.appliedInputOptions.set('model', modelInput)
+  const { extraArgs, permissionMode } = spawn.sdkOptions
+  // A configured `--model` in the agent's arguments survives when the chat saved none.
+  const configuredModel = typeof extraArgs?.model === 'string' ? extraArgs.model : undefined
+  session.launchIntent = {
+    model: spawn.sdkOptions.model ?? configuredModel,
+    permissionMode: Object.hasOwn(extraArgs ?? {}, 'dangerously-skip-permissions')
+      ? 'bypassPermissions'
+      : permissionMode
   }
   session.fastModeAtStart = spawn.fastModeAtStart
+  session.cliFlag = spawn.cliFlag
+  session.flagSettingsControl = spawn.flagSettingsControl
   const fastMode = spawn.options.get('fastMode')
   if (fastMode !== undefined && !spawn.fastModeAtStart) {
     session.appliedInputOptions.set('fastMode', fastMode)

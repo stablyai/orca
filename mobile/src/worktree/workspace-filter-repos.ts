@@ -1,5 +1,5 @@
 import { getRepoExecutionHostId } from '../../../src/shared/execution-host'
-import { repoColor } from './repo-color'
+import { resolveRepoBadgeColor } from '../../../src/shared/repo-badge-color'
 import { buildSectionRepoMap, type SectionRepo, type Worktree } from './workspace-list-sections'
 
 export type WorkspaceSectionRepo = {
@@ -10,8 +10,8 @@ export type WorkspaceSectionRepo = {
   color: string
 }
 
-export function sectionRepoColor(repo: Pick<SectionRepo, 'badgeColor' | 'displayName'>): string {
-  return (typeof repo.badgeColor === 'string' && repo.badgeColor) || repoColor(repo.displayName)
+export function sectionRepoColor(repo: Pick<SectionRepo, 'badgeColor'>): string {
+  return resolveRepoBadgeColor(repo.badgeColor)
 }
 
 // List catalog repos per host; before catalogs arrive, derive candidates from workspace rows.

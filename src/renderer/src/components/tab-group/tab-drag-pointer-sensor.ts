@@ -7,6 +7,7 @@ import type {
   SensorInstance,
   SensorProps
 } from '@dnd-kit/core'
+import { recordTabDragPointer } from './tab-drag-pointer'
 
 type PointerCoordinates = { x: number; y: number }
 
@@ -153,7 +154,10 @@ export class TabDragPointerSensor implements SensorInstance {
   constructor(props: SensorProps<PointerSensorOptions>) {
     this.props = props
     this.document = getOwnerDocument(props.event.target)
-    this.initialCoordinates = getPointerCoordinates(props.event) ?? DEFAULT_COORDINATES
+    const pointerDownCoordinates = getPointerCoordinates(props.event)
+    this.initialCoordinates = pointerDownCoordinates ?? DEFAULT_COORDINATES
+    // Why: replaces the previous gesture's pointer, which outlives it so onDragEnd can read it.
+    recordTabDragPointer(pointerDownCoordinates)
     this.handleStart = this.handleStart.bind(this)
     this.handleMove = this.handleMove.bind(this)
     this.handleEnd = this.handleEnd.bind(this)
@@ -238,6 +242,7 @@ export class TabDragPointerSensor implements SensorInstance {
     if (!coordinates) {
       return
     }
+    recordTabDragPointer(coordinates)
     const delta = subtractCoordinates(this.initialCoordinates, coordinates)
 
     if (!this.activated && activationConstraint) {

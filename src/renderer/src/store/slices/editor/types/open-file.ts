@@ -44,7 +44,7 @@ export type OpenFile = {
   runtimeEnvironmentId?: string | null
   /** SSH target that owns an absolute path outside the worktree. */
   externalSshTargetId?: string
-  /** Host grant for a read-only file outside every workspace on `runtimeEnvironmentId`; never persisted. */
+  /** Host grant for a file outside every workspace on `runtimeEnvironmentId`; never persisted. */
   terminalArtifactGrantId?: string
   /** Host provenance captured when the tab opened; mutations reject replacement owners. */
   operationProvenance?: EditorFileOperationProvenance

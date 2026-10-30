@@ -469,7 +469,8 @@ describe('managed agent hook timeouts', () => {
             ORCA_AGENT_HOOK_TOKEN: 'test-token',
             ORCA_PANE_KEY: 'pane-1',
             ORCA_TAB_ID: 'tab-1',
-            ORCA_WORKTREE_ID: 'wt-1'
+            ORCA_WORKTREE_ID: 'wt-1',
+            CLAUDE_JOB_DIR: ''
           },
           stdio: ['pipe', 'ignore', 'ignore']
         })

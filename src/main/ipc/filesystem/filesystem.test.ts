@@ -1,11 +1,13 @@
 import path from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { TRASH_DELETE_FAILED_MESSAGE } from '../../../shared/trash-delete-failure'
 import {
   handlers,
   store,
   dirEntry,
   REPO_PATH,
   trashItemMock,
+  rmMock,
   readdirMock,
   readFileMock,
   writeFileMock,
@@ -23,6 +25,11 @@ import {
 const diskPreconditionMock = vi.hoisted(() => ({ writeLocalTextFileWithDiskPrecondition: vi.fn() }))
 vi.mock('./local-disk-write-precondition', () => diskPreconditionMock)
 vi.mock('electron', async () => (await import('./filesystem-test-harness')).electronMock)
+// The distro these UNC fixtures name counts as running, so the boot gate lets the touch through.
+vi.mock('../../wsl-background-distro-gate', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  readWslDistroRunningState: async () => 'running'
+}))
 vi.mock('fs/promises', async () => (await import('./filesystem-test-harness')).fsPromisesMock)
 vi.mock('node:fs/promises', async () => (await import('./filesystem-test-harness')).fsPromisesMock)
 vi.mock(
@@ -449,6 +456,65 @@ describe('registerFilesystemHandlers', () => {
 
     expect(trashItemMock).toHaveBeenCalledWith(targetPath)
     expect(tryDeleteWslUncPathMock).toHaveBeenCalledWith(targetPath, { recursive: undefined })
+  })
+
+  it('tags a Trash failure so the renderer can offer permanent deletion', async () => {
+    // SAFETY: the fixture supplies the store methods used by filesystem authorization.
+    registerFilesystemHandlers(store as never)
+    const targetPath = path.resolve('/workspace/repo/file.txt')
+    trashItemMock.mockRejectedValue(new Error('Failed to perform delete operation'))
+
+    await expect(handlers.get('fs:deletePath')!(null, { targetPath })).rejects.toThrow(
+      `${TRASH_DELETE_FAILED_MESSAGE}: Failed to perform delete operation`
+    )
+    expect(rmMock).not.toHaveBeenCalled()
+  })
+
+  it('hard-deletes without Trash only when permanent is exactly true', async () => {
+    // SAFETY: the fixture supplies the store methods used by filesystem authorization.
+    registerFilesystemHandlers(store as never)
+    const targetPath = path.resolve('/workspace/repo/dir')
+
+    await handlers.get('fs:deletePath')!(null, { targetPath, recursive: true, permanent: 'yes' })
+    expect(rmMock).not.toHaveBeenCalled()
+    expect(trashItemMock).toHaveBeenCalledWith(targetPath)
+
+    trashItemMock.mockClear()
+    await handlers.get('fs:deletePath')!(null, { targetPath, recursive: true, permanent: true })
+    expect(rmMock).toHaveBeenCalledWith(targetPath, { recursive: true, force: true })
+    expect(trashItemMock).not.toHaveBeenCalled()
+  })
+
+  it('authorizes a permanent retry and propagates filesystem failures without a Trash tag', async () => {
+    // SAFETY: the fixture supplies the store methods used by filesystem authorization.
+    registerFilesystemHandlers(store as never)
+    const targetPath = path.resolve('/workspace/repo/file.txt')
+
+    await expect(
+      handlers.get('fs:deletePath')!(null, {
+        targetPath: path.resolve('/outside-workspace/file.txt'),
+        permanent: true
+      })
+    ).rejects.toThrow('Access denied')
+    expect(rmMock).not.toHaveBeenCalled()
+    expect(trashItemMock).not.toHaveBeenCalled()
+
+    rmMock.mockRejectedValueOnce(new Error('EACCES: permission denied'))
+    await expect(
+      handlers.get('fs:deletePath')!(null, { targetPath, permanent: true })
+    ).rejects.toThrow('EACCES: permission denied')
+    expect(trashItemMock).not.toHaveBeenCalled()
+  })
+
+  it('does not offer a permanent retry when the trashed item is already missing', async () => {
+    // SAFETY: the fixture supplies the store methods used by filesystem authorization.
+    registerFilesystemHandlers(store as never)
+    trashItemMock.mockRejectedValueOnce(Object.assign(new Error('missing'), { code: 'ENOENT' }))
+
+    await expect(
+      handlers.get('fs:deletePath')!(null, { targetPath: path.resolve('/workspace/repo/file.txt') })
+    ).resolves.toBeUndefined()
+    expect(rmMock).not.toHaveBeenCalled()
   })
 
   // WSL UNC has no Recycle Bin; delete inside the distro instead (#6415).

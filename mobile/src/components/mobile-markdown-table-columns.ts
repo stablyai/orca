@@ -4,7 +4,7 @@ import { spacing } from '../theme/mobile-theme'
 const AVERAGE_GLYPH_WIDTH = 7
 const WIDEST_GLYPH_WIDTH = 9
 // Horizontal padding plus the right border of `styles.tableCell`.
-const CELL_CHROME = spacing.sm * 2 + 1
+const CELL_CHROME = spacing.md * 2 + 1
 const MIN_COLUMN_WIDTH = 48
 const MAX_COLUMN_WIDTH = 220
 const WHITESPACE = /\s/
@@ -25,13 +25,19 @@ function cellContentWidth(text: string): number {
 }
 
 /** One width per header column, sized to the column's widest cell. `rows` holds each cell's
- *  drawn text, header row first. */
-export function mobileMarkdownTableColumnWidths(rows: readonly string[][]): number[] {
+ *  drawn text, header row first. The reader's zoom scales the text, not the cell padding. */
+export function mobileMarkdownTableColumnWidths(
+  rows: readonly string[][],
+  textScale: number
+): number[] {
   return (rows[0] ?? []).map((_, column) => {
     let widest = 0
     for (const row of rows) {
       widest = Math.max(widest, cellContentWidth(row[column] ?? ''))
     }
-    return Math.min(MAX_COLUMN_WIDTH, Math.max(MIN_COLUMN_WIDTH, widest + CELL_CHROME))
+    return Math.min(
+      MAX_COLUMN_WIDTH * textScale,
+      Math.max(MIN_COLUMN_WIDTH * textScale, widest * textScale + CELL_CHROME)
+    )
   })
 }

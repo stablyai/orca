@@ -15,6 +15,19 @@ const resultSchema = z.object({
   content: z.array(z.object({ type: z.string(), text: z.string().optional() }))
 })
 
+/** One row per turn: a second close of the same item is dropped. */
+export function piRpcSkippedEventNotice(turn: string): ProviderTimelineEvent {
+  return {
+    type: 'item.close',
+    item: `oversized:${turn}`,
+    body: {
+      kind: 'status',
+      tone: 'warning',
+      text: 'Pi sent an update too large to show, so part of this turn is missing here.'
+    }
+  }
+}
+
 const PI_TEXT_CHANNELS: Partial<Record<string, 'assistant' | 'reasoning'>> = {
   text_delta: 'assistant',
   text_end: 'assistant',

@@ -7,26 +7,31 @@ import { isRuntimeCompatBlockError } from '@/runtime/runtime-protocol-compat'
 import {
   parseRuntimeNativeChatReadSessionResult,
   parseRuntimeNativeChatTurnLifecycle,
-  RUNTIME_NATIVE_CHAT_READ_ERROR
+  runtimeNativeChatReadError
 } from './native-chat-runtime-contract'
+import { translate } from '@/i18n/i18n'
 
 /** Match local IPC so session consumers can read local or runtime-owned transcripts. */
 export type NativeChatSessionTransport = Pick<NativeChatApi, 'readSession' | 'subscribe'>
 
-const RUNTIME_TOO_OLD =
-  'This remote runtime is too old to show agent chat history. Update the remote runtime to view it.'
+function runtimeTooOldMessage(): string {
+  return translate(
+    'components.native-chat.runtime.tooOld',
+    'This remote runtime is too old to show agent chat history. Update the remote runtime to view it.'
+  )
+}
 
 export const RUNTIME_NATIVE_CHAT_RECONNECT_MS = 2_000
 
 /** Label only method/version blocks as update requirements; transient failures need generic copy (KTD-4). */
 export function toRuntimeNativeChatErrorMessage(err: unknown): string {
   if (err instanceof RuntimeRpcCallError && err.code === 'method_not_found') {
-    return RUNTIME_TOO_OLD
+    return runtimeTooOldMessage()
   }
   if (isRuntimeCompatBlockError(err)) {
-    return RUNTIME_TOO_OLD
+    return runtimeTooOldMessage()
   }
-  return RUNTIME_NATIVE_CHAT_READ_ERROR
+  return runtimeNativeChatReadError()
 }
 
 /** Web IPC already targets its paired runtime; preserve sync desktop and deferred web teardown forms. */
@@ -45,7 +50,7 @@ function createRuntimeNativeChatTransport(environmentId: string): NativeChatSess
         const result = await callRuntimeRpc<unknown>(
           target,
           'nativeChat.readSession',
-          { agent, sessionId, limit, transcriptPath },
+          { agent, sessionId, limit, transcriptPath, capabilities: { transcriptSourceOrder: 1 } },
           { timeoutMs: 15_000 }
         )
         return parseRuntimeNativeChatReadSessionResult(result)
@@ -94,7 +99,7 @@ function createRuntimeNativeChatTransport(environmentId: string): NativeChatSess
                 sessionId,
                 transcriptPath,
                 limit,
-                capabilities: { transcriptPending: 1 }
+                capabilities: { transcriptPending: 1, transcriptSourceOrder: 1 }
               },
               timeoutMs: 15_000
             },

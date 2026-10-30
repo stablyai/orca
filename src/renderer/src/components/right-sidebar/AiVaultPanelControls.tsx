@@ -1,4 +1,5 @@
 import type React from 'react'
+import { refreshRuntimeEnvironmentCatalog } from '@/runtime/runtime-environment-pairing-refresh'
 import {
   ArchiveRestore,
   ChevronRight,
@@ -134,18 +135,20 @@ export function VaultScopeSwitch({
         value="workspace"
         disabled={!workspaceAvailable}
         className={VAULT_SCOPE_TOGGLE_ITEM_CLASS}
+        title={workspaceLabel}
       >
-        {workspaceLabel}
+        <span className="min-w-0 truncate">{workspaceLabel}</span>
       </ToggleGroupItem>
       <ToggleGroupItem
         value="project"
         disabled={!projectAvailable}
         className={VAULT_SCOPE_TOGGLE_ITEM_CLASS}
+        title={projectLabel}
       >
-        {projectLabel}
+        <span className="min-w-0 truncate">{projectLabel}</span>
       </ToggleGroupItem>
-      <ToggleGroupItem value="all" className={VAULT_SCOPE_TOGGLE_ITEM_CLASS}>
-        {allLabel}
+      <ToggleGroupItem value="all" className={VAULT_SCOPE_TOGGLE_ITEM_CLASS} title={allLabel}>
+        <span className="min-w-0 truncate">{allLabel}</span>
       </ToggleGroupItem>
     </ToggleGroup>
   )
@@ -164,7 +167,14 @@ export function VaultHostScopeMenu({
   const label = selectedOption?.label ?? getExecutionHostLabel(executionHostScope)
 
   return (
-    <DropdownMenu>
+    <DropdownMenu
+      onOpenChange={(open) => {
+        // A fresh profile has no saved-server file to watch until the first CLI add creates it.
+        if (open) {
+          void refreshRuntimeEnvironmentCatalog()
+        }
+      }}
+    >
       <DropdownMenuTrigger asChild>
         <Button
           type="button"

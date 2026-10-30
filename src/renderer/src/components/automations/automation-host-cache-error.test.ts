@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { RemoteRuntimeClientError } from '../../../../shared/remote-runtime-client-error'
+import { RemoteRuntimeClientError } from '../../../../shared/remote-runtime/remote-runtime-client-error'
 import { classifyAutomationHostQueryError } from './automation-host-cache-error'
 
 function classify(error: unknown): { code: string; retryable: boolean } {

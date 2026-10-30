@@ -230,7 +230,13 @@ it('launches the copied helper on plain Node and leaves no inherited credentials
     Array.isArray(job.ProgramArguments)
       ? job.ProgramArguments.map(String)
       : []
-  expect(args.slice(0, 4)).toEqual([helperExec(), helperEntry(), '--socket', options.socketPath])
+  expect(args.slice(0, 5)).toEqual([
+    helperExec(),
+    '--max-semi-space-size=4',
+    helperEntry(),
+    '--socket',
+    options.socketPath
+  ])
   // Replacement preflight compares the installed entry, not the private helper copy.
   expect(args[args.indexOf('--entry-path') + 1]).toBe(options.entryPath)
   expect(args[args.indexOf('--spawner-exec-path') + 1]).toBe(helperExec())

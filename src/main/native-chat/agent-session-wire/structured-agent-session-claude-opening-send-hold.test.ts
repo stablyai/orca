@@ -3,13 +3,13 @@
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest'
+import { afterEach, assert, beforeEach, expect, it, vi } from 'vitest'
 import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
 import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
 import { agentSessionSendSubmission } from '../../../shared/agent-session-wire'
 import { projectStructuredAgentSessionMessages } from '../../../shared/structured-agent-session-message-projection'
 import { projectNativeChatTranscriptMessages } from '../../../shared/native-chat-transcript-projection'
-import { nativeChatRowsInDrawOrder } from '../../../shared/native-chat-turn-grouping'
+import { nativeChatRowsInDrawOrder } from '../../../shared/native-chat/transcript/native-chat-turn-grouping'
 import { nativeChatTurnMembership } from '../../../shared/native-chat-turn-membership'
 import { ClaudeStructuredSessionAdapter } from '../../claude/claude-structured-session-adapter'
 import {
@@ -22,8 +22,6 @@ import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-rec
 import { structuredClaudeLifecycleEvent } from '../../runtime/structured-claude-runtime-adapter'
 import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
 import { StructuredAgentSessionHost } from './structured-agent-session-host'
-import { retireOutgrownStructuredAgentSessionChild } from './structured-agent-session-outgrown-child'
-import type * as OutgrownChild from './structured-agent-session-outgrown-child'
 import {
   HOST_TEST_NOW as NOW,
   HOST_TEST_SESSION as SESSION,
@@ -36,32 +34,12 @@ import { recordingStructuredAgentSessionLogger } from './structured-agent-sessio
 import { claudeAndCodexDeclared } from './structured-agent-session-adapter-router-test-support'
 import { isStructuredAgentSessionMainAgentWorking } from '../../../shared/structured-agent-session-main-agent-working'
 import { DISPATCH_DOUBT_PROVIDER_IDLE } from '../agent-session-journal/journal-dispatch-doubt-reasons'
+import {
+  AGENT_JOURNAL_THREAD_SCOPE,
+  type AgentJournalMessageItem
+} from '../../../shared/agent-session-journal-types'
+import * as unheld from './structured-agent-session-unheld-turns'
 import { claudeUnwrittenUserMessageError } from '../../claude/claude-agent-sdk-user-message-queue'
-import { claudeStructuredPermissionOptions } from '../../claude/claude-structured-launch-resolution'
-import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
-import { agentSessionFailureWords } from '../../../shared/agent-session-failure-words'
-import { runningStructuredAgentSessionTurnItemBySequence } from '../../../shared/structured-agent-session-live-turn'
-import type * as LiveTurn from '../../../shared/structured-agent-session-live-turn'
-
-vi.mock('../../../shared/structured-agent-session-live-turn', async (importOriginal) => {
-  const actual = await importOriginal<typeof LiveTurn>()
-  return {
-    ...actual,
-    runningStructuredAgentSessionTurnItemBySequence: vi.fn(
-      actual.runningStructuredAgentSessionTurnItemBySequence
-    )
-  }
-})
-
-vi.mock('./structured-agent-session-outgrown-child', async (importOriginal) => {
-  const actual = await importOriginal<typeof OutgrownChild>()
-  return {
-    ...actual,
-    retireOutgrownStructuredAgentSessionChild: vi.fn(
-      actual.retireOutgrownStructuredAgentSessionChild
-    )
-  }
-})
 
 const CALLER = { callerKey: 'client-1' }
 const CAPABILITIES = ['interrupt_receipt_v1', 'interrupt_cancel_queued_v1', 'msg_lifecycle_v1']
@@ -71,28 +49,43 @@ let host: StructuredAgentSessionHost
 let adapter: ClaudeStructuredSessionAdapter
 let store: AgentSessionRecordStore
 let claude: ReturnType<typeof fakeClaude>
-let claudeFrames: { replayUuid: null; initProof?: 'none' }
 
-beforeEach(async () => {
+let startupGate: ReturnType<typeof Promise.withResolvers<void>>
+const session = () => host.collaboratorsForTests().sessions.get(SESSION)!
+const loop = () => host.collaboratorsForTests().conversationDelivery.loop
+const ready = () =>
+  vi.waitFor(() => expect(host.readStatusSummary(SESSION)?.hostExecutionPhase).toBe('ready'))
+const init = (fields: Record<string, unknown>) =>
+  frame(claude.connections.at(-1)!, { type: 'system', subtype: 'init', ...fields })
+const idle = () => init({ subtype: 'session_state_changed', state: 'idle' })
+function echo() {
+  const connection = claude.connections.at(-1)!
+  frame(connection, { ...connection.sent.at(-1)!, isReplay: true, parent_tool_use_id: null })
+}
+
+beforeEach(async ({ task }) => {
+  const imported = task.name.includes('history items')
+  const selections = task.name.includes('fallback')
+  startupGate = Promise.withResolvers<void>()
   root = await mkdtemp(join(tmpdir(), 'orca-claude-opening-send-'))
   resetHostTestOperationIds()
   const log = recordingStructuredAgentSessionLogger()
-  claudeFrames = { replayUuid: null }
-  claude = fakeClaude(
-    Object.assign(claudeFrames, {
-      routes: { interrupt: () => ({ still_queued: [], cancelled: [] }) }
-    })
-  )
+  claude = fakeClaude({
+    replayUuid: null,
+    ...(selections ? { initModel: 'claude-haiku-4-5' } : {}),
+    routes: { interrupt: () => ({ still_queued: [], cancelled: [] }) }
+  })
   const lifecycle: Promise<void>[] = []
   adapter = new ClaudeStructuredSessionAdapter({
     resolveLaunch: async ({ permissionMode }) => ({
       pathToClaudeCodeExecutable: 'claude',
-      options: claudeStructuredPermissionOptions(permissionMode ?? 'ask'),
+      options: { permissionMode: permissionMode === 'auto' ? 'auto' : 'default' },
       cwd: root,
       claudeConfigDir: join(root, 'claude-home'),
       providerSessionId: PROVIDER_SESSION_ID,
       resumeLeafUuid: null,
       resumesTranscript: (store.getRecord(SESSION)?.providerHandleChain.length ?? 0) > 0,
+      cliFlag: async () => 'supported' as const,
       continuesChain: (store.getRecord(SESSION)?.providerHandleChain.length ?? 0) > 0
     }),
     onEvent: (event) => {
@@ -117,19 +110,30 @@ beforeEach(async () => {
     logger: log.logger,
     now: () => NOW
   })
+  if (imported) {
+    const open = adapter.open.bind(adapter)
+    vi.spyOn(adapter, 'open').mockImplementation(async (input) => {
+      await startupGate.promise
+      return open(input)
+    })
+  }
   const params = hostTestAttachParams(null, {
     provider: 'claude',
     agent: 'claude',
-    options: { model: 'haiku', permissionMode: 'auto' },
+    ...(selections ? { options: { permissionMode: 'auto', model: 'haiku' } } : {}),
     accountHome: { variable: 'CLAUDE_CONFIG_DIR', path: join(root, 'claude-home') },
     providerHandle: { kind: 'claude', sessionId: PROVIDER_SESSION_ID, leafUuid: null }
   })
   expect(await host.attach(CALLER, params)).toMatchObject({ ok: true })
-  await vi.waitFor(() => expect(host.readStatusSummary(SESSION)?.hostExecutionPhase).toBe('ready'))
-  await Promise.all(lifecycle)
+  if (!imported) {
+    await ready()
+    await Promise.all(lifecycle)
+  }
 })
 
 afterEach(async () => {
+  startupGate.resolve()
+  vi.restoreAllMocks()
   await adapter.closeAll()
   await host.flushAllStreamedEvents()
   await rm(root, { recursive: true, force: true })
@@ -138,8 +142,12 @@ afterEach(async () => {
 const eventually = <T>(assertion: () => T | Promise<T>) =>
   vi.waitFor(assertion, { timeout: 10_000 })
 
-async function send(text: string, options?: Record<string, string>): Promise<string> {
-  const body = hostTestMessage(text)
+async function send(
+  text: string,
+  options?: Record<string, string>,
+  from?: AgentJournalMessageItem['from']
+): Promise<string> {
+  const body = { ...hostTestMessage(text), ...(from ? { from } : {}) }
   const sent = await host.send(CALLER, {
     envelope: {
       sessionId: SESSION,
@@ -148,11 +156,11 @@ async function send(text: string, options?: Record<string, string>): Promise<str
       payloadFingerprint: computeAgentSessionPayloadFingerprint({
         method: 'agentSession.send',
         sessionId: SESSION,
-        fields: { body, options }
+        fields: { body: hostTestMessage(text), ...(options ? { options } : {}) }
       })
     },
     body,
-    options
+    ...(options ? { options } : {})
   })
   if (!sent.ok) {
     throw new Error(JSON.stringify(sent.refusal))
@@ -198,121 +206,6 @@ it('reads a send as accepted across its echo, never in doubt, so a worker start 
     parent_tool_use_id: null
   })
   expect(agentSessionSendSubmission((await answer)?.value)?.dispatchState).toBe('accepted')
-})
-
-it('protects an admitted unechoed input from a model transition, then reopens for a fresh choice', async () => {
-  claudeFrames.initProof = 'none'
-  const connection = claude.connections[0]!
-  expect(connection.launch.options).toMatchObject({ model: 'haiku', permissionMode: 'auto' })
-  frame(connection, {
-    type: 'system',
-    subtype: 'init',
-    uuid: 'haiku-root',
-    model: 'claude-haiku-4-5',
-    permissionMode: 'default'
-  })
-  const first = await send('ADMITTED prompt')
-  await eventually(() => expect(written(connection, 'ADMITTED prompt')).toBeDefined())
-  await eventually(() =>
-    expect(host.collaboratorsForTests().conversationDelivery.loop.isRunning(SESSION)).toBe(false)
-  )
-  const admitted = (await snapshot()).submissions.find((entry) => entry.clientMessageId === first)!
-  expect(admitted).toMatchObject({ dispatchState: 'pending', handedOverAt: expect.any(Number) })
-  expect(host.currentWork(SESSION)?.owesSend(admitted)).toBe(true)
-  expect(host.currentWork(SESSION)?.activeTurnId()).toBeNull()
-  expect(adapter.holdsDispatch(SESSION)).toBe(false)
-
-  const blocked = await send('BLOCKED transition', { model: 'opus' })
-  await eventually(() =>
-    expect(host.collaboratorsForTests().conversationDelivery.loop.isRunning(SESSION)).toBe(false)
-  )
-  expect(connection.closeCount).toBe(0)
-  expect(connection.calls.some(({ subtype }) => subtype === 'set_model')).toBe(false)
-  const submissions = (await snapshot()).submissions
-  expect(submissions.find((entry) => entry.clientMessageId === blocked)).toMatchObject({
-    dispatchState: 'rejected',
-    rejection: {
-      kind: 'restartFailed',
-      refusal: { code: 'agent_session_operation_invalid', details: { reason: 'messagesUnsettled' } }
-    }
-  })
-  expect(submissions.find((entry) => entry.clientMessageId === first)?.dispatchState).toBe(
-    'pending'
-  )
-  expect(host.currentWork(SESSION)?.owesSend(admitted)).toBe(true)
-  expect(written(connection, 'BLOCKED transition')).toBeUndefined()
-
-  async function reply(on: FakeConnection, prompt: string, text: string, id: string) {
-    const input = written(on, prompt)!
-    frame(on, { ...input, isReplay: true, parent_tool_use_id: null })
-    frame(on, {
-      type: 'assistant',
-      uuid: `assistant-${id}`,
-      parent_tool_use_id: null,
-      message: { id: `msg-${id}`, role: 'assistant', content: [{ type: 'text', text }] },
-      user_message_uuid: input.uuid,
-      user_message_uuids: [input.uuid]
-    })
-    frame(on, {
-      type: 'result',
-      subtype: 'success',
-      uuid: `result-${id}`,
-      is_error: false,
-      terminal_reason: 'completed',
-      result: text,
-      user_message_uuid: input.uuid,
-      user_message_uuids: [input.uuid]
-    })
-    frame(on, { type: 'system', subtype: 'session_state_changed', state: 'idle' })
-    await eventually(async () => {
-      expect(
-        (await snapshot()).submissions.find((entry) => entry.clientMessageId === id)
-      ).toMatchObject({ dispatchState: 'accepted' })
-      expect(host.currentWork(SESSION)?.activeTurnId()).toBeNull()
-    })
-  }
-  await reply(connection, 'ADMITTED prompt', 'Original result retained.', first)
-  expect((await drawn()).map(({ text }) => text)).toContain('Original result retained.')
-  expect(
-    (await snapshot()).submissions.find((entry) => entry.clientMessageId === blocked)?.dispatchState
-  ).toBe('rejected')
-
-  const fresh = await send('FRESH transition', { model: 'opus' })
-  await eventually(() => {
-    expect(claude.connections).toHaveLength(2)
-    expect(written(claude.connections[1]!, 'FRESH transition')).toBeDefined()
-  })
-  const resumed = claude.connections[1]!
-  expect(connection.closeCount).toBe(1)
-  expect(resumed.launch.options).toMatchObject({ model: 'opus', permissionMode: 'auto' })
-  expect(store.getRecord(SESSION)?.providerHandleChain).toEqual(
-    expect.arrayContaining([
-      expect.objectContaining({
-        handle: expect.objectContaining({ nativeId: PROVIDER_SESSION_ID })
-      })
-    ])
-  )
-  frame(resumed, {
-    type: 'system',
-    subtype: 'init',
-    uuid: 'opus-root',
-    model: 'claude-opus-4-6',
-    permissionMode: 'default'
-  })
-  await reply(resumed, 'FRESH transition', 'First new-model reply.', fresh)
-  const repeated = await send('REPEATED choice', { model: 'opus' })
-  await eventually(() => expect(written(resumed, 'REPEATED choice')).toBeDefined())
-  await reply(resumed, 'REPEATED choice', 'Second new-model reply.', repeated)
-  expect(claude.connections).toHaveLength(2)
-  expect(resumed.calls.some(({ subtype }) => subtype === 'set_model')).toBe(false)
-  expect(claude.connections.some((child) => written(child, 'BLOCKED transition'))).toBe(false)
-  expect((await drawn()).map(({ text }) => text)).toEqual(
-    expect.arrayContaining([
-      'Original result retained.',
-      'First new-model reply.',
-      'Second new-model reply.'
-    ])
-  )
 })
 
 it('holds a follow-up until the echo opens the turn, then folds it in, drawn inside that turn', async () => {
@@ -593,255 +486,161 @@ it('sends a message that joins an unproven Stop close to the resumed child, and 
   await eventually(() => expect(written(resumed, 'And this.')).toBeDefined())
 })
 
-/** Rows an older host wrote as it sent them, at the live child's fence: never answered, and the
- *  CLI holding none of them, unless each was accepted or refused as not signed in. */
-async function olderHostSends(count: number, answer?: 'accepted' | 'notSignedIn'): Promise<void> {
-  const journal = host.collaboratorsForTests().sessions.get(SESSION)!.journal
-  const fence = store.getRecord(SESSION)!.lease.runtimeFence
-  for (let index = 0; index < count; index += 1) {
-    const clientMessageId = `older-${index}`
-    const body = hostTestMessage(clientMessageId)
-    await journal.appendSubmission({
-      clientMessageId,
-      payloadFingerprint: clientMessageId,
-      body,
-      fence
-    })
-    if (answer === 'accepted') {
-      await journal.resolveDispatch({
-        clientMessageId,
-        fence,
-        state: 'accepted',
-        providerIdentity: null
-      })
-    } else if (answer === 'notSignedIn') {
-      await journal.resolveDispatch({
-        clientMessageId,
-        fence,
-        state: 'rejected',
-        ...agentSessionFailureWords(agentSessionFailureFact(answer), { surface: 'rejection' })
-      })
-    }
-  }
+async function sendChoice(
+  text: string,
+  options: Record<string, string>,
+  from?: AgentJournalMessageItem['from']
+) {
+  await send(text, options, from)
+  await eventually(() => expect(written(claude.connections.at(-1)!, text)).toBeDefined())
+  echo()
+  await host.flushStreamedEvents(SESSION)
+  await eventually(() => expect(loop().isRunning(SESSION)).toBe(false))
 }
 
-/** What the delivery loop's retirement checks read: the journal's history, wake debt (its only
- *  `newestTurn` reader there), and what the CLI holds, built by the adapter itself on each read. */
-function countRetirementReads() {
-  const journal = host.collaboratorsForTests().sessions.get(SESSION)!.journal
-  const runningScans: { phase: string; visits: number }[] = []
-  const counts = {
-    checks: 0,
-    linkageVisits: 0,
-    submissionsCopied: 0,
-    newestTurn: 0,
-    heldSets: 0,
-    heldVisits: 0,
-    rejections: 0,
-    runningScans,
-    afterCheck: async (_check: number): Promise<void> => undefined
-  }
-  let inside = false
-  let phase: string | null = null
-  const running = vi.mocked(runningStructuredAgentSessionTurnItemBySequence)
-  const originalRunning = running.getMockImplementation()!
-  onTestFinished(() => void running.mockImplementation(originalRunning))
-  running.mockImplementation((items) => {
-    const scan = phase ? { phase, visits: 0 } : null
-    if (scan) {
-      counts.runningScans.push(scan)
-    }
-    return originalRunning({
-      *[Symbol.iterator]() {
-        for (const item of items) {
-          if (scan) {
-            scan.visits += 1
-          }
-          yield item
-        }
-      }
-    })
-  })
-  const retire = vi.mocked(retireOutgrownStructuredAgentSessionChild)
-  const actual = retire.getMockImplementation()!
-  onTestFinished(() => void retire.mockImplementation(actual))
-  retire.mockImplementation(async (...args) => {
-    counts.checks += 1
-    inside = true
-    phase = `owner-${counts.checks}`
-    try {
-      return await actual(...args)
-    } finally {
-      inside = false
-      phase = counts.checks === 2 ? 'turnScope' : null
-      await counts.afterCheck(counts.checks)
+it('preserves saved Auto through fallback, reopens once for a changed captured model, then reuses', async () => {
+  const first = claude.connections[0]!
+  init({ parent_tool_use_id: 'child', permissionMode: 'auto' })
+  init({ permissionMode: 'default', model: 'claude-haiku-4-5' })
+  init({ permissionMode: 'auto', model: 'claude-opus-5-5[1m]' })
+  await sendChoice('same fallback', { model: 'haiku' })
+  expect(claude.connections).toHaveLength(1)
+  const picked = { model: 'opus[1m]', effort: 'high', fastMode: 'true' }
+  await sendChoice('busy choice', picked)
+  expect(claude.connections).toHaveLength(1)
+  idle()
+  await sendChoice('mail notice', picked, {
+    kind: 'agent',
+    senders: [],
+    orchestration: {
+      message: 'mail-notice',
+      mailbox: 'agent:worker',
+      dispatchId: null,
+      messages: []
     }
   })
-  const { visitItemsWithLinkage, submissions, newestTurn } = journal
-  journal.visitItemsWithLinkage = (visit) =>
-    visitItemsWithLinkage((...item) => {
-      counts.linkageVisits += inside ? 1 : 0
-      visit(...item)
-    })
-  journal.submissions = () => {
-    const all = submissions()
-    counts.submissionsCopied += inside ? all.length : 0
-    return all
-  }
-  journal.newestTurn = () => {
-    counts.newestTurn += inside ? 1 : 0
-    return newestTurn()
-  }
-  const resolveDispatch = journal.resolveDispatch.bind(journal)
-  journal.resolveDispatch = (input, cards, receipt) => {
-    counts.rejections += input.state === 'rejected' ? 1 : 0
-    phase = null
-    return resolveDispatch(
-      input,
-      cards,
-      receipt && {
-        ...receipt,
-        write: (...args) => {
-          phase = 'receipt.write'
-          try {
-            return receipt.write(...args)
-          } finally {
-            phase = null
-          }
-        }
-      }
-    )
-  }
-  const { heldSends } = adapter
-  adapter.heldSends = (sessionId) => {
-    const held = heldSends(sessionId)
-    counts.heldSets += inside ? 1 : 0
-    counts.heldVisits += inside ? (held?.size ?? 0) : 0
-    return held
-  }
-  return counts
-}
+  expect(claude.connections).toHaveLength(1)
+  idle()
+  await sendChoice('new choice', picked)
+  expect(first.closeCount).toBe(1)
+  const replacement = claude.connections[1]!
+  expect(replacement.launch.options).toMatchObject({
+    permissionMode: 'auto',
+    model: 'opus[1m]',
+    effort: 'high'
+  })
+  expect(replacement.launch.options.settings).toEqual({ fastMode: true })
+  idle()
+  await sendChoice('reuse choice', picked)
+  expect(claude.connections).toHaveLength(2)
+  expect(replacement.sent).toHaveLength(2)
+  expect(store.getRecord(SESSION)?.permissionMode).toBe('auto')
+})
 
-/** A person's pick of another permission mode, which writes the chat's record only. */
-async function pickPermission(value: string): Promise<void> {
-  const fields = { key: 'permissionMode', value }
-  const picked = await host.setOption(CALLER, {
-    envelope: {
+it('does not infer fallback from unknown init or a missing captured model', async () => {
+  init({ model: 'claude-haiku-4-5' })
+  init({ permissionMode: 'default' })
+  await sendChoice('unknown permission', { model: 'opus[1m]' })
+  expect(
+    adapter.requiresModelTransitionRestart({
       sessionId: SESSION,
-      clientOperationId: hostTestOperationId(),
-      expectedRuntimeFence: store.getRecord(SESSION)!.lease.runtimeFence,
-      payloadFingerprint: computeAgentSessionPayloadFingerprint({
-        method: 'agentSession.setOption',
-        sessionId: SESSION,
-        fields
-      })
-    },
-    ...fields
-  })
-  expect(picked).toMatchObject({ ok: true })
-}
-
-// Each send is checked twice, before and after the wait for its child: the second check is what
-// sees a change made during that wait, so it must stay, and stay one pass over history.
-it('re-derives the retirement check after the wait, so a sign-out reported in it is honored', async () => {
-  const connection = claude.connections[0]!
-  const counts = countRetirementReads()
-  counts.afterCheck = async (check) => (check === 1 ? olderHostSends(1, 'notSignedIn') : undefined)
-  await send('CHANGED prompt')
-  await eventually(() => expect(written(claude.connections[1]!, 'CHANGED prompt')).toBeDefined())
-  expect(written(connection, 'CHANGED prompt')).toBeUndefined()
-  expect(connection.closeCount).toBe(1)
+      fence: session().child!.fence
+    })
+  ).toBe(false)
+  expect(claude.connections).toHaveLength(1)
 })
 
-describe.each([20, 200])('with %i earlier sends', (count) => {
-  it('checks an ordinary send twice, each check one pass over history', async () => {
-    await olderHostSends(count, 'accepted')
-    const counts = countRetirementReads()
-    await send('ORDINARY prompt')
-    await eventually(() => expect(written(claude.connections[0]!, 'ORDINARY prompt')).toBeDefined())
-    const { items, submissions } = await snapshot()
-    expect(submissions).toHaveLength(count + 1)
-    expect(counts).toMatchObject({
-      checks: 2,
-      linkageVisits: 2 * items.length,
-      submissionsCopied: 2 * submissions.length,
-      newestTurn: 0,
-      heldSets: 0
-    })
-  })
-
-  it('keeps an agent mid-turn through a permission change, deriving no wake debt', async () => {
-    await olderHostSends(count, 'accepted')
-    const connection = claude.connections[0]!
-    await send('FIRST prompt')
-    await eventually(() => expect(written(connection, 'FIRST prompt')).toBeDefined())
-    frame(connection, {
-      ...written(connection, 'FIRST prompt')!,
-      isReplay: true,
-      parent_tool_use_id: null
-    })
-    await eventually(() => expect(host.currentWork(SESSION)?.activeTurnId()).not.toBeNull())
-    await pickPermission('ask')
-    const counts = countRetirementReads()
-    const dispatch = vi.spyOn(adapter, 'dispatch')
-    await send('STEER prompt')
-    await eventually(() => expect(written(connection, 'STEER prompt')).toBeDefined())
-    expect(counts).toMatchObject({ checks: 2, newestTurn: 0 })
-    const { items } = await snapshot()
-    expect(counts.runningScans).toEqual(
-      ['owner-1', 'owner-2', 'turnScope', 'receipt.write'].map((phase) => ({
-        phase,
-        visits: items.length
-      }))
-    )
-    const addedScans = counts.runningScans.filter(({ phase }) => phase !== 'turnScope')
-    expect(addedScans.reduce((total, scan) => total + scan.visits, 0)).toBe(3 * items.length)
-    expect(dispatch).toHaveBeenCalledTimes(1)
-    expect(
-      connection.sent.filter((message) => JSON.stringify(message).includes('STEER prompt'))
-    ).toHaveLength(1)
-    expect(connection.closeCount).toBe(0)
-  })
-
-  // The 200-send case awaits journal writes and dispatches, so it has a larger test budget.
-  it('refuses each queued model change behind an admitted send, reading what the CLI holds once per check', async () => {
-    claudeFrames.initProof = 'none'
-    const connection = claude.connections[0]!
-    frame(connection, {
-      type: 'system',
-      subtype: 'init',
-      uuid: 'haiku-root',
-      model: 'claude-haiku-4-5',
-      permissionMode: 'default'
-    })
-    await olderHostSends(count)
-    const admitted = await send('ADMITTED prompt')
-    await eventually(() => expect(written(connection, 'ADMITTED prompt')).toBeDefined())
-    expect(adapter.holdsDispatch(SESSION)).toBe(false)
-    const counts = countRetirementReads()
-    const blocked: string[] = []
-    for (let index = 0; index < count; index += 1) {
-      blocked.push(await send(`BLOCKED ${index}`, { model: 'opus' }))
-    }
-    await eventually(async () => {
-      const rejected = (await snapshot()).submissions.filter(
-        (entry) => entry.dispatchState === 'rejected'
+it.each([10, 100])(
+  'recovers imported running roots before readiness and drains waiting input once (%i history items)',
+  async (n) => {
+    const { journal, child } = session()
+    expect(adapter.liveTurnId(SESSION)).toBeNull()
+    const { fence, generation } = child!
+    assert(typeof generation === 'string')
+    const turn = (id: string, ownFence = fence, agentId?: string) =>
+      journal.appendItem(
+        { provider: 'claude', sessionId: PROVIDER_SESSION_ID, uuid: id },
+        { kind: 'turn', turnId: id, state: 'running', startedAt: 1 },
+        {
+          fence,
+          ownerFence: ownFence,
+          turnScope: AGENT_JOURNAL_THREAD_SCOPE,
+          ...(agentId ? { agentId } : {})
+        }
       )
-      expect(rejected.map((entry) => entry.clientMessageId).sort()).toEqual([...blocked].sort())
-    })
-    // The admitted send is the one send the CLI holds, read once per check however many older
-    // unanswered rows come before it.
-    expect(counts).toMatchObject({
-      checks: count,
-      rejections: count,
-      heldSets: count,
-      heldVisits: count
-    })
-    expect(
-      (await snapshot()).submissions.find((entry) => entry.clientMessageId === admitted)
-    ).toMatchObject({ dispatchState: 'pending' })
-    expect(connection.closeCount).toBe(0)
-    expect(connection.calls.some(({ subtype }) => subtype === 'set_model')).toBe(false)
-    expect(claude.connections).toHaveLength(1)
-  }, 60_000)
-})
+    for (let i = 0; i < n; i++) {
+      await journal.appendItem(
+        { provider: 'claude', sessionId: PROVIDER_SESSION_ID, uuid: `history-${i}` },
+        {
+          kind: 'message',
+          role: 'assistant',
+          blocks: [{ type: 'text', text: `Earlier reply ${i}` }]
+        },
+        { fence, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+      )
+    }
+    const stale = await turn('imported-root')
+    const foreign = await turn('foreign-root', fence - 1)
+    const subagent = await turn('child-root', fence, 'child')
+    let visits = 0
+    let scanning = false
+    const settle = unheld.settleUnheldStructuredAgentSessionTurns
+    const scans = vi
+      .spyOn(unheld, 'settleUnheldStructuredAgentSessionTurns')
+      .mockImplementation(async (...args) => {
+        scanning = true
+        try {
+          await settle(...args)
+        } finally {
+          scanning = false
+        }
+      })
+    const visit = journal.visitItemsWithLinkage.bind(journal)
+    vi.spyOn(journal, 'visitItemsWithLinkage').mockImplementation((visitor) =>
+      visit((...args) => {
+        if (scanning) {
+          visits++
+        }
+        visitor(...args)
+      })
+    )
+    const batch = vi.spyOn(journal, 'appendPlannedLifecycleBatch')
+    expect(await send('after the update')).toBeTruthy()
+    expect(claude.connections[0]!.sent).toHaveLength(0)
+    const before = visits
+    startupGate.resolve()
+    await ready()
+    await vi.waitFor(() => expect(claude.connections[0]!.sent).toHaveLength(1))
+    echo()
+    await vi.waitFor(() => expect(journal.submissions()[0]?.dispatchState).toBe('accepted'))
+    await vi.waitFor(() => expect(loop().isRunning(SESSION)).toBe(false))
+    expect(journal.item(stale.itemId)?.body).toMatchObject({ state: 'interrupted' })
+    expect(journal.item(foreign.itemId)?.body).toMatchObject({ state: 'running' })
+    expect(journal.item(subagent.itemId)?.body).toMatchObject({ state: 'running' })
+    expect(batch).toHaveBeenCalledTimes(1)
+    expect(batch.mock.calls[0]![0].plan().mutations).toHaveLength(1)
+    // Count the actual startup scan, independently of pre-existing current-work reads.
+    expect(visits - before).toBe(n + 4)
+    const reconcile = (liveId: string | null | undefined) =>
+      unheld.settleUnheldStructuredAgentSessionTurns(journal, SESSION, fence, generation, liveId)
+    const scanned = visits
+    const cursor = journal.cursor()
+    await reconcile(undefined)
+    expect(visits).toBe(scanned)
+    const live = adapter.liveTurnId(SESSION)
+    expect(live).toBeTruthy()
+    await reconcile(live)
+    expect(journal.cursor()).toEqual(cursor)
+    expect(batch).toHaveBeenCalledTimes(1)
+    const scanCount = scans.mock.calls.length
+    const finalVisits = visits
+    idle()
+    await host.flushStreamedEvents(SESSION)
+    expect(scans).toHaveBeenCalledTimes(scanCount)
+    expect(visits).toBe(finalVisits)
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(claude.connections[0]!.sent).toHaveLength(1)
+    expect(host.currentWork(SESSION)?.activeTurnId()).toBeNull()
+    expect(host.readStatusSummary(SESSION)?.status).not.toBe('working')
+  }
+)

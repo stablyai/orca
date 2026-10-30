@@ -4,7 +4,6 @@ import {
   type ParsedAgentStatusPayload
 } from '../../agent-status-types'
 import { normalizeOptionalField } from '../../agent-status-field-normalization'
-import { isAskUserQuestionTool } from '../../agent-question-answered-intent'
 import {
   mainAgentTurnInterrupted,
   type AgentLeadStatusResolution
@@ -29,6 +28,7 @@ import { resolvePrompt, resolveToolState } from '../prompt-fields'
 import { extractToolFields, isNewTurnEvent } from '../provider-event-routing'
 import { readString } from '../tool-input-preview'
 import {
+  codexHookEventState,
   codexMainAgentStatusForPayload,
   codexLeadOutcomeForEvent,
   getOrCreateCodexSubagentRoster,
@@ -37,7 +37,6 @@ import {
   resolveCodexPaneStatus,
   setCodexMainAgentTurnState
 } from './codex-state'
-import { isForeignEphemeralCodexThread } from './codex-ephemeral-threads'
 
 export function buildCodexStatusPayload(
   state: HookListenerState,
@@ -161,26 +160,10 @@ export function normalizeCodexEvent(
     return normalizeCodexSubagentLifecycleEvent(state, eventName, paneKey, hookPayload)
   }
 
-  // Ephemeral side chats share the pane but must not replace its recorded main turn.
-  if (isForeignEphemeralCodexThread(state, paneKey, eventName, hookPayload)) {
-    return null
-  }
-
-  // Auto-allowed request_user_input still blocks on PreToolUse (Codex0.145+).
-  const isUserInputPreTool =
-    eventName === 'PreToolUse' &&
-    isAskUserQuestionTool(readString(hookPayload, 'tool_name') ?? readString(hookPayload, 'name'))
-  const stateName =
-    eventName === 'SessionStart' ||
-    eventName === 'UserPromptSubmit' ||
-    (eventName === 'PreToolUse' && !isUserInputPreTool) ||
-    eventName === 'PostToolUse'
-      ? 'working'
-      : eventName === 'PermissionRequest' || isUserInputPreTool
-        ? 'waiting'
-        : eventName === 'Stop' || eventName === 'Interrupt'
-          ? 'done'
-          : null
+  const stateName = codexHookEventState(
+    eventName,
+    readString(hookPayload, 'tool_name') ?? readString(hookPayload, 'name')
+  )
   if (!stateName) {
     return null
   }

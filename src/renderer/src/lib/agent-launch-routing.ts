@@ -20,6 +20,7 @@ export type AgentLaunchRoutingInput = {
   /** What this client advertises to a paired host. */
   clientCapabilities?: readonly string[]
   workspaceKind?: WorkspaceLaunchKind
+  projectExecutionKind?: 'host' | 'ssh'
   projectRuntime?: ProjectExecutionRuntimeResolution | null
   promptDelivery?: NativeChatLaunchPromptDelivery
   launchText?: string
@@ -50,6 +51,7 @@ export function structuredAgentLaunchSupport(input: Omit<AgentLaunchRoutingInput
     hostCapabilities: input.hostCapabilities,
     ...(input.clientCapabilities ? { clientCapabilities: input.clientCapabilities } : {}),
     workspaceKind: input.workspaceKind,
+    projectExecutionKind: input.projectExecutionKind,
     projectRuntime: input.projectRuntime,
     startsOutsideWorkspaceRoot: input.startsOutsideWorkspaceRoot,
     ...(input.hostStructuredAgents ? { hostStructuredAgents: input.hostStructuredAgents } : {})

@@ -1,4 +1,5 @@
-import type { TaskPageGlobalEffectsModel } from '../../use-task-page-global-effects'
+import { taskProviderErrorText } from '@/lib/task-provider-error-copy'
+import type { TaskPageGlobalEffectsModel } from '../use-task-page-global-effects'
 import { useEffect } from 'react'
 import { isIntegrationCredentialDecryptionError } from '../../../../../shared/integration-credential-errors'
 import { saveLinearIssueView } from '../../linear-issue-view-storage'
@@ -17,7 +18,7 @@ import type { LinearIssue } from '../../../../../shared/linear/issue-types'
 import type { LinearCollectionResult } from '../../../../../shared/linear/workspace-types'
 import { linearIssueAttributeFilterSignature } from '../../../../../shared/linear/issue-attribute-filter'
 import { reconcileTaskPageLinearIssuesAfterLandingRefresh } from './task-page-linear-cache-selectors'
-import { LINEAR_ITEM_LIMIT } from '../../task-page-source-context'
+import { LINEAR_ITEM_LIMIT } from '../task-page-source-context'
 import { useTaskSearchDebouncedApply } from '../use-task-search-debounced-apply'
 export function useTaskPageLinearListEffects(model: TaskPageGlobalEffectsModel) {
   const {
@@ -266,7 +267,11 @@ export function useTaskPageLinearListEffects(model: TaskPageGlobalEffectsModel) 
           setLinearIssues([])
           setLinearIssuesHasMore(false)
         }
-        setLinearError(err instanceof Error ? err.message : 'Failed to load Linear issues.')
+        setLinearError(
+          err instanceof Error
+            ? taskProviderErrorText(err.message)
+            : taskProviderErrorText('Failed to load Linear issues.')
+        )
         setLinearLoading(false)
       })
     return () => {

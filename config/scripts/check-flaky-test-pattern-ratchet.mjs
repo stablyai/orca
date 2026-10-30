@@ -9,6 +9,7 @@ import { listTrackedFiles, runCountRatchet } from './ratchet-baseline.mjs'
 
 const BASELINE_PATH = 'config/flaky-test-pattern-baseline.txt'
 const RULE_FILTER = '^test-'
+const FLAKY_RULE = new RegExp(RULE_FILTER)
 const HEADER = [
   '# Flaky-test pattern findings per rule and file (config/ast-grep/rules/flaky-tests).',
   '# This is a RATCHET: counts may only go DOWN. Run `pnpm lint:ast-grep:flaky-tests` to list them.',
@@ -28,10 +29,14 @@ export function countFindings(matches, isTracked = () => true) {
   return counts
 }
 
-export function collectFlakyTestPatternCounts(root = process.cwd()) {
+/** `matches` may come from an unfiltered scan another gate shares; only `test-*` rules count. */
+export function collectFlakyTestPatternCounts(root = process.cwd(), matches = undefined) {
   // Tracked files only, so untracked scratch never changes the baseline.
   const tracked = new Set(listTrackedFiles(root, []))
-  return countFindings(scanAstGrep(root, { filter: RULE_FILTER }), (file) => tracked.has(file))
+  const flaky = (matches ?? scanAstGrep(root, { filter: RULE_FILTER })).filter((match) =>
+    FLAKY_RULE.test(match.ruleId)
+  )
+  return countFindings(flaky, (file) => tracked.has(file))
 }
 
 function git(root, args) {
@@ -49,7 +54,8 @@ export function listChangedFiles(root = process.cwd()) {
   }
   let base
   try {
-    const mergeBase = git(root, ['merge-base', 'HEAD', 'origin/main']).trim()
+    const requested = process.env.ORCA_CODE_QUALITY_BASE || 'origin/main'
+    const mergeBase = git(root, ['merge-base', 'HEAD', requested]).trim()
     base = resolvePullRequestDiffBase(root, mergeBase)
   } catch {
     try {
@@ -61,8 +67,8 @@ export function listChangedFiles(root = process.cwd()) {
   if (!base) {
     return null
   }
-  const changed = git(root, ['diff', '--name-only', '--no-renames', base])
-    .split('\n')
+  const changed = git(root, ['diff', '--name-only', '--no-renames', '-z', base])
+    .split('\0')
     .filter(Boolean)
   return new Set(changed)
 }
@@ -74,13 +80,13 @@ export function changedFileScope(changed) {
   return (key) => changed.has(key.slice(key.indexOf(':') + 1))
 }
 
-export function main(root = process.cwd(), arg = undefined) {
+export function main(root = process.cwd(), arg = undefined, matches = undefined) {
   return runCountRatchet(
     {
       name: 'flaky-test-pattern',
       baselinePath: BASELINE_PATH,
       header: HEADER,
-      collect: collectFlakyTestPatternCounts,
+      collect: (dir) => collectFlakyTestPatternCounts(dir, matches),
       scope: (dir) => changedFileScope(listChangedFiles(dir)),
       unit: 'flaky-test finding(s)',
       fix: [

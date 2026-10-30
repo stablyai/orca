@@ -1,7 +1,7 @@
 import { resolve, dirname, basename } from 'node:path'
 import type { RuntimeStore } from '../../runtime/runtime-store-contract'
 import { lstat } from 'node:fs/promises'
-import { realpathAcrossWslDriveMount } from '../../wsl/wsl-unc-drive-fs-path'
+import { realpathAcrossWslDriveMount, windowsFsPath } from '../../wsl/wsl-unc-drive-fs-path'
 import { PATH_OUTSIDE_ALLOWED_DIRECTORIES } from '../../../shared/local-file-access'
 import { getAllowedRoots } from './filesystem-allowed-roots'
 import { isDescendantOrEqual, isENOENT, normalizeExistingPath } from './filesystem-path-containment'
@@ -140,7 +140,8 @@ async function resolveAuthorizedMissingPath(
 
 async function isSymlink(path: string): Promise<boolean> {
   try {
-    return (await lstat(path)).isSymbolicLink()
+    // A UNC drive-mount path opens only through its drive path; lstat there still sees links.
+    return (await lstat(windowsFsPath(path))).isSymbolicLink()
   } catch (error) {
     if (isENOENT(error)) {
       return false

@@ -180,7 +180,7 @@ export function NativeChatBackgroundTasksStatus(props: {
           <div className="flex h-8 items-center px-1.5">
             <button
               type="button"
-              className="flex h-6 min-w-0 flex-1 cursor-pointer items-center gap-2 rounded-md px-1.5 text-left outline-none hover:bg-accent hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-ring"
+              className="group/task-header flex h-6 min-w-0 flex-1 cursor-pointer items-center gap-2 rounded-md px-1.5 text-left outline-none hover:bg-accent hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-ring"
               aria-expanded={expanded}
               aria-controls={taskListId}
               aria-label={headerText}
@@ -194,7 +194,11 @@ export function NativeChatBackgroundTasksStatus(props: {
                   return (
                     <span key={segment.kind ?? 'total'}>
                       {/* Use text color; the border token is too faint for a readable separator. */}
-                      {index > 0 ? <span className="text-muted-foreground"> · </span> : null}
+                      {index > 0 ? (
+                        <span className="text-muted-foreground group-hover/task-header:text-accent-foreground">
+                          {' · '}
+                        </span>
+                      ) : null}
                       {Icon && kind ? (
                         <Icon
                           aria-hidden="true"
@@ -205,7 +209,9 @@ export function NativeChatBackgroundTasksStatus(props: {
                           )}`}
                         />
                       ) : null}
-                      <span className="font-medium text-foreground">{segment.text}</span>
+                      <span className="font-medium text-foreground group-hover/task-header:text-accent-foreground">
+                        {segment.text}
+                      </span>
                     </span>
                   )
                 })}

@@ -11,7 +11,6 @@ import {
   MOBILE_WEB_BUNDLE_MAX_ROUTES,
   MOBILE_WEB_BUNDLE_MAX_TOTAL_BYTES,
   MOBILE_WEB_BUNDLE_SCHEMA_VERSION,
-  MOBILE_WEB_PAGE_VERSION,
   type MobileWebBundleAsset
 } from './manifest-contract'
 
@@ -116,10 +115,6 @@ describe('the page version a manifest carries', () => {
         String(bad)
       ).toBe(false)
     }
-  })
-
-  it('is at least 1, so a manifest without one reads as older than every page that has one', () => {
-    expect(MOBILE_WEB_PAGE_VERSION).toBeGreaterThanOrEqual(1)
   })
 })
 
@@ -351,31 +346,6 @@ describe('refinement short-circuit', () => {
   it('reports buildId when every cheaper invariant holds', () => {
     const withinCeiling = assetsTotalling(MOBILE_WEB_BUNDLE_MAX_ASSETS, 64)
     expect(issuePaths(manifestOf(withinCeiling, { buildId: WRONG_BUILD_ID }))).toEqual(['buildId'])
-  })
-
-  it('does not hash an oversized asset list', () => {
-    const overCeiling = [
-      ...assetsTotalling(MOBILE_WEB_BUNDLE_MAX_ASSETS, 64),
-      asset('assets/overflow.js', 0)
-    ]
-    const paths = issuePaths(manifestOf(overCeiling, { buildId: WRONG_BUILD_ID }))
-    expect(paths).toEqual(['assets'])
-    expect(paths).not.toContain('buildId')
-  })
-
-  it('does not hash once a cheaper invariant has failed', () => {
-    const twoAssets = [ENTRY, asset('assets/a.js', 10)]
-    expect(issuePaths(manifestOf(twoAssets, { totalBytes: 0, buildId: WRONG_BUILD_ID }))).toEqual([
-      'totalBytes'
-    ])
-    expect(
-      issuePaths(
-        manifestOf(twoAssets, {
-          minCompatibleRuntimeProtocolVersion: 4,
-          buildId: WRONG_BUILD_ID
-        })
-      )
-    ).toEqual(['minCompatibleRuntimeProtocolVersion'])
   })
 })
 

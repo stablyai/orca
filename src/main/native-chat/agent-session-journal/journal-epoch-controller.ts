@@ -14,9 +14,13 @@ import { assertJournalFence, assertJournalWritable } from './journal-write-guard
 import type { JournalWriteBody } from './journal-write-queue'
 import type { JournalOperationReceipt } from './journal-row-writer'
 
+import type { JournalAttachmentClaim } from './journal-submission-hook'
+
 export class JournalEpochController {
   constructor(
     private readonly deps: {
+      isLiveGoal?: (id: string) => boolean
+      claimAttachments?: JournalAttachmentClaim
       identity: AgentSessionJournalIdentity
       now: () => number
       mintEpoch: () => string
@@ -71,6 +75,8 @@ export class JournalEpochController {
         items,
         receipt,
         previous: this.deps.state(),
+        claimAttachments: this.deps.claimAttachments,
+        isLiveGoal: this.deps.isLiveGoal,
         queuePause: this.deps.queuePauseRestatement(),
         queue: this.deps.queueRestatement(),
         now: this.deps.now,

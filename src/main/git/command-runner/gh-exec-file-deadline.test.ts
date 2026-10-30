@@ -1,6 +1,6 @@
-import { EventEmitter } from 'node:events'
 import type { ChildProcess } from 'node:child_process'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { createFakeSpawnedChild } from '../../../shared/__fixtures__/fake-spawned-child'
 
 const { spawnMock, processKillMock } = vi.hoisted(() => ({
   spawnMock: vi.fn(),
@@ -14,14 +14,10 @@ vi.mock('node:child_process', async (importOriginal) => ({
 
 import { ghExecFileAsync } from './gh-exec-file'
 
-function mockChild(pid = 4321): ChildProcess {
-  const child = new EventEmitter() as EventEmitter & Record<string, unknown>
-  child.pid = pid
-  child.kill = vi.fn(() => true)
-  child.stdin = Object.assign(new EventEmitter(), { end: vi.fn() })
-  child.stdout = new EventEmitter()
-  child.stderr = new EventEmitter()
-  return child as unknown as ChildProcess
+function mockChild(pid = 4321) {
+  const child = createFakeSpawnedChild(pid)
+  vi.spyOn(child.stdin, 'end')
+  return child
 }
 
 function settleChild(child: ChildProcess, stdout: string): void {
@@ -86,6 +82,25 @@ describe('gh exec deadline', () => {
     expect(options.windowsHide).toBe(true)
     expect(options.stdio).toEqual(['pipe', 'pipe', 'pipe'])
     expect(options.shell).toBe(false)
+  })
+
+  it('writes configured stdin through the child-process capture', async () => {
+    const child = mockChild()
+    const input = JSON.stringify({ title: 'Image issue', body: 'x'.repeat(133_596) })
+    spawnMock.mockImplementation(() => {
+      queueMicrotask(() => settleChild(child, '{"number":1}'))
+      return child
+    })
+
+    await expect(
+      ghExecFileAsync(['api', '-X', 'POST', 'repos/stablyai/orca/issues', '--input', '-'], {
+        timeout: 15_000,
+        stdin: input
+      })
+    ).resolves.toEqual({ stdout: '{"number":1}', stderr: '' })
+
+    expect(spawnMock).toHaveBeenCalledOnce()
+    expect(child.stdin?.end).toHaveBeenCalledWith(input)
   })
 
   it('fails rather than returning a clipped answer when gh overruns maxBuffer', async () => {

@@ -13,7 +13,10 @@ import {
   structuredLaunchIdentity,
   type StructuredLaunchState
 } from './structured-agent-session-launch-registry'
-import { initialStructuredLaunchSelection } from '../../structured-agent-session-launch-options'
+import {
+  initialStructuredLaunchSelection,
+  structuredLaunchSelectionController
+} from '../../structured-agent-session-launch-options'
 
 export function restorePersistedStructuredLaunchState(
   worktreeId: string,
@@ -36,7 +39,11 @@ export function restorePersistedStructuredLaunchState(
       ...(record.resumeFrom ? { resumeFrom: record.resumeFrom } : {}),
       ...(record.seedOptions ? { seedOptions: record.seedOptions } : {}),
       ...(record.firstMessage ? { firstMessage: record.firstMessage } : {}),
+      ...(record.optionsMode ? { optionsMode: record.optionsMode } : {}),
       ...(record.options ? { options: record.options } : {}),
+      ...(record.explicitLaunchOptions
+        ? { explicitLaunchOptions: record.explicitLaunchOptions }
+        : {}),
       ...(record.createMessageSupport === undefined
         ? {}
         : { createMessageSupport: record.createMessageSupport })
@@ -51,7 +58,7 @@ export function restorePersistedStructuredLaunchState(
   // Only a Retry or re-check restarts a restored launch.
   const callers: StructuredLaunchCallerGroup = createStructuredLaunchCallerGroup({ kind: 'retry' })
   const state: StructuredLaunchState = {
-    identity: structuredLaunchIdentity(worktreeId, record.agent, record.resumeFrom),
+    identity: structuredLaunchIdentity(worktreeId, record.agent, record),
     intent: {
       ...intent,
       ...(record.surfaceAddress ? { surfaceAddress: record.surfaceAddress } : {})
@@ -66,6 +73,7 @@ export function restorePersistedStructuredLaunchState(
   }
   callers.outcome = record.lifecycle === 'failed' ? 'failed' : 'unknown'
   callers.failedAt = record.failedAt
+  structuredLaunchSelectionController(state)
   setStructuredLaunchState(state)
   return state
 }

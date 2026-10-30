@@ -19,7 +19,7 @@ import {
   CODEX_VISUALS_SETUP_BUDGET_MS,
   prepareCodexThreadForVisuals
 } from './codex-structured-visuals'
-import { codexStructuredPermissionPolicy } from './codex-structured-permission-policy'
+import { codexStructuredPermissionPolicy } from '../../shared/codex-permission-policy'
 
 const VISUALS: NativeChatVisualsLaunch = {
   folder: '/state/chat-scratch/abc',
@@ -190,7 +190,7 @@ async function acquired(
       store: { getRecord: () => record, pinLaunchDirectory: vi.fn() },
       resolveWorkspacePath: async () => '/work/repo',
       resolveEnvironment: async () => launch.env ?? {},
-      resolveCommand: () => 'codex',
+      resolveCommand: () => ({ command: 'codex', prefixArgs: [] }),
       resolveLaunchArgs: () => [],
       prepareVisuals: async () => launch.visuals ?? null
     })

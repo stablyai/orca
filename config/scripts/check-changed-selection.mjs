@@ -20,6 +20,7 @@ const LOCALES = 'src/renderer/src/i18n/'
 
 // Ratchets default to SOURCE_ROOTS; list narrower inputs only where a scan is clearly scoped.
 const RATCHET_INPUTS = {
+  'check-daemon-blocking-call-ratchet.mjs': ['src/main/'],
   'check-e2e-typecheck-ratchet.mjs': ['tests/', 'config/tsconfig.e2e.json'],
   'check-focus-read-ratchet.mjs': ['src/renderer/src/', 'src/shared/'],
   'check-host-list-render-ratchet.mjs': ['src/renderer/src/'],
@@ -69,6 +70,44 @@ export const VERIFY_CHECKS = [
     inputs: ['src/renderer/src/', LOCALES]
   },
   {
+    name: 'mobile localization',
+    args: ['config/scripts/verify-mobile-localization.mjs'],
+    inputs: [
+      'mobile/app/',
+      'mobile/src/',
+      'mobile/web-entry/',
+      'mobile/app.json',
+      'mobile/locales/',
+      'src/shared/ui-locale',
+      'config/scripts/verify-mobile-localization',
+      'config/scripts/verify-localization-',
+      'config/scripts/generate-runtime-required-english-catalog',
+      'config/scripts/localization-surfaces'
+    ]
+  },
+  {
+    name: 'mobile localization coverage',
+    args: [
+      'config/scripts/audit-localization-coverage.mjs',
+      '--check',
+      '--source-root',
+      'mobile/app',
+      '--source-root',
+      'mobile/src',
+      '--source-root',
+      'mobile/web-entry',
+      '--allowlist',
+      'config/mobile-localization-coverage-allowlist.json'
+    ],
+    inputs: [
+      'mobile/app/',
+      'mobile/src/',
+      'mobile/web-entry/',
+      'config/mobile-localization-coverage-allowlist.json',
+      'config/scripts/audit-localization-coverage'
+    ]
+  },
+  {
     // CI's own predicate, so local and CI select this check identically.
     name: 'localization extraction',
     args: ['config/scripts/verify-localization-extraction.mjs'],
@@ -106,14 +145,18 @@ export const VERIFY_CHECKS = [
     inputs: ['README.md', 'docs/readme/']
   },
   {
-    name: 'process-host imports',
-    args: ['config/scripts/check-process-host-imports.mjs'],
-    inputs: [...SOURCE_ROOTS, 'config/process-host-direct-import-baseline.txt']
+    // Compiles Tailwind (~1.5s), so it runs only for inputs that can change the emitted CSS.
+    name: 'compiled :has() restyle scope',
+    args: ['config/scripts/check-has-restyle-scope.mjs'],
+    inputs: ['electron.vite.config.ts'],
+    matches: (files) =>
+      files.some((file) => /^src\/(?:renderer\/.*\.(?:css|tsx?)|shared\/.*\.css)$/.test(file))
   },
   {
-    name: 'compat boundary imports',
-    args: ['config/scripts/check-compat-boundary-imports.mjs'],
-    inputs: ['src/']
+    name: 'import boundaries',
+    runtime: 'bun',
+    args: ['config/scripts/check-import-boundaries.mjs'],
+    inputs: [...SOURCE_ROOTS, 'config/process-host-direct-import-baseline.txt']
   },
   {
     name: 'dead design-system classes',
@@ -172,15 +215,29 @@ export function selectTypecheckProjects(files) {
   ).map(({ config }) => config)
 }
 
+// Shared analysis modules select every ratchet built on them.
+const RATCHET_SHARED_MODULES = {
+  'config/scripts/gated-call-use-collector.mjs': [
+    'check-daemon-blocking-call-ratchet.mjs',
+    'check-main-sync-spawn-ratchet.mjs'
+  ]
+}
+
 function listRatchetChecks(scriptsDir) {
   const scripts = new Set(listRatchetScripts(scriptsDir))
-  // `pnpm lint` runs it although CI gives it a dedicated step outside run-ratchets.mjs.
+  // `pnpm lint` runs these although CI checks them in their own steps outside run-ratchets.mjs.
   scripts.add('check-main-sync-spawn-ratchet.mjs')
+  scripts.add('check-flaky-test-pattern-ratchet.mjs')
   return [...scripts].sort().map((script) => ({
     name: script.replace(/^check-|\.mjs$/g, ''),
     args: [`config/scripts/${script}`],
     inputs: RATCHET_INPUTS[script] ?? SOURCE_ROOTS,
-    matches: (files) => files.some((file) => /^config\/[^/]+-baseline\.txt$/.test(file))
+    matches: (files) =>
+      files.some(
+        (file) =>
+          /^config\/[^/]+-baseline\.txt$/.test(file) ||
+          RATCHET_SHARED_MODULES[file]?.includes(script)
+      )
   }))
 }
 

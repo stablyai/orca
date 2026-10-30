@@ -13,6 +13,7 @@ import {
   bulkStageFiles,
   bulkUnstageFiles,
   commitChanges,
+  completeMerge,
   detectConflictOperation,
   discardChanges,
   getBranchCompare,
@@ -72,6 +73,7 @@ export function createLocalGitProvider(options: LocalGitProviderOptions = {}): L
     getHistory: (worktreePath, historyOptions = {}) =>
       getHistory(worktreePath, { ...historyOptions, ...interactive }),
     commit: (worktreePath, message) => commitChanges(worktreePath, message, interactive),
+    completeMerge: (worktreePath) => completeMerge(worktreePath, interactive),
     getStagedCommitContext: (worktreePath) => getStagedCommitContext(worktreePath, interactive),
     getDiff: (worktreePath, filePath, staged, compareAgainstHead) =>
       getDiff(worktreePath, filePath, staged, compareAgainstHead, interactive),
@@ -130,9 +132,9 @@ export function createLocalGitProvider(options: LocalGitProviderOptions = {}): L
         ...(execOptions?.signal ? { signal: execOptions.signal } : {}),
         ...(execOptions?.timeoutMs === undefined ? {} : { timeout: execOptions.timeoutMs })
       }),
-    getRemoteFileUrl: async (worktreePath, relativePath, line) => {
-      await awaitWindowsHostGitEnvironmentReady({ cwd: worktreePath })
-      return getRemoteFileUrl(worktreePath, relativePath, line)
+    getRemoteFileUrl: async (worktreePath, relativePath, line, endLine) => {
+      await awaitWindowsHostGitEnvironmentReady({ ...base, cwd: worktreePath })
+      return getRemoteFileUrl(worktreePath, relativePath, line, endLine, base)
     },
     getRemoteCommitUrl: async (worktreePath, sha) => {
       await awaitWindowsHostGitEnvironmentReady({ cwd: worktreePath })

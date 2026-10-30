@@ -84,7 +84,7 @@ vi.mock('@/components/ui/dropdown-menu', async () => {
 
 import { structuredAgentSessionPermissionDescriptor } from '../../../../shared/structured-agent-session-permission-option'
 import { createStructuredAgentSessionOptionState } from '../../../../shared/structured-agent-session-options'
-import type { SessionOptionDescriptor } from '../../../../shared/native-chat-session-options'
+import type { SessionOptionDescriptor } from '../../../../shared/native-chat/input/native-chat-session-options'
 import {
   NativeChatComposerPermissionPicker,
   NativeChatPermissionModePicker,
@@ -140,7 +140,7 @@ describe('NativeChatPermissionModePicker', () => {
     )
     expect(screen.queryByText('Accept edits')).toBeNull()
     expect(option('ask').textContent).toContain(
-      'Edits files and runs commands in this workspace; asks before anything else'
+      "Asks before edits or commands it isn't already allowed to make"
     )
     expect(option('full-access').textContent).toContain(
       'Never asks; can edit any file and use the network'

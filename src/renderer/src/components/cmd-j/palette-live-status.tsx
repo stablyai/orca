@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'
+import { hasAwakeStructuredChat } from '@/store/slices/structured-chat-slept-at'
 import { AgentStateDot } from '@/components/AgentStateDot'
 import { StateIndicatorTooltip } from '@/components/StateIndicatorTooltip'
 import StatusIndicator from '@/components/sidebar/StatusIndicator'
@@ -199,6 +200,9 @@ export function PaletteWorktreeStatusDot({
   worktree: Pick<Worktree, 'id'>
 }): React.JSX.Element | null {
   const live = useLiveStatus()
+  const hasStructuredChat = useAppStore((s) =>
+    hasAwakeStructuredChat(s.unifiedTabsByWorktree[worktree.id], s.structuredChatSleptAtByPaneKey)
+  )
   if (!live) {
     return null
   }
@@ -209,6 +213,7 @@ export function PaletteWorktreeStatusDot({
     live.paneSources.runtimePaneTitlesByTabId,
     {
       liveAgentStatus: live.liveAgentStatusByWorktreeId.get(worktree.id),
+      hasStructuredChat,
       agentStatusPaneIdsByTabId: live.agentStatusPaneIdsByTabId,
       stalePaneIdsByTabId: live.stalePaneIdsByTabId,
       terminalLayoutsByTabId: live.paneSources.terminalLayoutsByTabId

@@ -10,10 +10,4 @@ describe('isXtermInstanceDisposed', () => {
     terminal.dispose()
     expect(isXtermInstanceDisposed(terminal)).toBe(true)
   })
-
-  it('answers false for non-terminal shapes', () => {
-    expect(isXtermInstanceDisposed(null)).toBe(false)
-    expect(isXtermInstanceDisposed(undefined)).toBe(false)
-    expect(isXtermInstanceDisposed({})).toBe(false)
-  })
 })

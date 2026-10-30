@@ -5,6 +5,7 @@ import {
   getWorktreeIdFromHostIdentity,
   isWorktreeHostIdentity
 } from '../../../shared/worktree/host-qualified-identity'
+import { worktreeWorkspaceKey } from '../../../shared/workspace-scope'
 import { SESSION_FIELDS_PRUNED_BY_OWNER_KEY } from '../../orca-profiles/profile-project-session-field-disposition'
 
 // Repo-keyed topology revisions advance rather than delete; host-qualified recency keys need a scan.
@@ -91,7 +92,11 @@ export function deleteOwnerKeyedSessionFields(
       }
     }
   }
-  if (next.activeWorkspaceKey === ownerKey) {
+  // Worktree owners are raw ids, but the active key stores their canonical worktree: form.
+  if (
+    next.activeWorkspaceKey === ownerKey ||
+    next.activeWorkspaceKey === worktreeWorkspaceKey(ownerKey)
+  ) {
     next.activeWorkspaceKey = null
   }
   if (next.activeWorktreeId === ownerKey) {

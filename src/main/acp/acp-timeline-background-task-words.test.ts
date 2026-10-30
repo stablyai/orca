@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { backgroundTaskFallbackText } from '../../shared/native-chat-background-task-row'
+import { backgroundTaskFallbackText } from '../../shared/native-chat/input/native-chat-background-task-row'
 import { isBackgroundTaskBlock } from '../../shared/native-chat-types'
 import { closeProviderTimelineRigs } from '../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
 import { openAcpFixtureRig, readAcpFixture } from './acp-timeline-fixture.test-support'

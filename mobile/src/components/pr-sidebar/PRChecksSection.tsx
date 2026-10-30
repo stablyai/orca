@@ -3,6 +3,10 @@ import { ActivityIndicator, Pressable, Text, View } from 'react-native'
 import { openExternalLink } from '../../platform/external-link'
 import { ChevronDown, ChevronRight, ExternalLink, RotateCw, Sparkles } from 'lucide-react-native'
 import { colors } from '../../theme/mobile-theme'
+import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { translate } from '../../i18n/mobile-i18n'
+import type { Translate } from '../../i18n/mobile-i18n'
+import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import type { PRCheckDetail } from '../../../../src/shared/github/check-types'
 import type { RpcClient } from '../../transport/rpc-client'
 import { fetchPRCheckDetails, type GitHubPrRepoSlug } from '../../session/github-pr-rpc'
@@ -10,13 +14,14 @@ import type { MobilePrActions } from '../../session/use-mobile-pr-actions'
 import {
   checkOutcome,
   checkOutcomeToken,
-  checkStatusLabel,
   firstFailingCheckKey,
   prCheckKey,
-  prChecksSummaryLabel,
-  sortPRChecks,
-  summarizePRChecks
+  summarizePRChecks,
+  type PRChecksSummary
 } from './pr-checks-presentation'
+import { sortChecksBySeverity } from '../../../../src/shared/pr-check-severity-order'
+import { getBrokenChecks } from '../../../../src/shared/pr-checks-fix-prompt'
+import { getCheckConclusion } from '../../../../src/shared/pr-check-status-label'
 import { statusColor } from './pr-sidebar-status-color'
 import { PRSection } from './PRSection'
 import { PRCheckDetailView, type DetailEntry } from './PRCheckDetail'
@@ -48,6 +53,62 @@ type Props = {
   triage?: PrChecksTriage
 }
 
+function checksSummaryLabel(summary: PRChecksSummary, checksError: string | null, t: Translate) {
+  if (checksError !== null) {
+    return t('pullRequest.checksSection.unavailable', 'Checks unavailable')
+  }
+  if (summary.total === 0) {
+    return t('pullRequest.checksSection.noChecks', 'No checks')
+  }
+  const parts: string[] = []
+  if (summary.failed > 0) {
+    parts.push(
+      t('pullRequest.checksSection.failing', '{{count}} failing', { count: summary.failed })
+    )
+  }
+  if (summary.pending > 0) {
+    parts.push(
+      t('pullRequest.checksSection.pendingCount', '{{count}} pending', { count: summary.pending })
+    )
+  }
+  if (summary.passed > 0) {
+    parts.push(t('pullRequest.checksSection.passed', '{{count}} passed', { count: summary.passed }))
+  }
+  const neutral = summary.total - summary.failed - summary.pending - summary.passed
+  if (neutral > 0) {
+    parts.push(t('pullRequest.checksSection.neutralCount', '{{count}} neutral', { count: neutral }))
+  }
+  return parts.join(' · ')
+}
+
+function checkStatusLabel(check: PRCheckDetail, t: Translate): string {
+  switch (getCheckConclusion(check)) {
+    case 'success':
+      return t('pullRequest.checksSection.successful', 'Successful')
+    case 'failure':
+      return t('pullRequest.checksSection.failed', 'Failed')
+    case 'cancelled':
+      return t('pullRequest.checksSection.cancelled', 'Cancelled')
+    case 'timed_out':
+      return t('pullRequest.checksSection.timedOut', 'Timed out')
+    case 'action_required':
+      return t('pullRequest.checksSection.actionRequired', 'Action required')
+    case 'neutral':
+      return t('pullRequest.checksSection.neutral', 'Neutral')
+    case 'skipped':
+      return t('pullRequest.checksSection.skipped', 'Skipped')
+    case 'pending':
+      break
+  }
+  if (check.status === 'queued') {
+    return t('pullRequest.checksSection.queued', 'Queued')
+  }
+  if (check.status === 'in_progress') {
+    return t('pullRequest.checksSection.inProgress', 'In progress')
+  }
+  return t('pullRequest.checksSection.pending', 'Pending')
+}
+
 // Sort summary/check rows; lazily cache expanded github.prCheckDetails per check key. Rerun action is separate.
 export function PRChecksSection({
   checks,
@@ -58,7 +119,11 @@ export function PRChecksSection({
   actions,
   triage
 }: Props) {
-  const sorted = sortPRChecks(checks)
+  useMobileColorScheme()
+  const t = useMobileTranslation()
+  const sorted = sortChecksBySeverity(checks)
+  // Desktop gates Fix and Rerun on the checks the host reruns and the prompt lists.
+  const count = getBrokenChecks(checks).length
   const summary = summarizePRChecks(checks)
   const rerunBusy = actions?.isBusy({ kind: 'rerun' }) ?? false
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
@@ -85,7 +150,13 @@ export function PRChecksSection({
         // Set error detail on rejection so loading cannot spin forever.
         entry = {
           status: 'error',
-          message: err instanceof Error ? err.message : 'Failed to load check details'
+          message:
+            err instanceof Error
+              ? err.message
+              : translate(
+                  'pullRequest.checksSection.loadDetailsFailed',
+                  'Failed to load check details'
+                )
         }
       }
       setDetailCache((prev) => ({ ...prev, [key]: entry }))
@@ -145,7 +216,7 @@ export function PRChecksSection({
 
   return (
     <PRSection
-      title="Checks"
+      title={t('pullRequest.checksSection.title', 'Checks')}
       trailing={
         <>
           <Text
@@ -154,16 +225,19 @@ export function PRChecksSection({
               { color: statusColor(checkOutcomeToken(summary.outcome)) }
             ]}
           >
-            {prChecksSummaryLabel(summary, checksError)}
+            {checksSummaryLabel(summary, checksError, t)}
           </Text>
           {/* Rerun is offered only when something failed; spinner-in-place while in-flight. */}
-          {actions && summary.failed > 0 ? (
+          {actions && count > 0 ? (
             <Pressable
               style={styles.iconButton}
               onPress={() => actions.rerunFailingChecks()}
               disabled={rerunBusy}
               accessibilityRole="button"
-              accessibilityLabel="Rerun failing checks"
+              accessibilityLabel={t(
+                'pullRequest.checksSection.rerunFailing',
+                'Rerun failing checks'
+              )}
             >
               {rerunBusy ? (
                 <ActivityIndicator color={colors.textSecondary} />
@@ -176,14 +250,23 @@ export function PRChecksSection({
       }
     >
       {/* Lead with desktop-style failing summary and Fix action so actionable state comes first. */}
-      {triage && summary.failed > 0 ? (
+      {triage && count > 0 ? (
         <View style={triageStyles.triageStrip}>
           <View style={triageStyles.triageStripText}>
             <Text style={triageStyles.triageStripTitle} numberOfLines={1}>
-              {summary.failed} failing check{summary.failed === 1 ? '' : 's'}
+              {count === 1
+                ? t('pullRequest.checksSection.failingChecks_one', '{{count}} failing check', {
+                    count
+                  })
+                : t('pullRequest.checksSection.failingChecks_other', '{{count}} failing checks', {
+                    count
+                  })}
             </Text>
             <Text style={triageStyles.triageStripSubtitle} numberOfLines={1}>
-              Inspect details or start an AI fix pass.
+              {t(
+                'pullRequest.checksSection.inspectOrFix',
+                'Inspect details or start an AI fix pass.'
+              )}
             </Text>
           </View>
           <Pressable
@@ -191,14 +274,19 @@ export function PRChecksSection({
             onPress={triage.fixChecks}
             disabled={triage.isBusy || triage.availability !== 'available'}
             accessibilityRole="button"
-            accessibilityLabel="Fix failing checks with AI"
+            accessibilityLabel={t(
+              'pullRequest.checksSection.fixFailing',
+              'Fix failing checks with AI'
+            )}
           >
             {triage.isBusy ? (
               <ActivityIndicator color={colors.textSecondary} />
             ) : (
               <Sparkles size={13} color={colors.textSecondary} strokeWidth={2.2} />
             )}
-            <Text style={triageStyles.triageStripButtonText}>Fix</Text>
+            <Text style={triageStyles.triageStripButtonText}>
+              {t('pullRequest.checksSection.fix', 'Fix')}
+            </Text>
           </Pressable>
         </View>
       ) : null}
@@ -225,7 +313,11 @@ export function PRChecksSection({
               style={styles.row}
               onPress={() => toggle(check)}
               accessibilityRole="button"
-              accessibilityLabel={`${check.name} check details`}
+              accessibilityLabel={t(
+                'pullRequest.checksSection.checkDetails',
+                '{{name}} check details',
+                { name: check.name }
+              )}
             >
               <Chevron size={14} color={colors.textSecondary} strokeWidth={2.2} />
               <View style={[styles.statusDot, { backgroundColor: statusColor(token) }]} />
@@ -236,7 +328,7 @@ export function PRChecksSection({
               </View>
               {/* Show status word/open-on-host without requiring expansion, matching desktop. */}
               <Text style={[styles.rowStatus, { color: statusColor(token) }]} numberOfLines={1}>
-                {checkStatusLabel(check)}
+                {checkStatusLabel(check, t)}
               </Text>
               {url ? (
                 <Pressable
@@ -244,7 +336,11 @@ export function PRChecksSection({
                   onPress={() => openExternalLink(url)}
                   hitSlop={6}
                   accessibilityRole="button"
-                  accessibilityLabel={`Open ${check.name} on the web`}
+                  accessibilityLabel={t(
+                    'pullRequest.checksSection.openOnWeb',
+                    'Open {{name}} on the web',
+                    { name: check.name }
+                  )}
                 >
                   <ExternalLink size={13} color={colors.textSecondary} strokeWidth={2.2} />
                 </Pressable>

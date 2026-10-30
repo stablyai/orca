@@ -51,8 +51,9 @@ export function ConversationDescription({
       <div className="flex items-center gap-2 border-b border-border/50 px-3 py-2 text-[12px] text-muted-foreground">
         <span className="font-medium text-foreground">{authorLabel}</span>
         <span>
-          {translate('auto.components.PullRequestPage.169a93b29a', 'updated')}{' '}
-          {formatRelativeTime(updatedAt)}
+          {translate('auto.components.PullRequestPage.updatedRelativeTime', 'updated {{time}}', {
+            time: formatRelativeTime(updatedAt)
+          })}
         </span>
         {canEditBody && !loading && detailsLoaded ? (
           bodyEditing ? (

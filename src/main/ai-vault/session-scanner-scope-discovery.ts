@@ -13,7 +13,8 @@ import { parseWslUncPath } from '../../shared/wsl-paths'
 import { throwIfAiVaultScanCancelled } from './ai-vault-scan-cancellation'
 import { yieldToEventLoop } from '../../shared/event-loop-yield'
 import type { FileWithMtime } from './session-scanner-types'
-import { errorMessage, extractString, parseJsonObject } from './session-scanner-values'
+import { extractString, parseJsonObject } from './session-scanner-values'
+import { scanIssueTextFromError } from './session-scan-issues'
 
 // Limit representative probing when a bucket contains transcripts without cwd records.
 const REPRESENTATIVE_CWD_LINE_LIMIT = 200
@@ -37,7 +38,7 @@ export function recordRefusal(
   agent: AiVaultAgent
 ): void {
   if (error instanceof WslTranscriptFsError) {
-    issues({ agent, path, message: error.message })
+    issues({ agent, path, ...scanIssueTextFromError(error) })
   }
 }
 
@@ -232,7 +233,7 @@ export async function collectBucketFiles(args: {
       })
     } catch (err) {
       throwIfAiVaultScanCancelled(args.signal)
-      args.issues({ agent: args.agent, path, message: errorMessage(err) })
+      args.issues({ agent: args.agent, path, ...scanIssueTextFromError(err) })
     }
   }
 }

@@ -5,7 +5,7 @@ import {
   DELEGATED_MOBILE_DEVICES_RUNTIME_CAPABILITY,
   type DelegatedMobileDeviceSyncParams
 } from '../../../shared/delegated-mobile-device-contract'
-import { RemoteRuntimeClientError } from '../../../shared/remote-runtime-client-error'
+import { RemoteRuntimeClientError } from '../../../shared/remote-runtime/remote-runtime-client-error'
 import type { MobileDesktopRelayHost, MobileDesktopRelayHosts } from './mobile-desktop-relay-hosts'
 
 const SyncResultSchema = z.object({

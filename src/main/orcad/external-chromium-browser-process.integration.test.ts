@@ -18,7 +18,7 @@ describe('ExternalChromiumBrowserProcess integration', () => {
       const fixturePath = join(root, 'fixture.html')
       await writeFile(
         fixturePath,
-        '<!doctype html><title>External Chromium</title><main>external-ready</main>'
+        '<!doctype html><title>External Chromium</title><main>external-ready</main><input>'
       )
       const provider = await resolveOrcadBrowserProvider({
         userDataPath: root,
@@ -31,8 +31,9 @@ describe('ExternalChromiumBrowserProcess integration', () => {
           throw new Error('External Chromium provider did not resolve.')
         }
         const commands = provider.factory({
+          getRuntimeId: () => 'fixture-runtime',
           getAgentBrowserBridge: () => null,
-          resolveWorktreeSelector: async (selector) => ({ id: selector }),
+          resolveWorkspaceSelector: async (selector) => ({ id: selector }),
           resolveBrowserWorkspace: async (selector) => ({ id: selector }),
           resolveBrowserNetworkExecutionHost: () => {
             throw new Error('No browser network execution host')
@@ -64,6 +65,19 @@ describe('ExternalChromiumBrowserProcess integration', () => {
             expression: 'document.querySelector("main")?.textContent'
           })
         ).resolves.toMatchObject({ result: 'external-ready' })
+        const page = 'external-page'
+        const inputValue = (): Promise<unknown> =>
+          commands.browserEval({ page, expression: 'document.querySelector("input").value' })
+        for (const text of ['--help', '-x', '--', 'a -- b', '--json --session other']) {
+          await commands.browserFill({ page, element: 'input', value: text })
+          await expect(inputValue()).resolves.toMatchObject({ result: text })
+          await commands.browserFill({ page, element: 'input', value: '' })
+          await commands.browserKeyboardInsertText({ page, text })
+          await expect(inputValue()).resolves.toMatchObject({ result: text })
+          await commands.browserFill({ page, element: 'input', value: '' })
+          await commands.browserType({ page, input: text })
+          await expect(inputValue()).resolves.toMatchObject({ result: text })
+        }
         await expect(
           commands.browserScreenshot({ page: 'external-page', format: 'png' })
         ).resolves.toMatchObject({ data: expect.stringMatching(/\S+/), format: 'png' })

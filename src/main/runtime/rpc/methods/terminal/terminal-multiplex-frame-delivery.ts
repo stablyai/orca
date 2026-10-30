@@ -8,6 +8,11 @@ import {
 import { appendAckPendingOutput } from './terminal-stream-replay'
 import { notePausedOutputDropped } from './terminal-multiplex-paused-output-drop'
 import {
+  markYieldedQueriesDiscardedInFrames,
+  settleDeliveredYieldedQueries,
+  settleReplayedYieldedQuery
+} from './terminal-multiplex-yielded-queries'
+import {
   isMultiplexStreamAttached,
   type TerminalMultiplexConnection
 } from './terminal-multiplex-connection'
@@ -112,6 +117,11 @@ export function installMultiplexFrameDelivery(state: TerminalMultiplexConnection
     if (!sent) {
       return false
     }
+    if (chunk.replayedQuery) {
+      settleReplayedYieldedQuery(stream, chunk.replayedQuery)
+    } else {
+      settleDeliveredYieldedQueries(stream, chunk.seq)
+    }
     if (stream.ackOutput) {
       stream.ackInFlightBytes += chunk.bytes.byteLength
       state.ackTotalInFlightBytes += chunk.bytes.byteLength
@@ -134,7 +144,7 @@ export function installMultiplexFrameDelivery(state: TerminalMultiplexConnection
       stream.ackPendingOutput.length > 0 ||
       !state.canSendAckGatedOutput(stream, chunk.bytes.byteLength)
     ) {
-      appendAckPendingOutput(stream, chunk)
+      markYieldedQueriesDiscardedInFrames(stream, appendAckPendingOutput(stream, chunk))
       return
     }
     state.sendAckGatedOutput(stream, chunk)

@@ -26,6 +26,21 @@ const projectDir = resolve(import.meta.dirname, '../..')
 const prWorkflow = parse(readFileSync(join(projectDir, '.github/workflows/pr.yml'), 'utf8'))
 const e2eWorkflow = parse(readFileSync(join(projectDir, '.github/workflows/e2e.yml'), 'utf8'))
 
+describe('browser native focus routing', () => {
+  it('selects the general E2E lane for focus adapter and image fixture changes', () => {
+    const spec = 'tests/e2e/browser-image-link-focus.spec.ts'
+    for (const file of [
+      'src/renderer/src/components/browser-pane/assemble-chrome/browser-page-guest-focus.ts',
+      'tests/e2e/helpers/browser-link-server.ts'
+    ]) {
+      const specs = selectPrE2eSpecs([file])
+      expect(specs, file).toContain(spec)
+      expect(selectGeneralE2eSpecs(specs), file).toContain(spec)
+      expect(classifyE2eJobs(JSON.stringify(specs)).e2e_run_changed, file).toBe(true)
+    }
+  })
+})
+
 describe('pr-e2e-native-only-routing', () => {
   const workflow = prWorkflow
   const filterStep = workflow.jobs.code_paths.steps.find((step) => step.id === 'e2e_filter')
@@ -253,6 +268,9 @@ describe('pr-e2e-layout-oracle-routing', () => {
       // Two calls of the reusable workflow in one run must not share artifact names.
       expect(prWorkflow.jobs.layout_oracle.with.artifact_suffix).toBeTruthy()
       expect(prWorkflow.jobs.e2e.with.artifact_suffix).toBeUndefined()
+      // Both lanes run on free hosted runners.
+      expect(prWorkflow.jobs.layout_oracle.with.fast_runners).toBeUndefined()
+      expect(prWorkflow.jobs.e2e.with.fast_runners).toBeUndefined()
     })
   })
 })
@@ -269,7 +287,9 @@ describe('ssh-browser-e2e-routing', () => {
     const run = job.steps.find(
       (step) => step.name === 'Run Docker SSH browser network route journeys'
     )
-    expect(job['runs-on']).toBe('blacksmith-4vcpu-ubuntu-2404')
+    expect(job['runs-on']).toBe(
+      "${{ inputs.fast_runners && 'blacksmith-4vcpu-ubuntu-2404' || 'ubuntu-24.04' }}"
+    )
     expect(job.if).toContain("inputs.test_files == ''")
     expect(job.if).toContain(spec)
     expect(install.with['native-runtime']).toBe('node')
@@ -482,6 +502,37 @@ describe('orcad-e2e-routing', () => {
 function selectsManagedSshLane(file) {
   return selectPrE2eSpecs([file]).some((spec) => spec.startsWith(MANAGED_SSH_E2E_SPEC_PREFIX))
 }
+
+describe('wsl-host remove routing', () => {
+  it('runs the fake transport spec, which covers Remove, for a remove-path change', () => {
+    for (const file of [
+      'src/main/wsl/wsl-host-server-stop.ts',
+      'src/main/wsl/wsl-host-peer-desktops.ts',
+      'src/main/wsl/wsl-host-removal.ts'
+    ]) {
+      expect(selectPrE2eSpecs([file]), file).toContain('tests/e2e/wsl-host-fake-transport.spec.ts')
+    }
+    expect(selectPrE2eSpecs(['src/main/wsl/wsl-host-server-stop.test.ts'])).not.toContain(
+      'tests/e2e/wsl-host-fake-transport.spec.ts'
+    )
+  })
+})
+
+describe('wsl-host fake connector routing', () => {
+  it('runs both WSL host specs for a fake connector change', () => {
+    const specs = selectPrE2eSpecs(['src/main/wsl/wsl-host-e2e-fake-connector.ts'])
+    for (const spec of [
+      'tests/e2e/wsl-host-chat.spec.ts',
+      'tests/e2e/wsl-host-fake-transport.spec.ts'
+    ]) {
+      expect(specs, spec).toContain(spec)
+      expect(existsSync(join(projectDir, spec)), spec).toBe(true)
+    }
+    expect(selectPrE2eSpecs(['src/main/wsl/wsl-host-e2e-fake-connector.test.ts'])).not.toContain(
+      'tests/e2e/wsl-host-chat.spec.ts'
+    )
+  })
+})
 
 describe('managed-SSH remote sources routing', () => {
   it('gives every managed-SSH spec a source route', () => {

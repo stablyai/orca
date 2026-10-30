@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AgentStatusUpdate } from '../store/slices/agent-status'
+import type { AgentStatusUpdate } from '../store/slices/agent-status/agent-status-contract'
 import {
   buildStoreState,
   expectWorktreeRouting,

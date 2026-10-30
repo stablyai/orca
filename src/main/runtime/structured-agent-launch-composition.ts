@@ -19,7 +19,10 @@ import { sealStructuredSessionChild } from './structured-session-child-env'
 
 /** Where a launch's shared inputs come from. */
 export type StructuredAgentLaunchSources = {
-  store: Pick<AgentSessionRecordStore, 'getRecord' | 'pinLaunchDirectory'>
+  store: Pick<
+    AgentSessionRecordStore,
+    'selectWritableRecord' | 'requireWritableRecord' | 'pinLaunchDirectory'
+  >
   resolveWorkspacePath: (workspaceId: string) => Promise<string>
   resolveBaseEnvironment: () => Promise<Record<string, string>>
   /** The base environment with the user's overlay for `agent` laid over it. */
@@ -106,10 +109,10 @@ function admittedRecord(
   store: StructuredAgentLaunchSources['store'],
   sessionId: string
 ): AgentSessionRecord {
-  const record = store.getRecord(sessionId)
-  if (!record) {
+  if (store.selectWritableRecord(sessionId).kind === 'missing') {
     throw new Error(`no durable agent-session record for ${sessionId}`)
   }
+  const record = store.requireWritableRecord(sessionId)
   if (record.provider !== definition.agent) {
     throw new Error(`session ${sessionId} is a ${record.provider} session`)
   }
@@ -180,6 +183,7 @@ export function composeStructuredLaunch<L>(
       identity,
       permissionMode
     )
+    admittedRecord(definition, sources.store, identity.sessionId)
     const child = sealStructuredSessionChild({
       sessionId: identity.sessionId,
       spawnToken,
@@ -209,6 +213,7 @@ export function composeStructuredLaunchRead<L>(
       part,
       identity
     )
+    admittedRecord(definition, sources.store, identity.sessionId)
     return { ...launch, cwd, env, envToDelete: [...inheritedEnvToDelete] }
   }
 }

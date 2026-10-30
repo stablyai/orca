@@ -1,3 +1,4 @@
+import { agentSessionRecordFixture } from '../native-chat/agent-session-record-test-fixture'
 import {
   createCodexStructuredLaunchResolver,
   TEST_SPAWN_TOKEN
@@ -41,7 +42,7 @@ async function withPlatform<T>(platform: NodeJS.Platform, run: () => Promise<T>)
 }
 
 function record(overrides: Partial<AgentSessionRecord> = {}): AgentSessionRecord {
-  return {
+  return agentSessionRecordFixture({
     sessionId: SESSION_ID,
     provider: 'codex',
     location: {
@@ -53,7 +54,7 @@ function record(overrides: Partial<AgentSessionRecord> = {}): AgentSessionRecord
     accountHome: { variable: 'CODEX_HOME', path: '/home/work/.codex' },
     providerHandleChain: [],
     ...overrides
-  } as AgentSessionRecord
+  })
 }
 
 function resolverFor(
@@ -64,7 +65,7 @@ function resolverFor(
   return createCodexStructuredLaunchResolver({
     store: { getRecord: () => value, pinLaunchDirectory: vi.fn() },
     resolveWorkspacePath,
-    resolveCommand: () => '/usr/local/bin/codex',
+    resolveCommand: () => ({ command: '/usr/local/bin/codex', prefixArgs: [] }),
     resolveLaunchArgs: resolveLaunchArgs ?? (() => value?.launchArgs ?? [])
   })
 }
@@ -142,7 +143,7 @@ describe('codex structured launch resolution', () => {
       },
       resolveLaunchArgs: () => [],
       resolveWorkspacePath: async () => '/floating/start-folder',
-      resolveCommand: () => '/usr/local/bin/codex'
+      resolveCommand: () => ({ command: '/usr/local/bin/codex', prefixArgs: [] })
     })
 
     await expect(resolveLaunch({ identity: IDENTITY })).resolves.toMatchObject({
@@ -155,6 +156,7 @@ describe('codex structured launch resolution', () => {
     const launch = await resolverFor(record())({ identity: IDENTITY })
 
     expect(launch).toEqual({
+      prefixArgs: [],
       command: '/usr/local/bin/codex',
       args: ['app-server'],
       cwd: '/repos/workspace-1',
@@ -162,7 +164,7 @@ describe('codex structured launch resolution', () => {
       resumeThreadId: null,
       permissionPolicy: {
         approvalPolicy: 'on-request',
-        sandbox: 'workspace-write',
+        sandbox: 'read-only',
         approvalsReviewer: 'user'
       },
       env: { CODEX_HOME: '/home/work/.codex' },
@@ -178,7 +180,7 @@ describe('codex structured launch resolution', () => {
         resolveLaunchArgs: () => [],
         store: { getRecord: () => record(), pinLaunchDirectory: vi.fn() },
         resolveWorkspacePath: async () => String.raw`C:\workspaces\orca`,
-        resolveCommand: () => command
+        resolveCommand: () => ({ command: command, prefixArgs: [] })
       })
 
       await expect(resolveLaunch({ identity: IDENTITY })).resolves.toMatchObject({
@@ -195,7 +197,7 @@ describe('codex structured launch resolution', () => {
         resolveLaunchArgs: () => [],
         store: { getRecord: () => record(), pinLaunchDirectory: vi.fn() },
         resolveWorkspacePath: async () => String.raw`C:\workspaces\orca`,
-        resolveCommand: () => 'codex.exe'
+        resolveCommand: () => ({ command: 'codex.exe', prefixArgs: [] })
       })
 
       await expect(resolveLaunch({ identity: IDENTITY })).resolves.toMatchObject({
@@ -249,10 +251,7 @@ describe('codex structured launch resolution', () => {
   })
 
   it.each([
-    [
-      'ask',
-      { approvalPolicy: 'on-request', sandbox: 'workspace-write', approvalsReviewer: 'user' }
-    ],
+    ['ask', { approvalPolicy: 'on-request', sandbox: 'read-only', approvalsReviewer: 'user' }],
     [
       'auto',
       { approvalPolicy: 'on-request', sandbox: 'workspace-write', approvalsReviewer: 'auto_review' }

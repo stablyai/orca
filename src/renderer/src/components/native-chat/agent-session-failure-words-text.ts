@@ -149,6 +149,18 @@ const PIECES: Record<AgentSessionFailureCopyId, (values: AgentSessionFailureCopy
         COPY.runtimeNotInstalled,
         values
       ),
+    fullAccessAsRoot: (values) =>
+      translate(
+        'components.native-chat.failureWords.fullAccessAsRoot',
+        COPY.fullAccessAsRoot,
+        values
+      ),
+    launchPreparationFailed: (values) =>
+      translate(
+        'components.native-chat.failureWords.launchPreparationFailed',
+        COPY.launchPreparationFailed,
+        values
+      ),
     conversationOpenElsewhere: () =>
       translate(
         'components.native-chat.failureWords.conversationOpenElsewhere',
@@ -177,6 +189,11 @@ const PIECES: Record<AgentSessionFailureCopyId, (values: AgentSessionFailureCopy
         COPY.chooseClaudeAccountThenSend
       ),
     ...PROVIDER_EXIT_PIECES,
+    claudeEffortInvalid: () =>
+      translate(
+        'components.native-chat.failureWords.claudeEffortInvalid',
+        COPY.claudeEffortInvalid
+      ),
     providerRejected: (values) =>
       translate(
         'components.native-chat.failureWords.providerRejected',
@@ -235,8 +252,6 @@ const PIECES: Record<AgentSessionFailureCopyId, (values: AgentSessionFailureCopy
       translate('components.native-chat.writeNotice.waitForStart', COPY.waitForStart),
     agentStillWorking: () =>
       translate('components.native-chat.writeNotice.agentStillWorking', COPY.agentStillWorking),
-    waitForTurn: () =>
-      translate('components.native-chat.writeNotice.waitForTurn', COPY.waitForTurn),
     runCommandWhenDone: (values) =>
       translate(
         'components.native-chat.failureWords.runCommandWhenDone',

@@ -12,12 +12,8 @@ import { acquire, release, type LocalGitExecOptions } from './gh-utils'
 import { resolveGitHubRepoExecution, type GitHubApiRepository } from './github-api-repository'
 import { isValidGitHubApiRepository } from './github-api-repository-validation'
 import { getIssueBodyAndComments, getIssueDetailsViaGraphQL } from './issue-work-item-details'
-import {
-  getPRFiles,
-  getPRFileViewedStates,
-  getPRMetadata,
-  mergePRFileViewedStates
-} from './pull-request-file-data'
+import { getPRFiles, getPRMetadata, mergePRFileViewedStates } from './pull-request-file-data'
+import { getPRDetailContext } from './pull-request-detail-context'
 import { getPRFileContents as loadPRFileContents } from './pull-request-file-contents'
 import {
   enrichItemDisplayAvatars,
@@ -86,7 +82,11 @@ export async function getWorkItemDetails(
       return null
     }
   }
-  const { item, repository: selectedRepository } = issueRepositoryOverride
+  const {
+    item,
+    repository: selectedRepository,
+    issueDetails
+  } = issueRepositoryOverride
     ? {
         item: await getWorkItemByOwnerRepo(
           repoPath,
@@ -96,7 +96,8 @@ export async function getWorkItemDetails(
           connectionId,
           localGitOptions
         ),
-        repository: issueRepositoryOverride
+        repository: issueRepositoryOverride,
+        issueDetails: undefined
       }
     : await getWorkItemWithRepository(
         repoPath,
@@ -104,7 +105,8 @@ export async function getWorkItemDetails(
         type,
         connectionId,
         localGitOptions,
-        preference
+        preference,
+        type === 'issue'
       )
   if (!item) {
     return null
@@ -119,13 +121,16 @@ export async function getWorkItemDetails(
 
   if (item.type === 'issue') {
     return withWorkItemDetailsPermit(async () => {
-      const collapsed = await getIssueDetailsViaGraphQL(
-        repoPath,
-        item.number,
-        resolvedRepository,
-        connectionId,
-        localGitOptions
-      )
+      const collapsed =
+        issueDetails === undefined
+          ? await getIssueDetailsViaGraphQL(
+              repoPath,
+              item.number,
+              resolvedRepository,
+              connectionId,
+              localGitOptions
+            )
+          : issueDetails
       if (collapsed) {
         return {
           item: enrichItemDisplayAvatars(item, [
@@ -170,27 +175,16 @@ export async function getWorkItemDetails(
   }
 
   // Nested client reads own their semaphore permits, so they stay outside these permits.
-  const [[metadata, files, viewedStates, participants], comments] = await Promise.all([
-    Promise.all([
-      withWorkItemDetailsPermit(() =>
-        getPRMetadata(repoPath, item.number, resolvedRepository, connectionId, localGitOptions)
-      ),
-      withWorkItemDetailsPermit(() =>
-        getPRFiles(repoPath, item.number, resolvedRepository, connectionId, localGitOptions)
-      ),
-      withWorkItemDetailsPermit(() =>
-        getPRFileViewedStates(
-          repoPath,
-          item.number,
-          resolvedRepository,
-          connectionId,
-          localGitOptions
-        )
-      ),
-      withWorkItemDetailsPermit(() =>
-        getWorkItemParticipants(repoPath, item, resolvedRepository, connectionId, localGitOptions)
-      )
-    ]),
+  const [{ viewedStates, participants }, metadata, files, comments] = await Promise.all([
+    withWorkItemDetailsPermit(() =>
+      getPRDetailContext(repoPath, item.number, resolvedRepository, connectionId, localGitOptions)
+    ),
+    withWorkItemDetailsPermit(() =>
+      getPRMetadata(repoPath, item.number, resolvedRepository, connectionId, localGitOptions)
+    ),
+    withWorkItemDetailsPermit(() =>
+      getPRFiles(repoPath, item.number, resolvedRepository, connectionId, localGitOptions)
+    ),
     resolvedRepository
       ? getPRComments(
           repoPath,

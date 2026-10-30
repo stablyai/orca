@@ -7,6 +7,7 @@ import type {
   ExternalAutomationManager
 } from '../../../../shared/automations-types'
 import type { ProjectHostSetup } from '../../../../shared/project-types'
+import type { AppState } from '@/store/types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import type {
@@ -218,8 +219,11 @@ export function makeWorktree(overrides: Partial<Worktree> = {}): Worktree {
   }
 }
 
+export type AutomationsPageFixtureState = Record<string, unknown> &
+  Pick<AppState, 'repos' | 'projectHostSetups' | 'worktreesByRepo'>
+
 export type AutomationsPageStoreFixtures = {
-  state: Record<string, unknown>
+  state: AutomationsPageFixtureState
   repoMap: Map<string, Repo>
   worktreeMap: Map<string, Worktree>
 }

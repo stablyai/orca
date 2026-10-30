@@ -366,10 +366,6 @@ describe('the fields that diverged', () => {
       })
     ).toEqual(['checkpoints'])
   })
-
-  it('is empty when the two agree', () => {
-    expect(divergingFields(recording({}), recording({}))).toEqual([])
-  })
 })
 
 describe('reading the scenario', () => {

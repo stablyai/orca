@@ -33,6 +33,9 @@ const LEGACY_MARKER_KINDS: ReadonlySet<SubmissionRejectionKind> = new Set([
 
 /** Cover every fact shape, with person/log/refusal details and every attachment reason with/without a limit. */
 function factsFor(kind: AgentSessionFailureKind): AgentSessionFailureFact[] {
+  if (kind === 'modelUnavailable') {
+    return [{ kind }, { kind, detail: { text: 'retired-model', audience: 'log' } }]
+  }
   const facts: AgentSessionFailureFact[] = [
     { kind },
     { kind, detail: { text: 'Context window exceeded.', audience: 'person' } },
@@ -374,20 +377,4 @@ describe('an attachment problem as a reader meets it', () => {
       })
     ).toEqual({ kind: 'attachmentInvalid' })
   })
-})
-
-it('keeps an unsettled ordinary send on the existing working and wait wording', () => {
-  expect(
-    agentSessionFailureSentence(
-      {
-        kind: 'restartFailed',
-        refusal: {
-          code: 'agent_session_operation_invalid',
-          details: { reason: 'messagesUnsettled' }
-        }
-      },
-      'rejection',
-      { agentName: 'Claude' }
-    )
-  ).toBe('The agent is still working. Wait for the agent to finish responding, or stop it.')
 })

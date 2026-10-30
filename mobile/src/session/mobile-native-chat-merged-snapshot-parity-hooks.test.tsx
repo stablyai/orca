@@ -1,3 +1,5 @@
+import { resolveMobileNativeChatRowProps } from './native-chat/transcript/use-mobile-native-chat-row-props'
+import { MobileNativeChatRow } from './native-chat/transcript/MobileNativeChatRowItemSource'
 // Compare live merged hooks/list output after every frame with a newly opened chat, including own echoes and host Stopping. Native row rendering, controller input construction and reconnects are outside this proof.
 
 import { createElement, isValidElement, type ReactElement, type ReactNode } from 'react'
@@ -17,8 +19,8 @@ import {
   STOP_JOURNAL_SESSION,
   stopJournal
 } from './mobile-native-chat-stop-journal.test-fixture'
-import { useMobileNativeChatDrafts } from './use-mobile-native-chat-drafts'
-import type { MobileNativeChatController } from './use-mobile-native-chat-controller'
+import { useMobileNativeChatDrafts } from './native-chat/composer/use-mobile-native-chat-drafts'
+import type { MobileNativeChatController } from './mobile-native-chat-controller-contract'
 import { useMobileStructuredAgentSession } from './use-mobile-structured-agent-session'
 
 vi.mock('@react-native-async-storage/async-storage', () => ({
@@ -57,18 +59,32 @@ vi.mock('lucide-react-native', () => ({
   ChevronsUpDown: 'ChevronsUpDown',
   Square: 'Square'
 }))
-vi.mock('./MobileNativeChatMessage', () => ({ MobileNativeChatMessage: 'ChatMessage' }))
-vi.mock('./MobileNativeChatMessageActionsSheet', () => ({
+vi.mock('./native-chat/transcript/MobileNativeChatMessage', () => ({
+  MobileNativeChatMessage: 'ChatMessage'
+}))
+vi.mock('./native-chat/transcript/MobileNativeChatMessageActionsSheet', () => ({
   MobileNativeChatMessageActionsSheet: 'MessageActionsSheet'
 }))
-vi.mock('./MobileNativeChatLiveLine', () => ({ MobileNativeChatLiveLine: 'LiveStatus' }))
-vi.mock('./MobileNativeChatComposer', () => ({ MobileNativeChatComposer: 'Composer' }))
-vi.mock('./MobileNativeChatQueuedMessages', () => ({ MobileNativeChatQueuedMessages: 'Queued' }))
-vi.mock('./MobileNativeChatVisual', () => ({ useMobileNativeChatVisualRenderer: () => null }))
+vi.mock('./native-chat/transcript/MobileNativeChatLiveLine', () => ({
+  MobileNativeChatLiveLine: 'LiveStatus'
+}))
+vi.mock('./native-chat/composer/MobileNativeChatComposer', () => ({
+  MobileNativeChatDraftComposer: 'Composer'
+}))
+vi.mock('./native-chat/input/MobileNativeChatQueuedMessages', () => ({
+  MobileNativeChatQueuedMessages: 'Queued'
+}))
+vi.mock('./native-chat/visual/MobileNativeChatVisual', () => ({
+  useMobileNativeChatVisualRenderer: () => null
+}))
 vi.mock('../components/ActionSheetModal', () => ({ ActionSheetModal: 'ActionSheetModal' }))
-vi.mock('./MobileNativeChatAsk', () => ({ MobileNativeChatAsk: 'ChatAsk' }))
-vi.mock('./MobileNativeChatPermission', () => ({ MobileNativeChatPermission: 'ChatPermission' }))
-vi.mock('./MobileNativeChatQuestion', () => ({ MobileNativeChatQuestion: 'ChatQuestion' }))
+vi.mock('./native-chat/input/MobileNativeChatAsk', () => ({ MobileNativeChatAsk: 'ChatAsk' }))
+vi.mock('./native-chat/input/MobileNativeChatPermission', () => ({
+  MobileNativeChatPermission: 'ChatPermission'
+}))
+vi.mock('./native-chat/input/MobileNativeChatQuestion', () => ({
+  MobileNativeChatQuestion: 'ChatQuestion'
+}))
 
 const STOP_ROW = `stopped-before-start:orca:${NEVER_OPENED}`
 
@@ -113,10 +129,13 @@ type DrawnRowProps = {
 }
 
 function drawnRow(row: ReactNode): unknown {
-  if (!isValidElement<DrawnRowProps>(row)) {
+  if (!isValidElement<DrawnRowProps & Parameters<typeof MobileNativeChatRow>[0]>(row)) {
     return row ?? null
   }
-  const { message, turnStatus, activeTurnIsWorking } = row.props
+  const { message, turnStatus, activeTurnIsWorking } =
+    row.type === MobileNativeChatRow
+      ? resolveMobileNativeChatRowProps(row.props.index, row.props.message, row.props.lookups)
+      : row.props
   const bar = turnStatus === null ? '-' : (turnStatus.workedSeconds ?? 'live')
   return [
     message.id,
@@ -139,7 +158,9 @@ function drawnFooter(node: ReactNode): unknown {
   if (element.type === 'LiveStatus') {
     return ['live', element.props.line?.stopping === true]
   }
-  return element.type === 'ChatMessage' ? drawnRow(element) : drawnFooter(element.props.children)
+  return element.type === 'ChatMessage' || element.type === MobileNativeChatRow
+    ? drawnRow(element)
+    : drawnFooter(element.props.children)
 }
 
 const mounted: ReactTestRenderer[] = []
@@ -191,23 +212,21 @@ async function mountPhone(): Promise<Phone> {
       transcriptSettled: session.session.status === 'ready'
     })
     latest = drafts
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: every member the list's rows, bars and footer read comes from the two hooks above, as the controller passes them; showNativeChat, nativeChatAgent, nativeChatCanStop, nativeChatStructured and the scope key are constants; the overlay's other members stay undefined: the composer's and Stop's handlers, files and options never reach the list, the streaming text is undefined on a structured tab too, and the prompts, which would hide the live status, are absent in this flow.
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: every member the list's rows, bars and footer read comes from the two hooks above, as the controller passes them; showNativeChat, nativeChatAgent, nativeChatCanStop, nativeChatStructured are constants; the overlay's other members stay undefined: the composer's and Stop's handlers, files and options never reach the list, the streaming text is undefined on a structured tab too, and the prompts, which would hide the live status, are absent in this flow.
     const controller = {
       showNativeChat: true,
       nativeChatSession: session.session,
       nativeChatAgent: 'codex',
-      nativeChatAgentWorking: session.isWorking,
       nativeChatCanStop: false,
       nativeChatStructured: true,
       nativeChatTurnIndicator: session.turnIndicator,
       nativeChatWorkingStartedAt: session.workingStartedAt,
       nativeChatSettledTurns: session.settledTurns,
       nativeChatTurnJournal: session.turnJournal,
-      nativeChatStreamLive: session.isWorking,
-      nativeChatStreamScopeKey: 'host\0workspace\0tab',
+      nativeChatTurnActive: session.isWorking,
       chatPending: drafts.pending,
       chatImagePreviewsByMessageId: drafts.imagePreviewsByMessageId,
-      chatComposerText: drafts.composerText,
+      chatDraftKey: drafts.draftKey,
       setChatComposerText: drafts.setComposerText,
       getChatComposerEditGeneration: drafts.getComposerEditGeneration,
       nativeChatQueued: session.queued
@@ -218,6 +237,8 @@ async function mountPhone(): Promise<Phone> {
       images: OVERLAY_IMAGES,
       onMicPress: () => {},
       micActive: false,
+      micStarting: false,
+      micProcessing: false,
       dictationMode: 'toggle',
       onMicPressIn: () => {},
       onMicPressOut: () => {},
@@ -227,7 +248,8 @@ async function mountPhone(): Promise<Phone> {
       sendSurfaceId: 'host\0workspace\0tab',
       sessionId: null,
       getSendCompletionGeneration: () => 0,
-      keyboardInset: 0
+      keyboardInset: 0,
+      hostName: null
     })
   }
   let renderer: ReactTestRenderer | null = null

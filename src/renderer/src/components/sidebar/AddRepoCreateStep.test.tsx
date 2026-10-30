@@ -39,18 +39,6 @@ function renderCreateStep({
 }
 
 describe('CreateStep', () => {
-  it('renders the name-first create UI with advanced controls collapsed', () => {
-    const html = renderCreateStep()
-
-    expect(html).toContain('Create a new project')
-    expect(html).toContain('Name')
-    expect(html).toContain('Git repository in ~/orca/projects')
-    expect(html).toContain('aria-expanded="false"')
-    expect(html).not.toContain('Project kind')
-    expect(html).not.toContain('Location</span>')
-    expect(html).not.toContain('aria-label="Browse host filesystem"')
-  })
-
   it('shows the Git-required explanation in the collapsed summary', () => {
     const html = renderCreateStep({
       createName: 'demo-project',

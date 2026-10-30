@@ -1,4 +1,4 @@
-import { requireNativeViewManager } from 'expo-modules-core'
+import { requireNativeModule, requireNativeViewManager } from 'expo-modules-core'
 import type { ComponentType, RefAttributes } from 'react'
 import type { NativeSyntheticEvent, ViewProps } from 'react-native'
 import type { MobileWebShellLoadStatePayload } from './load-state'
@@ -39,6 +39,14 @@ export const OrcaMobileWebShellView: ComponentType<
 > = requireNativeViewManager<
   OrcaMobileWebShellViewProps & RefAttributes<OrcaMobileWebShellViewHandle>
 >('OrcaMobileWebShell')
+
+// iOS shows the file:// URI in Quick Look; Android hands the content:// URI to the system PDF viewer with read access.
+// Android rejects with code native_pdf_no_viewer when no installed app opens PDFs.
+export function presentPdf(uri: string): Promise<void> {
+  return requireNativeModule<{ presentPdf: (uri: string) => Promise<void> }>(
+    'OrcaMobileWebShell'
+  ).presentPdf(uri)
+}
 
 export {
   MOBILE_WEB_SHELL_FAILURE_REASONS,

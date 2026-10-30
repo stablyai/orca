@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { i18n, setRendererPluginLanguagePacks } from '@/i18n/i18n'
-import { pluginLanguageResourceId } from '../../../../shared/plugins/plugin-language-pack-artifact'
+import { pluginLanguageResourceId } from '../../../../shared/plugins/artifacts/plugin-language-pack-artifact'
 import {
   getCodeBlockLanguageLabel,
   getCodeBlockLanguages,
@@ -31,7 +31,8 @@ describe('rich markdown code block languages', () => {
             editor: { RichMarkdownCodeBlock: { '13822cdfda': plainText } }
           }
         }
-      }
+      },
+      coverage: 100
     })
     setRendererPluginLanguagePacks([pack('Plugin plain text')])
     await i18n.changeLanguage(resourceLanguage)

@@ -1,5 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
 import { Animated } from 'react-native'
+import { translate } from '../i18n/mobile-i18n'
 import { reconcileMobileSessionCreateWarningState } from './mobile-session-create-warning-state'
 import type { MobileSessionTerminalRuntimeModel } from './use-mobile-session-terminal-runtime'
 import type { StructuredAgentSessionHostSupport } from './mobile-structured-agent-session-host-support'
@@ -25,7 +26,8 @@ export function useMobileSessionFeedbackCapabilities(scope: MobileSessionTermina
     connStateRef,
     activeSessionTabTypeRef,
     delayedActionTimersRef,
-    activeSessionTab
+    activeSessionTab,
+    onLiveInputSendFailureRef
   } = scope
   const [browserScreencastSupported, setBrowserScreencastSupported] = useState<boolean | null>(null)
   // Hide history entry when the host cannot serve it rather than opening a dead end.
@@ -125,6 +127,25 @@ export function useMobileSessionFeedbackCapabilities(scope: MobileSessionTermina
     },
     [clearToastHideTimer]
   )
+  useEffect(() => {
+    onLiveInputSendFailureRef.current = (failure) => {
+      showToast(
+        failure === 'input-too-large'
+          ? translate(
+              'session.useSessionTerminalSendActions.inputTooLarge',
+              'Input too large (max 256 KiB)'
+            )
+          : translate(
+              'session.useSessionTerminalSendActions.liveInputInterrupted',
+              'Live input interrupted. Field cleared; check the terminal before continuing.'
+            ),
+        3000
+      )
+    }
+    return () => {
+      onLiveInputSendFailureRef.current = () => {}
+    }
+  }, [onLiveInputSendFailureRef, showToast])
   return {
     browserScreencastSupported,
     setBrowserScreencastSupported,

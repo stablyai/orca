@@ -26,13 +26,18 @@ vi.mock('lucide-react-native', () => ({
 import { resolveHostDisplay } from '../../../src/shared/host-display-resolution'
 import { HostScreenHeader } from './host-screen-header'
 
-// Use the failed-attempt count that offers native Reconnect to prove the page still withholds it.
+// Use the unreachable verdict that offers native Reconnect to prove the page still withholds it.
 function controllerWith(forceReconnectHost: ForceReconnect) {
   const fields = {
     actions: {
       leaveHost: () => {},
       navigateFromHostList: () => {},
       openNewWorktreeModal: () => {}
+    },
+    connectionVerdict: {
+      kind: 'unreachable',
+      label: "Can't reach desktop",
+      reason: 'never-connected'
     },
     connState: 'reconnecting',
     embedded: false,
@@ -42,12 +47,6 @@ function controllerWith(forceReconnectHost: ForceReconnect) {
     hostDisplay: resolveHostDisplay({ name: 'Desk' }),
     lastConnectedAt: null,
     onHideSidebar: undefined,
-    reconnectAttempts: 20,
-    relayRecovery: {
-      pendingPath: null,
-      pairingRejected: false,
-      relayHostReachability: 'connecting'
-    },
     settings: { activeFilterCount: 0 },
     state: { hostName: 'Desk', view: { groupBy: 'none' }, showSearch: false }
   }

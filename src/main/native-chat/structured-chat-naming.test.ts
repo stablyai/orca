@@ -1,4 +1,15 @@
-import { describe, expect, it, vi } from 'vitest'
+import { agentSessionConversationView } from '../../shared/agent-session-conversation-view'
+import { OrchestrationDb } from '../runtime/orchestration/db'
+import {
+  structuredWorkerOpenTaskTitle,
+  structuredWorkerOwesWork
+} from '../runtime/structured-worker-custody'
+import {
+  mintStructuredWorkerHandle,
+  mintStructuredWorkerPaneKey,
+  structuredWorkerProcessIncarnation
+} from '../runtime/structured-worker-identity'
+import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import type { AgentSessionRecord } from '../../shared/agent-session-record'
 import { agentSessionRecordFixture } from '../../shared/agent-session-record.test-fixture'
 import { StructuredAgentSessionStatusFeed } from './agent-session-wire/structured-agent-session-status-feed'
@@ -6,7 +17,11 @@ import type {
   AgentSessionStatusEvent,
   AgentSessionStatusSummary
 } from '../../shared/agent-session-wire'
-import { STRUCTURED_CHAT_NAME_PROMPT_LIMIT } from '../../shared/structured-agent-session-first-prompt'
+import { agentSessionCurrentContextRows } from '../../shared/agent-session-context-clear'
+import {
+  firstStructuredAgentSessionPrompt,
+  STRUCTURED_CHAT_NAME_PROMPT_LIMIT
+} from '../../shared/structured-agent-session-first-prompt'
 import {
   type AgentSessionUserNameWrite,
   compareAndSetAgentSessionRecordName,
@@ -56,8 +71,9 @@ function rig(provider: 'claude' | 'codex') {
     record = apply(record)
     return record
   }
-  const setConversationName = vi.fn((_id: string, name: string | null, expected: string | null) =>
-    compareAndSetAgentSessionRecordName(mutate, name, expected)
+  const setConversationName = vi.fn(
+    (_id: string, name: string | null, expected: string | null, contextId?: string | null) =>
+      compareAndSetAgentSessionRecordName(mutate, name, expected, contextId)
   )
   const setUserConversationName = vi.fn(
     async (_id: string, name: string, write: AgentSessionUserNameWrite) => {
@@ -121,6 +137,7 @@ describe.each(['claude', 'codex'] as const)('structured %s chat naming', (provid
     expect(state.setConversationName).toHaveBeenCalledWith(
       state.summary.sessionId,
       'Please repair the login flow',
+      null,
       null
     )
     expect(state.deps.generate).toHaveBeenCalledTimes(1)
@@ -141,6 +158,53 @@ describe.each(['claude', 'codex'] as const)('structured %s chat naming', (provid
     expect(state.read()?.conversationName).toBe('auth/login')
     expect(state.deps.onNamed).toHaveBeenCalledTimes(4)
   })
+
+  it.each(['success', 'error', 'null', 'throw'] as const)(
+    'starts a fresh context while old generation finishes with %j',
+    async (outcome) => {
+      const state = rig(provider)
+      const old = Promise.withResolvers<StructuredChatNameGeneration>()
+      const fresh = deferred<StructuredChatNameGeneration>()
+      state.deps.generate = vi
+        .fn()
+        .mockReturnValueOnce(old.promise)
+        .mockReturnValueOnce(fresh.promise)
+      state.handle(state.summary, { replay: false })
+      await settle()
+      const record = state.read()!
+      state.replace({
+        ...record,
+        conversationName: undefined,
+        providerContextBoundary: { operationId: 'new-context', afterFence: 1, clearedAt: 101 }
+      })
+      state.handle(state.summary, { replay: false, firstInputSubmissionKey: null })
+      await settle()
+      expect(state.deps.generate).toHaveBeenCalledTimes(1)
+      state.handle(state.summary, { replay: false, firstInputSubmissionKey: 'new-input' })
+      await settle()
+      expect(state.deps.generate).toHaveBeenCalledTimes(1)
+      if (outcome === 'throw') {
+        old.reject(new Error('Old failure'))
+      } else {
+        old.resolve(
+          outcome === 'null'
+            ? null
+            : outcome === 'error'
+              ? { error: 'Old failure' }
+              : { name: 'Stale name' }
+        )
+      }
+      await settle()
+      expect(state.read()?.conversationName).toBe('Please repair the login flow')
+      expect(state.handle.activeSessionIds()).toEqual([state.summary.sessionId])
+      expect(state.handle.failure(state.summary.sessionId)).toBeUndefined()
+      expect(state.handle.failureOutput(state.summary.sessionId)).toBeNull()
+      fresh.resolve({ name: 'Fresh name' })
+      await settle()
+      expect(state.read()?.conversationName).toBe('Fresh name')
+      expect(state.handle.activeSessionIds()).toEqual([])
+    }
+  )
 
   it('clips a long first prompt into a short name', async () => {
     const state = rig(provider)
@@ -286,9 +350,23 @@ describe.each(['claude', 'codex'] as const)('structured %s chat naming', (provid
     expect(state.setConversationName).toHaveBeenLastCalledWith(
       state.summary.sessionId,
       'auth/login',
-      'Please repair the login flow'
+      'Please repair the login flow',
+      null
     )
     expect(state.handle.failure(state.summary.sessionId)).toBeUndefined()
+  })
+
+  it('codes the Orca-authored failure when the chat-name agent cannot run', async () => {
+    const state = rig(provider)
+    state.deps.generate = vi.fn(async () => {
+      throw new Error('spawn ENOENT')
+    })
+    state.handle(state.summary, { replay: false })
+    await settle()
+    expect(state.handle.failure(state.summary.sessionId)).toMatchObject({
+      message: 'Orca could not run the chat-name agent.',
+      messageCode: 'agentNotRun'
+    })
   })
 
   it.each(['read', 'save'] as const)(
@@ -302,7 +380,10 @@ describe.each(['claude', 'codex'] as const)('structured %s chat naming', (provid
       const failure = state.handle.failure(id)
       const feed = new StructuredAgentSessionStatusFeed({
         sessions: new Map(),
-        getRecord: state.getRecord,
+        getConversation: () => {
+          const record = state.getRecord()
+          return record ? agentSessionConversationView(record) : null
+        },
         now: () => 100,
         logger: state.deps.logger,
         namingActiveSessionIds: state.handle.activeSessionIds
@@ -456,7 +537,11 @@ describe.each(['claude', 'codex'] as const)('structured %s chat naming', (provid
     state.handle(state.summary, { replay: false })
     await settle()
     expect(state.read()?.conversationName).toBe(prompt)
-    expect(state.deps.generate).toHaveBeenCalledWith(expect.anything(), prompt)
+    expect(state.deps.generate).toHaveBeenCalledWith(
+      expect.anything(),
+      prompt,
+      expect.any(Function)
+    )
     generation.resolve({ name: 'auth/login' })
     await settle()
     expect(state.read()?.conversationName).toBe('auth/login')
@@ -483,7 +568,11 @@ describe.each(['claude', 'codex'] as const)('structured %s chat naming', (provid
     state.deps.readFirstPrompt = async () => `${prefix}𠮷`
     state.handle(state.summary, { replay: false })
     await settle()
-    expect(state.deps.generate).toHaveBeenCalledWith(expect.anything(), prefix)
+    expect(state.deps.generate).toHaveBeenCalledWith(
+      expect.anything(),
+      prefix,
+      expect.any(Function)
+    )
   })
 
   it('keeps the saved name when snapshot refresh fails', async () => {
@@ -513,19 +602,31 @@ describe.each(['claude', 'codex'] as const)('structured %s chat naming', (provid
   })
 })
 
-it("names a chat from a real host's status feed once its first send runs", async () => {
+it.each([false, true])('names the cleared context (user=%s)', async (user) => {
   const { host, store, log } = hostTestState()
-  host.deps.onSessionStatusChanged = createStructuredChatNamingHandler({
+  const db = new OrchestrationDb(':memory:')
+  onTestFinished(() => db.close())
+  const onNamed = vi.fn((_workspace: string, id: string) => host.publishConversationName(id))
+  const naming = createStructuredChatNamingHandler({
     getStore: () => store,
     getSettings: () => ({}),
-    workerTaskTitle: () => null,
+    workerTaskTitle: (record) => structuredWorkerOpenTaskTitle(db, record),
     readFirstPrompt: async (id, startedAt) =>
       firstStructuredChatNamingPrompt(await host.journalSnapshot(id), startedAt),
-    readJournalFirstPrompt: async () => '',
-    generate: async () => ({ name: 'auth/login' }),
-    onNamed: vi.fn(),
+    readJournalFirstPrompt: async (id) =>
+      firstStructuredAgentSessionPrompt(
+        agentSessionCurrentContextRows((await host.journalSnapshot(id)).items).items
+      ),
+    generate: async (_record, prompt) => ({
+      name: prompt === 'Please repair the login flow' ? 'auth/login' : 'New task'
+    }),
+    onNamed,
     logger: log.logger
   })
+  host.deps.onSessionStatusChanged = naming
+  host.deps.conversationNaming = naming
+  const events: AgentSessionStatusEvent[] = []
+  host.subscribeStatus({ id: 'history', emit: (event) => events.push(event) })
   await attach()
 
   const body = hostTestMessage('Please repair the login flow')
@@ -536,4 +637,149 @@ it("names a chat from a real host's status feed once its first send runs", async
   await vi.waitFor(() =>
     expect(store.getRecord(HOST_TEST_SESSION)?.conversationName).toBe('auth/login')
   )
+  if (user) {
+    await naming.setUserName(HOST_TEST_SESSION, 'My name', 'rename')
+  }
+  await host.cancel(CALLER, {
+    envelope: envelope('agentSession.cancel', { turnId: 'turn-1' }),
+    turnId: 'turn-1'
+  })
+  const task = db.createTask({ runId: 'run_legacy_local', spec: 'Old task still open' })
+  const { dispatch } = db.createStartingWorkerDispatch({
+    taskId: task.id,
+    startOptions: {},
+    creator: { kind: 'system' },
+    maxDepth: 9
+  })
+  db.prepareStartingWorkerAuthority({
+    dispatchId: dispatch.id,
+    handle: mintStructuredWorkerHandle(),
+    paneKey: mintStructuredWorkerPaneKey(HOST_TEST_SESSION),
+    processIncarnation: structuredWorkerProcessIncarnation(HOST_TEST_SESSION),
+    worktreeId: 'workspace',
+    effects: [],
+    setupState: 'not_configured',
+    hostScope: JSON.stringify({ kind: 'local', hostId: 'local' }),
+    terminalOwnership: 'created'
+  })
+  expect(structuredWorkerOpenTaskTitle(db, store.getRecord(HOST_TEST_SESSION)!)).toEqual({
+    title: 'Old task still open'
+  })
+  await vi.waitFor(() => expect(naming.activeSessionIds()).toEqual([]))
+  onNamed.mockClear()
+  expect(
+    await host.conversationCommand(CALLER, {
+      envelope: envelope('agentSession.conversationCommand', { command: 'clear' }),
+      command: 'clear'
+    })
+  ).toMatchObject({ ok: true })
+  expect(onNamed).toHaveBeenCalledWith(
+    store.getRecord(HOST_TEST_SESSION)!.location.workspaceId,
+    HOST_TEST_SESSION
+  )
+  expect(store.getRecord(HOST_TEST_SESSION)?.conversationName).toBe(user ? 'My name' : undefined)
+  expect(
+    events.some(
+      (event) =>
+        event.type === 'snapshot' &&
+        event.conversationNames?.some(
+          (note) =>
+            note.sessionId === HOST_TEST_SESSION &&
+            note.conversationName === (user ? 'My name' : null)
+        )
+    )
+  ).toBe(true)
+  expect(naming.regenerate(HOST_TEST_SESSION)).toBe(true)
+  await vi.waitFor(() => expect(naming.activeSessionIds()).toEqual([]))
+  expect(store.getRecord(HOST_TEST_SESSION)?.conversationName).toBe(user ? 'My name' : undefined)
+  const nextBody = hostTestMessage('Explain the database migrations')
+  expect(
+    await host.send(CALLER, {
+      envelope: envelope('agentSession.send', { body: nextBody }),
+      body: nextBody
+    })
+  ).toMatchObject({ ok: true })
+  await vi.waitFor(() =>
+    expect(store.getRecord(HOST_TEST_SESSION)?.conversationName).toBe(user ? 'My name' : 'New task')
+  )
+  expect(structuredWorkerOwesWork(db, store.getRecord(HOST_TEST_SESSION)!)).toBe(true)
+  expect(
+    (await host.journalSnapshot(HOST_TEST_SESSION)).items.some(
+      (item) =>
+        item.body.kind === 'message' &&
+        item.body.blocks.some(
+          (block) => block.type === 'text' && block.text === 'Please repair the login flow'
+        )
+    )
+  ).toBe(true)
+  if (!user) {
+    naming.regenerate(HOST_TEST_SESSION)
+    await vi.waitFor(() => expect(naming.activeSessionIds()).toEqual([]))
+    expect(store.getRecord(HOST_TEST_SESSION)?.conversationName).toBe('New task')
+  }
+})
+
+it('replaces disabled pending automatic work with explicit Regenerate and coalesces eligible work', async () => {
+  const state = rig('codex')
+  const source = deferred<string>()
+  state.deps.readFirstPrompt = vi.fn(() => source.promise)
+  state.handle(state.summary, { replay: false })
+  state.deps.getSettings = () => ({ nativeChatAutoName: false })
+  expect(state.handle.regenerate(state.summary.sessionId)).toBe(true)
+  state.handle.regenerate(state.summary.sessionId)
+  source.resolve('Obsolete automatic input')
+  await settle()
+  expect(state.deps.generate).toHaveBeenCalledExactlyOnceWith(
+    expect.anything(),
+    'Please repair the login flow',
+    expect.any(Function)
+  )
+  expect(state.read()?.conversationName).toBe('auth/login')
+})
+
+it('lets first input replace an empty Regenerate still reading its journal', async () => {
+  const state = rig('codex')
+  const empty = deferred<string>()
+  state.deps.readJournalFirstPrompt = () => empty.promise
+  state.handle.regenerate(state.summary.sessionId)
+  state.handle(state.summary, { replay: false })
+  empty.resolve('')
+  await settle()
+  expect(state.read()?.conversationName).toBe('auth/login')
+  expect(state.deps.generate).toHaveBeenCalledOnce()
+})
+
+it.each([false, true])('retains an entered backoff only (entered=%s)', async (entered) => {
+  const state = rig('codex')
+  const result = deferred<StructuredChatNameGeneration>()
+  const wait = deferred<void>()
+  state.deps.generate = vi
+    .fn()
+    .mockReturnValueOnce(result.promise)
+    .mockResolvedValue({ name: 'Latest' })
+  state.deps.wait = vi.fn(() => wait.promise)
+  state.handle(state.summary, { replay: false })
+  await settle()
+  if (entered) {
+    result.resolve({ error: 'Retryable' })
+    await settle()
+  }
+  state.replace({
+    ...state.read()!,
+    conversationName: undefined,
+    providerContextBoundary: { operationId: 'latest', afterFence: 1, clearedAt: 101 }
+  })
+  state.handle(state.summary, { replay: false })
+  await settle()
+  if (entered) {
+    expect(state.deps.generate).toHaveBeenCalledTimes(1)
+  } else {
+    result.resolve({ error: 'Obsolete' })
+  }
+  wait.resolve()
+  await settle()
+  expect(state.deps.wait).toHaveBeenCalledTimes(entered ? 1 : 0)
+  expect(state.deps.generate).toHaveBeenCalledTimes(2)
+  expect(state.read()?.conversationName).toBe('Latest')
+  expect(state.handle.failure(state.summary.sessionId)).toBeUndefined()
 })

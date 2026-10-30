@@ -6,7 +6,7 @@ import {
   resolveViewedUnreadSubjectKey
 } from '@/attention/agent-attention-acknowledgement'
 import { createTestStore, makeTab, makeUnifiedTab } from '../store/slices/store-test-helpers'
-import type { RetainedAgentEntry } from '../store/slices/agent-status'
+import type { RetainedAgentEntry } from '../store/slices/agent-status/agent-status-contract'
 import { FLOATING_TERMINAL_WORKTREE_ID, getDefaultSettings } from '../../../shared/constants'
 import { makePaneKey } from '../../../shared/stable-pane-id'
 

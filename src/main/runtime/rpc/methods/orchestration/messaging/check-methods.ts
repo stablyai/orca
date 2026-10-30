@@ -104,7 +104,7 @@ export const ORCHESTRATION_CHECK_METHODS = [
       if (!hasRunBindingKey(caller) && consumingCheck) {
         throw new OrchestrationError(
           'stable_pane_required',
-          `Terminal ${handle} has no live pane bound to a Run, so this inbox can never receive Run mail. Rebind this terminal with orchestration run-use, or read the Run mailbox with --run <run_id>.`,
+          `Terminal ${handle} has no live pane and no active Dispatch, so a consuming check here can never receive mail. Run check from the agent's own live terminal.`,
           orchestrationSkillRecoveryData()
         )
       }

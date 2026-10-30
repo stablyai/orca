@@ -1,3 +1,8 @@
+import {
+  sourceControlActionRecipeEntry,
+  type SelectedSourceControlActionRecipe
+} from '../../../../shared/source-control-action-selection'
+import type { AgentLaunchPreferences } from '@/components/settings/use-host-agent-launch-preferences'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
 import { newAgentLaunchRequestId } from '@/lib/agent-launch-request-id'
@@ -5,28 +10,34 @@ import type { RuntimeGitContext } from '@/runtime/runtime-git-client-context'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { TuiAgent } from '../../../../shared/tui-agent'
+import type { AgentLaunchChoice } from '@/lib/agent-menu-selection'
 import type { LaunchSource } from '../../../../shared/telemetry-events'
-import type {
-  SourceControlActionRecipe,
-  SourceControlLaunchActionId
+import {
+  normalizeSourceControlActionRecipe,
+  type SourceControlActionRecipe,
+  type SourceControlLaunchActionId
 } from '../../../../shared/source-control-ai-actions'
-import type { SourceControlAiWriteTarget } from '../../../../shared/source-control-ai-recipe-save'
+import {
+  saveSourceControlActionRecipe,
+  type SourceControlAiWriteTarget
+} from '../../../../shared/source-control-ai-recipe-save'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
-import { sourceControlActionRecipeMatchesTarget } from './source-control-action-recipe-match'
+import { sourceControlActionRecipeSaveMatchesTarget } from './source-control-action-recipe-match'
 import { resolveSourceControlAgentSaveTarget } from './source-control-agent-action-dialog-support'
+import { projectSelectedSourceControlActionLaunch } from '../../../../shared/source-control-action-launch-preferences'
 import { admitSourceControlRecovery } from './source-control-recovery-admission'
 
-type RunSourceControlAgentActionStartArgs = {
+export type RunSourceControlAgentActionStartArgs = {
   selectedAgent: TuiAgent
   trimmedCommandInput: string
-  agentArgs: string
-  /** False when the launch would be structured native chat, which reads no CLI arguments. */
-  agentArgsApply: boolean
-  commandTemplate: string
+  /** The picker's choice: a deliberate surface stays explicit, a saved replay requests terminal only. */
+  launchChoice?: AgentLaunchChoice
+  recipe: SelectedSourceControlActionRecipe
   saveTargetValue: string
   actionId: SourceControlLaunchActionId
   repoId?: string | null
+  agentLaunchPreferences?: AgentLaunchPreferences
   settings: GlobalSettings | null
   repo: Pick<Repo, 'id' | 'sourceControlAi'> | null
   worktreeId?: string | null
@@ -37,10 +48,15 @@ type RunSourceControlAgentActionStartArgs = {
   recoveryContext?: RuntimeGitContext | null
   signal?: AbortSignal
   onStart?: (args: {
+    agentLaunchPreferences?: AgentLaunchPreferences
     agent: TuiAgent
     commandInput: string
     /** Omitted when CLI arguments do not apply, so the launch resolves the global setting. */
     agentArgs?: string
+    /** The action's saved choice, on either route. */
+    sessionOptions?: Readonly<Record<string, string>>
+    launchChoice?: AgentLaunchChoice
+    sessionOptionsYieldToAgentArgs?: true
   }) => boolean | Promise<boolean>
   onSaveAgentDefault?: (
     target: SourceControlAiWriteTarget,
@@ -58,13 +74,13 @@ type RunSourceControlAgentActionStartArgs = {
 export async function runSourceControlAgentActionStart({
   selectedAgent,
   trimmedCommandInput,
-  agentArgs,
-  agentArgsApply,
-  commandTemplate,
+  launchChoice,
+  recipe,
   saveTargetValue,
   actionId,
   repoId,
   settings,
+  agentLaunchPreferences,
   repo,
   worktreeId,
   groupId,
@@ -93,8 +109,67 @@ export async function runSourceControlAgentActionStart({
   let launched = false
   let launchFailureNotified = false
   let launchAcceptedNotified = false
-  // Undefined selects global agent arguments; empty string would suppress that fallback.
-  const launchAgentArgs = agentArgsApply ? agentArgs : undefined
+  const saveTarget = resolveSourceControlAgentSaveTarget(saveTargetValue, repoId)
+  // Complete only the submitted selection; later parent changes cannot rewrite this launch.
+  let launchRecipe = recipe
+  let recipeToSave: SourceControlActionRecipe = recipe
+  if (saveTarget) {
+    const saved = saveSourceControlActionRecipe({
+      target: saveTarget,
+      settings: settings ?? {},
+      repo,
+      actionId,
+      recipe
+    })
+    recipeToSave =
+      normalizeSourceControlActionRecipe(
+        'sourceControlAi' in saved
+          ? saved.sourceControlAi.actions?.[actionId]
+          : saved.update.sourceControlAi?.actionOverrides?.[actionId]
+      ) ?? recipe
+    launchRecipe = sourceControlActionRecipeEntry(recipeToSave)
+  }
+  const projection = projectSelectedSourceControlActionLaunch(
+    launchRecipe,
+    selectedAgent,
+    { renderedPrompt: trimmedCommandInput, settings },
+    launchChoice
+  )
+  const {
+    commandInput: _prompt,
+    agentArgs: launchAgentArgs,
+    requestedSurface,
+    selectedExecutionHostId,
+    ...launchOptions
+  } = projection
+
+  const launchRecipeAlreadySaved = Boolean(
+    saveTarget &&
+    sourceControlActionRecipeSaveMatchesTarget({
+      actionId,
+      target: saveTarget,
+      recipe: launchRecipe,
+      settings,
+      repo
+    })
+  )
+  if (saveTarget && onSaveAgentDefault && !launchRecipeAlreadySaved) {
+    // Saving the selected recipe and delivering its prompt are independent user actions.
+    void (async () => {
+      try {
+        await onSaveAgentDefault(saveTarget, actionId, recipeToSave)
+      } catch (error) {
+        console.error('onSaveAgentDefault failed', error)
+        toast.error(
+          translate(
+            'sourceControl.actionSaveFailed',
+            'Could not save this action. Try saving it again in Settings.'
+          )
+        )
+      }
+    })()
+  }
+
   const notifyLaunchAccepted = (): void => {
     if (launchAcceptedNotified) {
       return
@@ -104,9 +179,12 @@ export async function runSourceControlAgentActionStart({
   }
   if (onStart) {
     launched = await onStart({
+      agentLaunchPreferences,
       agent: selectedAgent,
       commandInput: trimmedCommandInput,
-      agentArgs: launchAgentArgs
+      agentArgs: launchAgentArgs,
+      ...launchOptions,
+      ...(launchChoice ? { launchChoice } : {})
     })
     if (launched) {
       notifyLaunchAccepted()
@@ -119,6 +197,9 @@ export async function runSourceControlAgentActionStart({
       groupId: groupId ?? worktreeId,
       prompt: trimmedCommandInput,
       agentArgs: launchAgentArgs,
+      ...launchOptions,
+      requestedSurface,
+      selectedExecutionHostId,
       promptDelivery,
       launchPlatform,
       launchSource
@@ -157,30 +238,6 @@ export async function runSourceControlAgentActionStart({
     return false
   }
 
-  const saveTarget = resolveSourceControlAgentSaveTarget(saveTargetValue, repoId)
-  const launchRecipe = {
-    agentId: selectedAgent,
-    commandInputTemplate: commandTemplate,
-    agentArgs
-  }
-  const launchRecipeAlreadySaved = Boolean(
-    saveTarget &&
-    sourceControlActionRecipeMatchesTarget({
-      actionId,
-      target: saveTarget,
-      recipe: launchRecipe,
-      settings,
-      repo
-    })
-  )
-  if (saveTarget && onSaveAgentDefault && !launchRecipeAlreadySaved) {
-    try {
-      await onSaveAgentDefault(saveTarget, actionId, launchRecipe)
-    } catch (error) {
-      // Prompt delivery succeeded; recipe-save failure must not prevent accepted-launch callbacks from settling.
-      console.error('onSaveAgentDefault failed', error)
-    }
-  }
   onLaunched?.()
   if (!signal?.aborted) {
     onClose()

@@ -47,7 +47,10 @@ afterEach(async () => {
   vi.useRealTimers()
 })
 
-async function replay(name: string) {
+async function replay(
+  name: string,
+  oversized: (frame: z.infer<typeof record>) => boolean = () => false
+) {
   const frames = capture(name)
   const states = frames.filter(
     ({ dir, frame }) => dir === 'out' && frame.type === 'response' && frame.command === 'get_state'
@@ -95,7 +98,9 @@ async function replay(name: string) {
     if (dir === 'in' && frame.type === 'abort') {
       turns.stop()
     }
-    if (dir === 'out' && (frame.type !== 'response' || frame.command === 'prompt')) {
+    if (dir === 'out' && oversized(frame)) {
+      turns.skipped(frame.type, JSON.stringify(frame).slice(0, 256))
+    } else if (dir === 'out' && (frame.type !== 'response' || frame.command === 'prompt')) {
       turns.receive(frame)
     }
     if (dir === 'out' && frame.type === 'response' && frame.command === 'get_state') {
@@ -130,6 +135,22 @@ describe('scrubbed Pi 1.0.4 RPC captures', () => {
       result.rows.some((row) => row.body.kind === 'tool-call' && row.body.state === 'completed')
     ).toBe(true)
     expect(transcript(result.rows)).toContain('STEER_CONSUMED')
+    expect(transcript(result.rows)).toContain('FOLLOWUP_CONSUMED')
+  })
+  it('keeps the run and consumed inputs when Pi sends records too large to deliver', async () => {
+    const result = await replay('steer-followup', (frame) =>
+      ['tool_execution_end', 'message_end', 'turn_end', 'agent_end'].includes(frame.type)
+    )
+    expect(result.failed).not.toHaveBeenCalled()
+    expect(result.accepted.mock.calls.map(([id]) => id)).toEqual(['send-1', 'send-2', 'send-3'])
+    expect(result.turns.map((turn) => turn.outcome)).toEqual(['success'])
+    expect(
+      result.rows.filter((row) => row.body.kind === 'status' && row.body.tone === 'warning')
+    ).toHaveLength(1)
+    expect(result.rows.find((row) => row.body.kind === 'tool-call')?.body).toMatchObject({
+      name: 'bash',
+      state: 'completed'
+    })
     expect(transcript(result.rows)).toContain('FOLLOWUP_CONSUMED')
   })
   it.each(['provider-fetch-error', 'provider-socket-error'])(

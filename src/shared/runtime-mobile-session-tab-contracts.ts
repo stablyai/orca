@@ -61,6 +61,8 @@ export type RuntimeMobileSessionMarkdownTab = {
   documentVersion: string
   color?: string | null
   isPinned?: boolean
+  /** The paired server the file lives on. Its publisher sets it; runtimes strip it before serving. */
+  hostRuntimeEnvironmentId?: string
 }
 
 export type RuntimeMobileSessionFileTab = {
@@ -76,6 +78,8 @@ export type RuntimeMobileSessionFileTab = {
   color?: string | null
   isPinned?: boolean
   isActive: boolean
+  /** The paired server the file lives on. Its publisher sets it; runtimes strip it before serving. */
+  hostRuntimeEnvironmentId?: string
 }
 
 export type RuntimeMobileSessionBrowserTab = {

@@ -16,6 +16,7 @@ import { WSL_COMMAND_LOOP_ARGV0, WSL_COMMAND_LOOP_SCRIPT } from './wsl-command-l
 import { createWslCommandLoopPool } from './wsl-command-loop-pool'
 import { uploadDirectoryIntoWsl, wslGuestSourcePath } from './wsl-directory-upload'
 import { resolveWslExecutablePath } from './wsl-executable-path'
+import { noteWslDistroLaunched } from '../wsl-background-distro-gate'
 import { readWslDistroRegistryIdShared } from './wsl-distro-registry-id'
 import { ORCAD_WSL_DISTRO_GUID_ENV } from '../orcad/orcad-migration-wsl-destination'
 import type { WslOrcadHostTarget } from './wsl-orcad-host-target'
@@ -50,13 +51,17 @@ export function createWslOrcadHostTransport(
     if (commandLineLength([program, ...args]) > MAX_COMMAND_LINE_CHARS) {
       throw new Error('WSL command exceeds the Windows command-line limit')
     }
-    return spawn({
+    const child = spawn({
       program,
       args,
       cwd: resolveWslInteropSpawnCwd(),
       // Request UTF-8 for wsl.exe's own errors; default is UTF-16LE.
       env: { ...process.env, WSL_UTF8: '1' }
     })
+    // Any launch starts the distro, so an older "stopped" read no longer answers: a user act's
+    // connect is never refused its own bridges by the read taken before it booted the distro.
+    noteWslDistroLaunched(target.distro)
+    return child
   }
   const loops =
     options.commandLoops === false

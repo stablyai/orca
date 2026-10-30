@@ -148,7 +148,7 @@ function listedRow(worktree: ListedWorktree, repo: ListedRepo | undefined): List
 }
 
 /** Resolve each row’s own repo; repo IDs can collide across hosts. */
-function withOwnerRepos<W extends ListedWorktree, R extends ListedRepo>(
+export function withOwnerRepos<W extends ListedWorktree, R extends ListedRepo>(
   worktrees: readonly W[],
   repos: readonly R[]
 ): { worktree: W; repo: R | undefined }[] {

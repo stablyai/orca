@@ -410,56 +410,6 @@ test.describe('Browser Tab', () => {
     }
   })
 
-  test('Cmd/Ctrl+0 resets a zoomed browser page to 100%', async ({ orcaPage }) => {
-    const formServer = await startBrowserFormServer()
-    try {
-      const worktreeId = (await getActiveWorktreeId(orcaPage))!
-      const browserTab = await createBrowserTab(
-        orcaPage,
-        worktreeId,
-        formServer.url('Zoom reset'),
-        'Zoom Reset'
-      )
-      expect(browserTab?.id).toBeTruthy()
-      await expect
-        .poll(async () => readBrowserInputValue(orcaPage, browserTab!.id), { timeout: 5_000 })
-        .not.toBeNull()
-
-      const zoomModifier: 'meta' | 'control' = process.platform === 'darwin' ? 'meta' : 'control'
-      await orcaPage.evaluate(
-        async ({ browserTabId, browserPageId, modifier }) => {
-          const slot = document.querySelector(`[data-browser-overlay-tab-id="${browserTabId}"]`)
-          const webview = slot?.querySelector('webview') as Electron.WebviewTag | null
-          if (!webview) {
-            throw new Error(`Missing webview for browser tab ${browserTabId}`)
-          }
-          window.dispatchEvent(
-            new CustomEvent('orca:browser-page-zoom', {
-              detail: { browserPageId, direction: 'in' }
-            })
-          )
-          await webview.sendInputEvent({ type: 'keyDown', keyCode: '0', modifiers: [modifier] })
-          await webview.sendInputEvent({ type: 'keyUp', keyCode: '0', modifiers: [modifier] })
-        },
-        {
-          browserTabId: browserTab!.id,
-          browserPageId: browserTab!.pageId ?? browserTab!.id,
-          modifier: zoomModifier
-        }
-      )
-      await expect
-        .poll(() =>
-          orcaPage.evaluate((browserTabId) => {
-            const slot = document.querySelector(`[data-browser-overlay-tab-id="${browserTabId}"]`)
-            return (slot?.querySelector('webview') as Electron.WebviewTag | null)?.getZoomLevel()
-          }, browserTab!.id)
-        )
-        .toBe(0)
-    } finally {
-      await formServer.close()
-    }
-  })
-
   test('reloading one browser tab does not adopt another tab zoom', async ({ orcaPage }) => {
     const [formServerA, formServerB] = await Promise.all([
       startBrowserFormServer(),

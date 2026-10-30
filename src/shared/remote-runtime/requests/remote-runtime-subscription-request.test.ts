@@ -17,7 +17,7 @@ import { encodePairingOffer, parsePairingCode } from '../../pairing'
 import {
   subscribeRemoteRuntimeRequest,
   type RemoteRuntimeSubscription
-} from '../../remote-runtime-client'
+} from '../remote-runtime-client'
 
 const servers: WebSocketServer[] = []
 

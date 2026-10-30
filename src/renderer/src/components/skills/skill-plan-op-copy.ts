@@ -19,14 +19,11 @@ import { translate } from '@/i18n/i18n'
 
 export function updatedSkillsLabel(summary: BundledSkillResultSummary): string {
   const { changedCount, leftAloneCount } = summary
-  const updated =
-    changedCount === 1
-      ? translate('auto.components.skills.SkillFreshnessUpdateDialog.updatedOne', 'Updated 1 skill')
-      : translate(
-          'auto.components.skills.SkillFreshnessUpdateDialog.updatedMany',
-          'Updated {{value0}} skills',
-          { value0: changedCount }
-        )
+  const updated = translate(
+    'auto.components.skills.SkillFreshnessUpdateDialog.updated',
+    'Updated {{count}} skills',
+    { count: changedCount, defaultValue_one: 'Updated {{count}} skill' }
+  )
   return leftAloneCount > 0
     ? translate(
         'auto.components.skills.SkillFreshnessUpdateDialog.updatedSkipped',
@@ -174,14 +171,9 @@ export function updateActionLabel(plan: BundledSkillPlan): string {
       ? installForAgentsLabel(agents)
       : translate('auto.components.skills.SkillFreshnessUpdateDialog.title', 'Update skills')
   }
-  return updates === 1
-    ? translate(
-        'auto.components.skills.SkillFreshnessUpdateDialog.updateActionOne',
-        'Update 1 skill'
-      )
-    : translate(
-        'auto.components.skills.SkillFreshnessUpdateDialog.updateActionMany',
-        'Update {{value0}} skills',
-        { value0: updates }
-      )
+  return translate(
+    'auto.components.skills.SkillFreshnessUpdateDialog.updateAction',
+    'Update {{count}} skills',
+    { count: updates, defaultValue_one: 'Update {{count}} skill' }
+  )
 }

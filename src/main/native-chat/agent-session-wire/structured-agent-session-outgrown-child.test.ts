@@ -36,7 +36,7 @@ describe('a send after the agent said it is not signed in', () => {
 
   const fence = () => rig.store.getRecord(SESSION)?.lease.runtimeFence ?? 1
 
-  it('recovers a signed-out child for mail after sign-in, then reuses the new child', async () => {
+  it('goes to a new agent, and the new agent is kept for the sends after it', async () => {
     await foundRestTestChat(rig)
     rig.adapter.dispatch.mockImplementationOnce(async () => ({
       state: 'rejected',
@@ -49,20 +49,9 @@ describe('a send after the agent said it is not signed in', () => {
     expect(rig.adapter.acquire).toHaveBeenCalledTimes(1)
     rig.adapter.closeSession.mockClear()
 
-    const mail = restTestSend('signed in now: worker mail', fence())
-    mail.body.from = {
-      kind: 'agent',
-      senders: [],
-      orchestration: {
-        message: 'mail-notice',
-        mailbox: 'agent:worker',
-        dispatchId: null,
-        messages: []
-      }
-    }
-    expect((await rig.host.send(CALLER, mail)).ok).toBe(true)
+    expect((await rig.host.send(CALLER, restTestSend('signed in now', fence()))).ok).toBe(true)
     await vi.waitFor(() => expect(rig.adapter.dispatch).toHaveBeenCalledTimes(3))
-    expect(rig.adapter.closeSession).toHaveBeenCalledWith(SESSION)
+    expect(rig.adapter.closeSession).toHaveBeenCalledWith(SESSION, undefined)
     expect(rig.adapter.acquire).toHaveBeenCalledTimes(2)
 
     expect((await rig.host.send(CALLER, restTestSend('and again', fence()))).ok).toBe(true)
@@ -197,12 +186,14 @@ describe('retireOutgrownStructuredAgentSessionChild', () => {
     input: Parameters<typeof conversation>[0],
     work: Partial<typeof idle> = {},
     stopAgent = vi.fn(async () => undefined),
-    launchPermission?: () => Promise<AgentChatPermissionChoice | null>
+    launchPermission?: () => Promise<AgentChatPermissionChoice | null>,
+    permissionRequiresAcquisition?: (mode: AgentChatPermissionChoice) => boolean
   ) => {
     const warn = vi.fn()
     await retireOutgrownStructuredAgentSessionChild('session', conversation(input), {
       work: { ...idle, ...work },
       ...(launchPermission ? { launchPermission } : {}),
+      ...(permissionRequiresAcquisition ? { permissionRequiresAcquisition } : {}),
       stopAgent,
       logger: { warn, error: vi.fn() }
     })
@@ -244,54 +235,6 @@ describe('retireOutgrownStructuredAgentSessionChild', () => {
     expect(before.stopAgent).toHaveBeenCalledWith('session')
   })
 
-  it('says why a model change waits, reading wake debt only when open work leaves that open', async () => {
-    const settled: AgentChildWorkView = {
-      ...liveChildWork,
-      state: 'done',
-      membership: 'settled',
-      outcome: 'succeeded',
-      settledAt: 200
-    }
-    const refuse = async (work: Partial<typeof idle>, children: AgentChildWorkView[]) => {
-      const childWork = vi.fn(() => children)
-      const refusal = await retireOutgrownStructuredAgentSessionChild(
-        'session',
-        conversation({ newestTurnEndedAt: 100 }),
-        {
-          work: { ...idle, childWork, ...work },
-          next: {
-            clientMessageId: 'next',
-            fence: 2,
-            payloadFingerprint: 'next',
-            dispatchState: 'pending',
-            providerItemId: null,
-            reason: null,
-            submittedAt: 0,
-            resolvedAt: null
-          },
-          requiresModelTransitionRestart: () => true,
-          stopAgent: vi.fn(async () => undefined),
-          logger: { warn: vi.fn(), error: vi.fn() }
-        }
-      )
-      return { refusal, wakeDebtReads: childWork.mock.calls.length }
-    }
-    const waits = (reason: string, wakeDebtReads: number) => ({
-      refusal: { details: { reason } },
-      wakeDebtReads
-    })
-    expect(await refuse({ childWorkOpen: () => true }, [settled])).toMatchObject(
-      waits('backgroundTasksRunning', 0)
-    )
-    expect(await refuse({}, [settled])).toMatchObject(waits('backgroundTasksRunning', 1))
-    expect(await refuse({ providerHoldsDispatch: () => true }, [settled])).toMatchObject(
-      waits('backgroundTasksRunning', 1)
-    )
-    expect(await refuse({ providerHoldsDispatch: () => true }, [])).toMatchObject(
-      waits('messagesUnsettled', 1)
-    )
-  })
-
   it('logs a stop that fails and lets the send go on', async () => {
     const { warn } = await retire(
       signedOut,
@@ -315,6 +258,19 @@ describe('retireOutgrownStructuredAgentSessionChild', () => {
         (await retire(askChild, {}, undefined, now('full-access'))).stopAgent
       ).toHaveBeenCalledWith('session')
       expect((await retire(askChild, {}, undefined, now('ask'))).stopAgent).not.toHaveBeenCalled()
+    })
+
+    it('keeps a child that can apply policy per turn, and acquires unknown Auto only when idle', async () => {
+      expect(
+        (await retire(askChild, {}, undefined, now('full-access'), () => false)).stopAgent
+      ).not.toHaveBeenCalled()
+      expect(
+        (await retire(askChild, { childWorkOpen: () => true }, undefined, now('auto'), () => true))
+          .stopAgent
+      ).not.toHaveBeenCalled()
+      expect(
+        (await retire(askChild, {}, undefined, now('auto'), () => true)).stopAgent
+      ).toHaveBeenCalledWith('session')
     })
 
     it('is kept while it owes work, as a signed-out one is', async () => {

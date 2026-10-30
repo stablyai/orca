@@ -3,10 +3,10 @@ import { requestSharedControl } from '../../../shared/remote-runtime/requests/re
 import type { SharedControlPendingRequest } from '../../../shared/remote-runtime/control/remote-runtime-shared-control-types'
 import type { KnownRuntimeEnvironment } from '../../../shared/runtime-environments'
 import { getPreferredPairedRuntimeConnection } from '../../../shared/runtime-environments'
-import type * as RemoteRuntimeClient from '../../../shared/remote-runtime-client'
+import type * as RemoteRuntimeClient from '../../../shared/remote-runtime/remote-runtime-client'
 
 const oneShot = vi.hoisted(() => ({ statusRuntimeId: 'runtime-a', sent: new Array<string>() }))
-vi.mock('../../../shared/remote-runtime-client', async (importOriginal) => ({
+vi.mock('../../../shared/remote-runtime/remote-runtime-client', async (importOriginal) => ({
   ...(await importOriginal<typeof RemoteRuntimeClient>()),
   // The real sender asks `status.get` on the fresh socket and sends only if the check passes.
   sendRemoteRuntimeRequestWithStatusPreflight: async (

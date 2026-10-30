@@ -415,6 +415,29 @@ describe('agent_prompt_sent schema', () => {
   })
 })
 
+describe('agent_hook_install_failed schema', () => {
+  it('accepts only the fixed error categories', () => {
+    for (const error_message of ['EACCES', 'E2BIG', 'unknown']) {
+      expect(
+        eventSchemas.agent_hook_install_failed.safeParse({ agent: 'codex', error_message }).success
+      ).toBe(true)
+    }
+  })
+
+  it('rejects raw error messages and path-bearing codes (#21492)', () => {
+    for (const error_message of [
+      "EACCES: permission denied, open '/home/someone/.codex/config.toml'",
+      'EACCES /home/someone',
+      `E${'A'.repeat(16)}`,
+      'Timed out waiting for another managed-hook install to finish'
+    ]) {
+      expect(
+        eventSchemas.agent_hook_install_failed.safeParse({ agent: 'codex', error_message }).success
+      ).toBe(false)
+    }
+  })
+})
+
 describe('agent_hook_unattributed schema', () => {
   it('accepts the two bounded attribution failure reasons', () => {
     for (const reason of ['empty_pane_key', 'unknown_tab_id'] as const) {
@@ -505,6 +528,15 @@ describe('settings_changed schema', () => {
     expect(
       eventSchemas.settings_changed.safeParse({
         setting_key: 'experimentalNativeChat',
+        value_kind: 'bool'
+      }).success
+    ).toBe(true)
+  })
+
+  it('accepts the browser extensions switch as a boolean adoption signal', () => {
+    expect(
+      eventSchemas.settings_changed.safeParse({
+        setting_key: 'experimentalBrowserExtensions',
         value_kind: 'bool'
       }).success
     ).toBe(true)

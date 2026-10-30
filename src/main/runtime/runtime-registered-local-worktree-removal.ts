@@ -1,4 +1,9 @@
 import type { GitPushTarget, GitWorktreeInfo } from '../../shared/worktree/types'
+import {
+  authorizeWindowsCheckout,
+  nativeWindowsMarkerMissing,
+  usesNativeWindowsRemoval
+} from '../git/windows-worktree-removal'
 import { pruneGitWorktrees } from '../git/worktree-prune-guard'
 import type { RemoveWorktreeResult } from '../../shared/worktree/create-types'
 import type { ArchiveHookOverride } from '../../shared/worktree/archive-hook-removal-gate'
@@ -21,7 +26,7 @@ import {
   isOrphanedWorktreeError
 } from '../ipc/worktree-logic'
 import { cleanupLocalOrphanedWorktreeDirectory } from '../local-orphaned-worktree-cleanup'
-import { recoverLocalWindowsWorktreeRemoval } from '../local-worktree-removal-recovery'
+import { recoverPartialLocalWorktreeRemoval } from '../local-worktree-removal-recovery'
 import { findRegisteredDeletableWorktree } from '../worktree-removal-safety'
 import { CLIENT_REMOVAL_HOME } from '../worktree-removal-home-guard'
 import type { RuntimeStore } from './runtime-store-contract'
@@ -84,7 +89,11 @@ async function acceptRuntimeRegisteredLocalWorktreeRemoval(args: {
   let warning: string | undefined
   // Archive refusal precedes refresh, preflights, PTY stop and Git deletion; failure must leave them untouched (#19334).
   let archiveHookOverride: ArchiveHookOverride | undefined
-  if (hooks?.scripts.archive && args.runHooks) {
+  if (
+    hooks?.scripts.archive &&
+    args.runHooks &&
+    !(await nativeWindowsMarkerMissing(canonicalPath, localOptions))
+  ) {
     const result = await runHook(
       'archive',
       canonicalPath,
@@ -126,17 +135,32 @@ async function acceptRuntimeRegisteredLocalWorktreeRemoval(args: {
   const ignoredLinkedPaths = args.force
     ? []
     : await findExistingWorktreeSymlinkPaths(canonicalPath, linkedPaths)
+  const markerMissing = await nativeWindowsMarkerMissing(canonicalPath, localOptions)
   try {
-    await (args.hasLocalOptions
-      ? assertWorktreeCleanForRemoval(canonicalPath, args.force, {
+    if (usesNativeWindowsRemoval(canonicalPath, localOptions)) {
+      await authorizeWindowsCheckout(
+        repo.path,
+        canonicalPath,
+        args.force,
+        {
           ...localOptions,
-          ...(ignoredLinkedPaths.length > 0 ? { ignoredUntrackedPaths: ignoredLinkedPaths } : {})
-        })
-      : ignoredLinkedPaths.length > 0
+          knownRemovedWorktree: refreshed,
+          ignoredUntrackedPaths: ignoredLinkedPaths
+        },
+        true
+      )
+    } else if (!markerMissing) {
+      await (args.hasLocalOptions
         ? assertWorktreeCleanForRemoval(canonicalPath, args.force, {
-            ignoredUntrackedPaths: ignoredLinkedPaths
+            ...localOptions,
+            ...(ignoredLinkedPaths.length > 0 ? { ignoredUntrackedPaths: ignoredLinkedPaths } : {})
           })
-        : assertWorktreeCleanForRemoval(canonicalPath, args.force))
+        : ignoredLinkedPaths.length > 0
+          ? assertWorktreeCleanForRemoval(canonicalPath, args.force, {
+              ignoredUntrackedPaths: ignoredLinkedPaths
+            })
+          : assertWorktreeCleanForRemoval(canonicalPath, args.force))
+    }
   } catch (error) {
     if (!isOrphanCompatiblePreflightError(error)) {
       throw new Error(formatWorktreeRemovalError(error, canonicalPath, args.force))
@@ -147,7 +171,7 @@ async function acceptRuntimeRegisteredLocalWorktreeRemoval(args: {
   let accepted = false
   try {
     await args.stopPtys()
-    if (linkedPaths.length > 0) {
+    if (!markerMissing && linkedPaths.length > 0) {
       await removeWorktreeLinkedPaths(canonicalPath, linkedPaths)
     }
     accepted = true
@@ -222,7 +246,10 @@ export async function finishRuntimeLocalWorktreeRemoval(
         refreshed.head
       )
     } catch (error) {
-      const recovered = await recoverLocalWindowsWorktreeRemoval({
+      if (usesNativeWindowsRemoval(canonicalPath, localOptions)) {
+        throw error
+      }
+      const recovered = await recoverPartialLocalWorktreeRemoval({
         error,
         force: args.force,
         canonicalWorktreePath: canonicalPath,
@@ -230,7 +257,8 @@ export async function finishRuntimeLocalWorktreeRemoval(
         localWorktreeGitOptions: localOptions,
         registeredWorktree: refreshed,
         deleteBranch: args.deleteBranch,
-        closeWatcher: args.closeWatchers
+        closeWatcher: args.closeWatchers,
+        signal: checkoutDeleteSignal
       })
       if (recovered) {
         removalResult = recovered

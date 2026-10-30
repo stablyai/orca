@@ -23,6 +23,7 @@ import type { WorkspaceSleepPlatform } from '../workspaces/workspace-sleep-platf
 import type { SessionSearchSettingsApply } from '../runtime-session-search-settings'
 
 export type RuntimeConstructionDependencies = {
+  getSetupTerminalTitle?: () => string
   getLocalProvider?: () => IPtyProvider
   prepareClaudeAuth?: PrepareClaudeAuth
   onPtyStopped?: (ptyId: string) => void
@@ -71,6 +72,8 @@ export type RuntimeConstructionDependencies = {
   prepareCodexCatalogProbeHome?: (homePath: string) => void
   buildAgentHookPtyEnv?: () => Record<string, string>
   getDesktopWindowStatus?: () => RuntimeDesktopWindowStatus
+  /** Live headless-model depth; a host with no renderer to reveal from needs only its PTY provider's live window. */
+  headlessTerminalScrollbackRows?: number
   agentSessionClaimSigner?: AgentSessionClaimSigner
   skillTransactionRecovery?: Promise<unknown>
   applySessionSearchSettings?: SessionSearchSettingsApply

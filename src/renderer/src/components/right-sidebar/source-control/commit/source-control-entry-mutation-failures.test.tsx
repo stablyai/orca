@@ -37,7 +37,7 @@ vi.mock('@/store', () => ({
 
 import { useSourceControlDiscardConfirmation } from './use-discard-confirmation'
 import { useSourceControlEntryMutations } from './use-entry-mutations'
-import type { SourceControlEntryGroups } from '../listing/section-order'
+import type { SourceControlEntryGroups } from '../../../../../../shared/source-control-section-order'
 
 const EMPTY_GROUPS: SourceControlEntryGroups = { unstaged: [], staged: [], untracked: [] }
 

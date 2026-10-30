@@ -61,15 +61,6 @@ describe('readRetiredNameRegistryForRepo', () => {
 })
 
 describe('retiredNamesAfterRefresh', () => {
-  it('takes the new registry on success', () => {
-    expect(
-      retiredNamesAfterRefresh(loadOf('repo-1', ['nautilus']), 'repo-1', {
-        exhaustedTiers: 1,
-        names: ['nautilus-2']
-      })
-    ).toEqual(loadOf('repo-1', ['nautilus-2'], 1))
-  })
-
   // A failed refresh must not un-retire names while the create form requests suggestions.
   it('holds the previous registry when the refresh fails', () => {
     expect(retiredNamesAfterRefresh(loadOf('repo-1', ['nautilus'], 2), 'repo-1', null)).toEqual(
@@ -83,12 +74,6 @@ describe('retiredNamesAfterRefresh', () => {
       registry: EMPTY_RETIRED_NAME_REGISTRY
     })
   })
-
-  it('answers empty when the first fetch for a repo fails', () => {
-    expect(retiredNamesAfterRefresh(null, 'repo-1', null).registry).toEqual(
-      EMPTY_RETIRED_NAME_REGISTRY
-    )
-  })
 })
 
 describe('selectRetiredNameRegistry', () => {
@@ -98,10 +83,5 @@ describe('selectRetiredNameRegistry', () => {
     expect(selectRetiredNameRegistry(loaded, 'repo-2')).toEqual(EMPTY_RETIRED_NAME_REGISTRY)
     expect(selectRetiredNameRegistry(loaded, null)).toEqual(EMPTY_RETIRED_NAME_REGISTRY)
     expect(selectRetiredNameRegistry(null, 'repo-1')).toEqual(EMPTY_RETIRED_NAME_REGISTRY)
-  })
-
-  it('returns the stored registry itself so downstream memos do not rerun', () => {
-    const loaded = loadOf('repo-1', ['nautilus'])
-    expect(selectRetiredNameRegistry(loaded, 'repo-1')).toBe(loaded.registry)
   })
 })

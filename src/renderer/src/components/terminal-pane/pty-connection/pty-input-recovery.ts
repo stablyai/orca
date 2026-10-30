@@ -1,4 +1,4 @@
-import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime-pty-id'
+import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { useAppStore } from '@/store'
 import { ambiguousWorkspaceOwnerMessage } from '@/lib/duplicate-paired-servers'
 import { createIpcPtyTransport } from '../pty-transport'
@@ -15,8 +15,8 @@ import { getSystemPrefersDark } from '@/lib/terminal-theme'
 import { resolveTerminalColorSchemeMode } from '../../../../../shared/terminal-color-scheme-protocol'
 import { discardTerminalOutput } from '@/lib/pane-manager/pane-terminal-output-scheduler'
 import { terminalRendersInlineImages } from '@/lib/pane-manager/pane-inline-images'
+import { CONPTY_DA1_RESPONSE } from '../../../../../shared/conpty-device-attributes'
 import {
-  CONPTY_DA1_RESPONSE,
   createTerminalPixelSizeQueryResponder,
   installTerminalCapabilityReplyHandlers
 } from '../terminal-capability-replies'
@@ -43,7 +43,10 @@ export function installPtyInputRecovery(session: ConnectPanePtySession): void {
   session.terminalColorQueryReplies = session.terminalTheme
     ? { foreground: session.terminalTheme.foreground, background: session.terminalTheme.background }
     : undefined
-  session.agentLaunchPreferences = toAgentLaunchPreferences(session.paneStartup?.sessionOptions)
+  const launchAgent = session.paneStartup?.launchAgent
+  session.agentLaunchPreferences = launchAgent
+    ? toAgentLaunchPreferences(session.paneStartup?.sessionOptions, launchAgent)
+    : undefined
   session.transportOptions = buildPaneTransportOptions(session)
   if (session.connectionOwnerHydrating) {
     // Register unresolved-host panes for repo-change remount so hydration cannot leave an inert blank terminal.

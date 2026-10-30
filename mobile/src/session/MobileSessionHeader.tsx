@@ -5,11 +5,21 @@ import { MobileSessionHeaderIconButton } from './MobileSessionHeaderIconButton'
 import { MobileSessionTabStrip } from './MobileSessionTabStrip'
 import { StatusDot } from '../components/StatusDot'
 import { styles } from './mobile-session-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { useHostSidebarReveal } from '../layout/host-sidebar-reveal'
 import { useResponsiveLayout } from '../layout/responsive-layout'
 import type { MobileSessionController } from './use-mobile-session-controller'
 
-export function MobileSessionHeader({ controller }: { controller: MobileSessionController }) {
+export function MobileSessionHeader({
+  controller,
+  backInRail
+}: {
+  controller: MobileSessionController
+  backInRail: boolean
+}) {
+  useMobileColorScheme()
+  const t = useMobileTranslation()
   const {
     hostId,
     isFolderWorkspaceRoute,
@@ -38,22 +48,24 @@ export function MobileSessionHeader({ controller }: { controller: MobileSessionC
       <View style={styles.sessionTopBar}>
         {revealSidebar ? (
           <MobileSessionHeaderIconButton
-            accessibilityLabel="Show sidebar"
+            accessibilityLabel={t('session.header.showSidebar', 'Show sidebar')}
             icon={PanelLeftOpen}
             onPress={revealSidebar}
           />
         ) : null}
-        <MobileSessionHeaderIconButton
-          accessibilityLabel="Back to worktrees"
-          icon={ChevronLeft}
-          onPress={requestLeaveSession}
-        />
+        {backInRail ? null : (
+          <MobileSessionHeaderIconButton
+            accessibilityLabel={t('session.header.backToWorktrees', 'Back to worktrees')}
+            icon={ChevronLeft}
+            onPress={requestLeaveSession}
+          />
+        )}
 
         <View
           style={[styles.sessionTitleBlock, tabsInTopBar && styles.sessionTitleBlockBesideTabs]}
         >
           <Text style={styles.sessionTitle} numberOfLines={1}>
-            {worktreeName || 'Terminal'}
+            {worktreeName || t('session.header.terminalTitle', 'Terminal')}
           </Text>
           <Pressable
             style={styles.sessionMetaRow}
@@ -64,7 +76,11 @@ export function MobileSessionHeader({ controller }: { controller: MobileSessionC
               }
             }}
             accessibilityRole={showConnectionRetry ? 'button' : undefined}
-            accessibilityLabel={showConnectionRetry ? 'Reconnect to desktop' : undefined}
+            accessibilityLabel={
+              showConnectionRetry
+                ? t('session.header.reconnectToDesktop', 'Reconnect to desktop')
+                : undefined
+            }
           >
             <StatusDot state={presentedConnState} />
             <Text style={styles.sessionMetaText} numberOfLines={1}>
@@ -76,7 +92,7 @@ export function MobileSessionHeader({ controller }: { controller: MobileSessionC
         {!isFloatingWorkspaceRoute && (
           <MobileSessionHeaderIconButton
             active={activePanel === 'files'}
-            accessibilityLabel="Open file explorer"
+            accessibilityLabel={t('session.header.openFileExplorer', 'Open file explorer')}
             icon={Folder}
             onPress={() => handlePanelTap('files')}
           />
@@ -84,7 +100,7 @@ export function MobileSessionHeader({ controller }: { controller: MobileSessionC
         {!isFolderWorkspaceRoute && !isFloatingWorkspaceRoute && (
           <MobileSessionHeaderIconButton
             active={activePanel === 'sourceControl'}
-            accessibilityLabel="Open source control"
+            accessibilityLabel={t('session.header.openSourceControl', 'Open source control')}
             icon={GitBranch}
             onPress={() => handlePanelTap('sourceControl')}
           />
@@ -92,7 +108,7 @@ export function MobileSessionHeader({ controller }: { controller: MobileSessionC
         {showHeaderMoreButton ? (
           <MobileSessionHeaderIconButton
             active={activePanel === 'pr'}
-            accessibilityLabel="More session actions"
+            accessibilityLabel={t('session.header.moreActions', 'More session actions')}
             icon={MoreHorizontal}
             onPress={() => setShowHeaderMoreActions(true)}
           />

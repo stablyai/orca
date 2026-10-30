@@ -1,6 +1,7 @@
 // Why not all non-ascii punctuation: titles keep `・`, `–` and `·` unencoded in a url
 // (`/wiki/ジョン・スミス`), so only brackets, quotes, spaces and sentence marks end one.
-const PROSE_URL_TERMINATOR_SOURCE = String.raw`(?![\0-\x7f])[\p{Ps}\p{Pe}\p{Pi}\p{Pf}\p{Z}、。，．！？：；｡､…‥—]`
+// Escaped CJK sentence marks 、。，．！？：；｡､…‥— keep this module's chunk one-byte in V8.
+const PROSE_URL_TERMINATOR_SOURCE = String.raw`(?![\0-\x7f])[\p{Ps}\p{Pe}\p{Pi}\p{Pf}\p{Z}\u3001\u3002\uFF0C\uFF0E\uFF01\uFF1F\uFF1A\uFF1B\uFF61\uFF64\u2026\u2025\u2014]`
 
 const NOT_PROSE_URL_TERMINATOR = `(?!${PROSE_URL_TERMINATOR_SOURCE})`
 

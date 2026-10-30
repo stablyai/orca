@@ -1,3 +1,4 @@
+import type { AgentSessionConversationView } from '../../../shared/agent-session-conversation-view'
 // Validate fingerprints centrally. Prepare ledger replays without admitting writes; first runs
 // prepare ownership before lease admission, while command-receipt plans use their own admission.
 
@@ -11,7 +12,6 @@ import type {
   AgentSessionOperationDecision,
   AgentSessionOperationRow
 } from '../../../shared/agent-session-operation-ledger'
-import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import type {
   AgentSessionMutationEnvelope,
   AgentSessionMutationResult,
@@ -36,8 +36,11 @@ import {
   agentSessionOperationOutcomeUnknown,
   resolveAgentSessionReplayOutcome
 } from './structured-agent-session-replay-outcome'
-import type { AgentSessionTurnContext } from './structured-agent-session-turns'
-import { mutationTurnContext } from './structured-agent-session-mutation-turn-context'
+import type { AgentSessionReplayContext } from './structured-agent-session-turns'
+import {
+  mutationTurnContext,
+  mutationReplayContext
+} from './structured-agent-session-mutation-turn-context'
 import type { StructuredAgentSessionLogger } from './structured-agent-session-logger'
 import type { StructuredAgentRegistry } from './structured-agent-registry'
 import { admitCommandReceiptMutation } from './structured-agent-session-command-admission'
@@ -69,7 +72,7 @@ export type AgentSessionMutationRequest<TValue> = {
   /** Prepare between ledger evaluation and lease admission; return any terminal refusal. */
   prepareSession?: (
     ledger: Exclude<AgentSessionOperationDecision['decision'], 'refused'>,
-    record: AgentSessionRecord
+    record: AgentSessionConversationView
   ) => Promise<AgentSessionMutationSessionPreparation>
   publish: (journal: AgentSessionJournal) => void
   wakeDelivery?: (sessionId: string) => void
@@ -77,6 +80,19 @@ export type AgentSessionMutationRequest<TValue> = {
 }
 
 export async function admitAndRunAgentSessionMutation<TValue>(
+  request: AgentSessionMutationRequest<TValue>
+): Promise<AgentSessionMutationResult<TValue>> {
+  try {
+    return await admitAndRunAgentSessionMutationUnchecked(request)
+  } catch (error) {
+    if (isAgentSessionRefusalError(error)) {
+      return refuseAgentSessionMutation(error.refusal)
+    }
+    throw error
+  }
+}
+
+async function admitAndRunAgentSessionMutationUnchecked<TValue>(
   request: AgentSessionMutationRequest<TValue>
 ): Promise<AgentSessionMutationResult<TValue>> {
   const { plan, envelope } = request
@@ -92,34 +108,37 @@ export async function admitAndRunAgentSessionMutation<TValue>(
   if (plan.commandReceipt) {
     return admitCommandReceiptMutation(request, hostFingerprint, plan.commandReceipt)
   }
+  const ledger = request.store.evaluateMutationOperation({
+    callerKey: request.callerKey,
+    envelope,
+    hostFingerprint,
+    now: request.now(),
+    ...(plan.operationIdScope ? { operationIdScope: plan.operationIdScope } : {})
+  })
+  if (!ledger) {
+    return refuseAgentSessionMutation(AGENT_SESSION_NOT_ATTACHED)
+  }
+  if (ledger.decision.decision === 'refused') {
+    return refuseAgentSessionMutation(agentSessionLedgerRefusal(envelope, ledger.decision))
+  }
+  if (ledger.decision.decision === 'replay') {
+    const answered = await answerRecordedOperation(
+      request,
+      request.prepareSession,
+      ledger.decision.row,
+      ledger.record,
+      hostFingerprint
+    )
+    if (answered !== 'rerun') {
+      return answered
+    }
+  }
   if (request.prepareSession) {
-    const ledger = request.store.evaluateMutationOperation({
-      callerKey: request.callerKey,
-      envelope,
-      hostFingerprint,
-      now: request.now(),
-      ...(plan.operationIdScope ? { operationIdScope: plan.operationIdScope } : {})
-    })
-    if (!ledger) {
-      return refuseAgentSessionMutation(AGENT_SESSION_NOT_ATTACHED)
-    }
-    if (ledger.decision.decision === 'refused') {
-      return refuseAgentSessionMutation(agentSessionLedgerRefusal(envelope, ledger.decision))
-    }
-    if (ledger.decision.decision === 'replay') {
-      const answered = await answerRecordedOperation(
-        request,
-        request.prepareSession,
-        ledger.decision.row,
-        ledger.record,
-        hostFingerprint
-      )
-      if (answered !== 'rerun') {
-        return answered
-      }
-    }
-    const record = request.store.getRecord(envelope.sessionId) ?? ledger.record
-    const prepared = await request.prepareSession('admit', record)
+    const record = request.store.requireWritableRecord(envelope.sessionId)
+    const prepared = await request.prepareSession(
+      'admit',
+      request.store.getConversation(record.sessionId)!
+    )
     if (!prepared.ok) {
       return prepared
     }
@@ -157,10 +176,12 @@ export async function admitAndRunAgentSessionMutation<TValue>(
     return refuseAgentSessionMutation(admission.refusal)
   }
 
-  const fence = record.lease.runtimeFence
-  const context = mutationTurnContext(request, journal, record)
   if (admission.decision === 'replay') {
-    const replayed = replayRecordedOperation(request, context, admission.row)
+    const replayed = replayRecordedOperation(
+      request,
+      mutationReplayContext(request, journal, record),
+      admission.row
+    )
     if (replayed !== 'rerun') {
       return replayed
     }
@@ -169,7 +190,7 @@ export async function admitAndRunAgentSessionMutation<TValue>(
       envelope,
       hostFingerprint,
       ledger: { decision: 'admit', row: admission.row },
-      lease: record.lease,
+      lease: request.store.requireWritableRecord(envelope.sessionId).lease,
       ...(plan.conversationWrite ? { conversationWrite: true } : {})
     })
     if (rerun.decision === 'refused') {
@@ -177,6 +198,9 @@ export async function admitAndRunAgentSessionMutation<TValue>(
     }
   }
 
+  const current = request.store.requireWritableRecord(envelope.sessionId)
+  const fence = current.lease.runtimeFence
+  const context = mutationTurnContext(request, journal, current)
   const outcome = await runSettledAgentSessionMutation({
     store: request.store,
     // Global replay may cross callers; settle the original caller’s durable row.
@@ -193,9 +217,9 @@ export async function admitAndRunAgentSessionMutation<TValue>(
 /** Replay recorded failures directly; otherwise prepare/read without admission, rerunning only absent effects. */
 async function answerRecordedOperation<TValue>(
   request: AgentSessionMutationRequest<TValue>,
-  prepareSession: NonNullable<AgentSessionMutationRequest<TValue>['prepareSession']>,
+  prepareSession: AgentSessionMutationRequest<TValue>['prepareSession'],
   row: AgentSessionOperationRow,
-  record: AgentSessionRecord,
+  record: AgentSessionConversationView,
   hostFingerprint: string
 ): Promise<AgentSessionMutationResult<TValue> | 'rerun'> {
   const { plan, envelope } = request
@@ -209,8 +233,8 @@ async function answerRecordedOperation<TValue>(
       return refuseAgentSessionMutation(replay.refusal)
     }
   }
-  const prepared = await prepareSession('replay', record)
-  if (!prepared.ok) {
+  const prepared = await prepareSession?.('replay', record)
+  if (prepared && !prepared.ok) {
     return prepared
   }
   const journal = request.journal()
@@ -233,7 +257,7 @@ async function answerRecordedOperation<TValue>(
   if (current.decision.decision === 'admit') {
     return 'rerun'
   }
-  const context = mutationTurnContext(request, journal, current.record)
+  const context = mutationReplayContext(request, journal, current.record)
   return replayRecordedOperation(request, context, current.decision.row)
 }
 
@@ -249,7 +273,7 @@ export function replayRecordedOperation<TValue>(
     >
     envelope: AgentSessionMutationEnvelope
   },
-  context: AgentSessionTurnContext,
+  context: AgentSessionReplayContext,
   row: AgentSessionOperationRow
 ): AgentSessionMutationResult<TValue> | 'rerun' {
   const replay = resolveAgentSessionReplayOutcome({

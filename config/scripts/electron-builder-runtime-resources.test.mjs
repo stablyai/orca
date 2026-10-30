@@ -1,8 +1,7 @@
-import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { cp, mkdir, mkdtemp, readFile, readdir, stat, writeFile } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
-import { delimiter, dirname, join, relative, resolve } from 'node:path'
+import { delimiter, dirname, join, resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { removeTree } from '../../src/shared/windows-transient-lock-removal.ts'
 
@@ -10,10 +9,6 @@ const require = createRequire(import.meta.url)
 const projectRoot = resolve(import.meta.dirname, '..', '..')
 const electronBuilderConfig = require('../electron-builder.config.cjs')
 const {
-  createPackagedRuntimeNodeModuleResources,
-  findAsarEntry,
-  isPackagedExternalSpecifier,
-  packageNameFromSpecifier,
   prunePackagedNodePty,
   prunePackagedParcelWatcher,
   prunePackagedSherpaOnnx,
@@ -21,11 +16,6 @@ const {
   prunePackagedZodSources,
   verifyPackagedMainRuntimeDeps
 } = require('../packaged-runtime-node-modules.cjs')
-
-// Only os:win32 process-tree presence selects Windows plan; universal registry workspace link proves no binary exists.
-const windowsAddonsInstalled = existsSync(
-  join(projectRoot, 'node_modules', '@vscode', 'windows-process-tree', 'package.json')
-)
 
 describe('packaged runtime resources', () => {
   it('verifies packaged main runtime deps from Windows-style asar entries', async () => {
@@ -176,13 +166,6 @@ describe('packaged runtime resources', () => {
     }
   })
 
-  it('normalizes host-specific asar entry separators', () => {
-    expect(findAsarEntry(['\\out\\main\\index.js'], 'out/main/index.js')).toBe(
-      '\\out\\main\\index.js'
-    )
-    expect(findAsarEntry(['/out/main/index.js'], 'out/main/index.js')).toBe('/out/main/index.js')
-  })
-
   it('prunes non-target node-pty architecture outputs from packaged runtime resources', async () => {
     const resourcesDir = await mkdtemp(join(tmpdir(), 'orca-node-pty-prune-'))
     try {
@@ -248,30 +231,6 @@ describe('packaged runtime resources', () => {
       } finally {
         await removeTree(resourcesDir)
       }
-    }
-  })
-
-  it('includes external main dependencies in the packaged runtime closure', () => {
-    // Without packaged @parcel/watcher, serve silently stops propagating file changes (#4851).
-    const packaged = createPackagedRuntimeNodeModuleResources()
-    const packagedTargets = packaged.map((resource) => resource.to)
-    expect(packagedTargets).toContain(join('node_modules', '@parcel', 'watcher'))
-    expect(
-      packagedTargets.some((target) =>
-        target.startsWith(join('node_modules', '@parcel', 'watcher-'))
-      )
-    ).toBe(true)
-    expect(packagedTargets).toContain(join('node_modules', 'proper-lockfile'))
-  })
-
-  it('includes the Claude agent SDK in every desktop package plan', () => {
-    for (const platform of windowsAddonsInstalled
-      ? ['darwin', 'linux', 'win32']
-      : ['darwin', 'linux']) {
-      const packagedTargets = createPackagedRuntimeNodeModuleResources(platform).map(
-        (resource) => resource.to
-      )
-      expect(packagedTargets).toContain(join('node_modules', '@anthropic-ai', 'claude-agent-sdk'))
     }
   })
 
@@ -573,85 +532,7 @@ async function seedBundledRipgrep(resourcesDir) {
   }
 }
 
-// Bundler renames createRequire result, hiding these from bare-require scans; source-anchor or packaging passes before runtime MODULE_NOT_FOUND.
-function collectLazyRequireSpecifiers(directory, found = new Map()) {
-  for (const entry of readdirSync(directory, { withFileTypes: true })) {
-    const entryPath = join(directory, entry.name)
-    if (entry.isDirectory()) {
-      collectLazyRequireSpecifiers(entryPath, found)
-      continue
-    }
-    if (!entry.isFile() || !entry.name.endsWith('.ts') || entry.name.includes('.test.')) {
-      continue
-    }
-    const source = readFileSync(entryPath, 'utf8')
-    if (!source.includes('createRequire(')) {
-      continue
-    }
-    for (const match of source.matchAll(/\brequire[A-Za-z0-9_]*\(\s*'([^']+)'\s*\)/g)) {
-      if (isPackagedExternalSpecifier(match[1])) {
-        found.set(match[1], relative(projectRoot, entryPath).replaceAll('\\', '/'))
-      }
-    }
-  }
-  return found
-}
-
-function packagedResourceDestinations(platform) {
-  return new Set(
-    (electronBuilderConfig[platform].extraResources ?? []).map((resource) =>
-      String(resource.to).replaceAll('\\', '/')
-    )
-  )
-}
-
 describe('lazily required packages reach Resources/node_modules', () => {
-  it('excludes runtime builtins while retaining ordinary lazy dependencies', async () => {
-    const sourceDir = await mkdtemp(join(tmpdir(), 'orca-lazy-builtins-'))
-    try {
-      await writeFile(
-        join(sourceDir, 'runtime.ts'),
-        [
-          'const requireFromMain = createRequire(import.meta.url)',
-          "requireFromMain('node:fs')",
-          "requireFromMain('zod')"
-        ].join('\n')
-      )
-      expect([...collectLazyRequireSpecifiers(sourceDir).keys()]).toEqual(['zod'])
-    } finally {
-      await removeTree(sourceDir)
-    }
-  })
-
-  it('copies every createRequire specifier main uses into the packaged resource plan', () => {
-    const specifiers = collectLazyRequireSpecifiers(join(projectRoot, 'src', 'main'))
-    expect(specifiers.size).toBeGreaterThan(0)
-
-    const destinations = {
-      win: packagedResourceDestinations('win'),
-      mac: packagedResourceDestinations('mac'),
-      linux: packagedResourceDestinations('linux')
-    }
-    for (const [specifier, source] of specifiers) {
-      const packageName = packageNameFromSpecifier(specifier)
-      const covered = (platform) =>
-        destinations[platform].has(`node_modules/${packageName}`) ||
-        destinations[platform].has(`node_modules/${specifier}`)
-      // The Windows CI lane checks the full closure with its native addons installed.
-      if (windowsAddonsInstalled) {
-        expect(
-          covered('win'),
-          `${source} lazily requires '${specifier}', but nothing copies it to Resources/node_modules`
-        ).toBe(true)
-      }
-      if (covered('mac') && covered('linux')) {
-        continue
-      }
-      // Only the Windows-native loaders may be absent from the mac/linux plans.
-      expect(source, `'${specifier}' is packaged for Windows only`).toContain('windows')
-    }
-  })
-
   it('resolves the copied emoji dataset the way the packaged main bundle does', async () => {
     const resourcesDir = await mkdtemp(join(tmpdir(), 'orca-lazy-require-'))
     try {

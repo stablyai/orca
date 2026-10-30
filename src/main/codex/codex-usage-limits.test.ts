@@ -52,7 +52,7 @@ describe('a Codex usage limit', () => {
     expect(bodies.filter((body) => body.kind === 'status')).toEqual([
       expect.objectContaining({
         tone: 'warning',
-        text: 'Codex hit its weekly limit. Send a message once it resets to continue.',
+        text: 'Codex hit its weekly limit.',
         failure: {
           kind: 'usageLimitReached',
           usageLimit: { window: 'weekly', resetsAt: RESETS_AT_S * 1000 },

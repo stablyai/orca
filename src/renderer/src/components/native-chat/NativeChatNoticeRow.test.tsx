@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { projectStructuredItemsToNativeChat } from '../../../../shared/structured-agent-session-projection'
 import type { AgentSessionFailureFact } from '../../../../shared/agent-session-failure'
 import type { AgentJournalStatusItem } from '../../../../shared/agent-session-journal-types'
+import { isAdmissibleAgentJournalItemBody } from '../../../../shared/agent-session-journal-schemas'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { MessageRow } from './NativeChatMessageRow'
 import { NativeChatNoticeRow } from './NativeChatNoticeRow'
@@ -222,41 +223,89 @@ describe('the row an Orca stop leaves', () => {
 
 describe('the row a usage limit leaves', () => {
   const resetsAt = new Date(2026, 9, 18, 15, 0).getTime()
-  const row: AgentJournalStatusItem = {
+  const row = {
     kind: 'status',
     tone: 'warning',
-    ...agentSessionFailureWords(
-      agentSessionFailureFact('usageLimitReached', {
-        usageLimit: { window: 'session', resetsAt }
-      }),
-      { agentName: 'Claude', surface: 'row' }
-    )
-  }
+    text: 'Claude hit its session limit. Send a message once it resets to continue.',
+    failure: { kind: 'usageLimitReached', usageLimit: { window: 'session', resetsAt } }
+  } as const
 
-  it('says when the limit resets in this clock, and continues the turn it ended', () => {
+  it.each([
+    ['future', resetsAt],
+    ['past', new Date(2026, 9, 18, 10, 0).getTime()],
+    ['unknown', undefined]
+  ] as const)('shows a %s reset without a continuation action or instruction', (_state, reset) => {
     vi.useFakeTimers({ now: new Date(2026, 9, 18, 12, 30), toFake: ['Date'] })
-    const continueUsageLimit = vi.fn()
-    renderStatus(row, null, false, false, 'Claude', {
-      ...NO_OFFER,
-      usageLimitTurnItemId: 'cut-turn',
-      continueUsageLimit
-    })
-    vi.useRealTimers()
-    const clock = new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' }).format(
-      resetsAt
-    )
-    expect(
-      screen.getByText(`Claude hit its session limit. It resets at ${clock}.`)
-    ).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: 'Continue' }))
-    expect(continueUsageLimit).toHaveBeenCalledTimes(1)
+    try {
+      renderStatus(
+        {
+          kind: 'status',
+          tone: 'warning',
+          ...agentSessionFailureWords(
+            agentSessionFailureFact('usageLimitReached', {
+              usageLimit: { window: 'session', ...(reset === undefined ? {} : { resetsAt: reset }) }
+            }),
+            { agentName: 'Claude', surface: 'row' }
+          )
+        },
+        null,
+        false,
+        false,
+        'Claude',
+        { ...NO_OFFER, usageLimitTurnItemId: 'cut-turn', continueUsageLimit: vi.fn() }
+      )
+      const clock =
+        reset === undefined
+          ? null
+          : new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' }).format(reset)
+      expect(
+        screen.getByText(
+          clock === null
+            ? 'Claude hit its session limit.'
+            : `Claude hit its session limit. It resets at ${clock}.`
+        )
+      ).toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: 'Continue' })).toBeNull()
+      expect(screen.queryByText(/Send a message once it resets/)).toBeNull()
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
-  it('tells a chat that has no Continue to send a message', () => {
-    renderStatus(row, null, false, false, 'Claude')
-    expect(screen.getByText(/Send a message once it resets to continue\.$/)).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Continue' })).toBeNull()
-  })
+  it.each(['typed', 'text-only', 'unknown'] as const)(
+    'renders historical usage-limit text with a %s fact',
+    (fact) => {
+      const historicalRow: unknown =
+        fact === 'text-only'
+          ? { ...row, failure: undefined }
+          : fact === 'unknown'
+            ? {
+                ...row,
+                failure: {
+                  ...row.failure,
+                  kind: 'usageLimitReached' as const,
+                  futureLimit: true
+                }
+              }
+            : row
+      if (!isAdmissibleAgentJournalItemBody(historicalRow) || historicalRow.kind !== 'status') {
+        throw new Error('Historical status fixture was not admitted')
+      }
+      if (fact === 'unknown') {
+        expect(historicalRow.failure).toEqual({ ...row.failure, futureLimit: true })
+      }
+      renderStatus(historicalRow, null, false, false, 'Claude')
+      if (fact === 'typed') {
+        expect(
+          screen.getByText(/^Claude hit its session limit\. It resets at \S.*\.$/u)
+        ).toBeInTheDocument()
+        expect(screen.queryByText(/Send a message once it resets/)).toBeNull()
+      } else {
+        expect(screen.getByText(row.text)).toBeInTheDocument()
+      }
+      expect(screen.queryByRole('button', { name: 'Continue' })).toBeNull()
+    }
+  )
 })
 
 describe('notice rows', () => {
@@ -597,4 +646,21 @@ it('opens Antigravity accounts from its signed-out notice, and offers no link fo
       openSettingsTarget: original.openSettingsTarget
     })
   }
+})
+
+it('renders the localized unacknowledged goal pause through the existing Stop notice', async () => {
+  await i18n.changeLanguage('ja')
+  renderStatus({
+    kind: 'status',
+    tone: 'warning',
+    ...agentSessionFailureWords(agentSessionFailureFact('cancelUnconfirmed'), {
+      surface: 'row',
+      stopNotice: 'pauseUnconfirmed'
+    })
+  })
+  expect(
+    screen.getByText(
+      'Codex の実行は停止しましたが、目標の一時停止は確認されていません。続行する前に目標を確認してください。'
+    )
+  ).toBeInTheDocument()
 })

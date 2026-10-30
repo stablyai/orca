@@ -14,7 +14,7 @@ import type {
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import { isWslUncPath } from '../../shared/wsl-paths'
 import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
-import { structuredAgentRuntimeRegistration } from '../runtime/structured-agent-runtime-registrations'
+import { structuredAgentRuntimeMetadata } from '../runtime/structured-agent-runtime-metadata'
 import { readPiSessionHeader } from '../pi/rpc-launch-resolution'
 import { copyStructuredChatRecordConversation } from './structured-chat-conversation-copy'
 import { isAiVaultAgent } from './session-list-result-validation'
@@ -77,13 +77,16 @@ export async function prepareStructuredChatCliFork(
   prepare: AiVaultSessionResumePreparation
 ): Promise<AiVaultPrepareSessionResumeResult> {
   const host = getStructuredAgentSessionHost()
-  const record = host?.deps.store.getRecord(args.sourceChat.sessionId)
-  const registration = record && structuredAgentRuntimeRegistration(record.provider)
+  const record =
+    host && host.deps.store.selectWritableRecord(args.sourceChat.sessionId).kind !== 'missing'
+      ? host.deps.store.requireWritableRecord(args.sourceChat.sessionId)
+      : undefined
+  const metadata = record && structuredAgentRuntimeMetadata(record.provider)
   const head = record && agentSessionProviderHandleChainHead(record.providerHandleChain)
   if (
     !host ||
     !record ||
-    !registration ||
+    !metadata ||
     !head ||
     record.location.workspaceId !== args.sourceChat.workspaceId ||
     record.location.executionHostId !== LOCAL_EXECUTION_HOST_ID ||
@@ -102,18 +105,31 @@ export async function prepareStructuredChatCliFork(
   ) {
     throw new Error('Send a message after rewinding this chat, then open it in a terminal.')
   }
+  const requireCurrent = (): void => {
+    const current = host.deps.store.requireWritableRecord(record.sessionId)
+    const currentHead = agentSessionProviderHandleChainHead(current.providerHandleChain)
+    if (
+      current.location.workspaceId !== record.location.workspaceId ||
+      current.location.executionHostId !== record.location.executionHostId ||
+      current.location.wslDistro !== record.location.wslDistro ||
+      currentHead?.linkId !== head.linkId
+    ) {
+      throw new Error('This chat has no saved conversation available on this host.')
+    }
+  }
   const agent = record.provider
   const cwd =
     (await host.deps.resolveWorkspacePath?.(record.location.workspaceId)) || record.launchDirectory
   if (!cwd || !isAbsolute(cwd) || isWslUncPath(cwd)) {
     throw new Error('The chat workspace is unavailable on this host.')
   }
-  const providerSessionId = registration.sessionHistory.rowSessionId(head)
+  const providerSessionId = metadata.sessionHistory.rowSessionId(head)
   if (!providerSessionId.trim()) {
     throw new Error('This chat has no saved conversation to copy.')
   }
   assertNativeConversationContent(await host.journalSnapshot(record.sessionId))
   if (agentForksThroughChat(agent)) {
+    requireCurrent()
     const result = await copyStructuredChatRecordConversation(record, providerSessionId)
     const copy = result.forkedSession
     if (!copy || (agent === 'omp' && !copy.filePath)) {
@@ -123,7 +139,7 @@ export async function prepareStructuredChatCliFork(
       ...result,
       cliForkSource: {
         agent: copy.agent,
-        sourceAgent: registration.sessionHistory.rowAgents.at(-1) ?? agent,
+        sourceAgent: metadata.sessionHistory.rowAgents.at(-1) ?? agent,
         sessionId: copy.sessionId,
         filePath: copy.filePath ?? '',
         codexHome: null,
@@ -132,7 +148,7 @@ export async function prepareStructuredChatCliFork(
       }
     }
   }
-  const importer = registration.transcriptImport
+  const importer = metadata.transcriptImport
   if (!importer) {
     throw new Error('This chat cannot be opened in the CLI.')
   }
@@ -164,6 +180,7 @@ export async function prepareStructuredChatCliFork(
     agent === 'codex' && isLegacyAgentSessionAccountHome(record.accountHome)
       ? record.accountHome.path
       : null
+  requireCurrent()
   const result = await prepare({
     agent,
     sessionId: providerSessionId,

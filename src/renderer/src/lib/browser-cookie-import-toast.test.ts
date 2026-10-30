@@ -43,31 +43,67 @@ describe('emitBrowserCookieImportToast', () => {
     warningToastMock.mockReset()
   })
 
-  it('shows the localized total-failure warning', () => {
-    emitBrowserCookieImportToast(
-      {
-        ...summary,
-        warning: {
-          code: 'restart-fallback-unavailable',
-          loadedCookies: 0,
-          failedCookies: 3
-        }
-      },
-      'Imported 3 cookies.',
-      localExecution
-    )
-
-    expect(warningToastMock).toHaveBeenCalledWith(
-      'None of the 3 cookies could be loaded, and the restart fallback was unavailable. The previous cookies for this profile were replaced. Try the import again.'
-    )
-    expect(successToastMock).not.toHaveBeenCalled()
-  })
-
   it('shows success when the import has no warning', () => {
     emitBrowserCookieImportToast(summary, 'Imported 3 cookies.', localExecution)
 
     expect(successToastMock).toHaveBeenCalledWith('Imported 3 cookies.')
     expect(warningToastMock).not.toHaveBeenCalled()
+  })
+
+  it.each([2, 0])('reports %i imported and 2 ordinary skipped cookies once', (importedCookies) => {
+    emitBrowserCookieImportToast(
+      { ...summary, totalCookies: importedCookies + 2, importedCookies, skippedCookies: 2 },
+      `Imported ${importedCookies} cookies.`,
+      localExecution
+    )
+
+    expect(successToastMock).toHaveBeenCalledExactlyOnceWith(
+      `Imported ${importedCookies} cookies. 2 cookies skipped.`
+    )
+    expect(warningToastMock).not.toHaveBeenCalled()
+  })
+
+  it('counts only skips not already explained by Google and partition warnings', () => {
+    emitBrowserCookieImportToast(
+      {
+        ...summary,
+        totalCookies: 6,
+        importedCookies: 2,
+        skippedCookies: 4,
+        googleCookiesSkipped: 1,
+        partitionSkippedCookies: 1
+      },
+      'Imported 2 cookies.',
+      remoteExecution
+    )
+
+    expect(successToastMock).toHaveBeenCalledExactlyOnceWith(
+      'Imported 2 cookies. 2 cookies skipped.',
+      { description: 'Read from browsers on Remote Mac and stored there.' }
+    )
+    expect(warningToastMock).toHaveBeenCalledTimes(2)
+    expect(warningToastMock.mock.calls[1]?.[0]).toContain(
+      '1 cookies were not imported because their site-partition could not be read.'
+    )
+  })
+
+  it('relies on the existing undecryptable warning without duplicating failure counts', () => {
+    emitBrowserCookieImportToast(
+      {
+        ...summary,
+        totalCookies: 6,
+        importedCookies: 2,
+        skippedCookies: 4,
+        warning: { code: 'cookies-undecryptable', failedCookies: 2, reason: 'unknown' }
+      },
+      'Imported 2 cookies.',
+      localExecution
+    )
+
+    expect(warningToastMock).toHaveBeenCalledExactlyOnceWith(
+      '2 cookies could not be decrypted and were skipped. Close the source browser completely and try the import again.'
+    )
+    expect(successToastMock).not.toHaveBeenCalled()
   })
 
   it('offers the in-app file import without recommending an exporter', () => {
@@ -89,6 +125,89 @@ describe('emitBrowserCookieImportToast', () => {
       "Orca cannot decrypt 3 of this browser's cookies because they use app-bound encryption. You can import cookies from a file using “From File…”."
     )
     expect(message).not.toContain('export')
+  })
+
+  it('names the missing Linux cookie-key tool and source browser', () => {
+    emitBrowserCookieImportToast(
+      {
+        ...summary,
+        warning: {
+          code: 'cookies-undecryptable',
+          failedCookies: 3,
+          reason: 'linux-keyring-unavailable',
+          otherFailedCookies: 1,
+          keyringFailure: { cause: 'secret-tool-missing', browser: 'Google Chrome' }
+        }
+      },
+      'Imported 0 cookies.',
+      localExecution
+    )
+
+    const message = warningToastMock.mock.calls[0]?.[0]
+    expect(message).toContain('Google Chrome')
+    expect(message).toContain('secret-tool')
+    expect(message).toContain('libsecret-tools')
+    expect(message).toContain('import again')
+    expect(message).toContain('1 more cookies could not be decrypted for another reason.')
+    expect(message).not.toMatch(/keyring|gnome-keyring/i)
+  })
+
+  it.each([
+    { cause: 'keyring-locked' as const, action: 'Unlock your login keyring' },
+    { cause: 'key-unavailable' as const, action: 'sign in directly in Orca' }
+  ])('gives the recovery action for $cause', ({ cause, action }) => {
+    emitBrowserCookieImportToast(
+      {
+        ...summary,
+        warning: {
+          code: 'cookies-undecryptable',
+          failedCookies: 3,
+          reason: 'linux-keyring-unavailable',
+          keyringFailure: { cause, browser: 'Google Chrome' }
+        }
+      },
+      'Imported 0 cookies.',
+      localExecution
+    )
+
+    const message = warningToastMock.mock.calls[0]?.[0]
+    expect(message).toContain('Google Chrome')
+    expect(message).toContain(action)
+    expect(message).not.toContain('libsecret-tools')
+  })
+
+  it.each([
+    { detail: 'absent detail', keyringFailure: undefined },
+    { detail: 'absent cause', keyringFailure: { browser: 'Google Chrome' } },
+    {
+      detail: 'unknown cause',
+      keyringFailure: { cause: 'future-key-source', browser: 'Google Chrome' }
+    }
+  ])('keeps the legacy keyring warning for $detail', ({ keyringFailure }) => {
+    emitBrowserCookieImportToast(
+      {
+        ...summary,
+        importedCookies: 0,
+        totalCookies: 5,
+        skippedCookies: 5,
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: simulate missing/future nested cause values from an unvalidated RPC peer.
+        warning: {
+          code: 'cookies-undecryptable',
+          failedCookies: 3,
+          reason: 'linux-keyring-unavailable',
+          otherFailedCookies: 2,
+          keyringFailure
+        } as unknown as BrowserCookieImportSummary['warning']
+      },
+      'Imported 0 cookies.',
+      remoteExecution
+    )
+
+    expect(warningToastMock).toHaveBeenCalledTimes(1)
+    expect(warningToastMock).toHaveBeenCalledWith(
+      '3 cookies could not be decrypted because the system keyring was unavailable; 2 more could not be decrypted for another reason. Unlock your login keyring (or install a Secret Service provider such as gnome-keyring) and import again.'
+    )
+    expect(successToastMock).not.toHaveBeenCalled()
   })
 
   it('shows workspace-specific Google guidance after a remote-side import', () => {
@@ -169,7 +288,26 @@ describe('emitBrowserCookieImportToast', () => {
       remoteExecution
     )
     expect(warningToastMock).toHaveBeenCalledWith(
-      'Cookies with unreadable site partitions: 1. Related cookies left unimported to protect existing sessions: 1. Existing cookies for these sites were left unchanged. Check these sites in this profile before signing in again.',
+      'Cookies with unreadable site partitions: 1. Related cookies also skipped: 1. Check these sites in this profile before signing in again.',
+      { duration: 12000 }
+    )
+  })
+
+  it('reports a skipped partition beside successfully imported readable siblings without claiming preservation', () => {
+    emitBrowserCookieImportToast(
+      {
+        ...summary,
+        importedCookies: 2,
+        skippedCookies: 1,
+        partitionSkippedCookies: 1,
+        partitionSkipBreakdown: { unreadableCookies: 1, preservedRelatedCookies: 0 }
+      },
+      'Imported 2 cookies.',
+      localExecution
+    )
+    expect(successToastMock).toHaveBeenCalledWith('Imported 2 cookies.')
+    expect(warningToastMock).toHaveBeenCalledWith(
+      'Cookies with unreadable site partitions: 1. Related cookies also skipped: 0. Check these sites in this profile before signing in again.',
       { duration: 12000 }
     )
   })
@@ -182,14 +320,20 @@ describe('emitBrowserCookieImportToast', () => {
       emitBrowserCookieImportToast(
         {
           ...summary,
+          totalCookies: 5,
+          importedCookies: 1,
+          skippedCookies: 4,
           partitionSkippedCookies: 2,
           partitionSkipBreakdown: { unreadableCookies: 1, preservedRelatedCookies: 1 }
         },
         'Imported 1 cookie.',
         localExecution
       )
+      expect(successToastMock).toHaveBeenCalledExactlyOnceWith(
+        'Imported 1 cookie. 2 件の Cookie をスキップしました。'
+      )
       expect(warningToastMock.mock.calls[0]?.[0]).toContain('読み取れない Cookie: 1')
-      expect(warningToastMock.mock.calls[0]?.[0]).toContain('インポートしなかった関連 Cookie: 1')
+      expect(warningToastMock.mock.calls[0]?.[0]).toContain('スキップされた関連 Cookie: 1')
     } finally {
       await i18n.changeLanguage(originalLanguage)
     }
@@ -222,7 +366,7 @@ describe('emitBrowserCookieImportToast', () => {
       localExecution
     )
 
-    expect(successToastMock).toHaveBeenCalledWith('Imported 2 cookies.')
+    expect(successToastMock).toHaveBeenCalledWith('Imported 2 cookies. 1 cookies skipped.')
     expect(warningToastMock).not.toHaveBeenCalled()
   })
 
@@ -302,34 +446,5 @@ describe('emitBrowserCookieImportToast', () => {
     const message = warningToastMock.mock.calls[0]?.[0]
     expect(typeof message).toBe('string')
     expect(message).not.toBe('')
-  })
-
-  it('keeps both applicable warnings when restart fallback is unavailable', () => {
-    emitBrowserCookieImportToast(
-      {
-        ...summary,
-        importedCookies: 1,
-        skippedCookies: 2,
-        googleCookiesSkipped: 1,
-        warning: {
-          code: 'restart-fallback-unavailable',
-          loadedCookies: 1,
-          failedCookies: 1
-        }
-      },
-      'Imported 1 cookie.',
-      remoteExecution
-    )
-
-    expect(successToastMock).not.toHaveBeenCalled()
-    expect(warningToastMock.mock.calls).toEqual([
-      [
-        'Imported 1 of 2 cookies. The rest could not be loaded, and the restart fallback was unavailable. Try the import again.'
-      ],
-      [
-        'Google cookies were not imported. Open a browser tab in the Remote Mac workspace with this profile, then sign into Google.',
-        { duration: 12000 }
-      ]
-    ])
   })
 })

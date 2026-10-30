@@ -1,11 +1,9 @@
+import type { AgentSessionConversationView } from '../../shared/agent-session-conversation-view'
 /** Structured workers have no PTY; register their bearer handle, pane key and host scope as orchestration authority.
  * Random handles and leaves prevent session ids exposed in tab ids from yielding caller-supplied keys that read/consume worker mail. */
 
 import { randomUUID } from 'node:crypto'
-import type {
-  AgentSessionExecutionLocation,
-  AgentSessionRecord
-} from '../../shared/agent-session-record'
+import type { AgentSessionExecutionLocation } from '../../shared/agent-session-record'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import {
   structuredAgentSessionPaneKey,
@@ -111,14 +109,14 @@ export function structuredWorkerHostScope(
 
 /** Judge ownership, not liveness: a released lease stays current while its persisted chat tab is listed. */
 export function structuredWorkerRecordIsCurrent(
-  record: AgentSessionRecord | null | undefined,
+  record: AgentSessionConversationView | null | undefined,
   tabListed: boolean
 ): boolean {
   return Boolean(
     record &&
     // Why: a conflicted claim may name a terminal an older build recorded as owner, not this worker.
-    record.lease.claimStatus !== 'conflicted' &&
-    (record.lease.claimStatus !== 'released' || tabListed) &&
+    record.ownerObservation.claimStatus !== 'conflicted' &&
+    (record.ownerObservation.claimStatus !== 'released' || tabListed) &&
     structuredWorkerHostScope(record.location)
   )
 }

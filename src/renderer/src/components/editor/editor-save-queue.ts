@@ -9,7 +9,7 @@ import {
   ORCA_EDITOR_FILE_SAVED_EVENT,
   type EditorFileSavedDetail
 } from './editor-autosave'
-import { flushPendingEditorBuffer, hasPendingEditorBufferChange } from './editor-pending-flush'
+import { flushEditorViewsForSave, hasPendingEditorBufferChange } from './editor-pending-flush'
 import { createAutoSaveHolds, editorPathHoldKey } from './editor-autosave-holds'
 import {
   editorBufferIdOfView,
@@ -24,7 +24,6 @@ import {
 } from './editor-self-write-registry'
 import { getDiskBaselineSignature } from '../../../../shared/disk-baseline-signature'
 import { editorTabFileAccess } from '@/lib/local-file-access'
-import { isEditorLargePasteInFlight } from './editor-large-paste-in-flight'
 import {
   markEditorSaveRefusal,
   settleEditorRecordAfterWrite,
@@ -35,7 +34,7 @@ import {
 import type { FileWriteResult } from '../../../../shared/file-write-disk-precondition'
 import {
   editorSavePrecondition,
-  editorTabModelUri,
+  editorSaveGrant,
   writeEditorSave,
   type EditorSaveResult,
   type EditorSaveTrigger
@@ -51,6 +50,7 @@ import { createEditorSaveSlots, type EditorSaveRequest } from './editor-save-slo
 import { EditorSaveDiscardedError, editorDiscardEpoch } from './editor-discard-epoch'
 import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 import { releaseNonUtf8PausesWithoutDirtyTab } from './editor-non-utf8-autosave-pause'
+import { hasEditorBytesDraft, saveEditorBytesDraft } from './editor-bytes-documents'
 
 export type AppStoreApi = Pick<StoreApi<AppState>, 'getState' | 'subscribe'>
 
@@ -121,9 +121,7 @@ export function createEditorSaveQueue(store: AppStoreApi): EditorSaveQueue {
     // Explicit saves bypass autosave suspension but remain guarded; only Overwrite grants conflict consent.
     if (
       trigger === 'autosave' &&
-      (isAutosaveSuspendedForFile(liveFile) ||
-        isEditorLargePasteInFlight(editorTabModelUri(state, liveFile)) ||
-        holds.isHeld(state, liveFile))
+      (isAutosaveSuspendedForFile(liveFile) || holds.isHeld(state, liveFile))
     ) {
       return 'failed'
     }
@@ -134,7 +132,9 @@ export function createEditorSaveQueue(store: AppStoreApi): EditorSaveQueue {
     if (discarded()) {
       return nothingToWrite
     }
-    flushPendingEditorBuffer(store.getState(), fileId, trigger === 'autosave')
+    if (!(await flushEditorViewsForSave(store.getState, fileId, trigger === 'autosave'))) {
+      return discarded() ? nothingToWrite : 'failed'
+    }
     // Earlier saves or reloads can leave a queued dirty request with nothing to write.
     const isDirty = store.getState().openFiles.find((file) => file.id === fileId)?.isDirty === true
     if (!isDirty && request.requestedDirty && trigger !== 'overwrite') {
@@ -153,6 +153,9 @@ export function createEditorSaveQueue(store: AppStoreApi): EditorSaveQueue {
       : null
     const fileContext = getEditorFileOperationContext(state, liveFile, worktree?.path ?? null)
     const connectionId = fileContext.connectionId
+    if (hasEditorBytesDraft(fileId)) {
+      return saveEditorBytesDraft(store.getState, liveFile, fileContext, trigger, discarded)
+    }
     const precondition = editorSavePrecondition(liveFile, trigger)
     if (precondition.kind === 'blocked') {
       setModelExternalMutation(store.getState(), fileId, 'changed')
@@ -178,7 +181,8 @@ export function createEditorSaveQueue(store: AppStoreApi): EditorSaveQueue {
           if (discarded()) {
             throw new EditorSaveDiscardedError()
           }
-        }
+        },
+        editorSaveGrant(liveFile, fileContext, () => store.getState())
       )
     } catch (error) {
       // Clear failed-write stamps so they cannot suppress real external changes.
@@ -274,7 +278,7 @@ export function createEditorSaveQueue(store: AppStoreApi): EditorSaveQueue {
   const settleFileSaves = async (fileId: string, flush = true): Promise<void> => {
     // Flush debounced rich-text serialization before dropping its timer.
     if (flush) {
-      flushPendingEditorBuffer(store.getState(), fileId)
+      await flushEditorViewsForSave(store.getState, fileId)
     }
     const key = recordKeyOf(fileId)
     clearScheduledAutoSave(key)
@@ -325,11 +329,5 @@ export function createEditorSaveQueue(store: AppStoreApi): EditorSaveQueue {
     holds.dispose()
   }
 
-  return {
-    queueSave,
-    settleFileSaves,
-    holdAutoSave: holds.hold,
-    syncAutoSave,
-    dispose
-  }
+  return { queueSave, settleFileSaves, holdAutoSave: holds.hold, syncAutoSave, dispose }
 }

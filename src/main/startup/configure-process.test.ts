@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 
 vi.mock('electron', () => {
   const paths = new Map<string, string>([['appData', '/tmp/app-data']])
@@ -56,7 +56,7 @@ describe('patchPackagedProcessPath', () => {
     }
   })
 
-  it('prepends agent-CLI install dirs (~/.opencode/bin, ~/.vite-plus/bin) for packaged darwin runs', async () => {
+  it('seeds agent-CLI install dirs (~/.opencode/bin, ~/.vite-plus/bin, ~/.grok/bin) for packaged darwin runs', async () => {
     const { app } = await import('electron')
     const { patchPackagedProcessPath } = await import('./configure-process')
 
@@ -68,9 +68,10 @@ describe('patchPackagedProcessPath', () => {
     patchPackagedProcessPath()
 
     const segments = (process.env.PATH ?? '').split(':')
-    // #829: GUI PATH must discover the documented OpenCode/Pi fallback installs.
+    // #829/#17590: GUI PATH must discover the documented OpenCode/Pi/Grok fallback installs.
     expect(segments).toContain(join('/Users/tester', '.opencode/bin'))
     expect(segments).toContain(join('/Users/tester', '.vite-plus/bin'))
+    expect(segments).toContain(join('/Users/tester', '.grok/bin'))
     expect(segments).toContain(join('/Users/tester', 'bin'))
   })
 
@@ -223,6 +224,10 @@ describe('patchPackagedProcessPath', () => {
 
     setPlatform('win32')
     Object.defineProperty(app, 'isPackaged', { configurable: true, value: true })
+    vi.stubEnv('FNM_DIR', 'C:\\fnm')
+    onTestFinished(() => {
+      vi.unstubAllEnvs()
+    })
     const pathDelimiter = process.platform === 'win32' ? ';' : ':'
     process.env.PATH = `C:\\Windows\\System32${pathDelimiter}C:\\Windows`
 
@@ -232,6 +237,9 @@ describe('patchPackagedProcessPath', () => {
     const userLocalBin = join(homedir(), '.local', 'bin')
     expect(segments).toContain(userLocalBin)
     expect(segments.indexOf(userLocalBin)).toBeLessThan(segments.indexOf('C:\\Windows\\System32'))
+    // #11356: fnm's default Node only backfills; it must not shadow an inherited system Node.
+    const fnmAlias = join('C:\\fnm', 'aliases', 'default')
+    expect(segments.indexOf(fnmAlias)).toBeGreaterThan(segments.indexOf('C:\\Windows'))
   })
 })
 

@@ -11,6 +11,7 @@ import {
 } from 'node:fs'
 import { createRequire } from 'node:module'
 import { dirname, join, relative, resolve } from 'node:path'
+import { resolvePnpmCliInvocation } from './pnpm-cli-invocation.mjs'
 
 const root = resolve(import.meta.dirname, '../..')
 const PACKAGES = [{ name: '@orca/process-host', dir: 'src/packages/process-host' }]
@@ -90,14 +91,11 @@ function writeStamp(packageDir, inputs) {
 
 function runPackageBuild(name) {
   // Why not @orca/process-host: this builds it, so its dist may not exist yet.
-  const pnpmEntry = process.env.npm_execpath
-  const [program, args] = /\.[cm]?js$/.test(pnpmEntry ?? '')
-    ? [process.execPath, [pnpmEntry, '--filter', name, 'build']]
-    : ['pnpm', ['--filter', name, 'build']]
-  const result = spawnSync(program, args, {
+  const { command, prefixArgs, shell } = resolvePnpmCliInvocation()
+  const result = spawnSync(command, [...prefixArgs, '--filter', name, 'build'], {
     cwd: root,
     stdio: 'inherit',
-    shell: program === 'pnpm' && process.platform === 'win32'
+    shell
   })
   if (result.error) {
     throw result.error

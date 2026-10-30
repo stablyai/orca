@@ -1,8 +1,9 @@
 import { existsSync } from 'node:fs'
-import { utils, type BaseAgent, type ParsedKey } from 'ssh2'
+import type { BaseAgent, ParsedKey } from 'ssh2'
 import type { SshTarget } from '../../shared/ssh-types'
 import type { SshResolvedConfig } from './config/ssh-g-config-resolution'
 import { createIdentityFilteredAgent } from './ssh-agent-identity-filter'
+import { loadSsh2 } from './ssh2-module-load'
 import { resolveSshConfigHomePath } from './config/ssh-config-path-expansion'
 import { isOpenSshConfigBackedTarget } from './system-transport/system-ssh-args'
 import { readSshIdentityFileSync } from './ssh-identity-file-read'
@@ -142,6 +143,9 @@ function readPrivateKey(
   if (read.problem) {
     skipped?.set(keyPath, read.problem)
     warnSkippedIdentityFileOnce(keyPath, read.problem)
+  } else if (!EXPANDED_DEFAULT_KEY_PATHS.includes(resolveSshConfigHomePath(keyPath))) {
+    // Absent defaults are normal; a configured key that is missing explains a later password prompt.
+    skipped?.set(keyPath, 'it does not exist')
   }
   return undefined
 }
@@ -192,6 +196,7 @@ export function withSkippedIdentityFileDetail(
 }
 
 export function isUnencryptedPrivateKey(contents: Buffer): boolean {
+  const { utils } = loadSsh2()
   const parsed = utils.parseKey(contents) as ParsedKey | ParsedKey[] | Error
   if (parsed instanceof Error) {
     return false
@@ -211,6 +216,7 @@ export function resolveUnencryptedExplicitPrivateKeys(
 }
 
 export function findEncryptedPrivateKeyPath(keys: PrivateKeyFile[]): string | undefined {
+  const { utils } = loadSsh2()
   for (const key of keys) {
     const parsed = utils.parseKey(key.contents) as ParsedKey | ParsedKey[] | Error
     if (parsed instanceof Error && /passphrase|encrypted key|bad decrypt/i.test(parsed.message)) {

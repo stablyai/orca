@@ -10,6 +10,7 @@ import {
 } from '../../../shared/keybindings'
 import { useAppStore } from '../store'
 import { translate } from '@/i18n/i18n'
+import { localizedKeybindingTitle } from '@/components/settings/keybinding-title-copy'
 
 const STORAGE_PREFIX = 'orca.terminalShortcutCapturedNotice.'
 const NOTICE_DURATION_MS = 20_000
@@ -69,7 +70,7 @@ export function showTerminalShortcutCaptureNotification({
       'Terminal shortcut handled'
     ),
     {
-      description: `${definition.title} (${bindingLabel})`,
+      description: `${localizedKeybindingTitle(definition)} (${bindingLabel})`,
       // Allow reading time for one-time shortcut rebinding without making the toast persistent.
       duration: NOTICE_DURATION_MS,
       dismissible: true,

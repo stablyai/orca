@@ -1,61 +1,68 @@
 import { ptyIncarnationById, ptyOwnership } from './provider/ownership-state'
-import { createLaunchRaceRuntime } from '../pty-launch-race-test-fixture'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { createLaunchRaceRuntime } from './pty-launch-race-test-fixture'
+import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import type { AgentPaneLaunchRequest } from '../../../shared/agent-pane-launch-request'
-import { setupPtyIpcSuite } from '../pty-ipc-test-harness'
-import { statSyncMock } from '../pty-ipc-mock-registry'
+import { setupPtyIpcSuite } from './pty-ipc-test-harness'
+import { classifyErrorMock, statSyncMock } from './pty-ipc-mock-registry'
 import { registerPtyHandlers } from './register-handlers'
 import {
+  isAgentLaunchRunningIn,
   markAgentLaunchesClosedByUser,
   resetAgentLaunchPanesForTests
 } from '../../agent-launch/agent-launch-pane-attachment'
 import { AGENT_LAUNCH_PANE_REFUSED_CODE } from '../../../shared/agent-launch-pane-verdict'
+import { makePaneKey } from '../../../shared/stable-pane-id'
+import {
+  makePaneSpawnReservationKey,
+  paneSpawnReservationsByOwnerKey
+} from './pane/spawn-reservation'
+import { acquireWatcherRemovalGate } from '../watcher-removal-gate'
 
-vi.mock('electron', () => import('../pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
-vi.mock('fs', () => import('../pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
+vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
+vi.mock('fs', () => import('./pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
 vi.mock('node:fs/promises', async (importOriginal) =>
-  (await import('../pty-ipc-mock-registry')).fsPromisesModuleMock(await importOriginal())
+  (await import('./pty-ipc-mock-registry')).fsPromisesModuleMock(await importOriginal())
 )
-vi.mock('node-pty', () => import('../pty-ipc-mock-registry').then((m) => m.nodePtyModuleMock()))
+vi.mock('node-pty', () => import('./pty-ipc-mock-registry').then((m) => m.nodePtyModuleMock()))
 vi.mock('node:child_process', async (importOriginal) =>
-  (await import('../pty-ipc-mock-registry')).childProcessModuleMock(await importOriginal())
+  (await import('./pty-ipc-mock-registry')).childProcessModuleMock(await importOriginal())
 )
 vi.mock('../../opencode/hook-service', () =>
-  import('../pty-ipc-mock-registry').then((m) => m.openCodeHookServiceModuleMock())
+  import('./pty-ipc-mock-registry').then((m) => m.openCodeHookServiceModuleMock())
 )
 vi.mock('../../mimo/hook-service', () =>
-  import('../pty-ipc-mock-registry').then((m) => m.mimoHookServiceModuleMock())
+  import('./pty-ipc-mock-registry').then((m) => m.mimoHookServiceModuleMock())
 )
 vi.mock('../../agent-hooks/server', () =>
-  import('../pty-ipc-mock-registry').then((m) => m.agentHookServerModuleMock())
+  import('./pty-ipc-mock-registry').then((m) => m.agentHookServerModuleMock())
 )
 vi.mock('../../pi/titlebar-extension-service', () =>
-  import('../pty-ipc-mock-registry').then((m) => m.piTitlebarExtensionModuleMock())
+  import('./pty-ipc-mock-registry').then((m) => m.piTitlebarExtensionModuleMock())
 )
-vi.mock('../../pwsh', () => import('../pty-ipc-mock-registry').then((m) => m.pwshModuleMock()))
+vi.mock('../../pwsh', () => import('./pty-ipc-mock-registry').then((m) => m.pwshModuleMock()))
 vi.mock('../../wsl', async (importOriginal) =>
-  (await import('../pty-ipc-mock-registry')).wslModuleMock(await importOriginal())
+  (await import('./pty-ipc-mock-registry')).wslModuleMock(await importOriginal())
 )
 vi.mock('../../telemetry/client', () =>
-  import('../pty-ipc-mock-registry').then((m) => m.telemetryClientModuleMock())
+  import('./pty-ipc-mock-registry').then((m) => m.telemetryClientModuleMock())
 )
 vi.mock('../../telemetry/classify-error', () =>
-  import('../pty-ipc-mock-registry').then((m) => m.classifyErrorModuleMock())
+  import('./pty-ipc-mock-registry').then((m) => m.classifyErrorModuleMock())
 )
 vi.mock('../../cli/linux-terminal-orca-cli-shim', () =>
-  import('../pty-ipc-mock-registry').then((m) => m.linuxCliShimModuleMock())
+  import('./pty-ipc-mock-registry').then((m) => m.linuxCliShimModuleMock())
 )
 vi.mock('../../memory/pty-registry', () =>
-  import('../pty-ipc-mock-registry').then((m) => m.ptyRegistryModuleMock())
+  import('./pty-ipc-mock-registry').then((m) => m.ptyRegistryModuleMock())
 )
 vi.mock('../../agent-hooks/migration-unsupported-pty-state', () =>
-  import('../pty-ipc-mock-registry').then((m) => m.migrationUnsupportedPtyModuleMock())
+  import('./pty-ipc-mock-registry').then((m) => m.migrationUnsupportedPtyModuleMock())
 )
 vi.mock('../../codex/codex-pane-account-registry', () =>
-  import('../pty-ipc-mock-registry').then((m) => m.codexPaneAccountRegistryModuleMock())
+  import('./pty-ipc-mock-registry').then((m) => m.codexPaneAccountRegistryModuleMock())
 )
 vi.mock('../../codex/codex-state-db-backfill-recovery', () =>
-  import('../pty-ipc-mock-registry').then((m) => m.codexBackfillRecoveryModuleMock())
+  import('./pty-ipc-mock-registry').then((m) => m.codexBackfillRecoveryModuleMock())
 )
 
 // An AI button's launch is planned inside its pane's spawn, with the host's planner, and writes no
@@ -80,6 +87,7 @@ describe('a pane that starts its own agent launch', () => {
     providerSpawn: ReturnType<typeof vi.fn>,
     plan: () => Promise<Record<string, unknown>> = async () => ({ command: 'claude' })
   ) {
+    classifyErrorMock.mockReturnValue({ error_class: 'unknown' })
     installDaemonTestProvider({ spawn: providerSpawn })
     const runtime = {
       ...createLaunchRaceRuntime(),
@@ -278,6 +286,45 @@ describe('a pane that starts its own agent launch', () => {
 
     await expect(spawned).rejects.toThrow('agent_launch_tab_closed')
     expect(providerSpawn).not.toHaveBeenCalled()
+    expect(runtime.reportAgentLaunchPaneVerdict).not.toHaveBeenCalled()
+  })
+
+  it('starts nothing and releases its preparation when the pane closes while its lease waits', async () => {
+    let resolveLease!: (release: () => void) => void
+    const lease = new Promise<() => void>((resolve) => {
+      resolveLease = resolve
+    })
+    const releaseLease = vi.fn()
+    const acquireWorktreeTerminalSpawn = vi.fn(() => lease)
+    const providerSpawn = vi.fn(async () => ({ id: 'pty-agent' }))
+    const runtime = register(providerSpawn)
+    Object.assign(runtime, { acquireWorktreeTerminalSpawn })
+
+    const spawned = spawnPane().catch((error: unknown) => error)
+    await vi.waitFor(() => expect(acquireWorktreeTerminalSpawn).toHaveBeenCalledOnce())
+    const key = makePaneSpawnReservationKey(worktreeId, null, makePaneKey(tabId, leafId))!
+    const reservation = paneSpawnReservationsByOwnerKey.get(key)!
+    expect(reservation).toBeDefined()
+    const closedPane = { kind: 'pane', tabId, leafId } as const
+    expect(isAgentLaunchRunningIn(worktreeId, closedPane)).toBe(true)
+    const removal = acquireWatcherRemovalGate('/tmp/pane-launch')
+    onTestFinished(() => removal.release())
+    const drained = vi.fn()
+    const preparationDone = removal.ready.then(drained)
+    await Promise.resolve()
+    expect(drained).not.toHaveBeenCalled()
+
+    markAgentLaunchesClosedByUser(worktreeId, closedPane)
+    resolveLease(releaseLease)
+
+    expect(await spawned).toMatchObject({ message: 'agent_launch_tab_closed' })
+    expect(providerSpawn).not.toHaveBeenCalled()
+    expect(releaseLease).toHaveBeenCalledOnce()
+    await expect(reservation.promise).rejects.toThrow('agent_launch_tab_closed')
+    expect(paneSpawnReservationsByOwnerKey.has(key)).toBe(false)
+    expect(isAgentLaunchRunningIn(worktreeId, closedPane)).toBe(false)
+    await preparationDone
+    expect(drained).toHaveBeenCalledOnce()
     expect(runtime.reportAgentLaunchPaneVerdict).not.toHaveBeenCalled()
   })
 })

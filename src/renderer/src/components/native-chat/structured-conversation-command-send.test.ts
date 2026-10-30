@@ -7,7 +7,6 @@ import { TUI_AGENT_DISPLAY_NAMES } from '../../../../shared/tui-agent-display-na
 import { structuredAgentLabel } from '@/lib/structured-agent-session-launch-label'
 import {
   sendStructuredConversationCommand,
-  structuredConversationCommandHold,
   type StructuredConversationCommandCauses
 } from './structured-conversation-command-send'
 
@@ -196,39 +195,6 @@ describe('a /compact the host holds in line', () => {
         queued: { messageId: 'op-1', position: 1, state: 'waiting' }
       })
     ).toEqual({ accepted: true, error: null })
-  })
-
-  const idle = {
-    waitsInLine: false,
-    agentWorking: false,
-    promptPending: false,
-    backgroundTasksRunning: false,
-    sendPending: false
-  }
-
-  it('is held here only by a message the host does not have yet, or background work', () => {
-    const inLine = { ...idle, waitsInLine: true }
-    expect(
-      structuredConversationCommandHold({
-        ...inLine,
-        agentWorking: true,
-        promptPending: true
-      })
-    ).toBeNull()
-    expect(structuredConversationCommandHold({ ...inLine, sendPending: true })).toBe('ahead')
-    expect(structuredConversationCommandHold({ ...inLine, backgroundTasksRunning: true })).toBe(
-      'background'
-    )
-  })
-
-  it('against a host that cannot hold it, and for /clear, keeps every check in true words', () => {
-    expect(structuredConversationCommandHold(idle)).toBeNull()
-    expect(structuredConversationCommandHold({ ...idle, agentWorking: true })).toBe('working')
-    expect(structuredConversationCommandHold({ ...idle, sendPending: true })).toBe('sending')
-    expect(
-      structuredConversationCommandHold({ ...idle, agentWorking: true, sendPending: true })
-    ).toBe('working')
-    expect(structuredConversationCommandHold({ ...idle, promptPending: true })).toBe('prompt')
   })
 })
 

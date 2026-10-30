@@ -11,6 +11,7 @@ import type { RpcRequest } from '../../../core'
 import { ORCHESTRATION_METHODS } from '../../orchestration'
 import { prepareFederationWorkerLaunchOnHost } from './worker-opencode-model-preflight'
 import { FederationAttachStartParams } from '../federation/federation-start-schema'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../../shared/constants'
 
 describe('orchestration new-worktree workers', () => {
   type CreateWorktreeResult = Awaited<ReturnType<OrcaRuntimeService['createManagedWorktree']>>
@@ -286,6 +287,48 @@ describe('orchestration new-worktree workers', () => {
     expect(createWorktree).not.toHaveBeenCalled()
     expect(db.getTask(task.id)?.status).toBe('ready')
     expect(db.getDispatchContext(task.id)).toBeUndefined()
+  })
+
+  describe('from a terminal outside a managed git worktree', () => {
+    beforeEach(async () => {
+      const coordinator = await runtime.showTerminal('term_coord')
+      vi.mocked(runtime.showTerminal).mockResolvedValue({
+        ...coordinator,
+        worktreeId: FLOATING_TERMINAL_WORKTREE_ID
+      })
+      vi.mocked(runtime.showManagedWorktree).mockRejectedValue(new Error('selector_not_found'))
+    })
+
+    it('creates a new-top-level worktree in the explicit repo', async () => {
+      mockCreatedWorktree()
+
+      const { result } = await startWorker({ worktree: 'new-top-level', repo: 'repo' })
+
+      expect(runtime.createManagedWorktree).toHaveBeenCalledWith(
+        expect.objectContaining({
+          repoSelector: 'repo',
+          lineage: expect.objectContaining({ noParent: true, parentWorktree: undefined })
+        })
+      )
+      expect(result).toMatchObject({ state: 'ready' })
+    })
+
+    it.each([
+      ['new-child', { repo: 'repo' }],
+      ['new-top-level', {}]
+    ] as const)(
+      'refuses %s without a caller worktree before creating effects',
+      async (worktree, extra) => {
+        const createWorktree = vi.spyOn(runtime, 'createManagedWorktree')
+
+        await expect(startWorker({ worktree, ...extra })).rejects.toMatchObject({
+          code: 'invalid_argument',
+          message: expect.stringContaining('could not be resolved to a git worktree Orca manages')
+        })
+        expect(createWorktree).not.toHaveBeenCalled()
+        expect(db.getDispatchContext(db.listTasks()[0]!.id)).toBeUndefined()
+      }
+    )
   })
 
   it('injects the execution host CLI command without a Dispatch capability', async () => {

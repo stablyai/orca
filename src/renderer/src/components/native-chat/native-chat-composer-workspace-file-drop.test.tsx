@@ -16,7 +16,7 @@ import { NativeChatComposerField } from './NativeChatComposerField'
 import { useNativeChatComposerAttachments } from './use-native-chat-composer-attachments'
 import { useNativeChatWorkspaceFileDrop } from './use-native-chat-workspace-file-drop'
 import { useImeEnterGestureOwnership } from '@/lib/ime-composition-keyboard-event'
-import type * as RemoteRuntimePtyIdModule from '../../../../shared/remote-runtime-pty-id'
+import type * as RemoteRuntimePtyIdModule from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 
 const testState: {
   executionHostId: ExecutionHostId
@@ -52,7 +52,7 @@ vi.mock('./native-chat-attachment-upload', async (importOriginal) => ({
 vi.mock('@/i18n/i18n', () => ({
   translate: (_key: string, fallback: string) => fallback
 }))
-vi.mock('../../../../shared/remote-runtime-pty-id', async (importOriginal) => ({
+vi.mock('../../../../shared/remote-runtime/remote-runtime-pty-id', async (importOriginal) => ({
   ...(await importOriginal<typeof RemoteRuntimePtyIdModule>()),
   isRemoteRuntimePtyId: () => testState.targetIsRemoteRuntime
 }))
@@ -245,9 +245,10 @@ describe('native chat workspace file drops', () => {
     cleanup()
   })
 
-  it('consumes a nested editor drop once and inserts top-level paths at the caret', () => {
+  it('consumes a nested editor drop once and inserts top-level paths at the caret', async () => {
     render(<ComposerProbe initialDraft="$rev tail" />)
-    act(() => {
+    // Tiptap mounts node-view portals from a microtask.
+    await act(async () => {
       latestInput!.insertSkill!(0, 4, '$review')
     })
     expect(editor().querySelectorAll('[data-native-chat-skill]')).toHaveLength(1)
@@ -260,6 +261,7 @@ describe('native chat workspace file drops', () => {
     ])
     transfer.setData('text/plain', 'must not be inserted by ProseMirror')
     const accepted = dispatchDragEvent('drop', editor(), transfer)
+    await act(async () => {})
 
     expect(accepted).toBe(false)
     expect(screen.getByTestId('draft').textContent).toBe(

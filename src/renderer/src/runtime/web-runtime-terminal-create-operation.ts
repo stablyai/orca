@@ -3,7 +3,7 @@ import { createAgentSessionKeyboardOptions } from './agent-session-keyboard-capa
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import type { RuntimeMobileSessionCreateTerminalResult } from '../../../shared/runtime-types'
 import { toRuntimeExecutionHostId } from '../../../shared/execution-host'
-import { agentProviderSessionForEnsure } from '../../../shared/agent-session-resume'
+import { agentProviderSessionForHostEnsure } from './agent-session-ensure-provider-session'
 import { translate } from '../i18n/i18n'
 import { useAppStore } from '../store'
 import { agentResumeHostAuthorityCapability } from './agent-resume-host-authority-capability'
@@ -110,7 +110,10 @@ export async function createWebRuntimeSessionTerminalResult(
                         kind: 'explicit',
                         worktree: toRuntimeWorktreeSelector(args.worktreeId),
                         agent,
-                        providerSession: agentProviderSessionForEnsure(args.providerSession!),
+                        providerSession: await agentProviderSessionForHostEnsure(
+                          environmentId,
+                          args.providerSession!
+                        ),
                         ...(args.launchConfig?.ompResumeFilePath
                           ? { ompResumeFilePath: args.launchConfig.ompResumeFilePath }
                           : {}),

@@ -6,6 +6,7 @@ import type { CellInventoryHoldCounts } from './cell-inventory-hold-samples.js'
 import type { PostgresPoolPressureCounts } from './postgres-pool-pressure.js'
 import type { RelayReadinessGraceEvent, RelayReadinessObservation } from './relay-readiness.js'
 import { RELAY_FIX_LEVEL } from './relay-fix-level.js'
+import { sandboxTcpCounterDeltas, type SandboxTcpCounters } from './sandbox-tcp-counters.js'
 import type { StickySlotSample } from './sticky-slot-statements.js'
 
 export type RelayRuntimeCounts = {
@@ -380,6 +381,8 @@ export class RelayObservability implements RelayRuntimeObserver {
   private timer: ReturnType<typeof setInterval> | null = null
   private lastFlushAt = 0
   private instanceZone: string | undefined
+  private readTcpCounters: (() => SandboxTcpCounters | undefined) | undefined
+  private lastTcpCounters: SandboxTcpCounters | undefined
   private lastFlushedSafety = {
     sqlFailures: 0,
     reconnects: 0,
@@ -393,6 +396,19 @@ export class RelayObservability implements RelayRuntimeObserver {
 
   setInstanceZone(zone: string | undefined): void {
     this.instanceZone = zone
+  }
+
+  // TCP retransmits per window, to tell a lossy network path from a slow server.
+  setTcpCounterReader(read: () => SandboxTcpCounters | undefined): void {
+    this.readTcpCounters = read
+    this.lastTcpCounters = read()
+  }
+
+  private tcpCounterFields(): Record<string, number> {
+    const current = this.readTcpCounters?.()
+    const previous = this.lastTcpCounters
+    this.lastTcpCounters = current
+    return (current && previous && sandboxTcpCounterDeltas(previous, current)) || {}
   }
 
   recordAuth(success: boolean): void {
@@ -687,6 +703,7 @@ export class RelayObservability implements RelayRuntimeObserver {
       region: this.identity.region,
       // Which zone this instance runs in; read once at boot, absent until then or off Cloud Run.
       ...(this.instanceZone === undefined ? {} : { instanceZone: this.instanceZone }),
+      ...this.tcpCounterFields(),
       ...counts,
       forwardedBytesDelta: deltas.forwardedBytes,
       authSuccessesDelta: deltas.authSuccesses,

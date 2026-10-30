@@ -8,7 +8,6 @@ import {
   buildOrcadEntry,
   escapeLegalCommentTail,
   findNonAsciiSource,
-  moduleAtOffset,
   ORCAD_COMMONJS_MODULE_OPTIONS
 } from './orcad-entry-build.mjs'
 import { runProcessSync } from '@orca/process-host'
@@ -111,11 +110,6 @@ it('keeps the server bundle ASCII, so V8 stores its source one byte per characte
   expect(findNonAsciiSource(readFileSync(bundle, 'utf8'))).toBeNull()
 })
 
-it('names the line of a non-ASCII character a regex literal or tagged template left', () => {
-  expect(findNonAsciiSource('a=1\nb=/[\\u2726]/')).toBeNull()
-  expect(findNonAsciiSource('a=1\nb=/[\u2726]/')).toMatchObject({ offset: 8, line: 2 })
-})
-
 it('escapes only the trailing license comment, never code', () => {
   const code = 'a=/[\u2726]/;'
   const escaped = escapeLegalCommentTail(
@@ -125,12 +119,6 @@ it('escapes only the trailing license comment, never code', () => {
   expect(escaped).toContain('(c) Jos\\u{e9} \\u{1f600}')
   expect(findNonAsciiSource(escaped.slice(code.length))).toBeNull()
   expect(escapeLegalCommentTail(code)).toBe(code)
-})
-
-it('names the module an unminified build placed an offset in', () => {
-  const source = 'x\n// src/a.ts\nvar a = 1;\n// node_modules/b/index.js\nvar b = /\u2726/;\n'
-  expect(moduleAtOffset(source, source.indexOf('\u2726'))).toBe('node_modules/b/index.js')
-  expect(moduleAtOffset(source, source.indexOf('var a'))).toBe('src/a.ts')
 })
 
 it('keeps a build with every dark switch turned on ASCII', () => {

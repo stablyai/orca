@@ -44,7 +44,7 @@ vi.mock('./native-chat-runtime-send', () => ({
 }))
 
 import { useNativeChatInteractiveSend } from './use-native-chat-interactive-send'
-import type { AskPrompt } from './native-chat-interactive-prompt'
+import type { AskPrompt } from '../../../../shared/native-chat/input/native-chat-ask-types'
 
 const PROMPT: AskPrompt = {
   questions: [{ question: 'q', multiSelect: false, options: [{ label: 'A' }, { label: 'B' }] }]

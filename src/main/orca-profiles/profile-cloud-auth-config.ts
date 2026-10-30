@@ -15,6 +15,7 @@ export type OrcaCloudAuthConfig = {
   orgEndpoint: string
   logoutEndpoint: string
   relayTokenEndpoint: string
+  connectorTokenEndpoint: string
   relayDirectorUrl: string
   clientId: string
   scope: string
@@ -89,6 +90,9 @@ export function getOrcaCloudAuthConfig(
       relayTokenEndpoint:
         cleanEndpointUrl(env.ORCA_CLOUD_RELAY_TOKEN_URL) ??
         endpoint(apiBaseUrl, '/v1/desktop/auth/relay-token'),
+      connectorTokenEndpoint:
+        cleanEndpointUrl(env.ORCA_CLOUD_CONNECTOR_TOKEN_URL) ??
+        endpoint(apiBaseUrl, '/v1/desktop/auth/connector-token'),
       relayDirectorUrl:
         cleanOrigin(env.ORCA_RELAY_URL, allowLoopbackHttp) ?? PRODUCTION_RELAY_DIRECTOR_URL,
       clientId,

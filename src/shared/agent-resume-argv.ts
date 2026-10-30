@@ -11,7 +11,14 @@ export function getAgentResumeArgv(
     case 'codebuddy':
       return providerSession.key === 'session_id' ? ['codebuddy', '--resume', id] : null
     case 'claude':
-      return providerSession.key === 'session_id' ? ['claude', '--resume', id] : null
+      return providerSession.key === 'session_id'
+        ? [
+            'claude',
+            ...(providerSession.effort ? ['--effort', providerSession.effort] : []),
+            '--resume',
+            id
+          ]
+        : null
     case 'cursor':
       return providerSession.key === 'conversation_id' ? ['cursor-agent', '--resume', id] : null
     case 'codex':
@@ -66,8 +73,11 @@ export function getAgentResumeArgv(
     case 'zcode':
       return providerSession.key === 'session_id' ? ['zcode', '--resume', id] : null
     // DSH resumes by workspace path; callers must preserve cwd.
+    // Pin the backend (dsh-tui 0.14+ boots its remembered one); joined so <0.14 can't read `dsh` as a prompt.
     case 'dsh':
-      return providerSession.key === 'session_id' ? ['dsh-tui', '--resume', id] : null
+      return providerSession.key === 'session_id'
+        ? ['dsh-tui', '--backend=dsh', '--resume', id]
+        : null
     case 'jcode':
       return providerSession.key === 'session_id' ? ['jcode', '--resume', id] : null
     case 'kiro':

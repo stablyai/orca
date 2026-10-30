@@ -1,10 +1,15 @@
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type * as RuntimeEnvironmentStore from '../../../shared/runtime-environment-store'
+import type { WslHostServerStop } from '../../../shared/wsl-host-types'
 
 type WslServiceFake = { connect: ReturnType<typeof vi.fn>; remove: ReturnType<typeof vi.fn> }
 
 const mocks = vi.hoisted(() => {
   const order: string[] = []
-  const wsl: { service: WslServiceFake | null } = { service: null }
+  const wsl: { service: WslServiceFake | WslHostService | null } = { service: null }
   return {
     order,
     handle: vi.fn(),
@@ -18,10 +23,12 @@ const mocks = vi.hoisted(() => {
   }
 })
 
-vi.mock('electron', () => ({ ipcMain: { handle: mocks.handle } }))
-vi.mock('../../../shared/runtime-environment-store', () => ({
-  addEnvironmentFromPairingCode: vi.fn(),
-  listEnvironments: vi.fn(() => []),
+vi.mock('electron', () => ({
+  BrowserWindow: { getAllWindows: () => [] },
+  ipcMain: { handle: mocks.handle, removeHandler: vi.fn() }
+}))
+vi.mock('../../../shared/runtime-environment-store', async (importOriginal) => ({
+  ...(await importOriginal<typeof RuntimeEnvironmentStore>()),
   removeEnvironment: mocks.removeEnvironment,
   resolveEnvironment: mocks.resolveEnvironment
 }))
@@ -42,10 +49,29 @@ vi.mock('../../ssh/ssh-credential-decline', () => ({
 vi.mock('../../wsl/wsl-host-service-instance', () => ({
   getWslHostService: () => mocks.wsl.service
 }))
+vi.mock('../../wsl/wsl-host-connector', () => ({ createWslHostConnector: vi.fn() }))
+vi.mock('../../wsl/wsl-host-e2e-fake-connector', () => ({
+  createFakeWslHostConnector: vi.fn(),
+  readFakeWslHostsConfig: () => null
+}))
+vi.mock('../../orcad/orcad-artifact-materializer', () => ({ hasOrcadTemplate: () => true }))
+vi.mock('../../ssh/orcad-terminal-census-client', () => ({ requestOrcadTerminalCensus: vi.fn() }))
 
+import { registerWslHostHandlers } from '../wsl-host-handlers'
 import { registerRuntimeEnvironmentConnectivityHandlers } from './runtime-environment-connectivity-handlers'
+import {
+  findWslHostDeployment,
+  setWslHostPendingStop
+} from '../../../shared/runtime-environment-wsl-host-store'
+import { WslHostService } from '../../wsl/wsl-host-service'
+import { UBUNTU, makeConnector } from '../../wsl/wsl-host-service-test-connector'
+import { wslHostRemovalPendingMessage } from '../../wsl/wsl-host-add-admission'
 import { WSL_HOSTS_GATED_OFF_MESSAGE } from '../../wsl/wsl-host-gate'
 import { WSL_HOSTS_INTERNAL_GATE_ENV } from '../../../shared/wsl-host-internal-gate'
+
+const { resolveEnvironment: resolveActualEnvironment } = await vi.importActual<
+  typeof RuntimeEnvironmentStore
+>('../../../shared/runtime-environment-store')
 
 const endpoints = [
   {
@@ -120,11 +146,11 @@ function handler(channel: string): (event: unknown, args: Record<string, unknown
   return call![1]
 }
 
-function register(activeRuntimeEnvironmentId?: string): void {
+function register(activeRuntimeEnvironmentId?: string, userDataPath = '/u'): void {
   registerRuntimeEnvironmentConnectivityHandlers({
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: connect and remove read only settings.
     store: { getSettings: () => ({ activeRuntimeEnvironmentId }) } as never,
-    getUserDataPath: () => '/u',
+    getUserDataPath: () => userDataPath,
     invalidateTransport: vi.fn()
   })
 }
@@ -206,6 +232,20 @@ describe('runtimeEnvironments:remove by host kind', () => {
     expect(mocks.retire).not.toHaveBeenCalled()
   })
 
+  it('carries what the WSL service kept, so the UI can say the host stays', async () => {
+    useHost('wsl')
+    const serverStop: WslHostServerStop = {
+      stopped: false,
+      reason: 'busy',
+      verdict: 'live',
+      kept: true
+    }
+    vi.mocked(mocks.wsl.service!.remove).mockResolvedValueOnce(serverStop)
+    await expect(
+      handler('runtimeEnvironments:remove')(null, { selector: 'wsl:ubuntu' })
+    ).resolves.toEqual({ removed: redacted('wsl'), serverStop })
+  })
+
   it('removes a WSL host generically when no service exists', () => {
     useHost('wsl')
     mocks.wsl.service = null
@@ -247,5 +287,82 @@ describe('runtimeEnvironments:remove by host kind', () => {
     expect(mocks.retire).toHaveBeenCalledWith(id, expect.any(Function), expect.anything(), '/u')
     // Removed by its own id, so no legacy-selector transport is closed.
     expect(mocks.closeRequest).not.toHaveBeenCalled()
+  })
+})
+
+describe('stopped WSL Start admission through direct and generic IPC', () => {
+  let userDataPath: string
+  let connector: ReturnType<typeof makeConnector>
+
+  beforeEach(async () => {
+    userDataPath = mkdtempSync(join(tmpdir(), 'orca-wsl-start-admission-'))
+    connector = makeConnector([UBUNTU])
+    const service = new WslHostService({
+      userDataPath: () => userDataPath,
+      isEnabled: () => true,
+      hasServerFiles: () => true,
+      publish: vi.fn(),
+      pairingChanged: vi.fn(),
+      ready: vi.fn(),
+      removed: vi.fn()
+    })
+    service.attach(connector)
+    await expect(service.add({ distro: 'Ubuntu' })).resolves.toEqual({
+      ok: true,
+      environmentId: 'wsl:ubuntu'
+    })
+    await connector.disconnect('Ubuntu')
+    connector.distro.state = 'stopped'
+    mocks.wsl.service = service
+    mocks.resolveEnvironment.mockImplementation(resolveActualEnvironment)
+    mocks.handle.mockClear()
+    register(undefined, userDataPath)
+    registerWslHostHandlers({
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The connect handler does not read the store.
+      store: {} as never,
+      getUserDataPath: () => userDataPath,
+      invalidateTransport: vi.fn()
+    })
+    connector.connect.mockClear()
+    connector.forgetPairingFailures.mockClear()
+  })
+
+  afterEach(() => {
+    rmSync(userDataPath, { recursive: true, force: true })
+  })
+
+  const paths = [
+    ['wslHosts:connect', { environmentId: 'wsl:ubuntu', withdrawPendingRemoval: false }],
+    ['runtimeEnvironments:connect', { selector: 'wsl:ubuntu', timeoutMs: 5_000 }]
+  ] as const
+
+  it('refuses both paths on the same saved pending Remove without advancing to connect or status', async () => {
+    const pendingStop = { since: 1, reason: 'busy', verdict: 'live' } as const
+    setWslHostPendingStop(userDataPath, 'wsl:ubuntu', pendingStop)
+    const record = findWslHostDeployment(userDataPath, 'wsl:ubuntu')
+
+    for (const [channel, args] of paths) {
+      await expect(handler(channel)(null, args)).rejects.toThrow(
+        wslHostRemovalPendingMessage('Ubuntu')
+      )
+      expect(findWslHostDeployment(userDataPath, 'wsl:ubuntu')).toEqual(record)
+      expect(connector.connect).not.toHaveBeenCalled()
+      expect(connector.forgetPairingFailures).not.toHaveBeenCalled()
+      expect(mocks.getStatus).not.toHaveBeenCalled()
+    }
+  })
+
+  it('passes the same distro and default connector options after either path admits Start', async () => {
+    for (const [channel, args] of paths) {
+      await handler(channel)(null, args)
+    }
+    expect(connector.connect.mock.calls).toEqual([
+      ['Ubuntu', {}],
+      ['Ubuntu', {}]
+    ])
+    expect(mocks.getStatus).toHaveBeenCalledOnce()
+    expect(mocks.getStatus).toHaveBeenCalledWith(userDataPath, 'wsl:ubuntu', 5_000, {
+      reconnect: true
+    })
   })
 })

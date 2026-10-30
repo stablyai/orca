@@ -11,7 +11,7 @@ import {
   buildTaskPageRepoSourceState,
   selectTaskPageUnresolvedSourceRepos,
   reconcileTaskPagePagesWithWorkItemsCache
-} from '@/components/task-page-cache-selectors'
+} from '@/components/task-page/task-page-cache-selectors'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 export function useTaskPageGitHubCacheReconciliation(model: TaskPageGitHubDetailModel) {

@@ -1,4 +1,4 @@
-import { createElement as h, useMemo, type ReactElement, type ReactNode } from 'react'
+import { createElement as h, Fragment, useMemo, type ReactElement, type ReactNode } from 'react'
 import {
   act,
   create,
@@ -12,11 +12,14 @@ import { foldMobileNativeChatMessages } from './mobile-native-chat-render-data'
 import {
   useMobileNativeChatRowKeys,
   type MobileNativeChatRowKeys
-} from './mobile-native-chat-row-keys'
-import { mobileNativeChatRowId } from './mobile-native-chat-reading-place'
+} from './native-chat/transcript/mobile-native-chat-row-keys'
+import {
+  mobileNativeChatReadingPlace,
+  mobileNativeChatRowId
+} from './mobile-native-chat-reading-place'
 import { MobileNativeChatPageList } from './MobileNativeChatPageList'
-import { ToolRun } from './MobileNativeChatToolRun'
-import { useMobileNativeChatTurnDisclosure } from './use-mobile-native-chat-turn-disclosure'
+import { ToolRun } from './native-chat/transcript/MobileNativeChatToolRun'
+import { useMobileNativeChatTurnDisclosure } from './native-chat/transcript/use-mobile-native-chat-turn-disclosure'
 
 const platform = vi.hoisted(() => ({ OS: 'web' }))
 const scrollable = vi.hoisted(() => {
@@ -62,7 +65,7 @@ vi.mock('lucide-react-native', () => {
   const rest = ['MessageSquareMore', 'Pencil', 'Plug', 'Search', 'SquareTerminal', 'Wrench']
   return Object.fromEntries([...names, ...more, ...rest].map((name) => [name, icon]))
 })
-vi.mock('./mobile-native-chat-tool-styles', () => ({
+vi.mock('./native-chat/transcript/mobile-native-chat-tool-styles', () => ({
   toolStyles: {},
   toolType: () => ({ row: {}, meta: {}, code: {} })
 }))
@@ -71,16 +74,23 @@ vi.mock('../platform/external-link', () => ({ openExternalLink: vi.fn() }))
 vi.mock('../components/inline-text-selection', () => ({ INLINE_TEXT_SELECTION: false }))
 
 // The browser's resize step: after layout, before paint.
-const observers = new Set<() => void>()
-const resized = () => act(() => observers.forEach((deliver) => deliver()))
+const observers = new Map<() => void, Set<unknown>>()
+const resized = () => act(() => observers.forEach((_, deliver) => deliver()))
+// Only observers watching `target` hear about it, as in the browser.
+const resizedOnly = (target: unknown) =>
+  act(() => observers.forEach((targets, deliver) => targets.has(target) && deliver()))
 vi.stubGlobal(
   'ResizeObserver',
   class {
     constructor(private readonly deliver: () => void) {
-      observers.add(deliver)
+      observers.set(deliver, new Set())
     }
-    observe(): void {}
-    unobserve(): void {}
+    observe(target: unknown): void {
+      observers.get(this.deliver)?.add(target)
+    }
+    unobserve(target: unknown): void {
+      observers.get(this.deliver)?.delete(target)
+    }
     disconnect(): void {
       observers.delete(this.deliver)
     }
@@ -124,11 +134,13 @@ const chat = [say('u0', 'user', 'first'), say('x0', 'assistant', 'answer'), say(
   })
   .concat(run(1).slice(1), ...Array.from({ length: 39 }, (_, i) => run(i + 2)))
 
-type Box = { id: string; top: number; bottom: number; end: number }
+type Box = { id: string; top: number; bottom: number; end: number; parent: number; rows: boolean }
 type Element = {
   getAttribute: () => string
   getBoundingClientRect: () => { top: number; bottom: number }
   querySelectorAll: (selector: string) => Element[]
+  children: Element[]
+  nextElementSibling: Element | null
 }
 
 const oldHostTail = (): NativeChatMessage[] => JSON.parse(JSON.stringify(chat))
@@ -139,33 +151,44 @@ function page(tree: () => Node | Node[] | null) {
   const boxes = (): Box[] => {
     const out: Box[] = []
     let y = 0
-    const walk = (node: Node | string): void => {
+    const walk = (node: Node | string, parent: number): void => {
       if (typeof node === 'string' || node.type === 'span') {
         y += typeof node === 'string' ? 0 : 20
         return
       }
-      const at = out.push({ id: String(node.props.testID ?? ''), top: y, bottom: y, end: 0 }) - 1
-      node.children?.forEach(walk)
+      const id = String(node.props.testID ?? '')
+      const rows = node.props['data-chat-rows'] !== undefined
+      const at = out.push({ id, top: y, bottom: y, end: 0, parent, rows }) - 1
+      node.children?.forEach((child) => walk(child, at))
       out[at] = { ...out[at]!, bottom: y, end: out.length }
     }
-    walk({ type: 'page', props: {}, children: [tree() ?? []].flat() })
+    walk({ type: 'page', props: {}, children: [tree() ?? []].flat() }, -1)
     return out
+  }
+  const element = (all: Box[], at: number): Element => {
+    const box = all[at]!
+    const siblings = (parent: number): Element[] =>
+      all.flatMap((other, i) => (other.parent === parent ? [element(all, i)] : []))
+    return {
+      getAttribute: () => box.id,
+      getBoundingClientRect: () => ({
+        top: box.top - node.viewTop(),
+        bottom: box.bottom - node.viewTop()
+      }),
+      querySelectorAll: (inner: string) => select(all, at + 1, box.end, inner),
+      get children() {
+        return siblings(at)
+      },
+      get nextElementSibling() {
+        const next = all.findIndex((other, i) => i > at && other.parent === box.parent)
+        return next === -1 ? null : element(all, next)
+      }
+    }
   }
   const select = (all: Box[], from: number, to: number, selector: string): Element[] => {
     const prefix = /\^="([^"]+)"/.exec(selector)?.[1] ?? '?'
     return all.flatMap((box, at) =>
-      at >= from && at < to && box.id.startsWith(prefix)
-        ? [
-            {
-              getAttribute: () => box.id,
-              getBoundingClientRect: () => ({
-                top: box.top - node.viewTop(),
-                bottom: box.bottom - node.viewTop()
-              }),
-              querySelectorAll: (inner: string) => select(all, at + 1, box.end, inner)
-            }
-          ]
-        : []
+      at >= from && at < to && box.id.startsWith(prefix) ? [element(all, at)] : []
     )
   }
   let scrollTop = 0
@@ -188,7 +211,7 @@ function page(tree: () => Node | Node[] | null) {
       node.scrollTop = y - Math.max(0, node.scrollHeight - node.clientHeight)
     },
     getAttribute: () => null,
-    getBoundingClientRect: () => ({ top: 0, bottom: 200 }),
+    getBoundingClientRect: () => ({ top: 0, bottom: node.clientHeight }),
     addEventListener: (type: string, listener: () => void): void => {
       listeners.set(type, listener)
     },
@@ -197,6 +220,11 @@ function page(tree: () => Node | Node[] | null) {
     },
     touch: (type: 'touchstart' | 'touchend'): void => listeners.get(type)?.(),
     querySelectorAll: (selector: string): Element[] => select(boxes(), 0, Infinity, selector),
+    querySelector: (): Element | null => {
+      const all = boxes()
+      const at = all.findIndex((box) => box.rows)
+      return at === -1 ? null : element(all, at)
+    },
     top: (id: string): number =>
       (boxes().find((box) => box.id === id)?.top ?? Number.NaN) - node.viewTop()
   }
@@ -235,6 +263,7 @@ function Chat(props: {
   live: boolean
   joined?: number
   runs?: boolean
+  status?: boolean
 }): ReactElement {
   const folded = useMemo(
     () => foldMobileNativeChatMessages(props.messages, 'claude'),
@@ -257,13 +286,22 @@ function Chat(props: {
     onEndDistance: () => {},
     renderItem: ({ item, index }) => {
       const { workRun, joinsWorkRun } = turns.resolveRow(index, item)
-      return h(Row, {
+      const row = h(Row, {
         message: item,
         rowKey: keys.keyOf(item),
         joined: item === folded.at(-1) ? props.joined : 0,
         workRun,
         joinsWorkRun
       })
+      // Turn status draws beside its row, untagged.
+      return props.status
+        ? h(
+            Fragment,
+            null,
+            row,
+            ...Array.from({ length: 5 }, (_, i) => h('span', { key: i }, 'Done'))
+          )
+        : row
     },
     layoutKey: 'layout',
     contentContainerStyle: null,
@@ -276,7 +314,10 @@ function Chat(props: {
 
 function mount(
   messages: NativeChatMessage[],
-  options: { following: boolean; live: boolean; runs?: boolean } = { following: false, live: false }
+  options: { following: boolean; live: boolean; runs?: boolean; status?: boolean } = {
+    following: false,
+    live: false
+  }
 ) {
   let renderer!: ReactTestRenderer
   act(() => {
@@ -377,6 +418,18 @@ it('holds back a change below a scrolling reader until they rest, then keeps the
   expect(chat0.scroller.top(mobileNativeChatRowId('m4'))).toBe(line)
 })
 
+it('keeps a parked reader on their line when the list viewport changes height, as when the composer grows', () => {
+  const rows = Array.from({ length: 12 }, (_, i) => say(`m${i}`, i % 2 ? 'assistant' : 'user', 'x'))
+  const chat0 = mount(rows)
+  chat0.read(() => chat0.scroller.showFrom(40))
+  const line = chat0.scroller.top(mobileNativeChatRowId('m4'))
+
+  chat0.scroller.clientHeight = 120
+  resizedOnly(chat0.scroller)
+
+  expect(chat0.scroller.top(mobileNativeChatRowId('m4'))).toBe(line)
+})
+
 it("holds a row's look with its messages: what the chat's state adds lands once the reader rests", () => {
   const rows = Array.from({ length: 12 }, (_, i) => say(`m${i}`, i % 2 ? 'assistant' : 'user', 'x'))
   const chat0 = mount(rows)
@@ -422,6 +475,29 @@ it('opens a chat whose newest rows are short and older ones tall without drawing
   )
   const chat0 = mount([...tall, ...short], { following: true, live: false })
   expect(chat0.drawn(mobileNativeChatRowId('t11'))).toBe(1)
+})
+
+it('draws a bounded tail again once a reader who scrolled back through history returns to it', () => {
+  // Rows and their status lines are sized so a cut that drops a row's status would draw it back.
+  const messages = Array.from({ length: 200 }, (_, i) => ({
+    ...say(`m${i}`, i % 2 ? 'assistant' : 'user', ''),
+    blocks: [0, 1].map((line) => ({ type: 'text' as const, text: `message ${i}.${line}` }))
+  }))
+  const options = { following: true, live: false, status: true }
+  const chat0 = mount(messages, options)
+  const tail = chat0.rows().length
+  options.following = false
+  chat0.show(messages)
+  for (let page = 0; page < 8; page += 1) {
+    chat0.read(() => chat0.scroller.showFrom(0))
+  }
+  expect(chat0.rows().length).toBeGreaterThan(tail * 2)
+
+  options.following = true
+  chat0.show(messages)
+  chat0.read(() => (chat0.scroller.scrollTop = 0))
+  expect(chat0.rows().length).toBeLessThanOrEqual(tail)
+  expect(chat0.rows().at(-1)).toBe(mobileNativeChatRowId('m199'))
 })
 
 it('holds a row the reader taps open in place, and a reply below waits out a flick', () => {
@@ -540,4 +616,38 @@ it('a roster keeps its key when the fold moves it, and the rows the reader saw a
   expect(chat0.show(all.slice(13))).toBeLessThanOrEqual(1)
   expect(tops(['mid0', 'mid5'])).toEqual(after)
   expect(chat0.drawn(mobileNativeChatRowId('s2'))).toBe(1)
+})
+
+it('keeps the nearest rows off screen as stand-ins when turn-status lines sit between them and the view', () => {
+  type Line = { testID: string; top: number; bottom: number }
+  const lines: Line[] = [
+    { testID: mobileNativeChatRowId('above'), top: -300, bottom: -100 },
+    { testID: '', top: -100, bottom: -80 },
+    { testID: mobileNativeChatRowId('shown'), top: -80, bottom: 280 },
+    { testID: '', top: 280, bottom: 300 },
+    { testID: mobileNativeChatRowId('below'), top: 300, bottom: 500 }
+  ]
+  const children = lines.map((line) => ({
+    getAttribute: () => line.testID || null,
+    getBoundingClientRect: () => line,
+    querySelectorAll: () => [],
+    nextElementSibling: null
+  }))
+  const box = { ...children[0]!, children }
+  const scroller = {
+    scrollTop: 0,
+    scrollHeight: 800,
+    clientHeight: 200,
+    getAttribute: () => null,
+    getBoundingClientRect: () => ({ top: 0, bottom: 200 }),
+    querySelectorAll: () => [],
+    querySelector: () => box
+  }
+
+  const place = mobileNativeChatReadingPlace(scroller, {
+    current: () => undefined,
+    placement: () => 'p'
+  })
+
+  expect(place.map((unit) => unit.key)).toEqual(['shown', 'below', 'above'])
 })

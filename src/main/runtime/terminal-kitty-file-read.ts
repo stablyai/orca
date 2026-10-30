@@ -14,7 +14,7 @@ import {
   type TerminalKittyFileRequest,
   type TerminalKittyFileResult
 } from '../../shared/terminal-kitty-file'
-import { localTerminalArtifactRoots } from './terminal/artifacts/artifact-integrity'
+import { kittyTemporaryRoots } from './terminal-kitty-temporary-roots'
 
 export async function readTerminalKittyFile(
   request: TerminalKittyFileRequest,
@@ -30,7 +30,7 @@ export async function readTerminalKittyFile(
   const [canonical, workspaceRoot, tempRoots] = await Promise.all([
     realpath(path),
     workspacePath ? realpath(workspacePath) : null,
-    localTerminalArtifactRoots(
+    kittyTemporaryRoots(
       owner.wslDistro ? toWindowsWslUncPath('/', owner.wslDistro) : (workspacePath ?? '')
     )
   ])

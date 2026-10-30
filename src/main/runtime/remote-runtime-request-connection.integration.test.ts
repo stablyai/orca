@@ -8,7 +8,7 @@ import type { Repo } from '../../shared/repo-types'
 import { parsePairingCode } from '../../shared/pairing'
 import { RemoteRuntimeRequestConnection } from '../../shared/remote-runtime/requests/remote-runtime-request-connection'
 import { RemoteRuntimeSharedControlConnection } from '../../shared/remote-runtime/control/remote-runtime-shared-control-connection'
-import { subscribeRemoteRuntimeRequest } from '../../shared/remote-runtime-client'
+import { subscribeRemoteRuntimeRequest } from '../../shared/remote-runtime/remote-runtime-client'
 import type {
   RuntimeClientEvent,
   RuntimeClientEventStreamMessage
@@ -49,7 +49,6 @@ describe('remote runtime request connection integration', () => {
         getRuntimeId: () => 'fetch-runtime-test',
         getStartedAt: () => 1,
         cleanupSubscriptionsForConnection: () => {},
-        cancelMobileDictationForConnection: () => {},
         onClientDisconnected: () => {},
         listVisibleRepos: () => repos
       } as unknown as OrcaRuntimeService
@@ -137,7 +136,6 @@ describe('remote runtime request connection integration', () => {
           subscriptionCleanups.get(id)?.()
           subscriptionCleanups.delete(id)
         },
-        cancelMobileDictationForConnection: () => {},
         onClientDisconnected: () => {},
         showRepo: (selector: string) => {
           if (selector !== repo.id && selector !== `id:${repo.id}`) {
@@ -305,7 +303,6 @@ describe('remote runtime request connection integration', () => {
           subscriptionCleanups.get(id)?.()
           subscriptionCleanups.delete(id)
         },
-        cancelMobileDictationForConnection: () => {},
         onClientDisconnected: () => {},
         onClientEvent: (listener: (event: RuntimeClientEvent) => void) => {
           clientEventListeners.add(listener)
@@ -553,7 +550,6 @@ describe('remote runtime request connection integration', () => {
             }
           }
         },
-        cancelMobileDictationForConnection: () => {},
         onClientDisconnected: () => {},
         onClientEvent: (listener: (event: RuntimeClientEvent) => void) => {
           clientEventListeners.add(listener)

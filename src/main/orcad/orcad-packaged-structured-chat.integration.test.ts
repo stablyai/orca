@@ -33,8 +33,8 @@ import {
   sendRemoteRuntimeRequest,
   subscribeRemoteRuntimeRequest,
   type RemoteRuntimeSubscription
-} from '../../shared/remote-runtime-client'
-import { claudeSessionIdForOrcaSession } from '../claude/claude-structured-session-id'
+} from '../../shared/remote-runtime/remote-runtime-client'
+import { claudeSessionIdForOrcaSession } from '../claude/structured/claude-structured-session-id'
 import { quotePosixShell } from '../../shared/shell-argument-quoting'
 import { materializeOrcadArtifact } from './orcad-artifact-materializer'
 import {

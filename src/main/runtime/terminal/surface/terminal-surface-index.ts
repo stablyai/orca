@@ -18,7 +18,7 @@ import type {
 import { collectLayoutLeafIdsInOrder } from '../../../../shared/workspace-layout/terminal-pane-tree'
 import { bindingOf } from '../../pane-live-facts'
 import { worktreeIdsEqual } from '../../../../shared/worktree/id'
-import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime-pty-id'
+import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { getPtyExecutionHost } from '../../../../shared/terminal-execution-host'
 import {
   projectSessionTabs,

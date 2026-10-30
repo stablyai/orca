@@ -20,7 +20,7 @@ import {
   kiroTranscriptPathForMetadata
 } from './session-scanner-kiro-parser'
 import { OPENCLAW_AGENT_SOURCE } from './openclaw-session-layout'
-import { OMP_SESSION_ARTIFACT_DIR_PATTERN } from './session-scanner-omp-subagent-transcripts'
+import { isOmpConversationDirectory } from './session-scanner-omp-subagent-transcripts'
 import {
   claudeProjectsRootDirs,
   codexHomeSessionsDir,
@@ -231,14 +231,15 @@ export const AI_VAULT_AGENT_SOURCES: AiVaultAgentSourceTable = {
         'agent',
         'sessions'
       ]),
-    extensions: ['.jsonl']
+    extensions: ['.jsonl'],
+    // OMP inherits PI_CODING_AGENT_DIR, so Pi's folder can hold OMP's task artifacts.
+    directoryPredicate: isOmpConversationDirectory
   },
   omp: {
     rootDirs: (options, wslHomeDirs) =>
       ompSessionsRootDirs({ ompSessionsDir: options.ompSessionsDir, wslHomeDirs }),
     extensions: ['.jsonl'],
-    // Skip worker artifacts below workspace depth; OMP lists only top-level conversations (#9330).
-    directoryPredicate: (name, depth) => depth === 0 || !OMP_SESSION_ARTIFACT_DIR_PATTERN.test(name)
+    directoryPredicate: isOmpConversationDirectory
   },
   'prime-agent': {
     rootDirs: (options, wslHomeDirs) =>
@@ -299,6 +300,18 @@ export const AI_VAULT_AGENT_SOURCES: AiVaultAgentSourceTable = {
     // Exclude log, SQLite and materialized-projection sidecars.
     filePredicate: (filePath) => basename(filePath) === 'session.jsonl'
   }
+}
+
+// The Pi walk labels the OMP transcripts it reads, so an OMP row can sit under Pi's roots too.
+export function sessionRowRootDirs(
+  agent: AiVaultDeletableAgent,
+  options: AiVaultScanOptions,
+  wslHomeDirs: readonly string[]
+): string[] {
+  const roots = AI_VAULT_AGENT_SOURCES[agent].rootDirs(options, wslHomeDirs)
+  return agent === 'omp'
+    ? [...roots, ...AI_VAULT_AGENT_SOURCES.pi.rootDirs(options, wslHomeDirs)]
+    : roots
 }
 
 export { isDiscoverableSessionFile } from './session-file-discovery'

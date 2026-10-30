@@ -2,19 +2,26 @@ import { useMemo } from 'react'
 import { ActivityIndicator, Pressable, Text, TextInput, View } from 'react-native'
 import { Minus, MoreHorizontal, Plus, Sparkles } from 'lucide-react-native'
 import { colors, spacing } from '../theme/mobile-theme'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { MobileSourceControlCreatePrEntry } from './MobileSourceControlCreatePrEntry'
 import { MobileCommitFailurePanel } from './MobileCommitFailurePanel'
 import { KEYBOARD_COMMIT_BAR_CLEARANCE } from './mobile-source-control-screen-state'
 import { MobileSourceControlFileList } from './MobileSourceControlFileList'
 import type { MobileSourceControlState } from './use-mobile-source-control-state'
+import type { MobileSourceControlPrimaryAction } from './mobile-source-control-primary-action'
 import { styles } from './mobile-source-control-styles'
 import { hubStyles } from './mobile-source-control-hub-styles'
 
 type Props = {
-  state: MobileSourceControlState
+  state: Omit<MobileSourceControlState, 'primaryActionArgs'>
+  // The panel builds it once it knows the branch's review.
+  primaryAction: MobileSourceControlPrimaryAction
 }
 
-export function MobileSourceControlContent({ state }: Props) {
+export function MobileSourceControlContent({ state, primaryAction }: Props) {
+  useMobileColorScheme()
+  const t = useMobileTranslation()
   const {
     insets,
     connState,
@@ -36,7 +43,6 @@ export function MobileSourceControlContent({ state }: Props) {
     stageablePaths,
     unstageablePaths,
     stagedCount,
-    primaryAction,
     createPrAction,
     stageAll,
     unstageAll,
@@ -98,7 +104,9 @@ export function MobileSourceControlContent({ state }: Props) {
         // Retained rows look actionable offline; show reconnect state beside them.
         <View style={styles.reconnectBanner}>
           <ActivityIndicator size="small" color={colors.statusAmber} />
-          <Text style={styles.reconnectBannerText}>Reconnecting to desktop...</Text>
+          <Text style={styles.reconnectBannerText}>
+            {t('sourceControl.content.reconnecting', 'Reconnecting to desktop...')}
+          </Text>
         </View>
       ) : null}
       <View style={hubStyles.changesControls}>
@@ -130,7 +138,9 @@ export function MobileSourceControlContent({ state }: Props) {
             ) : (
               <Plus size={15} color={colors.textPrimary} strokeWidth={2.2} />
             )}
-            <Text style={styles.bulkButtonText}>Stage All</Text>
+            <Text style={styles.bulkButtonText}>
+              {t('sourceControl.content.stageAll', 'Stage All')}
+            </Text>
           </Pressable>
           <Pressable
             style={({ pressed }) => [
@@ -146,7 +156,9 @@ export function MobileSourceControlContent({ state }: Props) {
             ) : (
               <Minus size={15} color={colors.textPrimary} strokeWidth={2.2} />
             )}
-            <Text style={styles.bulkButtonText}>Unstage All</Text>
+            <Text style={styles.bulkButtonText}>
+              {t('sourceControl.content.unstageAll', 'Unstage All')}
+            </Text>
           </Pressable>
           <Pressable
             style={({ pressed }) => [
@@ -157,7 +169,10 @@ export function MobileSourceControlContent({ state }: Props) {
             onPress={() => setShowActionSheet(true)}
             disabled={ioBusy}
             hitSlop={8}
-            accessibilityLabel="Open source control actions"
+            accessibilityLabel={t(
+              'sourceControl.content.openActions',
+              'Open source control actions'
+            )}
           >
             <MoreHorizontal size={18} color={colors.textPrimary} strokeWidth={2.1} />
           </Pressable>
@@ -166,8 +181,12 @@ export function MobileSourceControlContent({ state }: Props) {
 
       {!hasVisibleChanges ? (
         <View style={styles.state}>
-          <Text style={styles.stateTitle}>No local changes</Text>
-          <Text style={styles.stateText}>Working tree is clean.</Text>
+          <Text style={styles.stateTitle}>
+            {t('sourceControl.content.emptyTitle', 'No local changes')}
+          </Text>
+          <Text style={styles.stateText}>
+            {t('sourceControl.content.emptyMessage', 'Working tree is clean.')}
+          </Text>
         </View>
       ) : (
         fileList
@@ -188,16 +207,21 @@ export function MobileSourceControlContent({ state }: Props) {
               style={[styles.commitInput, styles.commitInputDisabled]}
               accessibilityRole="text"
               accessibilityState={{ disabled: true }}
-              accessibilityLabel="Commit message disabled. No staged files."
+              accessibilityLabel={t(
+                'sourceControl.content.commitMessageDisabled',
+                'Commit message disabled. No staged files.'
+              )}
             >
-              <Text style={styles.commitInputDisabledText}>No staged files</Text>
+              <Text style={styles.commitInputDisabledText}>
+                {t('sourceControl.content.noStagedFiles', 'No staged files')}
+              </Text>
             </View>
           ) : (
             <TextInput
               style={styles.commitInput}
               value={commitMessage}
               onChangeText={setCommitMessage}
-              placeholder="Commit message"
+              placeholder={t('sourceControl.content.commitMessagePlaceholder', 'Commit message')}
               placeholderTextColor={colors.textMuted}
               editable={busyAction === null && openingPath === null && openingBranchPath === null}
               returnKeyType="done"
@@ -215,15 +239,17 @@ export function MobileSourceControlContent({ state }: Props) {
               disabled={generateDisabled}
               accessibilityState={{ disabled: generateDisabled }}
               accessibilityHint={
-                generateBlockedByMessage ? 'Clear the message to regenerate.' : undefined
+                generateBlockedByMessage
+                  ? t('sourceControl.content.regenerateHint', 'Clear the message to regenerate.')
+                  : undefined
               }
               onPress={() =>
                 generatingMessage ? cancelGenerateCommitMessage() : void generateCommitMessage()
               }
               accessibilityLabel={
                 generatingMessage
-                  ? 'Cancel commit message generation'
-                  : 'Generate commit message with AI'
+                  ? t('sourceControl.content.cancelGeneration', 'Cancel commit message generation')
+                  : t('sourceControl.content.generateMessage', 'Generate commit message with AI')
               }
             >
               {generatingMessage ? (

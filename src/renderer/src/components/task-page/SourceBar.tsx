@@ -1,4 +1,4 @@
-import type { TaskPageComposerActionsModel } from '../use-task-page-composer-actions'
+import type { TaskPageComposerActionsModel } from './use-task-page-composer-actions'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
@@ -6,7 +6,7 @@ import { X, ExternalLink } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { LinearScopeSelector } from '@/components/linear-scope-selector'
-import { getGitHubProjectSourceSummary } from '../task-page-source-context'
+import { getGitHubProjectSourceSummary } from './task-page-source-context'
 import {
   Select,
   SelectTrigger,
@@ -14,6 +14,7 @@ import {
   SelectContent,
   SelectItem
 } from '@/components/ui/select'
+import { openAppHttpLink } from '@/lib/app-http-link-open'
 export function TaskPageSourceBar({
   model
 }: {
@@ -166,11 +167,11 @@ export function TaskPageSourceBar({
                 type="button"
                 variant="outline"
                 size="icon-sm"
-                onClick={() => {
+                onClick={(event) => {
                   if (!selectedLinearTeamForExternalLink?.url) {
                     return
                   }
-                  void window.api.shell.openUrl(selectedLinearTeamForExternalLink.url)
+                  openAppHttpLink(selectedLinearTeamForExternalLink.url, { event })
                 }}
                 disabled={!selectedLinearTeamForExternalLink}
                 aria-label={

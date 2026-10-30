@@ -8,6 +8,8 @@ import type {
 } from '../../../../shared/agent-session-lease-adjudication'
 import type { AgentSessionProcessIdentity } from '../../../../shared/agent-session-record'
 import { runProcess } from '@orca/process-host'
+import { psLocaleEnvironment } from '../../../../shared/ps-locale-environment'
+import { runPsInProcess } from '../../../../shared/libproc-process-table'
 import {
   isWindowsProcessStartTimeAvailable,
   readWindowsProcessIdentityTableFresh
@@ -58,11 +60,11 @@ async function readLinuxProcessStartTimeMs(pid: number): Promise<number | null> 
 
 async function readDarwinProcessStartTimeMs(pid: number): Promise<number | null> {
   try {
-    const result = await runProcess({
-      program: 'ps',
-      args: ['-o', 'lstart=', '-p', String(pid)],
-      timeoutMs: PROCESS_START_TIME_TIMEOUT_MS
-    })
+    const args = ['-o', 'lstart=', '-p', String(pid)]
+    const env = psLocaleEnvironment()
+    const result =
+      (await runPsInProcess(args, { env, timeoutMs: PROCESS_START_TIME_TIMEOUT_MS })) ??
+      (await runProcess({ program: 'ps', args, env, timeoutMs: PROCESS_START_TIME_TIMEOUT_MS }))
     if (result.timedOut || result.code !== 0) {
       return null
     }
@@ -81,11 +83,11 @@ async function readDarwinProcessStartTimesMs(
     return observed
   }
   try {
-    const result = await runProcess({
-      program: 'ps',
-      args: ['-o', 'pid=,lstart=', '-p', pids.join(',')],
-      timeoutMs: PROCESS_START_TIME_TIMEOUT_MS
-    })
+    const args = ['-o', 'pid=,lstart=', '-p', pids.join(',')]
+    const env = psLocaleEnvironment()
+    const result =
+      (await runPsInProcess(args, { env, timeoutMs: PROCESS_START_TIME_TIMEOUT_MS })) ??
+      (await runProcess({ program: 'ps', args, env, timeoutMs: PROCESS_START_TIME_TIMEOUT_MS }))
     if (result.timedOut || result.code !== 0) {
       return observed
     }

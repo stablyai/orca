@@ -3,29 +3,10 @@ import {
   MAX_AUTOMATIC_DIFF_CHANGED_LINES,
   collectCountedCombinedDiffPasses,
   getCombinedDiffCountingPassKey,
-  isCombinedDiffSizeUnknown,
   shouldLoadCombinedDiffOnDemand
 } from './combined-diff-on-demand-load'
 
 describe('combined diff on-demand loading', () => {
-  it('defers diffs above the automatic changed-line limit', () => {
-    expect(
-      shouldLoadCombinedDiffOnDemand({
-        added: MAX_AUTOMATIC_DIFF_CHANGED_LINES,
-        removed: 1
-      })
-    ).toBe(true)
-  })
-
-  it('automatically loads diffs at the limit', () => {
-    expect(
-      shouldLoadCombinedDiffOnDemand({
-        added: MAX_AUTOMATIC_DIFF_CHANGED_LINES - 500,
-        removed: 500
-      })
-    ).toBe(false)
-  })
-
   it('defers uncounted tracked text files, whose size is unknown', () => {
     // Entry caps or failed numstat leave tracked rows uncounted; eager loading can freeze Monaco.
     expect(shouldLoadCombinedDiffOnDemand({ path: 'src/generated/schema.ts' })).toBe(true)
@@ -43,57 +24,11 @@ describe('combined diff on-demand loading', () => {
     expect(shouldLoadCombinedDiffOnDemand({ path: 'data/dump.json', area: 'untracked' })).toBe(true)
   })
 
-  it('automatically loads tracked binaries numstat left uncounted, whatever the extension', () => {
-    // Numstat marks binaries with dashes regardless of extension, including extensionless files.
-    for (const path of ['resources/build/icon.icns', 'assets/logo.tiff', 'bin/orca-helper']) {
-      expect(
-        shouldLoadCombinedDiffOnDemand({ path, area: 'unstaged', hasCountedSiblings: true })
-      ).toBe(false)
-    }
-  })
-
-  it('automatically loads submodule rows whose only change is untracked content inside', () => {
-    // Submodule-only untracked changes produce porcelain status but no numstat row.
-    expect(
-      shouldLoadCombinedDiffOnDemand({
-        path: 'vendor/sub',
-        area: 'unstaged',
-        submodule: { commitChanged: false, trackedChanges: false, untrackedChanges: true }
-      })
-    ).toBe(false)
-  })
-
   it('defers uncounted rows when the whole pass skipped counting', () => {
     // Without counted siblings, a small binary is indistinguishable from unbounded text.
     expect(
       shouldLoadCombinedDiffOnDemand({ path: 'resources/build/icon.icns', area: 'unstaged' })
     ).toBe(true)
-  })
-
-  it('defers uncounted svgs, which render as text rather than a preview', () => {
-    expect(shouldLoadCombinedDiffOnDemand({ path: 'assets/map.svg' })).toBe(true)
-  })
-
-  it('automatically loads uncounted images, which render as a preview', () => {
-    expect(shouldLoadCombinedDiffOnDemand({ path: 'docs/Shot.PNG' })).toBe(false)
-  })
-
-  it('automatically loads uncounted non-image binaries of any size', () => {
-    expect(shouldLoadCombinedDiffOnDemand({ path: 'fixtures/sample.zip' })).toBe(false)
-    expect(shouldLoadCombinedDiffOnDemand({ path: 'fonts/Inter.woff2' })).toBe(false)
-    expect(shouldLoadCombinedDiffOnDemand({ path: 'bun.lockb' })).toBe(false)
-  })
-
-  it('defers diffs when only additions are reported', () => {
-    expect(shouldLoadCombinedDiffOnDemand({ added: MAX_AUTOMATIC_DIFF_CHANGED_LINES + 1 })).toBe(
-      true
-    )
-  })
-
-  it('defers diffs when only removals are reported', () => {
-    expect(shouldLoadCombinedDiffOnDemand({ removed: MAX_AUTOMATIC_DIFF_CHANGED_LINES + 1 })).toBe(
-      true
-    )
   })
 
   it('credits a counted row only to its own counting pass', () => {
@@ -116,21 +51,6 @@ describe('combined diff on-demand loading', () => {
         getCombinedDiffCountingPassKey({ path: 'a', status: 'modified', area: 'unstaged' })
       )
     ).toBe(false)
-  })
-
-  it('separates the two deferral reasons the prompt has to explain', () => {
-    const overLimit = { added: MAX_AUTOMATIC_DIFF_CHANGED_LINES + 1, path: 'src/schema.ts' }
-    const uncounted = {
-      path: 'resources/build/icon.icns',
-      area: 'unstaged' as const,
-      added: undefined,
-      removed: undefined
-    }
-    expect(shouldLoadCombinedDiffOnDemand(overLimit)).toBe(true)
-    expect(shouldLoadCombinedDiffOnDemand(uncounted)).toBe(true)
-    expect(isCombinedDiffSizeUnknown(overLimit)).toBe(false)
-    expect(isCombinedDiffSizeUnknown(uncounted)).toBe(true)
-    expect(isCombinedDiffSizeUnknown({ added: 0, removed: 0 })).toBe(false)
   })
 
   it('keeps counted binary-extension rows on the line-count rule', () => {

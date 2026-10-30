@@ -1,3 +1,9 @@
+import { agentSessionConversationView } from '../../shared/agent-session-conversation-view'
+import {
+  agentSessionLeaseFixture,
+  agentSessionRecordFixture
+} from '../../shared/agent-session-record.test-fixture'
+import { codexProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
 // Open Dispatches retain active work; chats at rest remain mail recipients until tab retirement. Process liveness and close proof remain separate.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -33,28 +39,36 @@ const SESSION = 'a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d'
 const LOCAL = JSON.stringify({ kind: 'local', hostId: 'local' })
 
 function record(lease: Partial<AgentSessionRecord['lease']>): AgentSessionRecord {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a partial record; the ownership and liveness reads touch only lease, location and provider.
+  const base = agentSessionRecordFixture(
+    agentSessionLeaseFixture({ sessionId: SESSION, runtimeFence: 3, ...lease })
+  )
   return {
-    sessionId: SESSION,
+    ...base,
     provider: 'codex',
-    location: {
-      executionHostId: 'local',
-      wslDistro: null,
-      workspaceId: 'wt_1',
-      workspaceKind: 'git-worktree'
-    },
-    lease: { claimStatus: 'live', deathEvidence: null, runtimeFence: 3, ...lease }
-  } as AgentSessionRecord
+    accountHome: { variable: 'CODEX_HOME', path: '/tmp/codex-home' },
+    providerHandleChain: base.providerHandleChain.map((link) => ({
+      ...link,
+      handle: codexProviderHandle('at-rest')
+    })),
+    location: { ...base.location, workspaceId: 'wt_1' }
+  }
 }
 
 /** The installed session as the resolved running session the custody reads take. */
 function running(current: AgentSessionRecord): RunningStructuredSession {
-  return { sessionId: SESSION, record: current, lineage: [SESSION] }
+  return { sessionId: SESSION, record: agentSessionConversationView(current), lineage: [SESSION] }
 }
 
 function installHost(current: AgentSessionRecord | null, tabs: string[]) {
   const host = {
-    deps: { store: { getRecord: () => current } },
+    deps: {
+      store: {
+        getRecord: () => current,
+        getConversation: () => (current ? agentSessionConversationView(current) : null),
+        listConversations: () => (current ? [agentSessionConversationView(current)] : []),
+        getVisibleSessionTabIndex: () => ({ present: true, sessionIds: tabs })
+      }
+    },
     hasSession: () => false,
     getPersistedVisibleSessionTabIndex: () => ({ present: true, sessionIds: tabs }),
     setSessionTabVisibility: vi.fn(async (_id: string, visible: boolean) => {
@@ -360,7 +374,7 @@ describe('a task dispatched into a worker whose own dispatch settled', () => {
       await vi.waitFor(() =>
         expect(observeStructuredWorker({ sessionId: REST_TEST_SESSION }).status).toBe('exited')
       )
-      expect(rig.adapter.closeSession).toHaveBeenCalledWith(REST_TEST_SESSION)
+      expect(rig.adapter.closeSession).toHaveBeenCalledWith(REST_TEST_SESSION, undefined)
     } finally {
       hostRef.current = null
       await rig.dispose()

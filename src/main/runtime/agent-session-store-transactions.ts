@@ -1,11 +1,11 @@
-// Commit validated draft rows atomically before publication; failures discard the draft.
-// The promise queue preserves FIFO and defers BEGIN beyond the caller's open journal transaction.
-
 import type { JournalHostDatabase } from '../native-chat/agent-session-journal/journal-host-database'
 import type { JournalOperationReceipt } from '../native-chat/agent-session-journal/journal-row-writer'
 import { journalOpenRefusalError } from '../native-chat/agent-session-journal/journal-open-failure'
 import { AgentSessionJournalError } from '../native-chat/agent-session-journal/journal-write-guards'
-import type { AgentSessionStoreState } from './agent-session-store-state'
+import {
+  requireWritableAgentSessionRecord,
+  type AgentSessionStoreState
+} from './agent-session-store-state'
 import {
   insertAgentSessionOperationRowsIfAbsent,
   writeAgentSessionStoreRows
@@ -29,6 +29,9 @@ import {
   draftAgentSessionStoreState,
   type AgentSessionStoreRowWrites
 } from './agent-session-store-draft'
+
+// Commit validated draft rows atomically before publication; failures discard the draft.
+// The promise queue preserves FIFO and defers BEGIN beyond the caller's open journal transaction.
 
 // Identity-based diffs miss in-place edits; freeze rows in dev/tests to catch them.
 const FREEZE_ROWS = process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test'
@@ -83,6 +86,7 @@ export class AgentSessionStoreTransactions {
   private queue: Promise<unknown> = Promise.resolve()
   // Reads/reopens do not admit work; a count survives handle eviction without replaying history.
   private readonly admittedSends = new Map<string, number>()
+  readonly acceptedSendListeners = new Set<(sessionId: string) => void>()
   private published: AgentSessionStoreState
   /** Loaded takeover evidence; immutable for this runtime. */
   readonly replacedRuntimes: ReadonlyMap<string, AgentSessionReplacedRuntime>
@@ -90,7 +94,8 @@ export class AgentSessionStoreTransactions {
   constructor(
     private readonly journalDatabase: JournalHostDatabase,
     loaded: AgentSessionStoreState,
-    hostId: string
+    hostId: string,
+    readonly legacySessionTabIds: readonly string[]
   ) {
     freezeRows(loaded, null)
     this.published = {
@@ -149,7 +154,7 @@ export class AgentSessionStoreTransactions {
         // The ledger and wake share one draft as well as one commit.
         staged = this.stage((draft) => {
           apply(draft)
-          const record = admitted ? draft.records.get(admitted) : undefined
+          const record = admitted ? requireWritableAgentSessionRecord(draft, admitted) : undefined
           if (record?.sleptAt !== undefined) {
             const { sleptAt: _sleptAt, ...awake } = record
             draft.records.set(record.sessionId, {
@@ -176,6 +181,9 @@ export class AgentSessionStoreTransactions {
         staged?.adopt()
         if (admitted) {
           this.admittedSends.set(admitted, this.admittedSendCount(admitted) + 1)
+          for (const listener of this.acceptedSendListeners) {
+            listener(admitted)
+          }
         }
         staged = null
         admitted = undefined

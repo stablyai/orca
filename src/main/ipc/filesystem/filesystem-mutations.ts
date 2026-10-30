@@ -30,6 +30,7 @@ import { abortWhenRendererGone } from '../renderer-lifetime-abort'
 import { sweepAbandonedRuntimeUploadTempPath } from '../runtime-upload-temp-sweep'
 import type { RuntimeUploadFileStreamRequest } from '../../../shared/runtime-upload-staging-contract'
 import { resolveEnvironment } from '../../../shared/runtime-environment-store'
+import { windowsFsPath } from '../../wsl/wsl-unc-drive-fs-path'
 
 export function registerFilesystemMutationHandlers(store: Store): void {
   ipcMain.handle(
@@ -47,7 +48,7 @@ export function registerFilesystemMutationHandlers(store: Store): void {
       if (args.connectionId) {
         throw new SshHostNotServedError(args.connectionId)
       }
-      const filePath = await resolveDesktopAuthorizedPath(args.filePath, store)
+      const filePath = windowsFsPath(await resolveDesktopAuthorizedPath(args.filePath, store))
       await mkdir(dirname(filePath), { recursive: true })
       try {
         // Exclusive creation closes the existence-check race.
@@ -73,7 +74,7 @@ export function registerFilesystemMutationHandlers(store: Store): void {
       if (args.connectionId) {
         throw new SshHostNotServedError(args.connectionId)
       }
-      const dirPath = await resolveDesktopAuthorizedPath(args.dirPath, store)
+      const dirPath = windowsFsPath(await resolveDesktopAuthorizedPath(args.dirPath, store))
       await assertNotExists(dirPath)
       await mkdir(dirPath, { recursive: true })
     }
@@ -136,9 +137,13 @@ export function registerFilesystemMutationHandlers(store: Store): void {
       const destinationPath = await resolveDesktopAuthorizedPath(args.destinationPath, store, {
         preserveSymlink: true
       })
-      await mkdir(dirname(destinationPath), { recursive: true })
+      await mkdir(dirname(windowsFsPath(destinationPath)), { recursive: true })
       // Keep deconflicted copy destinations exclusive against late collisions.
-      await copyFile(sourcePath, destinationPath, constants.COPYFILE_EXCL)
+      await copyFile(
+        windowsFsPath(sourcePath),
+        windowsFsPath(destinationPath),
+        constants.COPYFILE_EXCL
+      )
     }
   )
 

@@ -1,6 +1,6 @@
 // Restore the last checkpointed cwd after Sleep instead of silently reopening at the worktree root.
 import type { ColdRestoreDetection } from '../../daemon/history-reader'
-import { wslUncPathToLinux } from './wsl-move-path-rewriter'
+import { wslUncPathToLinux } from '../../../shared/wsl-paths'
 
 export type WslMoveRestoreHint = { paneKey: string; cwd: string }
 
@@ -9,6 +9,11 @@ export type WslMoveRestoreHintPane = {
   sessionId: string
   /** Daemon-reported distro; null means a native shell. */
   wslDistro?: string | null
+  /**
+   * The folder the pane's shell was in, read inside the distro right before Sleep. Bash on the
+   * bridge reports none, so without it the checkpoint keeps only the spawn folder.
+   */
+  shellCwd?: string
 }
 
 export type WslMoveRestoreHintCapture = {
@@ -21,7 +26,7 @@ export type WslMoveRestoreHintCapture = {
   staleCwdPaneKeys: string[]
 }
 
-type ColdRestoreReader = {
+export type ColdRestoreReader = {
   detectColdRestoreState: (
     sessionId: string,
     opts?: { ignoreCleanEnd?: boolean; wslDistro?: string }
@@ -40,6 +45,11 @@ export async function captureWslMoveRestoreHints(
     staleCwdPaneKeys: []
   }
   for (const pane of panes) {
+    const shellCwd = pane.shellCwd && /^\/(?!\/)/.test(pane.shellCwd) ? pane.shellCwd : null
+    if (shellCwd) {
+      capture.hints.push({ paneKey: pane.paneKey, cwd: shellCwd })
+      continue
+    }
     let detection: ColdRestoreDetection
     try {
       // Clean Sleep exits still need their cold-restore checkpoints.
@@ -59,7 +69,7 @@ export async function captureWslMoveRestoreHints(
       capture.noCwdPaneKeys.push(pane.paneKey)
       continue
     }
-    const linux = hostLinuxCwd(detection.restoreInfo.cwd, pane, distro)
+    const linux = wslMoveHostLinuxCwd(detection.restoreInfo.cwd, pane, distro)
     if (!linux) {
       capture.noCwdPaneKeys.push(pane.paneKey)
       continue
@@ -74,7 +84,11 @@ export async function captureWslMoveRestoreHints(
 }
 
 // Accept Linux spelling only with evidence the session ran in this distro.
-function hostLinuxCwd(cwd: string, pane: WslMoveRestoreHintPane, distro: string): string | null {
+export function wslMoveHostLinuxCwd(
+  cwd: string,
+  pane: WslMoveRestoreHintPane,
+  distro: string
+): string | null {
   const fromUnc = wslUncPathToLinux(cwd, distro)
   if (fromUnc) {
     return fromUnc

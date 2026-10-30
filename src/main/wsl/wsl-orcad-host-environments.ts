@@ -47,12 +47,34 @@ function capabilitiesOf(result: unknown): readonly string[] | null {
 }
 
 /** Records a WSL orcad's capabilities from any `status.get` answer that passes the desktop. */
+const AUTOMATION_MUTATIONS = new Set([
+  'automation.create',
+  'automation.update',
+  'automation.delete'
+])
+const automationMutationListeners = new Set<(environmentId: string) => void>()
+
+/** E9: this desktop changed a WSL host's automations; the wake schedule re-reads them. */
+export function onWslOrcadHostAutomationsChanged(
+  listener: (environmentId: string) => void
+): () => void {
+  automationMutationListeners.add(listener)
+  return () => automationMutationListeners.delete(listener)
+}
+
 export function observeWslOrcadHostResponse(
   environmentId: string,
   method: string,
   response: RuntimeRpcResponse<unknown>
 ): void {
-  if (method !== 'status.get' || !response.ok || !distrosByEnvironment.has(environmentId)) {
+  if (!response.ok || !distrosByEnvironment.has(environmentId)) {
+    return
+  }
+  if (AUTOMATION_MUTATIONS.has(method)) {
+    automationMutationListeners.forEach((listener) => listener(environmentId))
+    return
+  }
+  if (method !== 'status.get') {
     return
   }
   const capabilities = capabilitiesOf(response.result)

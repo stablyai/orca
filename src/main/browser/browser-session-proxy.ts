@@ -1,6 +1,9 @@
 import { session, type Session } from 'electron'
 import type { BrowserSessionProfile } from '../../shared/browser-workspace-types'
-import { applyProxySettingsToSession } from '../network/proxy-settings'
+import {
+  applyProxySettingsToSession,
+  awaitProxySessionApplication
+} from '../network/proxy-settings'
 import type { NetworkProxySettings } from '../../shared/network-proxy'
 import {
   readNetworkProxySettings,
@@ -50,11 +53,28 @@ export async function applyBrowserSessionProxies(
     return
   }
   proxyPolicyGeneration += 1
+  await settleBrowserSessionProxyApplications(profiles, (sess) =>
+    applyProxySettingsToSession(sess, resolved)
+  )
+}
+
+export async function awaitBrowserSessionProxies(profiles: BrowserSessionProfile[]): Promise<void> {
+  await settleBrowserSessionProxyApplications(profiles, async (sess) => {
+    if (!(await awaitProxySessionApplication(sess))) {
+      await applyProxyToBrowserSession(sess)
+    }
+  })
+}
+
+async function settleBrowserSessionProxyApplications(
+  profiles: BrowserSessionProfile[],
+  apply: (sess: Session) => Promise<unknown>
+): Promise<void> {
   const failedPartitions = (
     await Promise.all(
       profiles.map(async (profile) => {
         try {
-          await applyProxySettingsToSession(session.fromPartition(profile.partition), resolved)
+          await apply(session.fromPartition(profile.partition))
           return null
         } catch {
           console.warn('[proxy] Failed to apply proxy to browser partition', profile.partition)

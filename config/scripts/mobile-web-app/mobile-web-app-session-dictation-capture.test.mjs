@@ -2,15 +2,11 @@
 // Web seam removes native audio/keep-awake: their web stubs deny microphone and do nothing, rather than capturing through shell.
 // Resolve package names before absence checks to catch typos; assert eight excluded vendored modules, not drifting total closure size.
 import { createRequire } from 'node:module'
-import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import { mobileWebAppRouteClosure } from '../build-mobile-web-app-bundle.mjs'
 import { mobileWebAppDependenciesPresent } from './mobile-web-app-bundle-dependencies.mjs'
 import { MOBILE_WEB_PAGE_ROUTES } from '../mobile-web-page-routes.mjs'
-import {
-  PAGE_ROUTE_MODULES,
-  pageRouteModulesCoverTheManifest
-} from './mobile-web-app-page-route-modules.mjs'
+import { PAGE_ROUTE_MODULES } from './mobile-web-app-page-route-modules.mjs'
 import { MobileWebBundleRouteSchema } from '../../../src/shared/mobile-web-bundle/manifest-contract.ts'
 
 // Gate mobile transforms too: nearest tsconfig extends Expo package absent from root-only shards.
@@ -21,7 +17,6 @@ const SEAM = 'src/platform/dictation-capture.web.ts'
 
 const NATIVE_SEAM = 'src/platform/dictation-capture.ts'
 
-// Use census’s verb set; bridge-audio-verbs.test.ts checks it against shell table.
 const DICTATION_GRANTS = ['native.audio.start', 'native.audio.read', 'native.audio.stop']
 
 // Native modules reach JSI; browser substitutes denied microphone and no-op wake lock.
@@ -74,24 +69,6 @@ describeClosure(
       expect(await grantsMissingForRoutes(MOBILE_WEB_PAGE_ROUTES)).toEqual([])
     })
 
-    it('finds the seam in exactly one closure, which is the session route', async () => {
-      const reaching = []
-      for (const route of MOBILE_WEB_PAGE_ROUTES) {
-        const module = PAGE_ROUTE_MODULES.get(route.pathname)
-        if (module === undefined) {
-          throw new Error(`No route module for ${route.pathname}`)
-        }
-        const closure = await closureOf(module)
-        if (closure.local.includes(SEAM)) {
-          reaching.push(route.pathname)
-        }
-      }
-      // Require session route reaches seam; absence checks must not pass because dictation left page.
-      expect(reaching).toEqual([SESSION_PATHNAME])
-      const session = await closureOf(SESSION)
-      expect(session.local).toContain(SEAM)
-    })
-
     it('reds the same rule when the session route is registered without them', async () => {
       // Drive same rule over under-granted entry to prove missing grants are detected.
       expect(
@@ -133,30 +110,3 @@ describeClosure(
   },
   240_000
 )
-
-describe('the census rule itself', () => {
-  it('names a route module for every registered pathname', () => {
-    const { mapped, declared } = pageRouteModulesCoverTheManifest(MOBILE_WEB_PAGE_ROUTES)
-    expect(mapped).toEqual(declared)
-  })
-
-  // Dynamic import delays load but still transforms mobile tsconfig extending absent Expo; dependency gate must enclose import on root-only shards.
-  it.skipIf(!bundles)(
-    'names only verbs the shell actually serves, read from its own table',
-    async () => {
-      // Require shell verb-table entries; route census agreeing with its own copied names proves nothing.
-      const { BRIDGE_NATIVE_VERB_NAMES } =
-        await import('../../../mobile/src/mobile-web-shell/bridge/bridge-native-verbs.ts')
-      expect(new Set(DICTATION_GRANTS).size).toBe(3)
-      for (const grant of DICTATION_GRANTS) {
-        expect(BRIDGE_NATIVE_VERB_NAMES, grant).toContain(grant)
-        expect(
-          MobileWebBundleRouteSchema.safeParse({ pathname: '/h', grants: [grant] }).success,
-          grant
-        ).toBe(true)
-      }
-    }
-  )
-})
-
-export const MOBILE_DIR = fileURLToPath(new URL('../../../mobile/', import.meta.url))

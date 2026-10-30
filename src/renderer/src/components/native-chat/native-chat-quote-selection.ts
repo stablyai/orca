@@ -1,3 +1,5 @@
+import { chatMathSelectionText } from '../sidebar/chat-markdown-math-selection'
+
 /** Only agent-reply prose marked with this attribute may be quoted. */
 export const NATIVE_CHAT_QUOTE_SOURCE_PROPS = { 'data-native-chat-quote-source': '' } as const
 
@@ -15,7 +17,7 @@ export function readNativeChatTranscriptSelection(root: HTMLElement): string {
   ) {
     return ''
   }
-  return selection.toString()
+  return chatMathSelectionText(selection, transcript) ?? selection.toString()
 }
 
 export function readNativeChatQuotableSelection(
@@ -31,7 +33,7 @@ export function readNativeChatQuotableSelection(
   }
   const edges = selectedTextEdges(range)
   const source = edges?.first.parentElement?.closest(QUOTE_SOURCE_SELECTOR)
-  const text = selection.toString().trim()
+  const text = (chatMathSelectionText(selection, root) ?? selection.toString()).trim()
   if (!edges || !source || !source.contains(edges.last) || text === '') {
     return null
   }

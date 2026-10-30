@@ -1,5 +1,6 @@
-import type { StructuredAgentSessionPreparedAdmission } from './structured-agent-session-prepared-admission'
+import type { StructuredAgentSessionAdmitFreshInput } from './structured-agent-session-input-admission'
 import type { AiVaultConversationCopy } from '../../../shared/ai-vault-resume-preparation'
+import type { AgentChatPermissionChoice } from '../../../shared/agent-chat-permission-mode'
 import type {
   AgentSessionRewindFork,
   AgentSessionRewindReason,
@@ -25,7 +26,10 @@ import type { StructuredAgentSessionAtRestCommands } from './structured-agent-se
 import type { AgentSessionSlashCommand } from '../../../shared/agent-session-wire'
 import type { AgentSessionThreadGoalChange } from '../../../shared/agent-session-thread-goal-wire'
 import type { SubmissionRejectionFact } from '../../../shared/agent-session-failure'
-import type { StructuredAgentSessionAdapterStop } from './structured-agent-session-adapter-stop'
+import type {
+  AgentSessionCloseObserver,
+  StructuredAgentSessionAdapterStop
+} from './structured-agent-session-adapter-stop'
 export type { AgentSessionCancelOutcome } from './structured-agent-session-adapter-stop'
 export type {
   StructuredAgentSessionChildEndCause,
@@ -55,7 +59,8 @@ export {
   AgentSessionPreSpawnError,
   AgentSessionPromptAnswerRejectedError,
   AgentSessionPromptUnavailableError,
-  isAgentSessionPreSpawnError
+  isAgentSessionPreSpawnError,
+  launchPreparationFailure
 } from './structured-agent-session-adapter-errors'
 export type { AgentSessionPreSpawnReason } from './structured-agent-session-adapter-errors'
 
@@ -113,6 +118,7 @@ export type StructuredAgentSessionEndedEvent = {
   /** Absent means provider exit without extra detail; host faults retain their own classification. */
   failure?: SubmissionRejectionFact
   cause: 'unexpected-exit' | 'requested-close'
+  deathEvidenceKind?: 'kill-delivered'
   /** Execution-host observations from a requested provider close, when available. */
   processExit?: {
     root: 'live' | 'unverifiable' | 'exited'
@@ -172,6 +178,10 @@ export type StructuredAgentSessionAdapter = StructuredAgentSessionAdapterStop & 
   releaseAcquisition?(input: { sessionId: string }): Promise<boolean>
   hasOwnedAcquisition?(sessionId: string): boolean
   stoppedAcquisition?(sessionId: string): StructuredAgentSessionAcquisitionReceipt | undefined
+  permissionModeRequiresAcquisition?(
+    sessionId: string,
+    mode: AgentChatPermissionChoice
+  ): boolean | undefined
   dispatch(input: {
     sessionId: string
     clientMessageId: string
@@ -184,8 +194,9 @@ export type StructuredAgentSessionAdapter = StructuredAgentSessionAdapterStop & 
     /** Preserve submission time as the opened turn’s requestedAt. */
     requestedAt?: number
     beforeDispatch?: () => Promise<void>
-    /** Prepared local input; the host commits write-ahead custody before synchronously offering it. */
-    admitPreparedInput?: StructuredAgentSessionPreparedAdmission
+    /** Whether the host still owns this exact child after asynchronous preparation. */
+    isCurrent?: () => boolean
+    admitFreshInput?: StructuredAgentSessionAdmitFreshInput
     /** Mark preparation before choices mutate the provider. */
     onInputPreparation?: () => void
     /** Checkpoint between choice application and execution-evidence capture. */
@@ -227,11 +238,14 @@ export type StructuredAgentSessionAdapter = StructuredAgentSessionAdapterStop & 
     change: AgentSessionThreadGoalChange
     /** Existing recorded goals require set to create a new objective, never rewrite the old one. */
     replacesGoal: boolean
+    executionOptions?: AgentSessionExecutionOptions
     signal?: AbortSignal
   }): Promise<{ ok: true } | { ok: false; rejected: string }>
   /** Derive unanswered retained work from the live child; false without one. */
   holdsDispatch?(sessionId: string): boolean
-  /** Host-local construction facts for the exact next input; absent providers keep their child. */
+  /** The root turn the live child is running, null when idle; absent when the agent cannot say. */
+  liveTurnId?(sessionId: string): string | null | undefined
+  /** The live child opened in another approval mode than requested and this input picks another model. */
   requiresModelTransitionRestart?(input: {
     sessionId: string
     fence: number
@@ -263,21 +277,32 @@ export type StructuredAgentSessionAdapter = StructuredAgentSessionAdapterStop & 
   setOption(
     input: StructuredAgentSessionSetOptionInput
   ): Promise<void | Readonly<Record<string, string>>>
+  /** Opt in only when setOption can update idle metadata without a provider turn. */
+  canSetOptionWhileIdle?(input: StructuredAgentSessionSetOptionInput): boolean
+  /** Applied inputs for this exact child; observations never decide message admission. */
+  readAppliedInputOptions?(input: {
+    sessionId: string
+    fence: number
+    acquisitionGeneration: string | null
+    next: AgentSessionExecutionOptions | undefined
+  }): { active: AgentSessionExecutionOptions; next: AgentSessionExecutionOptions } | null
   /** Synchronous capability projection; never acquires inventory or changes saved intent. */
   projectOptions?(
     sessionId: string,
     options: Readonly<Record<string, string>>
   ): StructuredAgentSessionOptionProjection | undefined
-  /** Fetch outside the lane; apply under the same child’s fence. */
-  prepareReadOptions?(input: {
-    sessionId: string
-    fence: number
-  }): Promise<() => StructuredAgentSessionLiveOptions> | undefined
+  /** Memory projection only; optional native observations belong to provider activity. */
   readOptions?(input: {
     sessionId: string
     fence: number
   }): Promise<StructuredAgentSessionLiveOptions>
-  readOptionRestoreFailures?(sessionId: string): readonly string[]
+  /** A fresh independent text task; never acquires or writes a turn in the chat. */
+  generateText?(input: {
+    agent: string
+    accountHome: AgentSessionAccountHome
+    prompt: string
+    shouldExecute?: () => boolean
+  }): Promise<string | null>
   /** Copy the provider conversation without changing the chat’s ID; omit for CLI-based forks. */
   copyConversation?(input: {
     identity: AgentSessionJournalIdentity
@@ -285,11 +310,11 @@ export type StructuredAgentSessionAdapter = StructuredAgentSessionAdapterStop & 
     accountHome: AgentSessionAccountHome
   }): Promise<AiVaultConversationCopy>
   /** True proves child exit; root/processless verdicts throw only after finalization (stopAgentSessionProviderRoot). */
-  closeSession?(sessionId: string): Promise<boolean>
+  closeSession?(sessionId: string, observeClose?: AgentSessionCloseObserver): Promise<boolean>
   /** Sink-failure shutdown leaves exit recovery unexpected. */
   forceCloseSession?(sessionId: string): Promise<boolean>
   /** Teardown without requiring a future-resume cursor. */
-  disposeSession?(sessionId: string): Promise<boolean>
+  disposeSession?(sessionId: string, observeClose?: AgentSessionCloseObserver): Promise<boolean>
   /** Acknowledge only after dead-child, lease and journal ownership release. */
   acknowledgeSessionRelease?(
     sessionId: string,

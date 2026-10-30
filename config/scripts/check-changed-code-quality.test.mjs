@@ -70,6 +70,42 @@ describe('changed-code quality line matching', () => {
     ).toBe(true)
   })
 
+  it.each(['edit', 'rename'])('treats bracketed filenames literally after %s', (change) => {
+    const repo = mkdtempSync(path.join(tmpdir(), 'changed-code-quality-literal-'))
+    try {
+      const hooks = `core.hooksPath=${path.join(repo, '.git', 'no-hooks')}`
+      const git = (...args) => {
+        const result = runProcessSync({
+          program: 'git',
+          args: ['-c', 'commit.gpgsign=false', '-c', hooks, ...args],
+          cwd: repo
+        })
+        expect(result.code, result.stderr).toBe(0)
+        return result.stdout.trim()
+      }
+      git('init', '--quiet')
+      const file = '[cd].ts'
+      const source = change === 'rename' ? '[ab].ts' : file
+      const content = 'export const first = 1\n\nexport const legacy = 3\n'
+      writeFileSync(path.join(repo, source), content)
+      writeFileSync(path.join(repo, 'c.ts'), content)
+      git('add', '.')
+      git('-c', 'user.name=t', '-c', 'user.email=t@example.invalid', 'commit', '-qm', 'base')
+      const base = git('rev-parse', 'HEAD')
+      if (change === 'rename') {
+        git('mv', source, file)
+      }
+      writeFileSync(path.join(repo, file), content.replace('first = 1', 'first = 2'))
+      writeFileSync(path.join(repo, 'c.ts'), content.replace('legacy = 3', 'legacy = 4'))
+
+      const { rangesByFile } = collectAddedLineRanges(repo, base)
+      expect(rangesByFile.get(file)).toEqual([{ start: 1, end: 1 }])
+      expect(rangesByFile.get('c.ts')).toEqual([{ start: 3, end: 3 }])
+    } finally {
+      rmSync(repo, { recursive: true, force: true })
+    }
+  })
+
   it('discovers nested rule overrides while retaining root diagnostics', () => {
     const root = path.resolve(import.meta.dirname, '..', '..')
     const directory = mkdtempSync(path.join(root, 'config', 'changed-code-quality-nested-'))
@@ -120,6 +156,31 @@ describe('changed-code quality line matching', () => {
     expect(isRootCodeQualityPath('cloud/apps/relay/src/index.ts')).toBe(false)
     expect(isRootCodeQualityPath('src/main/index.ts')).toBe(true)
   })
+
+  it.each(['src/renderer/src', 'mobile/src'])(
+    'checks nested components natively and keeps the selective index-key check in %s',
+    (sourceRoot) => {
+      const root = path.resolve(import.meta.dirname, '../..')
+      const directory = mkdtempSync(path.join(root, sourceRoot, 'native-react-lint-'))
+      try {
+        const file = path.join(directory, 'List.tsx')
+        writeFileSync(
+          file,
+          `export function List({ rows }) {
+            function Row() { return <input /> }
+            return <>{rows.map((row, index) => <Row key={index} />)}</>
+          }`
+        )
+        const codes = scanFixture('code quality', file).map((diagnostic) => diagnostic.code)
+        expect(codes).toContain('react(no-unstable-nested-components)')
+        expect(scanFixture('React Doctor', file).map((diagnostic) => diagnostic.code)).toEqual([
+          'react-doctor(no-array-index-as-key)'
+        ])
+      } finally {
+        rmSync(directory, { recursive: true, force: true })
+      }
+    }
+  )
 
   it.each([
     ['Counter.tsx', []],
@@ -406,6 +467,22 @@ describe('unloaded plugin directive unused warning', () => {
       expect(isUnloadedPluginDirectiveUnusedWarning(diagnostics[0], root, 'React Doctor')).toBe(
         false
       )
+    })
+  })
+
+  it('keeps mount-time state copies covered after disabling the overlapping rule', () => {
+    const source = `
+      import { useEffect, useState } from 'react'
+      export function Title({ title }) {
+        const [value, setValue] = useState('')
+        useEffect(() => { setValue(title) }, [])
+        return value
+      }
+    `
+    withFixture(source, ({ filename }) => {
+      expect(scanFixture('React Doctor', filename).map((diagnostic) => diagnostic.code)).toEqual([
+        'react-doctor(no-derived-state-effect)'
+      ])
     })
   })
 

@@ -9,7 +9,7 @@ import type {
 } from '../transport/mobile-web-bundle-fetch'
 import { joinUri } from './generation-cache-uri'
 import { MANIFEST_FILE_NAME, requireStorablePath } from './generation-asset-path'
-import { copyCachedAsset, reusableAssetsOf } from './generation-reuse'
+import { reusableAssetsOf } from './generation-reuse'
 import type { GenerationDirectoryEntry, GenerationFileSystem } from './generation-store-file-system'
 import { isHostCacheKey } from './host-cache-key'
 import type { MobileWebShellUpdateFailure } from './mobile-web-shell-update-failure'
@@ -42,7 +42,11 @@ export type StagedGeneration = {
 export type GenerationStore = {
   readActiveGeneration(hostKey: string): Promise<ActiveGeneration | null>
   openReusableAssets(hostKey: string): Promise<MobileWebBundleReusableAssets>
-  stageGeneration(hostKey: string, result: MobileWebBundleFetchResult): Promise<StagedGeneration>
+  stageGeneration(
+    hostKey: string,
+    result: MobileWebBundleFetchResult,
+    signal?: AbortSignal
+  ): Promise<StagedGeneration>
   commitGeneration(staged: StagedGeneration): Promise<ActiveGeneration>
   abortStagedGeneration(staged: StagedGeneration): Promise<void>
   sweepStagedGenerations(): Promise<void>
@@ -157,8 +161,12 @@ export function createGenerationStore(options: {
 
   async function stage(
     hostKey: string,
-    result: MobileWebBundleFetchResult
+    result: MobileWebBundleFetchResult,
+    signal?: AbortSignal
   ): Promise<StagedGeneration> {
+    if (signal?.aborted) {
+      throw new Error('generation staging was aborted')
+    }
     const manifest = result.manifest
     const directory = joinUri(stagingRoot(hostKey), manifest.buildId)
     const reused = new Set(result.reused)
@@ -168,12 +176,12 @@ export function createGenerationStore(options: {
       bytes: reused.has(asset.path) ? null : requireExactBytes(result.assets.get(asset.path), asset)
     }))
     // Copy reused assets on the stage queue so sweeps and concurrent downloads cannot remove their source mid-copy.
-    const active = reused.size > 0 ? await readActive(hostKey) : null
+    const reusable = reusableAssetsOf(fs, reused.size > 0 ? await readActive(hostKey) : null)
     // Discard prior residue; fresh writes over a partial tree would not form a verified generation.
     await fs.delete(directory)
     try {
       for (const { asset, uri, bytes } of assets) {
-        await (bytes === null ? copyCachedAsset(fs, active, asset, uri) : fs.writeBytes(uri, bytes))
+        await (bytes === null ? reusable.copyTo(asset, uri) : fs.writeBytes(uri, bytes))
       }
       // Write the manifest last so interrupted trees cannot appear activated.
       await fs.writeText(joinUri(directory, MANIFEST_FILE_NAME), JSON.stringify(manifest))
@@ -272,7 +280,7 @@ export function createGenerationStore(options: {
   return {
     readActiveGeneration: (hostKey) => serialize(() => openActive(hostKey)),
     openReusableAssets: (hostKey) => serialize(() => openReusable(hostKey)),
-    stageGeneration: (hostKey, result) => serialize(() => stage(hostKey, result)),
+    stageGeneration: (hostKey, result, signal) => serialize(() => stage(hostKey, result, signal)),
     commitGeneration: (staged) => serialize(() => commit(staged)),
     abortStagedGeneration: (staged) =>
       serialize(() => fs.delete(requireIssuedHandle(staged).directory)),

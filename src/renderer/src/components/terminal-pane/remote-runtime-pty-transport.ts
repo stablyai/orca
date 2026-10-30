@@ -1,13 +1,12 @@
 import { parseTerminalAttachmentLaunchResult } from '../../../../shared/terminal-attachment-launch-result'
-import {
-  terminalLaunchFacts,
-  agentProviderSessionForEnsure
-} from '../../../../shared/agent-session-resume'
+import { REMOTE_RUNTIME_PTY_HONOURS_TAB_SHELL_OVERRIDE } from './remote-runtime-pty-shell'
+import { terminalLaunchFacts } from '../../../../shared/agent-session-resume'
 import { isRuntimeCompatBlockError } from '@/runtime/runtime-protocol-compat'
 import { runtimeEnvironmentSupportsCapability } from '@/runtime/runtime-rpc-client'
 import { readTerminalSpawnDeferral } from '../../../../shared/host-spawn-admission'
 import { remoteRestoreSpawnIntentParams } from '../../runtime/remote-restore-spawn-intent'
 import { createAgentSessionKeyboardOptions } from '@/runtime/agent-session-keyboard-capability'
+import { agentProviderSessionForHostEnsure } from '@/runtime/agent-session-ensure-provider-session'
 import { createRemoteRuntimeDisconnectedInputGrace } from './remote-runtime-disconnected-input-grace'
 import {
   createRemoteRuntimeRecoveryInputHold,
@@ -20,6 +19,7 @@ import {
 import type { AcceptedInputOptions } from './pty-preconnect-input-buffer'
 import type { TerminalInputKind } from '../../../../shared/terminal-input-kind'
 import { isSshSignInPendingTerminalError } from './terminal-ssh-sign-in-error'
+import { terminalCreateThemeParams } from './terminal-view-attributes-publisher'
 /* eslint-disable max-lines -- Why: remote PTY transport keeps lifecycle, JSON fallback, and binary stream wiring together so reconnect/destroy ordering stays testable as one behavior surface. */
 import type { RuntimeRpcResponse } from '../../../../shared/runtime-rpc-envelope'
 import {
@@ -66,7 +66,7 @@ import {
   getRemoteRuntimeTerminalHandle,
   runtimeTerminalErrorMessage
 } from '../../runtime/runtime-terminal-stream'
-import { toRemoteRuntimePtyId } from '../../../../shared/remote-runtime-pty-id'
+import { toRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { getRemoteRuntimeTerminalMultiplexer } from '../../runtime/remote-runtime-terminal-multiplexer'
 import { REMOTE_TERMINAL_SNAPSHOT_TOO_LARGE } from '../../runtime/remote-runtime-terminal-snapshot-state'
 import { restoredSnapshotPaintsPrintableContent } from './restored-snapshot-coverage'
@@ -336,7 +336,16 @@ export function createRemoteRuntimePtyTransport(
     })
   }
 
-  const recoveryInputHold = createRemoteRuntimeRecoveryInputHold({ holdBeforeFirstConnect: true })
+  const recoveryInputHold = createRemoteRuntimeRecoveryInputHold({
+    holdBeforeFirstConnect: true,
+    // A closed pane has nobody left to tell.
+    onTypingDiscardedBeforeBind: () => {
+      if (!destroyed) {
+        opts.onTypingDiscardedBeforeBind?.()
+      }
+    }
+  })
+  let isFirstConnect = true
   let heldInputRelease: {
     stream: RemoteRuntimeMultiplexedTerminal
     waitingForValidation: boolean
@@ -2943,6 +2952,9 @@ export function createRemoteRuntimePtyTransport(
               ...(meta?.terminalOwner && meta.seq !== undefined
                 ? { terminalOwner: meta.terminalOwner }
                 : {}),
+              ...(meta?.lastTitle !== undefined && meta.seq !== undefined
+                ? { lastTitle: meta.lastTitle }
+                : {}),
               ...(meta?.alternateScreen !== undefined && meta.seq !== undefined
                 ? { alternateScreen: meta.alternateScreen }
                 : {}),
@@ -3370,12 +3382,31 @@ export function createRemoteRuntimePtyTransport(
     if (!replay) {
       settleSignInConnectWait()
     }
-    const expected = recoveryInputHold.expect(restoredInputEndpoint(options.sessionId))
+    // Why: a brand-new pane shows no old screen, so its typing belongs to the terminal it creates.
+    const newTerminal =
+      !options.sessionId && isFirstConnect && opts.keepTypeAheadForNewTerminal?.('connect') === true
+    isFirstConnect = false
+    const expected = newTerminal
+      ? recoveryInputHold.expectNewTerminal()
+      : recoveryInputHold.expect(restoredInputEndpoint(options.sessionId))
     let result: PtyConnectResult | undefined
     try {
       result = await connectPane(options)
     } finally {
-      recoveryInputHold.settleExpectation(expected, handle !== null && !destroyed)
+      const boundHandle = handle !== null && !destroyed ? handle : null
+      // Why a genuine create only: an adopted or cold-restored terminal is not the one typed into.
+      const createdFresh = Boolean(result && !result.isReattach && !result.coldRestore)
+      recoveryInputHold.settleExpectation(
+        expected,
+        boundHandle !== null,
+        // Startup work, or replayed history, that appeared since mount must not run behind typing.
+        boundHandle &&
+          createdFresh &&
+          opts.releasePreconnectInput?.() !== false &&
+          opts.keepTypeAheadForNewTerminal?.('bind') === true
+          ? heldInputEndpoint(boundHandle)
+          : null
+      )
       if (handle && recoveryInputHold.isHolding()) {
         releaseHeldInput()
       }
@@ -3490,8 +3521,11 @@ export function createRemoteRuntimePtyTransport(
         ...originOptions,
         ...(launchTokenToSend !== undefined ? { launchToken: launchTokenToSend } : {}),
         ...(launchAgentToSend !== undefined ? { launchAgent: launchAgentToSend } : {}),
+        ...(REMOTE_RUNTIME_PTY_HONOURS_TAB_SHELL_OVERRIDE && opts.shellOverride
+          ? { shell: opts.shellOverride }
+          : {}),
         ...spawnIntentParams,
-        ...(terminalColorQueryReplies ? { terminalColorQueryReplies } : {}),
+        ...terminalCreateThemeParams(terminalColorQueryReplies),
         ...(terminalKittyKeyboardProtocol === true ? { terminalKittyKeyboardProtocol: true } : {}),
         tabId,
         leafId,
@@ -3518,10 +3552,16 @@ export function createRemoteRuntimePtyTransport(
         )
       const hostAuthorityCreate = async (epoch = connectLifecycleEpoch) => {
         const keyboardOptions = await agentKeyboardOptions(createEnvironmentId)
+        const ensureProviderSession = resumeProviderSessionToSend
+          ? await agentProviderSessionForHostEnsure(
+              createEnvironmentId,
+              resumeProviderSessionToSend
+            )
+          : undefined
         return createWithUnknownOutcomeRecovery(
           'agent-session',
           (timeoutMs) =>
-            resumeProviderSessionToSend
+            ensureProviderSession
               ? callRuntimeForEnvironment<RuntimeEnsureAgentSessionResult>(
                   createEnvironmentId,
                   'terminal.ensureAgentSession',
@@ -3531,7 +3571,7 @@ export function createRemoteRuntimePtyTransport(
                     ...originOptions,
                     worktree: toRuntimeTerminalWorktreeSelector(worktreeId),
                     agent: launchAgentToSend!,
-                    providerSession: agentProviderSessionForEnsure(resumeProviderSessionToSend),
+                    providerSession: ensureProviderSession,
                     ...(launchConfigToSend?.ompResumeFilePath
                       ? { ompResumeFilePath: launchConfigToSend.ompResumeFilePath }
                       : {}),
@@ -3709,7 +3749,12 @@ export function createRemoteRuntimePtyTransport(
 
     attach(options) {
       settleSignInConnectWait()
-      recoveryInputHold.expect(null)
+      // Why: like the local attach, keys typed before it reach the terminal this pane names, never another.
+      recoveryInputHold.expect(
+        opts.bufferInputUntilConnect && opts.releasePreconnectInput?.() !== false
+          ? restoredInputEndpoint(options.existingPtyId)
+          : null
+      )
       attachPane(options, false)
     },
 

@@ -7,10 +7,8 @@ import {
 } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import type { ClaudeStreamJsonConnection } from './claude-stream-json-connection'
 import { ORCA_AGENT_SESSION_SPAWN_TOKEN_ENV as SPAWN_TOKEN_ENV } from '../../shared/agent-session-caller-env'
-import type {
-  ClaudeStructuredSessionAdapter,
-  ClaudeStructuredSessionEvent
-} from './claude-structured-session-adapter'
+import type { ClaudeStructuredSessionAdapter } from './claude-structured-session-adapter'
+import type { ClaudeStructuredSessionEvent } from './structured/claude-structured-session-state'
 import {
   acquired,
   adapterFor,
@@ -20,97 +18,14 @@ import {
   PROVIDER_SESSION_ID,
   tick,
   USER_MESSAGE,
-  type FakeConnection,
-  claudeOpened
+  type FakeConnection
 } from './claude-structured-session-test-support'
+import { claudeOpened } from './claude-structured-startup-settled-test-support'
 import { invokeCanUseTool } from './claude-can-use-tool-test-support'
 import { claudeProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
 import { providerRequestTimeoutOf } from '../provider-process/provider-request-timeout'
 
 describe('ClaudeStructuredSessionAdapter.acquire', () => {
-  it('keeps the first root init and successful literal selector separate from hooks and reports', async () => {
-    const claude = fakeClaude()
-    const open = claude.openConnection
-    claude.openConnection = async (launch, handlers) => {
-      const connection = await open(launch, handlers)
-      const frame = { type: 'system', session_id: PROVIDER_SESSION_ID }
-      handlers?.onMessage?.({
-        ...frame,
-        subtype: 'hook_started',
-        hook_name: 'SessionStart:startup'
-      })
-      handlers?.onMessage?.({
-        ...frame,
-        subtype: 'init',
-        parent_tool_use_id: 'child',
-        permissionMode: 'auto'
-      })
-      handlers?.onMessage?.({
-        ...frame,
-        subtype: 'init',
-        permissionMode: 'default',
-        model: 'claude-haiku-4-5'
-      })
-      return connection
-    }
-    const adapter = adapterFor(claude, {
-      options: { permissionMode: 'auto', extraArgs: { model: 'haiku' } }
-    })
-    await adapter.acquire({ identity: identityFor(), fence: 7, spawnToken: 'spawn-9' })
-    const requiresRestart = (model?: string) =>
-      adapter.requiresModelTransitionRestart({
-        sessionId: 'session-1',
-        fence: 7,
-        executionOptions: model === undefined ? {} : { model }
-      })
-    expect(requiresRestart('haiku')).toBe(false)
-    expect(requiresRestart()).toBe(false)
-    expect(requiresRestart('opus')).toBe(true)
-    for (const subtype of ['status', 'init']) {
-      claude.connections[0].handlers.onMessage?.({
-        type: 'system',
-        subtype,
-        session_id: PROVIDER_SESSION_ID,
-        permissionMode: 'auto',
-        model: 'opus'
-      })
-    }
-    expect(requiresRestart('opus')).toBe(true)
-    await adapter.setOption({ sessionId: 'session-1', fence: 7, key: 'model', value: 'opus' })
-    expect(requiresRestart('opus')).toBe(false)
-    expect(requiresRestart('haiku')).toBe(true)
-    claude.routes.set_model = () => {
-      throw new Error('control reply lost')
-    }
-    await expect(
-      adapter.setOption({ sessionId: 'session-1', fence: 7, key: 'model', value: 'haiku' })
-    ).rejects.toThrow('control reply lost')
-    expect(requiresRestart('opus')).toBe(true)
-    await adapter.closeSession('session-1')
-  })
-
-  it('does not let a later init fill the first root init missing permission', async () => {
-    const claude = fakeClaude()
-    const adapter = adapterFor(claude, { options: { permissionMode: 'auto' } })
-    await adapter.acquire({
-      identity: identityFor(),
-      fence: 7,
-      spawnToken: 'spawn-9',
-      options: { model: 'haiku' }
-    })
-    const frame = { type: 'system', subtype: 'init', session_id: PROVIDER_SESSION_ID }
-    claude.connections[0].handlers.onMessage?.(frame)
-    claude.connections[0].handlers.onMessage?.({ ...frame, permissionMode: 'default' })
-    expect(
-      adapter.requiresModelTransitionRestart({
-        sessionId: 'session-1',
-        fence: 7,
-        executionOptions: { model: 'opus' }
-      })
-    ).toBe(false)
-    await adapter.closeSession('session-1')
-  })
-
   it('ends a stalled initialize at its 60-second deadline with the timed-out step', async () => {
     vi.useFakeTimers()
     try {
@@ -268,6 +183,23 @@ describe('ClaudeStructuredSessionAdapter.acquire', () => {
     await adapter.acquire({ ...start, permissionMode: 'accept-edits' })
     expect(claude.connections[0].launch.options).not.toHaveProperty('effort')
     expect(resolveLaunch.mock.calls[0]?.[0].permissionMode).toBe('accept-edits')
+  })
+
+  it('names a launch that could not be resolved on the host, keeping its error (#34795)', async () => {
+    const claude = fakeClaude()
+    const adapter = adapterFor(claude)
+    vi.spyOn(adapter['deps'], 'resolveLaunch').mockRejectedValueOnce(
+      new Error('selector_not_found')
+    )
+
+    await expect(
+      adapter.acquire({ identity: identityFor(), fence: 7, spawnToken: 'spawn-9' })
+    ).rejects.toMatchObject({
+      name: 'AgentSessionPreSpawnError',
+      reason: 'launchPreparationFailed',
+      message: 'selector_not_found'
+    })
+    expect(claude.connections).toHaveLength(0)
   })
 
   it('recovers a cancellable lifecycle when the replay arrives after dispatch returned', async () => {

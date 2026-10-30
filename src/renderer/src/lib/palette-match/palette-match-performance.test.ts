@@ -1,13 +1,22 @@
 import { beforeAll, describe, expect, it, vi } from 'vitest'
-import { PALETTE_MATCH_BUDGET } from './palette-match-budget'
-import { matchPaletteDocument, type PaletteMatchDiagnostics } from './match-document'
-import * as matchFieldModule from './match-field'
-import { preparePaletteQuery } from './palette-query'
+import { PALETTE_MATCH_BUDGET } from '../../../../shared/palette-match/palette-match-budget'
+import {
+  matchPaletteDocument,
+  type PaletteMatchDiagnostics
+} from '../../../../shared/palette-match/match-document'
+import * as matchFieldModule from '../../../../shared/palette-match/match-field'
+import { preparePaletteQuery } from '../../../../shared/palette-match/palette-query'
 import { buildWorktreePaletteDocuments } from '../worktree-palette-document'
 import { searchWorktreeDocuments } from '../worktree-palette-search'
-import { comparePaletteEntityRanks, createPaletteSearchContext } from './palette-ranking'
-import { buildPaletteDocument, type PaletteDocument } from './palette-document'
-import type { PaletteQueryToken } from './palette-query'
+import {
+  comparePaletteEntityRanks,
+  createPaletteSearchContext
+} from '../../../../shared/palette-match/palette-ranking'
+import {
+  buildPaletteDocument,
+  type PaletteDocument
+} from '../../../../shared/palette-match/palette-document'
+import type { PaletteQueryToken } from '../../../../shared/palette-match/palette-query'
 import { issueCacheKey } from '@/store/github/cache-identity'
 import { getPaletteWorktreeIdentity } from '../palette-repo-resolution'
 import type { Repo } from '../../../../shared/repo-types'

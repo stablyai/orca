@@ -3,6 +3,7 @@ import type {
   TerminalPaneLayoutNode,
   TerminalPaneSplitDirection
 } from '../../../../shared/terminal-tab-types'
+import { markTerminalShowsReplayedHistory } from './replayed-history-terminals'
 import { isTerminalLeafId } from '../../../../shared/stable-pane-id'
 import {
   POST_REPLAY_MODE_RESET,
@@ -126,6 +127,7 @@ export function restoreScrollbackBuffers(
       })
       continue
     }
+    markTerminalShowsReplayedHistory(pane.terminal)
     try {
       const renderOptions = {
         shouldRefreshViewportSynchronously: () => !manager.hasWebglRenderer(pane.id)

@@ -1,15 +1,15 @@
 // Only queued work or provider operations start children. Run waits outside serialization;
 // fence each state commit so concurrent sends remain immediately acceptable.
 
-import {
-  providerDiagnosticOf,
-  type SubmissionRejectionFact,
-  type AgentSessionArgumentProblem,
-  type ProviderDiagnostic
+import type {
+  SubmissionRejectionFact,
+  AgentSessionArgumentProblem,
+  ProviderDiagnostic
 } from '../../../shared/agent-session-failure'
 import { argumentProblemOf } from '../structured-agent-arguments-error'
 import {
   agentSessionRefusalFromReference,
+  isAgentSessionRefusalError,
   readAgentSessionRefusalReference
 } from '../../../shared/agent-session-wire-refusals'
 import type {
@@ -27,6 +27,7 @@ import {
 } from './structured-agent-session-start-attempts'
 import { retryableStructuredAgentSessionAcquisition } from './structured-agent-session-start-retry'
 import { failedCreateRefusal } from './structured-agent-session-failed-create-refusal'
+import { startFailureDiagnosticOf } from './structured-agent-session-failure-text'
 import {
   joinClosingStructuredAgentSessionChild,
   releaseLeaseOfEndedStructuredAgentSessionChild
@@ -67,6 +68,14 @@ export function claimStructuredAgentSessionAgent(
   sessionId: string,
   startedFor?: string
 ): StructuredAgentSessionStartClaim {
+  try {
+    context.deps.store.requireWritableRecord(sessionId)
+  } catch (error) {
+    if (isAgentSessionRefusalError(error)) {
+      return { outcome: Promise.resolve({ ok: false, refusal: error.refusal }) }
+    }
+    throw error
+  }
   const session = context.sessions.get(sessionId)
   const child = session?.child
   if (!structuredAgentSessionStartStillQueued(session, startedFor)) {
@@ -209,7 +218,7 @@ function withDiagnostic(
   error: unknown,
   { aborted, expired }: { aborted: boolean; expired: boolean }
 ): StructuredAgentSessionResumeOutcome {
-  const diagnostic = providerDiagnosticOf(error)
+  const diagnostic = startFailureDiagnosticOf(error)
   const argumentProblem = argumentProblemOf(error)
   return {
     ok: false,

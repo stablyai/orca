@@ -230,8 +230,9 @@ describe('two concurrent imports into one partition', () => {
     expect(cookiesSetMock).not.toHaveBeenCalled()
 
     expect(events).toContain('set:new-a')
-    expect(events).toContain('remove:old-b')
-    expect(events.indexOf('set:new-a')).toBeLessThan(events.indexOf('remove:old-b'))
+    expect(events).toContain('set:new-b')
+    expect(events.indexOf('set:new-a')).toBeLessThan(events.indexOf('set:new-b'))
+    expect(cookiesRemoveMock).not.toHaveBeenCalled()
   })
 })
 
@@ -243,7 +244,6 @@ describe('two concurrent NATIVE imports into one partition', () => {
   let clearDataMock: ReturnType<typeof vi.fn>
   let releaseFirstWrite: () => void
   let platformSpy: { mockRestore: () => void }
-  let stagingCopyCount: number
 
   function chromeBrowser(cookiesPath: string) {
     return {
@@ -261,16 +261,7 @@ describe('two concurrent NATIVE imports into one partition', () => {
     tmpDir = mkdtempSync(join(tmpdir(), 'orca-cookie-native-concurrency-'))
     appGetPathMock.mockReturnValue(join(tmpDir, 'userData'))
     events = []
-    stagingCopyCount = 0
-    copyFileWithWindowsRetryMock
-      .mockReset()
-      .mockImplementation((source: string, destination: string) => {
-        if (destination.includes('cookie-import-staging')) {
-          stagingCopyCount += 1
-          events.push(`copy:${stagingCopyCount === 1 ? 'first' : 'second'}`)
-        }
-        copyFileSync(source, destination)
-      })
+    copyFileWithWindowsRetryMock.mockReset().mockImplementation(copyFileSync)
     // Seed in-scope cookies so the second import’s clear would expose a missing lock.
     snapshotClearIdentitiesMock
       .mockReset()
@@ -319,7 +310,7 @@ describe('two concurrent NATIVE imports into one partition', () => {
     rmSync(tmpDir, { recursive: true, force: true })
   })
 
-  it('does not let a second native import clear while the first is still writing', async () => {
+  it('serializes native source preparation and live writes', async () => {
     const sourceA = join(tmpDir, 'ChromeA', 'Default', 'Network', 'Cookies')
     const sourceB = join(tmpDir, 'ChromeB', 'Default', 'Network', 'Cookies')
     createChromiumCookieTestDatabase(sourceA, [
@@ -328,13 +319,13 @@ describe('two concurrent NATIVE imports into one partition', () => {
     createChromiumCookieTestDatabase(sourceB, [
       { domain: '.b.example', name: 'second', value: 'v' }
     ]).close()
-    // Precreate the database to keep initialization probes out of this ordering test.
+    // Existing target databases are never copied by the importer.
     createChromiumCookieTestDatabase(
       join(tmpDir, 'userData', 'Partitions', 'native-conc', 'Network', 'Cookies'),
       []
     ).close()
 
-    // Start both imports early enough to cover staging as well as live writes.
+    // Native preparation and live writes share the same Session admission.
     const first = importCookiesFromBrowser(chromeBrowser(sourceA), 'persist:native-conc')
     const second = importCookiesFromBrowser(chromeBrowser(sourceB), 'persist:native-conc')
     for (let i = 0; i < 100 && !events.includes('set:first'); i++) {
@@ -343,10 +334,7 @@ describe('two concurrent NATIVE imports into one partition', () => {
     expect(events).toContain('set:first')
     await new Promise((resolve) => setTimeout(resolve, 10))
 
-    expect(events).not.toContain('copy:second')
-    expect(events).toContain('remove:old-a')
-    expect(events).not.toContain('remove:old-b')
-    expect(events.filter((e) => e === 'flushStore')).toHaveLength(1)
+    expect(cookiesRemoveMock).not.toHaveBeenCalled()
     expect(events).not.toContain('set:second')
     expect(clearDataMock).not.toHaveBeenCalled()
 
@@ -357,9 +345,8 @@ describe('two concurrent NATIVE imports into one partition', () => {
     expect(resultB.ok).toBe(true)
     expect(writeCookieIdentityMock).toHaveBeenCalledTimes(2)
     expect(cookiesSetMock).not.toHaveBeenCalled()
-    expect(cookiesRemoveMock.mock.calls.map(([, name]) => name)).toEqual(['old-a', 'old-b'])
-    expect(events.indexOf('set:first')).toBeLessThan(events.indexOf('remove:old-b'))
-    expect(events.indexOf('copy:second')).toBeGreaterThan(events.indexOf('set:first'))
+    expect(cookiesRemoveMock).not.toHaveBeenCalled()
+    expect(events.indexOf('set:first')).toBeLessThan(events.indexOf('set:second'))
   })
 })
 
@@ -415,7 +402,7 @@ describe('cold-init probe on a partition that has never stored a cookie', () => 
     rmSync(tmpDir, { recursive: true, force: true })
   })
 
-  it('cannot write or delete __init while another transaction holds the partition', async () => {
+  it('imports into an unused partition without writing or deleting an initialization probe', async () => {
     const source = join(tmpDir, 'Chrome', 'Default', 'Network', 'Cookies')
     createChromiumCookieTestDatabase(source, [
       { domain: '.probe.example', name: 'probe', value: 'v' }
@@ -443,11 +430,8 @@ describe('cold-init probe on a partition that has never stored a cookie', () => 
     release()
     await running
 
-    // Verify the probe ran after release, rather than bailing out before the lock.
-    expect(cookiesSetMock).toHaveBeenCalledWith(
-      expect.objectContaining({ name: '__init', url: 'https://localhost' })
-    )
-    expect(events.indexOf('set:__init')).toBeGreaterThanOrEqual(0)
-    expect(events.indexOf('remove:__init')).toBeGreaterThan(events.indexOf('set:__init'))
+    expect(cookiesSetMock).not.toHaveBeenCalled()
+    expect(events).not.toContain('remove:__init')
+    expect(writeCookieIdentityMock).toHaveBeenCalledOnce()
   })
 })

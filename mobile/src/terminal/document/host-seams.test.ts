@@ -53,7 +53,7 @@ function terminalDouble() {
     get element() {
       return opened
     },
-    unicode: { activeVersion: '6' },
+    unicode: { activeVersion: '6', versions: [], register() {} },
     loaded,
     write(_data: string, callback?: () => void) {
       callback?.()

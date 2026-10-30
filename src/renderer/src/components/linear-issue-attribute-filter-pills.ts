@@ -4,7 +4,7 @@ import {
   canonicalizeLinearIssueAttributeFilter,
   type LinearIssueAttributeFilter
 } from '../../../shared/linear/issue-attribute-filter'
-import { getLinearPriorityLabel } from './task-page-localized-options'
+import { getLinearPriorityLabel } from './task-page/task-page-localized-options'
 import { isLinearMetadataGroupSelectionPartial } from './linear-issue-attribute-filter-team-ids'
 import type {
   LinearIssueFilterGroupedOption,

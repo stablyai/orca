@@ -1,4 +1,11 @@
 import {
+  getAgentSessionConversation,
+  selectWritableAgentSessionRecord,
+  requireWritableAgentSessionRecord,
+  type AgentSessionStoreState
+} from '../../agent-session-store-state'
+import type { AgentSessionConversationView } from '../../../../shared/agent-session-conversation-view'
+import {
   agentSessionOperationKey,
   agentSessionOperationExpiry,
   claimAgentSessionOperation,
@@ -18,8 +25,6 @@ import {
   type AgentSessionMutationAdmission
 } from '../../../../shared/agent-session-mutation-envelope'
 import type { AgentSessionMutationEnvelope } from '../../../../shared/agent-session-wire'
-import type { AgentSessionRecord } from '../../../../shared/agent-session-record'
-import type { AgentSessionStoreState } from '../../agent-session-store-state'
 import { AgentSessionRefusalError } from '../../../../shared/agent-session-wire-refusals'
 
 export type AgentSessionOperationAdmission = {
@@ -82,7 +87,7 @@ export type AgentSessionMutationOperationAdmission = {
 
 export type AgentSessionMutationOperationDecision = {
   admission: AgentSessionMutationAdmission
-  record: AgentSessionRecord
+  record: AgentSessionConversationView
 } | null
 
 type EvaluatedOperationRows = { rows: OperationRows; decision: AgentSessionOperationDecision }
@@ -146,10 +151,10 @@ export function admitAgentSessionGlobalOperationRow(
 
 /** Evaluate mutation replay before acquiring an owner; writes nothing, checks no lease, null means no record. */
 export function evaluateAgentSessionMutationOperation(
-  state: Pick<AgentSessionStoreState, 'records' | 'operations'>,
+  state: AgentSessionStoreState,
   args: AgentSessionMutationOperationAdmission
-): { decision: AgentSessionOperationDecision; record: AgentSessionRecord } | null {
-  const record = state.records.get(args.envelope.sessionId)
+): { decision: AgentSessionOperationDecision; record: AgentSessionConversationView } | null {
+  const record = getAgentSessionConversation(state, args.envelope.sessionId)
   if (!record) {
     return null
   }
@@ -176,8 +181,11 @@ export function admitAgentSessionMutationOperation(
   state: AgentSessionStoreState,
   args: AgentSessionMutationOperationAdmission
 ): AgentSessionMutationOperationDecision {
-  const record = state.records.get(args.envelope.sessionId)
+  const record = getAgentSessionConversation(state, args.envelope.sessionId)
   if (!record) {
+    if (selectWritableAgentSessionRecord(state, args.envelope.sessionId).kind === 'unreadable') {
+      requireWritableAgentSessionRecord(state, args.envelope.sessionId)
+    }
     return null
   }
   const operation = mutationOperation(args)
@@ -188,7 +196,7 @@ export function admitAgentSessionMutationOperation(
     envelope: args.envelope,
     hostFingerprint: args.hostFingerprint,
     ledger: ledger.decision,
-    lease: record.lease,
+    lease: () => requireWritableAgentSessionRecord(state, args.envelope.sessionId).lease,
     ...(args.conversationWrite ? { conversationWrite: true } : {})
   })
   if (ledger.decision.decision === 'admit' && admission.decision === 'refused') {

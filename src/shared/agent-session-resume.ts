@@ -1,3 +1,4 @@
+import { readAgentEffortLevel } from './agent-effort-level'
 import type { AgentHookSource } from './agent-hook-relay'
 import type { AgentStatusCacheIdentity, RefusedPaneResume } from './agent-status-ipc-payload'
 import type { AgentStatusState } from './agent-status-types'
@@ -44,6 +45,8 @@ export type AgentProviderSessionMetadata = {
   transcriptPath?: string
   /** Folder the agent ran in; resume runs there, not the pane's start folder (#16960). */
   cwd?: string
+  /** Claude's live effort level; resume replays it because Claude restores only its saved per-model default. */
+  effort?: string
 }
 
 export type SleepingAgentLaunchConfig = {
@@ -181,20 +184,14 @@ export function normalizeAgentProviderSession(raw: unknown): AgentProviderSessio
   // Persisted/relay paths cross trust boundaries too; reject controls as for hook paths.
   const transcriptPath = readPathFromKeys(record, ['transcriptPath'])
   const cwd = readPathFromKeys(record, ['cwd'])
+  const effort = readAgentEffortLevel(record.effort)
   return {
     key,
     id,
     ...(transcriptPath ? { transcriptPath } : {}),
-    ...(cwd ? { cwd } : {})
+    ...(cwd ? { cwd } : {}),
+    ...(effort ? { effort } : {})
   }
-}
-
-/** Older hosts' strict ensureAgentSession schema rejects the newer `cwd` field. */
-export function agentProviderSessionForEnsure(
-  providerSession: AgentProviderSessionMetadata
-): AgentProviderSessionMetadata {
-  const { cwd: _cwd, ...identity } = providerSession
-  return identity
 }
 
 /** Compare the provider-owned values that identify the CLI resume target.

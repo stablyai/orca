@@ -6,63 +6,95 @@ import {
   localizedHostedReviewCopy,
   resolveSupportedHostedReviewCopyProvider
 } from '@/i18n/hosted-review-localized-copy'
-import {
-  canClickBlockedCreateReviewReason,
-  resolveHostedReviewAuthInstruction
-} from './source-control-create-review-blocked-action'
-import type { PrimaryActionInputs } from './source-control-primary-action'
-import type { DropdownItem } from './source-control-dropdown-item-types'
-import type { DropdownActionContext } from './source-control-dropdown-action-context'
+import { canClickBlockedCreateReviewReason } from './source-control-create-review-blocked-action'
+import { hostedReviewSignInHint } from './hosted-review-sign-in-copy'
+import type { DropdownItem } from '../../../../shared/source-control-dropdown-item-types'
+import type { DropdownActionContext } from '../../../../shared/source-control-dropdown-action-context'
 
 export type HostedReviewDropdownItems = {
   createPR: DropdownItem
   pushCreatePR: DropdownItem
 }
 
-function reviewCopy(
-  provider: NonNullable<PrimaryActionInputs['hostedReviewCreation']>['provider'] | undefined
-): ReturnType<typeof localizedHostedReviewCopy> & {
-  authInstruction: string
-} {
-  return {
-    ...localizedHostedReviewCopy(resolveSupportedHostedReviewCopyProvider(provider)),
-    authInstruction: resolveHostedReviewAuthInstruction(provider ?? 'github')
-  }
-}
-
 export function buildHostedReviewDropdownItems(
   ctx: DropdownActionContext
 ): HostedReviewDropdownItems {
   const { hostedReviewCreation, globalBusy, upstreamLoading, shouldForcePushWithLease } = ctx
-  const createReviewCopy = reviewCopy(hostedReviewCreation?.provider)
+  const createReviewCopy = localizedHostedReviewCopy(
+    resolveSupportedHostedReviewCopyProvider(hostedReviewCreation?.provider)
+  )
 
   const createBlockedHint = ((): string => {
     switch (hostedReviewCreation?.blockedReason) {
       case 'dirty':
-        return 'Commit changes first'
+        return translate(
+          'auto.components.right.sidebar.source.control.dropdown.items.blockedCommitFirst',
+          'Commit changes first'
+        )
       case 'detached_head':
-        return 'Check out a branch first'
+        return translate(
+          'auto.components.right.sidebar.source.control.dropdown.items.blockedCheckOutBranchFirst',
+          'Check out a branch first'
+        )
       case 'default_branch':
-        return 'Switch to a feature branch'
+        return translate(
+          'auto.components.right.sidebar.source.control.dropdown.items.blockedSwitchToFeatureBranch',
+          'Switch to a feature branch'
+        )
       case 'no_upstream':
-        return 'Publish Branch'
+        return translate(
+          'auto.components.right.sidebar.source.control.dropdown.items.blockedPublishBranch',
+          'Publish Branch'
+        )
       case 'needs_push':
-        return 'Push first'
+        return translate(
+          'auto.components.right.sidebar.source.control.dropdown.items.blockedPushFirst',
+          'Push first'
+        )
       case 'needs_sync':
-        return shouldForcePushWithLease ? 'Force Push first' : 'Sync first'
+        return shouldForcePushWithLease
+          ? translate(
+              'auto.components.right.sidebar.source.control.dropdown.items.blockedForcePushFirst',
+              'Force Push first'
+            )
+          : translate(
+              'auto.components.right.sidebar.source.control.dropdown.items.blockedSyncFirst',
+              'Sync first'
+            )
       case 'auth_required':
-        return `${createReviewCopy.authInstruction} in this environment`
+        return hostedReviewSignInHint(hostedReviewCreation?.provider)
       case 'unsupported_provider':
-        return 'Unsupported provider'
+        return translate(
+          'auto.components.right.sidebar.source.control.dropdown.items.blockedUnsupportedProvider',
+          'Unsupported provider'
+        )
       case 'existing_review':
-        return `A ${createReviewCopy.reviewLabel} already exists`
+        return translate(
+          'auto.components.right.sidebar.source.control.dropdown.items.blockedExistingReview',
+          'A {{reviewLabel}} already exists',
+          { reviewLabel: createReviewCopy.reviewLabel }
+        )
       case 'fork_head_unsupported':
-        return 'Fork head unsupported'
+        return translate(
+          'auto.components.right.sidebar.source.control.dropdown.items.blockedForkHeadUnsupported',
+          'Fork head unsupported'
+        )
       case 'base_not_on_remote':
-        return 'Base branch is not on the remote'
+        return translate(
+          'auto.components.right.sidebar.source.control.dropdown.items.blockedBaseNotOnRemote',
+          'Base branch is not on the remote'
+        )
       case null:
       case undefined:
-        return upstreamLoading ? 'Checking branch status…' : 'Branch is not ready'
+        return upstreamLoading
+          ? translate(
+              'auto.components.right.sidebar.source.control.dropdown.items.checkingBranchStatus',
+              'Checking branch status…'
+            )
+          : translate(
+              'auto.components.right.sidebar.source.control.dropdown.items.blockedBranchNotReady',
+              'Branch is not ready'
+            )
     }
   })()
 
@@ -74,7 +106,11 @@ export function buildHostedReviewDropdownItems(
       { value0: createReviewCopy.shortLabel }
     ),
     title: hostedReviewCreation?.canCreate
-      ? `Create a ${createReviewCopy.reviewLabel} for this branch`
+      ? translate(
+          'auto.components.right.sidebar.source.control.dropdown.items.titleCreateReviewForBranch',
+          'Create a {{reviewLabel}} for this branch',
+          { reviewLabel: createReviewCopy.reviewLabel }
+        )
       : createBlockedHint,
     hint: hostedReviewCreation?.canCreate ? undefined : createBlockedHint,
     disabled:
@@ -93,12 +129,32 @@ export function buildHostedReviewDropdownItems(
   const pushCreatePR: DropdownItem = {
     kind: 'push_create_pr',
     label: shouldForcePushWithLease
-      ? `Force Push before ${createReviewCopy.shortLabel}`
-      : `Push before ${createReviewCopy.shortLabel}`,
+      ? translate(
+          'auto.components.right.sidebar.source.control.dropdown.items.forcePushBeforeReview',
+          'Force Push before {{shortLabel}}',
+          {
+            shortLabel: createReviewCopy.shortLabel
+          }
+        )
+      : translate(
+          'auto.components.right.sidebar.source.control.dropdown.items.pushBeforeReview',
+          'Push before {{shortLabel}}',
+          {
+            shortLabel: createReviewCopy.shortLabel
+          }
+        ),
     title: canPushAndCreate
       ? shouldForcePushWithLease
-        ? `Force push with lease before creating a ${createReviewCopy.reviewLabel}`
-        : `Push local commits before creating a ${createReviewCopy.reviewLabel}`
+        ? translate(
+            'auto.components.right.sidebar.source.control.dropdown.items.titleForcePushBeforeCreatingReview',
+            'Force push with lease before creating a {{reviewLabel}}',
+            { reviewLabel: createReviewCopy.reviewLabel }
+          )
+        : translate(
+            'auto.components.right.sidebar.source.control.dropdown.items.titlePushBeforeCreatingReview',
+            'Push local commits before creating a {{reviewLabel}}',
+            { reviewLabel: createReviewCopy.reviewLabel }
+          )
       : createBlockedHint,
     hint: canPushAndCreate ? undefined : createBlockedHint,
     disabled: !canPushAndCreate

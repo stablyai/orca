@@ -21,9 +21,45 @@ Install Node 24, pnpm, and the Bun version in [`config/.bun-version`](../config/
 native PTYs, socket liveness, and V8 memory behavior. `pnpm test:node` runs the same suites
 entirely on Node. Builds and dependency installation still use Node and pnpm.
 
+The server, its workers and its packaged dependencies target Node 24. The compatibility
+launcher and CLI still target Node 18; the launcher hands off to bundled Node 24 before
+loading server code. WSL guest programs and host discovery retain their Node 18 minimum.
+Keep Node 24 APIs and server imports out of these host compatibility paths. Running an
+unpackaged server directly requires Node 24 or newer.
+
+Use the pnpm version in `packageManager` in [`package.json`](../package.json): `corepack enable`
+needs Corepack 0.34.5 or newer to start the pinned pnpm (`npm install -g corepack@latest`). On
+Windows it writes shims next to `node.exe` and fails with `EPERM` outside an elevated shell when
+Node is in `C:\Program Files\nodejs`; run `npm install -g pnpm@<that version>` instead.
+
+`pnpm install` compiles native modules such as `node-pty` with `node-gyp` and loads them in
+Electron, so a fresh machine also needs:
+
+- **macOS**: Xcode Command Line Tools (`xcode-select --install`).
+- **Windows**: Python 3 and Visual Studio Build Tools with the "Desktop development with C++"
+  workload.
+- **Linux**: a C++ toolchain, Python 3, and the libraries Electron loads even on a headless
+  machine, plus `xvfb`, which the `*.electron.test.ts` files in `pnpm test` use when `DISPLAY` is
+  unset. On Ubuntu 24.04+ and Debian 13+:
+
+  ```bash
+  sudo apt-get update && sudo apt-get install -y build-essential python3 xvfb libgtk-3-0 libnss3 libgbm1 libasound2t64
+  ```
+
+  Older releases name the last package `libasound2`.
+
 ```bash
 pnpm install
 pnpm dev
+```
+
+`mobile/` is a separate pnpm project with its own lockfile, so the root `pnpm install` leaves its
+dependencies uninstalled. `pnpm build` (`build:mobile-web` fails without them) and the lint
+passes that cover `mobile/` need them. Install them before building or linting, and again
+when `mobile/pnpm-lock.yaml` changes:
+
+```bash
+pnpm -C mobile install --frozen-lockfile
 ```
 
 ### Dev Profiles and Parallel Instances
@@ -80,32 +116,9 @@ also includes committed changes since the branch's merge base. Update that ref w
 you need a newer baseline. Both accept the same path filters and options as `pnpm test`.
 When Git reports no changed files at all, the launcher exits before starting Vitest.
 
-Local runs enable Vitest's [dependency recording](https://vitest.dev/config/experimental#experimental-recorddependencies).
-Ordinary test runs populate the cache; later changed-file runs read it instead of
-transforming every test's import graph. Records are separate for the Bun and Node
-projects and live in each checkout's `node_modules/.vite`. A test without a record
-runs when at most 100 such tests are in scope, which records them. Beyond that, as in
-a new worktree, unrecorded tests are selected with Vitest's static import graph
-instead of running all of them. Keep Vite's local test cache between runs. Use
-`--experimental.recordDependencies=false` to use the static import graph for every test.
-
-This is local feedback, not a complete regression check. Vitest records loaded
-imports, including executed dynamic imports, but cannot infer arbitrary filesystem
-reads, subprocess inputs, or externalized module dependencies. Explicitly run tests
-for changed fixtures, generated files, CLI entry points, and other indirect inputs.
-After changing imports, run the affected suites before committing those changes so
-later edits use current records. Configuration, lockfile, patch, and workspace-package
-changes rerun every test within the requested scope. CI does not enable recording;
-the existing CI selection policy is unchanged. The static graph has the same blind spots
-and also misses dynamic imports with computed specifiers, so the first changed-file run
-in a new worktree is a little less complete than later ones.
-
-`pnpm build:packages` (which `pnpm test` runs first) skips compiling workspace packages
-when their sources, build script, and compiler are unchanged and `dist` is intact.
-
-Vitest also supports [`related --run <source-files>`](https://vitest.dev/guide/cli#vitest-related)
-and dependency-aware watch mode. `pnpm test --changed` uses Git to provide the source
-inputs automatically and exits after one run.
+Affected tests use Vitest's static import graph. Run suites explicitly for computed
+dynamic imports, fixture files, subprocess inputs, or other dependencies outside that
+graph. Local affected tests do not replace CI.
 
 To reduce main-process rebuild CPU and memory when you do not need its source maps,
 set `ORCA_DEV_MAIN_SOURCEMAPS=0` before `pnpm dev`. In Bash/zsh:
@@ -166,7 +179,7 @@ Avoid vague names like `test`, `misc`, or `changes`.
 
 ## Before Opening a PR
 
-Run the same checks that CI runs:
+Run the same checks that CI runs, after the `mobile/` install from [Local Setup](#local-setup):
 
 ```bash
 pnpm lint
@@ -174,6 +187,9 @@ pnpm typecheck
 pnpm test
 pnpm build
 ```
+
+`pnpm lint` runs independent checks in a bounded pool. Use
+`pnpm lint --maxWorkers=2 --timings` to limit concurrent checks and print their durations.
 
 For repeated local typechecks, use `pnpm tc` (or `pnpm tc:node`, `pnpm tc:web`,
 and `pnpm tc:cli`). On Apple Silicon macOS and x64/arm64 Linux, these use the pinned
@@ -253,8 +269,6 @@ All stable kinds (`patch`, `minor`, `major`) are computed off the latest _stable
 - **"A bad commit just landed on main, release the commit before it":** `kind=patch`, `ref=<good-sha>`. `main` is left alone; the tag points at the good SHA. Fix forward on `main` afterward.
 - **One-off RC for a feature branch:** `kind=rc`, `ref=<branch-or-sha>`. Produces an RC tag that does not touch `main`.
 - **Minor or major bump:** `kind=minor` or `kind=major`.
-
-The scheduled 2x/day RC cron in [`release-rc.yml`](../../actions/workflows/release-rc.yml) is independent and continues to run automatically from `main`.
 
 ## Release Channels
 

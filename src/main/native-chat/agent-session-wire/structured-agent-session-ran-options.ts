@@ -1,4 +1,4 @@
-// Fill unsaved choices from execution evidence, never host-filled settings/defaults.
+// Fill unsaved choices from execution evidence, never startup/config reports or host defaults.
 
 import type { AgentSessionOptionsResult } from '../../../shared/agent-session-wire'
 import type { AgentSessionExecutionOptions } from '../../../shared/agent-session-execution-options'
@@ -8,7 +8,6 @@ import type {
   StructuredAgentSessionProviderChild
 } from './structured-agent-session-host-types'
 import { structuredAgentSessionOptionOverridesRefusal } from './structured-agent-session-option-intent'
-import { savedAgentSessionCatalogModels } from './structured-agent-session-pick-reply'
 import { recordAgentSessionRanOptions } from '../../runtime/agent-session-record-options'
 
 type RanOptionsContext = {
@@ -17,7 +16,7 @@ type RanOptionsContext = {
   now: () => number
 }
 
-type RanOptions = Partial<Record<'model' | 'effort' | 'serviceTier' | 'fastMode', string>>
+type RanOptions = Partial<Record<'model' | 'effort', string>>
 
 export type StructuredAgentSessionHandedOptions = {
   message?: AgentSessionExecutionOptions
@@ -41,7 +40,7 @@ export function structuredAgentSessionChildRan(
   return childRuns.get(child)?.reported
 }
 
-/** The current child's descriptive report; never a saved or applied permission. */
+/** The current child's startup report or applied evidence; never saved intent or send authority. */
 export function structuredAgentSessionRuntimePermission(
   child: StructuredAgentSessionProviderChild | undefined
 ): { fence: number; mode: string | null } | null {
@@ -64,18 +63,12 @@ export function noteStructuredAgentSessionRuntimePermission(
 }
 
 function reportedRan(reported: AgentSessionOptionsResult['current']): RanOptions | null {
-  const { model, effort, serviceTier, fastMode, fastModeState } = reported
+  const { model, effort } = reported
   const filled = reported.defaulted ?? []
   if (!model || model === 'default' || filled.includes('model')) {
     return null
   }
-  return {
-    model,
-    ...(effort && !filled.includes('effort') ? { effort } : {}),
-    ...(serviceTier ? { serviceTier } : {}),
-    // Persist only confirmed Fast-on; off may mean this account cannot use Fast.
-    ...(fastMode && fastModeState === 'on' ? { fastMode: 'true' } : {})
-  }
+  return { model, ...(effort && !filled.includes('effort') ? { effort } : {}) }
 }
 
 /** Resolve delayed model evidence for an already handed-over turn. */
@@ -96,7 +89,7 @@ export async function noteStructuredAgentSessionReportedOptions(
     const owed = runs.owed
     await recordStructuredAgentSessionRanOptions(context, sessionId, fence, {
       ...owed,
-      ...(owed.executed ? { executed: { ...owed.executed, model: ran.model } } : {})
+      executed: { ...owed.executed, model: ran.model }
     })
   }
 }
@@ -150,20 +143,16 @@ export async function recordStructuredAgentSessionRanOptions(
   }
   const { message, executed } = handed
   const reported = childRuns.get(child)?.reported
+  // A report only completes an agent's own evidence of the dispatch, never stands in for it.
   const newerModel = checkpoint && reported !== checkpoint.reported ? reported?.model : undefined
-  const model = executed
-    ? (executed.model ?? message?.model ?? newerModel)
-    : (message?.model ?? reported?.model)
-  childRuns.set(child, { ...childRuns.get(child), owed: model ? undefined : handed })
+  const model = executed ? (executed.model ?? newerModel) : message?.model
+  childRuns.set(child, { ...childRuns.get(child), owed: executed && !model ? handed : undefined })
   if (!model) {
     return
   }
-  // Prefer dispatch proof; fallback tier/Fast must match the reported model because steers inherit turn choices.
-  const report: RanOptions = reported?.model === model ? reported : {}
+  // Prefer dispatch proof, else the message's effort; its tier or Fast may not have run.
   const proposed: Readonly<Record<string, string | undefined>> = executed ?? {
-    effort: message?.effort ?? report.effort,
-    serviceTier: report.serviceTier,
-    fastMode: report.fastMode
+    effort: message?.effort
   }
   const ran: Record<string, string> = {}
   for (const [key, value] of Object.entries({ ...proposed, model })) {
@@ -178,14 +167,13 @@ export async function recordStructuredAgentSessionRanOptions(
   if (!ran.model) {
     return
   }
-  const models = await savedAgentSessionCatalogModels(context.deps, record.provider, sessionId)
   await store
     .reviseSessionOptions(recordAgentSessionRanOptions, {
       sessionId,
       fence: child.fence,
       model,
       options: ran,
-      models,
+      models: undefined,
       now: context.now()
     })
     .catch((error: unknown) =>

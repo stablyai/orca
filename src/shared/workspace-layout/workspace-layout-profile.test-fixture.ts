@@ -8,7 +8,7 @@ import {
   toSshExecutionHostId,
   type ExecutionHostId
 } from '../execution-host'
-import { toRemoteRuntimePtyId } from '../remote-runtime-pty-id'
+import { toRemoteRuntimePtyId } from '../remote-runtime/remote-runtime-pty-id'
 import { toAppSshPtyId } from '../ssh-pty-id'
 import type { WorkspaceSessionState } from '../workspace-session-state-types'
 import {

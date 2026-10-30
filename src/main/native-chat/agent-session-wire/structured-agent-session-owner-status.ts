@@ -6,11 +6,11 @@ export function structuredAgentSessionOwnerStatus(
   deps: Pick<StructuredAgentSessionHostDeps, 'store'>,
   sessionId: string
 ): AgentSessionHandoffStatus {
-  const record = deps.store.getRecord(sessionId)
+  const record = deps.store.getConversation(sessionId)
   if (!record) {
     throw new Error('agent_session_identity_required')
   }
-  const { handoffStage: stage, handoffOperationId: operationId } = record.lease
+  const { handoffStage: stage, handoffOperationId: operationId } = record.ownerObservation
   return {
     owner: 'native',
     direction: stage ? 'to-native' : null,

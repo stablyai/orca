@@ -198,7 +198,13 @@ export const OPERATION_MUTATIONS = {
     file: 'mobile-pr-sidebar-state.ts',
     before: `      return {
         kind: 'ready',
-        data: { pr, details: null, checks: [], checksError: checksOutcome.error }
+        data: {
+          pr,
+          details: null,
+          checks: [],
+          checksError: checksOutcome.error,
+          pushTarget: link.pushTarget
+        }
       }`,
     after: '      return failureState(checksOutcome.error)'
   },

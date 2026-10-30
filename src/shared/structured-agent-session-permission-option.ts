@@ -1,4 +1,4 @@
-// Show host-stated permission mode; never infer what is running.
+// A live agent's report wins; otherwise the chat's saved mode, never a guessed one for own.
 
 import {
   AGENT_CHAT_PERMISSION_MODE_OPTION_ID,
@@ -6,7 +6,7 @@ import {
   type AgentChatPermissionMode
 } from './agent-chat-permission-mode'
 import type { StructuredAgentSessionOptionRecord } from './structured-agent-session-option-state'
-import type { SessionOptionDescriptor } from './native-chat-session-options'
+import type { SessionOptionDescriptor } from './native-chat/input/native-chat-session-options'
 
 /** English names and descriptions for surfaces without a translation catalog. */
 const MODE_COPY: Readonly<Record<AgentChatPermissionMode, { label: string; description: string }>> =
@@ -26,14 +26,14 @@ const MODE_COPY: Readonly<Record<AgentChatPermissionMode, { label: string; descr
     }
   }
 
-const CODEX_DESCRIPTIONS: Partial<Record<AgentChatPermissionMode, string>> = {
-  ask: 'Edits files and runs commands in this workspace; asks before anything else',
-  'full-access': 'Never asks; can edit any file and use the network'
-}
-
 // Claude's copy names the person's own settings; other agents decide what they already allow.
 const OTHER_AGENT_DESCRIPTIONS: Partial<Record<AgentChatPermissionMode, string>> = {
   ask: "Asks before edits or commands it isn't already allowed to make"
+}
+
+const CODEX_DESCRIPTIONS: Partial<Record<AgentChatPermissionMode, string>> = {
+  ...OTHER_AGENT_DESCRIPTIONS,
+  'full-access': 'Never asks; can edit any file and use the network'
 }
 
 const ANTIGRAVITY_DESCRIPTIONS: Partial<Record<AgentChatPermissionMode, string>> = {
@@ -62,10 +62,13 @@ export function structuredAgentSessionPermissionDescriptor(state: {
   if (!support || (!own && !support.modes.some((mode) => mode === state.permissionMode))) {
     return null
   }
+  // Without a report an explicit chat shows the saved mode its next turn applies; own has none.
   const current =
-    state.reportedPermissionMode === undefined && !own && state.permissionOwnSupported !== true
-      ? (state.permissionMode ?? undefined)
-      : (state.reportedPermissionMode ?? undefined)
+    state.reportedPermissionMode !== undefined
+      ? (state.reportedPermissionMode ?? undefined)
+      : own
+        ? undefined
+        : (state.permissionMode ?? undefined)
   const reported = support.modes.find((mode) => mode === current)
   const label = reported
     ? MODE_COPY[reported].label

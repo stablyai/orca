@@ -3,6 +3,7 @@ import { View, StyleSheet } from 'react-native'
 import { MobileSourceControlPanel } from '../source-control/MobileSourceControlPanel'
 import { MobileFileExplorerPanel } from '../files/MobileFileExplorerPanel'
 import { mobilePrSidebarStyles } from '../components/pr-sidebar/mobile-pr-sidebar-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useMobileDockResize } from './use-mobile-dock-resize'
 import type { ActivePanel } from './session-panel-host'
 
@@ -30,6 +31,7 @@ export function SessionDockColumn({
   onFileOpenStart,
   onOpenedFileDiff
 }: Props) {
+  useMobileColorScheme()
   const { dockWidth, panHandlers } = useMobileDockResize(availableWidth)
   return (
     <View style={[mobilePrSidebarStyles.dockColumn, { width: dockWidth }]}>

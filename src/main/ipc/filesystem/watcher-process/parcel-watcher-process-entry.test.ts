@@ -600,14 +600,8 @@ describe('parcel watcher process canary', () => {
     callback?.(null, [{ type: 'update', path: '/repo/after-overflow.txt' }])
     await vi.advanceTimersByTimeAsync(0)
 
-    expect(sendMock).toHaveBeenCalledWith(
-      {
-        op: 'watch-error',
-        id: 1,
-        message: 'Events were dropped by the FSEvents client. File system must be re-scanned.'
-      },
-      expect.any(Function)
-    )
+    expect(sendMock.mock.calls.some(([message]) => message.op === 'watch-error')).toBe(false)
+    expect(sendMock).toHaveBeenCalledWith({ op: 'overflow', id: 1 }, expect.any(Function))
     expect(sendMock).toHaveBeenCalledWith(
       {
         op: 'events',
@@ -616,6 +610,36 @@ describe('parcel watcher process canary', () => {
       },
       expect.any(Function)
     )
+  })
+
+  it('still invalidates a root deleted in the same batch as an FSEvents overflow', async () => {
+    let callback:
+      | ((err: Error | null, events: { type: string; path: string }[]) => void)
+      | undefined
+    subscribeMock
+      .mockResolvedValueOnce({ unsubscribe: vi.fn() })
+      .mockImplementationOnce(async (_dir, nextCallback) => {
+        callback = nextCallback
+        return { unsubscribe: vi.fn() }
+      })
+    const sendMock = vi.fn()
+    process.send = sendMock
+    await import('./parcel-watcher-process-entry')
+    await vi.advanceTimersByTimeAsync(0)
+    process.emit('message', { op: 'subscribe', id: 1, dir: '/repo', opts: {} }, undefined)
+    await vi.advanceTimersByTimeAsync(0)
+    sendMock.mockClear()
+
+    callback?.(new Error('Too many events. File system must be re-scanned.'), [
+      { type: 'delete', path: '/repo/nested' },
+      { type: 'delete', path: '/repo' }
+    ])
+    await vi.advanceTimersByTimeAsync(0)
+
+    expect(sendMock.mock.calls.map(([message]) => message)).toEqual([
+      { op: 'overflow', id: 1 },
+      { op: 'watch-error', id: 1, message: 'File watcher root was deleted' }
+    ])
   })
 
   it.each(['/repo', '/repo/Café'])(

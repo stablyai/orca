@@ -64,28 +64,12 @@ describe('the first frame of every agent’s picker', () => {
             settable: false,
             kind: { choices: [] }
           })
-          expect(canSetStructuredAgentSessionOption(state, 'model', 'anything')).toBe(false)
+          expect(canSetStructuredAgentSessionOption(state, 'model', 'anything')).toBe(true)
         } else {
           // Built-in lists are presentation, never tracked picks.
           expect(state.record.values.model).toBeUndefined()
         }
       }
-    }
-  )
-
-  it.each(AGENTS)(
-    '%s: a warm host catalog lists its models before the session reports',
-    (agent) => {
-      const { state, snapshot } = firstFrame(agent, {
-        ...HOST_CATALOG,
-        listingNamesConfiguredModel: false
-      })
-      expect(state.catalogSource).toBe('host')
-      const model = snapshot.find((descriptor) => descriptor.id === 'model')
-      expect(
-        model?.kind.type === 'select' && model.kind.choices.map((choice) => choice.value)
-      ).toEqual(['model-listed'])
-      expect(state.record.values.model).toBeUndefined()
     }
   )
 

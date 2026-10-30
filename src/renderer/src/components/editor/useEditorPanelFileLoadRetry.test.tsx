@@ -102,6 +102,11 @@ describe('useEditorPanelFileLoadRetry — owner-not-ready bounding (#6648)', () 
     expect(shouldRetryFileLoadError(WORKTREE_OWNER_NOT_READY_ERROR)).toBe(true)
     expect(shouldRetryFileLoadError(WORKTREE_OWNER_UNREACHABLE_ERROR)).toBe(false)
     expect(shouldRetryFileLoadError('Access denied: outside allowed directories')).toBe(false)
+    // A size refusal will not change on its own, whichever host or reader reported it.
+    expect(shouldRetryFileLoadError('file_too_large')).toBe(false)
+    expect(
+      shouldRetryFileLoadError('Remote file is too large to open in the editor (60000000 bytes)')
+    ).toBe(false)
   })
 
   it('does not spend retry budget when hiding cancels a pending retry', () => {

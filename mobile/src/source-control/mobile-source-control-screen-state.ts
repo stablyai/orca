@@ -1,3 +1,4 @@
+import { translate } from '../i18n/mobile-i18n'
 import {
   ArrowDown,
   ArrowDownUp,
@@ -24,6 +25,7 @@ import {
   canOpenMobileGitStatusEntry,
   isMobileGitDiscardableEntry,
   isMobileGitStageableEntry,
+  isMobileGitUnstageableEntry,
   type MobileGitFileStatus,
   type MobileGitStatusEntry
 } from './mobile-git-status'
@@ -38,6 +40,7 @@ export type LoadStatusOptions = {
   preserveReadyOnFailure?: boolean
   clearActionErrorOnSuccess?: boolean
   force?: boolean
+  rereadSettings?: boolean
 }
 
 export type StatusLoadInFlight = {
@@ -53,6 +56,7 @@ export type MobileGitStatusEntryView = MobileGitStatusEntry & {
   canDiscard: boolean
   canOpen: boolean
   canStage: boolean
+  canUnstage: boolean
   discardActionId: string
   stageActionId: string
   unstageActionId: string
@@ -67,6 +71,7 @@ export function buildMobileGitStatusEntryViews(
     canDiscard: isMobileGitDiscardableEntry(entry),
     canOpen: canOpenMobileGitStatusEntry(entry),
     canStage: isMobileGitStageableEntry(entry),
+    canUnstage: isMobileGitUnstageableEntry(entry),
     discardActionId: `discard:${entry.path}`,
     stageActionId: `stage:${entry.path}`,
     unstageActionId: `unstage:${entry.path}`
@@ -126,7 +131,7 @@ export function formatBranchLabel(branch: string | undefined, head: string | und
   if (branch?.startsWith('refs/heads/')) {
     return branch.slice('refs/heads/'.length)
   }
-  return branch || head?.slice(0, 7) || 'No branch'
+  return branch || head?.slice(0, 7) || translate('sourceControl.screenState.noBranch', 'No branch')
 }
 
 export function statusColor(status: MobileGitFileStatus): string {

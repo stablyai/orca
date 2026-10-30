@@ -1,33 +1,30 @@
-import type { AiVaultSession } from '../../../src/shared/ai-vault-types'
-import {
-  buildAiVaultResumeCommand,
-  buildAiVaultResumeShellCommand,
-  realHomeCodexResumeEnvDeletion
-} from '../../../src/shared/ai-vault-resume-command'
-import { RESUME_RPC_TIMEOUT_MS } from './ai-vault-resume-preparation'
-import { isResumableTuiAgent } from '../../../src/shared/agent-session-resume'
 import type {
   AgentProviderSessionMetadata,
   SleepingAgentLaunchConfig
 } from '../../../src/shared/agent-session-resume'
-import { getAiVaultAgentProviderSession } from '../../../src/shared/ai-vault-resume-startup'
-import { buildAgentResumeStartupPlan } from '../../../src/shared/tui-agent-startup'
 import {
-  resolveTuiAgentLaunchArgs,
-  resolveTuiAgentLaunchEnv
-} from '../../../src/shared/tui-agent-launch-defaults'
-import { normalizeAiVaultResumeFilePath } from '../../../src/shared/ai-vault-resume-path'
+  buildAiVaultLocalResumeStartup,
+  type AiVaultResumeCommandSession,
+  type AiVaultResumeLaunchSettings
+} from '../../../src/shared/ai-vault-resume-startup'
+import {
+  buildAiVaultRemoteResumeStartup,
+  resolveAiVaultResumeHostShell
+} from '../../../src/shared/ai-vault-resume-host-startup'
+import { isTuiAgent } from '../../../src/shared/tui-agent-config'
 import type { TuiAgent } from '../../../src/shared/tui-agent'
 import { parseWslUncPath } from '../../../src/shared/wsl-paths'
 import { resolveWindowsShellStartupFamily } from '../../../src/shared/windows-terminal-shell'
+import { RESUME_RPC_TIMEOUT_MS } from './ai-vault-resume-preparation'
 import type { RpcOperationSender } from '../transport/rpc-operation-sender'
 import { interpretOrThrowRefusalMessage } from '../transport/rpc-refusal-message'
 import { reviewTerminalCreateRun, reviewTerminalSendRun } from './mobile-review-terminal-operations'
 import type { MobileReviewTerminalTab } from './review-terminal-reply-schema'
-import type { MobileAiVaultResumeTargetStatus } from '../agent-history/agent-history-resume-target'
+import type { AiVaultResumeTargetStatus } from '../../../src/shared/ai-vault-resume-target'
 import { QODER_OWNED_TERMINAL_CREATE_CAPABILITY } from '../../../src/shared/qoder-terminal-create-capability'
 import { agentHistoryHostStatusSchema } from '../agent-history/agent-history-reply-schema'
 import { readMobileRuntimeHostPlatform } from '../transport/mobile-runtime-host-platform'
+import { translate } from '../i18n/mobile-i18n'
 
 export function readMobileAiVaultResumeHost(statusResult: unknown) {
   const status = agentHistoryHostStatusSchema.safeParse(statusResult)
@@ -35,39 +32,6 @@ export function readMobileAiVaultResumeHost(statusResult: unknown) {
     platform: readMobileRuntimeHostPlatform(statusResult),
     capabilities: status.success ? status.data.capabilities : undefined
   }
-}
-
-export function buildMobileAiVaultResumeCommand(args: {
-  session: Pick<AiVaultSession, 'agent' | 'sessionId' | 'cwd' | 'codexHome'> &
-    Partial<Pick<AiVaultSession, 'filePath'>>
-  hostPlatform: NodeJS.Platform
-  hostTerminalWindowsShell?: string | null
-  commandOverride?: string | null
-}): string {
-  // Why: this command is typed into the freshly created host terminal, so on
-  // Windows it must match the host's live shell instead of the phone platform.
-  const shell =
-    args.hostPlatform === 'win32'
-      ? resolveWindowsShellStartupFamily(args.hostTerminalWindowsShell)
-      : undefined
-  return buildAiVaultResumeCommand({
-    agent: args.session.agent,
-    sessionId: args.session.sessionId,
-    // Why: OMP resumes by absolute transcript path (custom OMP dir / WSL-store
-    // sessions miss on an id lookup), so mobile forwards it like desktop does.
-    resumeFilePath: normalizeAiVaultResumeFilePath(args.session.filePath, args.hostPlatform),
-    cwd: args.session.cwd,
-    platform: args.hostPlatform,
-    commandOverride: args.commandOverride,
-    codexHome: getMobileAiVaultResumeCodexHome(args.session.codexHome, args.hostPlatform),
-    shell
-  })
-}
-
-export type MobileAiVaultResumeSettings = {
-  agentCmdOverrides?: Partial<Record<TuiAgent, string | null>>
-  agentDefaultArgs?: Partial<Record<TuiAgent, string>>
-  agentDefaultEnv?: Partial<Record<TuiAgent, Record<string, string>>>
 }
 
 export type MobileAiVaultResumeLaunch = {
@@ -80,93 +44,34 @@ export type MobileAiVaultResumeLaunch = {
 }
 
 export function buildMobileAiVaultResumeLaunch(args: {
-  session: Pick<AiVaultSession, 'agent' | 'sessionId' | 'cwd' | 'codexHome'> &
-    Partial<Pick<AiVaultSession, 'filePath'>>
-  hostPlatform: NodeJS.Platform
+  session: AiVaultResumeCommandSession
+  workspacePlatform: NodeJS.Platform
   hostTerminalWindowsShell?: string | null
-  settings?: MobileAiVaultResumeSettings | null
+  settings?: AiVaultResumeLaunchSettings | null
 }): MobileAiVaultResumeLaunch {
-  const shell =
-    args.hostPlatform === 'win32'
-      ? resolveWindowsShellStartupFamily(args.hostTerminalWindowsShell)
-      : undefined
-  const codexHome = getMobileAiVaultResumeCodexHome(args.session.codexHome, args.hostPlatform)
-  const cmdOverrides = normalizeMobileAiVaultResumeCommandOverrides(
-    args.settings?.agentCmdOverrides
-  )
-  const commandOverride = cmdOverrides[args.session.agent] ?? null
-  const resumeFilePath = normalizeAiVaultResumeFilePath(args.session.filePath, args.hostPlatform)
-  if (isResumableTuiAgent(args.session.agent)) {
-    const startupPlan = buildAgentResumeStartupPlan({
-      agent: args.session.agent,
-      providerSession: { key: 'session_id', id: args.session.sessionId },
-      cmdOverrides,
-      platform: args.hostPlatform,
-      shell,
-      agentArgs: resolveTuiAgentLaunchArgs(args.session.agent, args.settings),
-      agentEnv: resolveTuiAgentLaunchEnv(args.session.agent, args.settings, args.hostPlatform),
-      ...(args.session.agent === 'omp' && resumeFilePath
-        ? { ompResumeFilePath: resumeFilePath }
-        : {})
-    })
-    if (startupPlan) {
-      const resumeProviderSession = getAiVaultAgentProviderSession({
-        ...args.session,
-        ...(resumeFilePath ? { filePath: resumeFilePath } : {})
-      })
-      return {
-        command:
-          args.session.agent === 'omp'
-            ? buildMobileAiVaultResumeCommand({
-                session: {
-                  ...args.session,
-                  ...(resumeFilePath ? { filePath: resumeFilePath } : {})
-                },
-                hostPlatform: args.hostPlatform,
-                hostTerminalWindowsShell: args.hostTerminalWindowsShell,
-                commandOverride: startupPlan.launchConfig.agentCommand
-              })
-            : buildAiVaultResumeShellCommand({
-                resumeCommand: startupPlan.launchCommand,
-                cwd: args.session.cwd,
-                platform: args.hostPlatform,
-                codexHome,
-                shell
-              }),
-        ...(startupPlan.env ? { env: startupPlan.env } : {}),
-        // Why: the resume command is typed into the created pane, so the bare
-        // real-home override must strip Codex homes at pane spawn like desktop.
-        ...realHomeCodexResumeEnvDeletion(args.session),
-        launchConfig: startupPlan.launchConfig,
-        launchAgent: startupPlan.agent,
-        ...(resumeProviderSession ? { resumeProviderSession } : {})
-      }
-    }
-  }
-  return {
-    command: buildMobileAiVaultResumeCommand({
+  const commandOverride = args.settings?.agentCmdOverrides?.[args.session.agent]
+  const startup =
+    buildAiVaultRemoteResumeStartup(args.session, commandOverride) ??
+    buildAiVaultLocalResumeStartup({
       session: args.session,
-      hostPlatform: args.hostPlatform,
-      hostTerminalWindowsShell: args.hostTerminalWindowsShell,
-      commandOverride
-    }),
-    ...realHomeCodexResumeEnvDeletion(args.session)
+      host: resolveAiVaultResumeHostShell({
+        session: args.session,
+        workspacePlatform: args.workspacePlatform,
+        // Why: the command is typed into the host's new pane, so quote for its live shell, not the phone's.
+        localLiveShell: () => resolveWindowsShellStartupFamily(args.hostTerminalWindowsShell)
+      }),
+      settings: args.settings,
+      commandOverride,
+      embedCwd: true
+    })
+  const { providerSession, ...launch } = startup
+  return {
+    ...launch,
+    ...(startup.launchConfig && isTuiAgent(args.session.agent)
+      ? { launchAgent: args.session.agent }
+      : {}),
+    ...(providerSession ? { resumeProviderSession: providerSession } : {})
   }
-}
-
-function normalizeMobileAiVaultResumeCommandOverrides(
-  overrides: Partial<Record<TuiAgent, string | null>> | null | undefined
-): Partial<Record<TuiAgent, string>> {
-  const normalized: Partial<Record<TuiAgent, string>> = {}
-  if (!overrides) {
-    return normalized
-  }
-  for (const [agent, command] of Object.entries(overrides) as [TuiAgent, string | null][]) {
-    if (typeof command === 'string' && command.trim()) {
-      normalized[agent] = command
-    }
-  }
-  return normalized
 }
 
 export async function resumeAiVaultSessionInTerminal(
@@ -208,7 +113,7 @@ export async function resumeAiVaultSessionInTerminal(
   let terminalTab
   terminalTab = interpretOrThrowRefusalMessage(
     () => reviewTerminalCreateRun.interpret(created),
-    'Failed to create terminal'
+    translate('session.aiVaultResumeLaunch.createFailed', 'Failed to create terminal')
   )
   if (launchAtCreate) {
     return terminalTab
@@ -226,10 +131,12 @@ export async function resumeAiVaultSessionInTerminal(
   let accepted
   accepted = interpretOrThrowRefusalMessage(
     () => reviewTerminalSendRun.interpret(sent),
-    'Failed to send resume command'
+    translate('session.aiVaultResumeLaunch.sendFailed', 'Failed to send resume command')
   )
   if (!accepted) {
-    throw new Error('Terminal input is locked')
+    throw new Error(
+      translate('session.aiVaultResumeLaunch.inputLocked', 'Terminal input is locked')
+    )
   }
   return terminalTab
 }
@@ -269,7 +176,7 @@ export function readMobileRuntimeTerminalWindowsShell(statusResult: unknown): st
 }
 
 export function resolveMobileAiVaultResumePlatform(
-  targetStatus: MobileAiVaultResumeTargetStatus,
+  targetStatus: AiVaultResumeTargetStatus,
   hostPlatform: NodeJS.Platform | null,
   workspacePath?: string | null,
   terminalPlatform?: NodeJS.Platform | null
@@ -292,14 +199,4 @@ export function resolveMobileAiVaultResumePlatform(
     return hostPlatform
   }
   return null
-}
-
-function getMobileAiVaultResumeCodexHome(
-  codexHome: string | null,
-  platform: NodeJS.Platform
-): string | null {
-  if (!codexHome || platform !== 'linux') {
-    return codexHome
-  }
-  return parseWslUncPath(codexHome)?.linuxPath ?? codexHome
 }

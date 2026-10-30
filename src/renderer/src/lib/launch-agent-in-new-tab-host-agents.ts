@@ -1,5 +1,6 @@
-import { useAppStore } from '@/store'
+import type { AgentLaunchRequestId } from '@/lib/agent-launch-request-id'
 import type { AgentStartupPlan } from '@/lib/tui-agent-startup'
+import { useAppStore } from '@/store'
 import {
   awaitStructuredRouteHostAnswer,
   planAgentSessionLaunch,
@@ -8,10 +9,44 @@ import {
 } from '@/lib/agent-session-launch-plan'
 import type { StructuredAgentLaunchSettlement } from '@/lib/structured-agent-launch-settlement'
 import type { StructuredPromptDeliveryResult } from '@/lib/structured-agent-session-launch-prompt'
-import type {
-  LaunchAgentInNewTabArgs,
-  LaunchAgentInNewTabResult
-} from '@/lib/launch-agent-in-new-tab'
+import type { LaunchAgentInNewTabArgs } from '@/lib/launch-agent-in-new-tab'
+import type { StructuredLaunchTerminal } from '@/lib/structured-agent-session-launch-admission'
+
+/** The user action this launch serves: minted where that action is handled, or carried by the
+ *  route the caller already planned for it. */
+export type LaunchAgentInNewTabRequest =
+  | { requestId: AgentLaunchRequestId; agentSessionLaunchPlan?: undefined }
+  | {
+      /** Keeps a preflighted route authoritative across workspace creation. */
+      agentSessionLaunchPlan: AgentSessionLaunchPlan
+      requestId?: undefined
+    }
+
+/** `host-published`: the surface opens once its host answers; `local-chat` opened before it did. */
+export type AgentLaunchSurface =
+  | { kind: 'local-terminal'; tabId: string }
+  | { kind: 'local-chat'; tabId: string }
+  | { kind: 'host-published' }
+
+export type LaunchAgentInNewTabResult = {
+  surface: AgentLaunchSurface
+  startupPlan?: AgentStartupPlan
+  pasteDraftAfterLaunch: boolean
+  promptDeliveryResult?: Promise<{ delivered: boolean; failureNotified: boolean }>
+  /** Structured route only: what the launch did once it settled. The call stays synchronous. */
+  terminalCompletion?: StructuredLaunchTerminal['completion']
+  structuredSettlement?: Promise<StructuredAgentLaunchSettlement>
+} | null
+
+export type AgentTabLaunchOutcome =
+  | LaunchAgentInNewTabResult
+  | { refused: StructuredPromptDeliveryResult }
+
+export function shouldQueueTerminalFocusAfterMenuClose(
+  result: NonNullable<LaunchAgentInNewTabResult>
+): boolean {
+  return result.surface.kind === 'host-published'
+}
 
 /** Bound host-fact waiting to the same deadline as local chat admission. */
 export const HOST_ANSWER_WAIT_MS = 3_000
@@ -46,8 +81,7 @@ export function routeNewTabLaunch(
 export function launchOnceHostAnswered(
   route: AwaitingHostAnswer,
   args: LaunchAgentInNewTabArgs,
-  startupPlan: AgentStartupPlan,
-  relaunch: (args: LaunchAgentInNewTabArgs) => LaunchAgentInNewTabResult
+  relaunch: (args: LaunchAgentInNewTabArgs) => AgentTabLaunchOutcome
 ): LaunchAgentInNewTabResult {
   if (args.beforeSurfaceOpen?.({ kind: 'host-published' }) === false) {
     args.focusIntent?.cancel()
@@ -63,7 +97,7 @@ export function launchOnceHostAnswered(
   )
   const structuredSettlement = opened.then(
     (result): Promise<StructuredAgentLaunchSettlement> | StructuredAgentLaunchSettlement =>
-      !result
+      !result || 'refused' in result
         ? { kind: 'cancelled', sessionId: null }
         : (result.structuredSettlement ?? { kind: 'terminal' }),
     (error: unknown): StructuredAgentLaunchSettlement => {
@@ -75,13 +109,17 @@ export function launchOnceHostAnswered(
     Boolean(args.prompt?.trim()) && (args.promptDelivery ?? 'auto-submit') !== 'draft'
   return {
     surface: { kind: 'host-published' },
-    startupPlan,
     pasteDraftAfterLaunch: false,
     structuredSettlement,
     ...(deliversPrompt
       ? {
           promptDeliveryResult: opened.then(
-            (result) => (result ? (result.promptDeliveryResult ?? DELIVERED) : NOT_DELIVERED),
+            (result) =>
+              result && 'refused' in result
+                ? result.refused
+                : result
+                  ? (result.promptDeliveryResult ?? DELIVERED)
+                  : NOT_DELIVERED,
             () => NOT_DELIVERED
           )
         }

@@ -2,7 +2,8 @@
 
 import '@testing-library/jest-dom/vitest'
 
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, screen } from '@testing-library/react'
+import { render } from './native-chat-tooltip-test-harness'
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 
 // Why: these fixtures have neither inline visual owners nor sender navigation.
@@ -24,7 +25,6 @@ afterEach(() => {
   expect(unusedChatLeaves.inlineVisual).not.toHaveBeenCalled()
   expect(unusedChatLeaves.openSender).not.toHaveBeenCalled()
 })
-import { TooltipProvider } from '@/components/ui/tooltip'
 import { NativeChatOrcaStopContext } from './native-chat-orca-stop-context'
 import { agentSessionFailureWords } from '../../../../shared/agent-session-failure-words'
 import type {
@@ -256,7 +256,7 @@ const usageLimitView = {
   }
 
   it.each(['claude', 'codex', 'grok'] as const)(
-    'keeps a collapsed %s quota failure and Continue visible',
+    'keeps a collapsed %s quota warning visible without a continuation action',
     (agent) => {
       continueUsageLimit.mockClear()
       const items: AgentJournalRenderItem[] = [
@@ -299,22 +299,20 @@ const usageLimitView = {
         }
       ]
       render(
-        <TooltipProvider>
-          <NativeChatOrcaStopContext.Provider value={usageLimitView}>
-            <NativeChatMessageList
-              session={{
-                ...session,
-                agent,
-                status: 'ready',
-                messages: projectStructuredAgentSessionMessages(items, [], [])
-              }}
-              journalItems={items}
-              settledTurns={selectStructuredAgentSettledTurns(items)}
-              isWorking={false}
-              expandSignal={false}
-            />
-          </NativeChatOrcaStopContext.Provider>
-        </TooltipProvider>
+        <NativeChatOrcaStopContext.Provider value={usageLimitView}>
+          <NativeChatMessageList
+            session={{
+              ...session,
+              agent,
+              status: 'ready',
+              messages: projectStructuredAgentSessionMessages(items, [], [])
+            }}
+            journalItems={items}
+            settledTurns={selectStructuredAgentSettledTurns(items)}
+            isWorking={false}
+            expandSignal={false}
+          />
+        </NativeChatOrcaStopContext.Provider>
       )
       expect(screen.getByRole('button', { name: 'Toggle turn details' })).toHaveAttribute(
         'aria-expanded',
@@ -323,10 +321,8 @@ const usageLimitView = {
       expect(screen.queryByText('Earlier work')).toBeNull()
       expect(screen.getByText(/hit its session limit/)).toBeVisible()
       expect(screen.getByText('Details')).toBeVisible()
-      const button = screen.getByRole('button', { name: 'Continue' })
-      expect(button).toBeVisible()
-      fireEvent.click(button)
-      expect(continueUsageLimit).toHaveBeenCalledOnce()
+      expect(screen.queryByRole('button', { name: 'Continue' })).toBeNull()
+      expect(screen.queryByText(/Send a message once it resets/)).toBeNull()
     }
   )
 

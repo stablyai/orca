@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { isLayoutOracleSource } from './pr-layout-oracle-route.mjs'
+import { SHELL_PREFIXES } from './pr-shell-contract-prefixes.mjs'
 import {
   isCloudTestRunnerInput,
   isWindowsProcessProbePath,
@@ -124,33 +125,6 @@ const XTERM_PREFIXES = [
   'config/scripts/regenerate-xterm-patches'
 ]
 
-const SHELL_PREFIXES = [
-  'src/main/daemon/repro-13767-shell-ready-marker-lost-to-exec',
-  'src/main/daemon/shell-ready',
-  'src/main/daemon/daemon-bash-shell-ready',
-  'src/main/daemon/daemon-shell-ready-wrapper',
-  'src/main/daemon/node-pty-fd-leak',
-  'src/main/providers/local-pty-shell-ready',
-  'src/main/providers/__tests__/shell-ready-framework-example',
-  'src/main/pty/',
-  'src/main/shell-templates',
-  'src/main/shell-startup-',
-  'src/main/shell-wrapper-',
-  'src/main/terminal-history-fish',
-  'src/main/zsh-',
-  'src/main/runtime/structured-session-cli-login-shell',
-  'src/main/runtime/structured-session-login-shell-test-harness',
-  'src/main/runtime/structured-session-child-env',
-  'src/renderer/src/components/terminal-pane/fish-color-scheme',
-  'src/shared/fish-',
-  'src/shared/pty-reply-echo-shapes',
-  'src/shared/startup-shell-portability',
-  'src/shared/posix-command-path-lookup',
-  'config/patches/node-pty@',
-  'config/scripts/ensure-native-runtime',
-  'config/scripts/node-pty-job-ownership'
-]
-
 const ORCAD_BROWSER_PREFIXES = [
   'src/main/orcad/external-chromium-',
   'src/main/orcad/orcad-browser-provider',
@@ -191,7 +165,7 @@ const MOBILE_WEB_APP_PREFIXES = [
   'mobile/pnpm-lock.yaml',
   'mobile/modules/orca-mobile-web-shell/',
   // Chat visuals on both mobile surfaces are built from it; their in-page links check runs here.
-  'src/shared/native-chat-visual-shell'
+  'src/shared/native-chat/native-chat-visual-shell'
 ]
 
 function changesMobileWebApp(changedFiles) {
@@ -273,7 +247,7 @@ const CROSS_VERSION_WIRE_PREFIXES = [
   'src/renderer/src/lib/agent-launch-routing.ts',
   'src/renderer/src/runtime/paired-host-client-capabilities.ts',
   'src/shared/electron-remote-runtime-client-capabilities.ts',
-  'src/shared/remote-runtime-client-capabilities.ts',
+  'src/shared/remote-runtime/remote-runtime-client-capabilities.ts',
   // An older app opening a newer orchestration database (orchestration-delivery-downgrade).
   'src/main/runtime/orchestration/db.ts',
   'src/main/runtime/orchestration/db/',
@@ -328,15 +302,15 @@ const NATIVE_CACHE_FILES = new Set([
   'config/scripts/electron-platform-path.mjs',
   'config/scripts/zip-extractor-command.mjs',
   'src/shared/zip-extractor-command.ts',
-  'config/scripts/shared-electron-dist-cache.mjs',
-  'config/scripts/shared-tree-publish.mjs',
   'config/scripts/space-sharing-copy.mjs',
-  'config/scripts/native-build-entry.cjs',
-  'config/scripts/native-build-entry-probe.cjs',
-  'config/scripts/shared-native-build.mjs'
+  'config/scripts/native-dependency-lock-digest.mjs',
+  'config/scripts/orcad-prebuild-node-gyp.mjs',
+  'config/scripts/msbuild-file-tracking.mjs'
 ])
 
 const NATIVE_CACHE_PREFIXES = [
+  'config/scripts/native-build-entry',
+  'config/scripts/shared-',
   'config/patches/node-pty@',
   'config/patches/@vscode__windows-process-tree',
   // The vendored addons' sources: build/ and bin/ beside them are ignored, so nothing else lands here.

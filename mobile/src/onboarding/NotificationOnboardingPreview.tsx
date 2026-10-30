@@ -1,13 +1,25 @@
 import { useEffect, useRef } from 'react'
-import { Animated, Easing, StyleSheet, Text, View } from 'react-native'
+import { Animated, Easing, Text, View } from 'react-native'
 import { OrcaLogo } from '../components/OrcaLogo'
+import type { Translate } from '../i18n/mobile-i18n'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useReducedMotionEnabled } from '../platform/use-reduced-motion'
 
-const SAMPLE_NOTIFICATIONS = [
-  { title: 'Codex finished', body: 'Tests are passing.' },
-  { title: 'Claude needs input', body: 'Waiting on you.' }
-] as const
+function sampleNotifications(t: Translate) {
+  return [
+    {
+      title: t('onboarding.notificationOnboardingPreview.codexFinished', 'Codex finished'),
+      body: t('onboarding.notificationOnboardingPreview.testsPassing', 'Tests are passing.')
+    },
+    {
+      title: t('onboarding.notificationOnboardingPreview.claudeNeedsInput', 'Claude needs input'),
+      body: t('onboarding.notificationOnboardingPreview.waitingOnYou', 'Waiting on you.')
+    }
+  ] as const
+}
 
 const ENTER_MS = 676
 const EXIT_MS = 416
@@ -22,6 +34,9 @@ type Props = {
 
 /** Decorative banners; the surrounding copy is the accessible explanation. */
 export function NotificationOnboardingPreview({ active }: Props) {
+  const t = useMobileTranslation()
+  useMobileColorScheme()
+  const notifications = sampleNotifications(t)
   const reduceMotion = useReducedMotionEnabled()
   const first = useRef(new Animated.Value(0)).current
   const second = useRef(new Animated.Value(0)).current
@@ -76,16 +91,22 @@ export function NotificationOnboardingPreview({ active }: Props) {
       style={styles.stack}
     >
       <Animated.View style={bannerMotion(first)}>
-        <SampleBanner notification={SAMPLE_NOTIFICATIONS[0]} />
+        <SampleBanner notification={notifications[0]} />
       </Animated.View>
       <Animated.View style={bannerMotion(second)}>
-        <SampleBanner notification={SAMPLE_NOTIFICATIONS[1]} />
+        <SampleBanner notification={notifications[1]} />
       </Animated.View>
     </View>
   )
 }
 
-function SampleBanner({ notification }: { notification: (typeof SAMPLE_NOTIFICATIONS)[number] }) {
+function SampleBanner({
+  notification
+}: {
+  notification: ReturnType<typeof sampleNotifications>[number]
+}) {
+  const t = useMobileTranslation()
+  useMobileColorScheme()
   return (
     <View style={styles.card}>
       <View style={styles.appIcon}>
@@ -94,7 +115,7 @@ function SampleBanner({ notification }: { notification: (typeof SAMPLE_NOTIFICAT
       <View style={styles.cardCopy}>
         <View style={styles.cardMeta}>
           <Text style={styles.appName}>Orca</Text>
-          <Text style={styles.now}>now</Text>
+          <Text style={styles.now}>{t('onboarding.notificationOnboardingPreview.now', 'now')}</Text>
         </View>
         <Text style={styles.cardTitle} numberOfLines={1}>
           {notification.title}
@@ -121,7 +142,7 @@ function bannerMotion(progress: Animated.Value) {
   }
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   stack: {
     width: '100%',
     maxWidth: 320,
@@ -176,4 +197,4 @@ const styles = StyleSheet.create({
     fontSize: typography.metaSize,
     marginTop: 1
   }
-})
+}))

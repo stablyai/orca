@@ -72,7 +72,8 @@ export async function startRuntimeLocalWorktreeTerminals(args: {
   warning?: string
   ports: Ports
 }): Promise<RuntimeLocalWorktreeTerminalStartupResult> {
-  const { request, repo, worktree, setup, defaultTabs, startup, ports } = args
+  const { request, repo, worktree, defaultTabs, startup, ports } = args
+  let { setup } = args
   const shouldActivate = request.activate === true || request.runHooks === true
   let warning = args.warning
   let didSpawnStartup = false
@@ -98,6 +99,7 @@ export async function startRuntimeLocalWorktreeTerminals(args: {
       ...(sequenced.startupEnv ? { env: { ...startup.env, ...sequenced.startupEnv } } : {})
     }
     wrappedSetupCommand = sequenced.setupCommand
+    setup = { ...setup, envVars: { ...setup.envVars, ...sequenced.setupEnv } }
   }
 
   // Main owns failed agent startup too, keeping its reason visible without a terminal service.
@@ -162,7 +164,12 @@ export async function startRuntimeLocalWorktreeTerminals(args: {
           Boolean(setup || defaultTabs))
       if (runtimeWillProvision) {
         const provisioned = await ports.provision({
-          ...provisionArgs(args, startupTerminalHandle, startupPaneHeld, wrappedSetupCommand),
+          ...provisionArgs(
+            { ...args, setup },
+            startupTerminalHandle,
+            startupPaneHeld,
+            wrappedSetupCommand
+          ),
           ...(provisionInBackground ? { surfaceOwner: false as const } : {})
         })
         didSpawnSetup = provisioned.setupSpawned
@@ -186,7 +193,12 @@ export async function startRuntimeLocalWorktreeTerminals(args: {
     }
   } else if (ports.canSpawn && (setup || defaultTabs || didSpawnStartup)) {
     const provisioning = ports.provision({
-      ...provisionArgs(args, startupTerminalHandle, startupPaneHeld, wrappedSetupCommand),
+      ...provisionArgs(
+        { ...args, setup },
+        startupTerminalHandle,
+        startupPaneHeld,
+        wrappedSetupCommand
+      ),
       surfaceOwner: false
     })
     if (request.awaitTerminalProvisioning) {

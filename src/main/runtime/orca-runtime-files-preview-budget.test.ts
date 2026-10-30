@@ -2,13 +2,14 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { resolveAuthorizedPathMock } from './orca-runtime-files-mock-registry'
+import { resolveAuthorizedPathMock, statMock } from './orca-runtime-files-mock-registry'
 import {
   createRuntimeFileCommands,
   useRuntimeFileCommandsLifecycle
 } from './orca-runtime-files-test-harness'
 import { RUNTIME_PREVIEWABLE_BINARY_MAX_BYTES } from './files/file-preview-budget'
 import { REMOTE_RPC_MAX_CONTENT_BYTES } from '../../shared/remote-rpc-content-budget'
+import { SshHostNotServedError } from '../providers/ssh-host-not-served-error'
 
 vi.mock('fs', async () => (await import('./orca-runtime-files-mock-registry')).fsModuleMock())
 vi.mock('fs/promises', async () =>
@@ -98,6 +99,49 @@ describe('RuntimeFileCommands', () => {
         isImage: true,
         mimeType: 'image/png'
       })
+    })
+
+    // Phones read images a chat names by host path; only image files on this machine qualify.
+    it('reads a chat image outside every project root but never another file type', async () => {
+      const dir = await previewFixture()
+      await writeFile(join(dir, 'notes.txt'), 'secret')
+      const { commands } = createRuntimeFileCommands()
+      statMock.mockResolvedValue({ isFile: () => true })
+      resolveAuthorizedPathMock.mockRejectedValue(new Error('Access denied'))
+
+      await expect(
+        commands.readChatImagePreview(
+          'id:wt-1',
+          join(dir, 'logo.png'),
+          REMOTE_RPC_MAX_CONTENT_BYTES
+        )
+      ).resolves.toEqual({
+        content: Buffer.from('aaaaaaaa').toString('base64'),
+        isBinary: true,
+        isImage: true,
+        mimeType: 'image/png'
+      })
+      await expect(
+        commands.readChatImagePreview('id:wt-1', join(dir, 'notes.txt'))
+      ).rejects.toThrow('only show local image files')
+      resolveAuthorizedPathMock.mockImplementation(async (p: string) => p)
+      await expect(
+        commands.readChatImagePreview('id:wt-1', join(dir, 'notes.txt'))
+      ).rejects.toThrow('not_an_image')
+    })
+
+    it('refuses chat images for an SSH workspace, whose paths name the remote machine', async () => {
+      const dir = await previewFixture()
+      const { commands } = createRuntimeFileCommands({
+        resolveRuntimeFileTarget: vi.fn(async () => ({
+          worktree: { id: 'wt-1', repoId: 'repo-1', path: '/remote/repo' },
+          executionHostId: 'ssh:ssh-1'
+        }))
+      })
+
+      await expect(commands.readChatImagePreview('id:wt-1', join(dir, 'logo.png'))).rejects.toThrow(
+        SshHostNotServedError
+      )
     })
   })
 })

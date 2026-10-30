@@ -151,17 +151,18 @@ describe('a chat at rest keeps its worktree activatable', () => {
   it('after the idle sweep stopped its agent and closed the conversation', async () => {
     clock += STRUCTURED_AGENT_SESSION_IDLE_MS + 1
     await vi.waitFor(() => expect(host.hasSession(SESSION)).toBe(false))
-    expect(closeSession).toHaveBeenCalledWith(SESSION)
+    expect(closeSession).toHaveBeenCalledWith(SESSION, undefined)
 
     expect(host.handoffStatus(SESSION)).toMatchObject({ owner: 'native' })
     expect(await activate()).toBe('structured')
   })
 
-  it('after an app restart restored it for reading', async () => {
+  it('after an app restart opens it for reading', async () => {
     await host.flushAllStreamedEvents()
     store = await openTestAgentSessionRecordStore(root)
     openHost()
-    await host.restoreReadableSessions()
+    await host.seedSessionTabs([SESSION])
+    await host.revealSession(SESSION)
     expect(host.hasSession(SESSION)).toBe(true)
     expect(store.getRecord(SESSION)?.lease).toMatchObject({
       claimStatus: 'released',

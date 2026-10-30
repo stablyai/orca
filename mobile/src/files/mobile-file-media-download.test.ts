@@ -159,7 +159,7 @@ describe('mobile media download', () => {
       }
     ])
     await expect(r.run()).rejects.toThrow('SSH provider unavailable')
-    expect(r.sink.append).toHaveBeenCalledExactlyOnceWith(Buffer.from(bytes))
+    expect(r.sink.append).toHaveBeenCalledExactlyOnceWith(new Uint8Array(bytes))
     expect(r.sink.finish).not.toHaveBeenCalled()
     expect(r.sink.dispose).toHaveBeenCalledOnce()
   })

@@ -2,8 +2,6 @@ import { describe, expect, it } from 'vitest'
 import { RpcClientStreamRegistry } from '../../transport/rpc-client-stream-registry'
 import { ScriptedRpcTransport } from './scripted-rpc-transport'
 import { vitestRecordingScheduler } from './vitest-recording-scheduler'
-import { driveReplyMatrix, replyMatrixGoldenId, replyMatrixSites } from './reply-matrix'
-import { replyMatrixNormalResult } from './reply-matrix-normal-result'
 import { runRecording } from './run-recording'
 import type { RpcClient } from '../../transport/rpc-client'
 import type { RecordingScenario } from './recording-scenario'
@@ -228,56 +226,6 @@ describe('subscription recordings', () => {
     expect(await drive('sync')).toEqual([])
     // Due-timer cleanup must match synchronous cleanup rather than appear as an uncancelled stream.
     expect(await drive('timer')).toEqual([])
-  })
-
-  it('drives the reply matrix over frames, and matrixes a family that only subscribes', () => {
-    const changed = { ok: true, streaming: true, result: { type: 'worktreesChanged' } }
-    const base: RecordingScenario = {
-      id: 'stream',
-      operation: 'op',
-      family: 'op',
-      sites: [],
-      schedules: [],
-      steps: [
-        { action: 'mount', id: 'mount' },
-        { frame: `${CLIENT_EVENTS}#1`, params: null, reply: readyFrame('sub-1') },
-        { checkpoint: 'ready' },
-        { frame: `${CLIENT_EVENTS}#1`, params: null, reply: changed },
-        { checkpoint: 'changed' }
-      ]
-    }
-    expect(replyMatrixSites(base)).toEqual([`${CLIENT_EVENTS}#1@1`, `${CLIENT_EVENTS}#1@2`])
-    expect(replyMatrixGoldenId('op', `${CLIENT_EVENTS}#1@2`)).toBe(
-      'matrix-op-runtime.clientevents.subscribe-1-2'
-    )
-    expect(replyMatrixNormalResult('op', [base], `${CLIENT_EVENTS}#1@2`)).toEqual(changed.result)
-    const variants = driveReplyMatrix(base, `${CLIENT_EVENTS}#1@1`, readyFrame('sub-1').result)
-    const partitions = variants.map((variant) => variant.id.replace('stream.', ''))
-    // Frames have no promise, so the two request-rejection partitions do not apply.
-    expect(partitions).toEqual([
-      'normal',
-      'result-absent',
-      'result-null',
-      'inner-ok-missing',
-      'inner-false-string-error',
-      'inner-false-object-error',
-      'outer-refused',
-      'outer-refused-no-message',
-      'method-not-found'
-    ])
-    const replies = new Map(variants.map((variant) => [variant.id, variant.steps[1]]))
-    // Keep streaming:true on success controls so they route to the same stream.
-    expect(replies.get('stream.normal')).toEqual(base.steps[1])
-    expect(replies.get('stream.result-absent')).toEqual({
-      frame: `${CLIENT_EVENTS}#1`,
-      params: null,
-      reply: { ok: true, streaming: true }
-    })
-    expect(replies.get('stream.outer-refused')).toMatchObject({
-      reply: { ok: false, error: { code: 'refused' } }
-    })
-    // Frames stay required after divergence because the registry still routes them to the opening id.
-    expect(variants[0]!.steps[3]).toEqual(base.steps[3])
   })
 })
 

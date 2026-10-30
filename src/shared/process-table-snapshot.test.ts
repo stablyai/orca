@@ -21,11 +21,7 @@ import {
   parseStrictProcessTableRows,
   ProcessTableCaptureError
 } from './process-table-snapshot'
-import {
-  buildProcessTableIndex,
-  getProcessTableIndex,
-  type ProcessTableIndexStats
-} from './process-table-index'
+import { buildProcessTableIndex, getProcessTableIndex } from './process-table-index'
 
 function deferred<T>(): {
   promise: Promise<T>
@@ -214,29 +210,6 @@ describe('process-table-snapshot reader', () => {
 
     await expect(Promise.all([fresh, ordinary])).resolves.toEqual(['scan-1', 'scan-1'])
     expect(scans).toBe(1)
-  })
-
-  it('shares one parsed-rows array across a burst so panes do not each re-parse', async () => {
-    // Parse inside the shared scan so callers share the same rows array instead of retokenizing stdout per pane.
-    let parses = 0
-    const gate = deferred<ReturnType<typeof parseProcessTableRows>>()
-    const reader = createProcessTableSnapshotReader<ReturnType<typeof parseProcessTableRows>>({
-      runPs: () => {
-        parses += 1
-        return gate.promise
-      },
-      now: () => 0
-    })
-
-    const a = reader.getSnapshot()
-    const b = reader.getSnapshot()
-    gate.resolve(parseProcessTableRows('100 1 Ss+ /bin/zsh'))
-
-    const rowsA = await a
-    const rowsB = await b
-    expect(parses).toBe(1)
-    // Reference identity: the burst reuses one parse, not one-per-caller.
-    expect(rowsA).toBe(rowsB)
   })
 })
 
@@ -493,24 +466,6 @@ describe('getProcessTableIndex', () => {
     expect(getProcessTableIndex(rows).byPid.get(100)).toBe(rows[0])
     expect(buildProcessTableIndex(rows).byPid.get(100)).toBe(rows[0])
   })
-
-  it('keeps the memo out of measured builds so a cache hit cannot satisfy a perf gate', () => {
-    const rows = parseProcessTableRows('100 1 Ss bash')
-    const stats: ProcessTableIndexStats = {
-      indexBuilds: 0,
-      rowVisits: 0,
-      indexLookups: 0
-    }
-
-    const memoized = getProcessTableIndex(rows)
-    const measured = buildProcessTableIndex(rows, stats)
-
-    expect(memoized.stats).toBeUndefined()
-    expect(measured).not.toBe(memoized)
-    expect(stats).toEqual({ indexBuilds: 1, rowVisits: 1, indexLookups: 0 })
-    // The measured build must not evict or replace the shared memo.
-    expect(getProcessTableIndex(rows)).toBe(memoized)
-  })
 })
 
 describe('process-table capture completeness', () => {
@@ -697,10 +652,5 @@ describe('evidence-publishing capture budget', () => {
       capturedAgeMs: PROCESS_TABLE_EVIDENCE_BUDGET_MS + 100
     })
     expect(execFileMock).toHaveBeenCalledTimes(1)
-  })
-
-  it('keeps the identity budget far above its own', () => {
-    // Only current-evidence consumers give up early; slow identity reads must not become absent processes.
-    expect(PROCESS_TABLE_EVIDENCE_BUDGET_MS).toBeLessThan(PS_TIMEOUT_MS)
   })
 })

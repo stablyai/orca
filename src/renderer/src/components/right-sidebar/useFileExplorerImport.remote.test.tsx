@@ -137,4 +137,17 @@ describe('file explorer OS file drops on remote workspaces', () => {
     expect(mocks.importPaths).not.toHaveBeenCalled()
     expect(clearDrag).toHaveBeenCalled()
   })
+
+  it('says why a remote import failed', async () => {
+    const reason = "'shot.png' is 3 GB, over the 2 GB per-file remote import limit"
+    mocks.importPaths.mockResolvedValueOnce({
+      results: [{ sourcePath: '/Users/me/Desktop/shot.png', status: 'failed', reason }]
+    })
+    const view = render(<Explorer worktreeId="wt-runtime" root={RUNTIME_ROOT} />)
+    dropFile(view.getByTestId('src'))
+    await waitFor(() => expect(mocks.toastError).toHaveBeenCalledTimes(1))
+    expect(mocks.toastError).toHaveBeenCalledWith(expect.any(String), {
+      description: 'Too large to upload to this host.'
+    })
+  })
 })

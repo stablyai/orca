@@ -3,6 +3,7 @@ import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import type { WorkspacePortScanResult } from '../../../shared/workspace-ports'
 import {
   openHttpLink,
+  openOwnedHttpLink,
   registerHttpLinkStoreAccessor,
   registerWorkspaceHttpLinkBrowserOpener,
   resolveLocalhostHttpLinkDisplayUrl
@@ -40,6 +41,10 @@ type LinkTestSettings = {
 const noSettings = (): LinkTestSettings | undefined => undefined
 const terminalView = (): 'terminal' | 'activity' => 'terminal'
 
+const repos: { id: string; displayName: string; repoIcon?: null; badgeColor?: string }[] = []
+
+const projects: { id: string; displayName: string; repoIcon?: null; badgeColor?: string }[] = []
+
 const storeState = {
   settings: noSettings(),
   setActiveWorktree: setActiveWorktreeMock,
@@ -47,8 +52,8 @@ const storeState = {
   setActiveView: setActiveViewMock,
   ...noActiveWorkspace(),
   createBrowserTab: createBrowserTabMock,
-  repos: [] as { id: string; displayName: string; repoIcon?: null; badgeColor?: string }[],
-  projects: [] as { id: string; displayName: string; repoIcon?: null; badgeColor?: string }[],
+  repos,
+  projects,
   worktreesByRepo: {} as Record<
     string,
     { id: string; projectId?: string; repoId?: string; displayName?: string }[]
@@ -87,6 +92,37 @@ afterEach(() => {
 })
 
 describe('openHttpLink', () => {
+  it.each([
+    { kind: 'local' },
+    { kind: 'runtime', runtimeEnvironmentId: 'env-1' },
+    { kind: 'ssh', connectionId: 'ssh-1' }
+  ] as const)('opens required owner %j without reading Active Server', (sourceOwner) => {
+    storeState.settings = {
+      openLinksInApp: true,
+      localhostWorktreeLabelsEnabled: true,
+      get activeRuntimeEnvironmentId(): never {
+        throw new Error('An owned link must not read Active Server')
+      }
+    }
+    openOwnedHttpLink('http://localhost:5180/', {
+      worktreeId: 'wt-1',
+      allowRemoteInApp: true,
+      sourceOwner
+    })
+    expect(openRuntimeBrowserTabMock).toHaveBeenCalledExactlyOnceWith({
+      workspaceId: 'wt-1',
+      url: 'http://localhost:5180/',
+      intent: { kind: 'url' },
+      linkContext: expect.objectContaining({ linkIntent: null, canReveal: expect.any(Function) }),
+      ...(sourceOwner.kind === 'runtime'
+        ? { expectedRuntimeEnvironmentId: 'env-1' }
+        : sourceOwner.kind === 'ssh'
+          ? { expectedSshConnectionId: 'ssh-1' }
+          : {})
+    })
+    expect(openUrlMock).not.toHaveBeenCalled()
+    expect(registerLocalhostLabelMock).not.toHaveBeenCalled()
+  })
   it('keeps the selected host of the active workspace a link opens in', () => {
     registerWorkspaceHttpLinkBrowserOpener(null)
     storeState.settings = { openLinksInApp: true }

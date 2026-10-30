@@ -17,6 +17,8 @@ import type { RuntimeNavigationTarget } from '../../shared/runtime-navigation'
 import type { RuntimeRepoSelector } from './runtime-repo-selector'
 
 export type RuntimeManagedWorktreeCreateArgs = {
+  /** A create someone asked for (UI, CLI, agent or paired client): its terminals may start a stopped WSL distro. */
+  wslUserAct?: true
   repoSelector: RuntimeRepoSelector
   name: string
   nameWasGenerated?: boolean
@@ -24,6 +26,7 @@ export type RuntimeManagedWorktreeCreateArgs = {
   baseBranch?: string
   compareBaseRef?: string
   branchNameOverride?: string
+  branchIntent?: CreateWorktreeArgs['branchIntent']
   linkedIssue?: number | null
   linkedPR?: number | null
   linkedLinearIssue?: string
