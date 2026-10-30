@@ -1,21 +1,12 @@
-/**
- * The desktop app takes orcad's instance lock on its userData profile, so `orca serve` on
- * orcad and the desktop refuse each other instead of both writing one profile.
- *
- * Electron's single-instance lock only fences other Electron launches; orcad is a plain Node
- * process that cannot see it. Sharing orcad's lock file gives both hosts one owner record.
- */
-import {
-  acquireOrcadInstanceLock,
-  OrcadInstanceLockError,
-  type OrcadInstanceLock
-} from '../orcad/orcad-instance-lock'
+/** Share orcad's profile lock to prevent concurrent desktop/serve writers; Electron's own instance lock cannot fence plain Node. */
+import { acquireOrcadInstanceLock, type OrcadInstanceLock } from '../orcad/orcad-instance-lock'
+import { OrcadInstanceLockError } from '../orcad/orcad-data-root-privacy'
 import { writeStartupDiagnosticLine, type StartupDiagnosticSink } from './startup-diagnostics'
 
 export type DesktopProfileLockResult =
   | { state: 'acquired'; lock: OrcadInstanceLock }
   | { state: 'held'; message: string }
-  /** The lock could not be taken for another reason; the desktop starts as it did before it. */
+  /** Unrelated lock failures preserve legacy desktop startup. */
   | { state: 'unavailable' }
 
 export function acquireDesktopProfileInstanceLock(
@@ -29,11 +20,16 @@ export function acquireDesktopProfileInstanceLock(
     process.once('exit', () => lock.release())
     return { state: 'acquired', lock }
   } catch (error) {
-    if (error instanceof OrcadInstanceLockError && error.code === 'orcad_instance_lock_held') {
+    // A holder this machine cannot judge may still be running: refusing keeps one writer.
+    if (
+      error instanceof OrcadInstanceLockError &&
+      (error.code === 'orcad_instance_lock_held' ||
+        error.code === 'orcad_instance_lock_holder_unverifiable')
+    ) {
       writeStartupDiagnosticLine(`[single-instance] ${error.message}`, write)
       return { state: 'held', message: error.message }
     }
-    // Why not refuse: only a proven live holder may stop a desktop that never took this lock before.
+    // Only live or unverifiable holders block startup; unrelated acquisition errors preserve legacy behavior.
     console.warn('[single-instance] Could not take the shared profile lock:', error)
     return { state: 'unavailable' }
   }

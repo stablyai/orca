@@ -4,30 +4,40 @@ import { WILL_QUIT_TEARDOWN_DEADLINE_MS } from '../quit-teardown-deadline'
 
 const settled = () => vi.fn(async () => {})
 const idle = () => vi.fn()
+const stopAgentHookServer = idle()
+const stopStructuredAgentSessionRuntime = settled()
+const beginSshShutdown = settled()
+const killAllPty = idle()
+/** Final-save calls seen by the first microtask after the SSH shutdown began. */
+let flushesByNextMicrotask = -1
 
 // Every teardown member settles except the profile store, so only the writer can hold quit.
 const dependencies: Record<string, Record<string, unknown>> = {
   '../ipc/filesystem-watcher': { closeAllWatchers: settled() },
   '../ipc/worktree-base-directory-watcher': { disposeWorktreeBaseDirectoryWatchers: settled() },
   '../ipc/folder-repo-git-upgrade': { stopFolderRepoGitUpgradeWatch: idle() },
-  '../ipc/pty': { killAllPty: idle() },
-  '../daemon/daemon-init': { disconnectDaemon: settled(), shutdownDaemon: settled() },
-  '../ipc/ssh-shutdown-drain': { beginSshShutdown: settled() },
-  '../agent-hooks/server': { agentHookServer: { stop: idle() } },
+  '../ipc/pty/kill-all': { killAllPty },
+  '../daemon/daemon-provider-state': { disconnectDaemon: settled(), shutdownDaemon: settled() },
+  '../ipc/ssh/ssh-shutdown-drain': { beginSshShutdown },
+  './main-process-connector-startup': { desktopConnectorCloud: () => null },
+  '../agent-hooks/server': { agentHookServer: { stop: stopAgentHookServer } },
   '../agent-hooks/wsl-hook-relay-manager': { wslHookRelayManager: { disposeAll: idle() } },
   '../agent-hooks/managed-agent-hook-controls': {
     removeManagedAgentHooksAsync: vi.fn(async () => [])
   },
-  '../runtime/structured-agent-session-runtime': { stopStructuredAgentSessionRuntime: settled() },
-  '../runtime/structured-agent-session-runtime-teardown': {
+  '../runtime/structured-agent-session-runtime': { stopStructuredAgentSessionRuntime },
+  '../runtime/agent-session/structured-agent-session-runtime-teardown': {
     setStructuredAgentSessionTeardownTrigger: idle()
   },
-  '../runtime/orca-runtime-files': { awaitRuntimeFileWatcherUnsubscribes: settled() },
+  '../runtime/files/watch/file-watcher-leases': { awaitRuntimeFileWatcherUnsubscribes: settled() },
   '../runtime/runtime-metadata': { clearRuntimeMetadataIfOwned: idle() },
   '../browser/paired-runtime-browser-client-host-runtime': {
     shutdownPairedRuntimeBrowserClientHosts: settled()
   },
+  '../ipc/desktop-browser-bridge-wiring': { disposeDesktopBrowserBridge: idle() },
+  '../orca-profiles/profile-cloud-session-owner': { flushUnsavedCloudSessions: idle() },
   '../browser/browser-manager': { browserManager: { setBrowserGuestStateChangedListener: idle() } },
+  '../browser/browser-session-registry': { browserSessionRegistry: {} },
   '../browser/local-ssh-browser-route': { closeAllLocalSshBrowserRoutes: settled() },
   '../codex/codex-state-db-backfill-recovery': { stopCodexStateDbBackfillRecoveries: settled() },
   '../codex/codex-account-session-bridge': { stopCodexAccountSessionBridges: idle() },
@@ -57,7 +67,13 @@ afterEach(() => {
   vi.resetModules()
 })
 
-async function startQuit(flushFinalOrThrowAsync: () => Promise<void>) {
+async function startQuit(
+  flushFinalOrThrowAsync: () => Promise<void>,
+  services: Record<string, unknown> = {}
+) {
+  beginSshShutdown.mockClear()
+  killAllPty.mockClear()
+  flushesByNextMicrotask = -1
   vi.resetModules()
   vi.useFakeTimers()
   const app = Object.assign(new EventEmitter(), { quit: vi.fn() })
@@ -66,8 +82,19 @@ async function startQuit(flushFinalOrThrowAsync: () => Promise<void>) {
     flushFinalOrThrowAsync: vi.fn(flushFinalOrThrowAsync),
     freezeWritesAsync: settled()
   }
+  beginSshShutdown.mockImplementation(async () => {
+    void Promise.resolve().then(() => {
+      flushesByNextMicrotask = store.flushFinalOrThrowAsync.mock.calls.length
+    })
+  })
   const profileStateAdmission: typeof admission | undefined = admission
-  const state = { isQuitting: false, watcherShutdownDone: true, store, profileStateAdmission }
+  const state = {
+    isQuitting: false,
+    watcherShutdownDone: true,
+    store,
+    profileStateAdmission,
+    ...services
+  }
   vi.doMock('electron', () => ({ app }))
   vi.doMock('./main-process-state', () => ({ mainProcessState: state }))
   for (const [moduleName, exports] of Object.entries(dependencies)) {
@@ -105,3 +132,91 @@ it('releases admission only after the final flush and freeze complete', async ()
   expect(admission.release).toHaveBeenCalledOnce()
   expect(app.quit).toHaveBeenCalledOnce()
 })
+
+it('writes a pane grid still inside its write burst before the final flush', async () => {
+  const paneGrids = Promise.withResolvers<void>()
+  const { store } = await startQuit(async () => {}, {
+    runtime: {
+      getOffscreenBrowserBackend: () => null,
+      getAgentBrowserBridge: () => null,
+      getEmulatorBridge: () => null,
+      disposeSkillUploadSessions: settled(),
+      getRuntimeId: () => undefined,
+      closeNotificationDismissals: settled(),
+      flushPaneGrids: () => paneGrids.promise
+    }
+  })
+  await vi.advanceTimersByTimeAsync(0)
+  // Before the SSH shutdown too: nothing is awaited between it and the final save.
+  expect(beginSshShutdown).not.toHaveBeenCalled()
+  expect(store.flushFinalOrThrowAsync).not.toHaveBeenCalled()
+  paneGrids.resolve()
+  await vi.advanceTimersByTimeAsync(0)
+  expect(beginSshShutdown).toHaveBeenCalledOnce()
+  expect(store.flushFinalOrThrowAsync).toHaveBeenCalledOnce()
+  expect(beginSshShutdown.mock.invocationCallOrder[0]).toBeLessThan(
+    store.flushFinalOrThrowAsync.mock.invocationCallOrder[0]!
+  )
+  // Nothing awaited between them: the save started in the same turn as the SSH shutdown.
+  expect(flushesByNextMicrotask).toBe(1)
+})
+
+it('starts the SSH shutdown and the final save at once when no pane grid waits', async () => {
+  const { store } = await startQuit(async () => {})
+  expect(beginSshShutdown).toHaveBeenCalledOnce()
+  expect(store.flushFinalOrThrowAsync).toHaveBeenCalledOnce()
+  const order = [beginSshShutdown, killAllPty, store.flushFinalOrThrowAsync].map(
+    (step) => step.mock.invocationCallOrder[0]!
+  )
+  expect(order).toEqual([...order].sort((a, b) => a - b))
+  await vi.advanceTimersByTimeAsync(0)
+  expect(flushesByNextMicrotask).toBe(1)
+})
+
+// Chat teardown reads hook status after server stop; retain it for background-only session resume offers.
+it('stops the hook server without clearing the status store the chat teardown reads', async () => {
+  await startQuit(async () => {})
+  expect(stopAgentHookServer).toHaveBeenCalledWith({ keepStatus: true })
+})
+
+it.each([
+  ['chat teardown', 'RPC stop'],
+  ['RPC stop', 'chat teardown']
+] as const)(
+  'closes notification dismissals only once %s and then %s settle',
+  async (first, second) => {
+    const sessionTeardown = Promise.withResolvers<void>()
+    const rpcStop = Promise.withResolvers<void>()
+    const release = { 'chat teardown': sessionTeardown.resolve, 'RPC stop': rpcStop.resolve }
+    stopStructuredAgentSessionRuntime.mockClear()
+    stopStructuredAgentSessionRuntime.mockImplementationOnce(() => sessionTeardown.promise)
+    const closeNotificationDismissals = vi.fn(() => new Promise<void>(() => {}))
+    const { app } = await startQuit(async () => {}, {
+      runtime: {
+        getOffscreenBrowserBackend: () => null,
+        getAgentBrowserBridge: () => null,
+        getEmulatorBridge: () => null,
+        disposeSkillUploadSessions: settled(),
+        getRuntimeId: () => undefined,
+        closeNotificationDismissals,
+        flushPaneGrids: () => null
+      },
+      runtimeRpc: { setMobileRelayPairingProvider: idle(), stop: vi.fn(() => rpcStop.promise) }
+    })
+    expect(stopStructuredAgentSessionRuntime).toHaveBeenCalledOnce()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(closeNotificationDismissals).not.toHaveBeenCalled()
+    release[first]()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(closeNotificationDismissals).not.toHaveBeenCalled()
+    release[second]()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(closeNotificationDismissals).toHaveBeenCalledOnce()
+    expect(app.quit).not.toHaveBeenCalled()
+    await vi.advanceTimersByTimeAsync(WILL_QUIT_TEARDOWN_DEADLINE_MS)
+    expect(console.warn).toHaveBeenCalledWith('[shutdown] Quit teardown deadline reached', {
+      pendingTeardowns: ['notification-dismissals']
+    })
+    expect(app.quit).toHaveBeenCalledOnce()
+  }
+)

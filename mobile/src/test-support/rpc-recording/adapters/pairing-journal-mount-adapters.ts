@@ -11,11 +11,7 @@ import {
   pairingRelay
 } from '../relay-pairing-fixtures'
 
-/**
- * The two senders that run before a host profile exists: first pairing, and the startup recovery
- * that reconciles a journal a crash or a lost reply left behind. Both race or retry candidates and
- * advance only on an authoritative install status, which is what the recordings have to show.
- */
+// Pairing/recovery may advance only on authoritative install status; record candidate races and lost-reply recovery before profiles exist.
 export function pairingJournalMountAdapters(
   modules: ReturnType<typeof operationModuleLoader>
 ): Record<string, MountAdapter> {
@@ -46,6 +42,7 @@ export function pairingJournalMountAdapters(
               journal = null
               effect('journal-cleared', 'recovery')
             },
+            claimJournal: async () => () => {},
             readCredentialBundle: async () => null,
             writeCredentialBundle: async (written: { current: { version: number } }) => {
               effect('bundle-written', { version: written.current.version })
@@ -108,6 +105,8 @@ export function pairingJournalMountAdapters(
               clearJournal: async () => {
                 effect('journal-cleared', JOURNAL_ID)
               },
+              releaseJournal: () => {},
+              recoverPendingJournal: async () => {},
               writeCredentialBundle: async (written: { current: { version: number } }) => {
                 effect('bundle-written', { version: written.current.version })
               },

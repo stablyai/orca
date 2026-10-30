@@ -95,8 +95,7 @@ async function runSelectedRuntimeAddJourney(
 
   const offer = await createRuntimeDesktopPairingOffer(orcaPage)
   const client = await launchPairedElectronClient(offer, testInfo, runtimeName)
-  // Why: the client renders the workbench under test, and a contained render
-  // crash only names its component stack on the renderer console.
+  // Forward renderer console because contained render failures expose their component stacks only there.
   forwardRendererConsole(client.page, testInfo)
   const serverUserDataDir = await electronApp.evaluate(({ app }) => app.getPath('userData'))
   const clientUserDataDir = await client.app.evaluate(({ app }) => app.getPath('userData'))
@@ -105,8 +104,7 @@ async function runSelectedRuntimeAddJourney(
 
   try {
     const measurements: Record<string, number> = {}
-    // Why: the client is the Playwright-driven surface in both topologies; the hidden-window
-    // parity under test is the HUB's.
+    // The client drives both topologies; hidden-window parity is measured on the hub.
     expect(await revealPairedClientWindow(client)).toMatchObject({
       isVisible: true,
       wasVisible: false
@@ -563,8 +561,10 @@ async function runSelectedRuntimeAddJourney(
       if (!store) {
         throw new Error('Renderer store unavailable')
       }
-      await store.getState().fetchProjectGroups()
-      await store.getState().fetchFolderWorkspaces()
+      await store.getState().fetchProjectGroups({ runtimeEnvironmentId: null, throwOnError: true })
+      await store
+        .getState()
+        .fetchFolderWorkspaces({ runtimeEnvironmentId: null, throwOnError: true })
       return {
         folderWorkspaces: store.getState().folderWorkspaces,
         projectGroups: store.getState().projectGroups

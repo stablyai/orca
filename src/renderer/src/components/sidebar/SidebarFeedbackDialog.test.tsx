@@ -56,6 +56,8 @@ vi.mock('@/lib/feedback-image-attachments', async (importOriginal) => {
   }
 })
 
+vi.mock('@/store', async () => import('./sidebar-feedback-draft.test-fixture'))
+
 import { SidebarFeedbackDialog } from './SidebarFeedbackDialog'
 import { useAppStore } from '@/store'
 
@@ -91,8 +93,7 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup()
-  // Why: the draft outlives the dialog on purpose now, so it also outlives a
-  // test unless each one starts from an empty store.
+  // The draft intentionally outlives dialogs; clear the store between tests.
   useAppStore.getState().clearFeedbackDraft()
 })
 
@@ -319,7 +320,7 @@ describe('SidebarFeedbackDialog image submission', () => {
     expect((send as HTMLButtonElement).disabled).toBe(true)
     fireEvent.click(send)
     expect(mocks.submit).not.toHaveBeenCalled()
-    // Why: a shrink can run for a while, and no thumbnail yet reads as a dropped file.
+    // Slow shrinking needs progress before a thumbnail appears.
     expect(await screen.findByText('Preparing attachments…')).not.toBeNull()
 
     await act(async () => {
@@ -374,7 +375,6 @@ describe('SidebarFeedbackDialog image submission', () => {
 
     expect(screen.queryByText('Preparing attachments…')).toBeNull()
     await screen.findByRole('button', { name: 'Remove small.png' })
-    // Past the show delay: a completed read must not leave a stale hint.
     await act(async () => {
       await new Promise((resolve) => setTimeout(resolve, 300))
     })
@@ -460,8 +460,7 @@ describe('SidebarFeedbackDialog image submission', () => {
     expect(onOpenChange).toHaveBeenCalledWith(false)
   })
 
-  // Why: 413 is the only shed-the-attachment status that means "too big". A
-  // corporate filter's 403 sheds the same attachment for a different reason.
+  // Only 413 establishes oversized uploads; corporate-filter 403 can also shed images.
   it('does not blame the size when the host rejected the images for another reason', async () => {
     mocks.readFeedbackImageFiles.mockResolvedValue({
       images: [
@@ -536,7 +535,7 @@ describe('SidebarFeedbackDialog image submission', () => {
     })
     render(<SidebarFeedbackDialog open onOpenChange={vi.fn()} />)
     const textarea = screen.getByPlaceholderText('What could we improve?')
-    // Why: PNGs over budget are shrunk; GIFs are not, so this one stays unattachable.
+    // Oversized PNGs shrink; GIFs remain unattachable.
     const file = new File(['image'], 'huge.gif', { type: 'image/gif' })
     Object.defineProperty(file, 'size', { value: 4 * 1024 * 1024 + 1 })
     const paste = new Event('paste', { bubbles: true, cancelable: true })
@@ -550,9 +549,7 @@ describe('SidebarFeedbackDialog image submission', () => {
     await waitFor(() => expect(mocks.readFeedbackImageFiles).toHaveBeenCalledWith([file], 0, 0))
   })
 
-  // Why: the byte budget, not the count, is what binds after one full-screen
-  // screenshot. A gate that only knows the count prevents default on a paste
-  // readFeedbackImageFiles is about to reject, eating the co-pasted text.
+  // Byte capacity can bind before count; rejected image pastes must retain co-pasted text.
   it('does not consume text when the attachment budget is already spent', async () => {
     mocks.readFeedbackImageFiles.mockResolvedValue({
       images: [
@@ -648,8 +645,7 @@ describe('SidebarFeedbackDialog image submission', () => {
     expect(textarea.selectionStart).toBe(14)
   })
 
-  // Why: a screenshot still shrinking will commit at most half the budget; holding
-  // its raw size against the gate would let a second paste spill into the textarea.
+  // Reserve the possible shrunk size so another accepted image paste cannot spill into the textarea.
   it('consumes a second oversized paste while the first is still shrinking', async () => {
     const shrunk = (name: string) => ({
       images: [
@@ -786,9 +782,7 @@ describe('SidebarFeedbackDialog draft survival', () => {
     return screen.getByPlaceholderText<HTMLTextAreaElement>('What could we improve?')
   }
 
-  // Why: orca#22466's third complaint. The dialog renders inside the sidebar
-  // subtree, so collapsing the sidebar unmounts it; with the draft in component
-  // state that silently discarded a report the user had not managed to send.
+  // Collapsing the sidebar unmounts this dialog; reports must survive in the store.
   it('keeps the typed report when the sidebar unmounts and remounts the dialog', () => {
     const first = render(<SidebarFeedbackDialog open onOpenChange={vi.fn()} />)
     fireEvent.change(textarea(), { target: { value: REPORT } })
@@ -821,9 +815,7 @@ describe('SidebarFeedbackDialog draft survival', () => {
     await waitFor(() => expect(useAppStore.getState().feedbackDraft.feedback).toBe(''))
   })
 
-  // Why: collapsing the sidebar while the request is in flight unmounts the
-  // dialog. The delivery still lands, so the draft has to go with it or the
-  // sent report comes back on the next open and invites a duplicate send.
+  // Submission can finish after sidebar unmount; clear delivered drafts to avoid duplicate sends.
   it('clears the draft when the sidebar unmounts before the submit resolves', async () => {
     let resolveSubmit: ((result: { ok: true }) => void) | undefined
     mocks.submit.mockReturnValue(
@@ -844,8 +836,7 @@ describe('SidebarFeedbackDialog draft survival', () => {
     expect(useAppStore.getState().feedbackDraft.feedback).toBe('')
   })
 
-  // Why: the unmounted handler's mountedRef stays false forever, so an
-  // unconditional clear would wipe whatever the user typed after reopening.
+  // Stale unmounted handlers must preserve different text typed after reopening.
   it('keeps a report typed after remount while the previous submit is still in flight', async () => {
     const SECOND_REPORT = 'Different bug, typed after reopening the dialog'
     let resolveSubmit: ((result: { ok: true }) => void) | undefined

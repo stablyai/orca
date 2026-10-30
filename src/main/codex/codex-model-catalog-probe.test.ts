@@ -14,10 +14,9 @@ const MODEL_ROW = {
 }
 
 describe('codex model catalog probe', () => {
-  it.each([`"${process.execPath}"`, ''])(
+  it.each([`"${process.execPath}"`, '', `"${process.execPath}" run -- codex`])(
     'lists with the session executable for Command %j',
     async (command) => {
-      // The env a user's shell/config resolves for sessions, PATH included.
       const resolveEnvironment = async (): Promise<NodeJS.ProcessEnv> => ({
         PATH: '/resolved/bin',
         HOME: '/homes/user',
@@ -47,23 +46,25 @@ describe('codex model catalog probe', () => {
           })
         }
       })
-      const success = await probe('/homes/account-a')
+      const success = await probe({ variable: 'CODEX_HOME', path: '/homes/account-a' })
       expect(success.origin).toBe('probe')
       expect(success.models.map((model) => model.id)).toEqual(['gpt-live'])
-      // The session launch resolves the exact same invocation for the same deps.
       const sessionInvocation = await resolveCodexStructuredInvocation({
         resolveEnvironment,
         resolveCommand
       })
       expect(invocations).toHaveLength(1)
       expect(invocations[0]!.cliPath).toBe(sessionInvocation.command)
+      expect(invocations[0]!.args.slice(0, sessionInvocation.prefixArgs.length)).toEqual(
+        sessionInvocation.prefixArgs
+      )
       expect(invocations[0]!.env).toEqual({
         PATH: '/resolved/bin',
         HOME: '/homes/user',
         OPENAI_BASE_URL: 'https://gateway.example',
         CODEX_HOME: '/homes/account-a'
       })
-      // A short-lived probe must not start plugin marketplace clones that outlive its teardown.
+      // Marketplace clones may outlive short-lived probe teardown.
       expect(invocations[0]!.args.join(' ')).toContain('features.plugins=false')
     }
   )
@@ -80,11 +81,12 @@ describe('codex model catalog probe', () => {
         process.stdout.write(JSON.stringify({ id: message.id, result }) + '\n')
       })
     `
+    const configReadTimeouts: (number | null | undefined)[] = []
+    const configReadFailures: unknown[] = []
     const probe = createCodexModelCatalogProbe({
       resolveEnvironment: async () => ({ PATH: '/bin' }),
-      resolveCommand: () => '/bin/codex',
-      // Real transport against a fake server; a session deadline shorter than the
-      // production one keeps the test fast while still outliving config/read's bound.
+      resolveCommand: () => ({ command: '/bin/codex', prefixArgs: [] }),
+      // Keep the real request timeout while checking the production budget below.
       runSession: (invocation, body) =>
         runCodexAppServerSession(
           {
@@ -94,10 +96,33 @@ describe('codex model catalog probe', () => {
             args: ['-e', server],
             timeoutMs: 6_000
           },
-          body
+          (rpc) =>
+            body({
+              ...rpc,
+              request: async (method, params, options) => {
+                if (method !== 'config/read') {
+                  return rpc.request(method, params, options)
+                }
+                configReadTimeouts.push(options?.timeoutMs)
+                try {
+                  return await rpc.request(method, params, { ...options, timeoutMs: 20 })
+                } catch (error) {
+                  configReadFailures.push(error)
+                  throw error
+                }
+              }
+            })
         )
     })
-    const success = await probe('/homes/a')
+    const success = await probe({ variable: 'CODEX_HOME', path: '/homes/a' })
+    expect(success.complete).toBe(false)
+    expect(configReadTimeouts).toEqual([3_000])
+    expect(configReadFailures).toEqual([
+      expect.objectContaining({
+        name: 'CodexAppServerTimeoutError',
+        message: 'codex app-server config/read exceeded 20ms'
+      })
+    ])
     expect(success.models.map((model) => ({ id: model.id, isDefault: model.isDefault }))).toEqual([
       { id: 'gpt-live', isDefault: true }
     ])
@@ -106,14 +131,16 @@ describe('codex model catalog probe', () => {
   it('refuses an empty listing rather than reporting it as a catalog', async () => {
     const probe = createCodexModelCatalogProbe({
       resolveEnvironment: async () => ({ PATH: '/bin' }),
-      resolveCommand: () => '/bin/codex',
+      resolveCommand: () => ({ command: '/bin/codex', prefixArgs: [] }),
       runSession: async (_invocation, body) =>
         body({ request: async () => ({ data: [], nextCursor: null }), notify: () => {} })
     })
-    await expect(probe('/homes/a')).rejects.toThrow(/listed no models/)
+    await expect(probe({ variable: 'CODEX_HOME', path: '/homes/a' })).rejects.toThrow(
+      /listed no models/
+    )
   })
 
-  it.each(['npx codex', 'codex --profile work', '/missing/codex', './codex'])(
+  it.each(['launcher $SECRET codex', 'FOO=1 codex', '/missing/codex', './codex'])(
     'lists nothing, and never probes the stock CLI, for Command %s',
     async (command) => {
       const runSession = vi.fn()
@@ -127,7 +154,9 @@ describe('codex model catalog probe', () => {
           ),
         runSession
       })
-      await expect(probe('/homes/a')).rejects.toMatchObject({ reason: 'agentCommandNotRunnable' })
+      await expect(probe({ variable: 'CODEX_HOME', path: '/homes/a' })).rejects.toMatchObject({
+        reason: 'agentCommandNotRunnable'
+      })
       expect(runSession).not.toHaveBeenCalled()
     }
   )
@@ -137,8 +166,8 @@ describe('Codex catalog availability', () => {
   function withAccount(account: unknown) {
     return createCodexModelCatalogProbe({
       resolveEnvironment: async () => ({}),
-      resolveCommand: () => 'codex',
-      // A stand-in system home, so no test reads the real ~/.codex/auth.json.
+      resolveCommand: () => ({ command: 'codex', prefixArgs: [] }),
+      // Isolate account classification from the real ~/.codex/auth.json.
       resolveAccountKind: (home) => (home === '/homes/system' ? 'system' : 'managed'),
       runSession: async (_invocation, body) =>
         body({
@@ -168,7 +197,9 @@ describe('Codex catalog availability', () => {
     new Error('unsupported method'),
     new Error('timeout')
   ])('unknown or authenticated account does not block: %j', async (account) => {
-    expect((await withAccount(account)('/homes/a')).models).toHaveLength(1)
+    expect(
+      (await withAccount(account)({ variable: 'CODEX_HOME', path: '/homes/a' })).models
+    ).toHaveLength(1)
   })
   it.each([
     ['/homes/a', 'managed'],
@@ -176,8 +207,12 @@ describe('Codex catalog availability', () => {
   ] as const)(
     'reports explicit signed-out account for %s beside its list',
     async (home, account) => {
-      // The verdict can be wrong while a chat works, so the picker keeps the list it got.
-      expect(await withAccount({ account: null, requiresOpenaiAuth: true })(home)).toMatchObject({
+      expect(
+        await withAccount({ account: null, requiresOpenaiAuth: true })({
+          variable: 'CODEX_HOME',
+          path: home
+        })
+      ).toMatchObject({
         models: [{ id: 'gpt-live' }],
         unavailable: { reason: 'notSignedIn', account }
       })
@@ -186,7 +221,7 @@ describe('Codex catalog availability', () => {
   it('omits unknown account context from a positive signed-out fact', async () => {
     const probe = createCodexModelCatalogProbe({
       resolveEnvironment: async () => ({}),
-      resolveCommand: () => 'codex',
+      resolveCommand: () => ({ command: 'codex', prefixArgs: [] }),
       runSession: async (_invocation, body) =>
         body({
           request: async (method) =>
@@ -196,14 +231,16 @@ describe('Codex catalog availability', () => {
           notify: () => {}
         })
     })
-    expect((await probe('/custom/home')).unavailable).toEqual({ reason: 'notSignedIn' })
+    expect((await probe({ variable: 'CODEX_HOME', path: '/custom/home' })).unavailable).toEqual({
+      reason: 'notSignedIn'
+    })
   })
   it('lists models while the account check is still answering', async () => {
     let answerAccount!: (value: unknown) => void
     const methods: string[] = []
     const probe = createCodexModelCatalogProbe({
       resolveEnvironment: async () => ({}),
-      resolveCommand: () => 'codex',
+      resolveCommand: () => ({ command: 'codex', prefixArgs: [] }),
       runSession: async (_invocation, body) =>
         body({
           request: async (method) => {
@@ -216,7 +253,7 @@ describe('Codex catalog availability', () => {
           notify: () => {}
         })
     })
-    const pending = probe('/homes/a')
+    const pending = probe({ variable: 'CODEX_HOME', path: '/homes/a' })
     await vi.waitFor(() => expect(methods).toContain('model/list'))
     expect(methods).toContain('account/read')
     answerAccount({ account: { type: 'chatgpt' }, requiresOpenaiAuth: true })
@@ -225,7 +262,7 @@ describe('Codex catalog availability', () => {
   it('a signed-out verdict wins over a model listing that failed', async () => {
     const probe = createCodexModelCatalogProbe({
       resolveEnvironment: async () => ({}),
-      resolveCommand: () => 'codex',
+      resolveCommand: () => ({ command: 'codex', prefixArgs: [] }),
       runSession: async (_invocation, body) =>
         body({
           request: async (method) => {
@@ -237,19 +274,21 @@ describe('Codex catalog availability', () => {
           notify: () => {}
         })
     })
-    await expect(probe('/homes/a')).rejects.toMatchObject({
+    await expect(probe({ variable: 'CODEX_HOME', path: '/homes/a' })).rejects.toMatchObject({
       unavailable: { reason: 'notSignedIn' }
     })
   })
   it.each(['ENOENT', 'EACCES'])('classifies only missing executable errors: %s', async (code) => {
     const probe = createCodexModelCatalogProbe({
       resolveEnvironment: async () => ({}),
-      resolveCommand: () => 'codex',
+      resolveCommand: () => ({ command: 'codex', prefixArgs: [] }),
       runSession: async () => {
         throw Object.assign(new Error('spawn failed'), { code, path: 'codex' })
       }
     })
-    const failure = await probe('/homes/a').catch((error: unknown) => error)
+    const failure = await probe({ variable: 'CODEX_HOME', path: '/homes/a' }).catch(
+      (error: unknown) => error
+    )
     expect(failure instanceof AgentModelCatalogUnavailableError).toBe(code === 'ENOENT')
   })
 })
@@ -259,7 +298,7 @@ describe('Codex catalog probe reads the home a launch would', () => {
     const order: string[] = []
     const probe = createCodexModelCatalogProbe({
       resolveEnvironment: async () => ({}),
-      resolveCommand: () => 'codex',
+      resolveCommand: () => ({ command: 'codex', prefixArgs: [] }),
       prepareHome: (prepared) => order.push(`prepare ${prepared}`),
       runSession: async (_invocation, body) => {
         order.push('spawn')
@@ -272,7 +311,35 @@ describe('Codex catalog probe reads the home a launch would', () => {
         })
       }
     })
-    expect((await probe('/homes/mirror')).models).toHaveLength(1)
+    expect((await probe({ variable: 'CODEX_HOME', path: '/homes/mirror' })).models).toHaveLength(1)
     expect(order).toEqual(['prepare /homes/mirror', 'spawn'])
   })
+})
+
+it('keeps unknown or unsupported configuration incomplete and observes genuine empty config', async () => {
+  for (const config of [undefined, [], { model: 42 }, {}]) {
+    const probe = createCodexModelCatalogProbe({
+      resolveEnvironment: async () => ({ PATH: '/bin' }),
+      resolveCommand: () => ({ command: '/bin/codex', prefixArgs: [] }),
+      runSession: async (_invocation, body) =>
+        body({
+          notify: () => {},
+          request: async (method) => {
+            if (method === 'model/list') {
+              return { data: [MODEL_ROW], nextCursor: null }
+            }
+            if (method === 'config/read') {
+              if (config === undefined) {
+                throw new Error('method not found')
+              }
+              return { config }
+            }
+            return {}
+          }
+        })
+    })
+    expect((await probe({ variable: 'CODEX_HOME', path: '/account' })).complete).toBe(
+      config !== undefined && !Array.isArray(config) && !('model' in config)
+    )
+  }
 })

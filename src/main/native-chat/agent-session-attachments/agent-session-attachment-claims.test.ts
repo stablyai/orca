@@ -21,6 +21,7 @@ import {
   agentSessionAttachmentStoreRoot
 } from './agent-session-attachment-references'
 import { claudeProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
+import { agentSessionSendBodyFingerprint } from '../../../shared/structured-agent-session-send-mutation'
 
 const UPLOAD_A = '0b6f8a52-4a3e-4c4e-9a59-1d5d1f2b8c01'
 const UPLOAD_B = '7c2d9e10-3f4a-4b5c-8d6e-2f1a0b9c8d02'
@@ -50,7 +51,6 @@ describe('agentSessionAttachmentReferences', () => {
       `@/home/other/agent-session-attachments/${UPLOAD_A}/a.txt`,
       `~/Library/Application Support/Orca/agent-session-attachments/${UPLOAD_A}/x.png`,
       `see agent-session-attachments/${UPLOAD_A}`,
-      // This host's root as the tail of a longer path is still another path.
       `/mnt${root}/${UPLOAD_A}/a.txt`
     ]
     for (const text of mentions) {
@@ -209,15 +209,13 @@ describe('claims written with the message', () => {
     ).toEqual([UPLOAD_A, UPLOAD_B].sort())
   })
 
-  it("refuses a client's draft naming a gone upload, and the /clear carry claims for its new chat", async () => {
+  it("refuses a gone upload and keeps a waiting card's attachment claim across clear", async () => {
     const journal = await open()
     const missing = message({ type: 'text', text: `@${join(storeRoot, UPLOAD_B, 'a.txt')}` })
     const refused = await journal.queuedMessages
       .insert({
         messageId: 'draft-0',
         body: missing,
-        fingerprint: 'fp',
-        hostInstance: 'p',
         requireAttachments: true
       })
       .catch((caught: unknown) => caught)
@@ -229,22 +227,16 @@ describe('claims written with the message', () => {
     await journal.queuedMessages.insert({
       messageId: 'draft-1',
       body,
-      fingerprint: 'fp',
-      hostInstance: 'p',
       requireAttachments: true
     })
-    const replacement = await open('session-d')
-    await replacement.queuedMessages.insert({
-      messageId: 'draft-1',
-      body,
-      fingerprint: 'fp-d',
-      hostInstance: 'p',
-      carriedFrom: IDENTITY.sessionId
-    })
-    expect(claims()).toEqual([
-      { upload_id: UPLOAD_A, session_id: IDENTITY.sessionId },
-      { upload_id: UPLOAD_A, session_id: 'session-d' }
-    ])
+    await journal.context.clear(
+      { operationId: 'clear', afterFence: 0, clearedAt: 1000 },
+      { write: () => {}, committed: () => {} }
+    )
+    await journals.closeAll()
+    const reopened = await open()
+    expect(reopened.queuedMessages.get('draft-1')).toMatchObject({ body, state: 'waiting' })
+    expect(claims()).toEqual([{ upload_id: UPLOAD_A, session_id: IDENTITY.sessionId }])
   })
 
   it("does not refuse a draft's conversion: the draft claimed its uploads when it was written", async () => {
@@ -254,14 +246,18 @@ describe('claims written with the message', () => {
     await journal.queuedMessages.insert({
       messageId: 'draft-1',
       body,
-      fingerprint: 'fp',
-      hostInstance: 'p',
       requireAttachments: true
     })
     await rm(join(storeRoot, UPLOAD_A), { recursive: true })
     await journal.appendSubmission(
-      { clientMessageId: 'handoff-1', payloadFingerprint: 'fp', body, fence: 0, origin: 'client' },
-      { messageId: 'draft-1', expect: 'waiting', settledByOp: null }
+      {
+        clientMessageId: 'handoff-1',
+        payloadFingerprint: agentSessionSendBodyFingerprint(IDENTITY.sessionId, body),
+        body,
+        fence: 0,
+        origin: 'client'
+      },
+      { messageId: 'draft-1', expect: 'waiting' }
     )
     expect(journal.submission('handoff-1')).toBeTruthy()
   })

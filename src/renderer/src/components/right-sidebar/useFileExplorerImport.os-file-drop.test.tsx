@@ -11,7 +11,7 @@ const mocks = vi.hoisted(() => ({
   captureGuard: vi.fn(),
   prepare: vi.fn()
 }))
-vi.mock('@/runtime/runtime-file-client', () => ({
+vi.mock('@/runtime/runtime-file-import-client', () => ({
   importExternalPathsToRuntime: mocks.importPaths
 }))
 vi.mock('./file-explorer-operation-owner', () => ({
@@ -156,7 +156,6 @@ describe('file explorer OS file drops', () => {
       worktreePath: '/repo'
     })
     expect(mocks.importPaths.mock.calls[0][2]).toBe('/repo/app/src')
-    // The explorer now shows workspace A, so the B result is not selected there.
     await waitFor(() => expect(clearDrag).toHaveBeenCalled())
     expect(setSelected).not.toHaveBeenCalled()
   })

@@ -1,10 +1,15 @@
 import { contextBridge, ipcRenderer } from 'electron'
+import { HIDDEN_WINDOW_FRAME_PUMP_STOP_CHANNEL } from '../shared/hidden-window-frame-pump'
+import { installHiddenWindowFramePump } from './hidden-window-frame-pump'
 import type { PreloadApi } from './api-types'
 import { installBrowserFindListener } from './preload-runtime-support'
 import { appApi } from './api/app-bridge'
 import { orcaProfilesApi } from './api/orca-profiles-bridge'
 import { platformApi } from './api/platform-bridge'
 import { wslApi } from './api/wsl-bridge'
+import { wslMoveApi } from './api/wsl-move-bridge'
+import { wslDriveProjectApi } from './api/wsl-drive-project-bridge'
+import { wslDriveUncConversionApi } from './api/wsl-drive-unc-conversion-bridge'
 import { pwshApi } from './api/pwsh-bridge'
 import { gitBashApi } from './api/git-bash-bridge'
 import { pluginsApi } from './api/plugins-bridge'
@@ -17,6 +22,7 @@ import { worktreesApi } from './api/worktrees-bridge'
 import { workspaceCleanupApi } from './api/workspace-cleanup-bridge'
 import { workspaceSpaceApi } from './api/workspace-space-bridge'
 import { workspacePortsApi } from './api/workspace-ports-bridge'
+import { linkPreviewApi } from './api/link-preview-bridge'
 import { ptyApi } from './api/pty-bridge'
 import { feedbackApi } from './api/feedback-bridge'
 import { crashReportsApi } from './api/crash-reports-bridge'
@@ -54,7 +60,6 @@ import { hooksApi } from './api/hooks-bridge'
 import { ephemeralVmApi } from './api/ephemeral-vm-bridge'
 import { cacheApi } from './api/cache-bridge'
 import { sessionApi } from './api/session-bridge'
-import { remoteWorkspaceApi } from './api/remote-workspace-bridge'
 import { updaterApi } from './api/updater-bridge'
 import { docPreviewApi } from './api/doc-preview-bridge'
 import { notebookApi } from './api/notebook-bridge'
@@ -78,6 +83,8 @@ import { zcodePlanCredentialsApi } from './api/zcode-plan-credentials-bridge'
 import { grokAccountsApi } from './api/grok-accounts-bridge'
 import { cursorAccountsApi } from './api/cursor-accounts-bridge'
 import { sshApi } from './api/ssh-bridge'
+import { plainSshTerminalApi } from './api/plain-ssh-terminal-bridge'
+import { legacyRelayBridgeApi } from './api/legacy-relay-bridge-api'
 import { automationsApi } from './api/automations-bridge'
 import { e2eApi } from './api/e2e-bridge'
 import { mobileApi } from './api/mobile-bridge'
@@ -86,7 +93,6 @@ import { speechApi } from './api/speech-bridge'
 
 installBrowserFindListener()
 
-// Custom APIs for renderer. Each domain bridge owns its IPC contract.
 const telemetryTrackApi: PreloadApi['telemetryTrack'] = (name, props) =>
   ipcRenderer.invoke('telemetry:track', name, props)
 const telemetrySetOptInApi: PreloadApi['telemetrySetOptIn'] = (optedIn) =>
@@ -101,6 +107,9 @@ const api = {
   orcaProfiles: orcaProfilesApi,
   platform: platformApi,
   wsl: wslApi,
+  wslMove: wslMoveApi,
+  wslDriveProject: wslDriveProjectApi,
+  wslDriveUnc: wslDriveUncConversionApi,
   pwsh: pwshApi,
   gitBash: gitBashApi,
   plugins: pluginsApi,
@@ -113,6 +122,7 @@ const api = {
   workspaceCleanup: workspaceCleanupApi,
   workspaceSpace: workspaceSpaceApi,
   workspacePorts: workspacePortsApi,
+  linkPreview: linkPreviewApi,
   pty: ptyApi,
   feedback: feedbackApi,
   crashReports: crashReportsApi,
@@ -154,7 +164,6 @@ const api = {
   ephemeralVm: ephemeralVmApi,
   cache: cacheApi,
   session: sessionApi,
-  remoteWorkspace: remoteWorkspaceApi,
   updater: updaterApi,
   docPreview: docPreviewApi,
   notebook: notebookApi,
@@ -178,6 +187,8 @@ const api = {
   grokAccounts: grokAccountsApi,
   cursorAccounts: cursorAccountsApi,
   ssh: sshApi,
+  plainSsh: plainSshTerminalApi,
+  legacyRelayBridge: legacyRelayBridgeApi,
   automations: automationsApi,
   e2e: e2eApi,
   mobile: mobileApi,
@@ -194,3 +205,16 @@ if (process.contextIsolated) {
 } else {
   window.api = api
 }
+
+installHiddenWindowFramePump(
+  process.argv,
+  (stop) => ipcRenderer.once(HIDDEN_WINDOW_FRAME_PUMP_STOP_CHANNEL, stop),
+  {
+    rootStyle: () => document.documentElement?.style ?? null,
+    requestAnimationFrame: (callback) => window.requestAnimationFrame(callback),
+    every: (callback, ms) => {
+      const handle = window.setInterval(callback, ms)
+      return () => window.clearInterval(handle)
+    }
+  }
+)

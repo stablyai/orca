@@ -12,7 +12,7 @@ import { useRuntimeFileListForWorktree, type RuntimeFileListState } from './quic
 
 const listRuntimeFilesMock = vi.hoisted(() => vi.fn())
 
-vi.mock('@/runtime/runtime-file-client', () => ({
+vi.mock('@/runtime/runtime-file-search-client', () => ({
   listRuntimeFiles: listRuntimeFilesMock,
   cancelRuntimeFileList: vi.fn(),
   searchRuntimeFilePaths: vi.fn()

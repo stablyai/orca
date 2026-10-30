@@ -1,9 +1,7 @@
-// A Claude chat whose first start died before initialize (not signed in, a crash) wrote no
-// transcript, so its next start launches that same provider id fresh. It is still the same
-// conversation: the new child continues the record's chain rather than creating a second root.
+// Unproven first starts have no transcript: retry the same provider id fresh until a start proves its root.
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { claudeSessionIdForOrcaSession } from '../claude/claude-structured-launch-resolution'
+import { claudeSessionIdForOrcaSession } from '../claude/structured/claude-structured-session-id'
 import { waitForStructuredAgentSessionRecovery } from './structured-agent-session-runtime'
 import { createScriptedClaudeRuntime } from './structured-claude-scripted-runtime-test-support'
 
@@ -24,12 +22,12 @@ describe('a Claude chat whose first start died before initialize', () => {
     await expect(host.attach(CALLER, claude.attachParams(SESSION, null))).resolves.toMatchObject({
       ok: true
     })
+    await vi.waitFor(() => expect(claude.child(SESSION).initializing).toBe(true))
     claude.child(SESSION).exit(new Error('claude stream-json exited (code 1): not signed in'))
     await waitForStructuredAgentSessionRecovery()
     const failed = host.deps.store.getRecord(SESSION)
     expect(failed?.lease.claimStatus).toBe('released')
 
-    // The user signs in and reopens the chat.
     claude.behave(SESSION, {})
     const reopened = await host.attach(
       CALLER,
@@ -37,14 +35,16 @@ describe('a Claude chat whose first start died before initialize', () => {
     )
 
     expect(reopened, JSON.stringify(reopened)).toMatchObject({ ok: true })
+    await vi.waitFor(() =>
+      expect(host.collaboratorsForTests().sessions.get(SESSION)?.child?.phase).toBe('ready')
+    )
     const providerSessionId = claudeSessionIdForOrcaSession(SESSION)
-    // No transcript exists to `--resume`, so the id is started fresh...
+    // No transcript exists to resume.
     expect(claude.child(SESSION).launch.options).toMatchObject({ sessionId: providerSessionId })
     expect(claude.child(SESSION).launch.options.resume).toBeUndefined()
-    // ...and the record still holds one conversation under one root.
     expect(
       host.deps.store.getRecord(SESSION)?.providerHandleChain.map((link) => link.origin)
-    ).toEqual(['created', 'resumed'])
+    ).toEqual(['created'])
     await vi.waitFor(() =>
       expect(host.deps.store.getRecord(SESSION)?.lease.claimStatus).toBe('live')
     )
@@ -52,8 +52,7 @@ describe('a Claude chat whose first start died before initialize', () => {
 })
 
 describe('a Claude chat whose CLI exits the moment it is spawned', () => {
-  // Before the spawn returns, the start time of a dead pid is unreadable; during that read, the
-  // child is found closed afterwards. Both must answer with what the CLI said.
+  // Exit may race spawn or start-time read; both must preserve the CLI verdict.
   it.each(['spawn', 'start-time-read'] as const)(
     "refuses the create in a sentence, not the CLI's diagnostic, when it exits at %s",
     async (at) => {

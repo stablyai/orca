@@ -1,11 +1,11 @@
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
-import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
+import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import { getGitHubRuntimeRepoId } from '@/lib/github-source-runtime-context'
 import {
   normalizeGitHubReviewerLogins,
   parseGitHubReviewerInputLogins
-} from '@/components/github-pr-reviewer-display'
+} from '../../../../../shared/github/pr-reviewer-display'
 import { notifyWorkItemDetailsMutation } from '@/components/github/github-work-item-comment-mutations'
 import { buildRequestedReviewUsers } from '@/components/github/work-item-state-presentation'
 import type {
@@ -14,14 +14,15 @@ import type {
 } from '../../../../../shared/github/pull-request-types'
 import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
 import type { TaskSourceContext } from '../../../../../shared/task-source-context'
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
+import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
 import { translate } from '@/i18n/i18n'
+import { codeHostErrorText } from '@/lib/code-host-error-copy'
 
 type ReviewerRequestArgs = {
   submitting: boolean
   selectedReviewerLogins: Set<string>
   localReviewRequests: GitHubAssignableUser[]
-  sourceSettings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'>
+  ownerTarget: RuntimeClientTarget
   repoPath: string | null
   sourceContext?: TaskSourceContext | null
   item: GitHubWorkItem
@@ -46,7 +47,7 @@ export async function requestPRReviewers({
   reviewerInput,
   selectedReviewerLogins,
   localReviewRequests,
-  sourceSettings,
+  ownerTarget,
   repoPath,
   sourceContext,
   item,
@@ -79,7 +80,7 @@ export async function requestPRReviewers({
     )
     return
   }
-  const target = getActiveRuntimeTarget(sourceSettings)
+  const target = ownerTarget
   if (target.kind !== 'environment' && !repoPath) {
     toast.error(
       translate(
@@ -118,7 +119,7 @@ export async function requestPRReviewers({
     }
     if (!result.ok) {
       toast.error(
-        result.error ??
+        codeHostErrorText(result) ??
           translate('auto.components.GitHubItemDialog.c42d942b75', 'Failed to request reviewer')
       )
       return
@@ -169,7 +170,7 @@ export async function removePRReviewers({
   submitting,
   reviewersToRemove,
   localReviewRequests,
-  sourceSettings,
+  ownerTarget,
   repoPath,
   sourceContext,
   item,
@@ -193,7 +194,7 @@ export async function removePRReviewers({
   if (logins.length === 0) {
     return
   }
-  const target = getActiveRuntimeTarget(sourceSettings)
+  const target = ownerTarget
   if (target.kind !== 'environment' && !repoPath) {
     toast.error(
       translate(
@@ -232,7 +233,7 @@ export async function removePRReviewers({
     }
     if (!result.ok) {
       toast.error(
-        result.error ??
+        codeHostErrorText(result) ??
           translate('auto.components.GitHubItemDialog.73487fb975', 'Failed to remove reviewer')
       )
       return

@@ -16,6 +16,7 @@ import type { FileExplorerRowProjection } from './file-explorer-row-projection'
 import type { useFileExplorerSelection } from './useFileExplorerSelection'
 import type { useFileExplorerTree } from './useFileExplorerTree'
 import type { useFileExplorerTreePaneState } from './use-file-explorer-tree-pane-state'
+import type { WslHostUnavailableReason } from '../terminal-pane/use-wsl-host-unavailable-reason'
 
 type FileExplorerFilesTreePaneProps = {
   activeRepo: Repo | null
@@ -36,9 +37,9 @@ type FileExplorerFilesTreePaneProps = {
   visibleRowCount: number
   handleExplorerBackgroundContextMenuCapture: (event: React.MouseEvent<HTMLDivElement>) => void
   handleExplorerBackgroundDoubleClick: (event: React.MouseEvent<HTMLDivElement>) => void
+  wslHostUnavailable?: WslHostUnavailableReason | null
 }
 
-/** Presentational tree pane: every effect it renders from lives in useFileExplorerTreePaneState. */
 export function FileExplorerFilesTreePane({
   activeRepo,
   worktreePath,
@@ -57,7 +58,8 @@ export function FileExplorerFilesTreePane({
   rowExpandedPaths,
   visibleRowCount,
   handleExplorerBackgroundContextMenuCapture,
-  handleExplorerBackgroundDoubleClick
+  handleExplorerBackgroundDoubleClick,
+  wslHostUnavailable = null
 }: FileExplorerFilesTreePaneProps): React.JSX.Element {
   const { loadingDirPaths, rootError } = tree
   const rootCache = displayRootPath ? tree.dirCache[displayRootPath] : undefined
@@ -107,9 +109,7 @@ export function FileExplorerFilesTreePane({
     handleOpenInTerminal
   } = nodeCommands
 
-  // Why: the root explorer container must stay mounted for loading, error,
-  // and empty states so it always owns OS file drops; otherwise an empty,
-  // loading or failed tree would have no drop target.
+  // Keep the root mounted in loading/error/empty states so it can always own OS file drops.
   const isEmptyState = visibleRowCount === 0 && !inlineInput
   const isNameFilterLoading = nameFilterSource?.relativePaths === null
   const isRootLoading = !rootCache || (!!displayRootPath && loadingDirPaths.has(displayRootPath))
@@ -121,6 +121,8 @@ export function FileExplorerFilesTreePane({
       : rootError
   const hasError = isEmptyState && !isLoading && treeError !== null
   const showTree = !isEmptyState
+  // Retry cannot succeed while WSL hosts are off; offer the switch instead.
+  const wslHostsTurnedOff = hasError && wslHostUnavailable === 'turned-off'
   const emptyMessage =
     hasNameFilter && !nameFilterFiles.loadError
       ? translate(
@@ -132,8 +134,7 @@ export function FileExplorerFilesTreePane({
   return (
     <ScrollArea
       className={cn(
-        // Why: Radix ScrollArea.Root hard-sets inline `position: relative`,
-        // defeating `absolute`; size by height so the viewport can overflow.
+        // Radix forces inline position:relative, so size by height to let the viewport overflow.
         'h-full min-h-0',
         explorerView !== 'files' && 'pointer-events-none invisible',
         isRootDragOver &&
@@ -161,14 +162,22 @@ export function FileExplorerFilesTreePane({
         onDoubleClick: handleExplorerBackgroundDoubleClick
       }}
     >
-      {treeError !== null && !isLoading && !hasNameFilter && displayRootPath && (
-        <div className="px-2 py-1 text-xs text-muted-foreground" role="status">
-          {showTree && <p>{treeError}</p>}
-          <Button variant="ghost" size="xs" onClick={() => void tree.refreshDir(displayRootPath)}>
-            {translate('fileExplorer.root.retry', 'Retry')}
-          </Button>
-        </div>
-      )}
+      {treeError !== null &&
+        !isLoading &&
+        !hasNameFilter &&
+        displayRootPath &&
+        !wslHostsTurnedOff && (
+          <div className="px-2 py-1 text-xs text-muted-foreground" role="status">
+            {showTree && <p>{treeError}</p>}
+            <Button
+              variant="ghost"
+              size="xs"
+              onClick={() => void tree.refreshDir(displayRootPath, { wakeWslDistro: true })}
+            >
+              {translate('fileExplorer.root.retry', 'Retry')}
+            </Button>
+          </div>
+        )}
       {!showTree && (
         <FileExplorerTreeStatus
           isLoading={isLoading}
@@ -176,6 +185,7 @@ export function FileExplorerFilesTreePane({
           isEmpty={isEmptyState && !isLoading && !hasError}
           emptyMessage={emptyMessage}
           scopedToFolder={!!displayRootPath && displayRootPath !== worktreePath}
+          wslHostsTurnedOff={wslHostsTurnedOff}
         />
       )}
       {showTree && (

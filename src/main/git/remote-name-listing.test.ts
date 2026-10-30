@@ -1,22 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const {
-  gitExecFileAsyncMock,
-  getSshGitProviderMock,
-  getSshGitProviderGenerationMock,
-  readLocalGitConfigSignatureMock
-} = vi.hoisted(() => ({
+const { gitExecFileAsyncMock, readLocalGitConfigSignatureMock } = vi.hoisted(() => ({
   gitExecFileAsyncMock: vi.fn(),
-  getSshGitProviderMock: vi.fn(),
-  getSshGitProviderGenerationMock: vi.fn(() => 0),
   readLocalGitConfigSignatureMock: vi.fn<() => Promise<string | undefined>>(async () => 'sig-1')
 }))
 
 vi.mock('./runner', () => ({ gitExecFileAsync: gitExecFileAsyncMock }))
-vi.mock('../providers/ssh-git-dispatch', () => ({
-  getSshGitProvider: getSshGitProviderMock,
-  getSshGitProviderGeneration: getSshGitProviderGenerationMock
-}))
 vi.mock('../github/local-git-config-signature', () => ({
   readLocalGitConfigSignature: readLocalGitConfigSignatureMock
 }))
@@ -38,9 +27,6 @@ describe('cached git remote name listing', () => {
   beforeEach(() => {
     _resetRemoteNameListingCache()
     gitExecFileAsyncMock.mockReset()
-    getSshGitProviderMock.mockReset()
-    getSshGitProviderGenerationMock.mockReset()
-    getSshGitProviderGenerationMock.mockReturnValue(0)
     readLocalGitConfigSignatureMock.mockReset()
     readLocalGitConfigSignatureMock.mockImplementation(async () => 'sig-1')
   })
@@ -180,20 +166,7 @@ describe('cached git remote name listing', () => {
     })
   })
 
-  it('lists remotes through the SSH git provider', async () => {
-    const exec = vi.fn(async () => ({ stdout: 'origin\n', stderr: '' }))
-    getSshGitProviderMock.mockReturnValue({ exec })
-
-    await expect(shouldProbeGitRemote('/remote/repo', 'upstream', 'ssh-1')).resolves.toBe(false)
-    expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
-    expect(exec).toHaveBeenCalledWith(['remote'], '/remote/repo', {
-      signal: expect.any(AbortSignal)
-    })
-  })
-
-  it('fails open when the SSH git provider is missing instead of listing locally', async () => {
-    getSshGitProviderMock.mockReturnValue(undefined)
-
+  it('fails open for an SSH repo instead of listing locally', async () => {
     await expect(shouldProbeGitRemote('/remote/repo', 'upstream', 'ssh-1')).resolves.toBe(true)
     expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
   })

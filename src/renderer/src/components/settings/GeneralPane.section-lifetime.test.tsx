@@ -68,8 +68,7 @@ it.each([false, true])(
     }
     const view = render(<GeneralPane {...props} />)
     await act(async () => {})
-    // The invariant is identity, not a magic number: the matched section keeps the same DOM
-    // node across every query edit, so editing the query cannot cost an extra read.
+    // Assert DOM identity across query edits so search cannot remount sections and add reads.
     const mountedHeading = screen.getByText('Updates', { exact: true })
     const versionReadsAfterMount = fake.getVersion.mock.calls.length
     const remoteRefreshesAfterMount = fake.refresh.mock.calls.length
@@ -109,8 +108,7 @@ it('keeps showing store-published remote update state without a remount', async 
   await act(async () => {})
   const mountedHeading = screen.getByText('Updates', { exact: true })
   expect(screen.getByText('1 paired server · 1 up to date')).toBeTruthy()
-  // Remote update entries live in the store, so a retained section stays fresh through the
-  // subscription rather than through the remount a query edit used to force.
+  // Retained sections must stay fresh through store subscriptions without query-driven remounts.
   fake.updates = new Map([
     ['synthetic-host', { environmentId: 'synthetic-host', phase: 'available', name: 'Synthetic' }]
   ])

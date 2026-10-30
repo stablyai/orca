@@ -15,6 +15,7 @@ import type { ExternalAutomationScope } from './external-automation-scope-client
 import { AutomationListLocalRows } from './AutomationListLocalRows'
 import { AutomationListExternalRows } from './AutomationListExternalRows'
 import { indexLatestAutomationRuns } from './automation-list-last-run'
+import { useAppStore } from '@/store'
 
 // Why: Tooltip needs a provider in the app; stub so rows render standalone.
 vi.mock('@/components/ui/tooltip', () => ({
@@ -55,7 +56,7 @@ function makeExternalJob(overrides: Partial<ExternalAutomationJob> = {}): Extern
   return {
     id: 'job-1',
     managerId: 'manager-1',
-    provider: 'hermes',
+    provider: 'openclaw',
     name: 'Nightly',
     schedule: '0 0 * * *',
     rawSchedule: null,
@@ -77,8 +78,8 @@ function makeExternalJob(overrides: Partial<ExternalAutomationJob> = {}): Extern
 function makeExternalManager(): ExternalAutomationManager {
   return {
     id: 'manager-1',
-    provider: 'hermes',
-    label: 'Local Hermes',
+    provider: 'openclaw',
+    label: 'Local OpenClaw',
     targetLabel: 'Local',
     target: { type: 'local' },
     status: 'available',
@@ -161,7 +162,7 @@ function renderExternalRows(handlers: {
   const job = makeExternalJob()
   const scope: ExternalAutomationScope = {
     owner: { authority: { kind: 'desktop' }, selector: { kind: 'self' } },
-    provider: 'hermes'
+    provider: 'openclaw'
   }
   return render(
     <AutomationListExternalRows
@@ -172,7 +173,6 @@ function renderExternalRows(handlers: {
       externalActionKey={null}
       onSelect={handlers.onSelect}
       onRequestAction={handlers.onRequestAction ?? vi.fn()}
-      onEdit={vi.fn()}
     />
   )
 }
@@ -184,9 +184,7 @@ afterEach(() => {
 
 describe('Automation list row selection', () => {
   it('does not open local detail when a quick-action menu item is chosen', async () => {
-    // Radix portals the menu out of the row's DOM, but React bubbles its
-    // clicks back through the component tree. Selecting Delete must not call
-    // onSelect (which opens the detail page behind the confirm dialog).
+    // React bubbles portaled Delete clicks through the row; onSelect must not open detail behind confirmation.
     const onSelect = vi.fn()
     const onDelete = vi.fn()
     renderLocalRows({ onSelect, onDelete })
@@ -208,6 +206,34 @@ describe('Automation list row selection', () => {
     expect(screen.getByText('Failed 8h ago')).toBeTruthy()
   })
 
+  // A moved project's local copy stays as it was for undo, but the host runs it now.
+  it("says a moved project's automation runs on the WSL host, not here", () => {
+    useAppStore.setState({
+      wslMovedProjects: [
+        {
+          kind: 'repo',
+          id: 'repo-1',
+          displayName: 'Repo 1',
+          path: '\\\\wsl.localhost\\Ubuntu\\r',
+          distro: 'Ubuntu'
+        }
+      ]
+    })
+    try {
+      renderLocalRows({ onSelect: vi.fn() })
+      expect(screen.getByText('Runs on the Ubuntu host')).toBeTruthy()
+      expect(screen.queryByText('Enabled')).toBeNull()
+    } finally {
+      useAppStore.setState({ wslMovedProjects: [] })
+    }
+  })
+
+  it('shows an ordinary local automation as enabled', () => {
+    renderLocalRows({ onSelect: vi.fn() })
+    expect(screen.getByText('Enabled')).toBeTruthy()
+    expect(screen.queryByText(/Runs on the .* host/)).toBeNull()
+  })
+
   it('still selects when the local row itself is clicked', async () => {
     const onSelect = vi.fn()
     const { container } = renderLocalRows({ onSelect })
@@ -222,9 +248,7 @@ describe('Automation list row selection', () => {
   })
 
   it('opens the actions menu on keyboard activation without selecting the row', async () => {
-    // The row handles Enter/Space for its own activation. Those keys bubble
-    // from the actions trigger too, so an unguarded row handler would
-    // preventDefault the button's native activation and open detail instead.
+    // Guard Enter/Space from the actions trigger so row activation cannot veto the button and open detail.
     const onSelect = vi.fn()
     renderLocalRows({ onSelect })
     const user = userEvent.setup()

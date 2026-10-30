@@ -11,7 +11,6 @@ import { registerRepoUpdateHandler } from './repos/repo-update-handler'
 import { registerSparsePresetHandlers } from './repos/sparse-preset-handlers'
 import { registerRepoFolderPickerHandlers } from './repos/repo-folder-picker-handlers'
 import { registerRepoCloneHandlers } from './repos/repo-clone-lifecycle'
-import { registerRepoGitUsernameHandler } from './repos/repo-git-username-handler'
 import { registerBaseRefQueryHandlers } from './repos/base-ref-query-handlers'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 
@@ -20,9 +19,9 @@ export function registerRepoHandlers(
   store: Store,
   runtime: OrcaRuntimeService
 ): void {
-  // Remove previously registered handlers so we can re-register on macOS app re-activation (new window).
+  // macOS window recreation re-registers these handlers.
   ipcMain.removeHandler('repos:list')
-  ipcMain.removeHandler('repos:listForExecutionHost')
+  ipcMain.removeHandler('repos:listWslMoved')
   ipcMain.removeHandler('repos:add')
   ipcMain.removeHandler('repos:removeForHost')
   ipcMain.removeHandler('repos:reorder')
@@ -53,21 +52,17 @@ export function registerRepoHandlers(
   ipcMain.removeHandler('repos:pickDirectory')
   ipcMain.removeHandler('repos:clone')
   ipcMain.removeHandler('repos:cloneAbort')
-  ipcMain.removeHandler('repos:cloneRemote')
   ipcMain.removeHandler('repos:isGitAvailable')
   ipcMain.removeHandler('repos:getDefaultCreateProjectParent')
-  ipcMain.removeHandler('repos:getGitUsername')
   ipcMain.removeHandler('repos:getBaseRefDefault')
   ipcMain.removeHandler('repos:searchBaseRefs')
   ipcMain.removeHandler('repos:searchBaseRefDetails')
-  ipcMain.removeHandler('repos:addRemote')
   ipcMain.removeHandler('repos:create')
-  ipcMain.removeHandler('repos:createRemote')
   ipcMain.removeHandler('sparsePresets:list')
   ipcMain.removeHandler('sparsePresets:save')
   ipcMain.removeHandler('sparsePresets:remove')
 
-  registerRepoCatalogHandlers(mainWindow, store)
+  registerRepoCatalogHandlers(mainWindow, store, runtime)
   registerProjectHostSetupHandlers(mainWindow, store)
   registerRepoCreationHandlers(mainWindow, store)
   registerProjectGroupHandlers(mainWindow, store)
@@ -77,6 +72,5 @@ export function registerRepoHandlers(
   registerSparsePresetHandlers(mainWindow, store)
   registerRepoFolderPickerHandlers(mainWindow)
   registerRepoCloneHandlers(mainWindow, store)
-  registerRepoGitUsernameHandler(store)
   registerBaseRefQueryHandlers(store)
 }

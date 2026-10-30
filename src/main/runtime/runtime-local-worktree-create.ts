@@ -3,7 +3,7 @@ import { shouldRunSetupForCreate } from '../effective-hook-config'
 import { getEffectiveHooks } from '../hooks'
 import type { Repo } from '../../shared/repo-types'
 import type { Worktree } from '../../shared/worktree/types'
-import type { Store } from '../persistence'
+import type { RuntimeStore } from './runtime-store-contract'
 import {
   getLocalProjectGitExecOptions,
   getLocalProjectWorktreeGitOptions,
@@ -19,10 +19,19 @@ import type { RemoteFetchResult, RemoteTrackingBase } from './runtime-remote-fet
 import type { HostedReviewExecutionOptions } from '../source-control/hosted-review-git-options'
 import { hasLocalWorktreeBaseRef } from '../git/worktree-base-ref-probe'
 import { resolveRuntimeLocalWorktreeCreateCandidate } from './runtime-local-worktree-create-candidate'
-import { createRuntimeLocalGitWorktree } from './runtime-local-git-worktree-create'
+import {
+  createRuntimeLocalGitWorktree,
+  startRuntimeLocalBaseRefRefresh
+} from './runtime-local-git-worktree-create'
 import { resolveRuntimeLocalWorktreeCreateBase } from './runtime-local-worktree-create-base'
 import { materializeRuntimeLocalWorktree } from './runtime-local-worktree-materialization'
+import {
+  holdInFlightWorktreeCreate,
+  openWorktreeCreatePathClaim,
+  type WorktreeCreatePathClaim
+} from '../worktree-create-in-flight'
 import { resolveRuntimeSetupDecision } from './runtime-local-worktree-setup'
+import { WorktreeCreateSetupChoiceRefusedError } from './worktree-create-setup-choice-refusal'
 import type { PreparationRearmHolder } from '../worktree-create-preparation'
 import {
   localWorktreeCreateExecutionHost,
@@ -32,7 +41,7 @@ import {
 type RuntimeLocalWorktreeCreateArgs<T> = {
   request: RuntimeManagedWorktreeCreateArgs
   repo: Repo
-  store: Store
+  store: RuntimeStore
   createdWithAgent: RuntimeManagedWorktreeCreateArgs['createdWithAgent']
   hostedReviewExecutionContext?: HostedReviewExecutionOptions
   resolveRemoteTrackingBase: (
@@ -57,23 +66,48 @@ type RuntimeLocalWorktreeCreateArgs<T> = {
 }
 
 export function createRuntimeLocalManagedWorktree<T>(args: RuntimeLocalWorktreeCreateArgs<T>) {
-  return worktreeCreateGit.run(() => performRuntimeLocalWorktreeCreate(args))
+  const pathClaim = openWorktreeCreatePathClaim()
+  return worktreeCreateGit
+    .run(() => performRuntimeLocalWorktreeCreate(args, pathClaim))
+    .finally(pathClaim.release)
 }
 
-async function performRuntimeLocalWorktreeCreate<T>(args: RuntimeLocalWorktreeCreateArgs<T>) {
+async function performRuntimeLocalWorktreeCreate<T>(
+  args: RuntimeLocalWorktreeCreateArgs<T>,
+  pathClaim: WorktreeCreatePathClaim
+) {
   const { request, repo, store } = args
-  const settings = store.getSettings()
+  const hostSettings = store.getSettings()
+  // Carry layout choice through name retirement and metadata, not just path creation.
+  const settings = {
+    ...hostSettings,
+    nestWorkspaces: request.nestWorkspaces ?? hostSettings.nestWorkspaces,
+    // Paired desktops own this toggle in their profiles, not the host's.
+    refreshLocalBaseRefOnWorktreeCreate:
+      request.refreshLocalBaseRefOnWorktreeCreate ??
+      hostSettings.refreshLocalBaseRefOnWorktreeCreate,
+    localBaseRefSuggestionDismissed:
+      request.localBaseRefSuggestionDismissed ?? hostSettings.localBaseRefSuggestionDismissed
+  }
   const pathSettings = getWorktreePathSettings(repo, settings, getWorktreeMirrorDistro(store, repo))
   const gitExecOptions = getLocalProjectGitExecOptions(store, repo)
   const worktreeGitOptions = getLocalProjectWorktreeGitOptions(store, repo)
   args.timing.recordExecutionHost(localWorktreeCreateExecutionHost(gitExecOptions))
-  // Why before any git work: an `ask` repo with no decision must refuse with nothing created, as
-  // the desktop create does; checked after the add, it left an orphan worktree behind.
+  // Resolve ask setup before Git work; checking after add formerly orphaned refused worktrees.
   if (getEffectiveHooks(repo)?.scripts.setup) {
-    shouldRunSetupForCreate(repo, resolveRuntimeSetupDecision(request))
+    try {
+      shouldRunSetupForCreate(repo, resolveRuntimeSetupDecision(request))
+    } catch (error) {
+      if (
+        error instanceof Error &&
+        error.message === 'Setup decision required for this repository'
+      ) {
+        throw new WorktreeCreateSetupChoiceRefusedError(error.message, { cause: error })
+      }
+      throw error
+    }
   }
-  // Username and base resolution are independent read-only probes. Starting
-  // both before awaiting removes one serial git/config round trip from create.
+  // Overlap independent username/base reads to remove one serial Git/config round trip.
   const usernamePromise =
     !request.branchNameOverride && settings.branchPrefix === 'git-username'
       ? resolveLocalGitUsername(repo.path)
@@ -113,6 +147,14 @@ async function performRuntimeLocalWorktreeCreate<T>(args: RuntimeLocalWorktreeCr
     refreshRemoteTrackingBase: args.refreshRemoteTrackingBase,
     timing: args.timing
   })
+  const baseRefRefresh = startRuntimeLocalBaseRefRefresh({
+    repoPath: repo.path,
+    base,
+    localWorktreeGitOptions: worktreeGitOptions,
+    refreshRemoteTrackingBase: args.refreshRemoteTrackingBase,
+    fetchRemote: args.fetchRemote,
+    timing: args.timing
+  })
   const candidate = await args.timing.time('resolve_name', () =>
     resolveRuntimeLocalWorktreeCreateCandidate({
       request,
@@ -123,53 +165,66 @@ async function performRuntimeLocalWorktreeCreate<T>(args: RuntimeLocalWorktreeCr
       username,
       store,
       baseBranch: base.baseBranch,
+      remoteTrackingBase: base.remoteTrackingBase,
       localWorktreeGitOptions: worktreeGitOptions,
-      hostedReviewExecutionContext: args.hostedReviewExecutionContext
+      hostedReviewExecutionContext: args.hostedReviewExecutionContext,
+      pathClaim
     })
   )
-  const git = await createRuntimeLocalGitWorktree({
-    request,
-    repo,
-    store,
-    settings,
-    base,
-    workspaceRoot: computeWorkspaceRoot(repo.path, pathSettings),
-    branchName: candidate.branchName,
-    worktreePath: candidate.worktreePath,
-    effectiveSanitizedName: candidate.effectiveSanitizedName,
-    checkoutExistingBranch: candidate.checkoutExistingBranch,
-    localWorktreeGitOptions: worktreeGitOptions,
-    refreshRemoteTrackingBase: args.refreshRemoteTrackingBase,
-    fetchRemote: args.fetchRemote,
-    rearm: args.rearm,
-    timing: args.timing
-  })
-  const materialized = await materializeRuntimeLocalWorktree({
-    request,
-    repo,
-    store,
-    settings,
-    created: git.created,
-    remoteTrackingBase: base.remoteTrackingBase,
-    sparseDirectories: git.sparseDirectories,
-    configuredPushTarget: git.configuredPushTarget,
-    checkoutExistingBranch: candidate.checkoutExistingBranch,
-    baseBranch: base.baseBranch,
-    branchName: candidate.branchName,
-    effectiveRequestedName: candidate.effectiveRequestedName,
-    requestedDisplayName: candidate.requestedDisplayName,
-    displayNameKind: candidate.displayNameKind,
-    effectiveSanitizedName: candidate.effectiveSanitizedName,
-    effectiveCreatedWithAgent: args.createdWithAgent,
-    localWorktreeGitOptions: worktreeGitOptions,
-    onMetadataPersisted: args.onWorktreeMetadataPersisted,
-    timing: args.timing
-  })
-  return {
-    ...materialized,
-    worktreePath: candidate.worktreePath,
-    created: git.created,
-    addResult: git.addResult,
-    ...(base.baseFallback ? { baseFallback: base.baseFallback } : {})
+  const releaseInFlightHold = await holdInFlightWorktreeCreate(
+    repo.id,
+    candidate.worktreePath,
+    worktreeGitOptions
+  )
+  try {
+    const git = await createRuntimeLocalGitWorktree({
+      request,
+      repo,
+      store,
+      settings,
+      base,
+      workspaceRoot: computeWorkspaceRoot(repo.path, pathSettings),
+      branchName: candidate.branchName,
+      worktreePath: candidate.worktreePath,
+      effectiveSanitizedName: candidate.effectiveSanitizedName,
+      checkoutExistingBranch: candidate.checkoutExistingBranch,
+      localWorktreeGitOptions: worktreeGitOptions,
+      baseRefRefresh,
+      rearm: args.rearm,
+      timing: args.timing
+    })
+    const materialized = await materializeRuntimeLocalWorktree({
+      request,
+      repo,
+      store,
+      settings,
+      created: git.created,
+      remoteTrackingBase: base.remoteTrackingBase,
+      sparseDirectories: git.sparseDirectories,
+      configuredPushTarget: git.configuredPushTarget,
+      checkoutExistingBranch: candidate.checkoutExistingBranch,
+      baseBranch: base.baseBranch,
+      branchName: candidate.branchName,
+      effectiveRequestedName: candidate.effectiveRequestedName,
+      requestedDisplayName: candidate.requestedDisplayName,
+      displayNameKind: candidate.displayNameKind,
+      effectiveSanitizedName: candidate.effectiveSanitizedName,
+      effectiveCreatedWithAgent: args.createdWithAgent,
+      localWorktreeGitOptions: worktreeGitOptions,
+      onMetadataPersisted: (worktree) => {
+        releaseInFlightHold()
+        return args.onWorktreeMetadataPersisted(worktree)
+      },
+      timing: args.timing
+    })
+    return {
+      ...materialized,
+      worktreePath: candidate.worktreePath,
+      created: git.created,
+      addResult: git.addResult,
+      ...(base.baseFallback ? { baseFallback: base.baseFallback } : {})
+    }
+  } finally {
+    releaseInFlightHold()
   }
 }

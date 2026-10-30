@@ -1,13 +1,11 @@
 // @vitest-environment happy-dom
 
-// The dialog's list as a control: initial focus, Select all, and keyboard movement.
-
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { useAppStore } from '../store'
 import { getDefaultSettings } from '../../../shared/constants'
-import { NativeChatResumeOnRestartModal } from './NativeChatResumeOnRestartModal'
+import { NativeChatResumeOnRestartModal } from './NativeChatResumeRuntimeModal'
 import { NativeChatResumeStatusSegment } from './status-bar/NativeChatResumeStatusSegment'
 import { TooltipProvider } from './ui/tooltip'
 import {
@@ -31,7 +29,9 @@ vi.mock('@/runtime/structured-agent-session-client', () => ({
 vi.mock('@/lib/activate-ai-vault-structured-session', () => ({
   activateAiVaultStructuredSession: vi.fn(async () => true)
 }))
-vi.mock('sonner', () => ({ toast: vi.fn() }))
+vi.mock('sonner', async () =>
+  (await import('./native-chat-resume-sonner-mock.test-support')).resumeSonnerMock()
+)
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true
 let root: Root
@@ -63,7 +63,6 @@ afterEach(() => {
   consumeNativeChatResumeOnRestartDialogRequest()
 })
 
-// Left to the dialog, focus lands on the scrollable list and draws a ring around it.
 it('opens with focus on the resume action', async () => {
   rpc.mockResolvedValue({ sessions: offered })
   await mount(<NativeChatResumeOnRestartModal />)
@@ -79,7 +78,6 @@ it('uses the sidebar surface without a border around the resume list', async () 
   expect(list?.classList.contains('border')).toBe(false)
 })
 
-// The resume list is a tree; it keeps the list's accessible name.
 it('exposes the list as a named tree of leveled items', async () => {
   rpc.mockResolvedValue({ sessions: offered })
   await mount(<NativeChatResumeOnRestartModal />)
@@ -91,9 +89,8 @@ it('exposes the list as a named tree of leveled items', async () => {
   const levels = [...tree!.querySelectorAll('[role="treeitem"]')].map((item) =>
     item.getAttribute('aria-level')
   )
-  // Select all, then this workspace (no project the store knows) and its two chats.
+  // Unknown projects add no level between Select all and workspace chats.
   expect(levels).toEqual(['1', '1', '2', '2'])
-  // The one divider sits under Select all.
   const selectAllItem = namedBox('Select all chats').closest('[role="treeitem"]')
   expect(selectAllItem?.parentElement?.classList.contains('border-b')).toBe(true)
 })
@@ -113,7 +110,6 @@ it('folds the focused node with Left and opens it with Right, keeping focus and 
   expect(workspace.closest('[role="treeitem"]')?.getAttribute('aria-expanded')).toBe('false')
   expect(document.querySelector('[aria-label*="Prompt a"]')).toBeNull()
   expect(document.activeElement).toBe(workspace)
-  // Left again on a closed node does nothing.
   await press('ArrowLeft')
   expect(workspace.closest('[role="treeitem"]')?.getAttribute('aria-expanded')).toBe('false')
 
@@ -165,7 +161,6 @@ it('starts the list with a tri-state Select all that counts the selection', asyn
   await mount(<NativeChatResumeOnRestartModal />)
   const list = document.querySelector('[aria-label="Chats that would be resumed"]')!
   const selectAll = namedBox('Select all chats')
-  // First row of the list, in the same left column as every other checkbox.
   expect(list.querySelector('[role="checkbox"]')).toBe(selectAll)
   expect(selectAll.closest('label')?.firstElementChild?.contains(selectAll)).toBe(true)
   const count = () => selectAll.closest('label')?.querySelector('.tabular-nums')?.textContent
@@ -200,7 +195,7 @@ it('leaves a failure a retry cannot fix out of Select all', async () => {
   expect(button('Resume 1 chat').disabled).toBe(false)
 })
 
-it('disables Select all and the workspace checkbox while a resume runs', async () => {
+it('drops Select all and the checkbox column while every listed chat is resuming', async () => {
   const continued = Promise.withResolvers<unknown>()
   rpc.mockImplementation((_target, method) =>
     method === 'agentSession.restartResumable'
@@ -215,19 +210,17 @@ it('disables Select all and the workspace checkbox while a resume runs', async (
   )
   await act(async () => button('Resume 2 chats').click())
   await act(async () => button('Resuming chats 0/2').click())
-  const list = document.querySelector('[aria-label="Chats that would be resumed"]')!
-  const boxes = [...list.querySelectorAll('[role="checkbox"]')]
-  expect(boxes).toHaveLength(2)
-  for (const box of boxes) {
-    expect(box.hasAttribute('disabled')).toBe(true)
-  }
+  const list = document.querySelector('[aria-label="Chats in this resume"]')!
+  expect(list.querySelectorAll('[role="checkbox"]')).toHaveLength(0)
+  expect(list.textContent).not.toContain('Select all')
+  expect(list.textContent).not.toContain('of 2')
+  expect(list.querySelectorAll('[role="img"][aria-label*="Waiting to start"]')).toHaveLength(2)
   await act(async () => continued.resolve({ sessions: [], failed: [], resumed: [], continued: [] }))
 })
 
 it('moves between the list’s checkboxes with the arrow keys', async () => {
   rpc.mockResolvedValue({ sessions: offered })
   await mount(<NativeChatResumeOnRestartModal />)
-  // This workspace has no repo the store knows, so no project row sits between.
   const order = [
     namedBox('Select all chats'),
     namedBox('Select all chats in workspace'),
@@ -256,7 +249,7 @@ async function pressOn(element: Element, key: string): Promise<void> {
   })
 }
 
-// Tab lands on the tree itself; its arrows must lead into the rows from there.
+// Tab enters at the tree; tree navigation must then reach rows.
 it('enters the tree from its own Tab stop with the arrow, Home and End keys', async () => {
   rpc.mockResolvedValue({ sessions: offered })
   await mount(<NativeChatResumeOnRestartModal />)
@@ -274,14 +267,13 @@ it('enters the tree from its own Tab stop with the arrow, Home and End keys', as
     await pressOn(tree, key)
     expect(document.activeElement).toBe(expected)
   }
-  // From a row, Home and End jump to the ends too.
   await pressOn(last, 'Home')
   expect(document.activeElement).toBe(first)
   await pressOn(first, 'End')
   expect(document.activeElement).toBe(last)
 })
 
-// Chromium focuses a pressed button; the keyboard must not be stranded on the arrow.
+// Native button focus must return from disclosure arrows to tree navigation.
 it('hands focus from a pressed arrow to its row’s checkbox', async () => {
   rpc.mockResolvedValue({ sessions: offered })
   await mount(<NativeChatResumeOnRestartModal />)

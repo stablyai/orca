@@ -13,9 +13,9 @@ vi.mock('./codex-app-server-session', async (importOriginal) => ({
   ...(await importOriginal<typeof AppServerSession>()),
   runCodexAppServerSession: mocks.runCodexAppServerSession
 }))
-vi.mock('../../shared/child-process/run-process', () => ({ runProcess: mocks.runProcess }))
+vi.mock('@orca/process-host', () => ({ runProcess: mocks.runProcess }))
 
-import { CodexAppServerRequestError } from './codex-app-server-request-error'
+import { CodexAppServerRequestError } from './app-server/codex-app-server-request-error'
 import { CodexAppServerUnsupportedError } from './codex-app-server-session'
 import {
   _internals,
@@ -24,21 +24,16 @@ import {
 } from './codex-hook-hash-lookup'
 import { getCodexHookTrustMemoPath } from './codex-hook-trust-memo'
 
-// Why this file: only an answer Codex gave about its version may be saved for that
-// version; a failed ask saved there would cost every home Orca's entry until Codex updates.
-
 const COMMAND = '/home/u/.orca/agent-hooks/codex-hook.sh'
 let userData: string
 let codexPath: string
 
-/** A fresh process that may ask Codex, as after an app restart. */
 function startProcess(): void {
   _internals.resetForTesting()
   startCodexHookHashLookup(Promise.resolve())
 }
 
-/** Stands in for Codex's app-server, listing Stop with `movedHash` for the copy after the dummy group. */
-/** Codex listing the scratch home: its dummy hook and, unless `listsOrca` is false, Orca's copies. */
+// movedHash controls the shifted copy; listsOrca=false leaves only the dummy hook.
 function listHashedHooks(movedHash = 'sha256:stop', listsOrca = true): void {
   mocks.runCodexAppServerSession.mockImplementation(
     async (invocation: { env?: Record<string, string> }, body: (rpc: unknown) => unknown) => {

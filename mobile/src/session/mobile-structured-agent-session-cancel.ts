@@ -1,23 +1,23 @@
 import type { AgentSessionCancelResult } from '../../../src/shared/agent-session-wire'
-import type { AgentJournalRenderItem } from '../../../src/shared/agent-session-journal-types'
 import type { StructuredAgentSessionState } from '../../../src/shared/structured-agent-session-reducer'
 import { runningStructuredAgentSessionTurnId } from '../../../src/shared/structured-agent-session-live-turn'
+import {
+  joinStructuredAgentSessionStop,
+  structuredAgentSessionStopIsJoinable
+} from '../../../src/shared/structured-agent-session-stop-join'
 import type { RpcClient } from '../transport/rpc-client'
 import {
   requestStructuredAgentSessionMutation,
   type StructuredAgentSessionMutationCallResult
 } from './mobile-structured-agent-session-rpc'
+import { actionableStructuredPrompts } from './mobile-structured-actionable-prompt'
 
 type PromptIdentity = { itemId: string; expectedRevision: number }
 
 export function pendingStructuredPromptIdentity(
-  items: readonly AgentJournalRenderItem[]
+  state: Pick<StructuredAgentSessionState, 'items' | 'currentRequests' | 'actionablePromptIds'>
 ): PromptIdentity | undefined {
-  const prompt = items.find((item) =>
-    item.body.kind === 'approval' || item.body.kind === 'question'
-      ? item.body.resolution.state === 'pending'
-      : false
-  )
+  const [prompt] = actionableStructuredPrompts(state)
   return prompt ? { itemId: prompt.itemId, expectedRevision: prompt.revision } : undefined
 }
 
@@ -30,44 +30,39 @@ export async function requestMobileStructuredAgentSessionCancel(args: {
   prompt?: PromptIdentity
   /** Whether the host answers a repeated Stop of a turn quietly; null until the status probe answers. */
   hostAnswersRepeatedStops: boolean | null
-  /** Stops still on their way, by what they stop; against a host that does not answer a repeat
-   *  quietly, a press for the same one joins it here. */
+  /** Whether the host takes a Stop naming no turn; null until the status probe answers. */
+  hostStopsConversation: boolean | null
+  // Join in-flight repeats only on legacy hosts that cannot quietly answer repeated Stop.
   inFlight: Map<string, Promise<boolean>>
   onSendError: (message: string) => void
 }): Promise<boolean> {
   const { client, enabled, inFlight, onSendError, sessionId, stateRef } = args
   const current = stateRef.current
   const turnId = runningStructuredAgentSessionTurnId(current)
-  if (!client || !sessionId || !enabled || current.fence === null || !turnId) {
+  // Check the capability before fields enter the fingerprint.
+  const prompt = args.prompt && args.promptCancelSupported === true ? args.prompt : undefined
+  // Conversation Stop also covers un-echoed sends; card Cancel must still name its originating turn.
+  const unnamed = args.hostStopsConversation === true && !args.prompt
+  if (!client || !sessionId || !enabled || current.fence === null || (!turnId && !unnamed)) {
     onSendError('Stop not sent')
     return false
   }
-  // Check the capability before fields enter the fingerprint.
-  const fields = {
-    turnId,
-    ...(args.prompt && args.promptCancelSupported === true ? { prompt: args.prompt } : {})
-  }
-  // Every press is its own Stop: a kept id would be answered from the last one and stop nothing.
+  const fields = unnamed ? {} : { turnId, ...(prompt ? { prompt } : {}) }
+  // Mint an id for each Stop so the ledger cannot replay an earlier press instead of stopping work.
   const fence = current.fence
   const stop = () => sendStop({ client, sessionId, fence, fields, onSendError })
-  if (args.hostAnswersRepeatedStops === true) {
+  if (
+    args.hostAnswersRepeatedStops === true ||
+    !structuredAgentSessionStopIsJoinable('agentSession.cancel', fields)
+  ) {
     return stop()
   }
-  // Temporary, for a host that predates the quiet repeated Stop: remove once none is supported.
-  const key = `${sessionId}:agentSession.cancel:${JSON.stringify(fields)}`
-  const joined = inFlight.get(key)
-  if (joined) {
-    return joined
-  }
-  const stopping = stop()
-  inFlight.set(key, stopping)
-  // Gone once it settles, so the next press is a new Stop.
-  void stopping.finally(() => {
-    if (inFlight.get(key) === stopping) {
-      inFlight.delete(key)
-    }
-  })
-  return stopping
+  // Legacy hosts need client-side joining until they support quiet repeated Stop.
+  return joinStructuredAgentSessionStop(
+    inFlight,
+    `${sessionId}:agentSession.cancel:${JSON.stringify(fields)}`,
+    stop
+  )
 }
 
 async function sendStop(input: {

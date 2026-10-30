@@ -4,7 +4,12 @@ import { normalizeRuntimePathSeparators } from '../../shared/cross-platform-path
 import { parseWslUncPath } from '../../shared/wsl-paths'
 import { toWindowsWslPath } from '../wsl'
 import { scanGitMarkerSync, resolveRealPathSync } from './repo-git-marker-scan'
-import { gitExecFileSync } from './runner'
+import {
+  gitRepoOutput,
+  runGitRepoCommands,
+  runGitRepoCommandsSync,
+  type GitRepoCommands
+} from './repo-detection-command'
 
 type GitRepoProbeResult = 'repo' | 'not-repo' | 'indeterminate'
 type GitRepoProbe = {
@@ -22,8 +27,7 @@ export type GitRepoRegistrationInfo = {
 
 let warnedMarkerFallbackThisSession = false
 
-/** Check if a path is a valid git repository (regular or bare). */
-export function isGitRepo(path: string): boolean {
+function* isGitRepoCommands(path: string): GitRepoCommands<boolean> {
   try {
     if (!statSync(path, { throwIfNoEntry: false })?.isDirectory()) {
       return false
@@ -32,7 +36,7 @@ export function isGitRepo(path: string): boolean {
     return false
   }
 
-  return isGitRepoFromProbe(path, probeGitRepo(path).result)
+  return isGitRepoFromProbe(path, (yield* probeGitRepo(path)).result)
 }
 
 function isGitRepoFromProbe(path: string, result: GitRepoProbeResult): boolean {
@@ -54,10 +58,10 @@ function isGitRepoFromProbe(path: string, result: GitRepoProbeResult): boolean {
 }
 
 /** Only a clean pair of negative Git answers is a definitive non-repo. */
-function probeGitRepo(path: string, includeLocation = false): GitRepoProbe {
+function* probeGitRepo(path: string, includeLocation = false): GitRepoCommands<GitRepoProbe> {
   try {
     const records = readGitPathOutput(
-      gitExecFileSync(
+      yield* gitRepoOutput(
         [
           'rev-parse',
           '--is-inside-work-tree',
@@ -76,7 +80,7 @@ function probeGitRepo(path: string, includeLocation = false): GitRepoProbe {
           : 'indeterminate'
     const location =
       includeLocation && insideWorkTree === 'true' && records.length !== 4
-        ? readGitRepoDirectories(path)
+        ? yield* readGitRepoDirectories(path)
         : { gitDir, commonDir }
     return { result, insideWorkTree: insideWorkTree === 'true', ...location }
   } catch {
@@ -84,8 +88,9 @@ function probeGitRepo(path: string, includeLocation = false): GitRepoProbe {
   }
 }
 
-/** Reuse one repository discovery across registration's validity, root and worktree checks. */
-export function inspectGitRepoForRegistration(path: string): GitRepoRegistrationInfo {
+function* inspectGitRepoForRegistrationCommands(
+  path: string
+): GitRepoCommands<GitRepoRegistrationInfo> {
   try {
     if (!statSync(path, { throwIfNoEntry: false })?.isDirectory()) {
       return { isRepo: false, rootPath: path, mainRepoPath: null }
@@ -93,14 +98,14 @@ export function inspectGitRepoForRegistration(path: string): GitRepoRegistration
   } catch {
     return { isRepo: false, rootPath: path, mainRepoPath: null }
   }
-  const probe = probeGitRepo(path)
+  const probe = yield* probeGitRepo(path)
   const isRepo = isGitRepoFromProbe(path, probe.result)
   let rootPath = path
   let mainRepoPath: string | null = null
   if (isRepo && probe.insideWorkTree) {
     try {
       const records = readGitPathOutput(
-        gitExecFileSync(
+        yield* gitRepoOutput(
           [
             'rev-parse',
             '--is-inside-work-tree',
@@ -119,9 +124,9 @@ export function inspectGitRepoForRegistration(path: string): GitRepoRegistration
             ? { toplevel, gitDir, commonDir }
             : {
                 toplevel: readGitPathOutput(
-                  gitExecFileSync(['rev-parse', '--show-toplevel'], { cwd: path })
+                  yield* gitRepoOutput(['rev-parse', '--show-toplevel'], { cwd: path })
                 ),
-                ...readGitRepoDirectories(path)
+                ...(yield* readGitRepoDirectories(path))
               }
         if (location.toplevel) {
           rootPath = normalizeGitRepoRootForInputPath(path, location.toplevel)
@@ -145,13 +150,13 @@ export function inspectGitRepoForRegistration(path: string): GitRepoRegistration
   return { isRepo, rootPath, mainRepoPath }
 }
 
-export function getGitRepoRoot(path: string): string {
+function* getGitRepoRootCommands(path: string): GitRepoCommands<string> {
   try {
     if (!existsSync(path) || !statSync(path).isDirectory()) {
       return path
     }
     // A bare repo has no toplevel; keep its marker fallback separate from the boolean probes.
-    const output = gitExecFileSync(['rev-parse', '--is-inside-work-tree', '--show-toplevel'], {
+    const output = yield* gitRepoOutput(['rev-parse', '--is-inside-work-tree', '--show-toplevel'], {
       cwd: path
     })
     const firstNewline = output.indexOf('\n')
@@ -161,9 +166,7 @@ export function getGitRepoRoot(path: string): string {
         return normalizeGitRepoRootForInputPath(path, toplevel)
       }
     }
-  } catch {
-    // Fall through to preserving the original path.
-  }
+  } catch {}
   return rootPathFromMarker(path)
 }
 
@@ -171,10 +174,14 @@ function readGitPathOutput(output: string): string {
   return output.endsWith('\n') ? output.slice(0, -1) : output
 }
 
-function readGitRepoDirectories(path: string): Pick<GitRepoProbe, 'gitDir' | 'commonDir'> {
+function* readGitRepoDirectories(
+  path: string
+): GitRepoCommands<Pick<GitRepoProbe, 'gitDir' | 'commonDir'>> {
   return {
-    gitDir: readGitPathOutput(gitExecFileSync(['rev-parse', '--git-dir'], { cwd: path })),
-    commonDir: readGitPathOutput(gitExecFileSync(['rev-parse', '--git-common-dir'], { cwd: path }))
+    gitDir: readGitPathOutput(yield* gitRepoOutput(['rev-parse', '--git-dir'], { cwd: path })),
+    commonDir: readGitPathOutput(
+      yield* gitRepoOutput(['rev-parse', '--git-common-dir'], { cwd: path })
+    )
   }
 }
 
@@ -191,13 +198,13 @@ function canonicalizeGitDirPath(path: string): string {
 }
 
 /** Return the main-checkout path only when `path` is a linked worktree. */
-export function getLinkedWorktreeMainRepoRoot(path: string): string | null {
+function* getLinkedWorktreeMainRepoRootCommands(path: string): GitRepoCommands<string | null> {
   try {
     if (!statSync(path, { throwIfNoEntry: false })?.isDirectory()) {
       return null
     }
-    const mainRepoPath = mainRepoPathFromProbe(path, probeGitRepo(path, true))
-    return mainRepoPath ? getGitRepoRoot(mainRepoPath) : null
+    const mainRepoPath = mainRepoPathFromProbe(path, yield* probeGitRepo(path, true))
+    return mainRepoPath ? yield* getGitRepoRootCommands(mainRepoPath) : null
   } catch {
     return null
   }
@@ -223,5 +230,34 @@ export function normalizeGitRepoRootForInputPath(inputPath: string, rootPath: st
     // Why: persist the UNC root so later Git calls keep routing through the WSL runner.
     return toWindowsWslPath(rootPath, inputWsl.distro)
   }
-  return normalizeRuntimePathSeparators(rootPath)
+  // Why: on POSIX a backslash is a filename character, and git already reports `/` separators.
+  return process.platform === 'win32' ? normalizeRuntimePathSeparators(rootPath) : rootPath
+}
+
+export function isGitRepo(path: string): boolean {
+  return runGitRepoCommandsSync(isGitRepoCommands(path))
+}
+
+export function isGitRepoAsync(path: string): Promise<boolean> {
+  return runGitRepoCommands(isGitRepoCommands(path))
+}
+
+export function inspectGitRepoForRegistration(path: string): GitRepoRegistrationInfo {
+  return runGitRepoCommandsSync(inspectGitRepoForRegistrationCommands(path))
+}
+
+export function inspectGitRepoForRegistrationAsync(path: string): Promise<GitRepoRegistrationInfo> {
+  return runGitRepoCommands(inspectGitRepoForRegistrationCommands(path))
+}
+
+export function getGitRepoRoot(path: string): string {
+  return runGitRepoCommandsSync(getGitRepoRootCommands(path))
+}
+
+export function getGitRepoRootAsync(path: string): Promise<string> {
+  return runGitRepoCommands(getGitRepoRootCommands(path))
+}
+
+export function getLinkedWorktreeMainRepoRoot(path: string): string | null {
+  return runGitRepoCommandsSync(getLinkedWorktreeMainRepoRootCommands(path))
 }

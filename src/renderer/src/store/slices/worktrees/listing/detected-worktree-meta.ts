@@ -6,25 +6,27 @@ import type { DetectedWorktreeListResult, Worktree } from '../../../../../../sha
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import {
   LOCAL_EXECUTION_HOST_ID,
-  parseExecutionHostId,
-  toSshExecutionHostId
+  getRepoExecutionHostId
 } from '../../../../../../shared/execution-host'
 import { parseWorkspaceKey } from '../../../../../../shared/workspace-scope'
+import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../../../shared/sidebar-inputs-switch'
 import { folderWorkspaceToWorktree } from '../../../../../../shared/folder-workspace-worktree'
 import {
   floatingWorkspaceToWorktree,
   isFloatingWorkspaceId
 } from '../../../../../../shared/floating-workspace-worktree'
-import {
-  findIndexedDetectedWorktrees,
-  findIndexedWorktreeOwnerForHost
-} from '@/lib/worktree-runtime-owner-index'
+import { findIndexedDetectedWorktrees } from '@/lib/worktree-runtime-owner-index'
 import { findWorktreeById, withoutErasedRequiredWorktreeFields } from '../../worktree-helpers'
 import { worktreeMatchesHost } from './worktree-host-ownership'
+import { hostWorktreeTarget } from '../../../../../../shared/worktree/host-qualified-identity'
+import {
+  selectFolderWorkspaces,
+  selectWorkspaceByHostTarget,
+  selectWorktreesByRepo
+} from '../../../workspace-record-selectors'
 
 const folderWorkspaceWorktreeCache = new WeakMap<FolderWorkspace, Worktree>()
-// Why a one-slot cache: the floating workspace is a singleton; retained selectors only need the
-// row's identity to hold while the resolved directory is unchanged.
+// Singleton floating workspace needs one cached row while resolved cwd stays equal, preserving selector identity.
 let floatingWorkspaceWorktreeCache: { path: string; worktree: Worktree } | null = null
 
 import { worktreeRowMatchesMetaHost } from './worktree-meta-host-match'
@@ -70,12 +72,18 @@ export function folderWorkspaceMatchesHost(
   workspace: Pick<FolderWorkspace, 'connectionId' | 'executionHostId'>,
   executionHostId: ExecutionHostId
 ): boolean {
-  return (
-    (parseExecutionHostId(workspace.executionHostId)?.id ??
-      (workspace.connectionId?.trim()
-        ? toSshExecutionHostId(workspace.connectionId)
-        : LOCAL_EXECUTION_HOST_ID)) === executionHostId
-  )
+  return getRepoExecutionHostId(workspace) === executionHostId
+}
+
+/** Stable synthetic row per folder workspace object, so selectors keep referential equality. */
+export function getFolderWorkspaceWorktree(folderWorkspace: FolderWorkspace): Worktree {
+  const cached = folderWorkspaceWorktreeCache.get(folderWorkspace)
+  if (cached) {
+    return cached
+  }
+  const worktree = folderWorkspaceToWorktree(folderWorkspace)
+  folderWorkspaceWorktreeCache.set(folderWorkspace, worktree)
+  return worktree
 }
 
 export function findKnownWorktreeById(
@@ -100,36 +108,23 @@ export function findKnownWorktreeById(
   }
   const workspaceScope = parseWorkspaceKey(worktreeId)
   if (workspaceScope?.type === 'folder') {
-    const folderWorkspace = state.folderWorkspaces.find(
+    const folderWorkspace = selectFolderWorkspaces(state).find(
       (workspace) =>
         workspace.id === workspaceScope.folderWorkspaceId &&
         (!executionHostId || folderWorkspaceMatchesHost(workspace, executionHostId))
     )
-    if (!folderWorkspace) {
-      return undefined
-    }
-    const cached = folderWorkspaceWorktreeCache.get(folderWorkspace)
-    if (cached) {
-      return cached
-    }
-    const worktree = folderWorkspaceToWorktree(folderWorkspace)
-    folderWorkspaceWorktreeCache.set(folderWorkspace, worktree)
-    return worktree
+    return folderWorkspace ? getFolderWorkspaceWorktree(folderWorkspace) : undefined
   }
   const visible = executionHostId
-    ? (findIndexedWorktreeOwnerForHost(
-        state.worktreesByRepo,
-        worktreeId,
-        executionHostId
-      ) as Worktree | null)
-    : findWorktreeById(state.worktreesByRepo, worktreeId)
+    ? selectWorkspaceByHostTarget(
+        state,
+        hostWorktreeTarget({ id: worktreeId, hostId: executionHostId })
+      )
+    : findWorktreeById(selectWorktreesByRepo(state), worktreeId)
   if (visible) {
     return visible
   }
-  // Why the index: this miss path runs per activity row for exactly the worktrees the
-  // feature targets (retained agents on deleted worktrees); the cached index replaces a
-  // full scan of every repo's detected worktrees. The index holds the same row objects,
-  // so the cast restores the listing's row type.
+  // Cached index avoids fleet scans per deleted-worktree activity row; same row objects justify restoring the listing row type.
   const detectedCandidates = findIndexedDetectedWorktrees(
     state.detectedWorktreesByRepo,
     worktreeId
@@ -182,7 +177,11 @@ export function getFolderWorkspaceMetaUpdates(
         ? null
         : updates.firstAgentMessageRenameError
   }
-  if (updates.comment !== undefined && updates.lastActivityAt === undefined) {
+  if (
+    updates.comment !== undefined &&
+    updates.lastActivityAt === undefined &&
+    !ORCA_SIDEBAR_INPUTS_IS_MAIN
+  ) {
     next.lastActivityAt = Date.now()
   }
   if (updates.linkedWorkItem !== undefined) {

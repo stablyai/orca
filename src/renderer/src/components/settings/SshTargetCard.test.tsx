@@ -2,13 +2,18 @@
 
 import { act } from 'react'
 import { createRoot } from 'react-dom/client'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { SshTargetCard } from './SshTargetCard'
 import { TooltipProvider } from '../ui/tooltip'
 import type { SshConnectionState, SshTarget } from '../../../../shared/ssh-types'
 
+beforeEach(() => {
+  Object.assign(window, { api: { runtimeEnvironments: {} } })
+})
+
 afterEach(() => {
   document.body.innerHTML = ''
+  Reflect.deleteProperty(window, 'api')
 })
 
 const target: SshTarget = {
@@ -38,8 +43,6 @@ async function renderCard(
           testing={false}
           onConnect={vi.fn()}
           onDisconnect={vi.fn()}
-          onTerminateSessions={vi.fn()}
-          onResetRelay={vi.fn()}
           onTest={vi.fn()}
           onEdit={vi.fn()}
           onRemove={vi.fn()}
@@ -65,8 +68,7 @@ describe('the connection error on an SSH target card', () => {
     expect(container.textContent).toContain('ssh-keygen -R build-01.internal')
   })
 
-  // This is the regression that made the careful wording pointless: `truncate` clamps to one line
-  // with an ellipsis and there is no title attribute, so the remedy was unreachable even on hover.
+  // Truncation without a tooltip hid the remedy at the end of host-key errors.
   it('does not clamp it to a single line', async () => {
     const container = await renderCard(errorState(HOST_KEY_ERROR))
     const paragraph = [...container.querySelectorAll('p')].find((node) =>
@@ -86,37 +88,50 @@ describe('the connection error on an SSH target card', () => {
   })
 })
 
-describe('the Host Node runtime on an SSH target card', () => {
-  const connected: SshConnectionState = {
-    targetId: 'target-1',
-    status: 'connected',
-    error: null,
-    reconnectAttempt: 0
-  }
+describe('an SSH host its managed server does not serve', () => {
+  it('leaves the reason to the translated status line instead of repeating main’s English', async () => {
+    const container = await renderCard({
+      targetId: 'target-1',
+      status: 'error',
+      error: 'This SSH host isn’t supported by this version of Orca.',
+      reconnectAttempt: 0,
+      managedServer: { kind: 'relay', reason: 'orcad_unavailable', detail: 'unsupported_host' }
+    })
 
-  it('marks a relay running on the opt-in Host Node runtime as unsupported', async () => {
-    const container = await renderCard(
-      { ...connected, hostNodeRuntime: true },
-      { ...target, remoteRuntime: 'legacy' }
-    )
+    expect(container.textContent).not.toContain('This SSH host isn’t supported')
+  })
+})
 
-    const note = container.querySelector('[data-ssh-host-node-runtime]')
-    expect(note?.textContent).toContain('Unsupported configuration')
-    expect(note?.textContent).toContain('Set Runtime to Auto')
+describe('the compact SSH host row', () => {
+  it('stays quiet while disconnected and names the key file only', async () => {
+    const container = await renderCard(undefined, {
+      ...target,
+      identityFile: '/Users/me/.ssh/id_ed25519'
+    })
+
+    expect(container.textContent).toContain('deploy@build-01.internal:22 · id_ed25519')
+    expect(container.textContent).not.toContain('Disconnected')
+    expect(container.textContent).toContain('Connect')
   })
 
-  it('marks an Auto host that fell back to Host Node without advice it already follows', async () => {
-    const container = await renderCard({ ...connected, hostNodeRuntime: true })
+  it('shows a live status and offers Disconnect when connected', async () => {
+    const container = await renderCard({
+      targetId: 'target-1',
+      status: 'connected',
+      error: null,
+      reconnectAttempt: 0
+    })
 
-    const note = container.querySelector('[data-ssh-host-node-runtime]')
-    expect(note?.textContent).toContain('Unsupported configuration')
-    expect(note?.textContent).toContain('Orca-managed Node isn’t available')
-    expect(note?.textContent).not.toContain('Set Runtime to Auto')
+    expect(container.textContent).toContain('Connected')
+    expect(container.textContent).toContain('Disconnect')
   })
 
-  it('says nothing about the runtime on a default connect', async () => {
-    const container = await renderCard(connected)
+  it('marks a host held by a managed server with a chip', async () => {
+    const container = await renderCard(undefined, {
+      ...target,
+      orcadFence: { environmentId: 'env-1' }
+    })
 
-    expect(container.querySelector('[data-ssh-host-node-runtime]')).toBeNull()
+    expect(container.textContent).toContain('Orca server')
   })
 })

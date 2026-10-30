@@ -1,5 +1,5 @@
 import { defineMethod } from '../core'
-import { RepoSelector } from './github-repo-target-schemas'
+import { RepoSelector } from '../../../../shared/rpc-contract/github-repo-target-params'
 import {
   IssuesList,
   RateLimit,
@@ -86,7 +86,8 @@ export const GITHUB_REPO_WORK_ITEM_METHODS = [
           ...(params.host ? { host: params.host } : {})
         },
         params.number,
-        params.type
+        params.type,
+        { preview: params.preview === true }
       )
   }),
   defineMethod({

@@ -23,7 +23,7 @@ export function pickPushRemoteUrl(args: {
   sshUrl: string
 }): string {
   const { originUrl, cloneUrl, sshUrl } = args
-  // Why: GHES port-443 SSH uses `ssh.<enterprise-host>`, not just ssh.github.com.
+  // Enterprise SSH-over-443 hosts can use ssh.<enterprise-host>, not just ssh.github.com.
   if (originUrl && (/^(git@|ssh:)/.test(originUrl) || /:\/\/(?:[^@/]+@)?ssh\./.test(originUrl))) {
     return sshUrl
   }
@@ -39,10 +39,7 @@ export function sanitizeRemoteName(owner: string, repo: string): string {
   return slug ? `pr-${slug}` : 'pr-head'
 }
 
-/**
- * A fork push target plus the PR's `maintainer_can_modify` flag, kept outside
- * {@link GitPushTarget} so it never leaks into the persisted push-target shape.
- */
+/** Keep maintainer permissions outside the persisted GitPushTarget shape. */
 export type PullRequestPushTarget = {
   pushTarget: GitPushTarget
   /** false when the PR has "Allow edits from maintainers" off; a push may be rejected. */
@@ -82,7 +79,7 @@ export async function getPullRequestPushTarget(
         matchedRepository = candidate
         break
       } catch (error) {
-        // Why: origin is often the contributor fork while the PR belongs to upstream; probe all PR repos before giving up.
+        // Fork origin may differ from the upstream PR namespace; exhaust candidate repositories.
         if (isNotFoundGhError(error)) {
           continue
         }

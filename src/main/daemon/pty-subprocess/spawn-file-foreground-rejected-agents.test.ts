@@ -72,6 +72,15 @@ describe('POSIX static-name agent selection', () => {
     ).toEqual({ available: true, processName: null })
   })
 
+  it('reports a foreground whose argv ps withheld as unavailable, never as no agent', () => {
+    expect(
+      resolveSpawnFileForegroundFromRows(
+        [root, { ...root, pid: 101, ppid: 100, pgid: 101, stat: 'S+', command: '(node)' }],
+        100
+      )
+    ).toEqual({ available: false, processName: null })
+  })
+
   it.each(['vim', 'npm', 'sleep'])('retains the ordinary %s name', (command) => {
     expect(
       resolveSpawnFileForegroundFromRows(

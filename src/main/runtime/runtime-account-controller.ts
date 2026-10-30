@@ -2,7 +2,9 @@ import type { ClaudeAccountService } from '../claude-accounts/service'
 import { hasAppEnvironment } from '../../shared/app-environment'
 import { getManagedDataAccountService } from '../managed-data-accounts/service'
 import type {
+  ClaudeAccountSignIn,
   ClaudeRateLimitAccountsState,
+  ClaudeSignInRequest,
   CodexRateLimitAccountsState,
   ManagedDataAccountProvider,
   ManagedDataAccountsState
@@ -13,10 +15,21 @@ import type {
 } from '../codex-accounts/service'
 import type { CodexAccountSelectionTarget } from '../codex-accounts/runtime-selection'
 import type { RateLimitService } from '../rate-limits/service'
+import type {
+  HostAccountSignInChannel,
+  HostAccountSignInProvider,
+  HostAccountSignInStatus
+} from '../../shared/host-account-sign-in-types'
 import type { CodexRateLimitResetOutcome, RateLimitState } from '../../shared/rate-limit-types'
 import type { CodexResetCreditExpectedScope } from '../../shared/codex-reset-credit-scope'
 import type { CommitMessageAgentEnvironmentResolvers } from '../text-generation/commit-message-agent-environment'
 import type { ClaudeAccountSelectionTarget } from '../claude-accounts/runtime-selection'
+import {
+  hostAccountsManagedByDesktopMessage,
+  type HostAccountLaunchEnv
+} from '../../shared/host-account-launch-env'
+import type { HostClaudeProfileRefresh } from './host-claude-profile-refresh'
+import { HostAccountLaunchEnvState } from './host-account-launch-env-state'
 
 export type RuntimeAccountServices = {
   claudeAccounts: ClaudeAccountService
@@ -47,6 +60,7 @@ export type CodexRateLimitResetRpcResult = {
 export class RuntimeAccountController {
   private services: RuntimeAccountServices | null = null
   private commitMessageAgentEnvironment: CommitMessageAgentEnvironmentResolvers | null = null
+  private readonly hostAccounts = new HostAccountLaunchEnvState(() => this.services !== null)
 
   setServices(services: RuntimeAccountServices): void {
     this.services = services
@@ -57,7 +71,41 @@ export class RuntimeAccountController {
   }
 
   getCommitMessageAgentEnvironment(): CommitMessageAgentEnvironmentResolvers | undefined {
-    return this.commitMessageAgentEnvironment ?? undefined
+    return this.commitMessageAgentEnvironment ?? this.hostAccounts.commitMessageAgentEnvironment()
+  }
+
+  /** Refused where this host has account services of its own: they already decide every launch. */
+  setHostLaunchEnv(launchEnv: HostAccountLaunchEnv): void {
+    this.hostAccounts.setHostLaunchEnv(launchEnv)
+  }
+
+  /** orcad's store: starts from the last pushed env, so launches before a reconnect keep it. */
+  restoreHostLaunchEnv(
+    saved: HostAccountLaunchEnv | null,
+    persist: (launchEnv: HostAccountLaunchEnv) => void,
+    options: { expectDesktopPush?: boolean; refreshClaudeProfile?: HostClaudeProfileRefresh } = {}
+  ): void {
+    this.hostAccounts.restoreHostLaunchEnv(saved, persist, options)
+  }
+
+  /** Before a launch for `agent` this host starts: the first account push, then a Claude refresh. */
+  prepareHostAgentLaunch(agent: string | null | undefined): Promise<void> {
+    return this.hostAccounts.prepareHostAgentLaunch(agent)
+  }
+
+  /** The desktop-selected account env for a process `agent` starts here; empty when none. */
+  hostLaunchEnvFor(agent: string | null | undefined): Readonly<Record<string, string>> {
+    return this.hostAccounts.hostLaunchEnvFor(agent)
+  }
+
+  /** Null where the desktop that owns this host's accounts polls usage instead (a WSL host). */
+  usageRateLimits(): RateLimitService | null {
+    return this.services?.rateLimits ?? null
+  }
+
+  /** Refuses where no poller would read a saved key, so a save is never reported for nothing. */
+  requireUsageRateLimits(): RateLimitService {
+    return this.requireServices().rateLimits
   }
 
   getClaudeConfigDirectory(target: ClaudeAccountSelectionTarget): string | null {
@@ -164,15 +212,29 @@ export class RuntimeAccountController {
     return this.requireServices().claudeAccounts.removeAccount(accountId)
   }
 
-  addClaudeFromConfigDir(
-    configDir: string,
-    options?: {
-      runtime?: 'host' | 'wsl'
-      wslDistro?: string | null
-      previousLegacyCredentialsSha256?: string | null
-    }
+  beginClaudeSignIn(request: ClaudeSignInRequest): Promise<ClaudeAccountSignIn> {
+    return this.requireServices().claudeAccounts.beginSignIn(request)
+  }
+
+  finishClaudeSignIn(
+    signIn: Omit<ClaudeAccountSignIn, 'configDir'>
   ): Promise<ClaudeRateLimitAccountsState> {
-    return this.requireServices().claudeAccounts.addAccountFromConfigDir(configDir, options)
+    return this.requireServices().claudeAccounts.finishSignIn(signIn)
+  }
+
+  cancelClaudeSignIn(signIn: Omit<ClaudeAccountSignIn, 'configDir'>): Promise<void> {
+    return this.requireServices().claudeAccounts.cancelSignIn(signIn)
+  }
+
+  /** Adds a host account whose login a client on another device finishes. */
+  async runHostSignIn(
+    provider: HostAccountSignInProvider,
+    channel: HostAccountSignInChannel
+  ): Promise<Pick<HostAccountSignInStatus, 'claude' | 'codex'>> {
+    const { claudeAccounts, codexAccounts } = this.requireServices()
+    return provider === 'claude'
+      ? { claude: await claudeAccounts.addAccountWithPastedCode(channel) }
+      : { codex: await codexAccounts.addAccountWithDeviceCode(channel) }
   }
 
   removeCodex(accountId: string): Promise<CodexRateLimitAccountsState> {
@@ -207,7 +269,11 @@ export class RuntimeAccountController {
 
   private requireServices(): RuntimeAccountServices {
     if (!this.services) {
-      throw new Error('Account services are not configured on this runtime')
+      throw new Error(
+        this.hostAccounts.current
+          ? hostAccountsManagedByDesktopMessage(this.hostAccounts.current.wslDistro)
+          : 'Account services are not configured on this runtime'
+      )
     }
     return this.services
   }

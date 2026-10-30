@@ -1,12 +1,10 @@
 import './rpc/unused-default-rpc-methods.test-fixture'
-// What happens to a chat assignee's Dispatch after the task is handed over, on the
-// coordinator-mail rig: its reports, its liveness, a stop, and the chat being closed.
 
 import { describe, expect, it, vi } from 'vitest'
 import { formatOrcaSessionAddress } from '../../shared/orca-session-address'
 import { testOrcaSessionId } from '../../shared/orca-session-address-test-fixture'
 import { idOf } from './rpc/orchestration-session-caller-test-fixture'
-import { closeStructuredAgentSessionChild } from './structured-agent-session-close'
+import { closeStructuredAgentSessionChild } from './agent-session/structured-agent-session-close'
 import type { FakeConnection } from './structured-chat-coordinator-fake-codex-fixture'
 import {
   COORDINATOR,
@@ -22,7 +20,7 @@ import {
   request,
   sendUserMessage,
   settleTurn,
-  startSuccessor
+  startClearedContext
 } from './structured-chat-coordinator-mail-rig.test-fixture'
 
 const WORKER = formatOrcaSessionAddress(testOrcaSessionId(PEER_CHAT))
@@ -68,13 +66,14 @@ describe("a chat assignee's report", () => {
     expect(db.getTask(taskId)?.status).toBe('completed')
   })
 
-  it('is admitted from the session a /clear continued the chat in, which keeps its Dispatch', async () => {
+  it('is admitted from the same cleared chat, which keeps its Dispatch', async () => {
     const { taskId, dispatchId } = await dispatchToChat()
-    const successor = await clearChat(PEER_CHAT)
+    const cleared = await clearChat(PEER_CHAT)
+    expect(cleared).toBe(PEER_CHAT)
     expect(db.getDispatchContextById(dispatchId)?.status).toBe('dispatched')
-    await startSuccessor(successor)
+    await startClearedContext(cleared)
 
-    await call('orchestration.send', workerDone(taskId, dispatchId), { sessionId: successor })
+    await call('orchestration.send', workerDone(taskId, dispatchId), { sessionId: cleared })
 
     expect(db.getDispatchContextById(dispatchId)?.status).toBe('completed')
   })
@@ -200,18 +199,19 @@ describe("a chat assignee's liveness, stop and close", () => {
     expect(db.getDispatchContextById(dispatchId)?.status).toBe('dispatched')
   })
 
-  it('reads unverifiable, never exited, when the session that continues the chat is unknown', async () => {
+  it('reads unverifiable, never exited, when the cleared chat record is unknown', async () => {
     const { dispatchId } = await dispatchToChat()
-    const successor = await clearChat(PEER_CHAT)
-    const getRecord = host.deps.store.getRecord.bind(host.deps.store)
-    vi.spyOn(host.deps.store, 'getRecord').mockImplementation((sessionId) =>
-      sessionId === successor ? null : getRecord(sessionId)
+    const cleared = await clearChat(PEER_CHAT)
+    expect(cleared).toBe(PEER_CHAT)
+    const getConversation = host.deps.store.getConversation.bind(host.deps.store)
+    vi.spyOn(host.deps.store, 'getConversation').mockImplementation((sessionId) =>
+      sessionId === cleared ? null : getConversation(sessionId)
     )
 
     expect(await call('orchestration.workerShow', { dispatch: dispatchId })).toMatchObject({
       observation: {
         status: 'unverifiable',
-        reason: expect.stringContaining('after a /clear cannot be verified')
+        reason: 'No durable record backs this chat.'
       },
       projection: { liveness: { verdict: 'unverifiable' } }
     })

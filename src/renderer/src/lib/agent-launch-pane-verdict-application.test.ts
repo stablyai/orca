@@ -4,6 +4,13 @@ import type { AgentLaunchPaneVerdict } from '../../../shared/agent-launch-pane-v
 import { createTabsSliceMockApi } from '../store/slices/tabs-slice-test-harness'
 import { createTestStore } from '../store/slices/store-test-helpers'
 
+// Main's answer to the window's layout commands, as a switch-on build sends them.
+vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
+  (
+    await import('@/runtime/layout-apply-test-transport.test-fixture')
+  ).runtimeRpcClientWithLayoutApply(await importOriginal())
+)
+
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
 vi.mock('@/lib/agent-status', async (importOriginal) => ({
   ...(await importOriginal<typeof AgentStatusModule>()),
@@ -61,20 +68,27 @@ beforeEach(() => {
 })
 
 describe("a launch pane's verdict in the window", () => {
-  it('settled: the tab forgets the launch and its prompt, so a restart reads nothing for it', () => {
+  it('settled: the tab forgets the launch and its prompt', () => {
     apply({ kind: 'proceed' })
     expect(launchTab()?.agentLaunchPane).toBeUndefined()
     expect(agentLaunchPanePrompt(tabId)).toBeNull()
   })
 
-  it('final: the tab keeps it for its life', () => {
-    apply({ kind: 'unconfirmed' })
+  it('final: the tab keeps it for this session', () => {
+    apply({ kind: 'not-started', code: 'boom' })
     expect(launchTab()?.agentLaunchPane).toEqual({
       leafId: LEAF,
       operationId: 'op-1',
-      outcome: { kind: 'unconfirmed' }
+      outcome: { kind: 'not-started', code: 'boom' }
     })
     expect(agentLaunchPanePrompt(tabId)).toBe('fix the build')
+  })
+
+  it('unconfirmed: the notice stays until the agent turns up after all', () => {
+    apply({ kind: 'unconfirmed' })
+    expect(launchTab()?.agentLaunchPane?.outcome).toEqual({ kind: 'unconfirmed' })
+    apply({ kind: 'proceed' })
+    expect(launchTab()?.agentLaunchPane).toBeUndefined()
   })
 
   it('final, for a launch pane the user already closed out of a split: nothing is kept', () => {
@@ -112,6 +126,9 @@ describe("a launch pane's verdict in the window", () => {
   it('never touches a pane no launch laid out', () => {
     apply({ kind: 'withdrawn' }, '9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d')
     expect(launchTab()).toBeDefined()
+    expect(launchTab()?.agentLaunchPane).toEqual({ leafId: LEAF, operationId: 'op-1' })
+    expect(agentLaunchPanePrompt(tabId)).toBe('fix the build')
+    expect(applyClosedTerminalLeafNotice).not.toHaveBeenCalled()
   })
 })
 
@@ -122,7 +139,7 @@ describe('the user closing a launch tab', () => {
   })
 
   it('is not, for a tab whose launch already has its outcome', () => {
-    apply({ kind: 'unconfirmed' })
+    apply({ kind: 'not-started', code: 'boom' })
     store.getState().closeTab(tabId)
     expect(wasAgentLaunchPaneClosedByUser(tabId, LEAF)).toBe(false)
   })

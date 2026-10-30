@@ -49,18 +49,19 @@ export async function listTeams(
 }
 
 export async function listTeamsOrThrow(
-  workspaceId?: LinearWorkspaceSelection | null
+  workspaceId?: LinearWorkspaceSelection | null,
+  signal?: AbortSignal
 ): Promise<LinearTeam[]> {
-  const entries = getClients(workspaceId)
+  const entries = getClients(workspaceId, signal)
   if (entries.length === 0) {
     return []
   }
 
   const results = await Promise.all(
     entries.map(async (entry) => {
-      await acquire()
+      await acquire(signal)
       try {
-        return await fetchAllTeamsForWorkspace(entry)
+        return await fetchAllTeamsForWorkspace(entry, signal)
       } catch (error) {
         if (isAuthError(error)) {
           clearToken(entry.workspace.id)
@@ -114,17 +115,21 @@ export async function listTeamsForAgent(
 async function readTeamResource<T>(
   teamId: string,
   workspaceId: string | null | undefined,
-  fetchAll: (team: Team) => Promise<T[]>,
-  fallbackWarning?: string
+  fetchAll: (team: Team, signal?: AbortSignal) => Promise<T[]>,
+  fallbackWarning?: string,
+  signal?: AbortSignal
 ): Promise<T[]> {
-  const entry = getClients(workspaceId)[0]
+  const entry = getClients(workspaceId, signal)[0]
   if (!entry) {
     return []
   }
 
-  await acquire()
+  await acquire(signal)
   try {
-    return await fetchAll(await entry.client.team(teamId))
+    signal?.throwIfAborted()
+    const team = await entry.client.team(teamId)
+    signal?.throwIfAborted()
+    return await fetchAll(team, signal)
   } catch (error) {
     if (isAuthError(error)) {
       clearToken(entry.workspace.id)
@@ -149,9 +154,10 @@ export async function getTeamStates(
 
 export async function getTeamStatesOrThrow(
   teamId: string,
-  workspaceId?: string | null
+  workspaceId?: string | null,
+  signal?: AbortSignal
 ): Promise<LinearWorkflowState[]> {
-  return readTeamResource(teamId, workspaceId, fetchAllTeamStates)
+  return readTeamResource(teamId, workspaceId, fetchAllTeamStates, undefined, signal)
 }
 
 export async function getTeamLabels(
@@ -163,9 +169,10 @@ export async function getTeamLabels(
 
 export async function getTeamLabelsOrThrow(
   teamId: string,
-  workspaceId?: string | null
+  workspaceId?: string | null,
+  signal?: AbortSignal
 ): Promise<LinearLabel[]> {
-  return readTeamResource(teamId, workspaceId, fetchAllTeamLabels)
+  return readTeamResource(teamId, workspaceId, fetchAllTeamLabels, undefined, signal)
 }
 
 export async function getTeamMembers(
@@ -177,21 +184,24 @@ export async function getTeamMembers(
 
 export async function getTeamMembersOrThrow(
   teamId: string,
-  workspaceId?: string | null
+  workspaceId?: string | null,
+  signal?: AbortSignal
 ): Promise<LinearMember[]> {
-  return readTeamResource(teamId, workspaceId, fetchAllTeamMembers)
+  return readTeamResource(teamId, workspaceId, fetchAllTeamMembers, undefined, signal)
 }
 
 export async function getViewerForWorkspaceOrThrow(
-  workspaceId: string
+  workspaceId: string,
+  signal?: AbortSignal
 ): Promise<{ id: string; displayName?: string | null; avatarUrl?: string | null }> {
-  const entry = getClients(workspaceId)[0]
+  const entry = getClients(workspaceId, signal)[0]
   if (!entry) {
     throw new Error('Not connected to Linear')
   }
 
-  await acquire()
+  await acquire(signal)
   try {
+    signal?.throwIfAborted()
     const viewer = await entry.client.viewer
     return {
       id: viewer.id,

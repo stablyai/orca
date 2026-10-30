@@ -1,4 +1,9 @@
-import { describe, expect, it } from 'vitest'
+import { createAcpStructuredLaunchResolver } from '../runtime/structured-agent-launch-composition.test-support'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { describe, expect, it, onTestFinished, vi } from 'vitest'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../shared/constants'
 import {
   agentSessionProviderHandleKey,
   type AgentSessionProviderHandle
@@ -13,9 +18,9 @@ import {
   spellProviderTimelineKey
 } from '../native-chat/agent-session-timeline/provider-timeline-identity'
 import { createProviderSpawnSpec } from '../provider-process/provider-process-supervisor'
-import { ACP_CHILD_ENV_TO_DELETE, acpLaunchSpecFor } from './acp-launch-specs'
+import { acpLaunchSpecFor } from './acp-launch-specs'
+import { STRUCTURED_CHILD_ENV_TO_DELETE } from '../runtime/structured-session-child-env'
 import { acpSessionNotRestoredItem } from './acp-session-reopen-failure'
-import { createAcpStructuredLaunchResolver } from './acp-structured-launch-resolution'
 
 const GROK = acpLaunchSpecFor('grok')!
 const identity = {
@@ -36,7 +41,6 @@ function grokRecord(overrides: Partial<AgentSessionRecord> = {}): AgentSessionRe
   }
 }
 
-/** A journal holding one turn of each named provider session. */
 function journalWithTurns(...providerSessions: string[]): JournalLoad {
   const state = createJournalReducerState(identity.sessionId, 'epoch-1')
   providerSessions.forEach((providerSession, index) => {
@@ -55,21 +59,16 @@ function journalWithTurns(...providerSessions: string[]): JournalLoad {
   return { state, newer: null, damage: null }
 }
 
-function resolver(
-  record: AgentSessionRecord,
-  fullAccess = false,
-  readJournal: () => JournalLoad | null = () => null
-) {
+function resolver(record: AgentSessionRecord, readJournal: () => JournalLoad | null = () => null) {
   const searched: (string | null | undefined)[] = []
   return {
     searched,
     resolve: createAcpStructuredLaunchResolver(GROK, {
-      store: { getRecord: () => record },
+      store: { getRecord: () => record, pinLaunchDirectory: vi.fn() },
       readJournal,
       resolveWorkspacePath: async () => '/repo/worktree',
       resolveEnvironment: async () => ({ PATH: '/usr/bin', HOME: '/home/user' }),
       resolveLaunchEnv: () => ({ GROK_EXTRA: '1' }),
-      resolveFullAccess: () => fullAccess,
       resolveCommand: (command, options) => {
         searched.push(options?.pathEnv)
         return `/resolved/${command}`
@@ -96,9 +95,22 @@ describe('ACP launch resolution', () => {
     expect(searched[0]).toContain('/home/user/.grok-work/bin')
   })
 
-  it('asks the agent to approve everything only under full access', async () => {
-    const launch = await resolver(grokRecord(), true).resolve({ identity })
-    expect(launch.args).toContain('--always-approve')
+  it('creates a new ACP session after clear instead of probing the old session', async () => {
+    const value = grokRecord({
+      providerContextBoundary: { operationId: 'clear', afterFence: 2, clearedAt: 100 },
+      providerHandleChain: []
+    })
+    const readJournal = vi.fn(() => null)
+    const launch = await resolver(value, readJournal).resolve({ identity })
+    expect(launch.resume).toBeNull()
+    expect(readJournal).not.toHaveBeenCalled()
+  })
+
+  it("asks the agent to approve everything only under the chat's full access", async () => {
+    const start = (permissionMode: 'ask' | 'full-access') =>
+      resolver(grokRecord()).resolve({ identity, spawnToken: 'token', permissionMode })
+    expect((await start('full-access')).args).toContain('--always-approve')
+    expect((await start('ask')).args).not.toContain('--always-approve')
   })
 
   it('resumes the chain head by its key, possibly unsaved only when this chat created it', async () => {
@@ -122,7 +134,6 @@ describe('ACP launch resolution', () => {
     expect(created.resume?.mayBeUnsaved()).toBe(true)
     const resumed = await resolver(
       grokRecord({ providerHandleChain: [link('created'), link('resumed')] }),
-      false,
       () => journalWithTurns()
     ).resolve({ identity })
     expect(resumed.resume).toMatchObject({ sessionId: 'acp-1', key })
@@ -142,9 +153,9 @@ describe('ACP launch resolution', () => {
       ]
     })
     const unsaved = async (readJournal: () => JournalLoad | null) =>
-      (await resolver(created, false, readJournal).resolve({ identity })).resume?.mayBeUnsaved()
+      (await resolver(created, readJournal).resolve({ identity })).resume?.mayBeUnsaved()
     const reads: string[] = []
-    const launch = await resolver(created, false, () => {
+    const launch = await resolver(created, () => {
       reads.push('read')
       return null
     }).resolve({ identity })
@@ -197,7 +208,6 @@ describe('ACP launch resolution', () => {
       nativeId: 'acp-1'
     })
     const replaced = grokRecord({ providerHandleChain: [link('acp-1'), link('acp-2', 'acp-1')] })
-    /** A journal holding the row for `lostKey`, written while `providerSession` ran. */
     const withRow = (providerSession: string): JournalLoad => {
       const load = journalWithTurns()
       const itemId = agentJournalItemKey(
@@ -221,10 +231,9 @@ describe('ACP launch resolution', () => {
       return load
     }
     const losses = async (record: AgentSessionRecord, readJournal: () => JournalLoad | null) =>
-      (await resolver(record, false, readJournal).resolve({ identity })).resume?.unannouncedLosses()
+      (await resolver(record, readJournal).resolve({ identity })).resume?.unannouncedLosses()
 
     const reads: string[] = []
-    // A chain that lost nothing never reads the journal.
     expect(
       await losses(grokRecord({ providerHandleChain: [link('acp-1')] }), () => {
         reads.push('read')
@@ -254,7 +263,7 @@ describe('ACP launch resolution', () => {
   it('refuses a record pinned to another host or another agent', async () => {
     const remote = grokRecord()
     remote.location = { ...remote.location, executionHostId: 'ssh:box' }
-    await expect(resolver(remote).resolve({ identity })).rejects.toThrow(/run on this runtime/)
+    await expect(resolver(remote).resolve({ identity })).rejects.toThrow(/run on the local host/)
     await expect(resolver(agentSessionRecordFixture()).resolve({ identity })).rejects.toThrow(
       /claude session/
     )
@@ -279,12 +288,73 @@ describe('Grok status: the structured session is the only producer', () => {
         command: 'grok',
         args: ['agent', 'stdio'],
         env: { GROK_HOME: '/home/user/.grok' },
-        envToDelete: ACP_CHILD_ENV_TO_DELETE
+        envToDelete: STRUCTURED_CHILD_ENV_TO_DELETE
       },
       inherited,
       'win32'
     )
     expect(Object.keys(spec.env).filter((key) => key.startsWith('ORCA_'))).toEqual([])
     expect(spec.env).toMatchObject({ PATH: '/usr/bin', GROK_HOME: '/home/user/.grok' })
+  })
+})
+
+describe('ACP launch folder of a floating chat', () => {
+  const floating = (launchDirectory?: string) =>
+    grokRecord({
+      location: { ...grokRecord().location, workspaceId: FLOATING_TERMINAL_WORKTREE_ID },
+      ...(launchDirectory ? { launchDirectory } : {})
+    })
+  const resolveIn = (record: AgentSessionRecord, currentSetting: string) => {
+    const resolveWorkspacePath = vi.fn(async () => currentSetting)
+    const pinLaunchDirectory = vi.fn()
+    const resolve = createAcpStructuredLaunchResolver(GROK, {
+      store: { getRecord: () => record, pinLaunchDirectory },
+      readJournal: () => null,
+      resolveWorkspacePath,
+      resolveEnvironment: async () => ({ PATH: '/usr/bin', HOME: '/home/user' }),
+      resolveCommand: (command) => `/resolved/${command}`
+    })
+    return { resolve, resolveWorkspacePath, pinLaunchDirectory }
+  }
+
+  it('launches in the folder the chat was pinned to after the floating setting moved', async () => {
+    const pinned = mkdtempSync(join(tmpdir(), 'orca-acp-floating-'))
+    try {
+      const { resolve, resolveWorkspacePath } = resolveIn(floating(pinned), '/floating/moved')
+      await expect(resolve({ identity })).resolves.toMatchObject({ cwd: pinned })
+      expect(resolveWorkspacePath).not.toHaveBeenCalled()
+    } finally {
+      rmSync(pinned, { recursive: true, force: true })
+    }
+  })
+
+  it('refuses with the folder-missing reason when the pinned folder is gone', async () => {
+    const gone = mkdtempSync(join(tmpdir(), 'orca-acp-floating-gone-'))
+    rmSync(gone, { recursive: true, force: true })
+    onTestFinished(() => rmSync(gone, { recursive: true, force: true }))
+    const { resolve } = resolveIn(floating(gone), '/floating/moved')
+    await expect(resolve({ identity })).rejects.toMatchObject({
+      name: 'AgentSessionPreSpawnError',
+      reason: 'launchFolderMissing'
+    })
+  })
+
+  it('pins an unpinned floating record to the folder its first launch runs in', async () => {
+    const { resolve, pinLaunchDirectory } = resolveIn(floating(), '/floating/start')
+    await expect(resolve({ identity })).resolves.toMatchObject({ cwd: '/floating/start' })
+    expect(pinLaunchDirectory).toHaveBeenCalledExactlyOnceWith(
+      identity.sessionId,
+      '/floating/start'
+    )
+  })
+
+  it('keeps resolving a worktree chat by its workspace, ignoring any recorded folder', async () => {
+    const { resolve, resolveWorkspacePath, pinLaunchDirectory } = resolveIn(
+      grokRecord({ launchDirectory: '/somewhere/else' }),
+      '/repo/worktree'
+    )
+    await expect(resolve({ identity })).resolves.toMatchObject({ cwd: '/repo/worktree' })
+    expect(resolveWorkspacePath).toHaveBeenCalledWith('workspace-1')
+    expect(pinLaunchDirectory).not.toHaveBeenCalled()
   })
 })

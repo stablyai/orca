@@ -1,11 +1,4 @@
-/**
- * A freshly launched Claude's first input, replayed from captured transcripts
- * (`__fixtures__/claude-dialog-trust-workspace*.txt`).
- *
- * The launch pastes on the signal the desktop's own paste used: bracketed paste turned on, then a
- * quiet render. Claude's first-launch trust dialog renders in that same mode, so the quiet window
- * also settles over it, and only the screen check keeps the prompt out of the dialog.
- */
+/** Trust dialogs also enable bracketed paste and settle quiet rendering; screen evidence must veto prompt delivery. */
 
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -19,7 +12,6 @@ import { resolveRemoteForegroundEvidence } from '../providers/agent-foreground-p
 import type { ProcessTableRow } from '../../shared/process-table-snapshot'
 import type * as TerminalForegroundGroup from './terminal-foreground-group'
 
-// What `ps` limited to the pane's terminal answers; the verdict over it stays the real one.
 const paneTerminal = vi.hoisted(() => {
   const state: { rows: ProcessTableRow[] | null } = { rows: null }
   return state
@@ -36,7 +28,6 @@ vi.mock('electron', () => ({
   app: { getPath: vi.fn(() => '/tmp') }
 }))
 
-/** The desktop paste's quiet window after bracketed paste, which the launch now shares. */
 const QUIET_WINDOW_MS = 1_500
 
 function readCapture(name: string): { data: string; size: { cols: number; rows: number } } {
@@ -45,7 +36,6 @@ function readCapture(name: string): { data: string; size: { cols: number; rows: 
   return { data: readFileSync(`${base}.txt`, 'utf8'), size: { cols: meta.cols, rows: meta.rows } }
 }
 
-/** Starts the launch wait on an empty pane, then streams the capture in, as a live launch does. */
 async function launchAndStream(
   name: string,
   timeoutMs: number,
@@ -76,7 +66,6 @@ describe('launch readiness for a freshly launched Claude', () => {
 
   it('claude-dialog-trust-workspace-answered: reads the composer after the answered dialog as ready', async () => {
     const { data } = readCapture('claude-dialog-trust-workspace-answered')
-    // Presence precondition: the capture turns bracketed paste on and ends on the idle composer.
     expect(data).toContain('\x1b[?2004h')
     const { ready, settled } = await launchAndStream(
       'claude-dialog-trust-workspace-answered',
@@ -92,7 +81,7 @@ describe('launch readiness for a freshly launched Claude', () => {
     const { ready, settled } = await launchAndStream(
       'claude-dialog-trust-workspace-answered',
       60_000,
-      // The relay offers no scan or shell check; either claiming a shell would refuse this signal.
+      // Relay lacks scan/shell proof; fabricating either would refuse readiness.
       { connectionId: 'ssh-1', confirmedForegroundProcess: 'zsh', shellForegroundProven: true }
     )
 
@@ -104,8 +93,6 @@ describe('launch readiness for a freshly launched Claude', () => {
   it('claude-dialog-trust-workspace: never reads the trust dialog as the composer', async () => {
     const { ready, settled } = await launchAndStream('claude-dialog-trust-workspace', 60_000)
 
-    // Reported inside the desktop paste's budget: the quiet window settles over the dialog, the
-    // screen check refuses it, and the idle wait names it.
     await vi.advanceTimersByTimeAsync(4_000)
     expect(settled).toHaveBeenCalled()
     await expect(ready).resolves.toMatchObject({
@@ -120,7 +107,6 @@ describe('a fresh orchestration worker start for Claude', () => {
     vi.useRealTimers()
   })
 
-  // Main's worker start pasted on this cue; the launch's quiet window put the brief 1.6 s later.
   it('settles on Claude’s ready title, before the launch paste’s quiet window', async () => {
     const { data, size } = readCapture('claude-dialog-trust-workspace-answered')
     const { runtime, handle } = await createTranscriptPane({
@@ -157,8 +143,7 @@ describe('what holds a launched agent’s terminal', () => {
       paneTerminal.rows = null
     })
 
-    // Captured with `ps -o pid=,ppid=,pgid=,tpgid=,stat=,command=` on a pane spawned the way a macOS
-    // pane is, under `login`: zsh holds the terminal in its own group, never the root's.
+    // Captured macOS login shape: zsh owns the foreground group independently of the login root.
     const login = (tpgid: number): ProcessTableRow => ({
       pid: 60404,
       ppid: 60394,
@@ -177,7 +162,6 @@ describe('what holds a launched agent’s terminal', () => {
     })
 
     it.each([
-      // A crashed stub's name can outlive it in the cached read; the rows show zsh back in front.
       ['zsh back at its prompt', [login(60406), zshAt(60406)], 'shell'],
       [
         'claude in front',
@@ -233,8 +217,7 @@ describe('what holds a launched agent’s terminal', () => {
     })
   })
 
-  // A tcsh or nu launch line runs the agent from `/bin/sh '<script>'`, which leads the terminal's
-  // foreground group with the agent a member of it, so the relay's name is `sh`.
+  // tcsh/nu wrappers lead with /bin/sh while the agent shares that foreground group.
   describe('SSH: the relay’s process-group observation, then its name', () => {
     beforeEach(() => setPlatform('darwin'))
 
@@ -278,7 +261,6 @@ describe('what holds a launched agent’s terminal', () => {
         '/opt/bin/claude',
         'agent'
       ],
-      // Reused from before the read was asked for, it may predate the agent's exit.
       [
         'takes the relay’s name over an observation too old to trust',
         1_500,
@@ -288,7 +270,6 @@ describe('what holds a launched agent’s terminal', () => {
       ['takes the relay’s name when the group holds another agent', 0, '/opt/bin/codex', 'shell']
     ] as const)('%s', async (_label, capturedAgeMs, agentCommand, found) => {
       const inspection = shLeadsClaude(capturedAgeMs, agentCommand)
-      // Presence precondition: the observation is live and names the agent in the group.
       expect(inspection.foregroundProcessEvidence).toMatchObject({
         verdict: 'live',
         processName: expect.any(String)
@@ -308,8 +289,7 @@ describe('what holds a launched agent’s terminal', () => {
     })
   })
 
-  // The scan names the pane's shell for an agent it cannot recognize (an npm agent as `node.exe`),
-  // and Git Bash and WSL keep other processes in the shell's job, so nothing proves the agent.
+  // Windows scans may name shell/node.exe and shared jobs; only shell-foreground proof is authoritative.
   describe('Windows: only the shell-foreground check, and never the agent', () => {
     beforeEach(() => setPlatform('win32'))
 
@@ -338,7 +318,7 @@ describe('what holds a launched agent’s terminal', () => {
     })
   })
 
-  // The stubs always disagree with the relay's name, so asking either would flip the answer.
+  // Contradictory stubs make any forbidden scan change the verdict.
   it.each([
     ['claude', 'agent'],
     ['bash', 'shell']
@@ -368,7 +348,6 @@ describe('what holds a launched agent’s terminal', () => {
     }
   )
 
-  // Why: a Windows relay names the pane's shell for an agent its scan cannot recognize (node.exe).
   it('SSH to a Windows host: never the agent', async () => {
     const { runtime } = await createTranscriptPane({
       paneTitle: 'Copilot',

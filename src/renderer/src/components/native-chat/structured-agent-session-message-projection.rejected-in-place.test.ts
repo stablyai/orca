@@ -1,5 +1,4 @@
-// A message the host accepted and then rejected stays in the desktop's chat where it was sent,
-// marked not sent, from the host's own history: a crash can lose the outbox, never the host's row.
+// Host-recorded rejections survive client crashes and stay in place as not sent.
 
 import { describe, expect, it } from 'vitest'
 import type {
@@ -56,7 +55,6 @@ function body(text: string) {
   }
 }
 
-// Same text, same fingerprint, as the host's body-only hash gives.
 function fingerprint(text: string): string {
   return `body:${text}`
 }
@@ -100,7 +98,6 @@ function submission(
   }
 }
 
-/** Rejected on the next open after a crash, before the agent ever got it. */
 function restartRejected(id: string, text: string, submittedAt: number): AgentJournalSubmission {
   return submission(id, text, submittedAt, {
     dispatchState: 'rejected',
@@ -130,10 +127,8 @@ function rows(messages: ReturnType<typeof projectStructuredAgentSessionMessages>
 }
 
 const SEED = submission('seed', 'seed', 1)
-// The one row drawn after a send a Stop took back before the agent started it.
 const STOPPED_ROW = `stopped-before-start:${agentJournalSubmissionKey('stopped')}`
 
-/** The stopped send's own row comes right after it. */
 function expectStopRowRightAfterStopped(messages: readonly { id: string }[]): void {
   const ids = messages.map((message) => message.id)
   expect(ids.indexOf(STOPPED_ROW)).toBe(ids.indexOf(agentJournalSubmissionKey('stopped')) + 1)
@@ -153,13 +148,11 @@ describe('a message the host accepted and then rejected, on the desktop', () => 
       { id: agentJournalSubmissionKey('seed'), text: 'seed', unsent: false },
       { id: agentJournalSubmissionKey('lost'), text: 'fix the parser', unsent: true }
     ])
-    // Its place is the host's: the row keeps the journal position it was recorded at.
     expect(
       messages.find((message) => message.id === agentJournalSubmissionKey('lost'))
     ).toMatchObject({ journalPosition: { sequence: 3, index: 0 }, source: 'transcript' })
   })
 
-  // An older host never moves it to its rejection: it stays at its submission, still drawn.
   it('keeps the position an older host gave it, however far back', () => {
     const later = Array.from({ length: 300 }, (_, index) => answer(4 + index))
     const items = [...SEED_ROWS, userItem('waited', 3, 'fix the parser'), ...later]
@@ -226,13 +219,11 @@ describe('a message the host accepted and then rejected, on the desktop', () => 
 
     expect(rows(projectStructuredAgentSessionMessages(items, [], submissions))).toEqual([
       { id: agentJournalSubmissionKey('seed'), text: 'seed', unsent: false },
-      { id: agentJournalSubmissionKey('again'), text: 'continue', unsent: false },
-      // Listed after the delivered rows; its journal position keeps its place.
-      { id: agentJournalSubmissionKey('first'), text: 'continue', unsent: true }
+      { id: agentJournalSubmissionKey('first'), text: 'continue', unsent: true },
+      { id: agentJournalSubmissionKey('again'), text: 'continue', unsent: false }
     ])
   })
 
-  // The host re-delivers its own message under new ids; however close their times, one row stays.
   it('keeps the last of several copies rejected in the same instant', () => {
     const items = [...SEED_ROWS, userItem('a', 3, 'pointer'), userItem('b', 4, 'pointer')]
     const submissions = [
@@ -265,13 +256,12 @@ describe('a message the host accepted and then rejected, on the desktop', () => 
     expect(rows(messages)).toEqual([
       { id: agentJournalSubmissionKey('seed'), text: 'seed', unsent: false },
       { id: agentJournalSubmissionKey('first'), text: 'again', unsent: false },
-      { id: agentJournalSubmissionKey('stopped'), text: 'again', unsent: false },
-      { id: agentJournalSubmissionKey('failed'), text: 'again', unsent: true }
+      { id: agentJournalSubmissionKey('failed'), text: 'again', unsent: true },
+      { id: agentJournalSubmissionKey('stopped'), text: 'again', unsent: false }
     ])
     expectStopRowRightAfterStopped(messages)
   })
 
-  // Its own reply reports the rejection, in the composer, as a command's.
   it('is not drawn when it was a command such as /compact', () => {
     const compact = {
       ...userItem('compact', 3, '/compact'),
@@ -282,7 +272,6 @@ describe('a message the host accepted and then rejected, on the desktop', () => 
     expect(
       rows(projectStructuredAgentSessionMessages([...SEED_ROWS, compact], [], submissions))
     ).toEqual([{ id: agentJournalSubmissionKey('seed'), text: 'seed', unsent: false }])
-    // One rule decides for the rows and the notices.
     expect(
       deliveryNotices(
         submissions,
@@ -330,7 +319,6 @@ describe("one row per rejected message, the host's", () => {
 describe('a rejected message the queue holds', () => {
   const seedRow = { id: agentJournalSubmissionKey('seed'), text: 'seed', unsent: false }
 
-  // A hand-off the host rejected sends its draft back to the card list, which shows the text.
   it('is not drawn when it was a queued draft handed off', () => {
     const items = [...SEED_ROWS, userItem('handoff', 3, 'queued text')]
     const submissions = [
@@ -342,8 +330,7 @@ describe('a rejected message the queue holds', () => {
     expect(deliveryNotices(submissions).size).toBe(0)
   })
 
-  // A send kept across a restart comes back as a paused card; the send itself records that card.
-  // The card's Edit and Delete remove it, so nothing but that record may hide the send.
+  // Only the submission’s kept-card record may hide it; editing/deleting the card must not resurrect the old send.
   it('is never drawn once kept as a card, with the card there, deleted, or edited and sent', () => {
     const items = [...SEED_ROWS, userItem('kept', 3, 'kept text')]
     const kept = { ...restartRejected('kept', 'kept text', 3), keptAsQueuedMessageId: 'kept' }
@@ -380,7 +367,7 @@ describe('a rejected message the queue holds', () => {
 })
 
 describe('the phone', () => {
-  it('still hides a message the host failed to deliver, but draws one a Stop withdrew', () => {
+  it('draws the same rows as the desktop: not sent in place, and a stopped send with its stop row', () => {
     const items = [
       ...SEED_ROWS,
       userItem('lost', 3, 'fix the parser'),
@@ -392,11 +379,15 @@ describe('the phone', () => {
       withdrawn('stopped', 'never mind', 4)
     ]
 
-    const messages = projectShared(items, [], submissions, { rejectedInPlace: false })
+    const messages = projectShared(items, [], submissions)
     expect(rows(messages)).toEqual([
       { id: agentJournalSubmissionKey('seed'), text: 'seed', unsent: false },
+      { id: agentJournalSubmissionKey('lost'), text: 'fix the parser', unsent: true },
       { id: agentJournalSubmissionKey('stopped'), text: 'never mind', unsent: false }
     ])
+    expect(rows(messages)).toEqual(
+      rows(projectStructuredAgentSessionMessages(items, [], submissions))
+    )
     expectStopRowRightAfterStopped(messages)
   })
 })

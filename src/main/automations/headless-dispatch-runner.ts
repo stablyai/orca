@@ -14,6 +14,11 @@ import type {
 } from './headless-dispatch'
 import type { AutomationRunTargetResult } from './run-target-resolution'
 import type { AutomationRunWriter } from './automation-run-writer'
+import {
+  automationRunFailure,
+  type AutomationRunFailure
+} from '../../shared/automation-run-failure-copy'
+import { parseWslDistroHold } from '../../shared/wsl-distro-stopped-hold'
 
 export type HeadlessAutomationDispatchContext = {
   automation: Automation
@@ -26,8 +31,21 @@ export type HeadlessAutomationDispatchContext = {
   watchRun: (run: AutomationRun) => void
 }
 
+/** Record dispatch refusals as skips. */
+export class AutomationDispatchRefusedError extends Error {
+  constructor(readonly failure: AutomationRunFailure) {
+    super(failure.error)
+  }
+}
+
 function describeDispatchError(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
+}
+
+/** A launch the runtime held for a stopped WSL distro is a retryable skip, not a crash (E9). */
+function heldForStoppedWslDistro(error: unknown): AutomationRunFailure | null {
+  const hold = parseWslDistroHold(describeDispatchError(error))
+  return hold ? automationRunFailure('wslDistroStopped', { distro: hold.distro }) : null
 }
 
 export async function runHeadlessAutomationDispatch(
@@ -46,14 +64,20 @@ export async function runHeadlessAutomationDispatch(
     })
   }
   let launch: HeadlessAutomationDispatchLaunch
+  // The agent can finish before launch returns.
+  const dispatchedAt = Date.now()
   try {
     launch = await ctx.dispatcher({ automation, run, target })
   } catch (error) {
+    const refusal =
+      error instanceof AutomationDispatchRefusedError
+        ? error.failure
+        : heldForStoppedWslDistro(error)
     return runs.updateRun({
       runId: run.id,
-      status: 'dispatch_failed',
+      status: refusal ? 'skipped_unavailable' : 'dispatch_failed',
       workspaceId: automation.workspaceId,
-      error: describeDispatchError(error)
+      ...(refusal ?? { error: describeDispatchError(error) })
     })
   }
   const launchRunTarget = {
@@ -66,14 +90,21 @@ export async function runHeadlessAutomationDispatch(
   const updated = runs.updateRun({
     runId: run.id,
     status: 'dispatched',
+    dispatchedAt,
     ...launchRunTarget,
-    // Kept here: a watched run's completion is written without it.
+    // Watched completions omit the precheck result.
     ...(precheckResult ? { precheckResult } : {}),
     error: null
   })
-  // Observe the launched agent even while persistence is stalled or rejects its acknowledgement.
+  // Start observation without waiting for persistence acknowledgement.
   if (!launch.completion) {
-    ctx.watchRun({ ...run, ...launchRunTarget, status: 'dispatched', error: null })
+    ctx.watchRun({
+      ...run,
+      ...launchRunTarget,
+      status: 'dispatched',
+      dispatchedAt,
+      error: null
+    })
   } else {
     void launch.completion
       .then(
@@ -84,7 +115,9 @@ export async function runHeadlessAutomationDispatch(
             ...launchRunTarget,
             precheckResult,
             outputSnapshot: completion.outputSnapshot ?? null,
-            error: completion.error ?? null
+            error: completion.error ?? null,
+            errorCode: completion.errorCode ?? null,
+            errorParams: completion.errorParams ?? null
           }),
         (error) =>
           ctx.markDispatchResult({

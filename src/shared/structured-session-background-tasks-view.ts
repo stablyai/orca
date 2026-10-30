@@ -1,7 +1,4 @@
-// The background-tasks strip's view of one session's wire state.
-//
-// Hosts select background work; newer clients also exclude their current turn's commands
-// from an older host's roster. Child agents and earlier commands stay visible mid-turn.
+// Hosts select background work; clients additionally hide current-turn commands in old rosters while retaining child agents/earlier commands.
 
 import type {
   AgentSessionBackgroundTask,
@@ -13,18 +10,20 @@ import type { AgentChildWorkView } from './agent-status-child-work-view'
 export type StructuredSessionBackgroundTasksView = {
   /** Background rows remain visible during a foreground turn. */
   show: boolean
-  /** Idle-only: gates the animated monitoring indicator and conversation
-   *  commands, never the strip itself. A running turn owns the voice. */
+  /** Idle-only monitoring/command gate; a running turn owns the indicator, but background rows remain visible. */
   isMonitoring: boolean
   tasks: AgentSessionBackgroundTask[]
   settledTasks: AgentSessionBackgroundTask[]
   /** The host's child records, when it publishes them; the rows then read these. */
   children?: AgentChildWorkView[]
   supportsStop: boolean
-  supportsStopAll: boolean
+  /** Offer untargeted Stop if no targeted stop exists and host supports it, or if idle unlisted work can be reached by ending the agent. */
+  offersStopAll: boolean
+  /** Some running work is not listed: the strip stays, and says details are unavailable. */
+  incomplete: boolean
 }
 
-/** One shared empty list: a roster with no rows of a kind keeps the strip's memo on every render. */
+/** Reuse empty lists to preserve strip memoization across renders. */
 const NO_TASKS: AgentSessionBackgroundTask[] = []
 const NO_FOREGROUND_COMMANDS: ReadonlySet<string> = new Set()
 
@@ -53,16 +52,18 @@ export function structuredSessionBackgroundTasksView(
     foregroundCommands,
     (task) => task.id
   )
-  // Only running children arrive; a roster with none holds nothing open either way.
-  // An older host's roster whose listed rows have all finished shows nothing that runs.
+  // Older rosters with only finished rows cannot hold the strip open.
   const onlyFinished = !children && !tasks.length && Boolean(backgroundTasks?.settledTasks?.length)
   const onlyForeground =
     foregroundCommands.size > 0 &&
     !children?.length &&
     !tasks.length &&
     Boolean(backgroundTasks?.children?.length || backgroundTasks?.tasks?.length)
-  const show = monitoring && !onlyFinished && !onlyForeground
+  const incomplete = monitoring && backgroundTasks.incomplete === true
+  const show = monitoring && (incomplete || (!onlyFinished && !onlyForeground))
+  // Commands and rewind follow the listed records, as the host's own admission does.
   const liveWork = children ? agentChildWorkLiveness(children) !== null : show
+  const supportsStop = backgroundTasks?.supportsTaskStop === true
   return {
     show,
     isMonitoring: turnId === null && liveWork,
@@ -70,9 +71,37 @@ export function structuredSessionBackgroundTasksView(
     // Running work only, from any host: an older host's finished rows are not shown either.
     settledTasks: NO_TASKS,
     ...(children ? { children } : {}),
-    supportsStop: backgroundTasks?.supportsTaskStop === true,
-    // Absent means the host predates the field and does accept an untargeted
-    // stop; only a host that says `false` has none to offer.
-    supportsStopAll: backgroundTasks?.supportsStopAll !== false
+    supportsStop,
+    // Missing supportsStopAll is legacy support; only explicit false means no untargeted Stop.
+    offersStopAll:
+      (!supportsStop && backgroundTasks?.supportsStopAll !== false) ||
+      (incomplete && turnId === null),
+    incomplete
   }
+}
+
+/** Identify listed runs by invocation because providers reuse IDs across child runs; old hosts fall back to provider ID. */
+export function structuredSessionListedTaskRun(
+  view: StructuredSessionBackgroundTasksView,
+  providerId: string
+): string | null {
+  if (!view.show) {
+    return null
+  }
+  if (!view.children) {
+    return view.tasks.some((task) => task.id === providerId) ? providerId : null
+  }
+  const child = view.children.find((candidate) => candidate.providerId === providerId)
+  return child ? `${child.invocation.invocationId}#${child.invocation.generation}` : null
+}
+
+/** Retain confirmed Stops only for still-listed runs; preserve map identity if none left. */
+export function structuredSessionConfirmedStopsStillListed(
+  view: StructuredSessionBackgroundTasksView,
+  confirmed: ReadonlyMap<string, string>
+): ReadonlyMap<string, string> {
+  const listed = [...confirmed].filter(
+    ([providerId, run]) => structuredSessionListedTaskRun(view, providerId) === run
+  )
+  return listed.length === confirmed.size ? confirmed : new Map(listed)
 }

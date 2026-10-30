@@ -65,7 +65,7 @@ describe('createIpcPtyTransport', () => {
 
   it('drops the OSC-9999 cross-chunk carry on resetAgentStatusCarry', async () => {
     // Why: a restore marker means bytes dropped, so a carried partial OSC-9999 prefix would eat the next chunk's head.
-    const { createPtyOutputProcessor } = await import('./pty-transport')
+    const { createPtyOutputProcessor } = await import('./pty-output-processor')
     const processor = createPtyOutputProcessor({})
     const callbacks = { onData: vi.fn() }
 
@@ -81,7 +81,7 @@ describe('createIpcPtyTransport', () => {
   it('does not schedule PTY side-effect drains for ordinary output with no working title', async () => {
     vi.useFakeTimers()
     try {
-      const { createPtyOutputProcessor } = await import('./pty-transport')
+      const { createPtyOutputProcessor } = await import('./pty-output-processor')
       const onTitleChange = vi.fn()
       const onBell = vi.fn()
       const processor = createPtyOutputProcessor({ onTitleChange, onBell })
@@ -101,7 +101,7 @@ describe('createIpcPtyTransport', () => {
   it('compacts ignored Cursor native titles into one deferred drain', async () => {
     vi.useFakeTimers()
     try {
-      const { createPtyOutputProcessor } = await import('./pty-transport')
+      const { createPtyOutputProcessor } = await import('./pty-output-processor')
       const onTitleChange = vi.fn()
       const processor = createPtyOutputProcessor({ onTitleChange })
       const callbacks = { onData: vi.fn() }
@@ -123,7 +123,7 @@ describe('createIpcPtyTransport', () => {
   it('lets an ignored Cursor native title clear a pending stale-title fallback', async () => {
     vi.useFakeTimers()
     try {
-      const { createPtyOutputProcessor } = await import('./pty-transport')
+      const { createPtyOutputProcessor } = await import('./pty-output-processor')
       const onAgentBecameIdle = vi.fn()
       const processor = createPtyOutputProcessor({
         onTitleChange: vi.fn(),
@@ -150,7 +150,7 @@ describe('createIpcPtyTransport', () => {
   it('re-arms stale-title fallback after a later title-free output scan', async () => {
     vi.useFakeTimers()
     try {
-      const { createPtyOutputProcessor } = await import('./pty-transport')
+      const { createPtyOutputProcessor } = await import('./pty-output-processor')
       const onTitleChange = vi.fn()
       const processor = createPtyOutputProcessor({
         onTitleChange,
@@ -176,7 +176,7 @@ describe('createIpcPtyTransport', () => {
   it('preserves stale-title detection after compacting deferred side effects', async () => {
     vi.useFakeTimers()
     try {
-      const { createPtyOutputProcessor } = await import('./pty-transport')
+      const { createPtyOutputProcessor } = await import('./pty-output-processor')
       const onTitleChange = vi.fn()
       const onAgentBecameWorking = vi.fn()
       const onAgentBecameIdle = vi.fn()
@@ -207,7 +207,7 @@ describe('createIpcPtyTransport', () => {
   it('limits deferred PTY side-effect work per timer tick', async () => {
     vi.useFakeTimers()
     try {
-      const { createPtyOutputProcessor } = await import('./pty-transport')
+      const { createPtyOutputProcessor } = await import('./pty-output-processor')
       const onTitleChange = vi.fn()
       const processor = createPtyOutputProcessor({ onTitleChange })
       const callbacks = { onData: vi.fn() }
@@ -233,7 +233,7 @@ describe('createIpcPtyTransport', () => {
   it('limits coalesced OSC titles in one PTY chunk per timer tick', async () => {
     vi.useFakeTimers()
     try {
-      const { createPtyOutputProcessor } = await import('./pty-transport')
+      const { createPtyOutputProcessor } = await import('./pty-output-processor')
       const onTitleChange = vi.fn()
       const processor = createPtyOutputProcessor({ onTitleChange })
       const callbacks = { onData: vi.fn() }
@@ -256,7 +256,7 @@ describe('createIpcPtyTransport', () => {
   it('flushes all remaining PTY side effects after a partial bounded drain', async () => {
     vi.useFakeTimers()
     try {
-      const { createPtyOutputProcessor } = await import('./pty-transport')
+      const { createPtyOutputProcessor } = await import('./pty-output-processor')
       const onTitleChange = vi.fn()
       const processor = createPtyOutputProcessor({ onTitleChange })
       const callbacks = { onData: vi.fn() }
@@ -280,8 +280,8 @@ describe('createIpcPtyTransport', () => {
   it('bounds the deferred side-effect queue under a stalled drain, keeping the newest title and a pending bell', async () => {
     vi.useFakeTimers()
     try {
-      const { createPtyOutputProcessor, MAX_PENDING_PTY_SIDE_EFFECTS } =
-        await import('./pty-transport')
+      const { createPtyOutputProcessor } = await import('./pty-output-processor')
+      const { MAX_PENDING_PTY_SIDE_EFFECTS } = await import('./pty-output-side-effect-queue')
       const onTitleChange = vi.fn()
       const onBell = vi.fn()
       const processor = createPtyOutputProcessor({ onTitleChange, onBell })
@@ -317,11 +317,9 @@ describe('createIpcPtyTransport', () => {
   it('collapses evicted agent-status payloads onto the survivor, keeping the newest', async () => {
     vi.useFakeTimers()
     try {
-      const {
-        createPtyOutputProcessor,
-        MAX_PENDING_PTY_SIDE_EFFECTS,
-        MAX_EVICTED_AGENT_STATUS_PAYLOAD_CARRY
-      } = await import('./pty-transport')
+      const { createPtyOutputProcessor } = await import('./pty-output-processor')
+      const { MAX_PENDING_PTY_SIDE_EFFECTS, MAX_EVICTED_AGENT_STATUS_PAYLOAD_CARRY } =
+        await import('./pty-output-side-effect-queue')
       const onAgentStatus = vi.fn()
       const processor = createPtyOutputProcessor({ onAgentStatus })
       const callbacks = { onData: vi.fn() }
@@ -349,10 +347,10 @@ describe('createIpcPtyTransport', () => {
     }
   })
 
-  it('delivers every side effect in order when the queue stays below the cap', async () => {
+  it('delivers the side-effect count and final title when the queue stays below the cap', async () => {
     vi.useFakeTimers()
     try {
-      const { createPtyOutputProcessor } = await import('./pty-transport')
+      const { createPtyOutputProcessor } = await import('./pty-output-processor')
       const onTitleChange = vi.fn()
       const onBell = vi.fn()
       const onAgentStatus = vi.fn()
@@ -378,7 +376,7 @@ describe('createIpcPtyTransport', () => {
   it('still runs stale-title detection when an OSC status chunk has no title', async () => {
     vi.useFakeTimers()
     try {
-      const { createPtyOutputProcessor } = await import('./pty-transport')
+      const { createPtyOutputProcessor } = await import('./pty-output-processor')
       const onTitleChange = vi.fn()
       const onAgentStatus = vi.fn()
       const onAgentBecameIdle = vi.fn()

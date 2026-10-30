@@ -12,16 +12,13 @@ import type { AgentSessionDeathEvidence } from '../../../shared/agent-session-re
 import { readAgentJournalTurn } from '../../../shared/agent-session-turn-record'
 import { createTrackedJournalOpener } from '../agent-session-journal/journal-host-database-test-support'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
-import {
-  settleStaleStructuredAgentSessionState,
-  settleStructuredAgentSessionDeadGeneration
-} from './structured-agent-session-dead-generation-settlement'
+import { settleStaleStructuredAgentSessionState } from './structured-agent-session-dead-generation-settlement'
+import { settleObservedExitForTest } from './structured-agent-session-observed-exit.test-fixture'
 import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 
 const SESSION = 'session-late-proof'
 const THREAD = 'thread-1'
 
-/** A probe that found the given owner's child gone at 9000. */
 function proofFor(ownerFence: number | undefined): AgentSessionDeathEvidence {
   return {
     kind: 'pid-absent',
@@ -61,7 +58,6 @@ afterEach(async () => {
   await rm(root, { recursive: true, force: true })
 })
 
-/** A running turn its owner wrote, with a running call and the given finished calls in it. */
 async function seedTurn(
   turnId: string,
   fence: number,
@@ -111,14 +107,13 @@ function callLifecycle(turnId: string, ordinal: number) {
 describe('a proof written after an unverifiable settle', () => {
   it('corrects the call that settle closed along with its turn, and only once', async () => {
     await seedTurn('turn-1', 1, [
-      // Failed on its own before the death: no proof of the death makes it interrupted.
+      // Independent failure must not become interrupted when death is later proven.
       { kind: 'tool-call', name: 'shell', input: { command: 'false' }, state: 'failed' },
       { kind: 'tool-call', name: 'read', input: { path: 'a' }, state: 'completed' }
     ])
 
     await settle(2, null)
     expect(turnState('turn-1')).toBe('unverifiable')
-    // Nothing proved the end, so the call reads failed, as it always has.
     expect(callLifecycle('turn-1', 1)).toBe('failed')
 
     await settle(3, proofFor(1))
@@ -140,7 +135,7 @@ describe('a proof written after an unverifiable settle', () => {
     expect(callLifecycle('turn-2', 1)).toBe('failed')
 
     const unrevised = journal.cursor()
-    // A later owner's death, and an older build's proof naming no owner, prove nothing about it.
+    // Other-owner and legacy ownerless proof cannot settle this generation.
     await expect(settle(4, proofFor(5))).resolves.toBe(0)
     await expect(settle(4, { ...proofFor(undefined), kind: 'exit-observed' })).resolves.toBe(0)
     expect(journal.cursor()).toEqual(unrevised)
@@ -153,10 +148,11 @@ describe('a proof written after an unverifiable settle', () => {
 
   it('corrects a call an unverifiable restart eviction closed', async () => {
     await seedTurn('turn-1', 7)
-    await settleStructuredAgentSessionDeadGeneration({
+    await settleObservedExitForTest({
       journal,
       sessionId: SESSION,
       fence: 8,
+      ownerFence: 7,
       settlementId: `restart-eviction:${SESSION}:8`,
       pendingSubmissionReason: 'provider_exited_before_acknowledgement',
       verdict: { state: 'unverifiable' },

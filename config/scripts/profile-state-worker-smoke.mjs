@@ -6,7 +6,8 @@ import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { Worker } from 'node:worker_threads'
-import { describeProcessFailure, runProcessSync } from './script-child-process.mjs'
+import { runProcessSync } from '@orca/process-host'
+import { describeProcessFailure } from './process-failure-message.mjs'
 import {
   ORCAD_PROFILE_PREFLIGHT_FLAG,
   parseOrcadProfilePreflight

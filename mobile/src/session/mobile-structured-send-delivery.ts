@@ -1,9 +1,8 @@
 import type { AgentSessionSendResult } from '../../../src/shared/agent-session-wire'
 import { agentSessionRefusalOperationState } from '../../../src/shared/agent-session-refusal-retry'
-import { structuredAgentSessionRejectionNotice } from '../../../src/shared/structured-agent-session-rejection-words'
-import { dispatchWasWithdrawn } from '../../../src/shared/structured-agent-session-dispatch-rejection'
-import type { MobileNativeChatSendOutcome } from './mobile-native-chat-send'
+import type { MobileNativeChatSendOutcome } from './native-chat/mobile-native-chat-send'
 import type { StructuredAgentSessionMutationCallResult } from './mobile-structured-agent-session-rpc'
+import { translate } from '../i18n/mobile-i18n'
 
 export type MobileStructuredSendDelivery = {
   outcome: MobileNativeChatSendOutcome
@@ -26,7 +25,10 @@ export function mobileStructuredSendDelivery(
   }
   if ('queued' in result.value && result.value.queued) {
     return result.value.queued.state === 'withdrawn'
-      ? { outcome: 'rejected', error: 'Message not sent' }
+      ? {
+          outcome: 'rejected',
+          error: translate('session.structuredSendDelivery.messageNotSent', 'Message not sent')
+        }
       : { outcome: 'queued', error: null }
   }
   const submission = 'submission' in result.value ? result.value.submission : undefined
@@ -36,18 +38,9 @@ export function mobileStructuredSendDelivery(
   if (submission.queuedMessageId === result.value.clientMessageId) {
     return { outcome: 'unknown', error: null }
   }
-  if (submission.dispatchState === 'rejected') {
-    if (submission.keptAsQueuedMessageId !== undefined) {
-      return { outcome: 'queued', error: null }
-    }
-    if (submission.queuedMessageId === undefined && dispatchWasWithdrawn(submission)) {
-      // The host transcript already owns this send's stopped row.
-      return { outcome: 'accepted', error: null }
-    }
-    return {
-      outcome: 'rejected',
-      error: structuredAgentSessionRejectionNotice(submission.reason, 'composer-send')
-    }
+  // Recorded rejections stay in history rather than returning to the composer; requeued submissions belong to their cards.
+  if (submission.dispatchState === 'rejected' && submission.keptAsQueuedMessageId !== undefined) {
+    return { outcome: 'queued', error: null }
   }
   return { outcome: 'accepted', error: null }
 }

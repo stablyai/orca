@@ -1,7 +1,4 @@
-/**
- * The platform each SSH host last reported this app session, so connect telemetry can name it
- * without a probe of its own. Keyed by the local target id, which never leaves this process.
- */
+/** Memoize session host facts for connect telemetry without extra probes; keys are local target ids. */
 import type { NodeRuntimeTarget } from '../../shared/node-runtime-pin'
 import type { RemoteHostPlatform } from './ssh-remote-platform'
 
@@ -13,11 +10,11 @@ export type SshHostPlatformFacts = {
 
 const known = new Map<string, SshHostPlatformFacts>()
 
-function libcOf(
-  host: RemoteHostPlatform,
+function sshHostLibc(
+  os: RemoteHostPlatform['os'],
   target: NodeRuntimeTarget | null
 ): SshHostPlatformFacts['libc'] {
-  if (host.os !== 'linux') {
+  if (os !== 'linux') {
     return 'none'
   }
   if (!target) {
@@ -31,7 +28,7 @@ export function rememberSshHostPlatform(
   host: RemoteHostPlatform,
   target: NodeRuntimeTarget | null
 ): void {
-  const libc = libcOf(host, target)
+  const libc = sshHostLibc(host.os, target)
   const previous = known.get(targetId)
   // A libc probe that did not run must not erase one that did.
   known.set(targetId, {

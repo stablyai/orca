@@ -5,22 +5,16 @@ import { openDocumentInFloatingWorkspace } from '@/lib/open-document-in-floating
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '../../store'
 
-/**
- * Opens documents the OS shell handed to Orca ("Open With" / double-click) in the
- * floating workspace, which is the one editor surface that needs no project.
- */
+/** Open OS shell document requests in the project-independent floating workspace. */
 async function openOsRequestedDocuments(documents: FileDocument[]): Promise<void> {
-  // Why the shape check: this payload crosses the preload boundary, so a stale or mismatched
-  // preload can hand back something that is not an array. Reading .length off that throws
-  // inside the promise chain rather than failing loudly at the boundary.
+  // Validate preload payload shape before length/access; older or mismatched preloads may return non-arrays.
   if (!Array.isArray(documents) || documents.length === 0) {
     return
   }
   const store = useAppStore.getState()
   let opened = 0
   for (const document of documents) {
-    // Why isolated: selecting several files hands us one batch, and one unopenable file
-    // must not cost the user the rest of the selection.
+    // Isolate per-file failures so a multi-file selection still opens the remaining documents.
     try {
       openDocumentInFloatingWorkspace(store.openFile, document)
       opened += 1
@@ -31,9 +25,7 @@ async function openOsRequestedDocuments(documents: FileDocument[]): Promise<void
   if (opened === 0) {
     return
   }
-  // Why enabled here: the user asked the OS for this file, and the tabs above are already in a
-  // surface a disabled floating workspace never renders. Same enable-then-reveal as the
-  // Settings "Edit keybindings in Orca" action.
+  // Enable floating workspace before revealing OS-requested files or the opened tabs remain invisible.
   if (store.settings?.floatingTerminalEnabled !== true) {
     await store.updateSettings({ floatingTerminalEnabled: true })
   }

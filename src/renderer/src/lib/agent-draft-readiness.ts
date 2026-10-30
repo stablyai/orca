@@ -1,28 +1,17 @@
 import type { DraftPasteReadySignal } from '../../../shared/tui-agent-config'
-import type { GlobalSettings } from '../../../shared/global-settings-types'
 import { subscribeToPtyData } from '@/components/terminal-pane/pty-data-sidecar-subscriptions'
 import { replayPreHandlerPtyData } from '@/components/terminal-pane/pty-pre-handler-buffer'
-import { isRemoteRuntimePtyId } from '@/runtime/runtime-terminal-inspection'
+import { isRemoteRuntimePtyId } from '../../../shared/remote-runtime/remote-runtime-pty-id'
 import { subscribeToRuntimeTerminalData } from '@/runtime/runtime-terminal-stream'
 import { createDraftPasteReadyScanner } from '../../../shared/draft-paste-ready-scanner'
 
 const BRACKETED_PASTE_QUIET_MS = 1500
 
-/**
- * Tap the PTY data stream as a side-channel observer (does NOT take over
- * the primary handler that feeds xterm) and resolve once input is ready.
- *
- * Why a sidecar subscription:
- *   - the main pane may attach mid-flight; we must not race against its
- *     handler registration on the dispatcher's primary slot.
- *   - DECSET 2004 and the Codex composer prompt may straddle two data chunks,
- *     so keep a small ring of recent bytes and search the union.
- */
+/** Observe without taking xterm’s primary handler; retain recent bytes because readiness markers can span chunks and the pane may attach mid-flight. */
 export function waitForAgentDraftInputReady(
   ptyId: string,
   timeoutMs: number,
-  readySignal: DraftPasteReadySignal,
-  settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined
+  readySignal: DraftPasteReadySignal
 ): Promise<boolean> {
   return new Promise<boolean>((resolve) => {
     let settled = false
@@ -75,12 +64,7 @@ export function waitForAgentDraftInputReady(
     }
 
     if (isRemoteRuntimePtyId(ptyId)) {
-      void subscribeToRuntimeTerminalData(
-        settings,
-        ptyId,
-        `desktop:paste-ready:${ptyId}`,
-        observeData
-      )
+      void subscribeToRuntimeTerminalData(ptyId, `desktop:paste-ready:${ptyId}`, observeData)
         .then((remoteUnsubscribe) => {
           if (settled) {
             remoteUnsubscribe()
@@ -91,8 +75,7 @@ export function waitForAgentDraftInputReady(
         .catch(() => finish(false))
     } else {
       unsubscribe = subscribeToPtyData(ptyId, observeData)
-      // Why: spawn can resolve after the first Codex frame was buffered. Replay
-      // it to this observer without consuming the primary xterm handler's copy.
+      // Replay early buffered Codex output to this observer without consuming xterm’s primary copy.
       replayPreHandlerPtyData(ptyId, observeData)
     }
 

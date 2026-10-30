@@ -1,7 +1,8 @@
+import { agentSessionSignInFor } from './agent-session-sign-in'
+
 export type AgentSessionAccountKind = 'managed' | 'system'
 
-/** Why no chat can start under the account a chat runs with, as the host's catalog probe found it.
- *  Absent (an older host, or no verdict yet) is unknown, which shows nothing. */
+/** Host-probed chat/account unavailability; absent older-host/pending verdicts remain unknown and display nothing. */
 export type AgentSessionUnavailable =
   | { reason: 'notSignedIn'; account?: AgentSessionAccountKind }
   | { reason: 'cliMissing' }
@@ -24,15 +25,21 @@ export function readAgentSessionUnavailable(value: unknown): AgentSessionUnavail
   }
 }
 
-export function agentSessionSignInCopyId(
-  provider: 'claude' | 'codex',
-  account?: AgentSessionAccountKind
-) {
-  return provider === 'claude'
+export function agentSessionSignInCopyId(provider: string, account?: AgentSessionAccountKind) {
+  const signIn = agentSessionSignInFor(provider)
+  return signIn?.agent === 'claude'
     ? account === 'managed'
       ? 'claudeManagedNotSignedIn'
       : 'claudeSystemNotSignedIn'
-    : account === 'managed'
-      ? 'codexManagedNotSignedIn'
-      : 'codexSystemNotSignedIn'
+    : signIn?.agent === 'codex'
+      ? account === 'managed'
+        ? 'codexManagedNotSignedIn'
+        : 'codexSystemNotSignedIn'
+      : signIn?.agent === 'antigravity'
+        ? 'antigravityNotSignedIn'
+        : signIn?.agent === 'pi'
+          ? 'interactiveAgentNotSignedIn'
+          : signIn?.loginCommand.length
+            ? 'agentCommandNotSignedIn'
+            : 'agentNotSignedIn'
 }

@@ -1,8 +1,9 @@
 ---
 name: orchestration
 description: >-
-  Coordinate supervised Orca workers: threaded messages, blocking ask/reply,
-  task dispatch, worker_done/escalation waits, task DAGs, decision gates,
+  Coordinate supervised Orca workers, or work as a dispatched worker
+  (heartbeats, ask, worker_done): threaded messages, blocking ask/reply, task
+  dispatch, worker_done/escalation waits, task DAGs, decision gates,
   coordinator loops, and decomposing work across agents. Use `orca-cli` for full
   ownership handoffs — "hand off", "handoff", "handover", "give this to another
   agent", "another worktree" — unless asked to supervise, monitor, or coordinate
@@ -40,8 +41,11 @@ absence included, is a checkpoint.
 | A message carries a legacy authority label                                                                                                     | Compatibility operator  | Load the legacy contract reference before any lifecycle mutation               |
 | No live preamble and no explicit supervision                                                                                                   | Ordinary terminal agent | Do not emit lifecycle messages; use `orca-cli` for terminal/worktree work      |
 
-Model or effort selection does not make a handoff supervised. Never substitute a
-non-Orca subagent tool when Orca orchestration provenance was requested.
+Model or effort selection does not make a handoff supervised: `orca-cli`'s
+`worktree create --agent` and `agent launch` take `--model` and `--effort`, and
+open a chat or a terminal per the user's Chat UI setting, as `worker-start` does.
+Never substitute a non-Orca subagent tool when Orca orchestration provenance was
+requested.
 
 ## Authority and safety floor
 
@@ -78,10 +82,14 @@ The injected preamble is authoritative. A dispatched worker must:
    coordinator question. Never open a local question TUI the coordinator cannot
    answer. Resume the same message ID after an ask timeout.
 2. Send heartbeats only at the cadence in the preamble. A heartbeat proves
-   liveness, not completion.
+   liveness, not completion. If a background loop sends them, restart it if it
+   expires mid-task, and stop it before `worker_done`.
 3. Read coordinator follow-ups at each natural checkpoint — before starting a
    new file, after a test run — and once more immediately before `worker_done`:
    `ORCA orchestration check --terminal <your_handle> --json`.
+   After processing every message, ack the batch, which returns the next one, and
+   repeat until `count` is 0; an unacked batch replays and hides newer mail:
+   `ORCA orchestration check --terminal <your_handle> --ack <delivery_id> --json`.
 4. Send `worker_done` exactly once, from the dispatched terminal, with a
    three-sentence executive summary, both lifecycle IDs, and explicit
    `--outcome succeeded` or `--outcome failed`. Never encode failure only in prose.
@@ -105,6 +113,12 @@ ORCA orchestration worker-start --spec "<worker B task>" --worktree current --ag
 ORCA orchestration check --wait --types "worker_done,escalation,question" --timeout-ms 900000 --json
 ```
 
+After a restart, resume your own Run with `run-use --id <run_id>`. A worker
+cannot bind the Run it works for or an ancestor, and cannot use
+`--takeover-legacy`; an already-bound no-op remains allowed. When its
+coordinator directs a handoff, a replacement worker may resume a separate Run
+with plain `run-use`.
+
 If `worker-start` exits non-zero, do not relaunch. Read the receipt's
 `failedStage` and `residualResources`, then load
 `references/recovery-and-cleanup.md`.
@@ -113,6 +127,8 @@ Use `task-create` plus `worker-start --task <task_id>` for planned fan-out with
 dependencies or a retry of a known Task. Use dependencies only for real ordering
 and prefer parallel waves over chains deeper than three or four steps; nested
 workers obey the depth limit, and a new Run does not reset the caller's depth.
+A dispatched worker starts its own helpers with `worker-start --spec` on the Run
+it works for, without `run-create`; the helpers report to that worker.
 
 A consuming `check` names its caller with `--terminal <handle>`, never `--from`;
 omit it inside the coordinator's own Orca terminal. It returns the bound Run's

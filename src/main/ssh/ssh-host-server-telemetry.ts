@@ -1,8 +1,4 @@
-/**
- * Connect-decision telemetry: which server each SSH connect chose and why, plus conversion and
- * deploy failures. Every raw code is narrowed onto a fixed enum here, so nothing a host or user
- * named can reach an event; unrecognised codes become `other`.
- */
+/** Narrow raw connect/setup codes to fixed enums; unknowns become other, never host/user strings. */
 import type { EventProps } from '../../shared/telemetry-events'
 import {
   SSH_HOST_SERVER_FAILURE_VALUES,
@@ -13,17 +9,27 @@ import { track } from '../telemetry/client'
 import type { HostServerConnectEvent } from './ssh-host-server-connect-events'
 import type { SshHostPlatformFacts } from './ssh-host-platform-memo'
 import type { OrcadTunnelTransport } from './orcad-tunnel-transport-memo'
-import { durationBucket } from './ssh-remote-runtime-telemetry'
 
 type HostProps = Pick<EventProps<'ssh_host_server_decided'>, 'host_os' | 'host_arch' | 'host_libc'>
 type FailureCode = (typeof SSH_HOST_SERVER_FAILURE_VALUES)[number]
 type RefusalCode = (typeof SSH_HOST_SERVER_REFUSAL_VALUES)[number]
+type DurationBucket = EventProps<'ssh_host_server_decided'>['duration_bucket']
 
 function pick<T extends string>(values: readonly T[], value: string, fallback: T): T {
   return values.find((candidate) => candidate === value) ?? fallback
 }
 
-function hostProps(facts: SshHostPlatformFacts | null): HostProps {
+function durationBucket(durationMs: number): DurationBucket {
+  if (durationMs < 5_000) {
+    return 'lt_5s'
+  }
+  if (durationMs < 15_000) {
+    return '5s_15s'
+  }
+  return durationMs < 60_000 ? '15s_60s' : 'gte_60s'
+}
+
+export function hostProps(facts: SshHostPlatformFacts | null): HostProps {
   return facts
     ? { host_os: facts.os, host_arch: facts.arch, host_libc: facts.libc }
     : { host_os: 'unknown', host_arch: 'unknown', host_libc: 'unknown' }
@@ -41,7 +47,7 @@ export function hostServerFailure(code: string | null): FailureCode {
     : 'other'
 }
 
-export type SshHostServerMoveOutcome = EventProps<'ssh_host_server_move'>['outcome']
+type SshHostServerMoveOutcome = EventProps<'ssh_host_server_move'>['outcome']
 
 export function trackSshHostServerMove(
   outcome: SshHostServerMoveOutcome,

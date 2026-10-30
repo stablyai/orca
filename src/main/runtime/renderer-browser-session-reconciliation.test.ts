@@ -3,8 +3,8 @@ import type {
   RuntimeMobileSessionBrowserTab,
   RuntimeMobileSessionTabsSnapshot
 } from '../../shared/runtime-types'
-import { OrcaRuntimeWithCloseStructuredAgentSessionTab } from './orca-runtime-close-structured-agent-session-tab'
-import { OrcaRuntimeWithReconcileHeadlessMobileSessionBrowserTabs } from './orca-runtime-reconcile-headless-mobile-session-browser-tabs'
+import { OrcaRuntimeWithCloseStructuredAgentSessionTab } from './session-tabs/structured-session-tab-close'
+import { OrcaRuntimeWithReconcileHeadlessMobileSessionBrowserTabs } from './session-lifecycle/projection/reconcile-headless-mobile-session-browser-tabs'
 
 const rendererPage: RuntimeMobileSessionBrowserTab = {
   type: 'browser',
@@ -41,6 +41,11 @@ const snapshot: RuntimeMobileSessionTabsSnapshot = {
   tabGroups: [{ id: 'group', activeTabId: 'renderer-tab', tabOrder: ['renderer-tab'] }]
 }
 
+function isHeadlessBuiltPublication(publicationEpoch: string): boolean {
+  const base = publicationEpoch.split(':headless-merge:')[0]
+  return base.startsWith('headless:') || base.startsWith('headless-hydrated:')
+}
+
 /** Drives the reconcile against a stub host and returns the published snapshot, if any. */
 function reconcile(
   host: {
@@ -51,18 +56,38 @@ function reconcile(
   existing: RuntimeMobileSessionTabsSnapshot = snapshot
 ): RuntimeMobileSessionTabsSnapshot | undefined {
   const storeMobileSessionSnapshot = vi.fn()
-  const runtime = OrcaRuntimeWithReconcileHeadlessMobileSessionBrowserTabs.prototype as unknown as {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Test invokes protected reconciliation method on class prototype.
+  const proto = OrcaRuntimeWithReconcileHeadlessMobileSessionBrowserTabs.prototype as unknown as {
     reconcileHeadlessMobileSessionBrowserTabs(
       worktreeId: string,
       existing: RuntimeMobileSessionTabsSnapshot
     ): void
+    reconcileOffscreenOwnedMobileSessionBrowserTabs(
+      worktreeId: string,
+      existing: RuntimeMobileSessionTabsSnapshot,
+      existingBrowserTabs: RuntimeMobileSessionBrowserTab[]
+    ): void
   }
-  runtime.reconcileHeadlessMobileSessionBrowserTabs.call(
+  proto.reconcileHeadlessMobileSessionBrowserTabs.call(
     {
       buildHeadlessMobileSessionBrowserTabs: () => host.live ?? [],
       getAvailableAuthoritativeWindow: () => (host.attached === false ? null : {}),
       offscreenBrowserBackend: host.offscreen === true ? {} : null,
-      storeMobileSessionSnapshot
+      storeMobileSessionSnapshot,
+      reconcileOffscreenOwnedMobileSessionBrowserTabs:
+        proto.reconcileOffscreenOwnedMobileSessionBrowserTabs,
+      isHeadlessBuiltMobileSessionPublicationBase: isHeadlessBuiltPublication,
+      getAcceptedRendererIdentityKeysForMobileSessionSnapshot() {
+        return null
+      },
+      isRendererOwnedMobileBrowserTab(
+        snapshot: RuntimeMobileSessionTabsSnapshot,
+        tab: RuntimeMobileSessionBrowserTab
+      ) {
+        return (
+          tab.placement?.kind !== 'client' && !isHeadlessBuiltPublication(snapshot.publicationEpoch)
+        )
+      }
     },
     'wt',
     existing
@@ -78,7 +103,9 @@ it('keeps renderer-owned browser pages when refreshing client-hosted pages on an
 })
 
 it.each([false, true])('retires absent offscreen pages when attached=%s', (attached) => {
-  expect(reconcile({ attached, offscreen: true })?.tabs).toEqual([])
+  expect(
+    reconcile({ attached, offscreen: true }, { ...snapshot, publicationEpoch: 'headless:1' })?.tabs
+  ).toEqual([])
 })
 
 it('removes retired client pages and publishes live ones while retaining renderer rows and group order', () => {

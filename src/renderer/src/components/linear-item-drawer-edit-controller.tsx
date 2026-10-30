@@ -1,3 +1,4 @@
+import { taskProviderErrorMessage, taskProviderErrorText } from '@/lib/task-provider-error-copy'
 import { useCallback, useState } from 'react'
 import { toast } from 'sonner'
 
@@ -12,6 +13,7 @@ import { linearUpdateIssue } from '@/runtime/runtime-linear-issue-mutations'
 import { translate } from '@/i18n/i18n'
 import { formatLinearEstimateInput } from '@/components/linear-item-drawer-edit-controls'
 import type { LinearIssueEditSectionProps } from '@/components/linear-item-drawer-types'
+import { defaultScopeSource } from '@/lib/default-creation-host'
 
 export function useLinearIssueEditController({
   issue,
@@ -24,7 +26,7 @@ export function useLinearIssueEditController({
   const [estimatePopoverOpen, setEstimatePopoverOpen] = useState(false)
   const patchLinearIssue = useAppStore((s) => s.patchLinearIssue)
   const settings = useAppStore((s) => s.settings)
-  const providerSettings = sourceContext ?? settings
+  const providerSettings = sourceContext ?? defaultScopeSource(settings)
   const { isPending, run } = useImmediateMutation()
 
   const {
@@ -76,7 +78,8 @@ export function useLinearIssueEditController({
           useAppStore.getState().invalidateLinearIssueLists({ sourceContext })
           useAppStore.getState().recordFeatureInteraction('linear-tasks')
         },
-        onError: (err) => toast.error(err)
+        formatError: taskProviderErrorMessage,
+        onError: (err) => toast.error(taskProviderErrorText(err))
       })
     },
     [
@@ -111,7 +114,8 @@ export function useLinearIssueEditController({
           useAppStore.getState().invalidateLinearIssueLists({ sourceContext })
           useAppStore.getState().recordFeatureInteraction('linear-tasks')
         },
-        onError: (err) => toast.error(err)
+        formatError: taskProviderErrorMessage,
+        onError: (err) => toast.error(taskProviderErrorText(err))
       })
     },
     [
@@ -144,7 +148,8 @@ export function useLinearIssueEditController({
         onSuccess: () => {
           useAppStore.getState().recordFeatureInteraction('linear-tasks')
         },
-        onError: (err) => toast.error(err)
+        formatError: taskProviderErrorMessage,
+        onError: (err) => toast.error(taskProviderErrorText(err))
       })
     },
     [
@@ -203,7 +208,8 @@ export function useLinearIssueEditController({
           useAppStore.getState().invalidateLinearIssueLists({ sourceContext })
           useAppStore.getState().recordFeatureInteraction('linear-tasks')
         },
-        onError: (err) => toast.error(err)
+        formatError: taskProviderErrorMessage,
+        onError: (err) => toast.error(taskProviderErrorText(err))
       })
     },
     [
@@ -259,7 +265,8 @@ export function useLinearIssueEditController({
           useAppStore.getState().invalidateLinearIssueLists({ sourceContext })
           useAppStore.getState().recordFeatureInteraction('linear-tasks')
         },
-        onError: (err) => toast.error(err)
+        formatError: taskProviderErrorMessage,
+        onError: (err) => toast.error(taskProviderErrorText(err))
       })
     },
     [

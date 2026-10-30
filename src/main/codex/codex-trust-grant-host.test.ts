@@ -2,16 +2,15 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { runProcessMock } = vi.hoisted(() => ({ runProcessMock: vi.fn() }))
 
-vi.mock('../../shared/child-process/run-process', () => ({ runProcess: runProcessMock }))
+vi.mock('@orca/process-host', () => ({ runProcess: runProcessMock }))
 
 import { resolveCodexTrustGrantHost } from './codex-trust-grant-host'
 
 beforeEach(() => {
   runProcessMock.mockReset()
-  // Stand in for the guest shell: rc banner first, then the payload inside the
-  // command's own fence. The identity script execs, so no closing fence is written.
+  // exec replaces the identity shell, leaving the captured payload without an end fence.
   runProcessMock.mockImplementation((spec: { args: string[] }) => {
-    const nonce = /__ORCA_WSL_CAPTURE_BEGIN_([^_]+)__/.exec(String(spec.args.at(-1)))?.[1] ?? ''
+    const nonce = /__ORCA_WSL_CAPTURE_BEGIN_ ([^_]+)__/.exec(String(spec.args.at(-1)))?.[1] ?? ''
     return Promise.resolve({
       code: 0,
       signal: null,
@@ -44,8 +43,6 @@ describe('resolveCodexTrustGrantHost', () => {
       version: 'codex-cli 1.2.3'
     })
     expect(request.invocation.command).toBe('wsl.exe')
-    // Why (#16441): the identity probe runs through the shared async runner —
-    // an execFileSync here froze the Electron main thread for its full timeout.
     expect(runProcessMock).toHaveBeenCalledWith(
       expect.objectContaining({
         program: 'wsl.exe',

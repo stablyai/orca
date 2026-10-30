@@ -172,14 +172,13 @@ describe('grantClaudeFolderTrust', () => {
     const lockDir = `${file}.lock`
     mkdirSync(lockDir)
     const oldTime = new Date(Date.now() - 60_000)
-    // Why: a lock older than Claude's 10 s stale window must still not be broken by Orca.
+    // Exceed Claude's 10-second stale window to verify Orca leaves its lock intact.
     utimesSync(lockDir, oldTime, oldTime)
     await expect(grantClaudeFolderTrust({ configFile: file, folderKeys: ['/wt'] })).resolves.toBe(
       'locked'
     )
     expect(readConfig(file)).toEqual({})
     expect(existsSync(lockDir)).toBe(true)
-    // Why: the replacement file is created before the lock, so a skipped write must remove it.
     expect(readdirSync(root).sort()).toEqual(['.claude.json', '.claude.json.lock'])
   })
 
@@ -274,7 +273,6 @@ describe('resolveLocalClaudeTrustConfig', () => {
     wslDistro: 'Ubuntu',
     wslLinuxConfigDir: '/home/u/.claude',
     envPatch: {},
-    stripAuthEnv: true,
     provenance: 'wsl:Ubuntu:system'
   }
 

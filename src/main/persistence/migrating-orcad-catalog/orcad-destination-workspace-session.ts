@@ -1,5 +1,5 @@
-import { serializeOrcadMigrationValue } from '../../../shared/orcad-migration-manifest'
-import { isRecord } from '../../../shared/orcad-migration-manifest-fields'
+import { serializeOrcadMigrationValue } from '../../../shared/orcad-migration/orcad-migration-manifest'
+import { isRecord } from '../../../shared/orcad-migration/orcad-migration-manifest-fields'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
 import { SESSION_FOCUS_FIELDS } from '../../../shared/workspace-session-host-field-ownership'
@@ -42,31 +42,26 @@ export function prepareOrcadMigrationWorkspaceSession(
     return { incoming: undefined, merged: undefined }
   }
   assertNoSessionRecordConflicts(state.workspaceSession, incoming)
-  assertNoSessionFocusConflicts(state.workspaceSession, incoming)
   assertNoSessionEntityConflicts(state.workspaceSession, incoming)
+  const merged = mergeWorkspaceSessions(state.workspaceSession, incoming)
+  // Focus is one desktop's selection, not saved state: a host already focused keeps all of its own.
   return {
     incoming,
-    merged: mergeWorkspaceSessions(state.workspaceSession, incoming)
+    merged: hasSessionFocus(state.workspaceSession)
+      ? { ...merged, ...sessionFocus(state.workspaceSession) }
+      : merged
   }
 }
 
-function assertNoSessionFocusConflicts(
-  existing: WorkspaceSessionState,
-  incoming: WorkspaceSessionState
-): void {
-  for (const field of SESSION_FOCUS_FIELDS) {
-    const current = existing[field]
-    const next = incoming[field]
-    if (
-      next !== undefined &&
-      next !== null &&
-      current !== undefined &&
-      current !== null &&
-      serializeOrcadMigrationValue(current) !== serializeOrcadMigrationValue(next)
-    ) {
-      throw new Error(`orcad_migration_dormant_focus_conflict:${field}`)
-    }
-  }
+/** Every focus field, so none the host left unset is borrowed from the desktop. */
+function sessionFocus(session: WorkspaceSessionState): Partial<WorkspaceSessionState> {
+  return Object.fromEntries(SESSION_FOCUS_FIELDS.map((field) => [field, session[field] ?? null]))
+}
+
+function hasSessionFocus(session: WorkspaceSessionState): boolean {
+  return SESSION_FOCUS_FIELDS.some(
+    (field) => session[field] !== undefined && session[field] !== null
+  )
 }
 
 export function applyPreparedOrcadMigrationWorkspaceSession(
@@ -121,13 +116,19 @@ export function collectOrcadMigrationSessionEntityOwners(
   session: WorkspaceSessionState
 ): Map<string, string> {
   const owners = new Map<string, string>()
-  const add = (key: string, owner: string): void => {
+  visitOrcadMigrationSessionEntities(session, (key, owner) => {
     const current = owners.get(key)
-    // A duplicate entity id is invalid even when both rows claim the same owner. Marking every
-    // repeat lets the caller reject duplicates within the incoming payload as well as conflicts
-    // with already-committed state.
+    // Mark every duplicate, even same-owner repeats within the incoming payload.
     owners.set(key, current === undefined ? owner : '\0')
-  }
+  })
+  return owners
+}
+
+/** Unique kind:id identities and their owning worktree or tab. */
+export function visitOrcadMigrationSessionEntities(
+  session: WorkspaceSessionState,
+  add: (key: string, owner: string) => void
+): void {
   for (const [owner, tabs] of Object.entries(session.tabsByWorktree ?? {})) {
     tabs.forEach((tab) => add(`terminal:${tab.id}`, owner))
   }
@@ -162,5 +163,4 @@ export function collectOrcadMigrationSessionEntityOwners(
   for (const [owner, groups] of Object.entries(session.tabGroups ?? {})) {
     groups.forEach((group) => add(`group:${group.id}`, owner))
   }
-  return owners
 }

@@ -1,10 +1,4 @@
-/**
- * Showing an `agent.launch` tab the host asked for before its agent exists.
- *
- * The tab is created under the host's ids so the pane key the host bakes into the agent's PTY names
- * this pane, and a retry that names the same tab finds it instead of making a second one. The pane
- * is laid out with no process; its own spawn waits in main for the host's and attaches to it.
- */
+/** Publish under host-reserved IDs before the agent exists so PTY routing names this pane and retries reuse its tab; the pane’s spawn waits in main and attaches to the host’s process. */
 
 import type { AgentLaunchPlacementReceipt } from '../../../shared/agent-launch-intent'
 import type {
@@ -12,15 +6,12 @@ import type {
   AgentLaunchTabPublishRequest
 } from '../../../shared/agent-launch-tab-publication'
 import { folderWorkspaceToWorktree } from '../../../shared/folder-workspace-worktree'
-import {
-  activateTerminalInitiatedWorktree,
-  focusTerminalInitiatedTab
-} from '../hooks/ipc-events/terminal-command-state'
+import { presentAgentLaunchTab } from './agent-launch-tab-presentation'
 import { useAppStore } from '../store'
 import { resolveUnifiedTabCreatePlacement } from '../store/slices/tabs/tabs-create-placement'
 import { insertUnifiedTabAfterAnchor } from './unified-tab-anchor-insertion'
 import { rememberAgentLaunchPanePrompt } from './agent-launch-pane-prompt'
-import { releaseAgentLaunchPaneSpawn } from './agent-launch-pane-spawn-hold'
+import { selectFolderWorkspaces } from '@/store/workspace-record-selectors'
 
 function landedGroupId(worktreeId: string, tabId: string): string | undefined {
   return useAppStore
@@ -70,19 +61,15 @@ export function publishAgentLaunchTab(
     if (request.prompt) {
       rememberAgentLaunchPanePrompt(tabId, request.prompt)
     }
-    // A different launch into this pane: what an earlier one left on it no longer stands. A retry of
-    // the same launch is that launch, so its tab and any final verdict stay as they are.
+    // Clear an earlier launch’s outcome only for a new launch; retries retain the same tab and verdict.
     const kept = store.tabsByWorktree[worktreeId]?.find((tab) => tab.id === tabId)?.agentLaunchPane
     if (kept?.leafId !== leafId || kept.operationId !== request.operationId) {
-      // A pane that already showed an earlier launch's outcome refused its spawn and is idle: it
-      // must spawn again, so it waits for this launch and attaches to its agent.
+      // A previously refused pane is idle; restart its spawn to await and attach to this launch.
       store.setTabAgentLaunchPane(tabId, launchPaneFor(request), {
         remount: kept?.leafId === leafId && kept.outcome !== undefined
       })
     }
-    // A tab this window made for this launch is the launch's to take back if it never runs.
-    const madeForThisLaunch = releaseAgentLaunchPaneSpawn(tabId, leafId)
-    return { tabId, created: madeForThisLaunch, placement: { groupId } }
+    return { tabId, created: false, placement: { groupId } }
   }
 
   const placement = resolveUnifiedTabCreatePlacement({
@@ -94,7 +81,7 @@ export function publishAgentLaunchTab(
     lookupWorktrees: () =>
       [
         ...(store.allWorktrees?.() ?? []),
-        ...(store.folderWorkspaces ?? []).map(folderWorkspaceToWorktree)
+        ...(selectFolderWorkspaces(store) ?? []).map(folderWorkspaceToWorktree)
       ].filter((worktree) => worktree.id === worktreeId)
   })
   const focuses = request.viewer === 'focus-window' || request.viewer === 'focus-in-workspace'
@@ -109,11 +96,6 @@ export function publishAgentLaunchTab(
   if (request.prompt) {
     rememberAgentLaunchPanePrompt(tabId, request.prompt)
   }
-  if (tab.id !== tabId) {
-    // createTab mints a fresh id on a collision it saw and we did not; that tab would never attach.
-    useAppStore.getState().closeTab(tab.id, { recordInteraction: false })
-    throw new Error('agent_launch_tab_id_taken')
-  }
   if (placement.anchorTabId) {
     const unifiedTabId = useAppStore
       .getState()
@@ -122,25 +104,7 @@ export function publishAgentLaunchTab(
       insertUnifiedTabAfterAnchor(worktreeId, unifiedTabId, placement.anchorTabId)
     }
   }
-  if (request.viewer === 'focus-window') {
-    // After the tab lands: activating prunes the workspace's empty groups, the requested split too.
-    activateTerminalInitiatedWorktree(useAppStore.getState(), worktreeId, [tab.id])
-  }
-  const current = useAppStore.getState()
-  // The desktop's own launch stays in its workspace: the window follows only if it is still there.
-  const windowShowsTab =
-    request.viewer === 'focus-window' ||
-    (request.viewer === 'focus-in-workspace' && current.activeWorktreeId === worktreeId)
-  if (windowShowsTab) {
-    current.setActiveTabType('terminal', worktreeId)
-    current.setActiveTab(tab.id)
-  }
-  if (windowShowsTab || request.viewer === 'reveal-owner') {
-    if (request.viewer !== 'focus-in-workspace') {
-      current.revealWorktreeInSidebar(worktreeId)
-    }
-    focusTerminalInitiatedTab(tab.id, leafId, worktreeId)
-  }
+  presentAgentLaunchTab(request.viewer, worktreeId, tab.id, leafId)
   const landed = landedGroupId(worktreeId, tab.id) ?? placement.groupId ?? ''
   const fallback = placementFallback(request, landed, placement.anchorTabId !== undefined)
   return {

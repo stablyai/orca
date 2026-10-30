@@ -1,11 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import {
-  writeSecureJsonFile,
-  hardenExistingSecureFile,
-  isUnreadableError
-} from '../../shared/secure-file'
-import { removeStaleDurableWriteTempFiles } from '../durable-file-write'
+import { isUnreadableError } from '../../shared/secure-file'
+import { AtomicSnapshotWriter } from '../persistence/atomic-snapshot-writer'
 import type { MobileNotificationEvent } from './runtime-mobile-notification-controller'
 import type { DeliveredNotificationIdentity } from '../../shared/mobile-notification-identity'
 import {
@@ -13,25 +9,28 @@ import {
   type StructuredAttentionOrigin
 } from '../../shared/agent-session-attention'
 
-export type { DeliveredNotificationIdentity } from '../../shared/mobile-notification-identity'
 export type DeliveredNotificationRecord = DeliveredNotificationIdentity & {
   structuredOrigin?: StructuredAttentionOrigin
 }
 type RecordEntry = DeliveredNotificationRecord & { dismissedThrough: number; expiresAt: number }
 const LIMIT = 4096
 const RETENTION_MS = 7 * 86400_000
-const STALE_WRITE_TEMP_AGE_MS = 86400_000
+
+function warnPersistFailed(error: unknown): void {
+  console.warn('[notifications] Could not persist dismissal recovery state', error)
+}
 
 export class MobileNotificationDismissalStore {
   private readonly path: string
   private entries: RecordEntry[] = []
   private unreadable = false
+  private closed = false
+  // Notification ids need no secure writer; its synchronous Windows icacls froze windows per alert (STA-9692).
+  private readonly writer: AtomicSnapshotWriter
   constructor(userDataPath: string) {
     this.path = join(userDataPath, 'mobile-notification-dismissals.json')
-    // Why: a write killed between writeFile and rename (e.g. a hung icacls, #20497) orphans its temp forever.
-    void removeStaleDurableWriteTempFiles(this.path, { minimumAgeMs: STALE_WRITE_TEMP_AGE_MS })
+    this.writer = new AtomicSnapshotWriter(() => this.path, { fileMode: 0o600 })
     try {
-      hardenExistingSecureFile(this.path)
       const value: unknown = JSON.parse(readFileSync(this.path, 'utf8'))
       if (Array.isArray(value)) {
         this.entries = value.flatMap(readEntry).slice(-LIMIT)
@@ -96,9 +95,30 @@ export class MobileNotificationDismissalStore {
     }
     next = next.slice(-LIMIT)
     this.entries = next
-    if (!this.unreadable) {
-      writeSecureJsonFile(this.path, next)
+    if (this.unreadable) {
+      return
     }
+    const serialize = () => JSON.stringify(this.entries, null, 2)
+    if (this.closed) {
+      // Exit would drop an asynchronous write.
+      try {
+        this.writer.writeSync(serialize)
+      } catch (error) {
+        warnPersistFailed(error)
+      }
+      return
+    }
+    this.writer.write(serialize).catch(warnPersistFailed)
+  }
+
+  flush(): Promise<void> {
+    return this.writer.waitForPendingWrite().catch(() => {})
+  }
+
+  /** Committed exits only: subsequent records write synchronously; wait for the pending write. */
+  close(): Promise<void> {
+    this.closed = true
+    return this.flush()
   }
 
   liveDeliveries(prefix = ''): DeliveredNotificationRecord[] {
@@ -133,7 +153,7 @@ export class MobileNotificationDismissalStore {
   }
 }
 
-/** An origin this build cannot read (a newer cause kind) degrades to none; the record survives. */
+/** Keep records with unknown future origin kinds, degrading only their origin to none. */
 function readEntry(value: unknown): RecordEntry[] {
   if (!isEntry(value)) {
     return []

@@ -3,15 +3,17 @@ import {
   getLinkedWorkItemWorkspaceName
 } from '../../../../shared/workspace-name'
 import { normalizeExecutionHostId } from '../../../../shared/execution-host'
-import { isWorkItemLookupText } from '@/lib/work-item-lookup-text'
+import { shouldApplyWorkspaceSourceAutoName } from '../../../../shared/new-workspace/workspace-source'
 import { resolveGitHubWorkItemIdentity } from '@/lib/github-work-item-identity'
 import { isWorkspaceLinkedItemSourceContextMatch } from '../../../../shared/workspace-linked-item-source-context'
 import { getGitHubLinkedWorkItemIdentity } from './source-selection-decisions'
 import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
 import type { TaskSourceContext } from '../../../../shared/task-source-context'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { JiraIssueKeyCasing } from '../../../../shared/ui-chrome-types'
 import type { LinkedWorkItemSummary } from '@/lib/new-workspace'
 import type { SmartGitHubPrStartPointSelection } from './source-selection-decisions'
+import type { WorkspaceCreationTargetHint } from '@/lib/project-host-workspace-target'
 
 export type ComposerDecisions = {
   canResolveFolderSmartGitHubSubmit: (input: { hasFolderSourceRepos: boolean }) => boolean
@@ -20,6 +22,7 @@ export type ComposerDecisions = {
     draftLinkedWorkItem?: LinkedWorkItemSummary | null
     initialName: string
     initialLinkedWorkItem?: LinkedWorkItemSummary | null
+    jiraIssueKeyCasing?: JiraIssueKeyCasing
   }) => string
   getInitialGitHubPrStartPointSelection: (input: {
     item: GitHubWorkItem | null | undefined
@@ -30,16 +33,12 @@ export type ComposerDecisions = {
     item: LinkedWorkItemSummary | null | undefined,
     context: TaskSourceContext | null | undefined
   ) => TaskSourceContext | null
-  isExplicitWorkspaceNameInput: (input: { name: string; lastAutoName: string }) => boolean
-  resolveInitialWorkspaceRunSeed: (input: {
-    draftProjectId?: string | null
-    draftHostId?: string | null
-    draftProjectHostSetupId?: string | null
-    initialTaskSourceContext?: Pick<
-      TaskSourceContext,
-      'projectId' | 'hostId' | 'projectHostSetupId'
-    > | null
-  }) => {
+  isExplicitWorkspaceNameInput: (input: {
+    name: string
+    lastAutoName: string
+    lookupTextIsQuery?: boolean
+  }) => boolean
+  resolveInitialWorkspaceRunSeed: (input: InitialWorkspaceRunSeedInput) => {
     projectId: string | null
     hostId: ExecutionHostId | null
     projectHostSetupId: string | null
@@ -67,13 +66,15 @@ export function canResolveFolderSmartGitHubSubmit({
 
 export function isExplicitWorkspaceNameInput({
   name,
-  lastAutoName
+  lastAutoName,
+  lookupTextIsQuery
 }: {
   name: string
   lastAutoName: string
+  lookupTextIsQuery?: boolean
 }): boolean {
   // Why: a user-authored name must win over linked-item and first-message AI naming.
-  return Boolean(name.trim()) && name !== lastAutoName && !isWorkItemLookupText(name)
+  return !shouldApplyWorkspaceSourceAutoName({ currentName: name, lastAutoName, lookupTextIsQuery })
 }
 
 export function resolveSmartGitHubCreateNames({
@@ -95,27 +96,38 @@ export function resolveSmartGitHubCreateNames({
   return { workspaceName: smartWorkspaceName, displayName: smartDisplayName }
 }
 
-function getLinkedWorkItemSeedName(item: LinkedWorkItemSummary | null | undefined): string {
+function getLinkedWorkItemSeedName(
+  item: LinkedWorkItemSummary | null | undefined,
+  jiraIssueKeyCasing: JiraIssueKeyCasing | undefined
+): string {
   if (!item) {
     return ''
   }
-  return getLinkedWorkItemWorkspaceName(item)?.seedName ?? getLinkedWorkItemSuggestedName(item)
+  return (
+    getLinkedWorkItemWorkspaceName(item, { jiraIssueKeyCasing })?.seedName ??
+    getLinkedWorkItemSuggestedName(item)
+  )
 }
 
 export function getInitialAutoManagedWorkspaceName({
   draftName,
   draftLinkedWorkItem,
   initialName,
-  initialLinkedWorkItem
+  initialLinkedWorkItem,
+  jiraIssueKeyCasing
 }: {
   draftName?: string | null
   draftLinkedWorkItem?: LinkedWorkItemSummary | null
   initialName: string
   initialLinkedWorkItem?: LinkedWorkItemSummary | null
+  jiraIssueKeyCasing?: JiraIssueKeyCasing
 }): string {
   // Why: a prefilled name counts as user input unless it exactly matches the linked-item seed Orca generated.
   const candidateName = draftName ?? initialName
-  const seedName = getLinkedWorkItemSeedName(draftLinkedWorkItem ?? initialLinkedWorkItem)
+  const seedName = getLinkedWorkItemSeedName(
+    draftLinkedWorkItem ?? initialLinkedWorkItem,
+    jiraIssueKeyCasing
+  )
   return candidateName && seedName && candidateName === seedName ? candidateName : ''
 }
 
@@ -123,6 +135,7 @@ export type InitialWorkspaceRunSeedInput = {
   draftProjectId?: string | null
   draftHostId?: string | null
   draftProjectHostSetupId?: string | null
+  initialWorkspaceTarget?: WorkspaceCreationTargetHint | null
   initialTaskSourceContext?: Pick<
     TaskSourceContext,
     'projectId' | 'hostId' | 'projectHostSetupId'
@@ -133,17 +146,19 @@ export function resolveInitialWorkspaceRunSeed({
   draftProjectId,
   draftHostId,
   draftProjectHostSetupId,
+  initialWorkspaceTarget,
   initialTaskSourceContext
 }: InitialWorkspaceRunSeedInput): {
   projectId: string | null
   hostId: ExecutionHostId | null
   projectHostSetupId: string | null
 } {
+  // Why: the linked provider account can belong to a different project or host than creation.
+  const initialRunTarget = initialWorkspaceTarget ?? initialTaskSourceContext
   return {
-    projectId: draftProjectId ?? initialTaskSourceContext?.projectId ?? null,
-    hostId: normalizeExecutionHostId(draftHostId ?? initialTaskSourceContext?.hostId),
-    projectHostSetupId:
-      draftProjectHostSetupId ?? initialTaskSourceContext?.projectHostSetupId ?? null
+    projectId: draftProjectId ?? initialRunTarget?.projectId ?? null,
+    hostId: normalizeExecutionHostId(draftHostId ?? initialRunTarget?.hostId),
+    projectHostSetupId: draftProjectHostSetupId ?? initialRunTarget?.projectHostSetupId ?? null
   }
 }
 
@@ -169,6 +184,7 @@ export function getInitialGitHubPrStartPointSelection({
     return null
   }
   return {
+    kind: 'github-pr',
     repoId,
     item: { ...item, type: itemIdentity.type, number: itemIdentity.number }
   }
@@ -178,7 +194,7 @@ export function retargetGitHubPrStartPointSelection(
   selection: SmartGitHubPrStartPointSelection | null,
   repoId: string
 ): SmartGitHubPrStartPointSelection | null {
-  return selection ? { repoId, item: selection.item } : null
+  return selection ? { kind: 'github-pr', repoId, item: selection.item } : null
 }
 
 export function getMatchingLinkedTaskSourceContext(

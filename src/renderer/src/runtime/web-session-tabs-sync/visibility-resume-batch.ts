@@ -8,7 +8,6 @@ import type {
   VisibilityResumeEnvironment
 } from './visibility-resume-types'
 
-/** Build the inventory/replay state for the subscriptions restarted by a resume. */
 export function buildVisibilityResumeBatch(args: {
   visibilityGeneration: number
   restartingSpecIndexes: readonly number[]

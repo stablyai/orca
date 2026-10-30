@@ -1,10 +1,4 @@
-/**
- * What a structured agent can do, declared before any session runs.
- *
- * Each agent's definition declares one record, and readers branch on it instead of on the agent's
- * name. A running session may narrow a declared capability (a Codex thread with legacy history
- * cannot rewind) but never widens one. Plain data, so a host can send it to clients as it is.
- */
+/** Branch on declared capabilities, not agent names. Sessions may narrow them (legacy Codex history cannot rewind), never widen them; plain data crosses the wire unchanged. */
 export type AgentSessionCapabilities = {
   /** Roll the conversation back to before a turn. */
   rewind: boolean
@@ -19,11 +13,6 @@ export type AgentSessionCapabilities = {
   /** A message sent while a turn runs: handed to the running agent at once (`inject`), or held by
    *  Orca and sent as the next prompt once the turn ends (`queue`). */
   steering: 'inject' | 'queue'
-  /**
-   * Who applies the user's permission setting. `provider`: the agent is launched with it and
-   * confines its own work. `orca`: Orca answers every permission request the agent sends by the
-   * session's setting (a protocol-driven agent's value). The agent's own settings still decide
-   * WHEN it asks, so only what it asks about is covered, never a sandbox.
-   */
+  /** provider enforces its launch permission setting; orca answers emitted requests by the session setting. Provider settings still control when requests are emitted, so this is not sandboxing. */
   approvalEnforcement: 'provider' | 'orca'
 }

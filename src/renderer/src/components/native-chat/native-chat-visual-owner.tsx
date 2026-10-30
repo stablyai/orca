@@ -1,13 +1,12 @@
 import { createContext, useContext, useMemo, type ReactNode } from 'react'
-import type { RuntimeClientTarget } from '@/runtime/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import { useNativeChatTabOwnerWorktreeId } from './use-native-chat-tab-owner'
 
-/** The structured chat a transcript belongs to: where its visuals are read and what owns them. */
 export type NativeChatVisualOwner = {
   target: RuntimeClientTarget
   sessionId: string
-  tabId: string
   worktreeId: string
+  tabId?: string
 }
 
 export const NativeChatVisualOwnerContext = createContext<NativeChatVisualOwner | null>(null)
@@ -17,7 +16,6 @@ export function useNativeChatVisualOwner(): NativeChatVisualOwner | null {
   return useContext(NativeChatVisualOwnerContext)
 }
 
-/** Names the structured chat below it as the owner of the visuals its replies show. */
 export function NativeChatVisualOwnerProvider({
   target,
   sessionId,
@@ -29,7 +27,7 @@ export function NativeChatVisualOwnerProvider({
   tabId: string
   children: ReactNode
 }): React.JSX.Element {
-  // Until the tab's workspace is known there is nothing to scope a sidebar visual to.
+  // Until the tab's workspace is known there is no workspace to open a visual's tab in.
   const worktreeId = useNativeChatTabOwnerWorktreeId(tabId)
   const environmentId = target.kind === 'environment' ? target.environmentId : null
   const owner = useMemo<NativeChatVisualOwner | null>(

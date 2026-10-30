@@ -12,18 +12,12 @@ const spawnWarmupPty: typeof pty.spawn = (file, args, options) => {
   return nodePty.spawn(file, args, options)
 }
 
-/**
- * Pays the one-time cost of the first ConPTY spawn (conpty native module
- * load, bundled conpty.dll + OpenConsole.exe first launch, Defender scans of
- * those binaries) at daemon boot instead of on the user's first terminal.
- * Measured ~2.7s on a Windows dev profile for the first spawn vs ~70ms after.
- */
+/** Move first-ConPTY startup cost ahead of the user’s first terminal when possible. */
 export function warmWindowsConptyOnce(spawnPty: typeof pty.spawn = spawnWarmupPty): void {
   if (process.platform !== 'win32') {
     return
   }
-  // Why: setImmediate keeps the ready/handshake path ahead of the warm-up; a
-  // real spawn arriving first simply does the warming itself.
+  // Defer warmup so the daemon’s ready/handshake path can proceed first.
   setImmediate(() => {
     try {
       // Warm-up children must die with the daemon, even before its first real terminal.
@@ -34,15 +28,14 @@ export function warmWindowsConptyOnce(spawnPty: typeof pty.spawn = spawnWarmupPt
         rows: 1,
         cwd: os.homedir(),
         env: process.env as Record<string, string>,
-        // Match real terminal spawns so the bundled ConPTY binaries are the
-        // ones warmed, not the legacy system ConPTY.
+        // Warm the bundled ConPTY binaries used by real terminal spawns.
         useConptyDll: true
       })
       const killTimer = setTimeout(() => {
         try {
           proc.kill()
         } catch {
-          /* best-effort cleanup of a stuck warm-up shell */
+          /* A stuck warmup shell must not make cleanup fail. */
         }
       }, WARMUP_KILL_TIMEOUT_MS)
       killTimer.unref?.()
@@ -50,7 +43,7 @@ export function warmWindowsConptyOnce(spawnPty: typeof pty.spawn = spawnWarmupPt
         clearTimeout(killTimer)
       })
     } catch {
-      /* warm-up is best-effort; real spawns surface their own errors */
+      /* Warmup is optional; real spawns report their own errors. */
     }
   })
 }

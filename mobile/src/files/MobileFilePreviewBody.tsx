@@ -1,17 +1,21 @@
 import { MobileFileMediaPreview } from './MobileFileMediaPreview'
 import type { MobileFilePreviewRpcSender } from './mobile-file-preview-operations'
-import { ActivityIndicator, Image, Pressable, ScrollView, Text, View } from 'react-native'
+import { ActivityIndicator, Image, ScrollView, Text, View } from 'react-native'
 import { colors } from '../theme/mobile-theme'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import type { MobileFilePreviewResult } from './mobile-file-preview-request'
 import { MobileFileMarkdownPreview } from './MobileFileMarkdownPreview'
 import { MobileFilePreviewEditableSource } from './MobileFilePreviewEditableSource'
 import { MobileFilePreviewSourceText } from './MobileFilePreviewSourceText'
 import type { MobileFilePreviewLineColumn } from './mobile-file-preview-line-column'
 import { filePreviewStyles as styles } from './mobile-file-preview-styles'
+import { MobileLoadErrorState } from '../components/MobileLoadErrorState'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 
 type Props = {
   preview: MobileFilePreviewResult
   client?: MobileFilePreviewRpcSender | null
+  worktreeId?: string
   relativePath: string
   title: string
   editable: boolean
@@ -22,11 +26,14 @@ type Props = {
   imageHeight: number
   onDraftChange: (content: string) => void
   onImageError: () => void
+  onOpenFile?: (pathText: string) => void
   /** Null where the only retry is a re-dial this document cannot make. */
   onRetry: (() => void) | null
 }
 
 export function MobileFilePreviewBody({ preview, ...options }: Props) {
+  useMobileColorScheme()
+  const t = useMobileTranslation()
   if (preview.status === 'loading') {
     return (
       <View style={styles.state}>
@@ -36,23 +43,14 @@ export function MobileFilePreviewBody({ preview, ...options }: Props) {
     )
   }
   if (preview.status === 'error' || preview.status === 'waiting') {
-    return (
-      <View style={styles.state}>
-        <Text style={styles.errorText}>{preview.message}</Text>
-        {options.onRetry ? (
-          <Pressable style={styles.retryButton} onPress={options.onRetry}>
-            <Text style={styles.retryText}>Retry</Text>
-          </Pressable>
-        ) : null}
-      </View>
-    )
+    return <MobileLoadErrorState message={preview.message} onRetry={options.onRetry} />
   }
   if (preview.status === 'empty') {
     return options.editable ? (
       <EditablePreviewSource {...options} />
     ) : (
       <View style={styles.state}>
-        <Text style={styles.stateText}>Empty file</Text>
+        <Text style={styles.stateText}>{t('files.filePreviewBody.emptyFile', 'Empty file')}</Text>
       </View>
     )
   }
@@ -80,7 +78,9 @@ export function MobileFilePreviewBody({ preview, ...options }: Props) {
             style={[styles.image, { width: options.imageWidth, height: options.imageHeight }]}
             resizeMode="contain"
             onError={options.onImageError}
-            accessibilityLabel={`${options.title} image`}
+            accessibilityLabel={t('files.filePreviewBody.imageLabel', '{{title}} image', {
+              title: options.title
+            })}
           />
         </ScrollView>
       </View>
@@ -92,10 +92,13 @@ export function MobileFilePreviewBody({ preview, ...options }: Props) {
     ) : (
       <MobileFileMarkdownPreview
         relativePath={options.relativePath}
+        client={options.client}
+        worktreeId={options.worktreeId}
         content={preview.content}
         truncated={preview.truncated}
         byteLength={preview.byteLength}
         initialLine={options.lineColumn?.line}
+        onOpenFile={options.onOpenFile}
       />
     )
   }

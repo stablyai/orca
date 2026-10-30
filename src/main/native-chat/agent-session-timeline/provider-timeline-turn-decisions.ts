@@ -1,6 +1,3 @@
-// What turn, user-message, context and session events do: admitted on the state, written
-// against the journal.
-
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
   type AgentJournalTurnLifecycle
@@ -37,7 +34,6 @@ import type {
   ProviderTimelinePendingInput
 } from './provider-timeline-state'
 
-/** Room for a settled turn row and its context facts. */
 const TURN_ROW_RESERVED_BYTES = 64 * 1024
 
 export function decideTurnOpen(
@@ -46,9 +42,8 @@ export function decideTurnOpen(
 ): ProviderTimelineDecision {
   const { state, journal, context } = input
   const open = state.open
-  // A newer turn ends this one, whoever asked for it; or the stopped one the provider never ended.
+  // New turns supersede open work, including externally stopped turns awaiting provider end.
   const superseded = open ?? state.stopped
-  // An open naming no turn while one is open is the same turn, not a new one.
   if (event.turn === undefined && open) {
     return { dropped: 'turn-duplicate' }
   }
@@ -95,9 +90,9 @@ export function decideTurnOpen(
       {
         reservedBytes: TURN_ROW_RESERVED_BYTES,
         lifecycle: true,
-        // The running row's ts is the turn start itself, so clients read no append lag.
+        // Stamp turn start rather than append latency.
         options: { turnScope: AGENT_JOURNAL_THREAD_SCOPE, lifecycle: true, observedAt: event.at },
-        // Only where no row is: a turn the journal already holds is never written back to running.
+        // Never regress an existing turn to running.
         resolve: (at) => (at.itemBody(turn.itemId) === null ? write : null)
       }
     ],
@@ -118,7 +113,6 @@ export function decideTurnEnd(
   event: Extract<ProviderTimelineDecidedEvent, { type: 'turn.end' }>
 ): ProviderTimelineDecision {
   const { state, journal } = input
-  // Unnamed: the open turn, else the one a person stopped, which the provider is now ending.
   const turn =
     event.turn === undefined
       ? (state.open ?? state.stopped)
@@ -126,8 +120,7 @@ export function decideTurnEnd(
   if (!turn) {
     return { dropped: 'no-turn' }
   }
-  // A turn this run opened, or one the journal holds (open, superseded, or ended by another
-  // writer): its end settles whatever is left, and a settled row is not written again.
+  // Known ended turns still need residual-work settlement without rewriting the turn.
   const known =
     state.open?.itemId === turn.itemId ||
     state.latest?.itemId === turn.itemId ||
@@ -153,9 +146,7 @@ export function decideTurnEnd(
   }
 }
 
-/** The open turn another writer settled (a person's Stop): its text stops and its prompts are
- *  cancelled; its row stays as that writer left it, and its running tool calls stay the
- *  provider's until the provider ends the turn (or a newer turn, or the session's end, does). */
+/** External settlement ends text/prompts; calls wait for provider end, a newer turn or session end. */
 export function decideTurnSettled(
   event: Extract<ProviderTimelineDecidedEvent, { type: 'turn.settled' }>
 ): ProviderTimelineDecision {
@@ -184,8 +175,7 @@ export function decideInput(
   )
 }
 
-/** A user message names the turn it opened: the one it names once that one opens, else the open
- *  turn while that still names no message of its own, else the next to open. */
+/** Bind the named turn, then an unclaimed open turn, otherwise the next to open. */
 function decideOpener(
   input: ProviderTimelineDecisionInput,
   message: Omit<ProviderTimelinePendingInput, 'turnItemId'>,
@@ -195,7 +185,6 @@ function decideOpener(
   const open = state.open
   const turn = named === undefined ? null : context.rows.turn(providerKey(named))
   if (turn && turn.itemId !== open?.itemId) {
-    // A late echo of a turn already over names nothing.
     if (journal && providerTimelineTurnRowState(journal, turn.itemId) !== 'absent') {
       return {}
     }
@@ -228,8 +217,7 @@ function decideOpener(
   }
 }
 
-/** Only while the row runs and still names the turn itself as its opener: an opener another writer
- *  gave it stands. Every other field is the row's as the journal holds it. */
+/** Set openers only on running, unclaimed turns; preserve all other journal fields. */
 function reviseOpener(
   journal: StructuredAgentSessionTransitionJournal,
   open: ProviderTimelineOpenTurn,
@@ -242,7 +230,7 @@ function reviseOpener(
   const target = { identity: open.identity }
   const write = {
     lifecycle: agentJournalTurnBody({ ...row, ...message }),
-    // Defence only: the check above reads the same snapshot; the revision refuses an ended row too.
+    // Recheck in revision even though the snapshot already showed running.
     onlyWhileRunning: true as const
   }
   return resolveAgentJournalTurnRowWrite(
@@ -260,10 +248,12 @@ export function decideSessionEnd(
   return {
     settle: {
       what: 'session-end',
+      recovered: true,
       resolve: (journal) =>
         providerTimelineSettlement(journal, 'session', {
           turns: runningProviderTimelineTurns(journal),
-          end: event.verdict
+          end: event.verdict,
+          ...(event.endedAt !== undefined ? { lostAt: event.endedAt } : {})
         })
     },
     commit: (next) => next.endSession()

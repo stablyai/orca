@@ -3,10 +3,12 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { prependOrcaCliDirToChildPath } from './cli/orca-cli-child-path'
+import { getDaemonZshWrapperSpec } from './daemon/daemon-zsh-shell-ready-wrapper-spec'
 import { POSIX_SHELL_STARTUP_COMMAND_ENV } from './pty/posix-shell-startup-command'
 import { getZshShellReadyWrapperFile } from './providers/local-pty-shell-ready-wrapper-generation'
 import { encodeShellStartupFeatures, selectShellStartupFeatures } from './shell-startup-features'
 import { ZSH_WRAPPER_DIR_MARKER_FILE } from './shell-templates'
+import { buildZshStartupHook } from './zsh-startup-wrapper-builder'
 import { hasZsh, MARKERS, runZshPty, ZSH_PATH } from './zsh-startup-hook-pty-harness'
 
 const itWithZsh = hasZsh ? it : it.skip
@@ -113,7 +115,6 @@ describe('zsh deferred startup after prompt-hook replacement', () => {
           'orca_test_status() { return 42; }; orca_test_status\n'
         )
       }
-      // Replay Ubuntu's later widget binding before the user's own startup changes.
       const stockWidget =
         stockBinding || stickyPrecmd || scheduledPrecmd
           ? USER_WIDGET.replaceAll('orca_test_line_init', 'zle-line-init')
@@ -135,7 +136,6 @@ describe('zsh deferred startup after prompt-hook replacement', () => {
         HOME: home,
         USERPROFILE: home,
         PATH: `${ambientBin}:/usr/bin:/bin`,
-        // Stock cases replay this replacement after the fixture installs its own widgets.
         DEBIAN_PREVENT_KEYBOARD_CHANGES: '1',
         ZDOTDIR: wrapperDir,
         ORCA_HISTFILE: join(home, 'scoped-history')
@@ -165,7 +165,6 @@ describe('zsh deferred startup after prompt-hook replacement', () => {
             ? ['source -- "$HOME/wrapper/.zshenv"', 'source -- "$HOME/wrapper/.zshenv"']
             : []),
           'O_LK=$(command -v orca-dev)',
-          'O_IR=${+functions[__orca_deferred_line_init]}',
           'O_SR=${+widgets[__orca_saved_line_init]}',
           ...(scheduleCleanup
             ? [
@@ -183,7 +182,6 @@ describe('zsh deferred startup after prompt-hook replacement', () => {
           'O_LK',
           'O_UC',
           'O_UN',
-          'O_IR',
           'O_SR',
           ...(scheduleCleanup ? ['O_SC', 'O_SE'] : []),
           ...(scheduledPrecmd ? ['O_EV', 'O_EO'] : []),
@@ -203,9 +201,6 @@ describe('zsh deferred startup after prompt-hook replacement', () => {
       expect(Number(result.values.O_UC)).toBeGreaterThan(0)
       if (!chainedLineInit) {
         expect(result.values.O_UN).toBe('zle-line-init')
-      }
-      if (!chainedLineInit && !chainedRedraw && !repeatSource) {
-        expect(result.values.O_IR).toBe('0')
       }
       expect(result.values.O_SR).toBe('0')
       if (repeatSource) {
@@ -276,6 +271,74 @@ describe('zsh deferred startup after prompt-hook replacement', () => {
           result.output.split(MARKERS.ready).length - 1
         )
       }
+    }
+  )
+})
+
+describe('zsh plugins that call deferred line-init by name', () => {
+  const roots: string[] = []
+
+  afterEach(() => {
+    for (const root of roots.splice(0)) {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
+  itWithZsh.each(['local', 'daemon'] as const)(
+    'keeps the plugin call working across prompts in a %s wrapper',
+    async (transport) => {
+      const home = mkdtempSync(join(tmpdir(), 'orca-zsh-named-wrapper-'))
+      roots.push(home)
+      const wrapperDir = join(home, 'wrapper')
+      mkdirSync(wrapperDir)
+      writeFileSync(
+        join(home, '.zshrc'),
+        `functions[orca_test_app_mode]=\${widgets[zle-line-init]#user:}'
+  O_AM=$((\${O_AM:-0}+1))'
+zle -N zle-line-init orca_test_app_mode
+`
+      )
+      const wrapper =
+        transport === 'local'
+          ? getZshShellReadyWrapperFile()
+          : buildZshStartupHook(getDaemonZshWrapperSpec())
+      writeFileSync(join(wrapperDir, '.zshenv'), wrapper)
+      writeFileSync(join(wrapperDir, ZSH_WRAPPER_DIR_MARKER_FILE), '')
+      const env: Record<string, string> = {
+        HOME: home,
+        USERPROFILE: home,
+        PATH: '/usr/bin:/bin',
+        DEBIAN_PREVENT_KEYBOARD_CHANGES: '1',
+        ZDOTDIR: wrapperDir
+      }
+      env.ORCA_SHELL_FEATURES = encodeShellStartupFeatures(
+        selectShellStartupFeatures({
+          shellPath: ZSH_PATH,
+          env,
+          hasStartupCommand: false,
+          waitsForShellReady: true,
+          emitsStartupIdentity: false
+        })
+      )
+
+      const result = await runZshPty({
+        env,
+        commands: [
+          'true',
+          'false',
+          '[[ ${functions[orca_test_app_mode]} == *__orca_deferred_line_init* ]]; O_CALL_REF=$?',
+          '__orca_deferred_line_init; O_NOOP=$?',
+          'O_INIT=${+functions[__orca_deferred_init]}'
+        ],
+        report: ['O_AM', 'O_CALL_REF', 'O_NOOP', 'O_INIT']
+      })
+
+      expect(result.output, result.output).not.toContain('command not found')
+      expect(result.output).toContain(MARKERS.ready)
+      expect(Number(result.values.O_AM)).toBeGreaterThan(2)
+      expect(result.values.O_CALL_REF).toBe('0')
+      expect(result.values.O_NOOP).toBe('0')
+      expect(result.values.O_INIT).toBe('0')
     }
   )
 })

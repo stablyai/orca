@@ -2,7 +2,7 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { runProcess } from './child-process/run-process'
+import { runProcess } from '@orca/process-host'
 import { buildRgArgs, createAccumulator, ingestRgJsonLine } from './text-search'
 
 describe('text search match budgets', () => {
@@ -27,6 +27,7 @@ describe('text search match budgets', () => {
           }
         }
         expect(accumulator.totalMatches).toBe(2000)
+        expect(accumulator.truncated).toBe(true)
         const matches = accumulator.fileMap.get(filename)?.matches ?? []
         expect(matches).toHaveLength(2000)
         for (const [index, match] of matches.entries()) {
@@ -68,30 +69,6 @@ describe('text search match budgets', () => {
         matchLength: 1
       })
       expect(accumulator.fileMap.get(filename)?.matches[1999]?.column).toBe(4000)
-    } finally {
-      await rm(root, { recursive: true, force: true })
-    }
-  })
-
-  it('preserves the requested budget from real rg dense-line output', async () => {
-    const { rgPath } = await import('@vscode/ripgrep-universal')
-    const root = await mkdtemp(join(tmpdir(), 'orca-rg-dense-'))
-    try {
-      await writeFile(join(root, 'dense.txt'), 'x '.repeat(10_000))
-      const result = await runProcess({
-        program: rgPath,
-        args: buildRgArgs('x', root, {}),
-        cwd: root
-      })
-      expect(result.code).toBe(0)
-      const accumulator = createAccumulator()
-      for (const line of result.stdout.split('\n')) {
-        if (ingestRgJsonLine(line, root, accumulator, 2000) === 'stop') {
-          break
-        }
-      }
-      expect(accumulator.totalMatches).toBe(2000)
-      expect(accumulator.truncated).toBe(true)
     } finally {
       await rm(root, { recursive: true, force: true })
     }

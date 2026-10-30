@@ -1,58 +1,43 @@
-/**
- * What a pane may do when an `agent.launch` showed it before its agent existed.
- *
- * Derived on every spawn. While the launch's fate is open, the launch record (the operation ledger)
- * names the launch that owns the pane and how it ended; the runtime, and the pane's persisted
- * binding, say whether a process holds it. Once the fate is final for the pane, the tab itself keeps
- * it (`agentLaunchPane.outcome`) for the tab's life, so the pane no longer reads the record. The one
- * in-memory fact is a launch still running in this process, which dies with that launch. Its pane
- * attaches as soon as its agent runs; a user's close of its tab or pane, committed to main, stops it.
- */
+/** Use process-local launch state; after restart, ordinary pane attachment handles recovery. */
 
-import {
-  listAgentSessionOperationRowsOwningPane,
-  type AgentSessionOperationOwnedPane,
-  type AgentSessionOperationRow
-} from '../../shared/agent-session-operation-ledger'
-import { isAgentLaunchResult } from '../../shared/agent-launch-intent'
-import type {
-  AgentLaunchPaneOutcome,
-  AgentLaunchPaneVerdict
-} from '../../shared/agent-launch-pane-verdict'
+import type { AgentLaunchPaneVerdict } from '../../shared/agent-launch-pane-verdict'
 import { parsePaneKey } from '../../shared/stable-pane-id'
 import type { TerminalSurfaceCloseTarget } from '../../shared/terminal-surface-close-target'
 
+const PROCEED: AgentLaunchPaneVerdict = { kind: 'proceed' }
+
+export type AgentLaunchPane = { worktreeId: string; paneKey: string }
+
 type RunningLaunch = {
-  pane: AgentSessionOperationOwnedPane
-  /** The launch's agent holds the pane, or the launch is over: whichever comes first. */
-  settled: Promise<{ tabTakenBack: boolean }>
-  finished: Promise<{ tabTakenBack: boolean }>
-  /** The user closed the launch's tab or pane while it ran; set by main's commit of that close. */
+  pane: AgentLaunchPane
+  /** Unblock attachment when the agent binds or the launch ends, whichever happens first. */
+  settled: Promise<AgentLaunchPaneVerdict>
+  finished: Promise<AgentLaunchPaneVerdict>
   closedByUser: boolean
 }
 
 const runningLaunchesByPane = new Map<string, RunningLaunch>()
+const failedLaunchesByPane = new Map<
+  string,
+  { pane: AgentLaunchPane; verdict: AgentLaunchPaneVerdict }
+>()
 
-function paneKeyOf(pane: AgentSessionOperationOwnedPane): string {
+function paneKeyOf(pane: AgentLaunchPane): string {
   return JSON.stringify([pane.worktreeId, pane.paneKey])
 }
 
 export type RunningAgentLaunchPane = {
-  /** The launch's agent runs in the pane: a waiting spawn attaches now, not once the prompt lands. */
+  /** Attach as soon as the agent binds, without waiting for prompt delivery. */
   agentBound(): void
-  /** The launch is over; its record says how. `tabTakenBack`: the host is closing the tab. */
-  finish(outcome: { tabTakenBack: boolean }): void
-  /** The user closed this launch's tab or pane: the launch must not run, or must stop. */
+  finish(verdict: AgentLaunchPaneVerdict): void
   closedByUser(): boolean
 }
 
-/** Registered before the window hears of the tab, so a pane that mounts at once already waits. */
-export function trackRunningAgentLaunchPane(
-  pane: AgentSessionOperationOwnedPane
-): RunningAgentLaunchPane {
+/** Register before tab publication so immediately mounted panes wait for the launch. */
+export function trackRunningAgentLaunchPane(pane: AgentLaunchPane): RunningAgentLaunchPane {
   const key = paneKeyOf(pane)
-  let resolve!: (outcome: { tabTakenBack: boolean }) => void
-  let settle!: (outcome: { tabTakenBack: boolean }) => void
+  let resolve!: (verdict: AgentLaunchPaneVerdict) => void
+  let settle!: (verdict: AgentLaunchPaneVerdict) => void
   const running: RunningLaunch = {
     pane,
     settled: new Promise((done) => {
@@ -64,35 +49,54 @@ export function trackRunningAgentLaunchPane(
     closedByUser: false
   }
   runningLaunchesByPane.set(key, running)
+  failedLaunchesByPane.delete(key)
   let finished = false
   return {
-    agentBound: () => settle({ tabTakenBack: false }),
-    finish: (outcome) => {
+    agentBound: () => settle(PROCEED),
+    finish: (verdict) => {
       if (finished) {
         return
       }
       finished = true
       if (runningLaunchesByPane.get(key) === running) {
         runningLaunchesByPane.delete(key)
+        if (
+          !running.closedByUser &&
+          (verdict.kind === 'not-started' || verdict.kind === 'unconfirmed')
+        ) {
+          failedLaunchesByPane.set(key, { pane, verdict })
+        }
       }
-      settle(outcome)
-      resolve(outcome)
+      settle(verdict)
+      resolve(verdict)
     },
     closedByUser: () => running.closedByUser
   }
+}
+
+/** `null` targets every pane of the workspace. */
+function launchesIn<T extends { pane: AgentLaunchPane }>(
+  launches: Map<string, T>,
+  worktreeId: string,
+  target: TerminalSurfaceCloseTarget | null
+): T[] {
+  return [...launches.values()].filter((launch) => {
+    const pane = launch.pane.worktreeId === worktreeId ? parsePaneKey(launch.pane.paneKey) : null
+    return (
+      pane !== null &&
+      (target === null ||
+        (pane.tabId === target.tabId && (target.kind === 'tab' || pane.leafId === target.leafId)))
+    )
+  })
 }
 
 function runningLaunchesIn(
   worktreeId: string,
   target: TerminalSurfaceCloseTarget
 ): RunningLaunch[] {
-  return [...runningLaunchesByPane.values()].filter((running) => {
-    const pane = running.pane.worktreeId === worktreeId ? parsePaneKey(running.pane.paneKey) : null
-    return pane?.tabId === target.tabId && (target.kind === 'tab' || pane.leafId === target.leafId)
-  })
+  return launchesIn(runningLaunchesByPane, worktreeId, target)
 }
 
-/** The user closed a tab, or one pane of it: every launch still running there stops. */
 export function markAgentLaunchesClosedByUser(
   worktreeId: string,
   target: TerminalSurfaceCloseTarget
@@ -100,9 +104,24 @@ export function markAgentLaunchesClosedByUser(
   for (const running of runningLaunchesIn(worktreeId, target)) {
     running.closedByUser = true
   }
+  forgetFailedAgentLaunches(worktreeId, target)
 }
 
-/** A launch still owns this pane: only its own spawn may put a process there. */
+/** Forget departed panes; null targets the entire workspace. */
+export function forgetFailedAgentLaunches(
+  worktreeId: string,
+  target: TerminalSurfaceCloseTarget | null
+): void {
+  for (const failed of launchesIn(failedLaunchesByPane, worktreeId, target)) {
+    failedLaunchesByPane.delete(paneKeyOf(failed.pane))
+  }
+}
+
+export function listFailedAgentLaunchWorktreeIds(): string[] {
+  return [...failedLaunchesByPane.values()].map((failed) => failed.pane.worktreeId)
+}
+
+/** Only the owning launch may spawn into a reserved pane. */
 export function isAgentLaunchRunningIn(
   worktreeId: string,
   target: TerminalSurfaceCloseTarget
@@ -110,107 +129,50 @@ export function isAgentLaunchRunningIn(
   return runningLaunchesIn(worktreeId, target).length > 0
 }
 
-function launchRanInPane(row: AgentSessionOperationRow, paneKey: string): boolean {
-  if (row.outcome.status !== 'succeeded' || !isAgentLaunchResult(row.outcome.launch)) {
-    return false
-  }
-  const { outcome } = row.outcome.launch
-  return outcome.kind === 'terminal' && outcome.paneKey === paneKey
-}
-
-/** The pane's fate as the record tells it. Exported for the record-only cases a test pins. */
-export function agentLaunchPaneVerdictFromRecord(
-  owning: readonly AgentSessionOperationRow[],
-  paneKey: string
-): AgentLaunchPaneVerdict {
-  if (owning.length === 0 || owning.some((row) => launchRanInPane(row, paneKey))) {
-    // Nothing owns it, or an agent ran here and is gone: the pane is an ordinary terminal again.
-    return { kind: 'proceed' }
-  }
-  const latest = owning.reduce((a, b) => (b.recordedAt > a.recordedAt ? b : a))
-  switch (latest.outcome.status) {
-    case 'failed':
-      return { kind: 'not-started', code: latest.outcome.code }
-    case 'succeeded':
-      // A chat, or another pane: nothing ran here.
-      return { kind: 'withdrawn' }
-    case 'unknown':
-    case 'pending':
-      return { kind: 'unconfirmed' }
-  }
-}
-
-export type AgentLaunchPaneEvidence = {
-  /** A process holds the pane, live or by its persisted binding: the spawn adopts it, whatever the
-   *  record says. */
-  isPaneLive(paneKey: string): boolean
-  /** The record's rows when the store is already open; null when it is not. */
-  openedRows(): Iterable<AgentSessionOperationRow> | null
-  /** What the pane's tab keeps about its launch: null when no launch laid it out, no outcome while
-   *  the fate is open, the outcome once it is final. */
-  launchPaneOnTab(): { outcome?: AgentLaunchPaneOutcome } | null
-  openRows(): Promise<Iterable<AgentSessionOperationRow>>
-  now(): number
-}
+/** Live processes and persisted bindings both qualify for adoption. */
+export type IsAgentLaunchPaneLive = (paneKey: string) => boolean
 
 async function settleVerdict(
-  pane: AgentSessionOperationOwnedPane,
-  evidence: AgentLaunchPaneEvidence
+  pane: AgentLaunchPane,
+  isPaneLive: IsAgentLaunchPaneLive
 ): Promise<AgentLaunchPaneVerdict> {
-  let waitedForLaunch = false
-  for (;;) {
-    const running = runningLaunchesByPane.get(paneKeyOf(pane))
-    if (!running) {
-      break
-    }
-    waitedForLaunch = true
-    if ((await running.settled).tabTakenBack) {
+  let verdict = failedLaunchesByPane.get(paneKeyOf(pane))?.verdict ?? PROCEED
+  // A retry can replace the launch in this pane while we await its verdict.
+  for (
+    let running = runningLaunchesByPane.get(paneKeyOf(pane));
+    running;
+    running = runningLaunchesByPane.get(paneKeyOf(pane))
+  ) {
+    if ((await running.settled).kind === 'withdrawn') {
       return { kind: 'withdrawn' }
     }
-    if (evidence.isPaneLive(pane.paneKey)) {
-      return { kind: 'proceed' }
+    if (isPaneLive(pane.paneKey)) {
+      return PROCEED
     }
-    if ((await running.finished).tabTakenBack) {
-      return { kind: 'withdrawn' }
+    verdict = await running.finished
+    if (verdict.kind === 'withdrawn') {
+      return verdict
     }
   }
-  if (evidence.isPaneLive(pane.paneKey)) {
-    return { kind: 'proceed' }
+  if (!isPaneLive(pane.paneKey)) {
+    return verdict
   }
-  // A launch that just settled here wrote the record; the tab's saved outcome may be an earlier
-  // launch's, not yet replaced on disk.
-  const final = waitedForLaunch ? undefined : evidence.launchPaneOnTab()?.outcome
-  if (final) {
-    return final
-  }
-  // Bookkeeping never gates the user: a record that cannot be read leaves an ordinary terminal.
-  const rows = evidence.openedRows() ?? (await evidence.openRows().catch(() => null))
-  return rows
-    ? agentLaunchPaneVerdictFromRecord(
-        listAgentSessionOperationRowsOwningPane(rows, pane, evidence.now()),
-        pane.paneKey
-      )
-    : { kind: 'proceed' }
+  failedLaunchesByPane.delete(paneKeyOf(pane))
+  return PROCEED
 }
 
-/**
- * Null when nothing can own the pane — no launch running for it, its tab keeping nothing about a
- * launch, and no record row naming it — so every other spawn keeps its timing and reads nothing.
- * Otherwise the verdict, once any running launch is over.
- */
+/** Return null synchronously for ordinary panes so their spawn timing stays unchanged. */
 export function resolveAgentLaunchPaneVerdict(
-  pane: AgentSessionOperationOwnedPane,
-  evidence: AgentLaunchPaneEvidence
+  pane: AgentLaunchPane,
+  isPaneLive: IsAgentLaunchPaneLive
 ): Promise<AgentLaunchPaneVerdict> | null {
-  if (!runningLaunchesByPane.has(paneKeyOf(pane)) && evidence.launchPaneOnTab() === null) {
-    const rows = evidence.openedRows()
-    if (!rows || listAgentSessionOperationRowsOwningPane(rows, pane, evidence.now()).length === 0) {
-      return null
-    }
-  }
-  return settleVerdict(pane, evidence)
+  const key = paneKeyOf(pane)
+  return runningLaunchesByPane.has(key) || failedLaunchesByPane.has(key)
+    ? settleVerdict(pane, isPaneLive)
+    : null
 }
 
 export function resetAgentLaunchPanesForTests(): void {
   runningLaunchesByPane.clear()
+  failedLaunchesByPane.clear()
 }

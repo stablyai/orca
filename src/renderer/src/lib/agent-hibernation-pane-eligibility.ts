@@ -2,9 +2,9 @@ import type { AgentStatusEntry } from '../../../shared/agent-status-types'
 import { getAgentResumeArgv, isResumableTuiAgent } from '../../../shared/agent-session-resume'
 import { parsePaneKey } from '../../../shared/stable-pane-id'
 import type { TerminalLayoutSnapshot, TerminalTab } from '../../../shared/terminal-tab-types'
-import { parseRemoteRuntimePtyId } from '@/runtime/runtime-terminal-stream'
+import { parseRemoteRuntimePtyId } from '../../../shared/remote-runtime/remote-runtime-pty-id'
 import { lastInputBlocksHibernation } from './agent-hibernation-input-guard'
-import { isLiveResumeAnchorForCompletedAgent } from './live-resume-anchor-record'
+import { isLiveResumeAnchorForCompletedAgent } from '../../../shared/live-resume-anchor-record'
 import { agentTurnEndedUncleanly } from '../../../shared/agent-main-agent-verdict'
 import type { AgentHibernationPlannerSnapshot } from './agent-hibernation-planner-snapshot'
 
@@ -80,9 +80,7 @@ export function getEligiblePane(args: {
     mobileLockedPtyIds
   } = args
   const sleepingRecord = sleepingAgentSessionsByPaneKey[entry.paneKey]
-  // Why: a completed turn leaves the TUI alive and resumable, so every resumable
-  // agent keeps a live resume anchor (#10238). That anchor is not a sleep record —
-  // treating it as one is what stopped non-Pi agents hibernating at all.
+  // Every resumable agent has a live anchor after completion; it is not a sleep capture and must not block hibernation.
   const hasOnlyLiveResumeAnchor = isLiveResumeAnchorForCompletedAgent(
     entry,
     sleepingRecord,
@@ -109,11 +107,7 @@ export function getEligiblePane(args: {
   if (!getAgentResumeArgv(entry.agentType, entry.providerSession)) {
     return null
   }
-  // Why: anchor on when `done` was first reported, not on the last status write —
-  // OSC 9999 repaints and reconnect replays advance `updatedAt` and would restart
-  // the countdown forever. Floors then restore the grace `updatedAt` gave by accident:
-  // returning to the tab, a fresh PTY binding (wake / app restart), and the moment a
-  // session-boundary done became a real completion.
+  // Anchor on first done, not repaint/replay updatedAt; floor by last foreground visit, fresh PTY binding and real completion boundary.
   const floors = [
     entry.stateStartedAt,
     foregroundTerminalLastSeenAtByTabId[tab.id],
@@ -127,9 +121,7 @@ export function getEligiblePane(args: {
     return null
   }
   const inputAt = lastTerminalInputAtByPaneKey[entry.paneKey]
-  // Why: killing the PTY discards the TUI composer's draft and any queued
-  // messages. The old input-after-done compare missed drafts typed while the
-  // agent was still working — the class that lost a user's draft in prod.
+  // Killing the PTY loses drafts/queued input typed during working too; input-after-done alone misses them.
   if (
     typeof inputAt === 'number' &&
     Number.isFinite(inputAt) &&

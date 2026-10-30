@@ -4,7 +4,6 @@ import {
   scopeGeneration
 } from '../../../source-control/hosted-review-scope-generations'
 import { runCoalescedProbe, type CoalescedProbes } from '../../../git/coalesced-probe'
-import { getSshGitProviderGeneration } from '../../../providers/ssh-git-dispatch'
 import { githubReadExecutionScope } from '../../github-read-execution-scope'
 import type { PRRefreshOutcome } from '../../../../shared/github/pull-request-refresh-types'
 import { acquire, release, ghRepoExecOptions, githubRepoContext } from '../../gh-utils'
@@ -23,7 +22,7 @@ export async function getPRForBranchOutcome(
   options: GitHubPRBranchLookupOptions = {}
 ): Promise<PRRefreshOutcome> {
   const branchName = branch.replace(/^refs\/heads\//, '')
-  // Why: detached HEAD can't use branch lookup, but an exact linked/fallback PR number is still safe to query and keeps review state visible.
+  // Detached HEAD cannot discover by branch, but explicit PR numbers remain safe.
   if (!branchName && typeof linkedPRNumber !== 'number' && typeof fallbackPRNumber !== 'number') {
     return { kind: 'no-pr', fetchedAt: Date.now() }
   }
@@ -35,7 +34,6 @@ export async function getPRForBranchOutcome(
 
   const key = JSON.stringify([
     executionScope,
-    connectionId ? getSshGitProviderGeneration(connectionId) : null,
     repoPath,
     scopeGeneration(hostedReviewRepoScope(repoPath, getRepoExecutionHostId({ connectionId }))),
     branchName,

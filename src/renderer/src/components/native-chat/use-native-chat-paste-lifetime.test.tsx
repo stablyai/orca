@@ -31,14 +31,6 @@ const WORKSPACE: NativeChatComposerDraftOwner = {
 }
 const owners: NativeChatAttachmentOwner[] = [
   { kind: 'local' },
-  {
-    kind: 'ssh',
-    connectionId: 'ssh-1',
-    worktreePath: '/remote/worktree',
-    expectedExecutionHostId: 'ssh:ssh-1',
-    expectedSshTargetId: 'ssh-1',
-    expectedSshConnectionGeneration: 1
-  },
   { kind: 'runtime-session', environmentId: 'paired', sessionId: 'a', pairingRevision: 1 }
 ]
 
@@ -87,11 +79,7 @@ it.each(owners)('keeps a $kind upload when its composer closes', (owner) => {
   ).toBe(true)
   expect(nativeChatPendingAttachmentSnapshot(scope('a'))).toEqual([])
   expect(readNativeChatComposerDraft(scope('a')).images).toEqual([
-    {
-      id: 'upload',
-      path: '/stored/image.png',
-      ...(owner.kind === 'ssh' ? { connectionId: 'ssh-1' } : {})
-    }
+    { id: 'upload', path: '/stored/image.png' }
   ])
   expect(readNativeChatComposerDraft(scope('b')).images).toEqual([])
 })

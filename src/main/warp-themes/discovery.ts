@@ -73,8 +73,7 @@ function getMacWarpThemeDirectories(home: string): string[] {
 function getLinuxWarpThemeDirectories(home: string): string[] {
   const pathImpl = path.posix
   const xdgDataHome = process.env.XDG_DATA_HOME
-  // Why: XDG_DATA_HOME is only valid as an absolute path; relative values would
-  // make discovery depend on Orca's launch directory.
+  // XDG_DATA_HOME must be absolute or discovery depends on Orca's launch directory.
   const dataHome =
     xdgDataHome && pathImpl.isAbsolute(xdgDataHome)
       ? xdgDataHome

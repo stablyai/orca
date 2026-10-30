@@ -18,7 +18,7 @@ const row = (sessionId: string): ResumeCandidate => ({
   recordedAt: 1
 })
 const failure = { ...row('a'), failedAt: 2, outcome: 'unconfirmed' as const, reason: 'pending' }
-const run = beginResumeRun([row('a'), row('b')], 10)
+const run = beginResumeRun([row('a'), row('b')], 10, 'user')
 
 describe('the dialog over a bulk action', () => {
   it('never regresses a seen phase or verdict when live progress clears', () => {
@@ -118,7 +118,7 @@ describe('the dialog over a bulk action', () => {
     expect(view.statusBySession.get('a')?.kind).toBe('in-flight')
   })
 
-  it('withdrawn and dismissed failures leave Need you after the reply', () => {
+  it('keeps an unknown action in Need you after its host failure is withdrawn', () => {
     const finished = {
       ...run,
       inFlight: false,
@@ -132,8 +132,17 @@ describe('the dialog over a bulk action', () => {
     )
     expect(failed.rows).toEqual([failure])
     const withdrawn = resumeRunView(finished, [], () => undefined, 'attention')
-    expect(withdrawn.rows).toEqual([])
-    expect(withdrawn.counts.attention).toBe(0)
+    expect(withdrawn.rows).toEqual([row('a')])
+    expect(withdrawn.counts.attention).toBe(1)
+    expect(withdrawn.statusBySession.get('a')).toEqual({ kind: 'unconfirmed' })
+    const refused = resumeRunView(
+      { ...finished, continued: [{ sessionId: 'a', outcome: 'refused' }] },
+      [],
+      () => undefined,
+      'attention'
+    )
+    expect(refused.rows).toEqual([])
+    expect(refused.counts.attention).toBe(0)
   })
 
   it('retains successful history but always shows current host failures', () => {

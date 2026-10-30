@@ -1,19 +1,16 @@
-// Claude's echo of a sent message both answers the send and opens its turn. Whatever order the
-// host publishes those in, a chat reading its frames one at a time must read working throughout:
-// Stop and every session list's Working come from that one rule.
+// Each intermediate echo/turn frame must preserve Working so Stop and session lists stay consistent.
 
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, beforeEach, expect, it } from 'vitest'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { AgentJournalSubmission } from '../../../shared/agent-session-journal-types'
 import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
 import { isStructuredAgentSessionMainAgentWorking } from '../../../shared/structured-agent-session-main-agent-working'
 import { ClaudeStructuredSessionAdapter } from '../../claude/claude-structured-session-adapter'
 import {
   fakeClaude,
-  PROVIDER_SESSION_ID,
-  claudeStartupSettled
+  PROVIDER_SESSION_ID
 } from '../../claude/claude-structured-session-test-support'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
@@ -53,6 +50,7 @@ beforeEach(async () => {
       providerSessionId: PROVIDER_SESSION_ID,
       resumeLeafUuid: null,
       resumesTranscript: false,
+      cliFlag: async () => 'supported' as const,
       continuesChain: false
     }),
     onEvent: (event) => {
@@ -61,7 +59,6 @@ beforeEach(async () => {
         lifecycle.push(host.handleAdapterEvent(mapped))
       }
     },
-    // As the runtime wires it.
     onDispatchSettledLate: (settlement) => void host.settleLateDispatch(settlement),
     openConnection: claude.current.openConnection,
     readProcessStartTime: async () => 1_700_000_000_000,
@@ -85,7 +82,7 @@ beforeEach(async () => {
     providerHandle: { kind: 'claude', sessionId: PROVIDER_SESSION_ID, leafUuid: null }
   })
   expect(await host.attach(CALLER, params)).toMatchObject({ ok: true })
-  await claudeStartupSettled(adapter, SESSION)
+  await vi.waitFor(() => expect(host.readStatusSummary(SESSION)?.hostExecutionPhase).toBe('ready'))
   await Promise.all(lifecycle)
 })
 
@@ -104,7 +101,7 @@ async function expectWorkingThroughEcho(backlog: boolean): Promise<void> {
   const turns = new Map<string, string>()
   const working: boolean[] = []
   const fence = store.getRecord(SESSION)!.lease.runtimeFence
-  host.subscribe({
+  await host.subscribe({
     id: 'chat-1',
     sessionId: SESSION,
     emit: (event) => {
@@ -125,6 +122,7 @@ async function expectWorkingThroughEcho(backlog: boolean): Promise<void> {
       )
     }
   })
+  working.length = 0
   const body = hostTestMessage('hi')
   await host.send(CALLER, {
     envelope: {
@@ -142,7 +140,7 @@ async function expectWorkingThroughEcho(backlog: boolean): Promise<void> {
   await settled()
   const connection = claude.current.connections[0]!
   if (backlog) {
-    // The previous cycle's result in the same read, its write issued just ahead of the echo's.
+    // Queue the previous result immediately ahead of the new echo in the same read.
     connection.handlers.onMessage?.({
       type: 'result',
       subtype: 'success',
@@ -155,7 +153,6 @@ async function expectWorkingThroughEcho(backlog: boolean): Promise<void> {
       result: ''
     })
   }
-  // Claude echoes the written message back, which is what opens its turn.
   connection.handlers.onMessage?.({ ...connection.sent.at(-1)!, uuid: 'echo-uuid' })
   await settled()
 

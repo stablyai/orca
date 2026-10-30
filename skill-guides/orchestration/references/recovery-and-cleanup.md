@@ -118,8 +118,11 @@ ORCA orchestration worker-start --task <task_id> --retry-of <dispatch_id> --work
 ```
 
 After three consecutive failures for one Task, its dispatch context
-circuit-breaks and the Task is failed. Do not route around that boundary with a
-new Run or an unrelated Dispatch.
+circuit-breaks and the Task is failed. Failed `worker-start` attempts count
+across `--retry-of`; a worker's own `failed` report does not. `--retry-of` a
+circuit-broken Dispatch is refused with `task_not_startable`: report the failure
+to the user instead. Do not route around that boundary with a new Run, Task, or
+unrelated Dispatch.
 
 For `outcome_unknown`, inspect first, then make an explicit choice:
 
@@ -130,6 +133,17 @@ ORCA orchestration worker-abandon --dispatch <dispatch_id> --json
 
 `worker-stop` closes only the exact proven supervised agent terminal. It never
 deletes the worktree, setup terminal, configured tabs, or unrelated processes.
+Its receipt's `processAction` reports what it did:
+
+- `closed_agent_terminal`: Orca issued that close; do not follow it with
+  `terminal close`.
+- `none`: this call issued no close (for example, already settled or
+  unsupervised).
+- `unknown`: Orca could not attempt or confirm a close.
+
+`stop_unknown` exits 1 and can still report `closed_agent_terminal` when the
+agent's exit was not proven; inspect `worker-show` before acting further.
+
 `worker-abandon` fences orchestration while accepting that resources may remain
 live; it performs no remote, process, or filesystem action. When it settles a
 worker, it retains an owned terminal by the same rule as `worker-retain`, so Orca
@@ -160,6 +174,8 @@ user-taken-over, and unproven terminals are retained.
 A `worker-start` that failed before its agent was ready still owns the terminal
 it created. Its receipt names `worker-release`, and `worker-list` reports that
 row as `reclaimable`; release it there rather than closing the terminal by hand.
+A `--retry-of` replacement for a `failed` worker releases the terminal that
+worker still owns the same way.
 
 Never release because of timeout, TUI idle, heartbeat, status, question,
 escalation, or stale/rejected completion. If the receipt says `release_pending`

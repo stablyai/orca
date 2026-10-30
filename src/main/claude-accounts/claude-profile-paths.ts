@@ -1,12 +1,16 @@
 import { lstatSync, mkdirSync, readFileSync, realpathSync } from 'node:fs'
 import * as hostPath from 'node:path'
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
+import {
+  CLAUDE_INJECTED_CONFIG_DIR_ENV,
+  CLAUDE_USER_CONFIG_DIR_ENV
+} from '../../shared/claude-profile-routing'
 import { isDefinitiveAbsence } from '../../shared/definitive-filesystem-absence'
 import type { ExecutionHostId } from '../../shared/execution-host'
 import { writeFileAtomically } from '../codex-accounts/fs-utils'
 import { ClaudeProfileSurfaceError } from './claude-profile-report'
 
-/** `executionHostId` routes calls to the host; it is the caller's view, so it is never persisted. */
+/** Caller-relative `executionHostId` routes calls but must not be persisted. */
 export type ClaudeProfileTarget =
   | { executionHostId: ExecutionHostId; runtime: 'host' }
   | { executionHostId: ExecutionHostId; runtime: 'wsl'; distro: string }
@@ -39,11 +43,7 @@ export function readClaudeProfileObject(file: string): ClaudeProfileRead<Record<
   }
 }
 
-/**
- * dataRoot belongs to the execution host: for WSL it is the guest's Linux data root. `home` is the
- * one spelling (absolute, normalized, no trailing separator) sign-in and launch must pass as
- * CLAUDE_CONFIG_DIR: Claude names the profile's Keychain entry from that exact text.
- */
+/** Use execution-host paths; pass the same normalized home at login and launch for Keychain identity. */
 export function describeClaudeProfile(
   dataRoot: string,
   accountId: string,
@@ -64,7 +64,7 @@ export function describeClaudeProfile(
   }
 }
 
-// Host-local facts only, in a fixed key order: the marker sits on the execution host's own disk.
+// Persist host-local identity in a stable key order for comparison.
 function ownershipRecord(
   version: unknown,
   accountId: unknown,
@@ -72,6 +72,20 @@ function ownershipRecord(
   distro: unknown
 ): string {
   return JSON.stringify({ version, accountId, runtime, distro })
+}
+
+function comparableOwnershipRecord(
+  version: unknown,
+  accountId: unknown,
+  runtime: unknown,
+  distro: unknown
+): string {
+  return ownershipRecord(
+    version,
+    accountId,
+    runtime,
+    runtime === 'wsl' && typeof distro === 'string' ? distro.trim().toLowerCase() : distro
+  )
 }
 
 function readOwnershipMarker(file: string): string | null {
@@ -90,26 +104,22 @@ function readOwnershipMarker(file: string): string | null {
     throw new ClaudeProfileSurfaceError('unreadable', 'Claude profile marker is unreadable')
   }
   const { version, accountId, runtime, distro } = marker.value
-  return ownershipRecord(version, accountId, runtime, distro)
+  return comparableOwnershipRecord(version, accountId, runtime, distro)
 }
 
-/**
- * The only gate before writing into a profile: namespace, containment, no linked components,
- * outside Claude's default homes, and an ownership marker beside the home. Refuses before creating anything.
- */
-// Written by setup's ownership gate when setup starts, not when it completes: its absence means
-// setup never started here, and its presence does not prove setup finished.
+// Setup writes this marker only after completing successfully.
 export function claudeProfileMarkerPath(profile: ClaudeProfileDescriptor): string {
   const path = profile.target.runtime === 'wsl' ? hostPath.posix : hostPath
   return path.join(path.dirname(profile.home), 'profile.json')
 }
 
+/** Validate ownership before creation; the returned marker writer must run last during setup. */
 export function prepareClaudeProfileDirectory(
   dataRoot: string,
   profile: ClaudeProfileDescriptor,
   userHome: string,
   userConfigDir?: string
-): void {
+): () => void {
   let expected: ClaudeProfileDescriptor
   try {
     expected = describeClaudeProfile(dataRoot, profile.accountId, profile.target)
@@ -128,19 +138,25 @@ export function prepareClaudeProfileDirectory(
   const distro = profile.target.runtime === 'wsl' ? profile.target.distro : undefined
   const record = ownershipRecord(profile.version, profile.accountId, profile.target.runtime, distro)
   const marker = readOwnershipMarker(markerPath)
-  if (marker !== null && marker !== record) {
+  if (
+    marker !== null &&
+    marker !==
+      comparableOwnershipRecord(profile.version, profile.accountId, profile.target.runtime, distro)
+  ) {
     throw new ClaudeProfileSurfaceError(
       'invalid-profile',
       'Claude profile belongs to another account or target'
     )
   }
   mkdirSync(profile.home, { recursive: true, mode: 0o700 })
-  if (marker === null) {
-    writeFileAtomically(markerPath, `${record}\n`, { mode: 0o600 })
+  return () => {
+    if (marker === null) {
+      writeFileAtomically(markerPath, `${record}\n`, { mode: 0o600 })
+    }
   }
 }
 
-export function assertClaudeProfileDescendant(root: string, destination: string): void {
+function assertClaudeProfileDescendant(root: string, destination: string): void {
   const suffix = relative(resolve(root), resolve(destination))
   if (!suffix || suffix === '..' || suffix.startsWith(`..${sep}`) || isAbsolute(suffix)) {
     throw new ClaudeProfileSurfaceError(
@@ -167,10 +183,7 @@ export function assertClaudeProfileDescendant(root: string, destination: string)
   }
 }
 
-/**
- * Resolves links in the deepest existing ancestor so a not-yet-created path cannot hide behind one;
- * the native call also returns on-disk case, so a case-only alias compares equal.
- */
+/** Resolve ancestor links and on-disk casing even for paths that do not exist yet. */
 function canonicalPath(file: string): string {
   const resolved = resolve(file)
   try {
@@ -184,7 +197,7 @@ function canonicalPath(file: string): string {
   }
 }
 
-export function assertDistinctClaudeProfile(profile: string, defaultHome: string): void {
+function assertDistinctClaudeProfile(profile: string, defaultHome: string): void {
   const left = canonicalPath(profile)
   const right = canonicalPath(defaultHome)
   for (const [root, destination] of [
@@ -201,8 +214,8 @@ export function assertDistinctClaudeProfile(profile: string, defaultHome: string
   }
 }
 
-/** Claude's default homes: a profile may never be, contain, or sit inside one. */
-export function assertOutsideDefaultClaudeHomes(
+/** Profiles and default homes must not overlap in either direction. */
+function assertOutsideDefaultClaudeHomes(
   profileHome: string,
   userHome: string,
   userConfigDir?: string
@@ -214,20 +227,24 @@ export function assertOutsideDefaultClaudeHomes(
   }
 }
 
-/** Set beside every CLAUDE_CONFIG_DIR Orca injects, so its own value never reads as the user's. */
-export const CLAUDE_INJECTED_CONFIG_DIR_ENV = 'ORCA_CLAUDE_INJECTED_CONFIG_DIR'
-
-/** The user's own CLAUDE_CONFIG_DIR (their System default), or undefined for `~/.claude`. */
 export function readUserClaudeConfigDir(env: NodeJS.ProcessEnv): string | undefined {
-  const configDir = env.CLAUDE_CONFIG_DIR?.trim()
-  const injected = env[CLAUDE_INJECTED_CONFIG_DIR_ENV]?.trim()
-  if (!configDir || (injected && resolve(injected) === resolve(configDir))) {
-    return undefined
-  }
-  return resolve(configDir)
+  const user = readUserClaudeConfigDirAsSet(env)
+  return user === undefined ? undefined : resolve(user.trim())
 }
 
-/** The folder profiles share from: the user's own CLAUDE_CONFIG_DIR, else `~/.claude`. */
+/** Preserve literal spelling for Keychain identity and shell rc comparisons. */
+export function readUserClaudeConfigDirAsSet(env: NodeJS.ProcessEnv): string | undefined {
+  const configDir = env.CLAUDE_CONFIG_DIR
+  const injected = env[CLAUDE_INJECTED_CONFIG_DIR_ENV]?.trim()
+  if (!configDir?.trim()) {
+    return undefined
+  }
+  if (injected && resolve(injected) === resolve(configDir.trim())) {
+    return env[CLAUDE_USER_CONFIG_DIR_ENV]?.trim() ? env[CLAUDE_USER_CONFIG_DIR_ENV] : undefined
+  }
+  return configDir
+}
+
 export function resolveClaudeDefaultHome(userHome: string, userConfigDir?: string): string {
   return userConfigDir ?? join(userHome, '.claude')
 }

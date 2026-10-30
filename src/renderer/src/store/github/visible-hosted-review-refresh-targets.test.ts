@@ -16,7 +16,9 @@ import {
   getVisibleHostedReviewRefreshTargets,
   visibleHostedReviewRefreshInputsChanged
 } from './visible-hosted-review-refresh-targets'
+import { getWorkspaceReferenceRequest } from '@/components/sidebar/workspace-reference-details'
 import { createVisibleHostedReviewRefreshScheduler } from './visible-hosted-review-refresh-scheduler'
+import { refreshHostedReviewCard } from '../slices/hosted-review-card-refresh'
 
 const repo: Repo = { id: 'repo-1', path: '/repo', displayName: 'repo', badgeColor: '', addedAt: 0 }
 const worktree = makePRRefreshWorktree()
@@ -102,6 +104,47 @@ describe('visible hosted review refresh targets', () => {
       })
     )
   })
+
+  it.each([review, null])(
+    'resolves a detached linked MR to a title or a settled miss: %j',
+    async (result) => {
+      const owner: Repo = {
+        ...repo,
+        gitRemoteIdentity: {
+          canonicalKey: 'gitlab.example.com/team/repo',
+          remoteName: 'origin',
+          remoteUrl: 'https://gitlab.example.com/team/repo.git'
+        }
+      }
+      const item = {
+        provider: 'gitlab' as const,
+        type: 'mr' as const,
+        number: 8,
+        url: 'https://gitlab.example.com/team/repo/-/merge_requests/8'
+      }
+      const detached = { ...worktree, branch: '', linkedGitLabMR: 8, linkedItems: [item] }
+      const store = setup(owner)
+      store.setState({ worktreesByRepo: { [repo.id]: [detached] }, activeWorktreeId: detached.id })
+      mockApi.hostedReview.forBranch.mockResolvedValue(result)
+      const exactKey = getWorkspaceReferenceRequest(item, detached, owner).key
+      const rows = getVisibleHostedReviewRefreshTargets(store.getState(), store.getState, {
+        selectedOnly: true
+      })
+      expect(rows).toHaveLength(1)
+      expect(rows[0].key).toBe(exactKey)
+      expect(await rows[0].refresh()).toBe(true)
+      expect(mockApi.hostedReview.forBranch).toHaveBeenCalledWith(
+        expect.objectContaining({
+          branch: '',
+          linkedGitLabMR: 8,
+          repoOwnerExecutionHostId: 'local',
+          currentHeadOid: null
+        })
+      )
+      expect(store.getState().hostedReviewCache[exactKey]?.data).toEqual(result)
+      expect(mockApi.gh.prForBranch).not.toHaveBeenCalled()
+    }
+  )
 
   it('uses the repo runtime owner rather than the focused server and fills both caches', async () => {
     const owner: Repo = { ...repo, executionHostId: 'runtime:owner-server' }
@@ -201,6 +244,29 @@ describe('visible hosted review refresh targets', () => {
     expect(targets(store)[0].revision).toBe(revision)
     store.setState({ worktreesByRepo: { [repo.id]: [{ ...worktree, head: 'new-head' }, alias] } })
     expect(targets(store)[0].revision).not.toBe(revision)
+  })
+
+  // E9: the timer-driven refresh of the selected card is interactive for priority, not a user act.
+  it('never asks to start a stopped WSL distro for the selected card, while a manual Refresh does', async () => {
+    const store = setup()
+    store.setState({ activeWorktreeId: worktree.id })
+    const rows = targets(store)
+    expect(rows[0]).toMatchObject({ selected: true })
+    await rows[0].refresh()
+    expect(mockApi.hostedReview.forBranch).toHaveBeenLastCalledWith(
+      expect.objectContaining({ admissionTier: 'interactive', active: true })
+    )
+    expect(mockApi.hostedReview.forBranch.mock.lastCall?.[0]).not.toHaveProperty('wakeWslDistro')
+
+    await refreshHostedReviewCard(store.getState().fetchHostedReviewForBranch, {
+      repoPath: repo.path,
+      repoId: repo.id,
+      branch: worktree.branch,
+      admissionTier: 'interactive'
+    })
+    expect(mockApi.hostedReview.forBranch).toHaveBeenLastCalledWith(
+      expect.objectContaining({ admissionTier: 'interactive', wakeWslDistro: true })
+    )
   })
 
   it('sets provider-neutral cadence for open, no review, closed and merged states', () => {

@@ -1,18 +1,18 @@
 import type { FolderWorkspace } from './folder-workspace-types'
 import type { Worktree } from './worktree/types'
 import { folderWorkspaceKey } from './workspace-scope'
-import { parseExecutionHostId, toSshExecutionHostId } from './execution-host'
+import {
+  getConnectionExecutionHostId,
+  parseExecutionHostId,
+  type ExecutionHostId
+} from './execution-host'
+import { composeWorktreeHostIdentity } from './worktree/host-qualified-identity'
 import { normalizeWorkspaceCreatorProvenance } from './workspace-creator-provenance'
 import { getWorkspaceAttachments } from './workspace-attachments'
 import { normalizeWorkspaceAttachment } from './workspace-attachment-normalization'
 
-/**
- * A folder workspace has no git repo, so its synthetic `Worktree` borrows the `repoId` slot to
- * name the PROJECT GROUP it belongs to. The value is never null, so a caller testing `repoId` for
- * absence to detect "no repo" will be wrong for every folder workspace.
- *
- * Minting and recognising it live together here so the two cannot drift.
- */
+/** Folder Worktrees borrow repoId for their project group; it is never null, so absence cannot detect a non-Git workspace.
+ * Keep prefix creation/recognition together to avoid drift. */
 const FOLDER_WORKSPACE_REPO_ID_PREFIX = 'folder-workspace:'
 
 export function folderWorkspaceRepoId(projectGroupId: string): string {
@@ -28,6 +28,21 @@ export function projectGroupIdFromRepoId(repoId: string | null | undefined): str
   return projectGroupId === '' ? null : projectGroupId
 }
 
+export function getFolderWorkspaceWorktreeHostId(
+  workspace: Pick<FolderWorkspace, 'executionHostId' | 'connectionId'>
+): ExecutionHostId {
+  return workspace.executionHostId ?? getConnectionExecutionHostId(workspace.connectionId)
+}
+
+export function getFolderWorkspaceHostIdentity(
+  workspace: Pick<FolderWorkspace, 'id' | 'executionHostId' | 'connectionId'>
+): string {
+  return composeWorktreeHostIdentity(
+    getFolderWorkspaceWorktreeHostId(workspace),
+    folderWorkspaceKey(workspace.id)
+  )
+}
+
 export function folderWorkspaceToWorktree(folderWorkspace: FolderWorkspace): Worktree {
   const linkedTask = folderWorkspace.linkedTask
   const selectedTask = linkedTask
@@ -36,9 +51,7 @@ export function folderWorkspaceToWorktree(folderWorkspace: FolderWorkspace): Wor
         linkedItems: folderWorkspace.linkedItems
       }).find((item) => item.type === 'issue')
   const creatorProvenance = normalizeWorkspaceCreatorProvenance(folderWorkspace.creatorProvenance)
-  const hostId =
-    folderWorkspace.executionHostId ??
-    (folderWorkspace.connectionId ? toSshExecutionHostId(folderWorkspace.connectionId) : 'local')
+  const hostId = getFolderWorkspaceWorktreeHostId(folderWorkspace)
   const parsedHost = parseExecutionHostId(hostId)
   return {
     id: folderWorkspaceKey(folderWorkspace.id),
@@ -78,6 +91,12 @@ export function folderWorkspaceToWorktree(folderWorkspace: FolderWorkspace): Wor
     sortOrder: folderWorkspace.sortOrder,
     manualOrder: folderWorkspace.manualOrder,
     lastActivityAt: folderWorkspace.lastActivityAt,
+    ...(folderWorkspace.smartTier !== undefined
+      ? { smartTier: folderWorkspace.smartTier, smartAt: folderWorkspace.smartAt }
+      : {}),
+    ...(folderWorkspace.lastTerminalUseAt !== undefined
+      ? { lastTerminalUseAt: folderWorkspace.lastTerminalUseAt }
+      : {}),
     createdAt: folderWorkspace.createdAt,
     createdWithAgent: folderWorkspace.createdWithAgent,
     pendingFirstAgentMessageRename: folderWorkspace.pendingFirstAgentMessageRename,

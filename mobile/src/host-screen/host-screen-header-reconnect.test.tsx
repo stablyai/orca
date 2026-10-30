@@ -26,14 +26,18 @@ vi.mock('lucide-react-native', () => ({
 import { resolveHostDisplay } from '../../../src/shared/host-display-resolution'
 import { HostScreenHeader } from './host-screen-header'
 
-/** A host the shell's client has failed to reach twenty times, which is the verdict that offers
- *  Reconnect on native. */
+// Use the unreachable verdict that offers native Reconnect to prove the page still withholds it.
 function controllerWith(forceReconnectHost: ForceReconnect) {
   const fields = {
     actions: {
       leaveHost: () => {},
       navigateFromHostList: () => {},
       openNewWorktreeModal: () => {}
+    },
+    connectionVerdict: {
+      kind: 'unreachable',
+      label: "Can't reach desktop",
+      reason: 'never-connected'
     },
     connState: 'reconnecting',
     embedded: false,
@@ -43,14 +47,8 @@ function controllerWith(forceReconnectHost: ForceReconnect) {
     hostDisplay: resolveHostDisplay({ name: 'Desk' }),
     lastConnectedAt: null,
     onHideSidebar: undefined,
-    reconnectAttempts: 20,
-    relayRecovery: {
-      pendingPath: null,
-      pairingRejected: false,
-      relayHostReachability: 'connecting'
-    },
-    settings: { activeFilterCount: 0, selectedSortLabel: 'Recent' },
-    state: { hostName: 'Desk', groupMode: 'none', showSearch: false }
+    settings: { activeFilterCount: 0 },
+    state: { hostName: 'Desk', view: { groupBy: 'none' }, showSearch: false }
   }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the header reads only these members on a narrow, non-embedded layout; the rest of the controller is unreachable from it.
   return fields as unknown as Parameters<typeof HostScreenHeader>[0]['controller']

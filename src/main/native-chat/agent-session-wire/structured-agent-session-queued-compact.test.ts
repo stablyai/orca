@@ -1,9 +1,7 @@
-// A /compact asked to wait (`delivery`) while the agent works: held as a card like a queued
-// send, answered at once, run when the queue drains it. Without the opt-in, today's refusal.
-
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
 import type { AgentChildWorkView } from '../../../shared/agent-status-child-work-view'
+import { reportedChildWork } from './structured-agent-session-reported-child-work.test-support'
 import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
 import { agentSessionFailureWords } from '../../../shared/agent-session-failure-words'
 import { ConversationCommandParams } from '../../../shared/rpc-contract/structured-agent-session-params'
@@ -26,10 +24,17 @@ import {
 let rig: QueuedMessageTestRig
 
 beforeEach(async () => {
-  rig = await createQueuedMessageTestRig()
+  vi.useFakeTimers()
+  rig = await createQueuedMessageTestRig({ restartable: true })
 })
 
-afterEach(() => rig.dispose())
+afterEach(async () => {
+  try {
+    await rig.dispose()
+  } finally {
+    vi.useRealTimers()
+  }
+})
 
 function compact(
   delivery?: 'queue-if-active',
@@ -95,7 +100,7 @@ const BACKGROUND_TASK: AgentChildWorkView = {
   invocation: { invocationId: 'spawn-dev', generation: 1 }
 }
 
-const settleMs = () => new Promise((resolve) => setTimeout(resolve, 150))
+const settleMs = () => vi.advanceTimersByTimeAsync(150)
 
 describe('a /compact that waits in line', () => {
   it("uses the person's reserve when background cards fill their bound", async () => {
@@ -208,7 +213,6 @@ describe('a /compact that waits in line', () => {
     const laterId = later.value.queued.messageId
     await rig.settleAccepted(working, 'a')
     await eventually(() => expect(rig.compact).toHaveBeenCalledOnce())
-    // The compaction's turn runs, so the later card still waits.
     await settleMs()
     expect(await rig.handoff(laterId)).toBeUndefined()
     rig.finishCompact()
@@ -261,7 +265,6 @@ describe('a /compact that waits in line', () => {
     await eventually(() => expect(rig.compact).toHaveBeenCalledOnce())
   })
 
-  /** The rows that report a failure, and the cards still listed. */
   async function failureRowsAndCards() {
     const snapshot = await rig.host.journalSnapshot(SESSION)
     return {
@@ -273,7 +276,7 @@ describe('a /compact that waits in line', () => {
   }
 
   it('refused by the agent: spent, said once in its turn, and the next card still runs', async () => {
-    // Every compaction is refused, as on a short chat: a returned card would loop or block.
+    // Returning a repeatedly refused compact card would loop or block the queue.
     rig.compact.mockResolvedValue({
       state: 'rejected',
       ...agentSessionFailureWords(
@@ -311,17 +314,16 @@ describe('a /compact that waits in line', () => {
       throw new Error('expected a queued receipt')
     }
     tasks = [BACKGROUND_TASK]
+    rig.host.publishChildWorkEvidence(SESSION, reportedChildWork(tasks, 1))
     await rig.settleAccepted(working, 'a')
     const laterId = later.value.queued.messageId
     await eventually(async () => expect(await rig.handoff(laterId)).toBeDefined())
     expect(rig.compact).not.toHaveBeenCalled()
-    // Refused while still queued: no hand-off was recorded for a command that never left.
     const refused = await rig.handoff(compactId)
     expect(refused).toMatchObject({ dispatchState: 'rejected' })
     expect(refused?.handedOverAt).toBeUndefined()
     const { failures, cards } = await failureRowsAndCards()
     expect(failures).toHaveLength(1)
-    // The reason, as the direct path says it, not a bare "try it again".
     expect(failures[0]!.body).toMatchObject({
       text: 'Background tasks are still running. Wait for the background tasks to finish. Run /compact again.'
     })
@@ -347,10 +349,10 @@ describe('a /compact that waits in line', () => {
     })
     vi.spyOn(console, 'warn').mockImplementation(() => undefined)
     tasks = [BACKGROUND_TASK]
+    rig.host.publishChildWorkEvidence(SESSION, reportedChildWork(tasks, 1))
     await rig.settleAccepted(working, 'a')
     await eventually(() => expect(failed).toHaveBeenCalledOnce())
-    // The refusal's row landed before the write that failed, so the card never left without it;
-    // the loop then reports its own fault, and nothing was ever handed over.
+    // Persist refusal before the failed write so the card cannot disappear without explanation.
     const { failures } = await failureRowsAndCards()
     expect(failures.map((row) => row.body)).toContainEqual(
       expect.objectContaining({
@@ -368,7 +370,6 @@ describe('a /compact that waits in line', () => {
     const compactId = await queuedCompact()
     await rig.stop()
     await rig.settleAccepted(working, 'a')
-    // The chat's agent went away; the next start fails.
     await rig.restartHostProcess()
     rig.failNextStart(new Error('the agent could not start'))
     vi.spyOn(console, 'warn').mockImplementation(() => undefined)
@@ -391,7 +392,7 @@ describe('a /compact that waits in line', () => {
     await eventually(() => expect(rig.compact).toHaveBeenCalledOnce())
   })
 
-  /** A command card consumed while the agent starts, and never handed over: then Orca crashes. */
+  /** Crash after card consumption but before startup allows dispatch. */
   async function consumedThenCrashed(send: 'drain' | 'sendNow'): Promise<string> {
     await rig.dispose()
     rig = await createQueuedMessageTestRig({ restartable: true })
@@ -399,7 +400,7 @@ describe('a /compact that waits in line', () => {
     const compactId = await queuedCompact()
     await rig.stop()
     await rig.settleAccepted(working, 'a')
-    // No child now, and the next start stays in its spawn: the hand-off stays queued.
+    // Hold new spawn so the handoff stays queued.
     await rig.host.close(SESSION, 'evict')
     const release = rig.holdNextStart()
     const startsBefore = rig.starts.mock.calls.length
@@ -416,8 +417,7 @@ describe('a /compact that waits in line', () => {
 
   it('cut short by a restart after the queue sent it: waits again under the restart, never spent', async () => {
     const compactId = await consumedThenCrashed('drain')
-    // The queue's own hand-off is not the person's, so it waits as any queued card does after a
-    // restart: held unshown, never sent by itself.
+    // Automatic host handoffs return to a hidden restart hold, never automatic redelivery.
     await eventually(async () =>
       expect(await rig.drafts()).toEqual([{ messageId: compactId, state: 'waiting' }])
     )
@@ -453,7 +453,7 @@ describe('a /compact that waits in line', () => {
     const kept = rig.send('kept message')
     await kept.result
     await eventually(() => expect(rig.starts.mock.calls.length).toBeGreaterThan(startsBefore))
-    // Finish the old host before reopening so its delayed start cannot keep writing.
+    // Drain the old host before reopening to prevent delayed writes.
     const restarted = rig.quitRestartHostProcess()
     release()
     await restarted
@@ -490,44 +490,52 @@ describe('a /compact that waits in line', () => {
     await eventually(() => expect(rig.starts.mock.calls.length).toBeGreaterThan(startsBefore))
     rig.crashRestartHostProcess()
     release()
-    // A command in flight is not resumed: the person runs it again. No card, kept or otherwise.
+    // In-flight commands need a fresh user request after restart.
     expect(await rig.drafts()).toEqual([])
     expect(await rig.submission(id)).toMatchObject({ dispatchState: 'rejected' })
   })
 
-  it('a /clear drops a waiting command card instead of carrying it to the new chat', async () => {
+  it('a /clear withdraws a waiting command and keeps ordinary cards paused in order', async () => {
     const working = await rig.workingSend()
-    await queuedCompact()
-    const draft = await rig.send('carried draft', 'queue-if-active').result
-    if (!draft.ok || !('queued' in draft.value)) {
-      throw new Error('expected a queued receipt')
-    }
+    const first = rig.send('first draft', 'queue-if-active')
+    await first.result
+    const compactId = await queuedCompact()
+    const last = rig.send('last draft', 'queue-if-active')
+    await last.result
     await rig.stop()
     await rig.settleAccepted(working, 'a')
-    const cleared = await clear()
-    const replacementId = cleared.ok ? cleared.value.replacementSessionId : undefined
-    if (!replacementId) {
-      throw new Error('expected a replacement session')
-    }
-    expect(await rig.drafts()).toEqual([])
-    expect(await rig.drafts(replacementId)).toEqual([
-      { messageId: draft.value.queued.messageId, state: 'waiting' }
+    expect(await clear()).toMatchObject({
+      ok: true,
+      value: { command: 'clear', state: 'completed' }
+    })
+    expect(await rig.drafts()).toEqual([
+      { messageId: first.id, state: 'waiting' },
+      { messageId: last.id, state: 'waiting' }
     ])
+    expect(
+      rig.host.collaboratorsForTests().sessions.get(SESSION)!.journal.queuedMessages.get(compactId)
+    ).toMatchObject({ state: 'withdrawn' })
+    expect(await rig.queuePause()).toBeNull()
+    expect(
+      rig.host.collaboratorsForTests().sessions.get(SESSION)!.journal.queuedMessages.pauses()
+    ).toContainEqual(
+      expect.objectContaining({ reason: 'cleared', messageIds: [first.id, last.id] })
+    )
+    expect(await rig.handoff(first.id)).toBeUndefined()
+    expect(await rig.handoff(last.id)).toBeUndefined()
     expect(rig.compact).not.toHaveBeenCalled()
   })
 
-  it('a /clear with only a command card waiting opens no replacement conversation for it', async () => {
+  it('a /clear with only a waiting command keeps the same chat with no queue pause', async () => {
     const working = await rig.workingSend()
     await queuedCompact()
     await rig.stop()
     await rig.settleAccepted(working, 'a')
-    const cleared = await clear()
-    const replacementId = cleared.ok ? cleared.value.replacementSessionId : undefined
-    if (!replacementId) {
-      throw new Error('expected a replacement session')
-    }
+    expect(await clear()).toMatchObject({ ok: true })
     expect(await rig.drafts()).toEqual([])
-    expect(rig.host.collaboratorsForTests().sessions.has(replacementId)).toBe(false)
+    expect(await rig.queuePause()).toBeNull()
+    expect(rig.host.collaboratorsForTests().sessions.has(SESSION)).toBe(true)
+    expect(rig.store.listRecords()).toHaveLength(1)
   })
 })
 

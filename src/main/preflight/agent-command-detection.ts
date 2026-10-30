@@ -1,48 +1,41 @@
-import { z } from 'zod'
-import { getActiveMultiplexer } from '../ssh/ssh-target-registry'
+import { SshHostNotServedError } from '../providers/ssh-host-not-served-error'
 import { detectWslCommandsOnPath } from '../ipc/preflight-wsl-agent-detection'
-import { detectCommandsInInstallDirs } from '../ipc/local-agent-install-dir-detection'
+import { detectCommandsInInstallDirs } from '../../shared/local-agent-install-dir-detection'
 import {
   getPreflightWslTarget,
   type PreflightRuntimeContext
 } from '../ipc/preflight-runtime-target'
-import { isCommandOnPath } from '../ipc/preflight-command-exec'
+import { findCommandsOnLocalPath } from '../ipc/command-path-resolver'
+import { buildLocalPreflightEnv } from '../ipc/preflight-local-env'
+import { readGuestWindowsDriveMounts } from '../ipc/wsl-guest-windows-drive-path'
 
 export async function detectAgentCommandsOnHost(
   commands: readonly string[],
   options: { connectionId?: string | null; context?: PreflightRuntimeContext } = {}
 ): Promise<Set<string>> {
   if (options.connectionId) {
-    const mux = getActiveMultiplexer(options.connectionId)
-    if (!mux || mux.isDisposed()) {
-      throw new Error('Agent command resolution requires the execution host connection.')
-    }
-    const result = z.object({ agents: z.array(z.string()) }).parse(
-      await mux.request('preflight.detectAgents', {
-        commands: commands.map((cmd) => ({ id: cmd, cmd }))
-      })
-    )
-    return new Set(result.agents.filter((cmd) => commands.includes(cmd)))
+    throw new SshHostNotServedError(options.connectionId)
   }
   const context = options.context
   const wslTarget = getPreflightWslTarget(context)
   if (wslTarget) {
     return detectWslCommandsOnPath(wslTarget, commands)
   }
-  const pathChecks = await Promise.all(
-    commands.map(async (cmd) => ({
-      cmd,
-      installedOnPath: await isCommandOnPath(cmd)
-    }))
+  // Bounded directory scans avoid repeated probes for missing commands (#34636).
+  const onPathCommands = await findCommandsOnLocalPath(commands, {
+    env: buildLocalPreflightEnv()
+  })
+  const missedCommands = commands.filter((cmd) => !onPathCommands.has(cmd))
+  // Resolve cold-GUI install dirs once; use the same WSL-filtered PATH while retaining process PATH elsewhere.
+  const guestMounts = readGuestWindowsDriveMounts()
+  // The batch includes the fallback's PATH normalization and Windows executable names.
+  const installDirCommands = detectCommandsInInstallDirs(
+    missedCommands,
+    guestMounts.length > 0 ? buildLocalPreflightEnv(guestMounts)?.PATH : undefined,
+    { skipPathSearch: true }
   )
-  const missedCommands = pathChecks.filter((check) => !check.installedOnPath).map(({ cmd }) => cmd)
-  // Why: PATH may still be unhydrated on a cold GUI launch; bulk resolution
-  // computes user install dirs once instead of blocking once per missed CLI.
-  const installDirCommands = detectCommandsInInstallDirs(missedCommands)
   const foundCommands = new Set(
-    pathChecks
-      .filter(({ cmd, installedOnPath }) => installedOnPath || installDirCommands.has(cmd))
-      .map(({ cmd }) => cmd)
+    commands.filter((cmd) => onPathCommands.has(cmd) || installDirCommands.has(cmd))
   )
   return foundCommands
 }

@@ -1,17 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as MiniMaxCookieStore from './minimax-cookie-store'
+import { setSecretStore } from '../../shared/secret-store'
 
 const safeStorageMock = vi.hoisted(() => ({
   isEncryptionAvailable: vi.fn(() => true),
   encryptString: vi.fn((value: string) => Buffer.from(value)),
   decryptString: vi.fn((value: Buffer) => value.toString('utf8'))
 }))
-
-const electronMock = vi.hoisted(() => ({
-  safeStorage: safeStorageMock
-}))
-
-vi.mock('electron', () => electronMock)
 
 const existsSyncMock = vi.fn()
 const readFileSyncMock = vi.fn()
@@ -60,6 +55,7 @@ describe('minimax-cookie-store', () => {
     safeStorageMock.isEncryptionAvailable.mockReturnValue(true)
     safeStorageMock.encryptString.mockImplementation((value: string) => Buffer.from(value))
     safeStorageMock.decryptString.mockImplementation((value: Buffer) => value.toString('utf8'))
+    setSecretStore({ ...safeStorageMock, describeProtectionGap: () => null })
   })
 
   afterEach(() => {
@@ -227,8 +223,6 @@ describe('minimax-cookie-store', () => {
       expect(store.getMiniMaxSessionCookieProtection()).toBe('sealed')
     })
 
-    // Pre-envelope files carry no kind, so the legacy sniff decides — the same one the
-    // reader uses, so the warning cannot disagree with how the bytes are interpreted.
     it('reports a legacy pre-envelope cookie header as plaintext', async () => {
       existsSyncMock.mockReturnValue(true)
       readFileSyncMock.mockReturnValue(Buffer.from('sessionId=abc123; other=1', 'utf8'))

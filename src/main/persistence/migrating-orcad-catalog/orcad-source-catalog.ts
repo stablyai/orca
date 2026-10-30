@@ -1,4 +1,5 @@
-import type { OrcadMigrationCatalogPayload } from '../../../shared/orcad-migration-manifest'
+import type { OrcadMigrationCatalogPayload } from '../../../shared/orcad-migration/orcad-migration-manifest'
+import { withoutOrcadRetainedMarker } from '../../../shared/orcad-retained-marker'
 import type { ProjectGroup } from '../../../shared/project-group-types'
 import type { SshTarget } from '../../../shared/ssh-types'
 import type { Store } from '../../persistence'
@@ -15,14 +16,14 @@ export function collectOrcadMigrationSourceCatalog(
   const allFolders = store.getFolderWorkspaces()
   const repositories = allRepos
     .filter((repo) => repoBelongsToOrcadSource(repo, target.id))
-    .map((repo) => structuredClone(repo))
+    .map(withoutOrcadRetainedMarker)
   const ownedFolderIds = orcadSourceFolderWorkspaceIds(
     { repos: allRepos, projectGroups: allGroups, folderWorkspaces: allFolders },
     target.id
   )
   const folderWorkspaces = allFolders
     .filter((workspace) => ownedFolderIds.has(workspace.id))
-    .map((workspace) => structuredClone(workspace))
+    .map(withoutOrcadRetainedMarker)
   const projectGroups = collectProjectGroups(
     allGroups,
     new Set([
@@ -34,7 +35,7 @@ export function collectOrcadMigrationSourceCatalog(
   return { repositories, projectGroups, folderWorkspaces }
 }
 
-function collectProjectGroups(
+export function collectProjectGroups(
   groups: ProjectGroup[],
   initialIds: ReadonlySet<string>
 ): ProjectGroup[] {

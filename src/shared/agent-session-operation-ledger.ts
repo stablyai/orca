@@ -7,19 +7,7 @@ import {
   type AgentSessionRewindReason,
   type AgentSessionRewindResult
 } from './agent-session-rewind'
-/**
- * Durable client-operation ledger.
- *
- * `terminal.ensureAgentSession` / `terminal.createAgentSession` already enforce timestamped
- * operation ids with fingerprint conflict detection, age expiry, and tombstone retention — but in
- * memory, so a host restart turns "replay this create" into "spawn another agent". These are the
- * same rules over rows that survive a restart; the store writes a row in the same atomic
- * transaction as the lease reservation.
- *
- * There is no count limit. Rows are bookkeeping for retries, and a full ledger refused every
- * caller's next write, including the user's own send behind unrelated agent traffic. A row's only
- * lifetime is the replay window it protects (`agentSessionOperationExpiry`).
- */
+/** Persist retry/fingerprint/expiry rules atomically with lease reservations so restarts cannot turn replays into duplicate spawns. Never cap row count: background traffic would block user writes; expire only by replay window. */
 
 import {
   AGENT_SESSION_MAX_NEW_OPERATION_AGE_MS,
@@ -29,32 +17,17 @@ import {
 import {
   isAgentSessionConversationCommandResult,
   type AgentSessionConversationCommandResult
-} from './agent-session-conversation-command'
+} from './agent-session/agent-session-conversation-command'
 
 export type AgentSessionOperationOutcome =
   | { status: 'pending' }
   | {
       status: 'succeeded'
-      /**
-       * Empty exactly when `launch` recorded a terminal surface — a PTY has a handle, not a session
-       * id. Kept a required string rather than made optional because a build that predates `launch`
-       * rejects a `succeeded` row without one: the records file such a build keeps is unusable to it
-       * whole, and a row the database holds is dropped from the ledger, so its retry runs again.
-       */
+      /** Empty for terminal launch: PTYs have handles, not session IDs. Keep the string required because older builds reject/drop rows without it, losing replay evidence. */
       sessionId: string
       conversationCommand?: AgentSessionConversationCommandResult
       rewind?: AgentSessionRewindResult
-      /**
-       * The full `agent.launch` answer. Recorded whole rather than rebuilt, because the preferred
-       * mode and the reason a launch downgraded away from it cannot be recomputed once the user's
-       * settings move: a replay must return what ran, not what would run now.
-       *
-       * Typed `unknown`, and deliberately NOT checked by `isAgentSessionOperationRow`, for the same
-       * reason `sessionId` above stays required: a load drops a row it rejects. `isAgentLaunchResult`
-       * is a hand-maintained mirror of a result type later work will edit, so a field tightened
-       * there would reject rows this same build wrote and lose their replay. It is narrowed where
-       * the value is read instead, where a payload we cannot read costs one replay.
-       */
+      /** Store the whole launch answer: changed settings cannot reconstruct its mode/downgrade reason. Keep unknown and do not validate at row admission: stricter isAgentLaunchResult checks could drop old rows and permit duplicate effects. Narrow at replay read, where an unreadable payload costs only that reply. */
       launch?: unknown
     }
   | {
@@ -69,9 +42,6 @@ export type AgentSessionOperationOutcome =
   /** The effect may or may not have happened; replay this answer instead of spawning again. */
   | { status: 'unknown' }
 
-/** A terminal pane an operation laid out before its process existed. */
-export type AgentSessionOperationOwnedPane = { worktreeId: string; paneKey: string }
-
 export type AgentSessionOperationRow = {
   callerKey: string
   operationId: string
@@ -80,37 +50,6 @@ export type AgentSessionOperationRow = {
   recordedAt: number
   expiresAt: number
   outcome: AgentSessionOperationOutcome
-  /**
-   * The pane an `agent.launch` showed before its agent existed. Written with the claim, so the pane
-   * can read its fate off this row — attach, couldn't start, couldn't confirm — across a restart,
-   * and stops being owned when the row expires. Not checked by `isAgentSessionOperationRow`: a
-   * malformed value costs that pane its verdict, never the row.
-   */
-  ownedPane?: AgentSessionOperationOwnedPane
-}
-
-/** Unexpired rows naming this pane as theirs. */
-export function listAgentSessionOperationRowsOwningPane(
-  rows: Iterable<AgentSessionOperationRow>,
-  pane: AgentSessionOperationOwnedPane,
-  now: number
-): AgentSessionOperationRow[] {
-  const owning: AgentSessionOperationRow[] = []
-  for (const row of rows) {
-    const owned: unknown = row.ownedPane
-    if (
-      row.expiresAt > now &&
-      typeof owned === 'object' &&
-      owned !== null &&
-      'paneKey' in owned &&
-      'worktreeId' in owned &&
-      owned.paneKey === pane.paneKey &&
-      owned.worktreeId === pane.worktreeId
-    ) {
-      owning.push(row)
-    }
-  }
-  return owning
 }
 
 export type AgentSessionOperationRefusalCode =
@@ -159,13 +98,7 @@ export function settleAgentSessionOperation(
   )
 }
 
-/**
- * Settlement is monotone in one direction only: once an operation is known to have succeeded or
- * failed, a later `unknown` must not take that certainty away. A crash handler, a restart
- * reconciler and the operation's own settle can all reach the same row, and the slowest of them is
- * not the best informed — an `unknown` landing after a recorded success would turn a replayable
- * answer into a permanent refusal for work that demonstrably completed.
- */
+/** Never replace settled success/failure with unknown: slower crash/restart reconciliation must not erase a replayable result. */
 function supersedesSettledOutcome(
   current: AgentSessionOperationOutcome,
   next: AgentSessionOperationOutcome
@@ -184,21 +117,10 @@ export type AgentSessionOperationClaim =
   /** Pruned or never admitted. */
   | { claim: 'absent' }
 
-/**
- * Take exclusive ownership of an admitted operation, atomically.
- *
- * Admission alone does not decide who runs: two callers replaying one id both read `pending`, and
- * two unconditional writes of `unknown` are not a compare-and-swap — both would see their own write
- * land and both would execute. The swap has to be conditional on the state it read, in one step,
- * and it has to report which caller won. `pending` is the only state that can be claimed.
- *
- * The row moves to `unknown` rather than staying `pending` on purpose: from the instant the effect
- * may start, the truthful durable answer is "this may have happened", and a host that dies mid-run
- * leaves exactly that behind.
- */
+/** Atomically CAS pending to unknown and return the winner before effects. Admission or unconditional writes let two callers run; unknown durably records possible effects if the host dies mid-run. */
 export function claimAgentSessionOperation(
   rows: ReadonlyMap<string, AgentSessionOperationRow>,
-  args: { callerKey: string; operationId: string; ownedPane?: AgentSessionOperationOwnedPane }
+  args: { callerKey: string; operationId: string }
 ): { rows: Map<string, AgentSessionOperationRow>; claim: AgentSessionOperationClaim } {
   const key = agentSessionOperationKey(args.callerKey, args.operationId)
   const existing = rows.get(key)
@@ -208,21 +130,13 @@ export function claimAgentSessionOperation(
   if (existing.outcome.status !== 'pending') {
     return { rows: new Map(rows), claim: { claim: 'lost', row: existing } }
   }
-  const claimed: AgentSessionOperationRow = {
-    ...existing,
-    outcome: { status: 'unknown' },
-    ...(args.ownedPane ? { ownedPane: args.ownedPane } : {})
-  }
+  const claimed: AgentSessionOperationRow = { ...existing, outcome: { status: 'unknown' } }
   const next = new Map(rows)
   next.set(key, claimed)
   return { rows: next, claim: { claim: 'won', row: claimed } }
 }
 
-/**
- * Retention floor. The tombstone must outlive the window in which its id could still be admitted
- * as new, plus the accepted future skew — otherwise a retry arriving in the gap becomes a second
- * spawn instead of a replay.
- */
+/** Retain tombstones beyond admission age plus future skew; a gap would turn retries into duplicate spawns. */
 export function agentSessionOperationExpiry(
   operationTimestamp: number,
   recordedAt: number
@@ -261,10 +175,7 @@ export function pruneAgentSessionOperationRows(
   return kept
 }
 
-/**
- * Decide what a mutating call with this operation id means against the persisted ledger. Callers
- * must prune first; a row that is present is a row that is still authoritative.
- */
+/** Prune before deciding: every retained row remains authoritative for retries. */
 export function evaluateAgentSessionOperation(args: {
   rows: ReadonlyMap<string, AgentSessionOperationRow>
   callerKey: string
@@ -297,8 +208,7 @@ export function evaluateAgentSessionOperation(args: {
         }
   }
   if (now - operationTimestamp > AGENT_SESSION_MAX_NEW_OPERATION_AGE_MS) {
-    // Why: once a tombstone could have expired, an unseen replay must never be reinterpreted as
-    // permission to start another fresh agent.
+    // Once the tombstone could have expired, unseen retries cannot authorize a fresh agent.
     return {
       decision: 'refused',
       code: 'agent_session_operation_expired',

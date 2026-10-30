@@ -1,11 +1,7 @@
-/**
- * `orca environment status|update|rollback|recover|stop|cancel-stop`: the Managed servers
- * actions over runtime RPC. Each call is gated on the runtime's managedServer.v1 capability, and
- * an older runtime's method_not_found reads the same as a missing capability.
- */
 import type {
   OrcadManagedCancelStopResult,
   OrcadManagedDeployResult,
+  OrcadManagedForgetResult,
   OrcadManagedRecoveryResult,
   OrcadManagedRollbackResult,
   OrcadManagedRuntimeStatus,
@@ -24,8 +20,7 @@ import { reportAfterClosedConnection } from './managed-server-reconnect'
 const UNSUPPORTED_MESSAGE =
   'This Orca runtime cannot manage servers over SSH. Run this on the computer whose Orca desktop app deployed the server, after updating Orca there.'
 
-// Why 20 minutes: the desktop runs the whole action inline, and a Windows runtime promotion (5 min)
-// plus a readiness wait (5 min) on a slow host already outlast the 60 s RPC default.
+// Windows promotion and readiness waits can take ten minutes; allow headroom on slow hosts.
 export const MANAGED_SERVER_ACTION_TIMEOUT_MS = 20 * 60_000
 const READ_ONLY_METHODS = new Set(['managedServer.status'])
 
@@ -53,7 +48,7 @@ async function callManagedServer<TResult>(
     if (error instanceof RuntimeClientError && error.code === 'method_not_found') {
       throw unsupported()
     }
-    // Why not a failure: the desktop keeps running the action after this client stops waiting.
+    // The runtime continues the action after this client times out.
     if (!readOnly && error instanceof RuntimeClientError && error.code === 'runtime_timeout') {
       throw new RuntimeClientError(
         'managed_server_in_progress',
@@ -87,10 +82,7 @@ function selectorOf(context: HandlerContext): { selector: string } {
 
 type Outcome = { outcome: string; code?: string; reason?: string }
 
-/**
- * Prints a result whose outcome is in `settled`; throws any other so scripts see a non-zero exit.
- * Why an allow-list: an outcome a newer desktop adds must fail loudly, not print `undefined`.
- */
+/** Reject unknown outcomes so newer-server responses cannot silently print undefined. */
 function report<TResult extends Outcome, TSettled extends TResult['outcome']>(
   response: RuntimeRpcSuccess<TResult>,
   json: boolean,
@@ -205,6 +197,27 @@ export const MANAGED_SERVER_HANDLERS: Record<string, CommandHandler> = {
       context.json,
       ['unlinked'],
       () => `Stopped ${params.selector} and unlinked it from this machine.`
+    )
+  },
+  'environment forget': async (context) => {
+    const params = selectorOf(context)
+    if (context.flags.get('yes') !== true) {
+      throw new RuntimeClientError(
+        'confirmation_required',
+        `Forgetting ${params.selector} unlinks it from this machine without stopping it on its host. Re-run with --yes to confirm.`
+      )
+    }
+    const response = await callManagedServer<OrcadManagedForgetResult>(
+      context,
+      'managedServer.forget',
+      params
+    )
+    report(
+      response,
+      context.json,
+      ['forgotten'],
+      () =>
+        `Unlinked ${params.selector} from this machine. Its host was not contacted, so orcad may still be running there.`
     )
   },
   'environment cancel-stop': async (context) => {

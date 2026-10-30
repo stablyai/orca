@@ -56,8 +56,11 @@ export function encodeProfileStateWriterError(
   if (error instanceof ProfileStateDocumentCorruptionError) {
     return { code: error.code, message: error.message, outcome, domain: error.domain }
   }
+  if (error instanceof ProfileStateDatabaseOpenError) {
+    const cause = encodeOpenErrorCause(error.cause)
+    return { code: error.code, message: error.message, outcome, ...(cause ? { cause } : {}) }
+  }
   if (
-    error instanceof ProfileStateDatabaseOpenError ||
     error instanceof ProfileStateWriterError ||
     error instanceof ProfileStateIndeterminateWriteError ||
     error instanceof ProfileStateReadRollbackError
@@ -88,8 +91,28 @@ export function decodeProfileStateWriterError(data: ProfileStateWriterErrorData)
       data.code === 'identity-mismatch' ||
       data.code === 'invalid-profile-id'
     ) {
-      return new ProfileStateDatabaseOpenError(data.code, data.message)
+      return new ProfileStateDatabaseOpenError(
+        data.code,
+        data.message,
+        data.cause ? Object.assign(new Error(data.cause.message), data.cause) : undefined
+      )
     }
   }
   return new ProfileStateWriterError(data.code, data.message, data.outcome)
+}
+
+// Preserve SQLite causes to distinguish lock races from damage (#27333); these messages exclude user data.
+function encodeOpenErrorCause(cause: unknown): ProfileStateWriterErrorData['cause'] {
+  if (!(cause instanceof Error)) {
+    return undefined
+  }
+  const code = 'code' in cause && typeof cause.code === 'string' ? cause.code : undefined
+  // Extended SQLite codes distinguish causes such as SQLITE_BUSY_RECOVERY.
+  const errcode =
+    'errcode' in cause && typeof cause.errcode === 'number' ? cause.errcode : undefined
+  return {
+    message: cause.message.slice(0, 500),
+    ...(code ? { code } : {}),
+    ...(errcode !== undefined ? { errcode } : {})
+  }
 }

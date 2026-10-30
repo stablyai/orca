@@ -17,7 +17,6 @@ vi.mock('../../observability/instrumentation', () => ({
 }))
 vi.mock('../../diagnostics/main-thread-churn-probe', () => ({ recordSubprocessSpawn: vi.fn() }))
 vi.mock('./git-read-cache-invalidation', () => ({ invalidateGitReadCaches: vi.fn() }))
-// Stand in for the on-disk safety filter: every discard target here exists and is symlink-free.
 vi.mock('../../../shared/git-discard-path-safety', () => ({
   removeSafeUntrackedDiscardTarget: vi.fn(),
   removeSafeUntrackedDiscardTargets: async (
@@ -42,7 +41,6 @@ afterEach(() => _resetGitAdmissionForTests())
 const DISTRO = 'Ubuntu-24.04'
 const WSL_WORKTREE = `\\\\wsl$\\${DISTRO}\\home\\emilio\\projects\\orca`
 const TRACKED_PATHS = ['docs/architecture.md', 'src/main/git/runner.ts']
-// Stock Ubuntu writes this to *stdout* from the interactive login shell's rc.
 const BANNER = 'To run a command as administrator (user "root"), use "sudo <command>".\n\n'
 const stdinEndMock = vi.fn()
 
@@ -66,9 +64,8 @@ function guestScript(args: unknown): string {
   return (args as string[] | undefined)?.join(' ') ?? ''
 }
 
-/** Wrap the payload in the caller's own fence when it asked for one; otherwise hand it over raw. */
 function loginShellStdout(script: string, payload: string): string {
-  const nonce = /__ORCA_WSL_CAPTURE_BEGIN_([^_]+)__/.exec(script)?.[1]
+  const nonce = /__ORCA_WSL_CAPTURE_BEGIN_ ([^_]+)__/.exec(script)?.[1]
   return nonce
     ? `${BANNER}__ORCA_WSL_CAPTURE_BEGIN_${nonce}__${payload}__ORCA_WSL_CAPTURE_END_${nonce}__`
     : `${BANNER}${payload}`
@@ -91,7 +88,7 @@ describe('WSL tracked-path listing behind a login-shell banner', () => {
     execFileMock.mockImplementation((_command, args, _options, callback) => {
       const script = guestScript(args)
       if (script.includes('_orca_git_path=')) {
-        // Distro exports GIT_* / XDG_CONFIG_HOME, so the direct-git read probe is rejected for good.
+        // Simulate guest-specific Git config permanently disabling direct reads.
         queueMicrotask(() => callback?.(Object.assign(new Error('probe rejected'), { code: 78 })))
         return createMockChild()
       }

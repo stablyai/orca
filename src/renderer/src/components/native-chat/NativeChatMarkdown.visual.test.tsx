@@ -25,7 +25,6 @@ import { getDefaultSettings } from '../../../../shared/constants'
 const owner: NativeChatVisualOwner = {
   target: { kind: 'local' },
   sessionId: 'session-alpha',
-  tabId: 'tab-1',
   worktreeId: 'wt-1'
 }
 const LINE = '::orca-visual{file="usage.html" title="Usage"}'
@@ -54,7 +53,7 @@ beforeEach(() => {
   vi.stubGlobal('IntersectionObserver', InViewObserver)
   clearNativeChatVisualCacheForTests()
   callRuntimeRpc.mockReset()
-  callRuntimeRpc.mockResolvedValue({ ok: true, revision: 'r1', sizeBytes: 9, html: '<p>v</p>' })
+  callRuntimeRpc.mockResolvedValue({ ok: true, revision: 'r1', html: '<p>v</p>', path: '/v' })
 })
 
 afterEach(() => {
@@ -105,7 +104,12 @@ describe('NativeChatMarkdown visuals', () => {
   it('keeps a mounted visual frame while the rest of the reply streams in', async () => {
     const { container, rerender } = render(
       withOwner(
-        <NativeChatMarkdown content={`Intro\n\n${LINE}\n\nMore`} visualMessageId="m1" streaming />
+        <NativeChatMarkdown
+          content={`Intro\n\n${LINE}\n\n\`\`\`text\nsettled\n\`\`\`\n\nMore`}
+          visualMessageId="m1"
+          growing
+          streaming
+        />
       )
     )
     await waitFor(() => expect(container.querySelector('iframe')).not.toBeNull())
@@ -113,8 +117,19 @@ describe('NativeChatMarkdown visuals', () => {
     rerender(
       withOwner(
         <NativeChatMarkdown
-          content={`Intro\n\n${LINE}\n\nMore text arriving now`}
+          content={`Intro\n\n${LINE}\n\n\`\`\`text\nsettled\n\`\`\`\n\nMore text arriving now`}
           visualMessageId="m1"
+          growing
+          streaming
+        />
+      )
+    )
+    rerender(
+      withOwner(
+        <NativeChatMarkdown
+          content={`Intro\n\n${LINE}\n\n\`\`\`text\nsettled\n\`\`\`\n\nMore text arriving now\n\n::orca-visual{file="../invalid.html"}\n\nend`}
+          visualMessageId="m1"
+          growing
           streaming
         />
       )

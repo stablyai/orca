@@ -6,15 +6,13 @@ import {
   PROVIDER_STDIN_END_GRACE_MS,
   PROVIDER_SUPERVISOR_MAX_STOP_MS
 } from '../provider-process/provider-process-supervisor'
-import type { CodexAppServerSpawn } from './codex-app-server-process-tree-kill'
+import {
+  spawnCodexAppServerProcess,
+  type CodexAppServerSpawn
+} from './codex-app-server-process-tree-kill'
 import type { CodexStateDbBackfillStatus } from './codex-state-db'
 import { runCodexStateDbBackfillRecovery } from './codex-state-db-backfill-recovery'
-import {
-  alive,
-  createSupervisedProbeRig,
-  waitFor,
-  type SupervisedProbeRig
-} from './supervised-probe-owner.test-fixture'
+import { alive, createSupervisedProbeRig, waitFor } from './supervised-probe-owner.test-fixture'
 
 const INCOMPLETE: CodexStateDbBackfillStatus = {
   kind: 'incomplete',
@@ -32,17 +30,6 @@ setInterval(() => {}, 60_000)
 `
 
 const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
-let rig: SupervisedProbeRig | null = null
-
-afterEach(() => {
-  if (originalPlatform) {
-    Object.defineProperty(process, 'platform', originalPlatform)
-  }
-  vi.unstubAllEnvs()
-  rig?.cleanup()
-  rig = null
-})
-
 function decodedSupervisorSpec(env: unknown): unknown {
   const encoded =
     typeof env === 'object' && env !== null && 'ORCA_PROVIDER_SUPERVISOR_SPEC' in env
@@ -52,9 +39,15 @@ function decodedSupervisorSpec(env: unknown): unknown {
 }
 
 describe('Codex backfill recovery app-server supervision', () => {
+  afterEach(() => {
+    if (originalPlatform) {
+      Object.defineProperty(process, 'platform', originalPlatform)
+    }
+  })
+
   it('runs the POSIX recovery app-server under a session-lifetime supervisor', async () => {
     Object.defineProperty(process, 'platform', { configurable: true, value: 'linux' })
-    // Never signalled: terminate is a stub here, and a handle-less ChildProcess must not be killed.
+    // Stub termination: this handle-less child must never be signalled.
     const child = new ChildProcess()
     const calls: { program: string; args: string[]; options: Record<string, unknown> }[] = []
     const spawnProcess: CodexAppServerSpawn = (program, args, options) => {
@@ -95,31 +88,43 @@ describe('Codex backfill recovery app-server supervision', () => {
 })
 
 describe.runIf(process.platform !== 'win32')('supervised Codex backfill recovery processes', () => {
-  it('stops the whole recovery group when the recovery is aborted', async () => {
-    rig = createSupervisedProbeRig()
-    for (const [key, value] of Object.entries(rig.env)) {
-      vi.stubEnv(key, value)
-    }
+  it.concurrent('stops the whole recovery group when the recovery is aborted', async ({
+    expect,
+    onTestFinished
+  }) => {
+    const rig = createSupervisedProbeRig()
+    onTestFinished(() => rig.cleanup())
     const standIn = rig.writeStandIn('codex')
     const controller = new AbortController()
 
     const recovery = runCodexStateDbBackfillRecovery(rig.dir, controller.signal, {
       resolveCommand: () => standIn,
-      readStatus: () => INCOMPLETE
+      readStatus: () => INCOMPLETE,
+      spawnProcess: (program, args, options) => {
+        if (typeof options.env !== 'object' || options.env === null) {
+          throw new Error('Recovery spawn requires a resolved environment')
+        }
+        return spawnCodexAppServerProcess(program, args, {
+          ...options,
+          env: { ...options.env, ...rig.env }
+        })
+      }
     })
     const pids = await rig.readPids()
     controller.abort()
 
     await expect(recovery).resolves.toEqual({ outcome: 'stopped', spawnCount: 1 })
-    // Its stdin end comes first; the supervisor then SIGTERMs, and SIGKILLs the group after.
     expect(existsSync(rig.signalFile) && readFileSync(rig.signalFile, 'utf8')).toBe('SIGTERM')
     expect(alive(pids.provider)).toBe(false)
-    // A SIGTERM to the root alone left this descendant running for good.
     expect(alive(pids.grandchild)).toBe(false)
   })
 
-  it('drains, then stops the recovery group, when its owner is SIGKILLed', async () => {
-    rig = createSupervisedProbeRig()
+  it.concurrent('drains, then stops the recovery group, when its owner is SIGKILLed', async ({
+    expect,
+    onTestFinished
+  }) => {
+    const rig = createSupervisedProbeRig()
+    onTestFinished(() => rig.cleanup())
     const standIn = rig.writeStandIn('codex')
     const bundle = await rig.bundleOwner(OWNER, __dirname)
     const owner = rig.launchOwner(bundle, {
@@ -136,7 +141,6 @@ describe.runIf(process.platform !== 'win32')('supervised Codex backfill recovery
         PROVIDER_SUPERVISOR_MAX_STOP_MS + 1_000
       )
     ).toBe(true)
-    // A gone owner gets the close its owner makes: the stdin end, its grace, and only then SIGTERM.
     const events = rig.readEvents()
     expect(events['stdin-end']).toBeDefined()
     expect((events.SIGTERM ?? 0) - (events['stdin-end'] ?? 0)).toBeGreaterThanOrEqual(

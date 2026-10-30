@@ -2,11 +2,18 @@
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { useRef } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type * as I18n from '@/i18n/i18n'
+import { createGlobalSettingsFixture } from '../../../../shared/global-settings-test-fixture'
+import { useAppStore } from '../../store'
 import type { NativeChatComposerHandle } from './native-chat-composer-types'
+import { NativeChatMarkdown } from './NativeChatMarkdown'
 import { NativeChatSelectionQuote } from './NativeChatSelectionQuote'
 import { NATIVE_CHAT_QUOTE_SOURCE_PROPS } from './native-chat-quote-selection'
 
-vi.mock('@/i18n/i18n', () => ({ translate: (_key: string, fallback: string) => fallback }))
+vi.mock('@/i18n/i18n', async (importOriginal) => ({
+  ...(await importOriginal<typeof I18n>()),
+  translate: (_key: string, fallback: string) => fallback
+}))
 
 const appendText = vi.fn<(text: string) => void>()
 const acceptsText = vi.fn(() => true)
@@ -20,18 +27,25 @@ const composer: NativeChatComposerHandle = {
   contains: () => false
 }
 
-function Chat(): React.JSX.Element {
+function Chat({ mathSource }: { mathSource?: string }): React.JSX.Element {
   const rootRef = useRef<HTMLDivElement>(null)
   return (
     <div ref={rootRef}>
-      <p data-testid="user">my own prompt</p>
-      <div {...NATIVE_CHAT_QUOTE_SOURCE_PROPS}>
-        <pre data-testid="first">{'Use the draft store.\n\nIt already appends.'}</pre>
+      <div data-native-chat-scroll="">
+        <p data-testid="user">my own prompt</p>
+        <div {...NATIVE_CHAT_QUOTE_SOURCE_PROPS}>
+          {mathSource ? (
+            <NativeChatMarkdown data-testid="first" content={mathSource} variant="document" />
+          ) : (
+            <pre data-testid="first">{'Use the draft store.\n\nIt already appends.'}</pre>
+          )}
+        </div>
+        <time data-testid="time" style={{ userSelect: 'none' }}>
+          10:42
+        </time>
+        <p data-testid="next">a tool line</p>
       </div>
-      <time data-testid="time" style={{ userSelect: 'none' }}>
-        10:42
-      </time>
-      <p data-testid="next">a tool line</p>
+      <p data-testid="composer">a draft reply</p>
       <NativeChatSelectionQuote rootRef={rootRef} composerRef={{ current: composer }} enabled />
     </div>
   )
@@ -144,5 +158,86 @@ describe('NativeChatSelectionQuote', () => {
       document.dispatchEvent(new Event('selectionchange'))
     })
     expect(screen.queryByRole('button', { name: 'Add to chat' })).toBeNull()
+  })
+})
+
+describe('NativeChatSelectionQuote copy on select', () => {
+  const originalSettings = useAppStore.getState().settings
+  const writeClipboardText = vi.fn<(text: string) => Promise<void>>()
+
+  function copyOnSelect(enabled: boolean): void {
+    useAppStore.setState({
+      settings: createGlobalSettingsFixture({ terminalClipboardOnSelect: enabled })
+    })
+  }
+
+  beforeEach(() => {
+    vi.useFakeTimers()
+    writeClipboardText.mockReset().mockResolvedValue(undefined)
+    vi.stubGlobal('api', { ui: { writeClipboardText } })
+    copyOnSelect(true)
+  })
+
+  afterEach(() => {
+    cleanup()
+    window.getSelection()?.removeAllRanges()
+    useAppStore.setState({ settings: originalSettings })
+    vi.unstubAllGlobals()
+    vi.useRealTimers()
+  })
+
+  it('copies a finished transcript selection, as the Copy menu item would', () => {
+    render(<Chat />)
+    releaseSelection(screen.getByTestId('user'), screen.getByTestId('first'))
+
+    expect(writeClipboardText).toHaveBeenCalledTimes(1)
+    expect(writeClipboardText).toHaveBeenCalledWith(window.getSelection()!.toString())
+  })
+
+  it('copies and quotes the authored formula selection through the existing actions', () => {
+    const source = 'Before $x^2$ after.'
+    render(<Chat mathSource={source} />)
+    const prose = screen.getByTestId('first')
+    fireEvent.pointerDown(prose, { button: 0 })
+    const range = document.createRange()
+    range.selectNodeContents(prose)
+    const selection = window.getSelection()
+    selection?.removeAllRanges()
+    selection?.addRange(range)
+    document.dispatchEvent(new Event('selectionchange'))
+    fireEvent.mouseUp(prose, { button: 0 })
+    settle()
+    expect(writeClipboardText).toHaveBeenCalledExactlyOnceWith(source)
+    fireEvent.click(screen.getByRole('button', { name: 'Add to chat' }))
+    expect(appendText).toHaveBeenCalledWith(`> ${source}\n\n`)
+    appendText.mockClear()
+  })
+
+  it('copies nothing while the setting is off', () => {
+    copyOnSelect(false)
+    render(<Chat />)
+    releaseSelection(screen.getByTestId('first'))
+
+    expect(writeClipboardText).not.toHaveBeenCalled()
+  })
+
+  it('copies nothing selected outside the transcript', () => {
+    render(<Chat />)
+    releaseSelection(screen.getByTestId('composer'))
+    releaseSelection(screen.getByTestId('first'), screen.getByTestId('composer'))
+
+    expect(writeClipboardText).not.toHaveBeenCalled()
+  })
+
+  it('copies a keyboard selection once, when it settles', () => {
+    render(<Chat />)
+    select(screen.getByTestId('first'))
+    expect(writeClipboardText).not.toHaveBeenCalled()
+
+    fireEvent.keyUp(screen.getByTestId('first'), { key: 'Shift' })
+    fireEvent.keyUp(screen.getByTestId('first'), { key: 'Shift' })
+
+    expect(writeClipboardText).toHaveBeenCalledTimes(1)
+    expect(writeClipboardText).toHaveBeenCalledWith('Use the draft store.\n\nIt already appends.')
   })
 })

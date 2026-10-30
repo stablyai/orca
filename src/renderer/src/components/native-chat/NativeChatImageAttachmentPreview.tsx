@@ -1,29 +1,32 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { FileText, Image as ImageIcon, ImageOff, Loader2, X } from 'lucide-react'
-import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
+import { FileText, Image as ImageIcon, ImageOff, X } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
 import { basename } from '@/lib/path'
 import { useLocalImageSrc } from '@/components/editor/useLocalImageSrc'
+import { PanZoomImageDialog } from '@/components/editor/PanZoomImageDialog'
 import { copyableNativeChatImageSrc, keepPreviewOpenForChatMenu } from './native-chat-image-copy'
-import {
-  isNativeChatImageAttachmentPath,
-  isNativeChatPastedImagePath
-} from './native-chat-image-paste'
+import { isNativeChatImageAttachmentPath } from './native-chat-image-paste'
+import { isNativeChatPastedImagePath } from '../../../../shared/native-chat-image-label'
 import type { NativeChatComposerImageAttachment } from './NativeChatComposerField'
 import { isAgentSessionAttachmentStorePath } from '../../../../shared/agent-session-attachments'
 import { chatImageAccess } from '@/lib/local-file-access'
+import { LoadingSpinner } from '@/components/LoadingSpinner'
+import { runtimeTargetForOwnerEnvironment } from '@/runtime/runtime-client-target'
+import { nativeChatImageNumberLabel } from './NativeChatImageReferencePill'
 
 type Props = {
   attachment: NativeChatComposerImageAttachment
+  /** Structured-chat image position, shared by prompt chips and send markers. */
+  number?: number
   /** The paired server the chat runs on; a file stored there is read back through it. */
   hostEnvironmentId?: string
   onRemove: (id: string) => void
 }
 
-/** Thumbnail for a pending image, with an in-app full-size preview on click. */
 export function NativeChatImageAttachmentPreview({
   attachment,
   hostEnvironmentId,
+  number,
   onRemove
 }: Props): React.JSX.Element {
   if (attachment.unavailableName !== undefined) {
@@ -31,6 +34,7 @@ export function NativeChatImageAttachmentPreview({
       <NativeChatUnavailableImageChip
         id={attachment.id}
         name={attachment.unavailableName}
+        number={number}
         onRemove={onRemove}
       />
     )
@@ -39,9 +43,28 @@ export function NativeChatImageAttachmentPreview({
     <NativeChatImageThumbnail
       attachment={attachment}
       hostEnvironmentId={hostEnvironmentId}
+      number={number}
       onRemove={onRemove}
     />
   )
+}
+
+function ImageNumberBadge({ number }: { number?: number }): React.JSX.Element | null {
+  if (number === undefined) {
+    return null
+  }
+  return (
+    <span
+      aria-hidden
+      className="pointer-events-none absolute bottom-0.5 left-0.5 rounded-full bg-background/85 px-1 text-3xs font-medium text-foreground tabular-nums"
+    >
+      #{number}
+    </span>
+  )
+}
+
+function numberedLabel(number: number | undefined, label: string): string {
+  return number === undefined ? label : `${nativeChatImageNumberLabel(number)}: ${label}`
 }
 
 function attachmentLabel(path: string): string {
@@ -66,15 +89,16 @@ function RemoveAttachmentButton({ onRemove }: { onRemove: () => void }): React.J
   )
 }
 
-/** An image the draft names but couldn't bring back. A file can be attached again in its place; a
- *  pasted image can't be matched by a new paste, so its copy asks only for removal. */
+/** Missing files can be reattached; a new paste cannot recover a missing pasted image, so offer removal only. */
 function NativeChatUnavailableImageChip({
   id,
   name,
+  number,
   onRemove
 }: {
   id: string
   name: string
+  number?: number
   onRemove: (id: string) => void
 }): React.JSX.Element {
   const pasted = isNativeChatPastedImagePath(name)
@@ -96,7 +120,7 @@ function NativeChatUnavailableImageChip({
     <div className="relative h-14 max-w-40 shrink-0">
       <div
         role="img"
-        aria-label={explanation}
+        aria-label={numberedLabel(number, explanation)}
         title={explanation}
         className="flex h-full items-center gap-2 rounded-md border border-dashed border-border bg-background px-2"
       >
@@ -105,6 +129,7 @@ function NativeChatUnavailableImageChip({
           <span className="truncate text-foreground">{label}</span>
           <span className="truncate text-muted-foreground">{hint}</span>
         </div>
+        <ImageNumberBadge number={number} />
       </div>
       <RemoveAttachmentButton onRemove={() => onRemove(id)} />
     </div>
@@ -114,6 +139,7 @@ function NativeChatUnavailableImageChip({
 function NativeChatImageThumbnail({
   attachment,
   hostEnvironmentId,
+  number,
   onRemove
 }: Props): React.JSX.Element {
   const [isOpen, setIsOpen] = useState(false)
@@ -150,7 +176,7 @@ function NativeChatImageThumbnail({
     () =>
       readEnvironmentId
         ? {
-            settings: { activeRuntimeEnvironmentId: readEnvironmentId },
+            target: runtimeTargetForOwnerEnvironment(readEnvironmentId),
             worktreeId: null,
             worktreePath: null
           }
@@ -165,8 +191,7 @@ function NativeChatImageThumbnail({
     // Why chat-image: a draft handed off from the host queue may carry paths a paired client chose.
     chatImageAccess()
   )
-  // The clipboard thumbnail is already in this process, so it renders with no
-  // round-trip; the on-disk file only wins for the full-size dialog.
+  // Use the immediate clipboard preview for thumbnails and prefer the stored file for full-size viewing.
   const thumbnailSrc = attachment.previewUrl ?? localSrc
   const fullSizeSrc = localSrc ?? attachment.previewUrl
   const filename = attachmentLabel(attachment.path)
@@ -188,11 +213,12 @@ function NativeChatImageThumbnail({
       <div ref={thumbnailRef} className="relative size-14 shrink-0">
         <button
           type="button"
-          aria-label={
+          aria-label={numberedLabel(
+            number,
             isPending
               ? pendingLabel
               : `${translate('components.native-chat.composer.viewAttachment', 'View image')}: ${label}`
-          }
+          )}
           aria-busy={isPending}
           title={label}
           data-native-chat-copy-image-src={copySrc}
@@ -205,62 +231,54 @@ function NativeChatImageThumbnail({
               alt={label}
               className={`size-full object-cover${isPending ? ' opacity-50' : ''}`}
             />
-          ) : attachment.pendingName ? (
-            <span className="flex max-w-full flex-col items-center gap-0.5 px-1">
-              <KindIcon className="size-5 shrink-0 text-muted-foreground" />
-              <span className="max-w-full truncate text-xs text-muted-foreground">
-                {attachment.pendingName}
-              </span>
+          ) : isPending ? (
+            <span className="flex max-w-full flex-col items-center gap-1 px-1">
+              <LoadingSpinner className="size-4 shrink-0 text-muted-foreground" />
+              {attachment.pendingName ? (
+                <span className="max-w-full truncate text-xs text-muted-foreground">
+                  {attachment.pendingName}
+                </span>
+              ) : null}
             </span>
           ) : (
             <KindIcon className="size-5 text-muted-foreground" />
           )}
         </button>
-        {isPending ? (
-          <span className="pointer-events-none absolute inset-0 flex items-center justify-center rounded-md bg-chat-canvas/50">
-            <Loader2 className="size-4 animate-spin text-muted-foreground" />
+        {isPending && thumbnailSrc ? (
+          <span className="pointer-events-none absolute inset-x-0 bottom-0 flex justify-center rounded-b-md bg-chat-canvas/90 py-0.5">
+            <LoadingSpinner className="size-3 text-muted-foreground" />
           </span>
         ) : null}
+        <ImageNumberBadge number={number} />
         <RemoveAttachmentButton onRemove={() => onRemove(attachment.id)} />
       </div>
-      <Dialog open={isOpen} onOpenChange={setIsOpen}>
-        <DialogContent
-          onInteractOutside={keepPreviewOpenForChatMenu}
-          className="flex max-h-[90vh] max-w-[90vw] flex-col sm:max-w-4xl"
-        >
-          <DialogTitle className="truncate text-sm">{label}</DialogTitle>
-          <DialogDescription className="sr-only">
-            {translate('components.native-chat.composer.imagePreview', 'Full-size image preview')}
-          </DialogDescription>
-          <div className="scrollbar-sleek flex min-h-0 items-center justify-center overflow-auto rounded-md bg-muted/20 p-2">
-            {fullSizeSrc ? (
-              <img
-                src={fullSizeSrc}
-                alt={label}
-                data-native-chat-copy-image-src={copySrc}
-                className="max-h-[75vh] max-w-full object-contain"
-              />
+      <PanZoomImageDialog
+        open={isOpen}
+        onOpenChange={setIsOpen}
+        src={fullSizeSrc}
+        title={label}
+        showTitle
+        onInteractOutside={keepPreviewOpenForChatMenu}
+        data-native-chat-copy-image-src={copySrc}
+        fallback={
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            {isPending ? (
+              <>
+                <LoadingSpinner className="size-4" />
+                {pendingLabel}
+              </>
             ) : (
-              <div className="flex items-center gap-2 py-12 text-sm text-muted-foreground">
-                {isPending ? (
-                  <>
-                    <Loader2 className="size-4 animate-spin" />
-                    {pendingLabel}
-                  </>
-                ) : (
-                  <>
-                    <ImageIcon className="size-4" />
-                    {translate(
-                      'components.native-chat.composer.imagePreviewUnavailable',
-                      'Preview unavailable'
-                    )}
-                  </>
+              <>
+                <ImageIcon className="size-4" />
+                {translate(
+                  'components.native-chat.composer.imagePreviewUnavailable',
+                  'Preview unavailable'
                 )}
-              </div>
+              </>
             )}
           </div>
-        </DialogContent>
-      </Dialog>
+        }
+      />
     </>
   )
 }

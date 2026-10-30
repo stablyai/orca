@@ -41,7 +41,7 @@ describe('DaemonPtyAdapter startup delivery', () => {
     rmSync(dir, { recursive: true, force: true })
   })
 
-  itOnPosix('preserves the existing fast-start timing for fish', async () => {
+  itOnPosix('uses the normal shell-ready timeout for fish', async () => {
     // The mock subprocess represents installed fish even on hosts without it.
     const resolveShell = vi
       .spyOn(localPtyUtils, 'resolveUnixShellPath')
@@ -54,7 +54,7 @@ describe('DaemonPtyAdapter startup delivery', () => {
         command: 'codex',
         env: { SHELL: '/usr/bin/fish' }
       })
-      await vi.advanceTimersByTimeAsync(299)
+      await vi.advanceTimersByTimeAsync(14_999)
       expect(lastSubprocess.write).not.toHaveBeenCalled()
       await vi.advanceTimersByTimeAsync(1)
       expect(lastSubprocess.write).toHaveBeenCalledExactlyOnceWith('codex\r')
@@ -73,14 +73,19 @@ describe('DaemonPtyAdapter startup delivery', () => {
       const missingShell = join(dir, 'missing-fish')
       const fallbackName = basename(localPtyUtils.resolveUnixShellPath(missingShell))
       context.skip(!['bash', 'zsh'].includes(fallbackName), 'Requires a Bash/zsh fallback')
-      await adapter.spawn({
-        cols: 80,
-        rows: 24,
-        command: 'codex',
-        env: { SHELL: source === 'environment' ? missingShell : '/bin/sh' },
-        ...(source === 'override' ? { shellOverride: missingShell } : {})
-      })
-      await new Promise((resolve) => setTimeout(resolve, 350))
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+      try {
+        await adapter.spawn({
+          cols: 80,
+          rows: 24,
+          command: 'codex',
+          env: { SHELL: source === 'environment' ? missingShell : '/bin/sh' },
+          ...(source === 'override' ? { shellOverride: missingShell } : {})
+        })
+        await vi.advanceTimersByTimeAsync(350)
+      } finally {
+        vi.useRealTimers()
+      }
       expect(lastSubprocess.write).not.toHaveBeenCalled()
       expect(lastSpawnOpts).toEqual(
         expect.objectContaining({ startupCommandDelivery: 'shell-ready' })
@@ -96,9 +101,13 @@ describe('DaemonPtyAdapter startup delivery', () => {
     { command: 'codex', startupCommandDelivery: 'fast' as const },
     { command: "codex 'linked issue context'", startupCommandDelivery: 'shell-ready' as const }
   ])('waits past 300ms and submits once after readiness: %j', async (startup) => {
-    await adapter.spawn({ cols: 80, rows: 24, ...startup, env: { SHELL: '/bin/zsh' } })
-
-    await new Promise((resolve) => setTimeout(resolve, 350))
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    try {
+      await adapter.spawn({ cols: 80, rows: 24, ...startup, env: { SHELL: '/bin/zsh' } })
+      await vi.advanceTimersByTimeAsync(350)
+    } finally {
+      vi.useRealTimers()
+    }
     expect(lastSubprocess.write).not.toHaveBeenCalled()
     expect(lastSpawnOpts).toEqual(
       expect.objectContaining({ startupCommandDelivery: 'shell-ready' })

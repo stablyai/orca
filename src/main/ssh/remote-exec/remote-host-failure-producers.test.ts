@@ -1,0 +1,205 @@
+/** Exercise real failure producers for directory upload, system SFTP and runtime self-test. */
+import { randomBytes } from 'node:crypto'
+import { chmod, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { NODE_RUNTIME_PIN } from '../../../shared/node-runtime-pin'
+import type { SshTarget } from '../../../shared/ssh-types'
+import { runProcess, runProcessSync } from '@orca/process-host'
+import {
+  REMOTE_NODE_RUNTIME_READY,
+  REMOTE_NODE_RUNTIME_VERIFIED_MARKER,
+  RemoteNodeRuntimeSelfTestError,
+  assertRemoteNodeRuntimePromoted
+} from '../orcad-remote-node-runtime-report'
+import { remoteNodeRuntimePresentCommand } from '../../managed-server/install/orcad-remote-node-runtime'
+import { getRemoteHostPlatform } from '../ssh-remote-platform'
+import { findSystemSsh } from '../system-transport/system-ssh-binary'
+import { uploadDirectoryViaSystemSsh } from '../system-transport/system-ssh-file-transfer'
+import { runSftpBatch } from '../system-transport/system-ssh-sftp-transfer'
+import { isHostAnsweredSystemSshExit } from '../system-transport/system-ssh-operation-lifecycle'
+
+vi.mock('@orca/process-host', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  runProcess: vi.fn()
+}))
+vi.mock('../system-transport/system-ssh-args', () => ({ buildSshArgs: () => ['--', 'host'] }))
+vi.mock('../system-transport/system-ssh-binary', () => ({
+  findSystemSsh: vi.fn(() => '/usr/bin/ssh')
+}))
+
+const posix = process.platform !== 'win32'
+// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: ssh args are mocked, so the target is never read.
+const target = {} as SshTarget
+let scratch: string
+
+beforeEach(async () => {
+  scratch = await mkdtemp(join(tmpdir(), 'orca-answered-producers-'))
+})
+afterEach(async () => {
+  vi.unstubAllEnvs()
+  await rm(scratch, { recursive: true, force: true })
+})
+
+async function script(name: string, body: string): Promise<string> {
+  const path = join(scratch, name)
+  await writeFile(path, `#!/bin/sh\n${body}\n`)
+  await chmod(path, 0o755)
+  return path
+}
+
+async function payload(): Promise<string> {
+  const dir = join(scratch, 'payload')
+  await mkdir(dir)
+  await writeFile(join(dir, 'runtime.tar.gz'), 'fixture')
+  return dir
+}
+
+describe.runIf(posix)('system-ssh directory upload', () => {
+  it('reports a remote tar ENOSPC as the host answering', async () => {
+    vi.mocked(findSystemSsh).mockReturnValue(
+      await script(
+        'ssh',
+        'cat >/dev/null\necho "tar: Cannot write: No space left on device" >&2\nexit 2'
+      )
+    )
+    const error = await uploadDirectoryViaSystemSsh(target, await payload(), '/remote').catch(
+      (e: unknown) => e
+    )
+    expect(String(error)).toContain('No space left on device')
+    expect(isHostAnsweredSystemSshExit(error)).toBe(true)
+  })
+
+  it('keeps the remote ENOSPC when the far end closes mid-stream and local tar then fails to write', async () => {
+    // Keep tar writing past SSH exit so downstream failure occurs on BSD tar too.
+    const dir = join(scratch, 'large')
+    await mkdir(dir)
+    await writeFile(join(dir, 'runtime.bin'), randomBytes(8 * 1024 * 1024))
+    vi.mocked(findSystemSsh).mockReturnValue(
+      await script(
+        'ssh',
+        'head -c 1024 >/dev/null\necho "tar: Cannot write: No space left on device" >&2\nexit 2'
+      )
+    )
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const error = await uploadDirectoryViaSystemSsh(target, dir, '/remote').catch(
+        (e: unknown) => e
+      )
+      expect(String(error)).toContain('No space left on device')
+      expect(isHostAnsweredSystemSshExit(error)).toBe(true)
+    }
+  })
+
+  it("keeps ssh's own exit 255 (contact lost) retryable", async () => {
+    vi.mocked(findSystemSsh).mockReturnValue(
+      await script('ssh', 'cat >/dev/null\necho "Connection reset by peer" >&2\nexit 255')
+    )
+    const error = await uploadDirectoryViaSystemSsh(target, await payload(), '/remote').catch(
+      (e: unknown) => e
+    )
+    expect(isHostAnsweredSystemSshExit(error)).toBe(false)
+  })
+
+  it('blames a local tar failure, not the remote tar that saw a truncated stream', async () => {
+    vi.mocked(findSystemSsh).mockReturnValue(
+      await script('ssh', 'cat >/dev/null\necho "tar: Unexpected EOF in archive" >&2\nexit 2')
+    )
+    const error = await uploadDirectoryViaSystemSsh(
+      target,
+      join(scratch, 'missing'),
+      '/remote'
+    ).catch((e: unknown) => e)
+    expect(String(error)).toContain('local tar relay upload')
+    expect(isHostAnsweredSystemSshExit(error)).toBe(false)
+  })
+})
+
+describe('system sftp batch', () => {
+  beforeEach(() => {
+    vi.stubEnv('ORCA_SYSTEM_SFTP_PATH', '/fixture/sftp')
+  })
+
+  it('reports a Windows file permission refusal as the host answering', async () => {
+    vi.mocked(runProcess).mockResolvedValueOnce({
+      code: 1,
+      signal: null,
+      stdout: '',
+      stderr: 'dest open "C:/Users/me/.orca-remote/node.zip": Permission denied',
+      timedOut: false
+    })
+    const error = await runSftpBatch(target, ['put node.zip']).catch((e: unknown) => e)
+    expect(String(error)).toContain('sftp batch failed (exit 1)')
+    expect(isHostAnsweredSystemSshExit(error)).toBe(true)
+  })
+
+  it.each([
+    [255, 'Connection closed'],
+    [1, 'Connection reset by peer']
+  ])('keeps a lost connection (exit %i: %s) unanswered', async (code, stderr) => {
+    vi.mocked(runProcess).mockResolvedValueOnce({
+      code,
+      signal: null,
+      stdout: '',
+      stderr,
+      timedOut: false
+    })
+    const error = await runSftpBatch(target, ['put node.zip']).catch((e: unknown) => e)
+    expect(String(error)).toContain(stderr)
+    expect(isHostAnsweredSystemSshExit(error)).toBe(false)
+  })
+})
+
+describe.runIf(posix)('warm runtime check on a cached install', () => {
+  const host = getRemoteHostPlatform('linux-x64')
+
+  async function cachedRuntime(nodeBody: string): Promise<string> {
+    const runtimeDir = join(scratch, 'runtime')
+    await mkdir(join(runtimeDir, 'bin'), { recursive: true })
+    await writeFile(join(runtimeDir, REMOTE_NODE_RUNTIME_VERIFIED_MARKER), '')
+    const node = join(runtimeDir, 'bin', 'node')
+    await writeFile(node, `#!/bin/sh\n${nodeBody}\n`)
+    await chmod(node, 0o755)
+    return runtimeDir
+  }
+
+  function runCheck(runtimeDir: string, run: boolean): string {
+    return runProcessSync({
+      program: '/bin/sh',
+      args: ['-c', remoteNodeRuntimePresentCommand(host, runtimeDir, run)]
+    }).stdout
+  }
+
+  it('stays READY while the cached runtime still runs', async () => {
+    const runtimeDir = await cachedRuntime(`echo v${NODE_RUNTIME_PIN.version}`)
+    expect(runCheck(runtimeDir, true).trim()).toBe(REMOTE_NODE_RUNTIME_READY)
+  })
+
+  it.each([
+    [
+      'a shared library removed since the install',
+      'echo "node: error while loading shared libraries: libatomic.so.1: cannot open shared object file" >&2\nexit 127',
+      127
+    ],
+    [
+      'an exec policy that now denies uploaded binaries',
+      'echo "sh: node: Permission denied" >&2\nexit 126',
+      126
+    ]
+  ])('reports %s as an answered refusal before launch', async (_label, body, exitStatus) => {
+    const runtimeDir = await cachedRuntime(body)
+    // Without running it, presence alone still says READY: the gap this check closes.
+    expect(runCheck(runtimeDir, false).trim()).toBe(REMOTE_NODE_RUNTIME_READY)
+    const output = runCheck(runtimeDir, true)
+    let thrown: unknown
+    try {
+      assertRemoteNodeRuntimePromoted(output)
+    } catch (error) {
+      thrown = error
+    }
+    if (!(thrown instanceof RemoteNodeRuntimeSelfTestError)) {
+      throw new Error(`expected a self-test refusal, got ${String(thrown)}`)
+    }
+    expect(thrown.exitStatus).toBe(exitStatus)
+  })
+})

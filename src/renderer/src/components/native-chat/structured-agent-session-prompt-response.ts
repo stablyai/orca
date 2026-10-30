@@ -1,46 +1,64 @@
-import type { RuntimeClientTarget } from '@/runtime/runtime-rpc-client'
-import { supportsStructuredAgentSessionQuestionAnswers } from '@/runtime/structured-agent-session-client'
+import {
+  supportsStructuredAgentSessionQuestionAnswers,
+  supportsStructuredAgentSessionPromptCancel
+} from '@/runtime/structured-agent-session-client'
 import {
   legacyAgentSessionSelectedOptionId,
   type AgentSessionPromptResponse
 } from '../../../../shared/agent-session-question-answer'
 import type { AgentSessionPromptResult } from '../../../../shared/agent-session-wire'
-import type { StructuredPromptItem } from './structured-agent-session-message-projection'
-import type { StructuredAgentSessionMutate } from './use-structured-agent-session-mutate'
+import type { StructuredPromptItem } from '../../../../shared/structured-agent-session-message-projection'
+import type { StructuredAgentSessionAction } from './use-structured-agent-session-mutate'
 
 export async function respondToStructuredAgentSessionPrompt({
   item,
   response,
-  target,
-  mutate
+  action
 }: {
   item: StructuredPromptItem
   response: AgentSessionPromptResponse
-  target: RuntimeClientTarget
-  mutate: StructuredAgentSessionMutate
+  action: StructuredAgentSessionAction | null
 }): Promise<AgentSessionPromptResult | null> {
+  if (!action) {
+    return null
+  }
+  const { body } = item
+  const answers = response.kind === 'answers' ? response.answers : []
   const promptTarget = { itemId: item.itemId, expectedRevision: item.revision }
   let fields: Record<string, unknown>
   if (response.kind === 'option') {
     fields = { ...promptTarget, optionId: response.optionId }
-  } else if (await supportsStructuredAgentSessionQuestionAnswers(target)) {
+  } else if (await supportsStructuredAgentSessionQuestionAnswers(action.target)) {
     // Negotiated before mutate fingerprints the call: older hosts reject the strict field.
-    fields = { ...promptTarget, answers: response.answers }
+    fields = { ...promptTarget, answers }
   } else {
     const optionId =
-      item.body.kind === 'question'
-        ? legacyAgentSessionSelectedOptionId(item.body, response.answers)
-        : null
+      body.kind === 'question' ? legacyAgentSessionSelectedOptionId(body, answers) : null
     if (optionId === null) {
       return null
     }
     fields = { ...promptTarget, optionId }
   }
-  return mutate<AgentSessionPromptResult>(
-    item.body.kind === 'approval'
-      ? 'agentSession.respondToApproval'
-      : 'agentSession.respondToQuestion',
-    `agentSession.respondTo:${item.body.kind}`,
+  return action.mutate<AgentSessionPromptResult>(
+    body.kind === 'approval' ? 'agentSession.respondToApproval' : 'agentSession.respondToQuestion',
+    `agentSession.respondTo:${body.kind}`,
     fields
   )
+}
+
+export async function cancelStructuredAgentSessionPrompt(
+  action: StructuredAgentSessionAction | null,
+  turnId: string | undefined,
+  prompt?: { itemId: string; expectedRevision: number }
+) {
+  if (!action) {
+    return null
+  }
+  const promptTarget = prompt && { ...prompt }
+  const promptSupported =
+    promptTarget !== undefined && (await supportsStructuredAgentSessionPromptCancel(action.target))
+  return action.mutate('agentSession.cancel', 'agentSession.cancel', {
+    ...(turnId ? { turnId } : {}),
+    ...(promptSupported ? { prompt: promptTarget } : {})
+  })
 }

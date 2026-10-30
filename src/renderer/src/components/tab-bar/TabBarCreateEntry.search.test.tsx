@@ -79,6 +79,18 @@ function press(key: string): void {
   })
 }
 
+function rowTexts(): string[] {
+  return [...container.querySelectorAll('[role="option"]')].map((row) => row.textContent ?? '')
+}
+
+function seedBrowserHistory(url: string, title: string): void {
+  useAppStore.setState({
+    browserUrlHistory: [
+      { url, normalizedUrl: url.replace(/\/$/, ''), title, lastVisitedAt: 1, visitCount: 1 }
+    ]
+  })
+}
+
 beforeEach(() => {
   fileListMock.current = { files: [], loading: false, loadError: null }
   tabSearchMock.calls = []
@@ -133,6 +145,167 @@ describe('TabBarCreateEntry search behavior', () => {
       })
     )
   })
+
+  it.each([false, true])(
+    'keeps a typed host and its pages above unrelated files (visited root: %s)',
+    (visitedRoot) => {
+      fileListMock.current.files = [
+        'mobile/rpc-foundation/goldens/matrix-transport.capability-probe-status.get-1.json',
+        'mobile/rpc-foundation/goldens/matrix-files.terminal-path-tap-files.open-1.json',
+        'mobile/rpc-foundation/goldens/matrix-files.terminal-path-tap-files.resolveterminalpath-1.json'
+      ]
+      const url = visitedRoot ? 'https://linear.app/' : 'https://linear.app/acme/issues'
+      seedBrowserHistory(url, 'Linear')
+      useAppStore.setState((state) => ({
+        browserUrlHistory: [
+          {
+            url: 'https://linear.app/acme/inbox',
+            normalizedUrl: 'https://linear.app/acme/inbox',
+            title: 'Linear inbox',
+            lastVisitedAt: 2,
+            visitCount: 10
+          },
+          ...state.browserUrlHistory
+        ]
+      }))
+      const onOpenEntry = vi.fn().mockResolvedValue(undefined)
+      renderEntry({ onOpenEntry })
+      setQuery('linear.app')
+
+      const rows = rowTexts()
+      const pageIndex = rows.findIndex((row) => row.includes('Open page'))
+      expect(pageIndex).toBeGreaterThanOrEqual(0)
+      expect(rows.findIndex((row) => row.includes('Open file'))).toBeGreaterThan(pageIndex)
+      expect(container.querySelector('[aria-selected="true"]')?.textContent).toContain('linear.app')
+      submit()
+      expect(onOpenEntry).toHaveBeenCalledWith(
+        expect.objectContaining({
+          classification: visitedRoot
+            ? { kind: 'explicit-url', url }
+            : { kind: 'host-url', url: 'https://linear.app/' }
+        })
+      )
+    }
+  )
+
+  it('still opens a visited host above a filename that contains it', () => {
+    fileListMock.current.files = ['config/localhost.ts']
+    seedBrowserHistory('http://localhost/', 'Local')
+    const onOpenEntry = vi.fn().mockResolvedValue(undefined)
+    renderEntry({ onOpenEntry })
+    setQuery('localhost')
+
+    submit()
+    expect(onOpenEntry).toHaveBeenCalledWith(
+      expect.objectContaining({
+        classification: { kind: 'explicit-url', url: 'http://localhost/' }
+      })
+    )
+  })
+
+  it.each([
+    { loading: false, loadError: null },
+    { loading: true, loadError: null },
+    { loading: false, loadError: 'scan failed' }
+  ])('submits the exact visited URL ahead of a more popular subpage (index: %j)', (fileIndex) => {
+    fileListMock.current = { files: [], ...fileIndex }
+    const url = 'https://x.com/bonafide714/status/211363866'
+    seedBrowserHistory(url, 'Nico on X')
+    useAppStore.setState((state) => ({
+      browserUrlHistory: [
+        {
+          url: `${url}/photo/1`,
+          normalizedUrl: `${url}/photo/1`,
+          title: 'Photo on X',
+          lastVisitedAt: 2,
+          visitCount: 10
+        },
+        ...state.browserUrlHistory
+      ]
+    }))
+    const onOpenEntry = vi.fn().mockResolvedValue(undefined)
+    renderEntry({ onOpenEntry })
+    setQuery(url)
+
+    const firstOption = container.querySelector('[role="option"]')
+    expect(firstOption?.textContent).toContain('Open page')
+    expect(firstOption?.getAttribute('aria-selected')).toBe('true')
+    expect(container.querySelector('input')?.getAttribute('aria-activedescendant')).toBe(
+      firstOption?.id
+    )
+
+    submit()
+    expect(onOpenEntry).toHaveBeenCalledWith(
+      expect.objectContaining({ classification: { kind: 'explicit-url', url } })
+    )
+  })
+
+  it('waits for files before selecting a visited host and stays blocked after reindexing', () => {
+    fileListMock.current = { files: [], loading: true, loadError: null }
+    seedBrowserHistory('https://example.com/', 'Example')
+    const onOpenEntry = vi.fn().mockResolvedValue(undefined)
+    renderEntry({ onOpenEntry })
+    setQuery('example.com')
+
+    expect(container.querySelector('[role="option"]')?.textContent).toContain('Open page')
+    expect(container.querySelector('[aria-selected="true"]')).toBeNull()
+    submit()
+    expect(onOpenEntry).not.toHaveBeenCalled()
+
+    fileListMock.current = { files: ['example.com'], loading: false, loadError: null }
+    renderEntry({ onOpenEntry })
+    expect(container.querySelector('[aria-selected="true"]')?.textContent).toContain('Open file')
+
+    fileListMock.current = { files: [], loading: true, loadError: null }
+    renderEntry({ onOpenEntry })
+    fileListMock.current = { files: [], loading: false, loadError: null }
+    renderEntry({ onOpenEntry })
+    expect(container.querySelector('[role="option"]')?.textContent).toContain('Open page')
+    expect(container.querySelector('[aria-selected="true"]')).toBeNull()
+    expect(container.querySelector('input')?.getAttribute('aria-activedescendant')).toBeNull()
+    submit()
+    expect(onOpenEntry).not.toHaveBeenCalled()
+
+    press('ArrowDown')
+    submit()
+    expect(onOpenEntry).toHaveBeenCalledWith(
+      expect.objectContaining({
+        classification: { kind: 'explicit-url', url: 'https://example.com/' }
+      })
+    )
+  })
+
+  // A code-host page title carries the file path, so it matches path queries too.
+  it.each([false, true])(
+    'keeps a matching page below local rows for a path query (typed: %s)',
+    (typed) => {
+      fileListMock.current.files = [
+        'src/renderer/src/components/tab-bar/TabBarCreateEntry.tsx',
+        'src/renderer/src/components/tab-bar/TabBarCreateEntryRow.tsx'
+      ]
+      seedBrowserHistory(
+        'https://github.com/acme/app/blob/main/src/renderer/src/components/tab-bar/TabBarCreateEntry.tsx',
+        'app/src/renderer/src/components/tab-bar/TabBarCreateEntry.tsx at main · acme/app'
+      )
+      const onOpenEntry = vi.fn().mockResolvedValue(undefined)
+      renderEntry({ onOpenEntry })
+      const query = 'components/tab-bar/TabBarCreate'
+      if (typed) {
+        for (let length = 1; length <= query.length; length += 1) {
+          setQuery(query.slice(0, length))
+        }
+      } else {
+        setQuery(query)
+      }
+
+      const rows = rowTexts()
+      const pageIndex = rows.findIndex((row) => row.includes('Open page'))
+      expect(pageIndex).toBeGreaterThan(rows.findLastIndex((row) => row.includes('Open file')))
+      submit()
+      expect(onOpenEntry).toHaveBeenCalledOnce()
+      expect(onOpenEntry.mock.calls[0]?.[0].classification.kind).not.toBe('explicit-url')
+    }
+  )
 
   it.each(['a', 'ab', 'asciinema'])('waits for an exact filename before arming %s', (query) => {
     fileListMock.current = { files: [], loading: true, loadError: null }
@@ -373,3 +546,105 @@ describe('TabBarCreateEntry search behavior', () => {
     expect(tabSearchMock.calls.at(-1)).toEqual({ enabled: false, query: '' })
   })
 })
+
+it('launches searched defaults on Enter and reaches the alternate only through Configure', () => {
+  const launched = vi.fn()
+  const entry = {
+    agent: 'codex' as const,
+    label: 'Codex',
+    rows: [{ agent: 'codex' as const, kind: 'chat' as const }],
+    surfaces: ['chat' as const, 'terminal' as const],
+    defaultSurface: 'chat' as const,
+    terminal: {},
+    structured: {},
+    catalog: {
+      origin: 'probe' as const,
+      fetchedAt: 1,
+      models: [
+        { id: 'astra', label: 'Astra', isDefault: true, efforts: [{ value: 'low', label: 'Low' }] }
+      ]
+    }
+  }
+  renderEntry({ agentPickerEntries: [entry], onLaunchAgentOption: launched })
+  setQuery('astra low')
+  submit()
+  expect(launched).toHaveBeenCalledOnce()
+  expect(launched.mock.calls[0][0].setup).toMatchObject({
+    surface: 'chat',
+    choices: { model: 'astra', options: { effort: 'low' } }
+  })
+  launched.mockClear()
+  renderEntry({ agentPickerEntries: [entry], onLaunchAgentOption: launched })
+  setQuery('astra low')
+  expect(container.querySelector('button[aria-label="Launch terminal"]')).toBeNull()
+  const configure = container.querySelector<HTMLButtonElement>(
+    'button[aria-label="Configure Codex"]'
+  )!
+  expect(configure.dataset.variant).toBe('ghost')
+  expect(configure.dataset.size).toBe('icon-xs')
+  expect(
+    configure.querySelector('svg.lucide-chevron-right')?.classList.contains('text-muted-foreground')
+  ).toBe(true)
+  expect(configure.classList.contains('border')).toBe(false)
+  expect(configure.previousElementSibling?.getAttribute('data-slot')).toBe('separator')
+  expect(configure.previousElementSibling?.getAttribute('data-orientation')).toBe('vertical')
+  expect(
+    configure.previousElementSibling?.classList.contains('data-[orientation=vertical]:h-4')
+  ).toBe(true)
+  act(() => configure.click())
+  expect(launched).not.toHaveBeenCalled()
+  act(() =>
+    [...document.querySelectorAll<HTMLButtonElement>('button')]
+      .find((button) => button.textContent === 'Launch terminal')
+      ?.click()
+  )
+  expect(launched).toHaveBeenCalledOnce()
+  expect(launched.mock.calls[0][0].setup.surface).toBe('terminal')
+})
+
+it.each(['g', 'low', 'high'])(
+  'keeps the file as the selected Enter action for %s with setup search mounted',
+  (query) => {
+    fileListMock.current = { files: [`${query}.ts`], loading: false, loadError: null }
+    const launched = vi.fn(),
+      opened = vi.fn().mockResolvedValue(undefined)
+    renderEntry({
+      onOpenEntry: opened,
+      onLaunchAgentOption: launched,
+      agentPickerEntries: [
+        {
+          agent: 'codex',
+          label: 'Codex',
+          rows: [{ agent: 'codex', kind: 'chat' }],
+          surfaces: ['chat', 'terminal'],
+          defaultSurface: 'chat',
+          terminal: {},
+          structured: {},
+          catalog: {
+            origin: 'probe',
+            fetchedAt: 1,
+            models: [
+              {
+                id: 'gpt-6-astra',
+                label: 'GPT 6 Astra',
+                isDefault: true,
+                efforts: [
+                  { value: 'low', label: 'Low' },
+                  { value: 'high', label: 'High' }
+                ]
+              }
+            ]
+          }
+        }
+      ]
+    })
+    setQuery(query)
+    expect(container.querySelector('[aria-selected="true"]')?.textContent).toContain(
+      query === 'g' ? 'Search Google' : `${query}.ts`
+    )
+    expect(rowTexts().some((text) => text.includes(`${query}.ts`))).toBe(true)
+    submit()
+    expect(launched).not.toHaveBeenCalled()
+    expect(opened).toHaveBeenCalledOnce()
+  }
+)

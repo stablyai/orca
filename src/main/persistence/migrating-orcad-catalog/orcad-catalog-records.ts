@@ -3,10 +3,11 @@ import {
   serializeOrcadMigrationValue,
   type OrcadMigrationImportReceipt,
   type OrcadMigrationManifest
-} from '../../../shared/orcad-migration-manifest'
+} from '../../../shared/orcad-migration/orcad-migration-manifest'
 import type { ProjectGroup } from '../../../shared/project-group-types'
 import type { Repo } from '../../../shared/repo-types'
 import { normalizeRuntimePathForComparison } from '../../../shared/cross-platform-path'
+import { isRepoOnCatalogHost } from '../../../shared/execution-host'
 import { assertOrcadMigrationStagedCatalogClaims } from './orcad-staged-catalog-claims'
 import {
   toOrcadDestinationFolderWorkspace,
@@ -23,7 +24,7 @@ import {
   prepareOrcadMigrationDormantState,
   type PreparedOrcadMigrationDormantState
 } from './orcad-dormant-state-records'
-import { selectNewRows } from './orcad-catalog-row-identity'
+import { sameOrcadRepositoryConfiguration, selectNewRows } from './orcad-catalog-row-identity'
 
 export type PreparedOrcadMigrationCatalog = {
   repositories: Repo[]
@@ -44,7 +45,7 @@ export function assertSameOrcadMigrationManifest(
   }
 }
 
-// Dormant only: no live PTY reaches the destination, so the incoming session is compared as is.
+// No live PTY migrates, so compare the incoming dormant session as is.
 export function prepareOrcadMigrationCatalog(
   manifest: OrcadMigrationManifest,
   state: StoreRuntimeState['state']
@@ -53,7 +54,12 @@ export function prepareOrcadMigrationCatalog(
   const repositories = manifest.payload.repositories.map(toOrcadDestinationRepository)
   const projectGroups = manifest.payload.projectGroups.map(toOrcadDestinationProjectGroup)
   const folderWorkspaces = manifest.payload.folderWorkspaces.map(toOrcadDestinationFolderWorkspace)
-  const newRepositories = selectNewRows(repositories, state.repos, catalogConflict('repository'))
+  const newRepositories = selectNewRows(
+    repositories,
+    state.repos,
+    catalogConflict('repository'),
+    sameOrcadRepositoryConfiguration
+  )
   const newProjectGroups = selectNewRows(
     projectGroups,
     state.projectGroups,
@@ -133,7 +139,8 @@ function assertNoRepositoryPathConflicts(incoming: Repo[], existing: Repo[]): vo
     }
     incomingByPath.set(key, repo.id)
   }
-  for (const repo of existing) {
+  // Same-path rows on other hosts represent different checkouts.
+  for (const repo of existing.filter(isRepoOnCatalogHost)) {
     if (
       !incomingIdSet.has(repo.id) &&
       incomingByPath.has(normalizeRuntimePathForComparison(repo.path))

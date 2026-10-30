@@ -1,4 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
+import { boundSessionOf, registerLivePty } from '../bind-first-pane.test-fixture'
+import { expectDesktopDropsPane } from '../__fixtures__/main-layout-close-fixture'
 import {
   OrcaRuntimeService,
   electronMocks,
@@ -12,6 +14,10 @@ import {
   makeWorktreeMeta,
   store
 } from '../orca-runtime-test-fixtures.spec'
+import {
+  hostWorktreeTarget,
+  type HostWorktreeTarget
+} from '../../../shared/worktree/host-qualified-identity'
 
 describe('OrcaRuntimeService', () => {
   it('retires exited saved PTY bindings instead of publishing a pending ghost', async () => {
@@ -255,12 +261,17 @@ describe('OrcaRuntimeService', () => {
       focusTerminal: vi.fn(),
       closeTerminal,
       closeTerminalPane,
-      sleepWorktree: vi.fn(),
       terminalFitOverrideChanged: vi.fn(),
       terminalDriverChanged: vi.fn()
     })
     const leftLeafId = '11111111-1111-4111-8111-111111111111'
     const rightLeafId = '22222222-2222-4222-8222-222222222222'
+    for (const [leafId, ptyId] of [
+      [leftLeafId, 'pty-left'],
+      [rightLeafId, 'pty-right']
+    ]) {
+      registerLivePty(runtime, ptyId, TEST_WORKTREE_ID, null, { tabId: 'tab-1', leafId })
+    }
     runtime.attachWindow(1)
     runtime.syncWindowGraph(1, {
       tabs: [
@@ -315,8 +326,11 @@ describe('OrcaRuntimeService', () => {
     await runtime.closeMobileSessionTab(`id:${TEST_WORKTREE_ID}`, `tab-1::${rightLeafId}`)
 
     expect(kill).toHaveBeenCalledWith('pty-right')
-    // Only the leaf-addressed notice for the closed pane; never a whole-tab close.
-    expect(closeTerminalPane).toHaveBeenCalledExactlyOnceWith('tab-1', rightLeafId)
+    expectDesktopDropsPane(
+      { closeTerminalPane, getSession: () => boundSessionOf(runtime) },
+      'tab-1',
+      rightLeafId
+    )
     expect(closeTerminal).not.toHaveBeenCalled()
   })
 
@@ -340,7 +354,6 @@ describe('OrcaRuntimeService', () => {
       renameTerminal: vi.fn(),
       focusTerminal: vi.fn(),
       closeTerminal,
-      sleepWorktree: vi.fn(),
       terminalFitOverrideChanged: vi.fn(),
       terminalDriverChanged: vi.fn()
     })
@@ -406,7 +419,6 @@ describe('OrcaRuntimeService', () => {
       renameTerminal: vi.fn(),
       focusTerminal,
       closeTerminal: vi.fn(),
-      sleepWorktree: vi.fn(),
       terminalFitOverrideChanged: vi.fn(),
       terminalDriverChanged: vi.fn()
     })
@@ -462,7 +474,6 @@ describe('OrcaRuntimeService', () => {
       renameTerminal: vi.fn(),
       focusTerminal,
       closeTerminal: vi.fn(),
-      sleepWorktree: vi.fn(),
       terminalFitOverrideChanged: vi.fn(),
       terminalDriverChanged: vi.fn()
     })
@@ -528,18 +539,21 @@ describe('OrcaRuntimeService', () => {
     const metaById: Record<string, WorktreeMeta> = {
       [TEST_WORKTREE_ID]: makeWorktreeMeta({ isUnread: true })
     }
-    const setWorktreeMeta = vi.fn((worktreeId: string, meta: Partial<WorktreeMeta>) => {
-      metaById[worktreeId] = { ...(metaById[worktreeId] ?? makeWorktreeMeta()), ...meta }
-      return metaById[worktreeId]
-    })
+    const setWorktreeMeta = vi.fn(
+      ({ id: worktreeId }: HostWorktreeTarget, meta: Partial<WorktreeMeta>) => {
+        metaById[worktreeId] = { ...(metaById[worktreeId] ?? makeWorktreeMeta()), ...meta }
+        return metaById[worktreeId]
+      }
+    )
     const activateWorktree = vi.fn()
     const worktreesChanged = vi.fn()
     const runtime = new OrcaRuntimeService({
       ...store,
       getAllWorktreeMeta: () => metaById,
       getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
+      getWorktreeMetaForHost: (worktreeId: string) => metaById[worktreeId],
       setWorktreeMeta
-    } as never)
+    })
     runtime.setNotifier({
       worktreesChanged,
       reposChanged: vi.fn(),
@@ -550,7 +564,6 @@ describe('OrcaRuntimeService', () => {
       renameTerminal: vi.fn(),
       focusTerminal: vi.fn(),
       closeTerminal: vi.fn(),
-      sleepWorktree: vi.fn(),
       terminalFitOverrideChanged: vi.fn(),
       terminalDriverChanged: vi.fn()
     })
@@ -560,14 +573,17 @@ describe('OrcaRuntimeService', () => {
 
     await runtime.activateManagedWorktree(`id:${TEST_WORKTREE_ID}`, { notifyClients: false })
 
-    expect(setWorktreeMeta).toHaveBeenCalledWith(TEST_WORKTREE_ID, { isUnread: false })
+    expect(setWorktreeMeta).toHaveBeenCalledWith(
+      hostWorktreeTarget({ id: TEST_WORKTREE_ID, hostId: 'local' }),
+      { isUnread: false }
+    )
     expect(metaById[TEST_WORKTREE_ID]?.isUnread).toBe(false)
     expect(worktreesChanged).toHaveBeenCalledWith(TEST_REPO_ID)
     expect(activateWorktree).not.toHaveBeenCalled()
   })
 
   it('wakes slept agents on the host renderer when a phone activates a worktree', async () => {
-    // Seed isUnread:false so the unread-clear branch stays quiet, isolating the mobile slept-agent wake.
+    // Keep unread-clear quiet to isolate the slept-agent wake.
     const metaById: Record<string, WorktreeMeta> = {
       [TEST_WORKTREE_ID]: makeWorktreeMeta({ isUnread: false })
     }
@@ -577,6 +593,7 @@ describe('OrcaRuntimeService', () => {
       ...store,
       getAllWorktreeMeta: () => metaById,
       getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
+      getWorktreeMetaForHost: (worktreeId: string) => metaById[worktreeId],
       getWorkspaceSession: () => ({
         ...getDefaultWorkspaceSession(),
         sleepingAgentSessionsByPaneKey: {
@@ -594,7 +611,7 @@ describe('OrcaRuntimeService', () => {
           }
         }
       })
-    } as never)
+    })
     runtime.setNotifier({
       worktreesChanged: vi.fn(),
       reposChanged: vi.fn(),
@@ -605,12 +622,11 @@ describe('OrcaRuntimeService', () => {
       renameTerminal: vi.fn(),
       focusTerminal: vi.fn(),
       closeTerminal: vi.fn(),
-      sleepWorktree: vi.fn(),
       resumeSleepingAgents,
       terminalFitOverrideChanged: vi.fn(),
       terminalDriverChanged: vi.fn()
     })
-    // A renderer must be attached to receive the wake; headless serve reports 'unsupported-headless' instead.
+    // Attach a renderer to exercise its wake notification.
     electronMocks.BrowserWindow.fromId.mockReturnValue({ isDestroyed: () => false } as never)
     runtime.attachWindow(TEST_WINDOW_ID)
     runtime.markGraphReady(TEST_WINDOW_ID)
@@ -620,8 +636,8 @@ describe('OrcaRuntimeService', () => {
       clientKind: 'mobile'
     })
 
-    // INV-2: mobile wake never navigates the desktop (no activateWorktree); it routes through the renderer's navigation-free wake.
-    expect(resumeSleepingAgents).toHaveBeenCalledWith(TEST_WORKTREE_ID)
+    // Mobile wake must resume sleeping agents without navigating the desktop.
+    await vi.waitFor(() => expect(resumeSleepingAgents).toHaveBeenCalledWith(TEST_WORKTREE_ID))
     expect(activateWorktree).not.toHaveBeenCalled()
     expect(result.sleepingAgentWake).toBe('requested')
   })

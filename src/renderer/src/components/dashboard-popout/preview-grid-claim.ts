@@ -1,16 +1,9 @@
 import type { Terminal } from '@xterm/xterm'
 import { clampTerminalViewport } from '../../../../shared/terminal-viewport'
+import { terminalPreviewApiFor } from './terminal-preview-api'
 
 const FIT_REQUEST_DEBOUNCE_MS = 200
-/**
- * Negotiates the PTY grid for the popout terminal dialog: measures the live
- * terminal's cell size, computes the grid the dialog box can hold, and asks
- * main to claim it (remote-desktop viewer machinery — the main-window pane
- * parks at the claimed grid and reclaims its own geometry once the claim is
- * released). Requests are keyed by target dims and never re-sent for an
- * unchanged target, so a host or phone taking the grid back doesn't start a
- * resize tug-of-war.
- */
+/** Claim the dialog-sized PTY grid once per target size; unchanged requests must not fight a host or phone reclaiming geometry. */
 export function createPreviewGridClaim(args: {
   ptyId: string
   container: HTMLElement
@@ -52,10 +45,10 @@ export function createPreviewGridClaim(args: {
       return
     }
     lastRequestedFit = fitKey
-    // The resize triggers a main-side resync push; the reconnect snapshot
-    // carries the new grid. If the claim didn't land (a phone owns the size),
-    // the dialog's scaled fallback rendering stays correct as-is.
-    void window.api.terminalPreview.fit(args.ptyId, cols, rows).catch(() => undefined)
+    // Successful claims trigger resync with the new grid; rejected claims keep the scaled fallback correct.
+    void terminalPreviewApiFor(args.ptyId)
+      .fit(args.ptyId, cols, rows)
+      .catch(() => undefined)
   }
 
   const schedule = (): void => {

@@ -2,14 +2,16 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   CompareSummary,
   CompareSummaryToolbarButton,
-  resolveSourceControlBaseRef,
-  resolveSourceControlCompareBaseRef,
-  resolveSourceControlPickerBaseRef,
-  shouldClearBranchCompareForMissingBase,
   shouldRefreshBranchCompareForRemoteStatus,
   shouldRefreshBranchCompareForStatusHead,
   shouldShowCompareSummary
-} from './SourceControl'
+} from './source-control/sync/compare-summary'
+import {
+  resolveSourceControlBaseRef,
+  resolveSourceControlCompareBaseRef,
+  resolveSourceControlPickerBaseRef,
+  shouldClearBranchCompareForMissingBase
+} from '../../../../shared/source-control-base-ref-resolution'
 import type { GitBranchCompareSummary } from '../../../../shared/git-diff-compare-types'
 import type { GitUpstreamStatus } from '../../../../shared/git-status-types'
 
@@ -289,9 +291,7 @@ describe('SourceControl compare summary', () => {
   })
 
   it('keeps the branch compare while upstream status is still loading', () => {
-    // remoteStatus undefined means upstream status has not loaded yet; the
-    // upstream policy can still make compareBaseRef momentarily null when no
-    // fallback base is available.
+    // Unloaded upstream status can temporarily clear the compare base when no fallback exists.
     expect(
       shouldClearBranchCompareForMissingBase({
         isFolder: false,

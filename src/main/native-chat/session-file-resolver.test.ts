@@ -150,12 +150,7 @@ describe('resolveSessionFilePath', () => {
   })
 
   it('never descends into an omp session artifact dir', async () => {
-    // Why: a session's task-subagent transcripts sit in its same-named
-    // `<stamp>_<uuid>/` artifact dir, and a label-named child CAN end in
-    // `_<session id>`. Asserting the parent wins would only prove the prune on a
-    // filesystem that happens to enumerate the dir first, so give the id exactly
-    // one match — inside the artifact dir. Pruned resolves to null; descending
-    // finds the child, whatever order readdir returns.
+    // Put the only match inside the artifact directory so success cannot depend on readdir ordering.
     const root = await makeRoot('orca-native-chat-resolve-omp-artifact-')
     const ompSessionsDir = join(root, 'omp-sessions')
     const cwdDir = join(ompSessionsDir, '-Users-ada-repo')
@@ -167,7 +162,6 @@ describe('resolveSessionFilePath', () => {
     await expect(
       resolveSessionFilePath('omp', 'sess-omp-child', { ompSessionsDir })
     ).resolves.toBeNull()
-    // The parent transcript itself still resolves through the pruned walk.
     await expect(
       resolveSessionFilePath('omp', '019fd8e2-fd56-7000-acfe-2e497adfa83c', { ompSessionsDir })
     ).resolves.toBe(join(cwdDir, `${stem}.jsonl`))
@@ -190,8 +184,6 @@ describe('resolveSessionFilePath', () => {
   })
 
   it('resolves a rollout from the orca-managed Codex home (ORCA_USER_DATA_PATH)', async () => {
-    // Orca launches Codex with its own managed CODEX_HOME, so rollout files land
-    // under <userData>/codex-runtime-home/home/sessions, NOT ~/.codex/sessions.
     const root = await makeRoot('orca-native-chat-resolve-managed-')
     const managedSessionsDir = join(root, 'codex-runtime-home', 'home', 'sessions')
     const dayDir = join(managedSessionsDir, '2026', '06', '19')
@@ -226,7 +218,6 @@ describe('resolveSessionFilePath', () => {
     const previousCodex = process.env.CODEX_HOME
     const previousUserData = process.env.ORCA_USER_DATA_PATH
     process.env.CODEX_HOME = codexHome
-    // Point the managed home at an empty dir so the fallback is exercised.
     process.env.ORCA_USER_DATA_PATH = managedRoot
     try {
       const resolved = await resolveSessionFilePath('codex', 'xyz-session')
@@ -249,13 +240,10 @@ describe('resolveSessionFilePath', () => {
   })
 
   it('prefers the hook transcriptPath when it exists (Claude id != file name)', async () => {
-    // Recent Claude Code names the file with a UUID that differs from the hook
-    // session_id, so the id glob would miss it — but transcript_path is exact.
     const root = await makeRoot('orca-native-chat-resolve-path-')
     const claudeProjectsDir = join(root, 'claude-projects')
     const projectDir = join(claudeProjectsDir, '-Users-ada-repo')
     await mkdir(projectDir, { recursive: true })
-    // The real transcript is named by a DIFFERENT id than the hook session id.
     const realFile = join(projectDir, 'real-file-uuid.jsonl')
     await writeFile(realFile, '{}\n')
 
@@ -299,11 +287,7 @@ describe('resolveSessionFilePath', () => {
   })
 })
 
-// Mobile native chat resolves with no root override (transcript-read-cache.ts:104),
-// while the account home a structured Claude session pins is
-// `CLAUDE_CONFIG_DIR || ~/.claude` (runtime-paths.ts:15). When the two disagree the
-// CLI writes one place and mobile reads another, and the chat goes dark with no
-// wire-level error — so the default root has to honour the same variable.
+// Mobile uses default roots, which must match the CLI’s CLAUDE_CONFIG_DIR or its transcript disappears.
 describe('the default Claude transcript root mobile falls back to', () => {
   it('follows CLAUDE_CONFIG_DIR, the same variable the pinned account home follows', async () => {
     const configDir = await makeRoot('orca-native-chat-claude-config-dir-')
@@ -315,7 +299,6 @@ describe('the default Claude transcript root mobile falls back to', () => {
     process.env.CLAUDE_CONFIG_DIR = configDir
 
     try {
-      // No `claudeProjectsDir` override: exactly the call mobile makes.
       await expect(resolveSessionFilePath('claude', 'session-under-config-dir')).resolves.toBe(
         transcript
       )

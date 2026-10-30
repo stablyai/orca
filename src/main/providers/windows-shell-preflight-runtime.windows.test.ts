@@ -12,6 +12,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import * as pty from 'node-pty'
 import { afterEach, describe, expect, it } from 'vitest'
+import { CODEX_COMMAND_IDENTITY_ENV_KEYS } from '../../shared/codex-shell-function'
 import { resolveGitBashPath } from '../git-bash'
 import {
   ORCA_CODEX_LAUNCH_PREFLIGHT_CMD_QUOTE_ENV,
@@ -162,8 +163,7 @@ describeWindows('Windows Codex shell preflight runtime', () => {
 
     const root = makeTempDir()
     const preflight = writeFailingPreflight(root)
-    // Keep the fixture ahead of any host-global Codex installation in Git Bash.
-    // A `.local` segment is rewritten by MSYS when it converts temporary paths.
+    // Pin the fixture ahead of host Codex; MSYS rewrites temporary paths containing a .local segment.
     const codexExecutable = join(root, 'bin', 'codex.exe')
     mkdirSync(join(root, 'bin'), { recursive: true })
     linkNodeExecutable(codexExecutable)
@@ -188,6 +188,8 @@ describeWindows('Windows Codex shell preflight runtime', () => {
         cwd: root,
         env: {
           ...withPathEntry(process.env, join(root, 'bin')),
+          // The fixture is Node: forwarded identity -c would become --check.
+          ...Object.fromEntries(CODEX_COMMAND_IDENTITY_ENV_KEYS.map((key) => [key, ''])),
           CHERE_INVOKING: '1',
           HOME: root,
           ORCA_CODEX_LAUNCH_PREFLIGHT: preflight,
@@ -197,9 +199,7 @@ describeWindows('Windows Codex shell preflight runtime', () => {
         },
         input:
           "type -P codex > git-bash-codex-path\ncodex -e \"require('node:fs').writeFileSync(process.env.ORCA_CODEX_MARKER,'ran')\"\nexit\n",
-        // Paired "Windows low spec" QA measured 12.7–15.8s across four runs: Git Bash
-        // cold-starts two large Node executables for AV scanning, so allow 25s without
-        // inflating the faster cmd.exe budget.
+        // Low-spec QA measured 12.7–15.8s for Git Bash cold-start AV scans; cmd.exe retains its shorter budget.
         timeoutMs: 25_000
       })
     } finally {

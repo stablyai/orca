@@ -1,12 +1,21 @@
 import { vi } from 'vitest'
 import type { AgentBrowserBridge } from '../browser/agent-browser-bridge'
-import type { RuntimeBrowserCommandHost } from './orca-runtime-browser'
+import type { RuntimeBrowserCommandHost } from './browser/browser-command-contracts'
 import { RuntimeBrowserPageRegistry } from './runtime-browser-page-registry'
 import type { RendererPublicationThrottleTarget } from '../window/renderer-publication-throttle'
 
 // The part of the authoritative window a browser stream touches: its renderer's throttle lease target.
 export type AuthoritativeWindowDouble = {
   webContents: RendererPublicationThrottleTarget
+}
+
+// A guest the page stream keeps painting while it streams.
+export function createStreamedGuest(): RendererPublicationThrottleTarget {
+  return {
+    isDestroyed: () => false,
+    setBackgroundThrottling: vi.fn(),
+    capturePage: vi.fn(async () => null)
+  }
 }
 
 /** A browser command host whose worktree `wt-1` has one registered page, `page-1`. */
@@ -26,7 +35,7 @@ export function createSinglePageBrowserCommandsHost(
   } as unknown as AgentBrowserBridge
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: page commands read only these host members.
   return {
-    resolveWorktreeSelector: async () => ({ id: 'wt-1' }),
+    resolveWorkspaceSelector: async () => ({ id: 'wt-1' }),
     getAgentBrowserBridge: () => bridge,
     getRuntimeBrowserPageRegistry: () => runtimeBrowserPages,
     getAvailableAuthoritativeWindow: vi.fn(() => window),

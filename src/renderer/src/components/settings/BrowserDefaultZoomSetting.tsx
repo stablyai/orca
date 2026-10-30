@@ -26,10 +26,10 @@ export function BrowserDefaultZoomSetting({
         'Default Zoom'
       )}
       description={translate(
-        'auto.components.settings.BrowserDefaultZoomSetting.2622126877',
-        'Zoom level applied to newly opened browser tabs.'
+        'auto.components.settings.BrowserDefaultZoomSetting.siteDefault',
+        "Zoom for sites you haven't zoomed."
       )}
-      keywords={['browser', 'zoom', 'scale', 'default', 'page zoom', 'new tab', 'percentage']}
+      keywords={['browser', 'zoom', 'scale', 'default', 'page zoom', 'site', 'percentage']}
       className="flex items-center justify-between gap-4 py-2"
     >
       <div className="space-y-0.5">
@@ -41,8 +41,8 @@ export function BrowserDefaultZoomSetting({
         </Label>
         <p className="text-xs text-muted-foreground">
           {translate(
-            'auto.components.settings.BrowserDefaultZoomSetting.bbeec087d3',
-            'Applied to newly opened browser tabs.'
+            'auto.components.settings.BrowserDefaultZoomSetting.siteDefault',
+            "Zoom for sites you haven't zoomed."
           )}
         </p>
       </div>

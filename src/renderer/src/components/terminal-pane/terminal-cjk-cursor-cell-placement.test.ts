@@ -1,24 +1,5 @@
 // @vitest-environment happy-dom
-/**
- * Issue #12729 — "the cursor lands on the wide character's first cell and clips its right half".
- *
- * The report pins two claims about the cursor. Both are pinned here against the vendored xterm,
- * because neither reproduces and a regression in either would change what the answer to that
- * issue is:
- *
- *   1. the reporter's captured pty stream must leave the cursor on the column the application
- *      asked for (`CSI 25;11H`), not on the last syllable's starting cell; and
- *   2. a block cursor sitting on a full-width glyph must carry the whole syllable, so nothing
- *      about the cursor can hide half a character.
- *
- * The occluding box in that report is the IME preedit overlay, not the cursor — see
- * `terminal-ime-xterm-trailing-preedit-occlusion.test.ts`.
- *
- * Claim 2 is pinned against the DOM renderer, which is the only one happy-dom can drive. The
- * shipped default on macOS is webgl, where the same guarantee comes from a different mechanism —
- * the cursor fill spans `cursorX .. cursorX + cell.getWidth() - 1`, so it covers both cells of a
- * wide glyph rather than clipping one. That arm cannot live here.
- */
+/** Verify reported CUP placement and full-width cursor coverage against vendored xterm (#12729); IME occlusion is tested separately. This exercises DOM only; WebGL covers wide cells through a different fill path. */
 import { Terminal } from '@xterm/xterm'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -45,11 +26,7 @@ function write(terminal: Terminal, data: string): Promise<void> {
   return new Promise((resolve) => terminal.write(data, resolve))
 }
 
-/**
- * Lets the write settle, drains the frame it already scheduled, then subscribes before forcing the
- * one under assertion — so the row spans read below are the rendered ones, and the listener is
- * always in place before its trigger rather than racing a frame that already fired.
- */
+// Drain the pending frame, then subscribe before refresh so assertions observe the forced render.
 async function writeAwaitingRender(terminal: Terminal, data: string): Promise<void> {
   await write(terminal, data)
   await new Promise<void>((resolve) => window.setTimeout(resolve, 0))
@@ -143,7 +120,6 @@ describe('#12729 — the cursor is not displaced by full-width text', () => {
 
     expect(terminal.buffer.active.cursorX).toBe(8)
     const cursorSpan = cursorCell(container)
-    // The whole syllable is inside the cursor span, so a block cursor cannot clip its right half.
     expect(cursorSpan?.textContent).toBe('라')
     expect(cursorSpan?.classList.contains('xterm-cursor-block')).toBe(true)
   })

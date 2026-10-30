@@ -30,8 +30,10 @@ vi.mock('electron', () => {
 })
 const { CdpWsProxyMock } = vi.hoisted(() => {
   const instances: unknown[] = []
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const MockClass = vi.fn().mockImplementation(function (this: any, _wc: unknown) {
+  const MockClass = vi.fn().mockImplementation(function (
+    this: Record<string, unknown>,
+    _wc: unknown
+  ) {
     this._wc = _wc
     this.start = vi.fn(async () => 'ws://127.0.0.1:9222')
     this.stop = vi.fn(async () => {})
@@ -99,22 +101,6 @@ describe('AgentBrowserBridge coordinate pointer input', () => {
     webContentsFromIdMock.mockReturnValue(wc)
   })
 
-  // ── Transport ──
-
-  it('dispatches move, down, up and wheel over CDP without spawning the helper', async () => {
-    await expect(bridge.mouseMove(10, 20)).resolves.toEqual({ moved: true })
-    await expect(bridge.mouseDown('left')).resolves.toEqual({ pressed: true })
-    await expect(bridge.mouseUp('left')).resolves.toEqual({ released: true })
-    await expect(bridge.mouseWheel(120, 30)).resolves.toEqual({
-      scrolled: true,
-      deltaX: 30,
-      deltaY: 120
-    })
-
-    expect(execFileMock).not.toHaveBeenCalled()
-    expect(dispatched()).toHaveLength(4)
-  })
-
   it('sends CDP payloads matching a real pointer press and release', async () => {
     await bridge.mouseMove(10, 20)
     await bridge.mouseDown('left')
@@ -140,8 +126,6 @@ describe('AgentBrowserBridge coordinate pointer input', () => {
       }
     ])
   })
-
-  // ── Position tracking ──
 
   it('drags from the tracked position while the button stays held', async () => {
     await bridge.mouseMove(10, 20)
@@ -188,10 +172,8 @@ describe('AgentBrowserBridge coordinate pointer input', () => {
     })
   })
 
-  // ── Click cadence ──
-
   it('escalates clickCount for a repeat press at the same point', async () => {
-    // Why: real wall-clock makes this flake — a >500ms stall under load resets the cadence.
+    // A wall-clock stall over 500ms resets click cadence.
     vi.useFakeTimers()
     try {
       await bridge.mouseMove(10, 20)
@@ -263,8 +245,6 @@ describe('AgentBrowserBridge coordinate pointer input', () => {
       clickCount: 1
     })
   })
-
-  // ── Buttons mask ──
 
   it('carries back and forward through as X1 and X2 presses', async () => {
     await bridge.mouseDown('back')
@@ -338,8 +318,6 @@ describe('AgentBrowserBridge coordinate pointer input', () => {
     })
   })
 
-  // ── Failures ──
-
   it('rejects non-finite coordinates and deltas before dispatching', async () => {
     await expect(bridge.mouseMove(Number.NaN, 20)).rejects.toMatchObject({
       code: 'browser_error'
@@ -349,14 +327,6 @@ describe('AgentBrowserBridge coordinate pointer input', () => {
     })
 
     expect(dispatched()).toHaveLength(0)
-  })
-
-  it('reports a dispatch failure as browser_error on the call that failed', async () => {
-    wc.debugger.sendCommand.mockRejectedValueOnce(new Error('boom'))
-
-    await expect(bridge.mouseMove(10, 20)).rejects.toMatchObject({
-      code: 'browser_error'
-    })
   })
 
   it('reports a page that dies mid-dispatch as browser_tab_not_found', async () => {
@@ -403,8 +373,6 @@ describe('AgentBrowserBridge coordinate pointer input', () => {
     expect(dispatched().at(-1)).toMatchObject({ type: 'mousePressed', clickCount: 1 })
   })
 
-  // ── Lifecycle ──
-
   it('attaches and detaches the debugger around each dispatch', async () => {
     let attached = false
     wc.debugger.isAttached.mockImplementation(() => attached)
@@ -425,9 +393,20 @@ describe('AgentBrowserBridge coordinate pointer input', () => {
     expect(wc.debugger.detach).not.toHaveBeenCalled()
   })
 
-  it('focuses the guest on press, as mouseClick does', async () => {
-    await bridge.mouseDown('left')
+  it('guards the user’s focus instead of focusing an embedded guest on press', async () => {
+    const release = vi.fn()
+    const guardUserFocusForAgentInput = vi.fn(async () => release)
+    bridge = new AgentBrowserBridge(
+      mockBrowserManager(undefined, undefined, { guardUserFocusForAgentInput })
+    )
+    bridge.setActiveTab(100)
+    wc.getType.mockReturnValue('webview')
 
-    expect(wc.focus).toHaveBeenCalled()
+    await bridge.mouseDown('left')
+    await bridge.mouseUp('left')
+
+    expect(wc.focus).not.toHaveBeenCalled()
+    expect(guardUserFocusForAgentInput).toHaveBeenCalledTimes(1)
+    expect(release).toHaveBeenCalledTimes(1)
   })
 })

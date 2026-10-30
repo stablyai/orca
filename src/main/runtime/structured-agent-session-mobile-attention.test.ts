@@ -7,6 +7,10 @@ import {
 import type { AgentSessionStatusSummary } from '../../shared/agent-session-wire'
 import type { NotificationSettings } from '../../shared/notification-settings-types'
 import {
+  structuredAgentSessionPaneKey,
+  structuredAgentSessionTabId
+} from '../../shared/structured-agent-session-projection'
+import {
   createStructuredAttentionMobileDelivery,
   readStructuredAttentionWorkspaceLabels,
   type StructuredAttentionMobileDeliveryDeps
@@ -62,6 +66,7 @@ function settings(overrides: Partial<NotificationSettings> = {}): NotificationSe
     customSoundPath: null,
     customSoundVolume: 1,
     mutedNotificationSourceIds: [],
+    notifyHiddenWorkspaces: true,
     ...overrides
   }
 }
@@ -72,6 +77,7 @@ function harness(overrides: Partial<StructuredAttentionMobileDeliveryDeps> = {})
   const delivery = createStructuredAttentionMobileDelivery({
     readNotificationSettings: () => settings(),
     readWorkspaceLabels: () => ({ repoLabel: 'orca', worktreeLabel: 'feature' }),
+    isWorkspaceMuted: () => false,
     dispatch: (event) => sent.push(event),
     reconcile: (state) => reconciled.push(state),
     now: () => 42,
@@ -93,6 +99,10 @@ describe('structured attention mobile delivery', () => {
         title: 'orca / feature - Claude needs input',
         body: 'May I run the migration?',
         worktreeId: SCOPE.workspaceId,
+        paneKey: structuredAgentSessionPaneKey(
+          structuredAgentSessionTabId('session-1'),
+          'session-1'
+        ),
         notificationId: key,
         attentionKey: key,
         agentState: 'blocked'
@@ -110,6 +120,15 @@ describe('structured attention mobile delivery', () => {
       ['blocked', 'orca / feature - Claude needs input'],
       ['done', 'orca / feature - Claude failed']
     ])
+  })
+
+  it('sends nothing for a workspace whose notifications are muted', () => {
+    const isWorkspaceMuted = vi.fn(() => true)
+    const quiet = harness({ isWorkspaceMuted })
+    quiet.delivery.deliver(PROMPT, SUMMARY)
+    quiet.delivery.deliver(completion('success'), SUMMARY)
+    expect(quiet.sent).toEqual([])
+    expect(isWorkspaceMuted).toHaveBeenCalledWith(SCOPE)
   })
 
   it('still sends when labels cannot be read, worded generically', () => {
@@ -165,12 +184,25 @@ describe('readStructuredAttentionWorkspaceLabels', () => {
     expect(labels).toEqual({ repoLabel: 'orca', worktreeLabel: 'feature' })
   })
 
-  it('reads a folder workspace by its own id', () => {
+  it('reads a folder workspace from the folder key a chat scope carries', () => {
     const labels = readStructuredAttentionWorkspaceLabels(
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only the read fields are stubbed.
       store as never,
-      { ...SCOPE, workspaceId: 'folder-1', workspaceKind: 'folder' }
+      { ...SCOPE, workspaceId: 'folder:folder-1', workspaceKind: 'folder' }
     )
     expect(labels).toEqual({ worktreeLabel: 'Notes' })
   })
+})
+
+it('preserves the missing notification settings failure before dispatch', () => {
+  let reads = 0
+  const h = harness({
+    readNotificationSettings() {
+      reads += 1
+      return undefined
+    }
+  })
+  expect(() => h.delivery.deliver(PROMPT, SUMMARY)).toThrow(TypeError)
+  expect(reads).toBe(1)
+  expect(h.sent).toEqual([])
 })

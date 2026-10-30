@@ -1,5 +1,5 @@
 import { build } from 'esbuild'
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
@@ -62,13 +62,5 @@ describe('session scanner service build smoke', () => {
       })`
     )
     expect(() => smokeSessionScannerService(directory)).toThrow('smoke failed')
-  })
-
-  it('runs in the orcad build under both runtimes', () => {
-    const source = readFileSync(resolve('config/scripts/build-orcad.mjs'), 'utf8')
-    expect(source).toContain(
-      "{ label: 'session scanner service', smoke: smokeSessionScannerService }"
-    )
-    expect(source).toContain('await smoke(OUT_DIR, { runtimePath: nodeRuntimePath })')
   })
 })

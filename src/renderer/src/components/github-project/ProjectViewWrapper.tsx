@@ -1,7 +1,8 @@
-import React, { useCallback } from 'react'
+import React, { useCallback, useMemo } from 'react'
 import GitHubItemDialog from '@/components/GitHubItemDialog'
 import { launchWorkItemDirect } from '@/lib/launch-work-item-direct'
 import { useAppStore } from '@/store'
+import { projectViewCacheKeyTarget } from '@/store/github/cache-identity'
 import { translate } from '@/i18n/i18n'
 import ProjectViewList from './ProjectViewList'
 import ProjectBoard from './ProjectBoard'
@@ -20,17 +21,38 @@ import type {
   GitHubProjectFieldMutationValue,
   GitHubProjectRow
 } from '../../../../shared/github/project-types'
+import type { ExecutionHostId } from '../../../../shared/execution-host'
+import { taskSourceRuntimeTarget } from '@/lib/task-source-runtime-target'
+import { openAppHttpLink } from '@/lib/app-http-link-open'
 
-type Props = { selectedRepoIds: ReadonlySet<string> }
+type Props = {
+  selectedRepoIds: ReadonlySet<string>
+  /** Row-less source host (shared with Linear and Jira): the board, picker and unmatched rows read from it. */
+  sourceHostId: ExecutionHostId
+}
 
-export default function ProjectViewWrapper({ selectedRepoIds }: Props): React.JSX.Element {
-  const tableState = useProjectViewTable(selectedRepoIds)
+export default function ProjectViewWrapper({
+  selectedRepoIds,
+  sourceHostId
+}: Props): React.JSX.Element {
+  const sourceTarget = useMemo(
+    () => taskSourceRuntimeTarget({ hostId: sourceHostId }),
+    [sourceHostId]
+  )
+  const tableState = useProjectViewTable(selectedRepoIds, sourceTarget)
   const rowActions = useProjectRowActions({
     table: tableState.table,
     currentCacheKey: tableState.currentCacheKey,
     selectedRepoIds
   })
   const addRepo = useAppStore((state) => state.addRepo)
+  const slugOrigin = rowActions.missingDialogs.slugDialog?.origin ?? null
+  const slugCacheKey = slugOrigin?.cacheKey ?? null
+  // Why: an open dialog keeps writing to the host its row was loaded from, even if the board's source moves.
+  const slugSourceTarget = useMemo(
+    () => (slugCacheKey ? projectViewCacheKeyTarget(slugCacheKey) : null),
+    [slugCacheKey]
+  )
 
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col">
@@ -44,8 +66,8 @@ export default function ProjectViewWrapper({ selectedRepoIds }: Props): React.JS
       ) : null}
       <ProjectViewBody tableState={tableState} rowActions={rowActions} />
       <ProjectItemSlugDialog
-        projectOrigin={rowActions.missingDialogs.slugDialog?.origin ?? null}
-        sourceSettings={tableState.settings}
+        projectOrigin={slugOrigin}
+        sourceTarget={slugSourceTarget ?? tableState.sourceTarget}
         onClose={() => rowActions.setSlugDialog(null)}
       />
       <ProjectMissingRepoDialog
@@ -93,9 +115,7 @@ function ProjectViewBody({
         host={activeProject.host}
         onOpenInGitHub={() => {
           if (table) {
-            void window.api.shell.openUrl(
-              `${table.project.url}/views/${table.selectedView.number ?? ''}`
-            )
+            openAppHttpLink(`${table.project.url}/views/${table.selectedView.number ?? ''}`)
           }
         }}
       />
@@ -116,7 +136,7 @@ function ProjectViewBody({
         )}
         onUse={(item) => {
           rowActions.setDialogRepoItem(null)
-          // Why: issue #4756 keeps project-view actions on the direct "start work now" path, not the TaskPage background-create flow.
+          // Project actions start work immediately; TaskPage’s background creation flow does not apply.
           void launchWorkItemDirect({
             item,
             repoId: dialogItem.workItem.repoId,
@@ -124,7 +144,7 @@ function ProjectViewBody({
             telemetrySource: 'sidebar',
             openModalFallback: () => {
               if (item.url) {
-                void window.api.shell.openUrl(item.url)
+                openAppHttpLink(item.url)
               }
             }
           })
@@ -146,11 +166,11 @@ function ProjectViewBody({
       onEditIssueType={(row, issueType) => void rowActions.editIssueType(row, issueType)}
       onOpenInBrowser={(row) => {
         if (row.content.url) {
-          void window.api.shell.openUrl(row.content.url)
+          openAppHttpLink(row.content.url)
         }
       }}
       onStartWork={rowActions.startWork}
-      sourceSettings={tableState.settings}
+      sourceTarget={tableState.sourceTarget}
     />
   )
   if (visibleTable.selectedView.layout === 'ROADMAP_LAYOUT') {

@@ -12,6 +12,8 @@ export function createInitialStoreState(getState: () => StoreState): StoreState 
     ptyIdsByTabId: {
       'tab-1': ['tab-pty']
     },
+    terminalPaneStartsByPaneKey: {},
+    terminalPaneResumeOutcomesByPaneKey: {},
     terminalLayoutsByTabId: {
       'tab-1': {
         root: { type: 'leaf', leafId: LEAF_1 },
@@ -31,7 +33,7 @@ export function createInitialStoreState(getState: () => StoreState): StoreState 
     sshConnectionStates: new Map(),
     transientClearedAgentStatusConnectionIds: {},
     cacheTimerByKey: {},
-    // Why: terminalMainSideEffectAuthority false pins the legacy renderer byte-parser wiring this suite asserts on (onTitleChange/onBell); authority-on mode has its own tests.
+    // Pin legacy byte-parser wiring; main-authority facts have separate coverage.
     settings: {
       promptCacheTimerEnabled: true,
       experimentalTerminalAttention: true,
@@ -59,7 +61,6 @@ export function createInitialStoreState(getState: () => StoreState): StoreState 
     }),
     registerAgentLaunchConfig: vi.fn(),
     clearAgentLaunchConfig: vi.fn(),
-    markWorktreeUnread: vi.fn(),
     observeTerminalGitHubPullRequestLink: vi.fn(),
     recordTerminalInput: vi.fn(),
     setAgentStatus: vi.fn(
@@ -91,10 +92,9 @@ export function createInitialStoreState(getState: () => StoreState): StoreState 
     clearPaneForegroundAgent: vi.fn((paneKey: string) => {
       delete getState().paneForegroundAgentByPaneKey[paneKey]
     }),
-    markTerminalTabUnread: vi.fn(),
-    markTerminalPaneUnread: vi.fn(),
-    markAgentCompletionPaneUnread: vi.fn()
-  } as StoreState
+    markTerminalBell: vi.fn(),
+    markAgentAttentionUnread: vi.fn()
+  }
 }
 
 export function buildReattachPaneTitleState(current: StoreState, title: string): StoreState {
@@ -106,7 +106,7 @@ export function buildReattachPaneTitleState(current: StoreState, title: string):
     runtimePaneTitlesByTabId: {
       'tab-1': { 1: title }
     }
-  } as StoreState
+  }
 }
 
 // Why: activeRuntimeEnvironmentId exercises the remote-runtime path where the renderer still owns OSC 9999 status.
@@ -116,9 +116,14 @@ export function buildActiveRuntimeEnvironmentState(
 ): StoreState {
   return {
     ...current,
+    // The client stamps a server's rows on arrival; focus alone never names the owner.
+    repos: current.repos.map((repo) => ({
+      ...repo,
+      executionHostId: repo.executionHostId ?? `runtime:${environmentId}`
+    })),
     settings: {
       ...current.settings,
       activeRuntimeEnvironmentId: environmentId
     }
-  } as StoreState
+  }
 }

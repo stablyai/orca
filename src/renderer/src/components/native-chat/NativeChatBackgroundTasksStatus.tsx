@@ -25,8 +25,7 @@ import { backgroundTasksHeaderContent } from './background-task-header-content'
 import { backgroundTaskGroupLabel, buildBackgroundTaskGroups } from './background-task-roster'
 import { sayBackgroundTaskTranslated as say } from './background-task-words-text'
 
-/** Border-box width at the live root font size; no viewport media query, so a
- *  narrow split pane on a wide monitor behaves like a narrow window. */
+/** Use strip width in rem so narrow splits behave like narrow windows even on wide monitors. */
 const NARROW_STRIP_REM = NARROW_BACKGROUND_TASKS_STRIP_REM
 
 function rootFontSizePx(): number {
@@ -34,8 +33,7 @@ function rootFontSizePx(): number {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : 16
 }
 
-/** Observe the strip's own border-box width; the viewport is only the
- *  pre-measurement stand-in before the first observer callback. */
+/** Measure the strip itself; viewport width is only the initial fallback. */
 function useNarrowStrip(ref: React.RefObject<HTMLDivElement | null>): boolean {
   const [narrow, setNarrow] = useState(() => window.innerWidth < NARROW_STRIP_REM * 16)
   useEffect(() => {
@@ -54,8 +52,6 @@ function useNarrowStrip(ref: React.RefObject<HTMLDivElement | null>): boolean {
   return narrow
 }
 
-/** Shared with the transcript row so a task reads as the same thing in the
- *  strip above the composer and in the row that outlives it. */
 export const KIND_ICONS = {
   agent: Bot,
   command: SquareTerminal,
@@ -64,10 +60,7 @@ export const KIND_ICONS = {
   unknown: CircleHelp
 } as const
 
-/** Monitoring is a STATE the app colours the same on every surface — the agent
- *  sidebar and `AgentStateDot` both draw an amber heartbeat — so the strip must
- *  match it or the two stop reading as the same thing. The other four are plain
- *  kind markers and stay neutral. `dimmed` is the running-turn treatment. */
+/** Match the sidebar’s amber monitoring state; other kind icons stay neutral, and running turns dim the strip. */
 function kindIconTone(kind: AgentSessionBackgroundTask['kind'], dimmed: boolean): string {
   const tone = kind === 'monitor' ? 'text-yellow-500' : 'text-muted-foreground'
   return dimmed ? `${tone}/40` : tone
@@ -86,7 +79,7 @@ function BackgroundTaskRow(props: {
   const stopId = backgroundTaskRowStopId(row, props.supportsTaskStop)
   return (
     <>
-      <li className="flex h-6 min-w-0 items-center gap-2 text-foreground/80">
+      <li className="flex h-6 min-w-0 items-center gap-2 text-foreground">
         <Icon aria-hidden="true" className={`size-3.5 shrink-0 ${kindIconTone(row.kind, false)}`} />
         {/* Every attention state states its reason on the row; `unverifiable` is never dropped. */}
         <AgentChildRowContent
@@ -98,7 +91,7 @@ function BackgroundTaskRow(props: {
           dotTitle={null}
         />
         {meta ? (
-          <span className="shrink-0 font-mono text-[10px] tabular-nums text-muted-foreground">
+          <span className="shrink-0 font-mono text-3xs tabular-nums text-muted-foreground">
             {meta}
           </span>
         ) : null}
@@ -141,24 +134,19 @@ export function NativeChatBackgroundTasksStatus(props: {
   settledTasks: readonly AgentSessionBackgroundTask[]
   /** The host's child views, when it publishes them; rows then read these instead of the tasks. */
   childViews?: readonly AgentChildWorkView[]
-  /** The session's parent-row context for those views, the one its sidebar rows read; without
-   *  it every live claim stands as reported. */
+  /** Use the sidebar’s parent context to qualify child state; without it, trust reported live claims. */
   childRowContext?: AgentChildRowContext
   supportsTaskStop: boolean
-  /** False when the provider exposes no honest stop at all; the fallback
-   *  control is hidden rather than offering a button that cannot act. */
-  supportsStopAll: boolean
+  /** Offer untargeted Stop only when the provider can perform it. */
+  offersStopAll: boolean
+  /** Some running work is not listed, so the rows are not the whole roster. */
+  incomplete?: boolean
   stoppingTaskIds: ReadonlySet<string>
   stoppingAll: boolean
-  /** True while the session is idle: only then may the strip speak as the
-   *  animated monitoring indicator. A running turn owns the voice. */
+  /** Let monitoring speak only when idle; a running turn owns the indicator. */
   indicatorActive: boolean
   isVisible: boolean
-  /** Owned by the parent. The strip is mounted on live work, so it disappears
-   *  and comes back whenever the roster momentarily empties between two pieces
-   *  of a sequential fan-out — settled rows are flushed at that same instant
-   *  and hold nothing open — and local state would collapse the list on every
-   *  such gap. */
+  /** Parent-owned expansion survives temporary empty rosters, which unmount this strip and flush settled rows. */
   expanded: boolean
   onExpandedChange: (expanded: boolean) => void
   onStop: (taskId?: string) => void
@@ -192,7 +180,7 @@ export function NativeChatBackgroundTasksStatus(props: {
           <div className="flex h-8 items-center px-1.5">
             <button
               type="button"
-              className="flex h-6 min-w-0 flex-1 cursor-pointer items-center gap-2 rounded-md px-1.5 text-left outline-none hover:bg-accent hover:text-accent-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
+              className="group/task-header flex h-6 min-w-0 flex-1 cursor-pointer items-center gap-2 rounded-md px-1.5 text-left outline-none hover:bg-accent hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-ring"
               aria-expanded={expanded}
               aria-controls={taskListId}
               aria-label={headerText}
@@ -205,9 +193,12 @@ export function NativeChatBackgroundTasksStatus(props: {
                   const Icon = kind ? KIND_ICONS[kind] : null
                   return (
                     <span key={segment.kind ?? 'total'}>
-                      {/* A text token, not `--border`: that one is a divider line
-                        (7% white in dark) and reads as invisible at this size. */}
-                      {index > 0 ? <span className="text-muted-foreground"> · </span> : null}
+                      {/* Use text color; the border token is too faint for a readable separator. */}
+                      {index > 0 ? (
+                        <span className="text-muted-foreground group-hover/task-header:text-accent-foreground">
+                          {' · '}
+                        </span>
+                      ) : null}
                       {Icon && kind ? (
                         <Icon
                           aria-hidden="true"
@@ -218,7 +209,9 @@ export function NativeChatBackgroundTasksStatus(props: {
                           )}`}
                         />
                       ) : null}
-                      <span className="font-medium text-foreground">{segment.text}</span>
+                      <span className="font-medium text-foreground group-hover/task-header:text-accent-foreground">
+                        {segment.text}
+                      </span>
                     </span>
                   )
                 })}
@@ -231,7 +224,7 @@ export function NativeChatBackgroundTasksStatus(props: {
               </span>
               <ChevronDown
                 aria-hidden="true"
-                className={`size-3 transition-transform ${expanded ? 'rotate-180' : ''}`}
+                className={`size-3 transition-transform motion-reduce:transition-none ${expanded ? 'rotate-180' : ''}`}
               />
             </button>
           </div>
@@ -246,7 +239,7 @@ export function NativeChatBackgroundTasksStatus(props: {
                     key={group.kind}
                     className={index > 0 ? 'mt-1.5 border-t border-border/60 pt-1.5' : ''}
                   >
-                    <p className="px-0.5 pb-1 font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+                    <p className="px-0.5 pb-1 font-mono text-3xs uppercase tracking-wider text-muted-foreground">
                       {backgroundTaskGroupLabel(group.kind)}
                     </p>
                     <ul
@@ -270,7 +263,10 @@ export function NativeChatBackgroundTasksStatus(props: {
               ) : (
                 <p>{say('detailsUnavailable')}</p>
               )}
-              {!props.supportsTaskStop && props.supportsStopAll ? (
+              {props.incomplete && groups.length > 0 ? (
+                <p className="mt-1.5">{say('detailsUnavailable')}</p>
+              ) : null}
+              {props.offersStopAll ? (
                 <div className={groups.length > 0 ? 'mt-2 border-t border-border pt-2' : 'mt-2'}>
                   <Button
                     type="button"

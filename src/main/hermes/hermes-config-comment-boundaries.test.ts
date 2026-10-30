@@ -3,8 +3,14 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import { parseDocument } from 'yaml'
-import { createManagedHookLocalFilesystem } from '../agent-hooks/managed-hook-local-filesystem'
-import { disablePlugin, enablePlugin, updateConfigContent } from './hermes-config-yaml'
+import { createManagedHookLocalFilesystem } from '../agent-hooks/managed-hook-local-filesystem.test-fixture'
+import {
+  disablePlugin,
+  enablePlugin,
+  installOrcaStatusConfig,
+  removeOrcaStatusConfig,
+  updateConfigContent
+} from './hermes-config-yaml'
 import { HermesHookService } from './hook-service'
 
 const fixtures = [
@@ -63,6 +69,10 @@ describe.each(['\n', '\r\n'])('Hermes comment boundaries (%j)', (eol) => {
         expect(output.replaceAll(eol, '')).not.toContain('\n')
       }
 
+      const serviceOutput = updateConfigContent(
+        input,
+        operation === 'install' ? installOrcaStatusConfig : removeOrcaStatusConfig
+      ).content
       const root = mkdtempSync(join(tmpdir(), 'orca-hermes-comments-'))
       const home = join(root, '.hermes')
       mkdirSync(home)
@@ -73,13 +83,13 @@ describe.each(['\n', '\r\n'])('Hermes comment boundaries (%j)', (eol) => {
         const service = new HermesHookService()
         const status = operation === 'install' ? service.install() : service.remove()
         expect(status.state).toBe(operation === 'install' ? 'installed' : 'not_installed')
-        expect(readFileSync(path, 'utf8')).toBe(output)
+        expect(readFileSync(path, 'utf8')).toBe(serviceOutput)
         expect(readFileSync(`${path}.bak`, 'utf8')).toBe(input)
         if (operation === 'install') {
           writeFileSync(path, input)
           const remote = await service.installRemote(createManagedHookLocalFilesystem(), root)
           expect(remote.state).toBe('installed')
-          expect(readFileSync(path, 'utf8')).toBe(output)
+          expect(readFileSync(path, 'utf8')).toBe(serviceOutput)
         }
       } finally {
         vi.unstubAllEnvs()

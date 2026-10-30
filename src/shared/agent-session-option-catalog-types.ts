@@ -1,9 +1,10 @@
+import type { AgentChoiceCliForm } from './agent-launch-choices'
 import type { AgentType } from './agent-status-types'
 import type {
   SessionOptionDescriptor,
   SessionOptionSelectChoice,
   SessionOptionValue
-} from './native-chat-session-options'
+} from './native-chat/input/native-chat-session-options'
 
 export type CatalogAgentInteractionDetection = 'claude-model-switch-confirmation'
 export type CatalogCommandDelivery = 'type'
@@ -20,7 +21,8 @@ export type CatalogMidSessionApply =
   | { kind: 'unsupported' }
 
 export type CatalogOptionApply = {
-  launchArgs?: (value: SessionOptionValue) => string[]
+  cli?: readonly AgentChoiceCliForm[]
+  launchArgs?: (value: SessionOptionValue, trailingAgentArgs?: readonly string[]) => string[]
   /** Removes conflicting free-form args, or detects when to omit the pick from launch args and the record. */
   removeAgentArgs?: (tokens: readonly string[]) => string[]
   composedIntoModel?: true
@@ -51,6 +53,8 @@ export type CatalogModel = {
   isDefault?: boolean
   /** Tokens the model's context window holds, where the host's listing states it. */
   contextWindowTokens?: number
+  /** The listing says the model runs Approve for me; absent is unknown, which offers it nowhere. */
+  supportsAutoMode?: boolean
   options: CatalogOption[]
 }
 
@@ -62,22 +66,12 @@ export type AgentSessionOptionCatalog = {
   /** Launch-safe options for opaque model ids that are absent from the static catalog. */
   unknownModelOptions?: CatalogOption[]
   composeModelValue?: (modelId: string, values: Record<string, SessionOptionValue>) => string
-  /** Why: a seeded id the CLI has retired is a fatal launch, so a successful probe
-   * must be able to drop it rather than only add. Membership only — option menus
-   * still come from the seed. */
+  /** Discovery may retire seeded IDs that fatally fail launch; it controls membership while the seed retains option menus. */
   discoveredModelsAreAuthoritative?: true
-  /** Set only when the `isDefault` model is provably what the CLI runs with no model
-   * flag, so an untouched draft may show it as selected. Off means `isDefault` stays
-   * decorative: agents whose default comes from account or user config would otherwise
-   * present a guess as the launch's model. Adopting this default as a persisted launch
-   * flag additionally requires a probe to confirm it — see `adoptModelAsLaunchDefault`.
-   *
-   * Known gap: "no model flag" is unverified. A user `-m` in `agentArgs` launches that
-   * model while the picker, which never reads launch args, still names the CLI default.
-   * A real fix means threading `modelApply.removeAgentArgs` through to the surface. */
+  /** Show isDefault as selected only when it proves the unflagged CLI model; persisting it also requires probe confirmation (adoptModelAsLaunchDefault). Known gap: user -m in agentArgs can override it while the picker still names the default; thread modelApply.removeAgentArgs to the surface to resolve this. */
   defaultModelIsCliDefault?: true
-  /** The host's model listing names the model the account is configured to run, so a new chat
-   *  may run the listed default. Off where the agent's own settings or env may pick another. */
+  /** For a host too old to say so itself: its model listing names the model the account is
+   *  configured to run, so a new chat may run the listed default. */
   hostListingNamesConfiguredModel?: true
   listModels?: {
     command: string

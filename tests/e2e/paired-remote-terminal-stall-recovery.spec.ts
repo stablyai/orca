@@ -1,4 +1,4 @@
-import { runProcess } from '../../src/shared/child-process/run-process'
+import { runProcess } from '@orca/process-host'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
@@ -281,6 +281,7 @@ test('restarts one ACK-starved paired terminal stream without replacing its PTY 
       .toBe(true)
     const observerOffer = await createRuntimeDesktopPairingOffer(orcaPage)
     observer = await launchPairedWebClient(electronApp, observerOffer)
+    const observerPage = observer.page
     await showHeadedClient(electronApp, client.page)
     await showHeadedClient(electronApp, observer.page)
     await expect
@@ -388,7 +389,7 @@ test('restarts one ACK-starved paired terminal stream without replacing its PTY 
     const observerOriginalPtyId = await waitForActivePanePtyId(observer.page, 30_000)
     expect(observerOriginalPtyId.split('@@').at(-1)).toBe(originalPtyId.split('@@').at(-1))
     await expect
-      .poll(() => getTerminalContent(observer.page), { timeout: 30_000 })
+      .poll(() => getTerminalContent(observerPage), { timeout: 30_000 })
       .toContain('PAIRED_STALL_READY')
 
     await client.page.evaluate((target) => {
@@ -485,7 +486,7 @@ test('restarts one ACK-starved paired terminal stream without replacing its PTY 
     expect(await waitForActivePanePtyId(client.page, 30_000)).toBe(originalPtyId)
     await expect(tab).toHaveAttribute('data-active', 'true')
     await expect
-      .poll(() => getTerminalContent(observer.page), { timeout: 30_000 })
+      .poll(() => getTerminalContent(observerPage), { timeout: 30_000 })
       .toContain(`LIVE:${liveMarker}`)
     expect(await waitForActivePanePtyId(observer.page, 30_000)).toBe(observerOriginalPtyId)
     expect(
@@ -589,7 +590,7 @@ test('restarts one ACK-starved paired terminal stream without replacing its PTY 
                 ),
               { tabId: webTabId, worktreeId: worktree.id }
             ),
-            observer.page.evaluate(
+            observerPage.evaluate(
               ({ tabId, worktreeId }) =>
                 (window.__store?.getState().tabsByWorktree[worktreeId] ?? []).some(
                   (candidate) => candidate.id === tabId

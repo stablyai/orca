@@ -10,8 +10,7 @@ import { requestStablePaneFit } from './pane-fit-resize-observer'
 import { clearPaneFitContinuationRetry } from './pane-fit-continuation-retry'
 import { resumePendingFitScrollRestoreAfterFit } from './pane-scroll'
 
-// Why: a real resize changes the element's pixels; a metric-only wobble does not.
-// No baseline / unmeasurable counts as changed so a first reveal still fits.
+// Pixel changes indicate real resize; unknown/unmeasurable baselines still require a first fit.
 export function paneFitClientSizeChanged(pane: ManagedPane): boolean {
   const last = (pane as ManagedPaneInternal).lastFitClientSize
   if (!last) {
@@ -24,8 +23,7 @@ export function paneFitClientSizeChanged(pane: ManagedPane): boolean {
   return current.width !== last.width || current.height !== last.height
 }
 
-// Why: missing/failed measurement counts as "matches" — safeFit would no-op
-// there anyway, so reveal must not force a reflow.
+// Treat failed measurements as matching: safeFit would no-op, so reveal must not force reflow.
 function proposedGridMatchesTerminal(pane: ManagedPane): boolean {
   try {
     const proposed = pane.fitAddon.proposeDimensions()
@@ -39,9 +37,7 @@ function proposedGridMatchesTerminal(pane: ManagedPane): boolean {
 }
 
 function releaseMeasurableFitContinuations(pane: ManagedPane): void {
-  // Why: no reflow needed, but a pane that mounted hidden can have replay/reattach
-  // continuations parked on a measurable fit — release them (and any parked scroll
-  // restore, mirroring safeFit's equal-dims path) now it is visible.
+  // Equal grids still release hidden replay/reattach continuations and parked scroll restore, as safeFit does.
   if (!canMeasurePaneForFit(pane)) {
     return
   }
@@ -50,28 +46,15 @@ function releaseMeasurableFitContinuations(pane: ManagedPane): void {
   clearPaneFitContinuationRetry(pane)
 }
 
-// Reveal fit (minimize→restore, worktree foreground, window wake). resumeRendering
-// re-attaches WebGL, whose cell metrics briefly differ from the DOM renderer's, so
-// a raw fit can propose a one-column-off grid, reflow xterm, then snap back — and
-// xterm's wrap→unwrap is not a perfect inverse, so a diff-painting inline TUI
-// (grok, Codex) is left corrupted. So:
-//  - pixels changed while hidden → real resize: fit now (also keeps xterm ahead of
-//    the async {fit:false} PTY size reassert so it can't forward a stale grid);
-//  - pixels unchanged but grid diverged (a direct terminal.resize from snapshot /
-//    SSH-reattach, or a DPI change) → repair on a steady grid, so a sustained
-//    mismatch refits but a transient metric wobble does not reflow;
-//  - grid already correct → leave it alone.
+/** WebGL reattach can briefly change cell metrics; raw reflow is not perfectly reversible and corrupts diff-painted TUIs. Fit real pixel resizes immediately (before async PTY reassert); repair grid-only divergence after stabilization; leave matching grids alone. */
 export function fitRevealedPane(pane: ManagedPane): void {
-  // Why first: the checks below can both say "nothing to do" and return without
-  // fitting, stranding metric options parked while the pane was unmeasurable.
+  // Flush parked metrics before early returns or unchanged pixels/grids could strand them forever.
   const flushed = flushDeferredPaneMetricOptionsIfMeasurable(pane)
   if (paneFitClientSizeChanged(pane)) {
     safeFit(pane)
     return
   }
-  // Why the stable path for a flush: it leaves pixels unchanged but the grid
-  // diverged — the same shape as a snapshot resize, and a raw fit here would
-  // reflow on the transient WebGL/DOM metric wobble this function exists to avoid.
+  // Flushed metrics change grid without pixels; stabilize to avoid reflow on transient DOM/WebGL differences.
   if (flushed || !proposedGridMatchesTerminal(pane)) {
     requestStablePaneFit(pane)
     return

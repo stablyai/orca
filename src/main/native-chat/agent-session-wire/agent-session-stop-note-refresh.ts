@@ -1,21 +1,24 @@
 import type { AgentJournalRenderItem } from '../../../shared/agent-session-journal-types'
 import { AGENT_SESSION_HISTORY_MAX_LIMIT } from '../../../shared/agent-session-wire'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
-import {
-  HISTORY_PAGE_CONTENT_BUDGET_BYTES,
-  oversizedHistoryItem
-} from './agent-session-history-page-bounds'
+import { measureHistoryItem, oversizedHistoryItem } from './agent-session-history-page-bounds'
 import { emptyAgentSessionBatch } from './agent-session-empty-batch'
+import { subscriberHistoryReader } from './agent-session-bounded-frames'
+import {
+  agentSessionPublishedWorkFields,
+  type AgentSessionPublishedWork
+} from './agent-session-published-work'
 import type { SubscriberDeliveryPort } from './agent-session-subscriber-catch-up'
 import type { Subscriber } from './structured-agent-session-subscribers'
 import { isStructuredAgentSessionStopNote } from './structured-agent-session-command-turn'
 
-/** A stale in-flight history page can land after its note's live correction was out of window. */
+/** Correct notes after stale in-flight pages; restate current work so rows retain modern-host semantics. */
 export function refreshDerivedStopNotes(
   port: Pick<SubscriberDeliveryPort, 'emit' | 'isActive'>,
   subscriber: Subscriber,
   journal: AgentSessionJournal,
-  hostNow: number
+  hostNow: number,
+  work?: AgentSessionPublishedWork
 ): void {
   let hasUnconfirmedStop = false
   journal.visitItems((itemId, _sequence, body) => {
@@ -31,16 +34,22 @@ export function refreshDerivedStopNotes(
     return
   }
   const snapshot = journal.snapshot()
+  const { form, budgetBytes } = subscriberHistoryReader(subscriber)
   let pending: AgentJournalRenderItem[] = []
   let bytes = 0
   const emit = (): void => {
-    port.emit(subscriber, {
-      type: 'batch',
-      sessionId: subscriber.sessionId,
-      batch: { ...emptyAgentSessionBatch(subscriber.cursor), items: pending },
-      fence: subscriber.fence,
-      hostNow
-    })
+    port.emit(
+      subscriber,
+      {
+        type: 'batch',
+        sessionId: subscriber.sessionId,
+        batch: { ...emptyAgentSessionBatch(subscriber.cursor), items: pending },
+        fence: subscriber.fence,
+        ...(work ? agentSessionPublishedWorkFields(journal, work) : {}),
+        hostNow
+      },
+      { currentWork: work }
+    )
     pending = []
     bytes = 0
   }
@@ -57,18 +66,17 @@ export function refreshDerivedStopNotes(
     ) {
       continue
     }
-    const projectedBytes = Buffer.byteLength(JSON.stringify(item), 'utf8')
+    const formed = form(item)
     const bounded =
-      projectedBytes > HISTORY_PAGE_CONTENT_BUDGET_BYTES ? oversizedHistoryItem(item) : item
-    const itemBytes = Buffer.byteLength(JSON.stringify(bounded), 'utf8') + 1
+      formed.bytes > budgetBytes ? measureHistoryItem(oversizedHistoryItem(formed.item)) : formed
+    const itemBytes = bounded.bytes + 1
     if (
       pending.length > 0 &&
-      (pending.length === AGENT_SESSION_HISTORY_MAX_LIMIT ||
-        bytes + itemBytes > HISTORY_PAGE_CONTENT_BUDGET_BYTES)
+      (pending.length === AGENT_SESSION_HISTORY_MAX_LIMIT || bytes + itemBytes > budgetBytes)
     ) {
       emit()
     }
-    pending.push(bounded)
+    pending.push(bounded.item)
     bytes += itemBytes
   }
   if (pending.length > 0 && port.isActive(subscriber)) {

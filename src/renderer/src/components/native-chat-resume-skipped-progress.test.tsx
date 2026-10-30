@@ -8,10 +8,13 @@ import {
   type RestartRpc,
   type ResumeStatusStream
 } from './native-chat-resume-modal.test-support'
-import { NativeChatResumeOnRestartModal } from './NativeChatResumeOnRestartModal'
+import { NativeChatResumeOnRestartModal } from './NativeChatResumeRuntimeModal'
 import { NativeChatResumeStatusSegment } from './status-bar/NativeChatResumeStatusSegment'
 import { requestNativeChatResumeOnRestartDialog } from './native-chat-resume-on-restart-dialog'
-import { getNativeChatRestartOffer } from './native-chat-resume-on-restart-store'
+import {
+  getNativeChatRestartOffer,
+  getNativeChatRestartRun
+} from './native-chat-resume-on-restart-store'
 import type { AgentSessionStatusSummary } from '../../../shared/agent-session-wire'
 
 const rpc: Mock<RestartRpc> = vi.hoisted(() => vi.fn<RestartRpc>())
@@ -33,9 +36,11 @@ vi.mock('@/runtime/structured-agent-session-client', () => ({
 vi.mock('@/lib/activate-ai-vault-structured-session', () => ({
   activateAiVaultStructuredSession: vi.fn(async () => true)
 }))
-vi.mock('sonner', () => ({ toast: vi.fn() }))
+vi.mock('sonner', async () =>
+  (await import('./native-chat-resume-sonner-mock.test-support')).resumeSonnerMock()
+)
 
-const { mount, button, toasts, runStatus } = createResumeModalFixture(rpc, statusStream)
+const { mount, button, toasts, runStatus, fakeHost } = createResumeModalFixture(rpc, statusStream)
 const dialog = () => document.querySelector('[role="dialog"]')?.textContent
 
 function emitPhase(phase?: NonNullable<AgentSessionStatusSummary['restartResume']>['phase']) {
@@ -149,12 +154,39 @@ it.each(['returned', 'lost'] as const)(
         )
       ).toHaveLength(2)
       expect(document.querySelectorAll('button[aria-label^="Dismiss"]')).toHaveLength(2)
-      expect(runStatus('Prompt a')).toBe('Prompt a: Couldn’t resume')
+      expect(runStatus('Prompt a')).toBe(
+        delivery === 'lost'
+          ? 'Prompt a: Couldn’t confirm the chat was resumed'
+          : 'Prompt a: Couldn’t resume'
+      )
       if (delivery === 'lost') {
-        expect(toasts()).toEqual([['1 chat couldn’t be resumed']])
+        expect(toasts()).toEqual([['Couldn’t confirm 1 chat was resumed']])
       }
     } finally {
       warn.mockRestore()
     }
   }
 )
+
+it('retires an all-skipped retry after its open result is closed', async () => {
+  fakeHost(
+    { sessions: [], failed: [{ ...failure('a', 'agent_session_conflict'), retryable: true }] },
+    () => 'skipped'
+  )
+  await mount(
+    <>
+      <NativeChatResumeOnRestartModal />
+      <NativeChatResumeStatusSegment iconOnly={false} />
+    </>
+  )
+  await act(async () => requestNativeChatResumeOnRestartDialog())
+  await act(async () => button('Retry').click())
+  expect(dialog()).toContain('Resumed 0 of 0 chats')
+  expect(getNativeChatRestartRun()?.entries).toHaveLength(0)
+  await act(async () => button('Close').click())
+  expect(getNativeChatRestartRun()).toBeNull()
+  await act(async () => button('1 chat failed to resume').click())
+  expect(dialog()).toContain('Resume interrupted chats?')
+  expect(dialog()).toContain('Prompt a')
+  expect(dialog()).not.toContain('Resumed 0 of 0 chats')
+})

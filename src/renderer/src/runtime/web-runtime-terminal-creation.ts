@@ -4,16 +4,39 @@ import {
   seedNativeChatLaunchDraftForAgentTab
 } from '../lib/agent-launch-prompt-delivery'
 import { createWebRuntimeSessionTerminalResult } from './web-runtime-terminal-create-operation'
-import { toWebTerminalSurfaceTabId } from './web-terminal-surface-id'
+import { notifyWebRuntimeTerminalCreateFailure } from './web-runtime-terminal-create-failure-notice'
+import { toWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
+import { startStoppedWslHostForUserAct, stoppedWslHostMessage } from '../lib/wsl-host-user-start'
 import type {
   CreateWebRuntimeSessionTerminalArgs,
   WebRuntimeTerminalCreateOutcome
 } from './web-runtime-session-types'
 
+/**
+ * Toast host failure here because no mirrored pane can show it; callers reporting themselves use
+ * notifyFailure:false. `userAct` marks a New Terminal the user asked for: it may start a stopped WSL
+ * host, which nothing automatic does (E9).
+ */
 export async function createWebRuntimeSessionTerminal(
-  args: CreateWebRuntimeSessionTerminalArgs
+  args: CreateWebRuntimeSessionTerminalArgs,
+  options: { notifyFailure?: boolean; userAct?: boolean } = {}
 ): Promise<WebRuntimeTerminalCreateOutcome> {
-  return (await createWebRuntimeSessionTerminalResult(args)).outcome
+  if (options.userAct && !(await startStoppedWslHostForUserAct(args.environmentId))) {
+    // The start already told the user why; the host is still stopped.
+    return { status: 'failed', message: stoppedWslHostMessage(args.environmentId) }
+  }
+  const created = await createWebRuntimeSessionTerminalResult(args)
+  if (
+    created.hostFailed &&
+    created.outcome.status === 'failed' &&
+    options.notifyFailure !== false
+  ) {
+    notifyWebRuntimeTerminalCreateFailure(created.outcome.message, {
+      environmentId: args.environmentId ?? null,
+      worktreeId: args.worktreeId
+    })
+  }
+  return created.outcome
 }
 
 export async function createWebRuntimeAgentSessionTerminal(
@@ -42,11 +65,7 @@ export async function createWebRuntimeAgentSessionTerminal(
   return { outcome: created.outcome, promptDelivered }
 }
 
-/**
- * Launch a web-host agent terminal whose draft already rode in on the launch
- * command (argv prefill). No post-ready paste runs for that delivery, so seed
- * the chat-composer copy here once the mirrored host tab id is known.
- */
+/** Argv-prefill carries draft in the command without post-ready paste; seed the composer once mirrored host tab ID is known. */
 export async function createWebRuntimeAgentSessionTerminalWithLaunchDraft(
   args: CreateWebRuntimeSessionTerminalArgs & {
     agent: TuiAgent

@@ -10,6 +10,9 @@ import type { ChecksPanelContextState } from './use-checks-panel-context-state'
 import type { ChecksPanelControllerState } from './use-checks-panel-controller-state'
 import type { ChecksPanelComposerState } from './use-checks-panel-composer-state'
 import { fetchGitLabMRDetailsForChecks, gitLabMRCommentsToPRComments } from './gitlab-review-client'
+import { checksPanelLoadErrorMessage } from './checks-panel-forge-owner'
+import { forgeOwnerHostIdForWorkspace } from '@/runtime/forge-credential-target'
+import { isWslDistroNotRunningRefusal } from '../../../../../shared/wsl-distro-not-running-refusal'
 
 export type ChecksPanelPollingInput = Pick<
   ChecksPanelContextState,
@@ -25,10 +28,11 @@ export type ChecksPanelPollingInput = Pick<
     | 'pollIntervalRef'
     | 'prevChecksRef'
     | 'repo'
-    | 'settings'
     | 'setChecks'
+    | 'setChecksError'
     | 'setChecksLoading'
     | 'setComments'
+    | 'setCommentsError'
     | 'setCommentsLoading'
     | 'gitLabProjectRefRef'
   > &
@@ -58,12 +62,17 @@ export function useChecksPanelPolling(model: ChecksPanelPollingInput) {
     activeGitLabReview ? hostedReviewCacheKey : prCacheKey
   ])
   const gitLabDetailsLoadingGenerationRef = useRef(0)
-  // Fetch checks via cached store method
   const fetchChecks = useCallback(
     async ({
       force = false,
-      prNumberOverride
-    }: { force?: boolean; prNumberOverride?: number | null } = {}) => {
+      prNumberOverride,
+      wakeWslDistro = false
+    }: {
+      force?: boolean
+      prNumberOverride?: number | null
+      /** Opening the panel or tab: a user act that may start a stopped WSL distro. */
+      wakeWslDistro?: boolean
+    } = {}) => {
       const {
         repo,
         prNumber,
@@ -72,8 +81,10 @@ export function useChecksPanelPolling(model: ChecksPanelPollingInput) {
         prCacheKey,
         fetchPRChecks,
         isCurrentAsyncResult,
+        activeWorktree,
         setChecksLoading,
         setChecks,
+        setChecksError,
         pollIntervalRef,
         prevChecksRef
       } = modelRef.current
@@ -99,7 +110,8 @@ export function useChecksPanelPolling(model: ChecksPanelPollingInput) {
           {
             force,
             throwOnError: true,
-            repoId: repo.id
+            repoId: repo.id,
+            ...(wakeWslDistro ? { wakeWslDistro: true } : {})
           }
         )
         if (!isCurrentAsyncResult(requestKey)) {
@@ -122,7 +134,13 @@ export function useChecksPanelPolling(model: ChecksPanelPollingInput) {
         ) {
           return
         }
-        console.warn('Failed to fetch PR checks:', err)
+        // A stopped WSL distro is refused, not failed: the shown checks stay, Refresh starts it.
+        if (!isWslDistroNotRunningRefusal(err)) {
+          console.warn('Failed to fetch PR checks:', err)
+        }
+        setChecksError(
+          checksPanelLoadErrorMessage(err, forgeOwnerHostIdForWorkspace(repo, activeWorktree))
+        )
         policyRef.current.fail()
         pollIntervalRef.current = Math.min(Math.max(60_000, pollIntervalRef.current * 2), 900_000)
       } finally {
@@ -143,14 +161,15 @@ export function useChecksPanelPolling(model: ChecksPanelPollingInput) {
       mrNumberOverride,
       headShaOverride,
       commitAsCurrent = false,
-      settingsOverride,
-      isRequestCurrent
+      isRequestCurrent,
+      background = false
     }: {
       mrNumberOverride?: number | null
       headShaOverride?: string | null
       commitAsCurrent?: boolean
-      settingsOverride?: ChecksPanelControllerState['settings']
       isRequestCurrent?: () => boolean
+      /** A poll or tab entry: refused rather than booting a stopped WSL distro. */
+      background?: boolean
     } = {}) => {
       const {
         activeGitLabReview,
@@ -158,13 +177,14 @@ export function useChecksPanelPolling(model: ChecksPanelPollingInput) {
         branch,
         hostedReviewCacheKey,
         asyncResultKeyRef,
-        settings,
         activeWorktree,
         isCurrentAsyncResult,
         gitLabProjectRefRef,
         setChecks,
+        setChecksError,
         setChecksLoading,
         setComments,
+        setCommentsError,
         setCommentsLoading,
         pollIntervalRef,
         prevChecksRef
@@ -196,9 +216,9 @@ export function useChecksPanelPolling(model: ChecksPanelPollingInput) {
         const details = await fetchGitLabMRDetailsForChecks({
           repoPath: repo.path,
           repoId: repo.id,
-          settings: settingsOverride ?? settings,
           iid: targetMRNumber,
-          repoOwnerExecutionHostId: activeWorktree?.hostId
+          repoOwnerExecutionHostId: forgeOwnerHostIdForWorkspace(repo, activeWorktree),
+          background
         })
         if (isRequestCurrent?.() === false || !isCurrentAsyncResult(requestKey)) {
           return
@@ -220,7 +240,16 @@ export function useChecksPanelPolling(model: ChecksPanelPollingInput) {
         if (isRequestCurrent?.() === false || !isCurrentAsyncResult(requestKey)) {
           return
         }
-        console.warn('Failed to fetch GitLab MR checks:', err)
+        if (!isWslDistroNotRunningRefusal(err)) {
+          console.warn('Failed to fetch GitLab MR checks:', err)
+        }
+        // One MR details request contains both pipeline and discussion; report failure for both.
+        const message = checksPanelLoadErrorMessage(
+          err,
+          forgeOwnerHostIdForWorkspace(repo, activeWorktree)
+        )
+        setChecksError(message)
+        setCommentsError(message)
         policyRef.current.fail()
         pollIntervalRef.current = Math.min(Math.max(60_000, pollIntervalRef.current * 2), 900_000)
       } finally {

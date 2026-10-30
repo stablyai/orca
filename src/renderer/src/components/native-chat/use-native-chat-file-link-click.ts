@@ -1,25 +1,19 @@
 import { useCallback, type RefObject } from 'react'
 import type { CommentMarkdownLinkClickHandler } from '@/components/sidebar/CommentMarkdown'
 import type { LinkActionRequest } from '@/components/link-actions/link-action-request'
-import { buildFileLinkActions } from '@/components/terminal-pane/terminal-file-link-actions'
-import {
-  openDetectedFilePath,
-  type FileOpenFailure
-} from '@/components/terminal-pane/terminal-file-open-routing'
+import { openDetectedFilePath } from '@/components/terminal-pane/terminal-file-open-routing'
 import { isTerminalLinkActionActivation } from '@/components/terminal-pane/terminal-link-activation'
 import { useAppStore } from '../../store'
-import { routeNativeChatHref } from '../../../../shared/native-chat-href-routing'
+import { routeNativeChatHref } from '../../../../shared/native-chat/native-chat-href-routing'
 import { resolveNativeChatFileLink, type NativeChatFileLinkContext } from './native-chat-file-link'
 import { nativeChatPlainLinkClickBehavior } from './native-chat-link-click-behavior'
-import { resolveNativeChatHttpLinkSourceOwner } from './native-chat-http-link-source-owner'
+import { showFileLinkUnresolvedToast } from './native-chat-file-link-toasts'
 import {
-  showFileLinkNotFoundToast,
-  showFileLinkUnresolvedToast,
-  showFileLinkUnverifiableToast
-} from './native-chat-file-link-toasts'
+  nativeChatFileLinkActions,
+  nativeChatFileOpenDeps
+} from './native-chat-link-target-actions'
 
-/** A plain click offers the terminal's file popover (when that is the user's link-click
- *  setting); a modifier click opens in Orca, and Shift opens the default app. */
+/** Honor terminal link-click settings: plain-click popover, modifier opens in Orca, Shift uses the default app. */
 export function useNativeChatFileLinkClick(
   context: NativeChatFileLinkContext | null,
   request?: (request: LinkActionRequest) => void,
@@ -48,19 +42,9 @@ export function useNativeChatFileLinkClick(
         showFileLinkUnresolvedToast(route.pathText)
         return
       }
-      const deps = {
-        worktreeId: context.worktreeId,
-        worktreePath: context.worktreePath,
-        runtimeEnvironmentId: context.runtimeEnvironmentId,
-        // Why: an underlined link must answer every click, so a miss says why.
-        onOpenFailure: (failure: FileOpenFailure) =>
-          failure.verdict === 'unverifiable'
-            ? showFileLinkUnverifiableToast(target.absolutePath, failure.error)
-            : showFileLinkNotFoundToast(target.absolutePath)
-      }
       if (behavior === 'open' || !request) {
         openDetectedFilePath(target.absolutePath, target.line, target.column, {
-          ...deps,
+          ...nativeChatFileOpenDeps(target, context),
           openWithSystemDefault: event.shiftKey
         })
         return
@@ -73,13 +57,7 @@ export function useNativeChatFileLinkClick(
         anchorY: keyboardAnchor?.bottom ?? event.clientY,
         restoreFocus: () =>
           (anchor.isConnected ? anchor : rootRef?.current)?.focus({ preventScroll: true }),
-        ...buildFileLinkActions(
-          target.absolutePath,
-          target.line,
-          target.column,
-          deps,
-          resolveNativeChatHttpLinkSourceOwner(state, context.worktreeId)
-        )
+        ...nativeChatFileLinkActions(target, context)
       })
     },
     [context, request, rootRef]

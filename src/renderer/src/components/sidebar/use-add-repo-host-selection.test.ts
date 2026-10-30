@@ -52,7 +52,10 @@ vi.mock('react', async (importOriginal) => {
 })
 
 vi.mock('@/store', () => ({
-  useAppStore: (selector: (state: typeof mocks.storeState) => unknown) => selector(mocks.storeState)
+  useAppStore: Object.assign(
+    (selector: (state: typeof mocks.storeState) => unknown) => selector(mocks.storeState),
+    { getState: () => mocks.storeState }
+  )
 }))
 
 vi.mock('sonner', () => ({
@@ -106,6 +109,7 @@ describe('useAddRepoHostSelection', () => {
     mocks.storeState.setActiveRuntimeEnvironmentPreference.mockResolvedValue(true)
     mocks.storeState.sshConnectionStates = new Map()
     mocks.storeState.runtimeEnvironments = []
+    mocks.storeState.setSshConnectionState.mockReset()
     mocks.sshConnect.mockReset()
     mocks.sshGetState.mockReset()
     mocks.isWebClient = false
@@ -119,15 +123,16 @@ describe('useAddRepoHostSelection', () => {
     })
   })
 
-  it('exposes the selected SSH target id', async () => {
+  it('never selects a connected SSH row; it holds the actions until the server row stands for it', async () => {
+    // Why: before the catalog hydrates, a connected SSH host is still its own row.
     mocks.stateValues = ['ssh:ssh-1', false]
     const { useAddRepoHostSelection } = await import('./use-add-repo-host-selection')
 
     const result = useAddRepoHostSelection({ isOpen: true, setStep: vi.fn() })
 
-    expect(result.selectedHostId).toBe('ssh:ssh-1')
-    expect(result.selectedParsedHost).toMatchObject({ kind: 'ssh', targetId: 'ssh-1' })
-    expect(result.selectedSshTargetId).toBe('ssh-1')
+    expect(result.selectedHostId).toBeNull()
+    expect(result.selectedParsedHost).toBeNull()
+    expect(result.displayedHostId).toBe('ssh:ssh-1')
   })
 
   it('selects a runtime host without changing the durable active server', async () => {
@@ -193,7 +198,7 @@ describe('useAddRepoHostSelection', () => {
     }
   )
 
-  it('selects a local or SSH host without changing the durable active server', async () => {
+  it('selects local without changing the durable active server, but not an SSH row', async () => {
     mocks.stateValues = ['runtime:env-1', false]
     mocks.storeState.settings = { activeRuntimeEnvironmentId: 'env-1' }
     const setStep = vi.fn()
@@ -201,13 +206,16 @@ describe('useAddRepoHostSelection', () => {
 
     const result = useAddRepoHostSelection({ isOpen: true, setStep })
     await result.handleSelectAddProjectHost('ssh:ssh-1')
+    expect(mocks.stateSetters[0]).not.toHaveBeenCalledWith('ssh:ssh-1')
+    expect(setStep).not.toHaveBeenCalled()
 
+    await result.handleSelectAddProjectHost('local')
     expect(mocks.storeState.setActiveRuntimeEnvironmentPreference).not.toHaveBeenCalled()
-    expect(mocks.stateSetters[0]).toHaveBeenCalledWith('ssh:ssh-1')
+    expect(mocks.stateSetters[0]).toHaveBeenCalledWith('local')
     expect(setStep).toHaveBeenCalledWith('add')
   })
 
-  it('falls back from a disconnected selected SSH host to Local Mac', async () => {
+  it('keeps a disconnected SSH host it was asked for instead of falling back to Local Mac', async () => {
     mocks.stateValues = ['ssh:ssh-1', false]
     mocks.hostOptions[1] = {
       ...mocks.hostOptions[1],
@@ -217,8 +225,8 @@ describe('useAddRepoHostSelection', () => {
 
     const result = useAddRepoHostSelection({ isOpen: true, setStep: vi.fn() })
 
-    expect(result.selectedHostId).toBe('local')
-    expect(result.selectedSshTargetId).toBeNull()
+    expect(result.selectedHostId).toBeNull()
+    expect(result.displayedHostId).toBe('ssh:ssh-1')
   })
 
   it('does not select a disconnected SSH host', async () => {
@@ -268,6 +276,72 @@ describe('useAddRepoHostSelection', () => {
     expect(mocks.stateSetters[0]).toHaveBeenCalledWith('ssh:ssh-1')
     expect(mocks.stateSetters[1]).toHaveBeenCalledWith(false)
     expect(setStep).toHaveBeenCalledWith('add')
+  })
+
+  it('keeps the failure main published for the host, and toasts its reason (#29648)', async () => {
+    mocks.stateValues = ['local', true]
+    mocks.hostOptions[1] = { ...mocks.hostOptions[1], health: 'disconnected' }
+    const published = {
+      targetId: 'ssh-1',
+      status: 'auth-failed' as const,
+      error: 'All configured authentication methods failed',
+      reconnectAttempt: 0
+    }
+    mocks.sshConnect.mockImplementation(async () => {
+      mocks.storeState.sshConnectionStates = new Map([['ssh-1', published]])
+      throw new Error(
+        "Error invoking remote method 'ssh:connect': Error: All configured authentication methods failed"
+      )
+    })
+    const { toast } = await import('sonner')
+    const { useAddRepoHostSelection } = await import('./use-add-repo-host-selection')
+
+    await useAddRepoHostSelection({ isOpen: true, setStep: vi.fn() }).handleConnectAddProjectHost(
+      'ssh:ssh-1'
+    )
+
+    expect(mocks.storeState.setSshConnectionState).toHaveBeenCalledTimes(1)
+    expect(toast.error).toHaveBeenCalledWith('All configured authentication methods failed')
+  })
+
+  it('marks the host failed with the error when connect rejects before main publishes', async () => {
+    mocks.stateValues = ['local', true]
+    mocks.hostOptions[1] = { ...mocks.hostOptions[1], health: 'disconnected' }
+    mocks.storeState.sshConnectionStates = new Map([
+      [
+        'ssh-1',
+        {
+          targetId: 'ssh-1',
+          status: 'error',
+          error: 'old',
+          reconnectAttempt: 0,
+          managedServer: { kind: 'relay', reason: 'refused', detail: 'an earlier refusal' }
+        }
+      ]
+    ])
+    mocks.storeState.setSshConnectionState.mockImplementation((id: string, state: unknown) => {
+      mocks.storeState.sshConnectionStates = new Map([[id, state]])
+    })
+    mocks.sshConnect.mockRejectedValue(
+      new Error(
+        "Error invoking remote method 'ssh:connect': Error: connect ECONNREFUSED 10.0.0.1:22"
+      )
+    )
+    const { toast } = await import('sonner')
+    const { useAddRepoHostSelection } = await import('./use-add-repo-host-selection')
+
+    await useAddRepoHostSelection({ isOpen: true, setStep: vi.fn() }).handleConnectAddProjectHost(
+      'ssh:ssh-1'
+    )
+
+    expect(mocks.storeState.sshConnectionStates.get('ssh-1')).toEqual({
+      targetId: 'ssh-1',
+      status: 'error',
+      error: 'connect ECONNREFUSED 10.0.0.1:22',
+      reconnectAttempt: 0,
+      remotePlatform: undefined
+    })
+    expect(toast.error).toHaveBeenCalledWith('connect ECONNREFUSED 10.0.0.1:22')
   })
 
   it('does not auto-select the active runtime host while it is unavailable', async () => {

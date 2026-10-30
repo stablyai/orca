@@ -19,7 +19,6 @@ import {
 } from './worktree-host-ownership'
 import { fetchKnownSshWorktreesForRepo } from './known-ssh-worktree-fetch'
 import { notifyRuntimeScopeForbiddenIfNeeded } from './runtime-scope-forbidden-toast'
-import { settingsForRepoOwner } from './worktree-owner-settings'
 
 export function createFetchDetectedWorktrees(
   set: WorktreeSliceSet,
@@ -41,23 +40,18 @@ export function createFetchDetectedWorktrees(
           ? (getCurrentDirectSshAuthority(ownerState, hostId) ?? undefined)
           : undefined
       if (parsedHost?.kind === 'ssh' && !directSshAuthority) {
-        // Why: this function's contract is detected-only. The fallback runs for its store side effect, but
-        // callers keep seeing null as they did before the metadata path existed.
+        // Fallback hydrates store only; detected-only callers retain the existing null return contract.
         await fetchKnownSshWorktreesForRepo(set, repoId, parsedHost.id)
         return null
       }
-      const refresh = await listDetectedWorktreesForRepoCoalesced(
-        settingsForRepoOwner(ownerState, repoId, hostId),
-        repoId,
-        {
-          executionHostId: hostId,
-          directSshAuthority,
-          connectionId: repoOwner?.connectionId,
-          knownWorktreeIds: getKnownWorktreeIdsForPurge(ownerState, repoId, hostId),
-          isStaleCatalogPublication: (result) =>
-            isStaleWorktreeCatalogPublication(get(), repoId, hostId, result.catalogVersion)
-        }
-      )
+      const refresh = await listDetectedWorktreesForRepoCoalesced(repoId, {
+        executionHostId: hostId,
+        directSshAuthority,
+        connectionId: repoOwner?.connectionId,
+        knownWorktreeIds: getKnownWorktreeIdsForPurge(ownerState, repoId, hostId),
+        isStaleCatalogPublication: (result) =>
+          isStaleWorktreeCatalogPublication(get(), repoId, hostId, result.catalogVersion)
+      })
       if (refresh.status !== 'admitted') {
         return null
       }

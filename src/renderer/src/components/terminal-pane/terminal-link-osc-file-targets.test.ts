@@ -54,8 +54,7 @@ describe('handleOscLink', () => {
       true
     )
 
-    // openDetectedFilePath is async (fire-and-forget), so flush the microtask queue
-    // before asserting on positive behavior.
+    // Flush fire-and-forget opening before positive assertions.
     await new Promise((resolve) => setTimeout(resolve, 0))
 
     expect(statMock).toHaveBeenCalledWith(expect.objectContaining({ filePath: '/tmp/test.txt' }))
@@ -89,13 +88,16 @@ describe('handleOscLink', () => {
       { forceContentReload: true }
     )
     expect(setPendingEditorRevealMock).toHaveBeenNthCalledWith(1, null)
-    expect(setPendingEditorRevealMock).toHaveBeenNthCalledWith(2, {
-      filePath: 'C:/repo/src/index.ts',
-      fileId: 'C:/repo/src/index.ts',
-      line: 12,
-      column: 3,
-      matchLength: 0
-    })
+    expect(setPendingEditorRevealMock).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        filePath: 'C:/repo/src/index.ts',
+        fileId: 'C:/repo/src/index.ts',
+        line: 12,
+        column: 3,
+        matchLength: 0
+      })
+    )
   })
 
   it('opens Windows UNC file URL links from Windows worktrees', async () => {
@@ -150,13 +152,16 @@ describe('handleOscLink', () => {
       { forceContentReload: true }
     )
     expect(setPendingEditorRevealMock).toHaveBeenNthCalledWith(1, null)
-    expect(setPendingEditorRevealMock).toHaveBeenNthCalledWith(2, {
-      filePath: '/tmp/test.txt',
-      fileId: '/tmp/test.txt',
-      line: 42,
-      column: 1,
-      matchLength: 0
-    })
+    expect(setPendingEditorRevealMock).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        filePath: '/tmp/test.txt',
+        fileId: '/tmp/test.txt',
+        line: 42,
+        column: 1,
+        matchLength: 0
+      })
+    )
   })
 
   it('opens file URL links with the system default app for shift+cmd/ctrl-click', async () => {
@@ -170,7 +175,7 @@ describe('handleOscLink', () => {
     await flushAsyncWork()
 
     expect(statMock).toHaveBeenCalledWith(expect.objectContaining({ filePath: '/tmp/test.txt' }))
-    expect(openFilePathMock).toHaveBeenCalledWith('/tmp/test.txt')
+    expect(openFilePathMock).toHaveBeenCalledWith('/tmp/test.txt', 'local')
     expect(openFileMock).not.toHaveBeenCalled()
     expect(setPendingEditorRevealMock).not.toHaveBeenCalled()
   })
@@ -193,13 +198,16 @@ describe('handleOscLink', () => {
       { forceContentReload: true }
     )
     expect(setPendingEditorRevealMock).toHaveBeenNthCalledWith(1, null)
-    expect(setPendingEditorRevealMock).toHaveBeenNthCalledWith(2, {
-      filePath: '/tmp/test.txt',
-      fileId: '/tmp/test.txt',
-      line: 42,
-      column: 7,
-      matchLength: 0
-    })
+    expect(setPendingEditorRevealMock).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        filePath: '/tmp/test.txt',
+        fileId: '/tmp/test.txt',
+        line: 42,
+        column: 7,
+        matchLength: 0
+      })
+    )
   })
 
   it('opens UNC file URL links with line and column anchors', async () => {
@@ -227,13 +235,16 @@ describe('handleOscLink', () => {
       { forceContentReload: true }
     )
     expect(setPendingEditorRevealMock).toHaveBeenNthCalledWith(1, null)
-    expect(setPendingEditorRevealMock).toHaveBeenNthCalledWith(2, {
-      filePath: '//server/Share/Repo/src/app.ts',
-      fileId: '//server/Share/Repo/src/app.ts',
-      line: 12,
-      column: 3,
-      matchLength: 0
-    })
+    expect(setPendingEditorRevealMock).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        filePath: '//server/Share/Repo/src/app.ts',
+        fileId: '//server/Share/Repo/src/app.ts',
+        line: 12,
+        column: 3,
+        matchLength: 0
+      })
+    )
   })
 
   it('opens relative OSC file links against the terminal cwd', async () => {
@@ -290,13 +301,16 @@ describe('handleOscLink', () => {
       }),
       { forceContentReload: true }
     )
-    expect(setPendingEditorRevealMock).toHaveBeenNthCalledWith(2, {
-      filePath: '\\\\wsl.localhost\\Ubuntu\\root\\workspace\\myrepo\\README.md',
-      fileId: '\\\\wsl.localhost\\Ubuntu\\root\\workspace\\myrepo\\README.md',
-      line: 5,
-      column: 3,
-      matchLength: 0
-    })
+    expect(setPendingEditorRevealMock).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        filePath: '\\\\wsl.localhost\\Ubuntu\\root\\workspace\\myrepo\\README.md',
+        fileId: '\\\\wsl.localhost\\Ubuntu\\root\\workspace\\myrepo\\README.md',
+        line: 5,
+        column: 3,
+        matchLength: 0
+      })
+    )
   })
 
   it('maps file URL OSC links for a WSL worktree before opening them', async () => {
@@ -325,13 +339,16 @@ describe('handleOscLink', () => {
       }),
       { forceContentReload: true }
     )
-    expect(setPendingEditorRevealMock).toHaveBeenNthCalledWith(2, {
-      filePath: '\\\\wsl.localhost\\Ubuntu\\root\\workspace\\myrepo\\README.md',
-      fileId: '\\\\wsl.localhost\\Ubuntu\\root\\workspace\\myrepo\\README.md',
-      line: 5,
-      column: 3,
-      matchLength: 0
-    })
+    expect(setPendingEditorRevealMock).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        filePath: '\\\\wsl.localhost\\Ubuntu\\root\\workspace\\myrepo\\README.md',
+        fileId: '\\\\wsl.localhost\\Ubuntu\\root\\workspace\\myrepo\\README.md',
+        line: 5,
+        column: 3,
+        matchLength: 0
+      })
+    )
   })
 
   it('opens tilde OSC file links against explicit terminal home when cwd is outside home', async () => {

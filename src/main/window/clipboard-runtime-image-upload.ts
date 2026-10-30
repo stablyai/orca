@@ -1,5 +1,5 @@
 import { assertClipboardImageByteLengthWithinLimit } from '../../shared/clipboard-image'
-import { callRuntimeEnvironment } from '../ipc/runtime-environment-transport-routing'
+import { callRuntimeEnvironment } from '../ipc/runtime-environments/runtime-environment-transport-routing'
 
 const CLIPBOARD_IMAGE_UPLOAD_CHUNK_BASE64_CHARS = 512 * 1024
 const CLIPBOARD_IMAGE_SINGLE_FRAME_FALLBACK_BASE64_CHARS = 256 * 1024
@@ -91,8 +91,7 @@ async function saveClipboardImageBase64InRuntime(
     }
     return remotePath
   } catch (error) {
-    // Why: failed chunked pastes should release the remote upload slot
-    // immediately instead of waiting for TTL cleanup.
+    // Release failed chunked-upload slots immediately rather than wait for TTL cleanup.
     await callRuntimeClipboardMethod(
       userDataPath,
       runtimeEnvironmentId,
@@ -105,8 +104,7 @@ async function saveClipboardImageBase64InRuntime(
   }
 }
 
-// connectionId: the runtime-side SSH target that holds the workspace, or null for
-// the runtime host itself. The runtime resolves it in its own provider registry.
+// connectionId belongs to the runtime's SSH registry; null targets the runtime host itself.
 export function saveClipboardImageBufferInRuntime(
   userDataPath: string,
   runtimeEnvironmentId: string,

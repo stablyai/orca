@@ -1,9 +1,5 @@
 // @vitest-environment happy-dom
 
-// The card stack above the composer: an accessible, labeled live list whose
-// rows expose Steer/Send, Delete, and the Edit / Turn-off-queueing menu, with
-// captions derived client-side per state.
-
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 
@@ -11,8 +7,12 @@ const mocks = vi.hoisted(() => ({
   updateSettings: vi.fn()
 }))
 
-vi.mock('@/i18n/i18n', () => ({ translate: (_key: string, fallback: string) => fallback }))
 vi.mock('sonner', () => ({ toast: { error: vi.fn() } }))
+// A card's sender line opens and names agents through modules this test does not exercise.
+vi.mock('@/lib/open-agent-message-sender', () => ({ openAgentMessageSender: vi.fn() }))
+vi.mock('@/runtime/structured-conversation-name', () => ({
+  useStructuredChatTabConversationName: () => null
+}))
 vi.mock('../../store', () => {
   const state = { updateSettings: mocks.updateSettings }
   const useAppStore = (selector: (value: typeof state) => unknown): unknown => selector(state)
@@ -21,22 +21,30 @@ vi.mock('../../store', () => {
 })
 
 import { TooltipProvider } from '@/components/ui/tooltip'
-import type { QueuedMessageCard } from './structured-agent-session-queued-cards'
+import type { QueuedMessageCard } from '../../../../shared/structured-agent-session-queued-cards'
 import { NativeChatQueuedMessageList } from './NativeChatQueuedMessageList'
 import { queuedMessageCardSendNow } from './NativeChatQueuedMessageCard'
 import {
   useStructuredAgentSessionQueuedMessages,
   type StructuredAgentSessionQueuedMessagesController
 } from './use-structured-agent-session-queued-messages'
-import type { StructuredAgentSessionMutate } from './use-structured-agent-session-mutate'
 import type { AgentSessionQueuedMessage } from '../../../../shared/agent-session-wire'
 import type { AgentSessionQueuePause } from '../../../../shared/agent-session-queued-message-wire'
+import type { AgentSessionFailureFact } from '../../../../shared/agent-session-failure'
 
-function renderList(owner: StructuredAgentSessionQueuedMessagesController) {
-  // The app root mounts the provider; tests supply the same context.
+function renderList(
+  owner: StructuredAgentSessionQueuedMessagesController,
+  agentName?: string,
+  statedFailures?: readonly AgentSessionFailureFact[]
+) {
   return render(
     <TooltipProvider delayDuration={0}>
-      <NativeChatQueuedMessageList controller={owner} />
+      <NativeChatQueuedMessageList
+        chatWorktreeId={null}
+        controller={owner}
+        agentName={agentName}
+        statedFailures={statedFailures}
+      />
     </TooltipProvider>
   )
 }
@@ -60,19 +68,23 @@ function controller(
   remove: ReturnType<typeof vi.fn>
   edit: ReturnType<typeof vi.fn>
   resume: ReturnType<typeof vi.fn>
+  clear: ReturnType<typeof vi.fn>
 } {
   return {
     cards,
     queueCapable,
+    clearCapable: cards.every((entry) => entry.hold !== 'sending'),
+    editCapable: true,
+    editor: undefined,
     pause,
     resume: vi.fn(async () => false),
-    resuming: false,
+    clear: vi.fn(async () => true),
+    queuePending: null,
+    pending: () => null,
     steer: vi.fn(async () => {}),
     remove: vi.fn(async () => {}),
     edit: vi.fn(async () => {}),
-    steerNewest: vi.fn(() => false),
-    queueResume: undefined,
-    queueHold: undefined
+    steerNewest: vi.fn(() => false)
   }
 }
 
@@ -90,26 +102,33 @@ function waitingDraft(
   }
 }
 
-/** The list over the real controller: cards and header as the host's publication projects them.
- *  Nothing runs after a Stop or a /clear. */
+/** Use host-projected cards after Stop or /clear, when sends stay held. */
 function renderHeldQueue(
   queuedMessages: AgentSessionQueuedMessage[],
-  queuePause: AgentSessionQueuePause | null
+  queuePause: AgentSessionQueuePause | null,
+  hasPendingPrompt = false
 ) {
   const mutate = vi.fn(async (..._call: [string, string, Record<string, unknown>]) => null)
   function HeldQueue(): React.JSX.Element {
     const owner = useStructuredAgentSessionQueuedMessages({
+      admit: () => null,
+      capturePresentation: () => () => true,
       enabled: true,
       queuedMessages,
       queuePause,
       submissions: [],
-      hasPendingPrompt: false,
+      hasPendingPrompt,
       isWorking: false,
       composerScopeKey: undefined,
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the list only awaits mutate; its answer is never read.
-      mutate: mutate as StructuredAgentSessionMutate
+      mutate: mutate,
+      editTransport: {
+        target: { kind: 'local' },
+        sessionId: 'session',
+        capable: false,
+        write: async () => ({ kind: 'dropped' })
+      }
     })
-    return <NativeChatQueuedMessageList controller={owner} />
+    return <NativeChatQueuedMessageList chatWorktreeId={null} controller={owner} />
   }
   const view = render(
     <TooltipProvider delayDuration={0}>
@@ -126,6 +145,67 @@ beforeEach(() => {
 afterEach(cleanup)
 
 describe('NativeChatQueuedMessageList', () => {
+  it.each([
+    [
+      'Claude',
+      "Claude isn't signed in. Run `claude auth login`, or choose an account in Claude Accounts settings."
+    ],
+    ['Codex', "Codex isn't signed in. Run `codex login`."],
+    ['Grok', 'Sign in to Grok with `grok login` on the computer running this chat.'],
+    [
+      'OpenCode',
+      'Sign in to OpenCode with `opencode auth login` on the computer running this chat.'
+    ],
+    ['Pi', 'Sign in to Pi by running `pi` and using `/login` on the computer running this chat.'],
+    ['OMP', 'Sign in to OMP.']
+  ])(
+    'threads %s identity to returned cards and keeps their Send control',
+    (agentName, sentence) => {
+      renderList(
+        controller([
+          card({
+            messageId: 'auth',
+            state: 'returned',
+            hold: 'returned',
+            returnedReason: 'Host English',
+            returnedRejection: { kind: 'notSignedIn' }
+          })
+        ]),
+        agentName
+      )
+      expect(screen.getByText(sentence)).toBeTruthy()
+      expect(screen.getByRole('button', { name: 'Send' })).toBeTruthy()
+      expect(screen.queryByText(/send your message again/)).toBeNull()
+    }
+  )
+
+  it.each(['Claude', 'Codex'])(
+    'keeps %s managed guidance and shows only delivery when the row explains auth',
+    (agentName) => {
+      const fact: AgentSessionFailureFact = { kind: 'notSignedIn', account: 'managed' }
+      const owner = controller([
+        card({ messageId: 'auth', state: 'returned', hold: 'returned', returnedRejection: fact })
+      ])
+      const rendered = renderList(owner, agentName)
+      expect(
+        screen.getByText(
+          `This ${agentName} account isn't signed in. Sign in again in ${agentName} Accounts settings.`
+        )
+      ).toBeTruthy()
+      rendered.unmount()
+      renderList(owner, agentName, [fact])
+      expect(screen.getByText('Your message was not sent.')).toBeTruthy()
+      expect(screen.queryByText(/account isn't signed in/)).toBeNull()
+      expect(screen.getByRole('button', { name: 'Send' })).toBeTruthy()
+      const header = screen.getByRole('list').previousElementSibling!
+      fireEvent.click(screen.getByRole('button', { name: 'Queued messages' }))
+      expect(header.textContent).toContain('Your message was not sent.')
+      expect(header.textContent).not.toContain("account isn't signed in")
+      fireEvent.click(screen.getByRole('button', { name: 'Queued messages' }))
+      expect(header.textContent).not.toContain('Your message was not sent.')
+      expect(screen.getAllByText('Your message was not sent.')).toHaveLength(1)
+    }
+  )
   it('renders only an empty live region when the host holds no drafts', () => {
     const { container } = renderList(controller([]))
     expect(screen.queryByRole('list')).toBeNull()
@@ -137,7 +217,10 @@ describe('NativeChatQueuedMessageList', () => {
     const region = container.querySelector('[aria-live="polite"]')
     rerender(
       <TooltipProvider delayDuration={0}>
-        <NativeChatQueuedMessageList controller={controller([card({ messageId: 'draft-1' })])} />
+        <NativeChatQueuedMessageList
+          chatWorktreeId={null}
+          controller={controller([card({ messageId: 'draft-1' })])}
+        />
       </TooltipProvider>
     )
     expect(container.querySelector('[aria-live="polite"]')).toBe(region)
@@ -186,7 +269,7 @@ describe('NativeChatQueuedMessageList', () => {
   it('a send on its way reads Sending and offers nothing until the host holds it', () => {
     renderList(controller([card({ messageId: 'sending-1', text: 'on its way', hold: 'sending' })]))
     expect(screen.getByText('Sending…')).toBeTruthy()
-    expect(screen.queryAllByRole('button')).toHaveLength(0)
+    expect(within(screen.getByRole('listitem')).queryAllByRole('button')).toHaveLength(0)
   })
 
   it("a send-failed command card's caption names Send only when Send is there", () => {
@@ -202,6 +285,13 @@ describe('NativeChatQueuedMessageList', () => {
     ).toBeTruthy()
     expect(screen.getByText("Couldn't send — press Send to retry.")).toBeTruthy()
     expect(screen.getAllByRole('button', { name: 'Send' })).toHaveLength(1)
+    const header = screen.getByRole('list').previousElementSibling!
+    fireEvent.click(screen.getByRole('button', { name: 'Queued messages' }))
+    expect(header.textContent).toContain(
+      "Couldn't send — press Send to retry once the agent finishes."
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Queued messages' }))
+    expect(header.textContent).not.toContain("Couldn't send")
   })
 
   it('an idle command card waiting its turn reads Send, not Steer', () => {
@@ -233,7 +323,7 @@ describe('NativeChatQueuedMessageList', () => {
     const owner = controller([card({ messageId: 'draft-1', position: 1 })])
     render(
       <TooltipProvider delayDuration={0}>
-        <NativeChatQueuedMessageList controller={owner} steerHeld />
+        <NativeChatQueuedMessageList chatWorktreeId={null} controller={owner} steerHeld />
       </TooltipProvider>
     )
     const steer = screen.getByRole('button', { name: 'Steer' })
@@ -251,7 +341,11 @@ describe('NativeChatQueuedMessageList', () => {
       const owner = controller([card({ messageId: 'draft-1', position: 1 })])
       render(
         <TooltipProvider delayDuration={0}>
-          <NativeChatQueuedMessageList controller={owner} focusComposer={focusComposer} />
+          <NativeChatQueuedMessageList
+            chatWorktreeId={null}
+            controller={owner}
+            focusComposer={focusComposer}
+          />
         </TooltipProvider>
       )
       const action = screen.getByRole('button', { name })
@@ -271,7 +365,9 @@ describe('NativeChatQueuedMessageList', () => {
         returnedReason: 'host_restarted_before_delivery'
       })
     ])
+    owner.reorder = { scope: 'test', pending: false, move: vi.fn(async () => {}) }
     renderList(owner)
+    expect(screen.getByText('Your message was not sent.').querySelector('svg')).not.toBeNull()
     expect(screen.getByRole('listitem').textContent).toContain('Your message was not sent.')
     fireEvent.click(screen.getByRole('button', { name: 'Send' }))
     expect(owner.steer).toHaveBeenCalledWith('refused')
@@ -362,12 +458,10 @@ describe('NativeChatQueuedMessageList', () => {
     )
   })
 
-  it.each([
-    ['stopped', 'Queue paused because you interrupted'],
-    ['some-newer-reason', 'Queue paused']
-  ])(
+  it.each(['stopped', 'some-newer-reason'])(
     "a queue the host holds ('%s') shows one header row above the cards, with Resume; the held card still reads Steer",
-    (reason, text) => {
+    (reason) => {
+      const text = 'Paused'
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a newer host may publish a reason this client's type does not list.
       const pause = { reason } as AgentSessionQueuePause
       const { container, mutate } = renderHeldQueue([waitingDraft('held', 1)], pause)
@@ -389,23 +483,48 @@ describe('NativeChatQueuedMessageList', () => {
     }
   )
 
-  it('a paused queue holds every card, in order, under one header', () => {
+  it('a card behind an open question shows no caption and keeps its actions', () => {
+    const { mutate } = renderHeldQueue([waitingDraft('mail', 1)], null, true)
+    const row = screen.getByRole('listitem')
+    // The open question below already says the agent waits; the text is the card's only line.
+    expect(row.querySelectorAll('p')).toHaveLength(1)
+    expect(within(row).getByRole('button', { name: 'Delete' })).toBeTruthy()
+    expect(within(row).getByRole('button', { name: 'More actions' })).toBeTruthy()
+    fireEvent.click(within(row).getByRole('button', { name: 'Steer' }))
+    expect(mutate).toHaveBeenCalledWith(
+      'agentSession.queuedMessageSend',
+      'agentSession.queuedMessageSend',
+      { messageId: 'mail' }
+    )
+  })
+
+  it('a paused queue holds every card, in order, under one header with Clear all and Resume', () => {
     renderHeldQueue([waitingDraft('a', 1), waitingDraft('b', 2)], { reason: 'stopped' })
-    expect(screen.getByText('Queue paused because you interrupted')).toBeTruthy()
+    const header = screen.getByRole('list').previousElementSibling!
+    expect(header.textContent).toBe('Paused·2Clear allResume')
     expect(screen.getAllByRole('button', { name: 'Steer' })).toHaveLength(2)
   })
 
-  it('no header row when the queue drains on its own (or after a restart), or with no cards', () => {
+  it('offers Clear all through per-card Delete on any host with a paused queue', () => {
+    const owner = controller([card({ messageId: 'held', hold: 'queue-paused' })], {
+      reason: 'stopped'
+    })
+    renderList(owner)
+    expect(screen.getByRole('button', { name: 'Clear all' })).toBeTruthy()
+  })
+
+  it('a queue that drains on its own (or after a restart) reads Queued, with no Resume; no cards, nothing', () => {
     renderHeldQueue([waitingDraft('waiting', 1)], null)
-    expect(screen.queryByText(/Queue paused/)).toBeNull()
+    expect(screen.getByRole('list').previousElementSibling?.textContent).toBe('Queued·1')
     expect(screen.queryByRole('button', { name: 'Resume' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Clear all' })).toBeNull()
     cleanup()
     const { container } = renderHeldQueue([], { reason: 'stopped' })
     expect(screen.queryByRole('button', { name: 'Resume' })).toBeNull()
     expect(container.textContent).toBe('')
   })
 
-  it('no header row over cards Resume would not send: returned, held on their own, or behind', () => {
+  it('reads Queued over cards Resume would not send: returned, held on their own, or behind', () => {
     const stopped = { reason: 'stopped' } as const
     const { container } = renderHeldQueue(
       [
@@ -416,30 +535,42 @@ describe('NativeChatQueuedMessageList', () => {
       stopped
     )
     expect(screen.queryByRole('button', { name: 'Resume' })).toBeNull()
-    expect(container.textContent).not.toContain('Queue paused')
+    expect(container.textContent).toContain('Queued·3')
   })
 
-  it('Resume shows it is pending, keeps the full text for a truncated line, and hands focus back', async () => {
+  it('Resume shows it is pending and hands focus back', async () => {
     const focusComposer = vi.fn()
-    const owner = {
+    const owner: StructuredAgentSessionQueuedMessagesController = {
       ...controller([card({ messageId: 'waiting', hold: 'queue-paused' })], { reason: 'stopped' }),
-      resuming: true
+      queuePending: 'resume' as const
     }
     render(
       <TooltipProvider delayDuration={0}>
-        <NativeChatQueuedMessageList controller={owner} focusComposer={focusComposer} />
+        <NativeChatQueuedMessageList
+          chatWorktreeId={null}
+          controller={owner}
+          focusComposer={focusComposer}
+        />
       </TooltipProvider>
     )
     const resume = screen.getByRole('button', { name: 'Resume' })
     expect(resume).toHaveProperty('disabled', true)
-    expect(screen.getByTitle('Queue paused because you interrupted')).toBeTruthy()
+    // Only the pressed button spins, and only after the deferral that keeps fast replies still.
+    expect(resume.querySelector('.animate-spin')).toBeNull()
+    await waitFor(() => expect(resume.querySelector('.animate-spin')).not.toBeNull())
+    const clearAll = screen.getByRole('button', { name: 'Clear all' })
+    expect(clearAll.querySelector('.animate-spin')).toBeNull()
     cleanup()
     const idle = controller([card({ messageId: 'waiting', hold: 'queue-paused' })], {
       reason: 'stopped'
     })
     render(
       <TooltipProvider delayDuration={0}>
-        <NativeChatQueuedMessageList controller={idle} focusComposer={focusComposer} />
+        <NativeChatQueuedMessageList
+          chatWorktreeId={null}
+          controller={idle}
+          focusComposer={focusComposer}
+        />
       </TooltipProvider>
     )
     const enabled = screen.getByRole('button', { name: 'Resume' })
@@ -462,59 +593,48 @@ describe('NativeChatQueuedMessageList', () => {
         .getByRole('button', { name: 'Steer' })
         .querySelector('.lucide-corner-down-right')
     ).not.toBeNull()
-    expect(waiting!.firstElementChild?.classList.contains('lucide-list-end')).toBe(true)
+    expect(waiting!.querySelector(':scope > div > :first-child svg.lucide-list-end')).not.toBeNull()
     expect(
       within(failed!).getByRole('button', { name: 'Send' }).querySelector('.lucide-send')
     ).not.toBeNull()
-    expect(failed!.firstElementChild?.classList.contains('lucide-circle-alert')).toBe(true)
+    expect(
+      failed!.querySelector(':scope > div > :first-child svg.lucide-circle-alert')
+    ).not.toBeNull()
     expect(container.querySelectorAll('.lucide-list-end')).toHaveLength(1)
   })
 
-  it('one bordered box holds the pause row and every card, rows divided, cards unbordered', () => {
-    renderList(
-      controller(
-        [
-          card({ messageId: 'waiting', hold: 'queue-paused' }),
-          card({ messageId: 'refused', state: 'returned', hold: 'returned', position: 2 }),
-          card({ messageId: 'failed', hold: 'paused', pausedReason: 'send_failed', position: 3 })
-        ],
-        { reason: 'stopped' }
-      )
+  it('Clear all deletes every card; the chevron folds only the cards, and an emptied queue opens again', () => {
+    const focusComposer = vi.fn()
+    const paused = controller([card({ messageId: 'held', hold: 'queue-paused' })], {
+      reason: 'stopped'
+    })
+    const view = render(
+      <TooltipProvider delayDuration={0}>
+        <NativeChatQueuedMessageList
+          chatWorktreeId={null}
+          controller={paused}
+          focusComposer={focusComposer}
+        />
+      </TooltipProvider>
     )
-    const list = screen.getByRole('list')
-    const box = list.parentElement!
-    expect(box.className.split(' ')).toEqual(
-      expect.arrayContaining(['rounded-md', 'border', 'border-border', 'bg-card', 'divide-y'])
-    )
-    // The pause row is the box's first row, outside the list; the list is its second.
-    expect(box.children).toHaveLength(2)
-    expect(box.firstElementChild?.textContent).toContain('Queue paused because you interrupted')
-    expect(box.lastElementChild).toBe(list)
-    expect(list.className.split(' ')).toContain('divide-y')
-    const rows = within(list).getAllByRole('listitem')
-    expect(rows).toHaveLength(3)
-    for (const row of rows) {
-      expect(row.className.split(' ')).not.toContain('border')
-      expect(row.className.split(' ')).not.toContain('rounded-md')
-    }
-    // Captions still render on their own rows.
-    expect(rows[2]?.textContent).toContain("Couldn't send — press Send to retry.")
-  })
-
-  it('without a pause the box holds only the list, one card or many', () => {
-    for (const count of [1, 4]) {
-      const view = renderList(
-        controller(
-          Array.from({ length: count }, (_, index) =>
-            card({ messageId: `draft-${index}`, position: index })
-          )
-        )
+    const rerender = (owner: StructuredAgentSessionQueuedMessagesController) =>
+      view.rerender(
+        <TooltipProvider delayDuration={0}>
+          <NativeChatQueuedMessageList chatWorktreeId={null} controller={owner} />
+        </TooltipProvider>
       )
-      const list = screen.getByRole('list')
-      expect(list.parentElement?.children).toHaveLength(1)
-      expect(within(list).getAllByRole('listitem')).toHaveLength(count)
-      view.unmount()
-    }
+    fireEvent.click(screen.getByRole('button', { name: 'Clear all' }))
+    expect(paused.clear).toHaveBeenCalledOnce()
+    const toggle = screen.getByRole('button', { name: 'Queued messages' })
+    expect(toggle.getAttribute('aria-expanded')).toBe('true')
+    fireEvent.click(toggle)
+    expect(toggle.getAttribute('aria-expanded')).toBe('false')
+    expect(screen.getByRole('list', { hidden: true }).hidden).toBe(true)
+    expect(screen.getByRole('button', { name: 'Resume' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Clear all' })).toBeTruthy()
+    rerender(controller([]))
+    rerender(controller([card({ messageId: 'next' })]))
+    expect(screen.getByRole('list').hidden).toBe(false)
   })
 
   it('the Steer tooltip spaces its hint from the shortcut chips', async () => {
@@ -542,7 +662,7 @@ describe('NativeChatQueuedMessageList', () => {
   })
 
   it('every card still waiting on the queue reads Steer; one held on its own or returned, Send', () => {
-    for (const hold of ['turn', 'awaiting-answer', 'behind-returned', 'queue-paused'] as const) {
+    for (const hold of ['turn', 'behind-returned', 'queue-paused'] as const) {
       expect(queuedMessageCardSendNow(card({ messageId: hold, hold }))).toEqual({
         steers: true,
         label: 'Steer',
@@ -580,7 +700,6 @@ describe('NativeChatQueuedMessageList', () => {
     expect(rows[0]?.textContent).toContain("Couldn't send — press Send to retry.")
     expect(rows[0]?.textContent).not.toContain('send_failed')
     expect(rows[1]?.textContent).toContain('Stopped before it was sent')
-    // Still a normal returned card: Send and Delete stay offered.
     expect(screen.getAllByRole('button', { name: 'Send' }).length).toBeGreaterThan(0)
   })
 
@@ -604,6 +723,42 @@ describe('NativeChatQueuedMessageList', () => {
     )
   })
 
+  it('a clipped card opens to its whole text, line breaks kept, and folds back', () => {
+    // happy-dom lays nothing out: a line wider than its box is what a clipped card measures.
+    const width = vi.spyOn(HTMLElement.prototype, 'scrollWidth', 'get').mockReturnValue(900)
+    const box = vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(300)
+    try {
+      const text = 'You have 1 orchestration message.\nRun `orca orchestration check --run run_e99`'
+      renderList(controller([card({ messageId: 'mail', text })]))
+      const open = screen.getByRole('button', { name: 'Show full message' })
+      expect(open.getAttribute('aria-expanded')).toBe('false')
+      // A native button in the tab order: Enter or Space opens it from the keyboard.
+      expect(open.tagName).toBe('BUTTON')
+      expect(open.getAttribute('tabindex')).not.toBe('-1')
+      open.focus()
+      expect(document.activeElement).toBe(open)
+      fireEvent.click(open)
+      const fold = screen.getByRole('button', { name: 'Show less' })
+      expect(fold.getAttribute('aria-expanded')).toBe('true')
+      const whole = document.getElementById(fold.getAttribute('aria-controls') ?? '')
+      expect(whole?.textContent).toBe(text)
+      expect(whole?.className).toContain('whitespace-pre-wrap')
+      expect(whole?.className).not.toContain('truncate')
+      // Opened below the row, at the card's width, not squeezed beside its actions.
+      expect(whole?.parentElement?.tagName).toBe('LI')
+      fireEvent.click(fold)
+      expect(screen.getByRole('button', { name: 'Show full message' })).toBeTruthy()
+    } finally {
+      width.mockRestore()
+      box.mockRestore()
+    }
+  })
+
+  it('a card whose text fits its line offers no toggle', () => {
+    renderList(controller([card({ messageId: 'short', text: 'ok' })]))
+    expect(screen.queryByRole('button', { name: 'Show full message' })).toBeNull()
+  })
+
   it('the menu offers Edit message and Turn off queueing', async () => {
     const owner = controller([card({ messageId: 'draft-1' })])
     renderList(owner)
@@ -615,8 +770,7 @@ describe('NativeChatQueuedMessageList', () => {
     expect(mocks.updateSettings).toHaveBeenCalledWith({ nativeChatQueueFollowUps: false })
   })
 
-  // A kept message shows as a card even where the host does not queue sends; there the setting
-  // and the chord would do nothing, so neither is offered.
+  // Kept cards also work without host queueing; omit queue-only settings and shortcuts there.
   it.each([
     { queueCapable: true, offered: true },
     { queueCapable: false, offered: false }
@@ -631,7 +785,6 @@ describe('NativeChatQueuedMessageList', () => {
       fireEvent.pointerDown(screen.getByRole('button', { name: 'More actions' }))
       expect(await screen.findByRole('menuitem', { name: 'Edit message' })).toBeTruthy()
       expect(screen.queryByRole('menuitem', { name: 'Turn off queueing' }) !== null).toBe(offered)
-      // Send, Delete and Edit work either way.
       fireEvent.click(screen.getByRole('menuitem', { name: 'Edit message' }))
       expect(owner.edit).toHaveBeenCalledWith('kept')
       fireEvent.click(screen.getByRole('button', { name: 'Send' }))
@@ -639,8 +792,7 @@ describe('NativeChatQueuedMessageList', () => {
     }
   )
 
-  // A long queue scrolls inside its own bounded box; a card the person queues is scrolled to,
-  // while another agent's card leaves the view on the next card to send.
+  // Scroll locally queued cards into view; preserve the next-send position for cards from other agents.
   it("scrolls only to a card the person just queued, inside the list's own bound", () => {
     const from = { kind: 'agent' as const, senders: [], orchestration: null }
     const first = [card({ messageId: 'a', position: 1 }), card({ messageId: 'b', position: 2 })]
@@ -652,7 +804,7 @@ describe('NativeChatQueuedMessageList', () => {
     const rerender = (cards: QueuedMessageCard[]): void =>
       view.rerender(
         <TooltipProvider delayDuration={0}>
-          <NativeChatQueuedMessageList controller={controller(cards)} />
+          <NativeChatQueuedMessageList chatWorktreeId={null} controller={controller(cards)} />
         </TooltipProvider>
       )
     rerender([...first, card({ messageId: 'mail', position: 3, from })])
@@ -665,7 +817,6 @@ describe('NativeChatQueuedMessageList', () => {
     expect(list.scrollTop).toBe(500)
   })
 
-  // The queue a chat opens with arrives after the list mounts; it opens on the next card to send.
   it('does not scroll for cards that load after the list mounts', () => {
     // The list mounts with the cards, so its height is stubbed where it will be read.
     const height = vi.spyOn(HTMLElement.prototype, 'scrollHeight', 'get').mockReturnValue(500)
@@ -674,6 +825,7 @@ describe('NativeChatQueuedMessageList', () => {
     view.rerender(
       <TooltipProvider delayDuration={0}>
         <NativeChatQueuedMessageList
+          chatWorktreeId={null}
           controller={controller([
             card({ messageId: 'a', position: 1 }),
             card({ messageId: 'b', position: 2 })
@@ -682,5 +834,32 @@ describe('NativeChatQueuedMessageList', () => {
       </TooltipProvider>
     )
     expect(screen.getByRole('list', { name: 'Queued messages' }).scrollTop).toBe(0)
+  })
+
+  it('preserves scroll through reorder, settlement and placeholder handoff but reveals a real append', () => {
+    const first = ['a', 'b', 'c'].map((messageId, at) => card({ messageId, position: at + 1 }))
+    const view = renderList(controller(first))
+    const list = screen.getByRole('list', { name: 'Queued messages' })
+    Object.defineProperty(list, 'scrollHeight', { configurable: true, value: 800 })
+    list.scrollTop = 30
+    const show = (cards: QueuedMessageCard[]) =>
+      view.rerender(
+        <TooltipProvider delayDuration={0}>
+          <NativeChatQueuedMessageList chatWorktreeId={null} controller={controller(cards)} />
+        </TooltipProvider>
+      )
+    const optimistic = [first[2]!, first[0]!, first[1]!]
+    show(optimistic)
+    expect(list.scrollTop).toBe(30)
+    show(optimistic.map((entry, at) => ({ ...entry, position: at + 1 })))
+    expect(list.scrollTop).toBe(30)
+    show(first)
+    expect(list.scrollTop).toBe(30)
+    const placeholder = card({ messageId: 'd', position: Number.MAX_SAFE_INTEGER, hold: 'sending' })
+    show([first[1]!, first[2]!, placeholder])
+    expect(list.scrollTop).toBe(800)
+    list.scrollTop = 40
+    show([first[1]!, first[2]!, { ...placeholder, position: 4, hold: 'turn' }])
+    expect(list.scrollTop).toBe(40)
   })
 })

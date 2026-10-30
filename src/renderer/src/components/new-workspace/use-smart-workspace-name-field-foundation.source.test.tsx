@@ -1,17 +1,23 @@
 // @vitest-environment happy-dom
 
-import { act, renderHook, waitFor } from '@testing-library/react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { act, cleanup, renderHook, waitFor } from '@testing-library/react'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { Repo } from '../../../../shared/repo-types'
+import { normalizeTaskSourceContext } from '../../../../shared/task-source-context'
 import type { LinearIssue } from '../../../../shared/linear/issue-types'
+import type { GitLabWorkItem } from '../../../../shared/gitlab-types'
 import type { TaskSourceContext } from '../../../../shared/task-source-context'
 import type { NormalizedWorkItemSourceSearchProps } from './smart-workspace-name-field-model'
 import { useWorkItemSourceSearch } from './use-work-item-source-search'
 import { referenceLinearIssue } from '../sidebar/workspace-reference-fixtures.test-support'
 import { useWorkItemSourceFoundation } from './use-work-item-source-foundation'
 import { useSmartWorkspaceSecondarySearches } from './use-smart-workspace-secondary-searches'
+import { useSmartWorkspaceGitlabSearch } from './use-smart-workspace-gitlab-search'
+import { useWorkItemSourcePresentation } from './use-work-item-source-presentation'
 
 const mocks = vi.hoisted(() => ({
   readStatus: vi.fn(),
+  listGitlabWorkItems: vi.fn(),
   readJiraSource: vi.fn(() => ({ intent: false })),
   state: {
     addRepo: vi.fn(),
@@ -29,6 +35,10 @@ const mocks = vi.hoisted(() => ({
   }
 }))
 vi.mock('@/runtime/runtime-linear-client', () => ({ linearStatus: mocks.readStatus }))
+vi.mock('@/lib/gitlab-work-item-source-lookup', () => ({
+  listGitLabWorkItemsForSource: mocks.listGitlabWorkItems,
+  lookupGitLabWorkItemByPathForSource: vi.fn()
+}))
 vi.mock('@/store', () => ({
   useAppStore: (selector: (state: typeof mocks.state) => unknown) => selector(mocks.state)
 }))
@@ -41,6 +51,9 @@ vi.mock('./use-jira-source-connection', () => ({
   useJiraSourceConnection: () => ({ status: null, loaded: false })
 }))
 vi.mock('./use-jira-url-source', () => ({ useJiraUrlSource: mocks.readJiraSource }))
+vi.mock('../use-jira-project-inventory', () => ({
+  useJiraProjectInventory: () => ({ projects: [], connected: true, error: null, loading: false })
+}))
 
 const source: TaskSourceContext = {
   kind: 'task-source',
@@ -69,13 +82,47 @@ function props(context?: TaskSourceContext): NormalizedWorkItemSourceSearchProps
 }
 
 describe('smart workspace explicit source connection', () => {
+  afterEach(cleanup)
+
   beforeEach(() => {
     vi.clearAllMocks()
+    mocks.readStatus.mockResolvedValue({ connected: false, viewer: null })
     mocks.state.linearStatus = {
       connected: false,
       viewer: null,
       selectedWorkspaceId: 'focused-workspace'
     }
+  })
+
+  it('uses the resolved runtime repository default when a local repository has the same ID', () => {
+    const localRepo: Repo = {
+      id: 'same-id',
+      path: '/local',
+      displayName: 'Local',
+      badgeColor: '',
+      addedAt: 0,
+      defaultJiraProject: { id: '10', key: 'LOC', name: 'Local', siteId: 'site-a' }
+    }
+    const selectedRepo: Repo = {
+      ...localRepo,
+      path: '/runtime',
+      executionHostId: 'runtime:remote',
+      defaultJiraProject: { id: '20', key: 'REM', name: 'Remote', siteId: 'site-b' }
+    }
+    const fieldProps = {
+      ...props(),
+      repos: [localRepo, selectedRepo],
+      repoId: 'same-id',
+      selectedRepo,
+      jiraSourceContext: normalizeTaskSourceContext({
+        provider: 'jira',
+        projectId: 'repo:same-id',
+        hostId: 'runtime:remote'
+      })
+    }
+    const { result } = renderHook(() => useWorkItemSourceFoundation(fieldProps))
+    expect(result.current.selectedRepo).toBe(selectedRepo)
+    expect(result.current.jiraProject).toEqual(selectedRepo.defaultJiraProject)
   })
 
   it('exposes Linear on a connected saved host while the focused runtime is disconnected', async () => {
@@ -112,6 +159,73 @@ describe('smart workspace explicit source connection', () => {
     expect(mocks.state.linearStatus.connected).toBe(false)
   })
 
+  it('shows GitLab workspace search rows without fetching an advertised probe page', async () => {
+    const repo: Repo = {
+      id: 'server-repo',
+      path: '/srv/app',
+      displayName: 'app',
+      badgeColor: '',
+      addedAt: 0,
+      executionHostId: 'runtime:remote'
+    }
+    const items: GitLabWorkItem[] = Array.from({ length: 12 }, (_, index) => ({
+      id: `mr-${index + 1}`,
+      type: 'mr',
+      number: index + 1,
+      title: `Merge request ${index + 1}`,
+      state: 'opened',
+      url: `https://gitlab.com/group/app/-/merge_requests/${index + 1}`,
+      labels: [],
+      updatedAt: '2026-10-01T00:00:00Z',
+      author: null,
+      repoId: repo.id
+    }))
+    mocks.listGitlabWorkItems.mockResolvedValue({
+      items,
+      page: 1,
+      perPage: 12,
+      totalCount: 0,
+      totalPages: 2
+    })
+    const fieldProps = {
+      ...props(),
+      repos: [repo],
+      repoId: repo.id,
+      repoBackedSourcesDisabled: false,
+      value: 'launch'
+    }
+    const { result } = renderHook(() => {
+      const foundation = useWorkItemSourceFoundation(fieldProps)
+      useSmartWorkspaceGitlabSearch({
+        foundation,
+        sourceQueryWithinLimit: true,
+        shouldQueryGitlab: true
+      })
+      return useWorkItemSourcePresentation(foundation)
+    })
+
+    await waitFor(() => expect(result.current.searchResultRows).toHaveLength(items.length))
+    expect(result.current.searchResultRows).toEqual(
+      items.map((item) => ({
+        kind: 'gitlab',
+        value: `gitlab-${repo.id}-mr-${item.number}`,
+        item
+      }))
+    )
+    expect(result.current.loading).toBe(false)
+    expect(mocks.listGitlabWorkItems).toHaveBeenCalledTimes(1)
+    expect(mocks.listGitlabWorkItems).toHaveBeenCalledWith(
+      expect.objectContaining({
+        repoPath: repo.path,
+        repoId: repo.id,
+        state: 'opened',
+        page: 1,
+        perPage: 12,
+        query: 'launch'
+      })
+    )
+  })
+
   it('hides disconnected saved-host Linear even when the focused runtime is connected', async () => {
     mocks.state.linearStatus = { ...mocks.state.linearStatus, connected: true }
     mocks.readStatus.mockResolvedValue({ connected: false, viewer: null })
@@ -122,7 +236,51 @@ describe('smart workspace explicit source connection', () => {
     expect(result.current.linearStatus.connected).toBe(false)
   })
 
-  it('retains focused runtime status and avoids a new status read without an override', async () => {
+  it("reads Linear on the selected repo's host, not the focused one (#32924)", async () => {
+    mocks.state.linearStatus = { ...mocks.state.linearStatus, connected: true }
+    mocks.readStatus.mockResolvedValue({ connected: false, viewer: null })
+    const serverRepo: Repo = {
+      id: 'server-repo',
+      path: '/srv/app',
+      displayName: 'app',
+      badgeColor: '',
+      addedAt: 0,
+      executionHostId: 'runtime:remote'
+    }
+    const fieldProps = { ...props(), repos: [serverRepo], repoId: serverRepo.id }
+    const { result } = renderHook(() => useWorkItemSourceFoundation(fieldProps))
+    await waitFor(() => expect(result.current.linearStatusChecked).toBe(true))
+    expect(mocks.readStatus).toHaveBeenCalledWith(
+      expect.objectContaining({ provider: 'linear', hostId: 'runtime:remote' })
+    )
+    expect(result.current.availableModes.some((mode) => mode.id === 'linear')).toBe(false)
+    expect(mocks.state.checkLinearConnection).not.toHaveBeenCalled()
+  })
+
+  it("holds a pasted Linear URL while the repo host's status is still loading", async () => {
+    mocks.state.linearStatus = { ...mocks.state.linearStatus, connected: true }
+    mocks.readStatus.mockReturnValue(new Promise(() => {}))
+    const serverRepo: Repo = {
+      id: 'server-repo',
+      path: '/srv/app',
+      displayName: 'app',
+      badgeColor: '',
+      addedAt: 0,
+      executionHostId: 'runtime:remote'
+    }
+    const searchProps = {
+      ...props(),
+      repos: [serverRepo],
+      repoId: serverRepo.id,
+      value: 'https://linear.app/acme/issue/ENG-1/title'
+    }
+    const { result } = renderHook(() => useWorkItemSourceSearch(searchProps))
+    await act(async () => {})
+    expect(result.current.linearStatusChecked).toBe(false)
+    expect(result.current.unresolvedLinearUrlIntent).toBe(true)
+  })
+
+  it('retains focused runtime status and avoids a new status read with no selected repo', async () => {
     mocks.state.linearStatus = { ...mocks.state.linearStatus, connected: true }
     const fieldProps = props()
     const { result } = renderHook(() => useWorkItemSourceFoundation(fieldProps))

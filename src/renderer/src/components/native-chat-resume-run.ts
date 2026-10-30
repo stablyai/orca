@@ -7,9 +7,13 @@ export type ResumeRunHostStatus = Pick<
   'restartResume' | 'hostExecutionPhase'
 >
 
+/** Who started a run: this launch's "resume automatically" preference, or the user's own click. */
+export type ResumeRunStarter = 'launch' | 'user'
+
 /** Selection and history belong to this window; live progress and failures belong to the host. */
 export type ResumeRun = Readonly<{
   startedAt: number
+  startedBy: ResumeRunStarter
   entries: readonly Readonly<{ candidate: ResumeCandidate; observedStatus?: ResumeRunHostStatus }>[]
   inFlight: boolean
   continued?: readonly RestartContinuationOutcome[]
@@ -60,8 +64,17 @@ export function resumeRunInFlight(run: ResumeRun | null): boolean {
   return run?.inFlight ?? false
 }
 
-export function beginResumeRun(candidates: readonly ResumeCandidate[], now: number): ResumeRun {
-  return { startedAt: now, entries: candidates.map((candidate) => ({ candidate })), inFlight: true }
+export function beginResumeRun(
+  candidates: readonly ResumeCandidate[],
+  now: number,
+  startedBy: ResumeRunStarter
+): ResumeRun {
+  return {
+    startedAt: now,
+    startedBy,
+    entries: candidates.map((candidate) => ({ candidate })),
+    inFlight: true
+  }
 }
 
 const NONE: readonly string[] = []

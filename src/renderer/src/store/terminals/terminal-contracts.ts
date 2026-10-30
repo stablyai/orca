@@ -1,6 +1,5 @@
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { AgentProviderSessionMetadata } from '../../../../shared/agent-session-resume'
-import type { DirectSshAuthority } from '../../../../shared/ssh-types'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { WorkspaceSessionHydrationOptions } from '@/lib/workspace-session-hydration-keys'
 import type { HostSessionSlices } from '@/lib/workspace-session-host-split'
@@ -11,6 +10,9 @@ export type AutomaticAgentResumeClaim = {
   launchAgent: TuiAgent
   providerSession: AgentProviderSessionMetadata
 }
+
+/** Agents whose panes restart in place onto a newly selected account. */
+export type AccountRestartAgent = 'codex' | 'claude'
 
 export type CodexRestartNotice = {
   previousAccountLabel: string
@@ -24,18 +26,12 @@ export type CodexRestartNotice = {
   dismissed?: true
 }
 
-/** Scoped direct-SSH hydration replaces only named workspace keys and authority. */
 export type HydrateWorkspaceSessionOptions = {
-  directSshAuthority?: DirectSshAuthority
   runtimeHostIdByWorkspaceSessionKey?: Record<string, ExecutionHostId>
   /** Rows parked for hosts that lost a contested workspace id; omitted leaves the store's copy. */
   contestedHostWorkspaceSessions?: HostSessionSlices
   /** Partition each restored session key was read from; omitted leaves the store's copy. */
   contestedPrimaryHostBySessionKey?: Record<string, ExecutionHostId>
+  /** Runtime partitions the cold read loaded; omitted leaves the store's copy. */
+  hydratedRuntimeSessionHostIds?: ExecutionHostId[]
 } & WorkspaceSessionHydrationOptions
-
-/** Scoped reconnect must still match this exact provider epoch and connection generation. */
-export type ReconnectPersistedTerminalsOptions = {
-  directSshAuthority: DirectSshAuthority
-  workspaceKeys: readonly string[]
-}

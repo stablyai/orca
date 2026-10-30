@@ -1,17 +1,5 @@
-/**
- * Composes the real chain a host guest's paint retention depends on, across the main/renderer
- * boundary that neither side's own suite can see:
- *
- *   runtime subscriber set
- *     -> the two IPC snapshots the renderer hydrates from on reload
- *        (`runtime:getBrowserDrivers`, `runtime:getBrowserRemoteViewerPages`)
- *     -> isBrowserPagePanePaintable, which decides display:none on the guest.
- *
- * Chromium never paints inside a display:none subtree, so a guest parked that way stops emitting
- * the frames its subscriber asked for. Scoping the mobile driver stamp to genuinely mobile clients
- * removed the only term that had been covering a paired desktop/web/CLI viewer, which left such a
- * viewer receiving frames only while the host operator happened to be looking at the same page.
- */
+// Test runtime subscribers → reload IPC snapshots → isBrowserPagePanePaintable across main/renderer.
+// Nonmobile remote viewers must retain guest paint after automation leases expire and the host looks elsewhere.
 import { describe, expect, it, vi } from 'vitest'
 import type { OrcaRuntimeService } from '../../src/main/runtime/orca-runtime'
 import {
@@ -46,8 +34,7 @@ function hostGuestIsPaintable(
   hydrateBrowserRemoteViewerPages(runtime.getBrowserRemoteViewerPages())
   return isBrowserPagePanePaintable({
     isActive: hostIsLookingAtThisPage,
-    // No agent command is in flight, so no automation bootstrap lease is held. That lease is what
-    // mounts a cold guest; it is released as soon as the command returns and cannot retain one.
+    // A completed automation command releases its bootstrap lease, which cannot retain the guest.
     isAutomationVisible: false,
     isMobileDriven: hasMobileDriverForAnyBrowserPage([PAGE]),
     hasRemoteViewer: hasRemoteViewerForAnyBrowserPage([PAGE])
@@ -95,8 +82,7 @@ describe('host guest paint retention for a remote screencast subscriber', () => 
     desktop.stop()
     await desktop.done
 
-    // Presence: the same call still reports true while the host looks at the page, so the false
-    // below is a real park and not an oracle that never returns true.
+    // Positive control: looking at the page must still make this same oracle paintable.
     expect(hostGuestIsPaintable(runtime, true)).toBe(true)
     expect(hostGuestIsPaintable(runtime, false)).toBe(false)
   })

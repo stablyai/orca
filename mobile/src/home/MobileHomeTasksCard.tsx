@@ -1,13 +1,17 @@
 import { ChevronRight, ListTodo } from 'lucide-react-native'
-import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { Pressable, Text, View } from 'react-native'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { TaskProviderLogo } from '../components/TaskProviderLogo'
-import type { TaskProvider } from '../tasks/mobile-task-providers'
+import type { TaskProvider } from '../../../src/shared/task-providers'
 import { colors, radii, spacing } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 
 const TASK_PROVIDER_LABELS: Record<TaskProvider, string> = {
   github: 'GitHub',
   gitlab: 'GitLab',
-  linear: 'Linear'
+  linear: 'Linear',
+  jira: 'Jira'
 }
 
 export function MobileHomeTasksCard(props: {
@@ -15,6 +19,8 @@ export function MobileHomeTasksCard(props: {
   providers: TaskProvider[]
   onOpen: (provider?: TaskProvider) => void
 }) {
+  const t = useMobileTranslation()
+  useMobileColorScheme()
   return (
     <Pressable
       disabled={!props.enabled}
@@ -29,11 +35,11 @@ export function MobileHomeTasksCard(props: {
         <ListTodo size={18} color={colors.textSecondary} />
       </View>
       <View style={styles.main}>
-        <Text style={styles.title}>Tasks</Text>
+        <Text style={styles.title}>{t('home.tasksCard.title', 'Tasks')}</Text>
         <Text style={styles.subtitle} numberOfLines={1}>
           {props.providers.length > 0
             ? props.providers.map((provider) => TASK_PROVIDER_LABELS[provider]).join(' · ')
-            : 'No task sources connected'}
+            : t('home.tasksCard.noSources', 'No task sources connected')}
         </Text>
       </View>
       <View style={styles.trailing}>
@@ -47,7 +53,9 @@ export function MobileHomeTasksCard(props: {
             <Pressable
               key={provider}
               accessibilityRole="button"
-              accessibilityLabel={`Open ${TASK_PROVIDER_LABELS[provider]} tasks`}
+              accessibilityLabel={t('home.tasksCard.openProviderTasks', 'Open {{provider}} tasks', {
+                provider: TASK_PROVIDER_LABELS[provider]
+              })}
               hitSlop={8}
               style={({ pressed }) => [
                 styles.providerButton,
@@ -68,7 +76,7 @@ export function MobileHomeTasksCard(props: {
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   card: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -115,4 +123,4 @@ const styles = StyleSheet.create({
     borderRadius: radii.button
   },
   providerButtonPressed: { backgroundColor: colors.bgRaised }
-})
+}))

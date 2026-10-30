@@ -1,10 +1,4 @@
-// Admission for one mutating `agentSession.*` call.
-//
-// The rules themselves live in the durable ledger and the lease adjudicator;
-// this is only the fixed order they are applied in, plus the payload
-// fingerprint both peers derive from the same request fields. Nothing here
-// re-derives who may write — that answer comes from
-// `agentSessionLeaseAdmitsWriter` alone.
+// Apply ledger/lease rules in fixed order with a shared payload fingerprint; agentSessionLeaseAdmitsWriter alone decides writer authority.
 
 import { createHash } from 'node:crypto'
 import type {
@@ -17,12 +11,7 @@ import { terminalOwnerRefusalMessage } from './agent-session-legacy-handoff-leas
 import type { AgentSessionMutationEnvelope, AgentSessionWireRefusal } from './agent-session-wire'
 import { refuse } from './agent-session-wire-refusals'
 
-/**
- * Stable digest over the fields that define what this call DOES. Keys are
- * emitted in sorted order at every depth so two peers serializing the same
- * request in different property order agree, and an undefined field is dropped
- * rather than hashed as present-but-empty.
- */
+/** Sort keys recursively and omit undefined fields so both peers hash equivalent request fields identically. */
 export function computeAgentSessionPayloadFingerprint(input: {
   method: string
   sessionId: string
@@ -54,11 +43,7 @@ function canonicalize(value: unknown): string {
   return `{${entries.map(([key, entry]) => `${JSON.stringify(key)}:${canonicalize(entry)}`).join(',')}}`
 }
 
-/**
- * A retry whose payload changed is a different call wearing the same id.
- * Checked BEFORE the ledger is consulted, so a refused call never leaves an
- * admitted row that a later honest retry would replay as already-done.
- */
+/** Reject changed-payload retries before consulting the ledger, avoiding an admitted row an honest retry could replay as done. */
 export function agentSessionFingerprintConflict(
   envelope: AgentSessionMutationEnvelope,
   hostFingerprint: string
@@ -78,21 +63,14 @@ export type AgentSessionMutationAdmission =
   | { decision: 'replay'; row: AgentSessionOperationRow }
   | { decision: 'refused'; refusal: AgentSessionWireRefusal }
 
-/**
- * Fixed order: fingerprint agreement, then the ledger (so a retry replays
- * before anything else can refuse it), then the lease.
- *
- * `expectedRuntimeFence` is not checked: each write names its own target (a
- * turn, an item revision, an epoch) or is last-writer-wins, so an owner restart
- * the client has not seen yet refuses nothing. Older hosts still check it.
- */
+/** Check fingerprint, then ledger replay, then lease. Ignore expectedRuntimeFence: writes name their target or are last-writer-wins, so unseen owner restarts do not refuse them; older hosts still check it. */
 export function admitAgentSessionMutation(input: {
   envelope: AgentSessionMutationEnvelope
   /** Fingerprint the host computed from the request it actually received. */
   hostFingerprint: string
   /** Decision from the durable ledger, evaluated under `hostFingerprint`. */
   ledger: AgentSessionOperationDecision
-  lease: AgentSessionLease
+  lease: AgentSessionLease | (() => AgentSessionLease)
   /** A write to the conversation, not to the provider child: a send is accepted and a Stop
    *  withdraws queued messages whoever owns the child, so the lease does not admit them. */
   conversationWrite?: true
@@ -108,10 +86,11 @@ export function admitAgentSessionMutation(input: {
   if (ledger.decision === 'replay') {
     return { decision: 'replay', row: ledger.row }
   }
+  const currentLease = typeof lease === 'function' ? lease() : lease
   if (input.conversationWrite) {
     return { decision: 'admit', row: ledger.row }
   }
-  const leaseRefusal = refuseUnlessWriterAdmitted(lease)
+  const leaseRefusal = refuseUnlessWriterAdmitted(currentLease)
   if (leaseRefusal) {
     return { decision: 'refused', refusal: leaseRefusal }
   }
@@ -132,7 +111,9 @@ export function agentSessionLedgerRefusal(
 
 /** Why the single admission oracle said no, mapped to what the client can do
  *  about it. The predicate itself is never re-implemented here. */
-function refuseUnlessWriterAdmitted(lease: AgentSessionLease): AgentSessionWireRefusal | null {
+export function refuseUnlessWriterAdmitted(
+  lease: AgentSessionLease
+): AgentSessionWireRefusal | null {
   if (agentSessionLeaseAdmitsWriter(lease)) {
     return null
   }

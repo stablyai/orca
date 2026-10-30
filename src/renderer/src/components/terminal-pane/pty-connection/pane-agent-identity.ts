@@ -1,4 +1,6 @@
 import { agentTypeToIconAgent } from '@/lib/agent-status'
+import { dismissRetainedProgramResult } from '@/lib/program-status/result-retention'
+import { isRetainedProgramResult } from '@/lib/program-status/row'
 import { useAppStore } from '@/store'
 import { getConnectionId } from '@/lib/connection-context'
 import { CONFIRMED_SHELL_MODE_RESET } from '../../../../../shared/terminal-mode-reset-profiles'
@@ -8,12 +10,10 @@ import {
 } from '@/lib/pane-manager/windows-pty-compatibility'
 import { createTerminalCommandLifecycle } from '../terminal-command-lifecycle'
 import { createPaneForegroundAgentTracker } from '../pane-foreground-agent-tracker'
-import { isRemoteExecutionHostPtyId } from '../remote-execution-host-pty'
+import { isRemoteExecutionHostPtyId } from '../../../../../shared/remote-execution-host-pty-id'
 import { inspectRuntimeTerminalProcess } from '@/runtime/runtime-terminal-inspection'
-import { parseAppSshPtyId } from '../../../../../shared/ssh-pty-id'
 import { dispatchTerminalCommandFinishedEvent } from '@/hooks/terminal-command-finished-event'
 import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
-import { resolveCommittedTitleAgentType } from '@/lib/pane-agent-evidence'
 import type { TuiAgent } from '../../../../../shared/tui-agent'
 import { isTuiAgent, TUI_AGENT_CONFIG } from '../../../../../shared/tui-agent-config'
 
@@ -23,19 +23,15 @@ import {
   type PaneLaunchAgentPaneSlice
 } from './pane-launch-agent-candidate'
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
+import { clearStaleAgentTabTitleOnConfirmedShell } from './confirmed-shell-agent-title'
 
-/** Pane agent identity, foreground-agent sampling, and command lifecycle handling. */
 export function installPaneAgentIdentity(session: ConnectPanePtySession): void {
-  // Why: the 133;D confirmation guard and the visible-pane resampler both key off
-  // "does this pane expect an agent"; derive each signal once so the two callers
-  // can't drift and silently reintroduce the icon bug this fix closes.
+  // Share expected-agent derivation between 133;D confirmation and visible resampling so their identity guards cannot drift.
   session.paneHasLiveHookAgentIcon = (state: ReturnType<typeof useAppStore.getState>): boolean => {
     const entry = state.agentStatusByPaneKey[session.cacheKey]
     return entry?.state !== 'done' && Boolean(agentTypeToIconAgent(entry?.agentType))
   }
-  // Why the shared module: the same ladder answers the 133;D guard, the visible-pane
-  // resampler, and the OSC color-reply skip, and it is the one piece of this installer
-  // that is a pure rule worth testing on its own.
+  // One launch ladder serves finish confirmation, visible sampling and OSC color-reply suppression.
   const panePane = (): PaneLaunchAgentPaneSlice => ({
     worktreeId: session.deps.worktreeId,
     tabId: session.deps.tabId,
@@ -47,21 +43,15 @@ export function installPaneAgentIdentity(session: ConnectPanePtySession): void {
   ): string | undefined => resolvePaneLaunchAgentCandidate(state, panePane())
   session.paneExpectsLaunchAgent = (state: ReturnType<typeof useAppStore.getState>): boolean =>
     Boolean(resolveLaunchAgentCandidate(state))
-  // Why: the concrete TUI agent a fresh spawn is expected to launch, used to seed
-  // a command-start confirmation on no-OSC shells (Git Bash/cmd) that never emit
-  // one. Returns null when the expectation isn't a recognized TUI agent.
+  // Seed fresh-spawn confirmation for recognized agents on no-OSC shells such as Git Bash/cmd.
   session.resolveExpectedLaunchTuiAgent = (): TuiAgent | null => {
     const candidate = resolveLaunchAgentCandidate(useAppStore.getState())
     return isTuiAgent(candidate) ? candidate : null
   }
-  // Why: jcode themes itself; answering its OSC color burst can land before its
-  // composer is ready and render the reply as pre-typed text (the main-side
-  // startup ingress already skips it, the renderer must skip the answer too).
+  // jcode themes itself; early OSC color replies can appear as composer text, so both main and renderer skip them.
   session.shouldAnswerPaneOscColorQueries = (): boolean =>
     paneShouldAnswerOscColorQueries(useAppStore.getState(), panePane())
-  // Why: a launched/hook-known agent pane must confirm — not trust — a 133;D so a
-  // full-screen agent's leaked nested-shell 133;D can't clear its tab identity,
-  // even on a restore where no command-start read has recorded evidence yet.
+  // Confirm leaked nested-shell 133;D for launch/hook-known agents even before any command read found them.
   session.paneHasKnownAgentIdentity = (): boolean => {
     const state = useAppStore.getState()
     const registeredLaunchAgent =
@@ -72,57 +62,27 @@ export function installPaneAgentIdentity(session: ConnectPanePtySession): void {
       isTuiAgent(registeredLaunchAgent)
     )
   }
-  // Why: a plain `codex`/`grok` sets its OSC title and the shell never repaints
-  // it on exit, so a confirmed return-to-shell must clear a title that still
-  // names an agent — otherwise the tab reads "grok" over a bare prompt. Only
-  // reset an agent-named title; user/shell-set titles are left untouched.
-  session.clearStaleAgentTabTitleOnConfirmedShell = (): void => {
-    const state = useAppStore.getState()
-    const currentTitle = state.runtimePaneTitlesByTabId?.[session.deps.tabId]?.[session.pane.id]
-    const tab = (state.tabsByWorktree[session.deps.worktreeId] ?? []).find(
-      (entry) => entry.id === session.deps.tabId
-    )
-    const title = currentTitle ?? tab?.title
-    if (!title || resolveCommittedTitleAgentType(title) === null) {
-      return
-    }
-    const neutralTitle = session.neutralTerminalTitle()
-    session.deps.setRuntimePaneTitle(session.deps.tabId, session.pane.id, neutralTitle)
-    if (session.manager.getActivePane()?.id === session.pane.id) {
-      session.deps.updateTabTitle(session.deps.tabId, neutralTitle)
-    }
-  }
+  session.clearStaleAgentTabTitleOnConfirmedShell = () =>
+    clearStaleAgentTabTitleOnConfirmedShell(session)
   session.deferredCommandFinishedStatusDrop = null
   session.deferredConfirmedShellReconcile = null
-  /** The pane's foreground was proven to be a shell, so its agent exited. Unlike a user dismissal,
-   *  this must also retire the main-side per-pane caches — a surviving Claude latch resolves the
-   *  next event straight back to `working`.
-   *
-   *  Ordered by the row's `acceptedStatusSeq`, not by row identity or `updatedAt`: the confirming
-   *  process read can take seconds, an unrelated field moving in that window is not evidence the
-   *  agent is alive, and a genuinely newer row can share the anchor's millisecond. Reading the token
-   *  off the row is what makes the ordering safe — the paired drop runs FIRST and removes the row,
-   *  and a removed row means nothing reported, not "the anchor is gone".
-   *
-   *  Residual: a row deleted by some OTHER path mid-window and then rebuilt restarts its count, so a
-   *  pane armed at 1 that reports exactly once more compares equal. It needs a foreign drop inside
-   *  the confirm window; the relaunch case that would otherwise hit it is already discarded by
-   *  onCommandStarted, and the cost is retiring a pane the process table just proved is a shell. */
-  const reconcileEndedProcessIfPaneQuiet = (armedAcceptedStatusSeq: number | undefined): void => {
+  /** Confirmed shell return retires main’s latches using one acceptedStatusSeq anchor across the full ladder; deferred row removal is not newer evidence. A foreign delete/rebuild can reset the ordinal, but command-start already cancels normal relaunch races. */
+  session.reconcileEndedProcessIfPaneQuiet = (armedAcceptedStatusSeq: number | undefined): void => {
     const current = useAppStore.getState().agentStatusByPaneKey[session.cacheKey]
     if (current && current.acceptedStatusSeq !== armedAcceptedStatusSeq) {
       return
     }
-    // Why: main-side only. The renderer row and launch config are already owned by the deferred
-    // drop above; what that path cannot reach is the hook server's per-pane Claude latches, which
-    // `agentStatus:drop` deliberately preserves for a still-live pane. Main echoes its own clear
-    // back through the pane-status-cleared channel, so both sides stay consistent.
+    // Why: main's clear echoes back and would drop the result the deferred drop just kept.
+    if (current && isRetainedProgramResult(current)) {
+      return
+    }
+    // Reconcile main-only hook latches retained by live-pane drops; renderer rows/config already belong to the deferred drop, and main echoes its clear.
     window.api?.agentStatus?.reconcileEndedProcess?.(session.cacheKey)
   }
   session.visibleForegroundSamplePending = false
   session.visibleForegroundSampleSettled = false
   session.settleDeferredCommandFinishedStatusDrop = (
-    options: { confirmedShell?: boolean } = {}
+    options: { confirmedShell?: boolean; processExitConfirmed?: boolean } = {}
   ): void => {
     const dropStatus = session.deferredCommandFinishedStatusDrop
     const reconcile = session.deferredConfirmedShellReconcile
@@ -135,9 +95,7 @@ export function installPaneAgentIdentity(session: ConnectPanePtySession): void {
       }
       return
     }
-    // Why: only a pane whose agent process the host can check keeps its row on an unanswered read;
-    // every other pane keeps today's cleanup until the renderer reads the owner record (step 2).
-    // The drop stays armed while main answers, so a new command start still cancels it.
+    // Host-verifiable owners retain rows on unanswered reads; other panes keep cleanup. Keep the drop armed so a new command can cancel it.
     const dropUnlessVerifiable = (verifiable: boolean): void => {
       if (session.deferredCommandFinishedStatusDrop !== dropStatus) {
         return
@@ -145,16 +103,18 @@ export function installPaneAgentIdentity(session: ConnectPanePtySession): void {
       session.deferredCommandFinishedStatusDrop = null
       if (!verifiable) {
         dropStatus()
+        // Why: only a process-table-confirmed exit proves the agent's main-side latches are dead.
+        if (options.processExitConfirmed) {
+          reconcile?.()
+        }
       }
     }
     void Promise.resolve(window.api?.agentStatus?.hasVerifiableAgentProcess?.(session.cacheKey))
       .then((verifiable) => dropUnlessVerifiable(verifiable === true))
       .catch(() => dropUnlessVerifiable(false))
   }
-  const isRemotePtyId = (id: string): boolean =>
-    Boolean(isRemoteExecutionHostPtyId(id) || parseAppSshPtyId(id))
   session.isForegroundTrackingAllowed = (id: string): boolean => {
-    if (isRemoteExecutionHostPtyId(id) || parseAppSshPtyId(id)) {
+    if (isRemoteExecutionHostPtyId(id)) {
       return true
     }
     if (!navigator.userAgent.includes('Windows')) {
@@ -164,8 +124,7 @@ export function installPaneAgentIdentity(session: ConnectPanePtySession): void {
     const tab = (state.tabsByWorktree[session.deps.worktreeId] ?? []).find(
       (candidate) => candidate.id === session.deps.tabId
     )
-    // Why: WSL and remote-runtime panes can never authorize native ConPTY
-    // bytes, so do not pay for Windows process scans that cannot affect routing.
+    // WSL/remote panes cannot authorize native ConPTY bytes, so skip Windows scans that cannot affect routing.
     return isLocalNativeWindowsConpty({
       userAgent: navigator.userAgent,
       connectionId: getConnectionId(session.deps.worktreeId) ?? null,
@@ -181,14 +140,14 @@ export function installPaneAgentIdentity(session: ConnectPanePtySession): void {
     getPtyId: () => session.transport.getPtyId(),
     isTrackablePtyId: session.isForegroundTrackingAllowed,
     readForegroundProcess: (id, options) =>
-      isRemotePtyId(id)
-        ? inspectRuntimeTerminalProcess(useAppStore.getState().settings, id, options)
+      isRemoteExecutionHostPtyId(id)
+        ? inspectRuntimeTerminalProcess(id, options)
         : window.api.pty.getForegroundProcess(id),
     confirmForegroundProcess: (id, options) =>
-      isRemotePtyId(id)
-        ? inspectRuntimeTerminalProcess(useAppStore.getState().settings, id, options)
+      isRemoteExecutionHostPtyId(id)
+        ? inspectRuntimeTerminalProcess(id, options)
         : window.api.pty.confirmForegroundProcess(id),
-    isRemotePtyId,
+    isRemotePtyId: isRemoteExecutionHostPtyId,
     getExpectedIncarnationId: () => session.remotePtyIncarnationId ?? null,
     publish: (entry) => useAppStore.getState().setPaneForegroundAgent(session.cacheKey, entry),
     getPublishedEntry: () => useAppStore.getState().paneForegroundAgentByPaneKey[session.cacheKey],
@@ -197,18 +156,25 @@ export function installPaneAgentIdentity(session: ConnectPanePtySession): void {
       session.agentCompletionCoordinator?.observeForegroundAgentProcess(process),
     hasKnownAgentIdentity: session.paneHasKnownAgentIdentity,
     onConfirmedShellForeground: (reason) => {
-      // Why: a confirmed local shell proves any hibernation record for this pane is stale;
-      // otherwise the tab resolver can repaint the exited agent from sleeping occupancy.
+      // Retire stale agent occupancy when a normal exit returns to the shell.
       const state = useAppStore.getState()
       const sleepingRecord = session.getSleepingRecordForPane(state)
-      if (sleepingRecord) {
+      const ptyId = session.transport.getPtyId()
+      const wake = session.hibernatedWakeTarget
+      // A delayed shell read can settle after exit consumes suppression; preserve only that PTY's exact wake record.
+      const isHibernationWakeRecord =
+        (ptyId && state.suppressedPtyExitIds[ptyId]) ||
+        (wake && wake.record === sleepingRecord?.record && (ptyId === null || wake.ptyId === ptyId))
+      if (sleepingRecord && !isHibernationWakeRecord) {
         session.clearSleepingRecordProviderDuplicates(state, sleepingRecord)
       }
       session.clearStaleAgentTabTitleOnConfirmedShell()
-      // Why: a hard-killed agent leaves mouse/focus/kitty modes armed, and the
-      // surviving shell then receives pointer moves as typed SGR reports; the
-      // replay guard keeps xterm's auto-replies from leaking to the shell.
+      // Confirmed hard-kill exit must disarm leftover mouse/focus/Kitty modes; guard reset auto-replies from reaching the shell.
       session.writeInputModeGround(CONFIRMED_SHELL_MODE_RESET)
+      // Agents that leave their OSC title (grok, codex) never trip the title exit; Orca's own hibernation stop keeps its chat.
+      if (!isHibernationWakeRecord) {
+        session.deps.onAgentExitedRef.current(session.pane.leafId)
+      }
       // Why: no 133;D backs these proofs, so a deferred command-finished drop keeps its own read.
       if (reason === 'process-exit') {
         // Why: reopen the one-shot visible sample so the next agent typed here is identified.
@@ -221,8 +187,7 @@ export function installPaneAgentIdentity(session: ConnectPanePtySession): void {
       }
       session.settleDeferredCommandFinishedStatusDrop({ confirmedShell: true })
     },
-    // Why wrapped: passed bare, a caller-supplied argument would be read as `options` and could
-    // reconcile on the unavailable path, which has no proof the agent exited.
+    // Wrap callbacks so caller arguments cannot become options that reconcile an unproven exit.
     onCommandFinishedUnavailable: () => session.settleDeferredCommandFinishedStatusDrop(),
     onVisibleForegroundSettled: (outcome) => {
       session.visibleForegroundSamplePending = false
@@ -242,16 +207,12 @@ export function installPaneAgentIdentity(session: ConnectPanePtySession): void {
       })
     }
   })
-  // Why: one command-finished policy whether the signal arrives as bytes
-  // (remote PTYs, kill switch off) or as a main-derived pty:sideEffect fact —
-  // routing both through this handler keeps the drop/interrupt semantics
-  // identical across authority modes.
+  // Bytes and main facts share command-finished policy to preserve drop/interrupt semantics across authority modes.
   session.handleCommandFinished = (bestEffortExitCode: number | null): void => {
     session.clearCommandInferredPaneAgentAfterPtySideEffects()
     session.visibleForegroundSamplePending = false
     const shouldDeferStatusDrop = session.paneForegroundAgentTracker.onCommandFinished()
-    // Why: the finished command may have moved HEAD or the index (e.g.
-    // `git checkout`); nudge git UI now instead of waiting for a poll.
+    // Commands can change HEAD/index; nudge git UI immediately instead of waiting for polling.
     dispatchTerminalCommandFinishedEvent(session.deps.worktreeId, bestEffortExitCode)
     const state = useAppStore.getState()
     const entry = state.agentStatusByPaneKey[session.cacheKey]
@@ -272,14 +233,11 @@ export function installPaneAgentIdentity(session: ConnectPanePtySession): void {
       session.dropCommandFinishedStatusIfSameTurn(entry)
     }
     if (shouldDeferStatusDrop) {
-      // Why: keep the concrete pane identity routable while the local process
-      // check distinguishes a leaked nested-shell D from a genuine agent exit.
-      // Anchor the accepted-status ordinal once, here — not per rung of the confirm ladder, which
-      // can span seconds — so the gate tolerates churn across the whole window.
+      // Retain identity through local shell confirmation, anchoring accepted-status ordinal once across the whole retry ladder.
       const armedAcceptedStatusSeq = entry?.acceptedStatusSeq
       session.deferredCommandFinishedStatusDrop = dropStatus
       session.deferredConfirmedShellReconcile = () =>
-        reconcileEndedProcessIfPaneQuiet(armedAcceptedStatusSeq)
+        session.reconcileEndedProcessIfPaneQuiet(armedAcceptedStatusSeq)
       return
     }
     session.deferredCommandFinishedStatusDrop = null
@@ -296,8 +254,7 @@ export function installPaneAgentIdentity(session: ConnectPanePtySession): void {
     }
     const state = useAppStore.getState()
     const foreground = state.paneForegroundAgentByPaneKey[session.cacheKey]
-    // Why: a daemon reattach may restore display identity without current
-    // routing authority. Only fresh evidence can suppress its confirmation.
+    // Reattached display identity lacks routing authority; only fresh evidence can suppress confirmation.
     if (foreground?.agent && foreground.routingTrusted === true) {
       return
     }
@@ -305,13 +262,11 @@ export function installPaneAgentIdentity(session: ConnectPanePtySession): void {
       return
     }
     const expectsAgent = session.paneExpectsLaunchAgent(state)
-    // Why: a completed local process ladder is stronger than stale tab/startup
-    // launch metadata. Command-start clears this mark if the pane becomes busy.
+    // Completed local confirmation outranks stale launch metadata; command-start clears the mark.
     if (foreground?.shellForeground) {
       return
     }
-    // Why: tab launch metadata can leak across split panes; rebuild pane-scoped
-    // identity from local process state, with remote/SSH excluded by the tracker.
+    // Tab launch metadata can name a sibling; rebuild pane identity from local process evidence.
     session.visibleForegroundSamplePending =
       session.paneForegroundAgentTracker.onVisiblePtyBound(expectsAgent)
   }
@@ -320,10 +275,7 @@ export function installPaneAgentIdentity(session: ConnectPanePtySession): void {
   }
   session.requestKnownWindowsShiftEnterReconfirmation = () => {
     const foreground = useAppStore.getState().paneForegroundAgentByPaneKey[session.cacheKey]
-    // Why: daemon reattach/launch metadata is display-only until a live
-    // provider read confirms it. Submit/interrupt/title-exit evidence must
-    // revoke that launch-only hint too, otherwise Shift+Enter can route bytes
-    // to an agent that already exited before confirmation ever ran.
+    // Revoke display-only reattach/launch hints on input or exit evidence until provider confirmation restores routing authority.
     if (
       !foreground?.agent ||
       !isTuiAgent(foreground.agent) ||
@@ -332,8 +284,7 @@ export function installPaneAgentIdentity(session: ConnectPanePtySession): void {
     ) {
       return
     }
-    // Why: cmd.exe and Git Bash have no OSC command boundaries. Keep the icon
-    // as a hint, but revoke bytes until one current provider confirmation lands.
+    // No-OSC shells retain display hints but require fresh provider evidence before byte routing.
     useAppStore.getState().setPaneForegroundAgent(session.cacheKey, {
       agent: foreground.agent,
       agentEvidence: foreground.agentEvidence,
@@ -342,8 +293,7 @@ export function installPaneAgentIdentity(session: ConnectPanePtySession): void {
     })
     session.visibleForegroundSamplePending = false
     session.visibleForegroundSampleSettled = false
-    // Why: hook rows can suppress display-only sampling, but cannot restore
-    // byte authority after this function explicitly revoked routing trust.
+    // Hooks can suppress display sampling but cannot restore explicitly revoked byte authority.
     session.sampleVisiblePaneForegroundAgent(true)
     if (session.paneForegroundAgentTracker.hasReadInFlight()) {
       useAppStore.getState().setPaneForegroundAgent(session.cacheKey, {
@@ -357,18 +307,16 @@ export function installPaneAgentIdentity(session: ConnectPanePtySession): void {
   }
   session.commandLifecycle = createTerminalCommandLifecycle({
     onCommandStarted: () => {
-      // Why: a new command invalidates cleanup waiting on the previous D; only
-      // a later confirmed shell boundary may retire this pane's live identity.
+      // New commands cancel prior finish cleanup; only a later confirmed shell boundary can retire identity.
       session.deferredCommandFinishedStatusDrop = null
+      dismissRetainedProgramResult(session.cacheKey, useAppStore.getState())
       session.visibleForegroundSamplePending = false
       session.visibleForegroundSampleSettled = false
-      // Why: typed commands can be aliases, so they only widen the bounded
-      // process-confirmation window; they never become routing evidence.
+      // Typed aliases may widen confirmation timing but cannot supply routing evidence.
       session.paneForegroundAgentTracker.onCommandStarted(session.commandInferredPaneAgent)
     },
     onCommandFinished: session.handleCommandFinished
   })
-  // Why: the xterm OSC 133 swallow is rendering hygiene, not a side effect —
-  // it stays attached in every authority mode.
+  // OSC 133 swallowing is rendering hygiene and stays installed under every side-effect authority.
   session.commandLifecycle.attachXtermConsumer(session.pane.terminal)
 }

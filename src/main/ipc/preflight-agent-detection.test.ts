@@ -7,11 +7,11 @@ const {
   execFileAsyncMock,
   hydrateShellPathMock,
   mergePathSegmentsMock,
-  getActiveMultiplexerMock,
   getBitbucketAuthStatusMock,
   getAzureDevOpsAuthStatusMock,
   getGiteaAuthStatusMock,
   resolveCliCommandsMock,
+  findCommandsOnLocalPathMock,
   isCommandOnLocalPathMock,
   listLocalCommandPathsMock,
   mergePersistedWindowsPathAsyncMock,
@@ -22,11 +22,11 @@ const {
   execFileAsyncMock: vi.fn(),
   hydrateShellPathMock: vi.fn(),
   mergePathSegmentsMock: vi.fn(),
-  getActiveMultiplexerMock: vi.fn(),
   getBitbucketAuthStatusMock: vi.fn(),
   getAzureDevOpsAuthStatusMock: vi.fn(),
   getGiteaAuthStatusMock: vi.fn(),
   resolveCliCommandsMock: vi.fn(),
+  findCommandsOnLocalPathMock: vi.fn(),
   isCommandOnLocalPathMock: vi.fn(),
   listLocalCommandPathsMock: vi.fn(),
   mergePersistedWindowsPathAsyncMock: vi.fn(),
@@ -34,8 +34,13 @@ const {
 }))
 
 const runWslProcessMock = vi.hoisted(() => vi.fn())
-// Why the runner and not child_process: WSL agent detection goes through
-// runWslProcess now, so a child_process mock never sees it.
+// These cases cover a running distro; the E9 stopped-distro gate has its own suite.
+vi.mock('../wsl/wsl-background-exec-gate', () => ({
+  assertWslDistroRunningForExec: async () => {},
+  runAsWslExecUserAct: async (_distro: unknown, act: () => Promise<unknown>) => act()
+}))
+
+// WSL detection uses runWslProcess, so child_process mocks cannot observe it.
 vi.mock('../wsl/wsl-runner', () => ({ runWslProcess: runWslProcessMock }))
 
 vi.mock('electron', () => ({
@@ -54,6 +59,12 @@ vi.mock('child_process', () => {
   }
 })
 
+vi.mock('../runtime/structured-agent-shell-environment', () => ({
+  captureHostShellEnvironment: vi.fn(async (beforeCapture?: () => Promise<unknown>) =>
+    beforeCapture?.()
+  )
+}))
+
 vi.mock('../startup/hydrate-shell-path', () => ({
   hydrateShellPath: hydrateShellPathMock,
   mergePathSegments: mergePathSegmentsMock
@@ -63,11 +74,10 @@ vi.mock('../../shared/node-cli-command-resolution', () => ({
   resolveCliCommands: resolveCliCommandsMock
 }))
 
-// Why (#9297): local PATH resolution is now fs-based (no where/which spawn).
-// These tests express "which commands are on PATH" via the where/which mock,
-// so route the resolver through that same mock to preserve their intent.
+// Route filesystem PATH resolution through the existing command-lookup mock.
 vi.mock('./command-path-resolver', async (importOriginal) => ({
   ...(await importOriginal<typeof LocalCommandResolver>()),
+  findCommandsOnLocalPath: findCommandsOnLocalPathMock,
   isCommandOnLocalPath: isCommandOnLocalPathMock,
   listLocalCommandPaths: listLocalCommandPathsMock
 }))
@@ -75,10 +85,6 @@ vi.mock('./command-path-resolver', async (importOriginal) => ({
 vi.mock('../pty/windows-environment-path', () => ({
   mergePersistedWindowsPathAsync: mergePersistedWindowsPathAsyncMock,
   mergePersistedWindowsPath: mergePersistedWindowsPathMock
-}))
-
-vi.mock('./ssh', () => ({
-  getActiveMultiplexer: getActiveMultiplexerMock
 }))
 
 vi.mock('../bitbucket/client', () => ({
@@ -95,9 +101,10 @@ vi.mock('../gitea/client', () => ({
 
 import {
   detectInstalledAgents,
-  detectInstalledAgentsWithShellPathHydration,
-  registerPreflightHandlers
-} from './preflight'
+  detectInstalledAgentsWithShellPathHydration
+} from '../preflight/agent-detection'
+import { registerPreflightHandlers } from './preflight'
+import { createGlobalSettingsFixture } from '../../shared/global-settings-test-fixture'
 import { resetPreflightMocks, type HandlerMap } from './preflight-test-harness'
 
 describe('preflight', () => {
@@ -112,11 +119,11 @@ describe('preflight', () => {
         execFileAsyncMock,
         hydrateShellPathMock,
         mergePathSegmentsMock,
-        getActiveMultiplexerMock,
         getBitbucketAuthStatusMock,
         getAzureDevOpsAuthStatusMock,
         getGiteaAuthStatusMock,
         resolveCliCommandsMock,
+        findCommandsOnLocalPathMock,
         isCommandOnLocalPathMock,
         listLocalCommandPathsMock,
         mergePersistedWindowsPathAsyncMock,
@@ -131,6 +138,73 @@ describe('preflight', () => {
       configurable: true,
       value: originalPlatform
     })
+  })
+
+  it.each(['win32', 'darwin', 'linux'])(
+    'skips disabled probes on automatic %s detection and refresh while Settings stays complete',
+    async (platform) => {
+      Object.defineProperty(process, 'platform', { value: platform })
+      const settings = createGlobalSettingsFixture({ disabledTuiAgents: ['kiro'] })
+      registerPreflightHandlers({ getSettings: () => settings })
+      isCommandOnLocalPathMock.mockImplementation(async (command: string) =>
+        ['claude', 'kiro-cli'].includes(command)
+      )
+      await expect(
+        handlers['preflight:detectAgents'](undefined, {
+          enabledOnly: true,
+          disabledTuiAgents: []
+        })
+      ).resolves.toEqual(['claude'])
+      expect(isCommandOnLocalPathMock.mock.calls.map(([command]) => command)).not.toContain(
+        'kiro-cli'
+      )
+      expect(resolveCliCommandsMock).toHaveBeenCalledWith(
+        expect.not.arrayContaining(['kiro-cli']),
+        { skipPathSearch: true }
+      )
+
+      isCommandOnLocalPathMock.mockClear()
+      await expect(
+        handlers['preflight:refreshAgents'](undefined, { enabledOnly: true })
+      ).resolves.toMatchObject({ agents: ['claude'] })
+      expect(isCommandOnLocalPathMock.mock.calls.map(([command]) => command)).not.toContain(
+        'kiro-cli'
+      )
+
+      await expect(handlers['preflight:detectAgents']()).resolves.toEqual(['claude', 'kiro'])
+      expect(isCommandOnLocalPathMock.mock.calls.map(([command]) => command)).toContain('kiro-cli')
+      await expect(handlers['preflight:refreshAgents']()).resolves.toMatchObject({
+        agents: ['claude', 'kiro']
+      })
+
+      settings.disabledTuiAgents = []
+      await expect(
+        handlers['preflight:detectAgents'](undefined, { enabledOnly: true })
+      ).resolves.toEqual(['claude', 'kiro'])
+    }
+  )
+
+  it('filters the WSL guest command batch for automatic inventory and keeps explicit inventory complete', async () => {
+    Object.defineProperty(process, 'platform', { value: 'win32' })
+    const settings = createGlobalSettingsFixture({ disabledTuiAgents: ['kiro'] })
+    registerPreflightHandlers({ getSettings: () => settings })
+    runWslProcessMock.mockResolvedValue({
+      code: 0,
+      timedOut: false,
+      stdout:
+        '__ORCA_AGENT_PATH__claude\t/home/me/bin/claude\n__ORCA_AGENT_PATH__kiro-cli\t/home/me/bin/kiro-cli\n',
+      stderr: ''
+    })
+    await expect(
+      handlers['preflight:detectAgents'](undefined, { wslDistro: 'Ubuntu', enabledOnly: true })
+    ).resolves.toEqual(['claude'])
+    expect(runWslProcessMock.mock.lastCall?.[0]).toMatchObject({ distro: 'Ubuntu' })
+    expect(runWslProcessMock.mock.lastCall?.[0].script).not.toContain("'kiro-cli'")
+    await expect(
+      handlers['preflight:detectAgents'](undefined, { wslDistro: 'Ubuntu' })
+    ).resolves.toEqual(['claude', 'kiro'])
+    expect(runWslProcessMock.mock.lastCall?.[0].script).toContain("'kiro-cli'")
+    expect(isCommandOnLocalPathMock).not.toHaveBeenCalled()
   })
 
   it('only reports agents when which/where resolves to a real executable path', async () => {
@@ -256,8 +330,7 @@ describe('preflight', () => {
   })
 
   it('detects agents via the install-dir resolver when which fails (stripped GUI PATH)', async () => {
-    // Why: cold GUI launches can run detection before shell-PATH hydration
-    // adds user install dirs, so `which` can miss runnable CLIs.
+    // Cold GUI detection can precede shell-PATH hydration; install directories remain a fallback.
     execFileAsyncMock.mockImplementation(async (command) => {
       if (command !== 'which') {
         throw new Error(`unexpected command ${String(command)}`)
@@ -287,7 +360,6 @@ describe('preflight', () => {
   })
 
   it('does not double-count an agent already found on PATH via the install-dir resolver', async () => {
-    // Why: the fallback should not duplicate ids when PATH already finds a CLI.
     execFileAsyncMock.mockImplementation(async (command, args) => {
       if (command !== 'which') {
         throw new Error(`unexpected command ${String(command)}`)
@@ -309,11 +381,12 @@ describe('preflight', () => {
 
     await expect(detectInstalledAgents()).resolves.toEqual(['claude'])
     expect(resolveCliCommandsMock).toHaveBeenCalledTimes(1)
-    expect(resolveCliCommandsMock).toHaveBeenCalledWith(expect.not.arrayContaining(['claude']))
+    expect(resolveCliCommandsMock).toHaveBeenCalledWith(expect.not.arrayContaining(['claude']), {
+      skipPathSearch: true
+    })
   })
 
   it('treats an agent as not installed when the install-dir resolver throws', async () => {
-    // Why: transient fs errors in the fallback must not crash detection.
     execFileAsyncMock.mockImplementation(async (command) => {
       if (command !== 'which') {
         throw new Error(`unexpected command ${String(command)}`)
@@ -501,11 +574,9 @@ describe('preflight', () => {
 
     await expect(detectInstalledAgents({ wslDistro: 'Ubuntu' })).resolves.toEqual(['claude'])
     expect(runWslProcessMock).toHaveBeenCalledTimes(1)
-    // Why: the local fallback must not report host binaries as WSL binaries.
+    // Local install-directory fallback must never supply WSL results.
     expect(resolveCliCommandsMock).not.toHaveBeenCalled()
-    // Why assert the lane, not the argv: argv is the runner's contract and is
-    // pinned by its own tests. What this suite owns is that detection asks the
-    // right distro on the lane that carries the user's PATH.
+    // The runner owns argv; this suite checks distro and PATH lane.
     expect(runWslProcessMock).toHaveBeenCalledWith(
       expect.objectContaining({ distro: 'Ubuntu', loginPath: 'preferred' })
     )
@@ -531,9 +602,7 @@ describe('preflight', () => {
 
     await expect(detectInstalledAgents({ wslDefault: true })).resolves.toEqual(['codex'])
     expect(runWslProcessMock).toHaveBeenCalledTimes(1)
-    // Why: the local fallback must not leak into WSL detection.
     expect(resolveCliCommandsMock).not.toHaveBeenCalled()
-    // No distro named: the runner resolves the default.
     expect(runWslProcessMock).toHaveBeenCalledWith(
       expect.objectContaining({ distro: undefined, loginPath: 'preferred' })
     )

@@ -1,12 +1,12 @@
 import { getAgentCatalog } from '@/lib/agent-catalog'
 import type { AutomationPrecheck } from '../../../../shared/automations-types'
-import { buildAutomationCronSchedule } from '../../../../shared/automation-schedule-occurrences'
 import type { Worktree } from '../../../../shared/worktree/types'
 import {
   hasExtraAgentArgs,
   parseExtraAgentArgs
 } from '../../../../shared/automation-extra-agent-args'
 import type { AutomationDraft } from './AutomationEditorDialog'
+import { extraAgentArgsErrorText } from './automation-extra-agent-args-error-copy'
 
 export const AUTOMATION_DEFAULT_TIME = '09:00'
 
@@ -38,19 +38,6 @@ export function buildDraftPrecheck(draft: AutomationDraft): AutomationPrecheck |
   }
 }
 
-export function buildHermesCronSchedule(draft: AutomationDraft): string {
-  if (draft.preset === 'custom') {
-    return draft.customSchedule.trim()
-  }
-  const { hour, minute } = parseDraftTime(draft.time)
-  return buildAutomationCronSchedule({
-    preset: draft.preset,
-    hour,
-    minute,
-    dayOfWeek: Number(draft.dayOfWeek)
-  })
-}
-
 export function getAgentLabel(agentId: string): string {
   return getAgentCatalog().find((agent) => agent.id === agentId)?.label ?? agentId
 }
@@ -66,7 +53,7 @@ export function getDraftExtraAgentArgsError(
     agent: draft.agentId,
     extraAgentArgs: draft.extraAgentArgs
   })
-  return parsed.ok ? null : parsed.error
+  return parsed.ok ? null : extraAgentArgsErrorText(parsed)
 }
 
 /** Reuse can't carry extras; the field offers a switch instead of flipping it silently. */

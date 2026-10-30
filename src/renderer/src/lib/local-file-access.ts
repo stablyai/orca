@@ -1,30 +1,30 @@
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import type { LocalFileAccess } from '../../../shared/local-file-access'
-import { settingsForRuntimeOwner } from '@/runtime/runtime-client-target'
 import type { OpenFile } from '@/store/slices/editor'
-import type { AppState } from '@/store/types'
 import { getConnectionIdForFile } from './connection-context'
+import { getRuntimeTargetForFileOwner } from './file-owner-runtime-target'
+import type { WorktreeRuntimeOwnerState } from './worktree-runtime-owner-state'
 
 const USER_FILE_ACCESS: LocalFileAccess = { kind: 'user-file' }
 const CHAT_IMAGE_ACCESS: LocalFileAccess = { kind: 'chat-image' }
+const PROJECT_FOLDER_LINK_ACCESS: LocalFileAccess = { kind: 'project-folder-link' }
 
 /** For a path the user named by a gesture (click, drop, typed path); never for document content. */
 export function userNamedFileAccess(): LocalFileAccess {
   return USER_FILE_ACCESS
 }
 
-/**
- * For an image a chat transcript or composer shows. Main reads any local image file in place, by
- * its real type, and refuses network shares, so it is safe for content no one clicked.
- */
+/** List a folder reached through a project symlink that leads outside; main verifies the link. */
+export function projectFolderLinkAccess(): LocalFileAccess {
+  return PROJECT_FOLDER_LINK_ACCESS
+}
+
+/** Read content-referenced local images by actual type; main refuses network shares even without a user gesture. */
 export function chatImageAccess(): LocalFileAccess {
   return CHAT_IMAGE_ACCESS
 }
 
-/**
- * For acting on a document the user opened: renaming it (to any path the user typed) or inserting
- * an image next to it, which main keeps inside the document's own folder.
- */
+/** User-opened document actions may rename to a typed path; image insertion remains inside its folder. */
 export function documentFolderAccess(documentPath: string): LocalFileAccess {
   return { kind: 'document-folder', documentPath }
 }
@@ -45,21 +45,31 @@ type EditorTabAccessFile = Pick<
   | 'liveTail'
 >
 
-/**
- * The file access a persisted editor tab reads and saves with. A tab the user opened outside its owner's
- * root (a floating-workspace tab, or one stored with an absolute path) is user-named, so it reads
- * the same before and after a restart; every other tab stays inside its project root.
- */
+/** A read-only tab named by absolute path is this computer's file: an AI Vault log or a client-local link. */
+export function isClientLocalReadOnlyTab(
+  file: Pick<OpenFile, 'filePath' | 'relativePath' | 'readOnly' | 'liveTail'> &
+    Partial<Pick<OpenFile, 'runtimeEnvironmentId'>>
+): boolean {
+  return (
+    file.readOnly === true &&
+    // Why: a server-granted file (live or restored without its grant) names a server path.
+    !file.runtimeEnvironmentId?.trim() &&
+    (file.liveTail === true || file.relativePath === file.filePath)
+  )
+}
+
+/** Persist gesture-based access for user-opened absolute/floating files across restart; other tabs remain bounded to project roots. */
 export function editorTabFileAccess(
-  state: Pick<AppState, 'settings'>,
+  state: WorktreeRuntimeOwnerState,
   file: EditorTabAccessFile
 ): LocalFileAccess | undefined {
-  // Why: AI Vault logs are client-local files the user opened, whatever the worktree's host.
-  if (file.readOnly === true && file.liveTail === true) {
+  // Why: these are client-local files the user opened, whatever the worktree's host.
+  if (isClientLocalReadOnlyTab(file)) {
     return USER_FILE_ACCESS
   }
-  const runtimeOwner = settingsForRuntimeOwner(state.settings, file.runtimeEnvironmentId)
-  if (file.externalSshTargetId?.trim() || runtimeOwner?.activeRuntimeEnvironmentId?.trim()) {
+  const owner = getRuntimeTargetForFileOwner(state, file.worktreeId, file.runtimeEnvironmentId)
+  // Why `!owner`: rows that disagree may put the path on another host.
+  if (file.externalSshTargetId?.trim() || owner?.kind !== 'local') {
     return undefined
   }
   const outsideOwnerRoot =
@@ -71,12 +81,9 @@ export function editorTabFileAccess(
   return USER_FILE_ACCESS
 }
 
-/**
- * The write access for acting on an open tab's file (rename, image insert) when the tab is
- * user-named, else none, so project tabs keep their project checks.
- */
+/** Allow user-named rename/image-insert access only for eligible open files; project tabs retain project checks. */
 export function editorTabDocumentFolderAccess(
-  state: Pick<AppState, 'settings'>,
+  state: WorktreeRuntimeOwnerState,
   file: EditorTabAccessFile
 ): LocalFileAccess | undefined {
   // Why: a read-only tab (an AI Vault log, possibly in an SSH workspace) is never written.

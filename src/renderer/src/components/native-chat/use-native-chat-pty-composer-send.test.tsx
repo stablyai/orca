@@ -2,7 +2,7 @@
 import { renderHook } from '@testing-library/react'
 import { beforeEach, expect, it, vi } from 'vitest'
 import type { AgentType } from '../../../../shared/agent-status-types'
-import type { NativeChatSendClassification } from '../../../../shared/native-chat-slash-commands'
+import type { NativeChatSendClassification } from '../../../../shared/native-chat/input/native-chat-slash-commands'
 import { useNativeChatPtyComposerSend } from './use-native-chat-pty-composer-send'
 import { sendNativeChatMessage } from './native-chat-runtime-send'
 import { sendNativeChatMessageWithImageAttachments } from './native-chat-runtime-image-send'
@@ -31,6 +31,7 @@ function send(
   const { result } = renderHook(() =>
     useNativeChatPtyComposerSend({
       agent,
+      draftScopeKey: 'terminal-test-scope',
       draft,
       imageAttachments: imagePaths.map((path) => ({ path })),
       disabled: false,
@@ -62,7 +63,7 @@ beforeEach(() => {
 
 it('routes a Claude chat send outcome to its own pending echo', () => {
   const callbacks = send('claude', 'chat', 'hello')
-  const options = vi.mocked(sendNativeChatMessage).mock.calls[0]?.[3]
+  const options = vi.mocked(sendNativeChatMessage).mock.calls[0]?.[2]
   options?.onWriteRejected?.()
   options?.onWriteUnconfirmed?.()
   expect(callbacks.rejected).toHaveBeenCalledWith('pending-1')
@@ -71,7 +72,7 @@ it('routes a Claude chat send outcome to its own pending echo', () => {
 
 it('routes a Claude image send outcome to its own pending echo', () => {
   const callbacks = send('claude', 'chat', 'look', ['/tmp/shot.png'])
-  vi.mocked(sendNativeChatMessageWithImageAttachments).mock.calls[0]?.[5]?.onWriteRejected?.()
+  vi.mocked(sendNativeChatMessageWithImageAttachments).mock.calls[0]?.[4]?.onWriteRejected?.()
   expect(callbacks.rejected).toHaveBeenCalledWith('pending-1')
 })
 
@@ -80,10 +81,9 @@ it.each([
   ['claude', 'command', '/compact']
 ] as const)('leaves a %s %s send on the unobserved write path', (agent, classification, draft) => {
   send(agent, classification, draft)
-  expect(vi.mocked(sendNativeChatMessage).mock.calls[0]?.[3]?.onWriteRejected).toBeUndefined()
+  expect(vi.mocked(sendNativeChatMessage).mock.calls[0]?.[2]?.onWriteRejected).toBeUndefined()
 })
 
-// The pane brings the latest into view on this, whatever the send was classified as.
 it.each([
   ['chat', 'hello'],
   ['command', '/compact'],
@@ -94,4 +94,12 @@ it.each([
 
 it('reports nothing for a blank draft', () => {
   expect(send('codex', 'chat', '   ').submitted).not.toHaveBeenCalled()
+})
+
+it('rejects reserved unavailable identities while ordinary large terminal text stays inline', () => {
+  send('claude', 'chat', '[Pasted text](orca-paste:00000000-0000-4000-8000-000000000000)')
+  expect(sendNativeChatMessage).not.toHaveBeenCalled()
+  const text = 'x'.repeat(300000)
+  send('codex', 'chat', text)
+  expect(vi.mocked(sendNativeChatMessage).mock.calls[0]?.slice(0, 2)).toEqual(['pty', text])
 })

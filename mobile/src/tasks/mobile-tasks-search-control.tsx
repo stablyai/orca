@@ -2,6 +2,7 @@ import type { ConnectionPresentationModel } from './use-mobile-tasks-connection-
 import { View, MobileSearchField } from './mobile-tasks-dependencies'
 import { styles } from './mobile-tasks-legacy-styles'
 import { getTaskPresetQuery, scopeGitHubTaskSearch } from './mobile-tasks-legacy-foundation'
+import { translate } from '../i18n/mobile-i18n'
 
 export function renderMobileTasksSearchControl(model: ConnectionPresentationModel) {
   const {
@@ -14,6 +15,7 @@ export function renderMobileTasksSearchControl(model: ConnectionPresentationMode
     gitlabView,
     isGithubProjectSearch,
     linearConnected,
+    jiraConnection,
     persistTaskResumeState,
     provider,
     providerLabel,
@@ -25,18 +27,29 @@ export function renderMobileTasksSearchControl(model: ConnectionPresentationMode
     taskUiReady
   } = model
   return provider === 'gitlab' && gitlabView === 'todos' ? null : provider === 'linear' &&
-    !linearConnected ? null : (
+    !linearConnected ? null : provider === 'jira' && !jiraConnection.connected ? null : (
     <View style={styles.searchBar}>
       <MobileSearchField
         value={isGithubProjectSearch ? githubProjectSearch : query}
         onChangeText={isGithubProjectSearch ? setGithubProjectSearch : setQuery}
         placeholder={
-          isGithubProjectSearch ? 'Search project view...' : `Search ${providerLabel} tasks...`
+          isGithubProjectSearch
+            ? translate('tasks.searchControl.projectPlaceholder', 'Search project view...')
+            : provider === 'jira'
+              ? // Jira accepts raw JQL, matching desktop.
+                translate(
+                  'tasks.searchControl.jiraPlaceholder',
+                  'Jira JQL, e.g. project = ABC AND statusCategory != Done'
+                )
+              : translate(
+                  'tasks.searchControl.providerPlaceholder',
+                  'Search {{provider}} tasks...',
+                  {
+                    provider: providerLabel
+                  }
+                )
         }
-        // Why: GitHub items seed the field with a preset query, so a bare
-        // value.length check would always show clear. Project mode shows clear
-        // for draft text or a non-empty applied override — not for applied ''
-        // (explicit unfiltered after clear), or the button sticks forever.
+        // Preset text is not an override; Project’s explicit empty filter must not leave Clear visible forever.
         showClear={
           isGithubProjectSearch
             ? githubProjectSearch.length > 0 ||
@@ -73,14 +86,12 @@ export function renderMobileTasksSearchControl(model: ConnectionPresentationMode
             applyGitHubProjectSearch()
           }
         }}
-        // Why: Project clear means unfiltered results ('' override when the view
-        // has a default filter), not restore view default. GitHub items clear
-        // restores the preset query. Linear clears and persists empty resume.
+        // Project Clear means unfiltered, GitHub restores its preset, and Linear persists empty resume.
         onClear={() => {
           if (isGithubProjectSearch) {
             const viewFilter = githubProjectTable?.selectedView.filter ?? ''
             setGithubProjectSearch('')
-            // Why: undefined = use view default; '' = explicit unfiltered override.
+            // Undefined uses the view default; empty string explicitly removes filtering.
             setAppliedGithubProjectSearch(viewFilter ? '' : undefined)
             return
           }

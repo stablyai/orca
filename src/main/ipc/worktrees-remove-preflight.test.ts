@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import * as filesystemAuth from './filesystem-auth'
+import * as scopedRootsInvalidation from './registered-worktree-roots-scoped-invalidation'
 import * as authorizedRootsCache from './registered-worktree-roots-cache'
 import {
   removeWorktreeLinkedPathsMock,
@@ -10,10 +10,7 @@ import {
   getEffectiveHooksMock,
   runHookMock,
   gitExecFileAsyncMock,
-  getSshGitProviderMock,
-  getSshFilesystemProviderMock,
-  killAllProcessesForWorktreeMock,
-  getSshPtyProviderMock
+  killAllProcessesForWorktreeMock
 } from './worktrees-test-module-mocks'
 import { handlers, setupWorktreeHandlers, store } from './worktrees-test-harness'
 import { mockKnownFeatureWorktree } from './worktrees-test-fixtures'
@@ -42,18 +39,8 @@ vi.mock('../github/client', async () =>
 vi.mock('../source-control/hosted-review', async () =>
   (await import('./worktrees-test-module-mocks')).hostedReviewModuleMock()
 )
-vi.mock('../providers/ssh-git-dispatch', async () =>
-  (await import('./worktrees-test-module-mocks')).sshGitDispatchModuleMock()
-)
-vi.mock('../providers/ssh-filesystem-dispatch', async () =>
-  (await import('./worktrees-test-module-mocks')).sshFilesystemDispatchModuleMock()
-)
 vi.mock('./worktree-symlinks', async () =>
   (await import('./worktrees-test-module-mocks')).worktreeSymlinksModuleMock()
-)
-vi.mock('./ssh', async () => (await import('./worktrees-test-module-mocks')).sshModuleMock())
-vi.mock('../ssh/ssh-target-registry', async () =>
-  (await import('./worktrees-test-module-mocks')).sshTargetRegistryModuleMock()
 )
 vi.mock('../hooks', async () => (await import('./worktrees-test-module-mocks')).hooksModuleMock())
 vi.mock('../setup-runner-script-text', async (importOriginal) =>
@@ -99,14 +86,19 @@ vi.mock('../workspace-cleanup-removal-snapshot-prune', async () =>
 vi.mock('../runtime/worktree-teardown', async () =>
   (await import('./worktrees-test-module-mocks')).worktreeTeardownModuleMock()
 )
-vi.mock('./pty', async () => (await import('./worktrees-test-module-mocks')).ptyModuleMock())
+vi.mock('./pty/provider/registry', async () =>
+  (await import('./worktrees-test-module-mocks')).ptyRegistryModuleMock()
+)
+vi.mock('./pty/provider/state-cleanup', async () =>
+  (await import('./worktrees-test-module-mocks')).ptyStateCleanupModuleMock()
+)
 
 describe('registerWorktreeHandlers', () => {
   let runtimeStub: WorktreeRuntimeStub
 
   beforeEach(() => {
     runtimeStub = setupWorktreeHandlers()
-    vi.spyOn(filesystemAuth, 'invalidateAuthorizedRootsCacheForRepo').mockClear()
+    vi.spyOn(scopedRootsInvalidation, 'invalidateAuthorizedRootsCacheForRepo').mockClear()
     vi.spyOn(authorizedRootsCache, 'invalidateAuthorizedRootsCache').mockClear()
   })
 
@@ -143,7 +135,7 @@ describe('registerWorktreeHandlers', () => {
     expect(removeWorktreeLinkedPathsMock).not.toHaveBeenCalled()
     expect(killAllProcessesForWorktreeMock).not.toHaveBeenCalled()
     expect(removeWorktreeMock).not.toHaveBeenCalled()
-    expect(filesystemAuth.invalidateAuthorizedRootsCacheForRepo).not.toHaveBeenCalled()
+    expect(scopedRootsInvalidation.invalidateAuthorizedRootsCacheForRepo).not.toHaveBeenCalled()
     expect(authorizedRootsCache.invalidateAuthorizedRootsCache).not.toHaveBeenCalled()
   })
 
@@ -206,7 +198,7 @@ describe('registerWorktreeHandlers', () => {
     expect(removeWorktreeLinkedPathsMock).not.toHaveBeenCalled()
     expect(killAllProcessesForWorktreeMock).not.toHaveBeenCalled()
     expect(removeWorktreeMock).not.toHaveBeenCalled()
-    expect(filesystemAuth.invalidateAuthorizedRootsCacheForRepo).not.toHaveBeenCalled()
+    expect(scopedRootsInvalidation.invalidateAuthorizedRootsCacheForRepo).not.toHaveBeenCalled()
     expect(authorizedRootsCache.invalidateAuthorizedRootsCache).not.toHaveBeenCalled()
   })
 
@@ -293,46 +285,5 @@ describe('registerWorktreeHandlers', () => {
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(['worktree', 'prune'], {
       cwd: '/workspace/repo'
     })
-  })
-
-  it('fails closed when the SSH PTY provider is unavailable', async () => {
-    const repo = {
-      id: 'repo-ssh',
-      path: '/remote/repo',
-      displayName: 'ssh',
-      badgeColor: '#000',
-      addedAt: 0,
-      connectionId: 'conn-1',
-      worktreeBaseRef: null
-    }
-    store.getRepos.mockReturnValue([repo])
-    store.getRepo.mockReturnValue(repo)
-    const removeWorktree = vi.fn()
-    getSshGitProviderMock.mockReturnValue({
-      listWorktrees: vi.fn().mockResolvedValue([
-        { path: '/remote/repo', isMainWorktree: true },
-        {
-          path: '/remote/feature-wt',
-          head: 'feature',
-          branch: 'feature',
-          isMainWorktree: false
-        }
-      ]),
-      worktreeIsClean: vi.fn().mockResolvedValue({ clean: true }),
-      removeWorktree
-    })
-    getSshFilesystemProviderMock.mockReturnValue({
-      readFile: vi.fn().mockRejectedValue(new Error('missing'))
-    })
-    getSshPtyProviderMock.mockReturnValue(undefined)
-
-    await expect(
-      handlers['worktrees:remove'](null, {
-        worktreeId: 'repo-ssh::/remote/feature-wt'
-      })
-    ).rejects.toThrow('PTY provider unavailable for worktree deletion')
-
-    expect(removeWorktree).not.toHaveBeenCalled()
-    expect(killAllProcessesForWorktreeMock).not.toHaveBeenCalled()
   })
 })

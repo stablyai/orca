@@ -1,14 +1,5 @@
-// The one way a chat surface puts a write that did not happen into words.
-//
-// A refusal's `message` is never shown. Every code has at least one host emitter whose message is
-// written for a log or carries a marker (the census is pinned in the test), so the refusal's
-// reason, when the host names one, and otherwise its code, pick the copy with the write. A code's
-// own row names a cause only where every emitter of the code means it; it is also the words for a
-// host too old to send a reason. A notice says how to get past a refusal only where the person has
-// a step to take; retrying is the control that sent the write, except on the phone, whose message
-// goes back to the composer, and a history that couldn't open right now says to try again unless
-// something beside the words retries it.
-// Surfaces keep the fact and choose the words when they show it, so nothing saved carries copy.
+// Never show refusal.message: emitters use log prose/markers (test census). Choose by named reason, else code, naming causes only when all emitters agree.
+// Keep facts until display so saved state contains no copy. Retry is the sending control, except phone sends return to its composer; retryable history opens name a retry unless the surface supplies one.
 
 import {
   agentSessionFailureSentence,
@@ -29,6 +20,7 @@ import {
   type AgentSessionWriteRefusal
 } from './agent-session-write-failure'
 import { agentSessionRefusalReasonWords } from './agent-session-refusal-reason-words'
+import { TUI_AGENT_DISPLAY_NAMES } from './tui-agent-display-names'
 
 export {
   agentSessionRefusalReasonWords,
@@ -46,13 +38,13 @@ const NOT_DONE: Record<AgentSessionWriteKind, AgentSessionWriteNoticeSentence> =
   answer: 'notDoneAnswer',
   option: 'notDoneOption',
   command: 'notDoneCommand',
+  'queued-edit': 'notDoneQueuedEdit',
   clear: 'notDoneCommand',
   compact: 'notDoneCommand',
-  goal: 'notDoneGoal'
+  goal: 'notDoneGoalChangeIncomplete'
 }
 
-/** A /clear or /compact refused because the agent is working: one plain sentence for every
- *  reason that is, saying only what the person sees and can do. */
+/** Share actionable wording for /clear and /compact blocked by running work. */
 const COMMAND_WHILE_WORKING: Partial<
   Record<AgentSessionWriteKind, Partial<Record<string, AgentSessionWriteNoticeSentence[]>>>
 > = {
@@ -68,9 +60,7 @@ const COMMAND_WHILE_WORKING: Partial<
   }
 }
 
-/** That the write did not happen, for one that a second attempt can carry out. Only the phone says
- *  how: its message goes back to the composer and it has no Retry control. Everywhere else the
- *  control that sent the write is the way to try again. */
+/** For retryable writes, name how only on the phone, whose message returns to the composer; other surfaces retry with the sending control. */
 export function agentSessionWriteNotDoneParts(
   write: AgentSessionWriteKind
 ): AgentSessionWriteNoticeSentence[] {
@@ -88,7 +78,8 @@ function causeParts(
   }
   const saysNotDone =
     (write === 'read-history' && AGENT_SESSION_HISTORY_UNREAD_CAUSES.has(cause)) ||
-    (cause === 'questionChanged' && write === 'answer')
+    (cause === 'questionChanged' && write === 'answer') ||
+    (cause === 'cancelNotSaved' && write === 'stop')
   return saysNotDone ? [cause] : [cause, NOT_DONE[write]]
 }
 
@@ -98,6 +89,16 @@ function reasonParts(
   write: AgentSessionWriteKind,
   context: AgentSessionFailureWordsContext
 ): AgentSessionWriteNoticePart[] | undefined {
+  if (
+    failure.code === 'agent_session_operation_invalid' &&
+    (failure.details?.agentInstallation || failure.details?.codexInstallation) &&
+    (write === 'send' || write === 'composer-send')
+  ) {
+    return [
+      NOT_DONE[write],
+      { failure: { kind: 'startFailed', refusal: failure }, surface: 'rejection', context }
+    ]
+  }
   if (
     failure.code === 'agent_session_operation_invalid' &&
     failure.details?.argumentProblem &&
@@ -124,7 +125,26 @@ function reasonParts(
   if (!words || 'words' in words) {
     return undefined
   }
+  if ('writes' in words) {
+    if (!words.writes.includes(write)) {
+      return undefined
+    }
+    const agent =
+      failure.code === 'agent_session_operation_invalid' ? failure.details?.agent : undefined
+    const said: AgentSessionWriteNoticePart[] = [
+      {
+        failure: { kind: words.fact },
+        surface: 'row',
+        context: agent ? { ...context, agentName: TUI_AGENT_DISPLAY_NAMES[agent] } : context
+      }
+    ]
+    return context.retryControl && words.action === 'retry' ? said : [...said, words.step]
+  }
   if ('fact' in words) {
+    if (write === 'answer' && words.fact === 'providerExited') {
+      // Name the ended agent and unsent answer, then give the next step.
+      return [{ failure: { kind: words.fact }, surface: 'answer', context }]
+    }
     return write === 'send' || write === 'composer-send'
       ? [
           NOT_DONE[write],
@@ -150,8 +170,7 @@ function reasonParts(
   return step && !retried ? [...said, step] : said
 }
 
-/** What stopped a refused start, for a line that already says the chat did not start and shows its
- *  own Retry. Empty when the refusal names no reason with words of its own. */
+/** Cause for a failed start already showing Retry; empty without a reason carrying its own wording. */
 export function agentSessionRefusalCauseParts(
   failure: AgentSessionWriteFailure,
   context: { agentName?: string } = {}
@@ -163,8 +182,7 @@ export function agentSessionRefusalCauseParts(
   return parts?.filter((part) => part !== 'notDoneSend') ?? []
 }
 
-/** `context.retryControl`: a Retry beside the words is the step for a reason whose action is to
- *  retry, and for sending again; any other step stays. */
+/** retryControl replaces retry/send-again advice only; preserve any other next step. */
 export function agentSessionWriteNoticeParts(
   failure: AgentSessionWriteFailure,
   write: AgentSessionWriteKind,
@@ -182,24 +200,19 @@ export function agentSessionWriteNoticeParts(
     return byReason
   }
   switch (failure.code) {
-    // The cause is in the chat's own status row. Some restarts can be retried and some need a new
-    // chat, and the code does not say which.
+    // The status row holds the restart cause; this code cannot distinguish retryable cases from those needing a new chat.
     case 'agent_session_owner_restart_failed':
       return ['restartFailed', notDone]
-    // Several different owner states share these codes. Each is refused before the id is recorded,
-    // so the phone's resend under the same id can go through.
+    // Owner refusals precede recording the operation ID, so phone resends may succeed.
     case 'agent_session_checkpoint_stale':
     case 'agent_session_conflict':
     case 'agent_session_ownership_unknown':
     case 'execution_owner_reconciling':
       return agentSessionWriteNotDoneParts(write)
-    // Only an older Orca host (one that capped its operation records) refuses this way; updating
-    // it is the fix, since retrying soon would be refused again.
+    // Only old hosts cap operation rows; updating fixes this, while immediate retries remain refused.
     case 'agent_session_operation_capacity':
       return [notDone, 'capacity']
-    // The phone resends under the same id, which the host refuses the same way again. The rest
-    // stand for reasons the code does not name (a cleared conversation, a pending question, a
-    // provider's own rejection...), so any cause or next step could be false.
+    // Same-id phone resends stay refused; these codes span unnamed causes, so neither cause nor next step is safe to guess.
     case 'agent_session_operation_conflict':
     case 'agent_session_operation_expired':
     case 'agent_session_operation_invalid':
@@ -234,6 +247,13 @@ export function agentSessionUnconfirmedSendParts(
   return [...cause, 'sendOutcomeLost']
 }
 
+/** A message over the host's size bound, caught before it is sent: what to do instead of resending. */
+export const AGENT_SESSION_MESSAGE_TOO_LARGE_PARTS = [
+  'notDoneSend',
+  'messageTooLarge',
+  'shortenMessage'
+] as const satisfies readonly AgentSessionWriteNoticePart[]
+
 export function agentSessionWriteNoticeEnglish(
   parts: readonly AgentSessionWriteNoticePart[]
 ): string {
@@ -248,14 +268,14 @@ export function agentSessionWriteNoticeEnglish(
     .join(' ')
 }
 
-/** English, for a surface without translations. Takes the refusal as the wire gives it; its
- *  message is not read. */
+/** English fallback for untranslated surfaces; never read the refusal message. */
 export function agentSessionRefusalNotice(
   refusal: Pick<AgentSessionWireRefusal, 'code' | 'message' | 'details'>,
-  write: AgentSessionWriteKind
+  write: AgentSessionWriteKind,
+  context: AgentSessionFailureWordsContext = {}
 ): string {
   return agentSessionWriteNoticeEnglish(
-    agentSessionWriteNoticeParts(agentSessionRefusalFailure(refusal), write)
+    agentSessionWriteNoticeParts(agentSessionRefusalFailure(refusal), write, context)
   )
 }
 
@@ -264,8 +284,7 @@ export function agentSessionWriteFailureNotice(write: AgentSessionWriteKind): st
   return agentSessionWriteNoticeEnglish(agentSessionWriteNoticeParts({ kind: 'failed' }, write))
 }
 
-/** The notice for a refused read of a chat's history, from the refusal's code and any details a
- *  host sent; a code this build does not know says only that the history did not load. */
+/** Word history-read refusals by code/details; unknown codes say only that history did not load. */
 export function agentSessionReadHistoryRefusalParts(
   code: string,
   details?: unknown,

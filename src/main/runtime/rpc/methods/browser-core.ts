@@ -1,5 +1,5 @@
 import { defineMethod } from '../core'
-import { BrowserTarget } from '../schemas'
+import { BrowserTarget } from '../../../../shared/rpc-contract/rpc-param-primitives'
 import {
   Check,
   Drag,
@@ -14,7 +14,6 @@ import {
   Is,
   Keypress,
   LimitParam,
-  Screenshot,
   Scroll,
   Select,
   SelectorPath,
@@ -25,8 +24,12 @@ import {
   TabSwitch,
   Upload,
   Wait
-} from './browser-schemas'
-import { BrowserOpenUrlParams, BrowserTabCreateParams } from './browser-tab-create-schema'
+} from '../../../../shared/rpc-contract/browser-params'
+import { Screenshot, Snapshot } from '../../../../shared/rpc-contract/browser-observation-params'
+import {
+  BrowserOpenUrlParams,
+  BrowserTabCreateParams
+} from '../../../../shared/rpc-contract/browser-tab-create-params'
 import { BROWSER_TEXT_METHODS } from './browser-text-rpc-methods'
 import { BROWSER_PROFILE_METHODS } from './browser-profile-rpc-methods'
 import { CertificateProceed } from '../../../../shared/rpc-contract/browser-core-params'
@@ -35,7 +38,7 @@ export const BROWSER_CORE_METHODS = [
   defineMethod({
     name: 'browser.snapshot',
     permission: 'workspace',
-    params: BrowserTarget,
+    params: Snapshot,
     handler: async (params, { runtime }) => runtime.browserSnapshot(params)
   }),
   defineMethod({
@@ -91,7 +94,7 @@ export const BROWSER_CORE_METHODS = [
     name: 'browser.eval',
     permission: 'workspace',
     params: Eval,
-    handler: async (params, { runtime }) => runtime.browserEval(params)
+    handler: async (params, { runtime, signal }) => runtime.browserEval(params, signal)
   }),
   defineMethod({
     name: 'browser.tabList',

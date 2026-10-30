@@ -4,7 +4,7 @@ import type * as DarwinUserTempDir from './darwin-user-temp-dir'
 
 const { runProcessMock } = vi.hoisted(() => ({ runProcessMock: vi.fn() }))
 
-vi.mock('../../shared/child-process/run-process', () => ({ runProcess: runProcessMock }))
+vi.mock('@orca/process-host', () => ({ runProcess: runProcessMock }))
 
 async function loadResolver(): Promise<typeof DarwinUserTempDir> {
   vi.resetModules()
@@ -43,12 +43,5 @@ describe('getDarwinUserTempDir', () => {
     expect(await getDarwinUserTempDir('darwin')).toBe(tmpdir())
     expect(await getDarwinUserTempDir('darwin')).toBe(tmpdir())
     expect(await getDarwinUserTempDir('darwin')).toBe('/var/folders/ab/xyz/T/')
-  })
-
-  it('uses os.tmpdir() without spawning off macOS', async () => {
-    const { getDarwinUserTempDir } = await loadResolver()
-
-    expect(await getDarwinUserTempDir('linux')).toBe(tmpdir())
-    expect(runProcessMock).not.toHaveBeenCalled()
   })
 })

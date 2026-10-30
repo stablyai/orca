@@ -1,35 +1,30 @@
 // @vitest-environment happy-dom
-
-import '@testing-library/jest-dom/vitest'
-
 import { cleanup, render, screen } from '@testing-library/react'
-import { afterEach, describe, expect, it } from 'vitest'
-import { UsageBreakdownSection } from './UsageBreakdownSection'
+import { afterEach, expect, it } from 'vitest'
+import { i18n } from '@/i18n/i18n'
+import { UsageBreakdownSection, type UsageBreakdownRow } from './UsageBreakdownSection'
 
-afterEach(cleanup)
+afterEach(async () => {
+  cleanup()
+  await i18n.changeLanguage('en')
+})
 
-describe('UsageBreakdownSection', () => {
-  it('wraps long model identifiers instead of truncating them', () => {
-    const firstModel = 'fireworks-ai/accounts/fireworks/models/deepseek-v3p2'
-    const secondModel = 'fireworks-ai/accounts/fireworks/models/qwen3-coder-480b'
+function row(key: string, sessions: number, eventsOrTurns: number): UsageBreakdownRow {
+  return { key, label: key, tokens: 0, sessions, eventsOrTurns }
+}
 
-    render(
-      <UsageBreakdownSection
-        title="By model"
-        topLabel="Top model:"
-        topValue={firstModel}
-        eventsOrTurns="events"
-        rows={[
-          { key: firstModel, label: firstModel, tokens: 1_000, sessions: 1, eventsOrTurns: 2 },
-          { key: secondModel, label: secondModel, tokens: 2_000, sessions: 2, eventsOrTurns: 4 }
-        ]}
-      />
-    )
-
-    for (const model of [firstModel, secondModel]) {
-      const label = screen.getByText(model)
-      expect(label).toHaveClass('min-w-0', 'break-words')
-      expect(label).not.toHaveClass('truncate')
-    }
-  })
+it('picks each Russian plural form for session and turn counts', async () => {
+  await i18n.changeLanguage('ru')
+  render(
+    <UsageBreakdownSection
+      title="title"
+      topLabel="top"
+      topValue="model"
+      eventsOrTurns="turns"
+      rows={[row('a', 1, 21), row('b', 3, 5), row('c', 11, 2)]}
+    />
+  )
+  expect(screen.getByText('1 сессия • 21 ответ')).toBeTruthy()
+  expect(screen.getByText('3 сессии • 5 ответов')).toBeTruthy()
+  expect(screen.getByText('11 сессий • 2 ответа')).toBeTruthy()
 })

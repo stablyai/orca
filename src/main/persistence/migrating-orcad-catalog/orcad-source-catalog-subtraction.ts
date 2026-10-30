@@ -1,10 +1,7 @@
-/**
- * Subtracts a migrated target's catalog rows from a copy of the source profile (the delta view).
- * Only rows the manifest names and the target still owns go; a group stays while anything outside
- * the migration references it. The live profile is never passed here.
- */
+// Delta-view copies only: remove still-owned manifest rows; retain groups referenced elsewhere.
 import type { StoreRuntimeState } from '../loading-store/store-runtime-state'
-import type { OrcadMigrationManifest } from '../../../shared/orcad-migration-manifest'
+import type { OrcadMigrationManifest } from '../../../shared/orcad-migration/orcad-migration-manifest'
+import { requireOrcadMigrationSshSource } from '../../../shared/orcad-migration/orcad-migration-source-kind'
 import { orcadSourceFolderWorkspaceIds, repoBelongsToOrcadSource } from './orcad-source-ownership'
 
 export function subtractOrcadSourceCatalogState(
@@ -14,8 +11,8 @@ export function subtractOrcadSourceCatalogState(
   const repoIds = new Set(manifest.payload.repositories.map((repo) => repo.id))
   const folderIds = new Set(manifest.payload.folderWorkspaces.map((workspace) => workspace.id))
   const groupIds = new Set(manifest.payload.projectGroups.map((group) => group.id))
-  const targetId = manifest.source.sshTargetId
-  // Before any repo goes: a folder owned through the repos inside it would read as local after.
+  const targetId = requireOrcadMigrationSshSource(manifest.source).sshTargetId
+  // Resolve inferred folder ownership before deleting its repos.
   const ownedFolderIds = orcadSourceFolderWorkspaceIds(state, targetId)
   state.repos = state.repos.filter(
     (repo) => !(repoIds.has(repo.id) && repoBelongsToOrcadSource(repo, targetId))
@@ -23,7 +20,7 @@ export function subtractOrcadSourceCatalogState(
   state.folderWorkspaces = state.folderWorkspaces.filter(
     (workspace) => !(folderIds.has(workspace.id) && ownedFolderIds.has(workspace.id))
   )
-  removeUnreferencedSourceGroups(state, groupIds, manifest.source.sshTargetId)
+  removeUnreferencedSourceGroups(state, groupIds, targetId)
 }
 
 function removeUnreferencedSourceGroups(

@@ -1,4 +1,5 @@
 import { vi } from 'vitest'
+import { createUntitledMarkdownFileWithTemplateSelection } from '@/lib/create-untitled-markdown'
 import type { Mock } from 'vitest'
 import { consumeFloatingTerminalOpenMaximizedIntent } from '@/lib/floating-terminal'
 import { clearFloatingPanelReclaimIntent } from '@/lib/floating-workspace-focus-reclaim'
@@ -37,14 +38,12 @@ export type FloatingTerminalPanelMocks = {
   closeTerminalTab: Mock<(tabId: string, options?: { onClosed?: () => void }) => void>
   closeUnifiedTab: Mock<FloatingPanelStoreState['closeUnifiedTab']>
   guardPinnedTabClose: Mock<(options: { isPinned: boolean; onClose: () => void }) => void>
-  // Floating creates pass options the store fixture type does not model, so keep vitest's
-  // default loose signature rather than narrowing call assertions.
+  // Keep this mock loose because floating creation options exceed the store fixture’s modeled signature.
   createBrowserTab: Mock
   createTab: Mock<FloatingPanelStoreState['createTab']>
   createWebRuntimeSessionBrowserTab: Mock<(args: { worktreeId: string }) => Promise<boolean>>
   createWebRuntimeSessionTerminal: Mock<(args: { worktreeId: string }) => Promise<boolean>>
-  // Called both as focus(tabId) and focus(tabId, leafId, options); the default signature keeps
-  // every arity assertable.
+  // Keep all supported focus call arities assertable.
   focusTerminalTabSurface: Mock
   getFloatingMarkdownDirectory: Mock<() => Promise<string>>
   getFloatingTerminalCwd: Mock<() => Promise<string>>
@@ -90,16 +89,13 @@ export const mocks: FloatingTerminalPanelMocks = {
   clearEditorDraft: vi.fn(),
   closeFile: vi.fn(),
   closeTab: vi.fn(),
-  // Models terminal-tab-actions.closeTerminalTab: a real close removes the tab from the store, then
-  // runs onClosed (which arms the emptying-close reclaim intent off the now-decremented live count).
-  // Pinned/cancel paths are asserted via the mock's args or overridden with mockImplementationOnce.
+  // Match real close ordering: remove from store, then notify; tests override deferred/canceled closes.
   closeTerminalTab: vi.fn((tabId: string, options?: { onClosed?: () => void }) => {
     removeFloatingTerminalTabFromStore(tabId)
     options?.onClosed?.()
   }),
   closeUnifiedTab: vi.fn(),
-  // Models pinned-tab-close-guard.guardPinnedTabClose: unpinned closes run onClose immediately;
-  // pinned closes are deferred to a confirm dialog (assert isPinned via the mock's args).
+  // Match immediate unpinned closes; pinned confirmation remains deferred.
   guardPinnedTabClose: vi.fn((options: { isPinned: boolean; onClose: () => void }) => {
     if (!options.isPinned) {
       options.onClose()
@@ -154,6 +150,8 @@ function resetStore(tabs: TerminalTab[] = []): void {
     groupsByWorktree: {},
     unifiedTabsByWorktree: {},
     openFiles: [],
+    editorBufferIdOf: {},
+    editorBufferViews: {},
     activeGroupIdByWorktree: {},
     activeTabIdByWorktree: { [FLOATING_TERMINAL_WORKTREE_ID]: tabs[0]?.id ?? null },
     layoutByWorktree: {},
@@ -196,9 +194,7 @@ function resetStore(tabs: TerminalTab[] = []): void {
   storeBox.state = state
 }
 
-// Why: the panel's per-test environment (hook runtime, store, stubbed globals and module
-// singletons) is identical across every FloatingTerminalPanel behavior area.
-export async function setupFloatingTerminalPanelTest(): Promise<void> {
+export function setupFloatingTerminalPanelTest(): void {
   vi.clearAllMocks()
   hookRuntime.effects = []
   hookRuntime.layoutEffects = []
@@ -207,16 +203,11 @@ export async function setupFloatingTerminalPanelTest(): Promise<void> {
   saveDialogBox.fileId = null
   parkingBox.parkedTabIds = new Set()
   resetStore()
-  // Why: the open-maximized intent is a module singleton; drain any leftover
-  // from a prior test so it cannot bleed into an unrelated render.
+  // Drain singleton intents so prior tests cannot affect this render.
   consumeFloatingTerminalOpenMaximizedIntent()
-  // Why: the reclaim intent is also a module singleton; clear it so one test's
-  // armed-but-unconsumed intent cannot trigger a reclaim in the next.
   clearFloatingPanelReclaimIntent()
-  // Why: the focus-report dedupe cache is module state keyed on the setFloatingFocus
-  // mock identity; reset it so a prior test's last-reported value can't suppress an IPC.
-  const { clearReportedFloatingFocusCache } = await import('./FloatingTerminalPanel')
-  clearReportedFloatingFocusCache()
+  mocks.setFloatingFocus = vi.fn()
+  vi.mocked(createUntitledMarkdownFileWithTemplateSelection).mockReset()
   mocks.createTab.mockReturnValue(makeTab({ id: 'created-tab' }))
   mocks.createWebRuntimeSessionBrowserTab.mockResolvedValue(false)
   mocks.createWebRuntimeSessionTerminal.mockResolvedValue(false)
@@ -258,9 +249,7 @@ export async function setupFloatingTerminalPanelTest(): Promise<void> {
   vi.stubGlobal('navigator', { userAgent: 'Macintosh' })
   vi.stubGlobal('HTMLElement', class {})
   vi.stubGlobal('localStorage', localStorage)
-  // Default so closeFloatingItemConfirmed's isFloatingWorkspacePanelFocused() read and the
-  // panel's outside-pointerdown effect are both safe; individual tests override document with
-  // specific activeElement state (keeping addEventListener/removeEventListener for runEffects()).
+  // Provide focus/listener defaults; tests may replace activeElement while retaining effect-safe listeners.
   vi.stubGlobal('document', {
     activeElement: null,
     addEventListener: vi.fn(),

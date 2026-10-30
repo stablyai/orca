@@ -17,25 +17,24 @@ import { grokHookService } from '../grok/hook-service'
 import { hermesHookService } from '../hermes/hook-service'
 import { jcodeHookService } from '../jcode/hook-service'
 import { kimiHookService } from '../kimi/hook-service'
+import { kiroHookService } from '../kiro/hook-service'
 import { dshHookService } from '../dsh/hook-service'
 import { museHookService } from '../muse/hook-service'
 import { zcodeHookService } from '../zcode/hook-service'
 import { openClaudeHookService } from '../openclaude/hook-service'
 
 export type RemoteManagedHookInstallOptions = {
-  /** Explicit CODEX_HOME dir for redirected runtimes (for example WSL's managed runtime home). */
+  /** Redirected runtime CODEX_HOME, including managed WSL homes. */
   codexHomeDir?: string
   /** Skip the trust write when a redirected runtime config is seeded by the launch path. */
   deferTrustUntilConfigToml?: boolean
-  /** Explicit GROK_HOME for remote runtimes that redirect Grok's config. */
   grokHomeDir?: string
-  /** Version reported by Claude on this execution host. */
+  /** Login-shell KIRO_HOME on the execution host; it replaces ~/.kiro outright. */
+  kiroHomeDir?: string
   claudeVersion?: string
-  /** Stops before starting the next installer when the owning relay request
-   *  is cancelled. Individual filesystem mutations remain atomic. */
+  /** Cancellation stops the next installer; individual mutations remain atomic. */
   signal?: AbortSignal
-  /** Positively detected and enabled agents allowed to mutate config.
-   *  Required for any install: omit/empty fails closed (no config mutation). */
+  /** Only positively detected, enabled agents may mutate configs; omitted/empty installs nothing. */
   agents?: readonly AgentHookTarget[]
 }
 
@@ -87,12 +86,14 @@ const REMOTE_MANAGED_HOOK_INSTALLERS: readonly RemoteManagedHookInstaller[] = [
   ['muse', (sftp, remoteHome) => museHookService.installRemote(sftp, remoteHome)],
   ['zcode', (sftp, remoteHome) => zcodeHookService.installRemote(sftp, remoteHome)],
   ['dsh', (sftp, remoteHome) => dshHookService.installRemote(sftp, remoteHome)],
-  ['jcode', (sftp, remoteHome) => jcodeHookService.installRemote(sftp, remoteHome)]
+  ['jcode', (sftp, remoteHome) => jcodeHookService.installRemote(sftp, remoteHome)],
+  [
+    'kiro',
+    (sftp, remoteHome, options) =>
+      kiroHookService.installRemote(sftp, remoteHome, options?.kiroHomeDir)
+  ]
 ]
 
-/** Agents wired into the remote (SSH) hook installer. Exported so an invariant
- *  test can assert every locally-managed agent that implements `installRemote`
- *  is registered here — the omission that hid Droid/Copilot status over SSH. */
 export const REMOTE_MANAGED_HOOK_INSTALLER_AGENTS: readonly AgentHookInstallStatus['agent'][] =
   REMOTE_MANAGED_HOOK_INSTALLERS.map(([agent]) => agent)
 
@@ -101,8 +102,7 @@ export async function installRemoteManagedAgentHooks(
   remoteHome: string,
   options?: RemoteManagedHookInstallOptions
 ): Promise<AgentHookInstallStatus[]> {
-  // Why: omit/empty allowlist must never mean "install every agent" — that
-  // recreates config homes for CLIs the user never installed (issue #11641).
+  // An empty allowlist must not create config homes for uninstalled CLIs.
   const allowedAgents = new Set(options?.agents ?? [])
   if (allowedAgents.size === 0) {
     return []
@@ -112,8 +112,7 @@ export async function installRemoteManagedAgentHooks(
     if (!allowedAgents.has(agent)) {
       continue
     }
-    // Why: relay requests can disappear during reconnect; do not start more
-    // user-config mutations after their client has gone away.
+    // Stop further config mutations when the owning relay request disappears.
     options?.signal?.throwIfAborted()
     try {
       const result = await install(sftp, remoteHome, options)
@@ -126,9 +125,7 @@ export async function installRemoteManagedAgentHooks(
         )
       }
     } catch (error) {
-      // Why: remote hook installation must not block SSH workspace startup.
-      // A broken agent config or transient SFTP failure should degrade status
-      // reporting only, while terminals/filesystem/git still come online.
+      // Hook failures must not prevent SSH terminals, files, and Git from becoming available.
       const detail = error instanceof Error ? error.message : String(error)
       console.warn(`[agent-hooks] Remote ${agent} managed hook install threw: ${detail}`)
       results.push({

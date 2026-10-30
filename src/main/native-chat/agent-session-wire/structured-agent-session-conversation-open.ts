@@ -1,21 +1,14 @@
-// The one way a conversation's journal becomes open on this host: for a send, for a reader, and
-// for an attach that finds none open.
-//
-// A damaged journal fails the open, which refuses it as unloadable. It marks what an earlier host
-// process handed over and left unanswered as in doubt, and settles what it left running — the
-// crash boundary. That
-// needs no lease: provider history decides such a row later, under a won lease, in the attach. A
-// row an earlier process accepted and never handed over (it quit or crashed first) is settled here
-// too, before any reader, command or child sees it: a person's message is kept as a card, the rest
-// rejected (`journal-unsent-send-hold.ts`). The cards then wait for the chat's next turn
-// (`queued-message-pause.ts`). Nothing here starts a provider child.
+// Open and settle the crash boundary before any reader, command or child: damaged journals fail;
+// handed-over sends remain permanently unknown. Unhanded personal text becomes a paused card,
+// other unhanded sends are rejected (journal-unsent-send-hold.ts / queued-message-pause.ts).
+// Settlement needs no lease and starts no provider child.
 
 import type { JournalHostDatabase } from '../agent-session-journal/journal-host-database'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import { openAgentSessionJournal } from '../agent-session-journal/journal-store-factory'
 import { holdUnsentSends } from '../agent-session-journal/journal-unsent-send-hold'
 import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
-import type { AgentSessionRecord } from '../../../shared/agent-session-record'
+import type { AgentSessionConversationView } from '../../../shared/agent-session-conversation-view'
 import {
   attachFingerprintFields,
   journalIdentityFor,
@@ -24,10 +17,7 @@ import {
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import { settleStaleStructuredAgentSessionState } from './structured-agent-session-dead-generation-settlement'
 import { structuredAgentSessionFailureWordsContext } from './structured-agent-session-send-preparation'
-import {
-  markStructuredQueueReopen,
-  structuredAgentSessionHostInstance
-} from './structured-agent-session-queued-pause'
+import { markStructuredQueueReopen } from './structured-agent-session-queued-pause'
 import type {
   StructuredAgentSessionHostDeps,
   StructuredAgentSessionHostSession
@@ -38,13 +28,12 @@ export type OpenedStructuredAgentSessionConversation = {
 }
 
 export type StructuredAgentSessionConversationOpenDeps = {
-  store: Pick<AgentSessionRecordStore, 'getRecord'>
+  store: Pick<AgentSessionRecordStore, 'getConversation' | 'replacedRuntime'>
   journalDatabase: JournalHostDatabase
   logger: StructuredAgentSessionHostDeps['logger']
 }
 
-/** An acquisition's own open: its reserve cleared the record's death evidence, so it settles
- *  what the gone generation left running itself, from what it read before. */
+/** Acquisition retains prior death evidence because reservation clears it. */
 export type StructuredAgentSessionConversationOpenOptions = {
   acquisition?: boolean
 }
@@ -52,15 +41,13 @@ export type StructuredAgentSessionConversationOpenOptions = {
 export type StructuredAgentSessionConversationOpenContext = {
   deps: StructuredAgentSessionConversationOpenDeps
   sessions: Map<string, StructuredAgentSessionHostSession>
-  /** Indexes a conversation that just became open; the host publishes it and wakes delivery. */
   adoptOpened: (
     sessionId: string,
     opened: OpenedStructuredAgentSessionConversation
   ) => Promise<void>
 }
 
-/** The open conversation, or null when this host has no record of it. For a caller inside the
- *  session's serialize, which is what makes "not open yet" exact. */
+/** Caller holds serialization so the open-or-absent decision is exact. */
 export async function openStructuredAgentSessionConversation(
   context: StructuredAgentSessionConversationOpenContext,
   sessionId: string,
@@ -70,7 +57,7 @@ export async function openStructuredAgentSessionConversation(
   if (open) {
     return open
   }
-  const record = context.deps.store.getRecord(sessionId)
+  const record = context.deps.store.getConversation(sessionId)
   if (!record) {
     return null
   }
@@ -79,14 +66,25 @@ export async function openStructuredAgentSessionConversation(
   return opened.session
 }
 
-/** The open itself, indexed by nobody yet: the caller adopts the result. */
+/** Caller adopts the unindexed journal; settlement needs store ownership history. */
+export async function openStructuredAgentSessionConversationJournal(
+  deps: StructuredAgentSessionConversationOpenDeps,
+  record: AgentSessionConversationView,
+  options?: StructuredAgentSessionConversationOpenOptions
+): Promise<OpenedStructuredAgentSessionConversation>
 export async function openStructuredAgentSessionConversationJournal(
   deps: Omit<StructuredAgentSessionConversationOpenDeps, 'store'>,
-  record: AgentSessionRecord,
+  record: AgentSessionConversationView,
+  options: { acquisition: true }
+): Promise<OpenedStructuredAgentSessionConversation>
+export async function openStructuredAgentSessionConversationJournal(
+  deps: Omit<StructuredAgentSessionConversationOpenDeps, 'store'> &
+    Partial<Pick<StructuredAgentSessionConversationOpenDeps, 'store'>>,
+  record: AgentSessionConversationView,
   options: StructuredAgentSessionConversationOpenOptions = {}
 ): Promise<OpenedStructuredAgentSessionConversation> {
   const { sessionId } = record
-  const fence = record.lease.runtimeFence
+  const fence = record.currentFence
   const params = attachParamsForRecord(record, {
     clientOperationId: `read-restore:${sessionId}`,
     expectedRuntimeFence: fence
@@ -94,7 +92,7 @@ export async function openStructuredAgentSessionConversationJournal(
   const identity = journalIdentityFor(record, params)
   const journal = await openAgentSessionJournal({ identity, database: deps.journalDatabase })
   try {
-    // A handed-over row found here is only doubt, which provider history decides under a won lease.
+    // A handed-over row found here stays doubt: it reads as sent, and nothing narrows it later.
     await journal.markPendingSubmissionsUnknown(fence)
   } catch (error) {
     deps.logger.warn('marking pending sends unknown on open failed', {
@@ -104,65 +102,55 @@ export async function openStructuredAgentSessionConversationJournal(
     })
   }
   try {
-    // Before a Stop this open serves can withdraw one: a Stop never withdraws a card.
-    await holdUnsentSends(journal, {
-      fence,
-      hostInstance: structuredAgentSessionHostInstance(),
-      hold: { cause: 'hostRestarted' }
-    })
+    // Preserve leftover personal sends before any Stop can withdraw them.
+    await holdUnsentSends(journal, { fence, hold: { cause: 'hostRestarted' } })
   } catch (error) {
-    // The row stays queued. The delivery loop's first step tries again before it hands anything
-    // over; if that fails too, the loop fails and rejects every queued send.
+    // Failed leftovers stay queued; delivery retries before handover or rejects all if recovery still fails.
     deps.logger.warn('settling sends an earlier process left queued failed on open', {
       scope: 'open-leftover-sends',
       sessionId,
       error
     })
   }
-  // After the leftovers became cards, so the mark follows every card this open found. Every open
-  // comes after the chat stopped running: the idle sweep never closes one with cards waiting.
+  // Mark after recovering cards; idle sweeping never closes handles while cards wait.
   await markStructuredQueueReopen(sessionId, journal, fence, deps.logger)
-  // No child in this process writes to a journal nobody had open, so whatever it shows running
-  // belongs to a generation that is gone, whatever the lease still claims. Settled before any
-  // reader or child sees it.
+  // No local child writes unopened journals; settle the gone generation before readers/new children.
   if (!options.acquisition) {
     await settleGoneGeneration(deps, record, journal)
   }
   return { session: { journal, params, child: null } }
 }
 
-/**
- * The open's settle again, for a conversation already open: a proof of death written since it
- * opened (the startup reconcile, a recovery) revises what the open could only call `unverifiable`.
- * A record holds a proof only while released, so no child here is writing. A no-op once revised.
- */
+/** New released-owner death proof can refine prior unverifiable work; no-op after revision. */
 export async function resettleOpenStructuredAgentSessionConversation(
   deps: StructuredAgentSessionConversationOpenDeps,
   sessionId: string,
   session: StructuredAgentSessionHostSession | undefined
 ): Promise<void> {
-  const record = deps.store.getRecord(sessionId)
-  if (session && record?.lease.deathEvidence) {
+  const record = deps.store.getConversation(sessionId)
+  if (session && record?.ownerObservation.deathEvidence) {
     await settleGoneGeneration(deps, record, session.journal)
   }
 }
 
 async function settleGoneGeneration(
-  deps: Pick<StructuredAgentSessionConversationOpenDeps, 'logger'>,
-  record: AgentSessionRecord,
+  deps: Pick<StructuredAgentSessionConversationOpenDeps, 'logger'> &
+    Partial<Pick<StructuredAgentSessionConversationOpenDeps, 'store'>>,
+  record: AgentSessionConversationView,
   journal: AgentSessionJournal
 ): Promise<void> {
   try {
     await settleStaleStructuredAgentSessionState({
       journal,
       sessionId: record.sessionId,
-      fence: record.lease.runtimeFence,
+      fence: record.currentFence,
       acquisitionGeneration: null,
-      deathEvidence: record.lease.deathEvidence ?? null,
+      deathEvidence: record.ownerObservation.deathEvidence ?? null,
+      replaced: deps.store?.replacedRuntime(record.sessionId),
       failureTextContext: structuredAgentSessionFailureWordsContext(record)
     })
   } catch (error) {
-    // Best effort: the next open or acquire re-derives it.
+    // Best effort; next open/acquisition retries.
     deps.logger.warn("settling a gone agent's work on open failed", {
       scope: 'open-dead-generation',
       sessionId: record.sessionId,
@@ -172,7 +160,7 @@ async function settleGoneGeneration(
 }
 
 export function attachParamsForRecord(
-  record: AgentSessionRecord,
+  record: Pick<AgentSessionConversationView, 'sessionId' | 'location' | 'provider' | 'accountHome'>,
   input: {
     clientOperationId: string
     expectedRuntimeFence: number

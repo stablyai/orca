@@ -3,7 +3,7 @@ import type { useAppStore } from '@/store'
 import type { parseGitHubIssueOrPRLink, RepoSlug } from '@/lib/github-links'
 import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
 import type { GitLabWorkItem } from '../../../../shared/gitlab-types'
-import type { JiraIssue, JiraSite } from '../../../../shared/jira-types'
+import type { JiraIssue, JiraSite } from '../../../../shared/jira/jira-types'
 import type { LinearIssue } from '../../../../shared/linear/issue-types'
 import type { BaseRefSearchResult } from '../../../../shared/repo-types'
 import type { TaskSourceContext } from '../../../../shared/task-source-context'
@@ -16,6 +16,7 @@ export type RepoOption = ReturnType<typeof useAppStore.getState>['repos'][number
 
 export type SmartWorkspaceNameFieldProps = {
   repos: readonly RepoOption[]
+  selectedRepo?: RepoOption | null
   repoId: string
   onRepoChange: (repoId: string) => void
   value: string
@@ -91,6 +92,7 @@ export const RESULT_LIMIT = 12
 export type WorkItemSourceSearchProps = Pick<
   SmartWorkspaceNameFieldProps,
   | 'repos'
+  | 'selectedRepo'
   | 'repoId'
   | 'value'
   | 'disabled'

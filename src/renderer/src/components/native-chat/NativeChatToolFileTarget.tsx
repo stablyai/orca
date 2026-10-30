@@ -1,9 +1,8 @@
 import type { CommentMarkdownLinkClickHandler } from '@/components/sidebar/CommentMarkdown'
 import { cn } from '@/lib/utils'
-import { createNativeChatFileHref } from '../../../../shared/native-chat-href-routing'
+import { createNativeChatFileHref } from '../../../../shared/native-chat/native-chat-href-routing'
 
-/** The file a tool row names: its base name on screen, the full path in its title and
- *  accessible name. With a link handler it opens the file in Orca instead of toggling the row. */
+/** Expose the full path accessibly; a link handler opens the file without toggling its row. */
 export function NativeChatToolFileTarget({
   path,
   label,
@@ -25,10 +24,12 @@ export function NativeChatToolFileTarget({
       </>
     )
   }
+  const href = createNativeChatFileHref(path, 'literal')
   return (
     <span
       role="link"
       tabIndex={0}
+      data-native-chat-link-href={href}
       className={cn(
         className,
         'cursor-pointer rounded-sm underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
@@ -38,7 +39,7 @@ export function NativeChatToolFileTarget({
       onClick={(event) => {
         // The row around this is its expand button; opening the file must not also toggle it.
         event.stopPropagation()
-        onLinkClick(event, createNativeChatFileHref(path, 'literal'))
+        onLinkClick(event, href)
       }}
       onKeyDown={(event) => {
         if (event.key === 'Enter' || event.key === ' ') {

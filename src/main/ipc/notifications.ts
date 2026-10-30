@@ -15,6 +15,7 @@ import { setTrayAttention } from '../tray/system-tray'
 import { isMainWindowVisible } from '../window/main-window-visibility'
 import { activeNotificationsById } from './native-notification-lifecycle'
 import { deliverNativeNotification } from './native-notification-delivery'
+import { removeReadMacosNotifications } from './macos-notification-center'
 import { createNotificationDeliveryService } from '../notifications/notification-delivery-service'
 import { createAnnouncedNotificationRegistry } from '../notifications/announced-notification-registry'
 import { registerNotificationSoundHandlers } from './notification-sound-ipc'
@@ -41,7 +42,7 @@ export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntime
     openNotificationSystemSettings()
   })
 
-  // Why: Electron's main process can't read macOS auth status; expose only what we can observe (platform support + whether we've prompted).
+  // Keep the legacy status surface observational; native authorization is read by onboarding below.
   const getPermissionStatus = (): NotificationPermissionStatusResult => ({
     supported: Notification.isSupported(),
     platform: process.platform,
@@ -52,15 +53,15 @@ export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntime
   ipcMain.handle(
     'notifications:probeDelivery',
     async (_event, args?: { force?: boolean }): Promise<NotificationDeliveryProbeResult> => {
-      // Why: macOS-only — Windows/Linux have no first-use permission dialog, so the onboarding card never renders there.
+      // First-use permission onboarding is macOS-only.
       if (process.platform !== 'darwin' || !Notification.isSupported()) {
         return { state: 'unsupported', authoritative: false }
       }
-      // Why: probes surface the macOS permission dialog, so mark startup registration done to avoid a second prompt later.
+      // Record prompting intent so startup registration cannot trigger a second prompt.
       if (store.getUI().notificationPermissionRequested !== true) {
         store.updateUI({ notificationPermissionRequested: true })
       }
-      // Preferred source: the bundled helper reads real auth silently, so polling tracks System Settings changes without banners.
+      // Prefer silent native reads so System Settings changes are visible without probe banners.
       const authorization = await readNotificationAuthorizationStatus()
       if (authorization === 'authorized') {
         recordNotificationDeliveryOutcome('delivered')
@@ -71,13 +72,13 @@ export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntime
         return { state: 'blocked', authoritative: true }
       }
       if (authorization === 'not-determined') {
-        // Why: the dialog only appears once something asks; fire one probe per session to trigger it, then report pending.
+        // Trigger the first-use presenter once, then report awaiting-decision.
         if (!hasTriggeredPermissionDialogThisSession()) {
           void probeNotificationDelivery()
         }
         return { state: 'awaiting-decision', authoritative: true }
       }
-      // Helper unavailable or 'unknown': fall back to scheduling-based probes with session caching to avoid repeated banners.
+      // Without native evidence, cache scheduling probes within the session to avoid repeat banners.
       const lastObservedDeliveryOutcome = getLastObservedDeliveryOutcome()
       if (!args?.force && lastObservedDeliveryOutcome !== null) {
         return {
@@ -116,12 +117,14 @@ export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntime
           const read = Array.isArray(reads)
             ? reads.find((item) => isStructuredAttentionRead(item) && item.paneKey === paneKey)
             : undefined
-          for (const entry of announced.take(paneKey, read)) {
+          const retired = announced.take(paneKey, read)
+          for (const entry of retired) {
             uniqueIds.add(entry.id)
             if (!entry.origin) {
               genericMobileIds.add(entry.id)
             }
           }
+          removeReadMacosNotifications(paneKey, retired)
           if (read) {
             runtime?.retireStructuredAttention(read)
           }
@@ -165,7 +168,7 @@ export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntime
     }
   })
 
-  // A remote host reported no pending prompt: its alerts relayed to this desktop's phones are over.
+  // A cleared remote prompt must also retire alerts forwarded to this desktop's phones.
   ipcMain.removeHandler('notifications:settleStructuredPrompts')
   ipcMain.handle(
     'notifications:settleStructuredPrompts',

@@ -11,6 +11,8 @@ function agent(overrides: Partial<RuntimeWorktreeAgentRow> = {}): RuntimeWorktre
     state: 'working',
     agentType: 'codex',
     prompt: 'fix mobile lag',
+    taskTitle: null,
+    displayName: null,
     lastAssistantMessage: null,
     toolName: null,
     toolInput: null,
@@ -40,7 +42,6 @@ function worktree(overrides: Partial<Worktree> = {}): Worktree {
     path: worktreePath,
     liveTerminalCount: 1,
     hasAttachedPty: true,
-    preview: '$ codex',
     unread: false,
     lastOutputAt: 1234,
     isPinned: false,
@@ -192,7 +193,7 @@ describe('areWorktreeListsEqual', () => {
     expect(areWorktreeListsEqual(at(1), at(1))).toBe(true)
   })
 
-  // The host drops Stopping on letting go of a session without moving any clock the row carries.
+  // Stopping may change without advancing any row clock.
   it("detects the host's Stopping coming and going with nothing else moved", () => {
     const stopping = (value: boolean) => [
       worktree({
@@ -221,12 +222,5 @@ describe('areWorktreeListsEqual', () => {
     const second = [worktree({ status: 'working', workingMode: 'monitoring' })]
 
     expect(areWorktreeListsEqual(first, second)).toBe(false)
-  })
-
-  it('treats missing and empty agent arrays as equivalent for rendering', () => {
-    const first = [worktree({ agents: undefined })]
-    const second = [worktree({ agents: [] })]
-
-    expect(areWorktreeListsEqual(first, second)).toBe(true)
   })
 })

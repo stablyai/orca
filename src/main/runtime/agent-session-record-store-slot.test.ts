@@ -1,7 +1,4 @@
-/**
- * The record store opened on its own, for launch admission, and the chat host built on it later.
- * The store is a single writer, so the property that matters is that there is only ever one.
- */
+/** Early launch admission and the later chat host must share one record-store writer. */
 
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -21,6 +18,7 @@ let stateDirectory: string
 function location(directory = stateDirectory) {
   return {
     stateDirectory: directory,
+    legacySessionTabIds: [],
     hostId: HOST_ID,
     logger: createStructuredAgentSessionLogger()
   }
@@ -54,14 +52,13 @@ describe('the record store slot', () => {
       ...location(),
       claimKeyId: 'key-1',
       resolveWorkspacePath: async () => stateDirectory,
-      resolveClaudeAuthPolicy: () => ({ stripAuthEnv: true }),
+      resolveClaudeAuthPolicy: () => ({ account: 'managed' }),
       resolveEnvironment: async () => ({}),
       resolveLaunchArgs: () => []
     })
     expect(host.deps.store).toBe(store)
 
     await stopStructuredAgentSessionRuntime()
-    // The host's teardown closes the one connection; stop does not close it a second time.
     expect(close).toHaveBeenCalledOnce()
   })
 

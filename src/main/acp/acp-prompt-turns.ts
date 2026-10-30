@@ -1,4 +1,13 @@
 import type { ProviderTimelineEvent } from '../native-chat/agent-session-timeline/provider-timeline-event'
+import {
+  absorbAcpCompactionFrame,
+  acpCompactionEnd,
+  type AcpCompaction,
+  type AcpCompactionFrame
+} from './acp-compaction-turn'
+import type { AcpDialect, AcpTurnEnding } from './acp-dialects/acp-dialect'
+import { hookOutcomeRowBody } from '../../shared/agent-session-hook-outcome'
+import type { SessionUpdate } from './generated/acp-protocol.generated'
 
 export type AcpPromptTurn = {
   clientMessageId: string
@@ -6,26 +15,76 @@ export type AcpPromptTurn = {
   requestedAt: number
   opened: boolean
   durationMs?: number
+  compaction?: AcpCompaction
 }
 
-/** An injected identity is known before any provider output arrives. */
+export const acpPromptTurnId = (clientMessageId: string): string => `prompt:${clientMessageId}`
+
 export class AcpPromptTurns {
   current?: AcpPromptTurn
-  /** The last prompt that ended, so its answer can still add the failure reason the end lacked. */
+  /** Retain the ended prompt so its reply can supply a late failure reason. */
   last?: AcpPromptTurn
 
   constructor(
     private readonly sessionId: string,
-    private readonly injected: boolean
+    private readonly dialect: AcpDialect,
+    private readonly agentName?: string
   ) {}
 
-  open(clientMessageId: string, at: number): { promptId: string; events: ProviderTimelineEvent[] } {
+  /** Reuse the host's already-open command turn for compaction. */
+  open(
+    clientMessageId: string,
+    at: number,
+    compactionTurn?: string
+  ): { promptId: string; events: ProviderTimelineEvent[] } {
     if (this.current) {
       throw new Error('ACP prompt overlaps a prompt or load')
     }
-    const turn = `prompt:${clientMessageId}`
+    if (compactionTurn !== undefined) {
+      this.current = {
+        clientMessageId,
+        turn: compactionTurn,
+        requestedAt: at,
+        opened: true,
+        compaction: { reply: '' }
+      }
+      return { promptId: compactionTurn, events: [] }
+    }
+    const turn = acpPromptTurnId(clientMessageId)
     this.current = { clientMessageId, turn, requestedAt: at, opened: false }
-    return { promptId: turn, events: this.injected ? [] : this.start(turn, at) }
+    const injected = this.dialect.injectedPromptIdentity === true
+    return { promptId: turn, events: injected ? [] : this.start(turn, at) }
+  }
+
+  compacting(turn: string | undefined): AcpPromptTurn | undefined {
+    return turn !== undefined && this.current?.turn === turn && this.current.compaction
+      ? this.current
+      : undefined
+  }
+
+  /** True suppresses rendering the compaction's frame. */
+  absorbCompaction(
+    turn: string | undefined,
+    extension: AcpCompactionFrame | undefined,
+    update: SessionUpdate | undefined
+  ): boolean {
+    const prompt = this.compacting(turn)
+    return prompt !== undefined && absorbAcpCompactionFrame(prompt, extension, update)
+  }
+
+  endCompaction(turn: string, ending: AcpTurnEnding): ProviderTimelineEvent[] | undefined {
+    const prompt = this.compacting(turn)
+    if (!prompt?.compaction) {
+      return undefined
+    }
+    return acpCompactionEnd({
+      ...prompt,
+      ...ending,
+      compaction: prompt.compaction,
+      thread: this.sessionId,
+      dialect: this.dialect,
+      agentName: this.agentName
+    })
   }
 
   finish(): void {
@@ -33,7 +92,7 @@ export class AcpPromptTurns {
     this.current = undefined
   }
 
-  /** Forgets a prompt the agent refused before its turn opened; false for any other. */
+  /** Only discard refusals received before the turn opens. */
   refuse(clientMessageId: string): boolean {
     if (this.current?.clientMessageId !== clientMessageId || this.current.opened) {
       return false
@@ -58,6 +117,19 @@ export class AcpPromptTurns {
       }
     ]
   }
+}
+
+/** Hook denial completes the turn; a stable row key deduplicates repeated endings. */
+export function acpTurnEndEvents(
+  thread: string,
+  turn: string,
+  { stopReason, at, durationMs, hookBlock }: AcpTurnEnding
+): ProviderTimelineEvent[] {
+  const end = acpTurnEnd(turn, hookBlock ? 'end_turn' : stopReason, at, durationMs)
+  const body = hookBlock && hookOutcomeRowBody('blocked', [hookBlock.reason ?? ''])
+  return body
+    ? [{ type: 'item.update', item: `hook-block:${turn}`, body, join: { thread, turn } }, end]
+    : [end]
 }
 
 export function acpTurnEnd(

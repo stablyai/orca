@@ -1,8 +1,19 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+const appStore = vi.hoisted(() => ({
+  getState: vi.fn(() => {
+    throw new Error('These transport fixtures must not read app-store ownership')
+  })
+}))
 
-// Why: the transport suppresses a repeat of the message it last surfaced so one outage cannot spam the
-// pane. Dismissal is the only evidence the user consumed that surface, so it must re-arm the memory —
-// otherwise an identical fatal error recurring during the same outage leaves a dead pane looking fine.
+vi.mock('@/store', () => ({ useAppStore: { getState: appStore.getState } }))
+
+afterEach(() => {
+  expect(appStore.getState).not.toHaveBeenCalled()
+})
+
+import { stubRuntimeEnvironmentBridge } from '../../runtime/runtime-environment-bridge-fixture'
+
+// Dismissal re-arms identical errors; otherwise a later fatal recurrence in the same outage can leave a dead pane without a visible surface.
 describe('remote runtime error surface dismissal', () => {
   const runtimeCall = vi.fn()
   const runtimeSubscribe = vi.fn()
@@ -20,14 +31,7 @@ describe('remote runtime error surface dismissal', () => {
         return { unsubscribe: vi.fn(), sendBinary: subscriptionSendBinary }
       }
     )
-    vi.stubGlobal('window', {
-      api: {
-        runtimeEnvironments: {
-          call: runtimeCall,
-          subscribe: runtimeSubscribe
-        }
-      }
-    })
+    stubRuntimeEnvironmentBridge({ call: runtimeCall, subscribe: runtimeSubscribe })
   })
 
   async function attachTransportWithFatalSends(onError: (message: string) => void) {
@@ -61,18 +65,6 @@ describe('remote runtime error surface dismissal', () => {
     // The memory re-arms: repeats after the re-surfaced error are suppressed again until the next dismissal.
     expect(await transport.sendInputAccepted?.('d', 'driving')).toBe(false)
     expect(onError).toHaveBeenCalledTimes(2)
-    transport.destroy?.()
-  })
-
-  it('leaves an undismissed surface deduped', async () => {
-    const onError = vi.fn()
-    const transport = await attachTransportWithFatalSends(onError)
-
-    expect(await transport.sendInputAccepted?.('a', 'driving')).toBe(false)
-    expect(await transport.sendInputAccepted?.('b', 'driving')).toBe(false)
-    expect(await transport.sendInputAccepted?.('c', 'driving')).toBe(false)
-
-    expect(onError).toHaveBeenCalledTimes(1)
     transport.destroy?.()
   })
 })

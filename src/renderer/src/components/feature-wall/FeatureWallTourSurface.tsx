@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import type { JSX, ReactNode } from 'react'
+import { translate } from '@/i18n/i18n'
 import {
   DEFAULT_FEATURE_WALL_WORKFLOW_ID,
   FEATURE_WALL_WORKFLOWS,
@@ -14,7 +15,7 @@ import type { FeatureWallOpenSourceTelemetry } from '../../../../shared/telemetr
 import type { FeatureWallTourDepthSummary } from '../../../../shared/feature-wall-tour-depth'
 import { track } from '@/lib/telemetry'
 import { useAppStore } from '@/store'
-import { ORCA_CLI_SKILL_NAME, ORCHESTRATION_SKILL_NAME } from '@/lib/agent-feature-install-commands'
+import { ORCA_CLI_SKILL_NAME, ORCHESTRATION_SKILL_NAME } from '@/lib/agent-feature-skill-names'
 import {
   GLOBAL_AGENT_SKILL_SOURCE_KINDS,
   useInstalledAgentSkill
@@ -27,7 +28,7 @@ import { useFeatureWallCompletion } from './use-feature-wall-completion'
 import { useFeatureWallTourTelemetry } from './use-feature-wall-tour-telemetry'
 import { FeatureWallContinueButton } from './FeatureWallContinueButton'
 import { FeatureWallTourPanel } from './FeatureWallTourPanel'
-import { getFeatureWallActiveStepCopy } from './feature-wall-active-step-copy'
+import { getFeatureWallActiveStepCopy, tourContinueLabel } from './feature-wall-active-step-copy'
 import { getScreenSubmitModifierLabel } from '@/lib/screen-submit-shortcut'
 import { useFeatureWallTourKeyboardShortcut } from './use-feature-wall-tour-keyboard-shortcut'
 import { useFeatureWallTourRailKeydown } from './use-feature-wall-tour-rail-keydown'
@@ -53,8 +54,11 @@ export function FeatureWallTourSurface({
   onDone,
   className,
   panelClassName,
-  doneLabel = 'Done',
-  footerText = 'Reopen any time from Help > Explore Orca.',
+  doneLabel = translate('auto.components.feature.wall.FeatureWallTourSurface.done', 'Done'),
+  footerText = translate(
+    'auto.components.feature.wall.FeatureWallTourSurface.reopenHint',
+    'Reopen any time from Help > Explore Orca.'
+  ),
   enableKeyboardShortcut = true,
   compactRail = false,
   detachedFooter = false,
@@ -83,7 +87,6 @@ export function FeatureWallTourSurface({
   )
   const selected = FEATURE_WALL_WORKFLOWS[selectedIndex]
   const taskSourcePresentation = useFeatureWallTaskSourcePresentation(isOpen, selected)
-  const selectedPresentation = taskSourcePresentation.workflow
   const agentsSteps = useMemo(() => getAgentsSteps(), [])
   const workbenchSteps = useMemo(() => getWorkbenchSteps(), [])
   const reviewSteps = useMemo(() => getReviewSteps(), [])
@@ -106,9 +109,7 @@ export function FeatureWallTourSurface({
       setReviewStepId(reviewSteps[0]?.id ?? 'notes')
     }
   }
-  // Why: the feature-wall completion model owns skill-completion state, so read
-  // installed skills here instead of asking child setup cards to notify upward
-  // from passive Effects.
+  // Read skills in the completion owner instead of reporting upward from child passive effects.
   const orchestrationSkill = useInstalledAgentSkill(ORCHESTRATION_SKILL_NAME, {
     enabled: isOpen,
     discoveryTarget: activeSkillRuntime.discoveryTarget,
@@ -176,8 +177,7 @@ export function FeatureWallTourSurface({
           tile_id: defaultTile.id,
           source
         })
-        // Keep the legacy hover/focus event firing too for analytics
-        // continuity until dashboards are migrated to feature_selected.
+        // Preserve legacy analytics until dashboards migrate to feature_selected.
         track('feature_wall_tile_focused', { tile_id: defaultTile.id })
       }
     }
@@ -276,7 +276,7 @@ export function FeatureWallTourSurface({
         : workbenchStepIndex < workbenchSteps.length - 1)) ||
     (selected.id === 'review' &&
       (reviewStepIndex < 0 ? reviewSteps.length > 0 : reviewStepIndex < reviewSteps.length - 1))
-  const continueLabel = isLastWorkflow && !hasNextSubStep ? doneLabel : 'Continue'
+  const continueLabel = tourContinueLabel(isLastWorkflow && !hasNextSubStep, doneLabel)
   const handleContinue = useCallback((): void => {
     markWorkflowVisited(selected.id)
     if (selected.id === 'agents-orchestration') {
@@ -364,7 +364,6 @@ export function FeatureWallTourSurface({
 
   const showGif = !prefersReducedMotion && gifUrl !== null
   const previewTitleId = `${reactId}-feature-wall-preview-${selected.id}`
-  const description = activeStepCopy?.description ?? selectedPresentation.lede
   const continueButton = (
     <FeatureWallContinueButton
       label={continueLabel}
@@ -383,7 +382,6 @@ export function FeatureWallTourSurface({
       previewPanelId={previewPanelId}
       previewTitleId={previewTitleId}
       selected={selected}
-      description={description}
       activeStepCopy={activeStepCopy}
       completion={completion}
       railRefs={railRefs}

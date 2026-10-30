@@ -15,8 +15,7 @@ import {
 } from './local-runtime-capabilities'
 import { localStructuredChatsInUse } from './local-structured-chats'
 
-// Why gated: a host older than this build installs its structured host to answer, which a profile
-// that never uses structured chat must not pay for; only with chats in use can a launch route to one.
+// Older hosts install structured storage just to answer; ask only with chats in use so unused profiles avoid that cost.
 function structuredChatSettingOn(state: Pick<AppState, 'settings'>): boolean {
   return isNativeChatEnabled(state.settings)
 }
@@ -25,6 +24,7 @@ async function syncLocalHost(settings: AppState['settings']): Promise<void> {
   if (!(await localStructuredChatsInUse(settings))) {
     return
   }
+  void useAppStore.getState().ensureNativeDetectedAgents()
   await loadHostStructuredAgents(
     LOCAL_EXECUTION_HOST_ID,
     await ensureLocalRuntimeCapabilities(),
@@ -45,10 +45,7 @@ function syncPairedHosts(statuses: AppState['runtimeStatusByEnvironmentId']): vo
   retainHostStructuredAgents(hostIds)
 }
 
-/** Reads each host's registered agents once its status says it publishes them and structured chat
- *  is in use, and again when a paired host's runtime changes. The local host is read when the chat
- *  setting turns on and whenever its capabilities land, so a read made before they were known is
- *  made again. Returns the unsubscribe. */
+/** Read registered agents when structured chat is in use and host capabilities arrive; paired runtime changes re-read. Local chat-setting/capability changes retry early unknown reads. Returns unsubscribe. */
 export function installHostStructuredAgentsSync(): () => void {
   const initial = useAppStore.getState()
   void syncLocalHost(initial.settings)

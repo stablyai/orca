@@ -1,12 +1,4 @@
-// What the structured `agentSession.*` surface IS, and how to call each method.
-//
-// Split from the skew scenarios so the manifest stays readable as it grows: this file answers
-// "which methods exist, what each must reach and return, and what params it takes"; the suite
-// next to it answers "what happens when the two builds disagree".
-//
-// Adding a method here is the deliberate act the cross-version gate exists to force. A new entry
-// makes the suite call it in both skew directions, so an addition cannot land without someone
-// stating what an older peer does with it.
+// Adding a manifest entry exercises both skew directions and requires declaring the older peer’s behavior.
 
 import { attachFingerprintFields } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-attach'
 import type { AgentSessionAttachParams } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-attach'
@@ -22,7 +14,8 @@ import {
   THREAD,
   NOW,
   ATTENTION_READ,
-  REWIND_METHOD
+  REWIND_METHOD,
+  ITEM_DETAIL_METHOD
 } from './structured-agent-session-surface-calls'
 
 export {
@@ -33,6 +26,7 @@ export {
   ATTENTION_READ,
   REWIND_METHOD,
   CONVERSATION_OUTLINE_METHOD,
+  ITEM_DETAIL_METHOD,
   STATUS_FEED_METHOD,
   TURN_COMPLETION_FEED_METHOD,
   STRUCTURED_CALLS
@@ -40,8 +34,7 @@ export {
 
 let operations = 0
 
-/** Each test starts the ledger's operation ids from zero, so one test's envelopes cannot be
- *  mistaken for a replay of another's. */
+// Reset ids so one test’s envelopes cannot look like another test’s replays.
 export function resetOperationIds(): void {
   operations = 0
 }
@@ -69,9 +62,14 @@ export function envelope(args: {
   }
 }
 
-export function attachParams(fence: number | null): Record<string, unknown> {
-  const params = {
-    envelope: { sessionId: SESSION, clientOperationId: operationId(), expectedRuntimeFence: fence },
+export function attachParams(fence: number | null): AgentSessionAttachParams {
+  const params: AgentSessionAttachParams = {
+    envelope: {
+      sessionId: SESSION,
+      clientOperationId: operationId(),
+      expectedRuntimeFence: fence,
+      payloadFingerprint: ''
+    },
     location: {
       executionHostId: 'local',
       wslDistro: null,
@@ -91,7 +89,7 @@ export function attachParams(fence: number | null): Record<string, unknown> {
       payloadFingerprint: computeAgentSessionPayloadFingerprint({
         method: 'agentSession.attach',
         sessionId: SESSION,
-        fields: attachFingerprintFields(params as unknown as AgentSessionAttachParams)
+        fields: attachFingerprintFields(params)
       })
     }
   }
@@ -103,19 +101,20 @@ export function createIntentParams(): Record<string, unknown> {
   return { envelope: envelope({ method: 'agentSession.create', fields, fence: null }), ...fields }
 }
 
-/** Built by the sender clients use, so an older host is handed exactly what a current client puts
- *  on the wire, fingerprint included. */
+// Use the production sender so old hosts receive the exact current fingerprinted wire shape.
 export function sendParams(
   text: string,
   fence: number,
-  sentDelivery?: 'queue-if-active'
+  sentDelivery?: 'queue-if-active',
+  options?: Readonly<Record<string, string>>
 ): Record<string, unknown> {
   return structuredAgentSessionMessageSendMutation({
     sessionId: SESSION,
     clientOperationId: operationId(),
     expectedRuntimeFence: fence,
     body: structuredAgentSessionSendBody(text, []),
-    ...(sentDelivery ? { delivery: sentDelivery } : {})
+    ...(sentDelivery ? { delivery: sentDelivery } : {}),
+    ...(options ? { options } : {})
   })
 }
 
@@ -149,8 +148,24 @@ export function paramsFor(method: string): unknown {
       const fields = { messageId: 'queued-1' }
       return { envelope: envelope({ method, fields, fence }), ...fields }
     }
+    case 'agentSession.queuedMessageMove': {
+      const fields = { messageId: 'queued-1', beforeMessageId: null }
+      return { envelope: envelope({ method, fields, fence }), ...fields }
+    }
     case 'agentSession.queuedMessagesResume':
       return { envelope: envelope({ method, fields: {}, fence }) }
+    case 'agentSession.queuedMessageUpdate': {
+      const fields = { messageId: 'queued-1', expectedBodyFingerprint: 'a'.repeat(64), text: 'hi' }
+      return { envelope: envelope({ method, fields, fence }), ...fields }
+    }
+    case 'agentSession.queuedMessageEditHold':
+      return {
+        sessionId: SESSION,
+        messageId: 'queued-1',
+        editId: 'edit-1',
+        action: 'acquire',
+        expectedBodyFingerprint: 'a'.repeat(64)
+      }
     case 'agentSession.respondToApproval':
     case 'agentSession.respondToQuestion': {
       const fields = { itemId: 'item-1', expectedRevision: 1, optionId: 'allow' }
@@ -166,16 +181,31 @@ export function paramsFor(method: string): unknown {
     }
     case 'agentSession.history':
       return { sessionId: SESSION, direction: 'tail' }
+    case 'agentSession.continuationContext':
+      return {
+        sessionId: SESSION,
+        workspaceId: WORKSPACE,
+        expectedCursor: { epoch: 'epoch-a', sequence: 0 }
+      }
+    case ITEM_DETAIL_METHOD:
+      return { sessionId: SESSION, itemId: 'item-1' }
+    case 'agentSession.sleepWorkspace':
+      return { workspaceId: WORKSPACE }
+    case 'agentSession.currentRequests':
+      return { sessionId: SESSION, version: '00000000-0000-4000-8000-000000000001' }
     case 'agentSession.acknowledgeAttention':
       return { ...ATTENTION_READ, observedCursor: { ...ATTENTION_READ.observedCursor } }
     case 'agentSession.modelCatalog':
       return { agent: 'codex', sessionId: SESSION }
     case 'agentSession.readVisual':
       return { sessionId: SESSION, file: 'usage-chart.html' }
+    case 'agentSession.rename':
+      return { sessionId: SESSION, name: 'Release notes' }
     case 'agentSession.hold':
     case 'agentSession.release':
       return { sessionId: SESSION, holderId: 'surface-1' }
     case 'agentSession.agents':
+    case 'agentSession.subscribeAvailability':
     case 'agentSession.restartResumable':
     case 'agentSession.restartResumableDismiss':
     case 'agentSession.restartResume':

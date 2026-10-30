@@ -47,7 +47,7 @@ vi.mock('./codex-real-home-hooks-json', async (importOriginal) => {
   const actual = await importOriginal<typeof RealHomeHooksJson>()
   return {
     ...actual,
-    // Why here: the install's last step before its "changed since read" guard.
+    // Inject the concurrent save immediately before the generation guard.
     backupRealHomeHooksJsonOnce: (
       ...args: Parameters<typeof actual.backupRealHomeHooksJsonOnce>
     ) => {
@@ -73,9 +73,6 @@ import {
   upsertHookTrustEntries,
   type CodexTrustEntry
 } from './config-toml-trust'
-
-// Why this file: every Orca instance and build on one HOME shares ~/.codex, and
-// the user's own hooks and approvals live beside Orca's entry there.
 
 type HooksFile = { hooks: Record<string, HookDefinition[]> }
 
@@ -118,7 +115,7 @@ function identity(path: string): { raw: string; ino: number; mtimeMs: number } {
   return { raw: readFileSync(path, 'utf-8'), ino: stat.ino, mtimeMs: stat.mtimeMs }
 }
 
-/** Runs the reconcile; 'unchanged' when it touched neither ~/.codex file. */
+/** Unchanged requires matching bytes, inode and mtime for both Codex files. */
 async function reconcile(
   options: {
     hashes?: CodexHookHashes | null
@@ -130,7 +127,7 @@ async function reconcile(
   if (options.userDataPath) {
     vi.stubEnv('ORCA_USER_DATA_PATH', options.userDataPath)
   }
-  // Why saved: the app's lookup holds the answer an earlier run wrote.
+  // Seed the cached lookup answer from a previous run.
   memoizeCodexHookAnswer(
     '/bin/codex',
     'codex-for-tests',
@@ -180,7 +177,7 @@ function expectOrcaApprovedAt(
 }
 
 beforeEach(() => {
-  // Why realpath: a symlinked temp dir (macOS /var) would give ~/.codex a second key spelling.
+  // Resolve macOS /var symlinks so the temp root adds no extra approval-key spelling.
   root = realpathSync.native(mkdtempSync(join(tmpdir(), 'orca-real-home-entries-')))
   home = join(root, 'home')
   userData = join(root, 'user-data')
@@ -267,7 +264,7 @@ describe('reconcileRealHomeCodexHookEntries', () => {
   it("keeps the approval of Orca's entry in an event this Codex does not list", async () => {
     const interrupt: HookDefinition = { hooks: [buildCodexManagedHook(frozen(), 'Interrupt')] }
     writeHooks({ hooks: { Interrupt: [interrupt] } })
-    // Why another version's hash: a newer Codex sharing ~/.codex approved this entry.
+    // Simulate approval by a newer Codex sharing the same home.
     const approved = {
       ...createCodexHookTrustEntry(
         hooksPath(),
@@ -463,7 +460,7 @@ describe('reconcileRealHomeCodexHookEntries', () => {
 
     expect(mocks.hooksJsonWrites).toBe(0)
     expectOrcaApprovedAt(2)
-    // Why gone: Orca's approval at the slot it left now names a user hook.
+    // The former Orca slot now names a user hook.
     expect(trustAt(stopEntryAt(1, orcaGroup()))).toBeUndefined()
     expect(trustAt(stopEntryAt(0, USER_B))?.trustedHash).toBe('sha256:b')
     expect(await reconcile()).toBe('unchanged')
@@ -505,7 +502,6 @@ describe('reconcileRealHomeCodexHookEntries', () => {
     await reconcile()
 
     expect(readHooks().hooks.Stop).toEqual([USER_A, USER_B, orcaGroup()])
-    // Why a prefix: Orca's approval blocks are only appended after the user's bytes.
     expect(readFileSync(configPath(), 'utf-8').startsWith(userToml)).toBe(true)
     expect(trustAt(stopEntryAt(1, USER_B))?.trustedHash).toBe('sha256:user')
   })

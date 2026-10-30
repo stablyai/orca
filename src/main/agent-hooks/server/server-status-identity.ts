@@ -1,12 +1,14 @@
-import { createHash } from 'node:crypto'
-
 import type { AgentKind } from '../../../shared/telemetry-events'
 import {
   getAgentResumeArgv,
   type AgentProviderSessionMetadata
 } from '../../../shared/agent-session-resume'
 import { parseLegacyNumericPaneKey, parsePaneKey } from '../../../shared/stable-pane-id'
-import type { AgentStatusIpcPayload, AgentType } from '../../../shared/agent-status-types'
+import {
+  pickHostTurnEnd,
+  type AgentStatusIpcPayload,
+  type AgentType
+} from '../../../shared/agent-status-types'
 import type { EnrichedAgentHookEventPayload } from './server-types'
 import { AGENT_PROMPT_SENT_AGENT_KINDS } from './server-constants'
 import { MAX_PANE_KEY_LEN } from '../../../shared/agent-hook-listener/listener-limits'
@@ -33,14 +35,14 @@ export function equivalentInterruptAgentType(
   return normalizedActual === normalizedBaseline
 }
 
-// Why: validate the durable `${tabId}:${leafUuid}` leaf suffix at write/hydrate so legacy numeric rows fail closed.
+// Durable caches reject legacy numeric keys; only stable pane IDs survive restart.
 export function isValidPaneKey(value: unknown): value is string {
   return (
     typeof value === 'string' && value.length <= MAX_PANE_KEY_LEN && parsePaneKey(value) !== null
   )
 }
 
-// Why: remote metadata-only rows are currently a Pi contract; user-dismissed rows use an internal persisted marker instead.
+// Remote identity-only rows are a Pi contract; dismissed rows use a separate retained marker.
 export function isValidPiProviderSessionOnly(
   providerSession: AgentProviderSessionMetadata | undefined,
   agentType: AgentType | undefined
@@ -63,6 +65,7 @@ export function toAgentStatusIpcPayload(
       : {}),
     stateStartedAt: entry.stateStartedAt,
     ...(entry.turnStartedAt !== undefined ? { turnStartedAt: entry.turnStartedAt } : {}),
+    ...pickHostTurnEnd(entry),
     ...(entry.providerSession ? { providerSession: entry.providerSession } : {}),
     ...(entry.providerSessionOnly ? { providerSessionOnly: true } : {}),
     ...(entry.promptInteractionKey ? { promptInteractionKey: entry.promptInteractionKey } : {}),
@@ -70,6 +73,7 @@ export function toAgentStatusIpcPayload(
     ...(entry.observation ? { observation: entry.observation } : {}),
     ...(entry.structuredHost ? { structuredHost: entry.structuredHost } : {}),
     ...(entry.terminalHandle ? { terminalHandle: entry.terminalHandle } : {}),
+    ...(entry.programStatus ? { programStatus: entry.programStatus } : {}),
     ...entry.payload
   }
 }
@@ -83,8 +87,4 @@ export function paneCacheKeyTabId(key: string): string | null {
 
 export function paneCacheKeyMatchesTab(key: string, tabId: string): boolean {
   return paneCacheKeyTabId(key) === tabId
-}
-
-export function hashLaunchToken(value: string): string {
-  return createHash('sha256').update(value).digest('hex')
 }

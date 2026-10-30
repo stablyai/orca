@@ -11,7 +11,6 @@ import {
 const testState = vi.hoisted(() => ({
   appState: null as unknown as NoteSendAppState,
   callRuntimeRpc: vi.fn(),
-  getActiveRuntimeTarget: vi.fn(() => ({ kind: 'local' })),
   RuntimeRpcCallError: class RuntimeRpcCallError extends Error {
     readonly code: string
     readonly response: unknown
@@ -34,9 +33,8 @@ vi.mock('@/store', () => ({
   )
 }))
 
-vi.mock('@/runtime/runtime-rpc-client', () => ({
-  callRuntimeRpc: testState.callRuntimeRpc,
-  getActiveRuntimeTarget: testState.getActiveRuntimeTarget,
+vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: testState.callRuntimeRpc }))
+vi.mock('@/runtime/runtime-rpc-result', () => ({
   RuntimeRpcCallError: testState.RuntimeRpcCallError
 }))
 
@@ -44,8 +42,6 @@ describe('active agent note send', () => {
   beforeEach(() => {
     testState.appState = createNoteSendAppState()
     testState.callRuntimeRpc.mockReset()
-    testState.getActiveRuntimeTarget.mockClear()
-    testState.getActiveRuntimeTarget.mockReturnValue({ kind: 'local' })
   })
 
   it('sends notes only after the active terminal is verified as an idle agent', async () => {
@@ -194,6 +190,17 @@ describe('active agent note send', () => {
       'terminal.isRunningAgent',
       'terminal.send'
     ])
+    expect(testState.callRuntimeRpc).toHaveBeenLastCalledWith(
+      { kind: 'local' },
+      'terminal.send',
+      {
+        terminal: 'term-1',
+        text: 'File: src/app.ts',
+        enter: true,
+        client: { id: 'orca-desktop', type: 'desktop' }
+      },
+      { timeoutMs: 15000 }
+    )
   })
 
   it('does not write notes when the active terminal is not an agent', async () => {

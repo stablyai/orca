@@ -12,7 +12,8 @@ import { scanWorkspacePorts } from './local-workspace-port-scanner'
 import type { WorkspacePortScanOptions } from './local-workspace-port-scan-state'
 
 export type WorkspacePortProbeInput = WorkspacePortProbe & {
-  connectionId?: string | null
+  /** True only when this host itself runs the workspace. */
+  runsHere: boolean
 }
 
 export function getStoreWorkspacePortProbes(
@@ -61,7 +62,7 @@ export function filterWorkspacePortProbes(
   repoId?: string
 ): WorkspacePortProbe[] {
   return worktrees.flatMap((worktree) => {
-    if ((repoId && worktree.repoId !== repoId) || worktree.connectionId) {
+    if ((repoId && worktree.repoId !== repoId) || !worktree.runsHere) {
       return []
     }
     return [
@@ -83,8 +84,7 @@ export async function killWorkspacePort(
     return { ok: false, reason: 'Invalid process or port.' }
   }
 
-  // Why (#11161): this re-scan is the authorization check for SIGTERM, so it
-  // must never land on a cycle that skipped the owner-attribution metadata.
+  // Stop authorization needs fresh owner metadata, even during background skip cycles (#11161).
   const scan = await scanWorkspacePorts([...worktrees], undefined, { requireMetadata: true })
   const port = scan.ports.find(
     (candidate) => candidate.pid === args.pid && candidate.port === args.port
@@ -105,15 +105,10 @@ export async function killWorkspacePort(
   }
 
   try {
-    // Why: caller-supplied pids are not trusted; the re-scan above proves
-    // this pid still owns the requested workspace listener before SIGTERM.
     process.kill(pid, 'SIGTERM')
     return { ok: true }
   } catch (error) {
-    // Why ESRCH is success: the pid exited between the authorizing re-scan and
-    // this signal, so the listener is gone and the port is free -- which is
-    // what Stop was asked for. Surfacing the raw `kill ESRCH` made a Stop that
-    // had already succeeded read as a failure.
+    // ESRCH after authorization means the listener already exited; Stop succeeded.
     if ((error as NodeJS.ErrnoException)?.code === 'ESRCH') {
       return { ok: true }
     }

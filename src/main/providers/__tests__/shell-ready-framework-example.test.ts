@@ -1,8 +1,3 @@
-/**
- * Example test using the shell-script-literal framework.
- *
- * This demonstrates the pattern for future shell-ready tests.
- */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'

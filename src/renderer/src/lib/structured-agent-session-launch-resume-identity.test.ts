@@ -4,6 +4,8 @@
 // the identity under test is derived there — mocking it out would assert only the mock's shape.
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { recordHostModelCatalogSnapshot } from '@/runtime/host-model-catalog-snapshots'
+import { holdStructuredAgentSessionLaunchOption } from './structured-agent-session-launch-options'
 import type { StructuredAgentSessionCreateParams } from '../../../shared/structured-agent-session-create'
 
 const mocks = vi.hoisted(() => ({
@@ -24,11 +26,13 @@ vi.mock('@/lib/agent-catalog', () => ({
 }))
 
 vi.mock('@/runtime/structured-agent-session-client', () => ({
-  callStructuredAgentSession: mocks.call
+  callStructuredAgentSession: mocks.call,
+  supportsStructuredAgentSessionCreateMessage: async () => true,
+  supportsStructuredAgentSessionCreateOptionsMode: async () => true,
+  structuredAgentSessionHostSupports: async () => true
 }))
 
-vi.mock('@/runtime/local-structured-session-tabs-sync', () => ({
-  LOCAL_STRUCTURED_SESSION_OWNER: 'local',
+vi.mock('@/runtime/local-structured-session-tabs-sync/inventory-refresh', () => ({
   refreshLocalStructuredSessionTabs: mocks.refresh
 }))
 
@@ -76,9 +80,44 @@ describe('a launch that adopts a conversation is its own identity', () => {
     })
   })
 
+  it.each(['off', 'medium'])(
+    'keeps held Pi %s raw in first-message identity despite supported drawing',
+    async (effort) => {
+      recordHostModelCatalogSnapshot({ kind: 'local' }, 'pi', null, {
+        origin: 'probe',
+        fetchedAt: 1,
+        models: [
+          {
+            id: 'openai/gpt-5',
+            label: 'GPT-5',
+            isDefault: false,
+            efforts: ['off', 'minimal', 'low', 'xhigh']
+              .filter((value) => effort !== 'off' || value !== 'off')
+              .map((value) => ({ value, label: value }))
+          }
+        ]
+      })
+      const launch = startStructuredAgentLaunch(`held-pi-${effort}`, 'pi', {
+        requestId: `held-pi-${effort}`,
+        prompt: 'opening text'
+      })
+      holdStructuredAgentSessionLaunchOption(launch.sessionId, 'model', 'openai/gpt-5')
+      holdStructuredAgentSessionLaunchOption(launch.sessionId, 'effort', effort)
+      await flushLaunchDispatch()
+      await vi.waitFor(() => expect(createParams()).toHaveLength(1))
+      expect(createParams()[0]?.firstMessage?.body.blocks).toEqual([
+        { type: 'text', text: 'opening text' }
+      ])
+      expect(createParams()[0]?.options).toEqual({ model: 'openai/gpt-5', effort })
+      expect(createParams()[0]?.firstMessage?.selection).toMatchObject({
+        model: 'openai/gpt-5',
+        effort
+      })
+    }
+  )
+
   it('does not hand a resume the blank launch already pending for the same worktree', async () => {
-    // A joining caller is handed the EXISTING intent and contributes only its prompt, so joining
-    // here would silently drop the adoption and open a blank chat instead.
+    // Joiners inherit existing intent and add prompt only; joining a blank launch would discard conversation adoption.
     const worktreeId = 'wt-resume-vs-blank'
     const blank = startStructuredAgentLaunch(worktreeId, 'codex', { requestId: 'request-1' })
     const resume = startStructuredAgentLaunch(worktreeId, 'codex', {
@@ -92,10 +131,16 @@ describe('a launch that adopts a conversation is its own identity', () => {
     // A resumed conversation may keep its own model, so its picker names no listed default.
     expect(getStructuredAgentSessionLaunchResumes(resume.sessionId)).toBe(true)
     expect(getStructuredAgentSessionLaunchResumes(blank.sessionId)).toBe(false)
-    expect(createParams()).toEqual([
-      expect.not.objectContaining({ resumeFrom: expect.anything() }),
-      expect.objectContaining({ resumeFrom: { providerSessionId: 'thread-1' } })
-    ])
+    const requests = createParams()
+    expect(requests).toHaveLength(2)
+    const blankRequest = requests.find((params) => params.envelope.sessionId === blank.sessionId)
+    expect(blankRequest?.envelope.sessionId).toBe(blank.sessionId)
+    expect(blankRequest?.resumeFrom).toBeUndefined()
+    expect(
+      requests.find((params) => params.envelope.sessionId === resume.sessionId)?.resumeFrom
+    ).toEqual({
+      providerSessionId: 'thread-1'
+    })
   })
 
   it('does not hand a blank launch the resume already pending for the same worktree', async () => {

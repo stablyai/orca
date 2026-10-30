@@ -6,6 +6,7 @@ import { useOrcaProfileAuthStatusRefresh } from '@/hooks/use-orca-profile-auth-s
 import { useAppStore } from '@/store'
 import { isWebClientLocation } from '@/lib/web-client-location'
 import { translate } from '@/i18n/i18n'
+import { OrcaSignInButton, OrcaSignInWaitNotice } from '../OrcaSignInProgress'
 
 type HowToStep = { key: string; title: string; description: string }
 
@@ -18,10 +19,8 @@ export function ArtifactsSettingsPane({
 }): React.JSX.Element {
   const openArtifactsPage = useAppStore((state) => state.openArtifactsPage)
   const authStatus = useAppStore((state) => state.orcaProfileAuthStatus)
-  const connect = useAppStore((state) => state.connectCurrentOrcaProfile)
   const signedIn = authStatus?.state === 'connected'
-  // Why: the capability lives in the desktop host's store and is deliberately absent from the
-  // settings.update allowlist, so a web client can only mirror it — never grant it.
+  // Only the desktop host can grant sharing; web clients mirror it because settings.update excludes this capability.
   const isWebClient = isWebClientLocation()
   const sharingEnabled = settings.artifactSharingEnabled === true
 
@@ -124,16 +123,12 @@ export function ArtifactsSettingsPane({
               )}
             </p>
           </div>
-          <Button
-            type="button"
-            size="sm"
-            disabled={authStatus?.configured !== true}
-            onClick={() => void connect()}
-          >
+          <OrcaSignInButton size="sm" disabled={authStatus?.configured !== true}>
             {authStatus?.state === 'reconnect-required'
               ? translate('auto.components.settings.artifacts.signInAgain', 'Sign in again')
               : translate('auto.components.settings.artifacts.signIn', 'Sign in to Orca')}
-          </Button>
+          </OrcaSignInButton>
+          <OrcaSignInWaitNotice className="basis-full" />
         </section>
       ) : null}
       <section className="space-y-4 py-5">

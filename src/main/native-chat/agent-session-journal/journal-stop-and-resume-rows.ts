@@ -1,13 +1,11 @@
-// The rows a Stop's event, a person's Resume and a reopen that found waiting cards append:
-// tombstones of ids no item ever takes, each carrying its record as an extra key
-// (`journal-row-schema.ts` says why not a row kind).
+// Additive tombstone fields keep Stop/Resume/reopen marks compatible with older row-kind readers.
 
 import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
 import type { JournalReducerState } from './journal-reducer'
 import { journalRowBase } from './journal-row-builders'
 import type { JournalStopEvent, JournalTombstoneRow } from './journal-row-schema'
 
-/** One id per mark kind; no item ever takes any of them. */
+// Reserve IDs that no real item uses.
 const JOURNAL_STOP_EVENT_ITEM_ID = agentJournalItemKey({
   provider: 'orca',
   clientMessageId: 'stop-event'
@@ -22,6 +20,18 @@ const JOURNAL_QUEUE_REOPEN_ITEM_ID = agentJournalItemKey({
 })
 
 type RowPlace = { state: JournalReducerState; seq: number; fence: number; ts: number }
+
+export function buildJournalQueueClearRow(
+  input: RowPlace & { clear: NonNullable<JournalTombstoneRow['queueClear']> }
+): JournalTombstoneRow {
+  return {
+    kind: 'tombstone',
+    itemId: agentJournalItemKey({ provider: 'orca', clientMessageId: 'queue-context-clear' }),
+    revision: 1,
+    queueClear: input.clear,
+    ...journalRowBase(input.state.epoch, input.seq, input.fence, input.ts)
+  }
+}
 
 export function buildJournalStopEventRow(
   input: RowPlace & { event: JournalStopEvent }
@@ -58,7 +68,6 @@ export function buildJournalQueueReopenRow(
   }
 }
 
-/** A Stop taking effect now: its event's time is its row's. */
 export function journalStopEventRowBuilder(
   state: () => JournalReducerState,
   event: Omit<JournalStopEvent, 'at'>,

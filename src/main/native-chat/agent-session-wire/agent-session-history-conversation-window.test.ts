@@ -12,7 +12,7 @@ import type {
   AgentSessionHistoryPage,
   AgentSessionHistoryRequest
 } from '../../../shared/agent-session-wire'
-import { serializeRemoteRuntimePayload } from '../../../shared/remote-runtime-memory-limits'
+import { serializeRemoteRuntimePayload } from '../../../shared/remote-runtime/remote-runtime-memory-limits'
 import { createTrackedJournalOpener } from '../agent-session-journal/journal-host-database-test-support'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import {
@@ -20,9 +20,13 @@ import {
   readAgentSessionHydrationPage
 } from './agent-session-history-page'
 import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
+import { foldSubagentItems } from '../../../shared/native-chat/transcript/native-chat-subagent-items'
+import {
+  subagentJournalBody,
+  subagentJournalItemIdentity
+} from '../agent-session-journal/journal-subagent-item'
 
-// A backward page windows over the session's own rows, and a subagent's rows in
-// that range ride along, so a burst cannot crowd the conversation off the page.
+// Window on session-owned rows; include subagent rows without letting bursts crowd out conversation.
 
 const IDENTITY: AgentSessionJournalIdentity = {
   sessionId: 'session-1',
@@ -146,6 +150,103 @@ describe('a history page over a session with a subagent', () => {
     expect(tail.hasOlder).toBe(false)
   })
 
+  it("carries a fan-out's subagent rows without counting them as conversation", async () => {
+    await append(named('own-', 1, 5))
+    for (const id of named('task-', 1, 300)) {
+      await journal.appendItem(
+        subagentJournalItemIdentity(id),
+        subagentJournalBody({ type: 'subagent', id, label: id, state: 'working', groupId: 't' }),
+        { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+      )
+    }
+    await append(['own-6'])
+
+    const tail = read({ direction: 'tail', limit: 3 })
+
+    expect(textsOf(tail)).toEqual([
+      'own-4',
+      'own-5',
+      ...named('Kicked off subagent task-', 1, 300),
+      'own-6'
+    ])
+    expect(tail.hasOlder).toBe(true)
+  })
+
+  it("loads an older page without renumbering a turn's subagents or moving their row", async () => {
+    const audit = async (id: string): Promise<void> => {
+      await journal.appendItem(
+        subagentJournalItemIdentity(id),
+        subagentJournalBody({
+          type: 'subagent',
+          id,
+          label: 'Audit',
+          state: 'working',
+          groupId: 't'
+        }),
+        { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+      )
+    }
+    await append(named('own-', 1, 3))
+    await audit('a')
+    await append(named('own-', 4, 5))
+    await audit('b')
+    await append(named('own-', 9, 2))
+    await audit('c')
+    await append(['own-11'])
+    const folded = (pages: AgentSessionHistoryPage[]) =>
+      foldSubagentItems(
+        pages
+          .flatMap((page) => page.items)
+          .map((entry) => ({
+            id: entry.itemId,
+            role: 'system' as const,
+            timestamp: null,
+            source: 'transcript' as const,
+            blocks: entry.body.kind === 'message' ? entry.body.blocks : []
+          }))
+      ).flatMap((row) =>
+        row.blocks.flatMap((block) =>
+          block.type === 'subagent-group'
+            ? [{ row: row.id, labels: block.agents.map((agent) => `${agent.id}=${agent.label}`) }]
+            : []
+        )
+      )
+
+    const tail = read({ direction: 'tail', limit: 5 })
+    const older = read({ direction: 'before', cursor: tail.window.nextCursor, limit: 5 })
+
+    expect(textsOf(tail)[0]).toBe('Kicked off subagent Audit')
+    expect(textsOf(older)).toEqual(named('own-', 1, 3))
+    expect(folded([tail])).toEqual([
+      { row: 'orca:subagent%3Aa', labels: ['a=Audit', 'b=Audit 2', 'c=Audit 3'] }
+    ])
+    expect(folded([older, tail])).toEqual(folded([tail]))
+  })
+
+  it('reaches back for a first sibling no further than one more page of conversation', async () => {
+    for (const [id, own] of [
+      ['a', named('own-', 1, 10)],
+      ['b', ['own-11']]
+    ] as const) {
+      await journal.appendItem(
+        subagentJournalItemIdentity(id),
+        subagentJournalBody({
+          type: 'subagent',
+          id,
+          label: id,
+          state: 'working',
+          groupId: 'thread'
+        }),
+        { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+      )
+      await append([...own])
+    }
+
+    const tail = read({ direction: 'tail', limit: 2 })
+
+    expect(textsOf(tail)).toEqual(['own-8', 'own-9', 'own-10', 'Kicked off subagent b', 'own-11'])
+  })
+
   it('still bounds a page by bytes, and paging back still reaches every row', async () => {
     const large = 'x'.repeat(250 * 1024)
     await append(['own-1'])
@@ -182,6 +283,33 @@ describe('a history page names the subagents whose roster row is older than it',
     expect(textsOf(page)[0]).toBe('own-2')
     expect(page.subagentRoster?.map((named) => [named.entry.id, named.entry.label])).toEqual([
       ['task-1', 'run task-1']
+    ])
+  })
+
+  it('names a subagent whose own row is above the opening page, by that row', async () => {
+    await append(['own-1'])
+    await journal.appendItem(
+      subagentJournalItemIdentity('task-1'),
+      subagentJournalBody({
+        type: 'subagent',
+        id: 'task-1',
+        label: 'run task-1',
+        state: 'working',
+        groupId: 'turn-1',
+        run: 'call-1'
+      }),
+      { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+    )
+    await append(named('own-', 2, 200))
+    await append(['child-2'], child)
+
+    const page = readAgentSessionHydrationPage(journal)
+
+    expect(page.subagentRoster).toEqual([
+      expect.objectContaining({
+        itemId: 'orca:subagent%3Atask-1',
+        entry: { id: 'task-1', label: 'run task-1', state: 'working' }
+      })
     ])
   })
 

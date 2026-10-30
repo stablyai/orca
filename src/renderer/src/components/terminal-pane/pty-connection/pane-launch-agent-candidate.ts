@@ -1,5 +1,7 @@
 import { isTuiAgent } from '../../../../../shared/tui-agent-config'
 import type { TuiAgent } from '../../../../../shared/tui-agent'
+import { recognizeAgentLaunchCommand } from '../../../../../shared/agent-command-line-intent'
+import { COMMAND_TOKEN_SCAN_MAX_CHARS } from '../../../../../shared/command-token-scanner'
 
 /** The store slice the launch-agent ladder reads. */
 export type PaneLaunchAgentStoreSlice = {
@@ -11,28 +13,24 @@ export type PaneLaunchAgentPaneSlice = {
   worktreeId: string
   tabId: string
   paneKey: string
-  startup?: { launchAgent?: string; initialAgentStatus?: { agent?: string } }
+  startup?: { command?: string; launchAgent?: string; initialAgentStatus?: { agent?: string } }
 }
 
-/**
- * The launch agent a pane is expected to run, from the first signal that has one.
- *
- * Why one ladder: the 133;D confirmation guard, the visible-pane resampler, and the
- * OSC color-reply skip all key off "what agent is this pane", and a second copy would
- * drift. Why `identity` is optional: a launch config is registered before its identity
- * lands, and reading through it unguarded threw on every pane connect once the
- * color-reply skip started calling this on all of them.
- */
+/** Share expected-agent precedence across finish confirmation, visible sampling and color-query policy; launch config may precede its identity. */
 export function resolvePaneLaunchAgentCandidate(
   state: PaneLaunchAgentStoreSlice,
   pane: PaneLaunchAgentPaneSlice
 ): string | undefined {
   const registered = state.agentLaunchConfigByPaneKey[pane.paneKey]?.identity?.agentType
+  const command = pane.startup?.command
   return (
     state.tabsByWorktree[pane.worktreeId]?.find((tab) => tab.id === pane.tabId)?.launchAgent ??
     pane.startup?.launchAgent ??
     pane.startup?.initialAgentStatus?.agent ??
-    (isTuiAgent(registered) ? registered : undefined)
+    (isTuiAgent(registered) ? registered : undefined) ??
+    (command && command.length <= COMMAND_TOKEN_SCAN_MAX_CHARS
+      ? recognizeAgentLaunchCommand(command)?.agent
+      : undefined)
   )
 }
 
@@ -45,10 +43,7 @@ export function resolvePaneLaunchTuiAgent(
   return isTuiAgent(candidate) ? candidate : null
 }
 
-// Why: jcode paints its own theme and fires its OSC 10/11 burst before its TUI input
-// loop is ready, so the cooked reply lands in the composer as pre-typed text (the same
-// class as #12112, which fixed opencode). The main-side startup ingress already skips
-// it; the renderer's capability handlers must skip the answer too.
+// jcode queries colors before its input loop is ready; skip renderer replies like main ingress to avoid pre-typed composer text (#12112).
 export function paneShouldAnswerOscColorQueries(
   state: PaneLaunchAgentStoreSlice,
   pane: PaneLaunchAgentPaneSlice

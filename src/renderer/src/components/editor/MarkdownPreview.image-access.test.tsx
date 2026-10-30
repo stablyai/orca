@@ -1,7 +1,6 @@
 // @vitest-environment happy-dom
 //
-// Renders the real MarkdownPreview and pins the file access its images are read with: a resource of the
-// document showing them, so main limits them to that document's roots or folder.
+// Render real image access to verify it stays scoped to the document’s roots or folder.
 
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
@@ -39,10 +38,27 @@ vi.mock('@/store', () => {
   return { useAppStore }
 })
 vi.mock('@/store/slices/worktree-helpers', () => ({ findWorktreeById: () => null }))
-vi.mock('@/runtime/runtime-rpc-client', () => ({
-  settingsForRuntimeOwner: (settings: unknown) => settings
+vi.mock('@/lib/file-owner-runtime-target', () => {
+  const getRuntimeTargetForFileOwner = (
+    _state: unknown,
+    _worktreeId: string | null | undefined,
+    owner: string | null | undefined
+  ) => (owner ? { kind: 'environment' as const, environmentId: owner } : { kind: 'local' as const })
+  return {
+    FILE_OWNER_UNRESOLVED_MESSAGE: 'unresolved',
+    getRuntimeTargetForFileOwner,
+    requireRuntimeTargetForFileOwner: getRuntimeTargetForFileOwner,
+    getRuntimeTargetForWorktreeOwner: (state: unknown, worktreeId: string | null | undefined) =>
+      getRuntimeTargetForFileOwner(state, worktreeId, undefined)
+  }
+})
+vi.mock('@/runtime/use-worktree-runtime-target', () => ({
+  useFileOwnerRuntimeTarget: (_worktreeId: unknown, runtimeEnvironmentId?: string | null) =>
+    runtimeEnvironmentId
+      ? { kind: 'environment', environmentId: runtimeEnvironmentId }
+      : { kind: 'local' }
 }))
-vi.mock('@/runtime/runtime-file-client', () => ({
+vi.mock('@/runtime/runtime-file-metadata-client', () => ({
   statRuntimePath: vi.fn(async () => ({ isDirectory: false }))
 }))
 vi.mock('@/lib/connection-context', () => ({ getConnectionIdForFile: () => null }))

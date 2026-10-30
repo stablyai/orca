@@ -1,11 +1,7 @@
-/**
- * A host another desktop was updating answers this one with "holds this host" or a fence-busy
- * deferral. That clears within minutes, but this connect's status would keep it until the next
- * reconnect; so the connect checks again on a timer until the host answers without the fence.
- */
+/** Recheck transient update fences until released so connect status clears without reconnecting. */
 import type { SshTarget } from '../../shared/ssh-types'
 import { checkManagedServerUpdate } from './managed-server-update-check'
-import { MANAGED_ORCAD_FENCED_DETAIL } from './orcad-managed-serving'
+import { managedResultAfterUpdate, unservedManagedResult } from './managed-server-serving-gate'
 import type {
   HostServerOnConnectDeps,
   HostServerOnConnectResult
@@ -17,7 +13,6 @@ export const FENCE_RECHECK_INTERVAL_MS = 45_000
 // About half an hour: past the 20-minute stale install lock a crashed updater can leave.
 const FENCE_RECHECK_MAX_ATTEMPTS = 40
 
-/** The connect's serving check and update check again, without its progress statuses. */
 export async function recheckFencedManagedServer(
   target: SshTarget,
   environmentId: string,
@@ -25,24 +20,15 @@ export async function recheckFencedManagedServer(
     Parameters<typeof checkManagedServerUpdate>[2]
 ): Promise<ManagedResult> {
   const serving = await deps.ensureServing(environmentId)
-  if (serving.state === 'unverifiable') {
-    return {
-      route: 'managed',
-      environmentId,
-      serving,
-      ...(serving.detail === MANAGED_ORCAD_FENCED_DETAIL ? { fenceHeld: true as const } : {})
-    }
+  const unserved = unservedManagedResult(environmentId, serving)
+  if (unserved) {
+    return unserved
   }
-  const { note, fenceBusy } = await checkManagedServerUpdate(target, environmentId, deps, () => {})
-  return {
-    route: 'managed',
-    environmentId,
-    ...(note ? { update: note } : {}),
-    ...(fenceBusy ? { fenceHeld: true as const } : {})
-  }
+  const update = await checkManagedServerUpdate(target, environmentId, deps, () => {})
+  return managedResultAfterUpdate(environmentId, serving, update)
 }
 
-export type FenceRecheckLoop = {
+type FenceRecheckLoop = {
   /** False once the host disconnected, or another connect replaced this one's status. */
   stillCurrent: () => boolean
   recheck: () => Promise<ManagedResult>
@@ -52,7 +38,7 @@ export type FenceRecheckLoop = {
 
 const loops = new Map<string, () => void>()
 
-/** Replaces any loop for the target; publishes the first answer free of the fence, then stops. */
+/** Replace the target's loop; publish the first unfenced answer and stop. */
 export function scheduleManagedServerFenceRecheck(targetId: string, loop: FenceRecheckLoop): void {
   loops.get(targetId)?.()
   let timer: ReturnType<typeof setTimeout> | null = null
@@ -92,8 +78,4 @@ export function scheduleManagedServerFenceRecheck(targetId: string, loop: FenceR
     timer = setTimeout(() => void tick(attempt + 1), loop.intervalMs ?? FENCE_RECHECK_INTERVAL_MS)
   }
   timer = setTimeout(() => void tick(0), loop.intervalMs ?? FENCE_RECHECK_INTERVAL_MS)
-}
-
-export function cancelManagedServerFenceRecheck(targetId: string): void {
-  loops.get(targetId)?.()
 }

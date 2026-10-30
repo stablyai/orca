@@ -1,11 +1,10 @@
-// The deep validator for a journal submission (`AgentJournalSubmission`), the row a sent message's
-// dispatch state lives on. Open string fields stay type-checked, never enum-checked, as in
-// `agent-session-journal-schemas.ts`.
+// Deep-validate dispatch submissions with open string vocabularies, as in agent-session-journal-schemas.ts.
 
 import { z } from 'zod'
 import { AgentJournalAnsweredTurnSchema } from './agent-session-answered-turn-schema'
 import { AgentSessionFailureFactSchema } from './agent-session-failure-fact-schema'
 import type { AgentJournalSubmission } from './agent-session-journal-types'
+import { AgentSessionExecutionOptionsSchema } from './agent-session-execution-options'
 
 // Every persisted field is listed, or a parse strips it: this schema drops unknown keys.
 export const AgentJournalSubmissionSchema = z.object({
@@ -26,13 +25,14 @@ export const AgentJournalSubmissionSchema = z.object({
   queuedMessageId: z.string().min(1).optional(),
   // The kind only; an object's other keys (a sender) are stripped, never published.
   source: z.object({ kind: z.string() }).optional(),
-  keptAsQueuedMessageId: z.string().min(1).optional()
+  keptAsQueuedMessageId: z.string().min(1).optional(),
+  options: AgentSessionExecutionOptionsSchema.optional()
 })
 
 export function isAdmissibleAgentJournalSubmission(
   value: unknown
 ): value is AgentJournalSubmission {
-  return AgentJournalSubmissionSchema.safeParse(value).success
+  return AgentJournalSubmissionSchema.validate(value)
 }
 
 /** Compile-time proof that every submission this build writes is admissible. */

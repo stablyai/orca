@@ -4,11 +4,13 @@ import { GIT_DIFF_METHODS } from './git-diff-methods'
 import {
   GitBranchCompare,
   GitBulkPaths,
+  GitBulkStage,
   GitCheckIgnored,
   GitCheckout,
   GitCommit,
   GitCommitCompare,
   GitFilePath,
+  GitResolveConflict,
   GitForkSync,
   GitHistory,
   GitPush,
@@ -19,7 +21,7 @@ import {
   GitSubmoduleStatus,
   GitTargetedRemote,
   WorktreeSelector
-} from './git-params'
+} from '../../../../shared/rpc-contract/git-params'
 
 export const GIT_METHODS = [
   defineMethod({
@@ -89,10 +91,22 @@ export const GIT_METHODS = [
     handler: async (params, { runtime }) => runtime.getRuntimeGitConflictOperation(params.worktree)
   }),
   defineMethod({
+    name: 'git.mutationInFlight',
+    permission: 'workspace',
+    params: WorktreeSelector,
+    handler: async (params, { runtime }) => runtime.getRuntimeGitMutationInFlight(params.worktree)
+  }),
+  defineMethod({
     name: 'git.abortMerge',
     permission: 'workspace',
     params: WorktreeSelector,
     handler: async (params, { runtime }) => runtime.abortRuntimeGitMerge(params.worktree)
+  }),
+  defineMethod({
+    name: 'git.completeMerge',
+    permission: 'workspace',
+    params: WorktreeSelector,
+    handler: async (params, { runtime }) => runtime.completeRuntimeGitMerge(params.worktree)
   }),
   defineMethod({
     name: 'git.abortRebase',
@@ -208,9 +222,16 @@ export const GIT_METHODS = [
   defineMethod({
     name: 'git.bulkStage',
     permission: 'workspace',
-    params: GitBulkPaths,
+    params: GitBulkStage,
     handler: async (params, { runtime }) =>
-      runtime.bulkStageRuntimeGitPaths(params.worktree, params.filePaths)
+      runtime.bulkStageRuntimeGitPaths(params.worktree, params.filePaths, params.scope)
+  }),
+  defineMethod({
+    name: 'git.resolveConflict',
+    permission: 'workspace',
+    params: GitResolveConflict,
+    handler: async (params, { runtime }) =>
+      runtime.resolveRuntimeGitConflict(params.worktree, params.filePath, params.resolution)
   }),
   defineMethod({
     name: 'git.unstage',
@@ -245,7 +266,12 @@ export const GIT_METHODS = [
     permission: 'workspace',
     params: GitRemoteFileUrl,
     handler: async (params, { runtime }) =>
-      runtime.getRuntimeGitRemoteFileUrl(params.worktree, params.relativePath, params.line)
+      runtime.getRuntimeGitRemoteFileUrl(
+        params.worktree,
+        params.relativePath,
+        params.line,
+        params.endLine
+      )
   }),
   defineMethod({
     name: 'git.remoteCommitUrl',

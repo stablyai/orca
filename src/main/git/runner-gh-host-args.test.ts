@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { applyGhHostToArgs } from './runner'
-import { collectGhArgvHostSignals } from './command-runner/gh-host-args'
+import { applyGhHostToArgs, collectGhArgvHostSignals } from './command-runner/gh-host-args'
 
 describe('applyGhHostToArgs', () => {
   it('returns args unchanged when no host is given', () => {

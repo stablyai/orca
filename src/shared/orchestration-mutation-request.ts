@@ -1,5 +1,4 @@
-// Shared shape for `orchestration request-show`, the read-only answer to
-// "did my mutation take effect?" when the response was lost in transit.
+// Read-only request-show resolves mutations whose response was lost in transit.
 
 export const MUTATION_REQUEST_STATES = ['completed', 'pending', 'absent'] as const
 
@@ -12,8 +11,7 @@ export type OrchestrationMutationRequestShowResult = {
   createdAt?: string
   updatedAt?: string
   receipt?: unknown
-  // Why: `absent` is genuinely ambiguous, so the honest reading ships with the row
-  // instead of being re-derived (and softened) by every caller.
+  // Ship absent’s ambiguous interpretation so callers cannot silently soften it.
   interpretation: string
 }
 

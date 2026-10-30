@@ -1,37 +1,57 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { translate } from '@/i18n/i18n'
+import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import type { AgentType, NativeChatMessage } from '../../../../shared/native-chat-types'
+import {
+  pendingSendsAsMessages,
+  prunePendingSends,
+  releaseEmptyTranscriptClaims,
+  type NativeChatPendingSend
+} from '../../../../shared/native-chat-pending-sends'
 import {
   appendPendingSendCache,
   nextNativeChatPendingSendId,
-  pendingSendsAsMessages,
-  prunePendingSends,
   readPendingSendCache,
-  writePendingSendCache,
-  type NativeChatPendingSend
+  writePendingSendCache
 } from './native-chat-pending'
 import type { NativeChatDeliveryNotice } from './NativeChatMessageRow'
+import type { ReadState } from './native-chat-live-session-contract'
 
-/** How long a send whose write acknowledgment was lost waits for its row; the phone's hold matches. */
+/** Wait for transcript evidence after lost write acknowledgment; mobile uses the same hold. */
 export const NATIVE_CHAT_UNCONFIRMED_SEND_HOLD_MS = 20_000
 
 const NO_NOTICES: ReadonlyMap<string, NativeChatDeliveryNotice> = new Map()
 
-/** Optimistic terminal-Chat echoes plus the definite send outcomes the transport reports. */
+/** Keep optimistic PTY echoes and definite transport outcomes until reconciliation. */
 export function useNativeChatPendingDelivery(args: {
   paneKey: string
   agent: AgentType
-  messages: NativeChatMessage[]
+  /** `readPhase` 'ready' with a `sessionId` means an empty `messages` was a real read. */
+  session: {
+    messages: NativeChatMessage[]
+    readPhase?: ReadState['phase']
+    sessionId?: string | null
+  }
 }) {
-  const { paneKey, agent, messages } = args
+  const languageRevision = useUiLanguageRevision()
+  const { paneKey, agent } = args
+  const { messages } = args.session
+  const sessionId = args.session.sessionId ?? null
+  // Without a sessionId, ready is an unread placeholder.
+  const readEmptySessionId =
+    args.session.readPhase === 'ready' && messages.length === 0 ? sessionId : null
   const scope = useMemo(() => ({ paneKey, agent }), [paneKey, agent])
-  const [pending, setPending] = useState(() => readPendingSendCache(scope))
+  const [cachedPending, setPending] = useState(() => readPendingSendCache(scope))
+  const pending = useMemo(
+    () => releaseEmptyTranscriptClaims(cachedPending, sessionId),
+    [cachedPending, sessionId]
+  )
   useEffect(() => setPending(readPendingSendCache(scope)), [scope])
   const save = useCallback(
     (update: (entries: NativeChatPendingSend[]) => NativeChatPendingSend[]) => {
       const current = readPendingSendCache(scope)
       const next = update(current)
-      // Why: pruning runs on every stream update; a no-op must not re-render the list.
+      // Stream pruning runs frequently; no-op updates must not rerender the list.
       if (next !== current) {
         setPending(writePendingSendCache(scope, next))
       }
@@ -39,8 +59,8 @@ export function useNativeChatPendingDelivery(args: {
     [scope]
   )
   useEffect(() => {
-    save((entries) => prunePendingSends(entries, messages))
-  }, [messages, save])
+    save((entries) => prunePendingSends(releaseEmptyTranscriptClaims(entries, sessionId), messages))
+  }, [messages, save, sessionId])
   const record = useCallback(
     (text: string, imagePaths?: string[]) => {
       const sentAt = Date.now()
@@ -51,12 +71,13 @@ export function useNativeChatPendingDelivery(args: {
         sentAt,
         afterMessageId: boundary?.id ?? null,
         afterMessageTimestamp: boundary?.timestamp ?? null,
+        ...(readEmptySessionId ? { afterEmptyTranscriptSessionId: readEmptySessionId } : {}),
         ...(imagePaths ? { imagePaths } : {})
       }
       setPending(appendPendingSendCache(scope, entry))
       return entry.id
     },
-    [messages, scope]
+    [messages, readEmptySessionId, scope]
   )
   const cancel = useCallback(
     (id: string) => save((entries) => entries.filter((entry) => entry.id !== id)),
@@ -80,14 +101,13 @@ export function useNativeChatPendingDelivery(args: {
       ),
     [save]
   )
-  // Why keep outcomes: Stop cannot affect a settled failure, and its bubble holds the only copy.
+  // Stop cannot cancel a settled failure; its bubble holds the only message copy.
   const clear = useCallback(
     () => save((entries) => entries.filter((entry) => entry.delivery)),
     [save]
   )
 
-  // A lost acknowledgment is the only unconfirmed trigger: an ordinary send, including one Claude
-  // queues mid-turn, has no transport doubt and stays pending until its row lands.
+  // Only lost acknowledgments trigger uncertainty; acknowledged/queued sends wait for their transcript row.
   const nextHoldDeadline = useMemo(() => {
     const deadlines = pending.flatMap((entry) =>
       entry.writeUnconfirmedAt !== undefined && !entry.delivery
@@ -114,7 +134,9 @@ export function useNativeChatPendingDelivery(args: {
             return entries
           }
           const unmatched = new Set(
-            pendingSendsAsMessages(due, messages).map((message) => message.id)
+            pendingSendsAsMessages(releaseEmptyTranscriptClaims(due, sessionId), messages).map(
+              (message) => message.id
+            )
           )
           if (unmatched.size === 0) {
             return entries
@@ -129,7 +151,7 @@ export function useNativeChatPendingDelivery(args: {
       Math.max(0, nextHoldDeadline - Date.now())
     )
     return () => clearTimeout(timer)
-  }, [nextHoldDeadline, messages, save])
+  }, [nextHoldDeadline, messages, save, sessionId])
 
   const notices = useMemo(() => {
     if (!pending.some((entry) => entry.delivery)) {
@@ -152,6 +174,7 @@ export function useNativeChatPendingDelivery(args: {
       })
     }
     return result
-  }, [pending, cancel])
+    // oxlint-disable-next-line react-hooks/exhaustive-deps -- translate() reads the UI language implicitly.
+  }, [pending, cancel, languageRevision])
   return { pending, record, cancel, reject, holdUnconfirmed, clear, notices }
 }

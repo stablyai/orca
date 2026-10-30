@@ -2,12 +2,11 @@ import type { PersistedState } from '../../../shared/persisted-state-types'
 import type { RemovedSshTargetTombstone, SshTarget } from '../../../shared/ssh-types'
 import type { ProtectedSecretPersistence } from '../../protected-secret-persistence'
 import { sshPtyOwnerLeaseSecretSlot } from '../../protected-secret-persistence'
-import { MAX_CLAUDE_LIVE_PTY_SESSION_IDS } from '../restoring-sessions/pane-alias-normalization'
 import {
   MAX_REMOVED_SSH_TARGET_TOMBSTONES,
   capRemovedSshTargetTombstones,
   collectSshTargetRemovalEvidenceDependencies
-} from '../../ssh/removed-ssh-target-tombstone-retention'
+} from '../../ssh/targets/removed-ssh-target-tombstone-retention'
 import { normalizeSshTarget } from './ssh-normalization'
 import { isRuntimeOwnedSshTargetId } from '../../../shared/execution-host'
 import {
@@ -19,7 +18,6 @@ export type SshTargetStateOperations = {
   state: PersistedState
   protectedSecrets: Pick<ProtectedSecretPersistence, 'removeRetainedBlob'>
   scheduleSave: () => void
-  flush: () => void
 }
 
 export function getSshTargets(state: PersistedState): SshTarget[] {
@@ -32,7 +30,7 @@ export function getSshTarget(state: PersistedState, id: string): SshTarget | und
 }
 
 export function addSshTarget(operations: SshTargetStateOperations, target: SshTarget): void {
-  // Replaced, not pushed in place: the automation list projection caches on array identity.
+  // Replace the array to invalidate identity-cached automation projections.
   operations.state.sshTargets = [...(operations.state.sshTargets ?? []), normalizeSshTarget(target)]
   operations.scheduleSave()
 }
@@ -48,7 +46,7 @@ export function updateSshTarget(
   }
   const normalized = normalizeSshTarget({ ...target, ...updates })
   const previousHostIdentity = sshHostIdentity(target)
-  // Why: Object.assign only adds keys, so anything normalization stripped (retired sync fields, implicit defaults) must be deleted off the live target.
+  // Object.assign cannot remove fields discarded by normalization.
   const mutableTarget = target as Record<string, unknown>
   for (const key of Object.keys(mutableTarget)) {
     if (!Object.hasOwn(normalized, key)) {
@@ -56,23 +54,15 @@ export function updateSshTarget(
     }
   }
   Object.assign(target, normalized)
-  // Why: an endpoint edit keeps the row id, so no re-adoption runs and nothing else would carry the
-  // retirement mirror across — config sync rewrites host/port/username in place on every import.
-  // Copied, not moved: another target may still sit on the old endpoint.
-  //
-  // Runtime-owned targets are excluded: an on-demand VM is discarded between provisions, so its
-  // fresh address reaches an empty filesystem where a reissued name collides with nothing. Copying
-  // there would spend names against history that no longer exists and, since each provision mints
-  // another address, churn the namespace cap with a bucket per run — evicting the real tombstones
-  // of local and ordinary SSH repos.
+  // Endpoint edits bypass readoption; copy history because other targets may still use the old endpoint.
+  // Skip disposable runtimes: their new filesystems share no history, and per-run buckets evict real tombstones.
   if (!isRuntimeOwnedSshTargetId(id)) {
     migrateRetirementNamespaceHostIdentity(operations.state.retiredWorktreeNamesByNamespace, {
       copyFrom: [previousHostIdentity],
       to: sshHostIdentity(target)
     })
   }
-  // The Object.assign above patches the row in place (other callers hold the
-  // reference); the automation list projection caches on array identity.
+  // Invalidate identity-cached lists after mutating the shared row.
   operations.state.sshTargets = [...(operations.state.sshTargets ?? [])]
   operations.scheduleSave()
   return { ...target }
@@ -89,41 +79,6 @@ export function removeSshTarget(operations: SshTargetStateOperations, id: string
   operations.state.sshTargets = nextTargets
   operations.state.sshPtyConsumerRecoveries = nextRecoveries
   operations.protectedSecrets.removeRetainedBlob(sshPtyOwnerLeaseSecretSlot(id))
-  operations.scheduleSave()
-}
-
-export function getClaudeLivePtySessionIds(state: PersistedState): string[] {
-  return [...(state.claudeLivePtySessionIds ?? [])]
-}
-
-export function addClaudeLivePtySessionId(
-  operations: SshTargetStateOperations,
-  sessionId: string
-): void {
-  if (sessionId.length === 0 || sessionId.length > 512) {
-    return
-  }
-  const ids = operations.state.claudeLivePtySessionIds ?? []
-  if (ids.includes(sessionId)) {
-    return
-  }
-  // Why: drop oldest at the cap — stale ids get pruned against the daemon at startup, so only recency matters.
-  operations.state.claudeLivePtySessionIds = [...ids, sessionId].slice(
-    -MAX_CLAUDE_LIVE_PTY_SESSION_IDS
-  )
-  // Why: flush sync so a force-quit right after a Claude spawn still seeds the live-PTY gate next launch.
-  operations.flush()
-}
-
-export function removeClaudeLivePtySessionId(
-  operations: SshTargetStateOperations,
-  sessionId: string
-): void {
-  const ids = operations.state.claudeLivePtySessionIds ?? []
-  if (!ids.includes(sessionId)) {
-    return
-  }
-  operations.state.claudeLivePtySessionIds = ids.filter((id) => id !== sessionId)
   operations.scheduleSave()
 }
 
@@ -173,7 +128,6 @@ export function addRemovedSshTargetTombstone(
   tombstone: RemovedSshTargetTombstone
 ): void {
   const existing = operations.state.removedSshTargetTombstones ?? []
-  // Why: dedupe by oldTargetId so re-removing the same id can't stack duplicate tombstones; newest wins.
   const filtered = existing.filter((entry) => entry.oldTargetId !== tombstone.oldTargetId)
   operations.state.removedSshTargetTombstones = capRemovedSshTargetTombstones(
     [...filtered, tombstone],

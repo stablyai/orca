@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { useState } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('@/i18n/i18n', () => ({
@@ -14,7 +15,8 @@ vi.mock('@/i18n/i18n', () => ({
 }))
 
 import { TooltipProvider } from '@/components/ui/tooltip'
-import type { SessionOptionDescriptor } from '../../../../shared/native-chat-session-options'
+import type { SessionOptionDescriptor } from '../../../../shared/native-chat/input/native-chat-session-options'
+import type { NativeChatOptionPickerRequest } from './native-chat-composer-types'
 import { NativeChatSessionOptionPickers } from './NativeChatSessionOptionPickers'
 
 const settle = (): Promise<void> =>
@@ -61,6 +63,23 @@ const effort: SessionOptionDescriptor = {
   settable: true
 }
 
+const speed: SessionOptionDescriptor = {
+  id: 'serviceTier',
+  label: 'Speed',
+  category: 'mode',
+  kind: {
+    type: 'select',
+    currentValue: 'default',
+    choices: [
+      { value: 'default', label: 'Standard' },
+      { value: 'fast', label: 'Fast' }
+    ]
+  },
+  valueSource: 'applied',
+  transport: 'catalog',
+  settable: true
+}
+
 const fast: SessionOptionDescriptor = {
   id: 'fastMode',
   label: 'Fast mode',
@@ -71,8 +90,10 @@ const fast: SessionOptionDescriptor = {
   settable: true
 }
 
-/** The pickers beside a real message box, so focus has somewhere to come back to. */
-async function renderComposer(snapshot: SessionOptionDescriptor[]): Promise<HTMLElement> {
+async function renderComposer(
+  snapshot: SessionOptionDescriptor[],
+  pickerRequest: NativeChatOptionPickerRequest | null = null
+): Promise<HTMLElement> {
   const messageBox = document.createElement('textarea')
   render(
     <TooltipProvider>
@@ -80,6 +101,7 @@ async function renderComposer(snapshot: SessionOptionDescriptor[]): Promise<HTML
         surface={surface}
         snapshot={snapshot}
         isWorking={false}
+        pickerRequest={pickerRequest}
         focusComposer={() => messageBox.focus()}
       />
     </TooltipProvider>
@@ -89,27 +111,42 @@ async function renderComposer(snapshot: SessionOptionDescriptor[]): Promise<HTML
   return messageBox
 }
 
-/** The options pill opens a menu; the model pill opens the search popover. */
-const pill = (surfaceKind: 'menu' | 'dialog'): HTMLElement => {
-  const found = screen
-    .getAllByRole('button')
-    .find((button) => button.getAttribute('aria-haspopup') === surfaceKind)
-  if (!found) {
-    throw new Error(`no pill opening a ${surfaceKind}`)
-  }
-  return found
+/** A slash command's request held by the session, which drops it when the picker consumes it. */
+function Session(props: {
+  requestId: string
+  composerShown?: boolean
+  surfaceShown?: boolean
+}): React.JSX.Element {
+  const [request, setRequest] = useState<NativeChatOptionPickerRequest | null>({
+    id: props.requestId,
+    consume: () => setRequest(null)
+  })
+  return (
+    <TooltipProvider>
+      {props.composerShown === false ? null : (
+        <NativeChatSessionOptionPickers
+          surface={props.surfaceShown === false ? null : surface}
+          snapshot={[model, effort]}
+          isWorking={false}
+          pickerRequest={request}
+        />
+      )}
+    </TooltipProvider>
+  )
 }
 
-/** The menu opens on pointerdown, which happy-dom does not synthesize, so press Enter instead. */
-const openPill = async (surfaceKind: 'menu' | 'dialog'): Promise<HTMLElement> => {
-  const trigger = pill(surfaceKind)
-  if (surfaceKind === 'menu') {
-    fireEvent.keyDown(trigger, { key: 'Enter' })
-  } else {
-    fireEvent.click(trigger)
-  }
+const pill = (): HTMLElement => screen.getByRole('button', { name: /^Model / })
+
+const openPicker = async (): Promise<HTMLElement> => {
+  const trigger = pill()
+  fireEvent.click(trigger)
   await settle()
   return trigger
+}
+
+const pressEscape = async (): Promise<void> => {
+  fireEvent.keyDown(document.activeElement ?? document.body, { key: 'Escape' })
+  await settle()
 }
 
 afterEach(() => {
@@ -118,50 +155,190 @@ afterEach(() => {
   vi.clearAllMocks()
 })
 
-describe('session option picker focus return', () => {
-  it('lands focus in the message box after an effort choice', async () => {
-    const messageBox = await renderComposer([model, effort])
-    await openPill('menu')
-
-    fireEvent.click(screen.getByRole('menuitemradio', { name: /High/ }))
+describe('session option picker focus', () => {
+  it.each(['click', 'ArrowDown'] as const)('opens on %s with the search focused', async (how) => {
+    await renderComposer([model, effort])
+    const trigger = pill()
+    if (how === 'click') {
+      fireEvent.click(trigger)
+    } else {
+      trigger.focus()
+      fireEvent.keyDown(trigger, { key: 'ArrowDown' })
+    }
     await settle()
 
-    expect(surface.setOption).toHaveBeenCalledWith('effort', 'high')
-    expect(document.activeElement).toBe(messageBox)
+    expect(document.activeElement).toBe(screen.getByRole('combobox'))
   })
 
-  it('lands focus in the message box after a model choice', async () => {
-    const messageBox = await renderComposer([model, effort])
-    await openPill('dialog')
+  it('opens on the option a slash command asked for, once', async () => {
+    await renderComposer([model, effort], { id: 'effort', consume: () => {} })
+    expect(document.activeElement).toBe(screen.getByRole('radio', { name: 'Low' }))
+
+    // The request is spent: opening by hand afterwards focuses the search as usual.
+    await pressEscape()
+    await openPicker()
+    expect(document.activeElement).toBe(screen.getByRole('combobox'))
+  })
+
+  it('stays open across a model, a speed and a switch pick, and closes into the message box on an effort pick', async () => {
+    const messageBox = await renderComposer([model, effort, speed, fast])
+    await openPicker()
 
     fireEvent.click(screen.getByRole('option', { name: /Sonnet 5/ }))
     await settle()
+    fireEvent.click(screen.getByRole('radio', { name: 'Fast' }))
+    await settle()
+    fireEvent.click(screen.getByRole('switch', { name: 'Fast mode' }))
+    await settle()
+    expect(screen.getByRole('dialog').contains(document.activeElement)).toBe(true)
 
-    expect(surface.setOption).toHaveBeenCalledWith('model', 'sonnet')
+    fireEvent.click(screen.getByRole('radio', { name: 'High' }))
+    await settle()
+
+    expect(surface.setOption.mock.calls).toEqual([
+      ['model', 'sonnet'],
+      ['serviceTier', 'fast'],
+      ['fastMode', true],
+      ['effort', 'high']
+    ])
+    expect(screen.queryByRole('dialog')).toBeNull()
     expect(document.activeElement).toBe(messageBox)
+  })
+
+  it('closes on a press of the effort level already in use, without a write', async () => {
+    const messageBox = await renderComposer([model, effort])
+    await openPicker()
+
+    fireEvent.click(screen.getByRole('radio', { name: 'Low' }))
+    await settle()
+
+    expect(surface.setOption).not.toHaveBeenCalled()
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(document.activeElement).toBe(messageBox)
+  })
+
+  // A level the picked model lacks is removed, and a removed element takes focus with it.
+  it('moves focus from an option to the search when a model row is pressed', async () => {
+    await renderComposer([model, effort])
+    await openPicker()
+    screen.getByRole('radio', { name: 'High' }).focus()
+
+    fireEvent.mouseDown(screen.getByRole('option', { name: /Sonnet 5/ }))
+
+    expect(document.activeElement).toBe(screen.getByRole('combobox'))
+  })
+
+  // The tooltip is the top layer, so Radix gives it the first Escape; one press still closes both.
+  it('closes on one Escape from a level whose tooltip is showing', async () => {
+    const levels: SessionOptionDescriptor = {
+      ...effort,
+      kind: {
+        type: 'select',
+        currentValue: 'xhigh',
+        choices: [
+          { value: 'medium', label: 'Medium' },
+          { value: 'xhigh', label: 'Extra high' }
+        ]
+      }
+    }
+    await renderComposer([model, levels])
+    const trigger = await openPicker()
+    const level = screen.getByRole('radio', { name: 'XHigh' })
+    // The tooltip's own open/closed state must not replace the one the level is styled by.
+    expect(level.getAttribute('data-state')).toBe('on')
+    level.focus()
+    await settle()
+    expect(screen.getByRole('tooltip')).not.toBeNull()
+
+    await pressEscape()
+
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(document.activeElement).toBe(trigger)
   })
 
   it('leaves focus on the pill when the picker is dismissed instead of used', async () => {
     await renderComposer([model, effort])
-    const trigger = await openPill('menu')
+    const trigger = await openPicker()
 
-    fireEvent.keyDown(document.activeElement ?? document.body, { key: 'Escape' })
-    await settle()
+    await pressEscape()
 
     expect(surface.setOption).not.toHaveBeenCalled()
     expect(document.activeElement).toBe(trigger)
   })
 
-  it('keeps focus in the open menu when a toggle leaves it open', async () => {
-    await renderComposer([model, effort, fast])
-    await openPill('menu')
-
-    fireEvent.click(screen.getByRole('switch', { name: 'Fast mode' }))
+  it('lands focus in the message box when the pill closes the picker after a pick', async () => {
+    const messageBox = await renderComposer([model, effort])
+    const trigger = await openPicker()
+    fireEvent.click(screen.getByRole('option', { name: /Sonnet 5/ }))
     await settle()
 
-    expect(surface.setOption).toHaveBeenCalledWith('fastMode', true)
-    const menu = screen.getByRole('menu')
-    expect(menu).toBeTruthy()
-    expect(menu.contains(document.activeElement)).toBe(true)
+    // What a press is to the browser: pointerdown, focus on the button, then the click.
+    fireEvent.pointerDown(trigger)
+    trigger.focus()
+    fireEvent.click(trigger)
+    await settle()
+
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(document.activeElement).toBe(messageBox)
+  })
+
+  it('leaves focus where a click outside put it, even after a pick', async () => {
+    await renderComposer([model, effort])
+    const elsewhere = document.createElement('input')
+    document.body.append(elsewhere)
+    await openPicker()
+    fireEvent.click(screen.getByRole('option', { name: /Sonnet 5/ }))
+    await settle()
+
+    // Radix waits for the click that follows an outside pointerdown before it dismisses.
+    fireEvent.pointerDown(elsewhere)
+    elsewhere.focus()
+    fireEvent.click(elsewhere)
+    await settle()
+
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(document.activeElement).toBe(elsewhere)
+  })
+
+  it('opens once for a request, and comes back closed after the pill went away', async () => {
+    const { rerender } = render(<Session requestId="model" />)
+    await settle()
+    expect(screen.queryByRole('dialog')).not.toBeNull()
+
+    rerender(<Session requestId="model" surfaceShown={false} />)
+    await settle()
+    expect(screen.queryByRole('button', { name: /^Model / })).toBeNull()
+    rerender(<Session requestId="model" />)
+    await settle()
+    expect(screen.queryByRole('dialog')).toBeNull()
+  })
+
+  it('focuses the effort for /effort once, not again after a prompt card', async () => {
+    const { rerender } = render(<Session requestId="effort" />)
+    await settle()
+    expect(document.activeElement).toBe(screen.getByRole('radio', { name: 'Low' }))
+
+    rerender(<Session requestId="effort" composerShown={false} />)
+    await settle()
+    rerender(<Session requestId="effort" />)
+    await settle()
+    expect(screen.queryByRole('dialog')).toBeNull()
+
+    await openPicker()
+    expect(document.activeElement).toBe(screen.getByRole('combobox'))
+  })
+
+  it('shows a tooltip on the pill only for what the pill cannot show', async () => {
+    await renderComposer([model, effort])
+    fireEvent.pointerMove(pill(), { pointerType: 'mouse' })
+    pill().focus()
+    await settle()
+    expect(screen.queryByRole('tooltip')).toBeNull()
+
+    cleanup()
+    await renderComposer([{ ...model, settable: false, disabledReason: 'set-when-session-starts' }])
+    pill().focus()
+    await settle()
+    expect(screen.getByRole('tooltip').textContent).toBe('Set when the session starts.')
   })
 })

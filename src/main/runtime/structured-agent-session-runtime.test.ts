@@ -1,6 +1,7 @@
-import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { readFileSync } from 'node:fs'
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { basename, join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type {
   AgentSessionClaimStatus,
@@ -23,7 +24,13 @@ import {
   hasPersistedStructuredAgentSessionStore,
   stopStructuredAgentSessionRuntime
 } from './structured-agent-session-runtime'
+import { seedTestAgentSessionRecordStore } from './agent-session-record-store-test-harness'
+import { nativeChatScratchFolderFor } from '../native-chat/native-chat-scratch-folder'
+import { foundAgentSessionRecord } from './agent-session-record-founding'
+import { openTestJournalHostDatabase } from '../native-chat/agent-session-journal/journal-host-database-test-support'
+import { recordingStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
 import { createStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
+import { onStructuredAgentSessionsHeldChanged } from '../native-chat/agent-session-wire/structured-agent-session-registry'
 
 const HOST_ID = 'local'
 
@@ -72,7 +79,6 @@ describe('structured agent-session store presence', () => {
     return JournalHostDatabase.open(profile)
   }
 
-  // Every host install creates the database, chats or not; startup restore must not wait on one.
   it('reports a profile whose database holds no chat absent', async () => {
     ;(await openProfileDatabase()).close()
 
@@ -188,8 +194,7 @@ describe('structured agent-session owner probe', () => {
   it('frees a lease that names neither an owner nor a spawn token', async () => {
     const probe = deadProbe()
     const scan = vi.fn(async () => [] as number[])
-    // Nothing was ever minted that a child could be carrying, so no scan is even needed;
-    // answering `indeterminate` here is what latches every released record into recovery.
+    // Without an owner or minted token no scan is needed; indeterminate would trap released records in recovery.
     const result = await createStructuredAgentSessionOwnerProbe(HOST_ID, probe, scan)(record(null))
 
     expect(probe).not.toHaveBeenCalled()
@@ -220,6 +225,109 @@ describe('structured agent-session runtime install', () => {
     vi.restoreAllMocks()
   })
 
+  function oldChat(provider: 'claude' | 'codex'): AgentSessionRecord {
+    return foundAgentSessionRecord(
+      {
+        sessionId: `old-${provider}`,
+        provider,
+        location: {
+          executionHostId: HOST_ID,
+          workspaceId: 'folder-1',
+          workspaceKind: 'folder',
+          wslDistro: null
+        },
+        accountHome: {
+          variable: provider === 'claude' ? 'CLAUDE_CONFIG_DIR' : 'CODEX_HOME',
+          path: '/account'
+        }
+      },
+      { claimKeyId: 'key-1', now: 1 }
+    )
+  }
+
+  async function installOver(
+    fullAccessAgents: readonly string[],
+    logger = recordingStructuredAgentSessionLogger().logger
+  ) {
+    return await ensureStructuredAgentSessionHost({
+      logger,
+      stateDirectory: stateDirectory!,
+      hostId: HOST_ID,
+      claimKeyId: 'key-1',
+      resolveWorkspacePath: async () => stateDirectory!,
+      resolveLaunchArgs: () => [],
+      resolveClaudeAuthPolicy: () => ({ account: 'managed' }),
+      resolveAgentFullAccess: (agent) => fullAccessAgents.includes(agent),
+      resolveEnvironment: async () => ({})
+    })
+  }
+
+  it.each([false, true])(
+    'backfills before the host is readable and keeps startup nonfatal on a failed write (%s)',
+    async (failWrite) => {
+      stateDirectory = await mkdtemp(join(tmpdir(), 'orca-structured-runtime-backfill-'))
+      await seedTestAgentSessionRecordStore(stateDirectory, { records: [oldChat('codex')] })
+      if (failWrite) {
+        openTestJournalHostDatabase(stateDirectory).db.exec(
+          "CREATE TRIGGER fail_permission_backfill BEFORE UPDATE ON agent_session_records BEGIN SELECT RAISE(ABORT, 'disk full'); END"
+        )
+      }
+      const logged = recordingStructuredAgentSessionLogger()
+      const host = await installOver(['codex'], logged.logger)
+      expect(host.deps.store.getRecord('old-codex')?.permissionMode).toBe(
+        failWrite ? undefined : 'full-access'
+      )
+      expect((await host.readOptions('old-codex')).current.permissionMode).toBe(
+        failWrite ? 'ask' : 'full-access'
+      )
+      if (failWrite) {
+        expect(logged.scopes()).toContain('permission-mode-backfill')
+      } else {
+        expect(logged.scopes()).not.toContain('permission-mode-backfill')
+      }
+    }
+  )
+
+  it.each([
+    [['claude'], 'full-access', 'ask'],
+    [['codex'], 'ask', 'full-access']
+  ] as const)(
+    "fills each old chat from its own agent's arguments when %j skip prompts",
+    async (fullAccessAgents, claude, codex) => {
+      stateDirectory = await mkdtemp(join(tmpdir(), 'orca-structured-runtime-backfill-'))
+      await seedTestAgentSessionRecordStore(stateDirectory, {
+        records: [oldChat('claude'), oldChat('codex')]
+      })
+      const host = await installOver(fullAccessAgents)
+      expect(host.deps.store.getRecord('old-claude')?.permissionMode).toBe(claude)
+      expect(host.deps.store.getRecord('old-codex')?.permissionMode).toBe(codex)
+    }
+  )
+
+  it('moves pre-rename chat visuals under the current root before the host is readable', async () => {
+    stateDirectory = await mkdtemp(join(tmpdir(), 'orca-structured-runtime-visuals-'))
+    await seedTestAgentSessionRecordStore(stateDirectory, { records: [oldChat('codex')] })
+    const current = nativeChatScratchFolderFor(stateDirectory, 'old-codex')
+    const legacy = join(stateDirectory, 'native-chat-visuals', basename(current))
+    await mkdir(legacy, { recursive: true })
+    await writeFile(join(legacy, 'chart.html'), '<p>chart</p>')
+
+    let readableAtPublication = false
+    const stopListening = onStructuredAgentSessionsHeldChanged((held) => {
+      if (held) {
+        readableAtPublication = readFileSync(join(current, 'chart.html'), 'utf8') === '<p>chart</p>'
+      }
+    })
+    try {
+      await installOver([])
+    } finally {
+      stopListening()
+    }
+
+    expect(readableAtPublication).toBe(true)
+    expect(await readFile(join(current, 'chart.html'), 'utf8')).toBe('<p>chart</p>')
+  })
+
   it('holds stop until the model catalog has written its coalesced save', async () => {
     stateDirectory = await mkdtemp(join(tmpdir(), 'orca-structured-runtime-'))
     await ensureStructuredAgentSessionHost({
@@ -229,7 +337,7 @@ describe('structured agent-session runtime install', () => {
       claimKeyId: 'key-1',
       resolveWorkspacePath: async () => stateDirectory!,
       resolveLaunchArgs: () => [],
-      resolveClaudeAuthPolicy: () => ({ stripAuthEnv: true }),
+      resolveClaudeAuthPolicy: () => ({ account: 'managed' }),
       resolveEnvironment: async () => ({})
     })
     let finishWrite = (): void => {}
@@ -271,7 +379,7 @@ describe('structured agent-session runtime install', () => {
         resolveWorkspacePath: async () => stateDirectory!,
         resolveEnvironment: async () => ({}),
         resolveLaunchArgs: () => [],
-        resolveClaudeAuthPolicy: () => ({ stripAuthEnv: true }),
+        resolveClaudeAuthPolicy: () => ({ account: 'managed' }),
         readProcessStartTime: async () => 1_700_000_000_000
       })
 

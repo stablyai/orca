@@ -17,10 +17,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
-import {
-  formatActiveFilterLabel,
-  OptionsFilterCountBadge
-} from '@/components/sidebar/options-filter-count-badge'
+import { OptionsFilterCountBadge } from '@/components/sidebar/options-filter-count-badge'
 import {
   ActivityScopeFilterMenuItems,
   useActivityScopeFilterCount
@@ -84,13 +81,15 @@ export function ActivityThreadOptionsMenu({
   const skipCloseAutoFocusRef = React.useRef(false)
   const activeFilterCount =
     useActivityScopeFilterCount() + (onUnreadOnlyChange && unreadOnly ? 1 : 0)
-  const activeFilterLabel = formatActiveFilterLabel(activeFilterCount)
   const optionsLabel =
     activeFilterCount > 0
       ? translate(
-          'auto.components.activity.ActivityPrototypePage.threadListOptionsActive',
-          'Thread list options ({{value0}} active)',
-          { value0: activeFilterLabel }
+          'auto.components.activity.ActivityPrototypePage.threadListOptionsActiveFilters',
+          'Thread list options ({{count}} filters active)',
+          {
+            count: activeFilterCount,
+            defaultValue_one: 'Thread list options ({{count}} filter active)'
+          }
         )
       : translate(
           'auto.components.activity.ActivityPrototypePage.db8a1878b5',
@@ -101,28 +100,28 @@ export function ActivityThreadOptionsMenu({
     <DropdownMenu>
       <Tooltip>
         <TooltipTrigger asChild>
-          {/* Why: keep Tooltip and Dropdown from composing refs onto the same button (Radix setRef crash loop). */}
-          <span className="inline-flex shrink-0">
-            <DropdownMenuTrigger asChild>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon-xs"
-                className="relative text-muted-foreground"
-                aria-label={optionsLabel}
-              >
-                <SlidersHorizontal className="size-3.5" strokeWidth={2.25} />
-                <OptionsFilterCountBadge count={activeFilterCount} />
-              </Button>
-            </DropdownMenuTrigger>
-          </span>
+          <DropdownMenuTrigger asChild>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-xs"
+              className="relative text-muted-foreground"
+              aria-label={optionsLabel}
+            >
+              <SlidersHorizontal className="size-3.5" strokeWidth={2.25} />
+              <OptionsFilterCountBadge count={activeFilterCount} />
+            </Button>
+          </DropdownMenuTrigger>
         </TooltipTrigger>
         <TooltipContent side="bottom" sideOffset={6}>
           {activeFilterCount > 0
             ? translate(
-                'auto.components.activity.ActivityPrototypePage.activityOptionsActive',
-                'Activity options ({{value0}})',
-                { value0: activeFilterLabel }
+                'auto.components.activity.ActivityPrototypePage.activityOptionsFilterCount',
+                'Activity options ({{count}} filters)',
+                {
+                  count: activeFilterCount,
+                  defaultValue_one: 'Activity options ({{count}} filter)'
+                }
               )
             : translate(
                 'auto.components.activity.ActivityPrototypePage.activityOptions',

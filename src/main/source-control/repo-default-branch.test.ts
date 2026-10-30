@@ -1,16 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { gitExecFileAsyncMock, getSshGitProviderMock } = vi.hoisted(() => ({
-  gitExecFileAsyncMock: vi.fn(),
-  getSshGitProviderMock: vi.fn()
+const { gitExecFileAsyncMock } = vi.hoisted(() => ({
+  gitExecFileAsyncMock: vi.fn()
 }))
 
 vi.mock('../git/runner', () => ({
   gitExecFileAsync: gitExecFileAsyncMock
-}))
-
-vi.mock('../providers/ssh-git-dispatch', () => ({
-  getSshGitProvider: getSshGitProviderMock
 }))
 
 import {
@@ -31,7 +26,6 @@ function primeLocalGitExec(defaultRef = 'refs/remotes/origin/master'): void {
 describe('getRepoDefaultBranchName', () => {
   beforeEach(() => {
     gitExecFileAsyncMock.mockReset()
-    getSshGitProviderMock.mockReset()
     __resetRepoDefaultBranchCacheForTests()
   })
 
@@ -41,8 +35,7 @@ describe('getRepoDefaultBranchName', () => {
     await expect(getRepoDefaultBranchName('/repo')).resolves.toBe('master')
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
       expect.arrayContaining(['for-each-ref', '--format=%(refname)%00%(symref)']),
-      // Why: the timeout keeps a dead filesystem from wedging the serial PR
-      // refresh drain — assert it stays armed on the local path.
+      // Bound local probes so dead filesystems cannot wedge the serial refresh drain.
       { cwd: '/repo', timeout: expect.any(Number) }
     )
   })
@@ -59,28 +52,6 @@ describe('getRepoDefaultBranchName', () => {
     )
   })
 
-  it('routes resolution through the SSH provider exec and never local git', async () => {
-    const provider = {
-      exec: vi.fn(async (args: string[], repoPath: string) => {
-        expect(repoPath).toBe('/remote/repo')
-        if (args[0] === 'for-each-ref') {
-          return { stdout: 'refs/remotes/origin/HEAD\0refs/remotes/origin/trunk\n' }
-        }
-        return { stdout: 'oid\n' }
-      })
-    }
-    getSshGitProviderMock.mockReturnValue(provider)
-
-    await expect(getRepoDefaultBranchName('/remote/repo', 'ssh-1')).resolves.toBe('trunk')
-    expect(getSshGitProviderMock).toHaveBeenCalledWith('ssh-1')
-    expect(provider.exec).toHaveBeenCalledWith(
-      expect.arrayContaining(['for-each-ref', '--format=%(refname)%00%(symref)']),
-      '/remote/repo',
-      { timeoutMs: expect.any(Number) }
-    )
-    expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
-  })
-
   it('shares one wall-clock timeout budget across all fallback probes', async () => {
     let now = 1_000
     const dateNow = vi.spyOn(Date, 'now').mockImplementation(() => now)
@@ -92,8 +63,7 @@ describe('getRepoDefaultBranchName', () => {
     try {
       await expect(getRepoDefaultBranchName('/repo')).resolves.toBeNull()
 
-      // Once the first probe consumes the budget, fallback refs fail open
-      // without spawning four more equally slow git processes.
+      // Share one deadline so fallback refs cannot multiply an exhausted host's delay.
       expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(1)
       expect(gitExecFileAsyncMock.mock.calls[0]?.[1]).toEqual({
         cwd: '/repo',
@@ -105,8 +75,6 @@ describe('getRepoDefaultBranchName', () => {
   })
 
   it('returns null without running local git when the SSH provider is unavailable', async () => {
-    getSshGitProviderMock.mockReturnValue(undefined)
-
     await expect(getRepoDefaultBranchName('/remote/repo', 'ssh-gone')).resolves.toBeNull()
     expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
   })
@@ -157,7 +125,6 @@ describe('getRepoDefaultBranchName', () => {
     await expect(getRepoDefaultBranchName('/repo')).resolves.toBe('master')
 
     primeLocalGitExec('refs/remotes/origin/main')
-    // Same repoPath, different runtime key → fresh resolution, not the host's.
     await expect(getRepoDefaultBranchName('/repo', null, { wslDistro: 'Ubuntu' })).resolves.toBe(
       'main'
     )
@@ -167,7 +134,6 @@ describe('getRepoDefaultBranchName', () => {
 describe('shouldHideNonOpenReviewOnDefaultBranch', () => {
   beforeEach(() => {
     gitExecFileAsyncMock.mockReset()
-    getSshGitProviderMock.mockReset()
     __resetRepoDefaultBranchCacheForTests()
   })
 

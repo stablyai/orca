@@ -2,15 +2,23 @@ name: macOS updater regression tests
 
 on:
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review, converted_to_draft]
     paths:
       - '.github/workflows/macos-updater-tests.yml'
       - 'src/main/macos-update-running-instances*'
       - 'src/main/updater*'
       - 'src/main/updater/**'
+      - 'native/macos-shipit-scheduling/**'
+      - 'config/scripts/macos-shipit-scheduling*'
+      - 'config/electron-builder.config.cjs'
       - 'src/main/startup/main-process-quit*'
       - 'src/main/window/main-window-state-lifecycle*'
       - 'src/main/window/dashboard-popout-window*'
-      - 'src/shared/child-process/**'
+      - 'src/packages/process-host/**'
+      - 'src/main/runtime/structured-agent-cli-writers*'
+      - 'src/main/providers/macos-tcc-login-shell*'
+      - 'src/shared/process-table-snapshot*'
+      - 'src/shared/darwin-process-table-capture*'
       - 'src/shared/update-status-types.ts'
       - 'pnpm-lock.yaml'
   workflow_dispatch:
@@ -24,6 +32,7 @@ concurrency:
 
 jobs:
   updater:
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft != true
     runs-on: macos-15
     timeout-minutes: 20
     steps:
@@ -33,11 +42,15 @@ jobs:
       - uses: ./.github/actions/install-node-dependencies
         with:
           native-runtime: node
+          cache-electron-package: 'true'
+      - name: Install the pinned Electron binary for native updater probes
+        run: node config/scripts/install-electron-package-binary.mjs
       - name: Exercise native application registry and update shutdown
         env:
           ORCA_BACKGROUND_LAUNCH: '1'
         run: >-
           pnpm exec vitest run --config config/vitest.config.ts
+          config/scripts/macos-shipit-scheduling.test.mjs
           src/main/macos-update-running-instances.test.ts
           src/main/macos-update-running-instances.integration.test.ts
           src/main/updater.mac-install.test.ts
@@ -46,3 +59,8 @@ jobs:
           src/main/startup/main-process-quit-update-veto.test.ts
           src/main/window/main-window-state-lifecycle.test.ts
           src/main/window/dashboard-popout-window.test.ts
+      - name: Prove login-backed terminal writer census on the disposable runner
+        env:
+          ORCA_MACOS_LOGIN_CENSUS_CI: '1'
+          ORCA_BACKGROUND_LAUNCH: '1'
+        run: pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/structured-agent-cli-writers.test.ts

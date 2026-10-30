@@ -7,8 +7,7 @@ const {
   glabHostEnvOptionsMock,
   glabRepoExecOptionsMock,
   acquireMock,
-  releaseMock,
-  getSshFilesystemProviderMock
+  releaseMock
 } = vi.hoisted(() => ({
   getProjectSlugMock: vi.fn(),
   glabExecFileAsyncMock: vi.fn(),
@@ -20,8 +19,7 @@ const {
     connectionId ? {} : { cwd: repoPath }
   ),
   acquireMock: vi.fn(),
-  releaseMock: vi.fn(),
-  getSshFilesystemProviderMock: vi.fn()
+  releaseMock: vi.fn()
 }))
 
 vi.mock('./client', () => ({
@@ -37,10 +35,6 @@ vi.mock('./gl-utils', () => ({
   glabRepoExecOptions: glabRepoExecOptionsMock
 }))
 
-vi.mock('../providers/ssh-filesystem-dispatch', () => ({
-  getSshFilesystemProvider: getSshFilesystemProviderMock
-}))
-
 import { createGitLabMergeRequest } from './merge-request-creation'
 
 describe('createGitLabMergeRequest', () => {
@@ -52,7 +46,6 @@ describe('createGitLabMergeRequest', () => {
     glabRepoExecOptionsMock.mockClear()
     acquireMock.mockReset()
     releaseMock.mockReset()
-    getSshFilesystemProviderMock.mockReset()
     acquireMock.mockResolvedValue(undefined)
     getProjectSlugMock.mockResolvedValue({ host: 'gitlab.com', path: 'acme/widgets' })
   })
@@ -100,8 +93,6 @@ describe('createGitLabMergeRequest', () => {
         '--draft'
       ])
     )
-    // Why: a local workspace resolves the host from cwd, so neither the flag
-    // nor the env override belongs on the command.
     expect(args).not.toContain('--hostname')
     expect(options).toMatchObject({
       cwd: '/repo-root',
@@ -193,45 +184,6 @@ describe('createGitLabMergeRequest', () => {
     expect(options).not.toHaveProperty('cwd')
   })
 
-  it('reads merge request templates from the SSH filesystem provider', async () => {
-    const readRemoteFile = vi.fn(async (path: string) => {
-      if (path === '/remote/repo-root/.gitlab/merge_request_templates/Default.md') {
-        return { content: 'Remote MR template body', isBinary: false }
-      }
-      throw new Error('missing template')
-    })
-    getSshFilesystemProviderMock.mockReturnValue({ readFile: readRemoteFile })
-    glabExecFileAsyncMock.mockResolvedValueOnce({
-      stdout: 'https://gitlab.com/acme/widgets/-/merge_requests/46\n',
-      stderr: ''
-    })
-
-    await expect(
-      createGitLabMergeRequest(
-        '/remote/repo-root',
-        {
-          provider: 'gitlab',
-          base: 'main',
-          head: 'feature/ssh-template',
-          title: 'SSH Template MR',
-          body: '',
-          useTemplate: true
-        },
-        'ssh:ssh-1'
-      )
-    ).resolves.toEqual({
-      ok: true,
-      number: 46,
-      url: 'https://gitlab.com/acme/widgets/-/merge_requests/46'
-    })
-
-    const [args] = glabExecFileAsyncMock.mock.calls[0]
-    expect(readRemoteFile).toHaveBeenCalledWith(
-      '/remote/repo-root/.gitlab/merge_request_templates/Default.md'
-    )
-    expect(args[args.indexOf('--description') + 1]).toBe('Remote MR template body')
-  })
-
   it('returns an existing merge request when GitLab reports a duplicate', async () => {
     glabExecFileAsyncMock
       .mockRejectedValueOnce(new Error('merge request already exists'))
@@ -260,6 +212,7 @@ describe('createGitLabMergeRequest', () => {
       ok: false,
       code: 'already_exists',
       error: 'A merge request already exists for this branch.',
+      reason: 'existing_review',
       existingReview: {
         number: 77,
         url: 'https://gitlab.com/acme/widgets/-/merge_requests/77'
@@ -278,8 +231,7 @@ describe('createGitLabMergeRequest', () => {
     )
   })
 
-  // Why: `glab mr create` has no --hostname flag either, so an SSH workspace
-  // has to reach its instance through GITLAB_HOST (#12193).
+  // mr create rejects --hostname; self-hosted SSH workspaces need GITLAB_HOST.
   it('creates a merge request through GITLAB_HOST on an SSH workspace', async () => {
     getProjectSlugMock.mockResolvedValue({ host: 'gitlab.example.internal', path: 'acme/widgets' })
     glabExecFileAsyncMock.mockResolvedValueOnce({
@@ -309,8 +261,7 @@ describe('createGitLabMergeRequest', () => {
     expect(options.env?.GITLAB_HOST).toBe('gitlab.example.internal')
   })
 
-  // Why: `glab mr list` has no --hostname flag, so the duplicate lookup has to
-  // reach a self-hosted instance through GITLAB_HOST instead (#12193).
+  // Duplicate lookup uses mr list, which also requires GITLAB_HOST instead of --hostname.
   it('looks up an existing merge request through GITLAB_HOST on an SSH workspace', async () => {
     glabExecFileAsyncMock
       .mockRejectedValueOnce(new Error('merge request already exists'))
@@ -336,7 +287,7 @@ describe('createGitLabMergeRequest', () => {
         },
         'ssh:ssh-1'
       )
-    ).resolves.toMatchObject({ ok: false, code: 'already_exists' })
+    ).resolves.toMatchObject({ ok: false, code: 'already_exists', reason: 'existing_review' })
 
     const [args, options] = glabExecFileAsyncMock.mock.calls[1]
     expect(args).not.toContain('--hostname')

@@ -11,9 +11,10 @@ import {
   openMobileE2EEV2Frame,
   sealMobileE2EEV2Frame
 } from '../../../shared/mobile-e2ee-v2-framing'
-import { deriveSharedKey } from './e2ee-crypto'
+import { deriveSharedKey } from '../../../shared/e2ee-crypto'
+import type { RpcBinarySendResult } from './rpc-binary-sender'
 import { E2EEChannel } from './e2ee-channel'
-import { deriveMobileE2EEV2KeySchedule } from './mobile-e2ee-v2-key-schedule'
+import { deriveMobileE2EEV2KeySchedule } from '../../../shared/mobile-e2ee-v2-node-key-schedule'
 
 const server = nacl.box.keyPair.fromSecretKey(new Uint8Array(32).fill(1))
 const client = nacl.box.keyPair.fromSecretKey(new Uint8Array(32).fill(2))
@@ -54,7 +55,14 @@ function setup() {
   const onError = vi.fn()
   const resolveAuthenticatedDevice = vi.fn((token: string) =>
     token === 'valid-token'
-      ? { deviceId: 'device-1', deviceToken: token, scope: 'mobile' as const }
+      ? {
+          deviceId: 'device-1',
+          deviceToken: token,
+          scope: 'mobile' as const,
+          clientId: token,
+          callerFingerprint: 'test-fingerprint',
+          credentialRevision: 0
+        }
       : null
   )
   const channel = new E2EEChannel(ws as unknown as WebSocket, {
@@ -146,7 +154,10 @@ describe('E2EEChannel v2', () => {
     expect(ctx.onReady).toHaveBeenCalledWith(ctx.channel, {
       deviceId: 'device-1',
       deviceToken: 'valid-token',
-      scope: 'mobile'
+      scope: 'mobile',
+      clientId: 'valid-token',
+      callerFingerprint: 'test-fingerprint',
+      credentialRevision: 0
     })
     const authenticated = openServerFrame(ctx.ws.sent[1]!.data, 'text', schedule, 0n)
     expect(JSON.parse(new TextDecoder().decode(authenticated!))).toEqual({
@@ -275,5 +286,26 @@ describe('E2EEChannel v2', () => {
       new Uint8Array([2])
     )
     expect(ctx.ws.sent[3]!.options).toEqual({ binary: true })
+  })
+
+  it('drops a backlogged lossy binary reply without spending a counter, then sends once drained', () => {
+    const ctx = setup()
+    const { schedule } = startV2(ctx)
+    authenticate(ctx, schedule)
+    ctx.ws.bufferedAmount = 9 * 1024 * 1024
+    const accepted: RpcBinarySendResult[] = []
+    ctx.channel.onMessage((_request, _textReply, binaryReply) => {
+      accepted.push(binaryReply(new Uint8Array([1]), { dropWhenBacklogged: true }))
+    })
+    ctx.channel.handleRawMessage(clientText('{"method":"browser.screencast"}', schedule, 1n))
+    ctx.ws.bufferedAmount = 0
+    vi.runOnlyPendingTimers()
+    expect(ctx.ws.sent).toHaveLength(2)
+
+    ctx.channel.handleRawMessage(clientText('{"method":"browser.screencast"}', schedule, 2n))
+    expect(accepted).toEqual(['backlogged', true])
+    expect(openServerFrame(ctx.ws.sent[2]!.data, 'binary', schedule, 1n)).toEqual(
+      new Uint8Array([1])
+    )
   })
 })

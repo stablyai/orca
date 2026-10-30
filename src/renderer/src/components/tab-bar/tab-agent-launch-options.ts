@@ -1,12 +1,25 @@
+import {
+  searchAgentPickerSetups,
+  type AgentPickerDraft,
+  type AgentPickerEntry
+} from '../../../../shared/agent-launch-picker'
+import { rowLabel, rowId, chatUnavailableLabel } from './tab-agent-row-presentation'
 import { getAgentCatalog } from '@/lib/agent-catalog'
-import { filterEnabledTuiAgents } from '../../../../shared/tui-agent-selection'
+import { orderAgentLaunchPickerAgents } from '../../../../shared/agent-launch-picker-rows'
 import { normalizeMatchQuery, tokenizeMatchValue } from './query-token-match'
 import type { TuiAgent } from '../../../../shared/tui-agent'
+import type { NewTabAgentMenuRow } from '@/lib/new-tab-agent-menu-rows'
 
 export type TabAgentLaunchOption = {
   agent: TuiAgent
   aliases: readonly string[]
   label: string
+  disabled?: boolean
+  id?: string
+  row?: NewTabAgentMenuRow
+  setup?: AgentPickerDraft
+  pickerEntry?: AgentPickerEntry
+  reason?: string
 }
 
 function normalizeAgentAlias(value: string): string {
@@ -26,14 +39,7 @@ export function orderTabLaunchAgents(
   detected: readonly TuiAgent[],
   disabled?: Iterable<unknown> | null
 ): TuiAgent[] {
-  const enabledDetected = filterEnabledTuiAgents(detected, disabled)
-  const inCatalogOrder = getAgentCatalog()
-    .filter((entry) => enabledDetected.includes(entry.id))
-    .map((entry) => entry.id)
-  if (!defaultAgent || defaultAgent === 'blank' || !inCatalogOrder.includes(defaultAgent)) {
-    return inCatalogOrder
-  }
-  return [defaultAgent, ...inCatalogOrder.filter((id) => id !== defaultAgent)]
+  return orderAgentLaunchPickerAgents(defaultAgent, detected, disabled)
 }
 
 export function buildTabAgentLaunchOptions(
@@ -58,14 +64,54 @@ export function buildTabAgentLaunchOptions(
       aliases.add(normalizeAgentAlias(commandOverride))
       aliases.add(compactAgentAlias(commandOverride))
     }
-    return { agent, aliases: [...aliases], label }
+    return {
+      agent,
+      aliases: [...aliases],
+      label
+    }
   })
 }
 
-// Scores how well a query matches an agent. Exact alias equality is the
-// strongest signal; otherwise every query token must prefix some alias token.
-// Why prefix-only (not substring): agent rows rank above file matches, so a
-// mid-string match like "ode" → "opencode" would noisily hijack the list.
+export function buildTabAgentLaunchOptionsFromRows(
+  rows: readonly NewTabAgentMenuRow[],
+  commandOverrides: Partial<Record<TuiAgent, string>> = {}
+): TabAgentLaunchOption[] {
+  return rows.map((row) => {
+    const base = buildTabAgentLaunchOptions([row.agent], commandOverrides)[0]
+    return {
+      ...base,
+      agent: row.agent,
+      aliases: base?.aliases ?? [],
+      label: rowLabel(row),
+      disabled: row.kind === 'chat-unavailable',
+      reason: row.kind === 'chat-unavailable' ? chatUnavailableLabel(row.reason) : undefined,
+      row,
+      id: row.kind === 'terminal' ? `agent:${row.agent}` : rowId(row)
+    }
+  })
+}
+
+export function buildAgentPickerLaunchOptions(
+  entries: readonly AgentPickerEntry[],
+  commandOverrides: Partial<Record<TuiAgent, string>> = {}
+): TabAgentLaunchOption[] {
+  return entries.flatMap((entry) => {
+    const row = entry.rows.find((row) =>
+      entry.defaultSurface === 'chat'
+        ? row.kind === 'chat'
+        : row.kind === 'cli' || row.kind === 'terminal'
+    )
+    return row
+      ? buildTabAgentLaunchOptionsFromRows([row], commandOverrides).map((option) => ({
+          ...option,
+          label: entry.label,
+          pickerEntry: entry
+        }))
+      : []
+  })
+}
+
+// Require exact aliases or token prefixes; substring hits would outrank files and hijack the omnibox.
 function scoreAgentLaunchOption(
   normalizedQuery: string,
   compactQuery: string,
@@ -86,9 +132,7 @@ function scoreAgentLaunchOption(
       if (candidateToken === queryToken) {
         best = Math.max(best, 3)
       } else if (queryToken.length >= 2 && candidateToken.startsWith(queryToken)) {
-        // Why: a single-character prefix matches almost every agent, flooding the
-        // list and letting one keystroke auto-launch the wrong agent; require an
-        // exact token match below 2 chars.
+        // Require exact tokens below two characters to avoid accidental one-keystroke agent launches.
         best = Math.max(best, 2)
       }
     }
@@ -109,15 +153,58 @@ export function findMatchingTabAgentLaunchOptions(
     return []
   }
   const compactQuery = compactAgentAlias(query)
-  return agents
-    .map((option, index) => ({
-      index,
-      option,
-      score: scoreAgentLaunchOption(normalizedQuery, compactQuery, option)
-    }))
-    .filter((entry) => entry.score > 0)
-    .sort((left, right) =>
-      left.score !== right.score ? right.score - left.score : left.index - right.index
-    )
-    .map((entry) => entry.option)
+  return (
+    agents
+      .map((option, index) => ({
+        index,
+        option,
+        score: scoreAgentLaunchOption(normalizedQuery, compactQuery, option)
+      }))
+      .filter((entry) => entry.score > 0)
+      // Why: the first match takes Enter, so a row that can't launch never outranks one that can.
+      .sort(
+        (left, right) =>
+          Number(Boolean(left.option.disabled)) - Number(Boolean(right.option.disabled)) ||
+          right.score - left.score ||
+          left.index - right.index
+      )
+      .map((entry) => entry.option)
+  )
+}
+
+export function matchingAgentPickerLaunchOptions(
+  entries: readonly AgentPickerEntry[],
+  query: string
+): TabAgentLaunchOption[] {
+  return searchAgentPickerSetups(entries, query).map((setup) => {
+    const surface = setup.entry.defaultSurface
+    return {
+      agent: setup.entry.agent,
+      label: setup.label,
+      aliases: [],
+      id: `setup:${setup.entry.agent}:${setup.model.id}:${setup.choices.options?.effort ?? ''}:${surface}`,
+      row: {
+        agent: setup.entry.agent,
+        kind: surface === 'chat' ? 'chat' : 'cli',
+        executionHostId: setup.entry.rows[0]?.executionHostId
+      },
+      setup: { agent: setup.entry.agent, surface, choices: setup.choices },
+      pickerEntry: setup.entry
+    }
+  })
+}
+
+export function configuredAgentPickerLaunchOption(
+  option: TabAgentLaunchOption,
+  draft: AgentPickerDraft
+): TabAgentLaunchOption {
+  return {
+    ...option,
+    row: {
+      agent: draft.agent,
+      kind: draft.surface === 'chat' ? 'chat' : 'cli',
+      executionHostId: option.row?.executionHostId
+    },
+    setup: draft
+  }
 }

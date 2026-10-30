@@ -12,7 +12,7 @@ import {
   resetLocalImageSrcStateForTests,
   useLocalImageSrc
 } from './useLocalImageSrc'
-import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client'
+import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
 import {
   blobUrlCache,
   cacheLocalImageBlob,
@@ -105,17 +105,17 @@ afterEach(() => {
 describe('getLocalImageCacheKey', () => {
   it('scopes local markdown image cache entries by runtime owner', () => {
     const localKey = getLocalImageCacheKey('/repo/docs/logo.png', null, {
-      settings: { activeRuntimeEnvironmentId: null },
+      target: { kind: 'local' as const },
       worktreeId: 'wt-1',
       worktreePath: '/repo'
     })
     const remoteKey = getLocalImageCacheKey('/repo/docs/logo.png', null, {
-      settings: { activeRuntimeEnvironmentId: 'env-1' },
+      target: { kind: 'environment' as const, environmentId: 'env-1' },
       worktreeId: 'wt-1',
       worktreePath: '/repo'
     })
     const otherRemoteKey = getLocalImageCacheKey('/repo/docs/logo.png', null, {
-      settings: { activeRuntimeEnvironmentId: 'env-2' },
+      target: { kind: 'environment' as const, environmentId: 'env-2' },
       worktreeId: 'wt-1',
       worktreePath: '/repo'
     })
@@ -328,14 +328,14 @@ describe('loadLocalImageSrc', () => {
     }
   })
 
-  it('fails closed when pinned previews already consume the entry or byte budget', () => {
+  it('refuses unleased overflow and oversized payloads when pinned previews fill the entry target', () => {
     for (let index = 0; index < 100; index += 1) {
       const key = `pinned-${index}`
       pinLocalImageCache(key)
       expect(cacheLocalImageBlob(key, `blob:${index}`, 1)).toBe(true)
     }
 
-    expect(cacheLocalImageBlob('pinned-overflow', 'blob:overflow', 1)).toBe(false)
+    expect(cacheLocalImageBlob('unleased-overflow', 'blob:overflow', 1)).toBe(false)
     expect(blobUrlCache.size).toBe(100)
     expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:overflow')
 
@@ -365,7 +365,7 @@ describe('loadLocalImageSrc', () => {
 
     await expect(
       loadLocalImageSrc('diagram.png', '/repo/docs/readme.md', null, {
-        settings: { activeRuntimeEnvironmentId: null },
+        target: { kind: 'local' as const },
         worktreeId: 'wt-1',
         worktreePath: '/repo',
         connectionId: 'ssh-1'
@@ -373,7 +373,7 @@ describe('loadLocalImageSrc', () => {
     ).resolves.toBe('blob:runtime-one')
     await expect(
       loadLocalImageSrc('diagram.png', '/repo/docs/readme.md', null, {
-        settings: { activeRuntimeEnvironmentId: null },
+        target: { kind: 'local' as const },
         worktreeId: 'wt-2',
         worktreePath: '/repo',
         connectionId: 'ssh-2'
@@ -388,7 +388,7 @@ describe('loadLocalImageSrc', () => {
 
     await expect(
       loadLocalImageSrc('diagram.png', '/tmp/readme.md', null, {
-        settings: { activeRuntimeEnvironmentId: null },
+        target: { kind: 'local' as const },
         worktreeId: 'wt-1',
         worktreePath: '/repo',
         connectionId: 'ssh-2',
@@ -454,7 +454,7 @@ describe('useLocalImageSrc runtime owner', () => {
 
   function sshOwner(overrides: Partial<RuntimeFileOperationArgs> = {}): RuntimeFileOperationArgs {
     return {
-      settings: { activeRuntimeEnvironmentId: null },
+      target: { kind: 'local' as const },
       worktreeId: 'wt-1',
       worktreePath: '/repo',
       connectionId: 'ssh-1',
@@ -475,8 +475,7 @@ describe('useLocalImageSrc runtime owner', () => {
     return null
   }
 
-  // Stands in for a surface that drops its copy whenever the owner object changes; only the
-  // probe's pin keeps the shown URL alive through that release.
+  // Release on owner-object changes so the probe’s pin alone must keep the displayed URL alive.
   function ReleaseOnOwnerObject({
     runtimeContext
   }: {

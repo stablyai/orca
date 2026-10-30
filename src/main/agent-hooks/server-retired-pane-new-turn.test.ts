@@ -18,9 +18,7 @@ beforeEach(() => {
 })
 afterEach(() => vi.restoreAllMocks())
 
-/** Each source's own new-turn boundary, as `isNewTurnEvent` classifies it. `null` means the
- *  classifier names no boundary for that source. That is not the same as "can never revive":
- *  mimo-code's boundary is an explicit-prompt MessagePart, which the gate handles separately. */
+/** Null omits the classifier boundary; mimo-code revives separately through explicit-prompt MessagePart. */
 const NEW_TURN_EVENT: Record<AgentHookSource, string | null> = {
   qoder: 'SessionStart',
   'qoder-cn': 'SessionStart',
@@ -48,12 +46,12 @@ const NEW_TURN_EVENT: Record<AgentHookSource, string | null> = {
   muse: 'UserPromptSubmit',
   zcode: 'SessionStart',
   dsh: 'SessionStart',
-  jcode: 'turn_start'
+  jcode: 'turn_start',
+  kiro: 'agentSpawn'
 }
 
 function reviveRetiredPane(source: unknown, hookEventName: string): boolean {
   const server = new AgentHookServer()
-  // Why: retirement is what command completion leaves behind on a reusable shell pane.
   server.retirePaneAuthority(PANE)
   server.ingestRemote(
     {
@@ -88,15 +86,12 @@ describe("retired pane un-retires on each provider's own new-turn event", () => 
     expect(reviveRetiredPane(source, hookEventName as string)).toBe(true)
   })
 
-  // Why these two: every case above passes `source`, so the source-less compatibility path —
-  // the branch added for older relays — would otherwise ship with no coverage at all.
   it('revives on a literal boundary when an older relay omits source', () => {
     expect(reviveRetiredPane(undefined, 'UserPromptSubmit')).toBe(true)
   })
 
   it('cannot revive a non-literal provider when an older relay omits source', () => {
-    // Why pinned: this is the accepted cost of the legacy shim, not an oversight. Widening the
-    // literal list to "fix" it would re-create the two-literal gate this change removes.
+    // Source-less legacy peers intentionally recognize only literal compatibility boundaries.
     expect(reviveRetiredPane(undefined, 'before_agent_start')).toBe(false)
   })
 
@@ -119,15 +114,12 @@ describe("retired pane un-retires on each provider's own new-turn event", () => 
   )
 
   it('leaves the pane retired for a source with no turn boundary', () => {
-    // Why mimo-code and command-code: neither names a boundary through `isNewTurnEvent`, so
-    // SessionStart must not open the gate for them. Mimo-code still revives on its own
-    // explicit-prompt MessagePart — that path is covered in server-opencode-lifecycle.test.ts.
+    // These providers lack classifier boundaries; mimo-code explicit prompts are covered by lifecycle tests.
     expect(reviveRetiredPane('mimo-code', 'SessionStart')).toBe(false)
     expect(reviveRetiredPane('command-code', 'SessionStart')).toBe(false)
   })
 
   it('leaves the pane retired for a non-boundary event on a revivable source', () => {
-    // Why: guards the inverse — the gate must not open on any event that merely mentions a session.
     expect(reviveRetiredPane('gemini', 'AfterAgent')).toBe(false)
   })
 })

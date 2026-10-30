@@ -5,53 +5,54 @@ import { agentSessionRefusalError } from '../../shared/agent-session-wire-refusa
 import {
   agentSessionProviderHandleChainHead,
   agentSessionProviderHandleKey,
+  type AgentSessionProviderHandleChain,
   type AgentSessionProviderHandleLink
 } from '../../shared/agent-session-provider-handle'
-import { isLegacyAgentSessionAccountHome } from '../../shared/agent-session-account-home'
-import type { AgentSessionJournalIdentity } from '../../shared/agent-session-journal-types'
-import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
+import { requireLegacyAgentSessionAccountHome } from '../../shared/agent-session-account-home'
 import type { resolveCliCommand } from '../../shared/node-cli-command-resolution'
-import { isStableCliVersionOnLine, probeAgentCliVersion } from '../agent-cli-version-probe'
 import {
+  checkAgentCliVersion,
+  type AgentCliVersionCheck,
+  type AgentCliVersionReader
+} from '../agent-cli-version-probe'
+import { AgentCliInstallationError } from '../native-chat/agent-cli-installation-error'
+import {
+  resolveAgainAfterRefreshOnMissingProgram,
+  assertStructuredAgentResolutionCurrent,
+  type StructuredAgentResolutionOperation,
   resolveStructuredAgentCommand,
+  type StructuredAgentCommand,
   type StructuredAgentCommandSettings
 } from '../native-chat/structured-agent-command-resolution'
-import type { AgentSessionRecordStore } from '../runtime/agent-session-record-store'
+import type { StructuredAgentLaunchPartResolver } from '../runtime/structured-agent-launch-composition'
 import { isWindowsProcessStartTimeAvailable } from '../windows/windows-process-table'
-import type { PiRpcLaunchOptions } from './rpc-launch'
+import { sessionIdFromFileName } from '../ai-vault/session-scanner-accumulator'
+import {
+  PI_RPC_SESSION_ENV_TO_DELETE,
+  withoutPiCallerEnv,
+  type PiRpcLaunchOptions
+} from './rpc-launch'
 
 export type PiRpcResolvedLaunch = PiRpcLaunchOptions & {
   previous: AgentSessionProviderHandleLink | null
   replacement?: 'unsaved' | 'restore-failed'
+  /** Conversation files, newest first; empty for a new conversation. */
+  lineage?: readonly string[]
 }
-export type PiRpcLaunchResolverDeps = {
-  store: AgentSessionRecordStore
-  resolveWorkspacePath: (id: string) => Promise<string>
-  resolveEnvironment: () => Promise<NodeJS.ProcessEnv>
-  /** The user's Pi Command setting, re-read per acquisition; none runs the stock binary. */
-  resolveCommandSettings?: () => StructuredAgentCommandSettings
+export type PiRpcLaunchPartDeps = {
   resolveCommand?: typeof resolveCliCommand
-  probeVersion?: typeof probeAgentCliVersion
+  probeVersion?: AgentCliVersionReader
   resolveFullAccess?: () => boolean
 }
 
-// Stable releases from 0.84.0 emit agent_settled after retries and detached compaction; older
-// Pi (the 0.73.x package included) keeps the terminal chat.
-const PI_RPC_RELEASE_LINES = [
-  { major: 0, floor: '0.84.0' },
-  { major: 1, floor: '1.0.0' }
-] as const
+// RPC turns require agent_settled (Pi 0.84+); older versions remain terminal-only.
+export const PI_RPC_MINIMUM_VERSIONS = ['0.84.0'] as const
 
-function supportsPiRpcVersion(version: string): boolean {
-  return PI_RPC_RELEASE_LINES.some((line) => isStableCliVersionOnLine(version, line))
-}
-
-/** The binary a Pi launch with `env` spawns; create support resolves through here too. */
 export function resolvePiRpcCommand(
   env: Readonly<Record<string, string>>,
   commandSettings: StructuredAgentCommandSettings = {},
   resolve?: typeof resolveCliCommand
-): string {
+): StructuredAgentCommand {
   const homePath = env.HOME ?? env.USERPROFILE
   return resolveStructuredAgentCommand(
     'pi',
@@ -61,16 +62,31 @@ export function resolvePiRpcCommand(
   )
 }
 
-export function piRpcVersionSupported(
-  launch: { command: string; cwd: string; env: Record<string, string> },
-  probe: typeof probeAgentCliVersion = probeAgentCliVersion
-): Promise<boolean> {
-  return probe({ program: launch.command, cwd: launch.cwd, env: launch.env }, supportsPiRpcVersion)
+export function checkPiRpcVersion(
+  launch: {
+    command: string
+    prefixArgs?: readonly string[]
+    cwd: string
+    env: Record<string, string>
+  },
+  read?: AgentCliVersionReader
+): Promise<AgentCliVersionCheck> {
+  return checkAgentCliVersion(
+    { program: launch.command, prefixArgs: launch.prefixArgs, cwd: launch.cwd, env: launch.env },
+    PI_RPC_MINIMUM_VERSIONS,
+    read
+  )
 }
 
-const headerSchema = z.object({ type: z.literal('session'), cwd: z.string().min(1) })
+const headerSchema = z.object({
+  type: z.literal('session'),
+  cwd: z.string().min(1),
+  id: z.string().optional()
+})
 
-async function sessionDirectory(file: string): Promise<string | null> {
+export async function readPiSessionHeader(
+  file: string
+): Promise<{ cwd: string; id?: string } | null> {
   let descriptor
   try {
     descriptor = await open(file, 'r')
@@ -88,52 +104,66 @@ async function sessionDirectory(file: string): Promise<string | null> {
     if (lf === -1) {
       throw new Error('Pi session header is incomplete or oversized')
     }
-    return headerSchema.parse(JSON.parse(data.slice(0, lf))).cwd
+    return headerSchema.parse(JSON.parse(data.slice(0, lf)))
   } finally {
     await descriptor.close()
   }
 }
 
-async function sameDirectory(left: string, right: string): Promise<boolean> {
+export async function samePiDirectory(left: string, right: string): Promise<boolean> {
   const canonical = async (value: string): Promise<string> =>
     realpath(value).catch(() => normalize(value))
   const [a, b] = await Promise.all([canonical(left), canonical(right)])
   return process.platform === 'win32' ? a.toLowerCase() === b.toLowerCase() : a === b
 }
 
-/** Reads the execution host's durable record; never resolves another host's files or account. */
-export function createPiRpcLaunchResolver(
-  deps: PiRpcLaunchResolverDeps
-): (identity: AgentSessionJournalIdentity) => Promise<PiRpcResolvedLaunch> {
-  return async (identity) => {
-    const record = deps.store.getRecord(identity.sessionId)
-    if (!record || record.provider !== 'pi') {
-      throw new Error('Pi session record unavailable')
-    }
-    if (
-      record.location.executionHostId !== LOCAL_EXECUTION_HOST_ID ||
-      record.location.wslDistro !== null
-    ) {
-      throw new Error('Pi structured session belongs to another execution host')
-    }
+/** Resolve chat/catalog launches identically; refresh the environment once if Pi is missing. */
+export function resolvePiRpcInvocation(deps: {
+  operation?: StructuredAgentResolutionOperation
+  accountDir: string
+  resolveEnvironment: () => Promise<NodeJS.ProcessEnv>
+  commandSettings?: StructuredAgentCommandSettings
+  resolveCommand?: typeof resolveCliCommand
+  refreshEnvironmentAfterMiss?: (askedAt: number) => Promise<void>
+  /** Base for relative PATH entries; defaults to Orca's working directory. */
+  resolveWorkingDirectory?: () => Promise<string> | string
+}): Promise<StructuredAgentCommand & { env: Record<string, string> }> {
+  return resolveAgainAfterRefreshOnMissingProgram(
+    async () => {
+      const env: Record<string, string> = {}
+      for (const [key, value] of Object.entries(await deps.resolveEnvironment())) {
+        if (value !== undefined) {
+          env[key] = value
+        }
+      }
+      assertStructuredAgentResolutionCurrent(deps.operation)
+      env.PI_CODING_AGENT_DIR = deps.accountDir
+      return { env, ...resolvePiRpcCommand(env, deps.commandSettings, deps.resolveCommand) }
+    },
+    deps.refreshEnvironmentAfterMiss,
+    { env: ({ env }) => env, cwd: deps.resolveWorkingDirectory },
+    deps.operation
+  )
+}
+
+export function piRpcLaunchPart(
+  deps: PiRpcLaunchPartDeps
+): StructuredAgentLaunchPartResolver<PiRpcResolvedLaunch> {
+  return async (basis) => {
+    const { record } = basis
     if (process.platform === 'win32' && !isWindowsProcessStartTimeAvailable()) {
       throw new Error('Pi structured sessions require Windows process creation-time proof')
     }
-    const accountHome = record.accountHome
-    if (
-      !isLegacyAgentSessionAccountHome(accountHome) ||
-      accountHome.variable !== 'PI_CODING_AGENT_DIR'
-    ) {
-      throw new Error('Pi account home does not match its binary')
-    }
-    const cwd = await deps.resolveWorkspacePath(record.location.workspaceId)
-    const env: Record<string, string> = {}
-    for (const [key, value] of Object.entries(await deps.resolveEnvironment())) {
-      if (value !== undefined) {
-        env[key] = value
-      }
-    }
-    env.PI_CODING_AGENT_DIR = accountHome.path
+    const accountHome = requireLegacyAgentSessionAccountHome(record.accountHome)
+    const cwd = await basis.launchDirectory()
+    const { env, command, prefixArgs } = await resolvePiRpcInvocation({
+      accountDir: accountHome.path,
+      resolveEnvironment: basis.environment,
+      commandSettings: basis.commandSettings(),
+      resolveCommand: deps.resolveCommand,
+      refreshEnvironmentAfterMiss: basis.refreshAfterMissingProgram,
+      resolveWorkingDirectory: () => cwd
+    })
     const previous = agentSessionProviderHandleChainHead(record.providerHandleChain)
     let sessionFile: string | undefined
     let forkFile: string | undefined
@@ -147,33 +177,65 @@ export function createPiRpcLaunchResolver(
         throw new Error('Pi resume handle is not a host session file')
       }
       const source = previous.handle.nativeId
-      const directory = await sessionDirectory(source)
-      if (directory === null) {
+      const header = await readPiSessionHeader(source)
+      if (
+        previous.origin === 'adopted' &&
+        (!header ||
+          header.id !== sessionIdFromFileName(source) ||
+          !(await samePiDirectory(header.cwd, cwd)))
+      ) {
+        throw agentSessionRefusalError('agent_session_identity_required', {
+          reason: 'transcriptNotFound'
+        })
+      }
+      if (header === null) {
         replacement = previous.origin === 'created' ? 'unsaved' : 'restore-failed'
-      } else if (await sameDirectory(directory, cwd)) {
+      } else if (await samePiDirectory(header.cwd, cwd)) {
         sessionFile = source
       } else {
         forkFile = source
       }
     }
-    const command = resolvePiRpcCommand(env, deps.resolveCommandSettings?.(), deps.resolveCommand)
-    // Again at every launch: the binary on PATH may have changed since the chat was created.
-    if (!(await piRpcVersionSupported({ command, cwd, env }, deps.probeVersion))) {
-      throw agentSessionRefusalError('structured_agent_session_unsupported', {
-        reason: 'hostUnsupported'
-      })
+    // Recheck each launch because the PATH binary may have changed.
+    const launchVersion = await checkPiRpcVersion(
+      { command, prefixArgs, cwd, env },
+      deps.probeVersion
+    )
+    if (launchVersion.status === 'tooOld') {
+      throw AgentCliInstallationError.tooOld('pi', launchVersion)
     }
     return {
-      command,
-      cwd,
-      env,
-      fullAccess: deps.resolveFullAccess?.() ?? true,
-      previous,
-      ...(sessionFile ? { sessionFile } : {}),
-      ...(forkFile ? { forkFile } : {}),
-      ...(replacement ? { replacement } : {})
+      launch: {
+        command,
+        prefixArgs,
+        fullAccess: deps.resolveFullAccess?.() ?? true,
+        previous,
+        ...(sessionFile || forkFile
+          ? { lineage: piConversationFiles(record.providerHandleChain) }
+          : {}),
+        ...(sessionFile ? { sessionFile } : {}),
+        ...(forkFile ? { forkFile } : {}),
+        ...(replacement ? { replacement } : {})
+      },
+      env: withoutPiCallerEnv(env),
+      inheritedEnvToDelete: PI_RPC_SESSION_ENV_TO_DELETE
     }
   }
+}
+
+/** Follow resumes and directory forks to the original session; forks preserve entry IDs. */
+function piConversationFiles(chain: AgentSessionProviderHandleChain): string[] {
+  const files: string[] = []
+  for (const link of chain.toReversed()) {
+    if (link.handle.transport !== 'jsonl-rpc' || link.handle.agent !== 'pi') {
+      break
+    }
+    files.push(link.handle.nativeId)
+    if (link.origin !== 'resumed' && link.origin !== 'forked') {
+      break
+    }
+  }
+  return files
 }
 
 export function piRpcProviderLink(

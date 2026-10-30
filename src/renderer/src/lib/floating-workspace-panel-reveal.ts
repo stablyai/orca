@@ -6,13 +6,17 @@ function toggleFloatingWorkspacePanel(): void {
   window.dispatchEvent(new Event(TOGGLE_FLOATING_TERMINAL_EVENT))
 }
 
-/** Opens the floating panel unless it is already on screen. */
+// Enable before toggling: floating tabs outlive feature disable and would otherwise reveal silently into nothing.
 // Why enable first: floating tabs outlive a feature disable, and the panel ignores the toggle
 // while disabled, so a live floating agent row would otherwise be a silent no-op.
 export function revealFloatingWorkspacePanel(
   state: Pick<AppState, 'settings' | 'updateSettings' | 'floatingWorkspacePanelOpen'>
 ): void {
-  if (state.settings?.floatingTerminalEnabled === true) {
+  // Why: host reveals can beat settings hydration; enabling then would overwrite a saved `false`.
+  if (!state.settings) {
+    return
+  }
+  if (state.settings.floatingTerminalEnabled === true) {
     if (!selectFloatingWorkspacePanelVisible(state)) {
       toggleFloatingWorkspacePanel()
     }

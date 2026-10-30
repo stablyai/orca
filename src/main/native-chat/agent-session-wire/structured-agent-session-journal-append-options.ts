@@ -1,8 +1,6 @@
-// The journal options one admitted single-item sink append forwards.
-//
-// Every such path calls this, so a row-level field added to the sink's options
-// reaches the durable row through one edit rather than through whichever spread
-// the next change remembers. Lifecycle batches carry producers per mutation.
+import { journalItemEchoFields } from '../agent-session-journal/journal-item-echo'
+// Centralize admitted single-item options; lifecycle batches carry producers per mutation.
+// Child-bound sink fences identify the execution that produced each row.
 
 import { agentJournalLinkageFields } from '../../../shared/agent-session-journal-producer'
 import type { JournalItemAppendOptions } from '../agent-session-journal/journal-store-contracts'
@@ -14,6 +12,9 @@ export function structuredAgentSessionJournalAppendOptions(
 ): JournalItemAppendOptions {
   return {
     fence,
+    ...journalItemEchoFields(options),
+    ownerFence: fence,
+    ...(options.executes ? { executionOwner: fence } : {}),
     ...(options.observedAt === undefined ? {} : { observedAt: options.observedAt }),
     turnScope: options.turnScope,
     ...agentJournalLinkageFields(options)

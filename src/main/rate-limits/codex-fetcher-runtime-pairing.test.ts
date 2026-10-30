@@ -3,7 +3,7 @@ import { EventEmitter } from 'node:events'
 import { tmpdir } from 'node:os'
 import { delimiter, join } from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type * as RunProcess from '../../shared/child-process/run-process'
+import type * as RunProcess from '@orca/process-host'
 
 const { childSpawnMock, readFileMock, resolveCodexCommandMock, ptySpawnMock } = vi.hoisted(() => ({
   childSpawnMock: vi.fn(),
@@ -12,9 +12,15 @@ const { childSpawnMock, readFileMock, resolveCodexCommandMock, ptySpawnMock } = 
   ptySpawnMock: vi.fn()
 }))
 
+// Keep child-process assertions in this suite; worker transport is covered separately.
+vi.mock(
+  '../worker-thread-child-process/worker-thread-child-process',
+  () =>
+    import('../worker-thread-child-process/worker-thread-child-process-in-process.test-fixtures')
+)
 vi.mock('node:child_process', () => ({ spawn: childSpawnMock }))
-// The chokepoint is the seam: assertions see what the fetcher asked for, before shim resolution.
-vi.mock('../../shared/child-process/run-process', async (importOriginal) => ({
+// Observe spawn requests before npm-shim resolution.
+vi.mock('@orca/process-host', async (importOriginal) => ({
   ...(await importOriginal<typeof RunProcess>()),
   spawnProcess: (spec: { program: string; args?: readonly string[] }) =>
     childSpawnMock(spec.program, spec.args ?? [], spec)
@@ -54,7 +60,6 @@ function makeRpcChild() {
   return child
 }
 
-/** A CLI installed under one version manager entry, with its sibling node. */
 function makeVersionManagerCli(cliName = 'codex'): { bin: string; cli: string } {
   const root = mkdtempSync(join(tmpdir(), 'orca-fetch-pair-'))
   const bin = join(root, '.nvm', 'versions', 'node', 'v20.11.0', 'bin')
@@ -75,8 +80,7 @@ describe('codex rate-limit spawn runtime pairing', () => {
   })
 
   it("spawns the RPC reader with the resolved CLI's own node ahead of PATH", async () => {
-    // Why a real fixture: the helper short-circuits on a non-absolute command,
-    // so a bare 'codex' mock would make this pass vacuously.
+    // Bare command mocks short-circuit pairing; use an absolute version-manager fixture.
     const { bin, cli } = makeVersionManagerCli()
     resolveCodexCommandMock.mockReturnValue(cli)
     const rpcChild = makeRpcChild()
@@ -86,8 +90,7 @@ describe('codex rate-limit spawn runtime pairing', () => {
     await vi.advanceTimersByTimeAsync(0)
 
     const spawnEnv = childSpawnMock.mock.calls[0]?.[2]?.env as NodeJS.ProcessEnv
-    // Guards the argument choice: pairing anything but the resolved CLI silently
-    // reverts the ABI fix (stablyai/orca#10932).
+    // Pair the resolved CLI's sibling runtime to prevent ABI drift (#10932).
     expect(spawnEnv.PATH?.split(delimiter)[0]).toBe(bin)
 
     rpcChild.emit('close')
@@ -95,8 +98,7 @@ describe('codex rate-limit spawn runtime pairing', () => {
   })
 
   it('hands an npm .cmd shim to the spawn chokepoint unwrapped, paired with its node', async () => {
-    // Why win32 specifically: only here could a pre-wrap turn the program into
-    // cmd.exe, which hides the shim from spawnProcess's resolver.
+    // Windows pre-wrapping would hide the npm shim from spawnProcess resolution.
     const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
     Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
     try {

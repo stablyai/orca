@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
-import { runProcess } from '../../src/shared/child-process/run-process'
+import { runProcess } from '@orca/process-host'
 import { afterEach, describe, expect, it } from 'vitest'
 
 const scriptPath = resolve('config/scripts/project-renderer-web-client.mjs')
@@ -92,12 +92,6 @@ describe('renderer web client projection', () => {
     expect(output.nM()).toBe(3)
   })
 
-  it('keeps the build-only manifest out of packaged apps', () => {
-    const builderConfig = readFileSync(resolve('config/electron-builder.config.cjs'), 'utf8')
-
-    expect(builderConfig).toContain("'!out/renderer/.vite{,/**/*}'")
-  })
-
   it('copies and minifies only the web dependency closure', async () => {
     const root = createRendererFixture()
     const result = await projectFixture(root)
@@ -109,6 +103,23 @@ describe('renderer web client projection', () => {
     expect(existsSync(join(root, 'out/web/assets/logo.png'))).toBe(true)
     expect(existsSync(join(root, 'out/web/assets/desktop-entry.js'))).toBe(false)
     expect(existsSync(join(root, 'out/web/stale.js'))).toBe(false)
+    const sharedFiles = JSON.parse(
+      readFileSync(join(root, 'out/renderer/.orca-web-client-files.json'), 'utf8')
+    )
+    expect(sharedFiles).toEqual(
+      expect.arrayContaining([
+        'web-index.html',
+        'assets/web-entry.js',
+        'assets/web-shared.js',
+        'assets/editor.worker-fixture.js',
+        'assets/web.css',
+        'assets/lazy.js',
+        'assets/logo.png'
+      ])
+    )
+    expect(sharedFiles).not.toContain('assets/desktop-entry.js')
+    expect(sharedFiles).not.toContain('.vite/manifest.json')
+    expect(sharedFiles).not.toContain('index.html')
     expect(readFileSync(join(root, 'out/web/assets/web.css'), 'utf8')).toBe('.root{color:red}\n')
   })
 

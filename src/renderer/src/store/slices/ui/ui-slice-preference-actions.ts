@@ -1,4 +1,5 @@
 import type { UISlice, UISliceGet, UISliceSet } from './ui-slice-contract'
+import { workspaceHostScopeForVisibleHosts } from '../../../../../shared/workspace-view/workspace-host-visibility'
 import { createAgentsViewPreferenceActions } from './ui-slice-agents-view-preference-actions'
 import {
   DEFAULT_AGENT_ACTIVITY_DISPLAY_MODE,
@@ -17,7 +18,6 @@ import {
   DEFAULT_STATUS_BAR_USAGE_MODE,
   normalizeStatusBarUsageMode
 } from '../../../../../shared/status-bar-usage-mode'
-import type { WorkspaceHostScope } from '../../../../../shared/ui-chrome-types'
 import {
   normalizeExecutionHostOrder,
   normalizeExecutionHostScope,
@@ -34,6 +34,7 @@ import {
   normalizeWorkspaceStatuses,
   WORKSPACE_BOARD_COLUMN_WIDTH_DEFAULT
 } from '../../../../../shared/workspace-statuses'
+import { createHostWorkspaceStatusActions } from './ui-slice-host-workspace-statuses'
 
 /** Builds preference defaults and setters for the UI slice, leaving durable writes to the persistence layer. */
 export function createUiPreferenceActions(set: UISliceSet, get: UISliceGet): Partial<UISlice> {
@@ -71,14 +72,10 @@ export function createUiPreferenceActions(set: UISliceSet, get: UISliceGet): Par
     visibleWorkspaceHostIds: null,
     setVisibleWorkspaceHostIds: (ids) => {
       const normalized = normalizeVisibleExecutionHostIds(ids)
-      // Why: workspaceHostScope stays the compat/default-host signal for creation flows; visibility can now be multi-select.
-      let workspaceHostScope: WorkspaceHostScope = get().workspaceHostScope
-      if (normalized === null) {
-        workspaceHostScope = 'all'
-      } else if (normalized.length === 1) {
-        workspaceHostScope = normalized[0]
-      }
-      set({ visibleWorkspaceHostIds: normalized, workspaceHostScope })
+      set({
+        visibleWorkspaceHostIds: normalized,
+        workspaceHostScope: workspaceHostScopeForVisibleHosts(normalized, get().workspaceHostScope)
+      })
     },
     workspaceHostOrder: [],
     setWorkspaceHostOrder: (ids) => {
@@ -198,6 +195,11 @@ export function createUiPreferenceActions(set: UISliceSet, get: UISliceGet): Par
         .set({ worktreeCardProperties: normalized, _worktreeCardModeDefaulted: false })
         .catch(console.error)
     },
+    showAgentModels: true,
+    setShowAgentModels: (show) => {
+      set({ showAgentModels: show })
+      window.api.ui.set({ showAgentModels: show }).catch(console.error)
+    },
     agentActivityDisplayMode: DEFAULT_AGENT_ACTIVITY_DISPLAY_MODE,
     setAgentActivityDisplayMode: (mode) => {
       const normalized = normalizeAgentActivityDisplayMode(mode)
@@ -211,6 +213,7 @@ export function createUiPreferenceActions(set: UISliceSet, get: UISliceGet): Par
       window.api.ui.set({ workspaceStatuses: normalized }).catch(console.error)
       set({ workspaceStatuses: normalized })
     },
+    ...createHostWorkspaceStatusActions(set, get),
 
     workspaceBoardOpacity: 1,
     setWorkspaceBoardOpacity: (opacity) => {
@@ -268,8 +271,15 @@ export function createUiPreferenceActions(set: UISliceSet, get: UISliceGet): Par
     statusBarUsageMode: DEFAULT_STATUS_BAR_USAGE_MODE,
     setStatusBarUsageMode: (mode) => {
       const normalized = normalizeStatusBarUsageMode(mode)
-      window.api.ui.set({ statusBarUsageMode: normalized }).catch(console.error)
-      set({ statusBarUsageMode: normalized })
+      // Why: choosing either mode discovers the selector; old hosts never arm the new notice.
+      const updates = {
+        statusBarUsageMode: normalized,
+        ...(!get().statusBarCompactChangeNoticeDismissed
+          ? { statusBarCompactChangeNoticeDismissed: true }
+          : {})
+      }
+      window.api.ui.set(updates).catch(console.error)
+      set(updates)
     }
   }
 }

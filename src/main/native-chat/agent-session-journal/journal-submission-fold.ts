@@ -1,21 +1,22 @@
-// Folding submission rows: the queue entry, its message row, where a handover places it, and the
-// provider item an accepted message adopts.
-
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
   type AgentJournalSubmission
 } from '../../../shared/agent-session-journal-types'
 import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
+import { readAgentSessionExecutionOptions } from '../../../shared/agent-session-execution-options'
 import { journalRenderItem } from './journal-render-item'
 import { statedOrDerivedTurnScope, upsertJournalItem } from './journal-item-fold'
 import type { JournalReducerState } from './journal-reducer'
 import type { JournalRow } from './journal-row-schema'
 import { journalDispatchRowApplies } from './journal-dispatch-settlement'
+import { DISPATCH_DOUBT_PROVIDER_ENDED_UNANSWERED } from './journal-dispatch-doubt-reasons'
+import { dispatchWasWithdrawn } from '../../../shared/structured-agent-session-dispatch-rejection'
 
 export function applyJournalSubmission(
   state: JournalReducerState,
   row: Extract<JournalRow, { kind: 'submission' }>
 ): void {
+  const options = readAgentSessionExecutionOptions(row.options)
   state.submissions.set(row.clientMessageId, {
     clientMessageId: row.clientMessageId,
     fence: row.fence,
@@ -27,17 +28,16 @@ export function applyJournalSubmission(
     resolvedAt: null,
     submittedSequence: row.seq,
     ...(row.handoverRecorded ? { handoverRecorded: true, acceptedSequence: row.seq } : {}),
-    // A malformed stored link is dropped, never the row.
     ...(typeof row.queuedMessageId === 'string' && row.queuedMessageId.length > 0
       ? { queuedMessageId: row.queuedMessageId }
       : {}),
     ...(row.origin === 'client' || row.origin === 'host' ? { origin: row.origin } : {}),
-    // Kept as written, a newer build's kind too; an undecodable one as an empty kind, so neither
-    // reads as a row without one.
-    ...(row.source !== undefined ? { source: { kind: storedSourceKind(row.source) } } : {})
+    // Preserve source presence: unknown/unreadable kinds must not become legacy user sends.
+    ...(row.source !== undefined ? { source: { kind: storedSourceKind(row.source) } } : {}),
+    ...(options ? { options } : {})
   })
   const itemId = agentJournalSubmissionKey(row.clientMessageId)
-  // A message handed over later belongs to no turn until its handover names one.
+  // Delayed handovers belong to no turn until dispatch names one.
   const turnScope = row.handoverRecorded
     ? AGENT_JOURNAL_THREAD_SCOPE
     : statedOrDerivedTurnScope(state, row)
@@ -46,14 +46,12 @@ export function applyJournalSubmission(
     itemId,
     0,
     journalRenderItem(itemId, 0, row.body, row, turnScope),
-    row.fence
+    // User messages retain admission provenance, not provider execution ownership.
+    { fence: row.fence }
   )
 }
 
-/** A queued message joins the conversation where it was handed over, not where it was accepted:
- *  what the agent did meanwhile — a command it waited behind, say — happened before it. It joins
- *  the turn that handover delivered it into — a steer — or none. Rows from hosts that predate the
- *  stated scope are scoped at the handover, as their creation would have been. */
+/** Place at handover, after intervening work; scope legacy rows from the handover position. */
 export function placeHandedOverMessage(
   state: JournalReducerState,
   submission: AgentJournalSubmission,
@@ -65,17 +63,41 @@ export function placeHandedOverMessage(
     return
   }
   const { sequenceIndex: _acceptedAt, ...accepted } = item
-  state.items.set(itemId, {
-    ...accepted,
+  const place = {
     sequence: row.seq,
     observedAt: row.ts,
     turnScope: row.turnScope ?? state.derivedTurnScope.scopeFor(item.body)
-  })
+  }
+  state.items.set(itemId, { ...accepted, ...place })
+  if (submission.queuedMessageId !== undefined) {
+    state.queuedHandOffPlaces.set(submission.clientMessageId, place)
+  }
 }
 
-/** A rejected message — queued, handed over, or sent directly — joins the conversation where it was
- *  rejected, in no turn: what happened before the rejection happened before it, and the newest page
- *  holds a recent one. Only a rejection: one in doubt may have reached the agent, so it stays. */
+/** Uncertain handoffs remain spent at their handover position; derive display without rewriting rejection. */
+export function foldQueuedHandOffInDoubt(
+  state: JournalReducerState,
+  submission: AgentJournalSubmission
+): void {
+  state.normalizedHandOffs.add(submission.clientMessageId)
+  const itemId = agentJournalSubmissionKey(submission.clientMessageId)
+  const item = state.items.get(itemId)
+  const place = state.queuedHandOffPlaces.get(submission.clientMessageId)
+  if (item && place) {
+    const { sequenceIndex: _rejectedAt, ...rest } = item
+    state.items.set(itemId, { ...rest, ...place })
+  }
+  if (dispatchWasWithdrawn(submission) && !submission.answeredInTurn) {
+    delete submission.queuedMessageId
+    return
+  }
+  submission.dispatchState = 'unknown'
+  submission.reason = DISPATCH_DOUBT_PROVIDER_ENDED_UNANSWERED
+  submission.recovered = true
+  delete submission.rejection
+}
+
+/** Place proven rejections at settlement in thread scope; uncertain deliveries retain their position. */
 export function placeRejectedMessage(
   state: JournalReducerState,
   submission: AgentJournalSubmission,
@@ -125,7 +147,7 @@ export function acceptSubmissionFromProviderItem(
   })
 }
 
-/** A turn the provider accepted, whoever sent it: the fact the queue's pause is lifted by. */
+/** Any provider-accepted turn may lift queue pauses. */
 export function noteTurnAccepted(
   state: JournalReducerState,
   submission: Pick<AgentJournalSubmission, 'acceptedSequence'>
@@ -138,7 +160,7 @@ export function noteTurnAccepted(
   }
 }
 
-/** A stored source's kind; an undecodable value reads as an empty kind, never a person's. */
+/** Unreadable source kinds stay distinct from personal sends. */
 function storedSourceKind(stored: unknown): string {
   return typeof stored === 'object' &&
     stored !== null &&

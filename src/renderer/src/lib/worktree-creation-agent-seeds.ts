@@ -2,8 +2,8 @@ import { useAppStore } from '@/store'
 import { seedNativeChatAppliedSessionOptions } from '@/components/native-chat/native-chat-session-option-cache'
 import { seedNativeChatLaunchDraftForAgentTab } from '@/lib/agent-launch-prompt-delivery'
 import { queueHookCommandsForFirstWorktreeTab } from '@/lib/hook-command-delayed-delivery'
-import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
-import { toWebTerminalSurfaceTabId } from '@/runtime/web-terminal-surface-id'
+import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/worktree-runtime-owner'
+import { toWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
 import type { WorktreeCreationRequest } from '@/lib/pending-worktree-creation'
 import type { TuiAgent } from '../../../shared/tui-agent'
 
@@ -11,13 +11,7 @@ type AppStoreSnapshot = ReturnType<typeof useAppStore.getState>
 
 type SeedRequest = Pick<WorktreeCreationRequest, 'agent' | 'startupPlan' | 'launchDraftPrompt'>
 
-/**
- * Resolve the tab the launch agent actually runs in.
- *
- * Deliberately never falls back to `tabs[0]`: with repo default terminal tabs
- * (e.g. "dev server", "logs", "shell") the worktree's first tab runs no agent,
- * and activation's `primaryTabId` is only the worktree's primary tab.
- */
+/** Find the actual agent tab, never tabs[0] or activation’s primary: default dev/log/shell tabs run no agent. */
 function resolveLaunchAgentTabId(
   state: AppStoreSnapshot,
   args: {
@@ -31,13 +25,12 @@ function resolveLaunchAgentTabId(
   const worktreeTabs = state.tabsByWorktree[args.worktreeId] ?? []
   // Main spawned the agent itself, so its startup tab is authoritative.
   if (args.backendSpawned && args.startupTerminalTabId) {
-    return getRuntimeEnvironmentIdForWorktree(state, args.worktreeId)
+    return runtimeEnvironmentIdOrLocalUnlessTwin(state, args.worktreeId)
       ? toWebTerminalSurfaceTabId(args.startupTerminalTabId)
       : args.startupTerminalTabId
   }
   const stamped = worktreeTabs.find((tab) => tab.launchAgent === args.agent)?.id
-  // Why: when the renderer owns startup, `ensureAgentStartupInTerminal` queues it
-  // on primaryTabId, so that tab is the agent's tab by construction.
+  // Renderer startup is queued on primaryTabId, making it the agent’s tab by construction.
   return stamped ?? args.primaryTabId ?? args.startupTerminalTabId ?? null
 }
 
@@ -51,8 +44,7 @@ function applyAgentTabSeeds(args: {
 }): void {
   const { request, agent, tabId } = args
   seedNativeChatAppliedSessionOptions(tabId, agent, request.startupPlan?.sessionOptions)
-  // Why: draft launch context reaches only the TUI input; seed the
-  // chat-composer copy so it isn't invisible in the chat view.
+  // Mirror draft launch context into chat composer; otherwise TUI-only input is invisible there.
   if (request.launchDraftPrompt) {
     seedNativeChatLaunchDraftForAgentTab({ tabId, agent, text: request.launchDraftPrompt })
   }
@@ -85,9 +77,7 @@ export function seedAgentTabStateAfterWorktreeCreate(args: {
     // draft on a tab that runs no agent.
     return
   }
-  // Why: runtime-owned (web session) worktrees mirror their session tabs async,
-  // so there is no tab to seed yet — hold the seed for the first mirrored tab
-  // instead of dropping it and leaving the draft invisible on that host class.
+  // Runtime tabs mirror asynchronously; retain seeds until agent-tab identity arrives instead of dropping draft context.
   queueHookCommandsForFirstWorktreeTab({
     worktreeId,
     deliver: (state, firstTerminalTabId) => {
@@ -103,10 +93,7 @@ export function seedAgentTabStateAfterWorktreeCreate(args: {
         })
         return
       }
-      // Why: same invariant as the synchronous branch — never seed a tab that
-      // runs no agent. The queue entry is consumed before delivery (no retry),
-      // so accept the first mirrored tab only when it is the worktree's only
-      // one and therefore unambiguously the agent's.
+      // Without a stamped agent tab, accept only a sole mirrored tab. Consumed seeds cannot retry, and default tabs must never receive agent drafts.
       if ((state.tabsByWorktree[worktreeId] ?? []).length === 1) {
         applyAgentTabSeeds({
           state,

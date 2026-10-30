@@ -17,9 +17,7 @@ function DelayedLoadingLabel(): React.JSX.Element | null {
   ) : null
 }
 
-/** Top of the transcript while older history remains: the auto-load sentinel,
- *  a quiet status line, and a manual load only once auto-load has stopped.
- *  Rendered as a direct child of the (positioned) transcript scroller. */
+/** Keep the sentinel directly under the positioned scroller; offer manual loading only after auto-loading stops. */
 export function NativeChatOlderHistoryRow({
   olderHistory,
   loadingEarlier
@@ -28,14 +26,13 @@ export function NativeChatOlderHistoryRow({
   loadingEarlier: boolean
 }): React.JSX.Element {
   return (
-    // Out of flow, inside the scroller's top padding: its coming and going must
-    // never move the window, least of all when the last page takes it away.
+    // Stay out of flow so adding or removing the history row cannot shift the transcript.
     <div
       ref={olderHistory.sentinelRef}
       className="absolute inset-x-0 top-0 flex h-10 items-center justify-center"
     >
       {olderHistory.isAutoLoadEnabled ? (
-        <span role="status" aria-live="polite" className="text-xs text-muted-foreground">
+        <span role="status" aria-live="polite" className="text-xs text-chat-foreground-faint">
           {loadingEarlier ? <DelayedLoadingLabel /> : null}
         </span>
       ) : (

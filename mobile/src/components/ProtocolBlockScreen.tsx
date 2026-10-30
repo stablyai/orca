@@ -1,82 +1,120 @@
 import { useWallAppUpdate } from '../app-update/use-wall-app-update'
 import { openExternalLink } from '../platform/external-link'
 import { useRouteHandoff } from '../navigation/route-handoff'
-import { Platform, Pressable, StyleSheet, Text, View } from 'react-native'
+import { Platform, Pressable, Text, View } from 'react-native'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import type { Translate } from '../i18n/mobile-i18n'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import type { CompatVerdict } from '../transport/protocol-compat'
 import type { MobileWebBundleCompatVerdict } from '../transport/mobile-web-bundle-compat'
+import type { PageRouteRefusalVerdict } from '../mobile-web-shell/page-route-policy'
 
 const RELEASES_URL = 'https://github.com/stablyai/orca/releases'
 const IOS_APP_STORE_URL = 'itms-apps://apps.apple.com/app/orca-ide/id6766130217'
 
-/** Every wall this screen renders: the protocol one and the bundle one. Both are terminal — there
- *  is no native workspace to fall back to, so the only way out is updating one of the two apps. */
+// Protocol/bundle/page-route walls are terminal: no native workspace fallback; update the relevant app or bundle.
 export type BlockedVerdict =
   | Extract<CompatVerdict, { kind: 'blocked' }>
   | Extract<MobileWebBundleCompatVerdict, { kind: 'blocked' }>
+  | PageRouteRefusalVerdict
 
 type Props = {
   verdict: BlockedVerdict
 }
 
-const DESKTOP_TOO_OLD_BODY =
-  'This paired desktop app is too old for your current Orca Mobile app. Update Orca on your computer, then try this host again.'
-
-/** What clears the wall. `refresh-bundle` is the one that no store can: the cached workspace is
- *  older than this host's client floor, so a download fixes it and an app update does not. */
+// refresh-bundle fixes cached workspace older than host floor; store app update cannot replace that cache.
 type BlockRemedy = 'update-mobile' | 'update-desktop' | 'refresh-bundle'
 
 function blockRemedy(verdict: BlockedVerdict): BlockRemedy {
   switch (verdict.reason) {
     case 'mobile-too-old':
     case 'bundle-shell-too-old':
+    case 'page-route-grant-missing':
       return 'update-mobile'
     case 'desktop-too-old':
     case 'bundle-unavailable':
+    case 'page-route-unlisted':
       return 'update-desktop'
     case 'bundle-incompatible':
       return verdict.side === 'desktop' ? 'update-desktop' : 'refresh-bundle'
   }
 }
 
-function blockTitle(remedy: BlockRemedy): string {
+function blockTitle(remedy: BlockRemedy, t: Translate): string {
   switch (remedy) {
     case 'update-mobile':
-      return 'Update Orca Mobile'
+      return t('components.protocolBlockScreen.updateMobileTitle', 'Update Orca Mobile')
     case 'update-desktop':
-      return 'Update Orca on your computer'
+      return t('components.protocolBlockScreen.updateDesktopTitle', 'Update Orca on your computer')
     case 'refresh-bundle':
-      return 'Refresh the mobile workspace'
+      return t(
+        'components.protocolBlockScreen.refreshWorkspaceTitle',
+        'Refresh the mobile workspace'
+      )
   }
 }
 
-function blockBody(verdict: BlockedVerdict, remedy: BlockRemedy, storeName: string): string {
+function blockBody(verdict: BlockedVerdict, remedy: BlockRemedy, t: Translate): string {
   if (remedy === 'refresh-bundle') {
-    return 'The workspace cached for this host is older than the desktop expects. Reconnect to this host to download the current one.'
+    return t(
+      'components.protocolBlockScreen.refreshWorkspaceBody',
+      'The workspace cached for this host is older than the desktop expects. Reconnect to this host to download the current one.'
+    )
   }
   if (verdict.reason === 'mobile-too-old') {
-    return `This desktop needs a newer Orca Mobile app. Update Orca Mobile from ${storeName}, then try this host again.`
-  }
-  if (verdict.reason === 'bundle-unavailable') {
-    return 'This paired desktop app does not include the mobile workspace yet. Update Orca on your computer, then try this host again.'
+    return Platform.OS === 'ios'
+      ? t(
+          'components.protocolBlockScreen.mobileTooOldAppStore',
+          'This desktop needs a newer Orca Mobile app. Update Orca Mobile from the App Store, then try this host again.'
+        )
+      : t(
+          'components.protocolBlockScreen.mobileTooOldGitHubReleases',
+          'This desktop needs a newer Orca Mobile app. Update Orca Mobile from GitHub Releases, then try this host again.'
+        )
   }
   if (remedy === 'update-mobile') {
-    return `This desktop's mobile workspace needs a newer Orca Mobile app. Update Orca Mobile from ${storeName}, then try this host again.`
+    return Platform.OS === 'ios'
+      ? t(
+          'components.protocolBlockScreen.workspaceNeedsUpdateAppStore',
+          "This desktop's mobile workspace needs a newer Orca Mobile app. Update Orca Mobile from the App Store, then try this host again."
+        )
+      : t(
+          'components.protocolBlockScreen.workspaceNeedsUpdateGitHubReleases',
+          "This desktop's mobile workspace needs a newer Orca Mobile app. Update Orca Mobile from GitHub Releases, then try this host again."
+        )
   }
-  return DESKTOP_TOO_OLD_BODY
+  return t(
+    'components.protocolBlockScreen.desktopTooOldBody',
+    'This paired desktop app is too old for your current Orca Mobile app. Update Orca on your computer, then try this host again.'
+  )
 }
 
 export function ProtocolBlockScreen({ verdict }: Props) {
+  useMobileColorScheme()
+  const t = useMobileTranslation()
   const router = useRouteHandoff()
   const mobileUpdate = useWallAppUpdate()
   const remedy = blockRemedy(verdict)
   // Why: Android APKs ship through GitHub Releases until a Play Store listing exists.
   const mobileUpdateTarget =
     Platform.OS === 'ios'
-      ? { label: 'Open App Store', url: IOS_APP_STORE_URL, storeName: 'the App Store' }
-      : { label: 'Open GitHub Releases', url: RELEASES_URL, storeName: 'GitHub Releases' }
+      ? {
+          label: t('components.protocolBlockScreen.openAppStore', 'Open App Store'),
+          url: IOS_APP_STORE_URL
+        }
+      : {
+          label: t('components.protocolBlockScreen.openGitHubReleases', 'Open GitHub Releases'),
+          url: RELEASES_URL
+        }
   const mobileAction = mobileUpdate
-    ? { label: `Get Orca ${mobileUpdate.version}`, url: mobileUpdate.url }
+    ? {
+        label: t('components.protocolBlockScreen.getVersion', 'Get Orca {{version}}', {
+          version: mobileUpdate.version
+        }),
+        url: mobileUpdate.url
+      }
     : { label: mobileUpdateTarget.label, url: mobileUpdateTarget.url }
   // No download to offer when the fix is a refetch: reconnecting is what this screen leaves you to do.
   const primaryAction =
@@ -84,14 +122,23 @@ export function ProtocolBlockScreen({ verdict }: Props) {
       ? null
       : remedy === 'update-mobile'
         ? mobileAction
-        : { label: 'Open GitHub Releases', url: RELEASES_URL }
+        : {
+            label: t('components.protocolBlockScreen.openGitHubReleases', 'Open GitHub Releases'),
+            url: RELEASES_URL
+          }
 
-  const title = blockTitle(remedy)
-  const body = blockBody(verdict, remedy, mobileUpdateTarget.storeName)
+  const title = blockTitle(remedy, t)
+  const body = blockBody(verdict, remedy, t)
   const recoveryNote =
     remedy === 'refresh-bundle'
-      ? 'If this message stays, remove this host and pair it again.'
-      : 'Already updated? Go back to Hosts and refresh the connection. If this message stays, remove this host and pair it again.'
+      ? t(
+          'components.protocolBlockScreen.refreshRecoveryNote',
+          'If this message stays, remove this host and pair it again.'
+        )
+      : t(
+          'components.protocolBlockScreen.updateRecoveryNote',
+          'Already updated? Go back to Hosts and refresh the connection. If this message stays, remove this host and pair it again.'
+        )
 
   return (
     <View style={styles.container}>
@@ -102,8 +149,7 @@ export function ProtocolBlockScreen({ verdict }: Props) {
           <Pressable
             style={({ pressed }) => [styles.primaryButton, pressed && styles.pressed]}
             onPress={() => {
-              // The seam: this screen is in the tasks page closure, where react-native's `openURL`
-              // calls a `window.open` both shells refuse and resolves anyway.
+              // Use external-link seam: page’s RN openURL calls window.open, which both shells refuse despite resolving.
               openExternalLink(primaryAction.url)
             }}
           >
@@ -113,13 +159,13 @@ export function ProtocolBlockScreen({ verdict }: Props) {
         <Pressable
           style={({ pressed }) => [styles.secondaryButton, pressed && styles.pressed]}
           onPress={() => {
-            // The handoff, not expo-router's singleton: `/` is the phone's home screen and the
-            // page does not carry it, so inside the shell a singleton replace renders the root
-            // route in the WebView rather than leaving it. This posts the target to the shell.
+            // Hand home replacement to shell; expo-router singleton inside page would render / in WebView instead of leaving it.
             router.replace('/')
           }}
         >
-          <Text style={styles.secondaryButtonText}>Back to hosts</Text>
+          <Text style={styles.secondaryButtonText}>
+            {t('components.protocolBlockScreen.backToHosts', 'Back to hosts')}
+          </Text>
         </Pressable>
         <Text style={styles.recoveryNote}>{recoveryNote}</Text>
       </View>
@@ -127,7 +173,7 @@ export function ProtocolBlockScreen({ verdict }: Props) {
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   container: {
     flex: 1,
     backgroundColor: colors.bgBase,
@@ -185,4 +231,4 @@ const styles = StyleSheet.create({
   pressed: {
     opacity: 0.7
   }
-})
+}))

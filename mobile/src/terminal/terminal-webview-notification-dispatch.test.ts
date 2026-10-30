@@ -36,4 +36,17 @@ describe('dispatchTerminalWebViewNotification', () => {
       altScreen: false
     })
   })
+
+  it('passes a tap click on and keeps other terminal input bytes-only', () => {
+    const onTerminalInput = vi.fn()
+    const handlers = { onTerminalInput, reportEngineError: vi.fn() }
+    const click = '\x1b[<0;9;31M\x1b[<0;9;31m'
+    const wheel = '\x1b[<64;9;31M'
+    dispatchTerminalWebViewNotification(
+      { type: 'terminal-input', bytes: click, click: true },
+      handlers
+    )
+    dispatchTerminalWebViewNotification({ type: 'terminal-input', bytes: wheel }, handlers)
+    expect(onTerminalInput.mock.calls).toEqual([[click, { click: true }], [wheel]])
+  })
 })

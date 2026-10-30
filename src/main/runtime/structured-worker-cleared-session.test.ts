@@ -1,8 +1,5 @@
-/**
- * A structured worker the user `/clear`ed carries on in a successor session. Every worker-level
- * reader and actor must reach the session running it now, read the whole conversation, and say
- * `unverifiable` — never `exited` — when it cannot find that session.
- */
+import { agentSessionConversationView } from '../../shared/agent-session-conversation-view'
+/** Worker-level reads/operations follow clear successors and the full lineage; unresolved successors remain unverifiable. */
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -36,17 +33,15 @@ const { listAddressableStructuredWorkers } =
   await import('./orchestration/structured-worker-group-addressing')
 const { readStructuredLineageJournalPage, STRUCTURED_JOURNAL_PAGE_LIMIT } =
   await import('./orchestration/structured-worker-journal-page')
-const { structuredSessionChildIdentityEnv } =
-  await import('./structured-session-child-identity-env')
+const { sealedChildEnv } = await import('./structured-session-child-env.test-support')
 const { foundAgentSessionRecord } = await import('./agent-session-record-founding')
 const { applyAgentSessionRestartAdjudication } =
-  await import('./agent-session-restart-lease-transitions')
+  await import('./agent-session/ownership/agent-session-restart-lease-transitions')
 const { openTestAgentSessionRecordStore } =
   await import('./agent-session-record-store-test-harness')
 const { OrcaRuntimeService } = await import('./orca-runtime')
 const { OrchestrationDb } = await import('./orchestration/db')
-const { ORCHESTRATION_METHODS } = await import('./rpc/methods/orchestration')
-const { eraseRpcMethods } = await import('./rpc/core')
+const { rpcRuntime } = await import('./structured-worker-rpc.test-support')
 const { structuredWorkerOwesWork } = await import('./structured-worker-custody')
 const { AGENT_SESSION_NOT_ATTACHED } =
   await import('../native-chat/agent-session-wire/structured-agent-session-mutation-admission')
@@ -58,7 +53,6 @@ const {
 } = await import('./structured-worker-identity')
 
 type Db = InstanceType<typeof OrchestrationDb>
-type Runtime = InstanceType<typeof OrcaRuntimeService>
 
 const MINTED = 'a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d'
 const SUCCESSOR = 'clear-a1b2c3d4e5f60718293a4b5c6d7e8f9012345678'
@@ -188,6 +182,18 @@ function installHost(): void {
     deps: {
       store: {
         getRecord: (id: string) => records.get(id) ?? null,
+        getConversation: (id: string) => {
+          const record = records.get(id)
+          return record ? agentSessionConversationView(record) : null
+        },
+        listConversations: () => [...records.values()].map(agentSessionConversationView),
+        requireWritableRecord: (id: string) => {
+          const record = records.get(id)
+          if (!record) {
+            throw new Error('Missing test record')
+          }
+          return record
+        },
         listRecords: () => [...records.values()],
         getVisibleSessionTabIndex: () => ({ present: tabIndexPresent, sessionIds: visibleTabs }),
         getSessionTabId: () => null
@@ -207,14 +213,15 @@ function installHost(): void {
       open.add(id)
       return { items: [message(`${id}-1`, 'idle')], submissions: [] }
     },
+    // No projection held: the gate reads the timeline as it stands.
+    currentWork: () => null,
     setSessionTabVisibility: async (id: string, visible: boolean) => {
       if (id === failHideOf) {
         throw new Error('the durable tab index is wedged')
       }
       visibleTabs = visible ? [...visibleTabs, id] : visibleTabs.filter((tab) => tab !== id)
     },
-    // As the real close: a child is stopped with exit evidence (none, nothing is written), and the
-    // conversation is dropped.
+    // Model real close: stop attached children with evidence, then drop the conversation.
     close: async (id: string) => {
       closed.push(id)
       open.delete(id)
@@ -300,28 +307,6 @@ function startWorkerDispatch(
   })
   db.markWorkerDispatchReady(dispatch.id)
   return dispatch.id
-}
-
-/** A real runtime over `db` with the orchestration RPCs, as a coordinator calls them. */
-function rpcRuntime(db: Db): {
-  runtime: Runtime
-  call: (name: string, params: Record<string, unknown>) => Promise<unknown>
-} {
-  const runtime = new OrcaRuntimeService()
-  runtime.setOrchestrationDb(db)
-  vi.spyOn(runtime, 'ensureStructuredAgentSessionHost').mockResolvedValue(undefined)
-  return {
-    runtime,
-    call: async (name, params) => {
-      const method = eraseRpcMethods(ORCHESTRATION_METHODS).find(
-        (candidate) => candidate.name === name
-      )
-      if (!method?.params) {
-        throw new Error(`Method not found: ${name}`)
-      }
-      return method.handler(method.params.parse(params), { runtime })
-    }
-  }
 }
 
 /** The coordinator releases a worker whose Dispatch succeeded. */
@@ -443,8 +428,7 @@ describe.each(['live', 'at-rest'] as const)(
       const stop = await stopStructuredWorker(identity, 'ctx_1')
       expect(closed).toEqual([SUCCESSOR])
       expect(stop.stopped).toBe(true)
-      // Release settles a stopped worker only on the probe's `exited`: a successor no agent ever
-      // ran gets no death evidence from its close, and must not read `unverifiable` forever.
+      // Never-started successors have no death evidence; retiring their tab must still let release prove exit.
       structuredWorkerIdentities.clear()
       await expect(
         new OrcaRuntimeService().inspectTerminalProcessIncarnationLiveness(
@@ -489,9 +473,7 @@ describe.each(['live', 'at-rest'] as const)(
 
     it("gives the successor's child the worker's handle", () => {
       const identity = registerWorker()
-      expect(structuredSessionChildIdentityEnv(SUCCESSOR, {}).ORCA_TERMINAL_HANDLE).toBe(
-        identity.handle
-      )
+      expect(sealedChildEnv(SUCCESSOR).ORCA_TERMINAL_HANDLE).toBe(identity.handle)
     })
 
     it("records the user's takeover when they type into the successor", () => {
@@ -880,8 +862,17 @@ describe('a running session that cannot be verified is refused, never declared e
     expect(observeStructuredWorker(identity).status).toBe('unverifiable')
     expect(structuredSessionMailTarget(MINTED, null)).toBeNull()
     const mintedRecord = records.get(MINTED)
-    const store = { getRecord: (id: string) => records.get(id) ?? null, listRecords: () => [] }
-    expect(mintedRecord && structuredSessionMailReach(store, mintedRecord, null)).toMatchObject({
+    const store = {
+      getRecord: (id: string) => {
+        const record = records.get(id)
+        return record ? agentSessionConversationView(record) : null
+      },
+      listRecords: () => []
+    }
+    expect(
+      mintedRecord &&
+        structuredSessionMailReach(store, agentSessionConversationView(mintedRecord), null)
+    ).toMatchObject({
       kind: 'unverifiable'
     })
     await expectRefused(identity, 'session_caller_not_live')

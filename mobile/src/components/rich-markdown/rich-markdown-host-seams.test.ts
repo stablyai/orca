@@ -1,37 +1,18 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { quietRichMarkdownEditorHost } from './rich-markdown-editor-host.test-support'
 import { createRichMarkdownEditorDocument } from './create-rich-markdown-editor-document'
-import { createRichMarkdownEditorScope } from './document-scope'
 import { RICH_MARKDOWN_EDITOR_MARKUP } from './document-markup'
 import type { MobileRichMarkdownEditorMessage } from '../mobile-rich-markdown-editor-contract'
 import type { RichMarkdownEditorDocument, RichMarkdownEditorHost } from './document-host-seams'
 
-/**
- * The six host seams the page sets, and the window reads and writes they default to.
- *
- * The script reached its host through `window.ReactNativeWebView`, asked for a URL with
- * `window.prompt`, measured the keyboard from `visualViewport` and took its ranges, its elements
- * and `execCommand` from the global `document`. On the page none of those means what it means in
- * the WebView: that bridge object is the *shell's*, so an editor message posted through it would
- * put editor JSON into the bridge's own channel; the prompt was measured to return null in both
- * shells, because neither implements the delegate the dialog needs; and the page's screen already
- * measures the same viewport with the same formula, so a second report would lift its bar twice.
- *
- * Both halves are asserted here, because a seam whose default quietly stopped reading the window
- * would leave the native document mute with every other editor test still green — they drive the
- * modules directly and would be stubbing nothing.
- */
+// Page supplies messages, URL prompt and keyboard seams: shell owns ReactNativeWebView, window.prompt returns null, and screen already measures keyboard; test remaining live-window defaults.
 const startedDocuments: RichMarkdownEditorDocument[] = []
 
 /** A started document over markup the case owns, with the hooks it wants as the host argument. */
-function startedDocument(host: RichMarkdownEditorHost = {}): RichMarkdownEditorDocument {
+function startedDocument(host: Partial<RichMarkdownEditorHost> = {}): RichMarkdownEditorDocument {
   document.body.innerHTML = RICH_MARKDOWN_EDITOR_MARKUP
-  const started = createRichMarkdownEditorDocument({
-    // The one the sequence would otherwise answer with the window: these cases are not the
-    // shell's, so nothing observes a viewport unless the case says so.
-    keyboardInsetSource: () => null,
-    ...host
-  })
+  const started = createRichMarkdownEditorDocument(quietRichMarkdownEditorHost(host))
   startedDocuments.push(started)
   return started
 }
@@ -41,82 +22,6 @@ afterEach(() => {
     startedDocuments.pop()!.stop()
   }
   vi.unstubAllGlobals()
-})
-
-describe('the editor document host seams, by default', () => {
-  it('posts to the React Native bridge, reading it at call time', () => {
-    const postMessage = vi.fn<(data: string) => void>()
-    // Built before the global exists: the default must read the window when it posts, not when the
-    // scope was created, because the document's scope is built as its script is parsed.
-    const scope = createRichMarkdownEditorScope()
-    vi.stubGlobal('ReactNativeWebView', { postMessage })
-    scope.postToHost({ type: 'ready' })
-    expect(postMessage.mock.calls).toEqual([['{"type":"ready"}']])
-  })
-
-  it('posts nothing when there is no bridge, which is the guard the script carried', () => {
-    expect(() => createRichMarkdownEditorScope().postToHost({ type: 'ready' })).not.toThrow()
-  })
-
-  it('asks the window for a URL, under the label each command carried', async () => {
-    const prompt = vi.fn<(label?: string) => string | null>(() => 'https://example.com/a')
-    const scope = createRichMarkdownEditorScope()
-    vi.stubGlobal('prompt', prompt)
-    await expect(scope.promptForUrl('link')).resolves.toBe('https://example.com/a')
-    await expect(scope.promptForUrl('image')).resolves.toBe('https://example.com/a')
-    expect(prompt.mock.calls).toEqual([['Link URL'], ['Image URL']])
-  })
-
-  it('answers the cancelled dialog as no URL rather than as a failure', async () => {
-    vi.stubGlobal('prompt', () => null)
-    await expect(createRichMarkdownEditorScope().promptForUrl('link')).resolves.toBe(null)
-  })
-
-  it('measures the covered height from the visual viewport, and observes both its events', () => {
-    const listeners: string[] = []
-    const removed: string[] = []
-    const viewport = {
-      height: 500,
-      offsetTop: 20,
-      addEventListener: (name: string) => listeners.push(name),
-      removeEventListener: (name: string) => removed.push(name)
-    }
-    const scope = createRichMarkdownEditorScope()
-    // Null before the viewport exists and a reader after it, which is what "read at call time"
-    // means for the one seam whose answer is an object.
-    expect(scope.keyboardInsetSource()).toBe(null)
-    vi.stubGlobal('visualViewport', viewport)
-    vi.stubGlobal('innerHeight', 800)
-    const source = scope.keyboardInsetSource()!
-    expect(source.measure()).toBe(280)
-    viewport.height = 900
-    // Clamped: a viewport taller than the window covers nothing rather than a negative height.
-    expect(source.measure()).toBe(0)
-    const uninstall = source.observe(() => {})
-    expect(listeners).toEqual(['resize', 'scroll'])
-    uninstall()
-    expect(removed).toEqual(['resize', 'scroll'])
-  })
-
-  it('clears a real timer, and a handle that was never set', () => {
-    const scope = createRichMarkdownEditorScope()
-    const fired = vi.fn()
-    vi.useFakeTimers()
-    try {
-      scope.clearTimer(window.setTimeout(fired, 0))
-      vi.runAllTimers()
-      expect(fired).not.toHaveBeenCalled()
-      expect(() => scope.clearTimer(null)).not.toThrow()
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
-  it('takes the selection and the page from the window the document is running in', () => {
-    const scope = createRichMarkdownEditorScope()
-    expect(scope.getDocument()).toBe(document)
-    expect(scope.getSelection()).toBe(window.getSelection())
-  })
 })
 
 describe('the editor document host seams, once the page sets them', () => {
@@ -174,10 +79,7 @@ describe('the editor document host seams, once the page sets them', () => {
   })
 
   it('takes the caret from the selection the host names, not the window one', async () => {
-    // The seam the page needs most. A document mounted inside a screen shares `window` with every
-    // other field on it, so the caret the editor saves and restores has to come from the object
-    // its host hands over — and the window's must be left alone, because it belongs to whatever
-    // else has focus.
+    // Save/restore only host selection: overlapping fields share window, and global selection belongs to whichever other field holds focus.
     document.body.innerHTML = RICH_MARKDOWN_EDITOR_MARKUP
     const editor = document.getElementById('editor')!
     editor.innerHTML = '<p id="only">text</p>'
@@ -204,12 +106,14 @@ describe('the editor document host seams, once the page sets them', () => {
     caret.collapse(true)
     ranges.push(caret)
 
-    const started = createRichMarkdownEditorDocument({
-      getSelection: () => hostSelection,
-      getDocument: () => hostDocument([]),
-      keyboardInsetSource: () => null,
-      postToHost: () => {}
-    })
+    const started = createRichMarkdownEditorDocument(
+      quietRichMarkdownEditorHost({
+        getSelection: () => hostSelection,
+        getDocument: () => hostDocument([]),
+        keyboardInsetSource: () => null,
+        postToHost: () => {}
+      })
+    )
     startedDocuments.push(started)
 
     // Saved out of the host's selection, which the blur then empties.
@@ -235,12 +139,7 @@ describe('the editor document host seams, once the page sets them', () => {
   })
 })
 
-/**
- * The page a host hands over: the real one, with `execCommand` recorded.
- *
- * happy-dom implements no `execCommand`, and the point of the seam is that the document never
- * reaches for a global one, so a host that answers with its own is exactly what a case needs.
- */
+// Host supplies real document with recorded execCommand because happy-dom lacks it; prove no global command lookup.
 function hostDocument(commands: [string, boolean, string | undefined][]): Document {
   const page: Document = Object.create(document)
   page.execCommand = (command: string, showUI?: boolean, value?: string) => {

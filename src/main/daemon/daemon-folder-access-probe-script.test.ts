@@ -1,6 +1,4 @@
-// The child script the probe runs is a minified copy of enumerateDirectoryOnce's errno mapping,
-// inlined because the child can load nothing from the app bundle. Every other test mocks the
-// spawn away, so this is the only place the script itself is executed.
+// Execute the inlined child script directly; other probe tests mock process spawning.
 
 import { chmod, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -8,7 +6,7 @@ import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { probeFolderAccessForFreshDaemon } from './daemon-folder-access-probe'
 
-// chmod cannot lock root out of a directory, and does not withhold reads on Windows.
+// chmod cannot deny directory reads to root or on Windows.
 const CAN_MAKE_A_DIRECTORY_UNREADABLE = process.platform !== 'win32' && process.getuid?.() !== 0
 
 let root: string

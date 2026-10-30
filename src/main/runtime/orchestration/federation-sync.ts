@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import type { OrcaRuntimeService } from '../orca-runtime'
+import type { FederationRuntime } from './federation-runtime'
 import type { FederatedLifecycleSettlement } from './federation-lifecycle-settlement'
 import { ORCHESTRATION_FEDERATION_LIFECYCLE_SETTLEMENT_PROTOCOL_VERSION } from '../../../shared/protocol-version'
 import { OrchestrationError } from './orchestration-error'
@@ -17,8 +17,7 @@ export { parseRelayedMessage } from './federation-sync-message'
 const FEDERATION_PULL_PAGE_SIZE = 50
 const MAX_FEDERATION_PULL_PAGES_PER_SYNC = 6
 
-// Peer payloads are untrusted input: decode them so a malformed page fails as an
-// orchestration error instead of a TypeError deep inside the import loop.
+// Decode untrusted peer pages before import to report malformed input as an orchestration error.
 const PulledRelayPage = z
   .object({
     runtimeEpoch: z.string().min(1),
@@ -38,7 +37,7 @@ const PulledRelayPage = z
   .passthrough()
 
 export async function syncFederatedDispatch(
-  runtime: OrcaRuntimeService,
+  runtime: FederationRuntime,
   dispatchId: string,
   isCurrent: () => boolean = () => true
 ): Promise<{ imported: number; acknowledgedThrough: number }> {
@@ -51,7 +50,7 @@ export async function syncFederatedDispatch(
 }
 
 async function syncFederatedDispatchPages(
-  runtime: OrcaRuntimeService,
+  runtime: FederationRuntime,
   dispatchId: string,
   remainingPages: number,
   isCurrent: () => boolean

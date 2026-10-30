@@ -1,4 +1,4 @@
-import type { ChildProcessHandle } from '../../shared/child-process/process-spec'
+import type { ChildProcessHandle } from '@orca/process-host/process-spec'
 import { StringDecoder } from 'node:string_decoder'
 import {
   getEphemeralVmRecipeResultConnection,
@@ -8,7 +8,6 @@ import { RuntimeClientError } from './types'
 
 const IGNORED_NON_RECIPE_STDOUT = '[serve] ignored non-recipe stdout'
 
-/** Relays the one recipe line a detached serve child prints, then lets the CLI exit. */
 export function waitForRecipeJson(child: ChildProcessHandle): Promise<number> {
   return new Promise((resolve, reject) => {
     let output = ''
@@ -35,8 +34,7 @@ export function waitForRecipeJson(child: ChildProcessHandle): Promise<number> {
       resolve(0)
     }
     const writeIgnoredRecipeStdout = (): void => {
-      // Why: non-readiness child stdout is untrusted and cannot be safely
-      // redacted, including schema-valid results with arbitrary user data.
+      // Arbitrary child output cannot be reliably redacted, even when it matches the schema.
       process.stderr.write(`${IGNORED_NON_RECIPE_STDOUT}\n`)
     }
     const processRecipeOutputLine = (line: string): void => {
@@ -94,8 +92,7 @@ export function waitForRecipeJson(child: ChildProcessHandle): Promise<number> {
     }
     child.stdout?.on('data', onData)
     child.once('error', onError)
-    // Why: `exit` can precede the final piped stdout data. `close` waits until
-    // stdio closes so a last recipe chunk is not mistaken for missing output.
+    // Wait for close: exit may precede the final recipe data on stdout.
     child.once('close', onClose)
   })
 }

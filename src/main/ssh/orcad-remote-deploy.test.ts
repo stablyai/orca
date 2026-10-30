@@ -1,62 +1,71 @@
+import type * as ExecCommandModule from './remote-exec/remote-exec-command'
 import { chmodSync, mkdirSync, mkdtempSync, rmSync, statSync, writeFileSync } from 'node:fs'
-import type * as RecordFile from './orcad-remote-record-file'
+import type * as RecordFile from '../managed-server/install/orcad-remote-record-file'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { runProcess } from '../../shared/child-process/run-process'
+import { runProcess } from '@orca/process-host'
 
-vi.mock('./ssh-relay-deploy-helpers', () => ({
-  execCommand: vi.fn(),
-  isUnconfirmedSshCommandTermination: () => false
+vi.mock('./remote-exec/remote-exec-command', async (importOriginal) => ({
+  ...(await importOriginal<typeof ExecCommandModule>()),
+  execCommand: vi.fn()
 }))
-vi.mock('./ssh-connection-utils', () => ({ shellEscape: (s: string) => `'${s}'` }))
-vi.mock('./ssh-relay-install-lock', () => ({
+vi.mock('../../shared/shell-argument-quoting', () => ({ quotePosixShell: (s: string) => `'${s}'` }))
+vi.mock('../managed-server/install/remote-install-lock', () => ({
   acquireInstallLock: vi.fn().mockResolvedValue(undefined),
   isRelayInstallLockStale: vi.fn().mockResolvedValue(false),
   RemoteInstallLockBusyError: class extends Error {},
   RELAY_INSTALL_LOCK_NAME: '.install-lock'
 }))
-vi.mock('./ssh-relay-install-transfers', () => ({
-  uploadRelayDirectory: vi.fn().mockResolvedValue(undefined),
-  writeRelayFile: vi.fn().mockResolvedValue(undefined)
+vi.mock('../managed-server/install/remote-install-transfers', () => ({
+  uploadRemoteInstallDirectory: vi.fn().mockResolvedValue(undefined),
+  writeRemoteInstallFile: vi.fn().mockResolvedValue(undefined)
 }))
-vi.mock('./orcad-remote-record-file', async (importOriginal) => ({
+vi.mock('../managed-server/install/orcad-remote-record-file', async (importOriginal) => ({
   ...(await importOriginal<typeof RecordFile>()),
   writeAtomicOrcadRemoteRecord: vi.fn().mockResolvedValue(undefined)
 }))
-vi.mock('./orcad-remote-node-runtime', () => ({
+vi.mock('../managed-server/install/orcad-remote-node-runtime', () => ({
   ensureRemoteOrcadNodeRuntime: vi.fn().mockResolvedValue(undefined)
 }))
 vi.mock('./orcad-local-build-hash', () => ({
   computeLocalOrcadBuildHash: () => 'abc123def4567890'
 }))
 
-import { execCommand } from './ssh-relay-deploy-helpers'
-import { acquireInstallLock, isRelayInstallLockStale } from './ssh-relay-install-lock'
-import { uploadRelayDirectory } from './ssh-relay-install-transfers'
-import { writeAtomicOrcadRemoteRecord } from './orcad-remote-record-file'
+import { execCommand } from './remote-exec/remote-exec-command'
+import {
+  acquireInstallLock,
+  isRelayInstallLockStale
+} from '../managed-server/install/remote-install-lock'
+import { uploadRemoteInstallDirectory } from '../managed-server/install/remote-install-transfers'
+import { writeAtomicOrcadRemoteRecord } from '../managed-server/install/orcad-remote-record-file'
 import { deployOrcad, type OrcadDeployOptions } from './orcad-remote-deploy'
-import { installOrcadBundle } from './orcad-remote-install'
-import { ensureRemoteOrcadNodeRuntime } from './orcad-remote-node-runtime'
+import { installOrcadBundle } from '../managed-server/install/orcad-remote-install'
+import { ensureRemoteOrcadNodeRuntime } from '../managed-server/install/orcad-remote-node-runtime'
 import {
   abandonInstall,
   finalizeInstall,
   isRemoteInstallComplete
-} from './ssh-relay-versioned-install'
-import { emptyOrcadActivationRecord, withActivatedVersion } from './orcad-activation-record'
+} from '../managed-server/install/remote-versioned-install'
+import {
+  emptyOrcadActivationRecord,
+  withActivatedVersion,
+  withDeactivatedVersionCommitted,
+  type OrcadActivationRecord
+} from '../managed-server/activation/orcad-activation-record'
+import { ORCAD_ACTIVATION_POLICY_REFUSED_CODE } from './orcad-installed-activation'
 import { getRemoteHostPlatform } from './ssh-remote-platform'
-import { isReadinessRead } from './orcad-activation-host-test-harness'
+import { isReadinessRead } from '../managed-server/activation/orcad-activation-host-test-harness'
 import { isSnapshotCaptureCommand } from './orcad-snapshot-capture-command'
-import type { SshConnection } from './ssh-connection'
 import { NODE_RUNTIME_PIN } from '../../shared/node-runtime-pin'
-import { serializeOrcadActivationTransaction } from './orcad-activation-transaction'
-import { createOrcadActivationTransaction } from './orcad-activation-transaction-transitions'
+import { serializeOrcadActivationTransaction } from '../managed-server/activation/orcad-activation-transaction'
+import { createOrcadActivationTransaction } from '../managed-server/activation/orcad-activation-transaction-transitions'
 
 const mockExec = vi.mocked(execCommand)
 const NEW_VERSION = '0.2.0+bb0100000000'
 const OLD_VERSION = '0.1.0+aa01'
 
-vi.mock('./ssh-relay-versioned-install', async (importOriginal) => ({
+vi.mock('../managed-server/install/remote-versioned-install', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   readLocalFullVersion: () => '0.2.0+bb0100000000',
   isRemoteInstallComplete: vi.fn().mockResolvedValue(false),
@@ -106,7 +115,6 @@ function readyLine(overrides: {
 
 type HostScript = {
   activationRecord: string
-  /** Readiness content per version dir, keyed by the version in the path. */
   readiness: Record<string, string>
   log: string[]
   preflightResult?: string
@@ -180,8 +188,13 @@ function scriptHost(script: HostScript): void {
 }
 
 function options(overrides: Partial<OrcadDeployOptions> = {}): OrcadDeployOptions {
+  const census = overrides.census ?? {
+    liveSessions: 0,
+    startedSinceActivation: 0,
+    daemonProtocolVersion: 3
+  }
   return {
-    conn: {} as SshConnection,
+    conn: Object.create(null),
     host: getRemoteHostPlatform('linux-x64'),
     remoteHome: '/home/u',
     localOrcadDir: '/local/out/orcad',
@@ -190,7 +203,10 @@ function options(overrides: Partial<OrcadDeployOptions> = {}): OrcadDeployOption
     userDataDir: '/home/u/.orca',
     bindHost: '127.0.0.1',
     port: 7777,
-    census: { liveSessions: 0, startedSinceActivation: 0, daemonProtocolVersion: 3 },
+    census,
+    // An unchanged recount unless a test opens a terminal during the upload.
+    recountCensus: async () => census,
+    releaseIncumbentAdmission: async () => {},
     readinessTimeoutMs: 50,
     sleep: async () => {},
     now: () => new Date('2026-02-02T00:00:00.000Z'),
@@ -226,7 +242,7 @@ describe('orcad install lock ownership', () => {
     await install()
     expect(acquireInstallLock).not.toHaveBeenCalled()
     expect(abandonInstall).not.toHaveBeenCalled()
-    expect(uploadRelayDirectory).not.toHaveBeenCalled()
+    expect(uploadRemoteInstallDirectory).not.toHaveBeenCalled()
   })
 
   it('releases its lock when another installer completed while acquisition waited', async () => {
@@ -235,13 +251,13 @@ describe('orcad install lock ownership', () => {
     expect(acquireInstallLock).toHaveBeenCalledOnce()
     expect(abandonInstall).toHaveBeenCalledOnce()
     expect(abandonInstall).toHaveBeenCalledWith(expect.anything(), remoteDir, options().host)
-    expect(uploadRelayDirectory).not.toHaveBeenCalled()
+    expect(uploadRemoteInstallDirectory).not.toHaveBeenCalled()
     expect(finalizeInstall).not.toHaveBeenCalled()
   })
 
   it('publishes a complete install before releasing its lock once', async () => {
     await install()
-    expect(uploadRelayDirectory).toHaveBeenCalledOnce()
+    expect(uploadRemoteInstallDirectory).toHaveBeenCalledOnce()
     expect(finalizeInstall).toHaveBeenCalledWith(expect.anything(), remoteDir, options().host, {
       signal: undefined,
       releaseLock: false
@@ -254,7 +270,7 @@ describe('orcad install lock ownership', () => {
 
   it('releases a failed upload without publishing it or replacing its error', async () => {
     const error = new Error('upload interrupted')
-    vi.mocked(uploadRelayDirectory).mockRejectedValueOnce(error)
+    vi.mocked(uploadRemoteInstallDirectory).mockRejectedValueOnce(error)
     await expect(install()).rejects.toBe(error)
     expect(abandonInstall).toHaveBeenCalledOnce()
     expect(finalizeInstall).not.toHaveBeenCalled()
@@ -263,7 +279,7 @@ describe('orcad install lock ownership', () => {
   it('releases its lock without reusing an aborted operation signal', async () => {
     const controller = new AbortController()
     const error = new Error('deployment canceled')
-    vi.mocked(uploadRelayDirectory).mockImplementationOnce(async () => {
+    vi.mocked(uploadRemoteInstallDirectory).mockImplementationOnce(async () => {
       controller.abort(error)
       controller.signal.throwIfAborted()
     })
@@ -278,7 +294,7 @@ describe('orcad install lock ownership', () => {
     vi.mocked(acquireInstallLock).mockRejectedValueOnce(error)
     await expect(install()).rejects.toBe(error)
     expect(abandonInstall).not.toHaveBeenCalled()
-    expect(uploadRelayDirectory).not.toHaveBeenCalled()
+    expect(uploadRemoteInstallDirectory).not.toHaveBeenCalled()
   })
 })
 
@@ -321,7 +337,9 @@ describe('deployOrcad', () => {
     expect(vi.mocked(acquireInstallLock).mock.calls[0][1]).toBe(
       `/home/u/.orca-remote/orcad-${NEW_VERSION}`
     )
-    expect(vi.mocked(uploadRelayDirectory).mock.calls[0][2]).toContain(`orcad-${NEW_VERSION}`)
+    expect(vi.mocked(uploadRemoteInstallDirectory).mock.calls[0][2]).toContain(
+      `orcad-${NEW_VERSION}`
+    )
   })
 
   it.each([
@@ -350,7 +368,7 @@ describe('deployOrcad', () => {
       expect(ensureRemoteOrcadNodeRuntime).toHaveBeenCalledWith(
         expect.objectContaining({ target, slotDir: `/home/u/.orca-remote/orcad-${NEW_VERSION}` })
       )
-      expect(vi.mocked(uploadRelayDirectory).mock.invocationCallOrder[0]).toBeLessThan(
+      expect(vi.mocked(uploadRemoteInstallDirectory).mock.invocationCallOrder[0]).toBeLessThan(
         mockExec.mock.invocationCallOrder[chmod]
       )
       expect(mockExec.mock.invocationCallOrder[chmod]).toBeLessThan(
@@ -358,6 +376,28 @@ describe('deployOrcad', () => {
       )
     }
   )
+
+  it('skips only the pre-upload record and fence reads a WSL connect already made', async () => {
+    const reads = async (preRead?: OrcadDeployOptions['preRead']) => {
+      vi.clearAllMocks()
+      scriptHost({ activationRecord: '', readiness: { [NEW_VERSION]: readyLine({}) }, log: [] })
+      await deployOrcad(options(preRead ? { preRead } : {}))
+      const commands = mockExec.mock.calls.map(([, command]) => String(command))
+      const count = (needle: string) => commands.filter((c) => c.includes(needle)).length
+      return {
+        record: count("[ ! -e '/home/u/.orca-remote/orcad-active.json'"),
+        fence: count('LOCKED')
+      }
+    }
+    const plain = await reads()
+    const record = emptyOrcadActivationRecord()
+    expect(await reads({ record, fenceOpen: true })).toEqual({
+      record: plain.record - 1,
+      fence: plain.fence - 1
+    })
+    // A fence the connect saw held is probed again.
+    expect((await reads({ record, fenceOpen: false })).fence).toBe(plain.fence)
+  })
 
   it('does not run chmod on a Windows remote', async () => {
     scriptHost({ activationRecord: '', readiness: {}, log: [] })
@@ -372,7 +412,7 @@ describe('deployOrcad', () => {
       NEW_VERSION,
       `C:/Users/u/.orca-remote/orcad-${NEW_VERSION}`
     )
-    expect(uploadRelayDirectory).toHaveBeenCalledOnce()
+    expect(uploadRemoteInstallDirectory).toHaveBeenCalledOnce()
     expect(finalizeInstall).toHaveBeenCalledOnce()
     expect(mockExec.mock.calls.some(([, command]) => String(command).startsWith('chmod '))).toBe(
       false
@@ -408,10 +448,10 @@ describe('deployOrcad', () => {
       outcome: 'installed-not-activated',
       code
     })
-    expect(uploadRelayDirectory).not.toHaveBeenCalled()
+    expect(uploadRemoteInstallDirectory).not.toHaveBeenCalled()
   })
 
-  // BUG-21: a bare stale fence (a wake cut short) failed every update with "Recover it first".
+  // BUG-21: interrupted wakes left bare stale fences that blocked every later update.
   it('clears a stale fence no journal backs and goes on with the update', async () => {
     vi.mocked(isRelayInstallLockStale).mockResolvedValueOnce(true)
     let fenced = true
@@ -429,7 +469,7 @@ describe('deployOrcad', () => {
     expect(vi.mocked(acquireInstallLock).mock.calls[0]?.[3]).toMatchObject({
       allowStaleTakeover: true
     })
-    expect(uploadRelayDirectory).toHaveBeenCalled()
+    expect(uploadRemoteInstallDirectory).toHaveBeenCalled()
   })
 
   it('leaves an upload incomplete when the remote cannot make search executable', async () => {
@@ -530,6 +570,84 @@ describe('deployOrcad', () => {
     })
   })
 
+  it.each([
+    ['activates', 'mid-upload', (r: OrcadActivationRecord) => r],
+    ['activates then stops', 'mid-upload', withDeactivatedVersionCommitted],
+    ['activates', 'before the upload', (r: OrcadActivationRecord) => r],
+    ['activates then stops', 'before the upload', withDeactivatedVersionCommitted]
+  ])(
+    'applies the caller policy under the fence when another desktop %s a newer build %s',
+    async (_name, when, settle) => {
+      const newer = withActivatedVersion(
+        emptyOrcadActivationRecord(),
+        '0.3.0+cc01',
+        null,
+        new Date(1),
+        '1.6.0'
+      )
+      const script: HostScript = {
+        activationRecord: when === 'mid-upload' ? ACTIVE_OLD : JSON.stringify(settle(newer)),
+        readiness: { [NEW_VERSION]: readyLine({}) },
+        log: []
+      }
+      scriptHost(script)
+      vi.mocked(uploadRemoteInstallDirectory).mockImplementationOnce(async () => {
+        script.activationRecord = JSON.stringify(settle(newer))
+      })
+      const admitRecord = vi.fn((record: OrcadActivationRecord) =>
+        record.activeAppVersion === '1.6.0' ? 'host-newer' : null
+      )
+      expect(await deployOrcad(options({ admitRecord }))).toMatchObject({
+        outcome: 'installed-not-activated',
+        code: ORCAD_ACTIVATION_POLICY_REFUSED_CODE
+      })
+      expect(admitRecord).toHaveBeenCalledWith(
+        expect.objectContaining({ activeAppVersion: '1.6.0' }),
+        NEW_VERSION
+      )
+      expect(script.log).toEqual([])
+      expect(
+        vi
+          .mocked(writeAtomicOrcadRemoteRecord)
+          .mock.calls.some(([, path]) => path.includes('orcad-active.json'))
+      ).toBe(false)
+    }
+  )
+
+  it('treats the census as unverifiable when another incumbent lands mid-upload', async () => {
+    const script: HostScript = {
+      activationRecord: ACTIVE_OLD,
+      readiness: { [NEW_VERSION]: readyLine({}) },
+      log: []
+    }
+    scriptHost(script)
+    const counted = JSON.parse(ACTIVE_OLD)
+    // A same-app-line peer activation passes version admission; census binding must catch the changed incumbent.
+    const peer = withActivatedVersion(counted, '0.1.5+dd01', null, new Date(5), '1.4.0')
+    vi.mocked(uploadRemoteInstallDirectory).mockImplementationOnce(async () => {
+      script.activationRecord = JSON.stringify(peer)
+    })
+    expect(
+      await deployOrcad(options({ censusRecord: counted, admitRecord: () => null }))
+    ).toMatchObject({
+      outcome: 'installed-not-activated',
+      code: 'orcad_update_terminal_census_unavailable'
+    })
+    expect(script.log).toEqual([])
+  })
+
+  it('keeps the census when the incumbent under the fence is the one it counted', async () => {
+    const script: HostScript = {
+      activationRecord: ACTIVE_OLD,
+      readiness: { [NEW_VERSION]: readyLine({}) },
+      log: []
+    }
+    scriptHost(script)
+    expect(await deployOrcad(options({ censusRecord: JSON.parse(ACTIVE_OLD) }))).toMatchObject({
+      outcome: 'installed-and-activated'
+    })
+  })
+
   it('stops the incumbent before snapshotting, so SQLite WAL files are quiescent', async () => {
     const script: HostScript = {
       activationRecord: ACTIVE_OLD,
@@ -541,6 +659,23 @@ describe('deployOrcad', () => {
     expect(script.log.indexOf('snapshot')).toBeGreaterThan(-1)
     expect(script.log.indexOf('snapshot')).toBeLessThan(script.log.indexOf(`launch:${NEW_VERSION}`))
     expect(script.log.indexOf(`stop:${OLD_VERSION}`)).toBeLessThan(script.log.indexOf('snapshot'))
+  })
+
+  it('never recounts an incumbent other than the one it counted', async () => {
+    const script: HostScript = {
+      activationRecord: ACTIVE_OLD,
+      readiness: { [NEW_VERSION]: readyLine({}) },
+      log: []
+    }
+    scriptHost(script)
+    const counted = JSON.parse(ACTIVE_OLD)
+    const peer = withActivatedVersion(counted, '0.1.5+dd01', null, new Date(5), '1.4.0')
+    vi.mocked(uploadRemoteInstallDirectory).mockImplementationOnce(async () => {
+      script.activationRecord = JSON.stringify(peer)
+    })
+    const recountCensus = vi.fn()
+    await deployOrcad(options({ censusRecord: counted, admitRecord: () => null, recountCensus }))
+    expect(recountCensus).not.toHaveBeenCalled()
   })
 
   it('installs but does not activate when terminals are running', async () => {
@@ -557,8 +692,8 @@ describe('deployOrcad', () => {
       outcome: 'installed-not-activated',
       code: 'orcad_update_terminals_running'
     })
-    // The bytes landed; nothing was stopped, launched or snapshotted.
-    expect(vi.mocked(uploadRelayDirectory)).toHaveBeenCalled()
+    // Uploading bytes must not mutate a refused incumbent.
+    expect(vi.mocked(uploadRemoteInstallDirectory)).toHaveBeenCalled()
     expect(script.log).toEqual([])
   })
 
@@ -572,7 +707,7 @@ describe('deployOrcad', () => {
     scriptHost(script)
     const result = await deployOrcad(options())
     expect(result).toMatchObject({ code: 'orcad_activation_daemon_degraded' })
-    // The error carries why the candidate failed, not only where its log is.
+    // Report the candidate failure itself, not just its log path.
     expect(result).toMatchObject({
       reason: expect.stringMatching(/Last lines of orcad\.log:\ndaemon: starting\n.*EACCES$/u)
     })
@@ -648,11 +783,13 @@ describe('deployOrcad', () => {
       activationRecord: ACTIVE_OLD,
       readiness: { [OLD_VERSION]: readyLine({ version: OLD_VERSION }) },
       log: [],
-      snapshotResult: 'tar: write failed'
+      snapshotResult: 'SNAPSHOT_FAILURE tar: Cannot write: No space left on device\nFAILED'
     }
     scriptHost(script)
 
-    await expect(deployOrcad(options())).rejects.toThrow('incumbent was stopped')
+    await expect(deployOrcad(options())).rejects.toThrow(
+      /activating \S+: tar: Cannot write: No space left on device\. .*incumbent was stopped/u
+    )
     expect(script.log).toEqual([
       'preflight',
       `stop:${OLD_VERSION}`,
@@ -706,6 +843,6 @@ describe('deployOrcad', () => {
     }
     scriptHost(script)
     await expect(deployOrcad(options())).rejects.toThrow('activation record')
-    expect(vi.mocked(uploadRelayDirectory)).not.toHaveBeenCalled()
+    expect(vi.mocked(uploadRemoteInstallDirectory)).not.toHaveBeenCalled()
   })
 })

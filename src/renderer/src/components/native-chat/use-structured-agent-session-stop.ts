@@ -1,4 +1,4 @@
-import type { RuntimeClientTarget } from '@/runtime/runtime-rpc-client'
+import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import { useStructuredAgentSessionHostStopsConversation } from '@/runtime/structured-agent-session-host-capability'
 import { agentStopDisplayStatus } from '../../../../shared/agent-stop-display-status'
 import type { StructuredAgentSessionMutate } from './use-structured-agent-session-mutate'
@@ -20,8 +20,7 @@ export function useStructuredAgentSessionStop(input: {
   stopping: boolean
   /** This client's Stop request is in flight. */
   pressed: boolean
-  /** A host that takes a Stop naming no turn gets Stop from the send until the work settles; every
-   *  Stop before a turn opens needs that form. An older host can stop only a turn it has opened. */
+  /** Untargeted Stop works before a turn opens; older hosts can stop only opened, named turns. */
   stopsConversation: boolean
   stop: (turnId: string | null, stopSends: () => void) => Promise<unknown>
 } {
@@ -39,8 +38,7 @@ export function useStructuredAgentSessionStop(input: {
     pressed: press.pressed,
     stopsConversation,
     stop: (turnId, stopSends) => {
-      // The chat's own send goes no further if it has not gone out yet. Host-held cards are
-      // never withdrawn by a Stop: the host pauses them, visible on every device, until acted on.
+      // Withdraw local unsent work; retain host-held cards for the host to pause visibly across devices.
       if (stopsConversation) {
         stopSends()
         return press.track(() => mutate('agentSession.cancel', 'agentSession.cancel', {}))

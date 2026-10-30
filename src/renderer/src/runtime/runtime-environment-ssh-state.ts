@@ -9,16 +9,13 @@ import {
   sshTargetLabelsEqual
 } from '@/store/slices/ssh-target-cleanup'
 import { sanitizeSshTargetGeneration } from '../../../shared/ssh-target-generation'
+import { forEachWithConcurrency } from '../../../shared/map-with-concurrency'
 
-/**
- * Mirrors a remote Orca server's own SSH targets into that environment's
- * per-environment SSH bucket (store slice `runtime-environment-ssh`), so a
- * desktop client attached to the server gets live reconnect overlays for the
- * server's SSH-backed workspaces (STA-1468, desktop topology). Never touches
- * the local SSH maps.
- */
+/** Mirror server-owned SSH state into only its per-environment bucket so paired desktops get reconnect overlays (STA-1468); local SSH maps remain independent. */
 
 const SSH_RPC_TIMEOUT_MS = 15_000
+// Decorative reads share the host’s 8-slot foreground lane; bound concurrency to cut N×15s stalls without starving interactions.
+export const SSH_STATE_READ_CONCURRENCY = 3
 
 function environmentTarget(environmentId: string): { kind: 'environment'; environmentId: string } {
   return { kind: 'environment', environmentId }
@@ -86,7 +83,7 @@ async function fetchEnvironmentSshConnectionStates(
   targets: readonly SshTargetSummary[],
   generation: number
 ): Promise<void> {
-  for (const target of targets) {
+  await forEachWithConcurrency(targets, SSH_STATE_READ_CONCURRENCY, async (target) => {
     if (generation !== getEnvironmentSshStateGeneration(environmentId)) {
       return
     }
@@ -106,7 +103,7 @@ async function fetchEnvironmentSshConnectionStates(
     } catch {
       // Why: a timeout or unsupported RPC is not authoritative evidence that the HUB's SSH link disconnected.
     }
-  }
+  })
 }
 
 type SshRefreshKind = 'metadata' | 'full'
@@ -212,16 +209,7 @@ function startEnvironmentSshRefresh(
   return entry.promise
 }
 
-/**
- * Fetches the environment's SSH targets, removal tombstones, and per-target
- * connection states into its bucket. Single-flight per environment; a `force`
- * request during an in-flight run schedules exactly one follow-up run so a
- * refresh triggered by a just-added target can't be swallowed by a stale
- * in-flight fetch.
- *
- * Hosts without the ssh.* RPC methods fail here and leave the bucket
- * un-hydrated — reads then resolve to "unknown", never to destructive UI.
- */
+/** Single-flight hydrate targets/tombstones/states. force during flight queues one follow-up so newly added targets cannot be lost behind stale fetches. Unsupported hosts stay unhydrated/unknown, never destructive. */
 export async function hydrateRuntimeEnvironmentSshState(
   environmentId: string,
   options: { force?: boolean } = {}
@@ -255,14 +243,7 @@ export async function refreshRuntimeEnvironmentSshTargetMetadata(
   return startEnvironmentSshRefresh(environmentId, bucket?.targetsHydrated ? 'metadata' : 'full')
 }
 
-/**
- * Applies a `sshStateChanged` runtime client event from `environmentId` to
- * that environment's bucket. For a target the bucket doesn't know yet
- * (added after hydration, or a disconnect racing a removal), the authoritative
- * target list is re-fetched instead of trusting the event: the forced
- * hydration also re-reads the state, so a removed target's trailing event
- * can't resurrect it.
- */
+/** Known-target events update that environment only. Unknown targets force authoritative membership/state hydration, preventing trailing removed-target events from resurrecting them. */
 export function applyRuntimeEnvironmentSshStateChanged(
   environmentId: string,
   targetId: string,
@@ -308,10 +289,7 @@ export async function connectRuntimeEnvironmentSshTarget(
   return admittedState
 }
 
-/** Resyncs the environment's target metadata after a failed connect so a
- * stale overlay converges to the ghost/re-adopted state (STA-1468). Full
- * hydration, not metadata alone: a host re-added under a new target id must
- * land with a connection state or its chip and mutation gate stay dead. */
+/** After failed connect, fully hydrate metadata AND state so ghost/re-adopted hosts converge; metadata alone leaves new target IDs’ chips/mutation gates dead (STA-1468). */
 export async function resyncRuntimeEnvironmentSshTargets(environmentId: string): Promise<void> {
   await hydrateRuntimeEnvironmentSshState(environmentId, { force: true })
 }

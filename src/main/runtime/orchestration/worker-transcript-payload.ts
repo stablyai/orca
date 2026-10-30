@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto'
 import type { NativeChatBlock, NativeChatMessage } from '../../../shared/native-chat-types'
 import { boundSubagentEntryId } from '../../native-chat/subagent-entry-id-bounds'
 import { boundWorkerTranscriptActivityBlock } from './worker-transcript-activity-block-bounds'
+import { replaceDispatchCapabilities } from './worker-terminal-redaction'
 
 export const DEFAULT_WORKER_TRANSCRIPT_MESSAGE_LIMIT = 40
 export const MAX_WORKER_TRANSCRIPT_MESSAGE_LIMIT = 50
@@ -9,14 +10,10 @@ const MAX_WORKER_TRANSCRIPT_BLOCKS = 6
 const MAX_WORKER_TRANSCRIPT_BLOCK_CHARS = 1_200
 const MAX_WORKER_TRANSCRIPT_INPUT_ITEMS = 20
 const MAX_WORKER_TRANSCRIPT_INPUT_NODES = 100
-// Message ids, turn ids, tool-call names and image urls, not only roster fields.
-// Equal to `MAX_SUBAGENT_FIELD_CHARS` today, kept a separate literal so a
-// roster-motivated change to that cap cannot silently move this one.
+// Bound all metadata independently of roster limits so roster tuning cannot silently widen other fields.
 const MAX_WORKER_TRANSCRIPT_METADATA_CHARS = 512
 const MAX_WORKER_TRANSCRIPT_RESPONSE_BYTES = 512 * 1024
 const TRUNCATION_MARKER = '\n… (truncated)'
-const DISPATCH_CAPABILITY_PATTERN = /\bdcap_[A-Za-z0-9_-]{20,}\b/g
-const DISPATCH_CAPABILITY_REDACTION = '[dispatch capability redacted]'
 
 type TranscriptBoundState = {
   warnings: Set<string>
@@ -28,22 +25,6 @@ export function clampWorkerTranscriptLimit(limit: number | undefined): number {
     return DEFAULT_WORKER_TRANSCRIPT_MESSAGE_LIMIT
   }
   return Math.min(Math.floor(limit!), MAX_WORKER_TRANSCRIPT_MESSAGE_LIMIT)
-}
-
-export function redactWorkerTerminalLines(lines: readonly string[]): {
-  lines: string[]
-  warnings: string[]
-} {
-  let redacted = false
-  const bounded = lines.map((line) => {
-    const result = replaceDispatchCapabilities(line)
-    redacted ||= result.redacted
-    return result.value
-  })
-  return {
-    lines: bounded,
-    warnings: redacted ? ['Dispatch capability tokens were redacted from terminal output.'] : []
-  }
 }
 
 export function boundWorkerTranscriptMessages(
@@ -70,13 +51,7 @@ export function boundWorkerTranscriptMessages(
   return { messages: bounded, limited: state.clipped, warnings: [...state.warnings] }
 }
 
-/**
- * The same per-message bounding, accumulated NEWEST-first.
- *
- * `boundWorkerTranscriptMessages` keeps the head, which is right for a forward page and wrong for
- * an archive: the evidence anyone reads a released worker back for is its final answer, so the
- * tail is what must survive the budget.
- */
+/** Apply message bounds newest-first for archives; forward-page head bounds would lose the worker's final answer. */
 export function boundWorkerTranscriptTail(
   messages: readonly NativeChatMessage[],
   maxBytes: number
@@ -139,7 +114,11 @@ function boundBlock(block: NativeChatBlock, state: TranscriptBoundState): Native
       input: boundToolInput(block.input, budget, 0, state)
     }
   }
-  if (block.type === 'subagent-group' || block.type === 'background-task') {
+  if (
+    block.type === 'subagent-group' ||
+    block.type === 'subagent' ||
+    block.type === 'background-task'
+  ) {
     return boundWorkerTranscriptActivityBlock(block, {
       clipMetadata: (value) => clipMetadata(value, state),
       clipText: (value) => clipText(value, state),
@@ -182,9 +161,7 @@ function isLocalFileLocator(value: string): boolean {
   )
 }
 
-/** A roster entry's id is the roster KEY, so it is redacted like other metadata
- *  but bounded with a digest rather than clipped: two ids sharing a 512-char
- *  head must not collapse onto one entry. */
+/** Digest oversized redacted roster keys instead of clipping, which could merge distinct entries. */
 function boundEntryId(value: string, state: TranscriptBoundState): string {
   const redacted = redactSensitiveText(value, state.warnings)
   const bounded = boundSubagentEntryId(redacted)
@@ -282,16 +259,4 @@ function redactSensitiveText(value: string, warnings: Set<string>): string {
   }
   warnings.add('Dispatch capability tokens were redacted from transcript output.')
   return result.value
-}
-
-function replaceDispatchCapabilities(value: string): { value: string; redacted: boolean } {
-  DISPATCH_CAPABILITY_PATTERN.lastIndex = 0
-  const redacted = DISPATCH_CAPABILITY_PATTERN.test(value)
-  DISPATCH_CAPABILITY_PATTERN.lastIndex = 0
-  return {
-    value: redacted
-      ? value.replace(DISPATCH_CAPABILITY_PATTERN, DISPATCH_CAPABILITY_REDACTION)
-      : value,
-    redacted
-  }
 }

@@ -1,7 +1,4 @@
-// Why: one place derives the path-free analytics shape for the changed-on-disk
-// conflict flow (issue #7265), so the three marking sites and the banner
-// actions cannot drift on enum values. Measures false-banner rates per
-// transport and which resolution users actually pick.
+// Share path-free conflict enums across marking and banner actions so false-banner rates remain comparable by transport.
 import { track } from '@/lib/telemetry'
 import { getConnectionIdForFile } from '@/lib/connection-context'
 import type { OpenFile } from '@/store/slices/editor'
@@ -51,9 +48,7 @@ export function trackExternalChangeConflictAction(
   track('editor_external_change_conflict_action', {
     action,
     surface: conflictSurface(file),
-    // Why: shown-vs-action cross-tabs per transport are the point of the
-    // metric — false-banner detection needs to see WHICH transports' banners
-    // users dismiss versus act on.
+    // Keep transport on actions too so dismissal/resolution can be compared against shown-banner rates.
     transport: conflictTransport(
       getConnectionIdForFile(file.worktreeId, file.filePath) ?? undefined,
       file.runtimeEnvironmentId

@@ -30,6 +30,8 @@ export type ProfileStateWriterErrorData = {
   expectedRevision?: number
   actualRevision?: number
   domain?: string | null
+  /** Preserve SQLite causes that the outer open-error class cannot identify. */
+  cause?: { code?: string; errcode?: number; message: string }
 }
 export type ProfileStateWriterResponse =
   | { id: number; ok: true; revision: number; exportedRevision?: number | null }
@@ -97,7 +99,17 @@ function isErrorData(value: unknown): value is ProfileStateWriterErrorData {
     (value.outcome === 'known-failure' || value.outcome === 'indeterminate') &&
     (value.expectedRevision === undefined || isProfileStateRevision(value.expectedRevision)) &&
     (value.actualRevision === undefined || isProfileStateRevision(value.actualRevision)) &&
-    (value.domain === undefined || value.domain === null || typeof value.domain === 'string')
+    (value.domain === undefined || value.domain === null || typeof value.domain === 'string') &&
+    (value.cause === undefined || isErrorCauseData(value.cause))
+  )
+}
+
+function isErrorCauseData(value: unknown): boolean {
+  return (
+    isRecord(value) &&
+    typeof value.message === 'string' &&
+    (value.code === undefined || typeof value.code === 'string') &&
+    (value.errcode === undefined || typeof value.errcode === 'number')
   )
 }
 

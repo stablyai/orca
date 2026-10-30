@@ -2,9 +2,6 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
-import { getRemoteHostPlatform } from '../ssh/ssh-remote-platform'
-import { MemoryRemoteProvider } from './remote-session-scanner-test-fixtures'
-import { scanRemoteAiVaultSessions } from './remote-session-scanner'
 import { isolatedScanRoots } from './session-scanner-test-fixtures'
 import { parseDevinSessionContent } from './session-scanner-devin-parser'
 import { dedupeScannedSessions, ScannedSessionCollection } from './session-root-dedup'
@@ -44,32 +41,6 @@ it('lists a session in both default directories once and still fills the scan li
   const unlimited = await scanAiVaultSessions({ ...options, unlimited: true })
   expect(unlimited.sessions.map((session) => session.sessionId)).toEqual(['same', 'other'])
 })
-
-it.each(['win32-x64', 'linux-x64'] as const)(
-  'deduplicates both remote directories on %s',
-  async (platform) => {
-    const provider = new MemoryRemoteProvider()
-    const windows = platform === 'win32-x64'
-    const home = windows ? 'C:/Users/ada' : '/home/ada'
-    const cliDir = `${home}/${windows ? 'AppData/Roaming' : '.local/share'}/devin/cli`
-    provider.addFile(`${cliDir}/transcripts/same.json`, transcript('same'), 10)
-    provider.addFile(`${cliDir}/agent_logs/devin-same.json`, transcript('same'), 20)
-    provider.addFile(
-      `${cliDir}/transcripts/other.json`,
-      transcript('other', '2026-09-18T00:00:00Z'),
-      5
-    )
-    const result = await scanRemoteAiVaultSessions({
-      provider,
-      remoteHome: home,
-      executionHostId: 'ssh:devin',
-      hostPlatform: getRemoteHostPlatform(platform),
-      limit: 2
-    })
-    expect(result.sessions.map((session) => session.sessionId)).toEqual(['same', 'other'])
-    expect(result.sessions[0].filePath).toBe(`${cliDir}/agent_logs/devin-same.json`)
-  }
-)
 
 function session(path: string) {
   const parsed = parseDevinSessionContent(

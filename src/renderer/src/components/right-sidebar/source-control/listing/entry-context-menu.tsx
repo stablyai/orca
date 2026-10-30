@@ -1,4 +1,4 @@
-import React, { useCallback } from 'react'
+import React, { useCallback, useMemo } from 'react'
 import { Copy, ExternalLink, Eye, FolderOpen } from 'lucide-react'
 import {
   ContextMenu,
@@ -10,16 +10,25 @@ import {
   ContextMenuSubTrigger,
   ContextMenuTrigger
 } from '@/components/ui/context-menu'
+import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'
+import { getWorkspaceEditorSshHost } from '@/lib/workspace-editor-ssh-target'
 import { OpenInApplicationIcon } from '@/lib/open-in-app-catalog'
 import { translate } from '@/i18n/i18n'
 import { LocalOnlyMenuHint } from '@/components/local-only-menu-hint'
 import {
   getRevealInFileManagerLabel,
-  isRevealInFileManagerBlocked,
+  getWorkspaceFileRevealOwner,
   revealInFileManager
 } from '@/lib/reveal-in-file-manager'
-import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
+import {
+  getRouteForLocalPathOpenOwner,
+  isRevealOrEditorOpenBlocked
+} from '@/lib/local-path-open-guard'
+import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/worktree-runtime-owner'
+import { formatClipboardFilePath } from '@/lib/clipboard-file-path'
+import type { ConflictResolution } from '../../../../../../shared/source-control-entry-actions'
+import { CONFLICT_RESOLUTION_ICONS, getLocalizedConflictResolutionLabel } from './conflict-label'
 import { NO_OPEN_IN_APPLICATIONS } from '@/lib/open-in-application-selection'
 import {
   getOpenInEntryAvailability,
@@ -35,6 +44,8 @@ type SourceControlEntryContextMenuProps = {
   hasWorkingTreeFile: boolean
   connectionId?: string | null
   onView?: () => void
+  conflictResolutions?: readonly ConflictResolution[]
+  onResolveConflict?: (resolution: ConflictResolution) => void
   onRevealInExplorer: (worktreeId: string, absolutePath: string) => void
   onOpenChange?: (open: boolean) => void
   children: React.ReactNode
@@ -47,6 +58,8 @@ export function SourceControlEntryContextMenu({
   hasWorkingTreeFile,
   connectionId,
   onView,
+  conflictResolutions,
+  onResolveConflict,
   onRevealInExplorer,
   onOpenChange,
   children
@@ -54,23 +67,25 @@ export function SourceControlEntryContextMenu({
   const openInApplications = useAppStore(
     (s) => s.settings?.openInApplications ?? NO_OPEN_IN_APPLICATIONS
   )
-  const settings = useAppStore((s) => s.settings)
-  // Why: a repo can belong to a runtime other than the focused one, and the OS reveal
-  // cannot tell that host's path from a local one of the same name.
+  // Resolve the repo owner; OS reveal cannot distinguish another host's path from an identically named local path.
   const runtimeEnvironmentId = useAppStore((s) =>
-    getRuntimeEnvironmentIdForWorktree(s, currentWorktreeId)
+    runtimeEnvironmentIdOrLocalUnlessTwin(s, currentWorktreeId)
   )
-  const revealBlocked = isRevealInFileManagerBlocked(settings, {
-    connectionId,
-    runtimeEnvironmentId
-  })
+  const revealOwner = useAppStore((s) =>
+    getWorkspaceFileRevealOwner(s, currentWorktreeId, { connectionId, runtimeEnvironmentId })
+  )
+  const revealBlocked = isRevealOrEditorOpenBlocked(revealOwner)
+  const openInRoute = useMemo(() => getRouteForLocalPathOpenOwner(revealOwner), [revealOwner])
+  const runtimeSshHost = useAppStore(
+    useShallow((s) => getWorkspaceEditorSshHost(s, { workspaceId: currentWorktreeId }))
+  )
 
   const handleCopyPath = useCallback(() => {
     if (!absolutePath) {
       return
     }
-    void window.api.ui.writeClipboardText(absolutePath)
-  }, [absolutePath])
+    void window.api.ui.writeClipboardText(formatClipboardFilePath(absolutePath, revealOwner))
+  }, [absolutePath, revealOwner])
 
   const handleCopyRelativePath = useCallback(() => {
     if (!relativePath) {
@@ -88,9 +103,9 @@ export function SourceControlEntryContextMenu({
 
   const handleRevealInFileManager = useCallback(() => {
     if (absolutePath) {
-      void revealInFileManager(absolutePath)
+      void revealInFileManager(absolutePath, revealOwner)
     }
-  }, [absolutePath])
+  }, [absolutePath, revealOwner])
 
   const handleOpenInApplication = useCallback(
     (command: string) => {
@@ -100,11 +115,12 @@ export function SourceControlEntryContextMenu({
       void openWorktreePath({
         target: 'external-editor',
         worktreePath: absolutePath,
-        connectionId,
+        ...openInRoute,
+        workspace: { workspaceId: currentWorktreeId },
         command
       })
     },
-    [absolutePath, connectionId]
+    [absolutePath, currentWorktreeId, openInRoute]
   )
 
   return (
@@ -118,6 +134,20 @@ export function SourceControlEntryContextMenu({
             'View'
           )}
         </ContextMenuItem>
+        {onResolveConflict && conflictResolutions && conflictResolutions.length > 0 ? (
+          <>
+            <ContextMenuSeparator />
+            {conflictResolutions.map((resolution) => {
+              const Icon = CONFLICT_RESOLUTION_ICONS[resolution]
+              return (
+                <ContextMenuItem key={resolution} onSelect={() => onResolveConflict(resolution)}>
+                  <Icon className="size-3.5" />
+                  {getLocalizedConflictResolutionLabel(resolution)}
+                </ContextMenuItem>
+              )
+            })}
+          </>
+        ) : null}
         <ContextMenuSeparator />
         <ContextMenuItem onSelect={handleCopyPath} disabled={!absolutePath}>
           <Copy className="size-3.5" />
@@ -140,8 +170,10 @@ export function SourceControlEntryContextMenu({
             {openInApplications.map((application) => {
               const availability = getOpenInEntryAvailability(
                 { ...application, target: 'external-editor' },
-                settings,
-                connectionId
+                openInRoute.connectionId,
+                openInRoute.runtimeEnvironmentId,
+                openInRoute.ownerUnresolved,
+                runtimeSshHost
               )
               return (
                 <ContextMenuItem

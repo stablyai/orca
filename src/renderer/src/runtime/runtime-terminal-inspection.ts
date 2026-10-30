@@ -1,14 +1,13 @@
-import type { GlobalSettings } from '../../../shared/global-settings-types'
 import type { RuntimeTerminalSend } from '../../../shared/runtime-types'
 import { isTerminalInputTooLargeWithDeferredMeasurement } from '../../../shared/terminal-input'
 import { recordRuntimeTerminalInputForPtyId } from './runtime-terminal-input-recording'
-export { recordRuntimeTerminalInputForPtyId } from './runtime-terminal-input-recording'
-import { callRuntimeRpc, getActiveRuntimeTarget } from './runtime-rpc-client'
+import { callRuntimeRpc } from './runtime-rpc-client'
 import {
   getRemoteRuntimePtyEnvironmentId,
-  getRemoteRuntimeTerminalHandle
+  getRemoteRuntimePtyOwner
 } from './runtime-terminal-stream'
 import { parseAppSshPtyId } from '../../../shared/ssh-pty-id'
+import { isRemoteRuntimePtyId } from '../../../shared/remote-runtime/remote-runtime-pty-id'
 import {
   classifyTerminalProcessInspectionFailure,
   clientOnlyUnverifiableInspection,
@@ -16,22 +15,13 @@ import {
   type TerminalProcessInspection
 } from '../../../shared/terminal-process-inspection'
 
-export type {
-  ClientOnlyUnverifiableInspection,
-  ClientOnlyUnverifiableReason
-} from '../../../shared/terminal-process-inspection'
 import type { TerminalInputKind } from '../../../shared/terminal-input-kind'
 
 export type RuntimeTerminalProcessInspection = TerminalProcessInspection
 
-const REMOTE_PTY_ID_PREFIX = 'remote:'
 const DESKTOP_RUNTIME_CLIENT = { id: 'orca-desktop', type: 'desktop' } as const
 function isRuntimePtyInputTooLarge(data: string): boolean | Promise<boolean> {
   return isTerminalInputTooLargeWithDeferredMeasurement(data)
-}
-
-export function isRemoteRuntimePtyId(ptyId: string): boolean {
-  return ptyId.startsWith(REMOTE_PTY_ID_PREFIX)
 }
 
 function isRemoteInspectionPtyId(ptyId: string): boolean {
@@ -51,13 +41,11 @@ function normalizeInspectionResult(
       typeof result.reason === 'string' ? result.reason : 'transport_loss'
     )
   }
-  // An old host has no evidence member. Its compatibility process name is not
-  // an observation and must never reach remote identity consumers.
+  // Old-host compatibility process names are not observed evidence; exclude them from remote identity.
   if (remote && result.foregroundProcessEvidence === undefined) {
     return clientOnlyUnverifiableInspection('old_host')
   }
-  // Older main/preload pairs may still return the removed boolean. Normalize it
-  // at the boundary while those peers are being upgraded.
+  // Normalize removed booleans from older main/preload pairs during upgrades.
   if (
     result &&
     typeof result === 'object' &&
@@ -70,17 +58,12 @@ function normalizeInspectionResult(
 }
 
 export async function inspectRuntimeTerminalProcess(
-  settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined,
   ptyId: string,
   options?: { expectedIncarnationId?: string; scanChildProcesses?: boolean; steadyState?: boolean }
 ): Promise<RuntimeTerminalProcessInspection> {
-  const ownerEnvironmentId = getRemoteRuntimePtyEnvironmentId(ptyId)
-  const target = ownerEnvironmentId
-    ? ({ kind: 'environment', environmentId: ownerEnvironmentId } as const)
-    : getActiveRuntimeTarget(settings)
-  const terminal = getRemoteRuntimeTerminalHandle(ptyId)
+  const owner = getRemoteRuntimePtyOwner(ptyId)
   const remote = isRemoteInspectionPtyId(ptyId)
-  if (target.kind !== 'environment' || !terminal) {
+  if (!owner) {
     try {
       const result = await (options
         ? window.api.pty.inspectProcess(ptyId, options)
@@ -97,16 +80,14 @@ export async function inspectRuntimeTerminalProcess(
 
   try {
     const result = await callRuntimeRpc<{ process: RuntimeTerminalProcessInspection }>(
-      target,
+      owner.target,
       'terminal.inspectProcess',
       {
-        terminal,
+        terminal: owner.terminal,
         ...(options?.expectedIncarnationId
           ? { expectedIncarnationId: options.expectedIncarnationId }
           : {}),
-        // Why forwarded: the close guards pass this so the host pays for a real child-process read.
-        // Dropped here, the host declines to scan and answers `unverifiable`, which the guard reads
-        // as running work -- a confirmation dialog on every idle close of a remote Windows pane.
+        // Close guards request real process scans; dropping this causes unverifiable and confirmation on every idle remote Windows close.
         ...(options?.scanChildProcesses === true ? { scanChildProcesses: true } : {})
       },
       { timeoutMs: 15_000 }
@@ -129,14 +110,10 @@ export async function inspectRuntimeTerminalProcess(
  * must read as "no new evidence", never as a shell confirmation.
  */
 export async function confirmRuntimeTerminalForegroundProcess(
-  settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined,
   ptyId: string
 ): Promise<string | null> {
-  const ownerEnvironmentId = getRemoteRuntimePtyEnvironmentId(ptyId)
-  const target = ownerEnvironmentId
-    ? ({ kind: 'environment', environmentId: ownerEnvironmentId } as const)
-    : getActiveRuntimeTarget(settings)
-  if (target.kind === 'environment' && getRemoteRuntimeTerminalHandle(ptyId)) {
+  // Why any remote id: an id without an owner segment still runs off this host, never locally.
+  if (isRemoteRuntimePtyId(ptyId)) {
     return null
   }
   const confirmForegroundProcess = window.api.pty.confirmForegroundProcess
@@ -148,7 +125,6 @@ export async function confirmRuntimeTerminalForegroundProcess(
 }
 
 export function sendRuntimePtyInput(
-  settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined,
   ptyId: string,
   data: string,
   inputKind: TerminalInputKind
@@ -158,43 +134,36 @@ export function sendRuntimePtyInput(
     return false
   }
   if (tooLarge !== false) {
-    // Why: this is a fire-and-forget path, so accepted paste-sized input must
-    // yield before validation and then dispatch without blocking the renderer.
+    // Yield before validating/dispatching fire-and-forget paste-sized input to avoid blocking renderer.
     void tooLarge
       .then((resolvedTooLarge) => {
         if (!resolvedTooLarge) {
-          sendRuntimePtyInputWithinLimit(settings, ptyId, data, inputKind)
+          sendRuntimePtyInputWithinLimit(ptyId, data, inputKind)
         }
       })
       .catch(() => {})
     return true
   }
-  return sendRuntimePtyInputWithinLimit(settings, ptyId, data, inputKind)
+  return sendRuntimePtyInputWithinLimit(ptyId, data, inputKind)
 }
 
-// Why the kind reaches only the local write: terminal.send has no launch kind, and its query-reply
-// kind is for mobile clients, so the host classifies a desktop's environment write by its bytes.
+// Only local writes accept launch kind; terminal.send’s query-reply kind is mobile-only, so host classifies desktop remote writes by bytes.
 function sendRuntimePtyInputWithinLimit(
-  settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined,
   ptyId: string,
   data: string,
   inputKind: TerminalInputKind
 ): boolean {
-  const ownerEnvironmentId = getRemoteRuntimePtyEnvironmentId(ptyId)
-  const target = ownerEnvironmentId
-    ? ({ kind: 'environment', environmentId: ownerEnvironmentId } as const)
-    : getActiveRuntimeTarget(settings)
-  const terminal = getRemoteRuntimeTerminalHandle(ptyId)
-  if (target.kind !== 'environment' || !terminal) {
+  const owner = getRemoteRuntimePtyOwner(ptyId)
+  if (!owner) {
     window.api.pty.write(ptyId, data, inputKind)
     recordRuntimeTerminalInputForPtyId(ptyId)
     return true
   }
 
   void callRuntimeRpc<{ send: RuntimeTerminalSend }>(
-    target,
+    owner.target,
     'terminal.send',
-    { terminal, text: data, client: DESKTOP_RUNTIME_CLIENT },
+    { terminal: owner.terminal, text: data, client: DESKTOP_RUNTIME_CLIENT },
     { timeoutMs: 15_000 }
   )
     .then((result) => {
@@ -203,10 +172,7 @@ function sendRuntimePtyInputWithinLimit(
       }
     })
     .catch(() => {
-      // Why: web session snapshots can retire a remote handle while xterm still
-      // flushes a final input event. The next host snapshot will reattach.
+      // Mirror can retire handles while xterm flushes final input; next host snapshot reattaches.
     })
   return true
 }
-
-export { sendRuntimePtyInputVerified } from './runtime-terminal-verified-input'

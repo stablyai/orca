@@ -1,4 +1,5 @@
 import type { ConnectionPresentationModel } from './use-mobile-tasks-connection-presentation'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import {
   SafeAreaView,
   View,
@@ -7,8 +8,10 @@ import {
   AlertTriangle,
   colors,
   ActionSheetModal,
+  BottomDrawerModalHost,
   GitBranch,
-  ConfirmModal
+  ConfirmModal,
+  useMobileColorScheme
 } from './mobile-tasks-dependencies'
 import { styles } from './mobile-tasks-legacy-styles'
 import {
@@ -38,6 +41,8 @@ import {
   renderMobileTasksGitHubProjectFieldsPicker,
   renderMobileTasksGitLabViewPicker,
   renderMobileTasksGitLabFilterPicker,
+  renderMobileTasksJiraFilterPicker,
+  renderMobileTasksJiraSitePicker,
   renderMobileTasksLinearFilterPicker,
   renderMobileTasksLinearWorkspacePicker,
   renderMobileTasksLinearTeamPicker,
@@ -77,6 +82,8 @@ import {
 import { renderMobileTasksItemDetailDrawer } from './mobile-tasks-item-detail-drawer'
 
 export function MobileTasksLegacySurface({ model }: { model: ConnectionPresentationModel }) {
+  const colorScheme = useMobileColorScheme()
+  const t = useMobileTranslation()
   const {
     error,
     githubMode,
@@ -121,8 +128,11 @@ export function MobileTasksLegacySurface({ model }: { model: ConnectionPresentat
               style={styles.sourceNoticeBanner}
             >
               <Text style={styles.sourceNoticeText}>
-                Preferred issue source upstream is unavailable for {fallback.repoLabel}. Using
-                origin.
+                {t(
+                  'tasks.legacySurface.sourceFallback',
+                  'Preferred issue source upstream is unavailable for {{repo}}. Using origin.',
+                  { repo: fallback.repoLabel }
+                )}
               </Text>
             </View>
           ))
@@ -131,6 +141,11 @@ export function MobileTasksLegacySurface({ model }: { model: ConnectionPresentat
       {!error && provider === 'github' && githubMode === 'items'
         ? githubSourceErrors.map((sourceError) => {
             const isRetrying = retryingGithubSourceRepoPaths.has(sourceError.repoPath)
+            const sourceErrorParts = t(
+              'tasks.legacySurface.loadIssuesFailed',
+              "Couldn't load issues from {{source}}.",
+              { source: '\uFFFC' }
+            ).split('\uFFFC')
             return (
               <View
                 key={`github-source-error:${sourceError.repoId}:${sourceError.source.owner}/${sourceError.source.repo}`}
@@ -138,11 +153,11 @@ export function MobileTasksLegacySurface({ model }: { model: ConnectionPresentat
               >
                 <View style={styles.sourceErrorCopy}>
                   <Text style={styles.sourceErrorText}>
-                    Couldn't load issues from{' '}
+                    {sourceErrorParts[0]}
                     <Text style={styles.sourceErrorSlug}>
                       {sourceError.source.owner}/{sourceError.source.repo}
                     </Text>
-                    .
+                    {sourceErrorParts.slice(1).join('')}
                   </Text>
                   <Text style={styles.sourceErrorMessage} numberOfLines={2}>
                     {sourceError.message}
@@ -150,13 +165,19 @@ export function MobileTasksLegacySurface({ model }: { model: ConnectionPresentat
                 </View>
                 <Pressable
                   accessibilityRole="button"
-                  accessibilityLabel={`Retry loading issues from ${sourceError.source.owner}/${sourceError.source.repo}`}
+                  accessibilityLabel={t(
+                    'tasks.legacySurface.retryLoadingIssues',
+                    'Retry loading issues from {{source}}',
+                    { source: `${sourceError.source.owner}/${sourceError.source.repo}` }
+                  )}
                   style={styles.sourceErrorRetry}
                   disabled={loading || isRetrying}
                   onPress={() => void retryGitHubIssueSourceFetch(sourceError.repoPath)}
                 >
                   <Text style={styles.sourceErrorRetryText}>
-                    {isRetrying ? 'Retrying...' : 'Retry'}
+                    {isRetrying
+                      ? t('tasks.legacySurface.retrying', 'Retrying...')
+                      : t('common.retry', 'Retry')}
                   </Text>
                 </Pressable>
               </View>
@@ -171,207 +192,230 @@ export function MobileTasksLegacySurface({ model }: { model: ConnectionPresentat
         <View style={styles.projectDataNotice}>
           <AlertTriangle size={15} color={colors.statusAmber} />
           <Text style={styles.projectDataNoticeText}>
-            Sub-issue data is unavailable for your token.
+            {t(
+              'tasks.legacySurface.subIssueDataUnavailable',
+              'Sub-issue data is unavailable for your token.'
+            )}
           </Text>
         </View>
       ) : null}
 
-      {renderMobileTasksListSurface(model)}
+      {renderMobileTasksListSurface(model, colorScheme)}
 
-      {renderMobileTasksProviderPicker(model)}
+      {/* iOS refuses stacked sibling native modals; layer Tasks sheets in one Modal by zIndex. */}
+      <BottomDrawerModalHost>
+        {renderMobileTasksProviderPicker(model)}
 
-      {renderMobileTasksRepoPicker(model)}
+        {renderMobileTasksRepoPicker(model)}
 
-      {renderMobileTasksGitHubIssueSourcePicker(model)}
+        {renderMobileTasksGitHubIssueSourcePicker(model)}
 
-      {renderMobileTasksGitHubViewPicker(model)}
+        {renderMobileTasksGitHubViewPicker(model)}
 
-      {renderMobileTasksGitHubPresetPicker(model)}
+        {renderMobileTasksGitHubPresetPicker(model)}
 
-      {renderMobileTasksPagePicker(model)}
+        {renderMobileTasksPagePicker(model)}
 
-      {renderMobileTasksGitHubProjectPicker(model)}
+        {renderMobileTasksGitHubProjectPicker(model)}
 
-      {renderMobileTasksGitHubProjectViewPicker(model)}
+        {renderMobileTasksGitHubProjectViewPicker(model)}
 
-      {renderMobileTasksGitHubProjectSortPicker(model)}
+        {renderMobileTasksGitHubProjectSortPicker(model)}
 
-      {renderMobileTasksGitHubProjectFieldsPicker(model)}
+        {renderMobileTasksGitHubProjectFieldsPicker(model)}
 
-      {renderMobileTasksGitLabViewPicker(model)}
+        {renderMobileTasksGitLabViewPicker(model)}
 
-      {renderMobileTasksGitLabFilterPicker(model)}
+        {renderMobileTasksGitLabFilterPicker(model)}
 
-      {renderMobileTasksLinearFilterPicker(model)}
+        {renderMobileTasksLinearFilterPicker(model)}
+        {renderMobileTasksJiraFilterPicker(model)}
+        {renderMobileTasksJiraSitePicker(model)}
 
-      {renderMobileTasksLinearWorkspacePicker(model)}
+        {renderMobileTasksLinearWorkspacePicker(model)}
 
-      {renderMobileTasksLinearTeamPicker(model)}
+        {renderMobileTasksLinearTeamPicker(model)}
 
-      {renderMobileTasksLinearStatusPicker(model)}
+        {renderMobileTasksLinearStatusPicker(model)}
 
-      {renderMobileTasksLinearViewPicker(model)}
+        {renderMobileTasksLinearViewPicker(model)}
 
-      {renderMobileTasksLinearGroupPicker(model)}
+        {renderMobileTasksLinearGroupPicker(model)}
 
-      {renderMobileTasksLinearOrderPicker(model)}
+        {renderMobileTasksLinearOrderPicker(model)}
 
-      {renderMobileTasksLinearDisplayPicker(model)}
+        {renderMobileTasksLinearDisplayPicker(model)}
 
-      {renderMobileTasksSortPicker(model)}
+        {renderMobileTasksSortPicker(model)}
 
-      {renderMobileTasksCreateDrawer(model)}
+        {renderMobileTasksCreateDrawer(model)}
 
-      {renderMobileTasksCreateTargetPicker(model)}
+        {renderMobileTasksCreateTargetPicker(model)}
 
-      {renderMobileTasksLinearConnectDrawer(model)}
+        {renderMobileTasksLinearConnectDrawer(model)}
 
-      {renderMobileTasksWorkspaceCreateTargetPicker(model)}
+        {renderMobileTasksWorkspaceCreateTargetPicker(model)}
 
-      {renderMobileTasksWorkspaceCreateDrawer(model)}
+        {renderMobileTasksWorkspaceCreateDrawer(model)}
 
-      {renderMobileTasksWorkspaceCreateRepoPicker(model)}
+        {renderMobileTasksWorkspaceCreateRepoPicker(model)}
 
-      {renderMobileTasksWorkspaceAgentPicker(model)}
+        {renderMobileTasksWorkspaceAgentPicker(model)}
 
-      {renderMobileTasksWorkspaceBaseBranchPicker(model)}
+        {renderMobileTasksWorkspaceBaseBranchPicker(model)}
 
-      {renderMobileTasksWorkspaceSparsePicker(model)}
+        {renderMobileTasksWorkspaceSparsePicker(model)}
 
-      {renderMobileTasksWorkspaceSparseDrawer(model)}
+        {renderMobileTasksWorkspaceSparseDrawer(model)}
 
-      {renderMobileTasksSetupTrustDrawer(model)}
+        {renderMobileTasksSetupTrustDrawer(model)}
 
-      {renderMobileTasksOrcaYamlTrustDrawer(model)}
+        {renderMobileTasksOrcaYamlTrustDrawer(model)}
 
-      {renderMobileTasksProjectMissingRepoDrawer(model)}
+        {renderMobileTasksProjectMissingRepoDrawer(model)}
 
-      {renderMobileTasksProjectDetailDrawer(model)}
+        {renderMobileTasksProjectDetailDrawer(model)}
 
-      {renderMobileTasksItemDetailDrawer(model)}
+        {renderMobileTasksItemDetailDrawer(model)}
 
-      <ActionSheetModal
-        visible={taskUiReady && mergeMethodProjectRow != null}
-        title="Merge method"
-        message="Choose how this pull request should be merged."
-        actions={
-          mergeMethodProjectRow
-            ? (['squash', 'merge', 'rebase'] as const).map((method) => ({
-                label: getHostedReviewMergeMethodLabel(method),
-                icon: GitBranch,
-                onPress: () => {
-                  setPendingProjectGitHubMerge({ row: mergeMethodProjectRow, method })
-                }
-              }))
-            : []
-        }
-        onClose={() => setMergeMethodProjectRow(null)}
-      />
-      <ActionSheetModal
-        visible={taskUiReady && mergeMethodTaskItem != null}
-        title="Merge method"
-        message={
-          mergeMethodTaskItem?.provider === 'gitlab'
-            ? 'Choose how this merge request should be merged.'
-            : 'Choose how this pull request should be merged.'
-        }
-        actions={
-          mergeMethodTaskItem
-            ? (mergeMethodTaskItem.provider === 'gitlab'
-                ? (['merge', 'squash', 'rebase'] as const)
-                : (['squash', 'merge', 'rebase'] as const)
-              ).map((method) => ({
-                label:
-                  mergeMethodTaskItem.provider === 'gitlab' && method === 'merge'
-                    ? 'Merge'
-                    : getHostedReviewMergeMethodLabel(method),
-                icon: GitBranch,
-                onPress: () => {
-                  const item = mergeMethodTaskItem
-                  setPendingHostedMerge({ item, method })
-                }
-              }))
-            : []
-        }
-        onClose={() => setMergeMethodTaskItem(null)}
-      />
-      <ConfirmModal
-        visible={taskUiReady && pendingHostedMerge != null}
-        title={
-          pendingHostedMerge?.item.provider === 'gitlab' ? 'Merge Request' : 'Merge Pull Request'
-        }
-        message={pendingHostedMerge ? getHostedMergeConfirmMessage(pendingHostedMerge) : undefined}
-        confirmLabel={
-          pendingHostedMerge ? getHostedReviewMergeMethodLabel(pendingHostedMerge.method) : 'Merge'
-        }
-        onConfirm={() => {
-          if (!taskUiReady || !pendingHostedMerge) {
-            return
+        <ActionSheetModal
+          visible={taskUiReady && mergeMethodProjectRow != null}
+          title={t('tasks.legacySurface.mergeMethodTitle', 'Merge method')}
+          message={t(
+            'tasks.legacySurface.pullRequestMergeMessage',
+            'Choose how this pull request should be merged.'
+          )}
+          actions={
+            mergeMethodProjectRow
+              ? (['squash', 'merge', 'rebase'] as const).map((method) => ({
+                  label: getHostedReviewMergeMethodLabel(method),
+                  icon: GitBranch,
+                  onPress: () => {
+                    setPendingProjectGitHubMerge({ row: mergeMethodProjectRow, method })
+                  }
+                }))
+              : []
           }
-          void mergeHostedReview(pendingHostedMerge.item, pendingHostedMerge.method)
-        }}
-        onCancel={() => setPendingHostedMerge(null)}
-      />
-      <ConfirmModal
-        visible={taskUiReady && pendingProjectGitHubMerge != null}
-        title="Merge Pull Request"
-        message={
-          pendingProjectGitHubMerge
-            ? getProjectGitHubMergeConfirmMessage(pendingProjectGitHubMerge)
-            : undefined
-        }
-        confirmLabel={
-          pendingProjectGitHubMerge
-            ? getHostedReviewMergeMethodLabel(pendingProjectGitHubMerge.method)
-            : 'Merge'
-        }
-        onConfirm={() => {
-          if (!taskUiReady || !pendingProjectGitHubMerge) {
-            return
+          onClose={() => setMergeMethodProjectRow(null)}
+        />
+        <ActionSheetModal
+          visible={taskUiReady && mergeMethodTaskItem != null}
+          title={t('tasks.legacySurface.mergeMethodTitle', 'Merge method')}
+          message={
+            mergeMethodTaskItem?.provider === 'gitlab'
+              ? t(
+                  'tasks.legacySurface.mergeRequestMergeMessage',
+                  'Choose how this merge request should be merged.'
+                )
+              : t(
+                  'tasks.legacySurface.pullRequestMergeMessage',
+                  'Choose how this pull request should be merged.'
+                )
           }
-          void mergeProjectGitHubPullRequest(
-            pendingProjectGitHubMerge.row,
-            pendingProjectGitHubMerge.method
-          )
-        }}
-        onCancel={() => setPendingProjectGitHubMerge(null)}
-      />
-      <ConfirmModal
-        visible={taskUiReady && pendingHostedStateChange != null}
-        title={
-          pendingHostedStateChange
-            ? getHostedStateConfirmTitle(pendingHostedStateChange)
-            : 'Update Item'
-        }
-        message={
-          pendingHostedStateChange
-            ? getHostedStateConfirmMessage(pendingHostedStateChange)
-            : undefined
-        }
-        confirmLabel={
-          pendingHostedStateChange
-            ? getHostedStateConfirmLabel(pendingHostedStateChange)
-            : 'Confirm'
-        }
-        destructive={pendingHostedStateChange?.nextState === 'closed'}
-        onConfirm={() => {
-          if (!taskUiReady || !pendingHostedStateChange) {
-            return
+          actions={
+            mergeMethodTaskItem
+              ? (mergeMethodTaskItem.provider === 'gitlab'
+                  ? (['merge', 'squash', 'rebase'] as const)
+                  : (['squash', 'merge', 'rebase'] as const)
+                ).map((method) => ({
+                  label:
+                    mergeMethodTaskItem.provider === 'gitlab' && method === 'merge'
+                      ? t('tasks.legacySurface.mergeAction', 'Merge')
+                      : getHostedReviewMergeMethodLabel(method),
+                  icon: GitBranch,
+                  onPress: () => {
+                    const item = mergeMethodTaskItem
+                    setPendingHostedMerge({ item, method })
+                  }
+                }))
+              : []
           }
-          if (pendingHostedStateChange.source === 'task') {
-            if (pendingHostedStateChange.item.provider === 'gitlab') {
-              void toggleGitLabStatus(pendingHostedStateChange.item)
+          onClose={() => setMergeMethodTaskItem(null)}
+        />
+        <ConfirmModal
+          visible={taskUiReady && pendingHostedMerge != null}
+          title={
+            pendingHostedMerge?.item.provider === 'gitlab'
+              ? t('tasks.legacySurface.mergeRequestTitle', 'Merge Request')
+              : t('tasks.legacySurface.mergePullRequestTitle', 'Merge Pull Request')
+          }
+          message={
+            pendingHostedMerge ? getHostedMergeConfirmMessage(pendingHostedMerge) : undefined
+          }
+          confirmLabel={
+            pendingHostedMerge
+              ? getHostedReviewMergeMethodLabel(pendingHostedMerge.method)
+              : t('tasks.legacySurface.mergeAction', 'Merge')
+          }
+          onConfirm={() => {
+            if (!taskUiReady || !pendingHostedMerge) {
               return
             }
-            void toggleGitHubStatus(pendingHostedStateChange.item)
-            return
+            void mergeHostedReview(pendingHostedMerge.item, pendingHostedMerge.method)
+          }}
+          onCancel={() => setPendingHostedMerge(null)}
+        />
+        <ConfirmModal
+          visible={taskUiReady && pendingProjectGitHubMerge != null}
+          title={t('tasks.legacySurface.mergePullRequestTitle', 'Merge Pull Request')}
+          message={
+            pendingProjectGitHubMerge
+              ? getProjectGitHubMergeConfirmMessage(pendingProjectGitHubMerge)
+              : undefined
           }
-          void mutateProjectRowIssueOrPr(pendingHostedStateChange.row, {
-            state: pendingHostedStateChange.nextState
-          })
-        }}
-        onCancel={() => setPendingHostedStateChange(null)}
-      />
+          confirmLabel={
+            pendingProjectGitHubMerge
+              ? getHostedReviewMergeMethodLabel(pendingProjectGitHubMerge.method)
+              : t('tasks.legacySurface.mergeAction', 'Merge')
+          }
+          onConfirm={() => {
+            if (!taskUiReady || !pendingProjectGitHubMerge) {
+              return
+            }
+            void mergeProjectGitHubPullRequest(
+              pendingProjectGitHubMerge.row,
+              pendingProjectGitHubMerge.method
+            )
+          }}
+          onCancel={() => setPendingProjectGitHubMerge(null)}
+        />
+        <ConfirmModal
+          visible={taskUiReady && pendingHostedStateChange != null}
+          title={
+            pendingHostedStateChange
+              ? getHostedStateConfirmTitle(pendingHostedStateChange)
+              : t('tasks.legacySurface.updateItemTitle', 'Update Item')
+          }
+          message={
+            pendingHostedStateChange
+              ? getHostedStateConfirmMessage(pendingHostedStateChange)
+              : undefined
+          }
+          confirmLabel={
+            pendingHostedStateChange
+              ? getHostedStateConfirmLabel(pendingHostedStateChange)
+              : t('common.confirm', 'Confirm')
+          }
+          destructive={pendingHostedStateChange?.nextState === 'closed'}
+          onConfirm={() => {
+            if (!taskUiReady || !pendingHostedStateChange) {
+              return
+            }
+            if (pendingHostedStateChange.source === 'task') {
+              if (pendingHostedStateChange.item.provider === 'gitlab') {
+                void toggleGitLabStatus(pendingHostedStateChange.item)
+                return
+              }
+              void toggleGitHubStatus(pendingHostedStateChange.item)
+              return
+            }
+            void mutateProjectRowIssueOrPr(pendingHostedStateChange.row, {
+              state: pendingHostedStateChange.nextState
+            })
+          }}
+          onCancel={() => setPendingHostedStateChange(null)}
+        />
+      </BottomDrawerModalHost>
     </SafeAreaView>
   )
 }

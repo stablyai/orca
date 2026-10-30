@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import type * as NodeOs from 'node:os'
 import type * as GitExecError from '../git/exec-error'
 import type * as WorkItemLookup from './client/fetch/get-work-item'
-import { runProcess } from '../../shared/child-process/run-process'
+import { runProcess } from '@orca/process-host'
 
 const { ghMock, fixture } = vi.hoisted(() => {
   const fixture: {
@@ -161,7 +161,9 @@ it.each(['issue', undefined] as const)(
     expect(details?.body).toBe('ORIGIN body')
     expect(details?.assignees).toEqual(['ORIGIN-assignee'])
     expect(details?.comments.map((comment) => comment.body)).toEqual(['ORIGIN comment'])
-    expect(fixture.requests[1].args).toContain('owner=fork-owner')
+    expect(
+      fixture.requests.filter(({ args }) => args.includes('graphql')).map(({ args }) => args)
+    ).toEqual([expect.arrayContaining(['owner=fork-owner'])])
   }
 )
 

@@ -1,15 +1,16 @@
 import type { AgentSessionUnavailable } from '../../shared/agent-session-availability'
-import type { spawnProcess } from '../../shared/child-process/run-process'
+import type { spawnProcess } from '@orca/process-host'
 import type { AgentGenerationFailureOutput } from './agent-failure-output'
 import type {
   CommitMessageAgentCapability,
   CommitMessageModelCapability
 } from '../../shared/commit-message-agent-spec'
 import type { CommitMessagePlan } from '../../shared/commit-message-plan'
+import type { TextGenerationFailureFields } from '../../shared/text-generation-failure-copy'
 
 export type GenerateCommitMessageResult =
   | { success: true; message: string; agentLabel?: string }
-  | { success: false; error: string; canceled?: boolean }
+  | ({ success: false; canceled?: boolean } & TextGenerationFailureFields)
 
 export type DiscoverCommitMessageModelsResult =
   | {
@@ -28,7 +29,11 @@ export type GeneratePullRequestFieldsResult<TFields> =
       agentLabel?: string
       branchChangedByPreparation?: boolean
     }
-  | { success: false; error: string; canceled?: boolean; branchChangedByPreparation?: boolean }
+  | ({
+      success: false
+      canceled?: boolean
+      branchChangedByPreparation?: boolean
+    } & TextGenerationFailureFields)
 
 export type RemoteCommitMessageExecResult = {
   stdout: string
@@ -43,6 +48,7 @@ export type TextGenerationOperation =
   | 'commit-message'
   | 'pull-request-fields'
   | 'branch-name'
+  | 'jira-issue-summary'
   | 'conversation-name'
 
 export type CommitMessageGenerationTarget =
@@ -61,12 +67,11 @@ export type CommitMessageGenerationTarget =
 
 export type InternalTextGenerationResult =
   | { success: true; rawOutput: string; agentLabel?: string }
-  | {
+  | ({
       success: false
-      error: string
       canceled?: boolean
       failureOutput?: AgentGenerationFailureOutput
-    }
+    } & TextGenerationFailureFields)
 
 export type GenerateBranchNameResult =
   | { success: true; slug: string; agentLabel?: string }
@@ -107,6 +112,7 @@ export type SourceControlAgentSpawnInput = {
   wslDistro?: string
   // WSL applies these in the guest; native callers already merge them into env.
   commandEnv?: Record<string, string>
+  preparation?: { script: string; args: string[] }
   stdinMode: 'ignore' | 'pipe'
   useCwdForNative: boolean
 }
@@ -114,3 +120,12 @@ export type SourceControlAgentSpawnInput = {
 export type SpawnSourceControlAgent = (
   input: SourceControlAgentSpawnInput
 ) => SpawnedSourceControlAgentProcess
+
+export type LocalSourceControlPlanInput = {
+  plan: CommitMessagePlan
+  cwd: string
+  env: NodeJS.ProcessEnv | undefined
+  operation: TextGenerationOperation
+  wslDistro?: string
+  spawnAgent: SpawnSourceControlAgent
+}

@@ -67,7 +67,7 @@ describe('showDeleteWorktreeFailureToast', () => {
     expect(toast.info).toHaveBeenCalledWith(
       'Failed to delete workspace feature/foo',
       expect.objectContaining({
-        id: 'delete-worktree-failure:wt-1',
+        id: 'delete-worktree-failure:|wt-1',
         dismissible: true,
         duration: Infinity
       })
@@ -82,11 +82,11 @@ describe('showDeleteWorktreeFailureToast', () => {
     expect(body.textContent).toContain('It has changed files.')
 
     clickButton(body, 'View')
-    expect(toast.dismiss).toHaveBeenCalledWith('delete-worktree-failure:wt-1')
+    expect(toast.dismiss).toHaveBeenCalledWith('delete-worktree-failure:|wt-1')
     expect(onViewChanges).toHaveBeenCalled()
 
     clickButton(body, 'Force Delete')
-    expect(toast.dismiss).toHaveBeenCalledWith('delete-worktree-failure:wt-1')
+    expect(toast.dismiss).toHaveBeenCalledWith('delete-worktree-failure:|wt-1')
     expect(onForceDelete).toHaveBeenCalled()
   })
 
@@ -107,7 +107,7 @@ describe('showDeleteWorktreeFailureToast', () => {
     expect(toast.error).toHaveBeenCalledWith(
       'Failed to delete workspace feature/bar',
       expect.objectContaining({
-        id: 'delete-worktree-failure:wt-2',
+        id: 'delete-worktree-failure:|wt-2',
         dismissible: true,
         duration: 10000
       })
@@ -118,12 +118,10 @@ describe('showDeleteWorktreeFailureToast', () => {
     expect(body.textContent).not.toContain('Force Delete')
 
     clickButton(body, 'View')
-    expect(toast.dismiss).toHaveBeenCalledWith('delete-worktree-failure:wt-2')
+    expect(toast.dismiss).toHaveBeenCalledWith('delete-worktree-failure:|wt-2')
     expect(onViewChanges).toHaveBeenCalled()
   })
 
-  // #19334: the archive-hook refusal is the one failure a user clears by waiving rather than by
-  // fixing state, and the desktop is where most people meet it.
   it('offers Delete Anyway when the archive hook refused the removal', () => {
     const onDeleteAnyway = vi.fn()
 
@@ -141,7 +139,6 @@ describe('showDeleteWorktreeFailureToast', () => {
 
     expect(toast.error).toHaveBeenCalledWith(
       'Failed to delete workspace feature/archive',
-      // The user has to read the reason before choosing, so this toast must not expire.
       expect.objectContaining({ duration: Infinity })
     )
 
@@ -150,7 +147,7 @@ describe('showDeleteWorktreeFailureToast', () => {
     expect(body.textContent).not.toContain('Force Delete')
 
     clickButton(body, 'Delete Anyway')
-    expect(toast.dismiss).toHaveBeenCalledWith('delete-worktree-failure:wt-archive')
+    expect(toast.dismiss).toHaveBeenCalledWith('delete-worktree-failure:|wt-archive')
     expect(onDeleteAnyway).toHaveBeenCalled()
   })
 

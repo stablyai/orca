@@ -1,29 +1,22 @@
 import type { DashboardAgentRow } from '@/components/dashboard/useDashboardData'
-import type { AgentRowState } from '@/lib/agent-row-decay-state'
+import type { AgentRowState } from '../../../../shared/agent-row-decay-state'
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
 import {
   agentChildRowContextForParent,
-  buildAgentChildRowModels,
-  buildLegacyAgentChildRowModels,
-  flattenAgentChildRowModels,
   type AgentChildRowModel
 } from '../../../../shared/agent-child-row-model'
 import {
   agentChildRunStateFor,
   type AgentChildDisplayState
 } from '../../../../shared/agent-status-child-work-display'
-import { agentChildWorkIsRunning } from '../../../../shared/agent-child-work-listing'
+import { buildRunningAgentChildRowModels } from '../../../../shared/running-agent-child-rows'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 
-/** Row-identity key for an in-process subagent child row. The NUL separator
- *  cannot appear in real pane keys, so synthetic keys can never collide with
- *  one. Never parsed back — activation goes through `activationPaneKey` /
- *  `orchestration.parentPaneKey` instead. */
+/** NUL prevents collision with real pane keys; synthetic keys are never parsed for activation, which uses the parent pane. */
 function subagentRowKey(parentPaneKey: string, subagentId: string): string {
   return `${parentPaneKey}\u0000subagent:${subagentId}`
 }
 
-/** The lifecycle word every reader of a CLI row already understands; the row's own dot says more. */
 function agentRowStateFor(displayState: AgentChildDisplayState): AgentRowState {
   const runState = agentChildRunStateFor(displayState)
   // A CLI row carries monitoring as `working` plus its `workingMode`.
@@ -39,7 +32,6 @@ function childDashboardRow(
   const startedAt = row.firstObservedAt > 0 ? row.firstObservedAt : parentEntry.stateStartedAt
   const paneKey = subagentRowKey(parentEntry.paneKey, row.id)
   const detail = row.detail
-  // The same fields a CLI agent row carries, so every reader of a CLI row reads a child the same way.
   const entry: AgentStatusEntry = {
     state: state === 'idle' || state === 'unverifiable' ? 'done' : state,
     ...(row.displayState === 'monitoring' ? { workingMode: 'monitoring' as const } : {}),
@@ -81,39 +73,16 @@ function childDashboardRow(
   }
 }
 
-/** Whether any work a child owns, at any depth, still runs. */
-function ownsLiveWork(row: AgentChildRowModel): boolean {
-  return row.owned.some((owned) => !owned.settled || ownsLiveWork(owned))
-}
-
-/**
- * Derive indented child rows for the subagents/teammates a pane's agent has
- * spawned. These children have no PTY or tab of their own: the rows reuse the
- * parent's tab, activate the parent's pane, and link into the existing lineage
- * tree through `orchestration.parentPaneKey`. The host's child views win; a host
- * that sends only the legacy `subagents` snapshot (an old host, any CLI pane)
- * is read as before.
- */
+/** Child rows reuse and activate the parent pane; prefer host child views and retain legacy snapshot support. */
 export function buildSubagentChildRows(args: {
   parentEntry: AgentStatusEntry
   tab: TerminalTab
-  /** Freshness of the parent's hook stream. A stale parent means active child
-   *  states are equally unverifiable. */
+  /** A stale parent hook stream makes active child evidence unverifiable too. */
   parentIsFresh: boolean
 }): DashboardAgentRow[] {
   const { parentEntry } = args
   const context = agentChildRowContextForParent(parentEntry, args.parentIsFresh)
-  const rows =
-    parentEntry.children !== undefined
-      ? buildAgentChildRowModels(parentEntry.children, context)
-      : buildLegacyAgentChildRowModels(parentEntry.subagents ?? [], context)
-  // Shells and monitors show through their owner's dot; the sidebar lists running agents only, from
-  // every source, by the same rule as the chat's strip.
-  return flattenAgentChildRowModels(rows)
-    .filter(
-      (row) =>
-        row.kind === 'agent' &&
-        agentChildWorkIsRunning({ settled: row.settled, ownsLiveWork: ownsLiveWork(row) })
-    )
-    .map((row) => childDashboardRow(row, parentEntry, args.tab))
+  return buildRunningAgentChildRowModels(parentEntry, context).map((row) =>
+    childDashboardRow(row, parentEntry, args.tab)
+  )
 }

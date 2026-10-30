@@ -1,4 +1,5 @@
 import type {
+  OrcaCloudSignInProgress,
   ConnectCurrentOrcaProfileResult,
   CreateCloudLinkedOrcaProfileArgs,
   CreateCloudLinkedOrcaProfileResult,
@@ -42,6 +43,11 @@ export type OrcaProfileApi = {
     args: FindOrcaProfileProjectsByPathArgs
   ) => Promise<FindOrcaProfileProjectsByPathResult>
   connectCurrent: () => Promise<ConnectCurrentOrcaProfileResult>
+  signInProgress: () => Promise<OrcaCloudSignInProgress | null>
+  onSignInProgressChanged: (
+    callback: (progress: OrcaCloudSignInProgress | null) => void
+  ) => () => void
+  cancelSignIn: () => Promise<void>
   refreshAuth: () => Promise<RefreshCurrentOrcaProfileAuthResult>
   signOutCurrent: () => Promise<SignOutCurrentOrcaProfileResult>
   selectOrg: (args: SelectOrcaProfileOrgArgs) => Promise<SelectOrcaProfileOrgResult>

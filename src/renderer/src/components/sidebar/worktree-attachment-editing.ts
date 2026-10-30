@@ -5,7 +5,10 @@ import type { Repo } from '../../../../shared/repo-types'
 import { normalizeGitRemoteUrl } from '../../../../shared/git-remote-identity'
 import type { WorkspaceAttachment, Worktree } from '../../../../shared/worktree/types'
 import type { WorktreeMeta } from '../../../../shared/worktree/meta-types'
-import { getWorkspaceAttachments } from '../../../../shared/workspace-attachments'
+import {
+  getWorkspaceAttachments,
+  workspaceAttachmentReferenceLabel
+} from '../../../../shared/workspace-attachments'
 import {
   getWorkspaceAttachmentKey,
   getWorkspaceAttachmentUrlScope
@@ -13,7 +16,7 @@ import {
 import { parseGitHubIssueOrPRLink } from '../../../../shared/github/links'
 import { parseGitLabIssueOrMRLink } from '../../../../shared/new-workspace/gitlab-links'
 import { parseLinearIssueInput } from '../../../../shared/linear/links'
-import { parseJiraIssueUrl } from '../../../../shared/jira-issue-url'
+import { parseJiraIssueUrl } from '../../../../shared/jira/jira-issue-url'
 import { isWorkItemLinkQueryTooLarge } from '../../../../shared/new-workspace/work-item-link-query-bounds'
 
 export const ATTACHMENT_INPUT_KINDS = [
@@ -65,16 +68,11 @@ export function workspaceAttachmentProviderLabel(item: WorkspaceAttachment): str
 }
 
 export function workspaceAttachmentLabel(item: WorkspaceAttachment): string {
-  if (item.provider === 'linear' || item.provider === 'jira') {
-    return item.identifier ?? item.linearIdentifier ?? item.jiraIdentifier ?? `#${item.number}`
-  }
-  if (item.type === 'mr') {
-    return translate('workspace.links.mrReference', 'MR !{{number}}', { number: item.number })
-  }
-  if (item.type === 'pr') {
-    return translate('workspace.links.prReference', 'PR #{{number}}', { number: item.number })
-  }
-  return translate('workspace.links.issueReference', 'Issue #{{number}}', { number: item.number })
+  return workspaceAttachmentReferenceLabel(item, {
+    mr: (number) => translate('workspace.links.mrReference', 'MR !{{number}}', { number }),
+    pr: (number) => translate('workspace.links.prReference', 'PR #{{number}}', { number }),
+    issue: (number) => translate('workspace.links.issueReference', 'Issue #{{number}}', { number })
+  })
 }
 
 export function parseWorkspaceAttachmentInput(

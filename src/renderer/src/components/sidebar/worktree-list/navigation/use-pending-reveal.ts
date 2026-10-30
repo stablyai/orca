@@ -19,8 +19,6 @@ import {
   type PendingSidebarRevealArgs
 } from './pending-reveal-inputs'
 
-// Drives the store's two pending reveal requests (a worktree card, or any sidebar row)
-// from "expand the ancestors" through "scroll the mounted element into view".
 export function usePendingSidebarReveal(args: PendingSidebarRevealArgs): void {
   const setRenamingWorktreeId = useAppStore((s) => s.setRenamingWorktreeId)
   const [pendingRevealRetryTick, setPendingRevealRetryTick] = useState(0)
@@ -166,6 +164,7 @@ export function usePendingSidebarReveal(args: PendingSidebarRevealArgs): void {
     args.repoMap,
     args.prCache,
     args.worktreeLineageById,
+    args.occurrencePlan,
     args.worktreeMap,
     renderRows,
     virtualizer,

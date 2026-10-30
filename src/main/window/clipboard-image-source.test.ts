@@ -1,7 +1,12 @@
 import { describe, expect, it, vi } from 'vitest'
 import { readClipboardImageSource } from './clipboard-image-source'
 
-function clipboardReader(filePath = '', itemCount = 1, formats: string[] = ['FileNameW']) {
+function clipboardReader(
+  filePath = '',
+  itemCount = 1,
+  formats: string[] = ['FileNameW'],
+  pasteboardTypes: string[] = []
+) {
   const shellItems = Buffer.alloc(4 + 4 * (itemCount + 1))
   shellItems.writeUInt32LE(itemCount)
   const buffers: Record<string, Buffer> = {
@@ -10,7 +15,8 @@ function clipboardReader(filePath = '', itemCount = 1, formats: string[] = ['Fil
   }
   return {
     availableFormats: vi.fn(() => formats),
-    readBuffer: vi.fn((format: string) => buffers[format] ?? Buffer.alloc(0))
+    readBuffer: vi.fn((format: string) => buffers[format] ?? Buffer.alloc(0)),
+    has: vi.fn((format: string) => pasteboardTypes.includes(format))
   }
 }
 
@@ -23,6 +29,7 @@ describe('readClipboardImageSource', () => {
         kind: 'native',
         windowsFileFormats: null
       })
+      expect(clipboard.has).not.toHaveBeenCalled()
     }
   )
 
@@ -69,4 +76,35 @@ describe('readClipboardImageSource', () => {
     expect(source?.kind).toBe('native')
     expect(source?.windowsFileFormats?.fileNameW).toEqual(clipboard.readBuffer('FileNameW'))
   })
+
+  it.each([['public.png'], ['public.tiff']])(
+    'recognizes a macOS image copied beside its file URL (%s)',
+    (pasteboardType) => {
+      const clipboard = clipboardReader(
+        '',
+        1,
+        ['text/uri-list'],
+        [pasteboardType, 'public.file-url']
+      )
+      expect(readClipboardImageSource(clipboard, 'darwin')).toEqual({
+        kind: 'native',
+        windowsFileFormats: null
+      })
+      expect(clipboard.readBuffer).not.toHaveBeenCalled()
+    }
+  )
+
+  it('ignores a macOS file URL with no image data', () => {
+    const clipboard = clipboardReader('', 1, ['text/uri-list'], ['public.file-url'])
+    expect(readClipboardImageSource(clipboard, 'darwin')).toBeNull()
+  })
+
+  it.each(['linux', 'win32'] as const)(
+    'does not probe macOS pasteboard types on %s',
+    (platform) => {
+      const clipboard = clipboardReader('', 1, ['text/uri-list'], ['public.png'])
+      expect(readClipboardImageSource(clipboard, platform)).toBeNull()
+      expect(clipboard.has).not.toHaveBeenCalled()
+    }
+  )
 })

@@ -1,10 +1,9 @@
 import { Node } from '@tiptap/core'
 import { type EditorState, Plugin, PluginKey, TextSelection } from '@tiptap/pm/state'
 import { Decoration, DecorationSet } from '@tiptap/pm/view'
-import type { MarkdownDocument } from '../../../../shared/filesystem-entry-types'
 import type { MarkdownDocumentIndex } from './markdown-doc-links'
+import { getDocIndex, type DocLinkStorage } from './rich-markdown-doc-link-storage'
 import {
-  createMarkdownDocumentIndex,
   formatMarkdownDocLink,
   parseMarkdownDocLink,
   resolveMarkdownDocLink
@@ -21,32 +20,21 @@ const docLinkDissolveKey = new PluginKey('docLinkDissolve')
 const docLinkAutoConvertKey = new PluginKey('docLinkAutoConvert')
 const docLinkInlinePreviewKey = new PluginKey('docLinkInlinePreview')
 
-type DocLinkStorage = {
-  documents: MarkdownDocument[]
-  _cachedDocs: MarkdownDocument[] | null
-  _cachedIndex: MarkdownDocumentIndex | null
-}
-
-function getDocIndex(storage: DocLinkStorage): MarkdownDocumentIndex | null {
-  if (storage.documents.length === 0) {
-    // Why: clear the cache so stale MarkdownDocument references aren't retained
-    // after the document list empties (e.g., when switching worktrees).
-    storage._cachedDocs = null
-    storage._cachedIndex = null
-    return null
-  }
-  if (storage._cachedDocs !== storage.documents) {
-    storage._cachedIndex = createMarkdownDocumentIndex(storage.documents)
-    storage._cachedDocs = storage.documents
-  }
-  return storage._cachedIndex
-}
-
 function buildPreviewDecorations(state: EditorState, storage: DocLinkStorage): DecorationSet {
   const decorations: Decoration[] = []
   const index = getDocIndex(storage)
   const cursor = state.selection.from
   state.doc.descendants((node, pos, parent) => {
+    if (node.type.name === 'markdownDocLink') {
+      const resolved = resolveAgainstIndex(getDocLinkTarget(node), index)
+      // A changed decoration refreshes the NodeView without editing the document.
+      decorations.push(
+        Decoration.node(pos, pos + node.nodeSize, {
+          'data-doc-link-resolved': String(resolved)
+        })
+      )
+      return
+    }
     if (!canHoldDocLink(node, parent)) {
       return
     }
@@ -59,9 +47,7 @@ function buildPreviewDecorations(state: EditorState, storage: DocLinkStorage): D
       }
       const from = pos + match.index
       const to = from + match[0].length
-      // Why: only decorate the match the cursor is currently editing. Other
-      // `[[target]]` matches are auto-converted to atom nodes on the next
-      // transaction, so decorating them here just causes a one-frame flicker.
+      // Decorate only the match under the cursor; others soon become atoms and would briefly flicker.
       if (cursor <= from || cursor > to) {
         continue
       }
@@ -95,7 +81,7 @@ function getDocLinkDisplayText(node: { attrs: Record<string, unknown> }): string
 }
 
 export function createMarkdownDocLink(transport: RichMarkdownSourceTransport) {
-  return Node.create({
+  return Node.create<Record<string, never>, DocLinkStorage>({
     name: 'markdownDocLink',
     inline: true,
     group: 'inline',
@@ -104,9 +90,9 @@ export function createMarkdownDocLink(transport: RichMarkdownSourceTransport) {
 
     addStorage() {
       return {
-        documents: [] as MarkdownDocument[],
-        _cachedDocs: null as MarkdownDocument[] | null,
-        _cachedIndex: null as MarkdownDocumentIndex | null
+        documents: [],
+        _cachedDocs: null,
+        _cachedIndex: null
       }
     },
 
@@ -170,7 +156,7 @@ export function createMarkdownDocLink(transport: RichMarkdownSourceTransport) {
     renderText: ({ node }) => getDocLinkDisplayText(node),
 
     addNodeView() {
-      const storage = this.storage as DocLinkStorage
+      const storage = this.storage
       return ({ node }: { node: { type: { name: string }; attrs: Record<string, unknown> } }) => {
         const target = getDocLinkTarget(node)
         const dom = document.createElement('span')
@@ -193,9 +179,7 @@ export function createMarkdownDocLink(transport: RichMarkdownSourceTransport) {
 
         return {
           dom,
-          // Why: this fires on every transaction, including the no-op dispatched
-          // when the document list changes in storage. Re-checking resolution
-          // here keeps the blue/grey styling current without a full re-render.
+          // Resolution decorations also trigger this when the document list changes.
           update: (updatedNode: { type: { name: string }; attrs: Record<string, unknown> }) => {
             if (updatedNode.type.name !== 'markdownDocLink') {
               return false
@@ -216,18 +200,12 @@ export function createMarkdownDocLink(transport: RichMarkdownSourceTransport) {
       }
     },
 
-    // Why: a ProseMirror plugin (not an input rule) so that [[target]] typed in
-    // any order — brackets first then target, paste, etc. — converts to a doc
-    // link node. Input rules only fire on sequential append at the cursor.
+    // A plugin converts links typed or pasted in any order; input rules cover only sequential appends.
     addProseMirrorPlugins() {
       const nodeType = this.type
-      const storage = this.storage as DocLinkStorage
+      const storage = this.storage
       return [
-        // Why: when the cursor is adjacent to a doc link atom and the user presses
-        // an arrow key toward it, dissolve the atom back to editable [[target]] text.
-        // Without this, atom nodes are un-enterable — the cursor jumps over them.
-        // Uses handleKeyDown (not addKeyboardShortcuts) so we can check modifier
-        // keys and let Shift+Arrow extend the selection normally.
+        // Dissolve adjacent atoms on plain arrows so they can be edited; inspect modifiers to preserve Shift+Arrow selection.
         new Plugin({
           key: docLinkDissolveKey,
           props: {
@@ -288,9 +266,7 @@ export function createMarkdownDocLink(transport: RichMarkdownSourceTransport) {
                 const from = pos + match.index
                 const to = from + match[0].length
 
-                // Why: skip when the cursor is anywhere from just inside [[
-                // through the closing ]]. The inline preview decoration gives
-                // real-time resolution feedback while the user is still editing.
+                // Keep cursor-owned link text editable; preview decorations provide resolution feedback until the cursor leaves.
                 if (cursor > from && cursor <= to) {
                   continue
                 }
@@ -305,9 +281,7 @@ export function createMarkdownDocLink(transport: RichMarkdownSourceTransport) {
           }
         }),
 
-        // Why: while the cursor is inside [[target]], the text hasn't converted
-        // to an atom node yet. This decoration gives real-time blue/grey feedback
-        // so the user knows whether the target resolves before moving the cursor out.
+        // Show resolution feedback for link text under the cursor before it converts to an atom.
         new Plugin({
           key: docLinkInlinePreviewKey,
           state: {

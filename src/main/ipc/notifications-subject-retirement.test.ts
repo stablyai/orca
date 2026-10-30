@@ -102,7 +102,7 @@ describe('notifications:dismiss by acknowledged subject', () => {
       )
     ).toEqual({ delivered: true })
 
-    // The renderer's rebuilt id no longer matches (the row's start moved); the subject still does.
+    // Rebuilt row IDs can change with start position; subject identity stays stable.
     expect(getDismissHandler()({}, ['agent:rebuilt'], [PANE])).toEqual({ dismissed: 1 })
     expect(notificationCloseMock).toHaveBeenCalledTimes(1)
     expect(dismissMobileNotification.mock.calls.map(([id]) => id).sort()).toEqual([
@@ -152,7 +152,6 @@ describe('notifications:dismiss by acknowledged subject', () => {
         notificationId: 'agent:first'
       }
     )
-    // Inside the first one's per-workspace cooldown: turned away on both paths.
     expect(
       await dispatch(
         {},
@@ -168,11 +167,11 @@ describe('notifications:dismiss by acknowledged subject', () => {
     getDismissHandler()({}, [], [PANE])
     expect(dismissMobileNotification).not.toHaveBeenCalled()
   })
-  // Positioned alerts outlive a no-read or earlier-bounded dismiss: a view ack can run before the transcript shows the edge.
+  // Positioned alerts survive reads before their journal boundary; pane-wide views cannot retire them.
   it('pane dismissal retires older-host structured alerts but not positioned ones past the read', async () => {
     const directory = mkdtempSync(join(tmpdir(), 'orca-pane-boundary-'))
+    const controller = new RuntimeMobileNotificationController()
     try {
-      const controller = new RuntimeMobileNotificationController()
       controller.configureDismissalStore(directory)
       const events: MobileNotificationEvent[] = []
       controller.onDispatched((event) => events.push(event))
@@ -189,7 +188,7 @@ describe('notifications:dismiss by acknowledged subject', () => {
         journalCursor: { epoch: 'remote-journal', sequence }
       })
       const dispatch = getDispatchHandler()
-      // A host older than journal cursors sends its completion with no position.
+      // Older hosts lack journal positions on completions.
       for (const [id, cause] of [
         ['agent-attention:older-host', undefined],
         ['agent-attention:A', origin('A', 1)],
@@ -232,13 +231,14 @@ describe('notifications:dismiss by acknowledged subject', () => {
       expect(dismissMobileNotification).toHaveBeenCalledTimes(1)
       expect(events.filter((event) => event.type === 'dismiss')).toHaveLength(2)
     } finally {
+      await controller.closeDismissals()
       rmSync(directory, { recursive: true, force: true })
     }
   })
   it('the click-time read a Mark read sends closes and retires every alert it covers', async () => {
     const directory = mkdtempSync(join(tmpdir(), 'orca-explicit-read-'))
+    const controller = new RuntimeMobileNotificationController()
     try {
-      const controller = new RuntimeMobileNotificationController()
       controller.configureDismissalStore(directory)
       const events: MobileNotificationEvent[] = []
       controller.onDispatched((event) => events.push(event))
@@ -288,14 +288,15 @@ describe('notifications:dismiss by acknowledged subject', () => {
         events.filter((event) => event.type === 'dismiss').map((event) => event.notificationId)
       ).toEqual(['agent-attention:click-A', 'agent-attention:click-B'])
     } finally {
+      await controller.closeDismissals()
       rmSync(directory, { recursive: true, force: true })
     }
   })
 
   it('settles only the relayed prompt alerts of a session its host reports none pending for', async () => {
     const directory = mkdtempSync(join(tmpdir(), 'orca-relay-settle-'))
+    const controller = new RuntimeMobileNotificationController()
     try {
-      const controller = new RuntimeMobileNotificationController()
       controller.configureDismissalStore(directory)
       const events: MobileNotificationEvent[] = []
       controller.onDispatched((event) => events.push(event))
@@ -340,6 +341,7 @@ describe('notifications:dismiss by acknowledged subject', () => {
         events.filter((event) => event.type === 'dismiss').map((event) => event.notificationId)
       ).toEqual([key('prompt:A')])
     } finally {
+      await controller.closeDismissals()
       rmSync(directory, { recursive: true, force: true })
     }
   })

@@ -1,13 +1,13 @@
 import { useAppStore } from '@/store'
-import { getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
+import { ipcOrRuntimeTargetForHostId } from '@/runtime/runtime-client-target'
+import { runtimeTargetForRepoOwner } from '@/lib/repo-runtime-owner'
 import type { WorktreeStartupPayload } from '@/lib/worktree-startup-payload'
 import type {
   WorktreeCreationPhase,
   WorktreeCreationRequest
 } from '@/lib/pending-worktree-creation'
 
-// Why: mirrors the startup-opt the composer used to build inline. The renderer
-// only seeds the first terminal when the backend did not already spawn it.
+// Match composer startup options; seed in renderer only when backend did not launch a terminal.
 export function buildWorktreeCreationStartupOpt(
   request: WorktreeCreationRequest,
   backendSpawned: boolean
@@ -23,11 +23,9 @@ export function buildWorktreeCreationStartupOpt(
     ...(plan.launchToken ? { launchToken: plan.launchToken } : {}),
     ...(request.agent ? { launchAgent: request.agent } : {}),
     ...(plan.draftPrompt ? { draftPrompt: plan.draftPrompt } : {}),
-    // Why: view-mode only. An argv-prefill plan sets no draftPrompt, so this is
-    // the sole signal that this launch starts with unsent context in the TUI.
+    // This view-only marker identifies unsent TUI context even for argv-prefill plans without draftPrompt.
     ...(plan.startupCommandDelivery ? { startupCommandDelivery: plan.startupCommandDelivery } : {}),
-    // Why: command-code shows its prompt in the tab status before the first
-    // hook fires, so the prompt is threaded through here.
+    // Command Code needs prompt status before its first hook; carry it through startup.
     ...(request.agent === 'command-code' && request.quickPrompt.trim().length > 0
       ? { initialAgentStatus: { agent: request.agent, prompt: request.quickPrompt.trim() } }
       : {}),
@@ -39,7 +37,11 @@ export function getWorktreeCreationIndeterminate(request: WorktreeCreationReques
   if (request.worktreeCreateProgressMode) {
     return request.worktreeCreateProgressMode === 'indeterminate'
   }
-  return getActiveRuntimeTarget(useAppStore.getState().settings).kind !== 'local'
+  // Why: progress follows the host the workspace is created on, not the focused one.
+  const target = request.executionHostId
+    ? ipcOrRuntimeTargetForHostId(request.executionHostId)
+    : runtimeTargetForRepoOwner(useAppStore.getState(), request.repoId)
+  return target?.kind !== 'local'
 }
 
 export function getInitialWorktreeCreationPhase(

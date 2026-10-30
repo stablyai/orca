@@ -1,14 +1,7 @@
 import { spawn } from 'node:child_process'
 import type * as ChildProcess from 'node:child_process'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import {
-  createSshDisposalError,
-  SSH_MUX_REQUEST_TIMEOUT_CODE
-} from '../ssh/ssh-channel-multiplexer'
-import {
-  discoverCommitMessageModelsLocal,
-  discoverCommitMessageModelsRemote
-} from './commit-message-text-generation'
+import { discoverCommitMessageModelsLocal } from './commit-message-text-generation'
 import { PROVIDER_SPAWN_FAILURE_MARKER } from '../provider-process/provider-spawn-failure-report'
 import {
   createChildTerminationExpectation,
@@ -41,19 +34,23 @@ function spawnError(errno: string): Error {
 
 const expectChildTerminated = createChildTerminationExpectation(terminateWindowsProcessTreeMock)
 
-// These suites drive fake children down the Windows direct-child path, taskkill included. The POSIX
-// supervised stop with the Codex home lock (generation: timeout, cancel, output limit; discovery:
-// timeout, output limit) is in source-control-local-process.test.ts.
+// Fake Windows direct-child/taskkill paths here; source-control-local-process.test.ts covers supervised POSIX stop and managed-home lock release.
 const hostPlatform = process.platform
 
 afterEach(() => {
-  Object.defineProperty(process, 'platform', { configurable: true, value: hostPlatform })
+  Object.defineProperty(process, 'platform', {
+    configurable: true,
+    value: hostPlatform
+  })
   vi.unstubAllEnvs()
 })
 
 beforeEach(() => {
-  Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
-  // Windows resolves a bare agent name on PATH; the host's own installs must not answer it.
+  Object.defineProperty(process, 'platform', {
+    configurable: true,
+    value: 'win32'
+  })
+  // Clear PATH so host agent installs cannot answer fake Windows lookups.
   vi.stubEnv('PATH', '')
   terminateWindowsProcessTreeMock.mockClear()
   terminateWindowsProcessTreeMock.mockResolvedValue(undefined)
@@ -73,14 +70,20 @@ describe('discoverCommitMessageModelsLocal on the Windows direct-child path', ()
   })
 
   it('discovers dynamic models through the agent CLI', async () => {
-    // The host's own spawn shape: supervised on POSIX, direct on Windows.
-    Object.defineProperty(process, 'platform', { configurable: true, value: hostPlatform })
+    Object.defineProperty(process, 'platform', {
+      configurable: true,
+      value: hostPlatform
+    })
     const listeners = new Map<string, (value: unknown) => void>()
     const child = {
       pid: 123,
       kill: vi.fn(),
-      stdout: { on: vi.fn((event, callback) => listeners.set(`stdout:${event}`, callback)) },
-      stderr: { on: vi.fn((event, callback) => listeners.set(`stderr:${event}`, callback)) },
+      stdout: {
+        on: vi.fn((event, callback) => listeners.set(`stdout:${event}`, callback))
+      },
+      stderr: {
+        on: vi.fn((event, callback) => listeners.set(`stderr:${event}`, callback))
+      },
       stdin: { end: vi.fn() },
       on: vi.fn((event, callback) => listeners.set(event, callback))
     }
@@ -104,14 +107,20 @@ describe('discoverCommitMessageModelsLocal on the Windows direct-child path', ()
   })
 
   it('writes the Claude list_models request to stdin and parses the control response', async () => {
-    // The host's own spawn shape: supervised on POSIX, direct on Windows.
-    Object.defineProperty(process, 'platform', { configurable: true, value: hostPlatform })
+    Object.defineProperty(process, 'platform', {
+      configurable: true,
+      value: hostPlatform
+    })
     const listeners = new Map<string, (value: unknown) => void>()
     const child = {
       pid: 123,
       kill: vi.fn(),
-      stdout: { on: vi.fn((event, callback) => listeners.set(`stdout:${event}`, callback)) },
-      stderr: { on: vi.fn((event, callback) => listeners.set(`stderr:${event}`, callback)) },
+      stdout: {
+        on: vi.fn((event, callback) => listeners.set(`stdout:${event}`, callback))
+      },
+      stderr: {
+        on: vi.fn((event, callback) => listeners.set(`stderr:${event}`, callback))
+      },
       stdin: { on: vi.fn(), end: vi.fn() },
       on: vi.fn((event, callback) => listeners.set(event, callback))
     }
@@ -162,11 +171,14 @@ describe('discoverCommitMessageModelsLocal on the Windows direct-child path', ()
       'stream-json',
       '--output-format',
       'stream-json',
-      '--verbose'
+      '--verbose',
+      '--strict-mcp-config',
+      '--settings',
+      '{"disableAllHooks":true}'
     ])
     expect(spawnMock.mock.calls[0]![2]).toMatchObject({
       windowsHide: true,
-      stdio: ['pipe', 'pipe', 'pipe']
+      stdio: ['pipe', 'pipe', 'pipe', ...(process.platform === 'win32' ? [] : ['ipc'])]
     })
     expect(child.stdin.end).toHaveBeenCalledWith(expect.stringContaining('"list_models"'))
   })
@@ -176,8 +188,12 @@ describe('discoverCommitMessageModelsLocal on the Windows direct-child path', ()
     const child = {
       pid: 123,
       kill: vi.fn(),
-      stdout: { on: vi.fn((event, callback) => listeners.set(`stdout:${event}`, callback)) },
-      stderr: { on: vi.fn((event, callback) => listeners.set(`stderr:${event}`, callback)) },
+      stdout: {
+        on: vi.fn((event, callback) => listeners.set(`stdout:${event}`, callback))
+      },
+      stderr: {
+        on: vi.fn((event, callback) => listeners.set(`stderr:${event}`, callback))
+      },
       stdin: { on: vi.fn(), end: vi.fn() },
       on: vi.fn((event, callback) => listeners.set(event, callback))
     }
@@ -185,7 +201,7 @@ describe('discoverCommitMessageModelsLocal on the Windows direct-child path', ()
 
     const pending = discoverCommitMessageModelsLocal('claude', undefined)
 
-    // Captured from claude 2.1.100: the unsupported subtype still exits 0.
+    // Real Claude 2.1.100 output: unsupported subtype still exits zero.
     listeners.get('stdout:data')?.(
       Buffer.from(
         '{"type":"control_response","response":{"subtype":"error","request_id":"orca-model-discovery","error":"Unsupported control request subtype: list_models"}}\n'
@@ -202,14 +218,20 @@ describe('discoverCommitMessageModelsLocal on the Windows direct-child path', ()
   })
 
   it('discovers dynamic models through the configured agent command override', async () => {
-    // The host's own spawn shape: supervised on POSIX, direct on Windows.
-    Object.defineProperty(process, 'platform', { configurable: true, value: hostPlatform })
+    Object.defineProperty(process, 'platform', {
+      configurable: true,
+      value: hostPlatform
+    })
     const listeners = new Map<string, (value: unknown) => void>()
     const child = {
       pid: 123,
       kill: vi.fn(),
-      stdout: { on: vi.fn((event, callback) => listeners.set(`stdout:${event}`, callback)) },
-      stderr: { on: vi.fn((event, callback) => listeners.set(`stderr:${event}`, callback)) },
+      stdout: {
+        on: vi.fn((event, callback) => listeners.set(`stdout:${event}`, callback))
+      },
+      stderr: {
+        on: vi.fn((event, callback) => listeners.set(`stderr:${event}`, callback))
+      },
       stdin: { end: vi.fn() },
       on: vi.fn((event, callback) => listeners.set(event, callback))
     }
@@ -225,9 +247,10 @@ describe('discoverCommitMessageModelsLocal on the Windows direct-child path', ()
       defaultModelId: 'auto'
     })
     if (process.platform === 'win32') {
+      // npm shim resolution uses node + npx-cli.js, preserving argv without cmd.exe.
       expect(spawnMock).toHaveBeenCalledWith(
-        expect.stringMatching(/cmd\.exe$/i),
-        ['/d', '/c', expect.stringMatching(/npx\.cmd$/i), 'cursor-agent', '--list-models'],
+        expect.stringMatching(/node\.exe$/i),
+        [expect.stringMatching(/npx-cli\.js$/i), 'cursor-agent', '--list-models'],
         expect.objectContaining({ windowsHide: true })
       )
     } else {
@@ -245,8 +268,12 @@ describe('discoverCommitMessageModelsLocal on the Windows direct-child path', ()
       const child = {
         pid: 123,
         kill: vi.fn(),
-        stdout: { on: vi.fn((event, callback) => listeners.set(`stdout:${event}`, callback)) },
-        stderr: { on: vi.fn((event, callback) => listeners.set(`stderr:${event}`, callback)) },
+        stdout: {
+          on: vi.fn((event, callback) => listeners.set(`stdout:${event}`, callback))
+        },
+        stderr: {
+          on: vi.fn((event, callback) => listeners.set(`stderr:${event}`, callback))
+        },
         stdin: { end: vi.fn() },
         on: vi.fn((event, callback) => listeners.set(event, callback))
       }
@@ -268,10 +295,7 @@ describe('discoverCommitMessageModelsLocal on the Windows direct-child path', ()
         'wsl.exe',
         ['-d', 'Ubuntu', '--exec', 'sh', '-lc', expect.any(String)],
         expect.objectContaining({
-          // Why a concrete directory (#16463): `undefined` makes CreateProcessW inherit
-          // Orca's own cwd, a deletable WSL UNC path when it was launched from a
-          // worktree. The Linux directory still rides inside the command (/mnt/c/repo,
-          // asserted below), so the Windows-side cwd never decides where discovery runs.
+          // #16463: explicit native cwd avoids inherited deletable WSL UNC paths; discovery's guest cwd remains inside the command.
           cwd: expect.any(String),
           windowsHide: true
         })
@@ -289,8 +313,12 @@ describe('discoverCommitMessageModelsLocal on the Windows direct-child path', ()
     const child = {
       pid: 123,
       kill: vi.fn(),
-      stdout: { on: vi.fn((event, callback) => listeners.set(`stdout:${event}`, callback)) },
-      stderr: { on: vi.fn((event, callback) => listeners.set(`stderr:${event}`, callback)) },
+      stdout: {
+        on: vi.fn((event, callback) => listeners.set(`stdout:${event}`, callback))
+      },
+      stderr: {
+        on: vi.fn((event, callback) => listeners.set(`stderr:${event}`, callback))
+      },
       stdin: { end: vi.fn() },
       on: vi.fn((event, callback) => listeners.set(event, callback))
     }
@@ -313,8 +341,12 @@ describe('discoverCommitMessageModelsLocal on the Windows direct-child path', ()
     const child = {
       pid: 123,
       kill: vi.fn(),
-      stdout: { on: vi.fn((event, callback) => listeners.set(`stdout:${event}`, callback)) },
-      stderr: { on: vi.fn((event, callback) => listeners.set(`stderr:${event}`, callback)) },
+      stdout: {
+        on: vi.fn((event, callback) => listeners.set(`stdout:${event}`, callback))
+      },
+      stderr: {
+        on: vi.fn((event, callback) => listeners.set(`stderr:${event}`, callback))
+      },
       stdin: { end: vi.fn() },
       on: vi.fn((event, callback) => listeners.set(event, callback))
     }
@@ -337,8 +369,12 @@ describe('discoverCommitMessageModelsLocal on the Windows direct-child path', ()
     const child = {
       pid: 123,
       kill: vi.fn(),
-      stdout: { on: vi.fn((event, callback) => listeners.set(`stdout:${event}`, callback)) },
-      stderr: { on: vi.fn((event, callback) => listeners.set(`stderr:${event}`, callback)) },
+      stdout: {
+        on: vi.fn((event, callback) => listeners.set(`stdout:${event}`, callback))
+      },
+      stderr: {
+        on: vi.fn((event, callback) => listeners.set(`stderr:${event}`, callback))
+      },
       stdin: { end: vi.fn() },
       on: vi.fn((event, callback) => listeners.set(event, callback))
     }
@@ -395,7 +431,6 @@ describe('discoverCommitMessageModelsLocal on the Windows direct-child path', ()
       await expect(pending).resolves.toEqual({
         success: false,
         error,
-        // A missing binary is typed so the catalog can say the CLI is not installed.
         ...(errno === 'ENOENT' ? { unavailable: { reason: 'cliMissing' } } : {})
       })
     }
@@ -468,10 +503,17 @@ describe('discoverCommitMessageModelsLocal on the Windows direct-child path', ()
       expect(spawnMock).toHaveBeenCalledTimes(2)
       secondChild.stdout.emit(
         'data',
-        Buffer.from(JSON.stringify({ models: [{ slug: 'gpt-5.5', display_name: 'GPT-5.5' }] }))
+        Buffer.from(
+          JSON.stringify({
+            models: [{ slug: 'gpt-5.5', display_name: 'GPT-5.5' }]
+          })
+        )
       )
       secondChild.emit('close', 0)
-      await expect(second).resolves.toMatchObject({ success: true, defaultModelId: 'gpt-5.5' })
+      await expect(second).resolves.toMatchObject({
+        success: true,
+        defaultModelId: 'gpt-5.5'
+      })
     } finally {
       vi.useRealTimers()
     }
@@ -492,18 +534,24 @@ describe('discoverCommitMessageModelsLocal on the Windows direct-child path', ()
       await expect(first).resolves.toMatchObject({ success: false })
       expect(spawnMock).toHaveBeenCalledTimes(1)
 
-      // A grandchild kept the inherited stdout open, so the killed child reports
-      // 'exit' and 'close' never arrives.
+      // Inherited stdout can outlive the killed root; exit must suffice without close.
       firstChild.emit('exit', null, 'SIGKILL')
       await vi.advanceTimersByTimeAsync(0)
       expect(spawnMock).toHaveBeenCalledTimes(2)
 
       secondChild.stdout.emit(
         'data',
-        Buffer.from(JSON.stringify({ models: [{ slug: 'gpt-5.5', display_name: 'GPT-5.5' }] }))
+        Buffer.from(
+          JSON.stringify({
+            models: [{ slug: 'gpt-5.5', display_name: 'GPT-5.5' }]
+          })
+        )
       )
       secondChild.emit('close', 0)
-      await expect(second).resolves.toMatchObject({ success: true, defaultModelId: 'gpt-5.5' })
+      await expect(second).resolves.toMatchObject({
+        success: true,
+        defaultModelId: 'gpt-5.5'
+      })
     } finally {
       vi.useRealTimers()
     }
@@ -526,98 +574,5 @@ describe('discoverCommitMessageModelsLocal on the Windows direct-child path', ()
     expect(child.stderr.listenerCount('data')).toBe(0)
     expect(child.listenerCount('error')).toBe(0)
     expect(child.listenerCount('close')).toBe(0)
-  })
-})
-
-describe('generateCommitMessageFromContext on the Windows direct-child path', () => {
-  it('discovers dynamic models through a remote execution plan', async () => {
-    const execute = vi.fn(async (plan, cwd, timeoutMs) => {
-      expect(plan).toEqual({
-        binary: 'npx',
-        args: ['cursor-agent', '--list-models'],
-        stdinPayload: null,
-        label: 'Cursor'
-      })
-      expect(cwd).toBe('/remote/repo')
-      expect(timeoutMs).toBe(60_000)
-      return {
-        stdout: 'auto - Auto\ngpt-5.2 - GPT-5.2\n',
-        stderr: '',
-        exitCode: 0,
-        timedOut: false
-      }
-    })
-
-    const result = await discoverCommitMessageModelsRemote(
-      'cursor',
-      '/remote/repo',
-      execute,
-      'npx cursor-agent'
-    )
-
-    expect(result).toMatchObject({
-      success: true,
-      defaultModelId: 'auto',
-      models: [
-        { id: 'auto', label: 'Auto' },
-        { id: 'gpt-5.2', label: 'GPT-5.2' }
-      ]
-    })
-  })
-
-  it('reports remote model discovery transport timeouts without PATH guidance', async () => {
-    const transportTimeout = Object.assign(
-      new Error('Request "agent.execNonInteractive" timed out after 65000ms'),
-      { code: SSH_MUX_REQUEST_TIMEOUT_CODE }
-    )
-    const result = await discoverCommitMessageModelsRemote(
-      'cursor',
-      '/remote/repo',
-      async () => {
-        throw transportTimeout
-      },
-      'npx cursor-agent'
-    )
-
-    expect(result).toEqual({
-      success: false,
-      error:
-        'Cursor model discovery took longer than 60s and may still be running on the remote host.'
-    })
-  })
-
-  it('keeps the unverifiable wording when the link is declared lost instead of timing out', async () => {
-    // Same regression as the exec leg: a wedged link now disposes the mux before the response
-    // deadline, so this branch sees CONNECTION_LOST. Reporting "could not be reached" for it
-    // asserts absence the client never observed (docs/reference/ssh-execution-boundary.md).
-    const result = await discoverCommitMessageModelsRemote(
-      'cursor',
-      '/remote/repo',
-      async () => {
-        throw createSshDisposalError('connection_lost')
-      },
-      'npx cursor-agent'
-    )
-
-    expect(result).toEqual({
-      success: false,
-      error:
-        'Cursor model discovery took longer than 60s and may still be running on the remote host.'
-    })
-  })
-
-  it('reports remote model discovery spawn failures with remote install guidance', async () => {
-    const result = await discoverCommitMessageModelsRemote('cursor', '/remote/repo', async () => ({
-      stdout: '',
-      stderr: '',
-      exitCode: null,
-      timedOut: false,
-      spawnError: 'ENOENT'
-    }))
-
-    expect(result).toEqual({
-      success: false,
-      error: 'cursor-agent not found on the remote PATH. Install Cursor there.'
-    })
   })
 })

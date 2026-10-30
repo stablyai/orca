@@ -1,8 +1,7 @@
 import { isAgentSessionThreadGoalFrame } from '../../../../shared/agent-session-thread-goal'
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'
 
-/** The goal banner shows goal state, so its transitions leave the transcript. The
- *  journal keeps them; only this view omits them. */
+/** Show goal transitions in the banner only; retain them in the journal. */
 export function omitNativeChatThreadGoalRows(
   messages: readonly NativeChatMessage[]
 ): NativeChatMessage[] {

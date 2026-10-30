@@ -1,30 +1,52 @@
 import { Pressable, Text, View } from 'react-native'
+import type { Translate } from '../i18n/mobile-i18n'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
+import { WorkspaceOptionsCountBadge } from './workspace-options-count-badge'
 import {
   ChevronLeft,
-  Filter,
-  Layers,
   List,
   PanelLeftClose,
   Plus,
   Search,
-  SlidersHorizontal,
   SquareTerminal,
   UserCircle,
   X
 } from 'lucide-react-native'
 import { StatusDot } from '../components/StatusDot'
-import { classifyConnection, type ConnectionVerdict } from '../transport/connection-health'
+import { isConnectionOutage, type ConnectionVerdict } from '../transport/connection-health'
+import { useCalmConnectionState } from '../transport/calm-connection-state'
 import { colors } from '../theme/mobile-theme'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { hostScreenStyles as styles } from './host-screen-styles'
 import type { HostScreenController } from './use-host-screen-controller'
 
 function isErrorVerdict(v: ConnectionVerdict): boolean {
-  return v.kind === 'warning' || v.kind === 'unreachable' || v.kind === 'auth-failed'
+  return isConnectionOutage(v) || v.kind === 'auth-failed'
+}
+
+function workspaceOptionsAccessibilityLabel(t: Translate, count: number): string {
+  if (count <= 0) {
+    return t('hostScreen.hostScreenHeader.workspaceOptions', 'Workspace options')
+  }
+  return count === 1
+    ? t(
+        'hostScreen.hostScreenHeader.activeFilters_one',
+        'Workspace options ({{count}} filter active)',
+        { count }
+      )
+    : t(
+        'hostScreen.hostScreenHeader.activeFilters_other',
+        'Workspace options ({{count}} filters active)',
+        { count }
+      )
 }
 
 export function HostScreenHeader({ controller }: { controller: HostScreenController }) {
+  const t = useMobileTranslation()
+  useMobileColorScheme()
   const {
     actions,
+    connectionVerdict,
     connState,
     embedded,
     floatingWorkspaceEnabled,
@@ -33,11 +55,10 @@ export function HostScreenHeader({ controller }: { controller: HostScreenControl
     hostDisplay,
     lastConnectedAt,
     onHideSidebar,
-    reconnectAttempts,
-    relayRecovery,
-    settings,
     state
   } = controller
+  // Why: a drop healed in a few seconds must not flash the host dot amber.
+  const presentedConnState = useCalmConnectionState(connState, lastConnectedAt)
 
   return (
     <View style={styles.topChrome}>
@@ -46,63 +67,42 @@ export function HostScreenHeader({ controller }: { controller: HostScreenControl
           style={styles.backButton}
           onPress={actions.leaveHost}
           accessibilityRole="button"
-          accessibilityLabel="Back to hosts"
+          accessibilityLabel={t('hostScreen.hostScreenHeader.backToHosts', 'Back to hosts')}
           hitSlop={8}
         >
           <ChevronLeft size={22} color={colors.textPrimary} />
         </Pressable>
-        {(() => {
-          const headerVerdict = classifyConnection({
-            state: connState,
-            reconnectAttempts,
-            lastConnectedAt,
-            hostName: state.hostName,
-            ...relayRecovery
-          })
-          return (
-            <>
-              <View style={styles.hostIdentity}>
-                <View style={styles.hostIdentityLine}>
-                  <StatusDot state={connState} verdict={headerVerdict} />
-                  <Text style={styles.hostNameText} numberOfLines={1}>
-                    {hostDisplay.title}
-                  </Text>
-                </View>
-                {hostDisplay.descriptorLine ? (
-                  <Text style={styles.hostPlatformText} numberOfLines={1}>
-                    {hostDisplay.descriptorLine}
-                  </Text>
-                ) : null}
-              </View>
-              {connState !== 'connected' &&
-                (() => {
-                  // Why: auth-failed has its own banner, so suppress the Reconnect button for that verdict.
-                  const verdict = headerVerdict
-                  const isError = isErrorVerdict(verdict)
-                  // Null on the page, where the shell owns the connection and nothing here re-dials.
-                  if (
-                    !isError ||
-                    !hostId ||
-                    verdict.kind === 'auth-failed' ||
-                    forceReconnectHost === null
-                  ) {
-                    return null
-                  }
-                  return (
-                    <Pressable
-                      style={styles.reconnectButton}
-                      onPress={() => void forceReconnectHost(hostId)}
-                      accessibilityRole="button"
-                      accessibilityLabel="Reconnect"
-                      hitSlop={8}
-                    >
-                      <Text style={styles.reconnectButtonText}>Reconnect</Text>
-                    </Pressable>
-                  )
-                })()}
-            </>
-          )
-        })()}
+        <View style={styles.hostIdentity}>
+          <View style={styles.hostIdentityLine}>
+            {presentedConnState !== connState && !isErrorVerdict(connectionVerdict) ? (
+              <StatusDot state={presentedConnState} />
+            ) : (
+              <StatusDot state={connState} verdict={connectionVerdict} />
+            )}
+            <Text style={styles.hostNameText} numberOfLines={1}>
+              {hostDisplay.title}
+            </Text>
+          </View>
+          {hostDisplay.descriptorLine ? (
+            <Text style={styles.hostPlatformText} numberOfLines={1}>
+              {hostDisplay.descriptorLine}
+            </Text>
+          ) : null}
+        </View>
+        {/* auth-failed has its own banner; the page cannot re-dial the connection the shell owns. */}
+        {isConnectionOutage(connectionVerdict) && hostId && forceReconnectHost !== null ? (
+          <Pressable
+            style={styles.reconnectButton}
+            onPress={() => void forceReconnectHost(hostId)}
+            accessibilityRole="button"
+            accessibilityLabel={t('hostScreen.hostScreenHeader.reconnect', 'Reconnect')}
+            hitSlop={8}
+          >
+            <Text style={styles.reconnectButtonText}>
+              {t('hostScreen.hostScreenHeader.reconnect', 'Reconnect')}
+            </Text>
+          </Pressable>
+        ) : null}
         {!embedded && floatingWorkspaceEnabled ? (
           <Pressable
             style={[
@@ -112,7 +112,10 @@ export function HostScreenHeader({ controller }: { controller: HostScreenControl
             onPress={actions.openFloatingWorkspace}
             disabled={connState !== 'connected'}
             accessibilityRole="button"
-            accessibilityLabel="Floating Workspace"
+            accessibilityLabel={t(
+              'hostScreen.hostScreenHeader.floatingWorkspace',
+              'Floating Workspace'
+            )}
             hitSlop={8}
           >
             <SquareTerminal
@@ -126,7 +129,7 @@ export function HostScreenHeader({ controller }: { controller: HostScreenControl
             style={styles.sidebarCollapseButton}
             onPress={onHideSidebar}
             accessibilityRole="button"
-            accessibilityLabel="Hide sidebar"
+            accessibilityLabel={t('hostScreen.hostScreenHeader.hideSidebar', 'Hide sidebar')}
             hitSlop={8}
           >
             <PanelLeftClose size={14} color={colors.textSecondary} />
@@ -134,7 +137,6 @@ export function HostScreenHeader({ controller }: { controller: HostScreenControl
         ) : null}
       </View>
 
-      {/* Filter/sort/group toolbar */}
       {embedded ? (
         <View style={styles.embeddedToolbar}>
           <View style={styles.embeddedToolbarRow}>
@@ -142,55 +144,25 @@ export function HostScreenHeader({ controller }: { controller: HostScreenControl
               style={[
                 styles.filterChip,
                 styles.embeddedFilterChip,
-                settings.activeFilterCount > 0 && styles.filterChipActive
+                controller.activeFilterCount > 0 && styles.filterChipActive
               ]}
-              onPress={() => state.setShowFilterModal(true)}
+              onPress={() => state.setShowWorkspaceOptions(true)}
               accessibilityRole="button"
-              accessibilityLabel={`Filter workspaces${settings.activeFilterCount > 0 ? `, ${settings.activeFilterCount} active` : ''}`}
+              accessibilityLabel={workspaceOptionsAccessibilityLabel(
+                t,
+                controller.activeFilterCount
+              )}
             >
-              <Filter
-                size={12}
-                color={settings.activeFilterCount > 0 ? colors.textPrimary : colors.textSecondary}
-              />
               <Text
                 style={[
                   styles.filterChipText,
-                  settings.activeFilterCount > 0 && styles.filterChipTextActive
+                  controller.activeFilterCount > 0 && styles.filterChipTextActive
                 ]}
                 numberOfLines={1}
               >
-                Filter{settings.activeFilterCount > 0 ? ` ${settings.activeFilterCount}` : ''}
+                {t('hostScreen.hostScreenHeader.workspaceOptions', 'Workspace options')}
               </Text>
-            </Pressable>
-
-            <Pressable
-              style={[styles.modeButton, styles.embeddedModeButton]}
-              onPress={() => state.setShowSortPicker(true)}
-              accessibilityRole="button"
-              accessibilityLabel={`Sort by ${settings.selectedSortLabel}`}
-            >
-              <SlidersHorizontal size={14} color={colors.textSecondary} />
-              <Text style={styles.sortLabel} numberOfLines={1}>
-                {settings.selectedSortLabel}
-              </Text>
-            </Pressable>
-
-            <Pressable
-              style={[styles.modeButton, styles.embeddedModeButton]}
-              onPress={() => state.setShowGroupPicker(true)}
-              accessibilityRole="button"
-              accessibilityLabel="Group workspaces"
-            >
-              <Layers size={14} color={colors.textSecondary} />
-              <Text style={styles.sortLabel} numberOfLines={1}>
-                {state.groupMode === 'none'
-                  ? 'Group'
-                  : state.groupMode === 'workspaceStatus'
-                    ? 'Status'
-                    : state.groupMode === 'repo'
-                      ? 'Repo'
-                      : 'PR'}
-              </Text>
+              <WorkspaceOptionsCountBadge count={controller.activeFilterCount} />
             </Pressable>
           </View>
 
@@ -205,7 +177,7 @@ export function HostScreenHeader({ controller }: { controller: HostScreenControl
               }
               disabled={connState !== 'connected'}
               accessibilityRole="button"
-              accessibilityLabel="Accounts"
+              accessibilityLabel={t('hostScreen.hostScreenHeader.accounts', 'Accounts')}
             >
               <UserCircle
                 size={16}
@@ -221,7 +193,7 @@ export function HostScreenHeader({ controller }: { controller: HostScreenControl
               onPress={() => actions.navigateFromHostList(`/h/${encodeURIComponent(hostId)}/tasks`)}
               disabled={connState !== 'connected'}
               accessibilityRole="button"
-              accessibilityLabel="Tasks"
+              accessibilityLabel={t('hostScreen.hostScreenHeader.tasks', 'Tasks')}
             >
               <List
                 size={16}
@@ -238,7 +210,10 @@ export function HostScreenHeader({ controller }: { controller: HostScreenControl
                 onPress={actions.openFloatingWorkspace}
                 disabled={connState !== 'connected'}
                 accessibilityRole="button"
-                accessibilityLabel="Floating Workspace"
+                accessibilityLabel={t(
+                  'hostScreen.hostScreenHeader.floatingWorkspace',
+                  'Floating Workspace'
+                )}
               >
                 <SquareTerminal
                   size={18}
@@ -255,7 +230,7 @@ export function HostScreenHeader({ controller }: { controller: HostScreenControl
               onPress={actions.openNewWorktreeModal}
               disabled={connState !== 'connected'}
               accessibilityRole="button"
-              accessibilityLabel="New workspace"
+              accessibilityLabel={t('hostScreen.hostScreenHeader.newWorkspace', 'New workspace')}
             >
               <Plus
                 size={16}
@@ -267,7 +242,11 @@ export function HostScreenHeader({ controller }: { controller: HostScreenControl
               style={styles.embeddedToolbarIconButton}
               onPress={() => state.setShowSearch((s) => !s)}
               accessibilityRole="button"
-              accessibilityLabel={state.showSearch ? 'Close search' : 'Search workspaces'}
+              accessibilityLabel={
+                state.showSearch
+                  ? t('hostScreen.hostScreenHeader.closeSearch', 'Close search')
+                  : t('hostScreen.hostScreenHeader.searchWorkspaces', 'Search workspaces')
+              }
             >
               {state.showSearch ? (
                 <X size={16} color={colors.textSecondary} />
@@ -280,53 +259,20 @@ export function HostScreenHeader({ controller }: { controller: HostScreenControl
       ) : (
         <View style={styles.toolbar}>
           <Pressable
-            style={[styles.filterChip, settings.activeFilterCount > 0 && styles.filterChipActive]}
-            onPress={() => state.setShowFilterModal(true)}
+            style={[styles.filterChip, controller.activeFilterCount > 0 && styles.filterChipActive]}
+            onPress={() => state.setShowWorkspaceOptions(true)}
             accessibilityRole="button"
-            accessibilityLabel={`Filter workspaces${settings.activeFilterCount > 0 ? `, ${settings.activeFilterCount} active` : ''}`}
+            accessibilityLabel={workspaceOptionsAccessibilityLabel(t, controller.activeFilterCount)}
           >
-            <Filter
-              size={12}
-              color={settings.activeFilterCount > 0 ? colors.textPrimary : colors.textSecondary}
-            />
             <Text
               style={[
                 styles.filterChipText,
-                settings.activeFilterCount > 0 && styles.filterChipTextActive
+                controller.activeFilterCount > 0 && styles.filterChipTextActive
               ]}
             >
-              Filter{settings.activeFilterCount > 0 ? ` (${settings.activeFilterCount})` : ''}
+              {t('hostScreen.hostScreenHeader.workspaceOptions', 'Workspace options')}
             </Text>
-          </Pressable>
-
-          <Pressable
-            style={styles.modeButton}
-            onPress={() => state.setShowSortPicker(true)}
-            accessibilityRole="button"
-            accessibilityLabel={`Sort by ${settings.selectedSortLabel}`}
-          >
-            <SlidersHorizontal size={14} color={colors.textSecondary} />
-            <Text style={styles.sortLabel} numberOfLines={1}>
-              {settings.selectedSortLabel}
-            </Text>
-          </Pressable>
-
-          <Pressable
-            style={styles.modeButton}
-            onPress={() => state.setShowGroupPicker(true)}
-            accessibilityRole="button"
-            accessibilityLabel="Group workspaces"
-          >
-            <Layers size={14} color={colors.textSecondary} />
-            <Text style={styles.sortLabel} numberOfLines={1}>
-              {state.groupMode === 'none'
-                ? 'Group'
-                : state.groupMode === 'workspaceStatus'
-                  ? 'Status'
-                  : state.groupMode === 'repo'
-                    ? 'Repo'
-                    : 'PR'}
-            </Text>
+            <WorkspaceOptionsCountBadge count={controller.activeFilterCount} />
           </Pressable>
 
           <View style={styles.toolbarSpacer} />
@@ -338,7 +284,7 @@ export function HostScreenHeader({ controller }: { controller: HostScreenControl
             }
             disabled={connState !== 'connected'}
             accessibilityRole="button"
-            accessibilityLabel="Accounts"
+            accessibilityLabel={t('hostScreen.hostScreenHeader.accounts', 'Accounts')}
           >
             <UserCircle
               size={16}
@@ -351,7 +297,7 @@ export function HostScreenHeader({ controller }: { controller: HostScreenControl
             onPress={() => actions.navigateFromHostList(`/h/${encodeURIComponent(hostId)}/tasks`)}
             disabled={connState !== 'connected'}
             accessibilityRole="button"
-            accessibilityLabel="Tasks"
+            accessibilityLabel={t('hostScreen.hostScreenHeader.tasks', 'Tasks')}
           >
             <List
               size={16}
@@ -363,7 +309,11 @@ export function HostScreenHeader({ controller }: { controller: HostScreenControl
             style={styles.searchToggle}
             onPress={() => state.setShowSearch((s) => !s)}
             accessibilityRole="button"
-            accessibilityLabel={state.showSearch ? 'Close search' : 'Search workspaces'}
+            accessibilityLabel={
+              state.showSearch
+                ? t('hostScreen.hostScreenHeader.closeSearch', 'Close search')
+                : t('hostScreen.hostScreenHeader.searchWorkspaces', 'Search workspaces')
+            }
           >
             {state.showSearch ? (
               <X size={16} color={colors.textSecondary} />

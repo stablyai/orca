@@ -5,15 +5,17 @@ import {
   fetchGitHubPullRequestHeadRef
 } from '../github/pr-head-tracking-ref'
 import { resolveGitHubPrStartPoint } from '../github/pr-start-point'
+import { resolvePrStartPointUnlessWslStopped } from '../github/pr-start-point-wsl-gate'
 import { resolveGitHubReviewHeadRemote } from '../github/review-head-remote'
 import { gitExecFileAsync } from '../git/runner'
 import {
   getLocalProjectGitExecOptions,
   getLocalProjectGhExecOptions
 } from '../project-runtime-git-options'
-import { requireSshGitProvider } from '../providers/ssh-git-dispatch'
 import { isFolderRepo } from '../../shared/repo-kind'
-import type { Store } from '../persistence'
+import { requireRepoLocalGitRoute } from '../repo-execution-host'
+import type { ProjectRuntimeResolutionStore } from '../local-project-runtime-resolution'
+import { reviewStartPointFailure } from '../../shared/review-start-point-failure-copy'
 
 export type RuntimeGitHubWorktreeBaseArgs = {
   repoSelector: string
@@ -21,11 +23,16 @@ export type RuntimeGitHubWorktreeBaseArgs = {
   headRefName?: string
   baseRefName?: string
   isCrossRepository?: boolean
+  /** The user creating or launching from the PR: it may start a stopped WSL distro. */
+  wakeWslDistro?: boolean
 }
 
 export async function resolveRuntimeGitHubWorktreeBase(
   args: RuntimeGitHubWorktreeBaseArgs,
-  deps: { store: Store | null; resolveRepo: (selector: string) => Promise<Repo> }
+  deps: {
+    store: ProjectRuntimeResolutionStore | null
+    resolveRepo: (selector: string) => Promise<Repo>
+  }
 ): Promise<GitHubPrStartPoint | { error: string }> {
   if (!deps.store) {
     throw new Error('runtime_unavailable')
@@ -34,59 +41,48 @@ export async function resolveRuntimeGitHubWorktreeBase(
   try {
     repo = await deps.resolveRepo(args.repoSelector)
   } catch {
-    return { error: 'Repo not found' }
+    return reviewStartPointFailure('repoNotFound')
   }
   if (isFolderRepo(repo)) {
-    return { error: 'Folder mode does not support creating worktrees.' }
+    return reviewStartPointFailure('folderUnsupported')
   }
-  const sshGitProvider = repo.connectionId ? requireSshGitProvider(repo.connectionId) : null
-  const localGitExecOptions = sshGitProvider
-    ? undefined
-    : getLocalProjectGitExecOptions(deps.store, repo)
-  const localGhOptions = sshGitProvider
-    ? repo.ghAccount
-      ? { ghAccount: repo.ghAccount }
-      : undefined
-    : getLocalProjectGhExecOptions(deps.store, repo)
-  const gitExec = sshGitProvider
-    ? (gitArgs: string[]) => sshGitProvider.exec(gitArgs, repo.path)
-    : (gitArgs: string[]) => gitExecFileAsync(gitArgs, localGitExecOptions ?? { cwd: repo.path })
+  // Use shared host gating: executionHostId may be a row's only SSH marker.
+  requireRepoLocalGitRoute(repo)
+  const localGitExecOptions = getLocalProjectGitExecOptions(deps.store, repo)
+  const localGhOptions = getLocalProjectGhExecOptions(deps.store, repo)
+  const gitExec = (gitArgs: string[]) => gitExecFileAsync(gitArgs, localGitExecOptions)
   const resolveRemote = (): Promise<string> =>
     resolveGitHubReviewHeadRemote({
       repoPath: repo.path,
       issueSourcePreference: repo.issueSourcePreference,
-      connectionId: repo.connectionId ?? null,
+      connectionId: null,
       localGitOptions: localGhOptions,
       gitExec
     })
   const fetchRemoteTrackingRef = (remote: string, branch: string): Promise<void> =>
-    fetchPrHeadTrackingRef(
-      repo,
-      sshGitProvider,
-      remote,
-      branch,
-      localGitExecOptions ? { localGitExecOptions } : {}
-    )
+    fetchPrHeadTrackingRef(repo, remote, branch, { localGitExecOptions })
   const fetchPullRequestHeadRef = (remote: string, prNumber: number): Promise<string> =>
-    fetchGitHubPullRequestHeadRef(
-      repo,
-      sshGitProvider,
-      remote,
-      prNumber,
-      localGitExecOptions ? { localGitExecOptions } : {}
-    )
-  return resolveGitHubPrStartPoint({
-    repoPath: repo.path,
-    prNumber: args.prNumber,
-    headRefName: args.headRefName,
-    baseRefName: args.baseRefName,
-    isCrossRepository: args.isCrossRepository,
-    issueSourcePreference: repo.issueSourcePreference,
-    connectionId: repo.connectionId ?? null,
-    localGitOptions: localGhOptions,
-    gitExec,
-    fetchRemoteTrackingRef,
-    fetchPullRequestHeadRef,
-    resolveRemote
-  })
+    fetchGitHubPullRequestHeadRef(repo, remote, prNumber, {
+      localGitExecOptions
+    })
+  // A paired client's push-target ensure asks unprompted; it must not start a stopped distro (E9).
+  return resolvePrStartPointUnlessWslStopped(
+    { path: repo.path, wslDistro: localGitExecOptions.wslDistro },
+    { wakeWslDistro: args.wakeWslDistro },
+    () =>
+      resolveGitHubPrStartPoint({
+        repoPath: repo.path,
+        prNumber: args.prNumber,
+        headRefName: args.headRefName,
+        baseRefName: args.baseRefName,
+        isCrossRepository: args.isCrossRepository,
+        issueSourcePreference: repo.issueSourcePreference,
+        connectionId: null,
+        localGitOptions: localGhOptions,
+        gitExec,
+        fetchRemoteTrackingRef,
+        fetchPullRequestHeadRef,
+        resolveRemote
+      })
+  )
 }

@@ -3,6 +3,24 @@ import { platformBindings } from './definitions-support'
 
 export const KEYBINDING_DEFINITION_CORE_4: readonly KeybindingDefinition[] = [
   {
+    id: 'chat.find',
+    title: 'Find in chat',
+    group: 'Chat',
+    scope: 'chat',
+    searchKeywords: ['shortcut', 'chat', 'find', 'search'],
+    defaultBindings: platformBindings(['Mod+F'])
+  },
+  {
+    id: 'terminal.toggleNativeChat',
+    title: 'Switch between Chat UI and terminal',
+    group: 'Chat',
+    scope: 'terminal',
+    conflictGroups: ['global', 'tabs', 'terminal', 'chat', 'fileExplorer'],
+    implicitDefaultYields: true,
+    searchKeywords: ['shortcut', 'chat', 'chat ui', 'native chat', 'terminal', 'toggle', 'switch'],
+    defaultBindings: platformBindings(['Mod+Shift+J'])
+  },
+  {
     id: 'sidebar.childWorkspaces.toggle',
     title: 'Toggle Child Workspaces',
     group: 'Global',

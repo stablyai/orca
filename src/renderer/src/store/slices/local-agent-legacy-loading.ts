@@ -1,5 +1,5 @@
 import type { AppState } from '../types'
-import { removeLocalAgentContextEntry } from './local-agent-context-eviction'
+import { removeLocalAgentContextEntries } from './local-agent-context-eviction'
 
 type LocalAgentLegacyLoadingState = Pick<
   AppState,
@@ -25,19 +25,14 @@ export function getLegacyLoadingPatch(
 
 export function getSupersededDetectPatch(
   state: LocalAgentLegacyLoadingState & Pick<AppState, 'isDetectingLocalAgentsByContext'>,
-  contextKey: string,
-  supersedesDetect: boolean,
+  contextKeys: ReadonlySet<string>,
   clearsLegacyDetect: boolean
 ): Partial<AppState> {
   return {
     ...(clearsLegacyDetect ? { isDetectingAgents: false } : {}),
-    ...(supersedesDetect
-      ? {
-          isDetectingLocalAgentsByContext: removeLocalAgentContextEntry(
-            state.isDetectingLocalAgentsByContext,
-            contextKey
-          )
-        }
-      : {})
+    isDetectingLocalAgentsByContext: removeLocalAgentContextEntries(
+      state.isDetectingLocalAgentsByContext,
+      contextKeys
+    )
   }
 }

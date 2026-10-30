@@ -16,28 +16,33 @@ let worktreeCardProperties: WorktreeCardProperty[] = []
 let settings: Partial<GlobalSettings> | null = null
 const WORKTREE_CARD_IMPORT_TIMEOUT_MS = 15_000
 
-vi.mock('@/store', () => ({
-  useAppStore: (selector: (state: unknown) => unknown) =>
-    selector({
-      deleteStateByWorktreeId: {},
-      fetchHostedReviewForBranch,
-      fetchIssue,
-      fetchLinearIssue,
-      gitConflictOperationByWorktree: {},
-      hostedReviewCache: {},
-      issueCache: {},
-      linearIssueCache: {},
-      openModal,
-      projectGroups: [],
-      remoteBranchConflictByWorktreeId: {},
-      settings,
-      sshConnectionStates: new Map(),
-      sshTargetLabels: new Map(),
-      updateWorktreeMeta,
-      workspacePortScan: null,
-      worktreeCardProperties
+vi.mock('@/store', () => {
+  const getState = () => ({
+    deleteStateByWorktreeId: {},
+    fetchHostedReviewForBranch,
+    fetchIssue,
+    fetchLinearIssue,
+    gitConflictOperationByWorktree: {},
+    hostedReviewCache: {},
+    issueCache: {},
+    linearIssueCache: {},
+    openModal,
+    projectGroups: [],
+    remoteBranchConflictByWorktreeId: {},
+    settings,
+    sshConnectionStates: new Map(),
+    sshTargetLabels: new Map(),
+    updateWorktreeMeta,
+    workspacePortScan: null,
+    worktreeCardProperties
+  })
+  return {
+    useAppStore: Object.assign((selector: (state: unknown) => unknown) => selector(getState()), {
+      getState,
+      subscribe: () => () => {}
     })
-}))
+  }
+})
 
 vi.mock('@/lib/worktree-activation', () => ({
   activateAndRevealWorktree: vi.fn()
@@ -115,7 +120,7 @@ describe('WorktreeCard pinned repo icon', () => {
   })
 
   it(
-    'shows the configured repo icon for pinned cards even when the repo badge is hidden',
+    'shows the repo icon and project name for pinned cards even when the repo badge is hidden',
     async () => {
       const { default: WorktreeCard } = await import('./WorktreeCard')
 
@@ -125,13 +130,13 @@ describe('WorktreeCard pinned repo icon', () => {
           repo={makeRepo()}
           isActive={false}
           inPinnedSection
-          // grouped-by-repo hides the normal badge; the pinned icon must still show
           hideRepoBadge
         />
       )
 
       expect(markup).toContain('🦊')
       expect(markup).toContain('Project orca')
+      expect(markup).toContain('>orca</span>')
     },
     WORKTREE_CARD_IMPORT_TIMEOUT_MS
   )
@@ -172,7 +177,30 @@ describe('WorktreeCard pinned repo icon', () => {
 
       expect(markup).toContain('🦊')
       expect(markup).toContain('Project orca')
+      expect(markup).toContain('>orca</span>')
       expect(markup).not.toContain('data-worktree-card-meta-row=""')
+    },
+    WORKTREE_CARD_IMPORT_TIMEOUT_MS
+  )
+
+  it(
+    'shows the project name on ungrouped compact cards and hides it when grouped by project',
+    async () => {
+      settings = { compactWorktreeCards: true, experimentalNewWorktreeCardStyle: false }
+      const { default: WorktreeCard } = await import('./WorktreeCard')
+      const worktree = makeWorktree({ isPinned: false, displayName: 'main' })
+
+      const ungrouped = renderToStaticMarkup(
+        <WorktreeCard worktree={worktree} repo={makeRepo()} isActive={false} />
+      )
+      expect(ungrouped).toContain('>orca</span>')
+      expect(ungrouped).toContain('Project orca')
+
+      const groupedByProject = renderToStaticMarkup(
+        <WorktreeCard worktree={worktree} repo={makeRepo()} isActive={false} hideRepoBadge />
+      )
+      expect(groupedByProject).not.toContain('>orca</span>')
+      expect(groupedByProject).not.toContain('Project orca')
     },
     WORKTREE_CARD_IMPORT_TIMEOUT_MS
   )

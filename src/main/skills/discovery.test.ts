@@ -9,10 +9,10 @@ import {
   LAST_KNOWN_ROOT_SCAN_RETENTION_MS
 } from './discovery'
 import { TUI_AGENT_CONFIG } from '../../shared/tui-agent-config'
-import type * as SkillRootFileWalk from './skill-root-file-walk'
+import * as Plugins from './claude-plugin-skill-sources'
+import * as SkillRootFileWalk from './skill-root-file-walk'
 import type { Repo } from '../../shared/repo-types'
 
-/** Root path whose walk should reject as if its scan had been abandoned. */
 let unavailableRootPath: string | null = null
 
 vi.mock('./skill-root-file-walk', async (importOriginal) => {
@@ -21,7 +21,6 @@ vi.mock('./skill-root-file-walk', async (importOriginal) => {
     ...actual,
     findSkillFiles: (rootPath: string, maxDepth: number, signal?: AbortSignal) => {
       if (unavailableRootPath !== null && rootPath === unavailableRootPath) {
-        // Shape matches what an aborted walk throws.
         return Promise.reject(
           Object.assign(new Error('This operation was aborted'), {
             name: 'AbortError'
@@ -46,10 +45,9 @@ function makeRepo(path: string, connectionId: string | null = null): Repo {
 }
 
 beforeEach(() => {
-  // Roots are shared between scans for a few seconds; each case owns its own tree.
+  // Reset shared scans because each case owns a different tree.
   clearSkillRootScanCache()
-  // Why: the Hermes root is the only home root that env vars can move outside the
-  // per-case tree, so a developer's real install must not leak into these scans.
+  // HERMES_HOME can escape the fixture; isolate it from developer installs.
   vi.stubEnv('HERMES_HOME', '')
   vi.stubEnv('LOCALAPPDATA', '')
   vi.spyOn(console, 'info').mockImplementation(() => undefined)
@@ -62,9 +60,19 @@ afterEach(() => {
 })
 
 describe('skill discovery', () => {
-  // Why this matters: callers already waiting on a scan that is later abandoned for
-  // age see it reject. Re-throwing turned one slow root into a failed discovery that
-  // emptied the picker for every healthy root beside it.
+  it('starts no root walks after a cancelled metadata wait completes late', async () => {
+    const pending = Promise.withResolvers<[]>()
+    vi.spyOn(Plugins, 'discoverClaudePluginSkillSources').mockReturnValueOnce(pending.promise)
+    const walks = vi.spyOn(SkillRootFileWalk, 'findSkillFiles')
+    const stop = new AbortController()
+    const reading = discoverSkills({ homeDir: '/h', cwd: '/w', signal: stop.signal })
+    stop.abort()
+    await expect(reading).rejects.toThrow()
+    pending.resolve([])
+    await Promise.resolve()
+    expect(walks).not.toHaveBeenCalled()
+  })
+  // An abandoned root must not empty the picker for healthy roots.
   it('keeps every healthy root when one root walk is aborted', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-skills-'))
     const home = join(root, 'home')
@@ -83,8 +91,7 @@ describe('skill discovery', () => {
     expect(stalledSource).toMatchObject({ skippedReason: 'unavailable' })
   })
 
-  // `unavailable` must stay distinct from `missing`: a root that did not answer is
-  // unknown, not empty, and a consumer must not read it as "these skills are gone".
+  // Unavailable means unknown, never proof that skills are missing.
   it('does not report an aborted root as missing', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-skills-'))
     const home = join(root, 'home')
@@ -105,9 +112,7 @@ describe('skill discovery', () => {
     })
   })
 
-  // The impact this exists for: every consumer derives "installed" from the skill
-  // list, so an empty list for an unanswered root made an installed skill offer
-  // Install again the moment a mount stalled.
+  // Retain the last answered scan so stalled roots do not make installed skills offer Install.
   it('serves the last answered skills for a root whose rescan did not answer', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-skills-'))
     const home = join(root, 'home')
@@ -148,7 +153,6 @@ describe('skill discovery', () => {
       refresh: true
     })
 
-    // A removed skill must not come back the next time its root stalls.
     expect(result.skills.map((skill) => skill.name)).toEqual([])
   })
 
@@ -210,6 +214,26 @@ describe('skill discovery', () => {
     expect(result.skills.find((skill) => skill.name === 'Planning')?.providers).toEqual([
       'agent-skills'
     ])
+  })
+
+  it("discovers a project's OpenCode skills as OpenCode's", async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-skills-'))
+    const repo = join(root, 'repo')
+    const opencodeSkill = join(repo, '.opencode', 'skills', 'release-notes')
+    await mkdir(opencodeSkill, { recursive: true })
+    await writeFile(join(opencodeSkill, 'SKILL.md'), '# Release notes\n\nWrite release notes.')
+
+    const result = await discoverSkills({
+      homeDir: join(root, 'home'),
+      cwd: join(root, 'missing-cwd'),
+      repos: [makeRepo(repo)]
+    })
+
+    const skill = result.skills.find((candidate) => candidate.name === 'Release notes')
+    expect(result.sources.find((source) => source.path === skill?.rootPath)).toMatchObject({
+      sourceKind: 'repo',
+      owner: 'opencode'
+    })
   })
 
   it('filters discovery by requested directory name and source kind', async () => {
@@ -324,7 +348,6 @@ describe('skill discovery', () => {
     await mkdir(join(codexSkills, 'review'), { recursive: true })
     await writeFile(join(codexSkills, 'review', 'SKILL.md'), '# review')
     await mkdir(join(home, '.agents'), { recursive: true })
-    // Shared root is a symlink onto the Codex root: one canonical file, two roots.
     await symlink(
       codexSkills,
       join(home, '.agents', 'skills'),
@@ -346,7 +369,6 @@ describe('skill discovery', () => {
     const claudeSkills = join(home, '.claude', 'skills')
     await mkdir(join(claudeSkills, 'orchestration'), { recursive: true })
     await writeFile(join(claudeSkills, 'orchestration', 'SKILL.md'), '# orchestration')
-    // `npx skills add --global` links a provider home onto an existing install.
     await mkdir(join(home, '.grok'), { recursive: true })
     await symlink(
       claudeSkills,
@@ -357,8 +379,7 @@ describe('skill discovery', () => {
     const result = await discoverSkills({ homeDir: home, repos: [], includeCwd: false })
 
     const skill = result.skills.find((entry) => entry.name === 'orchestration')
-    // Why: renderer coverage looks each rootPath up in `sources` by path, so a
-    // root with no matching source silently drops that agent back to uncovered.
+    // Every rootPath needs a source row or renderer coverage silently disappears.
     const owners = skill?.rootPaths
       ?.map((rootPath) => result.sources.find((source) => source.path === rootPath))
       .map((source) => source?.owner)
@@ -366,8 +387,7 @@ describe('skill discovery', () => {
   })
 
   it('names every source owner after a real agent id', () => {
-    // Why: renderer coverage joins `owner` to a TuiAgent id by string equality, and
-    // AgentType widens to string — a typo here reads Missing forever, type-clean.
+    // Coverage joins owner strings to agent ids; AgentType permits typos without type errors.
     const owners = buildSkillDiscoverySources({
       homeDir: '/home/test',
       repos: [],
@@ -378,8 +398,7 @@ describe('skill discovery', () => {
   })
 
   it('scans a home-equal workspace path as both a home and a repo root', () => {
-    // Why: coverage must tolerate several sources per path. Deduping these would
-    // make the renderer's duplicate-root regression test assert a dead shape.
+    // Keep duplicate-path sources representable so renderer regression coverage tests a live shape.
     const paths = buildSkillDiscoverySources({ homeDir: '/home/test', cwd: '/home/test' })
       .filter((source) => source.path === join('/home/test', '.claude', 'skills'))
       .map((source) => source.sourceKind)
@@ -397,6 +416,28 @@ describe('skill discovery', () => {
     const rootPaths = roots.map((root) => root.path.replace(/\\/g, '/'))
     expect(rootPaths).not.toContain('/remote/repo/.claude/skills')
     expect(rootPaths).toContain('/workspace/current/.claude/skills')
+  })
+
+  it('reports an SSH-backed repository as a remote-repo source instead of dropping it', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-skills-'))
+    const runtimeRepo = makeRepo('/runtime/repo')
+    runtimeRepo.executionHostId = 'runtime:environment-1'
+    const repos = [makeRepo('/remote/repo', 'ssh-1'), runtimeRepo]
+
+    const result = await discoverSkills({ homeDir: join(root, 'home'), repos, includeCwd: false })
+    const homeOnly = await discoverSkills({
+      homeDir: join(root, 'home'),
+      repos,
+      includeCwd: false,
+      sourceKinds: ['home']
+    })
+
+    const remoteSources = result.sources.filter((source) => source.skippedReason === 'remote-repo')
+    expect(remoteSources).toEqual([
+      expect.objectContaining({ path: '/remote/repo', sourceKind: 'repo', exists: false })
+    ])
+    expect(result.sources.some((source) => source.path.startsWith('/remote/repo/'))).toBe(false)
+    expect(homeOnly.sources.some((source) => source.skippedReason === 'remote-repo')).toBe(false)
   })
 
   it('scans each provider home skill root', () => {
@@ -427,15 +468,13 @@ describe('skill discovery', () => {
         '/workspace/current/.augment/skills'
       ])
     )
-    // Why: these live outside ~/.agents/skills, so they must carry the shared
-    // agent-skills provider to feed per-agent orchestration coverage.
+    // Nonstandard shared roots still need provider tags for orchestration coverage.
     for (const root of roots) {
       if (root.path.replace(/\\/g, '/') === '/home/test/.grok/skills') {
         expect(root.providers).toEqual(['agent-skills'])
       }
     }
-    // Why: the native-chat picker admits a root when its owner is null, so leaving
-    // OMP's home shared would leak OMP-only skills into every other agent's picker.
+    // A null owner admits every native-chat agent; OMP-only roots must stay scoped.
     expect(
       roots.find((root) => root.path.replace(/\\/g, '/') === '/home/test/.omp/agent/skills')?.owner
     ).toBe('omp')

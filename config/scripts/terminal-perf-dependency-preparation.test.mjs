@@ -4,7 +4,7 @@ import { dirname, join } from 'node:path'
 import { runInNewContext } from 'node:vm'
 import { parse } from 'yaml'
 import { expect, it } from 'vitest'
-import { runProcessSync } from './script-child-process.mjs'
+import { runProcessSync } from '@orca/process-host'
 
 const workflow = parse(readFileSync('.github/workflows/terminal-perf.yml', 'utf8'))
 const steps = workflow.jobs['terminal-perf'].steps
@@ -13,8 +13,10 @@ const script = selector.run.trim().match(/^node <<'NODE'\n([\s\S]*)\nNODE$/)[1]
 const supportedAction = readFileSync('.github/actions/install-node-dependencies/action.yml', 'utf8')
 const supportedManifest = {
   engines: { node: '24' },
-  packageManager: 'pnpm@12.8.1',
-  scripts: { postinstall: 'node config/scripts/rebuild-native-deps.mjs' }
+  packageManager: 'pnpm@12.14.0',
+  scripts: {
+    postinstall: 'pnpm run build:packages && node config/scripts/rebuild-native-deps.mjs'
+  }
 }
 
 function select(options = {}) {
@@ -45,6 +47,7 @@ function select(options = {}) {
         ...process.env,
         GITHUB_OUTPUT: output,
         RUNNER_KIND: options.kind ?? 'github-hosted',
+        RUNNER_NAME: options.name ?? 'GitHub Actions 1',
         JOB_CONTAINER: options.container ?? '',
         RUNNER_OS: options.os ?? 'Linux',
         RUNNER_ARCH: options.arch ?? 'X64'
@@ -60,18 +63,44 @@ function select(options = {}) {
 it('selects the measured current root profile with the actual installer metadata', () => {
   expect(select()).toBe('shared=true')
   expect(
-    select({ manifest: { ...supportedManifest, packageManager: 'pnpm@12.8.1+sha512.fixture' } })
+    select({ manifest: { ...supportedManifest, packageManager: 'pnpm@12.14.0+sha512.fixture' } })
   ).toBe('shared=true')
+})
+
+it('keeps the shared preparation route for the qualified older lifecycle', () => {
+  expect(
+    select({
+      manifest: {
+        ...supportedManifest,
+        scripts: { postinstall: 'node config/scripts/rebuild-native-deps.mjs' }
+      }
+    })
+  ).toBe('shared=true')
+})
+
+it('uses shared preparation on Blacksmith while preserving historical-ref fallback', () => {
+  const runner = { kind: 'self-hosted', name: 'blacksmith-4vcpu-ubuntu-2404-test' }
+  expect(select(runner)).toBe('shared=true')
+  expect(select({ ...runner, manifest: {} })).toBe('shared=false')
 })
 
 it.each([
   ['historical Node', { manifest: { ...supportedManifest, engines: { node: '22' } } }],
   ['historical pnpm', { manifest: { ...supportedManifest, packageManager: 'pnpm@10.0.0' } }],
-  ['unmeasured pnpm', { manifest: { ...supportedManifest, packageManager: 'pnpm@12.8.10' } }],
+  ['unmeasured pnpm', { manifest: { ...supportedManifest, packageManager: 'pnpm@12.14.00' } }],
   ['missing toolchain', { manifest: {} }],
   [
     'extra lifecycle work',
     { manifest: { ...supportedManifest, scripts: { postinstall: 'generate' } } }
+  ],
+  [
+    'additional package lifecycle work',
+    {
+      manifest: {
+        ...supportedManifest,
+        scripts: { postinstall: `${supportedManifest.scripts.postinstall} && generate` }
+      }
+    }
   ],
   ['self-hosted runner', { kind: 'self-hosted' }],
   ['job container', { container: 'container-id' }],

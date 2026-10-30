@@ -7,12 +7,13 @@ import {
   realpathSync,
   rmSync,
   statSync,
+  symlinkSync,
   writeFileSync
 } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
-import { runProcessSync } from '../shared/child-process/run-process'
+import { runProcessSync } from '@orca/process-host'
 import { runCodexAppServerSession } from './codex/codex-app-server-session'
 
 const testState = {
@@ -36,14 +37,14 @@ const {
   markAntigravityWorkspaceTrusted,
   markCodexProjectTrusted,
   markCopilotFolderTrusted,
-  markCursorWorkspaceTrusted
+  markCursorWorkspaceTrusted,
+  markKimiWorkspaceTrusted
 } = await import('./agent-trust-presets')
 const { runExclusivelyForCodexTrustConfig } =
   await import('./codex/codex-trust-config-mutation-queue')
 const { getLocalCodexTrustConfigFiles } = await import('./codex/codex-home-paths')
 
-// Why: fixture tests pin Orca's half; only the real binary proves Codex reads the key
-// Orca writes. CI sets REQUIRED so a missing binary fails instead of skipping.
+// Real-binary tests prove Codex consumes the key; CI requires the binary instead of skipping.
 const codexTrustContract = {
   binary: process.env.ORCA_CODEX_TRUST_CONTRACT_BINARY,
   version: process.env.ORCA_CODEX_TRUST_CONTRACT_VERSION
@@ -83,7 +84,7 @@ describe('markCursorWorkspaceTrusted', () => {
       const trustFile = join(projectsDir, slugDirs[0], '.workspace-trusted')
       expect(existsSync(trustFile)).toBe(true)
       const payload = JSON.parse(readFileSync(trustFile, 'utf-8'))
-      expect(payload.workspacePath).toBeTruthy()
+      expect(payload.workspacePath).toBe(realpathSync.native(workspace))
       expect(typeof payload.trustedAt).toBe('string')
     } finally {
       rmSync(workspace, { recursive: true, force: true })
@@ -107,6 +108,40 @@ describe('markCursorWorkspaceTrusted', () => {
   })
 })
 
+describe('markKimiWorkspaceTrusted', () => {
+  const kimiHome = () => join(testState.fakeHomeDir, '.kimi-code')
+  const records = () => readdirSync(join(kimiHome(), 'workspace-trust'))
+
+  it.skipIf(process.platform === 'win32')('uses the record name Kimi Code 2.3.1 wrote', () => {
+    // Name captured from a real Kimi Code 2.3.1 "Trust and continue" on macOS.
+    markKimiWorkspaceTrusted('/private/tmp/kimi-inst/ws/Sample Project', kimiHome())
+    expect(records()).toEqual(['wd_sample-project_017c73b76124'])
+  })
+
+  it.skipIf(process.platform !== 'win32')('lowercases Windows paths like Kimi', () => {
+    markKimiWorkspaceTrusted('C:\\projects\\Sample Project', kimiHome())
+    markKimiWorkspaceTrusted('c:\\PROJECTS\\sample project', kimiHome())
+    expect(records()).toEqual(['wd_sample-project_f415ab4f33c6'])
+  })
+
+  it.skipIf(process.platform === 'win32')(
+    'keys a symlinked workspace by the physical cwd Kimi sees',
+    () => {
+      const real = mkdtempSync(join(tmpdir(), 'orca-kimi-ws-'))
+      const link = join(testState.fakeHomeDir, 'linked-ws')
+      symlinkSync(real, link)
+      try {
+        markKimiWorkspaceTrusted(link, kimiHome())
+        const [name] = records()
+        const record = JSON.parse(readFileSync(join(kimiHome(), 'workspace-trust', name), 'utf-8'))
+        expect(record).toEqual({ root: realpathSync.native(real), trustedAt: expect.any(Number) })
+      } finally {
+        rmSync(real, { recursive: true, force: true })
+      }
+    }
+  )
+})
+
 describe('markCopilotFolderTrusted', () => {
   it('appends the workspace to trustedFolders in ~/.copilot/config.json', () => {
     const workspace = mkdtempSync(join(tmpdir(), 'orca-copilot-ws-'))
@@ -117,7 +152,7 @@ describe('markCopilotFolderTrusted', () => {
       const parsed = JSON.parse(readFileSync(configPath, 'utf-8'))
       expect(Array.isArray(parsed.trustedFolders)).toBe(true)
       expect(parsed.trustedFolders.length).toBe(1)
-      expect(typeof parsed.trustedFolders[0]).toBe('string')
+      expect(parsed.trustedFolders[0]).toBe(realpathSync.native(workspace))
     } finally {
       rmSync(workspace, { recursive: true, force: true })
     }
@@ -129,7 +164,7 @@ describe('markCopilotFolderTrusted', () => {
     }
     const workspace = mkdtempSync(join(tmpdir(), 'orca-copilot-ws-'))
     const configPath = join(testState.fakeHomeDir, '.copilot', 'config.json')
-    // Why: a restrictive runner umask would mask a dropped mode.
+    // A restrictive runner umask could hide a missing creation mode.
     const originalUmask = process.umask(0o022)
     try {
       mkdirSync(join(testState.fakeHomeDir, '.copilot'), { recursive: true })
@@ -201,8 +236,6 @@ describe('markAntigravityWorkspaceTrusted', () => {
     }
   })
 
-  // Why: the same settings.json also carries model, permissions and toolPermission. A
-  // clobbering write here would silently reset the user's agy configuration.
   it('preserves sibling settings keys and dedups an already-trusted workspace', () => {
     const workspace = mkdtempSync(join(tmpdir(), 'orca-agy-ws-'))
     const realpath = realpathSync(workspace)
@@ -231,8 +264,6 @@ describe('markAntigravityWorkspaceTrusted', () => {
     }
   })
 
-  // Why: agy's trust is exact-path, not inherited — a parent entry does not cover a child,
-  // which is what makes the per-worktree preflight necessary at all.
   it('adds a child worktree even when its parent is already trusted', () => {
     const parent = mkdtempSync(join(tmpdir(), 'orca-agy-parent-'))
     const child = join(parent, 'child-worktree')
@@ -255,9 +286,7 @@ describe('markAntigravityWorkspaceTrusted', () => {
 })
 
 describe('markCodexProjectTrusted', () => {
-  // Why (#16441): a hook install/grant holds this file across an awaited
-  // app-server session; an unqueued write here lands inside its
-  // capture->restore window and is silently reverted.
+  // Hook capture/restore could silently revert an unqueued trust write (#16441).
   it('queues behind an in-flight Codex trust-config mutation', async () => {
     const workspace = mkdtempSync(join(tmpdir(), 'orca-codex-ws-'))
     const configPath = join(testState.fakeHomeDir, '.codex', 'config.toml')
@@ -283,8 +312,7 @@ describe('markCodexProjectTrusted', () => {
     }
   })
 
-  // Why: Codex checks the cwd's own entry before any repo root, so the workspace key
-  // must satisfy it whatever the git layout.
+  // Codex checks the starting folder before the repo root, regardless of Git layout.
   describe('linked worktree trust key', { timeout: 120_000 }, () => {
     let fixtureRoot = ''
     beforeAll(() => {
@@ -336,8 +364,7 @@ describe('markCodexProjectTrusted', () => {
       }
     }
 
-    // Why thread/start: its default sandbox and the TUI trust prompt read the same
-    // project lookup, so workspaceWrite (not readOnly) means no prompt.
+    // thread/start shares the TUI trust lookup; workspaceWrite proves trust without a prompt.
     async function codexSandboxFor(cwd: string, codexHome: string): Promise<unknown> {
       const binary = codexTrustContract.binary!
       return runCodexAppServerSession(
@@ -426,6 +453,22 @@ describe('markCodexProjectTrusted', () => {
       expect(written).toContain('trust_level = "trusted"')
       expect(runtimeWritten).toContain(`[projects."${escapeTomlBasicString(realpath)}"]`)
       expect(runtimeWritten).toContain('trust_level = "trusted"')
+    } finally {
+      rmSync(workspace, { recursive: true, force: true })
+    }
+  })
+
+  it('writes the managed-account CODEX_HOME the launch runs on (#27235)', async () => {
+    const workspace = mkdtempSync(join(tmpdir(), 'orca-codex-ws-'))
+    const accountHome = join(testState.userDataDir, 'codex-accounts', 'acct-1', 'home')
+    try {
+      await markCodexProjectTrusted(
+        workspace,
+        getLocalCodexTrustConfigFiles(testState.fakeHomeDir, accountHome)
+      )
+      expect(readFileSync(join(accountHome, 'config.toml'), 'utf-8')).toContain(
+        `[projects."${escapeTomlBasicString(realpathSync.native(workspace))}"]\ntrust_level = "trusted"`
+      )
     } finally {
       rmSync(workspace, { recursive: true, force: true })
     }

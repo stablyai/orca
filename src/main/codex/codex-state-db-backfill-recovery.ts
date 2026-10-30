@@ -6,7 +6,7 @@ import { parseWslUncPath } from '../../shared/wsl-paths'
 import { withManagedHookInstallLock } from '../agent-hooks/managed-hook-install-lock'
 import { readManagedHookHostIdentity } from '../agent-hooks/managed-hook-owner-identity'
 import { resolveCodexCommand } from '../codex-cli/command'
-import type { ChildProcessHandle } from '../../shared/child-process/process-spec'
+import type { ChildProcessHandle } from '@orca/process-host/process-spec'
 import {
   spawnCodexAppServerProcess,
   type CodexAppServerSpawn
@@ -86,7 +86,7 @@ function initialRecoveryDecision(
   return null
 }
 
-/** Keeps a sanctioned app-server claimant alive until Codex completes its own backfill. */
+/** Keep an app-server claimant alive so Codex can finish its own backfill. */
 export async function runCodexStateDbBackfillRecovery(
   codexHomePath: string,
   signal: AbortSignal,
@@ -173,7 +173,6 @@ export async function withCodexBackfillSupervisorLock<T>(
   run: () => Promise<T>
 ): Promise<T> {
   const hostIdentity = scopeRecoveryHostIdentity(await readManagedHookHostIdentity(), codexHomePath)
-  // Reuse the crash-safe hard-link claim protocol; its storage root is Codex-specific.
   return await withManagedHookInstallLock(
     resolveCodexBackfillSupervisorLockRoot(codexHomePath),
     signal,
@@ -191,6 +190,7 @@ type ActiveRecovery = {
 
 const activeRecoveries = new Map<string, ActiveRecovery>()
 const coordinatorFailureCounts = new Map<string, number>()
+const gaveUpRecoveryKeys = new Set<string>()
 let stopping = false
 
 type RecoveryCoordinatorDependencies = {
@@ -215,6 +215,10 @@ function settleRecoveryEntry(
   }
   if (summary?.outcome === 'gave-up') {
     coordinatorFailureCounts.delete(key)
+    gaveUpRecoveryKeys.add(key)
+    console.warn(
+      `[codex-state-db-backfill] Codex session index rebuild gave up for ${key}; a codex wrapper on PATH that sets CODEX_HOME can cause this`
+    )
     return
   }
   if (summary === null) {
@@ -270,7 +274,11 @@ export function startCodexStateDbBackfillRecoveryInBackground(
   return task
 }
 
-/** Waits only for exact-owner arbitration, never for the potentially long Codex index. */
+export function hasCodexStateDbBackfillRecoveryGivenUp(codexHomePath: string): boolean {
+  return gaveUpRecoveryKeys.has(normalizeRuntimePathForComparison(codexHomePath))
+}
+
+/** Wait for owner arbitration; indexing continues in the background. */
 export async function ensureCodexStateDbBackfillRecoveryStarted(
   codexHomePath: string
 ): Promise<void> {
@@ -292,5 +300,6 @@ export const _internals = {
     stopping = false
     activeRecoveries.clear()
     coordinatorFailureCounts.clear()
+    gaveUpRecoveryKeys.clear()
   }
 }

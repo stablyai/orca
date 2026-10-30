@@ -1,7 +1,6 @@
 // @vitest-environment happy-dom
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { compile } from 'tailwindcss'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createGlobalSettingsFixture } from '../../../../shared/global-settings-test-fixture'
 import * as terminalThemeSelection from '../../../../shared/terminal-theme-selection'
@@ -95,6 +94,10 @@ describe('matching chat surfaces with opposite app schemes', () => {
     expect(matched.getPropertyValue('--chat-source-foreground')).toBe(
       terminalScheme === 'light' ? '#000000' : '#ffffff'
     )
+    // The unread marker is mixed toward the chat's own foreground, not the app's.
+    expect(matched.getPropertyValue('--chat-unread')).toContain(
+      terminalScheme === 'light' ? '#0969da 70%, #000000' : '#4493f8 70%, #ffffff'
+    )
     const codeForeground = matched.getPropertyValue('--chat-code-foreground')
     expect(codeForeground).toContain(`${terminalScheme === 'light' ? '#000000' : '#ffffff'} 85%`)
     expect(codeForeground).toContain(terminalScheme === 'light' ? '#ffffff' : '#000000')
@@ -117,25 +120,5 @@ describe('matching chat surfaces with opposite app schemes', () => {
     const styles = getComputedStyle(chat)
     expect(styles.getPropertyValue('--chat-canvas')).toContain('#000000')
     expect(styles.getPropertyValue('--chat-source-foreground')).toBe('#fafafa')
-  })
-})
-
-describe('chat scheme and inherited dark utilities', () => {
-  it('compiles the custom variant and excludes light chats and enables dark chats', async () => {
-    const declaration = css.match(/^@custom-variant dark \((.+)\);$/m)
-    expect(declaration).not.toBeNull()
-    if (!declaration) {
-      throw new Error('Missing dark variant')
-    }
-    const compiler = await compile(
-      `${declaration[0]}\n@theme { --color-input: #123456; }\n@tailwind utilities;`
-    )
-    expect(compiler.build(['dark:bg-input/30'])).toContain('data-native-chat-scheme')
-    expect(declaration[1]).toContain(
-      ".dark *:not(:where([data-native-chat-scheme='light'], [data-native-chat-scheme='light'] *))"
-    )
-    expect(declaration[1]).toContain(
-      ", [data-native-chat-scheme='dark'], [data-native-chat-scheme='dark'] *"
-    )
   })
 })

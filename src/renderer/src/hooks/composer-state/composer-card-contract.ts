@@ -1,4 +1,5 @@
 import type { ComposerModel } from './composer-model'
+import type { ComposerAgentRows } from './composer-agent-rows-target'
 
 export type ComposerCardSourceProps = Pick<
   ComposerModel,
@@ -57,6 +58,8 @@ export type ComposerCardSourceProps = Pick<
 >
 
 export type ComposerCardActionProps = {
+  agentRows?: ComposerAgentRows | null
+  selectedRepo?: ComposerModel['selectedRepo'] | null
   onRepoChange: ComposerModel['handleRepoChange']
   onProjectChange: ComposerModel['handleProjectChange']
   onProjectHostSetupChange: ComposerModel['handleProjectHostSetupChange']
@@ -79,7 +82,9 @@ export type ComposerCardActionProps = {
   smartNameJiraSourceContext?: ComposerModel['smartNameJiraSourceContext']
   onBaseBranchMrSelect?: ComposerModel['handleBaseBranchMrSelect']
   onClearSmartNameSelection: ComposerModel['handleClearSmartNameSelection']
+  reuseEligibleBranch?: ComposerModel['reuseEligibleBranch']
   canReuseSelectedBranch: boolean
+  onOpenSelectedBranchWorkspace?: () => void
   onReuseSelectedBranchChange: ComposerModel['handleReuseSelectedBranchChange']
   showCreateMultiple: boolean
   onCreateMultipleChange: ComposerModel['setCreateMultiple']

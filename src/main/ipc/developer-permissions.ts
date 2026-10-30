@@ -2,6 +2,7 @@ import { execFile } from 'node:child_process'
 import dgram from 'node:dgram'
 import { ipcMain, shell, systemPreferences } from 'electron'
 import { getMacosFullDiskAccessStatus } from '../macos-full-disk-access-status'
+import { getTerminalHostsFullDiskAccessStatus } from '../daemon/daemon-full-disk-access-status'
 import { testLocalNetworkConnection } from './local-network-connection-test'
 import type {
   DeveloperPermissionId,
@@ -87,8 +88,7 @@ function triggerAppleEventsPrompt(): Promise<void> {
       resolve()
     }
 
-    // Why: this request only nudges macOS to show the Automation prompt; a
-    // stuck osascript process should not keep the permission IPC pending.
+    // A stuck osascript permission nudge must not hold IPC indefinitely.
     const timeout = setTimeout(() => {
       child?.kill()
       finish()
@@ -153,9 +153,14 @@ async function getPermissionState(id: DeveloperPermissionId): Promise<DeveloperP
     case 'accessibility':
       return { id, status: getAccessibilityStatus() }
     case 'full-disk-access':
-      return { id, status: await getMacosFullDiskAccessStatus() }
-    // Why 'unknown' and not a probe: macOS reports no per-app Files-and-Folders grant, and the
-    // only caller opens the pane rather than reading a status.
+      return {
+        id,
+        status: await getMacosFullDiskAccessStatus(),
+        ...(process.platform === 'darwin'
+          ? { terminalHostStatus: await getTerminalHostsFullDiskAccessStatus() }
+          : {})
+      }
+    // macOS exposes no per-app Files-and-Folders status; callers open its settings pane.
     case 'files-and-folders':
     case 'automation':
     case 'local-network':
@@ -174,10 +179,7 @@ async function requestPermission(
   }
 
   if (id === 'microphone' || id === 'camera') {
-    // Why: askForMediaAccess only surfaces the TCC prompt when status is
-    // 'not-determined'. If the user previously denied (or macOS set the status
-    // to 'denied'/'restricted'), it resolves false with no prompt — leaving
-    // the user stuck. Fall through to the Privacy pane so they can toggle it.
+    // Previously denied/restricted access cannot prompt again; fall back to Privacy settings.
     const granted = await systemPreferences.askForMediaAccess(id)
     if (granted) {
       return { id, status: 'granted', openedSystemSettings: false }
@@ -191,9 +193,7 @@ async function requestPermission(
   }
 
   if (id === 'accessibility') {
-    // Why: isTrustedAccessibilityClient(true) shows the prompt only the first
-    // time for a given bundle. Once the user has dismissed or denied, calling
-    // it again is a no-op. Fall through to the Privacy pane when not granted.
+    // Accessibility prompts only once per bundle; fall back to Privacy settings after denial.
     const trusted = systemPreferences.isTrustedAccessibilityClient(true)
     if (trusted) {
       return { id, status: 'granted', openedSystemSettings: false }

@@ -17,14 +17,17 @@ import type {
 import { DESKTOP_READ_WINDOW } from './transcript-watch-contract'
 import { openCodeTranscriptPageLimit } from '../../shared/opencode-transcript-page-limit'
 
-// OpenCode SQLite reads use the same bounded worker as AI Vault.
-
 export type OpenCodeTranscriptDeps = {
-  resolveDbPath?: (sessionId?: string, signal?: AbortSignal) => Promise<string | null>
+  resolveDbPath?: (
+    sessionId?: string,
+    signal?: AbortSignal,
+    agent?: 'zcode'
+  ) => Promise<string | null>
   readSignal?: (
     dbPath: string,
     sessionId: string,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    agent?: 'zcode'
   ) => Promise<OpenCodeTranscriptSignal | null>
   readPage?: (
     args: {
@@ -32,6 +35,7 @@ export type OpenCodeTranscriptDeps = {
       sessionId: string
       limit: number
       beforeMessageRowId?: number
+      agent?: 'zcode'
     },
     signal?: AbortSignal
   ) => Promise<OpenCodeTranscriptPage | null>
@@ -43,8 +47,8 @@ export function resolveOpenCodeTranscriptDbPath(sessionId?: string): Promise<str
 
 export const openCodeTranscriptDefaultDeps: Required<OpenCodeTranscriptDeps> = {
   resolveDbPath: discoverOpenCodeTranscriptDatabase,
-  readSignal: (dbPath, sessionId, signal) =>
-    readOpenCodeTranscriptSignalViaWorker({ dbPath, sessionId }, signal),
+  readSignal: (dbPath, sessionId, signal, agent) =>
+    readOpenCodeTranscriptSignalViaWorker({ dbPath, sessionId, agent }, signal),
   readPage: (args, signal) => readOpenCodeTranscriptPageViaWorker(args, signal)
 }
 
@@ -53,7 +57,7 @@ export type OpenCodeTailResult =
   | { error: string; notFound?: true }
 
 export async function readOpenCodeNativeChatTranscriptTail(
-  args: { sessionId: string; limit: number; beforeOffset?: number },
+  args: { sessionId: string; limit: number; beforeOffset?: number; agent?: 'zcode' },
   deps: OpenCodeTranscriptDeps = {},
   signal?: AbortSignal
 ): Promise<OpenCodeTailResult> {
@@ -61,7 +65,8 @@ export async function readOpenCodeNativeChatTranscriptTail(
   try {
     const dbPath = await (deps.resolveDbPath ?? openCodeTranscriptDefaultDeps.resolveDbPath)(
       args.sessionId,
-      signal
+      signal,
+      args.agent
     )
     if (!dbPath) {
       return { error: 'Transcript unavailable', notFound: true }
@@ -71,7 +76,8 @@ export async function readOpenCodeNativeChatTranscriptTail(
         dbPath,
         sessionId: args.sessionId,
         limit,
-        ...(args.beforeOffset !== undefined ? { beforeMessageRowId: args.beforeOffset } : {})
+        ...(args.beforeOffset !== undefined ? { beforeMessageRowId: args.beforeOffset } : {}),
+        ...(args.agent ? { agent: args.agent } : {})
       },
       signal
     )
@@ -91,17 +97,20 @@ export async function readOpenCodeNativeChatTranscriptTail(
 export async function readOpenCodeNativeChatTranscriptFull(
   sessionId: string,
   deps: OpenCodeTranscriptDeps = {},
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  agent?: 'zcode'
 ): Promise<ReadTranscriptResult> {
-  // Pages arrive newest-window first; reverse windows, preserving message order.
+  // Reverse newest-first windows while preserving order inside each page.
   const pages: NativeChatMessage[][] = []
   let records = 0
   let bytes = 0
   let cursor: number | undefined
+  let sourceEmpty = false
   try {
     const dbPath = await (deps.resolveDbPath ?? openCodeTranscriptDefaultDeps.resolveDbPath)(
       sessionId,
-      signal
+      signal,
+      agent
     )
     if (!dbPath) {
       return { error: 'Transcript unavailable', notFound: true }
@@ -113,7 +122,8 @@ export async function readOpenCodeNativeChatTranscriptFull(
           dbPath,
           sessionId,
           limit: 500,
-          ...(cursor !== undefined ? { beforeMessageRowId: cursor } : {})
+          ...(cursor !== undefined ? { beforeMessageRowId: cursor } : {}),
+          ...(agent ? { agent } : {})
         },
         signal
       )
@@ -122,6 +132,9 @@ export async function readOpenCodeNativeChatTranscriptFull(
           return { error: 'Transcript unavailable', notFound: true }
         }
         break
+      }
+      if (pages.length === 0) {
+        sourceEmpty = page.beforeMessageRowId === null && !page.hasMore
       }
       pages.push(page.items.map((item) => item.message))
       records += page.items.length
@@ -137,5 +150,5 @@ export async function readOpenCodeNativeChatTranscriptFull(
   } catch (err) {
     return { error: errorMessage(err) }
   }
-  return { messages: pages.toReversed().flat() }
+  return { messages: pages.toReversed().flat(), sourceEmpty }
 }

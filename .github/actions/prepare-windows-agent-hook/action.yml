@@ -1,0 +1,32 @@
+name: Prepare the Windows agent hook
+description: Compiles native/windows-agent-hook into native/windows-agent-hook/.build/orca-agent-hook.exe, which electron-builder --win refuses to package without.
+
+runs:
+  using: composite
+  steps:
+    - name: Resolve the Windows Rust build scope
+      id: rust-scope
+      if: runner.os == 'Windows'
+      shell: bash
+      run: node config/scripts/windows-rust-build-scope.mjs >> "$GITHUB_OUTPUT"
+
+    # Source globs, not crate/**: target/ and .build/ can already exist when this key is computed.
+    # Real inputs only: older restores are safe because the build re-checks the exe's fingerprint.
+    - name: Cache the Windows agent hook build
+      if: runner.os == 'Windows'
+      uses: actions/cache@v5
+      with:
+        path: |
+          native/windows-agent-hook/.build
+          native/windows-agent-hook/target
+          ~/.cargo/registry
+        key: windows-agent-hook-v2-${{ runner.os }}-${{ runner.arch }}-${{ steps.rust-scope.outputs.toolchain }}-${{ steps.rust-scope.outputs.app-version }}-${{ hashFiles('native/windows-agent-hook/src/**', 'native/windows-agent-hook/build.rs', 'native/windows-agent-hook/Cargo.toml', 'native/windows-agent-hook/Cargo.lock', 'native/windows-agent-hook/app.manifest', 'native/windows-agent-hook/.cargo/**', 'config/scripts/build-windows-agent-hook.mjs', 'config/scripts/windows-rust-executable-build.mjs', 'config/scripts/windows-pe-imports.mjs', 'resources/build/icon.ico') }}
+        restore-keys: |
+          windows-agent-hook-v2-${{ runner.os }}-${{ runner.arch }}-${{ steps.rust-scope.outputs.toolchain }}-
+
+    - name: Build the Windows agent hook
+      if: runner.os == 'Windows'
+      shell: pwsh
+      run: |
+        node config/scripts/build-windows-agent-hook.mjs
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

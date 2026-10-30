@@ -15,17 +15,8 @@ import {
   taskProjectViewTableSchema
 } from './task-project-board-reply-schema'
 
-// The GitHub Projects board. Every `github.project.*` reply is an accepted result carrying its own
-// `{ ok, error }` envelope, which the board reads itself and whose message it prefers over its own
-// copy; the acceptance policy only decides whether there is an envelope to read. The board also
-// sends the plain `github.*` pull-request operations in mobile-task-item-state-operations.ts,
-// with a `prRepo` the item screen does not send — same method, same acceptance, one operation.
-//
-// Every reader here is checked against task-project-board-reply-schema.ts, which records the
-// consumer line behind each requirement. No acceptance changes: `require-result-or-throw-message`
-// still carries a refusal to the site's own catch, and it is that policy — not the reader, which
-// only ever answers `compatible: false` — that turns an unreadable envelope into the thrown
-// RpcIncompatibleReplyError the site reports.
+// Project callers interpret accepted ok/error envelopes; policy handles refusal and malformed-envelope errors.
+// Reuse plain PR operations where method and acceptance match, regardless of extra prRepo parameters.
 
 export const githubProjectListRead = bindDeferredRpcOperation(
   defineRpcOperation({
@@ -57,8 +48,6 @@ export const githubProjectViewTableRead = bindDeferredRpcOperation(
   })
 )
 
-/** A pasted project URL or owner/number. A soft `{ ok: false }` lands in the paste field, not
- *  the board's error line, so the two are distinguished at the site rather than by the policy. */
 export const githubProjectRefResolve = bindDeferredRpcOperation(
   defineRpcOperation({
     name: 'github.project.resolve-ref',
@@ -109,15 +98,7 @@ export const githubProjectIssueTypeListRead = bindDeferredRpcOperation(
   })
 )
 
-/**
- * A board row's issue edits. Two call sites send it — the metadata sheet's labels and assignees,
- * and the row editor's title, body and state — and both read `result.ok` off the payload.
- *
- * #20563 left a null reply reaching that read as a property-read TypeError, which the
- * `project.update-metadata` b2 seed records. The checked reader names it instead: a payload that is
- * not an envelope at all is an incompatible `github.project.updateIssueBySlug` reply, and the two
- * sites still differ only in the copy their own catch shows.
- */
+// Both editors read ok unguarded; reject null envelopes as incompatible replies before either property access.
 export const githubProjectIssueUpdate = bindDeferredRpcOperation(
   defineRpcOperation({
     name: 'github.project.update-issue',
@@ -198,15 +179,7 @@ export const githubProjectCommentDelete = bindDeferredRpcOperation(
   })
 )
 
-/**
- * A repo's owner/repo slug, the second of two policies on this method. The board matches its rows
- * against Orca repos and must distinguish "this repo has no slug" from "the ask failed", so it
- * throws and caches the failure for retry; the Smart picker's paste lookup in
- * mobile-task-source-search-operations.ts caches a refusal as "no slug" and carries on, so there
- * a refusal is a skip. One reader serves both — literally: both operations read through
- * `githubPrRepoSlugSchema`, the schema the session domain already wrote for this same reply, since
- * `github.repoSlug` has one shape and three consumers that all answer null without a slug.
- */
+// Board slug reads must distinguish no slug from failure for retry; Smart paste can skip refusal. Both share the session schema.
 export const githubProjectRepoSlugRead = bindDeferredRpcOperation(
   defineRpcOperation({
     name: 'github.project-repo-slug',

@@ -36,8 +36,6 @@ describe('AgentStateDot', () => {
   it('renders working as a yellow spinner', () => {
     const markup = renderMarkup('working')
 
-    // The spinner's own classes and animation contract belong to AgentWorkingSpinner.test.tsx;
-    // this pins only that 'working' reaches for it.
     expect(markup).toContain('data-agent-spinner')
   })
 
@@ -46,19 +44,14 @@ describe('AgentStateDot', () => {
 
     expect(markup).toContain('aria-label="Monitoring background tasks"')
     expect(markup).toContain('lucide-activity')
-    expect(markup).toContain('text-yellow-500')
+    expect(markup).toContain('text-agent-working')
     expect(markup).not.toContain('data-agent-spinner')
   })
 
   it('renders done as an emerald check icon', () => {
     const markup = renderMarkup('done')
 
-    // Why: 'done' renders a CircleCheck icon rather than a dot so it is
-    // visually distinct from other emerald-adjacent states across surfaces.
-    // Note: the sidebar's StatusIndicator intentionally diverges and uses an
-    // emerald dot for 'done'. Assertion targets the lucide 'circle-check'
-    // class hook + emerald text color, identifying the check icon without
-    // coupling to the exact SVG path markup lucide emits.
+    // Check completion via the icon class/color rather than Lucide’s SVG path. Sidebar StatusIndicator intentionally uses a dot.
     expect(markup).toContain('lucide-circle-check')
     expect(markup).toContain('text-emerald-500')
   })
@@ -69,7 +62,6 @@ describe('AgentStateDot', () => {
       const markup = renderMarkup(state)
 
       expect(markup).toContain('lucide-message-circle-question-mark')
-      // One token across sidebar, tabs, dashboard and map — never a raw hue.
       expect(markup).toContain('text-agent-question')
       expect(markup).not.toContain('text-amber-500')
       expect(markup).not.toContain('data-agent-spinner')
@@ -124,8 +116,7 @@ describe('AgentStateDot', () => {
     expect(markup).not.toContain(' title=')
   })
 
-  // Typecheck-time guard: a new AgentDotState member that ALL_STATES omits
-  // fails `pnpm tc`, so the tooltip case above can never silently skip a state.
+  // Compile-check full tooltip-state coverage so new states cannot be silently skipped.
   type UncoveredState = Exclude<AgentDotState, (typeof ALL_STATES)[number]>
   const _allStatesAreCovered: UncoveredState extends never ? true : never = true
   void _allStatesAreCovered

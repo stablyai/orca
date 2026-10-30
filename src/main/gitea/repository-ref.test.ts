@@ -1,8 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { gitExecFileAsyncMock, sshExecMock } = vi.hoisted(() => ({
-  gitExecFileAsyncMock: vi.fn(),
-  sshExecMock: vi.fn()
+const { gitExecFileAsyncMock } = vi.hoisted(() => ({
+  gitExecFileAsyncMock: vi.fn()
 }))
 
 vi.mock('../git/runner', () => ({
@@ -13,23 +12,17 @@ import {
   _getGiteaRepoRefCacheSize,
   _resetGiteaRepoRefCache,
   getGiteaRepoRef,
-  getGiteaRepoRefForRemote,
   parseGiteaRepoRef
 } from './repository-ref'
-import { registerSshGitProvider, unregisterSshGitProvider } from '../providers/ssh-git-dispatch'
 import { REMOTE_URL_PROBE_TIMEOUT_MS } from '../git/remote-url-probe'
 
 describe('Gitea repository ref parsing', () => {
   beforeEach(() => {
     gitExecFileAsyncMock.mockReset()
-    sshExecMock.mockReset()
-    unregisterSshGitProvider('conn-1')
     _resetGiteaRepoRefCache()
   })
 
-  afterEach(() => {
-    unregisterSshGitProvider('conn-1')
-  })
+  afterEach(() => {})
 
   it('parses HTTPS remotes and derives the API base URL', () => {
     expect(parseGiteaRepoRef('https://git.example.com/team/project.git')).toEqual({
@@ -100,6 +93,7 @@ describe('Gitea repository ref parsing', () => {
     expect(parseGiteaRepoRef('git@github.com:team/project.git')).toBeNull()
     expect(parseGiteaRepoRef('https://gitlab.com/team/project.git')).toBeNull()
     expect(parseGiteaRepoRef('https://bitbucket.org/team/project.git')).toBeNull()
+    expect(parseGiteaRepoRef('git@ssh.bitbucket.org:team/project.git')).toBeNull()
     expect(parseGiteaRepoRef('https://dev.azure.com/team/project/_git/repo')).toBeNull()
     expect(parseGiteaRepoRef('https://team.visualstudio.com/project/_git/repo')).toBeNull()
   })
@@ -138,24 +132,5 @@ describe('Gitea repository ref parsing', () => {
     }
 
     expect(_getGiteaRepoRefCacheSize()).toBe(512)
-  })
-
-  it('resolves repository refs through the SSH git provider for connected repos', async () => {
-    sshExecMock.mockResolvedValueOnce({
-      stdout: 'git@gitea.example.test:remote/project.git\n',
-      stderr: ''
-    })
-    registerSshGitProvider('conn-1', { exec: sshExecMock } as never)
-
-    await expect(getGiteaRepoRefForRemote('/repo', 'origin', 'conn-1')).resolves.toMatchObject({
-      host: 'gitea.example.test',
-      owner: 'remote',
-      repo: 'project'
-    })
-
-    expect(sshExecMock).toHaveBeenCalledWith(['remote', 'get-url', 'origin'], '/repo', {
-      signal: expect.any(AbortSignal)
-    })
-    expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
   })
 })

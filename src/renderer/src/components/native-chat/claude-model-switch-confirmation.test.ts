@@ -21,7 +21,6 @@ describe('Claude model switch confirmation detection', () => {
     const unsubscribe = vi.fn(() => {})
     const observer = createClaudeModelSwitchConfirmationObserver({
       ptyId: 'pty-1',
-      settings: {},
       expectedModelLabel: 'Fable 5',
       subscribeToData: (watcher) => {
         dataObserver.current = watcher
@@ -41,13 +40,10 @@ describe('Claude model switch confirmation detection', () => {
   })
 
   it('matches the resolved-model echo when the picker label carries no version', async () => {
-    // Why: the CLI echoes what the alias resolved to ("Opus 5 (1M context)")
-    // while discovered picker labels read "Opus (1M context)"; the family word
-    // must bridge the two so verified switches do not report as unverifiable.
+    // Match family labels to resolved echoes, such as Opus (1M context) versus Opus 5 (1M context).
     const dataObserver = { current: (_data: string): void => {} }
     const observer = createClaudeModelSwitchConfirmationObserver({
       ptyId: 'pty-1',
-      settings: {},
       expectedModelLabel: 'Opus (1M context)',
       subscribeToData: (watcher) => {
         dataObserver.current = watcher
@@ -69,7 +65,6 @@ describe('Claude model switch confirmation detection', () => {
       const dataObserver = { current: (_data: string): void => {} }
       const observer = createClaudeModelSwitchConfirmationObserver({
         ptyId: 'pty-1',
-        settings: {},
         expectedModelLabel: 'Opus (1M context)',
         subscribeToData: (watcher) => {
           dataObserver.current = watcher
@@ -95,7 +90,6 @@ describe('Claude model switch confirmation detection', () => {
     const submitConfirmation = vi.fn()
     const observer = createClaudeModelSwitchConfirmationObserver({
       ptyId: 'pty-1',
-      settings: {},
       expectedModelLabel: 'Fable 5',
       subscribeToData: (watcher) => {
         dataObserver.current = watcher
@@ -121,7 +115,6 @@ describe('Claude model switch confirmation detection', () => {
     const dataObserver = { current: (_data: string): void => {} }
     const observer = createClaudeModelSwitchConfirmationObserver({
       ptyId: 'pty-1',
-      settings: {},
       expectedModelLabel: 'Haiku',
       subscribeToData: (watcher) => {
         dataObserver.current = watcher
@@ -141,7 +134,6 @@ describe('Claude model switch confirmation detection', () => {
   it('reports unknown when the PTY observer cannot be established', async () => {
     const observer = createClaudeModelSwitchConfirmationObserver({
       ptyId: 'pty-1',
-      settings: {},
       expectedModelLabel: 'Fable 5',
       subscribeToData: () => Promise.reject(new Error('unavailable')),
       timeoutMs: 100
@@ -158,7 +150,6 @@ describe('Claude model switch confirmation detection', () => {
       let settled = false
       const observer = createClaudeModelSwitchConfirmationObserver({
         ptyId: 'pty-1',
-        settings: {},
         expectedModelLabel: 'Fable 5',
         subscribeToData: () => vi.fn(() => {}),
         timeoutMs: 100
@@ -169,8 +160,7 @@ describe('Claude model switch confirmation detection', () => {
 
       await observer.ready
       observer.arm()
-      // Simulates slow SSH send latency between arm() and command delivery: the
-      // clock must not run yet, or a successful switch would time out to unknown.
+      // Hold delivery during simulated SSH latency; detection must not time out before command delivery.
       await vi.advanceTimersByTimeAsync(500)
       expect(settled).toBe(false)
 

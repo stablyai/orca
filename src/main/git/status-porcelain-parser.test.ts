@@ -69,7 +69,6 @@ describe('StatusPorcelainParser', () => {
 
   it('carries a partial trailing line across chunk boundaries', () => {
     const parser = new StatusPorcelainParser()
-    // Split a single record across two chunks.
     parser.update('? partial', 0)
     parser.update('-name.txt\n', 0)
     parser.finish()
@@ -90,7 +89,6 @@ describe('StatusPorcelainParser', () => {
     const lines = `${Array.from({ length: 5 }, (_, i) => `? f${i}.txt`).join('\n')}\n`
     const stopped = parser.update(lines, 3)
     expect(stopped).toBe(true)
-    // The fourth entry (index 3) is what pushed count past the limit of 3.
     expect(parser.entries.length).toBe(4)
     expect(parser.statusLength).toBe(4)
   })

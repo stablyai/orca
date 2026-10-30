@@ -67,18 +67,21 @@ describe('createFilePathLinkProvider range bounds', () => {
     expect(statMock).toHaveBeenCalledWith({
       filePath: mappedPath,
       connectionId: undefined,
-      access: { kind: 'user-file' }
+      access: { kind: 'user-file' },
+      wakeWslDistro: true
     })
     expect(openFileMock).toHaveBeenCalledWith(expect.objectContaining({ filePath: mappedPath }), {
       forceContentReload: true
     })
-    expect(setPendingEditorRevealMock).toHaveBeenLastCalledWith({
-      filePath: mappedPath,
-      fileId: mappedPath,
-      line: 5,
-      column: 3,
-      matchLength: 0
-    })
+    expect(setPendingEditorRevealMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        filePath: mappedPath,
+        fileId: mappedPath,
+        line: 5,
+        column: 3,
+        matchLength: 0
+      })
+    )
   })
 
   it('resolves relative POSIX terminal links against the pane cwd before mapping', async () => {

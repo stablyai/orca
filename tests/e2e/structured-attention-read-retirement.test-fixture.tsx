@@ -1,11 +1,12 @@
 // @vitest-environment happy-dom
+import '../../src/main/runtime/rpc/unused-default-rpc-methods.test-fixture'
 import { transport } from './__mocks__/structured-attention-read-surfaces'
 import { cleanup } from '@testing-library/react'
 import { beforeEach, afterEach, vi } from 'vitest'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import type { RuntimeClientTarget } from '@/runtime/runtime-client-target'
+import type { RuntimeClientTarget } from '../../src/shared/runtime-client-target'
 import type { NotificationSettings } from '../../src/shared/notification-settings-types'
 import type { AgentJournalRenderItem } from '../../src/shared/agent-session-journal-types'
 import type { AgentSessionHistoryPage } from '../../src/shared/agent-session-wire'
@@ -36,7 +37,7 @@ import {
 } from '@/store/slices/store-test-helpers'
 
 import { useAppStore } from '@/store'
-import { useAutoAckViewedAgent } from '@/hooks/useAutoAckViewedAgent'
+import { useReadOnScreenAttention } from '@/hooks/useReadOnScreenAttention'
 import { useStructuredAgentSessionRead } from '@/components/native-chat/use-structured-agent-session-read'
 import { resetStructuredAgentSessionReadOwnersForTests } from '@/components/native-chat/structured-agent-session-read-owner'
 import { resetStructuredAgentSessionTurnCompletionFeedsForTests } from '@/runtime/structured-agent-session-turn-completion-feed'
@@ -55,7 +56,8 @@ export const NOTIFICATION_SETTINGS: NotificationSettings = {
   customSoundId: 'system',
   customSoundPath: null,
   customSoundVolume: 1,
-  mutedNotificationSourceIds: []
+  mutedNotificationSourceIds: [],
+  notifyHiddenWorkspaces: false
 }
 export const SCOPE = {
   executionHostId: 'local',
@@ -66,6 +68,7 @@ export const SCOPE = {
 export let fixture: {
   directory: string
   controller: RuntimeMobileNotificationController
+  relayControllers: RuntimeMobileNotificationController[]
   events: MobileNotificationEvent[]
   items: AgentJournalRenderItem[]
   sequence: number
@@ -161,7 +164,7 @@ export function ReadSurface({
   return null
 }
 export function AttentionPolicy(): null {
-  useAutoAckViewedAgent()
+  useReadOnScreenAttention()
   return null
 }
 export function readCalls(): number {
@@ -207,6 +210,7 @@ beforeEach(() => {
   const delivery = createStructuredAttentionMobileDelivery({
     readNotificationSettings: () => ({ ...NOTIFICATION_SETTINGS, suppressWhenFocused: false }),
     readWorkspaceLabels: () => ({}),
+    isWorkspaceMuted: () => false,
     dispatch: (event) => controller.dispatch(event),
     reconcile: (state) => controller.reconcileStructuredPromptAttention(state),
     now: () => 42
@@ -227,6 +231,7 @@ beforeEach(() => {
   fixture = {
     directory,
     controller,
+    relayControllers: [],
     events,
     items,
     sequence,
@@ -338,7 +343,7 @@ beforeEach(() => {
     settings: createGlobalSettingsFixture({ experimentalTerminalAttention: true })
   })
 })
-afterEach(() => {
+afterEach(async () => {
   cleanup()
   clearStructuredHostStub()
   resetStructuredAgentSessionReadOwnersForTests()
@@ -346,5 +351,10 @@ afterEach(() => {
   resetStructuredAgentSessionStatusFeedsForTests()
   vi.unstubAllGlobals()
   vi.restoreAllMocks()
+  await Promise.all(
+    [fixture.controller, ...fixture.relayControllers].map((controller) =>
+      controller.closeDismissals()
+    )
+  )
   rmSync(fixture.directory, { recursive: true, force: true })
 })

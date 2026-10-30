@@ -3,8 +3,8 @@ import { chmod, mkdir, mkdtemp, rm, symlink, writeFile, link } from 'node:fs/pro
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { NATIVE_CHAT_VISUAL_MAX_BYTES } from '../../shared/native-chat-visual-directive'
-import { nativeChatVisualsFolderFor } from './native-chat-visuals-folder'
+import { NATIVE_CHAT_VISUAL_MAX_BYTES } from '../../shared/native-chat/native-chat-visual-directive'
+import { nativeChatScratchFolderFor } from './native-chat-scratch-folder'
 import { nativeChatVisualRevision, readNativeChatVisualFile } from './native-chat-visual-file-read'
 
 const posixIt = process.platform === 'win32' ? it.skip : it
@@ -14,7 +14,7 @@ let folder: string
 
 beforeEach(async () => {
   stateDirectory = await mkdtemp(join(tmpdir(), 'orca-visual-read-'))
-  folder = nativeChatVisualsFolderFor(stateDirectory, 'session-alpha')
+  folder = nativeChatScratchFolderFor(stateDirectory, 'session-alpha')
   await mkdir(folder, { recursive: true })
 })
 
@@ -22,12 +22,12 @@ afterEach(async () => {
   await rm(stateDirectory, { recursive: true, force: true })
 })
 
-describe('nativeChatVisualsFolderFor', () => {
+describe('nativeChatScratchFolderFor', () => {
   it('places each chat in its own hashed folder under the state directory', () => {
-    const alpha = nativeChatVisualsFolderFor('/state', 'session-alpha')
-    const beta = nativeChatVisualsFolderFor('/state', 'session-beta')
-    expect(alpha).toMatch(/native-chat-visuals[\\/][0-9a-f]{32}$/)
-    expect(alpha.startsWith(join('/state', 'native-chat-visuals'))).toBe(true)
+    const alpha = nativeChatScratchFolderFor('/state', 'session-alpha')
+    const beta = nativeChatScratchFolderFor('/state', 'session-beta')
+    expect(alpha).toMatch(/chat-scratch[\\/][0-9a-f]{32}$/)
+    expect(alpha.startsWith(join('/state', 'chat-scratch'))).toBe(true)
     expect(alpha).not.toBe(beta)
   })
 })
@@ -41,7 +41,8 @@ describe('readNativeChatVisualFile', () => {
       ok: true,
       html,
       revision: nativeChatVisualRevision(Buffer.from(html)),
-      sizeBytes: Buffer.byteLength(html)
+      sizeBytes: Buffer.byteLength(html),
+      path: join(folder, 'chart.html')
     })
   })
 
@@ -52,7 +53,12 @@ describe('readNativeChatVisualFile', () => {
       throw new Error('expected a read')
     }
     const again = await readNativeChatVisualFile(folder, 'chart.html', first.revision)
-    expect(again).toEqual({ ok: true, revision: first.revision, sizeBytes: 8, unchanged: true })
+    expect(again).toMatchObject({
+      ok: true,
+      revision: first.revision,
+      sizeBytes: 8,
+      unchanged: true
+    })
 
     await writeFile(join(folder, 'chart.html'), '<p>b</p>')
     const changed = await readNativeChatVisualFile(folder, 'chart.html', first.revision)
@@ -64,7 +70,7 @@ describe('readNativeChatVisualFile', () => {
       ok: false,
       error: 'not_found'
     })
-    const absent = nativeChatVisualsFolderFor(stateDirectory, 'session-never')
+    const absent = nativeChatScratchFolderFor(stateDirectory, 'session-never')
     expect(await readNativeChatVisualFile(absent, 'chart.html')).toEqual({
       ok: false,
       error: 'not_found'
@@ -83,7 +89,7 @@ describe('readNativeChatVisualFile', () => {
   })
 
   posixIt('refuses a symlink to a sibling chat folder or another workspace', async () => {
-    const sibling = nativeChatVisualsFolderFor(stateDirectory, 'session-beta')
+    const sibling = nativeChatScratchFolderFor(stateDirectory, 'session-beta')
     await mkdir(sibling, { recursive: true })
     await writeFile(join(sibling, 'theirs.html'), '<p>other chat</p>')
     const worktree = join(stateDirectory, 'worktree')
@@ -115,7 +121,7 @@ describe('readNativeChatVisualFile', () => {
   })
 
   posixIt('refuses when the shared visuals root is a symlink', async () => {
-    const root = join(stateDirectory, 'native-chat-visuals')
+    const root = join(stateDirectory, 'chat-scratch')
     const moved = join(stateDirectory, 'moved-root')
     await rm(root, { recursive: true })
     await mkdir(join(moved, 'x'), { recursive: true })
@@ -168,7 +174,7 @@ describe('readNativeChatVisualFile', () => {
   })
 
   it('reads a hard link the agent made inside its own folder', async () => {
-    // A hard link grants nothing a copy would not: the agent could write the same bytes itself.
+    // Hard links grant no more than copying bytes the agent already controls.
     await writeFile(join(folder, 'a.html'), '<p>a</p>')
     await link(join(folder, 'a.html'), join(folder, 'b.html'))
     expect(await readNativeChatVisualFile(folder, 'b.html')).toMatchObject({ ok: true })
@@ -192,7 +198,7 @@ describe('readNativeChatVisualFile', () => {
         () => null,
         (error: unknown) => error
       )
-      // Root reads through the mode bits; everyone else gets the coded fault.
+      // Root bypasses mode bits, so assert refusal only when the read fails.
       if (failure !== null) {
         expect(String(failure)).toContain('visual_read_failed:EACCES')
         expect(String(failure)).not.toContain(stateDirectory)

@@ -7,7 +7,7 @@ import {
   type StructuredAgentSessionAction,
   type StructuredAgentSessionState
 } from '../../../../shared/structured-agent-session-reducer'
-import type { RuntimeClientTarget } from '@/runtime/runtime-rpc-client'
+import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import { callStructuredAgentSession } from '@/runtime/structured-agent-session-client'
 import type { NativeChatOlderPageResult } from './native-chat-pagination'
 
@@ -23,8 +23,7 @@ export async function readStructuredAgentSessionOlderPage(args: {
 }): Promise<NativeChatOlderPageResult> {
   const { target, sessionId, getState, apply, shouldStop } = args
   try {
-    // A live batch can head-trim past the anchor mid-read, and the reducer drops
-    // that page rather than leave a hole in the transcript. Re-anchor and retry.
+    // Head trimming can invalidate the page anchor; retry from a fresh anchor rather than leave a gap.
     for (let attempt = 0; attempt < OLDER_PAGE_ANCHOR_ATTEMPTS; attempt += 1) {
       const cursor = oldestStructuredAgentSessionCursor(getState())
       if (shouldStop()) {
@@ -55,8 +54,7 @@ export async function readStructuredAgentSessionOlderPage(args: {
     }
     return 'unchanged'
   } catch {
-    // A failed page leaves the loaded conversation intact; the list offers a retry, and
-    // the next invalidation (re-attach, snapshot, reset) re-enables paging.
+    // Failed pages leave history intact; retry controls or read-generation invalidation re-enable paging.
     return shouldStop() ? 'superseded' : 'failed'
   }
 }

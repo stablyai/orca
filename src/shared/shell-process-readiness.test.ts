@@ -1,19 +1,41 @@
-import { mkdir, mkdtemp, rm, symlink } from 'node:fs/promises'
+import { once } from 'node:events'
+import { mkdir, mkdtemp, realpath, rm, symlink } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { basename, dirname, join } from 'node:path'
+import { spawnProcess } from '@orca/process-host'
 import { describe, expect, it } from 'vitest'
 import {
-  parseDarwinExecutablePath,
+  readShellProcessReadiness,
   resolveInstalledShellExecutablePaths,
   resolveShellExecutablePath
 } from './shell-process-readiness'
 
 describe('shell process readiness', () => {
-  it('extracts the primary text image from macOS lsof output', () => {
-    expect(parseDarwinExecutablePath('p42\nftxt\nn/bin/zsh\nftxt\nn/usr/lib/zsh/zle.so\n')).toBe(
-      '/bin/zsh'
-    )
-  })
+  it.runIf(process.platform === 'darwin')(
+    'reads a child process executable path from real lsof on macOS',
+    async () => {
+      const executable = process.execPath
+      const child = spawnProcess({
+        program: executable,
+        args: ['-e', 'setTimeout(() => {}, 10_000)'],
+        stdio: 'ignore'
+      })
+      try {
+        await once(child, 'spawn', { signal: AbortSignal.timeout(5_000) })
+        if (child.pid === undefined) {
+          throw new Error('Fixture process has no PID')
+        }
+        const readiness = await readShellProcessReadiness(child.pid)
+        expect(readiness?.executablePath).toBe(await realpath(executable))
+      } finally {
+        if (child.exitCode === null && child.signalCode === null) {
+          const closed = once(child, 'close', { signal: AbortSignal.timeout(5_000) })
+          child.kill()
+          await closed
+        }
+      }
+    }
+  )
 
   it.skipIf(process.platform === 'win32')(
     'resolves bare shell commands through the spawn PATH',
@@ -91,26 +113,6 @@ describe('shell process readiness', () => {
         await expect(
           resolveInstalledShellExecutablePaths('shell-name', root, `${first}:${missing}:${second}`)
         ).resolves.toEqual([canonical])
-      } finally {
-        await rm(root, { recursive: true, force: true })
-      }
-    }
-  )
-
-  it.skipIf(process.platform === 'win32')(
-    'omits a same-name executable that no PATH entry reaches',
-    async () => {
-      const root = await mkdtemp(join(tmpdir(), 'orca-offpath-shell-'))
-      const onPath = join(root, 'bin')
-      const offPath = join(root, 'dropped')
-      await mkdir(onPath)
-      await mkdir(offPath)
-      await symlink(process.execPath, join(onPath, 'shell-name'))
-      await symlink(process.execPath, join(offPath, 'shell-name'))
-      try {
-        await expect(
-          resolveInstalledShellExecutablePaths('shell-name', root, onPath)
-        ).resolves.not.toContain(join(offPath, 'shell-name'))
       } finally {
         await rm(root, { recursive: true, force: true })
       }

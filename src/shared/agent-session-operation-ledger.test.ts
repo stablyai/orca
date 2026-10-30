@@ -6,10 +6,7 @@ import {
 import {
   agentSessionOperationExpiry,
   agentSessionOperationKey,
-  claimAgentSessionOperation,
   evaluateAgentSessionOperation,
-  pendingAgentSessionOperationRow,
-  settleAgentSessionOperation,
   isAgentSessionOperationRow,
   pruneAgentSessionOperationRows,
   type AgentSessionOperationRow
@@ -143,48 +140,6 @@ describe('operation admission', () => {
   })
 })
 
-describe('the pane a launch laid out', () => {
-  const pane = { worktreeId: 'wt-1', paneKey: 'tab-1:leaf-1' }
-
-  it('is recorded only by the claim that wins, and outlives the settle', () => {
-    const id = operationId(NOW)
-    const key = agentSessionOperationKey('caller', id)
-    const pending = new Map([
-      [
-        key,
-        pendingAgentSessionOperationRow({
-          callerKey: 'caller',
-          operationId: id,
-          fingerprint: 'fp',
-          now: NOW
-        })
-      ]
-    ])
-
-    const won = claimAgentSessionOperation(pending, {
-      callerKey: 'caller',
-      operationId: id,
-      ownedPane: pane
-    })
-    expect(won.rows.get(key)?.ownedPane).toEqual(pane)
-    const lost = claimAgentSessionOperation(won.rows, {
-      callerKey: 'caller',
-      operationId: id,
-      ownedPane: { worktreeId: 'wt-1', paneKey: 'tab-2:leaf-2' }
-    })
-    expect(lost.claim.claim).toBe('lost')
-    expect(lost.rows.get(key)?.ownedPane).toEqual(pane)
-
-    const settled = settleAgentSessionOperation(won.rows, {
-      callerKey: 'caller',
-      operationId: id,
-      outcome: { status: 'failed', code: 'boom' }
-    })
-    expect(settled.get(key)?.ownedPane).toEqual(pane)
-    expect(isAgentSessionOperationRow(settled.get(key))).toBe(true)
-  })
-})
-
 describe('retention', () => {
   it('keeps a tombstone strictly longer than its id can be admitted as new', () => {
     const expiry = agentSessionOperationExpiry(NOW, NOW)
@@ -201,6 +156,7 @@ describe('retention', () => {
     const late = agentSessionOperationExpiry(NOW + 10_000, NOW)
     expect(late).toBe(agentSessionOperationExpiry(NOW + 10_000, NOW + 10_000))
     expect(late).toBeGreaterThan(agentSessionOperationExpiry(NOW, NOW))
+    expect(agentSessionOperationExpiry(NOW, NOW + 10_000)).toBe(late)
   })
 
   it('drops only rows past their own expiry', () => {

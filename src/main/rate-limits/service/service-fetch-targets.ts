@@ -44,11 +44,11 @@ function codexResetUsageVisible(
 }
 
 export abstract class RateLimitServiceFetchTargets extends RateLimitServiceResultPolicy {
-  protected resolveCodexHome(target?: CodexAccountSelectionTarget): {
+  protected async resolveCodexHome(target?: CodexAccountSelectionTarget): Promise<{
     skip: boolean
     homePath: string | null
-  } {
-    const resolution = this.codexHomePathResolver?.(target)
+  }> {
+    const resolution = await this.codexHomePathResolver?.(target)
     if (!resolution) {
       return { skip: false, homePath: null }
     }
@@ -57,8 +57,7 @@ export abstract class RateLimitServiceFetchTargets extends RateLimitServiceResul
       : { skip: false, homePath: resolution.codexHomePath }
   }
 
-  // Why: resolving a WSL home probes wsl.exe, so it must not run before the other
-  // providers' fetches are started; chaining keeps the no-resolver path immediate.
+  // WSL home resolution probes wsl.exe; chain it so other providers start immediately.
   protected fetchKimiWithResolvedHome(): Promise<ProviderRateLimits> {
     const pendingHome = this.kimiHomeResolver?.()
     return pendingHome
@@ -130,6 +129,7 @@ export abstract class RateLimitServiceFetchTargets extends RateLimitServiceResul
       try {
         fresh = await fetchCodexRateLimits({
           codexHomePath,
+          networkProxySettings: this.networkProxySettingsResolver?.(),
           signal: controller.signal
         })
       } catch (error) {
@@ -150,17 +150,15 @@ export abstract class RateLimitServiceFetchTargets extends RateLimitServiceResul
     }
 
     const scopedCodex = this.applyStalePolicy(fresh, stateBeforeReset.codex)
-    const currentCodexHome = this.resolveCodexHome(target)
-    // Why: a skip has no provenance to compare, so treat it as no longer active
-    // rather than publishing this result against the system-default lane.
+    const currentCodexHome = await this.resolveCodexHome(target)
+    // Skips carry no provenance; never publish them as System Default usage.
     const stillActive =
       !currentCodexHome.skip &&
       this.isSameCodexTarget(this.codexFetchTarget, target) &&
       this.getCodexProvenance(target, currentCodexHome.homePath) ===
         this.getCodexProvenance(target, codexHomePath)
     if (stillActive) {
-      // Why: this post-redemption read is newer than every Codex fetch that
-      // started before it, so invalidate those results before publishing it.
+      // Redemption is newer than prior reads; invalidate their generations before publishing.
       this.codexFetchGeneration += 1
       this.trackActiveFailureStreak('codex', fresh)
       this.updateState({
@@ -169,24 +167,22 @@ export abstract class RateLimitServiceFetchTargets extends RateLimitServiceResul
       })
     }
 
-    // Why: the caller must receive the redeemed target even if the global UI
-    // switched targets while the provider mutation was in flight.
+    // Return the redeemed target even if global selection changed mid-request.
     return { ...stateBeforeReset, codex: scopedCodex, codexTarget: target }
   }
 
   protected shouldAllowClaudePtyFallback(
     authPreparation: ClaudeRuntimeAuthPreparation | undefined
   ): boolean {
-    // Why: Windows hidden PTY support is less reliable than host/WSL shells.
+    // Hidden Windows PTYs are less reliable; keep this supplement disabled.
     if (process.platform === 'win32') {
       return false
     }
-    // Why: system-default Claude isn't Orca-managed; refresh may read existing OAuth but must not launch Claude and trigger auth/browser flows.
+    // System Default may read OAuth but must not launch Claude auth/browser flows.
     return !isSystemDefaultClaudeAuth(authPreparation)
   }
 
   protected shouldAllowClaudeUsagePanelSupplement(): boolean {
-    // Why: keep this supplement off on Windows where hidden PTYs are still less reliable.
     return process.platform !== 'win32'
   }
 
@@ -203,11 +199,11 @@ export abstract class RateLimitServiceFetchTargets extends RateLimitServiceResul
         apiKeyReadSkipped: false
       }
     } catch (error) {
-      // Why: a transient read failure says nothing about the key, so skip it this cycle without blaming it.
+      // Transient key-file failure supplies no verdict; skip this cycle without blaming credentials.
       if (error instanceof ApiKeyFileUnreadableError) {
         return { ...config, apiKey: '', apiKeyError: null, apiKeyReadSkipped: true }
       }
-      // Why: an unreadable saved key is treated as absent so the cookie and OpenCode's own key still run.
+      // Cookie/store fallback remains usable when the saved key cannot decrypt.
       return {
         ...config,
         apiKey: '',
@@ -231,7 +227,7 @@ export abstract class RateLimitServiceFetchTargets extends RateLimitServiceResul
         error: null
       }
     } catch (error) {
-      // Why: one unreadable cookie must not abort every provider's refresh; surface it as MiniMax-only state instead.
+      // Cookie failure affects MiniMax only, not sibling refreshes.
       return {
         config: {
           sessionCookie: '',
@@ -252,7 +248,7 @@ export abstract class RateLimitServiceFetchTargets extends RateLimitServiceResul
         error: null
       }
     } catch (error) {
-      // Why: an undecryptable saved key must not abort every provider's refresh; surface it as ZCode-only state instead.
+      // Key decryption failure affects ZCode only, not sibling refreshes.
       return { config: { site: 'zai', apiKey: '' }, error: toErrorMessage(error) }
     }
   }

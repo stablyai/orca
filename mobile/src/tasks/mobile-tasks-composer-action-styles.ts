@@ -1,13 +1,6 @@
-import {
-  StyleSheet,
-  Platform,
-  colors,
-  radii,
-  spacing,
-  typography
-} from './mobile-tasks-dependencies'
+import { themedStyleSheet, colors, radii, spacing, typography } from './mobile-tasks-dependencies'
 
-export const mobileTasksComposerActionStyles = StyleSheet.create({
+export const mobileTasksComposerActionStyles = themedStyleSheet(() => ({
   createForm: {
     gap: spacing.sm
   },
@@ -102,57 +95,6 @@ export const mobileTasksComposerActionStyles = StyleSheet.create({
     paddingVertical: spacing.lg,
     alignItems: 'center'
   },
-  input: {
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    backgroundColor: colors.bgPanel,
-    borderRadius: radii.input,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    color: colors.textPrimary,
-    fontSize: typography.bodySize
-  },
-  bodyInput: {
-    minHeight: 88
-  },
-  monoInput: {
-    fontFamily: Platform.select({ ios: 'Menlo', android: 'monospace', default: 'monospace' })
-  },
-  commentInput: {
-    minHeight: 72,
-    marginTop: spacing.sm
-  },
-  commentComposer: {
-    position: 'relative',
-    marginTop: spacing.sm
-  },
-  commentComposerInput: {
-    minHeight: 40,
-    maxHeight: 120,
-    marginTop: 0,
-    paddingRight: 44
-  },
-  commentComposerSend: {
-    position: 'absolute',
-    right: spacing.xs,
-    bottom: spacing.xs,
-    width: 32,
-    height: 32,
-    borderRadius: radii.button,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.bgRaised
-  },
-  commentComposerSendPressed: {
-    opacity: 0.75
-  },
-  commentComposerSendDisabled: {
-    opacity: 0.5
-  },
-  replyInput: {
-    minHeight: 48,
-    marginTop: spacing.xs
-  },
   stackedInput: {
     marginTop: spacing.sm
   },
@@ -239,4 +181,4 @@ export const mobileTasksComposerActionStyles = StyleSheet.create({
     fontSize: typography.bodySize,
     fontWeight: '700'
   }
-})
+}))

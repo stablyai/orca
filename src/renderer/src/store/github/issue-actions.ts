@@ -2,13 +2,17 @@ import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import type { GitHubSlice } from './slice-types'
 import type { IssueInfo } from '../../../../shared/github/pull-request-types'
+import { isWslDistroNotRunningRefusal } from '../../../../shared/wsl-distro-not-running-refusal'
 import { callRuntimeRpc } from '../../runtime/runtime-rpc-client'
 import { sourceScopedRepoCacheKey } from './cache-identity'
 import { isFresh, withBoundedCacheEntry } from './cache-policy'
-import { debouncedSaveCache } from './cache-persistence'
 import { inflightIssueRequests } from './request-coordination'
 import { findRepoForGitHubOwner } from './repository-routing'
-import { getGitHubRepoSourceSettings, getGitHubWorkItemRequestContext } from './work-item-routing'
+import {
+  getGitHubRepoSourceSettings,
+  getGitHubSourceTarget,
+  getGitHubWorkItemRequestContext
+} from './work-item-routing'
 
 export const createIssueActions = (
   set: Parameters<StateCreator<AppState>>[0],
@@ -17,11 +21,7 @@ export const createIssueActions = (
   fetchIssue: async (repoPath, number, options) => {
     const repo = findRepoForGitHubOwner(get(), options?.repoId, repoPath)
     const repoId = options?.repoId ?? repo?.id
-    const requestSettings = getGitHubRepoSourceSettings(
-      get().settings,
-      repo,
-      options?.sourceContext
-    )
+    const requestSettings = getGitHubRepoSourceSettings(get(), repo, options?.sourceContext)
     const cacheKey = sourceScopedRepoCacheKey(
       repoPath,
       repoId,
@@ -46,7 +46,7 @@ export const createIssueActions = (
       try {
         const requestContext = getGitHubWorkItemRequestContext(
           get(),
-          requestSettings,
+          getGitHubSourceTarget(get(), repo, options?.sourceContext),
           repoId ?? repoPath,
           repoPath,
           options?.sourceContext
@@ -71,9 +71,12 @@ export const createIssueActions = (
             fetchedAt: Date.now()
           })
         }))
-        debouncedSaveCache(get())
         return issue
       } catch (err) {
+        // A poll refused for a stopped WSL distro keeps the issue it last showed.
+        if (isWslDistroNotRunningRefusal(err)) {
+          return get().issueCache[cacheKey]?.data ?? null
+        }
         console.error('Failed to fetch issue:', err)
         set((s) => ({
           issueCache: withBoundedCacheEntry(s.issueCache, cacheKey, {
@@ -81,7 +84,6 @@ export const createIssueActions = (
             fetchedAt: Date.now()
           })
         }))
-        debouncedSaveCache(get())
         return null
       } finally {
         inflightIssueRequests.delete(cacheKey)

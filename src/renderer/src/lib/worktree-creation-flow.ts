@@ -20,8 +20,7 @@ type ContinueBackgroundWorktreeCreationOptions = {
   revealCreationSurface?: boolean
 }
 
-// Why: nothing awaits these creations, so an escaped rejection would otherwise
-// strand the pending entry — and the creation surface — with no error shown.
+// Contain fire-and-forget rejections or pending creation UI remains stuck without errors.
 function startWorktreeCreation(creationId: string, request: WorktreeCreationRequest): void {
   executeWorktreeCreation(creationId, request).catch((error: unknown) => {
     console.error('worktree create: unhandled failure', creationId, error)
@@ -31,8 +30,7 @@ function startWorktreeCreation(creationId: string, request: WorktreeCreationRequ
     }
     const message = getWorkspaceCreateErrorToastMessage(formatWorkspaceCreateError(error))
     store.updatePendingWorktreeCreation(creationId, { status: 'error', error: message })
-    // Why: the panel renders this error inline while its surface is visible;
-    // only announce it separately after the user has navigated away.
+    // Inline creation errors need a separate toast only after navigation away.
     if (!(store.activeView === 'terminal' && store.activePendingCreationId === creationId)) {
       toast.error(message)
     }
@@ -52,13 +50,11 @@ function revealPendingCreation(
     status: 'creating',
     startedAt: Date.now(),
     indeterminate,
-    // Why: the creation surface owns the tab strip immediately. Delaying this
-    // caused the real workspace tab bar to flash out when the debounce elapsed.
+    // Give creation its tab strip synchronously; delayed reveal flashes the prior workspace’s tabs.
     loaderVisible: true,
     request
   })
-  // Why: the creation panel only renders under the terminal view (App content
-  // router), so force it active so the panel is what fills the content area.
+  // Creation UI renders only in terminal view; activate it before publishing the panel.
   store.setActiveView('terminal')
   store.setSidebarOpen(true)
 }
@@ -76,8 +72,7 @@ export function runBackgroundWorktreeCreation(request: WorktreeCreationRequest):
     store.setSidebarOpen(true)
     return existingCreationId
   }
-  // Why: crypto.randomUUID is undefined in non-secure browser contexts (LAN web
-  // client over plain HTTP). createBrowserUuid falls back to getRandomValues.
+  // Plain-HTTP LAN clients lack randomUUID; createBrowserUuid uses getRandomValues fallback.
   const creationId = createBrowserUuid()
   revealPendingCreation(creationId, request, getInitialWorktreeCreationPhase(request))
   startWorktreeCreation(creationId, request)
@@ -101,19 +96,17 @@ export function continueBackgroundWorktreeCreation(
   if (!store.pendingWorktreeCreations[creationId]) {
     return false
   }
-  // Why: the remote/runtime create path emits no progress events, so the stepped
-  // checklist would freeze on step 1. Use the request's captured repo owner so
-  // Retry does not change shape when focus moves to another runtime.
+  // Remote creates emit no phases; use captured submit-owner progress mode so Retry cannot change with focused runtime.
   store.updatePendingWorktreeCreation(creationId, {
     phase: getInitialWorktreeCreationPhase(request),
     status: 'creating',
     startedAt: Date.now(),
     error: undefined,
     provisioningLog: undefined,
+    checkoutProgress: undefined,
     request
   })
-  // Why: background work-item preflight can finish after the user moved on; keep
-  // the pending row alive without reselecting the creation panel in that case.
+  // Late background preflight preserves pending rows without reselecting creation after navigation.
   if (options.revealCreationSurface !== false) {
     store.setActivePendingWorktreeCreation(creationId)
     store.setActiveView('terminal')
@@ -135,7 +128,9 @@ export function retryBackgroundWorktreeCreation(creationId: string): void {
     startedAt: Date.now(),
     phase: getInitialWorktreeCreationPhase(entry.request),
     error: undefined,
-    provisioningLog: undefined
+    provisioningLog: undefined,
+    checkoutProgress: undefined,
+    worktreeId: undefined
   })
   store.setActivePendingWorktreeCreation(creationId)
   store.setActiveView('terminal')

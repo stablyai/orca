@@ -2,8 +2,29 @@
 
 import '@testing-library/jest-dom/vitest'
 
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, screen } from '@testing-library/react'
+import { render } from './native-chat-tooltip-test-harness'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
+// Why: these fixtures have neither inline visual owners nor sender navigation.
+const unusedChatLeaves = vi.hoisted(() => ({
+  inlineVisual: vi.fn(() => {
+    throw new Error('Unexpected inline visual in transcript fixture')
+  }),
+  openSender: vi.fn(() => {
+    throw new Error('Unexpected sender navigation in transcript fixture')
+  })
+}))
+vi.mock('./NativeChatInlineVisual', () => ({
+  NativeChatInlineVisual: unusedChatLeaves.inlineVisual
+}))
+vi.mock('@/lib/open-agent-message-sender', () => ({
+  openAgentMessageSender: unusedChatLeaves.openSender
+}))
+afterEach(() => {
+  expect(unusedChatLeaves.inlineVisual).not.toHaveBeenCalled()
+  expect(unusedChatLeaves.openSender).not.toHaveBeenCalled()
+})
 import type {
   AgentJournalItemBody,
   AgentJournalRenderItem
@@ -90,9 +111,7 @@ describe('windowed transcript', () => {
     expect(screen.queryByText(`marker-${TRANSCRIPT_LENGTH - 2}`)).toBeNull()
   })
 
-  // One gap per pair of rows, and none after the last one. The other half of
-  // this — that a row's own reservation does not include the gap as well — is
-  // pinned on the estimate itself, where it can be seen without layout.
+  // The estimate test separately guards against including gaps in both rows and reservations.
   it('reserves each row once and one gap between each pair', () => {
     const { container } = render(list(transcript))
 
@@ -115,8 +134,7 @@ describe('windowed transcript', () => {
     expect(indexes.length).toBeLessThan(TRANSCRIPT_LENGTH / 4)
   })
 
-  // The live row announces a running tool through `aria-live`, which says nothing
-  // from a row that is not in the document.
+  // Live announcements require the newest row to stay mounted outside the viewport.
   it('keeps the newest row mounted after the reader scrolls away from it', () => {
     const { container } = render(list(transcript))
     scrollTranscript(container, 5000)
@@ -163,10 +181,7 @@ describe('windowed transcript', () => {
   })
 })
 
-// The reveal chain runs message -> tool run -> diff card and lands on a card in
-// a DIFFERENT, earlier message than the rollup that was clicked. Under windowing
-// that message may not be mounted to be pointed at, so the reveal names it by id
-// and the row is pinned into the window until the card can answer for itself.
+// Diff reveals name and pin an earlier, possibly unmounted message until its card can answer.
 describe('revealing a diff from a turn rollup', () => {
   let restoreLayout = (): void => {}
   beforeEach(() => {
@@ -217,8 +232,7 @@ describe('revealing a diff from a turn rollup', () => {
         expandSignal={false}
       />
     )
-    // The rollup rides the turn's last row, which is pinned; the diff it points
-    // at is near the top and long gone from the window.
+    // The pinned tail holds the rollup; its target diff has scrolled out of the window.
     scrollTranscript(container, 4000)
     expect(screen.queryByRole('button', { name: /^Edited .*a\.ts(?:\s|$)/ })).toBeNull()
     const mountedBefore = windowState(container).indexes.length

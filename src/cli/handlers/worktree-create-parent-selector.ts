@@ -1,4 +1,4 @@
-import { isWorkspaceKey } from '../../shared/workspace-scope'
+import { isWorkspaceKey, worktreeWorkspaceKey } from '../../shared/workspace-scope'
 import { getOptionalStringFlag } from '../flags'
 import { RuntimeClientError, type RuntimeClient } from '../runtime-client'
 import { getOptionalWorktreeSelector } from '../selectors'
@@ -26,7 +26,7 @@ export function assertWorktreeParentFlagsCompatible(
   }
 }
 
-function getWorkspaceKeyParentSelector(selector: string): string | undefined {
+export function getWorkspaceKeyParentSelector(selector: string): string | undefined {
   const rawSelector = selector.startsWith('id:') ? selector.slice('id:'.length) : selector
   return isWorkspaceKey(rawSelector) ? rawSelector : undefined
 }
@@ -43,8 +43,7 @@ export async function resolveCreateParentSelector(
 
   const parentWorkspace = getWorkspaceKeyParentSelector(rawParentWorktree)
   if (parentWorkspace) {
-    // Why: create exposes one public parent flag, while the runtime still needs
-    // workspace keys to preserve folder/worktree lineage accurately.
+    // The public parent flag can name either kind; runtime workspace keys preserve folder lineage.
     return { parentWorkspace }
   }
 
@@ -53,11 +52,23 @@ export async function resolveCreateParentSelector(
     ? getWorkspaceKeyParentSelector(parentWorktree)
     : undefined
   if (resolvedParentWorkspace) {
-    // Why: active/current may resolve to a folder workspace pseudo-worktree id.
+    // active/current can resolve to a folder workspace pseudo-worktree id.
     return { parentWorkspace: resolvedParentWorkspace }
   }
 
   return {
     parentWorktree
   }
+}
+
+export function getEnvParentWorkspace(): string | undefined {
+  const workspaceId = process.env.ORCA_WORKSPACE_ID
+  if (typeof workspaceId === 'string' && isWorkspaceKey(workspaceId)) {
+    return workspaceId
+  }
+  const worktreeId = process.env.ORCA_WORKTREE_ID
+  if (typeof worktreeId === 'string' && worktreeId.length > 0) {
+    return isWorkspaceKey(worktreeId) ? worktreeId : worktreeWorkspaceKey(worktreeId)
+  }
+  return undefined
 }

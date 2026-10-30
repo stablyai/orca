@@ -1,9 +1,15 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { spawnDaemonChildProcess } from './daemon-launched-child-spawn'
+import { DAEMON_V8_FLAGS, spawnDaemonChildProcess } from './daemon-launched-child-spawn'
+import {
+  claimHostMallocTunables,
+  HOST_MALLOC_TUNABLES,
+  hostMallocTunablesLaunchEnv,
+  resetHostMallocTunablesForTests
+} from '../memory/host-malloc-tunables'
 
 const { spawn, fork } = vi.hoisted(() => ({ spawn: vi.fn(), fork: vi.fn() }))
-vi.mock('../../shared/child-process/run-process', () => ({ spawnProcess: spawn }))
-vi.mock('../../shared/child-process/fork-process', () => ({ forkProcess: fork }))
+vi.mock('@orca/process-host', () => ({ spawnProcess: spawn }))
+vi.mock('@orca/process-host/fork-process', () => ({ forkProcess: fork }))
 vi.mock('../../shared/app-environment', () => ({
   getAppEnvironment: () => ({ getVersion: () => '1.0.0' })
 }))
@@ -44,9 +50,80 @@ describe('daemon launch scope ownership', () => {
     expect(spawn).not.toHaveBeenCalled()
     expect(fork).toHaveBeenCalledWith(
       expect.objectContaining({
-        args: expect.not.arrayContaining(['--fresh-daemon-scope'])
+        args: expect.not.arrayContaining(['--fresh-daemon-scope']),
+        execArgv: expect.arrayContaining([...DAEMON_V8_FLAGS])
       })
     )
+  })
+})
+
+describe('daemon launch through the AppImage file', () => {
+  const appImage = {
+    appImagePath: '/apps/Orca.AppImage',
+    entryPathInAppDir: 'resources/app.asar.unpacked/out/main/daemon-entry.js',
+    appPathInAppDir: 'resources/app.asar',
+    appVersion: '1.0.0'
+  }
+
+  it('execs the AppImage inside the durable scope', () => {
+    spawnDaemonChildProcess({ ...options, appImage }, true)
+    expect(fork).not.toHaveBeenCalled()
+    const { program, args } = spawn.mock.calls[0][0]
+    expect(program).toBe('systemd-run')
+    const exec = args.indexOf('/apps/Orca.AppImage')
+    expect(args.slice(exec + 1, exec + 2)).toEqual(['-e'])
+    expect(args.slice(-2)).toEqual(['--fresh-daemon-scope', '--no-sandbox'])
+  })
+
+  it('spawns the AppImage directly on the unscoped fallback', () => {
+    spawnDaemonChildProcess({ ...options, appImage }, false)
+    expect(fork).not.toHaveBeenCalled()
+    expect(spawn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        program: '/apps/Orca.AppImage',
+        args: expect.not.arrayContaining(['--fresh-daemon-scope']),
+        stdio: ['ignore', 'ignore', 'pipe', 'ipc']
+      })
+    )
+  })
+
+  it('records an entry identity that survives the next mount', () => {
+    spawnDaemonChildProcess({ ...options, appImage }, false)
+    const { args } = spawn.mock.calls[0][0]
+    expect(args[args.indexOf('--entry-path') + 1]).toBe(
+      '/apps/Orca.AppImage/resources/app.asar.unpacked/out/main/daemon-entry.js'
+    )
+  })
+
+  it('keeps the mount entry identity for the in-mount fallback', () => {
+    spawnDaemonChildProcess(options, true)
+    const { args } = spawn.mock.calls[0][0]
+    expect(args[args.indexOf('--entry-path') + 1]).toBe('/app/daemon-entry.js')
+  })
+})
+
+describe('daemon launch on the extracted AppImage copy', () => {
+  const extractedGeneration = {
+    generationRoot: '/cache/ns/gen',
+    nodePath: '/cache/ns/gen/resources/node-runtime/bin/node',
+    entryPath: '/cache/ns/gen/resources/app.asar.unpacked/out/main/daemon-entry.js',
+    identityPath: '/apps/Orca.AppImage/resources/app.asar.unpacked/out/main/daemon-entry.js'
+  }
+
+  it.each([false, true])('runs the bundled Node on the copy (scoped=%s)', (scoped) => {
+    spawnDaemonChildProcess({ ...options, extractedGeneration }, scoped)
+    expect(fork).not.toHaveBeenCalled()
+    const { program, args, env, stdio } = spawn.mock.calls[0][0]
+    expect(program).toBe(scoped ? 'systemd-run' : extractedGeneration.nodePath)
+    const node = args.indexOf(extractedGeneration.nodePath)
+    // V8 flags must precede the entry, or Node hands them to the daemon script instead.
+    expect(args.slice(node + 1, node + 2 + DAEMON_V8_FLAGS.length)).toEqual([
+      ...DAEMON_V8_FLAGS,
+      extractedGeneration.entryPath
+    ])
+    expect(args[args.indexOf('--entry-path') + 1]).toBe(extractedGeneration.identityPath)
+    expect(env).not.toHaveProperty('ELECTRON_RUN_AS_NODE')
+    expect(stdio).toEqual(['ignore', 'ignore', 'pipe', 'ipc'])
   })
 })
 
@@ -77,5 +154,22 @@ describe('daemon launch environment', () => {
     expect(fork.mock.calls[0]?.[0].env.DBUS_SESSION_BUS_ADDRESS).toBe(
       'unix:path=/run/user/1000/bus'
     )
+  })
+})
+
+describe('daemon malloc tunables', () => {
+  afterEach(() => resetHostMallocTunablesForTests())
+
+  it('hands an orcad launch’s claimed tunables to the daemon on both launch paths', () => {
+    claimHostMallocTunables(Object.fromEntries(hostMallocTunablesLaunchEnv()))
+    spawnDaemonChildProcess(options, true)
+    spawnDaemonChildProcess(options, false)
+    expect(spawn.mock.calls.at(-1)?.[0].env.GLIBC_TUNABLES).toBe(HOST_MALLOC_TUNABLES)
+    expect(fork.mock.calls.at(-1)?.[0].env.GLIBC_TUNABLES).toBe(HOST_MALLOC_TUNABLES)
+  })
+
+  it('adds nothing when the launch set none', () => {
+    spawnDaemonChildProcess(options, false)
+    expect(fork.mock.calls.at(-1)?.[0].env.GLIBC_TUNABLES).toBe(process.env.GLIBC_TUNABLES)
   })
 })

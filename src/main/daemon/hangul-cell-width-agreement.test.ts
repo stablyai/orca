@@ -1,17 +1,4 @@
-/**
- * #15192, activation-order hypothesis: "the Orca unicode provider is not reached
- * in production, so Hangul lays out at the wrong width."
- *
- * These pin the measurements that close it. Every precomposed Hangul syllable is
- * two cells under xterm's Unicode 6 tables, its Unicode 11 tables, and Orca's
- * provider alike, so no activation order — provider, v11 fallback, or the
- * untouched v6 default — can change how a syllable is budgeted. Whatever moves
- * Korean text off its cells is not the unicode version.
- *
- * The version-sensitive and oracle-sensitive code points are pinned too, as the
- * complete list of Hangul-block characters where a width disagreement is even
- * available. None of them occur in modern Korean prose.
- */
+/** Pin precomposed Hangul widths across providers and document the fixture oracle’s jamo limitations. */
 import { describe, expect, it } from 'vitest'
 import { Terminal } from '@xterm/headless'
 import { Unicode11Addon } from '@xterm/addon-unicode11'
@@ -46,13 +33,7 @@ type UnicodeServiceInternals = {
   charProperties(codepoint: number, preceding: number): number
 }
 
-/**
- * Addon first, activation after — the order every call site uses. This mirrors that
- * order rather than importing it, so it does not guard the call sites themselves;
- * `pane-lifecycle.test.ts` covers that the activation runs and runs after the addon.
- * What is unguarded, and what these cover, is that the real `_core.unicodeService`
- * shape still lets the activation reach its non-fallback branch on a live terminal.
- */
+/** Verify live unicode-service activation; call-site ordering has separate lifecycle coverage. */
 function openWithUnicode11AddonLoaded(): {
   terminal: Terminal
   unicode: UnicodeServiceInternals
@@ -73,11 +54,7 @@ function propertyWidth(properties: number): number {
   return (properties >> 1) & 3
 }
 
-/**
- * Contiguous code points carrying the same detail collapse into one line. The detail
- * is part of the run key so a changed width re-partitions the output instead of
- * silently reusing a range that only ever asserted "these two disagree somehow".
- */
+/** Include both widths in run keys so changed disagreements cannot retain the same summary. */
 function summarize(entries: { codepoint: number; detail: string }[]): string[] {
   const runs: { start: number; end: number; detail: string }[] = []
   for (const { codepoint, detail } of entries) {
@@ -133,14 +110,7 @@ describe('Hangul cell width agreement (#15192)', () => {
         divergent.push({ codepoint: cp, detail: `oracle=${oracle} xterm=${xterm}` })
       }
     }
-    // Why pinned rather than fixed: xterm treats medial/final jamo as zero-width
-    // combining marks, the oracle as one cell — and `isWideGlyph` returns a boolean,
-    // so it cannot express zero-width without changing shape. Only decomposed (NFD)
-    // Korean reaches them and no fixture writes NFD today, so nothing mis-asserts;
-    // this is the tripwire for the fixture that adds it. U+3130/U+318F are unassigned
-    // Compatibility Jamo edges. U+A960..U+A97C is assigned Jamo Extended-A (Old Korean
-    // initials) that xterm makes wide and the oracle narrow — the dangerous direction,
-    // but no fixture uses it. Both widths are asserted so changing either trips this.
+    // The boolean wide-cell oracle cannot express zero-width jamo; pin both sides of each disagreement.
     expect(summarize(divergent)).toEqual([
       'U+1160..U+11FF oracle=1 xterm=0',
       'U+3130 oracle=2 xterm=1',

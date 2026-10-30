@@ -1,10 +1,11 @@
+import { quotePosixShell } from '../../shared/shell-argument-quoting'
 import { execFile } from 'node:child_process'
 import path from 'node:path'
 import { homedir } from 'node:os'
 import { promisify } from 'node:util'
 import { buildPosixCommandPathLookupScript } from '../../shared/posix-command-path-lookup'
 import { getSystemCliInstallDirectories } from '../../shared/system-cli-install-dirs'
-import { runProcess } from '../../shared/child-process/run-process'
+import { runProcess } from '@orca/process-host'
 import {
   beginLocalCommandSelection,
   isCommandOnLocalPath,
@@ -19,10 +20,6 @@ export const PREFLIGHT_COMMAND_TIMEOUT_MS = 5000
 const WSL_COMMAND_PATH_SENTINEL = '__ORCA_PREFLIGHT_COMMAND_PATH__'
 
 export type PreflightCommandResult = { stdout: string; stderr: string }
-
-export function shellQuote(value: string): string {
-  return `'${value.replace(/'/g, "'\\''")}'`
-}
 
 async function withPreflightTimeout<T>(
   command: string,
@@ -52,25 +49,30 @@ async function withPreflightTimeout<T>(
   }
 }
 
-/** Rejects on non-zero exit, spawn failure, or timeout — it never reports
- *  "absent" as a value. A caller that collapses that rejection into `false`
- *  makes "not installed" and "could not run it" the same answer; see
- *  docs/reference/wsl-probe-failure-semantics.md before doing so. */
+/** Reject execution failures; callers must distinguish them from absence (docs/reference/wsl-probe-failure-semantics.md). */
 export async function execLocalPreflightCommandOrThrow(
   command: string,
   args: string[],
-  options: { env?: NodeJS.ProcessEnv; timeoutMs?: number } = {}
+  options: { env?: NodeJS.ProcessEnv; timeoutMs?: number; terminationBarrier?: boolean } = {}
 ): Promise<PreflightCommandResult> {
   const env = options.env ?? buildLocalPreflightEnv()
   const timeoutMs = options.timeoutMs ?? PREFLIGHT_COMMAND_TIMEOUT_MS
   // Node cannot execFile a batch shim; the shared runner handles its argv safely.
-  if (process.platform === 'win32' && /\.(cmd|bat)$/i.test(command)) {
-    const result = await withPreflightTimeout(
-      command,
-      runProcess({ program: command, args, env, timeoutMs }),
-      timeoutMs
-    )
-    if (result.timedOut || result.code !== 0) {
+  if (
+    options.terminationBarrier ||
+    (process.platform === 'win32' && /\.(cmd|bat)$/i.test(command))
+  ) {
+    const pending = runProcess({
+      program: command,
+      args,
+      env,
+      timeoutMs,
+      ...(options.terminationBarrier ? { terminationBarrier: true } : {})
+    })
+    const result = options.terminationBarrier
+      ? await pending
+      : await withPreflightTimeout(command, pending, timeoutMs)
+    if (result.timedOut || result.outputTruncated || result.code !== 0) {
       throw Object.assign(new Error(`Failed running ${command}`), {
         ...result,
         code: result.timedOut ? 'ETIMEDOUT' : result.code
@@ -81,8 +83,7 @@ export async function execLocalPreflightCommandOrThrow(
   const commandPromise = execFileAsync(command, args, {
     encoding: 'utf-8',
     timeout: timeoutMs,
-    // Preflight probes console-subsystem binaries (git, gh, node); without this
-    // each one flashes a console and steals foreground on Windows (#10488).
+    // Hide Windows console probes so startup cannot steal focus (#10488).
     windowsHide: true,
     ...(env ? { env } : {})
   })
@@ -90,17 +91,13 @@ export async function execLocalPreflightCommandOrThrow(
   return withPreflightTimeout(command, commandPromise, timeoutMs)
 }
 
-// Throws on any failure — a distro that is booting/unreachable throws the
-// same way a command that genuinely doesn't exist does. Callers must not
-// collapse both into "absent"; see docs/reference/wsl-probe-failure-semantics.md.
+// Unreachable distros and absent commands both reject; see docs/reference/wsl-probe-failure-semantics.md.
 export async function execCommandInWslOrThrow(
   target: WslPreflightTarget,
   command: string
 ): Promise<PreflightCommandResult> {
   const commandPromise = runPreflightCommandInWsl(target, command, PREFLIGHT_COMMAND_TIMEOUT_MS)
-  // Label only (runPreflightCommandInWsl owns the actual wsl.exe invocation) —
-  // not the literal 'wsl.exe' so the wsl-invocation-boundary guard doesn't
-  // mistake this string for a spawn site.
+  // Diagnostic label only; runPreflightCommandInWsl owns process invocation.
   return withPreflightTimeout('wsl command', commandPromise)
 }
 
@@ -165,17 +162,29 @@ async function probeRunnableLocalCommand(command: string): Promise<LocalCommandP
   const candidates = explicit ? [] : await localProbeCandidates(command, env)
   const probes = candidates.length ? candidates.slice(0, PREFLIGHT_LOCAL_PROBE_LIMIT) : [command]
   const deadline = Date.now() + PREFLIGHT_COMMAND_TIMEOUT_MS
-  for (const binary of probes) {
-    const timeoutMs = deadline - Date.now()
-    if (timeoutMs <= 0) {
+  let recoveryDeadline: number | undefined
+  let timedOutBinary: string | undefined
+  for (const [index, binary] of probes.entries()) {
+    const remainingMs = (recoveryDeadline ?? deadline) - Date.now()
+    if (remainingMs <= 0) {
       return { status: 'timeout', binary }
     }
+    // Healthy CLIs keep their full budget; only timeout recovery divides a second budget.
+    const timeoutMs = recoveryDeadline
+      ? Math.max(1, Math.floor(remainingMs / (probes.length - index)))
+      : remainingMs
     try {
-      await execLocalPreflightCommandOrThrow(binary, ['--version'], { env, timeoutMs })
+      await execLocalPreflightCommandOrThrow(binary, ['--version'], {
+        env,
+        timeoutMs,
+        ...(probes.length > 1 ? { terminationBarrier: true } : {})
+      })
       return { status: 'available', binary }
     } catch (error) {
       if (probeTimedOut(error)) {
-        return { status: 'timeout', binary }
+        timedOutBinary = binary
+        recoveryDeadline ??= Date.now() + PREFLIGHT_COMMAND_TIMEOUT_MS
+        continue
       }
       if (
         candidates.length === 0 &&
@@ -188,6 +197,9 @@ async function probeRunnableLocalCommand(command: string): Promise<LocalCommandP
         return { status: 'absent' }
       }
     }
+  }
+  if (timedOutBinary) {
+    return { status: 'timeout', binary: timedOutBinary }
   }
   return {
     status: candidates.length > PREFLIGHT_LOCAL_PROBE_LIMIT ? 'limit_reached' : 'exec_failed',
@@ -203,7 +215,7 @@ export async function isCommandAvailable(
     return (await findRunnableLocalCommand(command)).status === 'available'
   }
   try {
-    await execCommandInWslOrThrow(wslTarget, `${shellQuote(command)} --version`)
+    await execCommandInWslOrThrow(wslTarget, `${quotePosixShell(command)} --version`)
     return true
   } catch {
     return false
@@ -215,21 +227,15 @@ export async function isCommandOnPath(
   wslTarget?: WslPreflightTarget
 ): Promise<boolean> {
   if (!wslTarget) {
-    // Why (#9297): resolve against PATH with fs instead of spawning one
-    // where/which subprocess per probe — privilege-management software gates
-    // each spawn and stalls startup. buildLocalPreflightEnv() supplies the same
-    // registry-merged PATH the child process previously saw (undefined = posix
-    // process.env), so the found/not-found result is identical.
+    // Filesystem PATH lookup avoids privilege-gated per-agent where/which spawns (#9297).
     return isCommandOnLocalPath(command, { env: buildLocalPreflightEnv() })
   }
   try {
-    // Why: preflight must validate the executable on PATH, not a shell alias or function.
+    // Require an executable, excluding shell aliases and functions.
     const { stdout } = await execCommandInWslOrThrow(
       wslTarget,
       [
-        // Same skip as agent detection: without it this branch answers "yes"
-        // for a Windows binary reached through interop, so preflight and the
-        // detector disagree about the same distro.
+        // Match agent detection by skipping Windows interop binaries during the PATH walk.
         buildPosixCommandPathLookupScript(
           { kind: 'literal', value: command },
           { skipWindowsMountDirs: true }

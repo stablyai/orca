@@ -5,13 +5,10 @@ import {
   UsageScanWorkerClient,
   scanCodexUsageOnWorker
 } from './usage-scan-worker-client'
-import type {
-  UsageScanWorkerRequest,
-  UsageScanWorkerRequestBody
-} from './usage-scan-worker-protocol'
+import type { UsageScanWorkerRequest, UsageScanWorkerScanBody } from './usage-scan-worker-protocol'
+import type { UsageSourceCacheRef } from './usage-source-cache-file'
 
-// A worker_threads stand-in the tests drive directly: it records posted requests
-// and lets a test emit message/error/exit without a built worker bundle.
+// Drive transport lifecycle without a built worker bundle.
 class FakeWorker {
   postedRequests: UsageScanWorkerRequest[] = []
   private listeners = new Map<string, Set<(arg?: unknown) => void>>()
@@ -55,14 +52,29 @@ class FakeWorker {
 }
 
 function createClient(factory: () => FakeWorker): UsageScanWorkerClient {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: FakeWorker implements the on/off/postMessage/terminate surface LazyWorkerThreadHost uses, and nothing here touches the rest of Worker.
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: FakeWorker implements the transport lifecycle; absent threadId skips optional owner cleanup.
   return new UsageScanWorkerClient({ workerFactory: factory as never, log: () => {} })
 }
 
-const CODEX_BODY: UsageScanWorkerRequestBody = {
+const SOURCE_CACHE: UsageSourceCacheRef = {
+  path: '/tmp/orca-codex-usage-sources.json',
+  schemaVersion: 6,
+  worktreeFingerprint: '[]',
+  reuse: true
+}
+
+const CODEX_BODY: UsageScanWorkerScanBody = {
+  operation: 'scan',
   providerId: 'codex',
   worktrees: [],
-  previous: []
+  sourceCache: SOURCE_CACHE
+}
+
+const CODEX_VALUE = {
+  operation: 'scan',
+  providerId: 'codex',
+  sessions: [{ sessionId: 'session-1' }],
+  dailyAggregates: []
 }
 
 describe('UsageScanWorkerClient', () => {
@@ -70,21 +82,70 @@ describe('UsageScanWorkerClient', () => {
     const worker = new FakeWorker()
     const client = createClient(() => worker)
 
-    const pending = scanCodexUsageOnWorker((body) => client.scan(body), [], [])
+    const pending = scanCodexUsageOnWorker((body) => client.scan(body), [], SOURCE_CACHE)
     await vi.waitFor(() => expect(worker.postedRequests).toHaveLength(1))
-    expect(worker.postedRequests[0]?.providerId).toBe('codex')
+    expect(worker.postedRequests[0]).toMatchObject({
+      operation: 'scan',
+      providerId: 'codex',
+      sourceCache: SOURCE_CACHE
+    })
+    worker.emit('message', { id: worker.lastId(), ok: true, value: CODEX_VALUE })
+
+    await expect(pending).resolves.toEqual({
+      sessions: [{ sessionId: 'session-1' }],
+      dailyAggregates: []
+    })
+  })
+
+  it('routes a cache split to the worker and hands back the report text', async () => {
+    const worker = new FakeWorker()
+    const client = createClient(() => worker)
+
+    const pending = client.splitCacheFile({
+      cacheFile: '/tmp/usage.json',
+      sourceKey: 'processedFiles'
+    })
+    await vi.waitFor(() => expect(worker.postedRequests).toHaveLength(1))
+    expect(worker.postedRequests[0]).toMatchObject({
+      operation: 'splitCacheFile',
+      cacheFile: '/tmp/usage.json',
+      sourceKey: 'processedFiles'
+    })
+    worker.emit('message', {
+      id: worker.lastId(),
+      ok: true,
+      value: { operation: 'splitCacheFile', reportText: '{}', migrated: true }
+    })
+
+    await expect(pending).resolves.toEqual({ reportText: '{}', migrated: true })
+  })
+
+  it('keeps worker verification attached to the exact returned report text', async () => {
+    const worker = new FakeWorker()
+    const client = createClient(() => worker)
+    const pending = client.splitCacheFile({
+      cacheFile: '/tmp/usage.json',
+      sourceKey: 'processedFiles',
+      providerId: 'claude'
+    })
+    await vi.waitFor(() => expect(worker.postedRequests).toHaveLength(1))
+    const reportText = '{"usageIntegrity":"verified-by-worker","schemaVersion":7}'
     worker.emit('message', {
       id: worker.lastId(),
       ok: true,
       value: {
-        providerId: 'codex',
-        source: [{ path: 'a.jsonl' }],
-        sessions: [],
-        dailyAggregates: []
+        operation: 'splitCacheFile',
+        reportText,
+        migrated: false,
+        reportIntegrityVerified: true
       }
     })
 
-    await expect(pending).resolves.toMatchObject({ source: [{ path: 'a.jsonl' }] })
+    await expect(pending).resolves.toEqual({
+      reportText,
+      migrated: false,
+      reportIntegrityVerified: true
+    })
   })
 
   it('fails closed instead of scanning on the calling thread when spawn fails', async () => {
@@ -92,8 +153,7 @@ describe('UsageScanWorkerClient', () => {
       throw new Error('no thread available')
     })
 
-    // The rejection is what the store turns into `lastScanError`, keeping the
-    // previous projection rather than publishing an empty one.
+    // Stores turn rejection into lastScanError and keep the previous projection.
     await expect(client.scan(CODEX_BODY)).rejects.toThrow(/spawn failed/)
   })
 
@@ -119,25 +179,15 @@ describe('UsageScanWorkerClient', () => {
       // Posted synchronously by dispatch; vi.waitFor would advance the fake clock.
       expect(worker.postedRequests).toHaveLength(1)
 
-      // Four windows of wall clock, each broken by a progress message just
-      // before the deadline: the old wall-clock budget died in the first one.
+      // Progress just before each deadline keeps the scan alive across four wall-clock windows.
       for (let window = 1; window <= 4; window++) {
         await vi.advanceTimersByTimeAsync(USAGE_SCAN_NO_PROGRESS_TIMEOUT_MS - 1)
         worker.emit('message', { id: worker.lastId(), filesScanned: window * 100 })
       }
       await vi.advanceTimersByTimeAsync(USAGE_SCAN_NO_PROGRESS_TIMEOUT_MS - 1)
-      worker.emit('message', {
-        id: worker.lastId(),
-        ok: true,
-        value: {
-          providerId: 'codex',
-          source: [{ path: 'a.jsonl' }],
-          sessions: [],
-          dailyAggregates: []
-        }
-      })
+      worker.emit('message', { id: worker.lastId(), ok: true, value: CODEX_VALUE })
 
-      await expect(pending).resolves.toMatchObject({ source: [{ path: 'a.jsonl' }] })
+      await expect(pending).resolves.toMatchObject({ sessions: [{ sessionId: 'session-1' }] })
     } finally {
       vi.useRealTimers()
     }
@@ -181,8 +231,7 @@ describe('UsageScanWorkerClient', () => {
       return worker
     })
 
-    // One more call than the cap, so the last one must be drained rather than
-    // handed to a fourth worker.
+    // One call beyond the death cap must drain instead of spawning another worker.
     const pending = Array.from({ length: MAX_CONSECUTIVE_DEATHS + 1 }, () =>
       client.scan(CODEX_BODY)
     )
@@ -201,12 +250,12 @@ describe('UsageScanWorkerClient', () => {
     const worker = new FakeWorker()
     const client = createClient(() => worker)
 
-    const pending = scanCodexUsageOnWorker((body) => client.scan(body), [], [])
+    const pending = scanCodexUsageOnWorker((body) => client.scan(body), [], SOURCE_CACHE)
     await vi.waitFor(() => expect(worker.postedRequests).toHaveLength(1))
     worker.emit('message', {
       id: worker.lastId(),
       ok: true,
-      value: { providerId: 'claude', source: [], sessions: [], dailyAggregates: [] }
+      value: { operation: 'scan', providerId: 'claude', sessions: [], dailyAggregates: [] }
     })
 
     await expect(pending).rejects.toThrow(/answered for claude/)

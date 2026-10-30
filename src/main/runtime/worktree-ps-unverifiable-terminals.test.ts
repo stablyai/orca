@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { getDefaultWorkspaceSession } from '../../shared/constants'
 
 vi.mock('electron', () => ({
@@ -8,18 +8,10 @@ vi.mock('electron', () => ({
   app: { getPath: vi.fn(() => '/tmp'), isPackaged: false }
 }))
 
-const getSshGitProviderMock = vi.hoisted(() => vi.fn())
-vi.mock('../providers/ssh-git-dispatch', () => ({
-  getSshGitProvider: getSshGitProviderMock,
-  getSshGitProviderGeneration: vi.fn(() => 0),
-  SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE: 'unavailable',
-  requireSshGitProvider: (connectionId: string) => getSshGitProviderMock(connectionId)
-}))
-
 import { OrcaRuntimeService } from './orca-runtime'
+import { partialRuntimeStore, storeWorktreeMeta } from './runtime-store-partial-fixture'
 
-// BUG-9: a network drop to a relay host made `worktree ps` print `live:0 pty:no` for a terminal
-// that was still running. Lost contact is `unverifiable`, never zero.
+// BUG-9: lost relay contact must report unverifiable, never live:0/pty:no for a surviving terminal.
 
 const CONNECTION_ID = 'conn-1'
 const REPO_PATH = '/home/user/app'
@@ -42,13 +34,13 @@ function makeStore() {
     setWorkspaceSession: vi.fn(),
     getRepos: vi.fn(() => [REPO]),
     getRepo: vi.fn((id: string) => (id === REPO.id ? REPO : undefined)),
-    getAllWorktreeMeta: vi.fn(() => ({})),
+    // Why: this process serves no SSH git, so the SSH repo lists its stored rows.
+    getAllWorktreeMeta: vi.fn(() => ({ [WORKTREE_ID]: storeWorktreeMeta() })),
     getWorktreeMeta: vi.fn(() => undefined),
     setWorktreeMeta: vi.fn(),
     removeWorktreeMeta: vi.fn(),
     getAllWorktreeLineage: vi.fn(() => ({})),
     getAllWorkspaceLineage: vi.fn(() => ({})),
-    getGitHubCache: vi.fn(() => undefined),
     getSettings: vi.fn(() => ({ workspaceDir: '/tmp/workspaces' })),
     getProjects: vi.fn(() => [])
   }
@@ -58,8 +50,7 @@ function makeRuntime(controller: {
   hasPty: () => boolean | null
   listProcesses: () => Promise<{ id: string; worktreeId: string }[]>
 }): OrcaRuntimeService {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the runtime reads only the store methods this fixture defines.
-  const runtime = new OrcaRuntimeService(makeStore() as never)
+  const runtime = new OrcaRuntimeService(partialRuntimeStore(makeStore()))
   runtime.setPtyController(
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: worktree.ps reaches only listProcesses and hasPty on this controller.
     {
@@ -81,15 +72,6 @@ async function psRow(runtime: OrcaRuntimeService) {
 }
 
 describe('worktree.ps terminal verdicts for an SSH host', () => {
-  beforeEach(() => {
-    getSshGitProviderMock.mockReset()
-    getSshGitProviderMock.mockReturnValue({
-      listWorktrees: vi.fn(async () => [
-        { path: REPO_PATH, head: 'abc', branch: 'main', isBare: false, isMainWorktree: true }
-      ])
-    })
-  })
-
   it('counts a terminal the reachable host lists as live', async () => {
     const runtime = makeRuntime({
       hasPty: () => true,

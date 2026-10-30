@@ -16,6 +16,7 @@ import {
   writeFakeWindowsProcessTree,
   writeFakeWindowsProcessTreeWithNodeAddonApi,
   writeFakeWindowsRegistry,
+  writeFakeWindowsSecurity,
   writeNodePtyPatchFile,
   writePatchedNodePtyBuildArtifacts,
   writeWindowsProcessTreePatchFile
@@ -33,6 +34,7 @@ describe('rebuild-native-deps patched node-pty rebuild', () => {
         writeFakeElectronRebuild(projectDir, { logPathEnv: 'ORCA_REBUILD_TEST_LOG' })
         writeFakeLoadableNodePty(projectDir)
         writeFakeWindowsProcessTree(projectDir)
+        writeFakeWindowsSecurity(projectDir)
         writeFakeNodePtyConptyPayload(projectDir, process.arch)
 
         const env = {
@@ -79,6 +81,7 @@ describe('rebuild-native-deps patched node-pty rebuild', () => {
         writeFakeLoadableNodePty(projectDir, { nativeDir: '../build/Release/' })
         writeFakeWindowsRegistry(projectDir)
         writeFakeWindowsProcessTree(projectDir)
+        writeFakeWindowsSecurity(projectDir)
         writeFakeNodePtyConptyPayload(projectDir, process.arch)
 
         const result = runRebuildScript(projectDir, {
@@ -144,17 +147,8 @@ describe('rebuild-native-deps patched node-pty rebuild', () => {
       'process_commandline.cc'
     )
 
-  // Why inside a git work tree: `git apply` run under one prefixes patch paths
-  // with the cwd-relative prefix, silently skips what does not match, and still
-  // exits 0. The package dir is always under the project root in production, so
-  // a fixture in %TEMP% alone would pass while the real repair did nothing.
-  //
-  // Why both line-ending modes: the patch is stored LF while upstream ships this
-  // source CRLF, so whether the pre-image matches depends on `core.autocrlf` --
-  // and under `false`, Git's own built-in default, it did not. The repair blinds
-  // git to the repo, so that value comes from global config, i.e. from whichever
-  // option the developer's installer wrote. Pinning both makes the case cover the
-  // host that breaks rather than the host that happens to run it.
+  // Run inside a worktree: git apply prefixes cwd paths and can silently skip mismatches with exit 0; TEMP-only fixture misses production failure.
+  // Cover autocrlf true/false: upstream source is CRLF, patch LF; repair blinds Git to repo config, leaving host-dependent global/system defaults.
   for (const autocrlf of ['false', 'true']) {
     it(`repairs an un-applied command-line patch in a work tree (autocrlf=${autocrlf})`, () => {
       const projectDir = mkTempProject()
@@ -189,9 +183,7 @@ describe('rebuild-native-deps patched node-pty rebuild', () => {
     })
   }
 
-  // Why fail rather than build: an unpatched command-line reader compiles fine
-  // and then opens every process with PROCESS_VM_READ to walk its PEB, which is
-  // the primitive the patch exists to remove.
+  // Refuse stale reader before build: it compiles but opens each process with PROCESS_VM_READ to walk its PEB, the primitive the patch removes.
   it('refuses a Windows rebuild when the command-line patch cannot be applied', () => {
     const projectDir = mkTempProject()
 
@@ -276,6 +268,7 @@ describe('rebuild-native-deps patched node-pty rebuild', () => {
         writeFakeElectronRebuild(projectDir, { logPathEnv: 'ORCA_REBUILD_TEST_LOG' })
         writeFakeLoadableNodePty(projectDir)
         writeFakeWindowsProcessTree(projectDir)
+        writeFakeWindowsSecurity(projectDir)
         writeFakeNodePtyConptyPayload(projectDir, process.arch)
 
         const result = runRebuildScript(projectDir, {
@@ -306,6 +299,7 @@ describe('rebuild-native-deps patched node-pty rebuild', () => {
         writeFakeLoadableNodePty(projectDir, { ownsPtyJob: false })
         writeFakeWindowsRegistry(projectDir)
         writeFakeWindowsProcessTree(projectDir)
+        writeFakeWindowsSecurity(projectDir)
         writeFakeNodePtyConptyPayload(projectDir, process.arch)
 
         const result = runRebuildScript(projectDir, {
@@ -325,9 +319,7 @@ describe('rebuild-native-deps patched node-pty rebuild', () => {
     }
   )
 
-  // The shape measured on a Windows dev checkout: the addon loads under
-  // Electron, exports all three job functions, and predates the denial. A bare
-  // require proves nothing about it; the probe has to read the binary.
+  // Model loadable addon with all job exports but no MSYS denial: require/export checks pass while Git Bash children leak.
   it.skipIf(process.platform !== 'win32')(
     'rebuilds a loadable ConPTY native that owns its job but predates the MSYS breakaway denial',
     () => {
@@ -340,6 +332,7 @@ describe('rebuild-native-deps patched node-pty rebuild', () => {
         writeFakeLoadableNodePty(projectDir, { cygwinBreakawayDenied: false })
         writeFakeWindowsRegistry(projectDir)
         writeFakeWindowsProcessTree(projectDir)
+        writeFakeWindowsSecurity(projectDir)
         writeFakeNodePtyConptyPayload(projectDir, process.arch)
         writeFakeNodePtyConptySource(projectDir)
 
@@ -450,12 +443,7 @@ describe('rebuild-native-deps patched node-pty rebuild', () => {
     }
   )
 
-  // The binary this step produces is the one copied into the packaged app. The
-  // relay build checks its own artifact and ensure-native-runtime checks what it
-  // loads; nothing checked this one, so a rebuild that quietly emitted the
-  // upstream reader shipped. Both non-clean states have to fail, which is the
-  // caller the tri-state was missing: after a rebuild that reported success, an
-  // absent binary is a broken build, not an absence to shrug at.
+  // Check rebuilt artifact destined for packaged app; neither relay gate nor runtime load check covers it. Missing output after success must fail too.
   for (const [addon, expected] of [
     ['unpatched', 'still imports ReadProcessMemory'],
     ['none', 'is not there']
@@ -483,10 +471,7 @@ describe('rebuild-native-deps patched node-pty rebuild', () => {
     })
   }
 
-  // The Electron probe carries this check too, but it is skipped whenever the
-  // Electron package binary is unusable. Every job export predates the MSYS
-  // breakaway denial, so without reading the binary this step would hand the
-  // packaged app one that leaks every Git Bash child out of its pane's job.
+  // Always inspect binary: Electron probe may be skipped; job exports predate MSYS denial and cannot detect escaped Git Bash children.
   it('fails a Windows rebuild that leaves an addon predating the MSYS breakaway denial', () => {
     const projectDir = mkTempProject()
 
@@ -509,10 +494,7 @@ describe('rebuild-native-deps patched node-pty rebuild', () => {
     }
   })
 
-  // Measured on a Windows dev checkout whose node_modules predated the denial:
-  // `--force` compiled for minutes, rewrote conpty.node byte-identical and
-  // unpatched, and the addon gate then said "rebuild from source" -- the step
-  // that had just run. The source is readable before the compile; read it.
+  // Check source before compile: stale install rebuilds byte-identical unsafe addon, then wrongly advises repeating rebuild.
   it('refuses to compile node-pty source that lacks the denial, before the rebuild runs', () => {
     const projectDir = mkTempProject()
 
@@ -544,7 +526,7 @@ describe('rebuild-native-deps patched node-pty rebuild', () => {
     }
   })
 
-  it('compiles node-pty when its source carries the denial', () => {
+  it('calls the rebuild API when node-pty source carries the denial', () => {
     const projectDir = mkTempProject()
 
     try {
@@ -595,9 +577,7 @@ describe('rebuild-native-deps patched node-pty rebuild', () => {
     }
   })
 
-  // A cross-host rebuild does not necessarily leave a win32 addon on this disk,
-  // and neither does a tree with no node-pty in it. That must warn, not fail an
-  // install that was working.
+  // Cross-host rebuild or absent optional node-pty may leave no win32 addon; warn without breaking a working install.
   it('warns rather than fails when no addon is expected on this disk', () => {
     const projectDir = mkTempProject()
 
@@ -619,10 +599,7 @@ describe('rebuild-native-deps patched node-pty rebuild', () => {
     }
   })
 
-  // The other half: on the host that will run this install, a missing addon is
-  // not an absence to shrug at. loadNativeModule falls through to the published
-  // prebuild, which is the binary that leaks every MSYS pane child.
-  // Runs only on Windows -- nothing else can make a win32 rebuild same-host.
+  // Same-host missing output must fail: loader falls back to upstream prebuild that leaks MSYS children. Only Windows can exercise this branch.
   it.skipIf(process.platform !== 'win32')(
     'fails a same-host Windows rebuild that left no addon, naming the prebuild that would load',
     () => {

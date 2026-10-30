@@ -94,7 +94,7 @@ describe('context usage on journal rows', () => {
     t.handle(assistantFrame('reply-a', 2_000, 18_600))
     t.handle(resultFrame(3_000, { 'claude-fable-5-1[1m]': entry(1_000_000, 18_600) }))
     expect(windowOf('turn-a')).toBe(1_000_000)
-    // The user moved to a 200k model; the 1M entry stays in the cumulative usage.
+    // Cumulative usage retains the old 1M entry after switching to a 200k model.
     t.handle(initFrame('claude-sonnet-5', 3_900))
     t.handle(userFrame('turn-b', 4_000))
     t.handle(assistantFrame('reply-b', 5_000, 20_000, undefined, 'claude-sonnet-5'))
@@ -105,7 +105,7 @@ describe('context usage on journal rows', () => {
       })
     )
     expect(windowOf('turn-b')).toBe(200_000)
-    // Same model without `[1m]`: only the turn's init tells the two entries apart.
+    // Init distinguishes the base model from its [1m] variant.
     t.handle(initFrame('claude-fable-5-1', 6_900))
     t.handle(userFrame('turn-c', 7_000))
     t.handle(assistantFrame('reply-c', 8_000, 21_000))
@@ -117,7 +117,6 @@ describe('context usage on journal rows', () => {
       })
     )
     expect(windowOf('turn-c')).toBe(200_000)
-    // A subagent on a larger-window model leaves the main thread's window alone.
     t.handle(initFrame('claude-sonnet-5', 9_900))
     t.handle(userFrame('turn-d', 10_000))
     t.handle(assistantFrame('reply-d', 11_000, 22_000, undefined, 'claude-sonnet-5'))
@@ -176,17 +175,15 @@ describe('context usage on journal rows', () => {
       t.appends.filter((entry) => entry.body.kind === 'message' && entry.body.role === 'assistant')
     const repliesBefore = replies().length
     t.handle(toolOnly('call-b1', 5_000, 60_000, 'toolu_1'))
-    // No message row: the usage has to live somewhere a text-less response writes.
     expect(replies()).toHaveLength(repliesBefore)
     expect(selectStructuredAgentContextUsage(t.items())).toMatchObject({
       usedTokens: 60_000,
       windowTokens: 1_000_000
     })
-    // The CLI sends one frame per block of a response; the row is revised once.
+    // The CLI emits one frame per response block; duplicate usage must not revise the turn.
     const revisions = t.turnRow('turn-b')?.revision
     t.handle(toolOnly('call-b1', 5_100, 60_000, 'toolu_2'))
     expect(t.turnRow('turn-b')?.revision).toBe(revisions)
-    // An auto-compaction mid-turn hides the size until the next response restates it.
     t.handle(compactBoundary(6_000))
     expect(selectStructuredAgentContextUsage(t.items())).toBeNull()
     t.handle(toolOnly('call-b2', 7_000, 30_000, 'toolu_3'))
@@ -207,10 +204,9 @@ describe('context usage on journal rows', () => {
     expect(t.turnRow('turn-a')?.body).toMatchObject({
       contextUsage: { window: { tokens: 1_000_000 }, used: { kind: 'unknown', capturedAt: 4_000 } }
     })
-    // No turn is open, so the report lands on the newest turn when it arrives.
+    // Between turns, target the newest turn when the context report arrives.
     expect(t.requests).toEqual([turnIdentity('turn-a'), null])
     expect(selectStructuredAgentContextUsage(t.items())).toBeNull()
-    // Mid-turn compaction lands on the open turn, and its next response restates the size.
     t.handle(userFrame('turn-b', 5_000))
     t.handle(compactBoundary(6_000))
     expect(t.turnRow('turn-b')?.body).toMatchObject({
@@ -339,7 +335,7 @@ describe('context usage on journal rows', () => {
     const onOpen = vi.fn()
     const turn = new ClaudeOpenTurn({
       sink: journal().sink,
-      settleChildren: () => {},
+      turnSuperseded: () => {},
       endOpenWork: () => {},
       onOpen
     })

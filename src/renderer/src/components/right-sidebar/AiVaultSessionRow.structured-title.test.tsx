@@ -7,6 +7,8 @@ import type { AiVaultSession } from '../../../../shared/ai-vault-types'
 import type { AiVaultSearchHit } from '../../../../shared/ai-vault-search-types'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { Tab } from '../../../../shared/tab-types'
+import { AGENT_SESSION_WORKSPACE_SLEEP_MARK_RUNTIME_CAPABILITY } from '../../../../shared/agent-session/agent-session-workspace-sleep'
+import { AGENT_SESSION_STATUS_FEED_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
 
 const mocks = vi.hoisted(() => ({ subscribe: vi.fn(), supports: vi.fn() }))
 vi.mock('@/runtime/structured-agent-session-client', () => ({
@@ -51,7 +53,10 @@ function row(host: ExecutionHostId = 'local', title = 'Codex Chat'): AiVaultSess
     subagentTranscriptCount: 0,
     resumeCommand: 'codex resume provider-session',
     subagent: null,
-    structuredSession: { workspaceId: 'folder-workspace', sessionId: 'native-session' }
+    structuredSession: {
+      workspaceId: 'folder-workspace',
+      sessionId: 'native-session'
+    }
   }
 }
 
@@ -65,9 +70,15 @@ function searchRow(): AiVaultSession {
     updatedAt: null,
     messageCount: 1,
     score: 1,
-    source: { presence: 'present', filePath: '/sessions/provider-session.jsonl' },
+    source: {
+      presence: 'present',
+      filePath: '/sessions/provider-session.jsonl'
+    },
     evidence: null,
-    structuredSession: { workspaceId: 'folder-workspace', sessionId: 'native-session' }
+    structuredSession: {
+      workspaceId: 'folder-workspace',
+      sessionId: 'native-session'
+    }
   }
   return aiVaultSearchHitToSession(hit, 'local')
 }
@@ -166,7 +177,9 @@ afterEach(() => {
 
 describe('native chat names in Vault rows', () => {
   it('shows the name its host publishes with the tab open, and keeps it when the tab closes', async () => {
-    useAppStore.setState({ unifiedTabsByWorktree: { 'folder-workspace': [tab()] } })
+    useAppStore.setState({
+      unifiedTabsByWorktree: { 'folder-workspace': [tab()] }
+    })
     await renderRow(row())
     expect(screen.getByText('Codex Chat')).toBeTruthy()
     publish('local', 'Explain the parser')
@@ -182,11 +195,27 @@ describe('native chat names in Vault rows', () => {
   ])(
     'lets a manual tab rename win in a %s row, and returns to the name once cleared',
     async (_kind, make) => {
-      useAppStore.setState({ unifiedTabsByWorktree: { 'folder-workspace': [tab('Manual name')] } })
+      useAppStore.setState({
+        unifiedTabsByWorktree: { 'folder-workspace': [tab('Manual name')] }
+      })
       await renderRow(make())
       publish('local', 'Explain the parser')
       expect(screen.getByText('Manual name')).toBeTruthy()
-      act(() => useAppStore.setState({ unifiedTabsByWorktree: { 'folder-workspace': [tab()] } }))
+      act(() =>
+        useAppStore.setState({
+          unifiedTabsByWorktree: { 'folder-workspace': [tab()] }
+        })
+      )
+      expect(screen.getByText('Explain the parser')).toBeTruthy()
+    }
+  )
+
+  it.each(['opencode', 'opencode2', 'grok', 'omp', 'pi'] as const)(
+    'shows a %s chat row its CLI title until the chat is named, then the chat name',
+    async (agent) => {
+      await renderRow({ ...row('local', 'Fix the parser'), agent })
+      expect(screen.getByText('Fix the parser')).toBeTruthy()
+      publish('local', 'Explain the parser')
       expect(screen.getByText('Explain the parser')).toBeTruthy()
     }
   )
@@ -222,7 +251,9 @@ describe('native chat names in Vault rows', () => {
 
   it('never shows a name another host published for the same session id', async () => {
     mocks.supports.mockResolvedValue(true)
-    const releaseLocal = getStructuredAgentSessionStatusFeed({ kind: 'local' }).activate()
+    const releaseLocal = getStructuredAgentSessionStatusFeed({
+      kind: 'local'
+    }).activate()
     await renderRow(row('runtime:paired'))
     expect(emitters.has('local')).toBe(true)
     publish('local', 'Local chat name')
@@ -240,7 +271,10 @@ describe('native chat names in Vault rows', () => {
       await vi.advanceTimersByTimeAsync(60_000)
     })
     expect(screen.getByText('Saved by older host')).toBeTruthy()
-    expect(mocks.supports).toHaveBeenCalledTimes(1)
+    expect(mocks.supports.mock.calls).toEqual([
+      ['older', AGENT_SESSION_STATUS_FEED_RUNTIME_CAPABILITY],
+      ['older', AGENT_SESSION_WORKSPACE_SLEEP_MARK_RUNTIME_CAPABILITY]
+    ])
     expect(mocks.subscribe).not.toHaveBeenCalled()
   })
 })

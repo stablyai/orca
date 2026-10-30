@@ -5,6 +5,15 @@ import {
   stubShallowSelector,
   stubTooltip
 } from './tab-bar-windows-shell-launch-render-stubs'
+import { layoutApplyTestTransport } from '@/runtime/layout-apply-test-transport.test-fixture'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+
+// Main's answer to the window's layout commands, as a switch-on build sends them.
+vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
+  (
+    await import('@/runtime/layout-apply-test-transport.test-fixture')
+  ).runtimeRpcClientWithLayoutApply(await importOriginal())
+)
 
 const appStoreSnapshot: {
   activeTabId: string | null
@@ -56,6 +65,7 @@ const useAppStoreMock = vi.fn(
 )
 
 vi.mock('react', async () => await stubHeadlessReact())
+vi.mock('@/store/plugin-new-files', () => ({ usePluginNewFiles: () => [] }))
 vi.mock('zustand/react/shallow', () => stubShallowSelector())
 // The headless React stub has no dispatcher for the hook each tab row subscribes to language changes with.
 vi.mock('react-i18next', async () => ({
@@ -120,6 +130,12 @@ vi.mock('./SortableTab', () => ({
   }
 }))
 
+vi.mock('./TerminalSortableTab', () => ({
+  default: function SortableTab(props: Record<string, unknown>) {
+    return { type: 'SortableTab', props }
+  }
+}))
+
 vi.mock('./EditorFileTab', () => ({
   default: function EditorFileTab(props: Record<string, unknown>) {
     return { type: 'EditorFileTab', props }
@@ -136,7 +152,11 @@ vi.mock('./BrowserTab', () => ({
 vi.mock('./QuickLaunchButton', () => ({
   QuickLaunchAgentMenuItems: function QuickLaunchAgentMenuItems() {
     return null
-  }
+  },
+  ProjectedAgentMenuItems: function ProjectedAgentMenuItems() {
+    return null
+  },
+  useTabAgentMenuLaunch: () => () => undefined
 }))
 
 vi.mock('./shell-icons', () => ({
@@ -315,19 +335,8 @@ describe('TabBar context menu wiring', () => {
     vi.unstubAllGlobals()
   })
 
-  it('wires the shared agent projection selector into the production TabBar', async () => {
-    const { selectTabBarAgentProjections } = await import('./tab-agent-types-by-tab-id')
-
-    await renderTabBar({ tabs: [], editorFiles: [], browserTabs: [], tabBarOrder: [] })
-
-    expect(useAppStoreMock).toHaveBeenCalledWith(selectTabBarAgentProjections)
-  })
-
   it('counts every tab kind for SortableTab.tabCount', async () => {
-    // Why: Close Others used to pass tabCount=tabs.length, where tabs is just the
-    // terminal list. With one terminal + any number of editor/browser tabs, the
-    // menu item rendered as disabled even though closeOthers can close the
-    // non-terminal siblings.
+    // Count all tab kinds so Close Others stays enabled with non-terminal siblings.
     const element = await renderTabBar({
       tabs: [TERMINAL_TAB],
       editorFiles: [EDITOR_FILE],
@@ -365,10 +374,7 @@ describe('TabBar context menu wiring', () => {
   })
 
   it('passes the editor unifiedTabId when EditorFileTab triggers onCloseToRight', async () => {
-    // Why: TabBar wires the editor tab as () => onCloseToRight(item.id). The
-    // emitted id is the editor's unifiedTabId (item.id for editors), not the
-    // file entityId. TabGroupPanel must accept this id shape to close right-side
-    // tabs from an editor tab — see the matching id|entityId resolver there.
+    // Editor close-to-right emits its unified tab ID; downstream routing must accept that ID instead of only the file entity.
     const onCloseToRight = vi.fn()
     const element = await renderTabBar({
       tabs: [TERMINAL_TAB],
@@ -398,7 +404,6 @@ describe('TabBar context menu wiring', () => {
 
     const sortable = findChildrenByType(element, 'SortableTab')
     expect(sortable).toHaveLength(1)
-    // First tab in the strip: nothing to its left.
     expect(sortable[0].props.hasTabsToLeft).toBe(false)
 
     const editorTabs = findChildrenByType(element, 'EditorFileTab')
@@ -442,8 +447,14 @@ describe('TabBar context menu wiring', () => {
     expect(sortable[0].props.isPinned).toBe(true)
 
     ;(sortable[0].props.onTogglePin as () => void)()
+    await layoutApplyTestTransport.settle()
 
-    expect(unpinTabMock).toHaveBeenCalledWith('unified-term-1')
+    // Main-owned layouts draw the host’s unpin response; the window must not duplicate the mutation.
+    if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+      expect(unpinTabMock).not.toHaveBeenCalled()
+    } else {
+      expect(unpinTabMock).toHaveBeenCalledWith('unified-term-1')
+    }
     expect(pinTabMock).not.toHaveBeenCalled()
   })
 

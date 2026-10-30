@@ -1,6 +1,6 @@
 import { EventEmitter } from 'node:events'
 import type { ChildProcess, spawn } from 'node:child_process'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi, type TestContext } from 'vitest'
 import { mkdtempSync, readFileSync, rmSync, writeFileSync, existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -18,9 +18,11 @@ import {
 } from '../provider-process/provider-process-supervisor'
 import { runCodexAppServerSession } from './codex-app-server-session'
 
-// Stub codex app-server speaking the same JSONL protocol: initialize →
-// initialized → hooks/list → config/batchWrite → hooks/list. Scenario-driven
-// via STUB_CONFIG so each test controls listings, errors, and hangs.
+// The orphan guard's process reads add timers of their own; the timer audit below is the session's.
+vi.mock('../provider-process/provider-group-orphan-guard', () => ({
+  guardSupervisedProviderGroup: () => false
+}))
+
 const STUB_SERVER_SOURCE = `
 const config = JSON.parse(process.env.STUB_CONFIG)
 // A wedged server ignores SIGTERM and its stdin end, so only SIGKILL ends it.
@@ -118,15 +120,22 @@ type StubHook = {
   trustStatus: string
 }
 
-function createStubRequest(options: {
-  scenario: string
-  hooks: StubHook[]
-  expectedTrustKeys: string[]
-  managedCommand: string
-  timeoutMs?: number
-}): { request: CodexHookTrustGrantRequest; recordFile: string; pidFile: string } {
+function createStubRequest(
+  options: {
+    scenario: string
+    hooks: StubHook[]
+    expectedTrustKeys: string[]
+    managedCommand: string
+    timeoutMs?: number
+  },
+  onTestFinished?: TestContext['onTestFinished']
+): { request: CodexHookTrustGrantRequest; recordFile: string; pidFile: string } {
   const root = mkdtempSync(join(tmpdir(), 'orca-codex-stub-'))
-  tempRoots.push(root)
+  if (onTestFinished) {
+    onTestFinished(() => rmSync(root, { recursive: true, force: true }))
+  } else {
+    tempRoots.push(root)
+  }
   const stubPath = join(root, 'stub-app-server.cjs')
   writeFileSync(stubPath, STUB_SERVER_SOURCE)
   const recordFile = join(root, 'batch-write-params.json')
@@ -158,8 +167,7 @@ function createStubRequest(options: {
 }
 
 const MANAGED_COMMAND = "/bin/sh '/tmp/orca/codex-hook.sh'"
-// The deadline starts at spawn and the stub writes its pid only once it runs; on a loaded host the
-// supervisor and stub have taken over 2 s to start, so a shorter deadline can stop it first.
+// Allow loaded hosts to start the supervisor and stub before the spawn-time deadline expires.
 const STUB_START_DEADLINE_MS = 8_000
 
 function managedHook(key: string, trustStatus = 'untrusted'): StubHook {
@@ -215,8 +223,7 @@ describe('killCodexAppServerProcessTree', () => {
     killCodexAppServerProcessTree(child, { platform: 'linux', spawnImpl })
 
     expect(spawnImpl).toHaveBeenCalledWith('pkill', ['-KILL', '-P', '1234'], { stdio: 'ignore' })
-    // A missing pkill arrives as an async 'error' event; unhandled, it would
-    // take down the main process.
+    // Missing pkill emits an async error that must not crash the main process.
     expect(descendants.on).toHaveBeenCalledWith('error', expect.any(Function))
     expect(descendants.unref).toHaveBeenCalledOnce()
     expect(child.kill).toHaveBeenCalledWith('SIGKILL')
@@ -255,7 +262,6 @@ describe('runCodexHookTrustGrantSession', () => {
       keys.map((key) => `sha256:hash-of-${key}`).sort()
     )
 
-    // Why: the write must never include user hooks, even untrusted ones.
     const written = JSON.parse(readFileSync(recordFile, 'utf-8')) as {
       edits: {
         keyPath: string
@@ -269,8 +275,7 @@ describe('runCodexHookTrustGrantSession', () => {
     expect(written.edits[0].mergeStrategy).toBe('upsert')
     expect(Object.keys(written.edits[0].value).sort()).toEqual([...keys].sort())
     expect(written.reloadUserConfig).toBe(true)
-    // Why: the entry process waits on these handles after setting exitCode, so
-    // an uncleared grace timer adds its full delay to synchronous launch prep.
+    // Leaked grace timers delay entry-process exit and synchronous launch preparation.
     const timerHandles = setTimeoutSpy.mock.results.map(({ value }) => value)
     expect(timerHandles).toHaveLength(2)
     expect(clearTimeoutSpy.mock.calls.map(([handle]) => handle)).toEqual(
@@ -280,8 +285,7 @@ describe('runCodexHookTrustGrantSession', () => {
 
   it('skips config/batchWrite when every expected entry is already trusted', async () => {
     const keys = ['/home/a/.codex/hooks.json:session_start:0:0']
-    // Why: the stub exits(9) on batchWrite in this scenario, so a write would
-    // fail the session instead of silently passing.
+    // The stub exits(9) on batchWrite, exposing any unintended write.
     const { request, recordFile } = createStubRequest({
       scenario: 'reject-write',
       hooks: keys.map((key) => managedHook(key, 'trusted')),
@@ -398,38 +402,44 @@ describe('runCodexHookTrustGrantSession', () => {
     expect(isCodexAppServerUnsupportedError(error)).toBe(false)
   })
 
-  it('kills a hung server at the session deadline', async () => {
+  it.concurrent('kills a hung server at the session deadline', async (context) => {
+    const { expect, onTestFinished } = context
     const keys = ['/home/a/.codex/hooks.json:session_start:0:0']
-    const { request, pidFile } = createStubRequest({
-      scenario: 'hang',
-      hooks: keys.map((key) => managedHook(key)),
-      expectedTrustKeys: keys,
-      managedCommand: MANAGED_COMMAND,
-      timeoutMs: STUB_START_DEADLINE_MS
-    })
+    const { request, pidFile } = createStubRequest(
+      {
+        scenario: 'hang',
+        hooks: keys.map((key) => managedHook(key)),
+        expectedTrustKeys: keys,
+        managedCommand: MANAGED_COMMAND,
+        timeoutMs: STUB_START_DEADLINE_MS
+      },
+      onTestFinished
+    )
 
     const startedAt = Date.now()
     await expect(runCodexHookTrustGrantSession(request)).rejects.toBeInstanceOf(
       CodexAppServerTimeoutError
     )
-    // Why: this stub exits on its stdin end and on SIGTERM, so the reap adds no grace on top of
-    // the deadline; a server that ignores both is the case below.
+    // This stub exits on stdin end or SIGTERM, so reaping must not add a grace delay.
     expect(Date.now() - startedAt - STUB_START_DEADLINE_MS).toBeLessThan(2_000)
     const childPid = Number(readFileSync(pidFile, 'utf8'))
     expect(() => process.kill(childPid, 0)).toThrow()
   })
 
-  it.runIf(process.platform !== 'win32')(
+  it.runIf(process.platform !== 'win32').concurrent(
     'stops a server that ignores its stdin end and SIGTERM after the SIGTERM grace',
-    async () => {
+    async ({ expect, onTestFinished }) => {
       const keys = ['/home/a/.codex/hooks.json:session_start:0:0']
-      const { request, pidFile } = createStubRequest({
-        scenario: 'wedged',
-        hooks: keys.map((key) => managedHook(key)),
-        expectedTrustKeys: keys,
-        managedCommand: MANAGED_COMMAND,
-        timeoutMs: STUB_START_DEADLINE_MS
-      })
+      const { request, pidFile } = createStubRequest(
+        {
+          scenario: 'wedged',
+          hooks: keys.map((key) => managedHook(key)),
+          expectedTrustKeys: keys,
+          managedCommand: MANAGED_COMMAND,
+          timeoutMs: STUB_START_DEADLINE_MS
+        },
+        onTestFinished
+      )
 
       const startedAt = Date.now()
       await expect(runCodexHookTrustGrantSession(request)).rejects.toBeInstanceOf(
@@ -444,14 +454,18 @@ describe('runCodexHookTrustGrantSession', () => {
     }
   )
 
-  it('bounds a callback that stalls between RPC requests', async () => {
-    const { request, pidFile } = createStubRequest({
-      scenario: 'happy',
-      hooks: [],
-      expectedTrustKeys: [],
-      managedCommand: MANAGED_COMMAND,
-      timeoutMs: STUB_START_DEADLINE_MS
-    })
+  it.concurrent('bounds a callback that stalls between RPC requests', async (context) => {
+    const { expect, onTestFinished } = context
+    const { request, pidFile } = createStubRequest(
+      {
+        scenario: 'happy',
+        hooks: [],
+        expectedTrustKeys: [],
+        managedCommand: MANAGED_COMMAND,
+        timeoutMs: STUB_START_DEADLINE_MS
+      },
+      onTestFinished
+    )
 
     const startedAt = Date.now()
     await expect(

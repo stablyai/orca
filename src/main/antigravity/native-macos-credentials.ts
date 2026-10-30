@@ -1,4 +1,4 @@
-import { runProcess } from '../../shared/child-process/run-process'
+import { runProcess } from '@orca/process-host'
 import {
   decodeAntigravityKeychainValue,
   encodeAntigravityKeychainValue,
@@ -71,7 +71,7 @@ export async function writeAntigravityMacOSCredential(
   }
   const keychain = target.keychainPath ? ` "${target.keychainPath}"` : ''
   const input = `add-generic-password -U -s "${target.service}" -a "${target.account}" -w ${encoded}${keychain}\n`
-  // security's interactive command buffer is limited; never risk a truncated credential write.
+  // Avoid truncating credentials in security’s limited interactive command buffer.
   if (Buffer.byteLength(input) > 4096) {
     throw new Error('Antigravity credentials exceed the macOS credential command limit.')
   }

@@ -1,14 +1,7 @@
-/**
- * Whether a scope under the systemd `--user` manager lives at least as long as the caller.
- *
- * Without lingering, systemd stops `user@<uid>.service` — and every `orca-daemon-*.scope` in it —
- * shortly after the user's last login session closes. A caller in a system unit or an SSH
- * session's `session-N.scope` outlives that, so moving the daemon into the user manager would
- * shorten its life (#24201). A caller already inside the user manager (a desktop app scope)
- * dies with it anyway, so the scope costs it nothing.
- */
+/** Outside callers require linger: logout can stop the user manager while their own cgroup survives (#24201). */
 import { readFileSync } from 'node:fs'
-import { runProcessSync, type ProcessResult } from '../../shared/child-process/run-process'
+import { runProcessSync } from '@orca/process-host'
+import type { ProcessResult } from '@orca/process-host/process-spec'
 
 const LINGER_PROBE_TIMEOUT_MS = 2_000
 
@@ -29,12 +22,10 @@ function runLoginctlLingerProbe(
   })
 }
 
-/** The path field of one `/proc/<pid>/cgroup` line (`id:controllers:path`); '' when absent. */
 export function cgroupPathFromProcLine(line: string): string {
   return line.split(':').slice(2).join(':').trim()
 }
 
-/** True when any of this process's cgroup paths sits inside the uid's user manager. */
 export function cgroupIsInsideUserManager(contents: string, uid: number): boolean {
   const unit = `/user@${uid}.service`
   return contents.split('\n').some((line) => {
@@ -50,7 +41,6 @@ export type UserManagerLifetimeProbeOptions = {
   log?: (message: string) => void
 }
 
-/** Fails closed: an unreadable cgroup plus an unknown linger state means "not durable". */
 export function userManagerOutlivesCaller(options: UserManagerLifetimeProbeOptions = {}): boolean {
   const uid = options.uid !== undefined ? options.uid : (process.getuid?.() ?? null)
   if (uid === null) {
@@ -73,7 +63,7 @@ export function userManagerOutlivesCaller(options: UserManagerLifetimeProbeOptio
     const probe = (options.runLingerProbe ?? runLoginctlLingerProbe)(uid, LINGER_PROBE_TIMEOUT_MS)
     lingering = probe.code === 0 && !probe.timedOut && probe.stdout.trim() === 'yes'
   } catch {
-    // loginctl missing or unstartable.
+    // An unavailable linger probe cannot establish durable scope ownership.
   }
   if (!lingering) {
     ;(options.log ?? console.warn)(

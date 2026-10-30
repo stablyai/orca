@@ -15,7 +15,7 @@ import { buildSleepingAgentLaunchConfig } from './sleeping-agent-launch-config'
 import { planHermesStartupQuery } from './hermes-startup-query'
 import { inlineAgentDraftFitsPlatform } from './agent-draft-platform-limit'
 import type { TuiAgent } from './tui-agent'
-import type { SessionOptionValue } from './native-chat-session-options'
+import type { SessionOptionValue } from './native-chat/input/native-chat-session-options'
 import { resolveAgentLaunchCommand } from './tui-agent-launch-command'
 import { appliedSessionOptionProps, buildFlagPromptStartupPlan } from './flag-prompt-startup'
 
@@ -31,8 +31,7 @@ export type AgentStartupPlan = {
   draftPrompt?: string | null
   env?: Record<string, string>
   startupCommandDelivery?: StartupCommandDelivery
-  /** Values actually emitted into this launch command, kept as base model ids
-   * so the native-chat surface can render only launch-backed state. */
+  /** Carry only emitted base model IDs so native chat shows launch-backed session options. */
   sessionOptions?: Record<string, SessionOptionValue>
 }
 
@@ -47,9 +46,10 @@ export function buildAgentStartupPlan(args: {
   agentEnv?: Record<string, string> | null
   sessionOptions?: Record<string, SessionOptionValue>
   sessionOptionsOverrideAgentArgs?: boolean
-  /** Why: SSH remotes deploy the CLI shim as plain `orca`, so the Linux-only
-   * `orca-ide` rename must be skipped for remote launches. */
+  /** Remote Linux deploys orca, so skip the local-only orca-ide rename. */
   isRemote?: boolean
+  /** Orca types into this launch after start, so a startup update prompt would take that input. */
+  suppressStartupUpdatePrompt?: boolean
 }): AgentStartupPlan | null {
   const { agent, prompt, cmdOverrides, platform, allowEmptyPromptLaunch = false } = args
   const shell = resolveStartupShell(platform, args.shell)
@@ -64,19 +64,33 @@ export function buildAgentStartupPlan(args: {
     agentArgs: usesQuery ? null : args.agentArgs,
     sessionOptions: args.sessionOptions,
     sessionOptionsOverrideAgentArgs: args.sessionOptionsOverrideAgentArgs,
-    isRemote: args.isRemote
+    isRemote: args.isRemote,
+    suppressStartupUpdatePrompt: args.suppressStartupUpdatePrompt
   })
   if (!baseCommand.ok) {
     return null
   }
   const launchCommand =
     agent === 'omp' ? withFreshOmpLaunch(baseCommand.command, shell) : baseCommand.command
+  // Hermes query launches splice agentArgs themselves; record them anyway so a resume keeps them.
+  const recordedCommand = usesQuery
+    ? resolveAgentLaunchCommand({
+        agent,
+        cmdOverrides,
+        platform,
+        shell,
+        agentArgs: args.agentArgs,
+        isRemote: args.isRemote
+      })
+    : baseCommand
   const launchConfig = buildSleepingAgentLaunchConfig({
     ...args,
-    // Why: picker flags are a one-time launch choice; a resumed provider
-    // session restores its own state and must retain only explicit user args.
-    agentCommand: baseCommand.commandWithoutSessionOptions
+    ...(recordedCommand.ok ? recordedCommand.resumeLaunch : baseCommand.resumeLaunch)
   })
+  // Updater overrides belong to this launch, not the saved session's environment.
+  const agentEnv = baseCommand.startupEnv
+    ? { ...args.agentEnv, ...baseCommand.startupEnv }
+    : args.agentEnv
 
   if (!trimmedPrompt) {
     if (!allowEmptyPromptLaunch) {
@@ -89,7 +103,7 @@ export function buildAgentStartupPlan(args: {
       followupPrompt: null,
       launchConfig,
       ...appliedSessionOptionProps(baseCommand.appliedSessionOptions),
-      ...(args.agentEnv ? { env: { ...args.agentEnv } } : {})
+      ...(agentEnv ? { env: { ...agentEnv } } : {})
     }
   }
 
@@ -108,7 +122,7 @@ export function buildAgentStartupPlan(args: {
       launchConfig,
       ...appliedSessionOptionProps(baseCommand.appliedSessionOptions),
       ...(agent === 'codex' ? { startupCommandDelivery: 'shell-ready' as const } : {}),
-      ...(args.agentEnv ? { env: { ...args.agentEnv } } : {})
+      ...(agentEnv ? { env: { ...agentEnv } } : {})
     }
   }
 
@@ -121,7 +135,7 @@ export function buildAgentStartupPlan(args: {
       shell,
       launchConfig,
       sessionOptions: baseCommand.appliedSessionOptions,
-      agentEnv: args.agentEnv
+      agentEnv
     })
   }
 
@@ -130,7 +144,7 @@ export function buildAgentStartupPlan(args: {
       baseCommand: baseCommand.command,
       agentArgs: args.agentArgs,
       prompt: trimmedPrompt,
-      agentEnv: args.agentEnv,
+      agentEnv,
       platform,
       shell,
       isRemote: args.isRemote
@@ -140,8 +154,7 @@ export function buildAgentStartupPlan(args: {
     }
     return {
       agent,
-      // Why: Hermes owns readiness and submission for `chat --query`; Orca
-      // only bounds and quotes the native invocation before starting the TUI.
+      // Hermes chat --query owns readiness/submission; Orca only bounds and quotes its native invocation.
       launchCommand: queryPlan.command,
       expectedProcess: config.expectedProcess,
       followupPrompt: null,
@@ -159,7 +172,7 @@ export function buildAgentStartupPlan(args: {
       followupPrompt: null,
       launchConfig,
       ...appliedSessionOptionProps(baseCommand.appliedSessionOptions),
-      ...(args.agentEnv ? { env: { ...args.agentEnv } } : {})
+      ...(agentEnv ? { env: { ...agentEnv } } : {})
     }
   }
 
@@ -171,7 +184,7 @@ export function buildAgentStartupPlan(args: {
       followupPrompt: null,
       launchConfig,
       ...appliedSessionOptionProps(baseCommand.appliedSessionOptions),
-      ...(args.agentEnv ? { env: { ...args.agentEnv } } : {})
+      ...(agentEnv ? { env: { ...agentEnv } } : {})
     }
   }
 
@@ -182,22 +195,12 @@ export function buildAgentStartupPlan(args: {
     followupPrompt: trimmedPrompt,
     launchConfig,
     ...appliedSessionOptionProps(baseCommand.appliedSessionOptions),
-    ...(args.agentEnv ? { env: { ...args.agentEnv } } : {})
+    ...(agentEnv ? { env: { ...agentEnv } } : {})
   }
 }
 
-/**
- * Whether this agent's prompt rides the launch command rather than the live PTY.
- *
- * The same question `buildAgentStartupPlan` answers by returning `followupPrompt: null`, asked
- * before a command exists — a caller deciding how to deliver a prompt has to know which half it is
- * getting while it is still choosing what to create. Derived from the one injection table rather
- * than restating it, and pinned against the builder for every agent by
- * `tui-agent-prompt-transport.test.ts`, so the two cannot answer differently.
- *
- * Every mode but `stdin-after-start` folds the prompt into argv — that is what argv is FOR, so
- * multi-line and special-character text reaches the CLI as one argument instead of keystrokes.
- */
+/** Predict the builder’s null-followupPrompt verdict before choosing a launch surface; derive from the same injection table and pin every agent in tui-agent-prompt-transport.spec.ts.
+ * All modes except stdin-after-start carry the prompt through the launch command; Hermes may reference an env carrier instead of literal prompt argv. */
 export function agentPromptRidesLaunchCommand(agent: TuiAgent): boolean {
   return TUI_AGENT_CONFIG[agent].promptInjectionMode !== 'stdin-after-start'
 }
@@ -222,7 +225,6 @@ export function buildAgentDraftLaunchPlan(args: {
   agentEnv?: Record<string, string> | null
   sessionOptions?: Record<string, SessionOptionValue>
   sessionOptionsOverrideAgentArgs?: boolean
-  /** Why: see buildAgentStartupPlan — remote launches use the plain `orca` shim. */
   isRemote?: boolean
 }): AgentDraftLaunchPlan | null {
   const { agent, draft, cmdOverrides, platform } = args
@@ -249,10 +251,13 @@ export function buildAgentDraftLaunchPlan(args: {
     agent === 'omp' ? withFreshOmpLaunch(baseCommand.command, shell) : baseCommand.command
   const launchConfig = buildSleepingAgentLaunchConfig({
     ...args,
-    // Why: see the new-session path above — resume must not replay picker flags.
-    agentCommand: baseCommand.commandWithoutSessionOptions
+    ...baseCommand.resumeLaunch
   })
   let plan: AgentDraftLaunchPlan | null = null
+  if (config.draftPromptFlag && shell === 'cmd' && /[\r\n]/.test(trimmed)) {
+    // Why: cmd.exe cannot quote a newline, so each one would submit the line early; paste instead.
+    return null
+  }
   if (config.draftPromptFlag) {
     const quoted = quoteStartupArg(trimmed, shell)
     plan = {

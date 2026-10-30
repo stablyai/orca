@@ -2,7 +2,7 @@ import React, { useCallback } from 'react'
 import { ExternalLink, MonitorUp, Pencil, StickyNote } from 'lucide-react'
 import { toast } from 'sonner'
 import { Badge } from '@/components/ui/badge'
-import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card'
+import { HoverCard, HoverCardContent } from '@/components/ui/hover-card'
 import { LinearIcon } from '@/components/icons/LinearIcon'
 import { JiraIcon } from '@/components/icons/JiraIcon'
 import { SelectedTextCopyMenu } from '@/components/SelectedTextCopyMenu'
@@ -26,13 +26,16 @@ import { useWorktreeCardReviewDetails } from '../sidebar/use-worktree-card-revie
 import { useWorktreeCardLinkedDetails } from '../sidebar/use-worktree-card-linked-details'
 import { useWorktreeCardLifecycleEffects } from '../sidebar/use-worktree-card-lifecycle-effects'
 import { useWorktreeCardSecondaryDetails } from '../sidebar/use-worktree-card-secondary-details'
-import { getReviewLabel } from '../sidebar/worktree-review-helpers'
+import { useWorkspaceReferenceLinkActions } from '../sidebar/use-workspace-reference-link-actions'
+import { LinkActionPopover } from '@/components/link-actions/LinkActionPopover'
 import { ActivityThreadHoverCardSummary } from './activity-thread-hover-card-summary'
+import { ActivityThreadHoverCardTrigger } from './activity-thread-hover-card-trigger'
 import type { AgentPaneThread } from './activity-thread-types'
 
 export type ActivityThreadHoverCardProps = {
   thread: AgentPaneThread
   children: React.ReactElement
+  // Keyboard focus only; pointer hover opens on rest (see activity-thread-hover-card-intent).
   openDelay?: number
   closeDelay?: number
   onJumpToWorkspace?: (thread: AgentPaneThread) => void
@@ -52,6 +55,8 @@ export function ActivityThreadHoverCard({
 }: ActivityThreadHoverCardProps): React.JSX.Element {
   const detailsHoverControl = useWorktreeCardDetailsHoverControl()
   const open = detailsHoverControl.hoverOpen && !suppressed
+  const { linkActionPopoverProps, onOpenLink, onAuxClickCapture } =
+    useWorkspaceReferenceLinkActions(thread.worktree.id, detailsHoverControl)
 
   return (
     <HoverCard
@@ -60,10 +65,20 @@ export function ActivityThreadHoverCard({
       openDelay={openDelay}
       closeDelay={closeDelay}
     >
-      <HoverCardTrigger asChild>{children}</HoverCardTrigger>
+      <span className="contents" onClick={(event) => event.stopPropagation()}>
+        <LinkActionPopover {...linkActionPopoverProps} />
+      </span>
+      <ActivityThreadHoverCardTrigger
+        open={open}
+        onOpenChange={detailsHoverControl.handleHoverOpenChange}
+      >
+        {children}
+      </ActivityThreadHoverCardTrigger>
       {open ? (
         <ActivityThreadHoverCardContent
           thread={thread}
+          onOpenLink={onOpenLink}
+          onAuxClickCapture={onAuxClickCapture}
           detailsHoverControl={detailsHoverControl}
           onJumpToWorkspace={onJumpToWorkspace}
           canJumpToWorkspace={canJumpToWorkspace}
@@ -75,11 +90,15 @@ export function ActivityThreadHoverCard({
 
 function ActivityThreadHoverCardContent({
   thread,
+  onOpenLink,
+  onAuxClickCapture,
   detailsHoverControl,
   onJumpToWorkspace,
   canJumpToWorkspace
 }: {
   thread: AgentPaneThread
+  onOpenLink: (url: string, event: React.MouseEvent) => void
+  onAuxClickCapture: (event: React.MouseEvent) => void
   detailsHoverControl: ReturnType<typeof useWorktreeCardDetailsHoverControl>
   onJumpToWorkspace?: (thread: AgentPaneThread) => void
   canJumpToWorkspace?: boolean
@@ -105,8 +124,6 @@ function ActivityThreadHoverCardContent({
     prDisplay: review.prDisplay
   })
 
-  const hoverDetailsOpen = detailsHoverControl.hoverOpen
-
   useWorktreeCardLifecycleEffects({
     worktree,
     repo: repo ?? undefined,
@@ -121,7 +138,7 @@ function ActivityThreadHoverCardContent({
     fetchHostedReviewForBranch: foundation.fetchHostedReviewForBranch,
     shouldRefreshHostedReview: false,
     newCardStyle: true,
-    hoverDetailsOpen,
+    hoverDetailsOpen: detailsHoverControl.hoverOpen,
     showIssue: true,
     issueCacheKey: review.issueCacheKey,
     fetchIssue: foundation.fetchIssue,
@@ -153,9 +170,9 @@ function ActivityThreadHoverCardContent({
     linkedBitbucketPR: review.linkedBitbucketPR,
     linkedAzureDevOpsPR: review.linkedAzureDevOpsPR,
     linkedGiteaPR: review.linkedGiteaPR,
-    cardProps: foundation.cardProps,
     newCardStyle: foundation.newCardStyle,
     compactCards: foundation.compactCards,
+    cardDetails: foundation.cardDetails,
     agentActivityDisplayMode: foundation.agentActivityDisplayMode,
     workspacePorts: foundation.workspacePorts,
     openTaskPage: foundation.openTaskPage,
@@ -189,18 +206,6 @@ function ActivityThreadHoverCardContent({
     )
   }, [copyLinkedWorkItemLink, detailsHoverControl, secondary.hoverIssue?.url])
 
-  const handleCopyReviewLink = useCallback(() => {
-    if (!secondary.hoverReview?.url) {
-      return
-    }
-    void copyLinkedWorkItemLink(
-      secondary.hoverReview.url,
-      translate('auto.components.sidebar.WorktreeCardMeta.reviewLinkLabel', '{{value0}} link', {
-        value0: getReviewLabel(secondary.hoverReview)
-      })
-    )
-  }, [copyLinkedWorkItemLink, secondary.hoverReview])
-
   const dismissAndRun = useCallback(
     (handler: ((event: React.MouseEvent) => void) | undefined) => (event: React.MouseEvent) => {
       detailsHoverControl.closeHover()
@@ -218,6 +223,7 @@ function ActivityThreadHoverCardContent({
       {...{ [WORKTREE_NATIVE_CONTEXT_MENU_ATTR]: '' }}
       onClick={(event) => event.stopPropagation()}
       onDoubleClick={(event) => event.stopPropagation()}
+      onAuxClickCapture={onAuxClickCapture}
     >
       <SelectedTextCopyMenu className="space-y-3">
         <ActivityThreadHoverCardSummary
@@ -228,10 +234,10 @@ function ActivityThreadHoverCardContent({
           }
           canJumpToWorkspace={canJumpToWorkspace}
         />
-
-        {/* GitHub / GitLab Issue */}
         <WorktreeCardIssueDetailSection
           issue={secondary.hoverIssue}
+          workspaceId={thread.worktree.id}
+          onManageLinks={dismissAndRun(foundation.handleManageLinks)}
           issueMenuOpen={detailsHoverControl.issueMenuOpen}
           onIssueMenuOpenChange={detailsHoverControl.handleIssueMenuOpenChange}
           onCopyIssueLink={secondary.hoverIssue?.url ? handleCopyIssueLink : undefined}
@@ -281,6 +287,7 @@ function ActivityThreadHoverCardContent({
                         'View on Linear'
                       )}
                       href={secondary.hoverLinearIssue.url}
+                      workspaceId={thread.worktree.id}
                     >
                       <ExternalLink className="size-3" />
                     </MetadataActionIcon>
@@ -327,6 +334,7 @@ function ActivityThreadHoverCardContent({
                     'View on Jira'
                   )}
                   href={secondary.hoverJiraIssue.url}
+                  workspaceId={thread.worktree.id}
                 >
                   <ExternalLink className="size-3" />
                 </MetadataActionIcon>
@@ -343,13 +351,11 @@ function ActivityThreadHoverCardContent({
         {/* Pull Request / Review */}
         <WorktreeCardReviewDetailSection
           review={secondary.hoverReview}
+          onManageLinks={dismissAndRun(foundation.handleManageLinks)}
           reviewMenuOpen={detailsHoverControl.reviewMenuOpen}
           onReviewMenuOpenChange={detailsHoverControl.handleReviewMenuOpenChange}
           onOpenReviewInOrca={secondary.handleOpenReviewInOrca}
-          onOpenReviewInBrowser={
-            secondary.hoverReview?.url ? secondary.handleOpenReviewInBrowser : undefined
-          }
-          onCopyReviewLink={secondary.hoverReview?.url ? handleCopyReviewLink : undefined}
+          onOpenLink={onOpenLink}
           onUnlinkReview={secondary.canUnlinkReview ? secondary.handleUnlinkReview : undefined}
           closeHover={detailsHoverControl.closeHover}
         />

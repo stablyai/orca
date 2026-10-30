@@ -1,9 +1,3 @@
-// Damage fails the chat's load, and nothing is deleted.
-//
-// A row this build cannot parse, a row numbered against its key, a gap in the sequence and an epoch
-// without its first row are each damage. The open refuses the chat as history that cannot be
-// loaded, and every stored row is where it was.
-
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -74,7 +68,6 @@ function storedRows(): { seq: number; rowJson: string }[] {
   return withJournalDatabase((db) => liveTestJournalRows(db, IDENTITY.sessionId))
 }
 
-/** A chat of an epoch row and five messages: sequences 1 to 6. */
 async function writeChat(): Promise<void> {
   const journal = await open()
   for (let ordinal = 0; ordinal < 5; ordinal += 1) {
@@ -171,7 +164,6 @@ function storedRowJson(db: Database.Database, seq: number): string {
 }
 
 describe('a row the reader would reject', () => {
-  // TypeScript accepts it; the persisted reader rejects a call id that is only spaces.
   const blankCallId: AgentJournalItemBody = {
     kind: 'message',
     role: 'assistant',
@@ -199,15 +191,15 @@ describe('a row the reader would reject', () => {
   it('rolls back a whole epoch replacement that holds one, keeping the epoch it would replace', async () => {
     const journal = await open()
     await journal.appendItem(item(0), body('kept'), scope)
-    // The open journal's own database: closing it here would close the journal's too.
+    // Closing the shared test connection would also close the live journal.
     const liveRows = () =>
       liveTestJournalRows(openTestJournalHostDatabase(root).db, IDENTITY.sessionId)
     const before = liveRows()
 
     await expect(
       journal.replaceEpochItems('legacy_import', 1, [
-        { identity: item(5), body: body('replacement') },
-        { identity: item(6), body: blankCallId }
+        { identity: item(5), body: body('replacement'), ownerFence: 1 },
+        { identity: item(6), body: blankCallId, ownerFence: 1 }
       ])
     ).rejects.toMatchObject({ code: 'journal_row_rejected' })
 
@@ -219,7 +211,6 @@ describe('a row the reader would reject', () => {
 })
 
 describe('an epoch named with no rows at all', () => {
-  // A crash inside an older build's repair: the suffix deleted, its new epoch not yet published.
   it('is founded afresh on open, with nothing deleted, and takes writes', async () => {
     await writeChat()
     withJournalDatabase((db) => {

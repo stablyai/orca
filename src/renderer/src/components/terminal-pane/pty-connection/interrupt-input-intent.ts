@@ -5,6 +5,9 @@ import { createAgentInterruptInference } from '../agent-interrupt-inference'
 import { createAgentQuestionAnsweredInference } from '../agent-question-answered-inference'
 import type { AgentInterruptInputIntent } from '../../../../../shared/agent-interrupt-intent'
 import { markTerminalBracketedPasteInterrupted } from '../terminal-bracketed-paste'
+import { isPassiveTerminalInputReport } from '../terminal-passive-input-report'
+import { dismissRetainedProgramResult } from '@/lib/program-status/result-retention'
+import { isRetainedProgramResult } from '@/lib/program-status/row'
 
 import { REATTACH_IDLE_AGENT_CURSOR_RESET_DELAY_MS } from './foreground-output-scan'
 
@@ -28,9 +31,7 @@ export function installInterruptInputIntent(session: ConnectPanePtySession): voi
       if (latestStatus !== 'idle' && latestStatus !== 'permission') {
         return
       }
-      // Why: restored idle agent TUIs can repaint after reattach SIGWINCH and
-      // reapply DECSCUSR steady-bar; the normal working→idle reset will not
-      // fire because the agent was already idle before Orca restarted.
+      // Reattach repaint can restore a steady cursor while already idle; no later working→idle edge will reset it.
       session.queueAgentIdleTerminalModeReset()
     }, REATTACH_IDLE_AGENT_CURSOR_RESET_DELAY_MS)
   }
@@ -38,9 +39,7 @@ export function installInterruptInputIntent(session: ConnectPanePtySession): voi
     paneKey: session.cacheKey,
     getStatusEntry: () => useAppStore.getState().agentStatusByPaneKey[session.cacheKey],
     inferInterrupt: (request) => {
-      // Why: the explicit hook row is the authority for an in-flight agent turn.
-      // Codex can reset its terminal title while handling Ctrl+C/Escape, so title
-      // state must not veto clearing the row's working state.
+      // Hooks own active-turn state; Ctrl+C/Escape can reset Codex’s title without ending the turn.
       return window.api.agentStatus
         .inferInterrupt(request)
         .then((applied) => {
@@ -70,8 +69,7 @@ export function installInterruptInputIntent(session: ConnectPanePtySession): voi
   ): void => {
     const state = useAppStore.getState()
     if (!entry) {
-      // Why: an Orca-started agent can exit before its first hook status. The
-      // launch registry was still created up front, so clear it on command exit.
+      // Clear launch identity on command exit even if the agent never emitted its first hook.
       state.clearAgentLaunchConfig(session.cacheKey)
       return
     }
@@ -101,7 +99,9 @@ export function installInterruptInputIntent(session: ConnectPanePtySession): voi
     if (!unchanged && !inferredFromEntry) {
       return
     }
-    state.dropAgentStatus(session.cacheKey)
+    if (!isRetainedProgramResult(current)) {
+      state.dropAgentStatus(session.cacheKey)
+    }
   }
   session.pendingTerminalInputIntent = null
   session.clearPendingTerminalInputIntentTimer = null
@@ -119,6 +119,9 @@ export function installInterruptInputIntent(session: ConnectPanePtySession): voi
       session.clearPendingTerminalInputIntent()
     }, 0)
   }
+  // Why: a focus or hover report landing between a keydown and its byte must not consume the intent.
+  session.pendingTerminalInputIntentFor = (data: string): AgentInterruptInputIntent | null =>
+    isPassiveTerminalInputReport(data) ? null : session.pendingTerminalInputIntent
   session.inputMatchesIntent = (intent: AgentInterruptInputIntent, data: string): boolean => {
     return (
       (intent === 'plain-escape' && data === '\x1b') || (intent === 'ctrl-c' && data === '\x03')
@@ -149,14 +152,14 @@ export function installInterruptInputIntent(session: ConnectPanePtySession): voi
     if (intent === 'ctrl-c' || data === '\x03') {
       markTerminalBracketedPasteInterrupted(session.pane.terminal)
     }
-    // Why: every delivered-input path funnels through here, so this is where a
-    // submit keystroke into a waiting AskUserQuestion pane becomes the
-    // "question answered" signal no hook will ever deliver.
+    // All delivered input meets here; submitting AskUserQuestion must infer an answer no hook will report.
     session.questionAnsweredInference.observeSentTerminalInput(data)
+    if (!isPassiveTerminalInputReport(data)) {
+      dismissRetainedProgramResult(session.cacheKey, useAppStore.getState())
+    }
   }
   session.pendingTerminalInputWrite = null
-  // Why: an unset baseline must differ from the first `?? null` snapshot so the
-  // first acknowledged input still advances the sequence.
+  // Distinguish unset from the first null snapshot so the first acknowledged input advances sequence.
   session.sequencedInterruptStatusBaseline = undefined
   session.interruptStatusBaselineSequence = 0
   session.setPendingTerminalInputWrite = (promise: Promise<boolean | null>): void => {

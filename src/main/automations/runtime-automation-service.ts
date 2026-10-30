@@ -1,21 +1,20 @@
-/**
- * The AutomationService a runtime host executes schedules with. Shared by Electron startup and
- * orcad so both hosts dispatch through the same headless path.
- */
 import type { ClaudeUsageStore } from '../claude-usage/store'
 import type { CodexUsageStore } from '../codex-usage/store'
 import type { Store } from '../persistence'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { AutomationService } from './service'
-import type { AutomationRun } from '../../shared/automations-types'
 import { createHeadlessRunTerminalRetention } from './headless-run-terminal-retention'
 import {
   getTuiAgentDetectCommands,
   isTuiAgent,
   TUI_AGENT_CONFIG
 } from '../../shared/tui-agent-config'
-import { buildHeadlessAutomationWorktreeCreateArgs } from './headless-workspace-create'
-import { createRuntimeAutomationRunTerminalObserver } from './runtime-terminal-run-observer'
+import { launchHeadlessAutomationAgent, runOwnHandle } from './headless-automation-agent-launch'
+import {
+  AGENT_HOOKS_REVIEW_BLOCKED_ERROR,
+  createRuntimeAutomationRunTerminalObserver
+} from './runtime-terminal-run-observer'
+import { closeEarlierHookReviewRunTerminals } from './hook-review-blocked-run-terminals'
 
 const MAX_REMEMBERED_LAUNCHES = 256
 
@@ -24,11 +23,11 @@ export function createRuntimeAutomationService(input: {
   runtime: OrcaRuntimeService
   claudeUsage?: ClaudeUsageStore
   codexUsage?: CodexUsageStore
-  /** A server process: it executes remote_host_service-owned schedules and dispatches headlessly. */
+  /** Execute remote_host_service schedules through the headless dispatcher. */
   headless: boolean
 }): AutomationService {
   const { store, runtime, claudeUsage, codexUsage } = input
-  // The handle each headless launch returned, so its watcher never depends on a pane-key lookup.
+  // Launch handles remain usable before pane-key lookup resolves.
   const launchedHandles = new Map<string, string>()
   const observer = createRuntimeAutomationRunTerminalObserver(runtime, {
     getAgentStatusRowsForPane: (paneKey) => runtime.getAgentStatusRowsForPane(paneKey),
@@ -42,69 +41,39 @@ export function createRuntimeAutomationService(input: {
     codexUsage,
     terminalObserver: {
       ...observer,
-      // This host's own launch handle first: it names the run's terminal without a lookup.
       resolveRunTerminal: (run) =>
         (run.terminalPaneKey ? launchedHandles.get(run.terminalPaneKey) : undefined) ??
-        observer.resolveRunTerminal(run)
+        observer.resolveRunTerminal(run),
+      observeCompletion: async (handle, options) => {
+        const observation = await observer.observeCompletion(handle, options)
+        if (options.run && observation.error === AGENT_HOOKS_REVIEW_BLOCKED_ERROR) {
+          const markDispatchResult = service.markDispatchResult.bind(service)
+          void closeEarlierHookReviewRunTerminals(
+            { store, runtime, markDispatchResult },
+            options.run
+          ).catch((error: unknown) => {
+            console.warn('[automations] hook-review tab cleanup failed:', error)
+          })
+        }
+        return observation
+      }
     },
     onAutomationsChanged: (payload) => runtime.notifyAutomationsChanged(payload),
     allowRemoteHostScheduling: input.headless,
     headlessDispatcher: input.headless
-      ? async ({ automation, run, target }) => {
-          let terminalHandle: string
-          let terminalSessionId: string | null = null
-          let terminalPaneKey: string | null = null
-          let terminalPtyId: string | null = null
-          let workspaceId: string
-          let workspaceDisplayName: string | null = null
-          if (automation.workspaceMode === 'new_per_run') {
-            const created = await runtime.createManagedWorktree(
-              buildHeadlessAutomationWorktreeCreateArgs({ automation, run, repo: target.repo })
-            )
-            terminalHandle = created.startupTerminal?.handle ?? ''
-            terminalSessionId = created.startupTerminal?.tabId ?? null
-            terminalPaneKey = created.startupTerminal?.paneKey ?? null
-            terminalPtyId = created.startupTerminal?.ptyId ?? null
-            workspaceId = created.worktree.id
-            workspaceDisplayName = created.worktree.displayName ?? null
-            if (!terminalHandle) {
-              throw new Error(
-                created.warning ||
-                  'Automation workspace was created, but no agent terminal started.'
-              )
-            }
-          } else {
-            if (!automation.workspaceId) {
-              throw new Error('The target workspace is no longer available.')
-            }
-            const terminal = await runtime.launchAgentTerminal(`id:${automation.workspaceId}`, {
-              agent: automation.agentId,
-              prompt: automation.prompt,
-              title: run.title,
-              ...(automation.extraAgentArgs ? { extraAgentArgs: automation.extraAgentArgs } : {})
-            })
-            terminalHandle = terminal.handle
-            terminalSessionId = terminal.tabId ?? null
-            terminalPaneKey = terminal.paneKey ?? null
-            terminalPtyId = terminal.ptyId ?? null
-            workspaceId = terminal.worktreeId
-            const worktree = await runtime.showManagedWorktree(`id:${workspaceId}`)
-            workspaceDisplayName = worktree.displayName ?? null
-          }
-          if (terminalPaneKey) {
-            launchedHandles.set(terminalPaneKey, terminalHandle)
+      ? async (request) => {
+          const { terminalHandle, ...launch } = await launchHeadlessAutomationAgent(runtime, {
+            ...request,
+            runs: store.listAutomationRuns(request.automation.id)
+          })
+          if (launch.terminalPaneKey) {
+            launchedHandles.set(launch.terminalPaneKey, terminalHandle)
             if (launchedHandles.size > MAX_REMEMBERED_LAUNCHES) {
               launchedHandles.delete(launchedHandles.keys().next().value ?? '')
             }
           }
-          // No completion: the run's watcher observes it, retrying wait timeouts until it settles.
-          return {
-            workspaceId,
-            workspaceDisplayName,
-            terminalSessionId,
-            terminalPaneKey,
-            terminalPtyId
-          }
+          // Let the watcher retry wait timeouts until completion or its observation deadline.
+          return launch
         }
       : undefined
   })
@@ -115,7 +84,6 @@ export function createRuntimeAutomationService(input: {
   return service
 }
 
-/** A headless host has no renderer to close finished run terminals; its service does it. */
 function bindHeadlessRunTerminalRetention(
   service: AutomationService,
   store: Store,
@@ -131,17 +99,51 @@ function bindHeadlessRunTerminalRetention(
         ? runtime.confirmTerminalShellAlone(run.terminalPtyId)
         : Promise.resolve(false),
     closeRunTerminal: async (run) => {
-      // Only the run's own process: a restarted pane holds a new PTY a user may be working in.
       const handle = runOwnHandle(runtime, run)
       if (!handle) {
         return false
       }
-      // The run's pane only: a pane a user split into the same tab is theirs.
+      // Preserve user-created splits in the same tab.
       await runtime.closeTerminal(handle)
       return true
     },
+    // Shared workspaces must close run panes rather than accumulate sleeping tabs.
+    runOwnsWorkspace: (run) => {
+      const provenance = run.workspaceId
+        ? store.getWorktreeMeta(run.workspaceId)?.automationProvenance
+        : undefined
+      // Why: a client-origin label names another owner's run, never one of this host's.
+      return provenance?.origin !== 'client' && provenance?.automationRunId === run.id
+    },
+    sleepRunWorkspace: async (run) => {
+      const ptyId = run.terminalPtyId
+      if (!run.workspaceId || !ptyId) {
+        return false
+      }
+      try {
+        // Sleep only this PTY, preserving other live terminals and the agent resume state.
+        const sleep = await runtime.sleepTerminalsForWorktree(`id:${run.workspaceId}`, {
+          soleLivePtyId: ptyId
+        })
+        // A retry may find no live PTYs if an earlier sleep stopped the process before failing.
+        const slept =
+          sleep.livePtyIds.length === 0 ||
+          (sleep.stoppedPtyIds.includes(ptyId) && !sleep.remainingLivePtyIds?.includes(ptyId))
+        if (!slept) {
+          return false
+        }
+      } catch (error) {
+        console.error('[automations] could not sleep a run workspace:', error)
+        return false
+      }
+      // Preserve tab and pane keys for resuming the slept agent.
+      await service.markDispatchResult({ runId: run.id, status: run.status, terminalPtyId: null })
+      return true
+    },
+    inAutomationLane: (automationId, operation) =>
+      service.runInAutomationLane(automationId, operation),
     forgetRunTerminal: async (run) => {
-      // A run still dispatched had its agent exit without a result, proven by its idle shell.
+      // An idle shell proves a dispatched run exited without a completion result.
       const unfinished = run.status === 'dispatched'
       await service.markDispatchResult({
         runId: run.id,
@@ -174,16 +176,4 @@ function automationAgentCommands(agentId: string | undefined): string[] {
   }
   const config = TUI_AGENT_CONFIG[agentId]
   return [...getTuiAgentDetectCommands(config), config.launchCmd]
-}
-
-/** The run's pane handle while that pane still holds the run's own PTY; null otherwise. */
-function runOwnHandle(runtime: OrcaRuntimeService, run: AutomationRun): string | null {
-  const handle = run.terminalPaneKey
-    ? runtime.getTerminalHandleForPaneKey(run.terminalPaneKey)
-    : null
-  return handle &&
-    run.terminalPtyId &&
-    runtime.getTerminalPtyIdForHandle(handle) === run.terminalPtyId
-    ? handle
-    : null
 }

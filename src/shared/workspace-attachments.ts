@@ -1,3 +1,4 @@
+import { getWorkspaceReferenceIdentity } from './workspace-reference-identity'
 import {
   WORKSPACE_ATTACHMENT_NUMBER_SLOTS,
   WORKSPACE_ATTACHMENT_LEGACY_FIELDS,
@@ -18,6 +19,43 @@ import {
   matchesWorkspaceAttachmentIdentity
 } from './workspace-attachment-normalization'
 
+export function matchesLegacyWorkspaceAttachment(
+  item: WorkspaceAttachment,
+  legacy: WorkspaceAttachment
+): boolean {
+  return (
+    getWorkspaceReferenceIdentity(item) === getWorkspaceReferenceIdentity(legacy) ||
+    matchesWorkspaceAttachmentIdentity(item, legacy)
+  )
+}
+
+/** How each numbered reference reads; the desktop passes its translated wording. */
+export type WorkspaceAttachmentLabelFormats = {
+  pr: (number: number) => string
+  mr: (number: number) => string
+  issue: (number: number) => string
+}
+
+const ENGLISH_ATTACHMENT_LABELS: WorkspaceAttachmentLabelFormats = {
+  pr: (number) => `PR #${number}`,
+  mr: (number) => `MR !${number}`,
+  issue: (number) => `Issue #${number}`
+}
+
+/** Use provider-native Linear/Jira keys; other references use PR #12-style labels. */
+export function workspaceAttachmentReferenceLabel(
+  item: Pick<
+    WorkspaceAttachment,
+    'provider' | 'type' | 'number' | 'identifier' | 'linearIdentifier' | 'jiraIdentifier'
+  >,
+  formats: WorkspaceAttachmentLabelFormats = ENGLISH_ATTACHMENT_LABELS
+): string {
+  if (item.provider === 'linear' || item.provider === 'jira') {
+    return item.identifier ?? item.linearIdentifier ?? item.jiraIdentifier ?? `#${item.number}`
+  }
+  return formats[item.type](item.number)
+}
+
 export function getWorkspaceAttachments(
   meta: WorkspaceAttachmentMetadata | null | undefined
 ): WorkspaceAttachment[] {
@@ -26,7 +64,7 @@ export function getWorkspaceAttachments(
   }
   const items = normalizeWorkspaceAttachments(meta.linkedItems)
   for (const legacy of legacyWorkspaceAttachments(meta)) {
-    if (!items.some((item) => matchesWorkspaceAttachmentIdentity(item, legacy))) {
+    if (!items.some((item) => matchesLegacyWorkspaceAttachment(item, legacy))) {
       items.push(legacy)
     }
   }
@@ -132,7 +170,10 @@ export function normalizeWorkspaceAttachmentUpdate(
             getWorkspaceAttachments(existing),
             updates.linkedItems
           )
-    const normalized = { ...requested, ...synchronizeSelection(merged, items, requested) }
+    const normalized = {
+      ...requested,
+      ...synchronizeSelection(merged, items, requested)
+    }
     if (
       preserveSelection &&
       Object.hasOwn(updates, 'pushTarget') &&
@@ -147,7 +188,12 @@ export function normalizeWorkspaceAttachmentUpdate(
     linkedWorkItem: existing?.linkedWorkItem,
     linkedTaskSourceContext: existing?.linkedTaskSourceContext
   })[0]
+  const selectionCleared = reviewSlots.every(([slot]) => requested[slot] === null)
   for (const fields of WORKSPACE_ATTACHMENT_LEGACY_FIELDS) {
+    // Clearing the active review must not delete the workspace's review history.
+    if (selectionCleared && reviewSlots.some(([slot]) => slot === fields[0])) {
+      continue
+    }
     if (updates[fields[0]] === null) {
       items = removeSelectedWorkspaceAttachments(
         items,

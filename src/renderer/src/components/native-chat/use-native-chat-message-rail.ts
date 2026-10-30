@@ -1,12 +1,9 @@
-// Rail state: which user messages get a tick, and which tick is lit.
-//
-// The lit tick is recomputed once scrolling settles rather than per scroll event.
-// Mid-scroll the answer is both expensive and useless — nobody reads a rail that
-// is itself moving — and settling on it is what makes the highlight feel like a
-// position report instead of a flicker.
+// Compute the active tick after scrolling settles to avoid expensive, flickering position reports mid-scroll.
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { flushSync } from 'react-dom'
 import { findActiveNativeChatRailItem } from './native-chat-active-rail-item'
+import { ALIGN_ARRIVED_PX } from './use-native-chat-viewport-align'
 import {
   buildNativeChatRailItems,
   mergeNativeChatRailOutline,
@@ -21,11 +18,9 @@ import {
 import type { NativeChatTranscriptSlot } from './native-chat-transcript-slots'
 import type { NativeChatTranscriptWindow } from './use-native-chat-transcript-window'
 
-/** Quiet period that counts as "stopped scrolling". */
 export const NATIVE_CHAT_RAIL_IDLE_MS = 120
 
-/** Narrower than this the preview card would cover the transcript it sits beside,
- *  so the whole rail stands down rather than half-working in a split pane. */
+/** Hide the rail in narrow panes where its preview would cover the transcript. */
 export const NATIVE_CHAT_RAIL_MIN_WIDTH_PX = 512
 
 export type NativeChatMessageRailState = {
@@ -35,17 +30,12 @@ export type NativeChatMessageRailState = {
   /** Light a tick now, ahead of the scroll that is taking the reader to it. */
   onActivate: (id: string) => void
   visible: boolean
-  /** The item whose preview is open, if any. */
   previewId: string | null
-  /** The item whose tick holds keyboard focus, if any. */
   focusId: string | null
-  /** The rail names the item it focused, or is about to: an item named here
-   *  always has a tick, so arrow keys can walk every message, sampled or not. */
+  /** Keep the focused item’s tick mounted so arrow keys can reach unsampled messages. */
   onFocusItem: (id: string | null) => void
-  /** What the agent answered the previewed item with; empty when nothing is
-   *  previewed or it has said nothing. Follows a reply that is still streaming. */
+  /** Reply to the previewed turn, including streaming text; empty without a reply. */
   previewReply: string
-  /** The rail names the item its preview shows, or null once it closes. */
   onPreview: (id: string | null) => void
 }
 
@@ -79,21 +69,36 @@ export function useNativeChatMessageRail({
     [outline, loadedItems]
   )
 
-  // Read through refs so a settling scroll never re-subscribes the listener:
-  // `virtualItems` is a fresh array on every frame of a scroll.
+  // Read fresh per-frame arrays through refs so scroll listeners and idle timers stay subscribed.
   const virtualItemsRef = useRef(virtualItems)
   virtualItemsRef.current = virtualItems
   const slotsRef = useRef(slots)
   slotsRef.current = slots
+  // Keep a clicked tick lit at its settled row offset; clamped jumps cannot place the row at the fold.
+  const clickedRef = useRef<{ id: string; offset: number | null } | null>(null)
 
   const readActiveId = useCallback(() => {
     const element = scrollRef.current
     if (!element) {
       return
     }
+    const clicked = clickedRef.current
+    if (clicked !== null) {
+      const top = element.scrollTop
+      const slotIndex = previousItemsRef.current.find((item) => item.id === clicked.id)?.slotIndex
+      const row = virtualItemsRef.current.find((item) => item.index === slotIndex)
+      if (row && row.end > top && row.start < top + element.clientHeight) {
+        clicked.offset ??= row.start - top
+        if (Math.abs(row.start - top - clicked.offset) <= ALIGN_ARRIVED_PX) {
+          return
+        }
+      }
+      clickedRef.current = null
+    }
     setActiveId((previous) =>
       findActiveNativeChatRailItem({
         slots: slotsRef.current,
+        ticks: previousItemsRef.current,
         virtualItems: virtualItemsRef.current,
         scrollTop: element.scrollTop,
         clientHeight: element.clientHeight,
@@ -103,49 +108,53 @@ export function useNativeChatMessageRail({
     )
   }, [scrollRef])
 
+  const idleTimerRef = useRef<number | null>(null)
+  const scheduleRead = useCallback(() => {
+    if (idleTimerRef.current !== null) {
+      window.clearTimeout(idleTimerRef.current)
+    }
+    idleTimerRef.current = window.setTimeout(() => {
+      idleTimerRef.current = null
+      readActiveId()
+    }, NATIVE_CHAT_RAIL_IDLE_MS)
+  }, [readActiveId])
+
   useEffect(() => {
     const element = scrollRef.current
     if (!element) {
       return
     }
-    let idleTimer: number | null = null
-    const scheduleRead = (): void => {
-      if (idleTimer !== null) {
-        window.clearTimeout(idleTimer)
-      }
-      idleTimer = window.setTimeout(() => {
-        idleTimer = null
-        readActiveId()
-      }, NATIVE_CHAT_RAIL_IDLE_MS)
-    }
     scheduleRead()
     element.addEventListener('scroll', scheduleRead, { passive: true })
     return () => {
       element.removeEventListener('scroll', scheduleRead)
-      if (idleTimer !== null) {
-        window.clearTimeout(idleTimer)
+      if (idleTimerRef.current !== null) {
+        window.clearTimeout(idleTimerRef.current)
+        idleTimerRef.current = null
       }
     }
-    // Subscribed once. Depending on anything that changes per render would tear
-    // the listener down and cancel the pending idle timer on every frame of a
-    // streaming turn, so the highlight would never settle.
-  }, [readActiveId, scrollRef])
+    // Per-render dependencies would cancel idle timers on streaming frames and prevent settlement.
+  }, [scheduleRead, scrollRef])
 
-  // Re-read when the set of prompts actually changes, so a transcript that grew
-  // updates without waiting for the next scroll.
+  // Prompt changes need a read without waiting for scroll; in-flight jumps wait until settled.
   useEffect(() => {
-    readActiveId()
+    if (clickedRef.current?.offset !== null) {
+      readActiveId()
+    }
   }, [items, readActiveId])
 
-  useEffect(() => {
+  // Measure before paint because rail-dependent padding would otherwise shift transcript text.
+  useLayoutEffect(() => {
     const element = scrollRef.current
     if (!element || typeof ResizeObserver === 'undefined') {
       return
     }
-    const observer = new ResizeObserver(() => {
+    const measure = (): void => {
       setWideEnough(element.clientWidth >= NATIVE_CHAT_RAIL_MIN_WIDTH_PX)
       setMaxTicks(nativeChatRailTickCapacity(element.clientHeight))
-    })
+    }
+    measure()
+    const observer = new ResizeObserver(() => flushSync(measure))
     observer.observe(element)
     return () => observer.disconnect()
   }, [scrollRef])
@@ -156,6 +165,15 @@ export function useNativeChatMessageRail({
     () => selectNativeChatRailTicks({ items, keepIds: [activeId, focusId, previewId], maxTicks }),
     [items, activeId, focusId, previewId, maxTicks]
   )
+  // Jumps that do not move the view fire no scroll event; schedule their landing read here.
+  const onActivate = useCallback(
+    (id: string) => {
+      clickedRef.current = { id, offset: null }
+      setActiveId(id)
+      scheduleRead()
+    },
+    [scheduleRead]
+  )
   const previewReply =
     previewId === null ? '' : nativeChatRailReplyPreview(turnRows, items, previewId)
 
@@ -164,7 +182,7 @@ export function useNativeChatMessageRail({
       ticks,
       items,
       activeId,
-      onActivate: setActiveId,
+      onActivate,
       visible: wideEnough && items.length > 0,
       previewId,
       previewReply,
@@ -172,6 +190,6 @@ export function useNativeChatMessageRail({
       focusId,
       onFocusItem: setFocusId
     }),
-    [ticks, items, activeId, wideEnough, previewId, previewReply, focusId]
+    [ticks, items, activeId, onActivate, wideEnough, previewId, previewReply, focusId]
   )
 }

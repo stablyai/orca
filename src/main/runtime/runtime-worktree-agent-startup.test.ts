@@ -1,23 +1,23 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Repo } from '../../shared/repo-types'
 import { tuiAgentToAgentKind } from '../../shared/agent-kind'
 import { getDefaultSettings } from '../../shared/constants'
 import type { RuntimeManagedWorktreeCreateArgs } from './runtime-managed-worktree-create-types'
+import type { AgentLaunchRuntime } from '../../shared/agent-launch-runtime'
 
 const mocks = vi.hoisted(() => ({
-  detectRemoteAgents: vi.fn(),
   detectInstalledAgentsWithShellPathHydration: vi.fn()
 }))
 
 vi.mock('../preflight/agent-detection', () => ({
-  detectRemoteAgents: mocks.detectRemoteAgents,
   detectInstalledAgentsWithShellPathHydration: mocks.detectInstalledAgentsWithShellPathHydration
 }))
 
 import {
   buildWorktreeStartupForAgent,
   buildWorktreeStartupForDraft,
-  resolveWorktreeCreateAgentStartup
+  resolveWorktreeCreateAgentStartup,
+  resolveWorktreeStartupDraftAgent
 } from './runtime-worktree-agent-startup'
 
 function makeRepo(fields: Partial<Repo>): Repo {
@@ -32,6 +32,12 @@ function makeRepo(fields: Partial<Repo>): Repo {
     ...fields
   }
 }
+
+const LINUX_FACT: AgentLaunchRuntime = {
+  platform: 'linux',
+  pty: { shellOverride: undefined, terminalWindowsWslDistro: null }
+}
+const LINUX = { platform: 'linux' as const, shell: 'posix' as const, launchRuntime: LINUX_FACT }
 
 const settings = {
   ...getDefaultSettings('/tmp'),
@@ -48,14 +54,13 @@ function launchCliNameFor(repo: Repo): string {
     repo,
     settings,
     agent: 'claude-agent-teams',
-    getLaunchPlatform: () => 'linux',
+    getLaunchRuntime: () => LINUX,
     toSessionOptions: () => undefined
   }).startup.command.split(' ')[0]!
 }
 
 describe('buildWorktreeStartupForAgent host resolution', () => {
-  // Why two hosts: one SSH fixture passes even when the launch shape is resolved off another
-  // host's row, which is the shape of the `ssh:m4air` -> openclaw leak.
+  // Two hosts catch launch shapes resolved from another host's row (ssh:m4air to openclaw leak).
   it('drops the Linux-only rename for both spellings of SSH ownership on two hosts', () => {
     expect(launchCliNameFor(makeRepo({ connectionId: 'm4air' }))).toBe('orca')
     expect(launchCliNameFor(makeRepo({ executionHostId: 'ssh:openclaw' }))).toBe('orca')
@@ -73,8 +78,8 @@ describe('buildWorktreeStartupForAgent host resolution', () => {
     ).toBe('orca')
   })
 
-  it('keeps the rename for a runtime host with no nested SSH target', () => {
-    expect(launchCliNameFor(makeRepo({ executionHostId: 'runtime:vm-1' }))).toBe('orca-ide')
+  it('uses the headless runtime CLI with no nested SSH target (#33920)', () => {
+    expect(launchCliNameFor(makeRepo({ executionHostId: 'runtime:vm-1' }))).toBe('orca')
   })
 
   it('uses per-launch arguments and preserves launch telemetry', () => {
@@ -84,7 +89,7 @@ describe('buildWorktreeStartupForAgent host resolution', () => {
       agent: 'claude',
       agentArgs: '--model opus',
       launchSource: 'source_control_recovery',
-      getLaunchPlatform: () => 'linux',
+      getLaunchRuntime: () => LINUX,
       toSessionOptions: () => undefined
     })
 
@@ -101,7 +106,7 @@ describe('buildWorktreeStartupForAgent host resolution', () => {
       repo: makeRepo({}),
       settings,
       agent: 'claude',
-      getLaunchPlatform: () => 'linux',
+      getLaunchRuntime: () => LINUX,
       toSessionOptions: () => undefined
     })
 
@@ -113,6 +118,22 @@ describe('buildWorktreeStartupForAgent host resolution', () => {
   })
 })
 
+// Host-built startup must use the same shell fact for quoting and spawn.
+it('quotes a worktree startup for its fact, not the Settings shell, and hands the fact on', () => {
+  const pty = { shellOverride: 'powershell.exe', terminalWindowsWslDistro: null }
+  const launchRuntime: AgentLaunchRuntime = { platform: 'win32', pty }
+  const result = buildWorktreeStartupForAgent({
+    repo: makeRepo({ path: 'C:\\repo' }),
+    settings: { ...settings, terminalWindowsShell: 'wsl.exe' },
+    agent: 'claude',
+    prompt: "fix Bob's bug",
+    getLaunchRuntime: () => ({ platform: 'win32', shell: 'powershell', launchRuntime }),
+    toSessionOptions: () => undefined
+  })
+  expect(result.startup.command).toContain("'fix Bob''s bug'")
+  expect(result.launchRuntime).toBe(launchRuntime)
+})
+
 describe('buildWorktreeStartupForAgent prompt carry', () => {
   const build = (onPromptCarry?: (carried: boolean) => void, terminalDefaultShell = '/bin/bash') =>
     buildWorktreeStartupForAgent({
@@ -120,7 +141,13 @@ describe('buildWorktreeStartupForAgent prompt carry', () => {
       settings: Object.assign({}, settings, { terminalDefaultShell }),
       agent: 'claude',
       prompt: 'summarize the diff\nthen list the risks',
-      getLaunchPlatform: () => 'linux',
+      getLaunchRuntime: () => ({
+        ...LINUX,
+        launchRuntime: {
+          ...LINUX_FACT,
+          pty: { shellOverride: terminalDefaultShell, terminalWindowsWslDistro: null }
+        }
+      }),
       toSessionOptions: () => undefined,
       ...(onPromptCarry ? { onPromptCarry } : {})
     })
@@ -148,42 +175,58 @@ describe('buildWorktreeStartupForAgent prompt carry', () => {
   })
 })
 
+// A blank create prompt must launch like an omitted prompt.
+describe('buildWorktreeStartupForAgent blank prompt', () => {
+  it.each(['claude', 'aider'] as const)(
+    'launches %s bare for an absent or blank prompt',
+    (agent) => {
+      const build = (prompt?: string) =>
+        buildWorktreeStartupForAgent({
+          repo: makeRepo({}),
+          settings,
+          agent,
+          ...(prompt !== undefined ? { prompt } : {}),
+          getLaunchRuntime: () => LINUX,
+          toSessionOptions: () => undefined
+        })
+
+      const bare = build()
+      expect(bare.followup).toBeUndefined()
+      expect(build('')).toEqual(bare)
+      expect(build('  \n ')).toEqual(bare)
+    }
+  )
+})
+
 describe('buildWorktreeStartupForDraft agent detection', () => {
-  it('probes the SSH host named only by executionHostId instead of this client', async () => {
-    mocks.detectRemoteAgents.mockResolvedValueOnce(['claude'])
-    mocks.detectInstalledAgentsWithShellPathHydration.mockResolvedValue([])
+  it('never probes this client for an SSH host named only by executionHostId', async () => {
+    mocks.detectInstalledAgentsWithShellPathHydration.mockResolvedValue(['claude'])
 
     const result = await buildWorktreeStartupForDraft({
       repo: makeRepo({ executionHostId: 'ssh:openclaw' }),
       settings,
       draft: 'ship it',
-      getLaunchPlatform: () => 'linux'
+      getLaunchRuntime: () => LINUX
     })
 
-    expect(mocks.detectRemoteAgents).toHaveBeenCalledWith({
-      connectionId: 'openclaw'
-    })
     expect(mocks.detectInstalledAgentsWithShellPathHydration).not.toHaveBeenCalled()
-    expect(result?.agent).toBe('claude')
+    expect(result).toBeNull()
   })
 
   it('probes this client for a local row carrying a stale connection', async () => {
-    mocks.detectRemoteAgents.mockClear()
     mocks.detectInstalledAgentsWithShellPathHydration.mockResolvedValueOnce(['claude'])
 
     const result = await buildWorktreeStartupForDraft({
       repo: makeRepo({ connectionId: 'm4air', executionHostId: 'local' }),
       settings,
       draft: 'ship it',
-      getLaunchPlatform: () => 'linux'
+      getLaunchRuntime: () => LINUX
     })
 
-    expect(mocks.detectRemoteAgents).not.toHaveBeenCalled()
     expect(result?.agent).toBe('claude')
   })
 
-  // The host picks and launches this agent itself, so it is attributed like any other it builds,
-  // whether the draft rides the launch command or is pasted once the agent is up.
+  // Attribute every host-built launch whether its draft rides argv or arrives after startup.
   it.each([
     ['claude', 'cli', 'cli', false],
     ['claude', undefined, 'unknown', false],
@@ -197,7 +240,7 @@ describe('buildWorktreeStartupForDraft agent detection', () => {
         settings,
         draft: 'ship it',
         requestedAgent: agent,
-        getLaunchPlatform: () => 'linux',
+        getLaunchRuntime: () => LINUX,
         ...(launchSource ? { launchSource } : {})
       })
 
@@ -222,7 +265,7 @@ describe('buildWorktreeStartupForAgent extra agent args', () => {
       agent: 'claude',
       prompt: 'go',
       extraAgentArgs: '--model opus',
-      getLaunchPlatform: () => 'linux',
+      getLaunchRuntime: () => LINUX,
       toSessionOptions: () => undefined
     })
 
@@ -239,7 +282,7 @@ describe('buildWorktreeStartupForAgent extra agent args', () => {
         agent: 'claude',
         prompt: 'go',
         extraAgentArgs: '--settings evil.json',
-        getLaunchPlatform: () => 'linux',
+        getLaunchRuntime: () => LINUX,
         toSessionOptions: () => undefined
       })
     ).toThrow('"--settings"')
@@ -248,7 +291,8 @@ describe('buildWorktreeStartupForAgent extra agent args', () => {
   it('threads worktree-create extras into the startup build', () => {
     const build = vi.fn(() => ({
       agent: 'claude' as const,
-      startup: { command: 'claude' }
+      startup: { command: 'claude' },
+      launchRuntime: LINUX_FACT
     }))
     const createArgs: RuntimeManagedWorktreeCreateArgs = {
       repoSelector: 'repo-1',
@@ -262,5 +306,96 @@ describe('buildWorktreeStartupForAgent extra agent args', () => {
     expect(build).toHaveBeenCalledWith('claude', 'go', undefined, {
       extraAgentArgs: '--effort high'
     })
+  })
+
+  it("merges a launch's account env over the startup plan's env", () => {
+    const build = vi.fn(() => ({
+      agent: 'codex' as const,
+      startup: { command: 'codex', env: { CODEX_HOME: '/stale', KEEP: '1' } },
+      launchRuntime: LINUX_FACT
+    }))
+    const resolved = resolveWorktreeCreateAgentStartup(
+      {
+        repoSelector: 'repo-1',
+        name: 'Review',
+        startupAgent: 'codex',
+        startupAccountEnv: { CODEX_HOME: '/home/u/.codex-b' }
+      },
+      build
+    )
+
+    expect(resolved?.startup.env).toEqual({ CODEX_HOME: '/home/u/.codex-b', KEEP: '1' })
+    expect(resolved?.launchRuntime).toBe(LINUX_FACT)
+  })
+})
+
+describe('resolveWorktreeStartupDraftAgent', () => {
+  beforeEach(() => {
+    mocks.detectInstalledAgentsWithShellPathHydration.mockReset()
+    mocks.detectInstalledAgentsWithShellPathHydration.mockResolvedValue([])
+  })
+  afterEach(() => {
+    mocks.detectInstalledAgentsWithShellPathHydration.mockReset()
+  })
+
+  const resolve = (
+    fields: Partial<Parameters<typeof resolveWorktreeStartupDraftAgent>[0]['settings']>,
+    requestedAgent?: 'claude' | 'codex',
+    repo = makeRepo({})
+  ) =>
+    resolveWorktreeStartupDraftAgent({
+      repo,
+      settings: { ...settings, ...fields },
+      ...(requestedAgent ? { requestedAgent } : {})
+    })
+
+  it('returns an enabled requested agent without detecting', async () => {
+    await expect(resolve({ defaultTuiAgent: 'claude' }, 'codex')).resolves.toBe('codex')
+    expect(mocks.detectInstalledAgentsWithShellPathHydration).not.toHaveBeenCalled()
+  })
+
+  it('returns the default when nothing was requested', async () => {
+    await expect(resolve({ defaultTuiAgent: 'claude' })).resolves.toBe('claude')
+    expect(mocks.detectInstalledAgentsWithShellPathHydration).not.toHaveBeenCalled()
+  })
+
+  // A disabled explicit request falls through to detection, not the default agent.
+  it('detects instead of using the default when the requested agent is disabled', async () => {
+    mocks.detectInstalledAgentsWithShellPathHydration.mockResolvedValue(['codex', 'gemini'])
+
+    await expect(
+      resolve({ defaultTuiAgent: 'claude', disabledTuiAgents: ['codex'] }, 'codex')
+    ).resolves.toBe('gemini')
+    expect(mocks.detectInstalledAgentsWithShellPathHydration).toHaveBeenCalledTimes(1)
+    expect(mocks.detectInstalledAgentsWithShellPathHydration).toHaveBeenCalledWith(undefined, {
+      disabledTuiAgents: ['codex']
+    })
+  })
+
+  it('starts no agent when the default is blank', async () => {
+    await expect(resolve({ defaultTuiAgent: 'blank' })).resolves.toBeNull()
+    expect(mocks.detectInstalledAgentsWithShellPathHydration).not.toHaveBeenCalled()
+  })
+
+  it('detects an enabled agent on this host when nothing usable was named', async () => {
+    mocks.detectInstalledAgentsWithShellPathHydration.mockResolvedValue(['codex', 'claude'])
+
+    await expect(resolve({ disabledTuiAgents: ['codex'] })).resolves.toBe('claude')
+    expect(mocks.detectInstalledAgentsWithShellPathHydration).toHaveBeenCalledExactlyOnceWith(
+      undefined,
+      { disabledTuiAgents: ['codex'] }
+    )
+  })
+
+  // An unserved SSH host cannot be answered by local detection.
+  it('starts no agent on an unserved SSH host rather than detecting locally', async () => {
+    mocks.detectInstalledAgentsWithShellPathHydration.mockResolvedValue(['codex'])
+
+    await expect(resolve({}, undefined, makeRepo({ connectionId: 'ssh-1' }))).resolves.toBeNull()
+    expect(mocks.detectInstalledAgentsWithShellPathHydration).not.toHaveBeenCalled()
+  })
+
+  it('starts no agent when detection finds none', async () => {
+    await expect(resolve({})).resolves.toBeNull()
   })
 })

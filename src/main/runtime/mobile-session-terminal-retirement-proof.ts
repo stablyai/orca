@@ -8,18 +8,8 @@ import {
   retirementProofKey
 } from '../../shared/terminal-retirement-proof-ledger'
 
-export {
-  appendRetiredTerminalSurfaceProofs,
-  dropRetirementProofsForLiveSurfaces
-} from '../../shared/terminal-retirement-proof-ledger'
-
-/**
- * Renderer snapshots omit the host's durable close acknowledgements; carry them forward.
- *
- * Why the identity inheritance: host-authored writes never set `worktreeInstanceId`. Without it
- * the stored entry forgets which occupant minted the proofs, and renderer(A) -> host write ->
- * renderer(B) would launder A's proofs into B.
- */
+/** Carry durable host close proofs through renderer snapshots. Inherit worktreeInstanceId on identity-less host writes
+ * so renderer(A) -> host -> renderer(B) cannot launder A's proofs into B. */
 export function preserveTerminalRetirementProofs(
   snapshot: RuntimeMobileSessionTabsSnapshot,
   existing: RuntimeMobileSessionTabsSnapshot | undefined
@@ -53,16 +43,8 @@ export function preserveTerminalRetirementProofs(
   }
 }
 
-/**
- * Attaches durable retirement proofs to a stored snapshot, bumping its version so clients that
- * gate on a strictly newer `snapshotVersion` accept the frame. Returns null when the snapshot
- * already carries exactly these proofs, so a no-op cannot fan out.
- *
- * Separate from `retireTerminalSurfacesFromSnapshot`: that one only produces a proof as a
- * byproduct of removing the surface, and by the time a close's durable half runs the surface may
- * already be gone from the snapshot. The proof still has to ship — it is the only host evidence
- * that rides the frame carrying the retraction.
- */
+/** Attach proofs even after surface removal; bump snapshotVersion so freshness-gated clients accept retractions.
+ * Return null for identical proofs to prevent no-op fan-out. */
 export function attachRetirementProofsToSnapshot(
   snapshot: RuntimeMobileSessionTabsSnapshot,
   proofs: readonly RuntimeMobileSessionRetiredTerminalSurface[]
@@ -72,8 +54,7 @@ export function attachRetirementProofsToSnapshot(
   }
   const merged = appendRetiredTerminalSurfaceProofs(snapshot.retiredTerminalSurfaces, proofs)
   const existing = snapshot.retiredTerminalSurfaces
-  // Why by key, not by index: the append moves a re-supplied proof to the tail, so comparing
-  // position would call a re-delivered exit a change and fan out a version bump carrying nothing.
+  // Re-supplied proofs move to the tail; compare by key to avoid no-op version bumps.
   const priorByKey = new Map(
     (existing ?? []).map((proof) => [retirementProofKey(proof), proof] as const)
   )

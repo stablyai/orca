@@ -19,7 +19,6 @@ import {
 const mockUnregisterPtyDataHandlers = vi.hoisted(() => vi.fn<() => unknown[]>(() => []))
 const mockRestorePtyDataHandlersAfterFailedShutdown = vi.hoisted(() => vi.fn())
 
-// Mock sonner (imported by repos.ts)
 vi.mock('sonner', () => ({
   toast: { info: vi.fn(), success: vi.fn(), error: vi.fn(), warning: vi.fn() }
 }))
@@ -29,7 +28,6 @@ vi.mock('@/components/terminal-pane/pty-dispatcher', () => ({
   unregisterPtyDataHandlers: mockUnregisterPtyDataHandlers
 }))
 
-// Mock agent-status (imported by terminal-helpers)
 vi.mock('@/lib/agent-status', async (importOriginal) => {
   const actual = await importOriginal<typeof AgentStatusModule>()
   return {
@@ -40,7 +38,7 @@ vi.mock('@/lib/agent-status', async (importOriginal) => {
 
 const mockApi = createStoreCascadesMockApi()
 
-// Why: sleep must drop live + retained agent-status rows, else a mid-turn agent stays "working" until the 30-min stale TTL.
+// Sleep must clear live/retained status or mid-turn agents remain working until the 30-minute TTL.
 describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -85,7 +83,6 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
       unreadTerminalPanes: { [targetPaneKey]: true, [siblingPaneKey]: true },
       unreadAgentCompletionPanes: { [targetPaneKey]: true, [siblingPaneKey]: true },
       lastTerminalInputAtByPaneKey: { [targetPaneKey]: 1000, [siblingPaneKey]: 1100 },
-      pendingSetupSplitByTabId: { 'tab-1': { command: 'setup', direction: 'horizontal' } },
       pendingIssueCommandSplitByTabId: { 'tab-1': { command: 'issue' } }
     })
     store.setState({ dropAgentStatusByWorktree: dropByWorktree as never })
@@ -152,7 +149,6 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
     expect(state.unreadAgentCompletionPanes[siblingPaneKey]).toBe(true)
     expect(state.lastTerminalInputAtByPaneKey[targetPaneKey]).toBeUndefined()
     expect(state.lastTerminalInputAtByPaneKey[siblingPaneKey]).toBe(1100)
-    expect(state.pendingSetupSplitByTabId['tab-1']).toBeDefined()
     expect(state.pendingIssueCommandSplitByTabId['tab-1']).toBeDefined()
     expect(dropByWorktree).not.toHaveBeenCalled()
   })
@@ -208,7 +204,6 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
     ).rejects.toThrow('agent_hibernation_capture_missing')
 
     const state = store.getState()
-    // Nothing was suppressed, killed, or persisted — the pane is untouched.
     expect(mockApi.pty.kill).not.toHaveBeenCalled()
     expect(state.suppressedPtyExitIds['pty-agent']).toBeUndefined()
     expect(state.sleepingAgentSessionsByPaneKey[targetPaneKey]).toBeUndefined()
@@ -263,7 +258,7 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
 
     const state = store.getState()
     expect(state.suppressedPtyExitIds['pty-agent']).toBeUndefined()
-    // Why: a done resumable agent retains its origin:'live' recovery anchor (#9454), so a failed shutdown rolls back to it, not to undefined — and must not commit a worktree-sleep record.
+    // Failed shutdown restores the done agent’s live recovery anchor, never worktree-sleep (#9454).
     expect(state.sleepingAgentSessionsByPaneKey[targetPaneKey]).toMatchObject({
       origin: 'live',
       agent: 'claude',
@@ -327,7 +322,6 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
       providerSession: { key: 'session_id', id: 'sess-ordering-1' }
     })
     expect(suppressionAtKillTime).toBe(true)
-    // The record must survive the successful kill so the reveal-time wake can consume it.
     const state = store.getState()
     expect(state.sleepingAgentSessionsByPaneKey[targetPaneKey]).toBeDefined()
   })
@@ -407,7 +401,7 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
 
     const state = store.getState()
     expect(state.ptyIdsByTabId['tab-1']).toEqual(['pty-agent', 'pty-shell'])
-    // Why: done resumable agent keeps its origin:'live' anchor (#9454); a failed kill rolls back to it, not undefined, and never commits worktree-sleep.
+    // Failed kill restores the done agent’s live recovery anchor, never worktree-sleep (#9454).
     expect(state.sleepingAgentSessionsByPaneKey[targetPaneKey]).toMatchObject({
       origin: 'live',
       agent: 'codex',
@@ -714,7 +708,7 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
     ])
     expect(state.suppressedPtyExitIds['remote:env-1@@terminal-1']).toBeUndefined()
     expect(state.suppressedPtyExitIds['terminal-1']).toBeUndefined()
-    // Why: done resumable agent keeps its origin:'live' anchor (#9454); a failed target-only stop rolls back to it, not undefined, and never commits worktree-sleep.
+    // Failed target stop restores the done agent’s live recovery anchor, never worktree-sleep (#9454).
     expect(state.sleepingAgentSessionsByPaneKey[targetPaneKey]).toMatchObject({
       origin: 'live',
       agent: 'codex',

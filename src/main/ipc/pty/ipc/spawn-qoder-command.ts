@@ -4,7 +4,8 @@ import { resolveLocalWindowsAgentStartupShell } from '../../../../shared/windows
 import type { PtyIpcSpawnState } from './spawn-state'
 
 export async function preparePtyIpcQoderCommand(ctx: PtyIpcSpawnState): Promise<void> {
-  if (ctx.preAdoptedStablePane || ctx.args.launchAgent !== 'qoder') {
+  // Adopted owners and pane launch plans already determine their own runtime command.
+  if (ctx.preAdoptedStablePane || ctx.paneAgentLaunch || ctx.args.launchAgent !== 'qoder') {
     return
   }
   const connectionId = ctx.args.connectionId

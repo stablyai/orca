@@ -3,7 +3,10 @@ import { createRef } from 'react'
 import { act, cleanup, render, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { useNativeChatComposerAttachments } from './use-native-chat-composer-attachments'
-import { attachNativeChatSessionAttachmentPaths } from './native-chat-session-attachment-drop'
+import {
+  attachNativeChatSessionAttachmentPaths,
+  reserveNativeChatAttachmentChips
+} from './native-chat-session-attachment-drop'
 import { NativeChatPromptEditor } from './NativeChatPromptEditor'
 import type { NativeChatComposerInput } from './native-chat-composer-input'
 import {
@@ -96,6 +99,7 @@ async function uploadFixture(
       return useNativeChatComposerAttachments({
         attachmentScopeKey: draftScope,
         allowWithoutTarget: true,
+        imageReferences: true,
         caret: 0,
         disabled: false,
         isComposing: () => false,
@@ -116,7 +120,7 @@ async function uploadFixture(
   let uploaded = Promise.resolve()
   act(() => {
     uploaded = attachNativeChatSessionAttachmentPaths({
-      paths: [sourcePath],
+      pending: reserveNativeChatAttachmentChips(view.result.current.pendingChips, [sourcePath]),
       owner: {
         kind: 'runtime-session',
         environmentId: 'paired',
@@ -191,10 +195,10 @@ it('does not attach a file reference removed while uploading', async () => {
   expect(result.target.text).toBe('next question')
 })
 
-it('keeps the original file owner when the mounted composer switches draft scopes', async () => {
+it('keeps original file ownership and ordinary insertion when the mounted composer switches scopes', async () => {
   const result = await uploadFixture('pdf', { switchScope: true })
   expect(result.pending).toEqual([])
-  expect(result.target.text).toBe(`next question\n\n@${result.path}`)
+  expect(result.target.text).toBe(`next question @${result.path}`)
   expect(result.otherInput).toBe('other question')
   expect(result.other.images).toEqual([])
 })

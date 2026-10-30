@@ -1,6 +1,5 @@
-// The restart-offer methods act for the calling client: a paired client too old to show an agent
-// is never listed, resumed, dismissed, or answered that agent's offers. The host stub filters by the
-// audience it is handed, as the real host does (structured-agent-session-restart-audience.test.ts).
+import '../unused-default-rpc-methods.test-fixture'
+// Filter restart list/resume/dismiss/failure answers to the caller's readable agents; the stub applies the real host's supplied audience.
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { setStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
@@ -22,8 +21,7 @@ afterEach(clearStructuredHostStub)
 const CLAUDE_OFFER = { sessionId: 'claude-session', agent: 'claude' }
 const GROK_OFFER = { sessionId: 'grok-session', agent: 'grok' }
 
-// A desktop from before registered agents: every client that calls these methods advertises Claude
-// support, and this one nothing beyond Claude and Codex.
+// Model an older desktop that renders Claude/Codex but lacks registered-agent support.
 const OLD_CLIENT = {
   ...STRUCTURED_CLIENT,
   clientCapabilities: DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES.filter(

@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { parsePairingCode, type PairingOffer } from './pairing'
 import { classifyRemotePairingHostname } from './remote-pairing-address'
+import { isProfileRuntimePublicKey } from './runtime-e2ee-keypair-file'
 import {
   createEnvironmentFromPairingOffer,
   getPreferredPairingOffer,
@@ -15,6 +16,16 @@ import {
   writeEnvironmentStore
 } from './runtime-environment-store-file'
 import { writeRuntimeEnvironmentSidecarEntry } from './runtime-environment-sidecar'
+import { findCollidingEnvironmentName } from './runtime-environment-name-collision'
+import {
+  findEnvironmentWithHostKey,
+  savedHostKeySpelling
+} from './runtime-environment-host-key-match'
+import {
+  assertNoIndependentSshAccess,
+  assertPairingReplaceableByAdd
+} from './runtime-environment-pairing-replace-guards'
+import { remoteServerPairingStoreError } from './runtime-environment-store-records'
 
 export {
   getEnvironmentStorePath,
@@ -25,36 +36,72 @@ export {
 
 export function listEnvironments(
   userDataPath: string,
-  options: { requireStoreFile?: boolean } = {}
+  options: Parameters<typeof readEnvironmentStore>[1] = {}
 ): KnownRuntimeEnvironment[] {
   return readEnvironmentStore(userDataPath, options).environments
 }
 
+export type AddEnvironmentArgs = {
+  name: string
+  pairingCode: string
+  now?: number
+  source?: RuntimeEnvironmentSource
+  connectionDependency?: 'ssh-tunnel'
+  /** Recorded only when the code turns out to be for an already saved server. */
+  runtimeId?: string
+}
+
+export type AddEnvironmentOutcome = {
+  environment: KnownRuntimeEnvironment
+  /** The code was for a saved server, whose pairing it replaced instead of adding a second entry. */
+  updatedExisting: boolean
+}
+
+/** Reject duplicate host keys: two saved entries publish identical workspaces and make writes ambiguous. */
 export function addEnvironmentFromPairingCode(
   userDataPath: string,
-  args: {
-    name: string
-    pairingCode: string
-    now?: number
-    source?: RuntimeEnvironmentSource
-    connectionDependency?: 'ssh-tunnel'
-  }
+  args: AddEnvironmentArgs
 ): KnownRuntimeEnvironment {
-  const offer = parsePairingCode(args.pairingCode)
-  if (!offer) {
-    throw new RuntimeEnvironmentStoreError(
-      'invalid_argument',
-      'Invalid pairing code. Expected an orca://pair?... URL or bare pairing payload.'
-    )
-  }
-  const store = readPersistedEnvironmentStore(userDataPath)
+  return saveEnvironmentFromPairingCode(userDataPath, args, false).environment
+}
+
+/** Refresh in place only when the caller also retires app connections authenticated with the replaced pairing. */
+export function addOrUpdateEnvironmentFromPairingCode(
+  userDataPath: string,
+  args: AddEnvironmentArgs
+): AddEnvironmentOutcome {
+  return saveEnvironmentFromPairingCode(userDataPath, args, true)
+}
+
+function saveEnvironmentFromPairingCode(
+  userDataPath: string,
+  args: AddEnvironmentArgs,
+  refreshSameServer: boolean
+): AddEnvironmentOutcome {
+  const offer = parseRemotePairingCode(userDataPath, args.pairingCode)
   const now = args.now ?? Date.now()
-  const existing = store.environments.find((entry) => entry.name === args.name)
+  const store = readPersistedEnvironmentStore(userDataPath, { recoverBlankStore: true })
+  const samePersisted = findEnvironmentWithHostKey(store.environments, offer.publicKeyB64)
+  // Why the overlaid entry: SSH access or a deployment lives only there, and the guard reads it.
+  const samePaired =
+    samePersisted &&
+    readEnvironmentStore(userDataPath).environments.find((entry) => entry.id === samePersisted.id)
+  if (samePersisted && !samePaired) {
+    throw remoteServerPairingStoreError('alreadyPairedUnreadable', { name: samePersisted.name })
+  }
+  if (samePaired) {
+    assertPairingReplaceableByAdd(samePaired, args.source, refreshSameServer)
+    const sameSpelling = { ...offer, publicKeyB64: savedHostKeySpelling(samePaired, offer) }
+    const environment = replaceEnvironmentPairing(userDataPath, samePaired.id, sameSpelling, {
+      now,
+      runtimeId: args.runtimeId,
+      connectionDependency: args.connectionDependency
+    })
+    return { environment, updatedExisting: true }
+  }
+  const existing = findCollidingEnvironmentName(store.environments, args.name)
   if (existing) {
-    throw new RuntimeEnvironmentStoreError(
-      'invalid_argument',
-      `A server named "${args.name}" already exists.`
-    )
+    throw remoteServerPairingStoreError('nameTaken', { name: existing.name })
   }
   const environment = createEnvironmentFromPairingOffer({
     id: randomUUID(),
@@ -73,7 +120,19 @@ export function addEnvironmentFromPairingCode(
     ].sort((a, b) => a.name.localeCompare(b.name))
   }
   writeEnvironmentStore(userDataPath, next)
-  return environment
+  return { environment, updatedExisting: false }
+}
+
+function parseRemotePairingCode(userDataPath: string, pairingCode: string): PairingOffer {
+  const offer = parsePairingCode(pairingCode)
+  if (!offer) {
+    throw remoteServerPairingStoreError('invalidPairingCode')
+  }
+  // Why the key, not the address: a loopback or LAN address proves nothing either way.
+  if (isProfileRuntimePublicKey(userDataPath, offer.publicKeyB64)) {
+    throw remoteServerPairingStoreError('selfPairingCode')
+  }
+  return offer
 }
 
 export function removeEnvironment(userDataPath: string, selector: string): KnownRuntimeEnvironment {
@@ -91,36 +150,42 @@ export function removeEnvironment(userDataPath: string, selector: string): Known
 export function updateEnvironmentFromPairingCode(
   userDataPath: string,
   selector: string,
-  args: { pairingCode: string; now?: number }
+  args: { pairingCode: string; now?: number; runtimeId?: string }
 ): KnownRuntimeEnvironment {
-  const offer = parsePairingCode(args.pairingCode)
-  if (!offer) {
-    throw new RuntimeEnvironmentStoreError(
-      'invalid_argument',
-      'Invalid pairing code. Expected an orca://pair?... URL or bare pairing payload.'
-    )
-  }
-  assertNoIndependentSshAccess(
-    resolveEnvironmentFromStore(readEnvironmentStore(userDataPath), selector)
-  )
+  const offer = parseRemotePairingCode(userDataPath, args.pairingCode)
+  const current = resolveEnvironmentFromStore(readEnvironmentStore(userDataPath), selector)
+  assertNoIndependentSshAccess(current)
+  return replaceEnvironmentPairing(userDataPath, selector, offer, {
+    now: args.now ?? Date.now(),
+    runtimeId: args.runtimeId,
+    connectionDependency: current.connectionDependency
+  })
+}
+
+/** Swaps a saved server's pairing in place, keeping its id, name and history. */
+function replaceEnvironmentPairing(
+  userDataPath: string,
+  selector: string,
+  offer: PairingOffer,
+  args: { now: number; runtimeId?: string; connectionDependency?: 'ssh-tunnel' }
+): KnownRuntimeEnvironment {
   const store = readPersistedEnvironmentStore(userDataPath)
   const existing = resolveEnvironmentFromStore(store, selector)
-  const now = args.now ?? Date.now()
   const previousPairingRevision = existing.pairingRevision ?? existing.createdAt
   const environment = createEnvironmentFromPairingOffer({
     id: existing.id,
     name: existing.name,
     now: existing.createdAt,
     offer,
-    runtimeId: existing.runtimeId,
+    runtimeId: args.runtimeId ?? existing.runtimeId,
     ...(existing.source ? { source: existing.source } : {}),
-    ...getPairingConnectionDependency(existing.connectionDependency, offer)
+    ...getPairingConnectionDependency(args.connectionDependency, offer)
   })
   const next = {
     ...environment,
     createdAt: existing.createdAt,
-    updatedAt: now,
-    pairingRevision: Math.max(now, previousPairingRevision + 1),
+    updatedAt: args.now,
+    pairingRevision: Math.max(args.now, previousPairingRevision + 1),
     lastUsedAt: existing.lastUsedAt
   }
   writeEnvironmentStore(userDataPath, {
@@ -163,9 +228,7 @@ export function resolveEnvironmentPairingOffer(
   return getPreferredPairingOffer(resolveEnvironment(userDataPath, selector))
 }
 
-// Why: markEnvironmentUsed runs on every runtime round-trip; persisting lastUsedAt each
-// time forces a secure-file rewrite (ACL hardening), which blocks the main thread on
-// Windows. lastUsedAt only needs coarse freshness, so skip writes within this window.
+// Throttle lastUsedAt: per-RPC secure-file/Windows ACL rewrites block main; coarse freshness is enough.
 const LAST_USED_PERSIST_INTERVAL_MS = 60_000
 
 export function markEnvironmentUsed(
@@ -183,8 +246,7 @@ export function markEnvironmentUsed(
   const store = readPersistedEnvironmentStore(userDataPath)
   const environment = resolveEnvironmentFromStore(store, selector)
   const now = args.now ?? Date.now()
-  // Why: a reply that raced a re-pair carries the previous device's identity; recording it beside
-  // the new token makes every later identity check fail.
+  // Ignore identity from replies racing a re-pair; attaching the old device to the new token breaks subsequent checks.
   const fromSavedPairing =
     args.pairingDeviceToken === undefined ||
     preferredDeviceToken(environment) === args.pairingDeviceToken
@@ -204,7 +266,9 @@ export function markEnvironmentUsed(
   }
   if (runtimeIdChanged || pairedDeviceIdChanged) {
     const current = resolveEnvironmentFromStore(readEnvironmentStore(userDataPath), environment.id)
-    if (current.sshAccess || current.pendingSshAccessOperation) {
+    // orcad mints a runtimeId per start; only a pending link must keep the runtime it verifies.
+    const intent = current.pendingSshAccessOperation
+    if (intent?.operation === 'link' || (pairedDeviceIdChanged && (current.sshAccess || intent))) {
       throw new RuntimeEnvironmentStoreError(
         'invalid_argument',
         'SSH access operation cannot change the paired runtime identity.'
@@ -253,19 +317,4 @@ export function resolveEnvironmentFromStore<T extends PersistedRuntimeEnvironmen
     )
   }
   throw new RuntimeEnvironmentStoreError('invalid_argument', `Unknown environment: ${selector}`)
-}
-
-function assertNoIndependentSshAccess(environment: KnownRuntimeEnvironment): void {
-  if (environment.orcadDeployment) {
-    throw new RuntimeEnvironmentStoreError(
-      'invalid_argument',
-      'This server is managed by Orca over SSH; its pairing cannot be replaced or removed here. To decommission it, run `orca environment stop --environment <name> --yes` or use Settings > Managed servers.'
-    )
-  }
-  if (environment.sshAccess || environment.pendingSshAccessOperation) {
-    throw new RuntimeEnvironmentStoreError(
-      'invalid_argument',
-      "Unlink this server's SSH access before replacing its pairing or removing it."
-    )
-  }
 }

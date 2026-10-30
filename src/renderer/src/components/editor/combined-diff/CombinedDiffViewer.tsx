@@ -19,6 +19,7 @@ import { useCombinedDiffSectionRetry } from './load-sections/use-combined-diff-s
 import { useCombinedDiffSectionRevalidation } from './load-sections/use-combined-diff-section-revalidation'
 import { useCombinedDiffViewPersist } from './remember-view/use-combined-diff-view-persist'
 import { useCombinedDiffViewRestore } from './remember-view/use-combined-diff-view-restore'
+import { buildCombinedDiffViewTabSuccession } from './remember-view/combined-diff-view-tab-scope'
 import { useCombinedDiffDirectScrollInput } from './scroll-viewport/use-combined-diff-direct-scroll-input'
 import { useCombinedDiffScrollAnchors } from './scroll-viewport/use-combined-diff-scroll-anchors'
 import { useCombinedDiffScrollPersistence } from './scroll-viewport/use-combined-diff-scroll-persistence'
@@ -42,10 +43,12 @@ import { useDocumentDarkTheme } from '@/hooks/use-document-dark-theme'
 
 export default function CombinedDiffViewer({
   file,
-  viewStateKey
+  viewStateKey,
+  viewStateScopeId
 }: {
   file: OpenFile
   viewStateKey: string
+  viewStateScopeId?: string
 }): React.JSX.Element {
   const settings = useAppStore((s) => s.settings)
   const gitStatusEntries = useAppStore(
@@ -98,17 +101,20 @@ export default function CombinedDiffViewer({
   })
   const restore = useCombinedDiffViewRestore({
     entrySet,
+    file,
     gitStatusEntries,
     registry,
     setGeneration,
     setSectionHeights,
     setSections,
     setSideBySide: preferences.setSideBySide,
+    succession: buildCombinedDiffViewTabSuccession(file.id, viewStateScopeId),
     viewStateKey
   })
   const { loadSection, loadDeferredSection } = useCombinedDiffSectionLoader({
     entrySet,
     file,
+    generation,
     registry,
     sectionCount: sections.length,
     setSectionHeights,
@@ -121,8 +127,7 @@ export default function CombinedDiffViewer({
     setSections
   })
 
-  // Why: one incremental scan of `sections` feeds the virtualizer keys, the restore signal and the
-  // toolbar collapse state, instead of three independent full passes per loaded section.
+  // Share one incremental scan across virtualizer keys, restore signals and toolbar collapse state.
   const sectionRowKeys = useCombinedDiffSectionRowKeys({ generation, sections })
   const sectionIndexByKey = useCombinedDiffSectionIndexMap({
     entrySignature: entrySet.entrySignature,
@@ -157,13 +162,19 @@ export default function CombinedDiffViewer({
     sideBySide: preferences.sideBySide,
     structureRevision: sectionRowKeys.structureRevision,
     totalSize: virtualizer.getTotalSize(),
-    viewStateKey,
+    memoryLeaseRef: restore.memoryLeaseRef,
     virtualizer
   })
 
   const toggleSection = useCallback(
     (index: number) => {
-      const shouldLoadAfterExpand = registry.sectionsRef.current[index]?.collapsed ?? false
+      const section = registry.sectionsRef.current[index]
+      const shouldLoadAfterExpand = section?.collapsed ?? false
+      const anchor = restore.scrollAnchorRef.current
+      if (section && !section.collapsed && anchor?.key === section.key) {
+        // The offset points into the body being removed; restore would land on later sections.
+        anchor.offset = 0
+      }
       setSections((prev) =>
         prev.map((s, i) => (i === index ? { ...s, collapsed: !s.collapsed } : s))
       )
@@ -171,7 +182,7 @@ export default function CombinedDiffViewer({
         registry.loadSchedulerRef.current.request(index)
       }
     },
-    [registry.loadSchedulerRef, registry.sectionsRef]
+    [registry.loadSchedulerRef, registry.sectionsRef, restore.scrollAnchorRef]
   )
 
   const treeNavigation = useCombinedDiffTreeNavigation({
@@ -216,6 +227,7 @@ export default function CombinedDiffViewer({
     entryCount: entrySet.entries.length,
     entrySignature: entrySet.entrySignature,
     loadedIndicesRef: registry.loadedIndicesRef,
+    memoryLeaseRef: restore.memoryLeaseRef,
     scrollContainerRef,
     sectionHeights,
     sections,
@@ -227,6 +239,7 @@ export default function CombinedDiffViewer({
     entrySignature: entrySet.entrySignature,
     hasDirectScrollInput,
     latestDomScrollAnchorRef: restore.latestDomScrollAnchorRef,
+    memoryLeaseRef: restore.memoryLeaseRef,
     programmaticScrollMarks,
     scrollAnchorRef: restore.scrollAnchorRef,
     scrollContainerRef,

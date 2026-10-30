@@ -3,11 +3,10 @@
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type {
-  SkillFreshnessInstallation,
-  SkillFreshnessInventory
-} from '../../../../shared/skill-freshness'
+import type { BundledSkillPlan } from '../../../../shared/bundled-skill-plan'
+import { bundledSkillNudgeKey } from '../../../../shared/bundled-skill-summary'
 import { SkillFreshnessNudge } from './SkillFreshnessNudge'
+import { planEntry, planOf, planOp, sharedEntry } from './bundled-skill-plan-fixtures.test-support'
 
 const mocks = vi.hoisted(() => ({
   dismissed: [] as string[],
@@ -16,53 +15,22 @@ const mocks = vi.hoisted(() => ({
   toastDismiss: vi.fn(),
   requestDialog: vi.fn(),
   settingsLoaded: true,
-  canUseLocalSkillFreshness: true,
+  canUseSkillFreshness: true,
   freshnessEnabled: true,
-  inventory: null as SkillFreshnessInventory | null,
+  plan: ((): BundledSkillPlan | null => null)(),
   error: null as string | null
 }))
 
-function placement(
-  overrides: Partial<SkillFreshnessInstallation> = {}
-): SkillFreshnessInstallation {
-  return {
-    id: 'orca-cli',
-    name: 'orca-cli',
-    rootId: 'home-agents',
-    providers: ['agent-skills'],
-    sourceKind: 'home',
-    sourceLabel: 'Agent skills home',
-    unresolvedPath: '/home/.agents/skills/orca-cli',
-    resolvedPath: '/home/.agents/skills/orca-cli',
-    physicalIdentity: 'physical-orca-cli',
-    topology: 'canonical-copy',
-    status: 'outdated',
-    installedReleaseRevision: 1,
-    installedAppVersion: '1.0.0',
-    currentReleaseRevision: 2,
-    currentPackageDigest: 'current',
-    currentAppVersion: '2.0.0',
-    observedPackageDigest: 'old',
-    errorCategory: null,
-    ...overrides
-  }
-}
-
-function eligibleInventory(): SkillFreshnessInventory {
-  return {
-    schemaVersion: 1,
-    installations: [placement()],
-    eligibleUpdateNames: ['orca-cli'],
-    scanIssues: [],
-    scannedAt: 1
-  }
+function updatePlan(): BundledSkillPlan {
+  return planOf([sharedEntry('orca-cli', 'update')])
 }
 
 vi.mock('@/hooks/useSkillFreshness', () => ({
-  useSkillFreshness: (enabled = true) => {
-    mocks.freshnessEnabled = enabled
+  useSkillFreshness: (target: unknown) => {
+    mocks.freshnessEnabled = target !== null
     return {
-      inventory: mocks.inventory,
+      plan: mocks.plan,
+      unsupported: null,
       loading: false,
       error: mocks.error,
       refresh: vi.fn()
@@ -72,7 +40,7 @@ vi.mock('@/hooks/useSkillFreshness', () => ({
 
 vi.mock('@/hooks/useActiveProjectSkillRuntime', () => ({
   useActiveProjectSkillRuntime: () => ({
-    canUseLocalSkillFreshness: mocks.canUseLocalSkillFreshness
+    bundledSkillTarget: mocks.canUseSkillFreshness ? { kind: 'local' } : null
   })
 }))
 
@@ -81,7 +49,9 @@ vi.mock('sonner', () => ({
 }))
 
 vi.mock('./skill-freshness-update-dialog', () => ({
-  requestSkillFreshnessUpdateDialog: mocks.requestDialog
+  requestSkillFreshnessUpdateDialog: mocks.requestDialog,
+  getSkillFreshnessUpdateDialogRequest: () => false,
+  subscribeSkillFreshnessUpdateDialog: () => () => {}
 }))
 
 vi.mock('@/store', () => {
@@ -112,15 +82,15 @@ async function rerenderNudge(): Promise<void> {
   })
 }
 
-const DISMISSAL_KEY = ['physical-orca-cli', 'orca-cli', '2'].join('\0')
+const DISMISSAL_KEY = bundledSkillNudgeKey('local', updatePlan()) ?? ''
 
 describe('SkillFreshnessNudge', () => {
   beforeEach(() => {
     mocks.dismissed = []
     mocks.settingsLoaded = true
-    mocks.canUseLocalSkillFreshness = true
+    mocks.canUseSkillFreshness = true
     mocks.freshnessEnabled = true
-    mocks.inventory = eligibleInventory()
+    mocks.plan = updatePlan()
     mocks.error = null
     mocks.updateSettings.mockReset()
     mocks.updateSettings.mockResolvedValue(undefined)
@@ -149,6 +119,34 @@ describe('SkillFreshnessNudge', () => {
     expect(mocks.updateSettings).not.toHaveBeenCalled()
   })
 
+  it('counts only skills the plan would update', async () => {
+    mocks.plan = planOf([
+      sharedEntry('orca-cli', 'update'),
+      sharedEntry('computer-use', 'keep'),
+      planEntry('orchestration', [
+        planOp('keep', '/home/u/.agents/skills/orchestration'),
+        planOp('leave', '/home/u/.claude/skills/orchestration', { reason: 'edited' })
+      ])
+    ])
+    await renderNudge()
+
+    expect(mocks.toastInfo).toHaveBeenCalledTimes(1)
+    expect(mocks.toastInfo.mock.calls[0]?.[0]).toBe('An installed Orca skill is out of date')
+    expect(mocks.toastInfo.mock.calls[0]?.[1].description).toContain('Update orca-cli so')
+  })
+
+  it('raises no nudge when the plan only links a newly detected agent', async () => {
+    mocks.plan = planOf([
+      planEntry('orca-cli', [
+        planOp('keep', '/home/u/.agents/skills/orca-cli'),
+        planOp('link', '/home/u/.claude/skills/orca-cli')
+      ])
+    ])
+    await renderNudge()
+
+    expect(mocks.toastInfo).not.toHaveBeenCalled()
+  })
+
   it('opens the update dialog on action click without persisting a dismissal', async () => {
     await renderNudge()
 
@@ -164,13 +162,7 @@ describe('SkillFreshnessNudge', () => {
     await renderNudge()
     const options = mocks.toastInfo.mock.calls[0]?.[1]
 
-    mocks.inventory = {
-      schemaVersion: 1,
-      installations: [placement({ status: 'current', observedPackageDigest: 'current' })],
-      eligibleUpdateNames: [],
-      scanIssues: [],
-      scannedAt: 2
-    }
+    mocks.plan = planOf([sharedEntry('orca-cli', 'keep')])
     await rerenderNudge()
     // Sonner invokes onDismiss for programmatic dismissals on its next render.
     options.onDismiss()
@@ -179,12 +171,12 @@ describe('SkillFreshnessNudge', () => {
     expect(mocks.updateSettings).not.toHaveBeenCalled()
   })
 
-  it('retracts a stale nudge when re-inventory fails', async () => {
+  it('retracts a stale nudge when re-planning fails', async () => {
     await renderNudge()
     const options = mocks.toastInfo.mock.calls[0]?.[1]
 
-    mocks.inventory = null
-    mocks.error = 'scan failed'
+    mocks.plan = null
+    mocks.error = 'plan failed'
     await rerenderNudge()
     options.onDismiss()
 
@@ -196,7 +188,7 @@ describe('SkillFreshnessNudge', () => {
     await renderNudge()
     const options = mocks.toastInfo.mock.calls[0]?.[1]
 
-    mocks.canUseLocalSkillFreshness = false
+    mocks.canUseSkillFreshness = false
     await rerenderNudge()
     options.onDismiss()
 
@@ -205,7 +197,7 @@ describe('SkillFreshnessNudge', () => {
     expect(mocks.updateSettings).not.toHaveBeenCalled()
   })
 
-  it('persists the exact placement/revision key once on explicit dismissal', async () => {
+  it('persists the plan nudge key once on explicit dismissal', async () => {
     await renderNudge()
 
     const options = mocks.toastInfo.mock.calls[0]?.[1]
@@ -220,14 +212,14 @@ describe('SkillFreshnessNudge', () => {
 
   it('does not repeat the same nudge within a session', async () => {
     await renderNudge()
-    // A fresh inventory object with identical content re-runs the effect.
-    mocks.inventory = eligibleInventory()
+    // A fresh plan object with identical content re-runs the effect.
+    mocks.plan = updatePlan()
     await rerenderNudge()
 
     expect(mocks.toastInfo).toHaveBeenCalledTimes(1)
   })
 
-  it('does not repeat a nudge for an already dismissed exact tuple', async () => {
+  it('does not repeat a nudge for an already dismissed key', async () => {
     mocks.dismissed = [DISMISSAL_KEY]
 
     await renderNudge()
@@ -235,71 +227,13 @@ describe('SkillFreshnessNudge', () => {
     expect(mocks.toastInfo).not.toHaveBeenCalled()
   })
 
-  it('does not nudge for a poisoned name with no eligible update', async () => {
-    mocks.inventory = {
-      schemaVersion: 1,
-      installations: [placement(), placement({ id: 'repo-copy', topology: 'repo-scope' })],
-      eligibleUpdateNames: [],
-      scanIssues: [],
-      scannedAt: 1
-    }
-
-    await renderNudge()
-
-    expect(mocks.toastInfo).not.toHaveBeenCalled()
-  })
-
-  it('keeps a project copy out of the dismissal key it persists', async () => {
-    // Why: the global update never reaches a project copy, so its identity must not enter
-    // the dismissal tuple — re-checking out that repo mints a new inode, which would
-    // re-raise a nudge the user already dismissed for the same global revision.
-    mocks.inventory = {
-      schemaVersion: 1,
-      installations: [
-        placement(),
-        placement({
-          id: 'repo-copy',
-          topology: 'repo-scope',
-          sourceKind: 'repo',
-          unresolvedPath: '/home/projects/work/.agents/skills/orca-cli',
-          resolvedPath: '/home/projects/work/.agents/skills/orca-cli',
-          physicalIdentity: 'physical-repo-orca-cli'
-        })
-      ],
-      eligibleUpdateNames: ['orca-cli'],
-      scanIssues: [],
-      scannedAt: 1
-    }
-
-    await renderNudge()
-    mocks.toastInfo.mock.calls[0]?.[1].onDismiss()
-
-    expect(mocks.updateSettings).toHaveBeenCalledWith({
-      dismissedSkillFreshnessNudges: [DISMISSAL_KEY]
-    })
-  })
-
-  it('stays dismissed when only a project copy changed identity', async () => {
+  it('nudges again when this build ships different bytes', async () => {
     mocks.dismissed = [DISMISSAL_KEY]
-    mocks.inventory = {
-      schemaVersion: 1,
-      installations: [
-        placement(),
-        placement({
-          id: 'repo-copy',
-          topology: 'repo-scope',
-          sourceKind: 'repo',
-          physicalIdentity: 'physical-repo-orca-cli-after-checkout'
-        })
-      ],
-      eligibleUpdateNames: ['orca-cli'],
-      scanIssues: [],
-      scannedAt: 2
-    }
+    mocks.plan = planOf([{ ...sharedEntry('orca-cli', 'update'), digest: 'c'.repeat(64) }])
 
     await renderNudge()
 
-    expect(mocks.toastInfo).not.toHaveBeenCalled()
+    expect(mocks.toastInfo).toHaveBeenCalledTimes(1)
   })
 
   it('waits for persisted settings before deciding whether to nudge', async () => {

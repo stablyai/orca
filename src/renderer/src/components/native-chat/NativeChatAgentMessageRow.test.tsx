@@ -1,13 +1,12 @@
 // @vitest-environment happy-dom
 import '@testing-library/jest-dom/vitest'
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, screen } from '@testing-library/react'
+import { render } from './native-chat-tooltip-test-harness'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { AgentMessageSource } from '../../../../shared/agent-session-message-source'
+import type { AgentMessageSource } from '../../../../shared/agent-session/agent-session-message-source'
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'
 import { MessageRow } from './NativeChatMessageRow'
 import { NativeChatQueuedMessageCard } from './NativeChatQueuedMessageCard'
-import { TooltipProvider } from '@/components/ui/tooltip'
-import { queuedCardSenderLine } from './native-chat-agent-message-sender-label'
 
 const openAgentMessageSender = vi.hoisted(() => vi.fn(async () => {}))
 vi.mock('@/lib/open-agent-message-sender', () => ({ openAgentMessageSender }))
@@ -45,7 +44,9 @@ function renderUserMessage(source?: AgentMessageSource, worktreeId: string | nul
       expandSignal={false}
       onScrollMessageToTop={vi.fn()}
       runtimeContext={
-        worktreeId ? { settings: null, worktreeId, worktreePath: '/repo' } : undefined
+        worktreeId
+          ? { target: { kind: 'local' as const }, worktreeId, worktreePath: '/repo' }
+          : undefined
       }
     />
   )
@@ -66,7 +67,9 @@ describe("another agent's message in the transcript", () => {
     const source = from([{ address: CODER.address, name: 'Coder' }])
     renderUserMessage(source)
     fireEvent.click(screen.getByRole('button', { name: 'Coder' }))
-    expect(openAgentMessageSender).toHaveBeenCalledWith(source, source.senders[0], 'wt-chat')
+    expect(openAgentMessageSender).toHaveBeenCalledWith(source, source.senders[0], 'wt-chat', {
+      kind: 'local'
+    })
   })
 
   it('separates the names as the queued card does, and keeps two same-named senders two', () => {
@@ -76,8 +79,9 @@ describe("another agent's message in the transcript", () => {
         { address: 'term_b', name: 'Codex' }
       ])
     )
+    expect(screen.getByText('Message from')).toBeInTheDocument()
     expect(screen.getAllByRole('button', { name: 'Codex' })).toHaveLength(2)
-    expect(container.textContent).toContain('Message fromCodex,Codex')
+    expect(container.textContent).toContain('Codex,Codex')
   })
 
   it('names each sender, an unnamed one as an agent, and counts the rest', () => {
@@ -123,40 +127,49 @@ describe("another agent's message in the transcript", () => {
 })
 
 describe("another agent's queued card", () => {
-  it('names who it is from on a line the card’s own controls keep their clicks from', () => {
-    render(
-      <TooltipProvider>
-        <NativeChatQueuedMessageCard
-          card={{
-            messageId: 'card',
-            position: 1,
-            text: 'You have 1 orchestration message.',
-            state: 'waiting',
-            hold: 'turn',
-            from: from([
-              { address: 'term_a', name: 'Coder' },
-              { address: 'term_b', name: null }
-            ])
-          }}
-          showsSteerShortcut={false}
-          onSteer={vi.fn()}
-          onDelete={vi.fn()}
-          onEdit={vi.fn()}
-          onTurnOffQueueing={vi.fn()}
-        />
-      </TooltipProvider>
+  function renderCard(source: AgentMessageSource, chatWorktreeId: string | null = 'wt-chat') {
+    return render(
+      <NativeChatQueuedMessageCard
+        card={{
+          messageId: 'card',
+          position: 1,
+          text: 'You have 1 orchestration message.',
+          state: 'waiting',
+          hold: 'turn',
+          from: source
+        }}
+        chatWorktreeId={chatWorktreeId}
+        showsSteerShortcut={false}
+        onSteer={vi.fn()}
+        onDelete={vi.fn()}
+        onEdit={vi.fn()}
+        onTurnOffQueueing={vi.fn()}
+      />
     )
-    expect(screen.getByText('From Coder, an agent')).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: /Coder/ })).not.toBeInTheDocument()
+  }
+
+  it('names who it is from, and opens the sender from its name as the transcript row does', () => {
+    const source = from([
+      { address: 'term_a', name: 'Coder' },
+      { address: 'term_b', name: null }
+    ])
+    const { container } = renderCard(source)
+    expect(container.textContent).toContain('FromCoder,an agent')
+    fireEvent.click(screen.getByRole('button', { name: 'Coder' }))
+    expect(openAgentMessageSender).toHaveBeenCalledWith(source, source.senders[0], 'wt-chat')
   })
 
   it('counts in "+N" only the senders it does not name, same-named ones included', () => {
-    expect(
-      queuedCardSenderLine(
-        from(
-          ['term_a', 'term_b', 'term_c', 'term_d'].map((address) => ({ address, name: 'Codex' }))
-        )
-      )
-    ).toBe('From Codex, Codex, Codex +1')
+    renderCard(
+      from(['term_a', 'term_b', 'term_c', 'term_d'].map((address) => ({ address, name: 'Codex' })))
+    )
+    expect(screen.getAllByRole('button', { name: 'Codex' })).toHaveLength(3)
+    expect(screen.getByText('+1')).toBeInTheDocument()
+  })
+
+  it('shows the name as plain text where there is no chat to open it from', () => {
+    renderCard(from([{ address: 'term_a', name: 'Coder' }]), null)
+    expect(screen.getByText('Coder')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Coder' })).not.toBeInTheDocument()
   })
 })

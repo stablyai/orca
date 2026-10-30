@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   TerminalStreamOpcode,
   decodeTerminalStreamFrame,
@@ -8,6 +8,18 @@ import {
   createRemoteRuntimeTransportMocks,
   type MultiplexSubscriptionCallbacks
 } from './remote-runtime-pty-transport-test-harness'
+
+const appStore = vi.hoisted(() => ({
+  getState: vi.fn(() => {
+    throw new Error('These transport fixtures must not read app-store ownership')
+  })
+}))
+
+vi.mock('@/store', () => ({ useAppStore: { getState: appStore.getState } }))
+
+afterEach(() => {
+  expect(appStore.getState).not.toHaveBeenCalled()
+})
 
 let subscriptionCallbacks: MultiplexSubscriptionCallbacks = null
 let resolvedPaneHandle = 'terminal-1'
@@ -458,9 +470,7 @@ describe('createRemoteRuntimePtyTransport', () => {
     setFitOverride('remote:env-1@@terminal-1', 'mobile-fit', 49, 20)
     setDriverForPty('remote:env-1@@terminal-1', { kind: 'mobile', clientId: 'phone-1' })
 
-    // Why: while the tunnel was down the host re-minted this pane's handle;
-    // resubscribing the stale closure handle would bind the mirror to a
-    // different PTY (#7718). The transport must re-derive from the snapshot.
+    // Re-derive host handles after transport loss; stale closure handles may now name a different PTY (#7718).
     runtimeCall.mockImplementation(async (args: { method: string }) =>
       args.method === 'session.tabs.list'
         ? {
@@ -547,8 +557,7 @@ describe('createRemoteRuntimePtyTransport', () => {
 
     subscriptionCallbacks?.onClose?.()
 
-    // Why: no red xterm error — retire quietly and let the next session-tabs
-    // snapshot drive respawn/removal.
+    // Retire quietly and leave later authoritative snapshots to drive recovery/removal.
     await vi.waitFor(() => expect(onPtyExit).toHaveBeenCalledWith('remote:env-1@@terminal-1', -1))
     expect(transport.getPtyId()).toBeNull()
     expect(onError).not.toHaveBeenCalled()

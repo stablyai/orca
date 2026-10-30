@@ -4,6 +4,9 @@ import type { ReactNode } from 'react'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import ProjectRoadmap from './ProjectRoadmap'
+import { i18n, loadRendererUiLanguage, setRendererPluginLanguagePacks } from '@/i18n/i18n'
+import { DEFAULT_LOCALE } from '@/i18n/supported-languages'
+import { pluginLanguageResourceId } from '../../../../shared/plugins/artifacts/plugin-language-pack-artifact'
 import type {
   GitHubProjectField,
   GitHubProjectFieldValue,
@@ -94,13 +97,65 @@ function table(
   }
 }
 
-afterEach(() => {
+afterEach(async () => {
   cleanup()
   vi.useRealTimers()
   window.localStorage.clear()
+  setRendererPluginLanguagePacks([])
+  await i18n.changeLanguage(await loadRendererUiLanguage(DEFAULT_LOCALE))
 })
 
 describe('ProjectRoadmap', () => {
+  it.each([
+    ['pt-BR', 'pt-BR'],
+    ['en-US-US', DEFAULT_LOCALE]
+  ])('renders date ticks and bars with plugin locale %s', async (packLocale, dateLocale) => {
+    const packId = 'plugin:stablyai.orca-portuguese/pt-BR' as const
+    const resourceLanguage = pluginLanguageResourceId(packId)
+    setRendererPluginLanguagePacks([
+      {
+        id: packId,
+        resourceLanguage,
+        pluginKey: 'stablyai.orca-portuguese',
+        locale: packLocale,
+        catalog: { common: { cancel: 'Cancelar' } },
+        coverage: 100
+      }
+    ])
+    await i18n.changeLanguage(await loadRendererUiLanguage(packId))
+    expect(i18n.resolvedLanguage).toBe(resourceLanguage)
+
+    render(
+      <ProjectRoadmap
+        table={table(
+          [TITLE_FIELD, START_FIELD, TARGET_FIELD],
+          [
+            row('scheduled', 'Scheduled', [
+              { kind: 'date', fieldId: START_FIELD.id, date: '2026-09-01' },
+              { kind: 'date', fieldId: TARGET_FIELD.id, date: '2026-10-15' }
+            ])
+          ]
+        )}
+        fallback={<div>list</div>}
+      />
+    )
+
+    const month = new Intl.DateTimeFormat(dateLocale, {
+      month: 'short',
+      timeZone: 'UTC'
+    }).format(new Date(Date.UTC(2026, 8, 1)))
+    expect(screen.getAllByText(month, { exact: false }).length).toBeGreaterThan(0)
+    const dateFormat = new Intl.DateTimeFormat(dateLocale, {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      timeZone: 'UTC'
+    })
+    const start = dateFormat.format(new Date(Date.UTC(2026, 8, 1)))
+    const end = dateFormat.format(new Date(Date.UTC(2026, 9, 15)))
+    expect(screen.getByRole('button', { name: `Scheduled — ${start} – ${end}` })).toBeTruthy()
+  })
+
   it('moves the today marker across local midnight without resetting scroll and cleans up its timer', () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date(2026, 8, 5, 23, 59, 59))

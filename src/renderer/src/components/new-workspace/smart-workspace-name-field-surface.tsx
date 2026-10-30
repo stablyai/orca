@@ -11,6 +11,7 @@ import { renderSmartWorkspaceNameInput } from './smart-workspace-name-input-surf
 import { renderSmartWorkspaceSourceResults } from './smart-workspace-source-results-surface'
 import { getJiraSourceStatusMessage } from './jira-source-status-message'
 import type { SmartWorkspaceNameFieldController } from './use-smart-workspace-name-field-controller'
+import { JiraProjectPicker } from '../jira-project-picker'
 
 export function renderSmartWorkspaceNameField(
   controller: SmartWorkspaceNameFieldController
@@ -48,6 +49,16 @@ export function renderSmartWorkspaceNameField(
           tabsListRef={controller.tabsListRef}
         />
       )}
+      {mode === 'jira' && selectedSource === null ? (
+        <JiraProjectPicker
+          projects={controller.jiraProjectInventory.projects}
+          value={controller.jiraProject}
+          onChange={controller.setJiraProject}
+          label={translate('components.jiraProjectPicker.label', 'Jira project')}
+          emptyLabel={translate('components.jiraProjectPicker.all', 'All Jira projects')}
+          disabled={disabled || controller.jiraProjectInventory.loading}
+        />
+      ) : null}
       <Popover
         open={!disabled && open && mode !== 'text' && selectedSource === null}
         onOpenChange={handleSourcePopoverOpenChange}
@@ -55,7 +66,7 @@ export function renderSmartWorkspaceNameField(
         <Command
           value={resolvedCommandValue}
           onValueChange={(next) => {
-            // Why: cmdk re-emits when rows reshape; freeze it while debounce trails input.
+            // cmdk re-emits on row reshapes; freeze selection while debounce trails the input.
             if (isQueryStale) {
               return
             }

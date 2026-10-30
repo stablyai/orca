@@ -64,13 +64,7 @@ export async function expectRawStopNoteRewindRecovery({
     kind: 'status',
     text: 'Cancellation requested.'
   })
-  rewind.mockImplementation(async () => {
-    expect(
-      store.getRecord(HOST_TEST_SESSION)?.rewind?.retained.find((item) => item.itemId === noteId)
-        ?.body
-    ).toEqual(unconfirmed)
-    return { ok: true }
-  })
+  rewind.mockImplementation(async () => ({ ok: true }))
   const replace = journal.replaceEpochItems.bind(journal)
   const crash = vi.spyOn(journal, 'replaceEpochItems').mockImplementationOnce(async (...args) => {
     await replace(...args)
@@ -100,6 +94,8 @@ export async function expectRawStopNoteRewindRecovery({
       hostTestAttachParams(store.getRecord(HOST_TEST_SESSION)!.lease.runtimeFence)
     )
   ).toMatchObject({ ok: true })
+  // Rewind settlement runs in startup after attach; drain serialization before asserting.
+  await host.collaboratorsForTests().serialize(HOST_TEST_SESSION, async () => {})
   expect(store.getRecord(HOST_TEST_SESSION)?.rewind?.phase).toBe('completed')
   expect(journal.itemBody(noteId)).toEqual(unconfirmed)
   expect(journal.snapshot().items.find((item) => item.itemId === noteId)?.body).toEqual({

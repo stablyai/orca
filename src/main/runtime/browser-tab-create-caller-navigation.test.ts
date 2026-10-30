@@ -1,8 +1,4 @@
-/**
- * A browser create from one paired device must select the tab on that device only. Before
- * `navigation`, `browser.tabCreate` carried no origin, so the host desktop and every other paired
- * client jumped to a tab someone else opened.
- */
+/** Paired browser creates must select only the screens named by their navigation target. */
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   RUNTIME_NAVIGATION_TARGETS,
@@ -62,7 +58,7 @@ const storeBase = {
 type RuntimeInternals = {
   offscreenBrowserBackend: unknown
   agentBrowserBridge: unknown
-  resolveWorktreeSelector: (selector: string) => Promise<{ id: string }>
+  resolveGitWorktreeSelector: (selector: string) => Promise<{ id: string }>
 }
 
 function makeSession(): WorkspaceSessionState {
@@ -88,7 +84,6 @@ function makeSession(): WorkspaceSessionState {
   }
 }
 
-/** A runtime whose headless snapshot already carries one browser page, plus two paired devices. */
 function createPairedRuntime() {
   let session = makeSession()
   const runtime = new OrcaRuntimeService({
@@ -99,11 +94,11 @@ function createPairedRuntime() {
     }
   })
   const internals = runtime as unknown as RuntimeInternals
-  // Why stubbed: selector resolution scans real git worktrees, and none of this test's behavior
-  // lives there — the browser command only needs the worktree id it hands the snapshot.
-  internals.resolveWorktreeSelector = async () => ({ id: WT })
+  // Stub git selector resolution; this contract needs only the resolved workspace id.
+  internals.resolveGitWorktreeSelector = async () => ({ id: WT })
   internals.offscreenBrowserBackend = {
     closeTab: vi.fn(),
+    ownsTab: () => true,
     createTab: vi.fn(async (options: { browserPageId?: string }) => ({
       browserPageId: options.browserPageId ?? 'page-new'
     }))
@@ -135,9 +130,7 @@ function createPairedRuntime() {
   const bystander: RuntimeMobileSessionTabsResult[] = []
   runtime.onMobileSessionTabsChanged((snapshot) => caller.push(snapshot), 'device-caller')
   runtime.onMobileSessionTabsChanged((snapshot) => bystander.push(snapshot), 'device-bystander')
-  // The shared snapshot is what the host desktop's derived rows read. A paired client projects its
-  // own selection over it, so the bystander below needs its own — both surfaces can be stolen and
-  // each one hides a different mutant.
+  // Shared host selection and the bystander's private projection can be stolen independently.
   const sharedActiveTabId = (): string | null | undefined =>
     (
       runtime as unknown as {
@@ -147,11 +140,7 @@ function createPairedRuntime() {
   return { runtime, caller, bystander, sharedActiveTabId }
 }
 
-/**
- * Presence precondition for every "did not move" below: the shared snapshot sits on page-old and
- * the bystander device privately sits on page-alt, so neither can pass by having nothing selected,
- * and the bystander's assertion cannot pass by merely following the shared value.
- */
+/** Seed distinct nonempty host/bystander selections so neither absence assertion can pass vacuously. */
 async function seedSelections(runtime: OrcaRuntimeService): Promise<void> {
   await runtime.browserTabCreate({ worktree: `id:${WT}`, page: 'page-old', activate: true })
   await runtime.browserTabCreate({ worktree: `id:${WT}`, page: 'page-alt', activate: false })
@@ -161,12 +150,7 @@ async function seedSelections(runtime: OrcaRuntimeService): Promise<void> {
   })
 }
 
-/**
- * The three surfaces a create can move — the shared snapshot the host desktop's rows read, the
- * caller's own projection, and a second device's — for every target `browser.tabCreate` accepts.
- * No first-party client sends 'host' or 'clients' today, but the schema takes all four from any
- * paired client, and each names a different set of screens that may be moved.
- */
+/** Cover all schema targets, including host/clients even when no first-party caller sends them. */
 const CREATE_NAVIGATION_OUTCOMES = {
   caller: { shared: 'page-old', caller: 'page-new', bystander: 'page-alt' },
   host: { shared: 'page-new', caller: 'page-new', bystander: 'page-alt' },
@@ -192,9 +176,8 @@ function createBrowserTab(
 
 describe('browser.tabCreate caller navigation', () => {
   beforeAll(async () => {
-    // Why: constructing the browser commands is what pulls the Chromium cluster in, so production
-    // installs this at the Electron entry and a Node host leaves the RPCs rejecting.
-    const { RuntimeBrowserCommands } = await import('./orca-runtime-browser')
+    // Install browser RPCs as Electron does; plain Node hosts leave them unavailable.
+    const { RuntimeBrowserCommands } = await import('./browser/browser-commands')
     setRuntimeBrowserCommandsFactory((host) => new RuntimeBrowserCommands(host))
     return () => setRuntimeBrowserCommandsFactory(null)
   })
@@ -204,9 +187,6 @@ describe('browser.tabCreate caller navigation', () => {
     return () => vi.useRealTimers()
   })
 
-  // The reported defect was the server's own UI switching to the tab a client created; the other
-  // half is a second paired device steered off the page it was reading. Which of the two a target
-  // is allowed to move is the whole contract, so every target asserts both plus the caller.
   it.each(RUNTIME_NAVIGATION_TARGETS)(
     'moves only the screens a %s create addresses',
     async (navigation) => {
@@ -242,8 +222,7 @@ describe('browser.tabCreate caller navigation', () => {
     const { runtime, bystander, sharedActiveTabId } = createPairedRuntime()
     await seedSelections(runtime)
 
-    // No caller: the host's own create. It moves the host's view and nobody else's — the create
-    // path must not reach for an all-device navigation just because no device asked for one.
+    // A local create must not steer paired devices.
     await runtime.browserTabCreate({
       worktree: `id:${WT}`,
       page: 'page-new',

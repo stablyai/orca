@@ -4,7 +4,7 @@ import type { SessionInfo } from '../daemon/types'
 import type { Store } from '../persistence'
 
 const getDaemonProviderMock = vi.fn()
-vi.mock('../daemon/daemon-init', () => ({
+vi.mock('../daemon/daemon-provider-state', () => ({
   getDaemonProvider: () => getDaemonProviderMock()
 }))
 vi.mock('../project-runtime-git-options', () => ({
@@ -27,7 +27,7 @@ function makeStore(folderWorkspaces: FolderWorkspace[]): Store {
   return store as Store
 }
 
-// Why fresh modules: the hydrator memoizes its pass and the registry is module-scoped.
+// Reset both memoized hydration and the module-scoped registry.
 async function loadFresh() {
   vi.resetModules()
   const hydrateMod = await import('./hydrate-local-pty-registry')

@@ -6,8 +6,7 @@ import {
   projectAgentChildWorkLegacySubagents
 } from './agent-status-child-work-projection'
 
-// Today's inputs: the rows a host publishes on `summary.backgroundTasks`, run through the exact
-// path the status bridge uses. The expected values were captured on unmodified main.
+// Run current published backgroundTasks through the bridge path against expectations captured on unmodified main.
 const PUBLISHED_TASKS: AgentSessionBackgroundTask[] = [
   {
     id: 'task-agent',

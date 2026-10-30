@@ -2,24 +2,25 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { TerminalLinkActionContext } from './terminal-link-action-request'
 
 const mocks = vi.hoisted(() => {
-  const settings: { activeRuntimeEnvironmentId: string | null } = {
+  const settings: { activeRuntimeEnvironmentId: string | null; openLinksInApp?: boolean } = {
     activeRuntimeEnvironmentId: null
   }
+  const tabGroups: Record<string, unknown> = {}
   return {
     canOpenWithSystemDefault: true,
-    downloadAndOpen: vi.fn(),
     openDetectedFilePath: vi.fn(),
     settings,
-    worktreeRoot: false
+    worktreeRoot: false,
+    tabGroups
   }
 })
 
 vi.mock('@/store', () => ({
-  useAppStore: { getState: () => ({ settings: mocks.settings }) }
+  useAppStore: { getState: () => ({ settings: mocks.settings, ...mocks.tabGroups }) }
 }))
 
 vi.mock('./terminal-file-open-routing', () => ({
-  getTerminalFileContext: () => ({}),
+  getTerminalFileContext: () => ({ sourceHostResolved: true }),
   mapTerminalFilePath: (filePath: string) => filePath,
   openDetectedFilePath: mocks.openDetectedFilePath,
   shouldOpenTerminalFileWithSystemDefault: () => mocks.canOpenWithSystemDefault,
@@ -28,10 +29,6 @@ vi.mock('./terminal-file-open-routing', () => ({
 
 vi.mock('./terminal-worktree-path-link', () => ({
   resolveKnownWorktreeRootPathLink: () => (mocks.worktreeRoot ? { id: 'wt-2' } : null)
-}))
-
-vi.mock('./terminal-remote-file-download-open', () => ({
-  downloadAndOpenRemoteTerminalFile: mocks.downloadAndOpen
 }))
 
 import { handleTerminalFileLink } from './terminal-file-link-actions'
@@ -77,6 +74,7 @@ beforeEach(() => {
   mocks.canOpenWithSystemDefault = true
   mocks.settings = { activeRuntimeEnvironmentId: null }
   mocks.worktreeRoot = false
+  mocks.tabGroups = {}
   vi.clearAllMocks()
 })
 
@@ -104,6 +102,33 @@ describe('terminal file link actions', () => {
     expect(mocks.openDetectedFilePath).toHaveBeenNthCalledWith(2, '/repo/src/main.ts', 12, 4, {
       ...deps,
       openWithSystemDefault: true
+    })
+  })
+
+  it('offers a local HTML file the link-routing browsers, primary first', () => {
+    const request = vi.fn()
+    handleTerminalFileLink('/repo/report.html', null, null, plainEvent(), deps, context(request))
+    mocks.settings = { activeRuntimeEnvironmentId: null, openLinksInApp: true }
+    handleTerminalFileLink('/repo/report.html', null, null, plainEvent(), deps, context(request))
+
+    const [systemFirst, orcaFirst] = request.mock.calls.map(([call]) => call)
+    expect([systemFirst.primary.label, systemFirst.alternate.label]).toEqual([
+      'System Browser',
+      'Orca Browser'
+    ])
+    expect([orcaFirst.primary.label, orcaFirst.alternate.label]).toEqual([
+      'Orca Browser',
+      'System Browser'
+    ])
+    systemFirst.primary.run()
+    systemFirst.alternate.run()
+    expect(mocks.openDetectedFilePath).toHaveBeenNthCalledWith(1, '/repo/report.html', null, null, {
+      ...deps,
+      browserDestination: 'system'
+    })
+    expect(mocks.openDetectedFilePath).toHaveBeenNthCalledWith(2, '/repo/report.html', null, null, {
+      ...deps,
+      browserDestination: 'orca'
     })
   })
 
@@ -140,8 +165,11 @@ describe('terminal file link actions', () => {
     expect(actionRequest.alternate.label).toBe('Download & open with default app')
 
     actionRequest.alternate.run()
-    expect(mocks.downloadAndOpen).toHaveBeenCalledWith({}, '/repo/docs/report.html')
-    expect(mocks.openDetectedFilePath).not.toHaveBeenCalled()
+    // The open flow downloads a host file and opens a path the host disowns on this computer.
+    expect(mocks.openDetectedFilePath).toHaveBeenCalledWith('/repo/docs/report.html', null, null, {
+      ...deps,
+      openWithSystemDefault: true
+    })
   })
 
   it('keeps row parity between local and remote previewable files', () => {
@@ -169,8 +197,7 @@ describe('terminal file link actions', () => {
     expect(rowCount(remoteRequest.mock.calls[0][0])).toBe(rowCount(localRequest.mock.calls[0][0]))
   })
 
-  // Why: a directory has nothing to hand the OS, and the download row would offer a transfer that
-  // can only fail. The popover is built on hover, so the path shape decides rather than a stat.
+  // Hover rows are synchronous; path shape excludes directories without a host stat round trip.
   it('drops the remote download row for a path that announces itself as a directory', () => {
     mocks.canOpenWithSystemDefault = false
     const request = vi.fn()
@@ -194,7 +221,7 @@ describe('terminal file link actions', () => {
       // Marked external so the popover draws the same icon as every other Reveal item.
       expect(row).toMatchObject({ external: true })
       await row.run()
-      expect(shellApi.openInFileManager).toHaveBeenCalledWith('/repo/src/main.ts')
+      expect(shellApi.openInFileManager).toHaveBeenCalledWith('/repo/src/main.ts', 'local')
       expect(mocks.openDetectedFilePath).not.toHaveBeenCalled()
     })
 
@@ -211,7 +238,7 @@ describe('terminal file link actions', () => {
       )
 
       await revealRow(request).run()
-      expect(shellApi.openInFileManager).toHaveBeenCalledWith('/repo/build/Orca.app')
+      expect(shellApi.openInFileManager).toHaveBeenCalledWith('/repo/build/Orca.app', 'local')
       expect(shellApi.openFilePath).not.toHaveBeenCalled()
       expect(fsApi.stat).not.toHaveBeenCalled()
       expect(mocks.openDetectedFilePath).not.toHaveBeenCalled()
@@ -265,11 +292,11 @@ describe('terminal file link actions', () => {
       expect(request.mock.calls[0][0]).not.toHaveProperty('secondaryActions')
     })
 
-    it('omits the row while a remote runtime is focused, or for a runtime-owned link', () => {
+    it('keeps the row for a local link while a server is focused, and omits it for a runtime-owned link', () => {
       mocks.settings = { activeRuntimeEnvironmentId: 'env-1' }
       const focused = vi.fn()
       handleTerminalFileLink('/repo/src/main.ts', null, null, plainEvent(), deps, context(focused))
-      expect(focused.mock.calls[0][0]).not.toHaveProperty('secondaryActions')
+      expect(focused.mock.calls[0][0]).toHaveProperty('secondaryActions')
 
       mocks.settings = { activeRuntimeEnvironmentId: null }
       const owned = vi.fn()
@@ -291,5 +318,84 @@ describe('terminal file link actions', () => {
       expect(shellApi.openInFileManager).not.toHaveBeenCalled()
       expect(fsApi.stat).not.toHaveBeenCalled()
     })
+  })
+})
+
+describe('open in this group', () => {
+  function seedGroups(groupIds: string[]): void {
+    const tabs = groupIds.map((groupId) => ({
+      id: `${groupId}-tab`,
+      entityId: `${groupId}-terminal`,
+      groupId,
+      contentType: 'terminal'
+    }))
+    mocks.tabGroups = {
+      unifiedTabsByWorktree: { 'wt-1': tabs },
+      groupsByWorktree: {
+        'wt-1': groupIds.map((id) => ({ id, activeTabId: `${id}-tab`, tabOrder: [`${id}-tab`] }))
+      },
+      layoutByWorktree: {
+        'wt-1':
+          groupIds.length === 1
+            ? { type: 'leaf', groupId: groupIds[0] }
+            : {
+                type: 'split',
+                direction: 'horizontal',
+                first: { type: 'leaf', groupId: groupIds[0] },
+                second: { type: 'leaf', groupId: groupIds[1] }
+              }
+      }
+    }
+  }
+
+  function rowLabels(request: ReturnType<typeof vi.fn>): string[] {
+    const actionRequest = request.mock.calls[0][0]
+    return (actionRequest.secondaryActions ?? []).map((row: { label: string }) => row.label)
+  }
+
+  it('pins the source group when the source has a neighbor', () => {
+    seedGroups(['A', 'B'])
+    const request = vi.fn()
+    const sourceDeps = { ...deps, sourceTabId: 'A-terminal' }
+    handleTerminalFileLink('/repo/src/main.ts', 3, null, plainEvent(), sourceDeps, context(request))
+
+    const rows = request.mock.calls[0][0].secondaryActions
+    expect(rowLabels(request)).toContain('Open in this group')
+    rows.find((row: { label: string }) => row.label === 'Open in this group').run()
+    expect(mocks.openDetectedFilePath).toHaveBeenCalledWith('/repo/src/main.ts', 3, null, {
+      ...sourceDeps,
+      openInSourceGroupSurface: 'internal'
+    })
+  })
+
+  it('omits the row for a single group, an unknown source, or a workspace switch', () => {
+    seedGroups(['A'])
+    const single = vi.fn()
+    handleTerminalFileLink(
+      '/repo/a.ts',
+      null,
+      null,
+      plainEvent(),
+      { ...deps, sourceTabId: 'A-terminal' },
+      context(single)
+    )
+    expect(rowLabels(single)).not.toContain('Open in this group')
+
+    seedGroups(['A', 'B'])
+    const unknown = vi.fn()
+    handleTerminalFileLink('/repo/a.ts', null, null, plainEvent(), deps, context(unknown))
+    expect(rowLabels(unknown)).not.toContain('Open in this group')
+
+    mocks.worktreeRoot = true
+    const root = vi.fn()
+    handleTerminalFileLink(
+      '/repo',
+      null,
+      null,
+      plainEvent(),
+      { ...deps, sourceTabId: 'A-terminal' },
+      context(root)
+    )
+    expect(rowLabels(root)).not.toContain('Open in this group')
   })
 })

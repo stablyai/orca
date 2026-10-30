@@ -1,5 +1,6 @@
 import type { ProviderRateLimits } from '../../shared/rate-limit-types'
 import { extractCodexAuthError } from '../../shared/codex-auth-errors'
+import { codexSpawnEnoent, isSpawnEnoent } from '../codex-cli/windows-only-agent-cli'
 import {
   excerptAgentFailureOutput,
   sanitizeAgentFailureDetail
@@ -13,6 +14,7 @@ import {
   type CodexRateLimitWindowsSnapshot
 } from './codex-rate-limit-window-classification'
 import { mapCodexCredits } from './codex-credit-balance'
+import { classifyCodexRpcErrorFailureKind } from './codex-rpc-failure-kind'
 import type { CodexRateLimitFetchOptions } from './codex-rate-limit-fetch-options'
 import { abortedCodexRateLimitResult } from './codex-rate-limit-fetch-result'
 import { mapCodexRateLimitWindow } from './codex-rate-limit-window-mapper'
@@ -160,20 +162,15 @@ export function readCodexRateLimitsViaRpc(
     }
 
     function onError(error: Error): void {
-      const isEnoent = (error as NodeJS.ErrnoException).code === 'ENOENT'
-      const isBareCommand = codexCommand === 'codex'
+      const enoent = isSpawnEnoent(error) ? codexSpawnEnoent(codexCommand) : null
       settle(
         {
           provider: 'codex',
           session: null,
           weekly: null,
           updatedAt: Date.now(),
-          error: isEnoent
-            ? isBareCommand
-              ? 'Codex CLI not found'
-              : 'Codex CLI found but could not run — Node.js may not be in your PATH'
-            : withMacTailscaleDnsHint(error.message, stderr),
-          status: isEnoent && isBareCommand ? 'unavailable' : 'error'
+          error: enoent?.message ?? withMacTailscaleDnsHint(error.message, stderr),
+          status: enoent?.missing ? 'unavailable' : 'error'
         },
         { kill: true }
       )
@@ -229,6 +226,7 @@ export function readCodexRateLimitsViaRpc(
             continue
           }
           if (message.error) {
+            const failureKind = classifyCodexRpcErrorFailureKind(message.error.message)
             settle(
               {
                 provider: 'codex',
@@ -236,7 +234,8 @@ export function readCodexRateLimitsViaRpc(
                 weekly: null,
                 updatedAt: Date.now(),
                 error: withMacTailscaleDnsHint(message.error.message, stderr),
-                status: 'error'
+                status: 'error',
+                ...(failureKind ? { usageMetadata: { failureKind } } : {})
               },
               { kill: true }
             )
@@ -280,7 +279,7 @@ export function readCodexRateLimitsViaRpc(
   })
 }
 
-// Why: surfaced text drives re-auth classification, so diagnosis and classification must use the same sanitized value.
+// Reauthentication classification and surfaced diagnostics must share the same sanitized text.
 function describeCodexRpcExit(
   code: number | null,
   signal: NodeJS.Signals | null,

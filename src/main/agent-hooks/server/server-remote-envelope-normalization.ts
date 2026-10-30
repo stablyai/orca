@@ -4,6 +4,10 @@ import {
   normalizeGrokPromptId
 } from '../../../shared/agent-hook-listener/listener-limits'
 import { isAgentHookSource, type AgentHookSource } from '../../../shared/agent-hook-relay'
+import {
+  readClaudeSettledRequests,
+  type ClaudeSettledRequest
+} from '../../../shared/agent-hook-listener/claude-settled-permission-requests'
 
 export type RemoteAgentStatusEnvelope = {
   paneKey: string
@@ -22,16 +26,19 @@ export type RemoteAgentStatusEnvelope = {
   grokPromptBoundary?: unknown
   compactTrigger?: unknown
   toolUseId?: string
+  claudeSettledRequests?: unknown
   toolAgentId?: string
   teammateName?: string
   toolAgentType?: string
   providerSession?: unknown
   providerSessionOnly?: unknown
   isReplay?: boolean
-  /** Payload fields the relay dropped to fit an oversized frame; validated below. */
+  turnEndedAt?: unknown
+  turnEndDisposition?: unknown
+  /** Fields shed to fit the relay frame; validate before restoration. */
   shedFields?: unknown
   claudeRunningNonAgentTask?: unknown
-  /** The producing peer's advertised run-capability set — a property of the peer/connection that built this envelope, not an orthogonal call parameter. Absent (older relay/HTTP paths) defaults to the unadvertised-legacy-peer set. */
+  /** Producing peer capabilities; absent on older peers, which use legacy defaults. */
   advertisedAgentStatusCapabilities?: readonly string[]
   statusUnavailable?: unknown
   evidenceAgeMs?: unknown
@@ -47,6 +54,7 @@ export type RemoteEnvelopeFields = {
   worktreeId?: string
   promptInteractionKey?: string
   toolUseId?: string
+  claudeSettledRequests?: readonly ClaudeSettledRequest[]
   toolAgentId?: string
   teammateName?: string
   toolAgentType?: string
@@ -62,6 +70,8 @@ export function normalizeRemoteEnvelopeFields(envelope: {
   worktreeId?: string
   promptInteractionKey?: string
   toolUseId?: string
+  claudeSettledRequests?: unknown
+  isReplay?: boolean
   toolAgentId?: string
   teammateName?: string
   toolAgentType?: string
@@ -99,6 +109,11 @@ export function normalizeRemoteEnvelopeFields(envelope: {
     toolUseId:
       typeof envelope.toolUseId === 'string' && envelope.toolUseId.trim().length > 0
         ? envelope.toolUseId.trim()
+        : undefined,
+    // Live hooks settle their own requests; retained settlements only repair replay gaps.
+    claudeSettledRequests:
+      source === 'claude' && envelope.isReplay === true
+        ? readClaudeSettledRequests(envelope.claudeSettledRequests)
         : undefined,
     toolAgentId:
       typeof envelope.toolAgentId === 'string' && envelope.toolAgentId.trim().length > 0

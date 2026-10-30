@@ -76,8 +76,8 @@ test.each(['qoder', 'jcode'] as const)(
         filters: {
           agents: AI_VAULT_AGENTS.filter((candidate) =>
             agent === 'qoder'
-              ? candidate !== 'jcode'
-              : !['codebuddy', 'zcode', 'qoder'].includes(candidate)
+              ? !['jcode', 'kiro'].includes(candidate)
+              : !['codebuddy', 'zcode', 'qoder', 'kiro'].includes(candidate)
           )
         }
       },
@@ -161,7 +161,7 @@ test('projects agents before cursor identity and preserves every other ranking f
     filters: {
       agents: ['codex', 'jcode'] as const,
       scopePaths: ['/host/folder'],
-      since: '2026-08-01T00:00:00Z',
+      since: '2026-08-01T00:00:00.000Z',
       sort: 'newest' as const
     }
   }

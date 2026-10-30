@@ -12,6 +12,7 @@ import WorktreeContextMenu from './WorktreeContextMenu'
 globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
 const state = {
+  unifiedTabsByWorktree: {},
   updateWorktreeMeta: vi.fn(),
   setWorktreesPinnedAndReveal: vi.fn(),
   workspaceStatuses: [],
@@ -38,13 +39,17 @@ vi.mock('@/store', () => ({
   })
 }))
 
-vi.mock('@/store/selectors', () => ({
-  useAllWorktrees: () => [],
-  useRepoById: (repoId?: string) =>
-    repoId ? { id: repoId, name: repoId, displayName: repoId, projectGroupId: null } : undefined,
-  useRepoMap: () => new Map(),
-  useWorktreeMap: () => new Map()
-}))
+vi.mock('@/store/selectors', () => {
+  const emptyWorktrees: never[] = []
+  const emptyMap = new Map()
+  return {
+    getAllWorktreesFromState: () => emptyWorktrees,
+    useRepoById: (repoId?: string) =>
+      repoId ? { id: repoId, name: repoId, displayName: repoId, projectGroupId: null } : undefined,
+    getRepoMapFromState: () => emptyMap,
+    getWorktreeMapFromState: () => emptyMap
+  }
+})
 
 vi.mock('@/i18n/i18n', () => ({
   translate: (_key: string, fallback: string) => fallback,
@@ -54,11 +59,15 @@ vi.mock('@/i18n/i18n', () => ({
 vi.mock('./ProjectGroupNameDialog', () => ({ ProjectGroupNameDialog: () => null }))
 vi.mock('./WorktreeParentPickerPopover', () => ({ WorktreeParentPickerPopover: () => null }))
 
+const openInMenu = vi.hoisted(() => vi.fn(() => null))
+vi.mock('./WorktreeOpenInMenu', () => ({ WorktreeOpenInSubMenu: openInMenu }))
+
 const writeClipboardText = vi.fn()
 const mounted: { container: HTMLDivElement; root: Root }[] = []
 
 beforeEach(() => {
   writeClipboardText.mockReset()
+  openInMenu.mockClear()
   Object.defineProperty(window, 'api', {
     configurable: true,
     value: { ui: { writeClipboardText } }
@@ -113,7 +122,7 @@ function clickMenuItem(label: string): void {
     (element) => element.textContent === label
   )
   expect(item, `menu item "${label}"`).toBeTruthy()
-  // Why: the menu swallows clicks until a primary pointerdown proves they aren't the opening right-click.
+  // Primary pointerdown distinguishes selection from the opening right-click, which the menu ignores.
   act(() => {
     item?.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0 }))
     item?.click()
@@ -121,6 +130,15 @@ function clickMenuItem(label: string): void {
 }
 
 describe('WorktreeContextMenu Copy Worktree Name', () => {
+  it('passes an inactive row owner even before that row reaches the catalog', () => {
+    openMenu(worktreeFixture({ hostId: 'runtime:remote-owner' }))
+
+    expect(openInMenu).toHaveBeenCalledWith(
+      expect.objectContaining({ runtimeEnvironmentId: 'remote-owner' }),
+      undefined
+    )
+  })
+
   it('copies the workspace display name', () => {
     openMenu(worktreeFixture())
 

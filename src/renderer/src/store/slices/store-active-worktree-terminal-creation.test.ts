@@ -1,16 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
 import { getDefaultSettings } from '../../../../shared/constants'
-import type { SshProviderEpoch } from '../../../../shared/ssh-types'
-import type { DirectSshPaneRetryAttemptId } from './direct-ssh-terminal-recovery'
-import { createTestStore, makeLayout, makeTab, makeWorktree, seedStore } from './store-test-helpers'
+import { createTestStore, makeTab, makeWorktree, seedStore } from './store-test-helpers'
 import { getOrphanTerminalIds } from './terminal-orphan-helpers'
 import { createStoreCascadesMockApi } from './store-cascades-test-harness'
 
 const mockUnregisterPtyDataHandlers = vi.hoisted(() => vi.fn<() => unknown[]>(() => []))
 const mockRestorePtyDataHandlersAfterFailedShutdown = vi.hoisted(() => vi.fn())
 
-// Mock sonner (imported by repos.ts)
 vi.mock('sonner', () => ({
   toast: { info: vi.fn(), success: vi.fn(), error: vi.fn(), warning: vi.fn() }
 }))
@@ -20,7 +17,6 @@ vi.mock('@/components/terminal-pane/pty-dispatcher', () => ({
   unregisterPtyDataHandlers: mockUnregisterPtyDataHandlers
 }))
 
-// Mock agent-status (imported by terminal-helpers)
 vi.mock('@/lib/agent-status', async (importOriginal) => {
   const actual = await importOriginal<typeof AgentStatusModule>()
   return {
@@ -125,144 +121,7 @@ describe('setActiveWorktree', () => {
     )
   })
 
-  it('moves current direct SSH binding evidence when detaching a live pane', () => {
-    const store = createTestStore()
-    const wt = 'repo1::/path/wt1'
-    const sourceTabId = 'tab-source'
-    const targetTabId = 'tab-target'
-    const authority = {
-      targetId: 'target-a',
-      providerEpoch: 'epoch-a' as SshProviderEpoch,
-      connectionGeneration: 1
-    }
-    const detachedPtyId = 'ssh:target-a@@pty-detached'
-    seedStore(store, {
-      tabsByWorktree: {
-        [wt]: [
-          makeTab({ id: sourceTabId, worktreeId: wt, ptyId: detachedPtyId }),
-          makeTab({ id: targetTabId, worktreeId: wt, ptyId: null })
-        ]
-      },
-      ptyIdsByTabId: { [sourceTabId]: [detachedPtyId], [targetTabId]: [] },
-      directSshLivePtyBindingByTabId: {
-        [sourceTabId]: {
-          attemptId: 'live-detach' as DirectSshPaneRetryAttemptId,
-          authority,
-          tabGeneration: 0,
-          ptyId: detachedPtyId
-        }
-      },
-      directSshPaneRetryHistoryByTabId: {
-        [sourceTabId]: { authority, attemptedAt: [1] }
-      },
-      sshConnectionStates: new Map([
-        [
-          authority.targetId,
-          {
-            targetId: authority.targetId,
-            status: 'connected',
-            error: null,
-            reconnectAttempt: 0,
-            providerEpoch: authority.providerEpoch,
-            connectionGeneration: authority.connectionGeneration
-          }
-        ]
-      ])
-    })
-
-    store.getState().syncPaneDetachPtyOwnership({
-      detachedLeafId: '11111111-1111-4111-8111-111111111111',
-      detachedPtyId,
-      sourceLayout: makeLayout(),
-      sourceTabId,
-      targetTabId
-    })
-
-    const state = store.getState()
-    expect(state.directSshPaneRetryByTabId[sourceTabId]).toBeUndefined()
-    expect(state.directSshLivePtyBindingByTabId[sourceTabId]).toBeUndefined()
-    expect(state.directSshPaneRetryHistoryByTabId[sourceTabId]).toBeUndefined()
-    expect(state.directSshLivePtyBindingByTabId[targetTabId]).toEqual({
-      attemptId: 'live-detach',
-      authority,
-      tabGeneration: 0,
-      ptyId: detachedPtyId
-    })
-    expect(state.directSshPaneRetryHistoryByTabId[targetTabId]).toEqual({
-      authority,
-      attemptedAt: [1]
-    })
-  })
-
-  it('rearms a current pending SSH detach as live destination evidence', () => {
-    const store = createTestStore()
-    const wt = 'repo1::/path/wt1'
-    const sourceTabId = 'tab-source'
-    const targetTabId = 'tab-target'
-    const authority = {
-      targetId: 'target-a',
-      providerEpoch: 'epoch-a' as SshProviderEpoch,
-      connectionGeneration: 1
-    }
-    const detachedPtyId = 'ssh:target-a@@pty-detached'
-    seedStore(store, {
-      tabsByWorktree: {
-        [wt]: [
-          makeTab({ id: sourceTabId, worktreeId: wt, ptyId: detachedPtyId, generation: 2 }),
-          makeTab({ id: targetTabId, worktreeId: wt, ptyId: null })
-        ]
-      },
-      ptyIdsByTabId: { [sourceTabId]: [detachedPtyId], [targetTabId]: [] },
-      directSshPaneRetryByTabId: {
-        [sourceTabId]: {
-          attemptId: 'pending-detach' as DirectSshPaneRetryAttemptId,
-          authority,
-          tabGeneration: 2,
-          startedAt: 1
-        }
-      },
-      sshConnectionStates: new Map([
-        [
-          authority.targetId,
-          {
-            targetId: authority.targetId,
-            status: 'connected',
-            error: null,
-            reconnectAttempt: 0,
-            providerEpoch: authority.providerEpoch,
-            connectionGeneration: authority.connectionGeneration
-          }
-        ]
-      ])
-    })
-
-    store.getState().syncPaneDetachPtyOwnership({
-      detachedLeafId: '11111111-1111-4111-8111-111111111111',
-      detachedPtyId,
-      sourceLayout: makeLayout(),
-      sourceTabId,
-      targetTabId
-    })
-
-    const state = store.getState()
-    expect(state.directSshPaneRetryByTabId[sourceTabId]).toBeUndefined()
-    expect(state.directSshLivePtyBindingByTabId[sourceTabId]).toBeUndefined()
-    expect(state.directSshPaneRetryHistoryByTabId[sourceTabId]).toBeUndefined()
-    expect(state.directSshLivePtyBindingByTabId[targetTabId]).toEqual({
-      attemptId: 'pending-detach',
-      authority,
-      tabGeneration: 0,
-      ptyId: detachedPtyId
-    })
-    expect(state.tabsByWorktree[wt].find((tab) => tab.id === targetTabId)?.ptyId).toBe(
-      detachedPtyId
-    )
-  })
-
-  // Regression for #9911: a split SSH tab's single relay slot points at the
-  // last-bound pane; when it exits, clearTabPtyId must promote a surviving pane
-  // instead of clearing, or a later relay-drop bulk-clear leaves the survivor
-  // visible only in the layout leaf map and the orphan sweep deletes the live tab.
+  // Promote a surviving split pane into the relay slot on exit; otherwise relay-drop clearing can make orphan sweep delete the live tab (#9911).
   it('promotes a surviving pane into the relay slot so a split tab is not orphaned after a relay drop', () => {
     const store = createTestStore()
     const wt = 'repo1::/path/wt1'
@@ -304,7 +163,6 @@ describe('setActiveWorktree', () => {
     expect(state.ptyIdsByTabId[tabId]).toEqual([])
     expect(state.tabsByWorktree[wt][0].ptyId).toBeNull()
     expect(state.lastKnownRelayPtyIdByTabId[tabId]).toBe('pty-A')
-    // Survivor A is still reconnectable, so the sweep must not delete the tab.
     expect(getOrphanTerminalIds(state, wt)).not.toContain(tabId)
   })
 

@@ -1,25 +1,19 @@
 import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
 
-/** What `removeRepoFromWorkspaceSession` does with a field when its repo goes away. */
 export type SessionFieldRepoRemovalDisposition =
-  /** Owner-keyed map: the shared helper deletes every key belonging to the repo. */
+  /** Delete map keys belonging to the repo. */
   | 'prunedByOwnerKey'
-  /** Pruned too, but by a rule of its own -- derived ids, pane keys, or a scalar. */
+  /** Prune by derived IDs, pane keys or scalar rules. */
   | 'prunedByBespokeRule'
-  /**
-   * This path leaves it alone. That is not the same as holding nothing repo-scoped: some of these
-   * are pruned by the owner-scanning pass instead, and some are known residue. The entries below
-   * say which, because the label alone would read as a clean bill of health.
-   */
+  /** Untouched here; entries below distinguish other pruning paths from known residue. */
   | 'notRepoScoped'
 
-/** What `extractSessionForTransfer` does with a field when its repo moves to another profile. */
 export type SessionFieldTransferDisposition =
-  /** Owner-keyed map: keys are rekeyed onto the new repo id and the values cloned as-is. */
+  /** Rekey to the destination repo and clone values. */
   | 'copiedByOwnerKey'
-  /** Copied too, but with element-level rekeying or an id filter of its own. */
+  /** Copy with element-level rekeying or filtering. */
   | 'copiedByBespokeRule'
-  /** Deliberately left behind: it names something only the source profile can resolve. */
+  /** Source-profile-only entities cannot transfer. */
   | 'notTransferred'
 
 type SessionFieldDisposition = {
@@ -27,35 +21,22 @@ type SessionFieldDisposition = {
   onTransfer: SessionFieldTransferDisposition
 }
 
-/**
- * Every persisted session field, and what the repo-removal and project-transfer paths owe it.
- *
- * Why this exists: `clientHostedBrowserPagesByWorktree` was added to the session type and then
- * missed by three separate prune paths, because nothing made handling it mandatory. Classification
- * is now a compile error to skip, and the two owner-keyed lists below are what those paths
- * actually iterate -- so a field marked `prunedByOwnerKey` is pruned by construction.
- *
- * Not covered: `mergeWorkspaceSessions`, the apply side of a transfer, is still a hand-written
- * field list. It is safe for this field only because `extractSessionForTransfer` never emits it --
- * classify a new field as transferable and that merge has to be edited by hand.
- */
+/** Classify every persisted field so owner-keyed pruning/transfer cannot omit additions.
+ * Transferable additions still require manual updates to mergeWorkspaceSessions. */
 export const WORKSPACE_SESSION_FIELD_DISPOSITION = {
-  // Residue: it can name the repo being removed, and no main-side path clears it. Harmless only
-  // because every renderer read resolves it against the live repo list, so a dead id reads as none.
+  // Residue: renderer reads validate this ID against live repos, so dead IDs resolve to none.
   activeRepoId: { onRepoRemoval: 'notRepoScoped', onTransfer: 'notTransferred' },
   activeWorkspaceKey: { onRepoRemoval: 'prunedByBespokeRule', onTransfer: 'copiedByBespokeRule' },
   activeWorkspaceExecutionHostId: { onRepoRemoval: 'notRepoScoped', onTransfer: 'notTransferred' },
   activeWorktreeId: { onRepoRemoval: 'prunedByBespokeRule', onTransfer: 'copiedByBespokeRule' },
-  // Residue here specifically: the owner-removal path nulls this when it deletes the tab it names,
-  // but repo removal does not, so it can outlive the tab.
+  // Owner removal clears this when its tab dies; repo removal can leave it stale.
   activeTabId: { onRepoRemoval: 'notRepoScoped', onTransfer: 'notTransferred' },
   tabsByWorktree: { onRepoRemoval: 'prunedByBespokeRule', onTransfer: 'copiedByBespokeRule' },
-  // Keyed by tab id, so both paths follow the tab ids the terminal maps gave up or carried over.
+  // Follow tab IDs removed or carried by terminal maps.
   terminalLayoutsByTabId: {
     onRepoRemoval: 'prunedByBespokeRule',
     onTransfer: 'copiedByBespokeRule'
   },
-  // Same tab-id keying as the layouts it shadows, so park scrollback follows the same tab ids.
   localOnlyScrollbackByTabId: {
     onRepoRemoval: 'prunedByBespokeRule',
     onTransfer: 'copiedByBespokeRule'
@@ -74,7 +55,7 @@ export const WORKSPACE_SESSION_FIELD_DISPOSITION = {
     onRepoRemoval: 'prunedByBespokeRule',
     onTransfer: 'copiedByBespokeRule'
   },
-  // Keyed by browser workspace id, so both paths follow the workspaces the map above resolved.
+  // Follow browser workspace IDs resolved above.
   browserPagesByWorkspace: {
     onRepoRemoval: 'prunedByBespokeRule',
     onTransfer: 'copiedByBespokeRule'
@@ -83,17 +64,17 @@ export const WORKSPACE_SESSION_FIELD_DISPOSITION = {
     onRepoRemoval: 'prunedByOwnerKey',
     onTransfer: 'copiedByOwnerKey'
   },
-  // Why not transferred: each row names a paired device and a browser profile that only the source
-  // profile can resolve, and the payload carries neither -- the same reason a transferred browser
-  // workspace gives up its sessionProfileId. A copied row would restore as a held tab no device can
-  // ever reclaim, which is exactly the stuck "unavailable" state persistence exists to prevent.
+  // Paired devices/browser profiles are source-scoped; copying rows would strand unavailable tabs.
   clientHostedBrowserPagesByWorktree: {
     onRepoRemoval: 'prunedByOwnerKey',
     onTransfer: 'notTransferred'
   },
-  // Keyed by runtime environment, not by worktree: this client's debt to environments that outlive
-  // any one repo.
+  // Environment cleanup debt outlives individual repos.
   clientHostedBrowserCloseIntentsByEnvironment: {
+    onRepoRemoval: 'notRepoScoped',
+    onTransfer: 'notTransferred'
+  },
+  pairedTerminalTabCloseIntentsByEnvironment: {
     onRepoRemoval: 'notRepoScoped',
     onTransfer: 'notTransferred'
   },
@@ -106,23 +87,20 @@ export const WORKSPACE_SESSION_FIELD_DISPOSITION = {
   tabGroupLayouts: { onRepoRemoval: 'prunedByOwnerKey', onTransfer: 'copiedByOwnerKey' },
   activeGroupIdByWorktree: { onRepoRemoval: 'prunedByOwnerKey', onTransfer: 'copiedByOwnerKey' },
   activeConnectionIdsAtShutdown: { onRepoRemoval: 'notRepoScoped', onTransfer: 'notTransferred' },
-  // Residue: keyed by tab id and pruned by neither path, so entries for a removed repo's tabs stay.
+  // Residue: neither path prunes removed tabs’ remote session IDs.
   remoteSessionIdsByTabId: { onRepoRemoval: 'notRepoScoped', onTransfer: 'notTransferred' },
   lastVisitedAtByWorktreeId: { onRepoRemoval: 'prunedByOwnerKey', onTransfer: 'copiedByOwnerKey' },
   defaultTerminalTabsAppliedByWorktreeId: {
     onRepoRemoval: 'prunedByOwnerKey',
     onTransfer: 'copiedByOwnerKey'
   },
-  // Owner-scoped after all, just not by this path: deleteScannedSessionFieldsForOwners prunes it by
-  // the record's worktreeId on worktree and project removal. Moving a project between profiles runs
-  // removeSourceRepo, which has no owner scan, so these records leak there.
+  // Owner scans prune by worktreeId, but cross-profile source removal has no scan and leaves residue.
   sleepingAgentSessionsByPaneKey: { onRepoRemoval: 'notRepoScoped', onTransfer: 'notTransferred' },
   terminalPtyIncarnationsByPaneKey: {
     onRepoRemoval: 'prunedByBespokeRule',
     onTransfer: 'copiedByBespokeRule'
   },
-  // Repo-keyed rather than worktree-keyed, but the owner-key helpers already treat a bare repo id
-  // as its own owner key.
+  // Owner-key helpers also accept bare repo IDs.
   terminalTopologyRevisionByRepoId: {
     onRepoRemoval: 'prunedByOwnerKey',
     onTransfer: 'copiedByOwnerKey'
@@ -131,17 +109,19 @@ export const WORKSPACE_SESSION_FIELD_DISPOSITION = {
     onRepoRemoval: 'prunedByBespokeRule',
     onTransfer: 'copiedByBespokeRule'
   },
-  // Owner-scoped after all, just not by this path: removing a workspace's session rows prunes these
-  // by the record's worktreeId. A project moved to another profile leaves them in the source profile
-  // until its next load, whose deregistered-repo sweep takes them.
+  // Pruned by worktreeId during owner removal; transferred source residue clears on next profile load.
   closedTerminalTabTombstonesByTabId: {
+    onRepoRemoval: 'notRepoScoped',
+    onTransfer: 'notTransferred'
+  },
+  // Owner removal prunes by worktreeId; closed panes do not transfer.
+  closedTerminalPanesByPaneKey: {
     onRepoRemoval: 'notRepoScoped',
     onTransfer: 'notTransferred'
   }
 } as const satisfies Record<keyof WorkspaceSessionState, SessionFieldDisposition>
 
-// Why: an unclassified field is a field both paths forget, and the leak only surfaces as state
-// belonging to a project that is no longer here.
+// Missing classifications would leak state belonging to removed projects.
 type UnclassifiedSessionField = Exclude<
   keyof WorkspaceSessionState,
   keyof typeof WORKSPACE_SESSION_FIELD_DISPOSITION

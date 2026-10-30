@@ -39,7 +39,8 @@ describe('transcript row height estimate', () => {
       const style = nativeChatAppearanceStyle({ nativeChatAppearance: { width: 'wide' } }, width)
       return nativeChatRowContentMetrics(prose, {
         lineHeightPx: style['--chat-estimated-line-height'],
-        charsPerLine: style['--chat-estimated-chars-per-line']
+        charsPerLine: style['--chat-estimated-chars-per-line'],
+        spacingScale: style['--chat-estimated-spacing-scale']
       })
     }
     const initial = metricsAtWidth(800)
@@ -60,7 +61,8 @@ describe('transcript row height estimate', () => {
       )
       const typography = {
         lineHeightPx: style['--chat-estimated-line-height'],
-        charsPerLine: style['--chat-estimated-chars-per-line']
+        charsPerLine: style['--chat-estimated-chars-per-line'],
+        spacingScale: style['--chat-estimated-spacing-scale']
       }
       return estimateNativeChatRowHeight(
         nativeChatRowContentMetrics(prose, typography),
@@ -81,9 +83,7 @@ describe('transcript row height estimate', () => {
     expect(estimateNativeChatTextLines('')).toBe(0)
     expect(estimateNativeChatTextLines('one line')).toBe(1)
     expect(estimateNativeChatTextLines('one\ntwo\nthree')).toBe(3)
-    // A single 300-character paragraph wraps rather than staying one line.
     expect(estimateNativeChatTextLines('x'.repeat(300))).toBeGreaterThan(1)
-    // A blank line still occupies one.
     expect(estimateNativeChatTextLines('a\n\nb')).toBe(3)
   })
 
@@ -109,13 +109,7 @@ describe('transcript row height estimate', () => {
     expect(enormous).toBeLessThan(5000 * 22)
   })
 
-  // The gap between rows belongs to the window, which puts one between every
-  // pair. A row that also charged for it would sit one gap lower than the row
-  // above it, and the drift compounds the whole way down the transcript.
-  //
-  // Stated without naming any constant: a prose row is its lines and nothing
-  // else, so its estimate has to be exactly its line count times what one more
-  // line costs. Any fixed amount riding along — a gap above all — breaks that.
+  // Inter-row gaps belong to the virtualizer; charging them per row compounds transcript drift.
   it('charges a prose row for its lines and for nothing else', () => {
     const lines = (count: number): number =>
       estimateNativeChatRowHeight(
@@ -128,8 +122,7 @@ describe('transcript row height estimate', () => {
     expect(lines(10)).toBe(10 * perLine)
   })
 
-  // The parts stacked INSIDE one row do pay for the gap between them, because
-  // that gap is inside the height the row will be measured at.
+  // Gaps between parts inside a row remain part of its measured height.
   it('charges a row for the gap above a turn status it carries', () => {
     const metrics = nativeChatRowContentMetrics(message('one line'))
     const bare = estimateNativeChatRowHeight(metrics, NO_CHROME)
@@ -178,7 +171,6 @@ describe('transcript row height estimate', () => {
     expect(
       estimateNativeChatRowHeight(prose, inSection) - estimateNativeChatRowHeight(prose, NO_CHROME)
     ).toBe(20)
-    // Reasoning draws no controls.
     expect(estimateNativeChatRowHeight(reasoning, inSection)).toBe(
       estimateNativeChatRowHeight(reasoning, NO_CHROME)
     )
@@ -234,7 +226,8 @@ describe('transcript row height estimate', () => {
       const style = nativeChatAppearanceStyle({ nativeChatAppearance: { fontSize } })
       const typography = {
         lineHeightPx: style['--chat-estimated-line-height'],
-        charsPerLine: style['--chat-estimated-chars-per-line']
+        charsPerLine: style['--chat-estimated-chars-per-line'],
+        spacingScale: style['--chat-estimated-spacing-scale']
       }
       const heightFor = (command: string): number =>
         estimateNativeChatRowHeight(
@@ -266,7 +259,8 @@ describe('transcript row height estimate', () => {
       const style = nativeChatAppearanceStyle({ nativeChatAppearance: { fontSize } })
       return estimateNativeChatRowHeight(reasoning, NO_CHROME, {
         lineHeightPx: style['--chat-estimated-line-height'],
-        charsPerLine: style['--chat-estimated-chars-per-line']
+        charsPerLine: style['--chat-estimated-chars-per-line'],
+        spacingScale: style['--chat-estimated-spacing-scale']
       })
     })
 

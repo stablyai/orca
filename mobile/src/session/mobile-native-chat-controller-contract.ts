@@ -1,79 +1,77 @@
+import type { NativeChatSkillDiscoverySnapshot } from '../../../src/shared/native-chat/input/native-chat-picker-items'
+import type { StructuredMobileSendAttachment } from './use-mobile-structured-send-with-outcome'
+import type { MobileSessionView } from '../storage/session-view-preferences'
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react'
-import type {
-  AskAnswerSelection,
-  AskPrompt,
-  parseAskFromStatus
-} from '../../../src/shared/native-chat-ask'
-import type { detectAgentPermission } from './mobile-native-chat-permission'
-import type { parseAgentQuestion } from './mobile-native-chat-question'
+import type { AskAnswerSelection } from '../../../src/shared/native-chat-ask-answer'
+import type { AskPrompt } from '../../../src/shared/native-chat/input/native-chat-ask-types'
+import type { MobileChatPermission } from './native-chat/input/mobile-native-chat-permission'
+import type { MobileChatQuestion } from './native-chat/input/mobile-native-chat-question'
 import type {
   NativeChatLiveTurnIndicator,
   NativeChatSettledTurns
 } from '../../../src/shared/native-chat-turn-status'
 import type { NativeChatTurnJournal } from '../../../src/shared/native-chat-turn-membership'
-import type { MobileNativeChatSendOutcome } from './mobile-native-chat-send'
-import type { MobileNativeChatCommandRefusalCauses } from './use-mobile-native-chat-send-error'
+import type { NativeChatAwaitingInput } from '../../../src/shared/native-chat/native-chat-terminal-turn'
+import type { NativeChatResolvedPrompt } from '../../../src/shared/native-chat-resolution-receipt'
+import type { MobileNativeChatSendOutcome } from './native-chat/mobile-native-chat-send'
+import type { MobileNativeChatCommandRefusalCauses } from './native-chat/use-mobile-native-chat-send-error'
 import type { MobileStructuredQueuedMessageControls } from './use-mobile-structured-queued-message-controls'
 import type { MobileStructuredBackgroundTasks } from './use-mobile-structured-background-tasks'
-import type { MobileNativeChatPendingMessage } from './use-mobile-native-chat-drafts'
+import type { MobileNativeChatPendingMessage } from './native-chat/mobile-native-chat-pending-echo'
 import type { useMobileNativeChatSession } from './use-mobile-native-chat-session'
-import type { MobileNativeChatSessionOptionPickersProps } from './MobileNativeChatSessionOptionPickers'
-import type { MobileNativeChatVisualSource } from './mobile-native-chat-visual-read'
+import type { MobileNativeChatSessionOptionPickersProps } from './native-chat/input/MobileNativeChatSessionOptionPickers'
+import type { MobileNativeChatVisualSource } from './native-chat/visual/mobile-native-chat-visual-read'
+import type { useMobileStructuredSessionCommands } from './use-mobile-structured-session-commands'
 
 export type MobileNativeChatController = {
-  /** Whether a tab's effective view is chat (per-tab override, else the default). */
+  sessionViewReady: boolean
   isTabChatView: (tabId: string) => boolean
+  setTabView: (tabId: string, view: MobileSessionView) => void
   toggleTabChatView: (tabId: string) => void
   showNativeChat: boolean
   showNativeChatRef: MutableRefObject<boolean>
-  /** Resolved agent for the active chat tab (names the empty-state copy). */
   nativeChatAgent: string | null
-  chatComposerText: string
+  nativeChatSessionLive: boolean
+  chatComposerScopeKey?: string | null
+  reportQueuedEditError?: (message: string) => void
+  chatDraftKey: string | null
   setChatComposerText: Dispatch<SetStateAction<string>>
   getChatComposerEditGeneration: () => number
   chatPending: MobileNativeChatPendingMessage[]
   chatImagePreviewsByMessageId: Record<string, string[]>
   nativeChatSession: ReturnType<typeof useMobileNativeChatSession>
-  /** Structured lane: drives the per-turn status row and live tool progress. */
   nativeChatStructured: boolean
-  /** Structured lane with a live client: where the transcript's visuals are read from. */
   nativeChatVisualSource: MobileNativeChatVisualSource | null
-  nativeChatAgentWorking: boolean
-  /** What labels the live turn's one indicator row; null off the structured lane. */
+  nativeChatItemSource: MobileNativeChatVisualSource | null
+  /** Working or waiting on the reader: keeps the turn clock running. */
+  nativeChatTurnActive: boolean
+  nativeChatAwaitingInput: NativeChatAwaitingInput | null
   nativeChatTurnIndicator: NativeChatLiveTurnIndicator | null
-  /** Structured lane: host-recorded turn timing for the per-turn status rows. */
   nativeChatWorkingStartedAt: number | null
   nativeChatSettledTurns: NativeChatSettledTurns | null
-  /** Structured lane: the journal that places each transcript row in its turn. */
   nativeChatTurnJournal: NativeChatTurnJournal | null
-  /** What a refused command's line stands on. */
+  nativeChatReceipts: ReadonlyMap<string, NativeChatResolvedPrompt> | null
+  nativeChatActionablePromptIds: readonly string[] | undefined
   nativeChatCommandRefusalCauses: MobileNativeChatCommandRefusalCauses
   nativeChatCanStop: boolean
   nativeChatStreamingText?: string
-  /** Agent mid-turn, regardless of whether chat is the visible view. */
-  nativeChatStreamLive: boolean
-  /** Host/workspace/tab/session scope for stateful streaming suppression. */
-  nativeChatStreamScopeKey: string
-  nativeChatPermission: ReturnType<typeof detectAgentPermission>
-  /** Terminal prompt occurrence; a replacement resets only the card's local submission state. */
+  nativeChatPermission: MobileChatPermission | null
+  // A new prompt occurrence resets local card submission state only.
   nativeChatPromptKey: string | null
-  nativeChatQuestion: ReturnType<typeof parseAgentQuestion>
-  /** The pending ask, already null while dismissed (dismissal lives here so it
-   *  survives the chat-view subtree unmounting on a view toggle). */
-  nativeChatAsk: ReturnType<typeof parseAskFromStatus>
-  /** Stable key for the current ask card (keys the card component). */
+  /** Only a structured chat's journal question; a terminal chat's questions are asks. */
+  nativeChatQuestion: MobileChatQuestion | null
+  // Keep dismissal above chat-view unmounts so toggling views cannot resurrect an answered ask.
+  nativeChatAsk: AskPrompt | null
   nativeChatAskKey: string | null
-  /** Hide the current ask until a genuinely different question arrives. */
   dismissNativeChatAsk: () => void
   handleNativeChatAnswerAsk: (
     prompt: AskPrompt,
     selections: AskAnswerSelection[]
   ) => Promise<boolean>
   handleNativeChatCancelAsk: () => Promise<boolean>
-  /** Terminal lane: fold the occurrence to a strip and free Send, writing nothing. */
+  // Collapse writes nothing to the terminal and frees Send.
   collapseNativeChatAsk: () => void
   collapseNativeChatPrompt?: () => void
-  /** The collapsed terminal occurrence, shown as a strip above the composer. */
   nativeChatCollapsedPrompt: { title: string; expand: () => void } | null
   handleNativeChatCancelPrompt?: (prompt?: {
     itemId: string
@@ -81,33 +79,29 @@ export type MobileNativeChatController = {
   }) => Promise<boolean>
   handleNativeChatRespondPermission: (text: string) => Promise<boolean>
   handleNativeChatStop: () => void
-  /** Host-held queued drafts shown as cards above the composer (structured lane; any host
-   *  that publishes them). */
   nativeChatQueued: MobileStructuredQueuedMessageControls
-  /** Running child work shown in a strip above the composer; null off the structured lane. */
   nativeChatBackgroundTasks: MobileStructuredBackgroundTasks | null
   nativeChatFilePaths: string[]
   loadNativeChatFiles: (query: string) => void
-  handleNativeChatQuestionAnswer: (text: string) => Promise<boolean>
+  nativeChatSkills: NativeChatSkillDiscoverySnapshot
+  loadNativeChatSkills: () => void
+  /** A grouped structured answer names the prompt it was rendered for. */
+  handleNativeChatQuestionAnswer?: (
+    text: string,
+    prompt?: MobileChatQuestion['prompt']
+  ) => Promise<boolean>
   handleNativeChatSend: (text: string, images?: string[]) => Promise<boolean>
-  /** Outcome-preserving send: callers that pasted terminal input beforehand
-   *  (image sends) must see 'unknown' to heal a possibly-orphaned paste. Such a
-   *  caller passes its own `deadline` so the paste it already spent and this text
-   *  body share one budget instead of holding the composer for two. */
+  // Preserve unknown outcomes to heal orphaned image pastes; share their deadline with text and retain the original pre-paste sentAt.
   handleNativeChatSendWithOutcome: (
     text: string,
     images?: string[],
     deadline?: number,
-    attachments?: readonly {
-      id?: string
-      path: string
-      previewUri: string
-    }[]
+    attachments?: readonly StructuredMobileSendAttachment[],
+    sentAt?: number
   ) => Promise<MobileNativeChatSendOutcome>
-  /** Launch-context text still parked on the agent's TUI input line, or null.
-   *  Image sends read it to size their leading clear (one Ctrl+U per line). */
+  // Read parked TUI launch text to clear one line per Ctrl+U before pasting images.
   readSeededLaunchDraft: () => string | null
-  /** Model/session-option pickers for the composer, or null when the active
-   *  agent has no session-option catalog. */
   nativeChatSessionOptions: MobileNativeChatSessionOptionPickersProps | null
+  nativeChatSessionCommands: ReturnType<typeof useMobileStructuredSessionCommands>
+  nativeChatAcceptsImages: boolean
 }

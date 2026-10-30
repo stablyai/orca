@@ -1,18 +1,9 @@
-/**
- * Creating a structured session for a worktree: resolve the create intent, attach it under the
- * host-computed fingerprint, then publish its tab.
- *
- * Extracted from `agentSession.create` so orchestration can start a native-born structured worker
- * on exactly the same path. `activate` is the only knob the two callers differ on: a chat the user
- * asked for takes the surface, a background dispatch must not steal it (the terminal worker path's
- * `surfaceOwner: false`).
- *
- * The prepare/commit split is the pre-commit boundary, not a style choice: nothing before `attach`
- * commits a session, so that span answers with a refusal, and nothing after it may be folded back
- * in. Both callers run the same two halves, so orchestration gets that guarantee too.
- */
+import { seededPermissionMode } from '../../../../shared/native-chat/input/native-chat-session-option-defaults'
+// Resolve the host launch identity, then commit an at-rest create or the compatible acquired path.
 
-import { refuse } from '../../../../shared/agent-session-wire-refusals'
+import { assertAgentPromptRequestActive } from '../../orca-runtime-core'
+import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from '../../../../shared/agent-chat-permission-mode'
+import { refuse, AgentSessionRefusalError } from '../../../../shared/agent-session-wire-refusals'
 import { computeAgentSessionPayloadFingerprint } from '../../../../shared/agent-session-mutation-envelope'
 import type {
   AgentSessionAttachResult,
@@ -25,35 +16,44 @@ import {
 } from '../../../native-chat/agent-session-wire/structured-agent-session-attach'
 import type { StructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-host'
 import type { StructuredAgentSessionCaller } from '../../../native-chat/agent-session-wire/structured-agent-session-host-types'
-import type { StructuredAgentSessionResumeSource } from '../../../../shared/structured-agent-session-create'
+import type {
+  StructuredAgentSessionResumeSource,
+  StructuredAgentSessionFirstMessage
+} from '../../../../shared/structured-agent-session-create'
+import { structuredAgentSessionOptionOverridesRefusal } from '../../../native-chat/agent-session-wire/structured-agent-session-options-read'
+import type { StructuredAgentSessionCreateOptions } from '../../../native-chat/agent-session-wire/structured-agent-session-create'
 import type { OrcaRuntimeService } from '../../orca-runtime'
-import type { StructuredAgentId } from '../../../../shared/agent-session-provider-handle'
 import {
-  resolveUncommittedStructuredCreate,
-  type StructuredCreateRefused
-} from './structured-agent-session-precommit-refusal'
+  captureStructuredAgentCliSource,
+  type StructuredAgentCliSourceEvidence
+} from '../../../native-chat/structured-agent-cli-source'
+import type { StructuredAgentId } from '../../../../shared/agent-session-provider-handle'
+import { resolveUncommittedStructuredCreate } from './structured-agent-session-precommit-refusal'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import { structuredAgentSessionClosedBeforeCreate } from './structured-agent-session-close-before-create'
+import type { ChatTabPlacement } from '../../agent-session/agent-session-tab-layout'
 
 export type PreparedStructuredAgentSessionCreate = {
   host: StructuredAgentSessionHost
   attachParams: AgentSessionAttachParams
   hostLaunchDirectory?: string
+  catalogModels?: StructuredAgentSessionCreateOptions['catalogModels']
   /** Null when the caller supplied its own location; only a resolved worktree publishes a tab. */
   tab: { workspaceId: string; agent: StructuredAgentId } | null
+  /** Absent for older clients and provider-dependent in-process callers. */
+  atRest?: { firstMessage?: StructuredAgentSessionFirstMessage }
 }
 
-/**
- * What a client's create intent fingerprints, recomputed host-side. `resumeFrom` is part of the
- * intent, not a detail of it: without it a retry of "adopt this conversation" would replay as, or
- * conflict with, a blank create. `tabId` is covered so the declared digest spans the payload, but
- * replay keys on the attach fingerprint, so a retry naming another tab is answered with the one the
- * chat's tab holds. The canonicalizer drops `undefined`, so plain creates keep the digest they had.
- */
+/** New creates keep the immutable client intent in the ledger; legacy creates keep attach identity. */
 export function structuredAgentSessionCreateIntentFingerprint(params: {
   envelope: AgentSessionMutationEnvelope
   worktree: string
   agent: string
   resumeFrom?: StructuredAgentSessionResumeSource
   tabId?: string
+  firstMessage?: StructuredAgentSessionFirstMessage
+  optionsMode?: 'replace-model-selection'
+  options?: Readonly<Record<string, string>>
 }): string {
   return computeAgentSessionPayloadFingerprint({
     method: 'agentSession.create',
@@ -62,13 +62,15 @@ export function structuredAgentSessionCreateIntentFingerprint(params: {
       worktree: params.worktree,
       agent: params.agent,
       resumeFrom: params.resumeFrom,
-      tabId: params.tabId
+      tabId: params.tabId,
+      firstMessage: params.firstMessage,
+      optionsMode: params.optionsMode,
+      options: params.options
     }
   })
 }
 
-/** The pre-commit half. Throws; the caller is expected to run it inside
- *  `resolveUncommittedStructuredCreate` so a failure reaches the client as a refusal. */
+/** Run throwing pre-commit work inside resolveUncommittedStructuredCreate so clients receive a no-effects refusal. */
 export async function prepareStructuredAgentSessionCreateForWorktree(args: {
   runtime: OrcaRuntimeService
   /** Installs the host lazily; called at the same point the RPC handler always installed it. */
@@ -78,14 +80,24 @@ export async function prepareStructuredAgentSessionCreateForWorktree(args: {
   agent: StructuredAgentId
   caller: StructuredAgentSessionCaller
   resumeFrom?: StructuredAgentSessionResumeSource
-  /** Replaces the seed options the host resolves from settings. Orchestration passes the
-   *  `--model`/`--effort` the dispatch asked for; a chat the user opened passes nothing and keeps
-   *  the saved selection. Narrowed by the caller, so `{}` never reaches the reservation. */
+  structuredAgentCliSourceEvidence?: StructuredAgentCliSourceEvidence
+  /** Explicit picks override seed keys at rest; acquired in-process launches replace the seed. */
+  optionsMode?: 'replace-model-selection'
   options?: Readonly<Record<string, string>>
-  /** The tab id the caller reserved for this chat, taken when its tab is published; absent, the tab
-   *  gets the id clients derive. Beside `options`, after the fingerprint, likewise. */
+  /** Use the caller-reserved tab id at publication; absent, derive the legacy id. Keep it outside launch fingerprints. */
   tabId?: string
+  firstMessage?: StructuredAgentSessionFirstMessage
+  atRest?: boolean
 }): Promise<PreparedStructuredAgentSessionCreate> {
+  const structuredAgentCliSourceEvidence =
+    args.structuredAgentCliSourceEvidence ??
+    (args.resumeFrom?.cliSource
+      ? captureStructuredAgentCliSource(
+          () => args.runtime.getAgentProviderSessionRows(),
+          args.resumeFrom.cliSource,
+          (source) => args.runtime.getStructuredAgentCliSourceRoute(source)
+        )
+      : undefined)
   // Adoption replay may need the record loaded from disk before source discovery can be skipped.
   let host = args.resumeFrom ? await args.ensureHost() : null
   const resolved = await args.runtime.resolveStructuredAgentSessionCreateIntent({
@@ -93,34 +105,61 @@ export async function prepareStructuredAgentSessionCreateForWorktree(args: {
     worktree: args.worktree,
     agent: args.agent,
     callerKey: args.caller.callerKey,
+    structuredAgentCliSourceEvidence,
     ...(args.resumeFrom ? { resumeFrom: args.resumeFrom } : {})
   })
-  const hostFingerprint = computeAgentSessionPayloadFingerprint({
+  const attachFingerprint = computeAgentSessionPayloadFingerprint({
     method: 'agentSession.attach',
     sessionId: args.envelope.sessionId,
     fields: attachFingerprintFields({ ...resolved, envelope: args.envelope })
   })
   host ??= await args.ensureHost()
-  const {
-    agent: _resolvedAgent,
-    provider: _resolvedProvider,
-    hostLaunchDirectory,
-    ...resolvedAttach
-  } = resolved
+  const priorOperation =
+    args.atRest === undefined
+      ? null
+      : host.deps.store.getOperationRow(args.caller.callerKey, args.envelope.clientOperationId)
+  // A capability update cannot change the contract of an already-recorded create.
+  const legacyReplay =
+    args.firstMessage === undefined &&
+    args.options === undefined &&
+    priorOperation?.fingerprint === attachFingerprint
+  const atRest =
+    args.atRest !== undefined &&
+    (priorOperation?.fingerprint === args.envelope.payloadFingerprint ||
+      (args.atRest === true && !legacyReplay))
+  const hostFingerprint = atRest ? args.envelope.payloadFingerprint : attachFingerprint
+  if (atRest && args.options) {
+    const refusal = structuredAgentSessionOptionOverridesRefusal(
+      host.deps.agents,
+      args.agent,
+      args.options
+    )
+    if (refusal) {
+      throw new AgentSessionRefusalError(refusal)
+    }
+  }
+  const { agent: _agent, provider: _provider, hostLaunchDirectory, ...resolvedAttach } = resolved
+  // Fingerprint explicit picks, never replay-varying defaults; explicit options replace saved seeds, while permission default stays chat-owned.
+  const overlays = atRest
+    ? args.optionsMode !== 'replace-model-selection'
+    : Object.keys(args.options ?? {}).every((id) => id === AGENT_CHAT_PERMISSION_MODE_OPTION_ID)
+  const picked = args.options
+    ? overlays
+      ? { ...resolved.options, ...args.options }
+      : { ...seededPermissionMode(resolved.options), ...args.options }
+    : resolved.options
   return {
     host,
     ...(hostLaunchDirectory ? { hostLaunchDirectory } : {}),
     attachParams: {
       ...resolvedAttach,
-      // After the fingerprint, deliberately: `attachFingerprintFields` excludes options because
-      // they are the session's initial state, not its identity, so a retry that re-resolves them
-      // must replay rather than conflict.
-      ...(args.options ? { options: args.options } : {}),
+      ...(picked ? { options: picked } : {}),
       ...(args.tabId ? { surfaceTabId: args.tabId } : {}),
       provider: resolved.provider,
       agent: resolved.agent,
       envelope: { ...args.envelope, payloadFingerprint: hostFingerprint }
     },
+    ...(atRest ? { atRest: args.firstMessage ? { firstMessage: args.firstMessage } : {} } : {}),
     tab: {
       workspaceId: resolved.location.workspaceId,
       agent: resolved.agent
@@ -134,14 +173,57 @@ export async function commitStructuredAgentSessionCreate(args: {
   caller: StructuredAgentSessionCaller
   prepared: PreparedStructuredAgentSessionCreate
   activate: boolean
+  /** This machine's window made the create and opens the chat's tab where it reserved it. */
+  placedByWindow?: boolean
+  /** Where the creating client opens the chat, in this host's ids. */
+  tabPlacement?: ChatTabPlacement
 }): Promise<AgentSessionMutationResult<AgentSessionAttachResult>> {
   const { prepared } = args
-  const result = prepared.hostLaunchDirectory
-    ? await prepared.host.attach(args.caller, prepared.attachParams, {
-        hostLaunchDirectory: prepared.hostLaunchDirectory
-      })
-    : await prepared.host.attach(args.caller, prepared.attachParams)
+  const tab = prepared.tab
+  const tabPlace = {
+    ...(args.placedByWindow ? { placedByWindow: true } : {}),
+    ...(args.tabPlacement ? { placement: args.tabPlacement } : {})
+  }
+  if (prepared.atRest) {
+    return prepared.host.create(args.caller, prepared.attachParams, {
+      ...prepared.atRest,
+      ...(prepared.catalogModels ? { catalogModels: prepared.catalogModels } : {}),
+      ...(prepared.hostLaunchDirectory
+        ? { hostLaunchDirectory: prepared.hostLaunchDirectory }
+        : {}),
+      ...(tab
+        ? {
+            // A chat closed while it was being made gets no tab to show before main closes it.
+            publishTab: () =>
+              ORCA_LAYOUT_OWNER_IS_MAIN &&
+              structuredAgentSessionClosedBeforeCreate(prepared.attachParams.envelope.sessionId)
+                ? Promise.resolve()
+                : args.runtime.publishStructuredAgentSessionTab({
+                    workspaceId: tab.workspaceId,
+                    sessionId: prepared.attachParams.envelope.sessionId,
+                    agent: tab.agent,
+                    activate: args.activate,
+                    ...tabPlace,
+                    ...(prepared.attachParams.surfaceTabId
+                      ? { tabId: prepared.attachParams.surfaceTabId }
+                      : {})
+                  })
+          }
+        : {})
+    })
+  }
+  const result = await prepared.host.attach(args.caller, prepared.attachParams, {
+    ...(prepared.hostLaunchDirectory ? { hostLaunchDirectory: prepared.hostLaunchDirectory } : {}),
+    ...(prepared.catalogModels ? { catalogModels: prepared.catalogModels } : {})
+  })
   if (!result.ok || !prepared.tab) {
+    return result
+  }
+  // A chat closed while it was being made gets no tab to show before main closes it.
+  if (
+    ORCA_LAYOUT_OWNER_IS_MAIN &&
+    structuredAgentSessionClosedBeforeCreate(result.value.sessionId)
+  ) {
     return result
   }
   const surfaceTabId = prepared.attachParams.surfaceTabId
@@ -151,6 +233,7 @@ export async function commitStructuredAgentSessionCreate(args: {
       sessionId: result.value.sessionId,
       agent: prepared.tab.agent,
       activate: args.activate,
+      ...tabPlace,
       ...(surfaceTabId ? { tabId: surfaceTabId } : {})
     })
   } catch (error) {
@@ -181,16 +264,28 @@ export async function createStructuredAgentSessionForWorktree(args: {
   worktree: string
   agent: StructuredAgentId
   activate: boolean
+  optionsMode?: 'replace-model-selection'
   options?: Readonly<Record<string, string>>
   tabId?: string
+  /** Create without starting the agent; its first message starts it. */
+  atRest?: true
+  firstMessage?: StructuredAgentSessionFirstMessage
+  signal?: AbortSignal
 }): Promise<AgentSessionMutationResult<AgentSessionAttachResult>> {
-  const prepared: PreparedStructuredAgentSessionCreate | StructuredCreateRefused =
-    await resolveUncommittedStructuredCreate(() =>
-      prepareStructuredAgentSessionCreateForWorktree(args)
-    )
+  // An at-rest create's ledger row is keyed by its intent, as a client's create is.
+  const envelope = args.atRest
+    ? {
+        ...args.envelope,
+        payloadFingerprint: structuredAgentSessionCreateIntentFingerprint(args)
+      }
+    : args.envelope
+  const prepared = await resolveUncommittedStructuredCreate(() =>
+    prepareStructuredAgentSessionCreateForWorktree({ ...args, envelope })
+  )
   if ('refusal' in prepared) {
     return { ok: false, refusal: prepared.refusal }
   }
+  assertAgentPromptRequestActive(args.signal)
   return commitStructuredAgentSessionCreate({
     runtime: args.runtime,
     caller: args.caller,

@@ -1,10 +1,4 @@
-/**
- * One-paste terminal freeze diagnostics: shared shapes for the breadcrumb
- * rings kept in BOTH processes and for the per-pty delivery table main embeds
- * in its debug snapshot. The goal is that a single console command captures
- * enough history + state to attribute any frozen-terminal report without
- * asking the user for more logs.
- */
+/** Shared renderer/main breadcrumbs and per-PTY delivery state let one freeze report attribute stalls without additional logs. */
 
 export type PtyDeliveryBreadcrumb = {
   atMs: number
@@ -23,9 +17,7 @@ export type PtyDeliveryBreadcrumbRing = {
 const BREADCRUMB_RING_CAPACITY = 100
 const BREADCRUMB_COALESCE_MS = 1_000
 
-// Why a ring with same-kind coalescing: breadcrumbs record rare transitions,
-// but a pathological loop (marker flood, gate flapping) must cost one array
-// slot + counter bump per second, never unbounded memory or GC churn.
+// Coalesce pathological marker/gate floods to one ring slot/counter per second instead of unbounded memory/GC.
 export function createPtyDeliveryBreadcrumbRing(
   capacity = BREADCRUMB_RING_CAPACITY,
   coalesceMs = BREADCRUMB_COALESCE_MS
@@ -57,10 +49,7 @@ export function createPtyDeliveryBreadcrumbRing(
   }
 }
 
-// Why redact: daemon session ids embed worktree paths
-// (`${worktreeId}@@${shortUuid}`). The `@@` suffix is unique enough to
-// correlate a pty across the renderer/main sections of one report without
-// shipping the user's filesystem layout.
+// PTY IDs embed worktree paths; retain only the unique @@ suffix to correlate main/renderer without exposing filesystem layout.
 export function redactPtyIdForDiagnostics(id: string): string {
   const separatorIdx = id.lastIndexOf('@@')
   if (separatorIdx !== -1) {

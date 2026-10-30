@@ -3,7 +3,7 @@ import type { PRRefreshOutcome } from './pull-request-refresh-types'
 import type { PRInfo } from './pull-request-types'
 import { normalizeGitHubPRForBranchOutcome } from './pull-request-for-branch-outcome'
 
-const PR = {
+const PR: PRInfo = {
   number: 42,
   title: 'Feature',
   state: 'merged',
@@ -11,12 +11,19 @@ const PR = {
   checksStatus: 'success',
   updatedAt: '2026-08-04T22:46:08Z',
   mergeable: 'UNKNOWN'
-} as PRInfo
+}
 
 describe('normalizeGitHubPRForBranchOutcome', () => {
   it('preserves current classified outcomes', () => {
     const outcome: PRRefreshOutcome = { kind: 'found', pr: PR, fetchedAt: 10 }
     expect(normalizeGitHubPRForBranchOutcome(outcome, 20)).toBe(outcome)
+  })
+
+  it.each([
+    { kind: 'no-pr' as const, fetchedAt: 10 },
+    { kind: 'no-pr' as const, fetchedAt: 10, rejectedPRUrls: [PR.url] }
+  ])('preserves no-PR responses from older and newer hosts', (outcome) => {
+    expect(normalizeGitHubPRForBranchOutcome(outcome, 20)).toEqual(outcome)
   })
 
   it('normalizes legacy PRInfo and null responses', () => {

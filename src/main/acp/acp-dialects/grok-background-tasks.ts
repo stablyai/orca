@@ -3,7 +3,7 @@ import type { AgentJournalToolCallItem } from '../../../shared/agent-session-jou
 import {
   isSettledBackgroundTaskState,
   normalizeBackgroundTaskKind
-} from '../../../shared/native-chat-background-task-row'
+} from '../../../shared/native-chat/input/native-chat-background-task-row'
 import type { NativeChatBackgroundTaskBlock } from '../../../shared/native-chat-types'
 import type { ToolCallUpdate } from '../generated/acp-protocol.generated'
 import type { AcpBackgroundTaskUpdate, AcpDialectNotification } from './acp-dialect'
@@ -43,8 +43,25 @@ const resultOutputSchema = z.object({
   MultiResult: z.object({ results: z.array(taskResultSchema) }).optional()
 })
 type GrokTask = z.infer<typeof taskSchema>
-/** Grok's output reads name a monitor only by this command prefix. */
+export type GrokTaskResult = z.infer<typeof taskResultSchema>
 const MONITOR_COMMAND = /^\[monitor[:\]]/
+const SUBAGENT_COMMAND = /^\[subagent[:\]]/
+
+export function isGrokSubagentTask(task: Pick<GrokTask, 'command'>): boolean {
+  return SUBAGENT_COMMAND.test(task.command ?? '')
+}
+
+export function grokTaskResults(
+  rawOutput: unknown
+): { type: 'TaskOutput' | 'KillTask'; tasks: GrokTaskResult[] } | undefined {
+  const result = resultOutputSchema.safeParse(rawOutput)
+  return result.success
+    ? {
+        type: result.data.type,
+        tasks: result.data.MultiResult?.results ?? (result.data.Result ? [result.data.Result] : [])
+      }
+    : undefined
+}
 
 function completedState(task: GrokTask): NativeChatBackgroundTaskBlock['state'] {
   return task.explicitly_killed
@@ -102,7 +119,7 @@ function snapshot(
           : {}),
     ...(label ? { label } : fallbackLabel ? { fallbackLabel } : {}),
     ...(task.output_file === undefined ? {} : { outputFile: task.output_file }),
-    // A running task's summary is Grok's "Background task <id> started", not the task's result.
+    // Running summaries announce startup; only settled summaries contain task results.
     ...(settled ? { summary: task.summary ?? '' } : {}),
     ...(task.error === undefined && !settled ? {} : { error: task.error ?? '' })
   }
@@ -119,23 +136,24 @@ export function grokToolBackgroundTasks(
   update: ToolCallUpdate,
   tool: AgentJournalToolCallItem
 ): AcpBackgroundTaskUpdate[] {
-  const result = resultOutputSchema.safeParse(update.rawOutput)
-  if (result.success) {
-    const tasks =
-      result.data.MultiResult?.results ?? (result.data.Result ? [result.data.Result] : [])
-    return tasks.flatMap((task) => {
-      if (result.data.type === 'KillTask') {
+  const result = grokTaskResults(update.rawOutput)
+  if (result) {
+    return result.tasks.flatMap((task) => {
+      if (isGrokSubagentTask(task)) {
+        return []
+      }
+      if (result.type === 'KillTask') {
         return update.status === 'completed' && task.outcome === 'killed'
           ? [snapshot(task, 'idle')]
           : []
       }
       const state = resultState(task)
-      return state && !task.command?.startsWith('[subagent:') ? [snapshot(task, state)] : []
+      return state ? [snapshot(task, state)] : []
     })
   }
   const input = taskInputSchema.safeParse(tool.input)
   if (tool.name === 'kill_command_or_subagent' && update.status === 'completed' && input.success) {
-    // Inference: a successful kill call settles its named tasks without a completion notice.
+    // Infer settlement from successful kill calls that emit no separate completion notice.
     return [
       ...new Set([
         ...(input.data.task_ids ?? []),

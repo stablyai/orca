@@ -7,14 +7,13 @@ import {
   RELAY_HOST_CAPABILITY_IDLE_REGIONAL_REHOME,
   RELAY_PROTOCOL_LIMITS
 } from '@orca-cloud/relay-contract'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest'
 import type WebSocket from 'ws'
 import type { RelayAssignmentStore } from './assignment-store.js'
 import type { RelayConfig } from './config.js'
-import type { RelayCredentialStore } from './credential-store.js'
+import { RelayStoreError, type RelayCredentialStore } from './credential-store.js'
 import { CONTROL_RENEWAL_BATCH_INTERVAL_MS } from './control-renewal-batch.js'
 import {
-  CONTROL_RENEWAL_STATEMENT_OUTCOMES,
   type ControlRenewalOutcome,
   type ControlRenewalRequest
 } from './control-renewal-statement.js'
@@ -124,49 +123,25 @@ function createRegistry(
   registry: HostSessionRegistry
   activate: ActivateSession
   acquireActivity: ReturnType<typeof vi.fn>
-  renewControlActivity: ReturnType<typeof vi.fn>
-  renewControlActivities: ReturnType<typeof vi.fn>
+  renewControlActivities: ReturnType<typeof vi.fn<RelayAssignmentStore['renewControlActivities']>>
   releaseActivity: ReturnType<typeof vi.fn>
   observer: {
     recordAuth: ReturnType<typeof vi.fn>
     recordControlClose: ReturnType<typeof vi.fn>
+    recordPostProofClose: ReturnType<typeof vi.fn>
     recordSpliceClose: ReturnType<typeof vi.fn>
   }
 } {
   const acquireActivity = vi.fn().mockResolvedValue(undefined)
-  const renewControlActivity = vi.fn().mockResolvedValue(undefined)
   const releaseActivity = vi.fn().mockResolvedValue(true)
-  // Mirrors the store's own batch semantics over the single-renewal mock: a known
-  // outcome becomes that row's verdict, and any other failure reaches the caller
-  // as the driver's error. Keeps every per-call expectation below aimed at the
-  // renewal a session actually asked for.
-  const renewControlActivities = vi.fn(
-    async (rows: readonly ControlRenewalRequest[]): Promise<ControlRenewalOutcome[]> =>
-      await Promise.all(
-        rows.map(async (row): Promise<ControlRenewalOutcome> => {
-          try {
-            await renewControlActivity(row.identity, {
-              activityId: row.activityId,
-              cellId: row.cellId,
-              expiresAt: row.expiresAt
-            })
-            return 'renewed'
-          } catch (error) {
-            const message = String((error as { message?: unknown }).message)
-            if (!CONTROL_RENEWAL_STATEMENT_OUTCOMES.has(message as ControlRenewalOutcome)) {
-              throw error
-            }
-            return message as ControlRenewalOutcome
-          }
-        })
-      )
-  )
+  const renewControlActivities = vi
+    .fn<RelayAssignmentStore['renewControlActivities']>()
+    .mockImplementation(async (rows) => rows.map(() => 'renewed'))
   const assignments = {
     activateControl,
     markMigrationTargetRegistered: vi.fn().mockResolvedValue(undefined),
     resolve: vi.fn().mockResolvedValue({ cellId: config.cellId }),
     acquireActivity,
-    renewControlActivity,
     renewControlActivities,
     releaseActivity
   } as unknown as RelayAssignmentStore
@@ -177,6 +152,7 @@ function createRegistry(
     recordReconnect: vi.fn(),
     recordSql: vi.fn(),
     recordControlClose: vi.fn(),
+    recordPostProofClose: vi.fn(),
     recordSpliceClose: vi.fn()
   } satisfies RelayRuntimeObserver
   const registry = new HostSessionRegistry(
@@ -218,7 +194,6 @@ function createRegistry(
     registry,
     activate,
     acquireActivity,
-    renewControlActivity,
     renewControlActivities,
     releaseActivity,
     observer
@@ -379,10 +354,7 @@ describe('host session cleanup races', () => {
     })!
     session.activeSplices.set('conn-a', () => session.activeSplices.delete('conn-a'))
 
-    // POST /v1/admin/drain has no idempotency guard, and SIGTERM then SIGINT both
-    // reach drain(), so a retry re-sends to every session. It must re-arm the pending
-    // teardown rather than stack a second one: across a paced cell that is 800 orphaned
-    // timers per retry, each one holding the loop open for the rest of the window.
+    // Drain retries/signals must re-arm, not stack teardown; a paced 800-host cell otherwise leaks 800 timers holding exit open each retry.
     registry.drain(0)
     const scheduled = vi.getTimerCount()
     registry.drain(0)
@@ -391,8 +363,7 @@ describe('host session cleanup races', () => {
     expect(vi.getTimerCount()).toBe(scheduled)
     vi.advanceTimersByTime(1)
 
-    // Asserting registry state, not the log line: FakeSocket closes synchronously, so
-    // the line is already emitted before the second teardown runs and would pass either way.
+    // Check state: synchronous FakeSocket close logs before second teardown, so log-only assertions miss corruption.
     expect(session.closingCounts).toEqual({ splices: 1, pending: 0 })
   })
 
@@ -582,6 +553,62 @@ describe('host session cleanup races', () => {
     )
   })
 
+  // c34 ghost seat came from activation outliving orphan grace and reviving a removed session outside the map.
+  it('refuses a rebind whose session left the map while its activation was in flight', async () => {
+    const blocked = deferred<string>()
+    const activateControl = vi
+      .fn<RelayAssignmentStore['activateControl']>()
+      .mockResolvedValueOnce('control:production-gce-c3:1')
+      .mockReturnValueOnce(blocked.promise)
+    const { registry, activate, releaseActivity } = createRegistry(activateControl)
+    const key = { userId: identity.sub, relayHostId: identity.relayHostId }
+    const originalSocket = new FakeSocket()
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: FakeSocket implements the registry's WebSocket event and lifecycle surface.
+    await activate(originalSocket as unknown as WebSocket, identity, null, 1, false, 1)
+    const original = registry.get(key)
+    originalSocket.close(1006, 'network reset')
+    expect(original?.state).toBe('orphaned')
+
+    const rebindSocket = new FakeSocket()
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: FakeSocket implements the registry's WebSocket event and lifecycle surface.
+    const rebinding = activate(rebindSocket as unknown as WebSocket, identity, original, 1, true, 1)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(activateControl).toHaveBeenCalledTimes(2)
+    // The grace runs out while the database answers slowly.
+    await vi.advanceTimersByTimeAsync(CONTROL_CONTINUITY_LIMITS.orphanGraceMs)
+    expect(registry.get(key)).toBeNull()
+    blocked.resolve('control:production-gce-c3:1')
+    await rebinding
+
+    expect(rebindSocket.close).toHaveBeenCalledWith(RELAY_CLOSE_CODE.PEER_DROPPED, 'control activation superseded')
+    expect(registry.get(key)).toBeNull()
+    expect(original?.state).toBe('closed')
+    const page = registry.seatFeed(null)
+    expect('full' in page && page.full).toEqual([])
+    expect(releaseActivity).toHaveBeenCalledWith(key, 'control:production-gce-c3:1')
+  })
+
+  // Two hellos proven against the same empty map could take the same generation; an activation at
+  // a generation this host already had here is refused, so a late leave cannot share it.
+  it('refuses a fresh activation at a generation this host already had here', async () => {
+    const activateControl = vi
+      .fn<RelayAssignmentStore['activateControl']>()
+      .mockResolvedValue('control:production-gce-c3:2')
+    const { registry, activate } = createRegistry(activateControl)
+    const key = { userId: identity.sub, relayHostId: identity.relayHostId }
+    const first = new FakeSocket()
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: FakeSocket implements the registry's WebSocket event and lifecycle surface.
+    await activate(first as unknown as WebSocket, identity, null, 2, false, 1)
+    first.close(1006, 'network reset')
+    await vi.advanceTimersByTimeAsync(CONTROL_CONTINUITY_LIMITS.orphanGraceMs)
+    expect(registry.get(key)).toBeNull()
+    const reused = new FakeSocket()
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: FakeSocket implements the registry's WebSocket event and lifecycle surface.
+    await activate(reused as unknown as WebSocket, identity, null, 2, false, 1)
+    expect(reused.close).toHaveBeenCalledWith(RELAY_CLOSE_CODE.PEER_DROPPED, 'control activation superseded')
+    expect(registry.get(key)).toBeNull()
+  })
+
   it('skips a closed queued control so its live retry avoids abandoned database work', async () => {
     const stalled = deferred<string>()
     const activateControl = vi
@@ -696,7 +723,7 @@ describe('host session cleanup races', () => {
       .fn<RelayAssignmentStore['activateControl']>()
       .mockResolvedValueOnce('control:production-gce-c3:1')
       .mockReturnValueOnce(blocked.promise)
-    const { registry, activate, renewControlActivity, releaseActivity } =
+    const { registry, activate, renewControlActivities, releaseActivity } =
       createRegistry(activateControl)
     const originalSocket = new FakeSocket()
     await activate(originalSocket as unknown as WebSocket, identity, null, 1, false, 1)
@@ -726,7 +753,7 @@ describe('host session cleanup races', () => {
       'relay draining'
     )
     expect(registry.get({ userId: identity.sub, relayHostId: identity.relayHostId })).toBeNull()
-    expect(renewControlActivity).not.toHaveBeenCalled()
+    expect(renewControlActivities).not.toHaveBeenCalled()
     expect(releaseActivity).toHaveBeenCalledWith(
       { userId: identity.sub, relayHostId: identity.relayHostId },
       'control:production-gce-c3:2'
@@ -770,7 +797,7 @@ describe('host session cleanup races', () => {
       .fn<RelayAssignmentStore['activateControl']>()
       .mockResolvedValueOnce('control:production-gce-c3:1')
       .mockResolvedValueOnce('control:production-gce-c3:2')
-    const { registry, activate, renewControlActivity } = createRegistry(activateControl)
+    const { registry, activate, renewControlActivities } = createRegistry(activateControl)
     const originalSocket = new FakeSocket()
     await activate(originalSocket as unknown as WebSocket, identity, null, 1, false, 1)
     const original = registry.get({
@@ -783,14 +810,14 @@ describe('host session cleanup races', () => {
     await vi.advanceTimersByTimeAsync(15_000)
     await closeRenewalWindow()
 
-    expect(renewControlActivity).toHaveBeenCalledOnce()
-    expect(renewControlActivity).toHaveBeenCalledWith(
-      { userId: identity.sub, relayHostId: identity.relayHostId },
+    expect(renewControlActivities).toHaveBeenCalledOnce()
+    expect(renewControlActivities).toHaveBeenCalledWith([
       expect.objectContaining({
+        identity: { userId: identity.sub, relayHostId: identity.relayHostId },
         activityId: 'control:production-gce-c3:2',
         cellId: 'production-gce-c3'
       })
-    )
+    ])
     registry.drain(0)
     vi.advanceTimersByTime(0)
   })
@@ -800,17 +827,17 @@ describe('host session cleanup races', () => {
     const oldSocket = new FakeSocket()
     await h.activate(oldSocket as unknown as WebSocket, identity, null, 1, false, 1)
     const session = h.registry.get({ userId: identity.sub, relayHostId: identity.relayHostId })!
-    let reject!: (error: Error) => void
-    h.renewControlActivity.mockReturnValueOnce(
-      new Promise<void>((_, fail) => {
-        reject = fail
+    let finish!: (outcomes: ControlRenewalOutcome[]) => void
+    h.renewControlActivities.mockReturnValueOnce(
+      new Promise<ControlRenewalOutcome[]>((resolve) => {
+        finish = resolve
       })
     )
     await vi.advanceTimersByTimeAsync(15_000)
     await closeRenewalWindow()
     const replacement = new FakeSocket()
     await h.activate(replacement as unknown as WebSocket, identity, session, 1, true, 1)
-    reject(new Error('activity_cell_not_authoritative'))
+    finish(['activity_cell_not_authoritative'])
     await vi.advanceTimersByTimeAsync(0)
     expect(replacement.close).not.toHaveBeenCalled()
     expect(session.socket).toBe(replacement)
@@ -822,7 +849,7 @@ describe('host session cleanup races', () => {
     const socket = new FakeSocket()
     await h.activate(socket as unknown as WebSocket, identity, null, 1, false, 1)
     const session = h.registry.get({ userId: identity.sub, relayHostId: identity.relayHostId })!
-    h.renewControlActivity.mockRejectedValueOnce(new Error('control_activity_not_found'))
+    h.renewControlActivities.mockResolvedValueOnce(['control_activity_not_found'])
     let reject!: (error: Error) => void
     h.acquireActivity.mockReturnValueOnce(
       new Promise<void>((_, fail) => {
@@ -848,7 +875,7 @@ describe('host session cleanup races', () => {
     const activateControl = vi
       .fn<RelayAssignmentStore['activateControl']>()
       .mockResolvedValue('control:production-gce-c3:1')
-    const { registry, activate, renewControlActivity } = createRegistry(activateControl)
+    const { registry, activate, renewControlActivities } = createRegistry(activateControl)
     const socket = new FakeSocket()
     const activatedAt = Date.now()
     await activate(socket as unknown as WebSocket, identity, null, 1, false, 1)
@@ -861,9 +888,9 @@ describe('host session cleanup races', () => {
 
     const pings = socket.send.mock.calls.filter((call) => String(call[0]).includes('"ping"'))
     expect(pings).toHaveLength(4)
-    expect(renewControlActivity).toHaveBeenCalledTimes(2)
-    const firstExpiry = Number(renewControlActivity.mock.calls[0]![1].expiresAt)
-    const secondExpiry = Number(renewControlActivity.mock.calls[1]![1].expiresAt)
+    expect(renewControlActivities).toHaveBeenCalledTimes(2)
+    const firstExpiry = Number(renewControlActivities.mock.calls[0]![0][0]!.expiresAt)
+    const secondExpiry = Number(renewControlActivities.mock.calls[1]![0][0]!.expiresAt)
     expect(firstExpiry).toBe(
       activatedAt +
         RELAY_PROTOCOL_LIMITS.controlPingIntervalMs +
@@ -879,18 +906,18 @@ describe('host session cleanup races', () => {
     const activateControl = vi
       .fn<RelayAssignmentStore['activateControl']>()
       .mockResolvedValue('control:production-gce-c3:1')
-    const { registry, activate, renewControlActivity } = createRegistry(activateControl)
-    renewControlActivity.mockRejectedValueOnce(new Error('pool timeout'))
+    const { registry, activate, renewControlActivities } = createRegistry(activateControl)
+    renewControlActivities.mockRejectedValueOnce(new Error('pool timeout'))
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
     const socket = new FakeSocket()
     try {
       await activate(socket as unknown as WebSocket, identity, null, 1, false, 1)
       await vi.advanceTimersByTimeAsync(RELAY_PROTOCOL_LIMITS.controlPingIntervalMs)
       await closeRenewalWindow()
-      expect(renewControlActivity).toHaveBeenCalledOnce()
+      expect(renewControlActivities).toHaveBeenCalledOnce()
       await vi.advanceTimersByTimeAsync(RELAY_PROTOCOL_LIMITS.controlPingIntervalMs)
       await closeRenewalWindow()
-      expect(renewControlActivity).toHaveBeenCalledTimes(2)
+      expect(renewControlActivities).toHaveBeenCalledTimes(2)
     } finally {
       warn.mockRestore()
       registry.drain(0)
@@ -902,17 +929,17 @@ describe('host session cleanup races', () => {
     const activateControl = vi
       .fn<RelayAssignmentStore['activateControl']>()
       .mockResolvedValue('control:production-gce-c3:1')
-    const { registry, activate, renewControlActivity } = createRegistry(activateControl)
-    const stalled = deferred<void>()
-    renewControlActivity.mockReturnValueOnce(stalled.promise)
+    const { registry, activate, renewControlActivities } = createRegistry(activateControl)
+    const stalled = deferred<ControlRenewalOutcome[]>()
+    renewControlActivities.mockReturnValueOnce(stalled.promise)
     const socket = new FakeSocket()
     await activate(socket as unknown as WebSocket, identity, null, 1, false, 1)
 
     await vi.advanceTimersByTimeAsync(RELAY_PROTOCOL_LIMITS.controlPingIntervalMs * 2)
     await closeRenewalWindow()
 
-    expect(renewControlActivity).toHaveBeenCalledTimes(2)
-    stalled.resolve(undefined)
+    expect(renewControlActivities).toHaveBeenCalledTimes(2)
+    stalled.resolve(['renewed'])
     await vi.advanceTimersByTimeAsync(0)
     registry.drain(0)
     vi.advanceTimersByTime(0)
@@ -922,25 +949,25 @@ describe('host session cleanup races', () => {
     const activateControl = vi
       .fn<RelayAssignmentStore['activateControl']>()
       .mockResolvedValue('control:production-gce-c3:1')
-    const { registry, activate, renewControlActivity } = createRegistry(activateControl)
-    const stalled = deferred<void>()
-    renewControlActivity.mockReturnValueOnce(stalled.promise)
+    const { registry, activate, renewControlActivities } = createRegistry(activateControl)
+    const stalled = deferred<ControlRenewalOutcome[]>()
+    renewControlActivities.mockReturnValueOnce(stalled.promise)
     const socket = new FakeSocket()
     await activate(socket as unknown as WebSocket, identity, null, 1, false, 1)
 
     await vi.advanceTimersByTimeAsync(RELAY_PROTOCOL_LIMITS.controlPingIntervalMs * 2)
     await closeRenewalWindow()
-    expect(renewControlActivity).toHaveBeenCalledTimes(2)
-    stalled.resolve(undefined)
+    expect(renewControlActivities).toHaveBeenCalledTimes(2)
+    stalled.resolve(['renewed'])
     await vi.advanceTimersByTimeAsync(0)
     await vi.advanceTimersByTimeAsync(RELAY_PROTOCOL_LIMITS.controlPingIntervalMs)
     await closeRenewalWindow()
 
-    expect(renewControlActivity).toHaveBeenCalledTimes(2)
+    expect(renewControlActivities).toHaveBeenCalledTimes(2)
     await vi.advanceTimersByTimeAsync(RELAY_PROTOCOL_LIMITS.controlPingIntervalMs)
     await closeRenewalWindow()
 
-    expect(renewControlActivity).toHaveBeenCalledTimes(3)
+    expect(renewControlActivities).toHaveBeenCalledTimes(3)
     registry.drain(0)
     vi.advanceTimersByTime(0)
   })
@@ -949,9 +976,9 @@ describe('host session cleanup races', () => {
     const activateControl = vi
       .fn<RelayAssignmentStore['activateControl']>()
       .mockResolvedValue('control:production-gce-c3:1')
-    const { registry, activate, acquireActivity, renewControlActivity } =
+    const { registry, activate, acquireActivity, renewControlActivities } =
       createRegistry(activateControl)
-    renewControlActivity.mockRejectedValueOnce(new Error('control_activity_not_found'))
+    renewControlActivities.mockResolvedValueOnce(['control_activity_not_found'])
     const socket = new FakeSocket()
     await activate(socket as unknown as WebSocket, identity, null, 1, false, 1)
 
@@ -975,9 +1002,9 @@ describe('host session cleanup races', () => {
     const activateControl = vi
       .fn<RelayAssignmentStore['activateControl']>()
       .mockResolvedValue('control:production-gce-c3:1')
-    const { registry, activate, acquireActivity, renewControlActivity } =
+    const { registry, activate, acquireActivity, renewControlActivities } =
       createRegistry(activateControl)
-    renewControlActivity.mockRejectedValueOnce(new Error('control_activity_moved'))
+    renewControlActivities.mockResolvedValueOnce(['control_activity_moved'])
     const socket = new FakeSocket()
     await activate(socket as unknown as WebSocket, identity, null, 1, false, 1)
 
@@ -994,9 +1021,9 @@ describe('host session cleanup races', () => {
     const activateControl = vi
       .fn<RelayAssignmentStore['activateControl']>()
       .mockResolvedValue('control:production-gce-c3:1')
-    const { registry, activate, acquireActivity, renewControlActivity } =
+    const { registry, activate, acquireActivity, renewControlActivities } =
       createRegistry(activateControl)
-    renewControlActivity.mockRejectedValueOnce(new Error('control_activity_not_found'))
+    renewControlActivities.mockResolvedValueOnce(['control_activity_not_found'])
     acquireActivity.mockRejectedValueOnce(new Error('activity_cell_not_authoritative'))
     const socket = new FakeSocket()
     await activate(socket as unknown as WebSocket, identity, null, 1, false, 1)
@@ -1016,8 +1043,8 @@ describe('host session cleanup races', () => {
     const activateControl = vi
       .fn<RelayAssignmentStore['activateControl']>()
       .mockResolvedValue('control:production-gce-c3:1')
-    const { registry, activate, renewControlActivity } = createRegistry(activateControl)
-    renewControlActivity.mockRejectedValueOnce(new Error('activity_cell_not_authoritative'))
+    const { registry, activate, renewControlActivities } = createRegistry(activateControl)
+    renewControlActivities.mockResolvedValueOnce(['activity_cell_not_authoritative'])
     const socket = new FakeSocket()
     await activate(socket as unknown as WebSocket, identity, null, 1, false, 1)
 
@@ -1036,7 +1063,7 @@ describe('host session cleanup races', () => {
     const activateControl = vi
       .fn<RelayAssignmentStore['activateControl']>()
       .mockResolvedValue('control:production-gce-c3:1')
-    const { registry, activate, renewControlActivity } = createRegistry(activateControl)
+    const { registry, activate, renewControlActivities } = createRegistry(activateControl)
     const socket = new FakeSocket()
     await activate(socket as unknown as WebSocket, identity, null, 1, false, 1)
     registry.drain(60_000)
@@ -1047,7 +1074,7 @@ describe('host session cleanup races', () => {
       await closeRenewalWindow()
     }
 
-    expect(renewControlActivity).toHaveBeenCalledTimes(2)
+    expect(renewControlActivities).toHaveBeenCalledTimes(2)
     expect(socket.readyState).toBe(socket.OPEN)
     vi.advanceTimersByTime(15_000)
   })
@@ -1064,7 +1091,7 @@ describe('control renewal cadence across a rebind', () => {
     const activateControl = vi
       .fn<RelayAssignmentStore['activateControl']>()
       .mockResolvedValue('control:production-gce-c3:1')
-    const { registry, activate, renewControlActivity } = createRegistry(activateControl)
+    const { registry, activate, renewControlActivities } = createRegistry(activateControl)
     const ping = RELAY_PROTOCOL_LIMITS.controlPingIntervalMs
     const socket = new FakeSocket()
     await activate(socket as unknown as WebSocket, identity, null, 1, false, 1)
@@ -1077,23 +1104,23 @@ describe('control renewal cadence across a rebind', () => {
 
     // Age the session so its attempt counter is well above zero.
     for (let tick = 0; tick < 5; tick++) await beat(socket)
-    expect(renewControlActivity).toHaveBeenCalledTimes(3)
+    expect(renewControlActivities).toHaveBeenCalledTimes(3)
 
     // The next renewal stalls and is still in flight when the control rebinds.
-    const stalled = deferred<void>()
-    renewControlActivity.mockReturnValueOnce(stalled.promise)
+    const stalled = deferred<ControlRenewalOutcome[]>()
+    renewControlActivities.mockReturnValueOnce(stalled.promise)
     for (let tick = 0; tick < 2; tick++) await beat(socket)
-    expect(renewControlActivity).toHaveBeenCalledTimes(4)
+    expect(renewControlActivities).toHaveBeenCalledTimes(4)
 
     const session = registry.get({ userId: identity.sub, relayHostId: identity.relayHostId })!
     const rebindSocket = new FakeSocket()
     await activate(rebindSocket as unknown as WebSocket, identity, session, 1, true, 1)
-    stalled.resolve(undefined)
+    stalled.resolve(['renewed'])
     await vi.advanceTimersByTimeAsync(0)
 
-    const before = renewControlActivity.mock.calls.length
+    const before = renewControlActivities.mock.calls.length
     for (let tick = 0; tick < 4; tick++) await beat(rebindSocket)
-    expect(renewControlActivity.mock.calls.length - before).toBe(2)
+    expect(renewControlActivities.mock.calls.length - before).toBe(2)
 
     registry.drain(0)
     vi.advanceTimersByTime(0)
@@ -1163,7 +1190,7 @@ describe('control lease recovery after the session is gone', () => {
       .fn<RelayAssignmentStore['activateControl']>()
       .mockResolvedValueOnce('control:production-gce-c3:1')
       .mockResolvedValueOnce('control:production-gce-c3:2')
-    const { registry, activate, acquireActivity, renewControlActivity } =
+    const { registry, activate, acquireActivity, renewControlActivities } =
       createRegistry(activateControl)
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
     try {
@@ -1172,19 +1199,19 @@ describe('control lease recovery after the session is gone', () => {
       const session = registry.get({ userId: identity.sub, relayHostId: identity.relayHostId })!
 
       // The renewal is still in flight when a newer generation takes over.
-      let failRenewal!: (error: Error) => void
-      renewControlActivity.mockReturnValueOnce(
-        new Promise<void>((_resolve, reject) => (failRenewal = reject))
+      let finishRenewal!: (outcomes: ControlRenewalOutcome[]) => void
+      renewControlActivities.mockReturnValueOnce(
+        new Promise<ControlRenewalOutcome[]>((resolve) => (finishRenewal = resolve))
       )
       await vi.advanceTimersByTimeAsync(RELAY_PROTOCOL_LIMITS.controlPingIntervalMs)
       await closeRenewalWindow()
-      expect(renewControlActivity).toHaveBeenCalledOnce()
+      expect(renewControlActivities).toHaveBeenCalledOnce()
 
       const newer = new FakeSocket()
       await activate(newer as unknown as WebSocket, identity, session, 2, false, 1)
 
       // Its release already removed the lease, so the renewal reports it missing.
-      failRenewal(new Error('control_activity_not_found'))
+      finishRenewal(['control_activity_not_found'])
       await vi.advanceTimersByTimeAsync(0)
 
       expect(acquireActivity).not.toHaveBeenCalled()
@@ -1354,6 +1381,7 @@ describe('source-owned idle cutover', () => {
       await h.registry.idleRehome(request, commit, vi.fn().mockResolvedValue('not-committed'))
     ).toEqual({ outcome })
     expect(commit).toHaveBeenCalledTimes(outcome === 'busy' ? 0 : 1)
+    await vi.advanceTimersByTimeAsync(0)
     expect(h.socket.close).toHaveBeenCalledTimes(outcome === 'busy' ? 0 : 1)
   })
   it('restarts the age when the host rebinds its control socket', async () => {
@@ -1373,6 +1401,31 @@ describe('source-owned idle cutover', () => {
     ).toEqual({ outcome: 'busy' })
     expect(commit).not.toHaveBeenCalled()
   })
+  it('closes a superseded socket whose refresh meets the cutover, not its successor', async () => {
+    const h = await source()
+    const successor = new FakeSocket()
+    h.registry.acceptControl(
+      successor as unknown as WebSocket,
+      identity,
+      undefined,
+      new Set([RELAY_HOST_CAPABILITY_IDLE_REGIONAL_REHOME])
+    )
+    successor.removeAllListeners('message')
+    await h.activate(successor as unknown as WebSocket, identity, h.session, 1, true, 1)
+    vi.setSystemTime(Date.now() + IDLE_REHOME_MIN_CONTROL_AGE_MS)
+    const commit = deferred<{ outcome: 'committed' }>()
+    const cutover = h.registry.idleRehome(
+      request,
+      vi.fn(() => commit.promise),
+      vi.fn().mockResolvedValue('not-committed')
+    )
+    h.socket.emit('message', Buffer.from(JSON.stringify({ type: 'auth-refresh', relayJwt: 'jwt' })), false)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(h.socket.close).toHaveBeenCalledWith(RELAY_CLOSE_CODE.DRAINING, 'resolve-director')
+    expect(successor.close).not.toHaveBeenCalledWith(RELAY_CLOSE_CODE.DRAINING, 'resolve-director')
+    commit.resolve({ outcome: 'committed' })
+    await cutover
+  })
   it('keeps either established client busy until both actually leave', async () => {
     const h = await source()
     h.session.activeConnIds.add('phone')
@@ -1387,6 +1440,7 @@ describe('source-owned idle cutover', () => {
     expect(
       await h.registry.idleRehome(request, commit, vi.fn().mockResolvedValue('not-committed'))
     ).toEqual({ outcome: 'committed' })
+    await vi.advanceTimersByTimeAsync(0)
     expect(h.socket.close).toHaveBeenCalledWith(RELAY_CLOSE_CODE.DRAINING, expect.any(String))
     expect(h.releaseActivity).toHaveBeenCalled()
   })
@@ -1572,11 +1626,20 @@ describe('source-owned idle cutover', () => {
         userId: identity.sub,
         relayHostId: identity.relayHostId,
         credentialKind: 'invite',
+        relayDeviceId: 'device-1',
+        tokenHash: 'invite-hash',
+        reservationId: 'reservation-1',
         leaseExpiresAt: Date.now() + 1000
       },
       attachTimer: setTimeout(() => {}, 1000),
-      credentialActivityId: null
-    } as never)
+      credentialActivityId: null,
+      phonePath: 'db',
+      timing: {
+        startedAt: Date.now(),
+        connOpenAt: Date.now(),
+        stageMs: { assignment: 0, credential: 0, activity: 0 }
+      }
+    })
     const attached = h.registry.acceptHostData(
       new FakeSocket() as unknown as WebSocket,
       'conn',
@@ -1718,18 +1781,10 @@ describe('host data attach owner lookup', () => {
     })
   }
 
-  // The pre-change implementation, kept inline as the oracle the new counts are
-  // differenced against: two inventory arrays, two independent finds.
-  function legacyOwnerLookup(
-    sessions: Map<string, HostSession>,
-    connId: string
-  ): { owner: HostSession | undefined; session: HostSession | undefined } {
-    const owner = [...sessions.values()].find((candidate) => candidate.pendingConns.has(connId))
-    const session = [...sessions.values()].find((candidate) => candidate.pendingConns.has(connId))
-    return { owner, session }
-  }
-
-  function pendingConn(client: FakeSocket, connTicket: string) {
+  function pendingConn(
+    client: FakeSocket,
+    connTicket: string
+  ): NonNullable<ReturnType<HostSession['pendingConns']['get']>> {
     return {
       connId: CONN_ID,
       connTicket,
@@ -1738,11 +1793,20 @@ describe('host data attach owner lookup', () => {
         userId: identity.sub,
         relayHostId: identity.relayHostId,
         credentialKind: 'invite',
+        relayDeviceId: 'device-1',
+        tokenHash: 'invite-hash',
+        reservationId: 'reservation-1',
         leaseExpiresAt: Date.now() + 1000
       },
       attachTimer: setTimeout(() => {}, 1000),
-      credentialActivityId: null
-    } as never
+      credentialActivityId: null,
+      phonePath: 'db',
+      timing: {
+        startedAt: Date.now(),
+        connOpenAt: Date.now(),
+        stageMs: { assignment: 0, credential: 0, activity: 0 }
+      }
+    }
   }
 
   // Every decoy holds a pending conn of its own, so each membership check the
@@ -1788,31 +1852,25 @@ describe('host data attach owner lookup', () => {
   it.each([
     {
       placement: 'first',
-      before: { visits: 2000, membership: 2 },
       after: { visits: 1, membership: 1 }
     },
     {
       placement: 'middle',
-      before: { visits: 2000, membership: 1000 },
       after: { visits: 500, membership: 500 }
     },
     {
       placement: 'last',
-      before: { visits: 2000, membership: 2000 },
       after: { visits: 1000, membership: 1000 }
     },
     {
       placement: 'absent',
-      before: { visits: 2000, membership: 2000 },
       after: { visits: 1000, membership: 1000 }
     }
   ] as const)(
     'visits the inventory once, not twice, for a $placement owner',
-    async ({ placement, before, after }) => {
+    async ({ placement, after }) => {
       const h = await attachRegistry(placement)
       expect(h.sessions.size).toBe(SESSION_COUNT)
-      const oracle = legacyOwnerLookup(h.sessions, CONN_ID)
-      const legacy = { ...h.counts }
       h.counts.visits = 0
       h.counts.membership = 0
       const host = new FakeSocket()
@@ -1826,10 +1884,7 @@ describe('host data attach owner lookup', () => {
         RELAY_CLOSE_CODE.BAD_OUTER_CREDENTIAL,
         'invalid host data ticket'
       )
-      expect(legacy).toEqual(before)
       expect({ ...h.counts }).toEqual(after)
-      expect(oracle.owner).toBe(placement === 'absent' ? undefined : h.owner)
-      expect(oracle.owner).toBe(oracle.session)
     }
   )
 
@@ -1861,7 +1916,6 @@ describe('host data attach owner lookup', () => {
   it('rejects on the earlier duplicate owner rather than the later live one', async () => {
     const h = await attachRegistry('middle')
     h.ordered[0]!.pendingConns.set(CONN_ID, pendingConn(new FakeSocket(), 'stale-ticket') as never)
-    expect(legacyOwnerLookup(h.sessions, CONN_ID).owner).toBe(h.ordered[0])
     h.counts.visits = 0
     h.counts.membership = 0
     const host = new FakeSocket()
@@ -1872,7 +1926,7 @@ describe('host data attach owner lookup', () => {
     expect(h.owner.pendingConns.has(CONN_ID)).toBe(true)
   })
 
-  it('splices the earlier duplicate owner and leaves the later one untouched', async () => {
+  it('consumes the earlier duplicate owner on basis failure and leaves the later one untouched', async () => {
     const basis = vi.fn().mockRejectedValue(new Error('basis failed'))
     const h = await attachRegistry('first', { recordConnectionBasis: basis })
     const duplicate = h.ordered[3]!
@@ -1934,6 +1988,8 @@ describe('paced drain', () => {
   it('sends every drain at once when no window is given', async () => {
     const { registry, sockets } = await connectHosts(4)
     registry.drain(0)
+    // A zero-grace drain is told by its close, once the host's release has landed.
+    await vi.advanceTimersByTimeAsync(0)
     expect(drainsSent(sockets)).toBe(4)
   })
 
@@ -1942,24 +1998,31 @@ describe('paced drain', () => {
   it('spreads the sends evenly across the window', async () => {
     const { registry, sockets } = await connectHosts(5)
     registry.drain(0, { paceWindowMs: 40_000 })
-    // The first host is sent synchronously; the last lands on the window's closing edge.
+    // Each host is told by its zero-grace close, which a timer nested in the send runs 1 ms on.
+    const advance = async (ms: number): Promise<void> => {
+      await vi.advanceTimersByTimeAsync(ms)
+      await vi.advanceTimersByTimeAsync(1)
+    }
+    // The first host is told at once; the last lands on the window's closing edge.
+    await advance(0)
     expect(drainsSent(sockets)).toBe(1)
-    await vi.advanceTimersByTimeAsync(10_000)
+    await advance(10_000)
     expect(drainsSent(sockets)).toBe(2)
-    await vi.advanceTimersByTimeAsync(20_000)
+    await advance(20_000)
     expect(drainsSent(sockets)).toBe(4)
-    await vi.advanceTimersByTimeAsync(10_000)
+    await advance(10_000)
     expect(drainsSent(sockets)).toBe(5)
   })
 
-  it('fences admission for every session before the first paced send lands', async () => {
+  it('refuses new host controls before the first paced send lands', async () => {
     const { registry, sockets } = await connectHosts(3)
     registry.drain(0, { paceWindowMs: 40_000 })
     expect(registry.isDraining()).toBe(true)
-    // A host whose drain has not been sent yet must already be non-authoritative.
+    // The fleet drain refuses newly arriving host controls immediately.
     const socket = new FakeSocket()
     registry.acceptControl(socket as unknown as WebSocket, { ...identity, sub: 'user-late' })
     expect(socket.close).toHaveBeenCalledWith(RELAY_CLOSE_CODE.DRAINING, 'relay draining')
+    await vi.advanceTimersByTimeAsync(0)
     expect(drainsSent(sockets)).toBe(1)
   })
 
@@ -1972,7 +2035,7 @@ describe('paced drain', () => {
     // Its own send at 40s plus its own 10s grace, not 10s from the drain call.
     await vi.advanceTimersByTimeAsync(39_999)
     expect(sockets[1]!.readyState).toBe(sockets[1]!.OPEN)
-    await vi.advanceTimersByTimeAsync(10_001)
+    await vi.advanceTimersByTimeAsync(1)
     expect(sockets[1]!.readyState).toBe(sockets[1]!.CLOSED)
   })
 
@@ -2005,11 +2068,244 @@ describe('paced drain', () => {
   it('lets an emergency drain supersede the sends still queued by a paced one', async () => {
     const { registry, sockets } = await connectHosts(4)
     registry.drain(0, { paceWindowMs: 40_000 })
+    await vi.advanceTimersByTimeAsync(0)
     expect(drainsSent(sockets)).toBe(1)
     registry.drain(0)
+    await vi.advanceTimersByTimeAsync(0)
     expect(drainsSent(sockets)).toBe(4)
     const sendsAfterEmergency = sockets.map((socket) => socket.send.mock.calls.length)
     await vi.advanceTimersByTimeAsync(40_000)
     expect(sockets.map((socket) => socket.send.mock.calls.length)).toEqual(sendsAfterEmergency)
+  })
+})
+
+describe('controls closed after host proof but before wiring', () => {
+  let warn: MockInstance<typeof console.warn>
+  beforeEach(() => {
+    vi.useFakeTimers()
+    warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+  })
+  afterEach(() => {
+    warn.mockRestore()
+    vi.clearAllTimers()
+    vi.useRealTimers()
+  })
+  const refusedLines = (): string[] =>
+    warn.mock.calls
+      .map((call) => String(call[0]))
+      .filter((line) => line.includes('control refused after proof'))
+
+  function expectRefusal(
+    observer: { recordPostProofClose: ReturnType<typeof vi.fn> },
+    code: number | null,
+    reason: string,
+    cause?: string
+  ): void {
+    expect(observer.recordPostProofClose).toHaveBeenCalledWith(reason)
+    const [line] = refusedLines()
+    expect(line).toContain(`host=${relayHostLogDigest(identity.relayHostId)} gen=1 app="1.4.173"`)
+    expect(line).toContain(`code=${code ?? 'none'} reason=${JSON.stringify(reason)}`)
+    if (cause) expect(line).toContain(`cause=${cause}`)
+    expect(line).not.toContain(identity.relayHostId)
+    expect(line).not.toContain(identity.sub)
+  }
+
+  it('logs an idle cutover refusal', async () => {
+    const h = createRegistry(vi.fn())
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: beginIdleWork only checks the host key's presence.
+    const idle = h.registry as unknown as { idleAttempts: Map<string, unknown> }
+    idle.idleAttempts.set(identity.relayHostId, {})
+    const socket = new FakeSocket()
+    await h.activate(socket as unknown as WebSocket, identity, null, 1, false, 1)
+    expect(socket.close).toHaveBeenCalledWith(
+      RELAY_CLOSE_CODE.WRONG_CELL,
+      'idle cutover in progress'
+    )
+    expectRefusal(h.observer, RELAY_CLOSE_CODE.WRONG_CELL, 'idle cutover in progress')
+  })
+
+  it('logs a stalled activation queue once', async () => {
+    const stalled = deferred<string>()
+    const h = createRegistry(
+      vi.fn<RelayAssignmentStore['activateControl']>().mockReturnValueOnce(stalled.promise)
+    )
+    const first = h.activate(new FakeSocket() as unknown as WebSocket, identity, null, 1, false, 1)
+    const waiting = new FakeSocket()
+    const second = h.activate(waiting as unknown as WebSocket, identity, null, 1, false, 1)
+    await Promise.resolve()
+    await Promise.resolve()
+    vi.advanceTimersByTime(30_000)
+    expectRefusal(h.observer, RELAY_CLOSE_CODE.LIMIT_EXCEEDED, 'control activation queue stalled')
+    stalled.resolve('control:production-gce-c3:1')
+    await Promise.all([first, second])
+    expect(h.observer.recordPostProofClose).toHaveBeenCalledOnce()
+  })
+
+  it('logs a superseded activation', async () => {
+    const h = createRegistry(vi.fn())
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only compared by identity against the empty session map.
+    const stale = {} as HostSession
+    await h.activate(new FakeSocket() as unknown as WebSocket, identity, stale, 1, false, 1)
+    expectRefusal(h.observer, RELAY_CLOSE_CODE.PEER_DROPPED, 'control activation superseded')
+  })
+
+  it.each([
+    { error: new Error('wrong_assignment'), cause: 'wrong_assignment' },
+    { error: Object.assign(new Error('timeout'), { code: '57014' }), cause: 'database_transient' },
+    // Assembled at runtime so the secret scanner does not read the fixture as a real URL.
+    {
+      error: new Error(`connect ${['postgres', '//user:secret@db/relay'].join(':')}`),
+      cause: 'error'
+    }
+  ])('logs a failed host-proof assignment check as $cause', async ({ error, cause }) => {
+    const h = createRegistry(
+      vi.fn<RelayAssignmentStore['activateControl']>().mockRejectedValueOnce(error)
+    )
+    await h.activate(new FakeSocket() as unknown as WebSocket, identity, null, 1, false, 1)
+    expectRefusal(
+      h.observer,
+      RELAY_CLOSE_CODE.WRONG_CELL,
+      'assignment changed during host proof',
+      cause
+    )
+    expect(refusedLines()[0]).not.toContain('secret')
+  })
+
+  it('logs a drain that lands during activation', async () => {
+    const h = createRegistry(vi.fn().mockResolvedValue('control:production-gce-c3:1'))
+    h.registry.drain(100)
+    await h.activate(new FakeSocket() as unknown as WebSocket, identity, null, 1, false, 1)
+    expectRefusal(h.observer, RELAY_CLOSE_CODE.DRAINING, 'relay draining')
+  })
+
+  it('logs a host that hangs up during activation, with no cell close code', async () => {
+    const blocked = deferred<string>()
+    const h = createRegistry(
+      vi.fn<RelayAssignmentStore['activateControl']>().mockReturnValueOnce(blocked.promise)
+    )
+    const socket = new FakeSocket()
+    const activation = h.activate(socket as unknown as WebSocket, identity, null, 1, false, 1)
+    await vi.advanceTimersByTimeAsync(0)
+    socket.close()
+    blocked.resolve('control:production-gce-c3:1')
+    await activation
+    expectRefusal(h.observer, null, 'host closed during activation')
+  })
+
+  it('logs a host that hangs up while queued, with no cell close code', async () => {
+    const stalled = deferred<string>()
+    const h = createRegistry(
+      vi
+        .fn<RelayAssignmentStore['activateControl']>()
+        .mockReturnValueOnce(stalled.promise)
+        .mockResolvedValue('control:production-gce-c3:1')
+    )
+    const first = h.activate(new FakeSocket() as unknown as WebSocket, identity, null, 1, false, 1)
+    const queued = new FakeSocket()
+    const second = h.activate(queued as unknown as WebSocket, identity, null, 1, false, 1)
+    queued.close()
+    stalled.resolve('control:production-gce-c3:1')
+    await Promise.all([first, second])
+    expectRefusal(h.observer, null, 'host closed while queued')
+  })
+
+  it('logs the hang-up, not a stall, when the queued host left before the deadline', async () => {
+    const stalled = deferred<string>()
+    const h = createRegistry(
+      vi.fn<RelayAssignmentStore['activateControl']>().mockReturnValueOnce(stalled.promise)
+    )
+    const first = h.activate(new FakeSocket() as unknown as WebSocket, identity, null, 1, false, 1)
+    const queued = new FakeSocket()
+    const second = h.activate(queued as unknown as WebSocket, identity, null, 1, false, 1)
+    await Promise.resolve()
+    await Promise.resolve()
+    queued.readyState = queued.CLOSED
+    vi.advanceTimersByTime(30_000)
+    expect(queued.close).toHaveBeenCalledWith(
+      RELAY_CLOSE_CODE.LIMIT_EXCEEDED,
+      'control activation queue stalled'
+    )
+    expectRefusal(h.observer, null, 'host closed while queued')
+    stalled.resolve('control:production-gce-c3:1')
+    await Promise.all([first, second])
+  })
+
+  it('does not log a control that was wired', async () => {
+    const h = createRegistry(vi.fn().mockResolvedValue('control:production-gce-c3:1'))
+    await h.activate(new FakeSocket() as unknown as WebSocket, identity, null, 1, false, 1)
+    expect(h.observer.recordPostProofClose).not.toHaveBeenCalled()
+    expect(refusedLines()).toEqual([])
+  })
+})
+
+describe('control error codes', () => {
+  beforeEach(() => vi.useFakeTimers())
+  afterEach(() => {
+    vi.clearAllTimers()
+    vi.useRealTimers()
+  })
+
+  async function revokeFailure(error: Error): Promise<{ sent: string[]; warned: string[] }> {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    const activateControl = vi
+      .fn<RelayAssignmentStore['activateControl']>()
+      .mockResolvedValue('control:production-gce-c3:1')
+    const { registry, activate } = createRegistry(activateControl, {
+      revoke: vi.fn().mockRejectedValue(error)
+    })
+    const socket = new FakeSocket()
+    await activate(socket as unknown as WebSocket, identity, null, 1, false, 1)
+    socket.emit(
+      'message',
+      Buffer.from(JSON.stringify({ type: 'device-revoke', reqId: 'revoke-1', relayDeviceId: 'device-1' })),
+      false
+    )
+    await vi.advanceTimersByTimeAsync(0)
+    const sent = socket.send.mock.calls.map((call) => String(call[0]))
+    const warned = warn.mock.calls.map((call) => String(call[0]))
+    warn.mockRestore()
+    registry.drain(0)
+    vi.advanceTimersByTime(0)
+    return { sent, warned }
+  }
+
+  function controlErrors(sent: string[]): unknown[] {
+    return sent
+      .map((line) => JSON.parse(line) as Record<string, unknown>)
+      .filter((message) => message.type === 'control-error')
+  }
+
+  it('never sends a database error message, which can carry the connection URL', async () => {
+    // Assembled at runtime so secret scanners do not flag a fixture URL.
+    const url = ['postgres', '://relay:', 'fake-pw', '@db.internal:5432/relay'].join('')
+    const error = Object.assign(new Error(`connect to ${url} failed: Connection terminated`), {
+      code: '08006'
+    })
+    const { sent, warned } = await revokeFailure(error)
+
+    expect(controlErrors(sent)).toEqual([
+      { type: 'control-error', reqId: 'revoke-1', code: 'database_transient' }
+    ])
+    expect(sent.join('\n')).not.toContain('fake-pw')
+    expect(warned).toContain('[orca-relay] control device-revoke failed: Error: redacted code=08006')
+    expect(warned.join('\n')).not.toContain('fake-pw')
+  })
+
+  it('maps any other unexpected message to a fixed code', async () => {
+    const { sent } = await revokeFailure(new Error('Unexpected token < in JSON'))
+
+    expect(controlErrors(sent)).toEqual([
+      { type: 'control-error', reqId: 'revoke-1', code: 'control_operation_failed' }
+    ])
+  })
+
+  it.each([
+    ['a store code', new RelayStoreError('reject-revoked'), 'reject-revoked'],
+    ['an invariant slug', new Error('authorization_expired'), 'authorization_expired']
+  ])('keeps %s on the wire', async (_kind, error, code) => {
+    const { sent, warned } = await revokeFailure(error)
+
+    expect(controlErrors(sent)).toEqual([{ type: 'control-error', reqId: 'revoke-1', code }])
+    expect(warned.join('\n')).not.toContain('control device-revoke failed')
   })
 })

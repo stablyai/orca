@@ -3,15 +3,16 @@ import { Loader2 } from 'lucide-react'
 import type { FeatureTip, FeatureTipAction } from '../../../../shared/feature-tips'
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
+import { getLocalizedFeatureTipCopy } from './feature-tip-localized-copy'
 
 function getPrimaryBusyLabel(action: FeatureTipAction): string {
   if (action === 'setup-cli') {
-    return 'Installing...'
+    return translate('auto.components.feature.tips.FeatureTipActions.installing', 'Installing...')
   }
   if (action === 'enable-session-search') {
-    return 'Turning on...'
+    return translate('auto.components.feature.tips.FeatureTipActions.turningOn', 'Turning on...')
   }
-  return 'Working...'
+  return translate('auto.components.feature.tips.FeatureTipActions.working', 'Working...')
 }
 
 export function FeatureTipActions({
@@ -22,13 +23,14 @@ export function FeatureTipActions({
   showSkip = true,
   fullWidth = false,
   primaryButtonRef,
-  label = currentTip.ctaLabel
+  label
 }: {
   currentTip: FeatureTip
   primaryBusy: boolean
   onPrimaryAction: () => void
   onSkip: () => void
   showSkip?: boolean
+  /** Fills the footer row, or what a sibling button leaves of it. */
   fullWidth?: boolean
   primaryButtonRef?: Ref<HTMLButtonElement>
   /** Overrides the tip's CTA for tips whose button changes with their state. */
@@ -43,7 +45,7 @@ export function FeatureTipActions({
       ) : null}
       <Button
         ref={primaryButtonRef}
-        className={fullWidth ? 'w-full' : undefined}
+        className={fullWidth ? 'w-full flex-1' : undefined}
         onClick={onPrimaryAction}
         disabled={primaryBusy}
       >
@@ -53,7 +55,7 @@ export function FeatureTipActions({
             {getPrimaryBusyLabel(currentTip.action)}
           </>
         ) : (
-          label
+          (label ?? getLocalizedFeatureTipCopy(currentTip).ctaLabel)
         )}
       </Button>
     </>

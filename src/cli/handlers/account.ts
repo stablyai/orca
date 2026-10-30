@@ -1,18 +1,16 @@
 import { spawn } from 'node:child_process'
-import { createHash } from 'node:crypto'
+import { assertWslDistroAllowed } from '@orca/process-host/wsl-distro-allowlist'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { delimiter, join } from 'node:path'
 import type { CommandHandler, HandlerContext } from '../dispatch'
 import { printResult } from '../format'
 import { RuntimeClientError } from '../runtime-client'
-import { stripElectronRunAsNode } from '../runtime/launch'
+import { stripElectronRunAsNode } from '../runtime/orca-app-executable'
 import { rejectRemoteSelectionFlags } from '../remote-selection-flag-rejection'
-import {
-  deleteActiveClaudeKeychainCredentialsStrict,
-  readActiveClaudeKeychainCredentialsStrict,
-  writeActiveClaudeKeychainCredentials
-} from '../../main/claude-accounts/keychain'
+import { buildWslExecArgs, buildWslLoginShellCommand } from '../../shared/wsl-login-shell-command'
+import { quotePosixShell } from '../../shared/shell-argument-quoting'
+import { isWindowsFnmDefaultAliasDir } from '../../shared/fnm-default-alias-dirs'
 import {
   getVersionManagerBinPaths,
   resolveCliCommand,
@@ -24,9 +22,13 @@ import {
   WINDOWS_BATCH_UNSAFE_CHARACTERS_LABEL
 } from '../../shared/windows-batch-spawn'
 import { stdioForWindowsInteractiveChild } from '../../shared/windows-console-input'
-import { ACCOUNT_IMPORT_RUNTIME_CAPABILITY } from '../../shared/protocol-version'
+import {
+  ACCOUNT_IMPORT_RUNTIME_CAPABILITY,
+  CLAUDE_SIGN_IN_RUNTIME_CAPABILITY
+} from '../../shared/account-runtime-capabilities'
 import type { RuntimeStatus } from '../../shared/runtime-types'
 import type {
+  ClaudeAccountSignIn,
   ClaudeRateLimitAccountsState,
   CodexRateLimitAccountsState,
   ManagedDataAccountsState
@@ -39,7 +41,6 @@ import { getWslAccountTarget } from './account-wsl-location'
 import { addDataAccount, listDataAccounts, mutateDataAccount } from './data-account-commands'
 import { formatAccountsBlock, formatDataAccounts } from './account-list-format'
 
-// Why: add returns just that provider's state; list returns the full snapshot.
 type AccountsListSnapshot = {
   opencode?: ManagedDataAccountsState
   devin?: ManagedDataAccountsState
@@ -56,16 +57,14 @@ function addAgentNodePaths(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
   const existing = new Set(currentEntries)
   const missing = getVersionManagerBinPaths().filter((entry) => !existing.has(entry))
   if (missing.length > 0) {
-    env[pathKey] = [...missing, ...currentEntries].join(delimiter)
+    const append = missing.filter(isWindowsFnmDefaultAliasDir)
+    const prepend = missing.filter((entry) => !append.includes(entry))
+    env[pathKey] = [...prepend, ...currentEntries, ...append].join(delimiter)
   }
   return env
 }
 
-/**
- * Runs the real agent login attached to the user's terminal so the OAuth
- * URL/device-code prompt is visible and the code can be pasted back — the desktop
- * GUI flow drives this via a browser Orca can't reach on a headless host.
- */
+/** Attach login to the terminal so device-code authentication works on headless hosts. */
 async function runAgentLoginInTerminal(
   command: string,
   args: string[],
@@ -80,8 +79,6 @@ async function runAgentLoginInTerminal(
     try {
       ;({ spawnCmd, spawnArgs } = getSpawnArgsForWindows(resolvedCommand, args))
     } catch (error) {
-      // Why: the bare sentinel message reaches the user verbatim otherwise, with
-      // nothing naming the path or the characters that made it unspawnable.
       rejectPromise(
         error instanceof UnsafeWindowsBatchArgumentsError
           ? new RuntimeClientError(
@@ -94,19 +91,22 @@ async function runAgentLoginInTerminal(
       )
       return
     }
-    // Why paired after the seed: addAgentNodePaths prepends the *newest* version
-    // manager bin, which is not necessarily where this CLI lives. Pairing last puts
-    // the CLI's own node in front of that seed (stablyai/orca#10932).
+    // Put the CLI's own Node ahead of newer version-manager bins to keep the command/runtime pair intact.
     const env = withCliRuntimeOnPath(
       resolvedCommand,
       addAgentNodePaths({ ...stripElectronRunAsNode(process.env), ...extraEnv })
     )
+    try {
+      assertWslDistroAllowed(spawnCmd, spawnArgs)
+    } catch (error) {
+      rejectPromise(error)
+      return
+    }
     const consoleStdio = stdioForWindowsInteractiveChild(json)
     let child: ReturnType<typeof spawn>
     try {
       child = spawn(spawnCmd, spawnArgs, {
-        // Why: JSON mode reserves stdout for the response envelope while keeping
-        // the interactive login attached to the user's terminal via stderr.
+        // Reserve stdout for JSON; keep interactive login on the terminal via stderr.
         stdio: consoleStdio.stdio,
         env
       })
@@ -140,85 +140,56 @@ async function runAgentLoginInTerminal(
   })
 }
 
-async function cleanupClaudeLoginArtifacts(
-  configDir: string,
-  legacyCredentials: string | null,
-  restoreLegacyCredentials: boolean
-): Promise<void> {
-  const errors: unknown[] = []
-  if (process.platform === 'darwin') {
-    try {
-      await deleteActiveClaudeKeychainCredentialsStrict(configDir)
-    } catch (error) {
-      errors.push(error)
-    }
-    if (restoreLegacyCredentials) {
-      try {
-        await (legacyCredentials
-          ? writeActiveClaudeKeychainCredentials(legacyCredentials)
-          : deleteActiveClaudeKeychainCredentialsStrict())
-      } catch (error) {
-        errors.push(error)
-      }
-    }
-  }
-  try {
-    rmSync(configDir, { recursive: true, force: true })
-  } catch (error) {
-    errors.push(error)
-  }
-  if (errors.length > 0) {
-    throw new AggregateError(errors, 'Failed to clean up Claude login artifacts.')
-  }
-}
-
-/** Logs into a Claude account in a temp config dir, then registers it with the local runtime. */
 async function addClaudeAccount({ client, cwd, json }: HandlerContext): Promise<void> {
-  const configDir = mkdtempSync(join(tmpdir(), 'orca-account-add-claude-'))
+  const { result: signIn } = await client.call<ClaudeAccountSignIn>(
+    'accounts.beginClaudeSignIn',
+    getWslAccountTarget(cwd) ?? {},
+    { timeoutMs: 300_000 }
+  )
   const session: InteractiveLoginSession = {
     child: null,
     registering: false,
     terminationPromise: null
   }
-  let legacyCredentials: string | null = null
-  let restoreLegacyCredentials = false
   const result = await withInteractiveLoginCleanup(
     session,
+    // Cancel cleans abandoned folders and preserves registered accounts; older hosts may lack the method.
     async () => {
-      await cleanupClaudeLoginArtifacts(configDir, legacyCredentials, restoreLegacyCredentials)
+      const { accountId, runtime, wslDistro } = signIn
+      await client
+        .call('accounts.cancelClaudeSignIn', { accountId, runtime, wslDistro })
+        .catch((error: unknown) => console.warn('[account] Could not clean up sign-in:', error))
     },
     async () => {
-      if (process.platform === 'darwin') {
-        legacyCredentials = await readActiveClaudeKeychainCredentialsStrict()
-        restoreLegacyCredentials = true
+      if (signIn.runtime === 'wsl' && signIn.wslDistro) {
+        const login = `exec env CLAUDE_CONFIG_DIR=${quotePosixShell(signIn.configDir)} claude auth login`
+        await runAgentLoginInTerminal(
+          'wsl.exe',
+          buildWslExecArgs(signIn.wslDistro, ['/bin/sh', '-c', buildWslLoginShellCommand(login)]),
+          {},
+          json,
+          session
+        )
+      } else {
+        await runAgentLoginInTerminal(
+          'claude',
+          ['auth', 'login'],
+          { CLAUDE_CONFIG_DIR: signIn.configDir },
+          json,
+          session
+        )
       }
-      await runAgentLoginInTerminal(
-        'claude',
-        ['auth', 'login', '--claudeai'],
-        {
-          CLAUDE_CONFIG_DIR: configDir
-        },
-        json,
-        session
-      )
       session.registering = true
-      return client.call<ClaudeRateLimitAccountsState>('accounts.addClaudeFromConfigDir', {
-        configDir,
-        ...getWslAccountTarget(cwd),
-        ...(process.platform === 'darwin'
-          ? {
-              previousLegacyCredentialsSha256: legacyCredentials
-                ? createHash('sha256').update(legacyCredentials).digest('hex')
-                : null
-            }
-          : {})
-      })
+      return client.call<ClaudeRateLimitAccountsState>(
+        'accounts.finishClaudeSignIn',
+        { accountId: signIn.accountId, runtime: signIn.runtime, wslDistro: signIn.wslDistro },
+        { timeoutMs: 300_000 }
+      )
     }
   )
   printResult(result, json, (state) => formatAccountsBlock('Claude', state))
 }
 
-/** Logs into a Codex account in a temp CODEX_HOME, then registers it with the local runtime. */
 async function addCodexAccount({ client, cwd, json }: HandlerContext): Promise<void> {
   const codexHome = mkdtempSync(join(tmpdir(), 'orca-account-add-codex-'))
   const session: InteractiveLoginSession = {
@@ -232,8 +203,7 @@ async function addCodexAccount({ client, cwd, json }: HandlerContext): Promise<v
       rmSync(codexHome, { recursive: true, force: true })
     },
     async () => {
-      // Why: plain OAuth binds a loopback callback the user's browser cannot reach
-      // on a headless/SSH host; device auth is explicitly designed for this flow.
+      // Device auth works over SSH where the browser cannot reach the host's loopback OAuth callback.
       await runAgentLoginInTerminal(
         'codex',
         ['login', '--device-auth'],
@@ -251,13 +221,6 @@ async function addCodexAccount({ client, cwd, json }: HandlerContext): Promise<v
   printResult(result, json, (state) => formatAccountsBlock('Codex', state))
 }
 
-/**
- * Rejects the runtime-selector flags instead of ignoring them. shouldIgnoreRemoteSelection
- * pins account commands to the local runtime, so honoring `--environment homelab`
- * silently would target the laptop rather than the host the user named — the exact
- * mistake this feature exists to avoid. A `--help` note does not reach someone who
- * already typed the flag.
- */
 function rejectAccountRemoteSelectionFlags(ctx: HandlerContext, command: string): void {
   rejectRemoteSelectionFlags(
     ctx.flags,
@@ -265,9 +228,14 @@ function rejectAccountRemoteSelectionFlags(ctx: HandlerContext, command: string)
   )
 }
 
-async function assertAccountImportSupported({ client }: HandlerContext): Promise<void> {
+async function assertAccountImportSupported(
+  { client }: HandlerContext,
+  agent: 'claude' | 'codex'
+): Promise<void> {
   const status = await client.call<RuntimeStatus>('status.get')
-  if (!status.result.capabilities?.includes(ACCOUNT_IMPORT_RUNTIME_CAPABILITY)) {
+  const capability =
+    agent === 'claude' ? CLAUDE_SIGN_IN_RUNTIME_CAPABILITY : ACCOUNT_IMPORT_RUNTIME_CAPABILITY
+  if (!status.result.capabilities?.includes(capability)) {
     throw new RuntimeClientError(
       'incompatible_runtime',
       'The running Orca runtime is too old to add accounts from the CLI. Update or restart Orca and try again.'
@@ -275,12 +243,10 @@ async function assertAccountImportSupported({ client }: HandlerContext): Promise
   }
 }
 
-/** CLI handlers for managed account enrollment and listing. */
 export const ACCOUNT_HANDLERS: Record<string, CommandHandler> = {
   'account add': async (ctx) => {
     const agentFlag = ctx.flags.get('agent')
-    // Why: a valueless `--agent` parses as boolean true; defaulting it to claude
-    // would silently run a full OAuth login for the provider the user did not ask for.
+    // A valueless flag is true; never silently default it to a different provider's OAuth flow.
     if (agentFlag !== undefined && typeof agentFlag !== 'string') {
       throw new RuntimeClientError(
         'invalid_argument',
@@ -299,8 +265,8 @@ export const ACCOUNT_HANDLERS: Record<string, CommandHandler> = {
       await addDataAccount(ctx, agent, runAgentLoginInTerminal)
       return
     }
-    // Why: fail on runtime version skew before burning a full OAuth round trip.
-    await assertAccountImportSupported(ctx)
+    // Check runtime support before spending an OAuth round trip.
+    await assertAccountImportSupported(ctx, agent)
     await ctx.client.call('accounts.list', { refreshUsage: false })
     await (agent === 'claude' ? addClaudeAccount(ctx) : addCodexAccount(ctx))
   },
@@ -312,8 +278,7 @@ export const ACCOUNT_HANDLERS: Record<string, CommandHandler> = {
       return
     }
     const { client, json } = ctx
-    // Why: this command renders no usage numbers, so skip the forced provider
-    // refresh — it is one serial network round-trip per managed account.
+    // Listing shows no usage, so avoid a serial provider refresh for every account.
     const result = await client.call<AccountsListSnapshot>('accounts.list', {
       refreshUsage: false
     })

@@ -1,7 +1,5 @@
 #!/usr/bin/env node
-// Benchmarks the production terminal byte-measurement exports at their real budgets: the output
-// batcher push and the snapshot budget scan. Every scenario asserts whether production invoked
-// Buffer.byteLength, so implementation drift cannot preserve stale speedup claims.
+// Measure production batcher/snapshot byte budgets; assert Buffer.byteLength branch use per fixture so implementation drift cannot preserve stale wins.
 import { spawnSync } from 'node:child_process'
 import { performance } from 'node:perf_hooks'
 import fs from 'node:fs'
@@ -45,7 +43,10 @@ function readSource(relative) {
   return fs.readFileSync(path.join(ROOT, relative), 'utf8')
 }
 
-const TERMINAL_SOURCE = readSource('src/main/runtime/rpc/methods/terminal.ts')
+const BATCH_SOURCE = readSource('src/main/runtime/rpc/methods/terminal/terminal-output-batcher.ts')
+const SNAPSHOT_SOURCE = readSource(
+  'src/main/runtime/rpc/methods/terminal/terminal-snapshot-publication.ts'
+)
 
 function requireCallForm(source, needle, label) {
   if (!source.includes(needle)) {
@@ -68,19 +69,25 @@ const {
 )
 
 const REQUESTED_SNAPSHOT_BYTE_BUDGET = (() => {
-  const match = /const REQUESTED_SNAPSHOT_BYTE_BUDGET = ([^\n]+)/.exec(TERMINAL_SOURCE)
+  const match = /const REQUESTED_SNAPSHOT_BYTE_BUDGET = ([^\n]+)/.exec(SNAPSHOT_SOURCE)
   if (!match) {
-    throw new Error('terminal.ts is stale: REQUESTED_SNAPSHOT_BYTE_BUDGET is gone')
+    throw new Error(
+      'terminal-snapshot-publication.ts is stale: REQUESTED_SNAPSHOT_BYTE_BUDGET is gone'
+    )
   }
   return Number(new Function(`return (${match[1].trim()})`)())
 })()
 
-requireCallForm(TERMINAL_SOURCE, 'measureTerminalStreamByteLength(data, {', 'terminal.ts')
-requireCallForm(TERMINAL_SOURCE, 'stopAfterBytes: remainingBudget', 'terminal.ts')
 requireCallForm(
-  TERMINAL_SOURCE,
+  BATCH_SOURCE,
+  'measureTerminalStreamByteLength(data, {',
+  'terminal-output-batcher.ts'
+)
+requireCallForm(BATCH_SOURCE, 'stopAfterBytes: remainingBudget', 'terminal-output-batcher.ts')
+requireCallForm(
+  SNAPSHOT_SOURCE,
   'terminalStreamByteLengthExceeds(data, REQUESTED_SNAPSHOT_BYTE_BUDGET)',
-  'terminal.ts'
+  'terminal-snapshot-publication.ts'
 )
 
 const nativeByteLength = Buffer.byteLength
@@ -97,12 +104,10 @@ function runWithNativeCallCount(fn) {
   }
 }
 
-// ---- OLD ARM: the production implementation terminal.ts called before this change.
 const legacyMeasure = measureClipboardTextByteLength
 const legacyExceeds = (data, maxBytes) =>
   measureClipboardTextByteLength(data, { stopAfterBytes: maxBytes }).exceededLimit
 
-// ---- Fixtures. Deterministic, seeded, and varied per sample so V8 cannot hoist.
 function mulberry32(seed) {
   let state = seed >>> 0
   return () => {
@@ -114,8 +119,7 @@ function mulberry32(seed) {
   }
 }
 
-// Realistic agent-TUI output: mostly ASCII with SGR runs, box drawing, and emoji status
-// glyphs, plus a per-sample marker so no two measured strings are identical.
+// Model ASCII/SGR/box-drawing/emoji TUI output with distinct per-sample marker to resist hoisting.
 function makeTerminalText(codeUnits, sampleId) {
   const random = mulberry32(sampleId * 2654435761)
   const lines = [
@@ -152,9 +156,7 @@ function makeTerminalTextUnderBytes(byteBudget, sampleId) {
   return text
 }
 
-// The TRUE adversary for the exceeds gate: stay at the code-unit cap so `length > maxBytes`
-// cannot short-circuit, but pack 3-byte BMP scalars so the legacy scan bails out after only a
-// THIRD of the string while Buffer.byteLength still walks all of it.
+// Stay at code-unit cap with 3-byte BMP scalars: legacy exits after one-third while Buffer.byteLength scans entire string.
 function makeEarlyTripText(byteBudget, sampleId) {
   const tripUnits = Math.ceil((byteBudget + 1) / 3)
   const marker = String.fromCharCode(0x4e00 + (sampleId % 4096))
@@ -172,9 +174,7 @@ function consume(value) {
   resultChecksum = Math.imul(resultChecksum ^ (value | 0), 16777619) >>> 0
 }
 
-// Small inputs are far below timer resolution, so batch them: build `repeats` distinct
-// samples, time the whole loop, and report per-call cost. Consuming the running total
-// inside the timed region keeps V8 from hoisting the calls out.
+// Batch distinct tiny inputs below timer resolution; consume total inside timed region to prevent hoisting.
 function runScenario(scenario) {
   const repeats = scenario.repeats ?? 1
   const samples = { legacy: [], next: [] }
@@ -233,8 +233,7 @@ const measurementEqual = (a, b) =>
 const measurementChecksum = (m) => m.byteLength + (m.exceededLimit ? 1 : 0)
 const booleanChecksum = (value) => (value ? 1 : 0)
 
-// Every scenario states which production branch it expects. Native fixtures require exactly one
-// Buffer.byteLength call per input; fallback fixtures require none.
+// Require one Buffer.byteLength call for native fixtures and none for fallback, pinning actual production branch.
 function requireBranch(expected) {
   return (inputCount, calls) => {
     const expectedCalls = expected === 'nativeFastPath' ? inputCount : 0
@@ -295,10 +294,7 @@ const scenarios = [
       }
     }
   ),
-  // TRUE WORST CASE for the batcher push. The guard only takes the native count when
-  // length*3 <= stopAfterBytes, which PROVES the limit cannot trip, so the fast path can never
-  // pay for both a Buffer.byteLength and a scan. What is left is the shape where the native
-  // call replaces the fewest scan iterations: a chunk sitting just above the code-unit floor.
+  // Worst native-push case sits just above code-unit floor, replacing fewest scan iterations; length*3<=budget prevents paying both native count and fallback scan.
   batchScenario(
     `batcher push ${MIN_NATIVE_BYTE_LENGTH_CODE_UNITS}B (floor)`,
     (sampleId) => makeInteractiveText(MIN_NATIVE_BYTE_LENGTH_CODE_UNITS, sampleId),
@@ -322,9 +318,7 @@ const scenarios = [
       }
     }
   ),
-  // TRUE WORST CASE for the boolean gate: at the code-unit cap so `length > maxBytes` cannot
-  // short-circuit, but 3-byte scalars let the legacy scan bail out a THIRD of the way in while
-  // Buffer.byteLength still walks the whole string. This is where the new arm can actually lose.
+  // Worst boolean-gate case holds code-unit cap with 3-byte scalars: legacy exits at one-third but native count traverses all and can lose.
   gateScenario(
     'snapshot gate early-trip',
     REQUESTED_SNAPSHOT_BYTE_BUDGET,
@@ -387,9 +381,7 @@ for (const scenario of scenarios) {
   )
 }
 
-// Small-chunk sweep across real interactive PTY write sizes. The floor makes everything below
-// MIN_NATIVE_BYTE_LENGTH_CODE_UNITS byte-identical to the legacy scan, so those rows must land
-// at ~1.00x; anything materially below that is a regression the change would be shipping.
+// Sweep real interactive write sizes: below native floor path equals legacy, so materially sub-1x timings signal regression.
 {
   console.log(
     `\nbatcher push small-chunk sweep (stopAfterBytes=${TERMINAL_OUTPUT_BATCH_MAX_BYTES}):`

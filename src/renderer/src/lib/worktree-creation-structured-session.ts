@@ -3,13 +3,13 @@ import { activateAndRevealWorktree, type ActivateAndRevealResult } from '@/lib/w
 import { adoptAgentSessionLaunchVerdict } from '@/lib/agent-session-launch-plan'
 import type { AgentLaunchRoute } from '@/lib/agent-launch-routing'
 import type { WorktreeCreationRequest } from '@/lib/pending-worktree-creation'
-import { beginStructuredAgentSessionProvisionalLaunch } from '@/lib/structured-agent-session-provisional-tab'
+import { beginStructuredAgentSessionProvisionalLaunch } from '@/lib/agent-session/structured-agent-session-provisional-tab'
 import type { StructuredLaunchTerminal } from '@/lib/structured-agent-session-launch-admission'
 import { buildWorktreeCreationStartupOpt } from '@/lib/worktree-creation-flow-startup'
 import { ensureWebRuntimeWorktreeTerminalAfterWake } from '@/lib/web-runtime-worktree-terminal-after-wake'
 import { ensureWorktreeHasInitialTerminal } from '@/lib/worktree-initial-terminal-seeding'
 import { mountCreatedWorktreeStartupTabsInBackground } from '@/lib/worktree-creation-background-mount'
-import type { RuntimeClientTarget } from '@/runtime/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 
 export type WorktreeCreationStructuredSessionResult = {
   accepted: boolean
@@ -29,11 +29,7 @@ type LaunchStructuredWorktreeSessionArgs = {
   primaryTabId: string | null
 }
 
-/**
- * The host's "no" to a create the user moved away from opens the agent terminal the way a
- * background terminal create does: in place, without selecting the workspace (#23974). A create the
- * user is still watching keeps the default, which opens it as a new agent tab there.
- */
+/** Host-declined chats keep background creates in place without navigation (#23974); still-visible creates use normal agent-tab fallback. */
 function openBackgroundDeclinedTerminal(
   args: LaunchStructuredWorktreeSessionArgs,
   host: RuntimeClientTarget
@@ -79,9 +75,7 @@ export async function launchStructuredWorktreeSession(
   if (isCancelled()) {
     return { ...settled, cancelled: true, activation, primaryTabId }
   }
-  // Why: the composer decided route and delivery mode before the worktree existed, and the request
-  // carries that verdict in renderer memory for the life of the create; re-entering with it is what
-  // keeps a retry from re-resolving against a host that has changed since.
+  // Reuse composer-fixed route/delivery through retries; later host changes must not re-resolve this create.
   const plan = adoptAgentSessionLaunchVerdict({
     route: args.agentLaunchRoute,
     // One create is one user action: a retry of it re-delivers the same request.
@@ -107,15 +101,15 @@ export async function launchStructuredWorktreeSession(
         ? {}
         : { onHostDeclined: (host) => openBackgroundDeclinedTerminal(args, host) }),
       beforeOpen: () => {
-        // Why: cancellation can arrive through the launch signal while reveal is running, before
-        // the pending-creation store snapshot has caught up.
+        // Launch cancellation can beat pending-store updates during async reveal; check the signal too.
         if (abandoned.signal.aborted || isCancelled()) {
           return false
         }
         if (args.shouldActivateOnCompletion && !activation) {
           try {
             activation = activateAndRevealWorktree(args.worktreeId, {
-              providesInitialSurface: true
+              providesInitialSurface: true,
+              worktreeCreationId: args.creationId
             })
           } catch (error) {
             // Why: without a revealed workspace the provisional tab has no visible owner.
@@ -136,8 +130,7 @@ export async function launchStructuredWorktreeSession(
       primaryTabId = launch.tab?.id ?? primaryTabId
     }
   } catch (error) {
-    // Why: nothing awaits this creation's caller, so an escaped throw would strand the panel
-    // mid-create.
+    // Contain this fire-and-forget caller’s errors or the panel remains mid-create.
     console.error('worktree create: structured chat tab failed to open', args.worktreeId, error)
     return { ...settled, activation, primaryTabId }
   } finally {

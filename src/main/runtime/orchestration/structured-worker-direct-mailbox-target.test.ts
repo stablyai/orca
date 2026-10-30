@@ -1,5 +1,10 @@
+import {
+  agentSessionLeaseFixture,
+  agentSessionRecordFixture
+} from '../../../shared/agent-session-record.test-fixture'
+import { agentSessionConversationView } from '../../../shared/agent-session-conversation-view'
+import type { AgentSessionLease } from '../../../shared/agent-session-record'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 
 const hostRef: { current: unknown } = { current: null }
 
@@ -7,8 +12,7 @@ vi.mock('../../native-chat/agent-session-wire/structured-agent-session-registry'
   getStructuredAgentSessionHost: () => hostRef.current
 }))
 
-const { OrcaRuntimeWithGetPtyRecordForPaneKey } =
-  await import('../orca-runtime-get-pty-record-for-pane-key')
+const { OrcaRuntimeWithGetPtyRecordForPaneKey } = await import('./terminal-pane-mail-routing')
 const {
   mintStructuredWorkerHandle,
   mintStructuredWorkerPaneKey,
@@ -19,22 +23,27 @@ const {
 const SESSION_ID = 'a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d'
 
 /** The real method through the real prototype chain; a re-declared copy would pin nothing. */
-class MailboxTargetProbe extends OrcaRuntimeWithGetPtyRecordForPaneKey {
+abstract class MailboxTargetProbe extends OrcaRuntimeWithGetPtyRecordForPaneKey {
   probeResolveTarget(mailboxHandle: string): unknown {
     return this.resolveStructuredMailboxTarget(mailboxHandle)
   }
 }
 
-function installRecord(lease: { runtimeKind: string; claimStatus: string }): void {
+function installRecord(lease: Pick<AgentSessionLease, 'runtimeKind' | 'claimStatus'>): void {
   hostRef.current = {
     deps: {
       store: {
-        getRecord: (sessionId: string) =>
-          ({
-            sessionId,
-            location: { executionHostId: 'local', wslDistro: null },
-            lease: { ...lease, runtimeFence: 1, deathEvidence: null }
-          }) as unknown as AgentSessionRecord
+        getConversation: (sessionId: string) =>
+          agentSessionConversationView(
+            agentSessionRecordFixture(
+              agentSessionLeaseFixture({
+                ...lease,
+                sessionId,
+                runtimeFence: 1,
+                deathEvidence: null
+              })
+            )
+          )
       }
     },
     hasSession: () => true
@@ -81,7 +90,6 @@ describe('the mailbox target for direct peer mail to a structured worker', () =>
       sessionId: SESSION_ID,
       dispatchId: 'd1'
     })
-    // The pane key is the remint-stable half of the lookup, exactly as the PTY path uses it.
     expect(findActiveDispatchForAssignee).toHaveBeenCalledWith(
       handle,
       structuredWorkerIdentities.get(handle)!.paneKey
@@ -89,11 +97,7 @@ describe('the mailbox target for direct peer mail to a structured worker', () =>
   })
 
   it('still delivers to a worker that has no active dispatch', () => {
-    // The defect this pins: the send stored durably and reported success, and then NEITHER lane
-    // claimed the mailbox — the PTY lane refuses a structured handle outright and this resolver
-    // answered only `dispatch:` addresses. The worker never reacted and the peer waiting on a
-    // reply hung, with nothing logged. A dispatch says nothing about whether delivery is safe;
-    // the idle gate and the writer lease do, and both still run downstream.
+    // Direct structured mail has no PTY lane; resolving it must not require a Dispatch, while idle and lease gates still apply.
     const handle = registerWorker()
     installRecord({ runtimeKind: 'native', claimStatus: 'live' })
     expect(probe(undefined).instance.probeResolveTarget(handle)).toEqual({
@@ -126,10 +130,7 @@ describe('the mailbox target for a Run whose coordinator is structured', () => {
   })
 
   it('owns the run mailbox, which neither lane used to claim', () => {
-    // The defect this pins: the PTY lane declines because the owner is structured, and this lane
-    // used to decline anything that was not `dispatch:`. Each half believed the other owned it, so
-    // a structured coordinator was never nudged for its own Run mail and nothing logged. A PTY
-    // coordinator is covered by blocking in `check --wait`; a chat session's turn just ends.
+    // Structured coordinators end their turn rather than block in check --wait; Run mail needs a session nudge.
     const handle = registerWorker()
     installRecord({ runtimeKind: 'native', claimStatus: 'live' })
     expect(

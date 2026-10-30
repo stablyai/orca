@@ -1,38 +1,44 @@
 import { useMemo } from 'react'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import type { WorkspaceStatusDefinition } from '../../../src/shared/worktree/types'
-import type { MobileGroupMode, MobileSortMode } from './workspace-view-settings'
+import type { ExecutionHostId } from '../../../src/shared/execution-host'
+import type {
+  WorkspaceGroupBy,
+  WorkspaceSortBy
+} from '../../../src/shared/workspace-view/workspace-view-options'
 import {
-  buildSections,
+  buildSectionRepoMap,
+  buildMobileWorkspacePlan,
   type FilterState,
+  type ProjectSectionCatalog,
   type Section,
+  type SectionRepo,
   type Worktree
 } from './workspace-list-sections'
-import { repoColor } from './repo-color'
-
-export type WorkspaceSectionRepo = {
-  name: string
-  id: string
-  color: string
-}
+import { buildFilterRepos, type WorkspaceSectionRepo } from './workspace-filter-repos'
 
 export function useWorkspaceSections(args: {
   displayWorktrees: Worktree[]
-  sortMode: MobileSortMode
+  sortMode: WorkspaceSortBy
   filters: FilterState
   search: string
-  groupMode: MobileGroupMode
+  groupMode: WorkspaceGroupBy
   pinnedIds: Set<string>
   showPinnedInGroups: boolean
-  repoIdsByName: Map<string, string>
-  repoColorsByName: Map<string, string>
+  projectCatalog: ProjectSectionCatalog
+  /** Every catalog repo on every host, which is what the desktop's filter lists. */
+  filterCatalogRepos: readonly SectionRepo[]
   collapsedGroups: Set<string>
   workspaceStatuses: readonly WorkspaceStatusDefinition[]
+  /** Each repo's host, for rows that predate their own hostId. */
+  repoHostIdByRepoId: ReadonlyMap<string, ExecutionHostId>
 }): {
   sections: Section[]
   rawSections: Section[]
   uniqueRepos: WorkspaceSectionRepo[]
-  uniqueRepoColors: Map<string, string>
+  repoById: ReadonlyMap<string, SectionRepo>
 } {
+  const t = useMobileTranslation()
   const {
     displayWorktrees,
     sortMode,
@@ -41,57 +47,54 @@ export function useWorkspaceSections(args: {
     groupMode,
     pinnedIds,
     showPinnedInGroups,
-    repoIdsByName,
-    repoColorsByName,
+    projectCatalog,
+    filterCatalogRepos,
     collapsedGroups,
-    workspaceStatuses
+    workspaceStatuses,
+    repoHostIdByRepoId
   } = args
 
-  const uniqueRepos = useMemo(() => {
-    const repos = new Map<string, { id: string; color: string }>()
-    for (const w of displayWorktrees) {
-      if (!repos.has(w.repo)) {
-        repos.set(w.repo, {
-          id: repoIdsByName.get(w.repo) ?? w.repoId,
-          color: repoColorsByName.get(w.repo) ?? repoColor(w.repo)
-        })
-      }
-    }
-    return [...repos.entries()].map(([name, { id, color }]) => ({ name, id, color }))
-  }, [displayWorktrees, repoColorsByName, repoIdsByName])
-
-  const uniqueRepoColors = useMemo(
-    () => new Map(uniqueRepos.map((repo) => [repo.name, repo.color])),
-    [uniqueRepos]
+  const uniqueRepos = useMemo(
+    () => buildFilterRepos(filterCatalogRepos, displayWorktrees),
+    [filterCatalogRepos, displayWorktrees, t]
   )
 
-  const rawSections = useMemo(
+  const repoById = useMemo(
+    () => buildSectionRepoMap(projectCatalog.repos, displayWorktrees),
+    [projectCatalog.repos, displayWorktrees, t]
+  )
+
+  const plan = useMemo(
     () =>
-      buildSections(
+      buildMobileWorkspacePlan(
         displayWorktrees,
         sortMode,
         filters,
         search,
         groupMode,
         pinnedIds,
-        repoIdsByName,
+        projectCatalog,
         workspaceStatuses,
-        collapsedGroups,
-        showPinnedInGroups
+        undefined,
+        showPinnedInGroups,
+        repoHostIdByRepoId
       ),
     [
+      repoHostIdByRepoId,
       displayWorktrees,
       sortMode,
       filters,
       search,
       groupMode,
       pinnedIds,
-      repoIdsByName,
+      projectCatalog,
       workspaceStatuses,
-      collapsedGroups,
-      showPinnedInGroups
+      showPinnedInGroups,
+      t
     ]
   )
+
+  const rawSections = useMemo(() => plan.render(collapsedGroups), [plan, collapsedGroups])
 
   const sections = useMemo(
     () =>
@@ -102,5 +105,5 @@ export function useWorkspaceSections(args: {
     [rawSections, collapsedGroups]
   )
 
-  return { sections, rawSections, uniqueRepos, uniqueRepoColors }
+  return { sections, rawSections, uniqueRepos, repoById }
 }

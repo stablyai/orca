@@ -27,6 +27,24 @@ type CodexAiVaultResumeOptions = {
   preparePinnedLaunchHome: (home: string) => Promise<void>
 }
 
+export type NativeCodexResumePreparation = (
+  args: AiVaultPrepareSessionResumeArgs,
+  nativeSystemHomePath?: string
+) => Promise<AiVaultPrepareSessionResumeResult>
+
+/** Native adoption supplies its execution target; History keeps its configured storage target. */
+export function codexAiVaultSessionResumePreparation(
+  getOptions: () => CodexAiVaultResumeOptions
+): NativeCodexResumePreparation {
+  return (args, nativeSystemHomePath) => {
+    const options = getOptions()
+    return prepareCodexAiVaultSessionResume(args, {
+      ...options,
+      systemCodexHomePath: nativeSystemHomePath ?? options.systemCodexHomePath
+    })
+  }
+}
+
 /** Keeps window and serve AI Vault resumes behind the same refusing account-home gate. */
 export async function prepareCodexAiVaultSessionResume(
   args: AiVaultPrepareSessionResumeArgs,
@@ -39,8 +57,7 @@ export async function prepareCodexAiVaultSessionResume(
       options.runtimeHome?.resolveSelectedHostAccountCodexHomePathForResume() ?? null,
     systemCodexHomePath: options.systemCodexHomePath
   })
-  // Why: a fork carries no provider session, so the pane spawn never readies the home a resume
-  // would; when it keeps the row's own home, that home needs the same hooks here.
+  // Forks have no provider session to trigger spawn-time setup; ready retained row homes here.
   if (args.fork && !result.useRealCodexHome && !result.substituteCodexHome) {
     try {
       await readyForkLaunchHome(args, options)

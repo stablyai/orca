@@ -18,12 +18,7 @@ const ROW = {
   linkedPR: null
 }
 
-/**
- * The host screen's three worktree mutations: pin, delete and open.
- *
- * Mounted with no hostId, which is the only thing that keeps the hook off native storage: the
- * pinned-id write is the sole native call and it sits behind `if (hostId)`.
- */
+// Omit hostId to keep the hook off native pinned-id storage while recording worktree writes.
 export function hostWorktreeActionMountAdapters(
   modules: ReturnType<typeof operationModuleLoader>
 ): Record<string, MountAdapter> {
@@ -33,14 +28,12 @@ export function hostWorktreeActionMountAdapters(
         typeof import('../../../host-screen/use-host-worktree-actions')
       >('mobile/src/host-screen/use-host-worktree-actions.ts').useHostWorktreeActions
       const state = observableModel(context, {
-        newWorktreeModalRef: { current: null },
-        newWorktreeModalVisibleRef: { current: false },
         pinnedIds: new Set<string>(),
         worktrees: [ROW],
         lastKnownWorktrees: [ROW],
         confirmRemoveHost: false,
         optimisticActiveWorktreeIdentity: null,
-        routeActionState: {}
+        serverWorkspaces: { hosts: [], worktrees: [] }
       })
       let actions: ReturnType<typeof useActions>
       const hook = hookMount(() => {
@@ -53,6 +46,7 @@ export function hostWorktreeActionMountAdapters(
           forgetHostClient: (() => {}) as unknown as Parameters<
             typeof useActions
           >[0]['forgetHostClient'],
+          hostCapabilities: [],
           hostId: undefined,
           pathname: '/h/host-1',
           // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: navigation is observed through the recorded sends, not the router.
@@ -69,7 +63,7 @@ export function hostWorktreeActionMountAdapters(
             return hook.mount()
           }
           if (name === 'toggle-pin') {
-            return performHookAction(() => actions.togglePin(ROW.worktreeId))
+            return performHookAction(() => actions.togglePin(ROW))
           }
           if (name === 'delete') {
             return performHookAction(() => actions.handleDeleteWorktree(ROW))

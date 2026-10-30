@@ -7,14 +7,14 @@ import { encodePairingOffer, PAIRING_OFFER_VERSION } from '../../shared/pairing'
 import { addManagedOrcadEnvironment } from '../../shared/runtime-environment-managed-orcad-store'
 import { listEnvironments } from '../../shared/runtime-environment-store'
 import type { SshTarget } from '../../shared/ssh-types'
-import { closeTestStores, createSqliteTestStore } from '../persistence-test-harness'
+import { closeTestStores, createSqliteTestStore } from '../persistence/persistence-test-harness'
 import { Store } from '../persistence/loading-store/store'
 import { stageOrcadMigrationDestination } from './orcad-migration-cutover-coordinator'
 import { listOrcadMigrationSourceCutovers } from './orcad-migration-cutover-journal'
 import { fakeOrcadMigrationDestination } from './orcad-migration-destination-fake'
 import { fenceOrcadMigrationSource } from './orcad-migration-source-fence'
 import { releaseUnreachableOrcadSetup } from './orcad-unreachable-setup-release'
-import { SshTargetOrcadClaims } from './ssh-target-orcad-claims'
+import { SshTargetOrcadClaims } from './targets/ssh-target-orcad-claims'
 
 const TARGET: SshTarget = {
   id: 'ssh-locked',
@@ -34,7 +34,6 @@ afterEach(async () => {
   }
 })
 
-/** A conversion that fenced the host and registered its server, then could not reach it. */
 async function strandedConversion() {
   const userDataPath = mkdtempSync(join(tmpdir(), 'orcad-unreachable-setup-'))
   directories.push(userDataPath)
@@ -57,8 +56,7 @@ async function strandedConversion() {
     targetId: TARGET.id,
     destinationEnvironmentId: 'env-1',
     destinationName: 'Managed',
-    terminalProof: { verdict: 'exited', provenPtyIds: [] },
-    hasDirectSshAuthority: () => false
+    terminalProof: { verdict: 'exited', provenPtyIds: [] }
   })
   if (fenced.outcome !== 'fenced') {
     throw new Error('expected a fence')

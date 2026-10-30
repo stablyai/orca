@@ -1,47 +1,16 @@
-import { isRemoteAgentHooksEnabled } from '../../../../shared/agent-hook-relay'
 import type { AgentSessionOwnerBinding } from '../../../../shared/agent-session-host-authority'
 import { agentSessionOwnerBindingsEqual } from '../../../../shared/claimed-agent-pty-owner'
 import { addNodePtyRecoveryHint } from '../../../daemon/node-pty-error-hints'
-import { SessionNotFoundError } from '../../../daemon/daemon-errors'
 import type { Store } from '../../../persistence'
-import {
-  isSshPtyAbsentFromRelayError,
-  isSshPtyNotFoundError,
-  isSshPtyProvenExitedOnRelayError
-} from '../../../providers/ssh-pty-errors'
-import type { IPtyProvider } from '../../../providers/types'
-import { markClaudePtyExited } from '../../../claude-accounts/live-pty-gate'
-import { ptyIncarnationById, ptyOwnership } from './ownership-state'
-import { getRelayPtyId } from './registry'
+import type { IPtyProvider } from '../../../providers/pty-provider-contract'
+import { isCurrentPtyExit, ptyIncarnationById, ptyOwnership } from './ownership-state'
+import { getRelayPtyId, tryGetProviderForPty } from './registry'
 import {
   KEEP_HISTORY_STOP_POLL_MS,
   KEEP_HISTORY_STOP_SETTLE_MS
 } from '../delivery/visibility-state'
 import { clearProviderPtyState } from './state-cleanup'
-
-export function stripRemotePaneEnvWhenHooksDisabled(
-  connectionId: string | null | undefined,
-  env: Record<string, string> | undefined
-): Record<string, string> | undefined {
-  if (!connectionId || isRemoteAgentHooksEnabled()) {
-    return env
-  }
-  if (
-    !env ||
-    (!('ORCA_PANE_KEY' in env) &&
-      !('ORCA_TAB_ID' in env) &&
-      !('ORCA_WORKTREE_ID' in env) &&
-      !('ORCA_AGENT_LAUNCH_TOKEN' in env))
-  ) {
-    return env
-  }
-  const stripped = { ...env }
-  delete stripped.ORCA_PANE_KEY
-  delete stripped.ORCA_TAB_ID
-  delete stripped.ORCA_WORKTREE_ID
-  delete stripped.ORCA_AGENT_LAUNCH_TOKEN
-  return stripped
-}
+import { PtyExitProof, type PtyRetirementEvidence } from '../../../pty-exit-proof'
 
 export function normalizeNodePtySpawnError(err: unknown): Error {
   const rawMessage = err instanceof Error ? err.message : String(err)
@@ -50,7 +19,7 @@ export function normalizeNodePtySpawnError(err: unknown): Error {
     return err
   }
   if (err instanceof Error) {
-    // Why: preserve the original stack/name/custom fields while adding the same recovery hint as the pty:spawn path.
+    // Mutate only the message to retain stack, name and custom error fields.
     err.message = hintedMessage
     return err
   }
@@ -59,40 +28,7 @@ export function normalizeNodePtySpawnError(err: unknown): Error {
 
 export function isPtyAlreadyGoneError(err: unknown): boolean {
   const message = err instanceof Error ? err.message : String(err)
-  return (
-    isSshPtyNotFoundError(err) ||
-    // Why: the reattach path rewrites the relay's wording to SSH_SESSION_EXPIRED and only this
-    // class preserves that the relay itself answered "absent" rather than the link dropping.
-    isSshPtyAbsentFromRelayError(err) ||
-    /Session not found/i.test(message)
-  )
-}
-
-/**
- * Narrower than {@link isPtyAlreadyGoneError}, for the one caller that retires a durable pane
- * binding rather than just releasing in-memory state: only a typed answer from the host that owns
- * the process may authorise that. The bare `PTY ".+" not found` text is the relay's raw wire
- * wording, which the SSH reattach path always types before it reaches a pane; matching the text
- * instead would let any untyped string carrying that phrase unbind a live pane
- * (docs/reference/ssh-execution-boundary.md).
- */
-export function isHostReportedPtyAbsenceError(err: unknown): boolean {
-  return isSshPtyAbsentFromRelayError(err) || err instanceof SessionNotFoundError
-}
-
-/**
- * The half of {@link isHostReportedPtyAbsenceError} that actually observed the process, and so the
- * only half that may certify an exit.
- *
- * The relay's plain absence answer is excluded because `pty.attach` gives it for an id its session
- * map never had as readily as for a pid it probed — after a relay restart, every id the previous
- * one minted. `SessionNotFoundError` is included because the process answering is the one that owns
- * the PTY: the in-process registry itself, or a daemon whose endpoint is live (a gone endpoint
- * raises `isDaemonEndpointGoneError` instead), so its absence is an observation rather than a lost
- * route (docs/reference/ssh-execution-boundary.md).
- */
-export function isObservedPtyExitEvidence(err: unknown): boolean {
-  return isSshPtyProvenExitedOnRelayError(err) || err instanceof SessionNotFoundError
+  return /Session not found/i.test(message)
 }
 
 export function delay(ms: number): Promise<void> {
@@ -109,9 +45,8 @@ export async function isProviderPtyLive(
   ptyId: string,
   deadlineMs?: number
 ): Promise<boolean> {
-  // Why: bound the liveness list RPC by the teardown deadline so a wedged daemon
-  // fails fast; undefined keeps the provider default for all other callers.
-  return (await provider.listProcesses(deadlineMs !== undefined ? { deadlineMs } : undefined)).some(
+  // Share the teardown deadline with the liveness RPC; other callers retain provider defaults.
+  return (await provider.listProcesses({ deadlineMs, ptyIds: [ptyId] })).some(
     (session) => session.id === ptyId
   )
 }
@@ -120,13 +55,14 @@ export async function isProviderAgentSessionOwnerLive(
   provider: IPtyProvider,
   owner: AgentSessionOwnerBinding
 ): Promise<boolean> {
-  const session = (await provider.listProcesses()).find((candidate) => candidate.id === owner.ptyId)
+  const session = (await provider.listProcesses({ ptyIds: [owner.ptyId] })).find(
+    (candidate) => candidate.id === owner.ptyId
+  )
   if (!session) {
     return false
   }
   if (provider.providesAgentSessionOwnerListings?.(owner.ptyId) !== true) {
-    // Why: in-process local owners cannot serialize the controller claim; exact incarnation
-    // liveness keeps that claim authoritative until the normal PTY exit releases it.
+    // In-process providers cannot list controller claims; exact incarnation liveness preserves their authority.
     const expectedIncarnation = ptyIncarnationById.get(owner.ptyId)
     return expectedIncarnation !== undefined && session.incarnationId === expectedIncarnation
   }
@@ -140,16 +76,18 @@ export async function isProviderAgentSessionOwnerLive(
 export async function verifyPtyStopped(
   provider: IPtyProvider,
   ptyId: string,
-  opts: { keepHistory?: boolean; deadlineMs?: number } | undefined
+  opts: { keepHistory?: boolean; deadlineMs?: number } | undefined,
+  exitObserved = false
 ): Promise<boolean> {
   if (await isProviderPtyLive(provider, ptyId, opts?.deadlineMs)) {
     return false
   }
-  if (!opts?.keepHistory) {
+  // Observed exit already proves this incarnation stopped; polling guards only unobserved stops.
+  if (!opts?.keepHistory || exitObserved) {
     return true
   }
   const settleDeadline = Date.now() + KEEP_HISTORY_STOP_SETTLE_MS
-  // Why: deadlineMs is absolute, so the settle poll must not outlive the caller's teardown budget.
+  // Polling must remain within the caller's absolute teardown deadline.
   const deadline =
     opts.deadlineMs !== undefined ? Math.min(settleDeadline, opts.deadlineMs) : settleDeadline
   while (Date.now() < deadline) {
@@ -164,21 +102,39 @@ export async function verifyPtyStopped(
   return true
 }
 
+/** Returns the retired incarnation, or `null` when the proof names a different incarnation than
+ *  the record's: a same-id respawn owns it now, so nothing is retired. A proof naming none still
+ *  retires: owner reconciliation can stamp the same process's incarnation mid-stop. */
 export function finishPtyShutdown(
   id: string,
   connectionId: string | null | undefined,
-  store: Store | undefined
-): string | undefined {
+  store: Store | undefined,
+  evidence: PtyRetirementEvidence
+): string | undefined | null {
+  if (
+    evidence instanceof PtyExitProof &&
+    evidence.incarnationId !== undefined &&
+    !isCurrentPtyExit({ id, incarnationId: evidence.incarnationId })
+  ) {
+    return null
+  }
   const incarnationId = ptyIncarnationById.get(id)
   clearProviderPtyState(id)
   if (connectionId) {
-    // Deliberately does NOT retire a recorded undelivered stop. Some callers reach here having
-    // asked the host and some having never asked it, so retiring from this one place would be a
-    // contract every call site has to know about — and the one that forgot would silently drop a
-    // kill order. Retirement is left to the replay, which only acts on host evidence.
-    store?.markSshRemotePtyLease(connectionId, getRelayPtyId(connectionId, id), 'terminated')
+    // Keeps any relay-era undelivered stop on the lease: only host evidence may retire it.
+    store?.markSshRemotePtyLease(connectionId, getRelayPtyId(connectionId, id), evidence)
   }
   ptyOwnership.delete(id)
-  markClaudePtyExited(id)
   return incarnationId
+}
+
+export async function isRegisteredAgentSessionOwnerLive(
+  owner: AgentSessionOwnerBinding
+): Promise<boolean> {
+  const ownerProvider = tryGetProviderForPty(owner.ptyId)
+  if (!ownerProvider) {
+    // Why: an owner on a host this process cannot reach is unknown, never absent.
+    throw new Error('execution_owner_unavailable')
+  }
+  return await isProviderAgentSessionOwnerLive(ownerProvider, owner)
 }

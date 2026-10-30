@@ -7,6 +7,7 @@ import {
   isExpiredActivePRRefreshState
 } from '../github/pr-refresh-state'
 import { evictStaleEntries } from '../github/cache-policy'
+import { persistGitHubCacheChanges } from '../github/cache-persistence'
 import { createProjectActions } from '../github/project-actions'
 import { createProjectRowActions } from '../github/project-row-actions'
 import { createWorkItemFetchActions } from '../github/work-item-fetch-actions'
@@ -25,11 +26,16 @@ import { createRefreshEventActions } from '../github/refresh-event-actions'
 import { createRefreshSweepActions } from '../github/refresh-sweep-actions'
 export type GitHubSlice = GitHubSliceContract
 
-export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (set, get) => ({
+export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (
+  set,
+  get,
+  store
+) => ({
   prCache: {},
   issueCache: {},
   checksCache: {},
   commentsCache: {},
+  reviewThreadResolutionsInFlight: {},
   prRefreshSequences: {},
   prRefreshStates: {},
   prVisibleRefreshGeneration: 0,
@@ -91,16 +97,20 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
   ...createWorkItemMutationActions(set, get),
 
   initGitHubCache: async () => {
+    let persisted: Awaited<ReturnType<typeof window.api.cache.getGitHub>> | null = null
     try {
-      const persisted = await window.api.cache.getGitHub()
-      if (persisted) {
-        set({
-          prCache: evictStaleEntries(persisted.pr || {}),
-          issueCache: evictStaleEntries(persisted.issue || {})
-        })
-      }
+      persisted = await window.api.cache.getGitHub()
     } catch (err) {
       console.error('Failed to load GitHub cache from disk:', err)
+    }
+    // Why after the read: an earlier write would replace main's copy with a partial cache.
+    // Before hydrating, so main also drops entries hydration evicts.
+    persistGitHubCacheChanges(store)
+    if (persisted) {
+      set({
+        prCache: evictStaleEntries(persisted.pr || {}),
+        issueCache: evictStaleEntries(persisted.issue || {})
+      })
     }
   }
 })

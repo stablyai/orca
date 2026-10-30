@@ -6,7 +6,7 @@ import { _resetTracerForTests, setActiveSink } from '../../observability/tracer'
 import type { TerminalSurfaceCloseCommit } from '../../runtime/terminal-surface-close'
 import { closeLeafOrTab } from './terminal-topology-commit'
 
-// An ssh: partition, so a leaked host id or worktree path would show in the span.
+// Host/path-bearing fixtures expose accidental trace metadata leaks.
 const HOST_ID: ExecutionHostId = 'ssh:target-1'
 const WORKTREE_ID = 'ssh-repo::/srv/app'
 const LEAF_1 = '11111111-1111-4111-8111-111111111111'
@@ -67,7 +67,7 @@ function commitFor(
     options: {},
     requestedSession: current,
     ownerMatches: () => true,
-    hostId: () => HOST_ID,
+    hostIds: () => [HOST_ID],
     getSession: () => current,
     setSession: (next) => {
       current = next

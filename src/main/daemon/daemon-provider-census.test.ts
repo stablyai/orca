@@ -1,6 +1,6 @@
 import { afterEach, expect, it, vi } from 'vitest'
 
-vi.mock('../ipc/pty', () => ({ setLocalPtyProvider: vi.fn() }))
+vi.mock('../ipc/pty/provider/registry', () => ({ setLocalPtyProvider: vi.fn() }))
 
 import { DaemonPtyRouter } from './daemon-pty-router'
 import { createAdapter } from './daemon-pty-router-test-fixture'

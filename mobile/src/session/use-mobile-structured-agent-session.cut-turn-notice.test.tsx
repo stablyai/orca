@@ -1,4 +1,5 @@
 import { createElement } from 'react'
+import { snapshotEvent } from './use-mobile-structured-agent-session-queued.test-fixture'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AgentJournalRenderItem } from '../../../src/shared/agent-session-journal-types'
@@ -6,6 +7,7 @@ import type { AgentSessionSubscribeEvent } from '../../../src/shared/agent-sessi
 import type { RpcClient } from '../transport/rpc-client'
 import type { RpcResponse } from '../transport/types'
 import { useMobileStructuredAgentSession } from './use-mobile-structured-agent-session'
+import { ANSWERED_PROMPT_ITEMS } from './native-chat/input/mobile-native-chat-answered-prompts.test-fixture'
 
 vi.mock('@react-native-async-storage/async-storage', () => ({
   default: { getItem: vi.fn(async () => null), setItem: vi.fn(), removeItem: vi.fn() }
@@ -47,28 +49,7 @@ const ITEMS: AgentJournalRenderItem[] = [
 ]
 
 function snapshot(items: AgentJournalRenderItem[]): AgentSessionSubscribeEvent {
-  return {
-    type: 'snapshot',
-    sessionId: 'session-1',
-    fence: 3,
-    page: {
-      sessionId: 'session-1',
-      epoch: 'epoch-1',
-      fence: 3,
-      direction: 'tail',
-      items,
-      removedItemIds: [],
-      submissions: [],
-      window: {
-        oldest: { epoch: 'epoch-1', sequence: 1 },
-        newest: { epoch: 'epoch-1', sequence: 3 },
-        nextCursor: { epoch: 'epoch-1', sequence: 4 }
-      },
-      liveCursor: { epoch: 'epoch-1', sequence: 3 },
-      hasOlder: false,
-      hasNewer: false
-    }
-  }
+  return snapshotEvent({ items })
 }
 
 describe('useMobileStructuredAgentSession transcript', () => {
@@ -78,9 +59,11 @@ describe('useMobileStructuredAgentSession transcript', () => {
     renderer = null
   })
 
-  it('shows a cut turn no row explains with the one notice desktop shows, in that turn', async () => {
+  async function mount(agent: string, items: AgentJournalRenderItem[]) {
     let listener: ((value: unknown) => void) | null = null
-    const client: Pick<RpcClient, 'sendRequest' | 'subscribe'> = {
+    const client: Pick<RpcClient, 'sendRequest' | 'subscribe' | 'getState' | 'onStateChange'> = {
+      getState: () => 'connected',
+      onStateChange: () => () => {},
       sendRequest: vi.fn(async (): Promise<RpcResponse> => ({
         id: 'response-1',
         ok: true,
@@ -97,13 +80,13 @@ describe('useMobileStructuredAgentSession transcript', () => {
     }
     function Harness(): null {
       rendered.hook = useMobileStructuredAgentSession({
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the hook calls only sendRequest and subscribe, both provided.
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the hook's request, subscription and connection members are provided.
         client: client as RpcClient,
         sessionId: 'session-1',
         enabled: true,
         connected: true,
         hostSupport: null,
-        agent: 'codex',
+        agent,
         onSendError: vi.fn()
       })
       return null
@@ -113,7 +96,12 @@ describe('useMobileStructuredAgentSession transcript', () => {
     })
     await vi.waitFor(() => expect(listener).toEqual(expect.any(Function)))
 
-    act(() => listener?.(snapshot(ITEMS)))
+    act(() => listener?.(snapshot(items)))
+    return rendered
+  }
+
+  it('shows a cut turn no row explains with the one notice desktop shows, in that turn', async () => {
+    const rendered = await mount('codex', ITEMS)
 
     await vi.waitFor(() =>
       expect(rendered.hook?.session.messages.at(-1)).toMatchObject({
@@ -126,7 +114,24 @@ describe('useMobileStructuredAgentSession transcript', () => {
         ]
       })
     )
-    // The turn bars place rows by the same items, so the notice joins the cut turn.
     expect(rendered.hook?.turnJournal.items.at(-1)).toMatchObject({ turnScope: SCOPE })
+  })
+
+  it('draws an answered approval and question as receipts, never as their raw tool lines', async () => {
+    const rendered = await mount('claude', ANSWERED_PROMPT_ITEMS)
+    await vi.waitFor(() => expect(rendered.hook?.session.messages.length).toBeGreaterThan(0))
+
+    const { session, receipts } = rendered.hook!
+    expect(
+      session.messages.some((message) =>
+        message.blocks.some(
+          (block) => block.type === 'tool-call' && block.name === 'AskUserQuestion'
+        )
+      )
+    ).toBe(false)
+    expect(session.messages.flatMap((message) => receipts.get(message.id)?.kind ?? [])).toEqual([
+      'approval',
+      'question'
+    ])
   })
 })

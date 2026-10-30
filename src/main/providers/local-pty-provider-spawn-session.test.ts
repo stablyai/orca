@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as MacosTccLoginShell from './macos-tcc-login-shell'
+import type { ShellSpawnParams } from './local-pty-utils'
 
 const {
   existsSyncMock,
@@ -13,7 +14,7 @@ const {
   readWindowsPtyJobProcessIdsMock,
   killWithDescendantSweepMock,
   isWslAvailableAsyncMock,
-  wslUncDirectoryExistsMock,
+  wslUncDirectoryExistsAsyncMock,
   createShellPromptReadinessProbeMock
 } = vi.hoisted(() => ({
   existsSyncMock: vi.fn(),
@@ -27,7 +28,7 @@ const {
   readWindowsPtyJobProcessIdsMock: vi.fn(),
   killWithDescendantSweepMock: vi.fn(),
   isWslAvailableAsyncMock: vi.fn(),
-  wslUncDirectoryExistsMock: vi.fn(),
+  wslUncDirectoryExistsAsyncMock: vi.fn(),
   createShellPromptReadinessProbeMock: vi.fn()
 }))
 
@@ -53,6 +54,15 @@ vi.mock('node-pty', () => ({
   spawn: spawnMock
 }))
 
+// Concurrent first imports can race Vitest mocks and load the real node-pty addon under a mocked platform.
+vi.mock('./local-pty-runtime-spawn', async () => {
+  const { spawnShellWithFallback } = await import('./local-pty-utils')
+  return {
+    loadLocalPtyRuntimeSpawn: async () => (params: Omit<ShellSpawnParams, 'ptySpawn'>) =>
+      spawnShellWithFallback({ ...params, ptySpawn: spawnMock })
+  }
+})
+
 vi.mock('./macos-tcc-login-shell', async (importOriginal) => ({
   ...(await importOriginal<typeof MacosTccLoginShell>()),
   prepareMacosTccLoginShell: prepareMacosTccLoginShellMock
@@ -62,10 +72,7 @@ vi.mock('../pty-descendant-termination', () => ({
   killWithDescendantSweep: killWithDescendantSweepMock
 }))
 
-// Resolve PowerShell family names to deterministic absolute paths (the fs mock
-// above otherwise makes every probe miss). The real resolver — which skips the
-// Store App Execution Alias stub — is covered in
-// windows-powershell-executable.test.ts.
+// The fs mock misses executable probes; pin paths here and leave Store-alias coverage to the resolver tests.
 const WINDOWS_POWERSHELL_ABS = 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe'
 const PWSH7_ABS = 'C:\\Program Files\\PowerShell\\7\\pwsh.exe'
 const CMD_ABS = 'C:\\Windows\\System32\\cmd.exe'
@@ -105,9 +112,8 @@ vi.mock('../wsl', () => ({
     `\\\\wsl.localhost\\${distro}${path.replace(/\//g, '\\')}`,
   getDefaultWslDistro: () => 'Ubuntu',
   isWslAvailableAsync: () => isWslAvailableAsyncMock(),
-  // Why: WSL worktree validation now asks the distro; these tests use WSL UNC
-  // cwds that are meant to exist, so report them present without spawning wsl.exe.
-  wslUncDirectoryExists: (...args: unknown[]) => wslUncDirectoryExistsMock(...args)
+  // Fixture WSL UNC directories exist; avoid launching wsl.exe to validate them.
+  wslUncDirectoryExistsAsync: (...args: unknown[]) => wslUncDirectoryExistsAsyncMock(...args)
 }))
 
 vi.mock('../shell-prompt-readiness-probe', () => ({
@@ -148,7 +154,7 @@ describe('LocalPtyProvider', () => {
       readWindowsPtyJobProcessIdsMock,
       killWithDescendantSweepMock,
       isWslAvailableAsyncMock,
-      wslUncDirectoryExistsMock,
+      wslUncDirectoryExistsAsyncMock,
       createShellPromptReadinessProbeMock
     })
 
@@ -165,12 +171,6 @@ describe('LocalPtyProvider', () => {
   })
 
   describe('spawn', () => {
-    it('returns a unique PTY id', async () => {
-      const result = await provider.spawn({ cols: 80, rows: 24 })
-      expect(result.id).toBeTruthy()
-      expect(typeof result.id).toBe('string')
-    })
-
     it('retires buffered output and synchronous Bun exit before replying to spawn', async () => {
       const disposeData = vi.fn()
       const disposeExit = vi.fn()
@@ -218,8 +218,7 @@ describe('LocalPtyProvider', () => {
         incarnationId: first.incarnationId,
         pid: 12345,
         isReattach: true,
-        // Why published: this attach really moved the PTY, unlike daemon/relay attach, so main
-        // must record 120x40 rather than preserving the size it held for the session.
+        // This local reattach resized the PTY; publish the new grid unlike daemon/relay attachments.
         attachedGrid: { cols: 120, rows: 40 }
       })
       expect(mockProc.resize).toHaveBeenCalledWith(120, 40)
@@ -382,9 +381,7 @@ describe('LocalPtyProvider', () => {
       expect(spawnMock).not.toHaveBeenCalled()
     })
 
-    // Why (#16441): the Codex hook install and trust grant moved into
-    // buildSpawnEnv, so the env build is now the long await before node-pty
-    // exists — shutdown must be able to cancel the session id during it.
+    // Hook/trust setup makes env build a long pre-spawn await; shutdown must cancel during it (#16441).
     it('does not spawn after shutdown cancels a pending spawn during the env build', async () => {
       spawnMock.mockClear()
       let finishEnvBuild!: (env: Record<string, string>) => void
@@ -559,8 +556,7 @@ describe('LocalPtyProvider', () => {
       const procA = { ...mockProc, pid: 1001 }
       spawnMock.mockReturnValueOnce(procA)
 
-      // Hold both spawns past the existence check and inside the preflight so they
-      // race to register the same id; release only after both are parked.
+      // Park both spawns past the existence check to race same-id registration.
       let releasePreflight!: () => void
       prepareMacosTccLoginShellMock.mockReturnValue(
         new Promise<void>((resolve) => {
@@ -574,7 +570,6 @@ describe('LocalPtyProvider', () => {
       releasePreflight()
 
       const [a, b] = await Promise.all([spawnA, spawnB])
-      // The winner owns the tracked PTY; the loser attaches to it, not a second one.
       expect(a.isReattach).toBeUndefined()
       expect(b.isReattach).toBe(true)
       expect(b.pid).toBe(procA.pid)

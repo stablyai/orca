@@ -16,9 +16,26 @@ import { pruneWorkspaceSpaceAnalysisSnapshots } from '../../../workspace-space-a
 import { isLocalWorktreeScanGenerationCurrent } from '../../../local-worktree-scan-generation'
 import { localWorktreePathsExistOrAreUnverifiable } from '../../../local-worktree-path-presence'
 import { worktreeRetentionPathComparisonKey } from '../../../worktree-retention-path-comparison'
+import { isWslMoveRepoBlocked } from '../../../persistence/moving-wsl-projects/wsl-move-background-backoff'
+
+type AuthoritativeLocalMetadataPruneStore = Pick<
+  Store,
+  'getRepos' | 'pruneSessionlessMissingLocalWorktreeMetadataForRepo' | 'getProfileStorageDirectory'
+> &
+  Partial<Pick<Store, 'selectProbeableLocalWorktreeMetadataCandidates'>>
+
+export function canPruneAuthoritativeLocalMetadata<
+  T extends Partial<AuthoritativeLocalMetadataPruneStore>
+>(store: T): store is T & AuthoritativeLocalMetadataPruneStore {
+  return (
+    typeof store.getRepos === 'function' &&
+    typeof store.pruneSessionlessMissingLocalWorktreeMetadataForRepo === 'function' &&
+    typeof store.getProfileStorageDirectory === 'function'
+  )
+}
 
 type AuthoritativeLocalMetadataPruneArgs = {
-  store: Store
+  store: AuthoritativeLocalMetadataPruneStore
   repo: Repo
   gitWorktrees: readonly GitWorktreeInfo[]
   scan: NativeLocalWorktreeMetadataScanExpectation
@@ -65,7 +82,9 @@ export async function pruneMetadataMissingFromAuthoritativeLocalScan({
   }
   const generationCurrent = () => isLocalWorktreeScanGenerationCurrent(repo.id, scanGeneration)
   const repoOwners = store.getRepos().filter((candidate) => candidate.id === repo.id)
+  // A WSL move can hide live paths temporarily; defer pruning until it settles.
   if (
+    isWslMoveRepoBlocked(repo) ||
     !generationCurrent() ||
     !isCallerCurrent() ||
     gitWorktrees.length === 0 ||
@@ -82,13 +101,11 @@ export async function pruneMetadataMissingFromAuthoritativeLocalScan({
   }
 
   const livePathKeys = new Set([
-    // Why: Git can canonicalize a symlinked main checkout differently from the configured path.
+    // Retain the configured main path even if Git canonicalized its symlink.
     worktreeRetentionPathComparisonKey(repo.path, platform),
     ...gitWorktrees.map((worktree) => worktreeRetentionPathComparisonKey(worktree.path, platform))
   ])
-  // Why: only rows a delete could still accept are worth a filesystem probe. This is advisory —
-  // `pruneSessionlessMissingLocalWorktreeMetadataForRepo` re-checks authoritatively — so it can only
-  // ever shrink the `stat` fan-out, never widen what gets removed (#17775).
+  // Advisory eligibility shrinks stat fan-out; deletion still rechecks authoritatively (#17775).
   const removableCandidates =
     store.selectProbeableLocalWorktreeMetadataCandidates?.(scan) ?? scan.metadata
   const probeCandidates = removableCandidates.flatMap((metadata) => {
@@ -124,7 +141,8 @@ export async function pruneMetadataMissingFromAuthoritativeLocalScan({
     return result([], generationCurrent())
   }
 
-  if (!generationCurrent() || !isCallerCurrent()) {
+  // Path probes yield, allowing a WSL move to begin after the entry guard.
+  if (!generationCurrent() || !isCallerCurrent() || isWslMoveRepoBlocked(repo)) {
     return result([], generationCurrent())
   }
   const removedIds = store.pruneSessionlessMissingLocalWorktreeMetadataForRepo(

@@ -1,12 +1,12 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { describeProcessFailure, runProcessSync } from './script-child-process.mjs'
+import { runProcessSync } from '@orca/process-host'
+import { describeProcessFailure } from './process-failure-message.mjs'
 import { ORCAD_SESSION_SCANNER_SERVICE_ENTRY } from '../../src/shared/orcad-artifacts.ts'
 import { AI_VAULT_SERVICE_PROTOCOL_VERSION } from '../../src/main/ai-vault/session-scanner-service-protocol.ts'
 
-// Why fork from a probe: the child must run under the runtime orcad ships, and it forks with
-// that runtime's execPath. The verdict is the exit code, never matched output.
+// Probe forks with shipped runtime’s execPath; judge exit code, never matched output.
 const PROBE = `
 const { fork } = require('node:child_process')
 const [entry, home, protocol] = process.argv.slice(2)
@@ -29,7 +29,8 @@ child.on('message', (message) => {
     child.send({ type: 'request', id: 1, operation: 'scan', options: { limit: 5 } })
     return
   }
-  if (!message || message.id !== 1) {
+  // Progress frames share the request id; only the result or error answers it.
+  if (!message || message.id !== 1 || (message.type !== 'result' && message.type !== 'error')) {
     return
   }
   const sessions = message.type === 'result' ? message.value.result.sessions : []

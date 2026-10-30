@@ -20,6 +20,7 @@ import { resolveCodexAutomationRunUsage } from './codex-automation-run-attributi
 import { buildRecentSessions } from './codex-usage-session-rows'
 import { buildBreakdown, buildDaily, buildSummary } from './codex-usage-rollup-projections'
 import { UsageProviderStoreLifecycle } from '../usage/usage-provider-store-lifecycle'
+import { splitUsageCacheFileViaWorker } from '../usage/usage-scan-worker-spawn'
 
 const SCHEMA_VERSION = CODEX_USAGE_SCHEMA_VERSION
 
@@ -43,12 +44,7 @@ function getDefaultState(): CodexUsagePersistedState {
 
 export function normalizePersistedState(state: CodexUsagePersistedState): CodexUsagePersistedState {
   if (state.schemaVersion !== SCHEMA_VERSION) {
-    // Why: Orca-scoped Codex projections now depend on locationModelBreakdown.
-    // Reusing an older cache would silently serve wrong model/session rows
-    // until the next forced rescan, so schema changes must invalidate stale
-    // persisted analytics instead of best-effort patching partial data.
-    // Preserve scanState.enabled so existing users keep tracking on across
-    // schema bumps; the next refresh will repopulate the analytics.
+    // Rebuild incompatible projections while preserving the user's tracking preference.
     const defaults = getDefaultState()
     return {
       ...defaults,
@@ -95,7 +91,8 @@ export class CodexUsageStore extends UsageProviderStoreLifecycle<
       normalizeState: normalizePersistedState,
       sourceKey: 'processedFiles',
       dataPresenceKey: 'hasAnyCodexData',
-      scan: codexUsageProvider.scan
+      scan: codexUsageProvider.scan,
+      splitCacheFile: splitUsageCacheFileViaWorker
     })
   }
 
@@ -143,6 +140,7 @@ export class CodexUsageStore extends UsageProviderStoreLifecycle<
   }
 
   async getAutomationRunUsage(input: AutomationUsageLookupInput): Promise<AutomationRunUsage> {
+    await this.whenLoaded()
     return resolveCodexAutomationRunUsage(input, {
       getState: () => this.state,
       refresh: (force) => this.refresh(force),

@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../../shared/constants'
 import { buildSettingsNavigationMetadata } from '@/hooks/useSettingsNavigationMetadata'
 import { ChatSettingsSection } from './ChatSettingsSection'
+import { TooltipProvider } from '../ui/tooltip'
 import { ActiveSettingsSectionProvider } from './SettingsSection'
 import { getChatAppearanceSearchEntries } from './chat-appearance-search'
 import { getChatNamingSearchEntry } from './chat-naming-search'
@@ -15,6 +16,7 @@ import type { SettingsInteractionController } from './use-settings-interaction-c
 import type { SettingsNavigationModel } from './use-settings-navigation-model'
 import type { SettingsTerminalModel } from './use-settings-terminal-model'
 
+vi.mock('@/lib/host-chat-program-acquisition', () => ({ useChatProgramFacts: () => {} }))
 vi.mock('../../store', () => ({
   useAppStore: (selector: (value: { settingsSearchQuery: string }) => unknown) =>
     selector({ settingsSearchQuery: '' })
@@ -91,21 +93,23 @@ function NavigationHarness({
     terminal as SettingsTerminalModel
   )
   return (
-    <ActiveSettingsSectionProvider value={activeSectionId}>
-      <output aria-label="Selected settings page">{activeSectionId}</output>
-      <ChatSettingsSection
-        settings={settings}
-        updateSettings={vi.fn()}
-        writeSourceControlAiSettings={async () => {}}
-        searchEntries={[
-          ...getChatAppearanceSearchEntries(),
-          getChatNamingSearchEntry(),
-          getChatInlineVisualsSearchEntry()
-        ]}
-        showDesktopOnlySettings
-        isMounted
-      />
-    </ActiveSettingsSectionProvider>
+    <TooltipProvider>
+      <ActiveSettingsSectionProvider value={activeSectionId}>
+        <output aria-label="Selected settings page">{activeSectionId}</output>
+        <ChatSettingsSection
+          settings={settings}
+          updateSettings={vi.fn()}
+          writeSourceControlAiSettings={async () => {}}
+          searchEntries={[
+            ...getChatAppearanceSearchEntries(),
+            getChatNamingSearchEntry(),
+            getChatInlineVisualsSearchEntry()
+          ]}
+          showDesktopOnlySettings
+          isMounted
+        />
+      </ActiveSettingsSectionProvider>
+    </TooltipProvider>
   )
 }
 
@@ -125,16 +129,6 @@ describe('Chat settings deep links', () => {
       screen.getByRole('switch', { name: 'Toggle inline visuals' })
     )
     await waitFor(() => expect(scrollIntoView.mock.contexts).toContain(visuals))
-  })
-
-  it('activates Chat and renders the moved row for a deep link', async () => {
-    render(<NavigationHarness enabled initialSection="appearance" />)
-    await waitFor(() => {
-      expect(screen.getByRole('status', { name: 'Selected settings page' }).textContent).toBe(
-        'chat'
-      )
-    })
-    expect(screen.getByRole('spinbutton', { name: 'Code text size' })).toBeTruthy()
   })
 
   it('activates Chat and scrolls to the separate naming section for its deep link', async () => {

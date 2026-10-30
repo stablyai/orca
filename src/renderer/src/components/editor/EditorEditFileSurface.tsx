@@ -19,9 +19,16 @@ import { EditorFileLoadErrorView } from './EditorFileLoadErrorView'
 import { RecoverableRenderErrorBoundary } from '../error-boundaries/RecoverableRenderErrorBoundary'
 import type { FileContent } from './editor-panel-content-types'
 import { ExternalFileChangeBanner } from './ExternalFileChangeBanner'
+import { PluginFileTypeSuggestion } from './PluginFileTypeSuggestion'
 import type { useMarkdownDocuments } from './useMarkdownDocuments'
 import { EditorMarkdownFileSurface } from './EditorMarkdownFileSurface'
 import type { MarkdownRenderState } from './markdown-render-mode'
+import type { ActivePluginCustomEditor } from '@/store/plugin-custom-editors'
+import PluginCustomEditorFrame from './PluginCustomEditorFrame'
+import PluginBytesCustomEditorSurface from './PluginBytesCustomEditorSurface'
+
+// Retry is a user act: it may start a stopped WSL distro.
+const USER_RETRY = { wakeWslDistro: true }
 
 const noopEditorContentChange = (_content: string): void => {}
 const noopEditorSave = async (_content: string): Promise<boolean> => false
@@ -44,6 +51,7 @@ export function EditorEditFileSurface({
   isMermaid,
   isCsv,
   isNotebook,
+  customEditor,
   mdViewMode,
   inlineMarkdownRenderState,
   isChangesMode,
@@ -76,6 +84,7 @@ export function EditorEditFileSurface({
   isMermaid: boolean
   isCsv: boolean
   isNotebook: boolean
+  customEditor?: ActivePluginCustomEditor | null
   mdViewMode: MarkdownViewMode
   inlineMarkdownRenderState: MarkdownRenderState | null
   isChangesMode: boolean
@@ -86,12 +95,16 @@ export function EditorEditFileSurface({
   markdownAnnotationsEnabled: boolean
   pendingEditorReveal: PendingEditorReveal | null
   markdownDocuments: MarkdownDocumentsController
-  getConflictNavigation: (file: OpenFile, content: string) => EditorConflictNavigation | undefined
+  getConflictNavigation: (
+    file: OpenFile,
+    content: string,
+    viewStateId: string
+  ) => EditorConflictNavigation | undefined
   getMarkdownSourceLineOffset: (frontMatterRaw: string) => number
   handleContentChange: (content: string) => void
   handleDirtyStateHint: (dirty: boolean) => void
   handleSave: (content: string) => Promise<boolean>
-  reloadContent: (file: OpenFile) => void
+  reloadContent: (file: OpenFile, options?: { wakeWslDistro?: boolean }) => void
 }): React.JSX.Element {
   if (activeFile.conflict?.kind === 'conflict-placeholder') {
     return <ConflictPlaceholderView file={activeFile} />
@@ -119,18 +132,31 @@ export function EditorEditFileSurface({
       <EditorFileLoadErrorView
         message={fileContent.loadError}
         code={fileContent.loadErrorCode}
-        onRetry={() => reloadContent(activeFile)}
+        onRetry={() => reloadContent(activeFile, USER_RETRY)}
+      />
+    )
+  }
+  if (customEditor?.contentKind === 'bytes') {
+    return (
+      <PluginBytesCustomEditorSurface
+        key={`${activeFile.id}\u0000${customEditor.key}`}
+        editor={customEditor}
+        file={activeFile}
+        fileContent={fileContent}
+        onSave={handleSave}
+        reloadContent={reloadContent}
       />
     )
   }
   if (fileContent.isBinary) {
-    if (fileContent.mediaUrl) {
+    if (fileContent.mediaUrl && !fileContent.isImage) {
       return (
         <MediaViewer
           key={fileContent.mediaUrl}
           src={fileContent.mediaUrl}
           mimeType={fileContent.mimeType ?? 'video/mp4'}
           filePath={activeFile.filePath}
+          playbackCacheKey={pdfViewStateKey}
           canOpenLocally={
             !activeFile.externalSshTargetId &&
             !activeFile.runtimeEnvironmentId &&
@@ -143,6 +169,8 @@ export function EditorEditFileSurface({
       return (
         <ImageViewer
           content={fileContent.content}
+          src={fileContent.mediaUrl}
+          byteSize={fileContent.size}
           filePath={activeFile.filePath}
           mimeType={fileContent.mimeType}
           preferenceKey={pdfPreferenceKey}
@@ -151,11 +179,14 @@ export function EditorEditFileSurface({
       )
     }
     return (
-      <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
-        {translate(
-          'auto.components.editor.EditorContent.b9de81ba52',
-          'Binary file — cannot display'
-        )}
+      <div className="flex h-full flex-col">
+        <PluginFileTypeSuggestion filePath={activeFile.filePath} />
+        <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
+          {translate(
+            'auto.components.editor.EditorContent.b9de81ba52',
+            'Binary file — cannot display'
+          )}
+        </div>
       </div>
     )
   }
@@ -196,11 +227,10 @@ export function EditorEditFileSurface({
     )
   }
 
-  // Why: without a key React reuses the instance and skips cleanup (scroll snapshot); key forces a remount per pane+path.
+  // Remount per pane/path so cleanup snapshots scroll instead of reusing an instance across files.
   const monacoRemountKey = `${viewStateScopeId}\u0000${activeFile.filePath}`
   const monacoEditor = (
-    // Why: Monaco's own create effect throws on a broken language/editor init, which would otherwise
-    // unmount the whole workbench; contain it to this pane and let the retry remount the editor.
+    // Contain Monaco initialization errors to this pane; retry remounts the editor.
     <RecoverableRenderErrorBoundary
       boundaryId="editor.monaco"
       surface="code-editor"
@@ -215,7 +245,6 @@ export function EditorEditFileSurface({
         relativePath={activeFile.relativePath}
         content={currentContent}
         language={monacoLanguage}
-        // Why: read-only tabs no-op the change/save callbacks so no draft, dirty state, or write can occur.
         readOnly={activeFile.readOnly === true}
         liveTail={activeFile.liveTail === true}
         onContentChange={
@@ -232,17 +261,17 @@ export function EditorEditFileSurface({
         markdownAnnotationsEnabled={markdownAnnotationsEnabled && isMarkdown}
         conflictDecorationsEnabled={activeFile.conflict?.conflictStatus === 'unresolved'}
         revealLine={
-          matchesPendingEditorReveal(pendingEditorReveal, activeFile)
+          matchesPendingEditorReveal(pendingEditorReveal, activeFile, viewStateScopeId)
             ? pendingEditorReveal.line
             : undefined
         }
         revealColumn={
-          matchesPendingEditorReveal(pendingEditorReveal, activeFile)
+          matchesPendingEditorReveal(pendingEditorReveal, activeFile, viewStateScopeId)
             ? pendingEditorReveal.column
             : undefined
         }
         revealMatchLength={
-          matchesPendingEditorReveal(pendingEditorReveal, activeFile)
+          matchesPendingEditorReveal(pendingEditorReveal, activeFile, viewStateScopeId)
             ? pendingEditorReveal.matchLength
             : undefined
         }
@@ -251,7 +280,18 @@ export function EditorEditFileSurface({
     </RecoverableRenderErrorBoundary>
   )
 
-  const editorSurface = isMarkdown ? (
+  const editorSurface = customEditor ? (
+    <PluginCustomEditorFrame
+      key={`${activeFile.id}\u0000${customEditor.key}`}
+      editor={customEditor}
+      fileId={activeFile.id}
+      content={currentContent}
+      readOnly={activeFile.readOnly === true}
+      onContentChange={handleContentChange}
+      onSave={handleSave}
+      onDirtyHint={handleDirtyStateHint}
+    />
+  ) : isMarkdown ? (
     <EditorMarkdownFileSurface
       activeFile={activeFile}
       viewStateScopeId={viewStateScopeId}
@@ -270,7 +310,11 @@ export function EditorEditFileSurface({
       monacoEditor={monacoEditor}
     />
   ) : isMermaid && mdViewMode === 'rich' ? (
-    <MermaidViewer key={activeFile.id} content={currentContent} filePath={activeFile.filePath} />
+    <MermaidViewer
+      key={activeFile.id}
+      content={currentContent}
+      scrollCacheKey={`${editorViewStateKey}:mermaid-diagram`}
+    />
   ) : isCsv && mdViewMode === 'rich' ? (
     <CsvViewer
       key={activeFile.id}
@@ -304,11 +348,17 @@ export function EditorEditFileSurface({
   return (
     <div className="flex flex-1 min-h-0 flex-col">
       {externalChangeBanner}
+      {customEditor ? null : (
+        <PluginFileTypeSuggestion
+          filePath={activeFile.filePath}
+          purpose={monacoLanguage === 'plaintext' ? 'open' : 'editor'}
+        />
+      )}
       {activeFile.conflict && (
         <ConflictBanner
           file={activeFile}
           entry={activeConflictEntry}
-          conflictNavigation={getConflictNavigation(activeFile, currentContent)}
+          conflictNavigation={getConflictNavigation(activeFile, currentContent, viewStateScopeId)}
         />
       )}
       <div className="min-h-0 flex-1 relative">{editorSurface}</div>
@@ -318,9 +368,10 @@ export function EditorEditFileSurface({
 
 function matchesPendingEditorReveal(
   reveal: PendingEditorReveal | null,
-  file: Pick<OpenFile, 'id' | 'filePath'>
+  file: Pick<OpenFile, 'id' | 'filePath'>,
+  viewStateId: string
 ): reveal is PendingEditorReveal {
-  if (!reveal) {
+  if (!reveal || (reveal.viewStateId && reveal.viewStateId !== viewStateId)) {
     return false
   }
   return reveal.fileId ? reveal.fileId === file.id : reveal.filePath === file.filePath

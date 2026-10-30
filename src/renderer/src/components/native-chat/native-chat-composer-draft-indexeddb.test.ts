@@ -1,5 +1,4 @@
-// A write counts as saved only once IndexedDB has committed it (the transaction's `complete`), not
-// when its `put` is queued: a crash in between would otherwise lose a draft reported as saved.
+// Count saves only after transaction completion; queued puts can still be lost before commit.
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createIndexedDbNativeChatComposerDraftStorage } from './native-chat-composer-draft-indexeddb'
 
@@ -132,8 +131,7 @@ describe('the IndexedDB draft storage', () => {
     it('reports a scope’s write settled true only at its transaction’s complete', async () => {
       const { factory, transactions } = fakeDatabase()
       const { store, drafts } = await storeOn(factory)
-      // The stand-in has no reads, so the startup load fails and stays pending a retry: this is an
-      // append before the load landed, which reads and writes the stored draft in one transaction.
+      // The fake cannot load, so append must atomically update storage before hydration finishes.
       void store.hydrateNativeChatComposerDrafts()
       drafts.appendNativeChatDraftCache('agent-session:s1', 'returned by Stop')
       const settled = store.nativeChatComposerDraftWriteSettled('agent-session:s1')

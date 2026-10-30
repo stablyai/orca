@@ -6,6 +6,7 @@ import {
 } from '@/components/terminal-pane/pty-pre-handler-buffer'
 import { OPENCODE_AGENT_ROW_GRACE_MS } from '../../../shared/opencode-agent-row-scanner'
 import { waitForAgentDraftInputReady } from './agent-draft-readiness'
+import type * as RemoteRuntimePtyIdModule from '../../../shared/remote-runtime/remote-runtime-pty-id'
 
 const testState = vi.hoisted(() => ({
   observer: null as ((data: string) => void) | null,
@@ -19,7 +20,8 @@ vi.mock('@/components/terminal-pane/pty-data-sidecar-subscriptions', () => ({
   }
 }))
 
-vi.mock('@/runtime/runtime-terminal-inspection', () => ({
+vi.mock('../../../shared/remote-runtime/remote-runtime-pty-id', async (importOriginal) => ({
+  ...(await importOriginal<typeof RemoteRuntimePtyIdModule>()),
   isRemoteRuntimePtyId: () => false
 }))
 
@@ -45,7 +47,7 @@ describe('waitForAgentDraftInputReady', () => {
     const primary = vi.fn()
 
     await expect(
-      waitForAgentDraftInputReady(PTY_ID, 20_000, 'codex-composer-prompt', {})
+      waitForAgentDraftInputReady(PTY_ID, 20_000, 'codex-composer-prompt')
     ).resolves.toBe(true)
     drainPreHandlerPtyData(PTY_ID, primary)
 
@@ -61,7 +63,7 @@ describe('waitForAgentDraftInputReady', () => {
     vi.useFakeTimers()
     vi.stubGlobal('window', globalThis)
     let settled: boolean | null = null
-    void waitForAgentDraftInputReady(PTY_ID, 20_000, 'opencode-agent-row', {}).then(
+    void waitForAgentDraftInputReady(PTY_ID, 20_000, 'opencode-agent-row').then(
       (ready) => (settled = ready)
     )
     testState.observer!(OPENCODE_BOX)
@@ -78,7 +80,7 @@ describe('waitForAgentDraftInputReady', () => {
     vi.useFakeTimers()
     vi.stubGlobal('window', globalThis)
     let settled: boolean | null = null
-    void waitForAgentDraftInputReady(PTY_ID, 20_000, 'opencode-agent-row', {}).then(
+    void waitForAgentDraftInputReady(PTY_ID, 20_000, 'opencode-agent-row').then(
       (ready) => (settled = ready)
     )
     await vi.advanceTimersByTimeAsync(19_000)
@@ -94,7 +96,7 @@ describe('waitForAgentDraftInputReady', () => {
     vi.useFakeTimers()
     vi.stubGlobal('window', globalThis)
     let settled: boolean | null = null
-    void waitForAgentDraftInputReady(PTY_ID, 20_000, 'opencode-agent-row', {}).then(
+    void waitForAgentDraftInputReady(PTY_ID, 20_000, 'opencode-agent-row').then(
       (ready) => (settled = ready)
     )
     testState.observer!(OPENCODE_BOX)

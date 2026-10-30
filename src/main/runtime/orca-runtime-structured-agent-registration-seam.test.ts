@@ -1,15 +1,15 @@
-// createSupport, create and the model catalog's account read ask the runtime's one registration
-// list where an agent runs and which account it pins, before any host exists. An agent the list does
-// not hold is answered no without installing the host.
+// Support/create/account reads share registration authority before host install; unknown agents must not install one.
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from './orca-runtime'
 import { structuredAgentRuntimeRegistration } from './structured-agent-runtime-registrations'
+import { acpLaunchSpecFor } from '../acp/acp-launch-specs'
+import { AcpStructuredSessionAdapter } from '../acp/acp-structured-session-adapter'
 
 afterEach(() => vi.restoreAllMocks())
 
 const LOCAL = {
-  executionHostId: 'local',
+  executionHostId: 'local' as const,
   wslDistro: null,
   workspaceId: 'workspace-1',
   workspaceKind: 'git-worktree' as const
@@ -48,7 +48,6 @@ describe('the structured agent registration list', () => {
 
   it('refuses an agent it does not hold without installing the host', async () => {
     const { runtime, installHost } = runtimeAt()
-    // No structured registration exists for Cursor.
     expect(
       await runtime.getStructuredAgentSessionCreateSupport('id:workspace-1', 'cursor')
     ).toEqual({
@@ -59,6 +58,40 @@ describe('the structured agent registration list', () => {
       message: 'structured_agent_session_unsupported'
     })
     expect(installHost).not.toHaveBeenCalled()
+  })
+
+  it('refuses Antigravity chat on a host without a pinned server build', async () => {
+    const { runtime, installHost } = runtimeAt()
+    const adapter = new AcpStructuredSessionAdapter({
+      spec: acpLaunchSpecFor('antigravity')!,
+      resolveLaunch: async () => {
+        throw new Error('no launch')
+      },
+      readLaunch: async () => {
+        throw new Error('no read')
+      },
+      connect: () => {
+        throw new Error('no connection')
+      },
+      dataDirectory: '/orca-data',
+      isWindowsProcessStartTimeAvailable: () => true
+    })
+    Object.assign(runtime, {
+      resolveRuntimeFileTarget: vi.fn(async () => ({ worktree: { path: '/worktree' } }))
+    })
+    const platform = process.platform
+    try {
+      Object.defineProperty(process, 'platform', { configurable: true, value: 'darwin' })
+      expect(adapter.supportsLocation(LOCAL)).toBe(true)
+      Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+      expect(
+        await runtime.getStructuredAgentSessionCreateSupport('id:workspace-1', 'antigravity')
+      ).toEqual({ supported: false, reason: 'agent' })
+      expect(adapter.supportsLocation(LOCAL)).toBe(false)
+      expect(installHost).not.toHaveBeenCalled()
+    } finally {
+      Object.defineProperty(process, 'platform', { configurable: true, value: platform })
+    }
   })
 
   it("resolves an account home through the agent's registration, with the read purpose", async () => {

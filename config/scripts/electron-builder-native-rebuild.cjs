@@ -14,14 +14,19 @@ function runElectronBuilderNativeRebuild(context, runner = execFileSync, runtime
       cwd: projectDir,
       stdio: 'inherit'
     })
+    // Packaging rejects a hook built for another machine, so build the one this package targets.
+    runner(
+      process.execPath,
+      ['config/scripts/build-windows-agent-hook.mjs', '--arch', readArchName(context?.arch)],
+      { cwd: projectDir, stdio: 'inherit' }
+    )
   }
   runner(process.execPath, args, {
     cwd: projectDir,
     stdio: 'inherit'
   })
 
-  // Why: returning false tells electron-builder that native deps were handled
-  // externally, avoiding its all-module rebuild of optional cpu-features.
+  // Return false to skip electron-builder’s all-module rebuild of optional cpu-features.
   return false
 }
 

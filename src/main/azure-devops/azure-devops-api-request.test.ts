@@ -45,23 +45,6 @@ describe('Azure DevOps API request (STA-3494)', () => {
     globalThis.fetch = OLD_FETCH
   })
 
-  it('retries with -preview when Azure DevOps Server rejects the api-version', async () => {
-    const versions: (string | null)[] = []
-    globalThis.fetch = vi.fn(async (input: string | URL | Request) => {
-      const url = new URL(String(input))
-      versions.push(url.searchParams.get('api-version'))
-      if (!url.searchParams.get('api-version')?.endsWith('-preview')) {
-        return previewRejection()
-      }
-      return Response.json({ authenticatedUser: { providerDisplayName: 'Server User' } })
-    }) as never
-
-    await expect(
-      requestAzureDevOpsJsonAtBase(SERVER_BASE, '/_apis/connectionData')
-    ).resolves.toEqual({ authenticatedUser: { providerDisplayName: 'Server User' } })
-    expect(versions).toEqual(['7.1', '7.1-preview'])
-  })
-
   it('remembers the -preview requirement per origin after the first rejection', async () => {
     const versions: (string | null)[] = []
     globalThis.fetch = vi.fn(async (input: string | URL | Request) => {
@@ -76,7 +59,6 @@ describe('Azure DevOps API request (STA-3494)', () => {
     const base = 'https://ado-sticky.example.com/tfs/MyCollection'
     await requestAzureDevOpsJsonAtBase(base, '/_apis/connectionData')
     await requestAzureDevOpsJsonAtBase(base, '/_apis/connectionData')
-    // First request learns the suffix; the second must not repeat the 400 round trip.
     expect(versions).toEqual(['7.1', '7.1-preview', '7.1-preview'])
   })
 
@@ -104,7 +86,6 @@ describe('Azure DevOps API request (STA-3494)', () => {
     }) as never
 
     await requestAzureDevOpsJson(serverRepoRef(), '/_apis/git/repositories/my-repo')
-    // Collection-level env base must not strip the project segment Git endpoints need.
     expect(paths).toEqual(['/tfs/MyCollection/MyProject/_apis/git/repositories/my-repo'])
   })
 

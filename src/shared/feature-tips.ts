@@ -4,11 +4,17 @@ import {
   type FeatureInteractionState
 } from './feature-interactions'
 
-export type FeatureTipId = 'voice-dictation' | 'orca-cli' | 'cmd-j-palette' | 'agent-session-search'
+export type FeatureTipId =
+  | 'native-chat-upgrade'
+  | 'voice-dictation'
+  | 'orca-cli'
+  | 'cmd-j-palette'
+  | 'agent-session-search'
 
 export type FeatureTipPriority = 'new' | 'unseen'
 
 export type FeatureTipAction =
+  | 'learn-native-chat-upgrade'
   | 'enable-voice'
   | 'setup-cli'
   | 'learn-cmd-j-palette'
@@ -22,7 +28,6 @@ export type FeatureTip = {
   description: string
   action: FeatureTipAction
   ctaLabel: string
-  /** Feature interactions that mean this tip is no longer useful to show. */
   completedByFeatureInteractions?: readonly FeatureInteractionId[]
 }
 
@@ -31,10 +36,24 @@ export type CompletedFeatureTipState = {
   voiceDictationEnabled: boolean
   /** Search is on, or this client cannot turn it on. */
   sessionSearchTipCompleted: boolean
+  /** Main's once-decided record; only profiles with Chat UI on before the chat upgrade are in it. */
+  inNativeChatUpgradeTipAudience: boolean
   featureInteractions?: FeatureInteractionState
 }
 
 export const FEATURE_TIPS = [
+  {
+    // Show the upgrade tip first for its audience’s first launch.
+    id: 'native-chat-upgrade',
+    priority: 'new',
+    eyebrow: 'New',
+    title: 'Native chat got an upgrade',
+    description:
+      'New chats with supported agents now open in the upgraded chat view. To move between chat and CLI, open Agent Session History in the right sidebar:',
+    action: 'learn-native-chat-upgrade',
+    ctaLabel: 'Got it',
+    completedByFeatureInteractions: []
+  },
   {
     id: 'agent-session-search',
     priority: 'new',
@@ -60,8 +79,7 @@ export const FEATURE_TIPS = [
     id: 'cmd-j-palette',
     priority: 'new',
     eyebrow: 'Tip',
-    // Why: "<shortcut>" is a placeholder token; the cmd-j dialog splits the
-    // title on it and inlines the live, platform-correct keybinding as a <kbd>.
+    // The dialog replaces <shortcut> with a live platform-aware <kbd>.
     title: 'Jump to a worktree with <shortcut>',
     description:
       'Search worktrees, switch tabs, tweak settings, or spin up a new worktree, all without leaving the keyboard.',
@@ -111,6 +129,9 @@ export function getCompletedFeatureTipIds(state: CompletedFeatureTipState): Set<
   }
   if (state.sessionSearchTipCompleted) {
     completedIds.add('agent-session-search')
+  }
+  if (!state.inNativeChatUpgradeTipAudience) {
+    completedIds.add('native-chat-upgrade')
   }
   for (const tip of FEATURE_TIPS) {
     if (

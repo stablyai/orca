@@ -16,7 +16,7 @@ export async function settlePostAcquisitionAttachFailure(
   cause: unknown
 ): Promise<never> {
   let cleanupError: unknown = cause
-  let exitProof: 'exit-proven' | 'root-exit-observed' | 'unproven' = 'unproven'
+  let exitProof: 'exit-proven' | 'root-exit-observed' | 'kill-delivered' | 'unproven' = 'unproven'
   try {
     await rethrowAfterAgentSessionAcquisitionCleanup(input.adapter, record.sessionId, cause)
   } catch (error) {
@@ -25,10 +25,15 @@ export async function settlePostAcquisitionAttachFailure(
       error instanceof AgentSessionAcquisitionExitUnprovenError
         ? 'unproven'
         : error instanceof AgentSessionAcquisitionRootExitObservedError
-          ? 'root-exit-observed'
+          ? error.deathEvidenceKind === 'kill-delivered'
+            ? 'kill-delivered'
+            : 'root-exit-observed'
           : 'exit-proven'
   }
-  input.onAcquisitionReleased?.(cause, { rootGone: exitProof !== 'unproven' })
+  input.onAcquisitionReleased?.(cause, {
+    rootGone: exitProof !== 'unproven',
+    ...(exitProof === 'kill-delivered' ? { deathEvidenceKind: exitProof } : {})
+  })
   try {
     await input.store.settleFailedPostAcquisitionAttachment({
       sessionId: record.sessionId,
@@ -73,7 +78,7 @@ export function endStructuredAgentSessionReleasedChild(
       fence: child.fence,
       cause: 'attach-failed',
       reason: cause instanceof Error ? cause.message : String(cause),
-      // Orca failed to attach; the provider said nothing.
+      // Host attach faults are not provider failures.
       failure: agentSessionFailureFact('hostFault'),
       duringStartup: child.phase === 'starting',
       ...verdict
@@ -84,4 +89,35 @@ export function endStructuredAgentSessionReleasedChild(
   context.runtimeState.currentEventSink(sessionId)?.close()
   context.runtimeState.discardEventSink(sessionId)
   context.publishStatus?.(sessionId)
+  // Re-derive reader/queue state after releasing the live acquisition.
+  context.generationEnded?.(sessionId)
+}
+
+export async function settleUnsupportedReservation(
+  input: AttachFlowInput,
+  record: AgentSessionRecord
+): Promise<void> {
+  const spawnToken = record.lease.reservedSpawnToken
+  if (!spawnToken) {
+    return
+  }
+  try {
+    await input.store.settleFailedAcquisition({
+      sessionId: record.sessionId,
+      fence: record.lease.runtimeFence,
+      spawnToken,
+      callerKey: input.callerKey,
+      operationId: input.params.envelope.clientOperationId,
+      outcome: {
+        status: 'failed',
+        code: 'structured_agent_session_unsupported',
+        details: { reason: 'hostUnsupported' },
+        message: 'Structured session support changed before the provider could start.'
+      },
+      exitProof: 'processless',
+      now: input.now()
+    })
+  } catch (error) {
+    throw new AggregateError([error], 'agent session unsupported reservation settlement failed')
+  }
 }

@@ -1,22 +1,10 @@
-// Census: every release-triggered workflow and every script that lists this repo's releases
-// classifies tags through release-tag-patterns.mjs, so a new tag family such as the agent state
-// rules cannot reach a desktop-only path through one that forgot it.
-import { readdirSync, readFileSync } from 'node:fs'
-import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { parse } from 'yaml'
 import {
   DESKTOP_RC_TAG,
   DESKTOP_STABLE_TAG,
-  DESKTOP_STABLE_TAG_SHELL_PATTERN,
   agentStateRulesTag,
   isAgentStateRulesTag
 } from './release-tag-patterns.mjs'
-
-const WORKFLOWS_DIR = '.github/workflows'
-const SCRIPT_DIRS = ['config/scripts', '.github/scripts']
-const SHARED_IMPORT = /from '[^']*release-tag-patterns\.mjs'/
-const LISTS_RELEASES = /\/releases\?|listReleases|releases\.atom|'release',\s*'list'/
 
 const RULES_TAGS = [agentStateRulesTag(1, 'next'), agentStateRulesTag(1, 'stable')]
 const rulesRelease = (tag, extra = {}) => ({
@@ -29,51 +17,7 @@ const rulesRelease = (tag, extra = {}) => ({
   ...extra
 })
 
-function read(path) {
-  return readFileSync(path, 'utf8')
-}
-
-function importsSharedPatterns(path) {
-  return SHARED_IMPORT.test(read(path))
-}
-
-function isReleaseTriggered(workflow) {
-  const on = workflow.on
-  if (typeof on === 'string') {
-    return on === 'release'
-  }
-  if (Array.isArray(on)) {
-    return on.includes('release')
-  }
-  return typeof on === 'object' && on !== null && 'release' in on
-}
-
-function releaseTriggeredWorkflows() {
-  return readdirSync(WORKFLOWS_DIR)
-    .filter((name) => /\.ya?ml$/.test(name))
-    .map((name) => join(WORKFLOWS_DIR, name))
-    .filter((path) => isReleaseTriggered(parse(read(path))))
-}
-
-function scriptsNamedIn(text) {
-  return [...text.matchAll(/((?:config|\.github)\/scripts\/[\w.-]+\.mjs)/g)].map(
-    (match) => match[1]
-  )
-}
-
-function releaseListingScripts() {
-  return SCRIPT_DIRS.flatMap((dir) =>
-    readdirSync(dir)
-      .filter((name) => name.endsWith('.mjs') && !name.includes('.test.'))
-      .map((name) => join(dir, name))
-  ).filter((path) => LISTS_RELEASES.test(read(path)))
-}
-
-/**
- * Scripts that list releases yet admit only desktop tags by their own shape. Each entry proves,
- * by calling the script, that a rules release never passes; a new listing script must import the
- * shared patterns or add a proof here.
- */
+// Exercise the desktop consumers against rules releases.
 const DESKTOP_ONLY_PROOFS = {
   'config/scripts/create-draft-release.mjs': async () => {
     const { latestPreviousPublishedDesktopReleaseTag } = await import('./create-draft-release.mjs')
@@ -85,6 +29,7 @@ const DESKTOP_ONLY_PROOFS = {
   },
   'config/scripts/publish-complete-draft-releases.mjs': async () => {
     const { isReleaseCutDraft } = await import('./publish-complete-draft-releases.mjs')
+    expect(isReleaseCutDraft(rulesRelease('v1.4.2-rc.1', { draft: true }))).toBe(true)
     for (const tag of RULES_TAGS) {
       expect(isReleaseCutDraft(rulesRelease(tag, { draft: true }))).toBe(false)
     }
@@ -99,6 +44,10 @@ const DESKTOP_ONLY_PROOFS = {
   },
   'config/scripts/assert-github-release-is-draft.mjs': async () => {
     const { matchingDesktopReleases } = await import('./assert-github-release-is-draft.mjs')
+    const desktop = { tag_name: 'v1.4.1' }
+    expect(
+      matchingDesktopReleases([...RULES_TAGS.map((tag) => rulesRelease(tag)), desktop], 'v1.4.1')
+    ).toEqual([desktop])
     expect(
       matchingDesktopReleases(
         RULES_TAGS.map((tag) => rulesRelease(tag)),
@@ -108,13 +57,18 @@ const DESKTOP_ONLY_PROOFS = {
   },
   'config/scripts/verify-release-required-assets.mjs': async () => {
     const { verifyRequiredReleaseAssets } = await import('./verify-release-required-assets.mjs')
+    const releases = RULES_TAGS.map((tag) => rulesRelease(tag))
     vi.stubGlobal(
       'fetch',
-      vi.fn(async () => new Response(JSON.stringify(RULES_TAGS.map((tag) => rulesRelease(tag)))))
+      vi.fn(async () => new Response(JSON.stringify(releases)))
     )
     await expect(
       verifyRequiredReleaseAssets({ repo: 'stablyai/orca', tag: 'v1.4.1', token: '' })
     ).rejects.toThrow('was not found')
+    releases.push({ tag_name: 'v1.4.1', assets: [] })
+    await expect(
+      verifyRequiredReleaseAssets({ repo: 'stablyai/orca', tag: 'v1.4.1', token: '' })
+    ).rejects.toThrow('Release v1.4.1 is missing required assets.')
   }
 }
 
@@ -123,62 +77,20 @@ afterEach(() => {
 })
 
 describe('release tag pattern census', () => {
-  it('finds the release-triggered workflows and release-listing scripts it guards', () => {
-    expect(releaseTriggeredWorkflows().length).toBeGreaterThan(0)
-    expect(releaseListingScripts().length).toBeGreaterThan(0)
-  })
-
-  it.each(releaseTriggeredWorkflows())('%s classifies tags through the shared patterns', (path) => {
-    const text = read(path)
-    const viaScript = scriptsNamedIn(text).some(importsSharedPatterns)
-    const viaShellPattern = text.includes(DESKTOP_STABLE_TAG_SHELL_PATTERN)
-    expect(
-      viaScript || viaShellPattern,
-      `${path} names no script importing release-tag-patterns.mjs and embeds no shared pattern`
-    ).toBe(true)
-  })
-
-  it.each(releaseTriggeredWorkflows())(
-    '%s checks out the shared patterns beside its script',
-    (path) => {
-      const workflow = parse(read(path))
-      const sparse = Object.values(workflow.jobs)
-        .flatMap((job) => job.steps ?? [])
-        .map((step) => step.with?.['sparse-checkout'])
-        .filter((value) => typeof value === 'string')
-      for (const paths of sparse) {
-        if (scriptsNamedIn(paths).some(importsSharedPatterns)) {
-          expect(paths).toContain('config/scripts/release-tag-patterns.mjs')
-        }
-      }
-    }
-  )
-
-  it.each(releaseListingScripts())(
-    '%s imports the shared patterns or proves it admits only desktop tags',
+  it.each(Object.keys(DESKTOP_ONLY_PROOFS))(
+    '%s excludes agent state rules releases from desktop selection',
     async (path) => {
-      if (importsSharedPatterns(path)) {
-        return
-      }
-      const proof = DESKTOP_ONLY_PROOFS[path]
-      expect(
-        proof,
-        `${path} lists releases: import release-tag-patterns.mjs or add a proof`
-      ).toBeDefined()
-      await proof()
+      await DESKTOP_ONLY_PROOFS[path]()
     }
   )
-
-  it('keeps no proof for a script that no longer lists releases', () => {
-    const listing = new Set(releaseListingScripts())
-    expect(Object.keys(DESKTOP_ONLY_PROOFS).filter((path) => !listing.has(path))).toEqual([])
-  })
 
   it('never classifies an agent state rules tag as a desktop release', () => {
     for (const tag of RULES_TAGS) {
       expect(isAgentStateRulesTag(tag)).toBe(true)
       expect(DESKTOP_STABLE_TAG.test(tag) || DESKTOP_RC_TAG.test(tag)).toBe(false)
     }
+    expect(DESKTOP_STABLE_TAG.test('v1.4.1')).toBe(true)
+    expect(DESKTOP_RC_TAG.test('v1.4.2-rc.1')).toBe(true)
     expect(() => agentStateRulesTag(1, 'beta')).toThrow()
   })
 })

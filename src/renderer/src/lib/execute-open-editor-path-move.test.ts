@@ -1,12 +1,24 @@
+// @vitest-environment happy-dom
+
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type * as RuntimeFileClient from '@/runtime/runtime-file-client'
+import type * as RuntimeFileMutationClient from '@/runtime/runtime-file-mutation-client'
 import type * as EditorAutosave from '@/components/editor/editor-autosave'
 
 const mocks = vi.hoisted(() => ({ renameRuntimePath: vi.fn() }))
-vi.mock('@/runtime/runtime-file-client', async (importOriginal) => {
-  const actual = await importOriginal<typeof RuntimeFileClient>()
+vi.mock('@/runtime/runtime-file-mutation-client', async (importOriginal) => {
+  const actual = await importOriginal<typeof RuntimeFileMutationClient>()
   return { ...actual, renameRuntimePath: mocks.renameRuntimePath }
 })
+vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
+  (
+    await import('@/runtime/layout-apply-test-transport.test-fixture')
+  ).runtimeRpcClientWithLayoutApply(await importOriginal())
+)
+vi.mock('@/runtime/runtime-layout-client', async (importOriginal) =>
+  (
+    await import('@/runtime/layout-apply-test-transport.test-fixture')
+  ).runtimeLayoutClientWithTestFrames(await importOriginal())
+)
 vi.mock('@/components/editor/editor-autosave', async (importOriginal) => {
   const actual = await importOriginal<typeof EditorAutosave>()
   return { ...actual, requestEditorSaveQuiesce: vi.fn().mockResolvedValue(undefined) }
@@ -15,11 +27,17 @@ vi.mock('@/components/editor/editor-autosave', async (importOriginal) => {
 import { useAppStore } from '@/store'
 import { executeOpenEditorPathMove } from './execute-open-editor-path-move'
 import { __activeEditorPathMoveCountForTests } from '@/components/editor/editor-path-move-inflight'
-import { getDiskBaselineSignature } from '@/components/editor/diff-content-signature'
+import { getDiskBaselineSignature } from '../../../shared/disk-baseline-signature'
 import { buildEditorExternalWatchEventHandler as createExternalWatchEventHandler } from '@/hooks/editor-external-watch-event-reconciliation'
+import {
+  drawTabsFromMain,
+  type TabsDrawnFromMain
+} from '@/store/slices/tabs-drawn-from-main.test-fixture'
+
+let main: TabsDrawnFromMain
 
 const CONTEXT = {
-  settings: null,
+  target: { kind: 'local' as const },
   worktreeId: 'wt-1',
   worktreePath: '/repo',
   connectionId: undefined
@@ -46,12 +64,14 @@ function openDirtyTab(): string {
 }
 
 describe('executeOpenEditorPathMove', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     useAppStore.setState(useAppStore.getInitialState(), true)
     mocks.renameRuntimePath.mockReset().mockResolvedValue(undefined)
+    main = await drawTabsFromMain(useAppStore)
   })
 
   afterEach(() => {
+    main.close()
     vi.unstubAllGlobals()
   })
 
@@ -77,11 +97,65 @@ describe('executeOpenEditorPathMove', () => {
     expect(moved.isDirty).toBe(true)
     expect(moved.lastKnownDiskSignature).toBe('sig-a')
     expect(useAppStore.getState().editorDrafts['/repo/sub/a.md']).toBe('unsaved work')
-    // Dirty destination gets the content-verify gate + provenance.
-    expect(moved.pendingLiveDiskVerification).toBe(true)
     expect(moved.pendingSelfMoveEcho?.targetPath).toBe('/repo/sub/a.md')
-    // The in-flight transaction is settled (no leak).
     expect(__activeEditorPathMoveCountForTests()).toBe(0)
+  })
+
+  it('never retargets the same path open from a same-id workspace on a server', async () => {
+    const localId = openDirtyTab()
+    const state = useAppStore.getState()
+    state.openFile({
+      filePath: '/repo/a.md',
+      relativePath: 'a.md',
+      worktreeId: 'wt-1',
+      runtimeEnvironmentId: 'env-server',
+      language: 'markdown',
+      mode: 'edit'
+    })
+    const remote = useAppStore
+      .getState()
+      .openFiles.find((file) => file.runtimeEnvironmentId === 'env-server')!
+    state.setEditorDraft(remote.id, 'server draft')
+    state.markFileDirty(remote.id, true)
+
+    await executeOpenEditorPathMove({
+      context: { ...CONTEXT, expectedExecutionHostId: 'local' },
+      fromPath: '/repo/a.md',
+      toPath: '/repo/b.md',
+      worktreeId: 'wt-1',
+      worktreePath: '/repo'
+    })
+
+    const files = useAppStore.getState().openFiles
+    expect(files.find((file) => file.runtimeEnvironmentId !== 'env-server')!.filePath).toBe(
+      '/repo/b.md'
+    )
+    expect(files.find((file) => file.id === remote.id)).toMatchObject({
+      filePath: '/repo/a.md',
+      isDirty: true
+    })
+    expect(useAppStore.getState().editorDrafts[remote.id]).toBe('server draft')
+    expect(useAppStore.getState().editorDrafts[localId]).toBeUndefined()
+  })
+
+  it('still moves its own tab when the workspace host focus changes while the rename runs', async () => {
+    openDirtyTab()
+    mocks.renameRuntimePath.mockImplementation(async () => {
+      useAppStore.setState({
+        activeWorktreeId: 'wt-1',
+        activeWorkspaceExecutionHostId: 'runtime:env-other'
+      })
+    })
+
+    await executeOpenEditorPathMove({
+      context: { ...CONTEXT, expectedExecutionHostId: 'local' },
+      fromPath: '/repo/a.md',
+      toPath: '/repo/b.md',
+      worktreeId: 'wt-1',
+      worktreePath: '/repo'
+    })
+
+    expect(useAppStore.getState().openFiles[0]!.filePath).toBe('/repo/b.md')
   })
 
   it('declares the moved file as the document for a document-scoped rename', async () => {
@@ -122,19 +196,14 @@ describe('executeOpenEditorPathMove', () => {
     await new Promise((resolve) => setTimeout(resolve, 20))
 
     const moved = useAppStore.getState().openFiles[0]!
-    // Disk matched the carried baseline: gate released, no false conflict banner.
-    expect(moved.pendingLiveDiskVerification).toBeFalsy()
     expect(moved.externalMutation).toBeUndefined()
     expect(moved.isDirty).toBe(true)
-    // Safety-net verify LEAVES the provenance so a destination watcher event
-    // arriving after this read is still recognized as the move's own echo.
+    // Keep echo provenance after proactive verify so a later destination watcher event remains recognized as this move’s own echo.
     expect(moved.pendingSelfMoveEcho?.targetPath).toBe('/repo/sub/a.md')
   })
 
   it('does not raise a false banner when the destination watcher event lands after the move', async () => {
-    // Regression: the proactive verify must NOT consume the echo provenance, or
-    // the real destination fs event (which on FSEvents/SSH lands after the fast
-    // local read) would fall through to the immediate changed-on-disk mark.
+    // FSEvents/SSH events may follow fast verification; consuming provenance early would mark our own rename as an external edit.
     const DISK_CONTENT = 'the file as it exists on disk\n'
     const id = openDirtyTab()
     useAppStore.getState().setLastKnownDiskSignature(id, getDiskBaselineSignature(DISK_CONTENT))
@@ -153,7 +222,6 @@ describe('executeOpenEditorPathMove', () => {
     })
     await new Promise((resolve) => setTimeout(resolve, 20))
 
-    // The delayed destination create/update event finally arrives.
     const { handleFsChanged, dispose } = createExternalWatchEventHandler((worktreePath) =>
       worktreePath === '/repo'
         ? {
@@ -178,7 +246,6 @@ describe('executeOpenEditorPathMove', () => {
 
   it('undoes the on-disk rename when the editor rekey collides', async () => {
     openDirtyTab()
-    // A distinct live session already occupies the destination id.
     useAppStore.getState().openFile(
       {
         filePath: '/repo/sub/a.md',
@@ -202,7 +269,6 @@ describe('executeOpenEditorPathMove', () => {
       })
     ).rejects.toThrow(/retarget/)
 
-    // Forward rename then inverse rename to undo the disk move.
     expect(mocks.renameRuntimePath).toHaveBeenCalledWith(
       CONTEXT,
       '/repo/a.md',
@@ -215,7 +281,6 @@ describe('executeOpenEditorPathMove', () => {
       '/repo/a.md',
       undefined
     )
-    // The stranded source session is left intact (not rekeyed).
     expect(useAppStore.getState().openFiles.map((f) => f.id)).toEqual(before)
   })
 
@@ -265,7 +330,6 @@ describe('executeOpenEditorPathMove', () => {
       })
     ).rejects.toThrow('EACCES')
 
-    // Commit-only: no store mutation on failure.
     expect(useAppStore.getState().openFiles).toEqual(before)
     expect(__activeEditorPathMoveCountForTests()).toBe(0)
   })

@@ -1,6 +1,6 @@
 import { defineMethod } from '../core'
 import { assertRpcClipboardTextWriteWithinLimit } from '../rpc-clipboard-text-validation'
-import { BrowserTarget } from '../schemas'
+import { BrowserTarget } from '../../../../shared/rpc-contract/rpc-param-primitives'
 import {
   ClipboardWrite,
   CookieDelete,
@@ -20,7 +20,7 @@ import {
   StorageKey,
   StorageKeyValue,
   Viewport
-} from './browser-schemas'
+} from '../../../../shared/rpc-contract/browser-params'
 import { MouseClick } from '../../../../shared/rpc-contract/browser-extras-params'
 
 export const BROWSER_EXTRA_METHODS = [

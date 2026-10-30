@@ -1,40 +1,77 @@
-import { describe, expect, it, vi } from 'vitest'
+// @vitest-environment happy-dom
 
-const CATALOG: Record<string, string> = {
-  'auto.components.terminal.pane.AgentLaunchPaneNotice.notStarted': '智能体无法启动。',
-  'auto.components.terminal.pane.AgentLaunchPaneNotice.unconfirmed': '无法确认智能体已启动。',
-  'auto.components.terminal.pane.AgentLaunchPaneNotice.exitedDuringStart': '它在启动时退出了。'
-}
-vi.mock('@/i18n/i18n', () => ({
-  translate: (key: string, fallback: string) => CATALOG[key] ?? fallback
-}))
+import React from 'react'
+import { cleanup, render } from '@testing-library/react'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { i18n, loadRendererUiLanguage } from '@/i18n/i18n'
+import { AgentLaunchPaneNotice } from './AgentLaunchPaneNotice'
+import { TerminalErrorToast } from './TerminalErrorToast'
+import { agentLaunchPaneOutcomeForLeaf } from './agent-launch-pane-notice-text'
 
-const { agentLaunchPaneNoticeText, agentLaunchPaneOutcomeForLeaf } =
-  await import('./agent-launch-pane-notice-text')
+afterEach(async () => {
+  cleanup()
+  await i18n.changeLanguage('en')
+})
 
-describe("the pane of a launch whose agent isn't running", () => {
-  it("says it couldn't start, in the viewer's language, with a reason they can act on", () => {
-    expect(
-      agentLaunchPaneNoticeText({ kind: 'not-started', code: 'agent_session_exited_during_start' })
-    ).toBe('智能体无法启动。 它在启动时退出了。')
-  })
-
-  it('never shows a host error code', () => {
-    expect(
-      agentLaunchPaneNoticeText({ kind: 'not-started', code: 'agent_launch_pane_already_live' })
-    ).toBe('智能体无法启动。')
-  })
-
-  it("says it can't confirm, never that it failed, when nobody knows", () => {
-    expect(agentLaunchPaneNoticeText({ kind: 'unconfirmed' })).toBe('无法确认智能体已启动。')
+describe('localized startup failure surfaces', () => {
+  it.each([
+    {
+      language: 'en',
+      exit: 'Codex exited while starting. Run it in a terminal in this folder to see why, then try again.',
+      workspace:
+        "Codex couldn't start because its workspace is no longer available. Restore the workspace folder or open an available workspace, then try again.",
+      unknown: "Couldn't confirm Codex started. Check its terminal before trying again."
+    },
+    {
+      language: 'zh',
+      exit: 'Codex 在启动时退出了。 请在此文件夹的终端中运行它以查看原因，然后重试。',
+      workspace:
+        '无法启动 Codex，因为其工作区已不可用。 请恢复工作区文件夹或打开可用的工作区，然后重试。',
+      unknown: '无法确认 Codex 已启动。请先检查其终端，再重试。'
+    }
+  ] as const)('renders both real mappings with the shipped $language catalog', async (copy) => {
+    await i18n.changeLanguage(await loadRendererUiLanguage(copy.language))
+    for (const [code, expected, refusal] of [
+      [
+        'agent_session_exited_during_start',
+        copy.exit,
+        { kind: 'not-started', code: 'agent_session_exited_during_start' }
+      ],
+      ['worktree_not_found', copy.workspace, { kind: 'not-started', code: 'worktree_not_found' }],
+      ['agent_session_operation_unknown', copy.unknown, { kind: 'unconfirmed' }]
+    ] as const) {
+      const toast = render(
+        React.createElement(TerminalErrorToast, {
+          error: `Error invoking remote method 'pty:spawn': Error: ${code}`,
+          agentId: 'codex',
+          paneOnClient: false,
+          onDismiss: vi.fn()
+        })
+      )
+      const pane = render(
+        React.createElement(AgentLaunchPaneNotice, {
+          refusal,
+          agentId: 'codex',
+          tabId: 'localized-startup-failure'
+        })
+      )
+      expect(toast.container.querySelector('span')?.textContent).toBe(expected)
+      expect(pane.container.querySelector('span')?.textContent).toBe(expected)
+      expect(toast.container.querySelector('a')).toBeNull()
+      expect(toast.container.textContent).not.toContain(code)
+      expect(pane.container.textContent).not.toContain(code)
+      toast.unmount()
+      pane.unmount()
+    }
   })
 })
 
 describe('which pane shows it', () => {
-  const tab = { agentLaunchPane: { leafId: 'leaf-1', outcome: { kind: 'unconfirmed' as const } } }
+  const outcome = { kind: 'not-started' as const, code: 'boom' }
+  const tab = { agentLaunchPane: { leafId: 'leaf-1', outcome } }
 
   it('the leaf the launch laid out, once its fate is final', () => {
-    expect(agentLaunchPaneOutcomeForLeaf(tab, 'leaf-1')).toEqual({ kind: 'unconfirmed' })
+    expect(agentLaunchPaneOutcomeForLeaf(tab, 'leaf-1')).toEqual(outcome)
     expect(agentLaunchPaneOutcomeForLeaf(tab, 'leaf-2')).toBeNull()
     expect(
       agentLaunchPaneOutcomeForLeaf({ agentLaunchPane: { leafId: 'leaf-1' } }, 'leaf-1')

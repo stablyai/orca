@@ -1,12 +1,8 @@
 import { normalizeBrowserNavigationUrl } from '../../../../shared/browser-url'
 import { ORCA_BROWSER_BLANK_URL } from '../../../../shared/constants'
-import { createWebRuntimeSessionBrowserTab } from '@/runtime/web-runtime-session'
+import { createWebRuntimeSessionBrowserTab } from '@/runtime/web-runtime-browser-creation'
 
-/**
- * Last committed URL, reduced to what is safe to restore on another browser engine.
- * A blank or non-web destination reopens blank rather than replaying something the
- * new page cannot reproduce; Orca never reconstructs a request body.
- */
+/** Restore only committed web URLs across engines; other destinations reopen blank and request bodies are never reconstructed. */
 export function resolveBrowserReopenOnServerUrl(
   url: string | null | undefined
 ): string | undefined {
@@ -25,10 +21,7 @@ export function resolveBrowserReopenOnServerUrl(
   return normalized
 }
 
-/**
- * Creates a NEW server-placed page. Placement is immutable per page generation, so the
- * client-hosted page is left alone — this never migrates or mutates it.
- */
+/** Placement is immutable per generation: create a separate server page without mutating the client-hosted one. */
 export async function reopenBrowserPageOnServer(args: {
   environmentId: string
   worktreeId: string
@@ -38,7 +31,6 @@ export async function reopenBrowserPageOnServer(args: {
     worktreeId: args.worktreeId,
     environmentId: args.environmentId,
     url: resolveBrowserReopenOnServerUrl(args.lastCommittedUrl),
-    // Omitting client placement is what `browser.tabCreate` reads as server placement.
     placementPreference: 'server',
     focusOnCreate: true
   })

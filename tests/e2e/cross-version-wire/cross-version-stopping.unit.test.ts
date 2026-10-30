@@ -5,17 +5,8 @@ import {
   materializeReleaseCheckout
 } from './release-checkout'
 
-/**
- * "Stopping…", paired across two builds.
- *
- * The host now publishes `stopping: true` on a working session's status summary, and the main
- * agent's row carries it as `mainAgent.stopping`. Both are optional fields an older reader must
- * ignore (Rule 1): an old desktop folds a new host's summary into a plain working row, and an old
- * phone reads a new host's `worktree ps` row as working with its usual line. A new reader of an old
- * host, which never publishes either field, must never read Stopping from it.
- *
- * The pre-change ref is pinned rather than derived: a newer baseline would carry the new reader.
- */
+// Pin pre-Stopping readers: optional status/mainAgent flags must remain plain working rows to old desktop/mobile clients.
+// Current clients must not infer Stopping from an old host that sends no flag.
 const PRE_CHANGE_REF = 'v1.4.214'
 const SUITE_TIMEOUT_MS = 180_000
 const STATUS_FOLD = 'src/shared/structured-agent-session-agent-status.ts'
@@ -79,11 +70,14 @@ function publishRow(host: HostRowModules, mainAgent: Record<string, unknown>): R
     stateStartedAt: NOW - 60_000,
     mainAgent
   }
+  const summaries = new Map([[WORKTREE_ID, summary]])
   host.attachRuntimeWorktreeAgentRows({
-    summaries: new Map([[WORKTREE_ID, summary]]),
+    summaries,
     pathIndex: { byPath: new Map(), byRealPath: new Map() },
     missingWorktreeIds: new Set(),
+    // Older builds read workingTerminalEvidenceByWorktreeId; newer ones read terminalTitleEvidenceByWorktreeId.
     workingTerminalEvidenceByWorktreeId: new Map(),
+    terminalTitleEvidenceByWorktreeId: new Map(),
     rowSources: host.collectRuntimeWorktreeAgentSources({
       hookSnapshots: [snapshot],
       mirroredWorktreeIdByTabId: new Map(),
@@ -94,8 +88,8 @@ function publishRow(host: HostRowModules, mainAgent: Record<string, unknown>): R
       }
     }),
     orchestrationByPaneKey: null,
-    getSummary: (map: Map<string, unknown>, _paths: unknown, _missing: unknown, id: string) =>
-      map.get(id) ?? null
+    // Old builds pass (summaries, pathIndex, missingIds, id); newer ones pass (id). The id is last in both.
+    getSummary: (...args: unknown[]) => summaries.get(String(args.at(-1))) ?? null
   })
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: JSON.parse of the rows the host just attached, which are plain objects.
   const [row] = JSON.parse(JSON.stringify(summary.agents)) as Row[]
@@ -152,7 +146,7 @@ beforeAll(async () => {
 
 describe('cross-version Stopping', () => {
   it('pairs two real builds that disagree on the field', () => {
-    // Anti-vacuous-pass oracle: one module resolved twice would make every cell same-version.
+    // Prove distinct build identities so the pairing cannot silently collapse into same-version tests.
     expect(oldBuild.fold).not.toBe(newBuild.fold)
     expect(newBuild.fold(STOPPING_SUMMARY).mainAgent).toMatchObject({ stopping: true })
     expect(oldBuild.fold(STOPPING_SUMMARY).mainAgent).not.toHaveProperty('stopping')

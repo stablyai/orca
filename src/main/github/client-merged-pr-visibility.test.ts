@@ -9,7 +9,6 @@ const { clientMocks, moduleMocks } = await vi.hoisted(async () => {
 
 vi.mock('./gh-utils', () => moduleMocks.ghUtilsModuleMock(clientMocks))
 vi.mock('../git/runner', () => moduleMocks.gitRunnerModuleMock(clientMocks))
-vi.mock('../providers/ssh-git-dispatch', () => moduleMocks.sshGitDispatchModuleMock(clientMocks))
 vi.mock('./local-git-config-signature', () =>
   moduleMocks.localGitConfigSignatureModuleMock(clientMocks)
 )
@@ -214,8 +213,6 @@ describe('getPRForBranch', () => {
     expect(pr).toBeNull()
     expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(3)
 
-    // A definitive "not part of this PR" answer is immutable for a merged PR:
-    // repeated polls must not re-probe GitHub.
     mockMergedBranchPRLookupBehindHead()
     const second = await getPRForBranch('/repo-root', 'fix-hibernation-wake')
 
@@ -259,7 +256,6 @@ describe('getPRForBranch', () => {
     const second = await getPRForBranch('/repo-root', 'fix-hibernation-wake')
 
     expect(second).toMatchObject({ number: 6011, confirmedContainedHeadOid: 'bbbb2222bbbb2222' })
-    // No fourth membership call: the confirmed answer is immutable and cached.
     expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(5)
   })
 
@@ -313,9 +309,7 @@ describe('getPRForBranch', () => {
       }
     )
 
-    // Why: the merged-implicit head probe must use the supplied oid — no
-    // `rev-parse HEAD` shell-out. (The #9171 guard may still probe the repo
-    // default branch for this non-open implicit result; that is unrelated.)
+    // Use the supplied head without rev-parse; independent default-branch probes remain allowed.
     expect(
       gitExecFileAsyncMock.mock.calls.some(
         (call) => call[0][0] === 'rev-parse' && call[0][1] === 'HEAD'
@@ -399,8 +393,7 @@ describe('getPRForBranch', () => {
 
   it('stamps linked merged divergence when a later membership page proves absence', async () => {
     mockMergedLinkedPRLookup()
-    // Page 1 is full and omits the linked PR (truncated), but page 2 is short and
-    // still omits it — that pair definitively proves the head is not contained.
+    // A short second page proves absence after a full first page.
     const fullPage = Array.from({ length: 100 }, (_, index) => ({ number: 1000 + index }))
     ghExecFileAsyncMock
       .mockResolvedValueOnce({ stdout: JSON.stringify(fullPage) })
@@ -418,8 +411,7 @@ describe('getPRForBranch', () => {
 
   it('leaves linked merged divergence unset when membership pages stay full to the cap', async () => {
     mockMergedLinkedPRLookup()
-    // Every page up to the cap is full and omits the linked PR, so absence can
-    // never be proven — the probe must stay unknown rather than clear the link.
+    // Full pages through the cap cannot prove absence, so preserve the durable link.
     const fullPage = Array.from({ length: 100 }, (_, index) => ({ number: 1000 + index }))
     for (let page = 0; page < 5; page += 1) {
       ghExecFileAsyncMock.mockResolvedValueOnce({ stdout: JSON.stringify(fullPage) })
@@ -436,9 +428,7 @@ describe('getPRForBranch', () => {
   })
 
   it('stamps linked merged divergence via the PR url when no repo candidates resolve', async () => {
-    // Fallback path: no resolved candidates, so `gh pr view` returns the PR with
-    // dataRepo=null. The membership probe must still run against the repo derived
-    // from the PR's own URL so a diverged merged linked PR can clear.
+    // Without resolved candidates, derive the membership-probe repository from the PR URL.
     resolvePRRepositoryCandidatesMock.mockResolvedValueOnce({ candidates: [], headRepo: null })
     ghExecFileAsyncMock
       .mockResolvedValueOnce({

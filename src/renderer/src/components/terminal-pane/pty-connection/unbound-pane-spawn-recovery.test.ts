@@ -13,7 +13,6 @@ function buildSession(overrides: Record<string, unknown> = {}): never {
     pane: { id: 4, leafId: 'pane-leaf' },
     terminalRecoveryGeneration: 2,
     terminalRecoveryInstance: { id: 3 },
-    directSshRetryAttempt: undefined,
     settlePaneAttachAttempt: vi.fn(),
     transport: {},
     ...overrides
@@ -25,7 +24,7 @@ describe('settleSpawnThatLeftPaneUnbound', () => {
     vi.clearAllMocks()
   })
 
-  it('remounts the tab so the pane rebinds over its live PTY', () => {
+  it('requests a tab remount for an unbound spawn', () => {
     settleSpawnThatLeftPaneUnbound(buildSession())
 
     expect(requestTerminalPaneRecovery).toHaveBeenCalledExactlyOnceWith({
@@ -37,18 +36,6 @@ describe('settleSpawnThatLeftPaneUnbound', () => {
     })
   })
 
-  it('leaves recovery to the direct SSH retry ledger when it holds a lease', () => {
-    const attempt = { attemptId: 'attempt-1' }
-    const settlePaneAttachAttempt = vi.fn()
-
-    settleSpawnThatLeftPaneUnbound(
-      buildSession({ directSshRetryAttempt: attempt, settlePaneAttachAttempt })
-    )
-
-    expect(settlePaneAttachAttempt).toHaveBeenCalledExactlyOnceWith(attempt, 'failed')
-    expect(requestTerminalPaneRecovery).not.toHaveBeenCalled()
-  })
-
   // #21195: a remount here would race the transport's own armed retry onto the same pane.
   it('leaves recovery to a remote transport that armed its own retry', () => {
     const settlePaneAttachAttempt = vi.fn()
@@ -57,25 +44,28 @@ describe('settleSpawnThatLeftPaneUnbound', () => {
       buildSession({ transport: { ownsRecovery: () => true }, settlePaneAttachAttempt })
     )
 
-    expect(settlePaneAttachAttempt).toHaveBeenCalledExactlyOnceWith(undefined, 'failed')
+    expect(settlePaneAttachAttempt).toHaveBeenCalledExactlyOnceWith('failed')
     expect(requestTerminalPaneRecovery).not.toHaveBeenCalled()
   })
 
-  it('remounts when the transport reports no recovery of its own', () => {
+  it('requests a remount when the transport reports no recovery of its own', () => {
     settleSpawnThatLeftPaneUnbound(buildSession({ transport: { ownsRecovery: () => false } }))
 
     expect(requestTerminalPaneRecovery).toHaveBeenCalledOnce()
   })
 
-  it('settles the spawn as failed before remounting', () => {
+  it('settles the spawn as failed before requesting a remount', () => {
     const settlePaneAttachAttempt = vi.fn()
 
     settleSpawnThatLeftPaneUnbound(
       buildSession({ deps: { tabId: 'tab-settle' }, settlePaneAttachAttempt })
     )
 
-    expect(settlePaneAttachAttempt).toHaveBeenCalledExactlyOnceWith(undefined, 'failed')
+    expect(settlePaneAttachAttempt).toHaveBeenCalledExactlyOnceWith('failed')
     expect(requestTerminalPaneRecovery).toHaveBeenCalledOnce()
+    expect(settlePaneAttachAttempt.mock.invocationCallOrder[0]).toBeLessThan(
+      vi.mocked(requestTerminalPaneRecovery).mock.invocationCallOrder[0]
+    )
   })
 
   // Distinct ids per case: warnTerminalLifecycleAnomaly dedups on a module-global key.

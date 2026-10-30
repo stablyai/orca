@@ -1,20 +1,26 @@
 import { EventEmitter } from 'node:events'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ClientChannel } from 'ssh2'
-import { execOrcadStateMutation } from './orcad-state-mutation-exec'
-import { execOrcadRemote, execOrcadRemoteOr } from './orcad-remote-runtime-control'
+import { execOrcadStateMutation } from '../managed-server/host-state/orcad-state-mutation-exec'
+import {
+  execOrcadRemote,
+  execOrcadRemoteOr
+} from '../managed-server/install/orcad-remote-runtime-control'
 import {
   ORCAD_FENCE_LOST_MARKER,
   OrcadFenceLostError,
   isOrcadFenceLost,
   posixOrcadFenceGuard,
   runWithOrcadFence
-} from './orcad-activation-fence-scope'
-import { isUnconfirmedSshCommandTermination, sshCommandExitError } from './ssh-relay-exec-command'
+} from '../managed-server/activation/orcad-activation-fence-scope'
+import {
+  isUnconfirmedSshCommandTermination,
+  sshCommandExitError
+} from './remote-exec/remote-exec-command'
 import { getRemoteHostPlatform } from './ssh-remote-platform'
-import type { SshConnection } from './ssh-connection'
+import type { OrcadHostTransport } from './orcad-host-transport'
 
-/** An ssh2 exec channel; the host never acknowledges a close, as when the link is down. */
+/** Model an exec channel whose unreachable host never acknowledges close. */
 class HostChannel extends EventEmitter {
   readonly stderr = Object.assign(new EventEmitter(), { resume: () => {} })
   readonly stdin = this
@@ -38,7 +44,7 @@ const conn = {
 }
 const target = {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only exec and usesSystemSshTransport are read.
-  conn: conn as unknown as SshConnection,
+  conn: conn as unknown as OrcadHostTransport,
   host: getRemoteHostPlatform('linux-x64')
 }
 const fence = {
@@ -46,7 +52,6 @@ const fence = {
   token: 't1'
 }
 
-// As serializedStateMutationCommand builds it: the guard leads the mutation.
 const mutation = `${posixOrcadFenceGuard(fence)} restore`
 
 function fenced<T>(run: () => Promise<T>): Promise<T> {
@@ -69,7 +74,7 @@ afterEach(() => {
   vi.useRealTimers()
 })
 
-// Round 13: the real exec error quotes the command, and every fenced command carries the marker.
+// Real exec errors quote commands that contain the guard marker; that alone must not imply fence loss.
 describe('a fenced step through the real exec', () => {
   it('stays an ordinary failure when the step itself exits nonzero', async () => {
     const error = await settledAfter(

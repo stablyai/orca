@@ -64,6 +64,7 @@ describe('usage overview model', () => {
       cacheWriteTokens: 500,
       cacheReuseRate: 0.8,
       estimatedCostUsd: 0.04,
+      hasUnpricedModels: false,
       topModel: 'claude-sonnet-4-5',
       topProject: 'orca-main',
       hasAnyClaudeData: true
@@ -224,6 +225,35 @@ describe('usage overview model', () => {
     expect(overviewWithUnpricedCodex(true).estimatedCostUsd).toBeCloseTo(0.02)
     expect(overviewWithUnpricedCodex(true).hasPartialCost).toBe(true)
     expect(overviewWithUnpricedCodex(false).hasPartialCost).toBe(false)
+  })
+
+  it('marks the overview cost partial when Claude priced some models but not all', () => {
+    const claudeSummary: ClaudeUsageSummary = {
+      scope: 'orca',
+      range: '30d',
+      sessions: 1,
+      turns: 2,
+      zeroCacheReadTurns: 0,
+      inputTokens: 1_000,
+      outputTokens: 500,
+      cacheReadTokens: 0,
+      cacheWriteTokens: 0,
+      cacheReuseRate: 0,
+      estimatedCostUsd: 0.01,
+      hasUnpricedModels: true,
+      topModel: 'claude-sonnet-5-5',
+      topProject: 'orca-main',
+      hasAnyClaudeData: true
+    }
+    const overview = buildUsageOverview({
+      claude: { scanState: enabledClaudeScanState(), summary: claudeSummary, daily: [] },
+      codex: { scanState: null, summary: null, daily: [] },
+      opencode: { scanState: null, summary: null, daily: [] },
+      muse: { scanState: null, summary: null, daily: [] }
+    })
+
+    expect(overview.estimatedCostUsd).toBeCloseTo(0.01)
+    expect(overview.hasPartialCost).toBe(true)
   })
 
   it('folds Muse tokens into the overview without a partial-cost warning when nothing is priced', () => {

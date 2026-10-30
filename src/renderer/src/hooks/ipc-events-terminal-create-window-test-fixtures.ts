@@ -4,23 +4,20 @@ import type { TuiAgent } from '../../../shared/tui-agent'
 
 type ListenerRef = { current: unknown }
 
-// Why: the preload surface the terminal-create scenario stubs is large enough that
-// inlining it would push the scenario test past the file-length budget.
+// Extract the large preload stub so scenario assertions stay within the line budget.
 export function buildTerminalCreateWindow(args: {
   dispatchEvent: unknown
   replyTerminalCreate: unknown
   createTerminalListenerRef: ListenerRef
   requestTerminalCreateListenerRef: ListenerRef
   focusTerminalListenerRef: ListenerRef
-  newTerminalTabListenerRef: ListenerRef
 }): Record<string, unknown> {
   const {
     dispatchEvent,
     replyTerminalCreate,
     createTerminalListenerRef,
     requestTerminalCreateListenerRef,
-    focusTerminalListenerRef,
-    newTerminalTabListenerRef
+    focusTerminalListenerRef
   } = args
   return {
     dispatchEvent,
@@ -99,7 +96,9 @@ export function buildTerminalCreateWindow(args: {
         onRequestTerminalTabMount: () => () => {},
         replyTerminalCreate,
         onPublishAgentLaunchTab: () => () => {},
+        onRevealTerminalPane: () => () => {},
         onAgentLaunchPaneVerdict: () => () => {},
+        onLaunchRecipe: () => () => {},
         onSplitTerminal: () => () => {},
         onRenameTerminal: () => () => {},
         onFocusTerminal: (
@@ -123,27 +122,20 @@ export function buildTerminalCreateWindow(args: {
         onOpenFileFromMobile: () => () => {},
         onOpenDiffFromMobile: () => () => {},
         onCloseTerminal: () => () => {},
-        onSleepWorktree: () => () => {},
+        onWorkspaceSleep: () => () => {},
         onResumeSleepingAgents: () => () => {},
-        onNewBrowserTab: () => () => {},
-        onNewMarkdownTab: () => () => {},
         onRequestTabCreate: () => () => {},
+        onRequestRemoteCliBrowserScope: () => () => {},
         replyTabCreate: () => {},
         onRequestTabClose: () => () => {},
         replyTabClose: vi.fn(),
         onRequestTabSetProfile: () => () => {},
         replyTabSetProfile: () => {},
-        onNewTerminalTab: (listener: () => void) => {
-          newTerminalTabListenerRef.current = listener
-          return () => {}
-        },
         onCloseActiveTab: () => () => {},
         onCloseFloatingItem: () => () => {},
         onSelectFloatingIndex: () => () => {},
-        onSwitchTab: () => () => {},
-        onSwitchTabAcrossAllTypes: () => () => {},
+        onBrowserPageTabShortcut: () => () => {},
         onSwitchRecentTab: () => () => {},
-        onSwitchTerminalTab: () => () => {},
         onToggleStatusBar: () => () => {},
         onFullscreenChanged: () => () => {},
         onTerminalZoom: () => () => {},
@@ -161,6 +153,7 @@ export function buildTerminalCreateWindow(args: {
       browser: {
         onGuestLoadFailed: () => () => {},
         onOpenLinkInOrcaTab: () => () => {},
+        onSessionProfilesChanged: () => () => {},
         onNavigationUpdate: () => () => {},
         onActivateView: () => () => {},
         onPaneFocus: () => () => {}
@@ -182,6 +175,7 @@ export function buildTerminalCreateWindow(args: {
       ssh: {
         listTargets: () => Promise.resolve([]),
         listPortForwards: () => Promise.resolve([]),
+        listUnrestoredPortForwards: () => Promise.resolve([]),
         listDetectedPorts: () => Promise.resolve([]),
         getState: () => Promise.resolve(null),
         onStateChanged: () => () => {},

@@ -13,6 +13,7 @@ vi.mock('@/runtime/runtime-repo-client', () => ({
 }))
 
 const { useCreatePullRequestDialogFields } = await import('./useCreatePullRequestDialogFields')
+const { useAppStore } = await import('@/store')
 
 type DialogFields = ReturnType<typeof useCreatePullRequestDialogFields>
 
@@ -52,6 +53,7 @@ function renderFields(initialRepoId: string): {
       branch: 'feature/child',
       eligibility,
       settings: null,
+      target: { kind: 'local' },
       submitting: false
     })
     return null
@@ -86,6 +88,13 @@ function renderFields(initialRepoId: string): {
 
 beforeEach(() => {
   getRuntimeRepoBaseRefDefault.mockReset()
+  const repo = { path: '/repo', displayName: 'Repo', badgeColor: '#000', addedAt: 0 }
+  useAppStore.setState({
+    repos: [
+      { ...repo, id: 'repo-1' },
+      { ...repo, id: 'repo-2' }
+    ]
+  })
 })
 
 describe('useCreatePullRequestDialogFields repo default base ref', () => {
@@ -99,8 +108,7 @@ describe('useCreatePullRequestDialogFields repo default base ref', () => {
       await harness.switchRepo('repo-1', 'refs/remotes/origin/feature/parent')
 
       expect(harness.current().repoDefaultBaseRef).toBe('main')
-      // Eligibility still drives the field itself; only the "is this the repo
-      // default?" answer comes from the repo lookup.
+      // Eligibility still seeds the field; repo lookup only identifies the default branch.
       expect(harness.current().base).toBe('feature/parent')
     } finally {
       harness.unmount()

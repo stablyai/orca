@@ -3,13 +3,15 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { NODE_RUNTIME_ASSETS } from '../../shared/node-runtime-pin'
-import { runProcess } from '../../shared/child-process/run-process'
+import { runProcess } from '@orca/process-host'
 import type * as preparationModule from './opencode-wsl-runtime-preparation'
 
 const mocks = vi.hoisted(() => ({
   exists: vi.fn(() => true),
   run: vi.fn(),
-  running: vi.fn(async (paths: readonly string[]) => [...paths]),
+  running: vi.fn(async (paths: readonly string[], _options?: { requireConfirmed?: boolean }) => [
+    ...paths
+  ]),
   download: vi.fn(async () => 'C:\\cache\\node-v24.21.0-linux-arm64-musl.tar.gz'),
   bundles: vi.fn((platform: string) => [`C:/relay/${platform}`])
 }))
@@ -21,10 +23,15 @@ vi.mock('../../shared/app-environment', () => ({
   })
 }))
 vi.mock('../wsl/wsl-runner', () => ({ runWslProcess: mocks.run }))
-vi.mock('../wsl-running-path-filter', () => ({
-  filterPathsToRunningWslDistrosAsync: mocks.running
+// The admission gate asks the running list for the path's distro; `running` stands in for it.
+vi.mock('../native-chat/wsl-transcript-running-admission', () => ({
+  admitWslTranscriptPath: async (path: string) => {
+    if ((await mocks.running([path], { requireConfirmed: true })).length === 0) {
+      throw new Error('WSL distro is not running.')
+    }
+  }
 }))
-vi.mock('../ssh/pinned-runtime-materializer', () => ({
+vi.mock('../node-runtime/pinned-runtime-materializer', () => ({
   materializeNodeRuntimeArchive: mocks.download
 }))
 vi.mock('../ssh/relay-bundle-paths', () => ({ relayBundleCandidates: mocks.bundles }))
@@ -65,7 +72,7 @@ async function prepared() {
 }
 
 describe('WSL SQLite runtime preparation', () => {
-  it('returns immediately, coalesces distro aliases, and uses an actual guest SQLite probe', async () => {
+  it('returns immediately, coalesces distro aliases, and requests the guest SQLite probe', async () => {
     let release: (value: ReturnType<typeof success>) => void = () => {}
     mocks.run.mockReturnValueOnce(
       new Promise((resolve) => {
@@ -87,10 +94,7 @@ describe('WSL SQLite runtime preparation', () => {
         args: ['-e', expect.stringMatching(/require\('node:sqlite'\).*backup/)]
       })
     )
-    expect(mocks.bundles.mock.calls.map(([platform]) => platform)).toEqual([
-      'linux-x64',
-      'linux-arm64'
-    ])
+    expect(mocks.bundles.mock.calls.map(([platform]) => platform)).toEqual(['wsl'])
     expect(mocks.download).not.toHaveBeenCalled()
   })
 
@@ -131,7 +135,7 @@ describe('WSL SQLite runtime preparation', () => {
     await prepared()
   })
 
-  it('rejects a guest Node without the SyncDatabase surface and tolerates its stderr warning', async () => {
+  it('checks the generated SQLite probe against missing API and stderr warnings locally', async () => {
     await prepared()
     const probe = mocks.run.mock.calls.find(([spec]) => spec.program === 'node')?.[0]
     expect(probe?.args[0]).toBe('-e')
@@ -164,7 +168,7 @@ describe('WSL SQLite runtime preparation', () => {
     }
   })
 
-  it('falls back to the pinned Node in the runtimes/ store, verified in the guest, with literal argv', async () => {
+  it('requests pinned runtime verification and preserves literal argv', async () => {
     const expected = NODE_RUNTIME_ASSETS['linux-arm64-musl'].executableSha256
     mocks.run.mockImplementation(async (spec) => {
       if (spec.script?.startsWith('data=')) {
@@ -181,8 +185,14 @@ describe('WSL SQLite runtime preparation', () => {
           `/mnt/c/${spec.args.at(-1).includes('.tar.gz') ? 'node $literal.tar.gz' : 'reader $literal.cjs'}`
         )
       }
-      if (spec.script?.startsWith('getconf')) {
-        return success('musl libc')
+      if (
+        spec.script?.includes('getconf GNU_LIBC_VERSION') ||
+        spec.script?.includes('ldd --version')
+      ) {
+        return success('')
+      }
+      if (spec.script?.includes('/lib/ld-musl-')) {
+        return success('musl libc (aarch64)\nVersion 1.2.5')
       }
       if (spec.script?.startsWith('printf')) {
         return success('/home/ada $literal')
@@ -232,7 +242,7 @@ describe('WSL SQLite runtime preparation', () => {
       if (spec.program === 'wslpath') {
         return success('/mnt/c/reader.cjs')
       }
-      if (spec.script?.startsWith('getconf')) {
+      if (spec.script?.includes('getconf GNU_LIBC_VERSION')) {
         return success('glibc 2.31')
       }
       if (spec.script?.startsWith('printf')) {
@@ -263,7 +273,7 @@ describe('WSL SQLite runtime preparation', () => {
     mocks.run.mockResolvedValueOnce(success(''))
     await prepare([home])
     await vi.waitFor(async () =>
-      expect((await prepare([home]))[0]?.error).toContain('No OpenCode database')
+      expect((await prepare([home]))[0]?.error).toContain('No OpenCode or ZCode database')
     )
     expect(mocks.run).toHaveBeenCalledOnce()
     expect(mocks.download).not.toHaveBeenCalled()
@@ -274,16 +284,19 @@ describe('WSL SQLite runtime preparation', () => {
     expect(mocks.running).toHaveBeenCalledWith(expect.any(Array), { requireConfirmed: true })
   })
 
-  it.skipIf(process.platform === 'win32')(
-    'keeps the discovery default visible when guest overrides point elsewhere',
-    async () => {
+  it.skipIf(process.platform === 'win32').each(['opencode', 'zcode'] as const)(
+    'presence script finds %s-only data despite unrelated OpenCode overrides',
+    async (agent) => {
       await prepared()
       const script = mocks.run.mock.calls[0]?.[0].script
       const directory = await mkdtemp(join(tmpdir(), 'orca-wsl-presence-'))
       try {
-        const data = join(directory, '.local', 'share', 'opencode')
+        const data =
+          agent === 'zcode'
+            ? join(directory, '.zcode', 'cli', 'db')
+            : join(directory, '.local', 'share', 'opencode')
         await mkdir(data, { recursive: true })
-        await writeFile(join(data, 'opencode.db'), '')
+        await writeFile(join(data, agent === 'zcode' ? 'db.sqlite' : 'opencode.db'), '')
         const result = await runProcess({
           program: '/bin/sh',
           args: ['-c', script],

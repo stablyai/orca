@@ -1,14 +1,19 @@
 import { useCallback, useLayoutEffect, useMemo, useRef } from 'react'
+import { basename } from '@/lib/path'
 import type { NativeChatAttachmentOwner } from './native-chat-attachment-upload'
+import type { NativeChatReservedAttachment } from './native-chat-session-attachment-drop'
 import { nativeChatPendingAttachmentSnapshot } from './native-chat-pending-attachment-cache'
 
-/**
- * Preview URLs belong to this composer; pending uploads belong to the draft's attachment cache.
- */
+/** Composer owns preview URLs; the draft attachment cache owns pending uploads. */
 export function useNativeChatPasteLifetime(args: {
   targetKey?: string
   attachmentScopeKey?: string
-  beginPendingImageAttachment: (previewUrl?: string, pendingName?: string) => string | null
+  /** `serverOwned`: an image the paste saved on the remote target's own server, not a client file. */
+  beginPendingImageAttachment: (
+    previewUrl?: string,
+    pendingName?: string,
+    serverOwned?: boolean
+  ) => string | null
   /** Files the result into the composer's scope even once this instance is unmounted. */
   resolvePendingImageAttachment: (id: string, path: string, connectionId?: string | null) => void
   revealPendingImageAttachment?: (id: string, previewUrl?: string) => void
@@ -22,6 +27,24 @@ export function useNativeChatPasteLifetime(args: {
     imageFile: Blob,
     options: { deferPreview: boolean; canShow: () => boolean }
   ) => { id: string | null; reveal: () => void }
+  /** Register the operation for the native clipboard's picture; `reveal` previews its thumbnail. */
+  startClipboardImageChip: (
+    owner: NativeChatAttachmentOwner,
+    pendingName?: string
+  ) => {
+    id: string | null
+    reveal: () => void
+  }
+  /** Reserve each macOS file candidate; reveal the clipboard preview and transfer retained chips to file intake for settlement. */
+  startClipboardCandidateChips: (
+    owner: NativeChatAttachmentOwner,
+    paths: string[]
+  ) => {
+    reserved: NativeChatReservedAttachment[]
+    reveal: () => void
+    transfer: () => NativeChatReservedAttachment[]
+  }
+  dropImagePaste: (pendingId: string | null) => void
   keepStoreUploadAfterUnmount: (
     pendingId: string | null,
     saved: { status: string; tempPath?: string }
@@ -83,11 +106,11 @@ export function useNativeChatPasteLifetime(args: {
       options: { deferPreview: boolean; canShow: () => boolean }
     ): { id: string | null; reveal: () => void } => {
       if (options.deferPreview) {
-        const id = beginPendingImageAttachment()
+        const id = beginPendingImageAttachment(undefined, undefined, owner.kind === 'remote')
         if (id) {
           track(id, '', owner)
         }
-        // Through the scope's cache, so it shows even in a composer that came back since.
+        // Reveal through the scope cache so a remounted composer sees the result.
         const reveal = (): void => {
           if (
             !id ||
@@ -110,7 +133,7 @@ export function useNativeChatPasteLifetime(args: {
         return { id: null, reveal: () => {} }
       }
       const previewUrl = URL.createObjectURL(imageFile)
-      const id = beginPendingImageAttachment(previewUrl)
+      const id = beginPendingImageAttachment(previewUrl, undefined, owner.kind === 'remote')
       if (id) {
         track(id, previewUrl, owner)
       } else {
@@ -119,6 +142,60 @@ export function useNativeChatPasteLifetime(args: {
       return { id, reveal: () => {} }
     },
     [attachmentScopeKey, beginPendingImageAttachment, lifetime, revealPendingImageAttachment, track]
+  )
+  const startClipboardImageChip = useCallback(
+    (
+      owner: NativeChatAttachmentOwner,
+      pendingName?: string
+    ): { id: string | null; reveal: () => void } => {
+      const id = beginPendingImageAttachment(undefined, pendingName, owner.kind === 'remote')
+      if (id) {
+        track(id, '', owner)
+      }
+      const reveal = (): void => {
+        void window.api.ui
+          .readClipboardImageThumbnail()
+          .catch(() => null)
+          .then((thumbnail) => {
+            if (id && thumbnail) {
+              revealPendingImageAttachment?.(id, thumbnail.dataUrl)
+            }
+          })
+      }
+      return { id, reveal }
+    },
+    [beginPendingImageAttachment, revealPendingImageAttachment, track]
+  )
+  const startClipboardCandidateChips = useCallback(
+    (owner: NativeChatAttachmentOwner, paths: string[]) => {
+      const chips = paths.flatMap((path) => {
+        const chip = startClipboardImageChip(owner, basename(path))
+        return chip.id ? [{ path, chipId: chip.id, reveal: chip.reveal }] : []
+      })
+      const reserved = chips.map(({ path, chipId }) => ({ path, chipId }))
+      const transfer = (): NativeChatReservedAttachment[] => {
+        for (const { chipId } of reserved) {
+          lifetime.pending.delete(chipId)
+          lifetime.uploads.delete(chipId)
+        }
+        // A chip removed or cleared meanwhile starts no file work.
+        const current = attachmentScopeKey
+          ? nativeChatPendingAttachmentSnapshot(attachmentScopeKey)
+          : null
+        return reserved.filter(({ chipId }) => !current || current.some(({ id }) => id === chipId))
+      }
+      return { reserved, reveal: () => chips[0]?.reveal(), transfer }
+    },
+    [attachmentScopeKey, lifetime, startClipboardImageChip]
+  )
+  const dropImagePaste = useCallback(
+    (pendingId: string | null) => {
+      if (pendingId) {
+        lifetime.pending.delete(pendingId)
+        dropPendingImageAttachment(pendingId)
+      }
+    },
+    [lifetime, dropPendingImageAttachment]
   )
   const keepStoreUploadAfterUnmount = useCallback(
     (pendingId: string | null, saved: { status: string; tempPath?: string }): boolean => {
@@ -143,11 +220,7 @@ export function useNativeChatPasteLifetime(args: {
       }
       lifetime.uploads.delete(pendingId)
       if (saved.status === 'saved' && saved.tempPath) {
-        resolvePendingImageAttachment(
-          pendingId,
-          saved.tempPath,
-          owner?.kind === 'ssh' ? owner.connectionId : null
-        )
+        resolvePendingImageAttachment(pendingId, saved.tempPath, null)
       } else {
         dropPendingImageAttachment(pendingId)
       }
@@ -155,5 +228,13 @@ export function useNativeChatPasteLifetime(args: {
     },
     [attachmentScopeKey, dropPendingImageAttachment, lifetime, resolvePendingImageAttachment]
   )
-  return { lifetime, track, startImageChip, keepStoreUploadAfterUnmount }
+  return {
+    lifetime,
+    track,
+    startImageChip,
+    startClipboardImageChip,
+    startClipboardCandidateChips,
+    dropImagePaste,
+    keepStoreUploadAfterUnmount
+  }
 }

@@ -1,6 +1,3 @@
-// The writes one non-text event's transition carries, in order: the text owed ahead of it, its
-// settlement, then its rows.
-
 import {
   providerTimelineSettlementId,
   type ProviderTimelineContext
@@ -14,14 +11,10 @@ import { turnOf } from './provider-timeline-rows'
 import type { ProviderTimelineState } from './provider-timeline-state'
 import type { ProviderTimelineTextStreams } from './provider-timeline-text-streams'
 
-/** Paces the queue only: a settlement's mutations are the journal's to choose. */
+/** Pace admission; actual settlement mutations resolve from the journal. */
 const SETTLEMENT_RESERVED_BYTES = 64 * 1024
 
-/** Text owed ahead of the event lands first; a row-writing event also ends the messages it
- *  separates: anonymous ones of its producer, every stream of a turn it ends, all on a session end.
- *  An earlier turn's end, while another turn is open, ends only that earlier turn's streams. A turn
- *  another writer settled stops its streams until that turn's boundary: the provider's end of it,
- *  or the next turn's open. */
+/** Flush preceding text; separate anonymous messages by producer and release streams at their own boundaries. */
 export function planProviderTimelineBarrier(
   input: {
     streams: ProviderTimelineTextStreams
@@ -32,7 +25,7 @@ export function planProviderTimelineBarrier(
   decision: ProviderTimelineDecision
 ): void {
   const { streams, state } = input
-  // A full snapshot of a streamed message replaces what streamed, so that text is not flushed.
+  // Full snapshots supersede deltas for the same row; do not flush stale text.
   const replaced = decision.closes ? streams.get(decision.closes) : undefined
   streams.planFlush(plan, replaced)
   if (replaced) {
@@ -67,7 +60,6 @@ export function planProviderTimelineBarrier(
   }
 }
 
-/** The event's own settlement and rows, after the text it flushed. */
 export function planProviderTimelineWrites(
   context: ProviderTimelineContext,
   plan: ProviderTimelinePlan,
@@ -79,6 +71,7 @@ export function planProviderTimelineWrites(
     plan.settlement({
       settlementId: providerTimelineSettlementId(context, serial(), settle.what),
       reservedBytes: SETTLEMENT_RESERVED_BYTES,
+      recovered: settle.recovered,
       resolve: settle.resolve
     })
   }

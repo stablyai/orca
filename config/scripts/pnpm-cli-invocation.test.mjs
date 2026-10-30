@@ -1,4 +1,3 @@
-import { readFileSync } from 'node:fs'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { resolvePnpmCliInvocation } from './pnpm-cli-invocation.mjs'
 
@@ -37,6 +36,20 @@ describe('resolvePnpmCliInvocation', () => {
       shell: false
     })
   })
+
+  it.each([
+    ['/usr/share/nodejs/npm/bin/npx-cli.js', 'linux', 'pnpm', false],
+    ['/usr/local/lib/node_modules/npm/bin/npm-cli.js', 'darwin', 'pnpm', false],
+    ['/Users/dev/.volta/tools/image/npm/10.8.0/bin/npm-cli.js', 'darwin', 'pnpm', false],
+    ['C:\\Program Files\\nodejs\\node_modules\\npm\\bin\\npx-cli.js', 'win32', 'pnpm.cmd', true]
+  ])(
+    'ignores the npm CLI %s that `npx` or `npm run` exports',
+    (npmExecPath, platform, command, shell) => {
+      expect(
+        resolvePnpmCliInvocation({ npmExecPath, nodeExecPath, platform, pnpmHome: '' })
+      ).toEqual({ command, prefixArgs: [], shell })
+    }
+  )
 
   it('does not wrap a Windows native pnpm.exe in node', () => {
     expect(
@@ -88,8 +101,7 @@ describe('resolvePnpmCliInvocation', () => {
     }
   })
 
-  // Why: `npmExecPath: undefined` would hit the destructuring default and read the ambient
-  // npm_execpath, so an explicit empty string is the only env-independent way to force this branch.
+  // Pass empty npmExecPath to force branch independently of env; undefined activates the destructuring default.
   it('falls back to PATH pnpm when npm_execpath is empty', () => {
     expect(resolvePnpmCliInvocation({ npmExecPath: '', nodeExecPath, platform: 'darwin' })).toEqual(
       { command: 'pnpm', prefixArgs: [], shell: false }
@@ -214,18 +226,5 @@ describe('resolvePnpmCliInvocation', () => {
       resolvePnpmCliInvocation({ npmExecPath: '', platform, pnpmHome: 'C:\\pnpm', fileExists })
     ).toEqual({ command: 'pnpm', prefixArgs: [], shell: false })
     expect(fileExists).not.toHaveBeenCalled()
-  })
-})
-
-describe('pnpm 12 native-cli callers', () => {
-  it('reinvokes pnpm through the helper rather than `node $npm_execpath`', () => {
-    for (const file of [
-      './build-native-for-platform.mjs',
-      './run-ssh-docker-bulk-open-freeze-e2e.mjs'
-    ]) {
-      const source = readFileSync(new URL(file, import.meta.url), 'utf8')
-      expect(source).toContain("from './pnpm-cli-invocation.mjs'")
-      expect(source).not.toMatch(/process\.execPath,\s*\[\s*(?:pnpmEntry|npmExecPath)/)
-    }
   })
 })

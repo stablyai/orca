@@ -17,7 +17,9 @@ export function WorkspaceAttachmentSourceStatus({
   error: string | null
   onRetry: () => void
 }): React.JSX.Element {
-  let message =
+  // Linear’s empty result list already explains unreadable login.
+  const linearLoginUnreadable = controller.mode === 'linear' && Boolean(controller.linearReadError)
+  let message: string | null =
     error ?? translate('workspace.links.inlineSearchHint', 'Select a result to attach it.')
   let retry: (() => void) | null = null
   if (!error && taskUrlProvider === 'jira') {
@@ -48,6 +50,8 @@ export function WorkspaceAttachmentSourceStatus({
         'Connect Linear in Settings to link this issue.'
       )
       retry = onRetry
+    } else if (linearLoginUnreadable) {
+      retry = onRetry
     } else if (controller.unresolvedLinearUrlIntent || controller.linearLoading) {
       message = translate('workspace.links.loadingLinear', 'Loading Linear issue…')
     } else {
@@ -58,13 +62,17 @@ export function WorkspaceAttachmentSourceStatus({
       retry = onRetry
     }
   }
+  // Retain row layout so the sibling Reference type button cannot shift.
+  if (!error && linearLoginUnreadable && taskUrlProvider !== 'jira') {
+    message = null
+  }
   return (
     <div
       role="status"
       aria-live="polite"
       className="flex min-w-0 items-center gap-2 text-xs text-muted-foreground"
     >
-      <span>{message}</span>
+      {message ? <span>{message}</span> : null}
       {retry ? (
         <Button
           type="button"

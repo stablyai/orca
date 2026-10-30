@@ -1,10 +1,4 @@
-// A Claude subagent's permission request, replayed from a capture of the real CLI through the real
-// adapter, deferred sink, durable journal and status feed, published as production publishes it:
-// on the sink's own publish, on a journal commit (a microtask later), and after child work. At every
-// status publish the subagents read waiting must each have a pending card in that same journal, and
-// the parent row must match a second host fed the same evidence with no subagent ever waiting: a
-// subagent's wait never reaches its parent's row. Both hosts read the same journal, so what the
-// prompt rows' linkage changes on the parent (its dating) is pinned where it shows.
+// Real CLI captures verify waiting children have durable cards and child waits do not alter parent status.
 
 import { readFileSync } from 'node:fs'
 import { mkdtemp, rm } from 'node:fs/promises'
@@ -23,7 +17,8 @@ import type { AgentStatusStructuredSessionSubject } from '../../shared/agent-sta
 import { AgentHookServer } from '../agent-hooks/server'
 import type { AgentSessionJournal } from '../native-chat/agent-session-journal/journal-store'
 import { createTrackedJournalOpener } from '../native-chat/agent-session-journal/journal-host-database-test-support'
-import { settleStructuredAgentSessionDeadGeneration } from '../native-chat/agent-session-wire/structured-agent-session-dead-generation-settlement'
+import { settleObservedExitForTest } from '../native-chat/agent-session-wire/structured-agent-session-observed-exit.test-fixture'
+import { StructuredAgentSessionCurrentWork } from '../native-chat/agent-session-wire/structured-agent-session-current-work'
 import { createDeferredStructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import { testEventSinkLogging } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
 import { createStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
@@ -32,13 +27,13 @@ import { indexedStatusFeedSession } from '../native-chat/agent-session-wire/stru
 import { invokeCanUseTool } from './claude-can-use-tool-test-support'
 import { system, toolUse } from './claude-child-work-producer-harness.test-fixture'
 import { ClaudeStructuredSessionAdapter } from './claude-structured-session-adapter'
-import type { ClaudeStructuredSessionEvent } from './claude-structured-session-state'
+import type { ClaudeStructuredSessionEvent } from './structured/claude-structured-session-state'
 import {
   fakeClaude,
   identityFor,
-  PROVIDER_SESSION_ID,
-  claudeStartupSettled
+  PROVIDER_SESSION_ID
 } from './claude-structured-session-test-support'
+import { claudeStartupSettled } from './claude-structured-startup-settled-test-support'
 
 const SESSION = 'session-1'
 const FENCE = 7
@@ -67,14 +62,12 @@ function captured(name: string): Captured[] {
   )
 }
 
-/** The subagent that asks in a capture. */
 function askerOf(name: string): string {
   return text(captured(name).find((event) => event.frame.subtype === 'task_started')?.frame.task_id)
 }
 
 const ASKER = askerOf('fg-allow')
 
-/** The same evidence from a producer that never reads a subagent waiting. */
 function withoutWaits(evidence: AgentChildWorkEvidence[]): AgentChildWorkEvidence[] {
   return evidence.map((edge) =>
     edge.type === 'live' && edge.child.state === 'waiting'
@@ -105,7 +98,6 @@ function pendingCards(items: readonly AgentJournalRenderItem[]): AgentJournalRen
 
 const journals = createTrackedJournalOpener()
 let root: string
-/** What the host does with the adapter's events, where a test needs it. */
 const hooks: { onEvent?: (event: ClaudeStructuredSessionEvent) => void } = {}
 
 beforeEach(async () => {
@@ -118,8 +110,6 @@ afterEach(async () => {
   await rm(root, { recursive: true, force: true })
 })
 
-/** One status publish: what the parent row read beside the main-equivalent host, and whether a
- *  subagent read waiting without a pending card of its own in the journal it was projected from. */
 type Publish = { waiting: string[]; askers: string[]; row: unknown; unwaited: unknown }
 
 async function pipeline() {
@@ -134,7 +124,6 @@ async function pipeline() {
   const unwaited = new AgentHookServer()
   const publishes: Publish[] = []
   let published: AgentStatusStructuredSessionSubject | undefined
-  /** The child's row as the host shows it, which every surface reads. */
   const viewOf = (providerId: string) =>
     published &&
     server.getStructuredChildWorkViews(published).find((view) => view.providerId === providerId)
@@ -164,7 +153,7 @@ async function pipeline() {
         })
       ]
     ]),
-    getRecord: () => null,
+    getConversation: () => null,
     now,
     statusSink: () => ({
       publish: (summary, subject) => {
@@ -183,7 +172,7 @@ async function pipeline() {
       readChildWork: (subject) => server.getStructuredChildWorkViews(subject)
     })
   })
-  // As the host publishes: the sink's own publish, and every journal commit a microtask later.
+  // Match host publication on sink publish and deferred journal commits.
   const deferred = createDeferredStructuredAgentSessionEventSink(testEventSinkLogging(SESSION))
   const publishStatus = () => feed.publish(SESSION, journal)
   const target = { journal, fence: FENCE, publish: publishStatus }
@@ -208,6 +197,7 @@ async function pipeline() {
       providerSessionId: PROVIDER_SESSION_ID,
       resumeLeafUuid: null,
       resumesTranscript: false,
+      cliFlag: async () => 'supported' as const,
       continuesChain: false
     }),
     openConnection: claude.openConnection,
@@ -230,7 +220,6 @@ async function pipeline() {
       await new Promise((resolve) => setTimeout(resolve, 0))
     }
   }
-  /** What the host's own commit writes for the card: its resolution, at the live turn. */
   const hostRecords =
     (resolution: Pick<AgentJournalResolution, 'state' | 'selectedOptionId'>, itemId = cardId()) =>
     async (): Promise<void> => {
@@ -243,7 +232,10 @@ async function pipeline() {
       await journal.appendItem(
         identity,
         { ...card.body, resolution: { ...resolution, resolvedBy: 'client-1', resolvedAt: now() } },
-        { fence: FENCE, turnScope: journal.liveTurnScope() }
+        {
+          fence: FENCE,
+          turnScope: new StructuredAgentSessionCurrentWork(journal, FENCE).turnScope()
+        }
       )
     }
   const cardId = (): string => {
@@ -255,8 +247,6 @@ async function pipeline() {
   }
   const connection = claude.connections[0]!
   const aborts = new Map<string, AbortController>()
-  /** Feeds a captured frame as the CLI or the SDK hands it over, then lets every write land. The
-   *  SDK hands `canUseTool` no agent id when `withoutAgentId`, as when the CLI names none. */
   const step = async (
     { from, frame }: Captured,
     options: { withoutAgentId?: boolean } = {}
@@ -282,7 +272,6 @@ async function pipeline() {
     }
     await settle()
   }
-  /** Replays a capture up to and including its permission request. */
   const ask = async (name: string, options: { withoutAgentId?: boolean } = {}): Promise<void> => {
     const events = captured(name)
     const at = events.findIndex((event) => event.frame.type === 'control_request')
@@ -290,14 +279,12 @@ async function pipeline() {
       await step(event, options)
     }
   }
-  /** Publishes that broke the invariant or told the parent rows apart. */
   const violations = () =>
     publishes.filter(
       (entry) =>
         entry.waiting.some((id) => !entry.askers.includes(id)) ||
         !isDeepStrictEqual(entry.row, entry.unwaited)
     )
-  /** Raises a request the capture does not hold, as the SDK would. */
   const raise = (requestId: string, toolUseId: string, agentId?: string): void => {
     const controller = new AbortController()
     aborts.set(requestId, controller)
@@ -346,7 +333,6 @@ function answer(
   })
 }
 
-/** The user closes the card without answering; the Stop that follows ends the request. */
 function dismiss(run: Pipeline) {
   return run.adapter.dismissPrompt({
     sessionId: SESSION,
@@ -357,8 +343,6 @@ function dismiss(run: Pipeline) {
   })
 }
 
-/** Replays a whole capture, answering through the app's own path where Orca answered, and returns
- *  the asking subagent's row after each event, labelled. */
 async function replay(name: string): Promise<Pipeline & { timeline: string[] }> {
   const run = await pipeline()
   const timeline: string[] = []
@@ -381,8 +365,7 @@ async function replay(name: string): Promise<Pipeline & { timeline: string[] }> 
   return { ...run, timeline }
 }
 
-/** Root spawns agent-a, which spawns agent-n; `asker` asks for agent-n's Bash call, which is read
- *  after the request unless `toolCallFirst`. */
+/** Root → agent-a → agent-n; the request can precede agent-n's Bash call. */
 async function nested(asker: string, toolCallFirst = false): Promise<Pipeline> {
   const run = await pipeline()
   const spawn = (id: string, taskId: string, parentRef: string | null) => [
@@ -430,7 +413,6 @@ describe("a Claude subagent's permission request", () => {
         'allow -> live working'
       ]
     ],
-    // The parent's own turn ends while its background subagent is still asking.
     [
       'bg-allow',
       [
@@ -474,7 +456,6 @@ describe("a Claude subagent's permission request", () => {
     for (const event of events.slice(0, at)) {
       await run.step(event)
     }
-    // No journal is bound: the card's row waits in the sink while the host publishes.
     run.deferred.unbind()
     run.raise('req-late', 'toolu_late', ASKER)
     await new Promise((resolve) => setTimeout(resolve, 0))
@@ -497,7 +478,6 @@ describe("a Claude subagent's permission request", () => {
         await dismiss(run)
       }
       await run.settle()
-      // Claude withdraws the request itself; after a dismissal that closes nothing more.
       if (how !== 'allowed' && how !== 'denied') {
         for (const controller of run.aborts.values()) {
           controller.abort()
@@ -601,7 +581,7 @@ describe("a Claude subagent's permission request", () => {
     await run.settle()
     const cards = pendingCards(run.journal.snapshot().items)
     expect(cards.map((card) => card.agentId ?? null).sort()).toEqual([ASKER, null].sort())
-    // Dated by the session's own ask, though its subagent asked first: main's rule, as for Codex.
+    // The root request takes precedence over the earlier child request.
     const own = cards.find((card) => !card.agentId)?.observedAt
     expect(own).toBeGreaterThan(
       cards.find((card) => card.agentId === ASKER)?.observedAt ?? Infinity
@@ -629,7 +609,7 @@ describe("a Claude subagent's permission request", () => {
     let settled: Promise<unknown> | undefined
     hooks.onEvent = (event) => {
       if (event.type === 'ended') {
-        settled = settleStructuredAgentSessionDeadGeneration({
+        settled = settleObservedExitForTest({
           journal: run.journal,
           sessionId: SESSION,
           fence: FENCE,

@@ -1,3 +1,4 @@
+import '../unused-default-rpc-methods.test-fixture'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import {
@@ -36,7 +37,13 @@ function actions(): ManagedServerActions {
       code: 'c',
       reason: 'r'
     })),
-    cancelStop: vi.fn()
+    cancelStop: vi.fn(),
+    forget: vi.fn(async () => ({
+      outcome: 'forgotten' as const,
+      verdict: 'unverifiable' as const,
+      environmentId: 'env-1',
+      sshTargetId: 'ssh-1'
+    }))
   }
 }
 
@@ -64,6 +71,10 @@ describe('managed server RPC', () => {
       request('managedServer.update', { selector: 'build-box', force: true })
     )
     expect(registered.update).toHaveBeenLastCalledWith('build-box', true)
+
+    await dispatcher().dispatch(request('managedServer.forget', { selector: 'build-box' }))
+    expect(registered.forget).toHaveBeenCalledWith('build-box')
+    expect(registered.stop).toHaveBeenCalledTimes(1)
   })
 
   it('rejects a missing selector before reaching an action', async () => {

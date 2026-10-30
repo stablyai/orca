@@ -10,10 +10,11 @@ import {
   getWorktreeParentPickerLabel,
   hasWorktreeParentLink,
   isWorktreeParentPickerDisabled,
+  getSharedWorkspaceStatus,
   planWorkspaceStatusAssignment,
   selectMenuScopedMap,
   shouldRevealWorktreeDeveloperMenu
-} from './WorktreeContextMenu'
+} from './worktree-context-menu-policy'
 import { getDeleteStateForWorktreeHost } from './worktree-delete-state-host-match'
 import type { WorktreeLineage } from '../../../../shared/worktree/lineage-types'
 import type { WorkspaceStatusDefinition, Worktree } from '../../../../shared/worktree/types'
@@ -32,8 +33,6 @@ describe('shouldRevealWorktreeDeveloperMenu', () => {
     ).toBe(true)
   })
 
-  // Why: the parking action targets one workspace, so it must not appear for a
-  // multi-select context even with the modifier held.
   it('stays hidden for a multi-workspace selection', () => {
     expect(
       shouldRevealWorktreeDeveloperMenu({ developerMenuRevealed: true, isMultiContext: true })
@@ -42,19 +41,11 @@ describe('shouldRevealWorktreeDeveloperMenu', () => {
 })
 
 describe('selectMenuScopedMap (delete-teardown re-render guard)', () => {
-  // Why: the closed menu wrapper must stay inert to delete teardown's high-churn
-  // set()s. The guard is referential stability — when closed, the selector must
-  // return the SAME `empty` reference even as the live map identity changes each
-  // teardown set(), so Zustand's Object.is equality short-circuits the subscription
-  // and the (common) closed wrapper does not re-render. These assertions pin that
-  // contract; if they regress, every visible card re-renders on every teardown set()
-  // and worktree-card hover popovers stall during a delete.
+  // Closed menus need the same empty reference across teardown churn so Zustand does not rerender every visible card.
   it('returns the stable empty sentinel when the menu is closed', () => {
     const empty = Object.freeze({})
     const liveA = { 'wt-1': ['pty-1'] }
     const liveB = { 'wt-2': ['pty-2'] }
-    // Live map identity churns across teardown set()s, yet a closed wrapper keeps
-    // the same reference — no subscription wakeup.
     expect(selectMenuScopedMap(false, liveA, empty)).toBe(empty)
     expect(selectMenuScopedMap(false, liveB, empty)).toBe(empty)
     expect(selectMenuScopedMap(false, liveA, empty)).toBe(selectMenuScopedMap(false, liveB, empty))
@@ -63,8 +54,6 @@ describe('selectMenuScopedMap (delete-teardown re-render guard)', () => {
   it('returns the live map synchronously once the menu is open', () => {
     const empty = Object.freeze({})
     const live = { 'wt-1': ['pty-1'] }
-    // The render where menuOpen flips true must read real data so menu items
-    // (sleep/delete/lineage) reflect live tabs/ptys/delete state.
     expect(selectMenuScopedMap(true, live, empty)).toBe(live)
   })
 })
@@ -270,9 +259,7 @@ describe('project removal from workspace context menus', () => {
 })
 
 describe('planWorkspaceStatusAssignment (context-menu "Move to Status" routing)', () => {
-  // Why: this is the exact branch #10175 regressed on — the board must funnel
-  // through the Linear-sync callback, the sidebar list must stay local-only. A
-  // silent flip of either branch re-introduces the bug, so pin both here.
+  // Board status changes must use Linear sync; sidebar assignments remain local.
   const statuses: WorkspaceStatusDefinition[] = [
     { id: 'todo', label: 'Todo' },
     { id: 'in-review', label: 'In review' }
@@ -281,12 +268,11 @@ describe('planWorkspaceStatusAssignment (context-menu "Move to Status" routing)'
     ({ id, workspaceStatus }) as Worktree
 
   it('routes to board Linear-sync with ALL selected ids when the board wired a callback', () => {
-    // The board path forwards every id; moveWorktreesToStatus filters no-ops downstream.
     expect(
       planWorkspaceStatusAssignment(
         [wt('a', 'todo'), wt('b', 'in-review')],
         'in-review',
-        statuses,
+        () => statuses,
         true
       )
     ).toEqual({ kind: 'board-sync', worktreeIds: ['a', 'b'] })
@@ -297,10 +283,26 @@ describe('planWorkspaceStatusAssignment (context-menu "Move to Status" routing)'
       planWorkspaceStatusAssignment(
         [wt('a', 'todo'), wt('b', 'in-review')],
         'in-review',
-        statuses,
+        () => statuses,
         false
       )
     ).toEqual({ kind: 'local-only', localWriteIds: ['a'] })
+  })
+
+  it("compares each card against its own host's columns in a mixed selection", () => {
+    const hostColumns: WorkspaceStatusDefinition[] = [
+      ...statuses,
+      { id: 'status-6', label: 'Today' }
+    ]
+    const local = wt('a', 'todo')
+    const hosted = { ...wt('b', 'status-6'), hostId: 'runtime:env-1' as const }
+    const statusesFor = (item: Worktree) => (item.hostId ? hostColumns : statuses)
+
+    expect(getSharedWorkspaceStatus([local, hosted], statusesFor)).toBe('')
+    expect(planWorkspaceStatusAssignment([local, hosted], 'todo', statusesFor, false)).toEqual({
+      kind: 'local-only',
+      localWriteIds: ['b']
+    })
   })
 
   it('writes nothing on the local-only path when every worktree already has the target status', () => {
@@ -308,7 +310,7 @@ describe('planWorkspaceStatusAssignment (context-menu "Move to Status" routing)'
       planWorkspaceStatusAssignment(
         [wt('a', 'in-review'), wt('b', 'in-review')],
         'in-review',
-        statuses,
+        () => statuses,
         false
       )
     ).toEqual({ kind: 'local-only', localWriteIds: [] })

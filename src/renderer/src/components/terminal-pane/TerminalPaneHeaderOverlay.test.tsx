@@ -7,9 +7,14 @@ import path from 'node:path'
 import { isTerminalLeafId } from '../../../../shared/stable-pane-id'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ManagedPane, PaneManager } from '@/lib/pane-manager/pane-manager'
-import type { PtyTransport } from './pty-transport'
+import type { PtyTransport } from './pty-transport-types'
 import TerminalPaneHeaderOverlay from './TerminalPaneHeaderOverlay'
-import { encodeWorkspaceFilePaths, WORKSPACE_FILE_PATHS_MIME } from '@/lib/workspace-file-drag'
+import {
+  encodeWorkspaceFilePaths,
+  WORKSPACE_FILE_PATHS_MIME,
+  WORKSPACE_FILE_DRAG_SOURCE_MIME,
+  writeWorkspaceFileDragSource
+} from '@/lib/workspace-file-drag'
 
 vi.mock('@/components/ui/tooltip', () => ({
   Tooltip: ({ children }: { children?: ReactNode }) => children,
@@ -37,6 +42,9 @@ vi.mock('@/store', () => ({
   }
 }))
 vi.mock('./terminal-input-activity', () => ({ recordTerminalUserInputForLeaf: vi.fn() }))
+vi.mock('./TerminalPaneResumeInChatButton', () => ({
+  TerminalPaneResumeInChatButton: () => <button type="button">Continue in Chat UI</button>
+}))
 
 const mounted: { container: HTMLDivElement; root: Root }[] = []
 
@@ -70,6 +78,8 @@ function renderOverlay({
   onRenameSubmit = vi.fn(),
   canContinueAgentSessionInNewSession = false,
   onContinueAgentSessionInNewSession = vi.fn(),
+  canShowTerminal = false,
+  canResumeInNewNativeChat = false,
   renameValue = '',
   renamingPaneId = null,
   dropSetup
@@ -84,6 +94,8 @@ function renderOverlay({
   onRenameSubmit?: ReturnType<typeof vi.fn>
   canContinueAgentSessionInNewSession?: boolean
   onContinueAgentSessionInNewSession?: ReturnType<typeof vi.fn>
+  canShowTerminal?: boolean
+  canResumeInNewNativeChat?: boolean
   renameValue?: string
   renamingPaneId?: number | null
   dropSetup?: {
@@ -132,6 +144,9 @@ function renderOverlay({
         onContinueAgentSessionInNewSession={
           onContinueAgentSessionInNewSession as (pane: ManagedPane) => void
         }
+        canShowTerminal={canShowTerminal}
+        onShowTerminal={vi.fn()}
+        canResumeInNewNativeChat={canResumeInNewNativeChat}
         onSplitPane={vi.fn()}
         onBeginPaneDrag={vi.fn()}
         onActivatePaneTitleInteraction={dropSetup?.activate ?? vi.fn()}
@@ -176,6 +191,30 @@ afterEach(() => {
 })
 
 describe('TerminalPaneHeaderOverlay', () => {
+  it('offers Continue in Chat UI instead of a chat view switch, on the active pane only', () => {
+    const { container } = renderOverlay({ paneTitles: {}, canResumeInNewNativeChat: true })
+
+    const resumeButtons = [...container.querySelectorAll('button')].filter(
+      (button) => button.textContent === 'Continue in Chat UI'
+    )
+    expect(resumeButtons).toHaveLength(1)
+    expect(resumeButtons[0]?.closest('.pane-title-bar')?.hasAttribute('data-active-pane')).toBe(
+      true
+    )
+    expect(container.querySelector('button[aria-label="Show chat view"]')).toBeNull()
+  })
+
+  it('keeps Show terminal as the way back from chat view', () => {
+    const { container } = renderOverlay({
+      paneTitles: {},
+      canShowTerminal: true,
+      canResumeInNewNativeChat: true
+    })
+
+    expect(container.querySelector('button[aria-label="Show terminal"]')).not.toBeNull()
+    expect(container.textContent).not.toContain('Continue in Chat UI')
+  })
+
   it('keeps the titled split-pane X as remove-title only', () => {
     const { container, onClosePane, onRemoveTitle } = renderOverlay({
       paneTitles: { 1: 'server', 2: '' }
@@ -302,13 +341,20 @@ describe('TerminalPaneHeaderOverlay', () => {
 })
 
 function dispatchFileDrag(target: Element, type: 'dragover' | 'drop', internal: boolean): void {
+  const payload = new Map([
+    [WORKSPACE_FILE_PATHS_MIME, encodeWorkspaceFilePaths(['/repo/file.txt'])]
+  ])
+  writeWorkspaceFileDragSource(
+    { setData: (mime, value) => payload.set(mime, value) },
+    { executionHostId: 'local', workspaceId: 'wt-1' }
+  )
   const event = new Event(type, { bubbles: true, cancelable: true })
   Object.defineProperty(event, 'isTrusted', { value: true })
   Object.defineProperty(event, 'dataTransfer', {
     value: {
-      types: internal ? [WORKSPACE_FILE_PATHS_MIME] : ['Files'],
+      types: internal ? [WORKSPACE_FILE_PATHS_MIME, WORKSPACE_FILE_DRAG_SOURCE_MIME] : ['Files'],
       files: [new File([], 'file.txt')],
-      getData: () => encodeWorkspaceFilePaths(['/repo/file.txt']),
+      getData: (mime: string) => (internal ? (payload.get(mime) ?? '') : ''),
       dropEffect: 'none'
     }
   })

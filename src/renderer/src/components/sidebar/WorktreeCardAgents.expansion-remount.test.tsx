@@ -38,6 +38,7 @@ vi.mock('@/store', () => ({
     selector({
       agentActivityDisplayMode: 'compact',
       acknowledgedAgentsByPaneKey: {},
+      retainedAgentsByPaneKey: {},
       cacheTimerByKey: {},
       dropAgentStatus: vi.fn(),
       dismissRetainedAgent: vi.fn(),
@@ -95,8 +96,6 @@ async function mountAgents(worktreeId: string): Promise<HTMLElement> {
 }
 
 function summaryButton(host: HTMLElement): HTMLButtonElement {
-  // The compact multi-agent summary is the only control carrying aria-expanded
-  // when the agents are flat (no per-agent child disclosure).
   const button = host.querySelector<HTMLButtonElement>('button[aria-expanded]')
   if (!button) {
     throw new Error('compact agent summary button not found')
@@ -130,9 +129,7 @@ describe('WorktreeCardAgents inline-list expansion durability', () => {
     })
     expect(summaryButton(host).getAttribute('aria-expanded')).toBe('true')
 
-    // Simulate the WorktreeCard remount that a virtualizer recycle or a sibling
-    // child-worktrees toggle triggers: fully unmount, then mount a fresh tree
-    // for the same worktree. Before the fix this reset the summary to collapsed.
+    // Fully remount the same worktree as virtualizer recycling or child-worktree toggles do.
     await act(async () => {
       const first = mountedRoots.shift()!
       first.root.unmount()
@@ -193,7 +190,6 @@ describe('worktree-card-agents-expansion-state module cache', () => {
     })
     expect(read()).toBe('true')
 
-    // Remount the hook consumer: the collapsed parent must survive.
     await act(async () => root.unmount())
     root = createRoot(host)
     await act(async () => {

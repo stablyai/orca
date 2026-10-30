@@ -2,9 +2,7 @@ import { CLIPBOARD_TEXT_MEASURE_YIELD_CODE_UNITS } from '../../../../shared/clip
 import type { TerminalInputKind } from '../../../../shared/terminal-input-kind'
 
 export const PTY_PRECONNECT_INPUT_MAX_ENTRIES = 1024
-// Why: a retention budget, not the 16MB single-write ceiling. The deferral lasts
-// under a second and this is held twice (transport buffer + handoff record) across
-// up to 64 deferred splits, so size it at a few clipboard-sized pastes.
+// Budget retained paste across transport/handoff copies and up to 64 deferred splits, independently of the single-write ceiling.
 export const PTY_PRECONNECT_INPUT_MAX_CODE_UNITS = 4 * CLIPBOARD_TEXT_MEASURE_YIELD_CODE_UNITS
 
 export type PtyPreconnectInputKind = 'ordinary' | 'immediate' | 'accepted'
@@ -16,15 +14,28 @@ export type PtyPreconnectInputEntry = {
   inputKind: TerminalInputKind
 }
 
+/** Lets the caller of an acknowledged write give it up; a held or journaled copy is then never sent. */
+export type AcceptedInputOptions = { signal?: AbortSignal }
+
 type BufferedInput = PtyPreconnectInputEntry & {
   resolve?: (accepted: boolean) => void
+  signal?: AbortSignal
 }
 
-type PreconnectInputWriter = {
+export type PreconnectInputWriter = {
   isCurrent: () => boolean
   sendInput: (data: string, inputKind: TerminalInputKind) => boolean
   sendInputImmediate: (data: string) => boolean
-  sendInputAccepted?: (data: string, inputKind: TerminalInputKind) => Promise<boolean>
+  sendInputAccepted?: (
+    data: string,
+    inputKind: TerminalInputKind,
+    options?: AcceptedInputOptions
+  ) => Promise<boolean>
+  /**
+   * True when a failed accepted write was withdrawn or of unknown delivery, not a broken link, so
+   * the input typed after it still goes (a sequenced remote stream keeps order on its own).
+   */
+  continuesAfterFailedWrite?: () => boolean
 }
 
 export type PtyPreconnectInputBuffer = {
@@ -39,14 +50,21 @@ export type PtyPreconnectInputBuffer = {
   enqueueAccepted: (
     data: string,
     inputKind: TerminalInputKind,
-    onRetained?: (entry: PtyPreconnectInputEntry) => void
+    onRetained?: (entry: PtyPreconnectInputEntry) => void,
+    options?: AcceptedInputOptions
   ) => Promise<boolean>
   flush: (writer: PreconnectInputWriter) => Promise<void>
   clear: () => void
 }
 
+export type PtyPreconnectInputBufferOptions = {
+  /** Retain outage input by coalescing keystrokes; renewed outage pauses release with remaining entries preserved. */
+  recoveryHold?: boolean
+}
+
 export function createPtyPreconnectInputBuffer(
-  initialEntries: readonly PtyPreconnectInputEntry[] = []
+  initialEntries: readonly PtyPreconnectInputEntry[] = [],
+  options: PtyPreconnectInputBufferOptions = {}
 ): PtyPreconnectInputBuffer {
   let pending: BufferedInput[] = []
   let pendingCodeUnits = 0
@@ -61,6 +79,19 @@ export function createPtyPreconnectInputBuffer(
   const retain = (input: BufferedInput): boolean => {
     const activeEntries = activeAcceptedInput ? 1 : 0
     const activeCodeUnits = activeAcceptedInput?.data.length ?? 0
+    const tail = pending.at(-1)
+    if (
+      options.recoveryHold &&
+      buffering &&
+      input.kind === 'ordinary' &&
+      tail?.kind === 'ordinary' &&
+      tail.inputKind === input.inputKind &&
+      input.data.length <= PTY_PRECONNECT_INPUT_MAX_CODE_UNITS - pendingCodeUnits - activeCodeUnits
+    ) {
+      tail.data += input.data
+      pendingCodeUnits += input.data.length
+      return true
+    }
     if (
       !buffering ||
       pending.length + activeEntries >= PTY_PRECONNECT_INPUT_MAX_ENTRIES ||
@@ -76,8 +107,25 @@ export function createPtyPreconnectInputBuffer(
     data: string,
     kind: PtyPreconnectInputKind,
     inputKind: TerminalInputKind,
-    resolve?: BufferedInput['resolve']
-  ): BufferedInput => ({ data, kind, inputKind, ...(resolve ? { resolve } : {}) })
+    resolve?: BufferedInput['resolve'],
+    signal?: AbortSignal
+  ): BufferedInput => ({
+    data,
+    kind,
+    inputKind,
+    ...(resolve ? { resolve } : {}),
+    ...(signal ? { signal } : {})
+  })
+  // Why: a caller that timed out already reported the write failed; delivering it later would land a stray fragment.
+  const withdraw = (input: BufferedInput): void => {
+    const index = pending.indexOf(input)
+    if (index === -1) {
+      return
+    }
+    pending.splice(index, 1)
+    pendingCodeUnits -= input.data.length
+    input.resolve?.(false)
+  }
   const notifyRetained = (
     onRetained: ((entry: PtyPreconnectInputEntry) => void) | undefined,
     input: BufferedInput
@@ -89,8 +137,7 @@ export function createPtyPreconnectInputBuffer(
     }
   }
 
-  // Seeded entries came from a predecessor transport and must not be reported
-  // back to that predecessor's handoff owner as newly typed input.
+  // Seeded entries already belong to predecessor handoff; do not report them back as newly typed.
   for (const entry of initialEntries) {
     retain(createInput(entry.data, entry.kind, entry.inputKind))
   }
@@ -119,6 +166,12 @@ export function createPtyPreconnectInputBuffer(
         if (input.kind === 'accepted') {
           activeAcceptedInput = input
         }
+        if (buffering && options.recoveryHold && !writer.isCurrent()) {
+          pending.unshift(input)
+          pendingCodeUnits += input.data.length
+          activeAcceptedInput = null
+          return
+        }
         if (!buffering || !writer.isCurrent()) {
           input.resolve?.(false)
           clear()
@@ -130,7 +183,11 @@ export function createPtyPreconnectInputBuffer(
             accepted = await Promise.race([
               Promise.resolve(
                 writer.sendInputAccepted
-                  ? writer.sendInputAccepted(input.data, input.inputKind)
+                  ? writer.sendInputAccepted(
+                      input.data,
+                      input.inputKind,
+                      input.signal ? { signal: input.signal } : undefined
+                    )
                   : writer.sendInput(input.data, input.inputKind)
               ),
               flushStopped.then(() => null)
@@ -149,7 +206,8 @@ export function createPtyPreconnectInputBuffer(
             return
           }
           input.resolve?.(accepted)
-          if (!accepted) {
+          // Why not for a withdrawn write: its caller gave up on it alone, not on what was typed after it.
+          if (!accepted && !input.signal?.aborted && !writer.continuesAfterFailedWrite?.()) {
             clear()
             return
           }
@@ -201,13 +259,25 @@ export function createPtyPreconnectInputBuffer(
       }
       return retained
     },
-    enqueueAccepted(data, inputKind, onRetained) {
+    enqueueAccepted(data, inputKind, onRetained, options) {
       return new Promise<boolean>((resolve) => {
-        const input = createInput(data, 'accepted', inputKind, resolve)
+        const signal = options?.signal
+        if (signal?.aborted) {
+          resolve(false)
+          return
+        }
+        const onAbort = (): void => withdraw(input)
+        // Why: a long-lived caller signal would otherwise pin every settled input through its listener.
+        const settle = (accepted: boolean): void => {
+          signal?.removeEventListener('abort', onAbort)
+          resolve(accepted)
+        }
+        const input = createInput(data, 'accepted', inputKind, settle, signal)
         if (!retain(input)) {
           resolve(false)
           return
         }
+        signal?.addEventListener('abort', onAbort, { once: true })
         notifyRetained(onRetained, input)
       })
     },

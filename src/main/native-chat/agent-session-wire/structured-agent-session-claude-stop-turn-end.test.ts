@@ -1,7 +1,4 @@
-// Which turn a Claude Stop's event makes the person's cancellation, on the shipping adapter: the
-// Stop ends the child, so whatever its event binds is what the child's end cut. Older CLIs end an
-// interrupted turn with an error result that names no reason, and the journal's Stop rule decides
-// it as it writes the end.
+// Older Claude CLIs omit interrupt reasons; journal Stop binding must classify only the turn actually stopped.
 
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -14,8 +11,7 @@ import { ClaudeStructuredSessionAdapter } from '../../claude/claude-structured-s
 import {
   fakeClaude,
   PROVIDER_SESSION_ID,
-  type FakeConnection,
-  claudeStartupSettled
+  type FakeConnection
 } from '../../claude/claude-structured-session-test-support'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
@@ -34,7 +30,7 @@ import {
 import { NO_STRUCTURED_AGENTS } from './structured-agent-session-adapter-router-test-support'
 
 const CALLER = { callerKey: 'client-1' }
-// As Claude Code 2.1.280 advertises them on a turn's system/init frame.
+// Claude Code 2.1.280 system/init capabilities.
 const CAPABILITIES = ['interrupt_receipt_v1', 'interrupt_cancel_queued_v1', 'msg_lifecycle_v1']
 
 let root: string
@@ -57,6 +53,7 @@ beforeEach(async () => {
       providerSessionId: PROVIDER_SESSION_ID,
       resumeLeafUuid: null,
       resumesTranscript: (store.getRecord(SESSION)?.providerHandleChain.length ?? 0) > 0,
+      cliFlag: async () => 'supported' as const,
       continuesChain: (store.getRecord(SESSION)?.providerHandleChain.length ?? 0) > 0
     }),
     onEvent: (event) => {
@@ -88,7 +85,7 @@ beforeEach(async () => {
     providerHandle: { kind: 'claude', sessionId: PROVIDER_SESSION_ID, leafUuid: null }
   })
   expect(await host.attach(CALLER, params)).toMatchObject({ ok: true })
-  await claudeStartupSettled(adapter, SESSION)
+  await vi.waitFor(() => expect(host.readStatusSummary(SESSION)?.hostExecutionPhase).toBe('ready'))
   await Promise.all(lifecycle)
 })
 
@@ -118,7 +115,6 @@ function envelope(
   }
 }
 
-/** A send Claude takes but has not echoed yet. */
 async function sendUnechoed(connection: FakeConnection, text: string): Promise<void> {
   const body = hostTestMessage(text)
   expect(
@@ -133,7 +129,6 @@ function frame(connection: FakeConnection, message: Record<string, unknown>): vo
   connection.handlers.onMessage?.({ session_id: PROVIDER_SESSION_ID, ...message })
 }
 
-/** Claude echoes its latest send, which opens that send's turn. */
 function echoLatest(connection: FakeConnection): void {
   const written = connection.sent.findLast((message) => message.type === 'user')!
   frame(connection, { ...written, uuid: written.uuid })
@@ -144,7 +139,7 @@ function stop(turnId?: string) {
   return host.cancel(CALLER, { envelope: envelope('agentSession.cancel', fields), ...fields })
 }
 
-/** Resolves once everything queued on the session's lane so far has run: a Stop's second step. */
+/** Drain through Stop’s queued second step. */
 function laneDrained(): Promise<void> {
   return host['tasks'].serialize(SESSION, async () => {})
 }
@@ -173,9 +168,7 @@ it("reads an older CLI's error end after a Stop pressed before the echo as inter
   expect(await lastTurn()).toMatchObject({ state: 'interrupted', outcome: 'cancellation' })
 })
 
-// A phone names the turn it last saw. The Stop ends the child, which ends whatever is in flight,
-// so its event names no ended turn: it binds the turn the follow-up's echo opens.
-it('reads a follow-up the child end cut as interrupted when the Stop named the turn before it', async () => {
+it('leaves the follow-up running when the Stop named the turn before it', async () => {
   const connection = claude.connections[0]!
   await sendUnechoed(connection, 'Write a long reply.')
   frame(connection, { type: 'system', subtype: 'init', uuid: 'init-1', capabilities: CAPABILITIES })
@@ -192,22 +185,21 @@ it('reads a follow-up the child end cut as interrupted when the Stop named the t
     )
   )
   await sendUnechoed(connection, 'Follow up.')
-  // Claude takes the interrupt; the follow-up's echo opens its turn, which outlives the grace.
-  claude.routes.interrupt = () => {
-    setTimeout(() => echoLatest(connection), 5)
-    return { still_queued: [], cancelled: [] }
-  }
 
-  await expect(stop(ended)).resolves.toMatchObject({ ok: true, value: { cancelled: true } })
+  await expect(stop(ended)).resolves.toMatchObject({ ok: true, value: { cancelled: false } })
   await laneDrained()
 
-  expect(connection.closed).toBe(true)
-  const cut = await lastTurn()
-  expect(cut?.turnId).not.toBe(ended)
-  expect(cut).toMatchObject({ state: 'interrupted', outcome: 'cancellation' })
+  expect(connection.closed).toBe(false)
+  expect(connection.calls.some((call) => call.subtype === 'interrupt')).toBe(false)
+  echoLatest(connection)
+  const followUp = await eventually(async () => {
+    const turn = await lastTurn()
+    expect(turn?.turnId).not.toBe(ended)
+    return turn
+  })
+  expect(followUp).toMatchObject({ state: 'running' })
 }, 15_000)
 
-// The Stop bound only the turn it stopped: a later turn's error end is the provider's own.
 it("keeps an older CLI's error end on a later turn a failure, with its error text, after a turnless Stop", async () => {
   const stopped = claude.connections[0]!
   claude.routes.interrupt = () => {
@@ -223,7 +215,6 @@ it("keeps an older CLI's error end on a later turn a failure, with its error tex
   await laneDrained()
   expect(await lastTurn()).toMatchObject({ outcome: 'cancellation' })
 
-  // The next send starts a new child on the same conversation.
   const body = hostTestMessage('Carry on.')
   expect(
     await host.send(CALLER, { envelope: envelope('agentSession.send', { body }), body })

@@ -66,6 +66,7 @@ export function useComposerSubmitOrchestration(
     pushTarget: target.workspaceIdentityState.pushTarget
   })
   const quickSubmitPreparation = useQuickSubmitPreparation({
+    branchIntent: target.workspaceIdentityState.branchIntent,
     branchAutoNameRef: target.asyncComposerState.branchAutoNameRef,
     branchNameOverridePreservesNameEdits:
       target.workspaceIdentityState.branchNameOverridePreservesNameEdits,
@@ -108,11 +109,11 @@ export function useComposerSubmitOrchestration(
     resetForNextCreate: multipleCreateReset.resetForNextCreate,
     resolvedInitialWorkspaceStatus: target.initialTargetState.resolvedInitialWorkspaceStatus,
     selectedEphemeralVmRecipeId: target.runtimeTargetSelection.selectedEphemeralVmRecipeId,
-    selectedRepoAgentLaunchPlatform: target.runtimeTargetSelection.selectedRepoAgentLaunchPlatform,
+    selectedRepoAgentLaunchFact: target.runtimeTargetSelection.selectedRepoAgentLaunchFact,
     selectedRepoExecutionHostId: target.runtimeTargetSelection.selectedRepoExecutionHostId,
     selectedRepoIsGit: target.runtimeTargetSelection.selectedRepoIsGit,
     selectedRepoIsRemote: target.runtimeTargetSelection.selectedRepoIsRemote,
-    selectedRepoSettings: target.runtimeTargetSelection.selectedRepoSettings,
+    selectedRepoTarget: target.runtimeTargetSelection.selectedRepoTarget,
     selectedRepoStartupShell: target.runtimeTargetSelection.selectedRepoStartupShell,
     selectedWorkspaceTarget: target.runtimeTargetSelection.selectedWorkspaceTarget,
     settings: target.composerTargetStore.settings,
@@ -127,6 +128,7 @@ export function useComposerSubmitOrchestration(
     isProjectGroupTarget: target.runtimeTargetSelection.isProjectGroupTarget,
     isSubmissionCancelled: target.composerTargetStore.isSubmissionCancelled,
     linkedPR: target.workspaceIdentityState.linkedPR,
+    linkedWorkItem: target.sourceContextState.linkedWorkItem,
     name: target.sourceContextState.name,
     onCreated: target.composerTargetStore.onCreated,
     parsedLinkedIssueNumber: target.derivedComposerState.parsedLinkedIssueNumber,
@@ -143,7 +145,9 @@ export function useComposerSubmitOrchestration(
     showProjectRequiredError: source.branchStartPointActions.showProjectRequiredError,
     sourceIntentBlocksCreate: target.workspaceIdentityState.sourceIntentBlocksCreate,
     sparseError: target.derivedComposerState.sparseError,
-    submitFolderTarget: folderSubmitOrchestration.submitFolderTarget
+    submitFolderTarget: folderSubmitOrchestration.submitFolderTarget,
+    taskSourceContext: target.sourceContextState.taskSourceContext,
+    telemetrySource: target.composerTargetStore.telemetrySource
   })
   return {
     folderSubmitOrchestration,

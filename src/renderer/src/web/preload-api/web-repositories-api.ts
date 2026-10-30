@@ -8,7 +8,7 @@ import {
   withRuntimeRepoMutationOwner,
   withRuntimeRepoOwner
 } from './web-runtime-calls'
-import { assertActiveEnvironment, invalidateRuntimeWorktreeCaches } from './web-runtime-session'
+import { invalidateRuntimeWorktreeCaches } from './web-runtime-session'
 import { noopUnsubscribe } from './web-storage'
 
 export function createReposApi(): NonNullable<Partial<PreloadApi>['repos']> {
@@ -17,6 +17,8 @@ export function createReposApi(): NonNullable<Partial<PreloadApi>['repos']> {
       const owned = await callRuntimeResultWithOwner<{ repos: Repo[] }>('repo.list')
       return owned.result.repos.map((repo) => withRuntimeRepoOwner(repo, owned.hostId))
     },
+    // A WSL move is a desktop's own; a paired web client never holds the retained local rows.
+    listWslMoved: async () => [],
     add: async ({ path, kind, displayName }) => {
       invalidateRuntimeWorktreeCaches()
       const owned = await callRuntimeResultWithOwner<{ repo: Repo } | { error: string }>(
@@ -53,35 +55,7 @@ export function createReposApi(): NonNullable<Partial<PreloadApi>['repos']> {
       )
       return withRuntimeRepoOwner(owned.result.repo, owned.hostId)
     },
-    cloneRemote: async () => {
-      // Why: SSH relay cloning is owned by the desktop main process; paired web clients can't run that local IPC path.
-      throw new Error('SSH clone is unavailable in paired web clients.')
-    },
-    createRemote: async () => {
-      // Why: SSH relay project creation is owned by the desktop main process; paired web clients can't use local SSH IPC.
-      throw new Error('Creating projects on SSH hosts is unavailable in paired web clients.')
-    },
     cloneAbort: () => Promise.resolve(),
-    addRemote: async ({ remotePath, displayName, kind }) => {
-      invalidateRuntimeWorktreeCaches()
-      const owned = await callRuntimeResultWithOwner<{ repo: Repo }>('repo.add', {
-        path: remotePath,
-        kind
-      })
-      const result = {
-        repo: withRuntimeRepoOwner(owned.result.repo, owned.hostId)
-      }
-      if (!displayName) {
-        return result
-      }
-      assertActiveEnvironment(owned.environmentId)
-      return {
-        repo: await createReposApi().update({
-          repoId: result.repo.id,
-          updates: { displayName }
-        })
-      }
-    },
     create: async ({ parentPath, name, kind }) => {
       invalidateRuntimeWorktreeCaches()
       const owned = await callRuntimeResultWithOwner<{ repo: Repo } | { error: string }>(
@@ -99,7 +73,6 @@ export function createReposApi(): NonNullable<Partial<PreloadApi>['repos']> {
       return getDefaultCreateProjectParent(result.resolvedPath)
     },
     onCloneProgress: () => noopUnsubscribe,
-    getGitUsername: () => Promise.resolve(''),
     getBaseRefDefault: async ({ repoId }) =>
       callRuntimeResult('repo.baseRefDefault', { repo: repoId }),
     searchBaseRefs: async ({ repoId, query, limit }) =>

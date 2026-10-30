@@ -35,7 +35,8 @@ function createSettings(): GlobalSettings {
       customSoundId: 'system',
       customSoundPath: null,
       customSoundVolume: 50,
-      mutedNotificationSourceIds: []
+      mutedNotificationSourceIds: [],
+      notifyHiddenWorkspaces: false
     }
   })
 }
@@ -95,8 +96,7 @@ describe('NotificationsPane', () => {
 
     await sendNotificationSettingsTestNotification(createSettings().notifications, 50)
 
-    // Why: this UI sends via Electron's main-process Notification module;
-    // renderer Web Notification.permission can stay stale after macOS Settings changes.
+    // Probe main-process Electron delivery; renderer permission state can remain stale after macOS settings change.
     expect(notifications.dispatch).toHaveBeenCalledWith({
       source: 'test',
       requireDisplayConfirmation: true

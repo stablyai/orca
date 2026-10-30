@@ -1,8 +1,8 @@
 import { detectLanguage } from '@/lib/language-detect'
 import { getConnectionId } from '@/lib/connection-context'
-import { isPathInsideWorktree, toWorktreeRelativePath } from '@/lib/terminal-links'
+import { isPathInsideWorktree, toWorktreeRelativePath } from '../../../../../shared/terminal-links'
 import { useAppStore } from '@/store'
-import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client'
+import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
 import {
   normalizeBrowserNavigationUrl,
   redactKagiSessionToken
@@ -22,6 +22,7 @@ import type {
 } from '../describe-page/browser-page-types'
 import type { MutableRefObject } from 'react'
 import { statUserOpenedPath } from '@/lib/user-opened-local-path'
+import { requireRuntimeTargetForFileOwner } from '@/lib/file-owner-runtime-target'
 
 export type NavigateBrowserPageToUrlArgs = {
   url: string
@@ -29,7 +30,6 @@ export type NavigateBrowserPageToUrlArgs = {
   worktreeId: string
   activeLoadFailureRef: MutableRefObject<BrowserLoadError | null>
   lastKnownWebviewUrlRef: MutableRefObject<string | null>
-  trackNextLoadingEventRef: MutableRefObject<boolean>
   recoveryNavigationValidationRef: MutableRefObject<BrowserPageRecoveryNavigationValidation | null>
   webviewRef: MutableRefObject<Electron.WebviewTag | null>
   onSetUrlRef: MutableRefObject<BrowserPageUrlSetter>
@@ -45,7 +45,6 @@ export function navigateBrowserPageToUrl({
   worktreeId,
   activeLoadFailureRef,
   lastKnownWebviewUrlRef,
-  trackNextLoadingEventRef,
   recoveryNavigationValidationRef,
   webviewRef,
   onSetUrlRef,
@@ -75,7 +74,6 @@ export function navigateBrowserPageToUrl({
     if (!webview) {
       return
     }
-    trackNextLoadingEventRef.current = targetUrl !== ORCA_BROWSER_BLANK_URL
     lastKnownWebviewUrlRef.current = normalizedBrowserModelUrl
     recoveryNavigationValidationRef.current = recoveryLoadError
       ? { committed: false, started: false, targetUrl: normalizedBrowserModelUrl }
@@ -100,7 +98,7 @@ export function navigateBrowserPageToUrl({
         // Why getKnownWorktreeById: folder and floating workspaces are absent from allWorktrees().
         const activeWorktree = store.getKnownWorktreeById(worktreeId)
         const fileContext: RuntimeFileOperationArgs = {
-          settings: store.settings,
+          target: requireRuntimeTargetForFileOwner(store, worktreeId, undefined),
           worktreeId,
           worktreePath: activeWorktree?.path,
           connectionId: undefined

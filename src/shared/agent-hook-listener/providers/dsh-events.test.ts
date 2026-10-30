@@ -2,9 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { createHookListenerState, type HookListenerState } from '../listener-state'
 import { normalizeAndAccept } from '../../agent-hook-listener-test-harness'
 
-// Payload shape copied from a live run of @deepseek-ai/dsh-hooks-claude-code 0.1.5-rc.3
-// mounted through $DSH_HOME/cordis.patch.yml: `session_id`, an always-empty
-// `transcript_path`, `cwd`, `hook_event_name`, plus the per-event fields.
+// Real @deepseek-ai/dsh-hooks-claude-code0.1.5-rc.3 payloads: session/cwd/event fields and empty transcript_path, mounted through DSH_HOME/cordis.patch.yml.
 const SESSION_ID = '9478e2d8-29bc-4009-ab32-657efa2bd763'
 const CHILD_SESSION_ID = 'b1c4fb80-4f12-4a6f-9a68-7c0d5f0f5a12'
 
@@ -41,6 +39,9 @@ describe('normalizeDshEvent', () => {
     const started = normalizeAndAccept(state, 'dsh', event('SessionStart', { source: 'startup' }))
     expect(started?.payload.state).toBe('done')
     expect(started?.payload.agentType).toBe('dsh')
+    expect(started?.payload.sessionBoundary).toBe(true)
+    const stopped = normalizeAndAccept(state, 'dsh', event('Stop', { stop_hook_active: false }))
+    expect(stopped?.payload.sessionBoundary).toBeUndefined()
   })
 
   it('treats an ordinary tool as working and surfaces its name', () => {
@@ -71,8 +72,7 @@ describe('normalizeDshEvent', () => {
         tool_use_id: 'call-2'
       })
     )
-    // Why this matters: DSH's bridge has no Notification/PermissionRequest event, so the
-    // ask-the-user tool is the only structured signal that a pane needs the user.
+    // DSH has no approval/notification hooks; ask_user_question is its only structured human-input signal.
     expect(asked?.payload.state).toBe('waiting')
     expect(asked?.payload.interactivePrompt).toContain('Which one?')
 
@@ -93,9 +93,7 @@ describe('normalizeDshEvent', () => {
     const done = normalizeAndAccept(state, 'dsh', event('Stop', {}))
     expect(done?.payload.state).toBe('done')
 
-    // The bridge stamps the CHILD's session id and a constant `general-purpose` agent_type
-    // on both subagent events, so a child that outlives the lead's Stop would otherwise
-    // flip the finished pane back to working (the Muse regression in #22216).
+    // Child session IDs and constant general-purpose labels cannot distinguish lead identity; ignore their lifecycle (#22216).
     for (const name of ['SubagentStart', 'SubagentStop']) {
       expect(
         normalizeAndAccept(state, 'dsh', {

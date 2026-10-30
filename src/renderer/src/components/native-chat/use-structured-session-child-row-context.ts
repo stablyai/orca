@@ -22,8 +22,7 @@ export function structuredSessionChildRowContext(
   )
 }
 
-/** The strip's children read their parent's verdict from the same status row the sidebar reads,
- *  so one child never says "No update" in one place and "Working" in the other. */
+/** Use the sidebar’s parent verdict so the same child cannot disagree between strip and sidebar. */
 export function useStructuredSessionChildRowContext(
   paneKey: string
 ): AgentChildRowContext | undefined {
@@ -31,8 +30,7 @@ export function useStructuredSessionChildRowContext(
   // The freshness window is thirty minutes; a coarse shared tick is well inside its precision.
   const now = useNow(30_000, parent !== undefined)
   const context = parent ? structuredSessionChildRowContext(parent, now) : undefined
-  // Rebuilt from its values, not the row: a status row that changed none of them keeps the strip's
-  // grouped rows memoized.
+  // Memoize by verdict fields so unchanged status updates cannot rebuild grouped child rows.
   const fresh = context?.parentEvidenceFresh
   const observation = context?.transportObservation
   const observedAt = context?.parentObservedAt

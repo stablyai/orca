@@ -1,11 +1,12 @@
 import type { RuntimeTerminalInteractiveWait } from '../../../../../../shared/runtime-types'
-import type { OrcaRuntimeService } from '../../../../orca-runtime'
+import type { WorkerTerminalReleaseRuntime } from '../../../../orchestration/worker-terminal-release-runtime'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
-import { parseWorkerTerminalHostScope } from '../../../../orchestration/worker-terminal-process-liveness'
+import { parseWorkerTerminalHostScope } from '../../../../../../shared/worker-terminal-host-scope'
 import type { RemoteDispatchAttachmentRow } from '../../../../orchestration/types'
+import { orchestrationTimestampToMs } from '../worker/worker-output'
 
 export function requireHomeAttachment(
-  runtime: OrcaRuntimeService,
+  runtime: WorkerTerminalReleaseRuntime,
   dispatchId: string,
   callerFingerprint: string | undefined
 ): RemoteDispatchAttachmentRow {
@@ -20,10 +21,10 @@ export function requireHomeAttachment(
 }
 
 export async function inspectRemoteAttachment(
-  runtime: OrcaRuntimeService,
+  runtime: WorkerTerminalReleaseRuntime,
   dispatchId: string
 ): Promise<{
-  terminal: Awaited<ReturnType<OrcaRuntimeService['showTerminal']>> | null
+  terminal: Awaited<ReturnType<WorkerTerminalReleaseRuntime['showTerminal']>> | null
   exact: boolean
   status: 'unattached' | 'missing' | 'identity_changed' | 'live' | 'exited' | 'unverifiable'
   /** Set with `unverifiable`; names what we lost contact with. */
@@ -48,18 +49,15 @@ export async function inspectRemoteAttachment(
   if (!exact) {
     return { terminal, exact, status: 'identity_changed' }
   }
-  // Why: transport loss clears `connected` for every remote PTY; only the execution host can certify exit.
+  // Transport loss clears connected on every remote PTY; only its execution host can prove exit.
   const agentWait = terminal.agentWait
   const verdict = runtime.getTerminalLivenessVerdict?.(attachment.terminal_handle) ?? null
   if (verdict?.status === 'unverifiable') {
     return { terminal, exact, status: 'unverifiable', reason: verdict.reason, agentWait }
   }
   if (!verdict) {
-    // Why: the verdict register only fills on the first inventory sweep or exit frame, so a PTY
-    // this host just spawned has none for minutes and every fleet row read host_indeterminate.
-    // The host owns a connected local pane, so its own connected flag is host evidence of life,
-    // exactly as worker-show reads it. Nothing weaker earns a claim: a disconnected pane or an
-    // SSH-scoped one (contact, not the process) stays unverifiable, never `exited`.
+    // New local PTYs lack register verdicts until inventory arrives; host-owned connected state can prove life.
+    // Disconnected or SSH-scoped contact still proves neither life nor exit.
     const currentHostScope = runtime.getOrchestrationDispatchAuthority?.(
       attachment.terminal_handle
     )?.hostScope
@@ -85,4 +83,44 @@ export async function inspectRemoteAttachment(
     return { terminal, exact, status: 'exited', agentWait }
   }
   return { terminal, exact, status: 'live', agentWait }
+}
+
+/** The fleet and show verdict: the terminal's, upgraded to `exited` only on this host's proof. */
+export async function observeRemoteAttachmentLiveness(
+  runtime: WorkerTerminalReleaseRuntime,
+  dispatchId: string
+): Promise<Awaited<ReturnType<typeof inspectRemoteAttachment>>> {
+  const observation = await inspectRemoteAttachment(runtime, dispatchId)
+  const db = runtime.getOrchestrationDb()
+  const attachment = db.getRemoteDispatchAttachment(dispatchId)
+  const incarnation = attachment?.process_incarnation
+  if (!attachment?.terminal_handle || !incarnation) {
+    return observation
+  }
+  if (
+    (observation.status === 'missing' || observation.status === 'identity_changed') &&
+    // Legacy runtimeId:ptyId:generation fences never match the process table, so absence proves nothing.
+    !incarnation.startsWith(`${attachment.runtime_epoch}:`)
+  ) {
+    // After reboot, process-table absence proves the PTY and handle are gone.
+    const liveness = await runtime
+      .inspectTerminalProcessIncarnationLiveness(
+        incarnation,
+        db.getWorkerTerminalResourceByOwner(dispatchId)?.host_scope ?? null
+      )
+      .catch(() => 'unverifiable' as const)
+    return liveness === 'exited' ? { terminal: null, exact: true, status: 'exited' } : observation
+  }
+  if (observation.status !== 'live') {
+    return observation
+  }
+  // PTY shells outlive killed agents; accept only hook-proven exits after this dispatch attached.
+  const agent = await (
+    runtime.checkTerminalAgentPresence?.(
+      attachment.terminal_handle,
+      // Why not rounded up: attach forgets earlier exits, so one in the creation second is the worker's.
+      orchestrationTimestampToMs(attachment.created_at)
+    ) ?? Promise.resolve(null)
+  ).catch(() => 'unverifiable' as const)
+  return agent === 'exited' ? { ...observation, status: 'exited', agentWait: null } : observation
 }

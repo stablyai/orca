@@ -1,16 +1,17 @@
+import { createClaudeStructuredLaunchResolver } from '../runtime/structured-agent-launch-composition.test-support'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve as resolvePath } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
 import { agentSessionRecordFixture } from '../../shared/agent-session-record.test-fixture'
 import { claudeProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
+import type { AgentSessionRewindRecord } from '../../shared/agent-session-rewind'
+import { CLAUDE_PROFILE_SETUP_FAILED_MESSAGE } from '../../shared/claude-profile-routing'
 import {
-  CLAUDE_PROFILE_MISSING_MESSAGE,
   ClaudeProfileRouter,
   type ClaudeProfileRouterSettings
 } from '../claude-accounts/claude-profile-router'
 import { installClaudeProfileRouter } from '../claude-accounts/claude-profile-installed-router'
-import { createClaudeStructuredLaunchResolver } from './claude-structured-launch-resolution'
 
 const roots: string[] = []
 afterEach(() => {
@@ -32,7 +33,10 @@ it('launches each acquisition under the current selection, not the account it wa
     getSettings: () => settings,
     dataRoot: root,
     userHome: join(root, 'personal'),
-    env: { CLAUDE_CONFIG_DIR: resolvePath('/user/own') }
+    env: { CLAUDE_CONFIG_DIR: resolvePath('/user/own') },
+    runSetup: async () => {
+      throw new Error('setup refused')
+    }
   })
   installClaudeProfileRouter(router)
   const record = {
@@ -44,9 +48,9 @@ it('launches each acquisition under the current selection, not the account it wa
     store: { getRecord: () => record, pinLaunchDirectory: vi.fn() },
     resolveLaunchArgs: () => [],
     resolveWorkspacePath: async (id) => `/repos/${id}`,
-    resolveCommand: () => '/usr/local/bin/claude',
+    resolveCommand: () => ({ command: '/usr/local/bin/claude', prefixArgs: [] }),
     resolveInheritedEnv: async () => ({ PATH: '/usr/bin' }),
-    resolveAuthPolicy: () => ({ stripAuthEnv: false })
+    resolveAuthPolicy: () => ({ account: 'system' })
   })
   const identity = {
     sessionId: record.sessionId,
@@ -56,11 +60,14 @@ it('launches each acquisition under the current selection, not the account it wa
     providerHandle: claudeProviderHandle('unused', null)
   }
 
-  await expect(resolve({ identity })).rejects.toThrow(CLAUDE_PROFILE_MISSING_MESSAGE)
+  await expect(resolve({ identity })).rejects.toMatchObject({
+    name: 'AgentSessionPreSpawnError',
+    reason: 'claudeAccountSetupFailed',
+    message: CLAUDE_PROFILE_SETUP_FAILED_MESSAGE
+  })
 
   const home = join(root, 'claude-profiles', 'a', 'home')
   mkdirSync(home, { recursive: true })
-  // Already set up, so the launch does not wait for setup.
   writeFileSync(join(root, 'claude-profiles', 'a', 'profile.json'), '{}')
   const routed = await resolve({ identity })
   expect(routed.claudeConfigDir).toBe(home)
@@ -73,7 +80,7 @@ it('launches each acquisition under the current selection, not the account it wa
   expect((await resolve({ identity })).claudeConfigDir).toBe(resolvePath('/user/own'))
 })
 
-function routedResumeFixture() {
+function routedResumeFixture(rewind?: AgentSessionRewindRecord) {
   const root = mkdtempSync(join(tmpdir(), 'claude-launch-routing-'))
   roots.push(root)
   const home = join(root, 'claude-profiles', 'a', 'home')
@@ -98,16 +105,17 @@ function routedResumeFixture() {
     ...agentSessionRecordFixture(),
     providerHandleChain: [
       { linkId: 'link-1', origin: 'created' as const, mintedAtFence: 1, observedAt: 1, handle }
-    ]
+    ],
+    ...(rewind ? { rewind } : {})
   }
   const transcriptHomes = new Set<string>()
   const resolve = createClaudeStructuredLaunchResolver({
     store: { getRecord: () => record, pinLaunchDirectory: vi.fn() },
     resolveLaunchArgs: () => [],
     resolveWorkspacePath: async (id) => `/repos/${id}`,
-    resolveCommand: () => '/usr/local/bin/claude',
+    resolveCommand: () => ({ command: '/usr/local/bin/claude', prefixArgs: [] }),
     resolveInheritedEnv: async () => ({ PATH: '/usr/bin' }),
-    resolveAuthPolicy: () => ({ stripAuthEnv: false }),
+    resolveAuthPolicy: () => ({ account: 'system' }),
     hasTranscript: async ({ claudeConfigDir }) => transcriptHomes.has(claudeConfigDir)
   })
   const identity = {
@@ -141,4 +149,23 @@ it('resumes a chat with a stored leaf whose transcript is in no known folder', a
   const resumed = await launch()
   expect(resumed.options).toMatchObject({ resume: 'ran-under-b' })
   expect(resumed.resumeLeafUuid).toBe('leaf-1')
+})
+
+it('refuses a rewound chat whose kept conversation is in another account', async () => {
+  const { root, transcriptHomes, launch } = routedResumeFixture({
+    operationId: 'rewind-1',
+    callerKey: 'desktop',
+    itemId: 'item-1',
+    expectedEpoch: 'epoch-1',
+    phase: 'completed',
+    providerFork: {
+      sessionId: 'forked',
+      sourceSessionId: 'ran-under-b',
+      throughEntryId: 'entry-1',
+      replacesSessionId: 'ran-under-b'
+    }
+  })
+  transcriptHomes.add(join(root, 'personal', '.claude'))
+
+  await expect(launch()).rejects.toMatchObject({ reason: 'historyInOtherAccount' })
 })

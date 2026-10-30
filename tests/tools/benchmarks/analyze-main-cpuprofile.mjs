@@ -1,18 +1,7 @@
 #!/usr/bin/env node
-/**
- * Bucket a MAIN-process .cpuprofile by self time, resolved through out/main's
- * source maps, so a minified frame like `_Le` reads as the file it came from.
- *
- * Why buckets and not just a flame list: the question this answers is whether
- * main-thread git cost is spawn initiation + stdout drain (which a utility
- * process removes) or result parsing + IPC (which it does not).
- *
- * Why the nearest-mapping fallback: esbuild emits source-less segments, and an
- * exact-position lookup returns null for them — which silently dumped a third
- * of the busy samples into an "unknown bundle" bucket on the first pass.
- *
- * Usage: node tests/tools/benchmarks/analyze-main-cpuprofile.mjs <file.cpuprofile> [--top 30]
- */
+// Bucket main .cpuprofile self-time through source maps to separate spawn/stdout cost (movable to utility process) from parsing/IPC.
+// Use nearest mappings because esbuild’s source-less segments made exact lookup classify ~1/3 of busy samples as unknown.
+// Usage: node tests/tools/benchmarks/analyze-main-cpuprofile.mjs <file.cpuprofile> [--top 30]
 import { readFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { TraceMap, decodedMappings } from '@jridgewell/trace-mapping'
@@ -85,23 +74,12 @@ function originOf(frame) {
   return `${file}:${name}`
 }
 
-/**
- * Which cost phase a frame belongs to, matched on the V8 function name first.
- *
- * Why function name and not the resolved source file: the source map's
- * greatest-lower-bound lookup lands on the *preceding* mapped segment often
- * enough that file attribution alone put env builders in the diagnostics probe.
- * With ORCA_UNMINIFIED_MAIN=1 the function name is the real one, so it is the
- * trustworthy key; the file is kept only as a display hint.
- *
- * `spawn` (no url) is the native process_wrap binding — the synchronous
- * posix_spawn that actually holds the main thread.
- */
+// Classify by V8 function name first: greatest-lower-bound mapping can name the preceding file; unminified names are more trustworthy.
+// Native spawn without URL is process_wrap’s synchronous posix_spawn holding main.
 const NAME_RULES = [
   [/^\((?:idle|program)\)$/, 'idle/program'],
   [/^\(garbage collector\)$/, 'gc'],
-  // Env construction exists only to hand a git child its environment, so it is
-  // spawn preparation: it moves wherever the spawn moves.
+  // Environment construction belongs to spawn preparation and moves with spawn.
   [
     /^(?:spawn|spawnSync|normalizeSpawnArguments|validateArgumentNullCheck|validateTimeout|ChildProcess|setupChannel|execFile|execFileSync|spawnWithSignal)$/,
     'spawn-init'
@@ -124,7 +102,7 @@ const NAME_RULES = [
 ]
 
 const URL_RULES = [
-  [/child_process|spawn-resolution|run-process\.ts/, 'spawn-init'],
+  [/child_process|spawn-resolution|run-process\.(?:ts|js)/, 'spawn-init'],
   [
     /string_decoder|node:internal\/streams|node:stream|node:net|bounded-output-sink/,
     'stdout-drain'
@@ -151,12 +129,7 @@ function bucketOf(label) {
   return 'other'
 }
 
-/**
- * Where the frame lives, for display. Bundle frames keep their generated
- * position rather than a mapped file: with the mappings this bundle carries, a
- * greatest-lower-bound source lookup names the wrong file often enough to
- * mislead, and the (unminified) function name already identifies the code.
- */
+// Display generated positions for bundle frames: lower-bound mappings can name the wrong file, while unminified functions identify code.
 function displayLocation(frame) {
   if (!frame.url) {
     return '<native>'

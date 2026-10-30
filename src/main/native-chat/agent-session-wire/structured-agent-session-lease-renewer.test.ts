@@ -193,7 +193,7 @@ describe('structured agent-session lease renewal', () => {
       renewer.start()
       now += 10_000
       await vi.advanceTimersByTimeAsync(10_000)
-      // Real-timer poll: the suite's default 1000ms budget is tight under a loaded CI shard.
+      // Allow loaded CI shards time for the real-timer poll.
       await vi.waitFor(
         () => expect(store.getRecord('session-renewal')?.lease.lastRenewedAt).toBe(now),
         { timeout: 5000 }
@@ -222,7 +222,6 @@ describe('structured agent-session lease renewal', () => {
     })
 
     void renewer.renewNow()
-    // Nothing has been written yet: the tick is parked in its probe.
     expect(store.getRecord('session-renewal')?.lease.lastRenewedAt).toBe(NOW)
     const stopped = renewer.stop()
     releaseProbe()
@@ -273,8 +272,7 @@ describe('structured agent-session lease renewal', () => {
   })
 
   it('never extends the lease of a record parked in recovery', async () => {
-    // The host cannot vouch for a child it holds no transport to; renewing while
-    // recovering keeps an orphan pid's lease alive and reads as a healthy owner.
+    // Renewing unowned recovery children would make orphan PIDs appear healthy.
     const store = await liveStore()
     await store.transitionHandoff('session-renewal', (record) => ({
       ...record,

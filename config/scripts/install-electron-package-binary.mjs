@@ -17,6 +17,7 @@ import { platform as osPlatform, tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { getElectronPlatformPath } from './electron-platform-path.mjs'
 import { getZipExtractorCommand } from './zip-extractor-command.mjs'
+import { isSharedPackageDir } from './native-build-entry.cjs'
 import {
   shareElectronDistFromCache,
   hasAdoptedSharedElectronDist,
@@ -29,7 +30,6 @@ const projectDir = resolve(import.meta.dirname, '../..')
 const electronPackageDir = resolve(projectDir, 'node_modules/electron')
 const electronRequire = createRequire(resolve(electronPackageDir, 'package.json'))
 const { version: electronVersion } = electronRequire('./package.json')
-const { downloadArtifact } = electronRequire('@electron/get')
 const targetPlatform = getElectronTargetPlatform()
 const targetArch = getElectronTargetArch()
 const platformPath = getElectronPlatformPath(targetPlatform)
@@ -51,8 +51,7 @@ const transientDownloadErrorCodes = new Set([
 ])
 
 try {
-  // Why: Electron's own install.js can exit 0 while an async extract promise is
-  // still unsettled, leaving a partial dist/. Top-level await makes that fail.
+  // Top-level await makes incomplete extraction fail; Electron install.js can exit 0 with its async extraction unsettled.
   await main()
 } catch (error) {
   console.error('[electron-package] Failed to install Electron package binary.')
@@ -78,9 +77,9 @@ async function main() {
     return
   }
 
-  // Why: PR tests run under system Node after native modules are rebuilt for
-  // Node. Install only Electron's npm package binary here; do not run the full
-  // Electron native-module rebuild path, which would undo the Node ABI rebuild.
+  assertForeignTargetLeavesSharedElectronAlone()
+
+  // Install only Electron binary; full native rebuild would undo PR tests’ system-Node ABI rebuild.
   console.log('[electron-package] Electron package binary is missing; running Electron install.')
   await installElectronPackageBinary(sharedEntry)
 
@@ -91,6 +90,21 @@ async function main() {
     console.error('[electron-package] Electron package is still unavailable after install.')
     process.exit(1)
   }
+}
+
+// dist runs on this host; packaging downloads targets separately. Foreign-target installs would break every worktree sharing pnpm’s global slot.
+function assertForeignTargetLeavesSharedElectronAlone() {
+  if (
+    (targetPlatform === osPlatform() && targetArch === process.arch) ||
+    !isSharedPackageDir(electronPackageDir, projectDir)
+  ) {
+    return
+  }
+  throw new Error(
+    `Refusing to install a ${targetPlatform}-${targetArch} Electron into ${electronPackageDir}, ` +
+      'which every worktree shares through the global virtual store. Unset ELECTRON_INSTALL_ARCH ' +
+      '/ npm_config_arch, or install with ORCA_PNPM_GLOBAL_VIRTUAL_STORE=0.'
+  )
 }
 
 function electronPackageIsUsable() {
@@ -168,8 +182,7 @@ async function installElectronPackageBinary(sharedEntry) {
       cacheRootIsPersistent: Boolean(persistentCacheRoot)
     })
 
-    // Why: CI has observed partial extracts directly under node_modules/electron
-    // that leave only dist/locales. Verify in temp before replacing package dist.
+    // Verify temp extraction before replacing dist; CI partial extracts have left only locales.
     extractElectronArchive(zipPath, extractDir)
     const extractedExecutable = resolve(extractDir, platformPath)
     if (!existsSync(extractedExecutable)) {
@@ -180,6 +193,10 @@ async function installElectronPackageBinary(sharedEntry) {
       process.exit(1)
     }
 
+    // Why: a worktree sharing this slot may have installed it during the download; never swap out a dist it runs.
+    if (isSharedPackageDir(electronPackageDir, projectDir) && electronPackageIsUsable()) {
+      return
+    }
     moveExtractedElectronDist(extractDir, electronDistDir)
     if (sharedEntry !== null) {
       publishElectronDistForSiblingWorktrees(sharedEntry, electronDistDir)
@@ -189,13 +206,7 @@ async function installElectronPackageBinary(sharedEntry) {
   }
 }
 
-/**
- * Point this worktree's dist at the copy its siblings already share, so the ~295MB tree costs one
- * allocation per repository instead of one per worktree.
- *
- * Staged inside node_modules/electron on purpose: clonefile only shares blocks within a volume, and
- * staging elsewhere would silently downgrade the publish rename to a cross-device byte copy.
- */
+// Share ~295MB dist across worktrees; stage within electron package so same-volume clonefile/atomic rename cannot degrade into cross-device copying.
 function adoptSharedElectronDist(sharedEntry, electronDistDir) {
   const stageRoot = mkdtempSync(resolve(electronPackageDir, '.dist-clone-'))
   try {
@@ -249,6 +260,7 @@ function formatShareError(error) {
 }
 
 async function downloadElectronArtifactWithRetry(downloadOptions, { cacheRootIsPersistent }) {
+  const { downloadArtifact } = electronRequire('@electron/get')
   const retryDelays = getDownloadRetryDelays()
 
   for (let attempt = 0; ; attempt += 1) {
@@ -275,8 +287,7 @@ async function downloadElectronArtifactWithRetry(downloadOptions, { cacheRootIsP
 function getDownloadRetryDelays() {
   const configured = process.env.ORCA_ELECTRON_PACKAGE_RETRY_DELAYS_MS
   if (!configured) {
-    // Why: GitHub release CDN returns intermittent 503 / HTTP2 stream refusals
-    // under CI fan-out; a few short attempts still exhaust during outages.
+    // Short retries exhaust during CDN 503/HTTP2 outages under CI fan-out.
     return [1_000, 3_000, 5_000, 10_000]
   }
 
@@ -337,8 +348,7 @@ function formatDownloadError(error) {
 
 function extractElectronArchive(zipPath, extractDir) {
   mkdirSync(extractDir, { recursive: true })
-  // Why: extract-zip/Electron install.js can leave Node 24 with an unsettled
-  // promise and no active handles on CI. Host unzip tools fail synchronously.
+  // Host unzip avoids Node 24 extract-zip/install.js promises remaining unsettled without active handles.
   const command = getExtractorCommand(zipPath, extractDir)
   const result = spawnSync(command.file, command.args, {
     encoding: 'utf8',
@@ -408,9 +418,7 @@ function moveExtractedElectronDist(extractDir, electronDistDir) {
     }
   } finally {
     if (cleanupTransaction) {
-      // Why: the discarded tree can hold an executable another process still has
-      // open on Windows. Never fail a published install, or mask a publish error,
-      // on leftover-temp cleanup.
+      // Windows may retain open executables in discarded trees; cleanup must not fail a published install or mask publish errors.
       try {
         rmSync(transactionDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 })
       } catch (cleanupError) {
@@ -425,8 +433,7 @@ function moveExtractedElectronDist(extractDir, electronDistDir) {
 
 function stageExtractedElectronDist(extractDir, nextDistDir) {
   try {
-    // Why: macOS Electron archives rely on framework symlinks. Moving the
-    // verified tree preserves them exactly; copying has broken them in CI.
+    // Move verified tree to preserve macOS framework symlinks; copying broke them in CI.
     renameSync(extractDir, nextDistDir)
   } catch (/** @type {any} */ err) {
     if (err?.code !== 'EXDEV') {

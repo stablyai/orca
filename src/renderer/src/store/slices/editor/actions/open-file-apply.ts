@@ -5,7 +5,6 @@ import { getRecentlyClosedTabPosition, pushRecentlyClosedTabKind } from '../../r
 import type { AppState } from '../../../types'
 import {
   type ClosedEditorTabSnapshot,
-  type EditorTabSelection,
   MAX_RECENT_CLOSED_EDITOR_TABS,
   type OpenFile
 } from '../types/open-file'
@@ -19,8 +18,11 @@ import {
 } from '../file-ids/editor-file-ids'
 import {
   buildEditorActiveResult,
+  resolveEditorLinkOpenPlacement,
   resolveEditorOpenTargetGroupId
 } from '../tabs/editor-open-target-group'
+import type { OpenFileOptions } from '../types/editor-files-slice'
+import type { EditorOpenLinkIntent } from '../types/editor-open-link-intent'
 import { resolveEditorPreviewIntent } from '../tabs/editor-preview-tab-setting'
 import {
   getReplaceablePreviewFileId,
@@ -32,24 +34,16 @@ export type OpenFileApplyScratch = {
   editorItemTargetGroupId: string | undefined
   /** Resolved against the setting inside the reducer so the tab can't disagree with its OpenFile. */
   editorItemIsPreview: boolean
+  /** Set when a link's explicit target failed revalidation; state was left untouched. */
+  refused: boolean
 }
 
 export function applyOpenFileToState(
   s: AppState,
   file: Omit<OpenFile, 'id' | 'isDirty'>,
-  options:
-    | {
-        preview?: boolean
-        targetGroupId?: string
-        recordReplacedPreview?: boolean
-        suppressActiveRuntimeFallback?: boolean
-        forceContentReload?: boolean
-        focusEditor?: boolean
-        reopenId?: string
-        selection?: EditorTabSelection
-      }
-    | undefined,
-  scratch: OpenFileApplyScratch
+  options: OpenFileOptions | undefined,
+  scratch: OpenFileApplyScratch,
+  linkIntent: EditorOpenLinkIntent | null = null
 ): Partial<AppState> | AppState {
   const worktreeId = file.worktreeId
   let operationProvenance = file.operationProvenance
@@ -81,7 +75,7 @@ export function applyOpenFileToState(
       isSameEditorOwner(f, worktreeId, runtimeEnvironmentId) &&
       (f.filePath === file.filePath || canReuseLocalWslAlias(s, f, file, runtimeEnvironmentId))
   )
-  // Why: a snapshot's reopenId can be a stale shape — the same path is bare in whichever worktree opened it first and namespaced elsewhere — so honoring it while this owner's tab is already open would strand activeFileId and the unified tab on an id no OpenFile has.
+  // Already-open owner tabs outrank stale reopenId shapes; bare/namespaced drift otherwise points selection at no OpenFile.
   const id = existing
     ? existing.id
     : options?.reopenId && !s.openFiles.some((candidate) => candidate.id === options.reopenId)
@@ -93,21 +87,29 @@ export function applyOpenFileToState(
           runtimeEnvironmentId,
           reusableOpenFileModes
         )
+  const linkPlacement =
+    linkIntent && resolveEditorLinkOpenPlacement(s, worktreeId, linkIntent, id, file.mode)
+  if (linkPlacement?.kind === 'refused') {
+    scratch.refused = true
+    return s
+  }
   scratch.editorItemFileId = id
   const isPreview = resolveEditorPreviewIntent(s, options?.preview)
   scratch.editorItemIsPreview = isPreview
   const recordReplacedPreview = options?.recordReplacedPreview ?? false
   // Why: resolve the target group up-front so preview replacement is scoped to it (group B open must not evict group A's preview).
-  const targetGroupId =
-    resolveEditorOpenTargetGroupId(s, worktreeId, options?.targetGroupId) ?? undefined
+  const requestedGroupId =
+    linkPlacement?.kind === 'group' ? linkPlacement.groupId : options?.targetGroupId
+  const targetGroupId = resolveEditorOpenTargetGroupId(s, worktreeId, requestedGroupId) ?? undefined
   scratch.editorItemTargetGroupId = targetGroupId
   const activeResult =
     options?.selection === 'none' ? {} : buildEditorActiveResult(s, worktreeId, id)
   if (existing) {
-    // If opening as non-preview, also pin the existing tab
     const updatedPreview = isPreview ? existing.isPreview : false
     const nextExternalSshTargetId = file.externalSshTargetId ?? existing.externalSshTargetId
     const refreshExternalSshProvenance = file.externalSshTargetId !== undefined
+    // Why: a re-click mints a fresh grant; the old one may have expired.
+    const nextGrantId = file.terminalArtifactGrantId ?? existing.terminalArtifactGrantId
     const fileContentReloadNonce = shouldRequestExistingFileContentReload(
       existing,
       file.mode,
@@ -115,9 +117,7 @@ export function applyOpenFileToState(
     )
       ? (existing.fileContentReloadNonce ?? 0) + 1
       : existing.fileContentReloadNonce
-    // View Log is the only read-only open path. A normal open of the same path
-    // is an explicit request to edit it, so drop the log-only restrictions while
-    // keeping View Log from downgrading an already writable tab.
+    // Normal open explicitly enables editing of a View Log; View Log must never downgrade an already writable tab.
     const nextReadOnly = existing.readOnly === true && file.readOnly === true ? true : undefined
     const nextLiveTail = file.liveTail === true && nextReadOnly === true ? true : undefined
     const needsExistingUpdate =
@@ -135,6 +135,7 @@ export function applyOpenFileToState(
       existing.worktreeId !== file.worktreeId ||
       existing.runtimeEnvironmentId !== runtimeEnvironmentId ||
       existing.externalSshTargetId !== nextExternalSshTargetId ||
+      existing.terminalArtifactGrantId !== nextGrantId ||
       refreshExternalSshProvenance ||
       existing.fileContentReloadNonce !== fileContentReloadNonce ||
       existing.readOnly !== nextReadOnly ||
@@ -152,6 +153,7 @@ export function applyOpenFileToState(
               language: file.language,
               runtimeEnvironmentId,
               externalSshTargetId: nextExternalSshTargetId,
+              terminalArtifactGrantId: nextGrantId,
               operationProvenance: refreshExternalSshProvenance
                 ? operationProvenance
                 : f.operationProvenance,
@@ -194,7 +196,6 @@ export function applyOpenFileToState(
         markdownFrontmatterVisible: nextMarkdownFrontmatterVisible,
         markdownTableOfContentsVisible: nextMarkdownTableOfContentsVisible
       } = removeEditorStateForReplacedPreview(s, replacedPreview, id)
-      // Replace in-place to preserve tab position
       newFiles = s.openFiles.map((f, i) =>
         i === existingPreviewIdx
           ? {
@@ -207,7 +208,6 @@ export function applyOpenFileToState(
             }
           : f
       )
-      // Swap the old preview ID for the new one in the stored tab bar order
       const prevOrder = s.tabBarOrderByWorktree?.[worktreeId]
       const previewTabBarUpdate = prevOrder
         ? {
@@ -217,7 +217,7 @@ export function applyOpenFileToState(
             }
           }
         : {}
-      // Why: push the evicted preview onto the recently-closed stack so Cmd/Ctrl+Shift+T can reopen it; gated to keep file-explorer clicks silent.
+      // Capture evicted previews for Cmd/Ctrl+Shift+T only when requested; explorer single-clicks stay silent.
       let nextRecentlyClosed = s.recentlyClosedEditorTabsByWorktree
       let nextRecentlyClosedKinds = s.recentlyClosedTabKindsByWorktree
       if (recordReplacedPreview && replacedPreview.id !== id) {

@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const runProcessSync = vi.hoisted(() => vi.fn())
-vi.mock('../../shared/child-process/run-process', () => ({ runProcessSync }))
+vi.mock('@orca/process-host', () => ({ runProcessSync }))
 
 const { probeSecretServiceCollection } = await import('./linux-secret-service-probe')
 
@@ -27,8 +27,7 @@ describe('probeSecretServiceCollection', () => {
     expect(probeSecretServiceCollection()).toBe('unavailable')
   })
 
-  // Why unavailable and not locked: a timeout means we learned nothing, and guessing
-  // "locked" would be the same no-op while implying we measured something.
+  // Timeout proves no collection state; report unavailable rather than invent a locked verdict.
   it('reports unavailable when the probe is killed on its timeout', () => {
     answers({ code: null, stdout: '', timedOut: true })
     expect(probeSecretServiceCollection()).toBe('unavailable')
@@ -46,8 +45,7 @@ describe('probeSecretServiceCollection', () => {
     expect(probeSecretServiceCollection()).toBe('unavailable')
   })
 
-  // The probe exists to be abandonable; a call without a kill deadline could become the
-  // 76s stall it is meant to detect.
+  // Require a kill deadline and a non-prompting property read so the probe cannot reproduce the stall.
   it('bounds the child with a timeout and reads a property that cannot prompt', () => {
     answers({ stdout: '(<false>,)' })
     probeSecretServiceCollection()

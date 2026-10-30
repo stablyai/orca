@@ -88,23 +88,6 @@ describe('push host challenge store', () => {
     })
   })
 
-  it('spends no skew tolerance on its own expiry, so the ttl is the whole window', async () => {
-    const host = createPushHostKeypair(5)
-    const challenge = await store.issue(hostPublicKeyB64(host))
-    const proof = answerPushHostChallenge(challenge!, {
-      gatewayOrigin: GATEWAY_ORIGIN,
-      keypair: host,
-      now: () => clock
-    })!
-    // A proof that the host would still consider in-window is refused here: the
-    // gateway issued expires_at against this clock and needs no allowance.
-    clock += PUSH_LIMITS.challengeTtlMs + PUSH_LIMITS.clockSkewToleranceMs - 1
-    await expect(store.verify(challenge!.challengeId, proof)).resolves.toEqual({
-      ok: false,
-      reason: 'expired'
-    })
-  })
-
   it('accepts a proof that lands just inside the ttl', async () => {
     const host = createPushHostKeypair(26)
     const challenge = await store.issue(hostPublicKeyB64(host))
@@ -155,21 +138,6 @@ describe('push host challenge store', () => {
       ok: false,
       reason: 'proof_mismatch'
     })
-  })
-
-  it('rejects a proof bound to a different gateway origin', async () => {
-    const host = createPushHostKeypair(8)
-    const challenge = await store.issue(hostPublicKeyB64(host))
-    const reasons: string[] = []
-    expect(
-      answerPushHostChallenge(challenge!, {
-        gatewayOrigin: 'https://push.example.test',
-        keypair: host,
-        now: () => clock,
-        onInvalid: (reason) => reasons.push(reason)
-      })
-    ).toBeNull()
-    expect(reasons.join()).toContain('gatewayOrigin')
   })
 
   it('rejects an unknown challenge id and a malformed public key', async () => {

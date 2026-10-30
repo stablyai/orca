@@ -13,7 +13,7 @@ import {
 } from '@/components/sidebar/AddRemoteHostDialog'
 import { lazyWithRetry } from '@/lib/lazy-with-retry'
 import type * as SetProjectLocationDialogModule from '@/components/new-workspace/SetProjectLocationDialog'
-import { unwrapRuntimeRpcResult } from '@/runtime/runtime-rpc-client'
+import { unwrapRuntimeRpcResult } from '@/runtime/runtime-rpc-result'
 import { withUiConnectTimeout } from '@/ssh/ssh-connect-ui-timeout'
 import { isSshConnectInFlight, trackSshConnect } from '@/ssh/ssh-connect-in-flight'
 import { translate } from '@/i18n/i18n'
@@ -38,10 +38,9 @@ import {
 import { getSshStatusLabel } from './new-workspace/new-workspace-composer-ssh-status'
 import { useNewWorkspaceComposerFileDrop } from './new-workspace/use-new-workspace-composer-file-drop'
 import { useComposerFileDragOver } from './new-workspace/use-composer-file-drag-over'
+import { buildDefaultAgentSettingsUpdate } from '../../../shared/default-agent-settings'
 
-// Why lazy: this pulls the ~41 KB project-location browser onto the boot graph, and nothing
-// reaches it without an explicit "Set location" click. Shared with the warm below so both hit
-// the same module-map entry.
+// Lazy-load the project-location browser outside boot; warming shares this module entry with the click.
 const loadSetProjectLocationDialog = (): Promise<typeof SetProjectLocationDialogModule> =>
   import('@/components/new-workspace/SetProjectLocationDialog')
 
@@ -107,8 +106,7 @@ export default function NewWorkspaceComposerCard(
   const [setLocationOption, setSetLocationOption] = React.useState<NeedsProjectHostOption | null>(
     null
   )
-  // Why sticky: the dialog animates itself closed off its own `option` prop, so unmounting it
-  // when the option clears would cut that animation short.
+  // Retain the dialog while its cleared option drives the close animation.
   const [setLocationDialogMounted, setSetLocationDialogMounted] = React.useState(false)
 
   const selectedRepo = eligibleRepos.find((candidate) => candidate.id === repoId)
@@ -123,8 +121,7 @@ export default function NewWorkspaceComposerCard(
   const needsSetupProjectHostSetupOptions = projectHostSetupOptions.filter(
     (option) => option.kind === 'needs-setup'
   )
-  // Warm on the precursor: the "Set location" row only renders for a needs-setup host that can
-  // still take one, so the chunk resolves while the picker is being read rather than on the click.
+  // Warm when a usable Set location row appears so reading the picker overlaps the chunk load.
   const hasSetLocationOption = needsSetupProjectHostSetupOptions.some(
     (option) => option.canSetLocation
   )
@@ -142,28 +139,55 @@ export default function NewWorkspaceComposerCard(
     : translate('auto.components.NewWorkspaceComposerCard.notConnected', 'Not connected')
   const connectButtonLabel =
     selectedRepoSshStatus === 'disconnected' || selectedRepoSshStatus === null
-      ? 'Connect'
-      : 'Reconnect'
+      ? translate('auto.components.NewWorkspaceComposerCard.connect', 'Connect')
+      : translate('auto.components.NewWorkspaceComposerCard.reconnect', 'Reconnect')
   const setupConfigLabel =
     setupConfig?.kind === 'default-tabs'
-      ? 'Default tab commands'
+      ? translate(
+          'auto.components.NewWorkspaceComposerCard.setupConfigDefaultTabs',
+          'Default tab commands'
+        )
       : setupConfig?.kind === 'setup-and-default-tabs'
-        ? 'Setup and default tab commands'
-        : 'Setup script'
+        ? translate(
+            'auto.components.NewWorkspaceComposerCard.setupConfigSetupAndDefaultTabs',
+            'Setup and default tab commands'
+          )
+        : translate(
+            'auto.components.NewWorkspaceComposerCard.setupConfigSetupScript',
+            'Setup script'
+          )
   const setupRunLabel =
     setupConfig?.kind === 'default-tabs'
-      ? 'Run default tab commands'
+      ? translate(
+          'auto.components.NewWorkspaceComposerCard.runDefaultTabCommands',
+          'Run default tab commands'
+        )
       : setupConfig?.kind === 'setup-and-default-tabs'
-        ? 'Run setup and default tab commands'
-        : 'Run setup command'
+        ? translate(
+            'auto.components.NewWorkspaceComposerCard.runSetupAndDefaultTabCommands',
+            'Run setup and default tab commands'
+          )
+        : translate('auto.components.NewWorkspaceComposerCard.runSetupCommand', 'Run setup command')
   const setupAskLabel =
     setupConfig?.kind === 'default-tabs'
-      ? 'Run default tab commands now?'
+      ? translate(
+          'auto.components.NewWorkspaceComposerCard.askRunDefaultTabCommands',
+          'Run default tab commands now?'
+        )
       : setupConfig?.kind === 'setup-and-default-tabs'
-        ? 'Run setup and default tab commands now?'
-        : 'Run setup now?'
-  const setupRunButtonLabel = setupConfig?.kind === 'setup' ? 'Run setup now' : 'Run commands now'
-  const setupSkipButtonLabel = setupConfig?.kind === 'setup' ? 'Skip for now' : 'Skip commands'
+        ? translate(
+            'auto.components.NewWorkspaceComposerCard.askRunSetupAndDefaultTabCommands',
+            'Run setup and default tab commands now?'
+          )
+        : translate('auto.components.NewWorkspaceComposerCard.askRunSetup', 'Run setup now?')
+  const setupRunButtonLabel =
+    setupConfig?.kind === 'setup'
+      ? translate('auto.components.NewWorkspaceComposerCard.runSetupNow', 'Run setup now')
+      : translate('auto.components.NewWorkspaceComposerCard.runCommandsNow', 'Run commands now')
+  const setupSkipButtonLabel =
+    setupConfig?.kind === 'setup'
+      ? translate('auto.components.NewWorkspaceComposerCard.skipForNow', 'Skip for now')
+      : translate('auto.components.NewWorkspaceComposerCard.skipCommands', 'Skip commands')
   const showSetupAgentStartupPolicy =
     setupControlsEnabled && setupConfig !== null && setupConfig.kind !== 'default-tabs'
   const agentCatalog = getAgentCatalog()
@@ -272,7 +296,7 @@ export default function NewWorkspaceComposerCard(
   )
   const handleSetDefaultAgent = React.useCallback(
     (next: TuiAgent | 'blank' | null): void => {
-      void updateSettings({ defaultTuiAgent: next })
+      void updateSettings(buildDefaultAgentSettingsUpdate(next))
     },
     [updateSettings]
   )

@@ -15,8 +15,8 @@ import { tmpdir } from 'node:os'
 import { join, relative } from 'node:path'
 import { lock } from 'proper-lockfile'
 import { afterEach, describe, expect, it } from 'vitest'
-import { forceTerminateProcessTree } from '../../../src/shared/child-process/process-tree-termination'
-import { spawnProcess } from '../../../src/shared/child-process/run-process'
+import { forceTerminateProcessTree } from '@orca/process-host/process-tree-termination'
+import { spawnProcess } from '@orca/process-host'
 import {
   importReleaseCheckoutModule,
   materializeReleaseCheckout,
@@ -46,8 +46,7 @@ function git(args: string[]): string {
 }
 
 function syntheticCheckout(): ReleaseCheckout {
-  // Why realpath: vite-node reports module urls through macOS's /var -> /private/var
-  // symlink, so provenance assertions need the resolved form.
+  // Resolve macOS /var symlinks like vite-node for provenance comparisons.
   const root = realpathSync(temporaryCacheRoot())
   return { ref: 'v0.0.0-synthetic', commit: 'f'.repeat(40), label: 'v0.0.0-synthetic', root }
 }
@@ -216,8 +215,7 @@ async function runContentionPhase(
       acquiredMarker,
       ...(ablateLock ? { ablateLock, stagingMarker, proceedPath, populateStaging: true } : {})
     })
-    // onLockAttempt runs only after the rival's first stamp miss and invocation
-    // of the actual lock function; no elapsed-time guess stands in for contention.
+    // Wait for real lock contention acknowledgement, not an elapsed-time guess.
     await waitForFile(ablateLock ? stagingMarker : attemptMarker, 30_000)
     if (!ablateLock) {
       expect(existsSync(acquiredMarker), rival.output()).toBe(false)
@@ -229,8 +227,7 @@ async function runContentionPhase(
       (error: unknown) => error
     )
     if (ablateLock) {
-      // The staging marker is after the second stamp miss. Publishing before this
-      // acknowledgement would let the ablation pass without exercising deletion.
+      // Wait for the second stamp miss or the ablation could pass without exercising deletion.
       writeFileSync(proceedPath, '')
     }
     await releaseOnce()
@@ -300,47 +297,26 @@ describe('release checkout materialization', () => {
     expect(relative(cacheRoot, checkout.root)).not.toMatch(/^\.\./)
   }, 180_000)
 
-  // v1.4.221 still needs the pinned test-only parser for its dense match path.
-  // Default cache root: package resolution must walk up into the repo's node_modules.
-  it('runs the released dense parser with its retained test dependency', async () => {
+  // Default cache root lets released source resolve packages from the repo's node_modules.
+  it('runs a released schema with an existing package dependency', async () => {
     const checkout = await materializeReleaseCheckout('v1.4.221')
-    const ripgrep = await importReleaseCheckoutModule(
+    const schema = await importReleaseCheckoutModule(
       checkout,
-      '/src/shared/ripgrep-dense-match-json.ts'
+      '/src/shared/agent-session-context-usage-schema.ts'
     )
-    const callExport = (name: string, ...args: unknown[]): unknown => {
-      const exported = ripgrep[name]
-      if (typeof exported !== 'function') {
-        throw new Error(`v1.4.221 ripgrep-dense-match-json has no ${name} export`)
-      }
-      return exported(...args)
+    const isAdmissible = schema.isAdmissibleAgentSessionContextUsage
+    if (typeof isAdmissible !== 'function') {
+      throw new Error('v1.4.221 has no isAdmissibleAgentSessionContextUsage export')
     }
-    const limits = { structuralTokens: 64, nestingDepth: 8 }
 
-    expect(callExport('parseRipgrepMatchJson', '{"type":"match"}', 1, limits)).toEqual({
-      type: 'match'
-    })
-    expect(callExport('parseDenseRipgrepMatchJson', '{"type":"match"}', 1, 8)).toEqual({
-      type: 'match',
-      data: { submatches: [] }
-    })
-    const match = {
-      type: 'match',
-      data: {
-        path: { text: 'src/example.ts' },
-        lines: { text: 'hit hit\n' },
-        line_number: 7,
-        submatches: [
-          { start: 0, end: 3 },
-          { start: 4, end: 7 }
-        ]
-      }
-    }
-    expect(callExport('parseDenseRipgrepMatchJson', JSON.stringify(match), 1, 8)).toEqual({
-      ...match,
-      data: { ...match.data, submatches: [{ start: 0, end: 3 }] }
-    })
-    expect(() => callExport('parseDenseRipgrepMatchJson', '{"type":', 1, 8)).toThrow()
+    expect(
+      isAdmissible({
+        window: { tokens: 200_000, capturedAt: 1 },
+        used: { kind: 'unknown', capturedAt: 1 }
+      })
+    ).toBe(true)
+    expect(isAdmissible({ window: { tokens: 0, capturedAt: 1 } })).toBe(false)
+    expect(isAdmissible({ used: { kind: 'invalid', capturedAt: 1 } })).toBe(false)
   }, 180_000)
 
   it('keeps an import live while another colliding release label materializes', async () => {
@@ -399,8 +375,7 @@ describe('release checkout materialization', () => {
     })
 
     await expect(runContentionPhase(published, scratch, 'locked', false)).resolves.toBe(true)
-    // In the same causally acknowledged interleaving, a no-lock materializer
-    // deletes the newly published tree. This makes the lock assertion non-vacuous.
+    // The same acknowledged interleaving without a lock must delete the published tree, proving the lock assertion matters.
     await expect(runContentionPhase(published, scratch, 'ablated', true)).resolves.toBe(false)
   }, 120_000)
 
@@ -585,9 +560,7 @@ describe('release checkout module importer', () => {
     const probe = await importReleaseCheckoutModule(checkout, '/src/provenance-probe.mjs')
     expect(String(probe.moduleUrl)).toContain(checkout.root.split('\\').join('/'))
 
-    // The working tree has this module and the synthetic checkout does not:
-    // resolving it would mean a root-relative specifier silently ran current
-    // code as the "old" side — the exact poison this harness exists to prevent.
+    // This module exists only in the working tree; resolving it would silently run current code as the old build.
     await expect(
       importReleaseCheckoutModule(checkout, '/src/shared/protocol-version.ts')
     ).rejects.toThrow()

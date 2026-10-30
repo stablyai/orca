@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 
-import { cleanup, render } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import type {
@@ -33,8 +33,7 @@ import { claudeGroupedQuestionPromptItems } from './native-chat-structured-quest
 
 const STRIP = '[data-native-chat-background-tasks]'
 const GOAL = '[data-native-chat-thread-goal]'
-// The seam is CSS on DOM adjacency: the strip styles itself when a goal tab follows
-// it, and the goal tab styles itself when the strip precedes it.
+// Docking depends on adjacent task/goal DOM elements and their group markers.
 const STRIP_DOCK_RULE = /^\[\[data-native-chat-background-tasks\]:has\(\+\[([a-z-]+)\]\)_&\]:(.+)$/
 const GOAL_DOCK_RULE = /^group-\[\[([a-z-]+)\]\+&\]\/goal:(.+)$/
 
@@ -59,7 +58,7 @@ function goal(status: AgentJournalThreadGoal['status']): AgentJournalThreadGoal 
   }
 }
 
-function sessionView(): React.JSX.Element {
+function sessionView(agent: 'codex' | 'claude' = 'codex'): React.JSX.Element {
   return (
     <TooltipProvider>
       <NativeChatStructuredSession
@@ -68,7 +67,7 @@ function sessionView(): React.JSX.Element {
         tabId="structured-tab-goal"
         sessionId="session-goal"
         target={{ kind: 'local' }}
-        agent="codex"
+        agent={agent}
       />
     </TooltipProvider>
   )
@@ -77,7 +76,7 @@ function sessionView(): React.JSX.Element {
 function showStripAndGoal(status: AgentJournalThreadGoal['status'] = 'active'): void {
   mocks.monitoringBackgroundTasks = true
   mocks.backgroundTasks = [{ id: 'task-agent', kind: 'agent' }]
-  mocks.threadGoal = { goal: goal(status), pending: false, change: vi.fn() }
+  mocks.threadGoal = { goal: goal(status), pending: false, hostChanges: true, change: vi.fn() }
 }
 
 describe('NativeChatStructuredSession task strip on the goal tab', () => {
@@ -85,6 +84,40 @@ describe('NativeChatStructuredSession task strip on the goal tab', () => {
     cleanup()
     localStorage.clear()
     resetStructuredSessionMocks()
+  })
+
+  it('reveals a Claude goal cleared from the strip while preserving the composer draft', () => {
+    const change = vi.fn(async () => true)
+    mocks.threadGoal = { goal: goal('active'), pending: false, hostChanges: false, change }
+    const view = render(sessionView('claude'))
+    const composer = screen.getByRole('textbox', { name: 'Message' })
+    fireEvent.change(composer, { target: { value: 'Keep this draft' } })
+
+    const clear = screen.getByRole('button', { name: 'Clear goal' })
+    mocks.sendOut = true
+    view.rerender(sessionView('claude'))
+    expect(clear).toHaveProperty('disabled', true)
+    fireEvent.click(clear)
+    expect(change).not.toHaveBeenCalled()
+    expect(mocks.revealLatest).not.toHaveBeenCalled()
+
+    mocks.sendOut = false
+    mocks.isWorking = true
+    view.rerender(sessionView('claude'))
+    expect(mocks.turnId).toBeNull()
+    expect(clear).toHaveProperty('disabled', true)
+    fireEvent.click(clear)
+    expect(change).not.toHaveBeenCalled()
+    expect(mocks.revealLatest).not.toHaveBeenCalled()
+
+    mocks.isWorking = false
+    view.rerender(sessionView('claude'))
+    expect(clear).toHaveProperty('disabled', false)
+    fireEvent.click(clear)
+
+    expect(change).toHaveBeenCalledWith({ kind: 'clear' })
+    expect(mocks.revealLatest).toHaveBeenCalledOnce()
+    expect(composer).toHaveProperty('value', 'Keep this draft')
   })
 
   it('stacks the strip directly on the goal tab at the tab width, sharing one edge', () => {
@@ -113,7 +146,6 @@ describe('NativeChatStructuredSession task strip on the goal tab', () => {
     expect(stripUtilities).toEqual(expect.arrayContaining(['rounded-b-none', 'shadow-none']))
     expect(goalRules.map((rule) => rule.utility)).toEqual(['rounded-t-none', 'border-t-0'])
 
-    // Same width: the strip takes the goal tab's inset inside the shared column.
     const goalInset = goalTab.firstElementChild
     expect(goalInset?.classList).toContain('px-2')
     expect(stripUtilities).toContain('px-2')
@@ -236,7 +268,6 @@ describe('NativeChatStructuredSession queued messages above the task strip', () 
     expect(queued.compareDocumentPosition(strip) & Node.DOCUMENT_POSITION_FOLLOWING).toBe(
       Node.DOCUMENT_POSITION_FOLLOWING
     )
-    // The strip still docks on the goal tab; the queue never sits between them.
     expect(strip.nextElementSibling).toBe(document.querySelector(GOAL))
   })
 })

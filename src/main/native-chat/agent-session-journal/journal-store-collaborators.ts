@@ -1,35 +1,32 @@
-// Wiring for the store's collaborators.
-//
-// Split out of the store itself so the class stays a description of the public
-// surface rather than sixty lines of constructor plumbing.
-
 import type {
   AgentJournalCursor,
   AgentSessionJournalIdentity
 } from '../../../shared/agent-session-journal-types'
 import type { JournalHostDatabase } from './journal-host-database'
+import { JournalContextController } from './journal-context-controller'
 import { JournalEpochController } from './journal-epoch-controller'
 import { JournalItemAppender } from './journal-item-appender'
 import { JournalLifecycleBatchAppender } from './journal-lifecycle-batch-appender'
 import type { JournalLoad } from './journal-open'
 import { JournalQueuedMessages } from './journal-queued-messages'
 import { JournalStopMarks } from './journal-stop-marks'
+import { JournalStopAcceptor } from './journal-stop-acceptance'
 import { journalQueuePauseRestatement } from './queued-message-pause'
 import type { JournalReducerState } from './journal-reducer'
-import { JournalRowWriter } from './journal-row-writer'
+import { JournalRowWriter, type JournalOperationReceipt } from './journal-row-writer'
 import { JournalStepWriter } from './journal-step-writer'
 import { restoreJournalStore } from './journal-store-restore'
 import { JournalSubmissionWriter } from './journal-submission-writer'
 import type { JournalRow } from './journal-row-schema'
 import type { AgentSessionJournal } from './journal-store'
 import type { JournalWriteBody } from './journal-write-queue'
-import type { JournalAttachmentClaim } from './journal-submission-hook'
+import { journalInputClaimsReceipt, type JournalAttachmentClaim } from './journal-submission-hook'
 import { claimAgentSessionAttachmentsInTransaction } from '../agent-session-attachments/agent-session-attachment-claims'
+import { JournalGoalAttachmentInverse } from './journal-goal-attachment-inverse'
+import { isJournalStreamedTextRevision } from './journal-streamed-text-revision'
 
 export type JournalStoreHost = {
-  /** Fires the journal's commit listener for a durable change that appended no
-   *  row — a standalone draft-table transaction — so readers learn of it the
-   *  same way they learn of a row. */
+  /** Notify readers of durable draft-only transactions that append no journal row. */
   notifyCommitted: () => void
   identity: AgentSessionJournalIdentity
   now: () => number
@@ -40,9 +37,9 @@ export type JournalStoreHost = {
   readOnly: () => boolean
   cursor: () => AgentJournalCursor
   adopt: (loaded: JournalLoad) => void
-  commit: (row: JournalRow) => void
+  commit: (rows: readonly JournalRow[], savedAt: number) => void
   journal: () => AgentSessionJournal
-  enqueue: (build: (seq: number, ts: number) => JournalRow) => Promise<JournalRow>
+  enqueue: JournalRowWriter['enqueue']
 }
 
 export type JournalStoreCollaborators = {
@@ -54,13 +51,28 @@ export type JournalStoreCollaborators = {
   stepWriter: JournalStepWriter
   queuedMessages: JournalQueuedMessages
   stopMarks: JournalStopMarks
-  /** Restores the store's state from disk. Owned here because it needs the same
-   *  collaborators the constructor just built. */
+  context: JournalContextController
+  stops: JournalStopAcceptor
+  goalAttachments: JournalGoalAttachmentInverse
   restore: () => Promise<void>
 }
 
 export function createJournalStoreCollaborators(host: JournalStoreHost): JournalStoreCollaborators {
+  const goalAttachments = new JournalGoalAttachmentInverse(host.identity.sessionId)
+  const claimAttachments: JournalAttachmentClaim = (db, body, required, previous, goalId) => {
+    const claim = claimAgentSessionAttachmentsInTransaction(db, {
+      stateDirectory: host.database().stateDirectory,
+      sessionId: host.identity.sessionId,
+      body,
+      required,
+      ...(previous ? { previous } : {}),
+      now: host.now()
+    })
+    return () => goalAttachments.acquired(claim.referenced, claim.inserted, goalId)
+  }
   const epochController = new JournalEpochController({
+    claimAttachments,
+    isLiveGoal: (id) => goalAttachments.isLive(id),
     identity: host.identity,
     now: host.now,
     mintEpoch: host.mintEpoch,
@@ -68,34 +80,16 @@ export function createJournalStoreCollaborators(host: JournalStoreHost): Journal
     database: host.database,
     readOnly: host.readOnly,
     highestFence: () => host.state().highestFence,
+    state: host.state,
     queuePauseRestatement: () =>
       journalQueuePauseRestatement(
         host.state().queuePauseMarks,
         host.state().latestAcceptedTurnSequence,
         host.journal().queuedMessages.pauses()
       ),
+    queueRestatement: () => host.journal().queuedMessages.restatement(),
     cursor: host.cursor,
     adopt: host.adopt
-  })
-  const claimAttachments: JournalAttachmentClaim = (db, body, required) =>
-    claimAgentSessionAttachmentsInTransaction(db, {
-      // Uploaded attachments are stored beside the journal database.
-      stateDirectory: host.database().stateDirectory,
-      sessionId: host.identity.sessionId,
-      body,
-      required,
-      now: host.now()
-    })
-  const queuedMessages = new JournalQueuedMessages({
-    sessionId: host.identity.sessionId,
-    now: host.now,
-    serialize: host.serialize,
-    database: host.database,
-    readOnly: host.readOnly,
-    state: host.state,
-    reopenFloor: () => host.journal().reopenFloor(),
-    committed: host.notifyCommitted,
-    claimAttachments
   })
   const rowWriter = new JournalRowWriter({
     sessionId: host.identity.sessionId,
@@ -106,27 +100,40 @@ export function createJournalStoreCollaborators(host: JournalStoreHost): Journal
     highestFence: () => host.state().highestFence,
     nextSequence: () => host.state().lastSequence + 1,
     commit: host.commit,
-    // Every rejection is a dispatch row through this one writer; the draft
-    // returned-transition rides it so no path can bypass the hook.
-    inTransaction: (db, row) => queuedMessages.onRowInTransaction(db, row),
-    rolledBack: () => queuedMessages.invalidate()
+    streamedTextRevision: (row) => isJournalStreamedTextRevision(host.state(), row)
+  })
+  const inputReceipt = (rows: readonly JournalRow[], receipt?: JournalOperationReceipt) =>
+    journalInputClaimsReceipt(claimAttachments, (id) => goalAttachments.isLive(id), rows, receipt)
+  const queuedMessages = new JournalQueuedMessages({
+    sessionId: host.identity.sessionId,
+    serialize: host.serialize,
+    database: host.database,
+    readOnly: host.readOnly,
+    state: host.state,
+    reopenFloor: () => host.journal().reopenFloor(),
+    writer: rowWriter,
+    committed: host.notifyCommitted,
+    claimAttachments
   })
   const lifecycleBatchAppender = new JournalLifecycleBatchAppender({
     state: host.state,
     cursor: host.cursor,
-    enqueue: host.enqueue,
-    enqueueRows: (plan) => rowWriter.enqueueRows(plan)
+    enqueueRows: (plan) => rowWriter.enqueueRows(plan, inputReceipt)
   })
   return {
+    goalAttachments,
     epochController,
     queuedMessages,
     stopMarks: new JournalStopMarks({ state: host.state }),
-    // Behind the stored fact: settles drafts whose consumed submission the loaded journal shows
-    // refused (a downgrade wrote no hook), then prunes. Bookkeeping, never failing the open.
+    context: new JournalContextController({
+      state: host.state,
+      writer: rowWriter,
+      cards: queuedMessages
+    }),
+    stops: new JournalStopAcceptor({ writer: rowWriter, state: host.state }),
+    // Import legacy cards once per open without failing the open.
     restore: () =>
-      restoreJournalStore(host, { epochController }).then(() =>
-        queuedMessages.repairAndPruneAtOpen()
-      ),
+      restoreJournalStore(host, { epochController }).then(() => queuedMessages.importAtOpen()),
     rowWriter,
     submissionWriter: new JournalSubmissionWriter({
       state: host.state,
@@ -136,14 +143,16 @@ export function createJournalStoreCollaborators(host: JournalStoreHost): Journal
       claimAttachments
     }),
     itemAppender: new JournalItemAppender({
+      inputReceipt,
       state: host.state,
-      enqueue: host.enqueue
+      enqueue: host.enqueue,
+      claimAttachments
     }),
     lifecycleBatchAppender,
     stepWriter: new JournalStepWriter({
       serialize: host.serialize,
       state: host.state,
-      writeRows: (plan) => rowWriter.writeRows(plan),
+      writeRows: (plan) => rowWriter.writeRows(plan, inputReceipt),
       planSettlement: (batch) => lifecycleBatchAppender.planResolved(batch)
     })
   }

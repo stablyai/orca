@@ -1,4 +1,5 @@
 import { useEffect } from 'react'
+import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 
 import { isMacAppDataPath } from '@/lib/passive-macos-app-data-access'
 import { installWindowVisibilityInterval, isWindowVisible } from '@/lib/window-visibility-interval'
@@ -55,6 +56,7 @@ export function useWorktreeCardLifecycleEffects({
     showIssue: boolean
     showLinearIssue: boolean
   }): void {
+  const hostedReviewExactKey = !branch || branch === 'HEAD' ? hostedReviewCacheKey : undefined
   useEffect(() => {
     if (
       !newCardStyle ||
@@ -73,11 +75,13 @@ export function useWorktreeCardLifecycleEffects({
     // Why: hidden card metadata is revealed on whole-card hover, so fetch lazily instead of always-on polling.
     void fetchHostedReviewForBranch(repo.path, branch, {
       repoId: repo.id,
+      repoOwnerExecutionHostId: getRepoExecutionHostId(repo),
+      ...(hostedReviewExactKey ? { exactReviewKey: hostedReviewExactKey } : {}),
       linkedGitHubPR: worktree.linkedPR ?? null,
       ...(cachedBranchFallbackGitHubPRNumber !== null
         ? { fallbackGitHubPR: cachedBranchFallbackGitHubPRNumber }
         : {}),
-      currentHeadOid: worktree.head ?? null,
+      currentHeadOid: hostedReviewExactKey ? null : (worktree.head ?? null),
       linkedGitLabMR,
       linkedBitbucketPR,
       linkedAzureDevOpsPR,
@@ -100,10 +104,11 @@ export function useWorktreeCardLifecycleEffects({
     linkedGiteaPR,
     fetchHostedReviewForBranch,
     branch,
-    hostedReviewCacheKey
+    hostedReviewCacheKey,
+    hostedReviewExactKey
   ])
 
-  // Why: same as above for issues — hidden-surface polling only burns GitHub calls for invisible data.
+  // Poll issues only while visible; hidden metadata does not justify GitHub calls.
   useEffect(() => {
     // Why: per-card decoration lookups from the browser flood the RPC path at paired-web startup; the host is authoritative.
     if (

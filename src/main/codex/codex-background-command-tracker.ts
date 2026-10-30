@@ -6,7 +6,6 @@ import {
 import type { CodexBackgroundTaskEvent } from './codex-background-task-frames'
 import { readRecord, readString } from './codex-item-field-readers'
 import { readCodexThreadItem } from './codex-structured-item-translation'
-import { MAX_CODEX_ITEM_STREAM_METADATA_BYTES } from './codex-item-stream-retention'
 import type { CodexAbandonedCommand } from './codex-prompt-registry'
 import { readCodexTurnId } from './codex-structured-thread-facts'
 import { codexPrimaryCommandTaskId } from '../../shared/structured-session-foreground-commands'
@@ -18,10 +17,10 @@ type Command = {
   turnId: string | null
   backgrounded: boolean
   task: AgentSessionBackgroundTask
-  bytes: number
+  /** Codex's id for the command's process, which a background-terminal stop names. */
+  processId?: string
 }
 
-/** A command process starting, or ending: it exited, its thread closed, or the session ended. */
 export type CodexBackgroundCommandChange =
   | {
       type: 'started'
@@ -29,34 +28,15 @@ export type CodexBackgroundCommandChange =
       turnId: string | null
       backgrounded: boolean
       task: AgentSessionBackgroundTask
+      processId?: string
     }
   | { type: 'ended'; threadId: string; taskId: string }
 
 export class CodexBackgroundCommandTracker {
   private readonly commands = new Map<string, Command>()
-  private readonly settled = new Map<string, number>()
-  private liveBytes = 0
-  private settledBytes = 0
+  private readonly settled = new Set<string>()
 
-  constructor(
-    private readonly primaryThreadId: string,
-    private readonly maxMetadataBytes = MAX_CODEX_ITEM_STREAM_METADATA_BYTES
-  ) {}
-
-  get retainedMetadataBytes(): number {
-    return this.liveBytes + this.settledBytes
-  }
-
-  canObserve(event: CodexBackgroundTaskEvent): boolean {
-    const parsed = this.parse(event)
-    return (
-      !parsed ||
-      parsed.completed ||
-      this.commands.has(parsed.key) ||
-      this.settled.has(parsed.key) ||
-      this.liveBytes + parsed.command.bytes <= this.maxMetadataBytes
-    )
-  }
+  constructor(private readonly primaryThreadId: string) {}
 
   observe(event: CodexBackgroundTaskEvent): CodexBackgroundCommandChange | null {
     const parsed = this.parse(event)
@@ -70,12 +50,7 @@ export class CodexBackgroundCommandTracker {
     if (this.commands.has(key)) {
       return null
     }
-    if (this.liveBytes + command.bytes > this.maxMetadataBytes) {
-      throw new Error('Codex command metadata was not admitted before observation')
-    }
     this.commands.set(key, command)
-    this.liveBytes += command.bytes
-    this.trimSettled()
     return this.liveChange(command)
   }
 
@@ -97,8 +72,15 @@ export class CodexBackgroundCommandTracker {
   }
 
   private liveChange(command: Command): Extract<CodexBackgroundCommandChange, { type: 'started' }> {
-    const { threadId, turnId, backgrounded, task } = command
-    return { type: 'started', threadId, turnId, backgrounded, task }
+    const { threadId, turnId, backgrounded, task, processId } = command
+    return {
+      type: 'started',
+      threadId,
+      turnId,
+      backgrounded,
+      task,
+      ...(processId !== undefined ? { processId } : {})
+    }
   }
 
   /** The thread closed: Codex stops its processes first, so none of them can report an exit. */
@@ -120,14 +102,28 @@ export class CodexBackgroundCommandTracker {
     return [...this.commands.values()]
       .filter((command) => command.backgrounded && !coveredThreads?.has(command.threadId))
       .map(({ threadId, task }) => {
-        // The agent row carrying the child's name is gone by the time this row shows;
-        // unqualified it reads as a bare shell string with no owner. Resolved on read so
-        // a label registered after the command still lands.
+        // Qualify orphaned command rows on read so labels arriving after the command still apply.
         const label = threadId === this.primaryThreadId ? null : childLabel?.(threadId)
         return label
           ? { ...task, description: codexChildCommandDescription(label, task.description) }
           : task
       })
+  }
+
+  get holdsProcess(): boolean {
+    return [...this.commands.values()].some((command) => command.processId !== undefined)
+  }
+
+  liveCommands(): CodexBackgroundCommandChange[] {
+    return [...this.commands.values()].map((command) => this.liveChange(command))
+  }
+
+  /** Only backgrounded commands have rows the user can stop. */
+  backgroundProcesses(taskIds: readonly string[]): { threadId: string; processId: string }[] {
+    const named = new Set(taskIds)
+    return [...this.commands.values()].flatMap(({ threadId, backgrounded, task, processId }) =>
+      backgrounded && processId !== undefined && named.has(task.id) ? [{ threadId, processId }] : []
+    )
   }
 
   /** Live processes, including foreground tools that are absent from the strip. */
@@ -137,7 +133,6 @@ export class CodexBackgroundCommandTracker {
       .map((command) => this.liveChange(command))
   }
 
-  /** The session ended, and every command with it. */
   clear(): CodexBackgroundCommandChange[] {
     const ended = [...this.commands.values()].map(
       ({ threadId, task }): CodexBackgroundCommandChange => ({
@@ -148,8 +143,6 @@ export class CodexBackgroundCommandTracker {
     )
     this.commands.clear()
     this.settled.clear()
-    this.liveBytes = 0
-    this.settledBytes = 0
     return ended
   }
 
@@ -157,7 +150,6 @@ export class CodexBackgroundCommandTracker {
   private end(key: string): CodexBackgroundCommandChange | null {
     const existing = this.commands.get(key)
     if (existing) {
-      this.liveBytes -= existing.bytes
       this.commands.delete(key)
     }
     this.rememberSettled(key)
@@ -171,28 +163,12 @@ export class CodexBackgroundCommandTracker {
   }
 
   private rememberSettled(key: string): void {
-    if (this.settled.has(key)) {
-      return
-    }
-    const bytes = Buffer.byteLength(key, 'utf8') + 256
-    if (this.liveBytes + bytes <= this.maxMetadataBytes) {
-      this.settled.set(key, bytes)
-      this.settledBytes += bytes
-    }
-    this.trimSettled()
-  }
-
-  private trimSettled(): void {
-    while (
-      this.settled.size > MAX_SETTLED_COMMANDS ||
-      this.retainedMetadataBytes > this.maxMetadataBytes
-    ) {
-      const oldest = this.settled.entries().next().value
-      if (!oldest) {
-        break
+    this.settled.add(key)
+    if (this.settled.size > MAX_SETTLED_COMMANDS) {
+      const oldest = this.settled.values().next().value
+      if (oldest !== undefined) {
+        this.settled.delete(oldest)
       }
-      this.settled.delete(oldest[0])
-      this.settledBytes -= oldest[1]
     }
   }
 
@@ -213,7 +189,8 @@ export class CodexBackgroundCommandTracker {
       .replace(/\s+/g, ' ')
       .trim()
     const turnId = readCodexTurnId(event.params)
-    const value = {
+    const processId = readString(item, 'processId') ?? undefined
+    const command = {
       threadId: event.threadId,
       turnId,
       backgrounded: turnId !== null && this.settled.has(this.turnKey(event.threadId, turnId)),
@@ -224,16 +201,9 @@ export class CodexBackgroundCommandTracker {
             : `codex-command:thread:${encodeURIComponent(event.threadId)}:${encodeURIComponent(item.id)}`,
         kind: 'command' as const,
         ...(description ? { description } : {})
-      }
+      },
+      ...(processId !== undefined ? { processId } : {})
     }
-    return {
-      key,
-      completed,
-      command: {
-        ...value,
-        bytes:
-          Buffer.byteLength(key, 'utf8') + Buffer.byteLength(JSON.stringify(value), 'utf8') + 256
-      }
-    }
+    return { key, completed, command }
   }
 }

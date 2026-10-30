@@ -1,17 +1,6 @@
-// Turns a provider adapter's grammar events (`provider-timeline-event.ts`) into the journal rows
-// every structured lane writes.
-//
-// Division of lifecycle work:
-// - The adapter translates its dialect, decides when a turn opens, and re-applies an event the sink
-//   refused (the lane runner holds it and pauses reading under backpressure).
-// - The assembler admits each event as ONE sink transition. What it knows (`ProviderTimelineState`)
-//   changes only when the sink admits the event, in admission order, which is the order its own
-//   rows are written in. Each write decides, when it runs, from what the journal holds then: a
-//   resume admits events before the sink binds, and the dead-generation sweep lands in between.
-// - The journal keeps what other writers own: a person's Stop, a client's answer, the sweep. The
-//   assembler reads those by key and never copies them.
-// - One assembler lives exactly as long as one provider child, so nothing it knows ever has to be
-//   recovered: a new child is a new assembler, in a new acquisition generation.
+// Adapters translate and retry refused events; admission alone advances assembler state.
+// Deferred writes resolve from current journal state, preserving other writers’ answers and Stops.
+// Each provider child gets a fresh assembler and generation.
 
 import type { AgentType } from '../../../shared/agent-session-journal-types'
 import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
@@ -50,15 +39,14 @@ export type { ProviderTimelineDropRule } from './provider-timeline-decision'
 export type { ProviderTimelineApplyResult } from './provider-timeline-text-events'
 
 export type ProviderTimelineAssembler = {
-  /** The host already wrote this command's running turn; the provider ends that same row. */
+  /** Provider completion must revise the host’s existing command turn. */
   beginCommand(command: StructuredAgentSessionCommandRun): void
   forgetCommand(turnId: string): void
-  apply(event: ProviderTimelineEvent): ProviderTimelineApplyResult
-  /** The turn id of the open turn, as its row and a client's Stop name it. */
+  /** Observe only this event’s transition, excluding preliminary settlement and drops. */
+  apply(event: ProviderTimelineEvent, onPublished?: () => void): ProviderTimelineApplyResult
   readonly openTurnId: string | null
-  /** Writes the text the coalescing window holds. */
   flush(): void
-  /** Drops the text the window holds: apply `session.ended` first, which writes it. */
+  /** Drops buffered text; apply session.ended first to flush it. */
   dispose(): void
 }
 
@@ -66,11 +54,10 @@ export type ProviderTimelineAssemblerDeps = {
   sink: ProviderTimelineSink
   sessionId: string
   agent: AgentType
-  /** The acquisition: minted keys and request ids are unique per generation. */
+  /** Minted keys and request IDs are generation-scoped. */
   generation: string
-  /** The provider session whose ids the adapter forwards. */
   namespace: string
-  /** The session's own provider thread, for providers that run subagents on threads of their own. */
+  /** Distinguish session work from subagent threads. */
   ownThread?: () => string | null
   coalesceMs?: number
   schedule?: AgentSessionDeltaCoalescerDeps['schedule']
@@ -116,7 +103,8 @@ export function createProviderTimelineAssembler(
 
   const applyDecided = (
     event: ProviderTimelineDecidedEvent,
-    journal: ProviderTimelineTextHost['journal']
+    journal: ProviderTimelineTextHost['journal'],
+    onPublished?: () => void
   ): ProviderTimelineApplyResult => {
     const serials = state.serials()
     const decision = decideProviderTimelineEvent(
@@ -136,7 +124,6 @@ export function createProviderTimelineAssembler(
       decision.commit?.(state)
       serials.commit()
     })
-    // An earlier turn's end leaves the open turn's activity line alone.
     if (
       event.type === 'turn.open' ||
       event.type === 'session.ended' ||
@@ -144,12 +131,10 @@ export function createProviderTimelineAssembler(
     ) {
       plan.onAdmitted(() => deps.sink.setActivity?.(null))
     }
-    return { admission: plan.submit(deps.sink) }
+    return { admission: plan.submit(deps.sink, onPublished) }
   }
 
-  /** The open turn another writer settled (a person's Stop) ends here first, as one transition
-   *  that stops its text and cancels its prompts; refused, the event that found it is refused with
-   *  it and its retry finds it again. */
+  /** Settle another writer’s ended turn first; refusal rejects the discovering event so retry repeats both. */
   const endSettledTurn = (
     journal: NonNullable<ProviderTimelineTextHost['journal']>
   ): ProviderTimelineApplyResult | null => {
@@ -160,7 +145,10 @@ export function createProviderTimelineAssembler(
     return applyDecided({ type: 'turn.settled', turn: open }, journal)
   }
 
-  const apply = (event: ProviderTimelineEvent): ProviderTimelineApplyResult => {
+  const apply = (
+    event: ProviderTimelineEvent,
+    onPublished?: () => void
+  ): ProviderTimelineApplyResult => {
     const journal = deps.sink.journalItems()
     const settled = journal ? endSettledTurn(journal) : null
     if (settled && !settled.admission.accepted) {
@@ -192,7 +180,7 @@ export function createProviderTimelineAssembler(
       case 'context.usage':
       case 'provider.frame':
       case 'session.ended':
-        return applyDecided(event, journal)
+        return applyDecided(event, journal, onPublished)
     }
   }
 

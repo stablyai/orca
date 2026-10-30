@@ -16,17 +16,6 @@ function refused(code: string, reason?: string): StructuredAgentSessionSendAnswe
   return { kind: 'result', result: { ok: false, refusal } }
 }
 
-const recorded: StructuredAgentSessionSendAnswer = {
-  kind: 'result',
-  result: {
-    ok: true,
-    replayed: false,
-    fence: 1,
-    cursor: { epoch: 'e', sequence: 1 },
-    value: { clientMessageId: 'm', queued: { messageId: 'm', position: 0, state: 'waiting' } }
-  }
-}
-
 function withRow(fields: Partial<AgentJournalSubmission>): StructuredAgentSessionSendAnswer {
   return {
     kind: 'result',
@@ -58,10 +47,6 @@ function thrown(rpcCode: string | undefined): StructuredAgentSessionSendAnswer {
 }
 
 describe('structuredAgentSessionSendEvidence', () => {
-  it('reads any ok answer as the host holding the message', () => {
-    expect(structuredAgentSessionSendEvidence(recorded).kind).toBe('recorded')
-  })
-
   it('reads a row the host returns, in any state, as its own from then on', () => {
     for (const dispatchState of ['pending', 'accepted', 'rejected', 'unknown'] as const) {
       expect(structuredAgentSessionSendEvidence(withRow({ dispatchState })).kind).toBe('recorded')
@@ -98,6 +83,15 @@ describe('structuredAgentSessionSendEvidence', () => {
     ]) {
       expect(structuredAgentSessionSendEvidence(thrown(rpcCode)).kind).toBe('uncertain')
     }
+    for (const rpcCode of [
+      'runtime_manually_disconnected',
+      'runtime_rpc_queue_overloaded',
+      'remote_runtime_busy',
+      'forbidden',
+      'capability_unsupported'
+    ]) {
+      expect(structuredAgentSessionSendEvidence(thrown(rpcCode)).kind).toBe('uncertain')
+    }
     const thrownRefusal = {
       response: { error: { data: { refusal: { code: 'agent_session_journal_unreadable' } } } }
     }
@@ -110,8 +104,14 @@ describe('structuredAgentSessionSendEvidence', () => {
     ).toBe('uncertain')
   })
 
+  // Pins the full turned-away list (round-2 S5): every other code, client-minted ones included, is uncertain.
   it('treats a call the host turned away before running it as never written', () => {
-    for (const rpcCode of ['method_not_found', 'invalid_argument', 'unauthorized']) {
+    for (const rpcCode of [
+      'method_not_found',
+      'method_not_supported',
+      'invalid_argument',
+      'unauthorized'
+    ]) {
       expect(structuredAgentSessionSendEvidence(thrown(rpcCode)).kind).toBe('not-recorded')
     }
   })

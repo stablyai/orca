@@ -1,13 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { i18n } from '@/i18n/i18n'
-import type { AgentSessionConversationCommandResult } from '../../../../shared/agent-session-conversation-command'
+import type { AgentSessionConversationCommandResult } from '../../../../shared/agent-session/agent-session-conversation-command'
 import type { AgentSessionFailureFact } from '../../../../shared/agent-session-failure'
 import { agentSessionFailureWords } from '../../../../shared/agent-session-failure-words'
 import { TUI_AGENT_DISPLAY_NAMES } from '../../../../shared/tui-agent-display-names'
 import { structuredAgentLabel } from '@/lib/structured-agent-session-launch-label'
 import {
   sendStructuredConversationCommand,
-  structuredConversationCommandHold,
   type StructuredConversationCommandCauses
 } from './structured-conversation-command-send'
 
@@ -25,8 +24,6 @@ const COMPACTION_FAILED: AgentSessionFailureFact = {
   detail: { text: 'Context is too short', audience: 'person' }
 }
 
-// The facts a command whose conversation did not start can carry: a /clear's new one, or the
-// start a /compact waited on.
 const START_FACTS: AgentSessionFailureFact[] = [
   START_FAILED,
   { kind: 'restartFailed' },
@@ -49,7 +46,6 @@ const COMPACT_FACTS: AgentSessionFailureFact[] = [
   { kind: 'compactionUnconfirmed' }
 ]
 
-// What the host returns: its English, worded with the context it uses, beside the fact.
 function hostResult(
   command: 'clear' | 'compact',
   failure: AgentSessionFailureFact,
@@ -93,7 +89,6 @@ describe('the line under the composer after a conversation command failed', () =
         expect(await sent(result, provider)).toEqual({ accepted: false, error: result.error })
       }
     }
-    // The host's own tests pin these sentences.
     expect((await sent(hostResult('clear', START_FAILED, 'codex'), 'codex')).error).toBe(
       "Codex couldn't start. Run /clear again."
     )
@@ -101,7 +96,7 @@ describe('the line under the composer after a conversation command failed', () =
       (await sent(hostResult('compact', { kind: 'restartFailed' }, 'codex'), 'codex')).error
     ).toBe("Codex couldn't restart. Run /compact again.")
     expect((await sent(hostResult('compact', { kind: 'notSignedIn' }), 'claude')).error).toBe(
-      "Claude isn't signed in. Run `claude` and sign in with /login, or choose an account in Claude Accounts settings. Run /compact again."
+      "Claude isn't signed in. Run `claude auth login`, or choose an account in Claude Accounts settings. Run /compact again."
     )
     expect((await sent(hostResult('clear', START_FACTS[2], 'codex'), 'codex')).error).toBe(
       "Codex couldn't start. Start a new chat to continue."
@@ -130,7 +125,7 @@ describe('the line under the composer after a conversation command failed', () =
       'Claude を起動できませんでした。/clear をもう一度実行してください。'
     )
     expect((await sent(hostResult('compact', { kind: 'notSignedIn' }))).error).toBe(
-      'Claude にサインインしていません。`claude` を実行して /login でサインインするか、設定の Claude アカウントでアカウントを選択してください。/compact をもう一度実行してください。'
+      'Claude にサインインしていません。`claude auth login` を実行するか、Claude アカウント設定でアカウントを選択してください。/compact をもう一度実行してください。'
     )
   })
 
@@ -200,40 +195,6 @@ describe('a /compact the host holds in line', () => {
         queued: { messageId: 'op-1', position: 1, state: 'waiting' }
       })
     ).toEqual({ accepted: true, error: null })
-  })
-
-  const idle = {
-    waitsInLine: false,
-    agentWorking: false,
-    promptPending: false,
-    backgroundTasksRunning: false,
-    sendPending: false
-  }
-
-  it('is held here only by a message the host does not have yet, or background work', () => {
-    const inLine = { ...idle, waitsInLine: true }
-    expect(
-      structuredConversationCommandHold({
-        ...inLine,
-        agentWorking: true,
-        promptPending: true
-      })
-    ).toBeNull()
-    expect(structuredConversationCommandHold({ ...inLine, sendPending: true })).toBe('ahead')
-    expect(structuredConversationCommandHold({ ...inLine, backgroundTasksRunning: true })).toBe(
-      'background'
-    )
-  })
-
-  it('against a host that cannot hold it, and for /clear, keeps every check in true words', () => {
-    expect(structuredConversationCommandHold(idle)).toBeNull()
-    expect(structuredConversationCommandHold({ ...idle, agentWorking: true })).toBe('working')
-    // The agent idle, only this window's own message still on its way: it is still being sent.
-    expect(structuredConversationCommandHold({ ...idle, sendPending: true })).toBe('sending')
-    expect(
-      structuredConversationCommandHold({ ...idle, agentWorking: true, sendPending: true })
-    ).toBe('working')
-    expect(structuredConversationCommandHold({ ...idle, promptPending: true })).toBe('prompt')
   })
 })
 

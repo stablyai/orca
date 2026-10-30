@@ -7,14 +7,8 @@ import {
   stubAuxiliaryModules
 } from './ipc-events-agent-status-window-test-fixtures'
 import { buildSshAuthorityReconciliationHarness } from './ipc-events-ssh-authority-test-fixtures'
-import type { DirectSshReconnectCoordinatorDouble } from './ipc-events-ssh-authority-test-fixtures'
 
-function stubDirectSshModules(args: {
-  storeState: StoreLike
-  coordinator: DirectSshReconnectCoordinatorDouble
-  coordinatorRoutingEnabled?: boolean
-  capturePreparationInput?: ReturnType<typeof vi.fn>
-}): void {
+function stubDirectSshModules(args: { storeState: StoreLike }): void {
   stubReactSyncEffect()
   stubAuxiliaryModules()
   vi.doMock('../store', () => ({
@@ -23,35 +17,9 @@ function stubDirectSshModules(args: {
       getState: () => args.storeState
     }
   }))
-  vi.doMock('./direct-ssh-reconnect-rollout', () => ({
-    isDirectSshReconnectCoordinatorRoutingEnabled: () => args.coordinatorRoutingEnabled ?? true
-  }))
-  vi.doMock('./direct-ssh-worktree-refresh-scheduler', () => ({
-    createDirectSshWorktreeRefreshScheduler: () => ({
-      stop: vi.fn(),
-      disposeProvider: vi.fn()
-    })
-  }))
-  vi.doMock('./direct-ssh-host-hydration', () => ({
-    createDirectSshHostHydration: () => ({
-      capturePreparationInput: args.capturePreparationInput ?? vi.fn(),
-      readHostScopedLineage: vi.fn(),
-      isPreparationTokenCurrent: vi.fn(() => true),
-      stop: vi.fn()
-    })
-  }))
-  vi.doMock('./direct-ssh-reconnect-coordinator', () => ({
-    createDirectSshReconnectCoordinator: () => args.coordinator
-  }))
-  vi.doMock('@/lib/direct-ssh-reconnect-product-telemetry', () => ({
-    createDirectSshReconnectProductTelemetryAdapter: vi.fn()
-  }))
 }
 
-// Why: end-to-end exercise of startup agent-status restoration through
-// useIpcEvents itself. The main process owns the durable cache; the renderer
-// pulls a snapshot only after workspace tabs are ready so startup pushes
-// cannot be lost while local state is still empty.
+// Pull main’s durable status snapshot through the real hook only after tabs are ready, recovering startup pushes received before local state.
 describe('useIpcEvents agent status snapshot integration', () => {
   beforeEach(() => {
     vi.resetModules()
@@ -102,37 +70,33 @@ describe('useIpcEvents agent status snapshot integration', () => {
   it.each([
     { partialAuthority: { providerEpoch: 'epoch-current' } },
     { partialAuthority: { connectionGeneration: 7 } }
-  ])(
-    'fills a same-watermark partial SSH authority and routes it once',
-    async ({ partialAuthority }) => {
-      const harness = buildSshAuthorityReconciliationHarness({
-        partialAuthority,
-        latestAuthority: {
-          providerEpoch: 'epoch-current',
-          connectionGeneration: 7
-        }
-      })
-      stubDirectSshModules({ storeState: harness.storeState, coordinator: harness.coordinator })
-      const { useIpcEvents } = await import('./useIpcEvents')
-      useIpcEvents()
-
-      harness.emitPartialState()
-
-      await vi.waitFor(() => {
-        expect(harness.requestReconnect).toHaveBeenCalledOnce()
-      })
-      expect(harness.getState).toHaveBeenCalledOnce()
-      expect(harness.setSshConnectionState).toHaveBeenCalledTimes(2)
-      expect(harness.storedState()).toEqual({
-        targetId: 'target-reconciliation',
-        status: 'connected',
-        error: null,
-        reconnectAttempt: 0,
+  ])('fills a same-watermark partial SSH authority', async ({ partialAuthority }) => {
+    const harness = buildSshAuthorityReconciliationHarness({
+      partialAuthority,
+      latestAuthority: {
         providerEpoch: 'epoch-current',
         connectionGeneration: 7
-      })
-    }
-  )
+      }
+    })
+    stubDirectSshModules({ storeState: harness.storeState })
+    const { useIpcEvents } = await import('./useIpcEvents')
+    useIpcEvents()
+
+    harness.emitPartialState()
+
+    await vi.waitFor(() => {
+      expect(harness.setSshConnectionState).toHaveBeenCalledTimes(2)
+    })
+    expect(harness.getState).toHaveBeenCalledOnce()
+    expect(harness.storedState()).toEqual({
+      targetId: 'target-reconciliation',
+      status: 'connected',
+      error: null,
+      reconnectAttempt: 0,
+      providerEpoch: 'epoch-current',
+      connectionGeneration: 7
+    })
+  })
 
   it.each([
     { partialAuthority: { providerEpoch: 'epoch-conflict' } },
@@ -147,7 +111,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
           connectionGeneration: 7
         }
       })
-      stubDirectSshModules({ storeState: harness.storeState, coordinator: harness.coordinator })
+      stubDirectSshModules({ storeState: harness.storeState })
       const { useIpcEvents } = await import('./useIpcEvents')
       useIpcEvents()
 
@@ -157,7 +121,6 @@ describe('useIpcEvents agent status snapshot integration', () => {
         expect(harness.getState).toHaveBeenCalledOnce()
       })
       await Promise.resolve()
-      expect(harness.requestReconnect).not.toHaveBeenCalled()
       expect(harness.setSshConnectionState).toHaveBeenCalledOnce()
       expect(harness.storedState()).toEqual(
         expect.objectContaining({
@@ -165,116 +128,6 @@ describe('useIpcEvents agent status snapshot integration', () => {
           ...partialAuthority
         })
       )
-    }
-  )
-
-  it.each([
-    { enabled: true, expectedRoute: ['request'] },
-    {
-      enabled: false,
-      expectedRoute: ['replace', 'invalidate', 'retry', 'capture', 'prepare']
-    }
-  ])(
-    'routes a changed direct SSH authority through the enabled=$enabled path',
-    async ({ enabled, expectedRoute }) => {
-      const order: string[] = []
-      let sshStateListener: ((data: { targetId: string; state: unknown }) => void) | undefined
-      const oldState = {
-        targetId: 'target-a',
-        status: 'connected' as const,
-        error: null,
-        reconnectAttempt: 0,
-        providerEpoch: 'epoch-old',
-        connectionGeneration: 1
-      }
-      const nextState = {
-        ...oldState,
-        providerEpoch: 'epoch-new',
-        connectionGeneration: 2
-      }
-      const storeState = buildStoreState({
-        sshTargetLabels: new Map([['target-a', 'Target A']]),
-        sshConnectionStates: new Map([['target-a', oldState]]),
-        setSshConnectionState: (targetId: string, state: unknown) => {
-          ;(storeState.sshConnectionStates as Map<string, unknown>).set(targetId, state)
-        },
-        invalidateStaleDirectSshTargetPtyBindings: () => {
-          order.push('invalidate')
-          return 1
-        },
-        retryDirectSshTargetPanes: () => {
-          order.push('retry')
-          return 1
-        },
-        setSshTargetsMetadata: vi.fn(),
-        setRemovedSshTargetLabels: vi.fn(),
-        setRemoteWorkspaceSyncStatus: vi.fn(),
-        clearRemoteDetectedAgents: vi.fn(),
-        clearDirectSshTargetPtyBindings: vi.fn(),
-        clearRemovedSshTargetState: vi.fn()
-      })
-      const coordinator = {
-        requestReconnect: vi.fn(async () => {
-          order.push('request')
-          return { status: 'complete' }
-        }),
-        replaceAuthority: vi.fn(() => {
-          order.push('replace')
-        }),
-        prepareOnly: vi.fn(async () => {
-          order.push('prepare')
-          return { token: null }
-        }),
-        correctUnboundTerminals: vi.fn(() => 0),
-        finalizeHydratedTerminals: vi.fn(() => 0),
-        invalidate: vi.fn(),
-        stop: vi.fn()
-      }
-      const capturePreparationInput = vi.fn(async (authority, reason) => {
-        order.push('capture')
-        return {
-          ...authority,
-          reason,
-          catalogRevision: 1,
-          repoRefs: [],
-          authorityRequirement: 'required'
-        }
-      })
-
-      stubDirectSshModules({
-        storeState,
-        coordinator,
-        coordinatorRoutingEnabled: enabled,
-        capturePreparationInput
-      })
-      vi.stubGlobal(
-        'window',
-        buildWindowApi({
-          onSet: () => () => {},
-          ssh: {
-            onStateChanged: (listener: (data: { targetId: string; state: unknown }) => void) => {
-              sshStateListener = listener
-              return () => {}
-            }
-          }
-        })
-      )
-
-      const { useIpcEvents } = await import('./useIpcEvents')
-      useIpcEvents()
-      sshStateListener?.({ targetId: 'target-a', state: nextState })
-      await Promise.resolve()
-      await Promise.resolve()
-
-      expect(order).toEqual(expectedRoute)
-      if (enabled) {
-        expect(coordinator.requestReconnect).toHaveBeenCalledOnce()
-        expect(coordinator.prepareOnly).not.toHaveBeenCalled()
-      } else {
-        expect(coordinator.requestReconnect).not.toHaveBeenCalled()
-        expect(coordinator.replaceAuthority).toHaveBeenCalledOnce()
-        expect(coordinator.prepareOnly).toHaveBeenCalledOnce()
-      }
     }
   )
 
@@ -424,30 +277,18 @@ describe('useIpcEvents agent status snapshot integration', () => {
         sshConnectionStates.set(nextTargetId, state)
       },
       setPortForwards,
+      setUnrestoredPortForwards: vi.fn(),
       setDetectedPorts,
       setSshTargetsMetadata: vi.fn(),
       setRemovedSshTargetLabels: vi.fn(),
-      setRemoteWorkspaceSyncStatus: vi.fn(),
       fetchRuntimeEnvironmentRepos: vi.fn(async () => []),
       fetchWorktreeLineage: vi.fn(async () => undefined),
       clearRemoteDetectedAgents: vi.fn(),
-      clearDirectSshTargetPtyBindings: vi.fn(),
-      clearRemovedSshTargetState: vi.fn(),
-      invalidateStaleDirectSshTargetPtyBindings: vi.fn(() => 0),
-      retryDirectSshTargetPanes: vi.fn(() => 0)
+      clearRemovedSshTargetState: vi.fn()
     })
-    const coordinator = {
-      requestReconnect: vi.fn(async () => ({ status: 'complete' })),
-      replaceAuthority: vi.fn(),
-      prepareOnly: vi.fn(async () => ({ token: null })),
-      correctUnboundTerminals: vi.fn(() => 0),
-      finalizeHydratedTerminals: vi.fn(() => 0),
-      invalidate: vi.fn(),
-      stop: vi.fn()
-    }
     let partialTargetStateCalls = 0
 
-    stubDirectSshModules({ storeState, coordinator })
+    stubDirectSshModules({ storeState })
     vi.stubGlobal(
       'window',
       buildWindowApi({
@@ -477,6 +318,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
             )
           },
           listPortForwards,
+          listUnrestoredPortForwards: () => Promise.resolve([]),
           listDetectedPorts,
           onPortForwardsChanged: (
             listener: (data: { targetId: string; forwards: (typeof liveForward)[] }) => void

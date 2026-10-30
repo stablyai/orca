@@ -24,18 +24,9 @@ export const EMPTY_TERMINAL_REPLY_QUERY_SCAN_STATE: TerminalReplyQueryScanState 
   pendingStartSeq: null
 }
 
-/**
- * Sequences worth replaying to a late-attaching view, because a scrollback snapshot
- * carries only rendered cells and drops the control bytes that produced them.
- *
- * Most entries are reply-eliciting queries the attaching emulator must answer once.
- * The DECSET/DECRST 2031 pair is different: since #9993 nothing answers the subscribe,
- * but a remote renderer derives its color-scheme subscription registry from these very
- * bytes (pty-connection observeLiveMode2031Chunk), so both toggles must be carried —
- * an arm without its withdraw would leave the client subscribed for a TUI that already
- * retired the subscription, and fish rearms/withdraws on every prompt.
- */
-function isReplayableCsi(sequence: string): boolean {
+/** Scrollback snapshots omit control bytes, so late views must replay queries once.
+ * 2031 subscribe/withdraw are state, not queries: carry both or a retired TUI subscription remains armed (#9993). */
+export function isReplayableCsi(sequence: string): boolean {
   if (DEVICE_ATTRIBUTES_QUERY_RE.test(sequence)) {
     return true
   }
@@ -53,8 +44,7 @@ function isReplayableCsi(sequence: string): boolean {
     sequence === '\x1b[18t' ||
     sequence === '\x1b[?u' ||
     sequence === '\x1b[?2031h' ||
-    // Why paired with the arm above, exact-form only: replaying a combined DECRST such as
-    // `CSI ?2004;2031l` would also toggle unrelated modes in the attaching emulator.
+    // Replay only exact withdrawal; combined DECRST would also change unrelated modes in the attaching emulator.
     sequence === '\x1b[?2031l'
   )
 }

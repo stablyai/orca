@@ -1,0 +1,46 @@
+[
+  {
+    "provider": "opencode",
+    "version": "1.19.3",
+    "exitCode": 0,
+    "name": "QA2470 Lighthouse Signal",
+    "error": null,
+    "stdout": "{\"type\":\"step_start\",\"timestamp\":1792991875300,\"sessionID\":\"ses_e895b8375fferhsqRugDBAfOMG\",\"part\":{\"id\":\"prt_176a4d0e3001m57TVJpsACK53O\",\"messageID\":\"msg_176a47d7f001JaEXkAqkc0ZZ9i\",\"sessionID\":\"ses_e895b8375fferhsqRugDBAfOMG\",\"snapshot\":\"1335331e97b2b8302af6756ec01cb1b1da251fb3\",\"type\":\"step-start\"}}\n{\"type\":\"text\",\"timestamp\":1792991875307,\"sessionID\":\"ses_e895b8375fferhsqRugDBAfOMG\",\"part\":{\"id\":\"prt_176a4d0e9001Kd17lu7Ex0q8Tx\",\"messageID\":\"msg_176a47d7f001JaEXkAqkc0ZZ9i\",\"sessionID\":\"ses_e895b8375fferhsqRugDBAfOMG\",\"type\":\"text\",\"text\":\"QA2470 Lighthouse Signal\",\"time\":{\"start\":1792991875305,\"end\":1792991875306}}}\n{\"type\":\"step_finish\",\"timestamp\":1792991875504,\"sessionID\":\"ses_e895b8375fferhsqRugDBAfOMG\",\"part\":{\"id\":\"prt_176a4d1ab001RJrfENLLX1KW4r\",\"reason\":\"stop\",\"snapshot\":\"1335331e97b2b8302af6756ec01cb1b1da251fb3\",\"messageID\":\"msg_176a47d7f001JaEXkAqkc0ZZ9i\",\"sessionID\":\"ses_e895b8375fferhsqRugDBAfOMG\",\"type\":\"step-finish\",\"tokens\":{\"total\":8951,\"input\":7153,\"output\":6,\"reasoning\":0,\"cache\":{\"write\":0,\"read\":1792}},\"cost\":0}}\n",
+    "stderr": "",
+    "stdoutSha256": "f4fb472fd517f7c9b71d368c711153ffa317c8384747cebf7844850d0430f8a7",
+    "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "provider": "opencode2",
+    "version": "2.0.21",
+    "exitCode": 0,
+    "name": "QA2409-OPENCODE2-RECORDED-REAL-OUTPUT",
+    "error": null,
+    "stdout": "{\"type\":\"step_start\",\"timestamp\":1792963133760,\"sessionID\":\"ses_e8b11e04fffejwGieQ5aEaX725\",\"part\":{\"id\":\"prt_174ee4140001jPttpvqKq3nqUG\",\"sessionID\":\"ses_e8b11e04fffejwGieQ5aEaX725\",\"messageID\":\"msg_174ee2aca0010gpdeVAaLShy3c\",\"type\":\"step-start\",\"snapshot\":\"63f0c12995d872e305bfefca54db12330153945a\"}}\n{\"type\":\"text\",\"timestamp\":1792963133934,\"sessionID\":\"ses_e8b11e04fffejwGieQ5aEaX725\",\"part\":{\"id\":\"prt_174ee4143001wQsGHsX1N5Y522\",\"sessionID\":\"ses_e8b11e04fffejwGieQ5aEaX725\",\"messageID\":\"msg_174ee2aca0010gpdeVAaLShy3c\",\"type\":\"text\",\"text\":\"QA2409-OPENCODE2-RECORDED-REAL-OUTPUT\",\"time\":{\"start\":1792963133763,\"end\":1792963133934}}}\n{\"type\":\"step_finish\",\"timestamp\":1792963134593,\"sessionID\":\"ses_e8b11e04fffejwGieQ5aEaX725\",\"part\":{\"id\":\"prt_174ee4481001E8vuO413WRUmM3\",\"sessionID\":\"ses_e8b11e04fffejwGieQ5aEaX725\",\"messageID\":\"msg_174ee2aca0010gpdeVAaLShy3c\",\"type\":\"step-finish\",\"reason\":\"stop\",\"snapshot\":\"d5bc3db45bd1a4f0f251bdf033349914a8c70ca2\",\"cost\":0,\"tokens\":{\"input\":3979,\"output\":20,\"reasoning\":0,\"cache\":{\"read\":2048,\"write\":0}}}}\n",
+    "stderr": "",
+    "stdoutSha256": "361fd0491ec7893d4ee48a5c46f668e8a61b4f23ff47d1f6ef8a02139eaa70ee",
+    "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "provider": "pi",
+    "version": "print/text",
+    "exitCode": 1,
+    "name": null,
+    "error": "Pi CLI command failed with code 1",
+    "stdout": "",
+    "stderr": "OAuth refresh failed for openai: OpenAI OAuth token request failed (400): {\n  \"error\": \"invalid_grant\"\n}\n",
+    "stdoutSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "stderrSha256": "789ac0ebfa846ae385959e1a56764768bc6cb3faad5c8417d8cc778af40c57b0"
+  },
+  {
+    "provider": "omp",
+    "version": "17.0.5",
+    "exitCode": 0,
+    "name": null,
+    "error": "OMP returned an empty chat name.",
+    "stdout": "",
+    "stderr": "",
+    "stdoutSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  }
+]

@@ -3,12 +3,7 @@ import type { Tab, TabGroup } from '../../../../../shared/tab-types'
 import type { TerminalTab } from '../../../../../shared/terminal-tab-types'
 import type { OpenFile } from '../editor'
 
-/**
- * Session shape measured on a real heavy profile: 193 workspaces / 382 tabs,
- * spread over every reconciliation outcome (no-op, dropped tab, restored legacy
- * runtime terminal, orphan sweep, editor tab) so a whole-session fold exercises
- * both the workspace-scoped maps and the store-global ones workspaces share.
- */
+/** Model a measured 193-workspace/382-tab profile across no-op, drop, legacy restore, orphan and editor paths, exercising workspace and global maps. */
 export const HYDRATED_WORKSPACE_COUNT = 193
 export const HYDRATED_TAB_COUNT = 382
 
@@ -230,7 +225,6 @@ export const RECONCILIATION_WRITABLE_KEYS = [
   'terminalLayoutsByTabId',
   'pendingStartupByTabId',
   'pendingInitialCwdByTabId',
-  'pendingSetupSplitByTabId',
   'pendingIssueCommandSplitByTabId',
   'automaticAgentResumeClaimsByTabId',
   'nativeChatLaunchPromptByTabId',

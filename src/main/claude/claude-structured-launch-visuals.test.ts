@@ -1,21 +1,23 @@
+import { createClaudeStructuredLaunchResolver } from '../runtime/structured-agent-launch-composition.test-support'
 import { describe, expect, it, vi } from 'vitest'
 import type { AgentSessionJournalIdentity } from '../../shared/agent-session-journal-types'
 import { agentSessionRecordFixture } from '../native-chat/agent-session-record-test-fixture'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import {
-  NATIVE_CHAT_VISUALS_DIR_ENV,
+  NATIVE_CHAT_SCRATCH_DIR_ENV,
   type NativeChatVisualsLaunch
 } from '../native-chat/native-chat-visuals-delivery'
 import {
   CLAUDE_CLI_FLAG_PROBE_KILL_AFTER_MS,
   CLAUDE_PLUGIN_DIR_FLAG,
-  type ClaudeCliFlag
+  CLAUDE_THINKING_DISPLAY_FLAG,
+  type ClaudeCliFlag,
+  type ClaudeCliFlagFact
 } from './claude-cli-flag-support'
-import { createClaudeStructuredLaunchResolver } from './claude-structured-launch-resolution'
 
 const SESSION_ID = 'orca-session-visuals'
 const VISUALS: NativeChatVisualsLaunch = {
-  folder: '/state/native-chat-visuals/abc',
+  folder: '/state/chat-scratch/abc',
   skill: { pluginDir: '/app/native-chat-visuals', skillsRoot: '/app/native-chat-visuals/skills' }
 }
 
@@ -28,9 +30,16 @@ const IDENTITY: AgentSessionJournalIdentity = {
   providerHandle: null
 }
 
+type Supports = (flag: ClaudeCliFlag, launch: unknown, budgetMs?: number) => Promise<boolean>
+
+const checkOf =
+  (supports: Supports) =>
+  async (...args: Parameters<Supports>): Promise<ClaudeCliFlagFact> =>
+    (await supports(...args)) ? 'supported' : 'unsupported'
+
 function launch(options: {
   prepareVisuals?: (sessionId: string) => Promise<NativeChatVisualsLaunch | null>
-  supports?: (flag: ClaudeCliFlag, launch: unknown, budgetMs?: number) => Promise<boolean>
+  supports?: Supports
   launchArgs?: string[]
   env?: Record<string, string>
   attachmentDirectory?: string
@@ -38,13 +47,13 @@ function launch(options: {
   return createClaudeStructuredLaunchResolver({
     store: { getRecord: () => record, pinLaunchDirectory: vi.fn() },
     resolveWorkspacePath: async (id) => `/repos/${id}`,
-    resolveCommand: () => '/usr/local/bin/claude',
-    resolveAuthPolicy: () => ({ stripAuthEnv: false }),
+    resolveCommand: () => ({ command: '/usr/local/bin/claude', prefixArgs: [] }),
+    resolveAuthPolicy: () => ({ account: 'system' }),
     resolveLaunchArgs: () => options.launchArgs ?? [],
     resolveEnv: () => options.env ?? {},
     hasTranscript: async () => false,
     ...(options.attachmentDirectory ? { attachmentDirectory: options.attachmentDirectory } : {}),
-    ...(options.supports ? { cliFlags: { supports: options.supports } } : {}),
+    ...(options.supports ? { cliFlags: { check: checkOf(options.supports) } } : {}),
     ...(options.prepareVisuals ? { prepareVisuals: options.prepareVisuals } : {})
   })({ identity: IDENTITY })
 }
@@ -60,7 +69,7 @@ describe('a Claude chat launch with inline visuals', () => {
     expect(prepareVisuals).toHaveBeenCalledWith(SESSION_ID)
     expect(resolved.options.plugins).toEqual([{ type: 'local', path: VISUALS.skill.pluginDir }])
     expect(resolved.options.additionalDirectories).toEqual(['/shared/notes', VISUALS.folder])
-    expect(resolved.env?.[NATIVE_CHAT_VISUALS_DIR_ENV]).toBe(VISUALS.folder)
+    expect(resolved.env?.[NATIVE_CHAT_SCRATCH_DIR_ENV]).toBe(VISUALS.folder)
   })
 
   it.each([
@@ -91,18 +100,18 @@ describe('a Claude chat launch with inline visuals', () => {
     })
     expect(resolved.options).not.toHaveProperty('plugins')
     expect(resolved.options.additionalDirectories).toEqual([VISUALS.folder])
-    expect(resolved.env?.[NATIVE_CHAT_VISUALS_DIR_ENV]).toBe(VISUALS.folder)
+    expect(resolved.env?.[NATIVE_CHAT_SCRATCH_DIR_ENV]).toBe(VISUALS.folder)
   })
 
   it('without a prepared folder, grants nothing and drops a folder inherited from another chat', async () => {
     const resolved = await launch({
       prepareVisuals: async () => null,
       supports: async () => true,
-      env: { [NATIVE_CHAT_VISUALS_DIR_ENV]: '/state/native-chat-visuals/other-chat' }
+      env: { [NATIVE_CHAT_SCRATCH_DIR_ENV]: '/state/chat-scratch/other-chat' }
     })
     expect(resolved.options).not.toHaveProperty('plugins')
     expect(resolved.options).not.toHaveProperty('additionalDirectories')
-    expect(resolved.env).not.toHaveProperty(NATIVE_CHAT_VISUALS_DIR_ENV)
+    expect(resolved.env).not.toHaveProperty(NATIVE_CHAT_SCRATCH_DIR_ENV)
   })
 
   it('never asks about the plugin flag on a host that delivers no visuals', async () => {
@@ -144,6 +153,8 @@ describe('a Claude chat launch with inline visuals', () => {
       async (_flag: ClaudeCliFlag, _launch: unknown, _budgetMs?: number) => false
     )
     await launch({ supports })
-    expect(supports).toHaveBeenCalledTimes(1)
+    expect(
+      supports.mock.calls.filter(([flag]) => flag === CLAUDE_THINKING_DISPLAY_FLAG)
+    ).toHaveLength(1)
   })
 })

@@ -356,15 +356,24 @@ describe('workspace linked work editor', () => {
   it.each([
     { key: 'Enter', keyCode: 13, isComposing: true },
     { key: 'Enter', keyCode: 229 },
-    { key: 'Enter', keyCode: 13 }
+    { key: 'Enter', keyCode: 13 },
+    null
   ])('keeps notes open through IME confirmation and redispatch: %j', async (event) => {
     openDialog()
     const notes = screen.getByRole('textbox', { name: 'Notes' })
     fireEvent.compositionStart(notes)
     fireEvent.change(notes, { target: { value: '確定' } })
-    fireEvent.keyDown(notes, event)
+    if (event) {
+      fireEvent.keyDown(notes, event)
+    } else {
+      fireEvent.keyUp(notes, { key: 'f', keyCode: 70, isComposing: true })
+    }
     fireEvent.compositionEnd(notes)
-    fireEvent.keyUp(notes, { key: 'Enter', keyCode: 13 })
+    if (event) {
+      fireEvent.keyUp(notes, { key: 'Enter', keyCode: 13 })
+    } else {
+      fireEvent.input(notes, { data: '定', inputType: 'insertText', isComposing: false })
+    }
     fireEvent.keyDown(notes, { key: 'Enter', keyCode: 13 })
     expect(updateWorktreeMeta).not.toHaveBeenCalled()
     expect(useAppStore.getState().activeModal).toBe('edit-meta')

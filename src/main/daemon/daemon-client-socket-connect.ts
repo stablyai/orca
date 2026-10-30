@@ -4,7 +4,7 @@ import { ensureDaemonSocketDir } from './daemon-socket-endpoint-path'
 
 export function connectDaemonSocket(socketPath: string, timeoutMs: number): Promise<Socket> {
   return new Promise((resolve, reject) => {
-    // Throws inside the executor, so an untrusted relocated dir rejects before the hello token is sent.
+    // Reject untrusted socket directories before sending the hello token.
     ensureDaemonSocketDir(socketPath)
     const socket = connect(socketPath)
     const cleanup = (): void => {
@@ -31,20 +31,22 @@ export function connectDaemonSocket(socketPath: string, timeoutMs: number): Prom
   })
 }
 
-// Why: capture both sockets by value — the fields they came from are nulled on teardown,
-// so a cleanup reading them back would unhook nothing.
+// Capture socket values because teardown nulls the client fields before cleanup.
 export function armDaemonSocketCloseHandlers(
   controlSocket: Socket,
   streamSocket: Socket,
-  handleClose: () => void
+  handleClose: () => void,
+  drainStream: (done: () => void) => void
 ): () => void {
-  controlSocket.on('close', handleClose)
-  controlSocket.on('error', handleClose)
+  // Drain buffered output before control close destroys the stream socket.
+  const handleControlClose = (): void => drainStream(handleClose)
+  controlSocket.on('close', handleControlClose)
+  controlSocket.on('error', handleControlClose)
   streamSocket.on('close', handleClose)
   streamSocket.on('error', handleClose)
   return () => {
-    controlSocket.off('close', handleClose)
-    controlSocket.off('error', handleClose)
+    controlSocket.off('close', handleControlClose)
+    controlSocket.off('error', handleControlClose)
     streamSocket.off('close', handleClose)
     streamSocket.off('error', handleClose)
   }

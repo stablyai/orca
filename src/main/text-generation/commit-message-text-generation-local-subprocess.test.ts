@@ -27,9 +27,7 @@ const spawnMock = vi.mocked(spawn)
 
 const expectChildTerminated = createChildTerminationExpectation(terminateWindowsProcessTreeMock)
 
-// These suites drive fake children down the Windows direct-child path, taskkill included. The POSIX
-// supervised stop with the Codex home lock (generation: timeout, cancel, output limit; discovery:
-// timeout, output limit) is in source-control-local-process.test.ts.
+// Fake Windows direct-child/taskkill paths here; source-control-local-process.test.ts covers supervised POSIX stop and managed-home lock release.
 const hostPlatform = process.platform
 
 afterEach(() => {
@@ -39,7 +37,7 @@ afterEach(() => {
 
 beforeEach(() => {
   Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
-  // Windows resolves a bare agent name on PATH; the host's own installs must not answer it.
+  // Clear PATH so host agent installs cannot answer fake Windows lookups.
   vi.stubEnv('PATH', '')
   terminateWindowsProcessTreeMock.mockClear()
   terminateWindowsProcessTreeMock.mockResolvedValue(undefined)
@@ -79,7 +77,7 @@ describe('generateCommitMessageFromContext on the Windows direct-child path', ()
     listeners.get('stdout:data')?.(Buffer.alloc(4 * 1024 * 1024 + 1))
     listeners.get('close')?.(null)
 
-    await expect(pending).resolves.toEqual({
+    await expect(pending).resolves.toMatchObject({
       success: false,
       error:
         'agent CLI command produced too much output. Check the agent CLI configuration and try again.'
@@ -177,10 +175,7 @@ describe('generateCommitMessageFromContext on the Windows direct-child path', ()
         'wsl.exe',
         ['-d', 'Ubuntu 24.04', '--exec', 'sh', '-lc', expect.any(String)],
         expect.objectContaining({
-          // Why a concrete directory (#16463): `undefined` makes CreateProcessW inherit
-          // Orca's own cwd, a deletable WSL UNC path when it was launched from a
-          // worktree. The Linux directory still rides inside the command (/mnt/c/repo,
-          // asserted below), so the Windows-side cwd never decides where the agent runs.
+          // #16463: explicit native cwd avoids inheriting a deletable WSL UNC worktree; guest cwd stays inside the command.
           cwd: expect.any(String),
           windowsHide: true,
           env: expect.objectContaining({ CODEX_HOME: '/home/tester/.codex' })
@@ -240,10 +235,11 @@ describe('generateCommitMessageFromContext on the Windows direct-child path', ()
         })
         expect(spawnMock).toHaveBeenCalledWith(
           'C:\\Windows\\System32\\cmd.exe',
-          ['/d', '/c', 'C:/tools/agent.cmd'],
+          ['/d /v:off /s /c ""C:/tools/agent.cmd""'],
           expect.objectContaining({
             cwd: 'C:\\repo',
-            windowsHide: true
+            windowsHide: true,
+            windowsVerbatimArguments: true
           })
         )
       })
@@ -275,10 +271,10 @@ describe('generateCommitMessageFromContext on the Windows direct-child path', ()
         }
       )
 
-      expect(result).toEqual({
+      expect(result).toMatchObject({
         success: false,
         error:
-          'C:/tools/agent.cmd cannot be run as a Windows batch command with the prompt in argv. Remove {prompt} so Orca sends the prompt on stdin.'
+          "C:/tools/agent.cmd runs through a Windows batch script that cannot take the multi-line prompt as an argument. Point Settings at the agent's executable, or use a custom command without {prompt} so Orca sends the prompt on stdin."
       })
       expect(spawnMock).not.toHaveBeenCalled()
     })

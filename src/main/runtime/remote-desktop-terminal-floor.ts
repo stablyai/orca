@@ -1,4 +1,4 @@
-import { clampTerminalViewport } from './terminal-viewport'
+import { clampTerminalViewport } from '../../shared/terminal-viewport'
 
 type Viewport = { cols: number; rows: number }
 type Viewer = Viewport & { clientId: string; activity: number }
@@ -10,16 +10,20 @@ export type RemoteDesktopTerminalFloorDependencies = {
   isMobileDriven: (ptyId: string) => boolean
   getTerminalSize: (ptyId: string) => Viewport | null
   resolveHostTarget: (ptyId: string) => Viewport
+  /** False on a headless host (orca serve, orcad), which has no pane to give a PTY's grid back to. */
+  hostShowsTerminals: () => boolean
   applyLayout: (ptyId: string, target: LayoutTarget) => Promise<{ ok: boolean }>
 }
 
 export class RemoteDesktopTerminalFloor {
-  // Why: subscriptions, not clients, own floors so duplicate streams release independently.
+  // Subscriptions own floors so duplicate streams clean up independently.
   private readonly viewers = new Map<string, Map<string, Viewer>>()
   private readonly owners = new Map<string, string>()
   private readonly hostReclaimTargets = new Map<string, Viewport>()
-  // Why: an in-flight host reclaim must not consume a target after a newer viewer mutation.
+  // A newer viewer revision must prevent an older host reclaim consuming its target.
   private readonly viewerRevisions = new Map<string, number>()
+  // Passively reconnecting clients resume reaped ownership unless another claim intervened.
+  private readonly orphanedOwnerClientIds = new Map<string, string>()
   private activity = 0
 
   constructor(private readonly dependencies: RemoteDesktopTerminalFloorDependencies) {}
@@ -59,7 +63,7 @@ export class RemoteDesktopTerminalFloor {
   }
 
   recordHostReclaimTarget(ptyId: string, cols: number, rows: number): void {
-    // Why: phone presence must not seed the separate remote-viewer cache.
+    // Phone presence must not seed desktop-viewer reclaim geometry.
     if (!this.owners.has(ptyId) || cols <= 0 || rows <= 0) {
       return
     }
@@ -83,6 +87,7 @@ export class RemoteDesktopTerminalFloor {
     this.owners.delete(ptyId)
     this.hostReclaimTargets.delete(ptyId)
     this.viewerRevisions.delete(ptyId)
+    this.orphanedOwnerClientIds.delete(ptyId)
   }
 
   async applyLayout(ptyId: string): Promise<boolean> {
@@ -102,7 +107,7 @@ export class RemoteDesktopTerminalFloor {
         }
       : { kind: 'desktop', ...this.resolveHostReclaimTarget(ptyId) }
     const result = await this.dependencies.applyLayout(ptyId, layoutTarget)
-    // Why: failed or superseded reclaim must retain true host geometry for the next attempt.
+    // Retain true host geometry after failed or superseded reclaim.
     if (
       reclaimingHost &&
       result.ok &&
@@ -123,7 +128,9 @@ export class RemoteDesktopTerminalFloor {
     claim = true
   ): Promise<boolean> {
     const viewport = clampTerminalViewport(cols, rows)
-    if (claim) {
+    const claims =
+      claim || (!this.owners.has(ptyId) && this.orphanedOwnerClientIds.get(ptyId) === clientId)
+    if (claims) {
       this.ensureHostReclaimTarget(ptyId)
     }
     let viewers = this.viewers.get(ptyId)
@@ -135,9 +142,9 @@ export class RemoteDesktopTerminalFloor {
     if (
       prior?.cols === viewport.cols &&
       prior.rows === viewport.rows &&
-      (!claim || this.owners.get(ptyId) === subscriptionKey)
+      (!claims || this.owners.get(ptyId) === subscriptionKey)
     ) {
-      if (claim && this.owners.get(ptyId) === subscriptionKey) {
+      if (claims && this.owners.get(ptyId) === subscriptionKey) {
         const size = this.dependencies.getTerminalSize(ptyId)
         if (size?.cols !== viewport.cols || size.rows !== viewport.rows) {
           return this.applyLayout(ptyId)
@@ -145,11 +152,11 @@ export class RemoteDesktopTerminalFloor {
       }
       return true
     }
-    const activity = claim ? ++this.activity : (prior?.activity ?? 0)
+    const activity = claims ? ++this.activity : (prior?.activity ?? 0)
     viewers.set(subscriptionKey, { clientId, ...viewport, activity })
     this.bumpRevision(ptyId)
-    if (claim) {
-      this.owners.set(ptyId, subscriptionKey)
+    if (claims) {
+      this.setOwner(ptyId, subscriptionKey)
       return this.applyLayout(ptyId)
     }
     return true
@@ -168,14 +175,15 @@ export class RemoteDesktopTerminalFloor {
     }
     this.ensureHostReclaimTarget(ptyId)
     viewer.activity = ++this.activity
-    this.owners.set(ptyId, subscriptionKey)
+    this.setOwner(ptyId, subscriptionKey)
     this.bumpRevision(ptyId)
     return this.applyLayout(ptyId)
   }
 
   claimHost(ptyId: string, cols: number, rows: number): Promise<boolean> {
+    this.orphanedOwnerClientIds.delete(ptyId)
     if (!this.owners.has(ptyId)) {
-      // Why: host input during an in-flight reclaim must join it, not pass it.
+      // Host input must join an in-flight reclaim rather than overtake it.
       return this.hostReclaimTargets.has(ptyId) ? this.applyLayout(ptyId) : Promise.resolve(true)
     }
     this.hostReclaimTargets.set(ptyId, clampTerminalViewport(cols, rows))
@@ -184,15 +192,25 @@ export class RemoteDesktopTerminalFloor {
     return this.applyLayout(ptyId)
   }
 
+  // Host typing cancels a reaped viewer's resume even without a visible fit override.
+  noteHostInput(ptyId: string): void {
+    this.orphanedOwnerClientIds.delete(ptyId)
+  }
+
   unregisterViewers(ptyId: string, subscriptionKeys: Iterable<string>): Promise<boolean> {
     const viewers = this.viewers.get(ptyId)
     if (!viewers) {
       return Promise.resolve(false)
     }
     let changed = false
-    let removedOwner = false
+    let removedOwnerClientId: string | null = null
+    let removedOwnerViewport: Viewport | null = null
     for (const subscriptionKey of subscriptionKeys) {
-      removedOwner = this.owners.get(ptyId) === subscriptionKey || removedOwner
+      if (this.owners.get(ptyId) === subscriptionKey) {
+        const owner = viewers.get(subscriptionKey)
+        removedOwnerClientId = owner?.clientId ?? null
+        removedOwnerViewport = owner ? { cols: owner.cols, rows: owner.rows } : null
+      }
       changed = viewers.delete(subscriptionKey) || changed
     }
     if (!changed) {
@@ -201,21 +219,40 @@ export class RemoteDesktopTerminalFloor {
     if (viewers.size === 0) {
       this.viewers.delete(ptyId)
     }
-    if (removedOwner) {
+    if (removedOwnerClientId !== null) {
+      // A reconnect replacement stream from the same client retains ownership.
+      let successor: { key: string; viewer: Viewer } | null = null
       let fallback: { key: string; activity: number } | null = null
       for (const [key, viewer] of viewers) {
-        if (viewer.activity > 0 && (!fallback || viewer.activity > fallback.activity)) {
+        if (viewer.clientId === removedOwnerClientId) {
+          successor = { key, viewer }
+        } else if (viewer.activity > 0 && (!fallback || viewer.activity > fallback.activity)) {
           fallback = { key, activity: viewer.activity }
         }
       }
-      if (fallback) {
-        this.owners.set(ptyId, fallback.key)
+      if (successor) {
+        successor.viewer.activity = ++this.activity
+        this.setOwner(ptyId, successor.key)
+      } else if (fallback) {
+        this.setOwner(ptyId, fallback.key)
       } else {
         this.owners.delete(ptyId)
+        this.orphanedOwnerClientIds.set(ptyId, removedOwnerClientId)
       }
     }
     this.bumpRevision(ptyId)
-    return removedOwner ? this.applyLayout(ptyId) : Promise.resolve(true)
+    if (removedOwnerClientId === null) {
+      return Promise.resolve(true)
+    }
+    if (!this.owners.has(ptyId) && !this.dependencies.hostShowsTerminals()) {
+      // Headless hosts have no host pane to reclaim; restoring spawn size would cause duplicate TUI redraws (#15997).
+      if (removedOwnerViewport) {
+        // Remember the departing viewer grid, not a temporary phone-fit grid, for the later restore.
+        this.hostReclaimTargets.set(ptyId, removedOwnerViewport)
+      }
+      return Promise.resolve(true)
+    }
+    return this.applyLayout(ptyId)
   }
 
   refreshViewer(
@@ -241,7 +278,7 @@ export class RemoteDesktopTerminalFloor {
       const activity = claim ? ++this.activity : viewer.activity
       viewers.set(subscriptionKey, { ...viewer, ...viewport, activity })
       if (claim) {
-        this.owners.set(ptyId, subscriptionKey)
+        this.setOwner(ptyId, subscriptionKey)
       }
       changed = true
     }
@@ -260,6 +297,11 @@ export class RemoteDesktopTerminalFloor {
     if (!this.hostReclaimTargets.has(ptyId)) {
       this.hostReclaimTargets.set(ptyId, this.resolveHostReclaimTarget(ptyId))
     }
+  }
+
+  private setOwner(ptyId: string, subscriptionKey: string): void {
+    this.owners.set(ptyId, subscriptionKey)
+    this.orphanedOwnerClientIds.delete(ptyId)
   }
 
   private bumpRevision(ptyId: string): void {

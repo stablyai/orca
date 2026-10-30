@@ -4,11 +4,8 @@ import type { RpcDecodeIssue } from './rpc-operation-contract'
 export const RPC_INCOMPATIBLE_REPLY_CODE = 'incompatible_reply'
 const INCOMPATIBLE_REPLY_ERROR_NAME = 'RpcIncompatibleReplyError'
 
-// Why: a reply the operation's reader cannot read says nothing about what the host did.
-// On a mutation it is NOT evidence the mutation failed and authorizes no retry — only a
-// host-negotiated idempotency capability inside its dedupe window does (see
-// tasks/worktree-create-retry.ts). So this error is deliberately neither marked
-// delivery-unknown nor shaped like the cutover error the retry loops replay on.
+// Unreadable mutation replies prove no failure and authorize no retry without negotiated idempotency inside its dedupe window.
+// Keep this distinct from delivery-unknown and cutover errors that retry loops recognize.
 export class RpcIncompatibleReplyError extends Error {
   readonly code = RPC_INCOMPATIBLE_REPLY_CODE
 
@@ -17,7 +14,7 @@ export class RpcIncompatibleReplyError extends Error {
     readonly method: string,
     readonly issues: readonly RpcDecodeIssue[]
   ) {
-    // Why plain copy: this message reaches toasts and screen error text unchanged.
+    // This message reaches screen text and toasts unchanged.
     super(`The host sent a reply this app could not read (${method})`)
     this.name = INCOMPATIBLE_REPLY_ERROR_NAME
   }

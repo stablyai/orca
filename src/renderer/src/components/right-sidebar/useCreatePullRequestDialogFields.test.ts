@@ -94,6 +94,7 @@ function renderDialogFields(input: DialogFieldsRenderInput): {
       eligibility: currentInput.eligibility,
       currentBaseRef: currentInput.currentBaseRef,
       settings: currentInput.settings ?? null,
+      target: { kind: 'local' },
       submitting: false,
       generation: currentInput.generation
     })
@@ -157,9 +158,7 @@ describe('useCreatePullRequestDialogFields', () => {
   })
 
   it('prefers the remote-validated eligibility default over a stacked local-only base', async () => {
-    // Why: for a stacked worktree the current base is the local-only parent
-    // branch, which the main process resolves to the repo default. The seeded
-    // field must follow the remote-validated eligibility default, not the parent.
+    // Main resolves local-only stack parents to a remote-valid default; seed that validated ref.
     const harness = renderDialogFields({
       eligibility: createEligibility({ defaultBaseRef: 'refs/remotes/origin/main' }),
       currentBaseRef: 'stacked-parent'
@@ -177,8 +176,6 @@ describe('useCreatePullRequestDialogFields', () => {
   })
 
   it('falls back to the current base ref when eligibility supplies no default', async () => {
-    // Why: when the main process cannot resolve a default (e.g. origin/HEAD
-    // unset and no probes match), keep the current base rather than blanking it.
     const harness = renderDialogFields({
       eligibility: createEligibility({ defaultBaseRef: null }),
       currentBaseRef: 'refs/remotes/origin/release'

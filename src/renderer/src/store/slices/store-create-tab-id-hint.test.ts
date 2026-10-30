@@ -6,7 +6,6 @@ import { createStoreCascadesMockApi } from './store-cascades-test-harness'
 const mockUnregisterPtyDataHandlers = vi.hoisted(() => vi.fn<() => unknown[]>(() => []))
 const mockRestorePtyDataHandlersAfterFailedShutdown = vi.hoisted(() => vi.fn())
 
-// Mock sonner (imported by repos.ts)
 vi.mock('sonner', () => ({
   toast: { info: vi.fn(), success: vi.fn(), error: vi.fn(), warning: vi.fn() }
 }))
@@ -16,7 +15,6 @@ vi.mock('@/components/terminal-pane/pty-dispatcher', () => ({
   unregisterPtyDataHandlers: mockUnregisterPtyDataHandlers
 }))
 
-// Mock agent-status (imported by terminal-helpers)
 vi.mock('@/lib/agent-status', async (importOriginal) => {
   const actual = await importOriginal<typeof AgentStatusModule>()
   return {
@@ -47,7 +45,7 @@ describe('createTab tabId hint', () => {
     expect(tab.id).toBe(hintedId)
   })
 
-  it('falls back to a fresh id on collision and warns', () => {
+  it('rejects a taken id instead of minting a fresh one', () => {
     const store = createTestStore()
     const wt = 'repo1::/path/wt-collision'
     const existingId = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee'
@@ -63,14 +61,12 @@ describe('createTab tabId hint', () => {
       unifiedTabsByWorktree: {}
     })
 
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    try {
-      const tab = store.getState().createTab(wt, undefined, undefined, { id: existingId })
-      expect(tab.id).not.toBe(existingId)
-      expect(warn).toHaveBeenCalledWith(expect.stringContaining(existingId))
-    } finally {
-      warn.mockRestore()
-    }
+    const before = store.getState().tabsByWorktree
+
+    expect(() => store.getState().createTab(wt, undefined, undefined, { id: existingId })).toThrow(
+      `Terminal tab ${existingId} already exists`
+    )
+    expect(store.getState().tabsByWorktree).toBe(before)
   })
 
   it('treats tab ids as global and rejects hints that collide in another worktree', () => {
@@ -93,14 +89,10 @@ describe('createTab tabId hint', () => {
       unifiedTabsByWorktree: {}
     })
 
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    try {
-      const tab = store.getState().createTab(wtA, undefined, undefined, { id: existingId })
-      expect(tab.id).not.toBe(existingId)
-      expect(warn).toHaveBeenCalledWith(expect.stringContaining(existingId))
-    } finally {
-      warn.mockRestore()
-    }
+    expect(() => store.getState().createTab(wtA, undefined, undefined, { id: existingId })).toThrow(
+      `Terminal tab ${existingId} already exists`
+    )
+    expect(store.getState().tabsByWorktree[wtA]).toBeUndefined()
   })
 
   it('ignores empty string hints instead of persisting an unusable tab id', () => {

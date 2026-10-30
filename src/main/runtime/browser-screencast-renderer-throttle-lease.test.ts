@@ -1,11 +1,8 @@
-/**
- * A remote browser stream keeps the desktop window drawing for exactly as long as it lives: guest
- * frames come from the embedder's compositor, which a throttled hidden window stops running.
- */
+/** Hidden host compositors must keep drawing while remote streams need guest frames. */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { BrowserScreencastOptions } from '../browser/browser-screencast-stream-types'
 import { createScreencastHarness } from './browser-screencast-subscriber-test-harness'
-import { RuntimeBrowserCommands } from './orca-runtime-browser'
+import { RuntimeBrowserCommands } from './browser/browser-commands'
 import { createSinglePageBrowserCommandsHost } from './single-page-browser-commands-host-test-double'
 
 const { webContentsFromId, startBrowserScreencast } = vi.hoisted(() => ({
@@ -31,7 +28,6 @@ function createRig() {
       capturePage: vi.fn(async () => null)
     }
   }
-  // The streamed guest, recording its throttle and capture calls in order.
   const guestCalls: unknown[] = []
   const guest = {
     destroyed: false,
@@ -47,7 +43,7 @@ function createRig() {
     browserCommands: new RuntimeBrowserCommands(createSinglePageBrowserCommandsHost(window))
   })
   const pageStreams: PageStream[] = []
-  // Models Chromium's asynchronous teardown: a held stop leaves the stream open until `close()`.
+  // Model asynchronous teardown: stopping does not close the held stream yet.
   const stopControl = { hold: false }
   startBrowserScreencast.mockImplementation(
     async (_guest: unknown, options: BrowserScreencastOptions) => {
@@ -118,8 +114,7 @@ describe('remote browser screencast renderer throttle lease', () => {
     expect(callsAtStart).toEqual([false])
   })
 
-  // Unsubscribe, connection close, ghost eviction and a desktop page close all end through the
-  // page stream's `done`, so one of them stands for all.
+  // Unsubscribe, disconnect, ghost eviction and page close all settle through done.
   it('restores it when the stream ends', async () => {
     const rig = createRig()
     const phone = rig.subscribe('conn-phone')
@@ -162,7 +157,6 @@ describe('remote browser screencast renderer throttle lease', () => {
     rig.pageStreams[0].options.onError?.('Browser stream timed out.')
     const guestLookups = webContentsFromId.mock.calls.length
     const tablet = rig.subscribe('conn-tablet')
-    // Past its guest lookup, the joiner reaches the page record with no further await.
     await vi.waitFor(() =>
       expect(webContentsFromId.mock.calls.length).toBeGreaterThan(guestLookups)
     )
@@ -200,7 +194,6 @@ describe('remote browser screencast renderer throttle lease', () => {
 
 const GUEST_REHIDE = { capture: { x: 0, y: 0, width: 0, height: 0 }, opts: { stayHidden: true } }
 
-// When the streamed tab is the active desktop tab, the guest's own widget is what a cover hides.
 describe('remote browser screencast guest painting', () => {
   beforeEach(() => {
     webContentsFromId.mockReset()

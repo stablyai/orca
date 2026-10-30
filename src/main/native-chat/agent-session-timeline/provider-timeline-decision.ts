@@ -1,10 +1,5 @@
-// What a non-text event does, in two parts that never share a clock.
-//
-// Admission decides from the state (and the journal's rows by key, when bound) whether the event
-// is dropped, what it holds open, and how it changes the state; it writes and allocates nothing.
-// Each write's resolver decides, when the write runs, what the journal holds then: a resume admits
-// events before the sink binds, and the dead-generation sweep lands between admission and the
-// write, so every journal-dependent choice is made there.
+// Admission allocates/writes nothing; deferred resolvers read current journal state because recovery
+// may land after admission but before sink binding.
 
 import type {
   AgentJournalItemBody,
@@ -33,7 +28,6 @@ import {
   decideTurnSettled
 } from './provider-timeline-turn-decisions'
 
-/** Why an event wrote nothing. Each is a grammar rule the adapter broke or a fact already held. */
 export type ProviderTimelineDropRule =
   | 'session-ended'
   | 'turn-duplicate'
@@ -48,9 +42,7 @@ export type ProviderTimelineDropRule =
 
 export type ProviderTimelineDecidedEvent =
   | Exclude<ProviderTimelineEvent, { type: 'text.delta' | 'text.close' | 'activity' }>
-  /** The assembler's own: the journal shows the open turn settled by another writer (a person's
-   *  Stop), so its text stops and its prompts are cancelled; its running tool calls wait for the
-   *  provider's own `turn.end`. */
+  /** Another writer settled the turn; cancel text/prompts but leave calls for the provider’s end. */
   | { type: 'turn.settled'; turn: ProviderTimelineTurnRef }
 
 type Journal = StructuredAgentSessionTransitionJournal
@@ -60,37 +52,39 @@ export type ProviderTimelineResolvedWrite = {
   body: AgentJournalItemBody
 }
 
-/** One row write: where it goes is fixed at admission, what it says is resolved when it runs. */
+/** Placement is fixed at admission; content resolves at execution. */
 export type ProviderTimelineItemWrite = {
   reservedBytes: number
   lifecycle: boolean
-  /** A new row's turn is admission's placement; an existing row keeps its own. */
+  /** Existing rows keep their scope; new rows use admission placement. */
   options: StructuredAgentSessionItemAppendOptions
   resolve: (journal: Journal) => ProviderTimelineResolvedWrite | null
 }
 
 export type ProviderTimelineDecision = {
   dropped?: ProviderTimelineDropRule
-  /** What the event holds open, for the budget. */
   hold?: ProviderTimelineHold
-  /** The event's change to the state, made when the sink admits it. */
+  /** Apply state changes only after sink admission. */
   commit?: (state: ProviderTimelineState) => void
-  /** The settlement the event owes, read from the journal when it runs. */
-  settle?: { what: string; resolve: (journal: Journal) => readonly JournalLifecycleMutationInput[] }
+  /** Resolve settlement from the journal at execution. */
+  settle?: {
+    what: string
+    recovered?: true
+    resolve: (journal: Journal) => readonly JournalLifecycleMutationInput[]
+  }
   writes?: readonly ProviderTimelineItemWrite[]
-  /** The streamed item whose text this event's full snapshot replaces. */
+  /** Replace this stream with the event’s full snapshot. */
   closes?: string
-  /** The turn this event ends; `current` unless another turn is open, whose text and activity
-   *  an earlier turn's end leaves alone. */
+  /** Earlier turn ends must not disturb the open turn’s text/activity. */
   ends?: { turnItemId: string; current: boolean }
 }
 
 export type ProviderTimelineDecisionInput = {
   context: ProviderTimelineContext
   state: ProviderTimelineState
-  /** The journal at admission; null before the sink binds. */
+  /** Null until sink binding. */
   journal: Journal | null
-  /** Serials this event takes, committed with it. */
+  /** Consume serials only on admission. */
   serial: () => number
 }
 

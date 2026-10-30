@@ -1,12 +1,12 @@
 import {
-  getPreferredPairingOffer,
+  getPreferredPairedRuntimeConnection,
   type KnownRuntimeEnvironment
 } from '../../shared/runtime-environments'
-import { sendRemoteRuntimeRequest } from '../../shared/remote-runtime-client'
+import { sendRemoteRuntimeRequest } from '../../shared/remote-runtime/remote-runtime-client'
 import { verifyRemotePairingRuntimeStatus } from '../../shared/remote-pairing-verification'
 import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../shared/electron-remote-runtime-client-capabilities'
 import type { RuntimeStatus } from '../../shared/runtime-types'
-import type { PairingOffer } from '../../shared/pairing'
+import type { PairedRuntimeConnection } from '../../shared/paired-runtime-connection'
 
 export const RUNTIME_IDENTITY_MISMATCH_MESSAGE =
   'The endpoint does not match this paired runtime identity.'
@@ -17,7 +17,7 @@ export function verifyRuntimeEnvironmentIdentity(
 ) {
   return verifyRuntimePairingIdentity(
     {
-      ...getPreferredPairingOffer(environment),
+      ...getPreferredPairedRuntimeConnection(environment),
       ...(options.endpoint ? { endpoint: options.endpoint } : {})
     },
     environment,
@@ -25,15 +25,15 @@ export function verifyRuntimeEnvironmentIdentity(
   )
 }
 
-/** Proves the runtime at `pairing` holds its keys and is the expected runtime. */
+/** Proves the runtime at `connection` holds its keys and is the expected runtime. */
 export async function verifyRuntimePairingIdentity(
-  verifiedPairing: PairingOffer,
+  connection: PairedRuntimeConnection,
   expected: Pick<KnownRuntimeEnvironment, 'runtimeId' | 'pairedDeviceId'>,
   signal?: AbortSignal
 ) {
   signal?.throwIfAborted()
   const response = await sendRemoteRuntimeRequest<RuntimeStatus>(
-    verifiedPairing,
+    connection,
     'status.get',
     undefined,
     15_000,
@@ -60,7 +60,7 @@ export async function verifyRuntimePairingIdentity(
     throw new Error(RUNTIME_IDENTITY_MISMATCH_MESSAGE)
   }
   return {
-    verifiedPairing,
+    verifiedConnection: connection,
     verifiedRuntimeId: runtimeId,
     runtimeStatus: status.runtimeStatus
   }

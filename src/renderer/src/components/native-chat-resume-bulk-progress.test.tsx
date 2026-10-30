@@ -8,7 +8,7 @@ import {
 } from './native-chat-resume-modal.test-support'
 import { act } from 'react'
 import { expect, it, vi, type Mock } from 'vitest'
-import { NativeChatResumeOnRestartModal } from './NativeChatResumeOnRestartModal'
+import { NativeChatResumeOnRestartModal } from './NativeChatResumeRuntimeModal'
 import { chatBox } from './native-chat-resume-on-restart-modal.test-support'
 import { NativeChatResumeStatusSegment } from './status-bar/NativeChatResumeStatusSegment'
 import type { ResumeCandidate, ResumeFailure } from './native-chat-resume-on-restart-grouping'
@@ -39,7 +39,9 @@ vi.mock('@/runtime/structured-agent-session-client', () => ({
 vi.mock('@/lib/activate-ai-vault-structured-session', () => ({
   activateAiVaultStructuredSession: vi.fn(async () => true)
 }))
-vi.mock('sonner', () => ({ toast: vi.fn() }))
+vi.mock('sonner', async () =>
+  (await import('./native-chat-resume-sonner-mock.test-support')).resumeSonnerMock()
+)
 
 const { mount, button, offerIds, toasts, fakeHost, runStatus } = createResumeModalFixture(
   rpc,
@@ -290,7 +292,7 @@ it.each(['unknown', 'pending'] as const)(
   }
 )
 
-it('dismissing a failure after the reply never promotes it to resumed history', async () => {
+it('dismissing a host failure preserves the uncertain action history', async () => {
   fakeHost({ sessions: [offered[0]!] }, () => 'unknown')
   await mount(<NativeChatResumeOnRestartModal />)
   await act(async () => continueNativeChatRestartOffer(['a']))
@@ -299,8 +301,9 @@ it('dismissing a failure after the reply never promotes it to resumed history', 
   expect(dismiss).not.toBeNull()
   await act(async () => dismiss?.click())
   expect(document.querySelector('[role="dialog"]')?.textContent).toContain('Resumed 0 of 1 chat')
-  expect(document.querySelector('[role="dialog"]')?.textContent).toContain('Need you0')
-  expect(runStatus('Prompt a')).toBeNull()
+  expect(getNativeChatRestartOffer().failed).toEqual([])
+  expect(document.querySelector('[role="dialog"]')?.textContent).toContain('Need you1')
+  expect(runStatus('Prompt a')).toBe('Prompt a: Couldn’t confirm the chat was resumed')
   expect(toasts()).toEqual([['Couldn’t confirm 1 chat was resumed']])
 })
 
@@ -313,7 +316,7 @@ it('keeps an unknown reply unconfirmed when it carries no confirmed failure list
   await mount(<NativeChatResumeOnRestartModal />)
   await act(async () => continueNativeChatRestartOffer(['a']))
   expect(document.querySelector('[role="dialog"]')?.textContent).toContain('Resumed 0 of 1 chat')
-  expect(runStatus('Prompt a')).toBeNull()
+  expect(runStatus('Prompt a')).toBe('Prompt a: Couldn’t confirm the chat was resumed')
   expect(toasts()).toEqual([['Couldn’t confirm 1 chat was resumed']])
 })
 

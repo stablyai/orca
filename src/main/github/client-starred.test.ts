@@ -9,7 +9,6 @@ const { clientMocks, moduleMocks } = await vi.hoisted(async () => {
 
 vi.mock('./gh-utils', () => moduleMocks.ghUtilsModuleMock(clientMocks))
 vi.mock('../git/runner', () => moduleMocks.gitRunnerModuleMock(clientMocks))
-vi.mock('../providers/ssh-git-dispatch', () => moduleMocks.sshGitDispatchModuleMock(clientMocks))
 vi.mock('./local-git-config-signature', () =>
   moduleMocks.localGitConfigSignatureModuleMock(clientMocks)
 )
@@ -31,7 +30,6 @@ import { resetOriginRepositoryCache } from './client-test-harness'
 
 const { execFileAsyncMock, ghExecFileAsyncMock, acquireMock, releaseMock } = clientMocks
 
-/** Let the coalesced check reach its `await acquire()` continuation and spawn gh. */
 async function flushMicrotasks(): Promise<void> {
   for (let i = 0; i < 5; i += 1) {
     await Promise.resolve()
@@ -78,16 +76,11 @@ describe('checkOrcaStarred', () => {
     await expect(checkOrcaStarred()).resolves.toBe(null)
   })
 
-  // ── #18234: an unbounded, unreaped, un-deduped star check ──────────────
-
   it('never spawns gh directly, so the spawn carries a deadline and a tree kill', async () => {
     ghExecFileAsyncMock.mockResolvedValueOnce({ stdout: 'HTTP/2.0 204 No Content\r\n', stderr: '' })
 
     await checkOrcaStarred()
 
-    // Why: the raw execFileAsync has no timeout, so a `gh` that never exits ran
-    // forever at 100% CPU and was never reaped. ghExecFileAsync bounds the child
-    // and kills its process tree on the deadline.
     expect(execFileAsyncMock).not.toHaveBeenCalled()
     const [, options] = ghExecFileAsyncMock.mock.calls[0]
     expect(typeof options.timeout).toBe('number')
@@ -108,8 +101,6 @@ describe('checkOrcaStarred', () => {
     const third = checkOrcaStarred()
     await flushMicrotasks()
 
-    // Why: five call sites can ask at once; without coalescing each forked its
-    // own `gh` and four stuck children exhausted the GitHub semaphore.
     expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(1)
     expect(acquireMock).toHaveBeenCalledTimes(1)
 
@@ -132,8 +123,6 @@ describe('checkOrcaStarred', () => {
 
     await expect(checkOrcaStarred()).resolves.toBe(null)
 
-    // Why: a leaked slot is permanent — four of them wedge every GitHub feature
-    // in the app for the rest of the session.
     expect(releaseMock).toHaveBeenCalledTimes(1)
     expect(acquireMock).toHaveBeenCalledTimes(1)
   })

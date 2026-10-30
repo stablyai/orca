@@ -1,5 +1,5 @@
+import { pairedRuntimeConnectionFromOffer } from '../../shared/paired-runtime-connection'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { PairingOffer } from '../../shared/pairing'
 import type {
   BrowserClientHostedPageInventory,
   BrowserClientHostCommandEvent,
@@ -16,26 +16,24 @@ import {
 import type {
   RemoteRuntimeSubscription,
   RemoteRuntimeSubscriptionCallbacks
-} from '../../shared/remote-runtime-client'
+} from '../../shared/remote-runtime/remote-runtime-client'
 
 const { subscribeRemoteRuntimeRequestMock } = vi.hoisted(() => ({
   subscribeRemoteRuntimeRequestMock: vi.fn()
 }))
 
-vi.mock('../../shared/remote-runtime-client', () => ({
+vi.mock('../../shared/remote-runtime/remote-runtime-client', () => ({
   subscribeRemoteRuntimeRequest: subscribeRemoteRuntimeRequestMock
 }))
 
 import { PairedRuntimeBrowserHostLease } from './paired-runtime-browser-host-lease'
 
-const pairing = {
-  v: 2,
+const pairing = pairedRuntimeConnectionFromOffer({
   endpoint: 'ws://127.0.0.1:6768',
   deviceToken: 'device-token',
   publicKeyB64: 'public-key',
-  pairedDeviceId: 'device-a',
-  scope: 'runtime'
-} as PairingOffer
+  pairedDeviceId: 'device-a'
+})
 
 afterEach(() => {
   subscribeRemoteRuntimeRequestMock.mockReset()
@@ -89,8 +87,6 @@ describe('PairedRuntimeBrowserHostLease', () => {
       expect.any(Number),
       expect.any(Object),
       expect.objectContaining({
-        // Metadata rides this same connection, and its handler gates on the capability being
-        // declared by the connection the publish arrives on.
         clientCapabilities: [
           BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY,
           BROWSER_CLIENT_PAGE_METADATA_RUNTIME_CAPABILITY
@@ -102,9 +98,6 @@ describe('PairedRuntimeBrowserHostLease', () => {
     expect(close).toHaveBeenCalledOnce()
   })
 
-  // Why this is asserted on the lease and not just at the transport: the runtime accepts page
-  // metadata only on the connection the lease attached on, so sending it anywhere else — the very
-  // thing an ordinary runtime call does — is refused as a stale lease and the page's URL is frozen.
   it('sends page metadata over its own attached connection', async () => {
     const sendRequest = vi.fn().mockResolvedValue({
       ok: true,
@@ -707,7 +700,7 @@ function createLease(
   } = {}
 ): PairedRuntimeBrowserHostLease {
   return new PairedRuntimeBrowserHostLease({
-    pairing,
+    connection: pairing,
     authorityRuntimeId: 'runtime-a',
     browserHostClientId: 'host-a',
     hostCapabilities: ['webview'],

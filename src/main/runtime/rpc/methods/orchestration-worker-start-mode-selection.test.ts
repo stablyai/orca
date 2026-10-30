@@ -1,12 +1,11 @@
-/**
- * End of the seam: `orchestration.workerStart` reads the user's own setting and starts the worker
- * that setting describes. No flag reaches this decision, and no combination refuses the start.
- */
+/** workerStart follows the user's launch preference without a mode flag; unsupported structured mode falls back rather than refusing routine dispatch. */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from '../../orca-runtime'
 import { OrchestrationDb } from '../../orchestration/db'
 import { ORCHESTRATION_METHODS } from './orchestration'
+import { OrchestrationError } from '../../orchestration/orchestration-error'
+import { OPENCODE_MODEL_VERSION_REFUSAL } from '../../../../shared/agent-launch-model-preferences'
 
 const STRUCTURED_HANDLE = 'structworker_abc'
 // A real Orca session ID: a minted worker's preamble names it by this, not its handle.
@@ -104,11 +103,12 @@ describe('worker-start honours the settings default', () => {
     settings: Record<string, unknown> | null,
     overrides: Record<string, unknown> = {}
   ) {
-    vi.spyOn(runtime, 'getClientSettings').mockImplementation(() => {
+    vi.spyOn(runtime, 'requireStore').mockImplementation(() => {
       if (!settings) {
         throw new Error('runtime_unavailable')
       }
-      return settings as never
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this worker fixture reaches only the private store getSettings reader.
+      return { getSettings: () => settings } as never
     })
     const task = db.createTask({ spec: 'settings-driven task', runId })
     const method = ORCHESTRATION_METHODS.find(
@@ -207,8 +207,7 @@ describe('worker-start honours the settings default', () => {
   })
 
   it('seeds --model and --effort into the structured session instead of downgrading', async () => {
-    // These two used to force a PTY worker, which is half of why orchestration never produced a
-    // structured chat: choosing a model is the ordinary way to dispatch one.
+    // Model/effort used to force PTY mode, preventing routine structured dispatch.
     const result = await startWorker(STRUCTURED_DEFAULT, { model: 'opus', effort: 'high' })
 
     expect(result).toMatchObject({
@@ -221,9 +220,30 @@ describe('worker-start honours the settings default', () => {
     )
   })
 
+  it.each([false, true])(
+    'keeps OpenCode version refusal before worker effects with native default %s',
+    async (experimentalNativeChat) => {
+      const dispatch = vi.spyOn(db, 'createStartingWorkerDispatch')
+      vi.spyOn(runtime, 'probeOrchestrationOpenCodeModelLaunchSupport').mockRejectedValue(
+        new OrchestrationError('capability_unsupported', OPENCODE_MODEL_VERSION_REFUSAL)
+      )
+      await expect(
+        startWorker(
+          { ...STRUCTURED_DEFAULT, experimentalNativeChat },
+          { agent: 'opencode', model: 'opencode/fledge-alpha-free' }
+        )
+      ).rejects.toMatchObject({
+        code: 'capability_unsupported',
+        message: OPENCODE_MODEL_VERSION_REFUSAL
+      })
+      expect(dispatch).not.toHaveBeenCalled()
+      expect(createExistingWorktreeWorkerTerminal).not.toHaveBeenCalled()
+      expect(createStructuredWorkerSessionForWorktree).not.toHaveBeenCalled()
+    }
+  )
+
   it('creates a new worktree WITHOUT an agent terminal and gives it a structured session', async () => {
-    // The other half: `createWorkerWorktree` creates agent-first, so a `--worktree new-child`
-    // dispatch could only ever end up a PTY terminal worker.
+    // Agent-first new worktrees previously made structured mode unreachable.
     const created = mockWorktreeCreation()
 
     const result = await startWorker(STRUCTURED_DEFAULT, {
@@ -258,8 +278,7 @@ describe('worker-start honours the settings default', () => {
   })
 
   it('falls back to a terminal agent in the worktree it just created when the host refuses', async () => {
-    // The host can only answer for a workspace that exists, so a created worktree settles its mode
-    // after creation — and a refusal must not fail a routine dispatch.
+    // Resolve mode after creation, when workspace support is knowable; unsupported preference must still dispatch.
     mockWorktreeCreation()
     vi.mocked(runtime.getStructuredAgentSessionCreateSupport).mockResolvedValue({
       supported: false,

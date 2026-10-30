@@ -1,37 +1,38 @@
 import type {
+  AgentJournalCursor,
   AgentJournalMessageItem,
   AgentJournalRenderItem,
   AgentJournalSubmission
 } from './agent-session-journal-types'
 import { agentJournalSubmissionKey } from './agent-session-journal-item-key'
+import { selectAgentSessionCurrentRequests } from './agent-session-current-requests'
 import { isQueuedAgentJournalSubmission } from './agent-session-queued-submission'
-import { collapseProviderRetryRuns } from './native-chat-provider-retry-runs'
+import { collapseProviderRetryRuns } from './native-chat/native-chat-provider-retry-runs'
 import {
   keepStoppedSendsInSendOrder,
   placeStoppedSends,
   withStopRowsAfterStoppedSends
-} from './native-chat-stopped-before-start'
+} from './native-chat/native-chat-stopped-before-start'
 import { compareNativeChatTranscriptMessages } from './native-chat-transcript-projection'
 import type { NativeChatMessage } from './native-chat-types'
 import { dispatchWasWithdrawn } from './structured-agent-session-dispatch-rejection'
 import { projectStructuredItemsToNativeChat } from './structured-agent-session-projection'
+import { isActionableStructuredAgentSessionPrompt } from './structured-agent-session-live-turn'
+import {
+  agentSessionContextSequenceFor,
+  isAgentSessionContextClear
+} from './agent-session-context-clear'
 
-/** A message this client sent that the host has not drawn yet: its bubble until the row lands. */
+/** Client echo until host publication; an acknowledged read past recordedCursor supersedes it. */
 export type StructuredAgentSessionOptimisticMessage = {
   clientMessageId: string
   body: AgentJournalMessageItem
   queuedAt: number
+  recordedCursor?: AgentJournalCursor
   /** Sent while the chat read Stopping: drawn after the turn being stopped. */
   sentWhileStopping?: true
 }
 
-export type StructuredAgentSessionMessageProjectionOptions = {
-  /** Draw a message the host accepted and then rejected where the host recorded it, as not sent.
-   *  Off for a client that hands such a message back to its composer instead. */
-  rejectedInPlace: boolean
-}
-
-/** The loaded items that are a conversation command such as `/compact`, by item id. */
 export function structuredAgentSessionCommandItemIds(
   items: readonly AgentJournalRenderItem[]
 ): Set<string> {
@@ -42,28 +43,26 @@ export function structuredAgentSessionCommandItemIds(
   )
 }
 
-/**
- * The rejected submissions the host's history shows in place as not sent, by item id; `submissions`
- * in submission order, as the client keeps them. A withdrawn one is drawn as a stopped send, one the
- * queue holds (a draft's hand-off, or a send kept as a card) is drawn as its card, and a command
- * such as `/compact` has its rejection reported as its own reply.
- */
+/** Rejected sends shown as unsent in submission order; withdrawals use stop notices, queued handoffs/cards keep their cards,
+ * and commands carry rejection in their own reply. */
 export function structuredAgentSessionRejectedShownInPlace(
   submissions: readonly AgentJournalSubmission[],
-  commandItemIds: ReadonlySet<string>
+  commandItemIds: ReadonlySet<string>,
+  clearSequences: readonly number[] = []
 ): Set<string> {
-  // Each body's copies, as positions in submission order. A withdrawn one is no failed copy, so it
-  // supersedes nothing.
-  const copies = new Map<string, { index: number; submittedAt: number }[]>()
-  for (const [index, submission] of submissions.entries()) {
+  const latest = new Map<string, number>()
+  const later = Array.from<number | undefined>({ length: submissions.length })
+  const scopeKey = (submission: AgentJournalSubmission) =>
+    JSON.stringify([
+      agentSessionContextSequenceFor(submission.acceptedSequence ?? 0, clearSequences),
+      submission.payloadFingerprint
+    ])
+  for (let index = submissions.length - 1; index >= 0; index--) {
+    const submission = submissions[index]
+    const key = scopeKey(submission)
+    later[index] = latest.get(key)
     if (!dispatchWasWithdrawn(submission)) {
-      const copy = { index, submittedAt: submission.submittedAt }
-      const same = copies.get(submission.payloadFingerprint)
-      if (same) {
-        same.push(copy)
-      } else {
-        copies.set(submission.payloadFingerprint, [copy])
-      }
+      latest.set(key, Math.max(latest.get(key) ?? -Infinity, submission.submittedAt))
     }
   }
   const shown = new Set<string>()
@@ -73,16 +72,13 @@ export function structuredAgentSessionRejectedShownInPlace(
       submission.dispatchState !== 'rejected' ||
       dispatchWasWithdrawn(submission) ||
       submission.queuedMessageId !== undefined ||
-      // Recorded on the send itself, so an Edit or Delete of its card brings no row back.
+      // Persist card ownership on the send so editing/deleting the card cannot resurrect its row.
       submission.keptAsQueuedMessageId !== undefined ||
       commandItemIds.has(agentJournalSubmissionKey(submission.clientMessageId)) ||
       // Collapses resends of a rejected message: past Retries resent it under a new id, and the
       // host re-delivers its own messages under new ids. Only a later copy sent once the rejection
       // was known counts, so a repeat sent before it is kept.
-      (resolvedAt !== null &&
-        (copies.get(submission.payloadFingerprint) ?? []).some(
-          (copy) => copy.index > index && copy.submittedAt >= resolvedAt
-        ))
+      (resolvedAt !== null && later[index] !== undefined && later[index] >= resolvedAt)
     ) {
       continue
     }
@@ -95,11 +91,9 @@ export function projectStructuredAgentSessionMessages(
   items: readonly AgentJournalRenderItem[],
   optimistic: readonly StructuredAgentSessionOptimisticMessage[],
   submissions: readonly AgentJournalSubmission[],
-  options: StructuredAgentSessionMessageProjectionOptions,
   projectItems = projectStructuredItemsToNativeChat
 ): NativeChatMessage[] {
-  // A send a Stop took back before the agent started it stays where it was sent, as the
-  // conversation's own history. A queued card's hand-off is left out: the card holds its text.
+  // Keep stopped-before-start sends in conversation history; queued handoffs stay in their cards.
   const stoppedBeforeStart = new Map(
     submissions
       .filter(
@@ -107,23 +101,21 @@ export function projectStructuredAgentSessionMessages(
       )
       .map((submission) => [agentJournalSubmissionKey(submission.clientMessageId), submission])
   )
-  // Other refused sends are ledger evidence, not conversation history, unless drawn in place as
-  // not sent.
+  // Other rejections are ledger-only unless explicitly shown in place as unsent.
   const rejected = new Set(
     submissions
       .filter((submission) => submission.dispatchState === 'rejected')
       .map((submission) => agentJournalSubmissionKey(submission.clientMessageId))
       .filter((itemId) => !stoppedBeforeStart.has(itemId))
   )
-  // Runs on every streaming commit, so a chat with no such send pays nothing for placing one.
+  // Avoid placement work on every stream commit when no stopped sends exist.
   const placement =
     stoppedBeforeStart.size > 0 ? placeStoppedSends(items, submissions, stoppedBeforeStart) : null
-  const inPlace = options.rejectedInPlace
-    ? structuredAgentSessionRejectedShownInPlace(
-        submissions,
-        structuredAgentSessionCommandItemIds(items)
-      )
-    : new Set<string>()
+  const inPlace = structuredAgentSessionRejectedShownInPlace(
+    submissions,
+    structuredAgentSessionCommandItemIds(items),
+    items.filter((item) => isAgentSessionContextClear(item.body)).map((item) => item.sequence)
+  )
   const visibleItems: AgentJournalRenderItem[] = []
   const unsentItems: AgentJournalRenderItem[] = []
   for (const item of items) {
@@ -134,8 +126,7 @@ export function projectStructuredAgentSessionMessages(
     }
   }
   const journalled = new Set(visibleItems.map((item) => item.itemId))
-  // Not delivered yet, so nothing the agent does meanwhile — a command it waits behind — comes
-  // after it. Its handover places it in the conversation.
+  // Until handover, a queued send has no conversation position, even relative to commands it waits behind.
   const queued = new Set(
     submissions
       .filter(isQueuedAgentJournalSubmission)
@@ -153,7 +144,7 @@ export function projectStructuredAgentSessionMessages(
     } else {
       const { opensTurn, position } = placement(message.id)
       moved ||= position !== undefined
-      // A turn opened for it: that turn's interrupted end is its stop, so it gets no row of its own.
+      // An opener’s interrupted turn already reports its stop; do not add another notice.
       if (!opensTurn) {
         shownStopped.add(message.id)
       }
@@ -167,18 +158,22 @@ export function projectStructuredAgentSessionMessages(
   if (shownStopped.size > 0) {
     moved = keepStoppedSendsInSendOrder(delivered, stoppedBeforeStart, shownStopped) || moved
   }
-  const conversation = moved
+  const ordered = moved
     ? Array.from(collapseProviderRetryRuns(delivered)).sort(compareNativeChatTranscriptMessages)
     : collapseProviderRetryRuns(delivered)
+  const conversation =
+    shownStopped.size > 0 ? withStopRowsAfterStoppedSends(ordered, shownStopped) : ordered
   return [
-    // After the held sends leave: they are drawn after the conversation, never inside a run.
-    ...(shownStopped.size > 0
-      ? withStopRowsAfterStoppedSends(conversation, shownStopped)
+    // Merge unsent rows at journal positions after stop grouping so each run retains one stop notice.
+    ...(unsentItems.length > 0
+      ? withRowsAtJournalPlaces(
+          conversation,
+          projectItems(unsentItems).map((message) => ({ ...message, unsent: true as const }))
+        )
       : conversation),
+    // Held cards follow the conversation outside its runs.
     ...held,
-    // In no turn; the journal position keeps their place.
-    ...projectItems(unsentItems).map((message) => ({ ...message, unsent: true as const })),
-    // The host's row draws a message once it has one, under its own id or the provider's.
+    // Host rows supersede client echoes under either client or provider IDs.
     ...optimistic
       .filter(
         (entry) =>
@@ -194,4 +189,43 @@ export function projectStructuredAgentSessionMessages(
         ...(entry.sentWhileStopping ? { sentWhileStopping: true as const } : {})
       }))
   ]
+}
+
+/** Merge placed rows in journal order so clients rendering the list directly need no sort. */
+function withRowsAtJournalPlaces(
+  rows: readonly NativeChatMessage[],
+  placed: NativeChatMessage[]
+): NativeChatMessage[] {
+  placed.sort(compareNativeChatTranscriptMessages)
+  const merged: NativeChatMessage[] = []
+  let next = 0
+  for (const row of rows) {
+    while (next < placed.length && compareNativeChatTranscriptMessages(placed[next], row) < 0) {
+      merged.push(placed[next++])
+    }
+    merged.push(row)
+  }
+  return merged.concat(placed.slice(next))
+}
+
+export type StructuredPromptItem = AgentJournalRenderItem & {
+  body: Extract<AgentJournalRenderItem['body'], { kind: 'approval' | 'question' }>
+}
+
+/** Offer pending prompts, respecting the host’s actionable-wait declaration when available. */
+export function pendingStructuredSessionPrompts({
+  journalItems,
+  currentRequests,
+  actionablePromptIds
+}: {
+  journalItems: readonly AgentJournalRenderItem[]
+  currentRequests?: readonly AgentJournalRenderItem[]
+  actionablePromptIds?: readonly string[]
+}): StructuredPromptItem[] {
+  return selectAgentSessionCurrentRequests({ items: journalItems, currentRequests }).filter(
+    (item): item is StructuredPromptItem =>
+      (item.body.kind === 'approval' || item.body.kind === 'question') &&
+      item.body.resolution.state === 'pending' &&
+      isActionableStructuredAgentSessionPrompt(item.itemId, actionablePromptIds)
+  )
 }

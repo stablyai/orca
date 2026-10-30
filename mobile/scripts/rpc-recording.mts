@@ -11,13 +11,12 @@
 import { createRequire } from 'node:module'
 import { readdirSync, rmSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { runProcess } from '../../src/shared/child-process/run-process.ts'
+import { runProcess } from '@orca/process-host'
 import { derivedGoldens } from '../src/test-support/rpc-recording/derived-goldens.ts'
 import { RECORDING_DRIVERS } from '../src/test-support/rpc-recording/recording-drivers.ts'
 import { readScenarios } from '../src/test-support/rpc-recording/scenario-input.ts'
 
-// Ten minutes, not two: the corpus records in 150-290s, so the old 120s budget killed every run and
-// reported it as a truncated failure rather than as a timeout.
+// Corpus takes 150–290s; allow ten minutes or old 120s budget kills it with misleading truncated failures.
 const RECORDING_TIMEOUT_MS = 600_000
 const root = resolve(import.meta.dirname, '../..')
 const goldens = resolve(root, 'mobile/rpc-foundation/goldens')
@@ -72,12 +71,11 @@ try {
     cwd: resolve(root, 'mobile'),
     timeoutMs: RECORDING_TIMEOUT_MS,
     env: { ...process.env, ORCA_BACKGROUND_LAUNCH: '1', RPC_FOUNDATION_MODE: '--record' },
-    // Streamed, not captured: a capture holds a multi-minute run silent and clips its tail past 8 MB.
+    // Stream output: multi-minute capture stays silent and truncates beyond 8 MiB.
     stdio: 'inherit'
   })
   if (result.timedOut) {
-    // Why: a killed run writes a partial reporter line and nothing else, which reads as a failing
-    // test rather than as a run that never finished.
+    // Distinguish killed partial reporter line from an actual test failure.
     throw new Error(
       `Recording did not finish within ${RECORDING_TIMEOUT_MS / 1000}s and was killed.`
     )

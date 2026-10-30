@@ -97,8 +97,7 @@ export function removeStaleRuntimeHookTrustEntries(
       continue
     }
     const expectedHash = expectedHashes.get(normalizeHookTrustKeyForLookup(key))
-    // Why a defined hash: conflicting duplicate tables read as no hash, and an
-    // unexpected key must not match that and survive.
+    // Undefined hashes from conflicting tables must not match unexpected keys and survive cleanup.
     if (expectedHash !== undefined && expectedHash === state.trustedHash) {
       continue
     }
@@ -112,11 +111,12 @@ export function removeStaleRuntimeHookTrustEntries(
 export function removeSystemManagedHookTrustEntries(
   systemHomePath: string,
   sourcePaths: readonly [string, ...string[]],
-  codexHashes: readonly CodexHookHashes[]
+  codexHashes: readonly CodexHookHashes[],
+  tomlPath: string = getSystemCodexConfigTomlPath()
 ): void {
   removeCodexManagedHookTrustEntries({
     codexHashes,
-    tomlPath: getSystemCodexConfigTomlPath(),
+    tomlPath,
     runtimeHomePath: systemHomePath,
     sourcePaths,
     command: getManagedCommand(getManagedScriptPath()),
@@ -141,7 +141,7 @@ export function removeRuntimeManagedHookTrustEntries(
       sourceUsesExplicitCodexHome: true
     })
   } catch (error) {
-    // Best effort — stale trust is harmless once hooks.json no longer references the hook; log so a programmer error isn't silent.
+    // Stale trust is inert once hooks.json no longer references the hook.
     console.warn('[codex-hook-service] failed to clean trust entries', error)
   }
 }
@@ -159,7 +159,7 @@ export function removeWslRuntimeManagedHookTrustEntries(
       timeoutSec: MANAGED_HOOK_TIMEOUT_SECONDS
     })
   } catch (error) {
-    // Why: best-effort like host cleanup; stale trust is inert once hooks.json no longer points at us.
+    // Stale trust is inert once hooks.json no longer references the hook.
     console.warn('[codex-hook-service] failed to clean WSL trust entries', error)
   }
 }

@@ -1,73 +1,72 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { setupPtyIpcSuite } from './pty-ipc-test-harness'
-import { createDaemonActiveProviderFixtures } from './pty-ipc-daemon-provider-fixtures'
-import {
-  registerPtyHandlers,
-  registerSshPtyProvider,
-  unregisterSshPtyProvider,
-  getLocalPtyProvider
-} from './pty'
-import { isCommandOnPath } from './preflight-command-exec'
+import { setupPtyIpcSuite } from './pty/pty-ipc-test-harness'
+import { createDaemonActiveProviderFixtures } from './pty/pty-ipc-daemon-provider-fixtures'
+import { registerPtyHandlers } from './pty/register-handlers'
+import { findCommandsOnLocalPath } from './command-path-resolver'
+import type * as CommandPathResolver from './command-path-resolver'
 import { detectWslCommandsOnPath } from './preflight-wsl-agent-detection'
 import type * as FsPromises from 'node:fs/promises'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import type { FolderWorkspace } from '../../shared/folder-workspace-types'
-import { buildAgentResumeStartupPlan } from '../../shared/tui-agent-startup'
+import { buildAgentResumeStartupPlan } from '../../shared/tui-agent-resume-startup'
 import type { PtySpawnIpcArgs } from './pty/ipc/spawn-types'
 
-vi.mock('./preflight-command-exec', () => ({ isCommandOnPath: vi.fn() }))
-vi.mock('./local-agent-install-dir-detection', () => ({
+vi.mock('./command-path-resolver', async (importOriginal) => ({
+  ...(await importOriginal<typeof CommandPathResolver>()),
+  findCommandsOnLocalPath: vi.fn()
+}))
+vi.mock('../../shared/local-agent-install-dir-detection', () => ({
   detectCommandsInInstallDirs: () => new Set()
 }))
-vi.mock('./preflight-wsl-agent-detection', () => ({ detectWslCommandsOnPath: vi.fn() }))
-const { mux } = vi.hoisted(() => ({ mux: vi.fn() }))
-vi.mock('../ssh/ssh-target-registry', () => ({ getActiveMultiplexer: mux }))
+vi.mock('./preflight-wsl-agent-detection', () => ({
+  detectWslCommandsOnPath: vi.fn()
+}))
 vi.mock('node:fs/promises', async (importOriginal) => ({
   ...(await importOriginal<typeof FsPromises>()),
   stat: vi.fn(async () => ({ isDirectory: () => true }))
 }))
-vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
-vi.mock('fs', () => import('./pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
-vi.mock('node-pty', () => import('./pty-ipc-mock-registry').then((m) => m.nodePtyModuleMock()))
+vi.mock('electron', () => import('./pty/pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
+vi.mock('fs', () => import('./pty/pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
+vi.mock('node-pty', () => import('./pty/pty-ipc-mock-registry').then((m) => m.nodePtyModuleMock()))
 vi.mock('node:child_process', async (importOriginal) =>
-  (await import('./pty-ipc-mock-registry')).childProcessModuleMock(await importOriginal())
+  (await import('./pty/pty-ipc-mock-registry')).childProcessModuleMock(await importOriginal())
 )
 vi.mock('../opencode/hook-service', () =>
-  import('./pty-ipc-mock-registry').then((m) => m.openCodeHookServiceModuleMock())
+  import('./pty/pty-ipc-mock-registry').then((m) => m.openCodeHookServiceModuleMock())
 )
 vi.mock('../mimo/hook-service', () =>
-  import('./pty-ipc-mock-registry').then((m) => m.mimoHookServiceModuleMock())
+  import('./pty/pty-ipc-mock-registry').then((m) => m.mimoHookServiceModuleMock())
 )
 vi.mock('../agent-hooks/server', () =>
-  import('./pty-ipc-mock-registry').then((m) => m.agentHookServerModuleMock())
+  import('./pty/pty-ipc-mock-registry').then((m) => m.agentHookServerModuleMock())
 )
 vi.mock('../pi/titlebar-extension-service', () =>
-  import('./pty-ipc-mock-registry').then((m) => m.piTitlebarExtensionModuleMock())
+  import('./pty/pty-ipc-mock-registry').then((m) => m.piTitlebarExtensionModuleMock())
 )
-vi.mock('../pwsh', () => import('./pty-ipc-mock-registry').then((m) => m.pwshModuleMock()))
+vi.mock('../pwsh', () => import('./pty/pty-ipc-mock-registry').then((m) => m.pwshModuleMock()))
 vi.mock('../wsl', async (importOriginal) =>
-  (await import('./pty-ipc-mock-registry')).wslModuleMock(await importOriginal())
+  (await import('./pty/pty-ipc-mock-registry')).wslModuleMock(await importOriginal())
 )
 vi.mock('../telemetry/client', () =>
-  import('./pty-ipc-mock-registry').then((m) => m.telemetryClientModuleMock())
+  import('./pty/pty-ipc-mock-registry').then((m) => m.telemetryClientModuleMock())
 )
 vi.mock('../telemetry/classify-error', () =>
-  import('./pty-ipc-mock-registry').then((m) => m.classifyErrorModuleMock())
+  import('./pty/pty-ipc-mock-registry').then((m) => m.classifyErrorModuleMock())
 )
 vi.mock('../cli/linux-terminal-orca-cli-shim', () =>
-  import('./pty-ipc-mock-registry').then((m) => m.linuxCliShimModuleMock())
+  import('./pty/pty-ipc-mock-registry').then((m) => m.linuxCliShimModuleMock())
 )
 vi.mock('../memory/pty-registry', () =>
-  import('./pty-ipc-mock-registry').then((m) => m.ptyRegistryModuleMock())
+  import('./pty/pty-ipc-mock-registry').then((m) => m.ptyRegistryModuleMock())
 )
 vi.mock('../agent-hooks/migration-unsupported-pty-state', () =>
-  import('./pty-ipc-mock-registry').then((m) => m.migrationUnsupportedPtyModuleMock())
+  import('./pty/pty-ipc-mock-registry').then((m) => m.migrationUnsupportedPtyModuleMock())
 )
 vi.mock('../codex/codex-pane-account-registry', () =>
-  import('./pty-ipc-mock-registry').then((m) => m.codexPaneAccountRegistryModuleMock())
+  import('./pty/pty-ipc-mock-registry').then((m) => m.codexPaneAccountRegistryModuleMock())
 )
 vi.mock('../codex/codex-state-db-backfill-recovery', () =>
-  import('./pty-ipc-mock-registry').then((m) => m.codexBackfillRecoveryModuleMock())
+  import('./pty/pty-ipc-mock-registry').then((m) => m.codexBackfillRecoveryModuleMock())
 )
 
 describe('desktop Qoder execution-host selection', () => {
@@ -76,12 +75,11 @@ describe('desktop Qoder execution-host selection', () => {
     handlers,
     mainWindow
   })
-  const nativeProbe = vi.mocked(isCommandOnPath)
+  const nativeProbe = vi.mocked(findCommandsOnLocalPath)
   const wslProbe = vi.mocked(detectWslCommandsOnPath)
   beforeEach(() => {
-    nativeProbe.mockReset().mockImplementation(async (cmd) => cmd === 'qodercli')
+    nativeProbe.mockReset().mockResolvedValue(new Set(['qodercli']))
     wslProbe.mockReset().mockResolvedValue(new Set(['qoder']))
-    mux.mockReset()
   })
   async function spawn(args: Partial<PtySpawnIpcArgs> = {}, store?: Store) {
     const providerSpawn = setupDaemonAdapter()
@@ -129,17 +127,16 @@ describe('desktop Qoder execution-host selection', () => {
     ['legacy-only', ['qodercli']],
     ['both', ['qoder', 'qodercli']]
   ] as const)('keeps legacy preference on %s native hosts', async (_, commands) => {
-    nativeProbe.mockImplementation(async (cmd) => commands.some((found) => found === cmd))
+    nativeProbe.mockResolvedValue(new Set(commands))
     const { providerSpawn } = await spawn()
     expect(providerSpawn).toHaveBeenCalledWith(
       expect.objectContaining({ command: 'qodercli --resume original-id' })
     )
-    expect(nativeProbe).toHaveBeenCalledWith('qodercli')
-    expect(nativeProbe).toHaveBeenCalledWith('qoder')
+    expect(nativeProbe).toHaveBeenCalledWith(['qodercli', 'qoder'], expect.any(Object))
     expect(wslProbe).not.toHaveBeenCalled()
   })
   it('preserves exact resume tokens and captured configuration on a native folder', async () => {
-    nativeProbe.mockImplementation(async (cmd) => cmd === 'qoder')
+    nativeProbe.mockResolvedValue(new Set(['qoder']))
     const plan = buildAgentResumeStartupPlan({
       agent: 'qoder',
       providerSession: { key: 'session_id', id: 'session with spaces' },
@@ -176,7 +173,6 @@ describe('desktop Qoder execution-host selection', () => {
     expect(providerSpawn).toHaveBeenCalledWith(expect.objectContaining({ command: args.command }))
     expect(nativeProbe).not.toHaveBeenCalled()
     expect(wslProbe).not.toHaveBeenCalled()
-    expect(mux).not.toHaveBeenCalled()
   })
   it('uses the selected project WSL distro rather than installed native legacy', async () => {
     await withWin32Platform(async () => {
@@ -229,7 +225,7 @@ describe('desktop Qoder execution-host selection', () => {
   })
   it('keeps native Windows launches on the host shell', async () => {
     await withWin32Platform(async () => {
-      nativeProbe.mockImplementation(async (cmd) => cmd === 'qoder')
+      nativeProbe.mockResolvedValue(new Set(['qoder']))
       const { providerSpawn } = await spawn({
         cwd: 'C:\\review',
         worktreeId: 'repo-review::C:\\review',
@@ -245,55 +241,4 @@ describe('desktop Qoder execution-host selection', () => {
       expect(wslProbe).not.toHaveBeenCalled()
     })
   })
-  it.each(['modern-only', 'legacy-only', 'missing', 'disposed'] as const)(
-    'lets SSH own detection and refuse absent contact: %s',
-    async (host) => {
-      const remoteSpawn = setupDaemonAdapter()
-      registerSshPtyProvider('ssh-qoder-review', getLocalPtyProvider())
-      const localSpawn = setupDaemonAdapter()
-      const request = vi
-        .fn()
-        .mockResolvedValue({ agents: [host === 'modern-only' ? 'qoder' : 'qodercli'] })
-      mux.mockReturnValue(
-        host === 'missing' ? null : { isDisposed: () => host === 'disposed', request }
-      )
-      registerPtyHandlers(mainWindow)
-      try {
-        const pending = handlers.get('pty:spawn')!(null, {
-          cols: 80,
-          rows: 24,
-          cwd: '/remote/folder',
-          worktreeId: 'repo-ssh::/remote/folder',
-          connectionId: 'ssh-qoder-review',
-          launchAgent: 'qoder',
-          command: "qodercli '--resume' 'same remote id'"
-        })
-        if (host === 'missing' || host === 'disposed') {
-          await expect(pending).rejects.toThrow('execution host connection')
-          expect(remoteSpawn).not.toHaveBeenCalled()
-          expect(request).not.toHaveBeenCalled()
-        } else {
-          await pending
-          expect(remoteSpawn).toHaveBeenCalledWith(
-            expect.objectContaining({
-              cwd: '/remote/folder',
-              command: `${host === 'modern-only' ? 'qoder' : 'qodercli'} '--resume' 'same remote id'`
-            })
-          )
-          expect(request).toHaveBeenCalledWith('preflight.detectAgents', {
-            commands: [
-              { id: 'qodercli', cmd: 'qodercli' },
-              { id: 'qoder', cmd: 'qoder' }
-            ]
-          })
-        }
-        expect(localSpawn).not.toHaveBeenCalled()
-        expect(nativeProbe).not.toHaveBeenCalled()
-        expect(wslProbe).not.toHaveBeenCalled()
-        expect(mux).toHaveBeenCalledWith('ssh-qoder-review')
-      } finally {
-        unregisterSshPtyProvider('ssh-qoder-review')
-      }
-    }
-  )
 })

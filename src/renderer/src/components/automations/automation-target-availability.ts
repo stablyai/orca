@@ -1,9 +1,7 @@
 import type { Automation } from '../../../../shared/automations-types'
 import { getRepoExecutionHostId, parseExecutionHostId } from '../../../../shared/execution-host'
-import {
-  describeRuntimeCompatBlock,
-  evaluateRuntimeCompat
-} from '../../../../shared/protocol-compat'
+import { evaluateRuntimeCompat } from '../../../../shared/protocol-compat'
+import { describeRuntimeCompatBlock } from '@/lib/runtime-host-copy'
 import {
   MIN_COMPATIBLE_RUNTIME_SERVER_VERSION,
   RUNTIME_PROTOCOL_VERSION
@@ -81,9 +79,15 @@ export function getAutomationTargetAvailability({
         return runtimeAvailability
       }
     }
-    const setup = projectHostSetups.find(
-      (candidate) => candidate.id === automation.runContext?.projectHostSetupId
+    const runContext = automation.runContext
+    const setupsWithId = projectHostSetups.filter(
+      (candidate) => candidate.id === runContext.projectHostSetupId
     )
+    // Legacy setup IDs equal repo IDs; scope by host to distinguish moved SSH setups from managed-server copies (#27454).
+    const setup =
+      setupsWithId.find((candidate) =>
+        setupHostMatchesRunContext(candidate.hostId, runContext.hostId, automationHostTarget)
+      ) ?? setupsWithId[0]
     if (!setup) {
       return unavailable(
         'missing-project-host-setup',
@@ -96,9 +100,7 @@ export function getAutomationTargetAvailability({
         `Project setup on the selected automation host is ${setup.setupState}.`
       )
     }
-    // Why: projectId is a derived identity that upgrades over time (repo:→git:→github:);
-    // matching on it strands automations created before their repo's identity resolved.
-    // Anchor on repoId/path/host instead — the durable, stable target identity.
+    // Derived project IDs upgrade repo→git→github; preserve saved targets by stable repoId/path/host instead.
     const setupMatchesContext =
       setup.repoId === automation.runContext.repoId &&
       setup.path === automation.runContext.path &&
@@ -163,8 +165,7 @@ function setupHostMatchesRunContext(
     return true
   }
   const targetHostId = getRuntimeTargetHostId(target)
-  // Why: remote-runtime project lists project the server-local host as runtime:<env>,
-  // while CLI-created automations can preserve the server's durable local run host.
+  // Renderer mirrors server-local hosts as runtime:<env>; CLI records may retain the server’s durable local run host.
   return targetHostId !== null && setupHostId === targetHostId && runHostId === 'local'
 }
 
@@ -177,8 +178,7 @@ function repoHostMatchesRunContext(
     return true
   }
   const targetHostId = getRuntimeTargetHostId(target)
-  // Why: repos fetched from a remote runtime are owned by runtime:<env> in the
-  // renderer, but saved automations still target the host setup that runs there.
+  // Remote repos appear runtime-owned in the renderer but must match the saved host setup that executes there.
   return targetHostId !== null && getRepoExecutionHostId(repo) === targetHostId
 }
 

@@ -1,4 +1,12 @@
-import { mkdirSync, readdirSync, realpathSync, rmdirSync, statSync, symlinkSync } from 'node:fs'
+import {
+  mkdirSync,
+  readdirSync,
+  realpathSync,
+  rmdirSync,
+  statSync,
+  symlinkSync,
+  unlinkSync
+} from 'node:fs'
 import { join } from 'node:path'
 import { renameFileWithWindowsRetry } from '../codex-accounts/fs-utils'
 import { resolveClaudeDefaultHome } from './claude-profile-paths'
@@ -17,9 +25,9 @@ import {
   mergeClaudeProfilePromptHistory
 } from './claude-profile-prompt-history'
 
+// Exclude `sessions`: its live-process registry belongs to each folder's daemon.
 export const CLAUDE_PROFILE_HISTORY_DIRS = [
   'projects',
-  'sessions',
   'session-env',
   'file-history',
   'shell-snapshots',
@@ -32,7 +40,7 @@ export const CLAUDE_PROFILE_HISTORY_DIRS = [
 
 type MoveResult = { retained: number; failed: unknown[] }
 
-/** Keeps going past a failed entry so one locked file never hides the rest. */
+// One locked entry must not prevent merging the rest.
 function moveHistoryTree(source: string, destination: string, result: MoveResult): void {
   for (const item of readdirSync(source, { withFileTypes: true })) {
     const from = join(source, item.name)
@@ -59,7 +67,7 @@ function drainDirectory(
   pending: string,
   destination: string,
   report: ClaudeProfileReport,
-  name: (typeof CLAUDE_PROFILE_HISTORY_DIRS)[number]
+  name: string
 ): void {
   const result: MoveResult = { retained: 0, failed: [] }
   moveHistoryTree(pending, destination, result)
@@ -72,10 +80,11 @@ function drainDirectory(
   }
 }
 
-function mergeDirectory(
+/** Link the default home's `name` folder in place of the profile's, moving its entries there. */
+export function mergeClaudeProfileDirectory(
   profile: string,
   home: string,
-  name: (typeof CLAUDE_PROFILE_HISTORY_DIRS)[number],
+  name: string,
   platform: NodeJS.Platform,
   report: ClaudeProfileReport
 ): ClaudeProfileSurfaceOutcome {
@@ -94,7 +103,7 @@ function mergeDirectory(
     try {
       drainDirectory(pending, destination, report, name)
     } catch (error) {
-      // Why: an unreadable leftover is reported and kept; it must not stop the share itself.
+      // Preserve unreadable leftovers without preventing link publication.
       warnClaudeProfile(report, name, error)
     }
   }
@@ -118,7 +127,7 @@ function mergeDirectory(
     renameFileWithWindowsRetry(source, pending)
   }
   try {
-    // Why: a junction needs no Windows privilege; Node's lstat reports it as a symlink.
+    // Junctions avoid Windows symlink privilege requirements.
     symlinkSync(destination, source, platform === 'win32' ? 'junction' : 'dir')
   } catch (error) {
     if (current) {
@@ -136,10 +145,25 @@ function mergeDirectory(
   return 'linked'
 }
 
-/**
- * Pools a profile's sessions and prompt history into the default home. Execution-host paths only;
- * callers go through provisionClaudeAccountProfile, which gates and creates the profile.
- */
+// Undo legacy session sharing; Claude recreates its per-folder process registry.
+function unlinkSharedSessions(profile: string, home: string): ClaudeProfileSurfaceOutcome {
+  const source = join(profile, 'sessions')
+  if (!lstatIfPresent(source)?.isSymbolicLink()) {
+    return 'unchanged'
+  }
+  if (realpathSync(source) !== realpathSync(join(home, 'sessions'))) {
+    return 'user-owned'
+  }
+  try {
+    unlinkSync(source)
+  } catch {
+    // A Windows junction is removed as a directory.
+    rmdirSync(source)
+  }
+  return 'synced'
+}
+
+/** Call after profile ownership checks and creation on the execution host. */
 export async function shareClaudeProfileHistory(args: {
   profileHome: string
   userHome: string
@@ -153,9 +177,12 @@ export async function shareClaudeProfileHistory(args: {
   mkdirSync(defaultHome, { recursive: true, mode: 0o700 })
   for (const name of CLAUDE_PROFILE_HISTORY_DIRS) {
     await runClaudeProfileSurface(report, name, () =>
-      mergeDirectory(args.profileHome, defaultHome, name, platform, report)
+      mergeClaudeProfileDirectory(args.profileHome, defaultHome, name, platform, report)
     )
   }
+  await runClaudeProfileSurface(report, 'sessions', () =>
+    unlinkSharedSessions(args.profileHome, defaultHome)
+  )
   await runClaudeProfileSurface(report, 'history.jsonl', () =>
     mergeClaudeProfilePromptHistory(args.profileHome, defaultHome, platform, report)
   )

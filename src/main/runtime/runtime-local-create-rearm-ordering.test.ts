@@ -1,5 +1,4 @@
-// Re-arming the prepared-checkout pool is a full `reset --hard`. Firing it before the create's
-// terminals are launched puts that checkout in front of the startup agent's first git reads.
+// Rearm resets the prepared pool with reset --hard; launching terminals first keeps startup agent Git reads ahead of that mutation.
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('electron', () => ({
@@ -22,10 +21,10 @@ vi.mock('./runtime-local-worktree-terminal-startup', () => ({
 }))
 
 vi.mock('./runtime-local-worktree-setup', () => ({
-  prepareRuntimeLocalWorktreeSetup: vi.fn(async () => ({
+  prepareRuntimeLocalWorktreeSetup: vi.fn(async (args: { warning?: string }) => ({
     setup: undefined,
     defaultTabs: undefined,
-    warning: undefined,
+    warning: args.warning,
     effectiveDecision: 'skip',
     hookFound: false,
     shouldRunSetup: false,
@@ -33,12 +32,15 @@ vi.mock('./runtime-local-worktree-setup', () => ({
   }))
 }))
 
-vi.mock('../ipc/filesystem-auth', () => ({
-  invalidateAuthorizedRootsCache: vi.fn(),
+vi.mock('../ipc/registered-worktree-roots-cache', () => ({
+  invalidateAuthorizedRootsCache: vi.fn()
+}))
+vi.mock('../ipc/registered-worktree-roots-scoped-invalidation', () => ({
   invalidateAuthorizedRootsCacheForRepo: vi.fn()
 }))
 
 import { OrcaRuntimeService } from './orca-runtime'
+import { partialRuntimeStore } from './runtime-store-partial-fixture'
 
 const repo = { id: 'repo-1', path: '/repo', displayName: 'Repo', badgeColor: 'blue', kind: 'git' }
 
@@ -61,8 +63,7 @@ function makeRuntime(): OrcaRuntimeService {
     getSettings: () => ({ disabledTuiAgents: [], workspaceDir: '/worktrees' }),
     getProjectHostSetups: () => []
   }
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: every store method this create path reaches is supplied above.
-  const runtime = new OrcaRuntimeService(store as never)
+  const runtime = new OrcaRuntimeService(partialRuntimeStore(store))
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the named members all exist on the service; the cast only exposes non-public ones to the spies.
   const internals = runtime as unknown as RuntimeInternals
   vi.spyOn(internals, 'resolveRepoSelector').mockResolvedValue(repo)
@@ -97,10 +98,10 @@ describe('runtime local create prepared-pool re-arm ordering', () => {
         metadataResult: { lineage: null, workspaceLineage: null, warnings: [] }
       }
     })
-    startTerminalsMock.mockImplementation(async () => {
+    startTerminalsMock.mockImplementation(async (args: { warning?: string }) => {
       calls.order.push('terminals')
       return {
-        warning: undefined,
+        warning: args.warning,
         returnedSetup: undefined,
         didSpawnSetup: false,
         didSpawnStartup: false,
@@ -120,6 +121,23 @@ describe('runtime local create prepared-pool re-arm ordering', () => {
 
     expect(startTerminalsMock).toHaveBeenCalledOnce()
     expect(calls.order).toEqual(['terminals', 'rearm'])
+  })
+
+  it('returns upstream warnings with other creation warnings', async () => {
+    createLocalMock.mockResolvedValueOnce({
+      worktree,
+      worktreePath: worktree.path,
+      includeCopyWarning: 'Some files were skipped.',
+      created: { path: worktree.path, head: 'abc', branch: 'app' },
+      addResult: { upstreamWarning: 'Check the push destination.' },
+      metadataResult: { lineage: null, workspaceLineage: null, warnings: [] }
+    })
+    const result = await makeRuntime().createManagedWorktree({
+      repoSelector: 'repo-1',
+      name: 'app'
+    })
+    expect(result.warning).toContain('Some files were skipped.')
+    expect(result.warning).toContain('Check the push destination.')
   })
 
   it('still arms the pool when terminal launch fails', async () => {

@@ -1,8 +1,6 @@
-// A compaction Codex refuses up front keeps Codex's own words for the chat's failure row.
-
 import { describe, expect, it } from 'vitest'
 import { structuredAgentSessionCommandTurn } from '../native-chat/agent-session-wire/structured-agent-session-command-turn'
-import { CodexAppServerRequestError } from './codex-app-server-connection'
+import { CodexAppServerRequestError } from './app-server/codex-app-server-request-error'
 import { acquired, fakeCodex } from './codex-structured-session-adapter-fixture'
 
 describe('Codex compaction refused at the request', () => {
@@ -32,7 +30,7 @@ describe('Codex compaction refused at the request', () => {
       })
     ).resolves.toEqual({
       state: 'rejected',
-      reason: 'The provider did not accept this message: thread has nothing to compact.',
+      reason: "Codex didn't accept this message: thread has nothing to compact.",
       rejection: {
         kind: 'providerRejected',
         detail: { text: 'thread has nothing to compact', audience: 'person' }

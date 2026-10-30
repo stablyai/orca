@@ -1,3 +1,4 @@
+import '../unused-default-rpc-methods.test-fixture'
 import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -7,6 +8,7 @@ import type { RpcResponse } from '../core'
 import { RpcDispatcher } from '../dispatcher'
 import {
   AGENT_SESSION_ATTACHMENTS_RUNTIME_CAPABILITY,
+  AGENT_SESSION_PHONE_ATTACHMENTS_RUNTIME_CAPABILITY,
   RUNTIME_CAPABILITIES
 } from '../../../../shared/protocol-version'
 import { AgentSessionAttachmentStore } from '../../../native-chat/agent-session-attachments/agent-session-attachment-store'
@@ -54,8 +56,7 @@ async function call(
   const replies: RpcResponse[] = []
   await dispatcher.dispatchStreaming(
     { id: 'request-1', authToken: 'token', method, params },
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the dispatcher writes serialized RpcResponse frames.
-    (raw) => replies.push(JSON.parse(raw) as RpcResponse),
+    (raw) => replies.push(JSON.parse(raw)),
     client
   )
   if (!replies[0]) {
@@ -104,6 +105,7 @@ async function uploadBytes(name: string, bytes: Buffer): Promise<string> {
 describe('agentSessionAttachment.*', () => {
   it('is advertised, so a client can tell a host with the store from an older one', () => {
     expect(RUNTIME_CAPABILITIES).toContain(AGENT_SESSION_ATTACHMENTS_RUNTIME_CAPABILITY)
+    expect(RUNTIME_CAPABILITIES).toContain(AGENT_SESSION_PHONE_ATTACHMENTS_RUNTIME_CAPABILITY)
   })
 
   it('stores an upload for the chat and hands back the server path', async () => {

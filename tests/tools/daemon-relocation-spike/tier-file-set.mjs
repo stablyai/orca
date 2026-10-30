@@ -1,12 +1,8 @@
-// Tier definitions as DATA, so trimming the copied file set is a config change
-// rather than a code change. A tier resolves (given a discovered inventory) to a
-// flat list of copy operations { sourcePath, destRel, kind }.
+// Declare DLL tiers as data; resolve inventory into sourcePath/destRel/kind copy operations.
 
 import { dirname, join, relative, sep } from 'node:path'
 
-// GPU/render DLLs that a run-as-node Electron host plausibly never loads. The
-// spike measures whether dropping them still yields a working ConPTY host.
-// ffmpeg.dll is deliberately NOT here — it is kept in the no-gpu tier.
+// Experimentally omit GPU DLLs in run-as-node; keep ffmpeg.dll in the no-gpu tier.
 export const GPU_DLLS = new Set([
   'libegl.dll',
   'libglesv2.dll',
@@ -15,10 +11,7 @@ export const GPU_DLLS = new Set([
   'd3dcompiler_47.dll'
 ])
 
-// Each tier declares which top-level DLLs to include. The exe, runtime data
-// blobs, daemon bundle, and node-pty are in every tier — they are the
-// irreducible core (Orca.exe needs icu + snapshots even as node; the daemon
-// needs its bundle; node-pty needs its native + conpty runtime).
+// Every tier retains exe, ICU/snapshots, daemon bundle and node-pty native/ConPTY runtime; only top-level DLL selection varies.
 export const TIER_DEFINITIONS = {
   full: { label: 'TIER_FULL_RUNTIME', dlls: 'all' },
   'no-gpu': { label: 'TIER_NO_GPU_DLLS', dlls: 'non-gpu' },
@@ -29,10 +22,7 @@ function isGpuDll(name) {
   return GPU_DLLS.has(name.toLowerCase())
 }
 
-/**
- * Which top-level DLL entries a tier keeps. Pure over the inventory's DLL list
- * so selftest can exercise it without a real build.
- */
+// Select tier DLLs purely from inventory for offline selftests.
 export function selectTierDlls(topLevelDlls, tier) {
   const def = TIER_DEFINITIONS[tier]
   if (!def || def.dlls === 'none') {
@@ -44,27 +34,13 @@ export function selectTierDlls(topLevelDlls, tier) {
   return topLevelDlls.filter((e) => !isGpuDll(e.name))
 }
 
-/**
- * A source file/dir's path relative to the win-unpacked root, normalized to '/'.
- *
- * Why relative to the APP DIR (not the app.asar.unpacked root): node-pty is
- * packaged at resources/node_modules/node-pty (see
- * config/packaged-runtime-node-modules.cjs), a SIBLING of app.asar.unpacked.
- * The daemon resolves `require('node-pty')` by walking parent dirs up from
- * resources/app.asar.unpacked/out/main/daemon-entry.js, which passes through
- * resources/ and finds resources/node_modules/node-pty. Mirroring the full
- * win-unpacked layout verbatim is the only copy that preserves that walk.
- */
+// Use win-unpacked-relative paths, not unpacked-root-relative: daemon require walks up to sibling resources/node_modules/node-pty.
+// Mirror the full layout to preserve that lookup and native resolution.
 export function toPosixRelative(appDir, absPath) {
   return relative(appDir, absPath).split(sep).join('/')
 }
 
-/**
- * Build the ordered copy plan for a tier. Returns { ops, warnings } where each
- * op is { sourcePath, destRel, kind: 'file' | 'dir' }. Every destRel mirrors the
- * source's win-unpacked-relative path. Missing required inputs are surfaced as
- * warnings rather than thrown, so the report stays complete.
- */
+// Return ordered copy ops plus missing-input warnings rather than throw, keeping reports complete.
 export function resolveTierFileSet(inv, tier) {
   const ops = []
   const warnings = []
@@ -85,19 +61,16 @@ export function resolveTierFileSet(inv, tier) {
     })
   }
 
-  // Core: exe + runtime data blobs live next to Orca.exe in win-unpacked.
   addFile(inv.hostExe, 'Orca.exe')
   for (const entry of inv.runtimeData) {
     addFile(entry, entry.name)
   }
 
-  // Top-level DLLs per tier.
   for (const dll of selectTierDlls(inv.topLevelDlls, tier)) {
     addFile(dll)
   }
 
-  // Daemon bundle: the entry, its sibling chunks/, and the unpacked
-  // out/package.json (CJS/ESM loader resolution). Mirror the layout verbatim.
+  // Mirror daemon entry/chunks and out/package.json for CJS/ESM resolution.
   if (inv.daemonEntry.exists && inv.unpackedRoot) {
     addFile(inv.daemonEntry, 'daemon-entry.js')
     const entryDir = dirname(inv.daemonEntry.path)
@@ -119,8 +92,7 @@ export function resolveTierFileSet(inv, tier) {
     warnings.push('missing required input: daemon-entry.js (+ chunks)')
   }
 
-  // node-pty package tree (native binding + conpty runtime), mirrored at its
-  // real win-unpacked path (resources/node_modules/node-pty).
+  // Mirror node-pty at resources/node_modules/node-pty, including native/ConPTY runtime.
   if (inv.nodePty.exists && inv.nodePty.conptyNode) {
     ops.push({
       sourcePath: inv.nodePty.packageDir,

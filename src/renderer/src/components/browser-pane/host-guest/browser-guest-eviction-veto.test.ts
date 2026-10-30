@@ -1,9 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { BrowserWorkspace } from '../../../../../shared/browser-workspace-types'
-import {
-  browserTabsVetoGuestEviction,
-  selectBrowserGuestEvictionWorktreeIds
-} from './browser-guest-worktree-retention'
+import { browserTabsVetoGuestEviction } from './browser-guest-eviction-veto'
+import { selectBrowserGuestEvictionWorktreeIds } from './browser-guest-worktree-retention'
 import { hydrateBrowserDrivers } from '../../../lib/pane-manager/browser-mobile-driver-state'
 import { hydrateBrowserRemoteViewerPages } from '../../../lib/pane-manager/browser-remote-viewer-state'
 import {
@@ -12,8 +10,7 @@ import {
 } from './browser-automation-visibility'
 import { installBrowserPageDownloadActivityTracking } from '../navigate/browser-page-download-activity'
 
-// The retention budget DESTROYS a hidden worktree's guests rather than parking them, so a page a
-// paired client is streaming has to veto here too: a destroyed guest kills the screencast for good.
+// Eviction destroys guests, permanently ending paired-client streams; paint retention must veto it too.
 const WATCHED_PAGE = 'page-watched'
 const WATCHED_WORKTREE = 'wt-watched'
 
@@ -63,8 +60,7 @@ describe('browser guest eviction veto', () => {
     expect(evictionRun(tabsFor(WATCHED_PAGE))).toContain(WATCHED_WORKTREE)
   })
 
-  // Downloads are the one veto term that is not a paint term: parking a guest keeps the download
-  // alive, but eviction unregisters it and main cancels its downloads (tab-close semantics).
+  // Parking preserves downloads; eviction unregisters the guest and main cancels them as on tab close.
   it('spares a page that is still writing a download', () => {
     let emitDownloadRequested: (event: {
       downloadId: string

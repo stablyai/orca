@@ -1,7 +1,7 @@
 import { EventEmitter } from 'node:events'
 import { PassThrough } from 'node:stream'
 import { describe, expect, it, vi } from 'vitest'
-import type { spawnProcess } from '../../shared/child-process/run-process'
+import type { spawnProcess } from '@orca/process-host'
 import { openCodexAppServerConnection } from './codex-app-server-connection'
 
 function stubChild() {
@@ -22,7 +22,6 @@ function stubChild() {
 }
 
 describe('Codex app-server exit order', () => {
-  // Stdout can end before the exit is seen, as when the provider supervisor's own exit closes it.
   it('reports an exit whose stdout ended first once the exit is seen, with its usual reason', async () => {
     const { child, spawnImpl } = stubChild()
     const exits: string[] = []

@@ -6,17 +6,21 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { useNativeChatReaderScrollInput } from './native-chat-reader-scroll-input'
 import { useNativeChatTranscriptScroll } from './use-native-chat-transcript-scroll'
 
+const unmarkedScroll = (): boolean => false
+
 function TranscriptHarness({
   isVisible,
   restoreScrollOffset,
   scrollToEnd,
   reconcileReaderScroll = vi.fn(),
+  consumeProgrammaticScroll = unmarkedScroll,
   itemCount = 100
 }: {
   isVisible: boolean
   restoreScrollOffset: (offset: number) => void
   scrollToEnd: () => void
   reconcileReaderScroll?: (isTakingOver: boolean) => void
+  consumeProgrammaticScroll?: (event: Event) => boolean
   itemCount?: number
 }): React.JSX.Element {
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -32,12 +36,13 @@ function TranscriptHarness({
     isAlignPending: () => false,
     scrollToEnd,
     restoreScrollOffset,
-    consumeProgrammaticScroll: () => false,
+    consumeProgrammaticScroll,
     reconcileReaderScroll
   })
   const input = useNativeChatReaderScrollInput(scrollRef, {
     onReaderScroll: () => {},
-    onLeaveEnd: transcript.readerLeavesEnd
+    onLeaveEnd: transcript.readerLeavesEnd,
+    onScrollGesture: transcript.forwardedGesture
   })
   return (
     <div
@@ -47,6 +52,9 @@ function TranscriptHarness({
       onScroll={transcript.onScroll}
     >
       <div ref={contentRef} />
+      <button onClick={() => input.forwardedGesture({ kind: 'wheel', deltaY: -100, zoom: false })}>
+        Visual wheel
+      </button>
     </div>
   )
 }
@@ -186,8 +194,7 @@ describe('native chat transcript visibility', () => {
 })
 
 describe('native chat transcript follow', () => {
-  // Folding a settled turn shrinks the content, and the browser clamps a reader
-  // parked just above the end onto it. That offset moves up, but toward the end.
+  // Folding can clamp a detached reader upward onto the new end.
   it('reattaches a detached reader that content shrinking clamps onto the end', () => {
     let scrollTop = 900
     let scrollHeight = 1_000
@@ -212,7 +219,7 @@ describe('native chat transcript follow', () => {
     fireEvent.scroll(scrollElement)
     scrollToEnd.mockClear()
     view.rerender(<TranscriptHarness {...props} itemCount={101} />)
-    // Anti-vacuous: detached 50px up, new content does not pull the reader down.
+    // Prove ordinary growth leaves the detached reader alone.
     expect(scrollToEnd).not.toHaveBeenCalled()
 
     scrollHeight = 700
@@ -234,7 +241,13 @@ describe('native chat transcript follow', () => {
     Object.defineProperties(scrollElement, {
       clientHeight: { configurable: true, get: () => 100 },
       scrollHeight: { configurable: true, get: () => scrollHeight },
-      scrollTop: { configurable: true, get: () => scrollTop, set: (value) => (scrollTop = value) }
+      scrollTop: {
+        configurable: true,
+        get: () => scrollTop,
+        set: (value) => {
+          scrollTop = value
+        }
+      }
     })
 
     scrollHeight = 700
@@ -246,4 +259,28 @@ describe('native chat transcript follow', () => {
 
     expect(scrollToEnd).toHaveBeenCalled()
   })
+})
+
+it('keeps following when a visual input is followed only by an application scroll', () => {
+  const scrollToEnd = vi.fn()
+  const props = {
+    isVisible: true,
+    restoreScrollOffset: vi.fn(),
+    scrollToEnd,
+    consumeProgrammaticScroll: () => true
+  }
+  const view = render(<TranscriptHarness {...props} />)
+  const scroller = view.getByTestId('scroll')
+  Object.defineProperties(scroller, {
+    clientHeight: { configurable: true, value: 100 },
+    scrollHeight: { configurable: true, value: 1000 }
+  })
+  scroller.scrollTop = 900
+  fireEvent.scroll(scroller)
+  fireEvent.click(view.getByRole('button', { name: 'Visual wheel' }))
+  scroller.scrollTop = 300
+  fireEvent.scroll(scroller)
+  scrollToEnd.mockClear()
+  view.rerender(<TranscriptHarness {...props} itemCount={101} />)
+  expect(scrollToEnd).toHaveBeenCalled()
 })

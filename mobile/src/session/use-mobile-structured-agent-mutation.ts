@@ -1,7 +1,3 @@
-// The one mutation seam the structured session hook hands its features: builds
-// the envelope, with a fresh operation id per call, and folds refusals into the
-// session's error channel.
-
 import { useCallback } from 'react'
 import type { StructuredAgentSessionState } from '../../../src/shared/structured-agent-session-reducer'
 import type { RpcClient } from '../transport/rpc-client'
@@ -13,7 +9,8 @@ import {
 export type MobileStructuredAgentMutate = <TValue>(
   method: string,
   fingerprintMethod: string,
-  fields: Record<string, unknown>
+  fields: Record<string, unknown>,
+  shouldReportError?: () => boolean
 ) => Promise<StructuredAgentSessionMutationResult<TValue>>
 
 export function useMobileStructuredAgentMutate(args: {
@@ -22,13 +19,15 @@ export function useMobileStructuredAgentMutate(args: {
   enabled: boolean
   stateRef: { readonly current: StructuredAgentSessionState }
   onSendError: (message: string) => void
+  agentName?: string
 }): MobileStructuredAgentMutate {
-  const { client, enabled, onSendError, sessionId, stateRef } = args
+  const { agentName, client, enabled, onSendError, sessionId, stateRef } = args
   return useCallback(
     async <TValue>(
       method: string,
       fingerprintMethod: string,
-      fields: Record<string, unknown>
+      fields: Record<string, unknown>,
+      shouldReportError?: () => boolean
     ): Promise<StructuredAgentSessionMutationResult<TValue>> => {
       const current = stateRef.current
       if (!client || !sessionId || !enabled || current.fence === null) {
@@ -41,7 +40,8 @@ export function useMobileStructuredAgentMutate(args: {
         fingerprintMethod,
         sessionId,
         expectedRuntimeFence: targetFence,
-        fields
+        fields,
+        ...(agentName ? { agentName } : {})
       })
       if (result.status === 'accepted') {
         return {
@@ -53,9 +53,11 @@ export function useMobileStructuredAgentMutate(args: {
       if (result.status === 'unknown') {
         return result
       }
-      onSendError(result.message)
+      if (shouldReportError?.() !== false) {
+        onSendError(result.message)
+      }
       return { status: 'rejected' }
     },
-    [client, enabled, onSendError, sessionId, stateRef]
+    [agentName, client, enabled, onSendError, sessionId, stateRef]
   )
 }

@@ -6,9 +6,11 @@ import {
   replaceRuntimeEnvironmentRevisions
 } from './runtime-environment-revision'
 import {
+  refreshRuntimeEnvironmentCatalog,
   setRuntimeEnvironmentCatalogRefresher,
   subscribeRuntimeEnvironment
 } from './runtime-environment-pairing-refresh'
+import { stubRuntimeEnvironmentBridge } from './runtime-environment-bridge-fixture'
 
 const PAIRING_CHANGED = new Error(
   "Error invoking remote method 'runtimeEnvironments:subscribe': Error: Runtime environment pairing changed; refresh and try again"
@@ -32,7 +34,7 @@ function installMain(onCatalogWrite: () => void = () => {}): {
     refuseStale(args)
     return { ok: true, result: {} }
   })
-  vi.stubGlobal('window', { api: { runtimeEnvironments: { subscribe, call } } })
+  stubRuntimeEnvironmentBridge({ subscribe, call })
   setRuntimeEnvironmentCatalogRefresher(async () => {
     replaceRuntimeEnvironmentRevisions([{ id: 'env-1', createdAt: 1, pairingRevision: 2 }])
     // The app's store-write subscriber resyncs subscriptions keyed on the revision.
@@ -90,5 +92,33 @@ describe('a pairing rotation under a live subscriber', () => {
     await expect(request()).rejects.toThrow('pairing changed')
     await vi.waitFor(() => expect(getRuntimeEnvironmentRevision('env-1')).toBe(2))
     await expect(request()).resolves.toMatchObject({ ok: true })
+  })
+})
+
+describe('catalog refresh coalescing', () => {
+  it('reads again after an in-flight read that may predate the change', async () => {
+    let catalog = ['env-1', 'env-recipe']
+    const published: string[][] = []
+    const releaseFirstRead = Promise.withResolvers<void>()
+    let reads = 0
+    setRuntimeEnvironmentCatalogRefresher(async () => {
+      const snapshot = [...catalog]
+      reads += 1
+      if (reads === 1) {
+        await releaseFirstRead.promise
+      }
+      published.push(snapshot)
+    })
+
+    const first = refreshRuntimeEnvironmentCatalog()
+    // Recipe cleanup forgets the server while the earlier read is still out.
+    catalog = ['env-1']
+    const afterRemoval = refreshRuntimeEnvironmentCatalog()
+    const sameBurst = refreshRuntimeEnvironmentCatalog()
+    releaseFirstRead.resolve()
+    await Promise.all([first, afterRemoval, sameBurst])
+
+    expect(reads).toBe(2)
+    expect(published.at(-1)).toEqual(['env-1'])
   })
 })

@@ -32,9 +32,7 @@ export function TerminalInteractionSection({
   updateSettings,
   searchQuery
 }: TerminalInteractionSectionProps): React.JSX.Element {
-  // Why: the context-menu escape hatch is gated on the Control key on every
-  // platform (see use-terminal-pane-context-menu), so macOS wording is
-  // "Control-click" while Windows/Linux keep "Ctrl+right-click".
+  // Context-menu escape always uses Control; call it Control-click on macOS and Ctrl+right-click elsewhere.
   const isMac = isMacPlatform()
   const rightClickPasteDescription = isMac
     ? translate(
@@ -242,14 +240,16 @@ export function TerminalInteractionSection({
         <SearchableSetting
           title={translate('auto.components.settings.TerminalPane.902f5dee1f', 'Copy on Select')}
           description={translate(
-            'auto.components.settings.TerminalPane.4729c645fc',
-            'Automatically copy terminal selections to the clipboard.'
+            'components.settings.TerminalInteraction.copyOnSelectDescription',
+            'Automatically copy text you select in a terminal or chat to the clipboard.'
           )}
           keywords={[
             'clipboard',
             'copy',
             'select',
             'selection',
+            'highlight',
+            'chat',
             'auto',
             'automatic',
             'x11',
@@ -261,8 +261,8 @@ export function TerminalInteractionSection({
           <SettingsSwitchRow
             label={translate('auto.components.settings.TerminalPane.902f5dee1f', 'Copy on Select')}
             description={translate(
-              'auto.components.settings.TerminalPane.4729c645fc',
-              'Automatically copy terminal selections to the clipboard.'
+              'components.settings.TerminalInteraction.copyOnSelectDescription',
+              'Automatically copy text you select in a terminal or chat to the clipboard.'
             )}
             checked={settings.terminalClipboardOnSelect}
             onChange={() =>

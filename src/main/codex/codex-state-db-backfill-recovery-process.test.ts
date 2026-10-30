@@ -1,6 +1,6 @@
 import { EventEmitter } from 'node:events'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { ChildProcessHandle } from '../../shared/child-process/process-spec'
+import type { ChildProcessHandle } from '@orca/process-host/process-spec'
 import { PROVIDER_SUPERVISOR_MAX_STOP_MS } from '../provider-process/provider-process-supervisor'
 import { terminateProviderProcessTree } from '../provider-process/provider-process-teardown'
 import { stopCodexBackfillRecoveryProcess } from './codex-state-db-backfill-recovery-process'
@@ -52,7 +52,6 @@ describe('stopCodexBackfillRecoveryProcess for a supervised app-server', () => {
     await stopCodexBackfillRecoveryProcess(asHandle(child), true)
 
     expect(child.stdin.end).toHaveBeenCalledOnce()
-    // A direct SIGTERM would skip the stdin-end grace a Codex close gets.
     expect(child.kill).not.toHaveBeenCalled()
     expect(terminateProviderProcessTree).not.toHaveBeenCalled()
   })
@@ -66,13 +65,12 @@ describe('stopCodexBackfillRecoveryProcess for a supervised app-server', () => {
     expect(terminateProviderProcessTree).not.toHaveBeenCalled()
     await vi.advanceTimersByTimeAsync(1)
     expect(terminateProviderProcessTree).toHaveBeenCalledWith(child, {
-      site: 'codex-state-db-backfill-recovery'
+      site: 'codex-state-db-backfill-recovery',
+      supervised: true
     })
-    // The shared close then waits, bounded, for the forced root's exit.
     await vi.advanceTimersByTimeAsync(1_000)
     await stopped
 
-    // The stop signals nothing itself: the stdin end asks, and only the teardown forces.
     expect(child.stdin.end).toHaveBeenCalledOnce()
     expect(child.kill).not.toHaveBeenCalled()
   })

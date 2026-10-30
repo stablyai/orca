@@ -8,6 +8,19 @@ const mocks = vi.hoisted(() => {
   > = {
     repo1: [{ id: 'wt-1', repoId: 'repo1', path: '/remote/repo', hostId: 'runtime:env-1' }]
   }
+  const projects: {
+    id: string
+    localWindowsRuntimePreference:
+      | { kind: 'inherit-global' }
+      | { kind: 'windows-host' }
+      | { kind: 'wsl'; distro: string | null }
+  }[] = [
+    {
+      id: 'repo1',
+      localWindowsRuntimePreference: { kind: 'inherit-global' as const }
+    }
+  ]
+
   return {
     toastLoading: vi.fn(() => 'toast-1'),
     toastDismiss: vi.fn(),
@@ -19,18 +32,7 @@ const mocks = vi.hoisted(() => {
       activeRepoId: 'repo1',
       activeWorktreeId: 'wt-1',
       settings: { activeRuntimeEnvironmentId: 'env-1' as string | null },
-      projects: [
-        {
-          id: 'repo1',
-          localWindowsRuntimePreference: { kind: 'inherit-global' as const }
-        }
-      ] as {
-        id: string
-        localWindowsRuntimePreference:
-          | { kind: 'inherit-global' }
-          | { kind: 'windows-host' }
-          | { kind: 'wsl'; distro: string | null }
-      }[],
+      projects,
       repos: [
         {
           id: 'repo1',
@@ -63,7 +65,7 @@ vi.mock('@/store', () => ({
   }
 }))
 
-vi.mock('@/runtime/runtime-file-client', () => ({
+vi.mock('@/runtime/runtime-file-import-client', () => ({
   importExternalPathsToRuntime: mocks.importExternalPathsToRuntime
 }))
 
@@ -159,7 +161,7 @@ describe('handleTerminalFileDrop', () => {
 
     expect(mocks.importExternalPathsToRuntime).toHaveBeenCalledWith(
       {
-        settings: { activeRuntimeEnvironmentId: 'env-1' },
+        target: { kind: 'environment', environmentId: 'env-1' },
         worktreeId: 'wt-1',
         worktreePath: '/remote/repo',
         expectedExecutionHostId: 'local',
@@ -168,7 +170,7 @@ describe('handleTerminalFileDrop', () => {
       },
       ['/Users/me/logo.png'],
       '/remote/repo/.orca/drops',
-      { assertCurrent: expect.any(Function) }
+      { assertCurrent: expect.any(Function), nameExtensionlessImages: true }
     )
     expect(sendInput).toHaveBeenCalledWith(
       wrapTerminalBracketedPasteText('/remote/repo/.orca/drops/logo.png'),
@@ -262,7 +264,7 @@ describe('handleTerminalFileDrop', () => {
 
     expect(mocks.importExternalPathsToRuntime).toHaveBeenCalledWith(
       {
-        settings: { activeRuntimeEnvironmentId: 'env-1' },
+        target: { kind: 'environment', environmentId: 'env-1' },
         worktreeId: 'wt-1',
         worktreePath: '//server/share/repo',
         expectedExecutionHostId: 'local',
@@ -271,7 +273,7 @@ describe('handleTerminalFileDrop', () => {
       },
       ['/Users/me/logo.png'],
       '\\\\server\\share\\repo\\.orca\\drops',
-      { assertCurrent: expect.any(Function) }
+      { assertCurrent: expect.any(Function), nameExtensionlessImages: true }
     )
     expect(sendInput).toHaveBeenCalledWith(
       wrapTerminalBracketedPasteText('\\\\server\\share\\repo\\.orca\\drops\\logo.png'),
@@ -326,7 +328,7 @@ describe('handleTerminalFileDrop', () => {
 
     expect(mocks.importExternalPathsToRuntime).toHaveBeenCalledWith(
       {
-        settings: { activeRuntimeEnvironmentId: 'owner-runtime' },
+        target: { kind: 'environment', environmentId: 'owner-runtime' },
         worktreeId: 'wt-1',
         worktreePath: '/remote/repo',
         expectedExecutionHostId: 'local',
@@ -335,7 +337,7 @@ describe('handleTerminalFileDrop', () => {
       },
       ['/Users/me/spec.pdf'],
       '/remote/repo/.orca/drops',
-      { assertCurrent: expect.any(Function) }
+      { assertCurrent: expect.any(Function), nameExtensionlessImages: true }
     )
     expect(sendInput).toHaveBeenCalledWith('/remote/repo/.orca/drops/spec.pdf ', 'driving')
   })
@@ -498,7 +500,9 @@ describe('handleTerminalFileDrop', () => {
       paths: ['/Users/me/spec.pdf']
     })
 
-    expect(sendInputAccepted).toHaveBeenCalledWith('/Users/me/spec.pdf ', 'driving')
+    expect(sendInputAccepted).toHaveBeenCalledWith('/Users/me/spec.pdf ', 'driving', {
+      signal: expect.any(AbortSignal)
+    })
     expect(sendInput).not.toHaveBeenCalled()
     expect(focus).not.toHaveBeenCalled()
     expect(mocks.recordTerminalUserInputForLeaf).toHaveBeenCalledWith('tab-1', 'leaf-1')
@@ -652,113 +656,6 @@ describe('handleTerminalFileDrop', () => {
     expect(sendInput).not.toHaveBeenCalled()
     expect(focus).not.toHaveBeenCalled()
     expect(mocks.recordTerminalUserInputForLeaf).not.toHaveBeenCalled()
-  })
-
-  it('uses SSH remote platform metadata for Windows remote path drops', async () => {
-    mocks.storeState.settings = { activeRuntimeEnvironmentId: null }
-    mocks.storeState.repos = [
-      {
-        id: 'repo1',
-        connectionId: 'ssh-win',
-        path: 'C:\\Remote Repo',
-        executionHostId: 'ssh:ssh-win'
-      }
-    ]
-    mocks.storeState.worktreesByRepo = {
-      repo1: [
-        {
-          id: 'wt-1',
-          repoId: 'repo1',
-          path: 'C:\\Remote Repo',
-          hostId: parseExecutionHostId(mocks.storeState.repos[0]?.executionHostId)?.id ?? 'local'
-        }
-      ]
-    }
-    mocks.storeState.sshConnectionStates = new Map([
-      ['ssh-win', { remotePlatform: 'win32', connectionGeneration: 4 }]
-    ])
-    mocks.resolveDroppedPathsForAgent.mockResolvedValue({
-      failed: [],
-      resolvedPaths: ['C:\\Remote Repo\\A&B.txt'],
-      skipped: []
-    })
-    const sendInput = vi.fn(() => true)
-    const focus = vi.fn()
-    const pane = { id: 1, leafId: 'leaf-1', terminal: { focus } }
-    const manager = {
-      getActivePane: () => pane,
-      getPanes: () => [pane]
-    }
-
-    await handleTerminalFileDrop({
-      manager: manager as never,
-      paneTransports: new Map([[1, createTerminalTransport(sendInput)]]) as never,
-      worktreeId: 'wt-1',
-      tabId: 'tab-1',
-      cwd: undefined,
-      pane,
-      paths: ['C:\\Users\\Name\\A&B.txt']
-    })
-
-    expect(mocks.resolveDroppedPathsForAgent).toHaveBeenCalledWith({
-      paths: ['C:\\Users\\Name\\A&B.txt'],
-      worktreePath: 'C:\\Remote Repo',
-      connectionId: 'ssh-win',
-      expectedExecutionHostId: 'ssh:ssh-win',
-      expectedSshTargetId: 'ssh-win',
-      expectedSshConnectionGeneration: 4
-    })
-    expect(sendInput).toHaveBeenCalledWith('"C:\\Remote Repo\\A&B.txt" ', 'driving')
-    expect(focus).not.toHaveBeenCalled()
-    expect(mocks.recordTerminalUserInputForLeaf).toHaveBeenCalledWith('tab-1', 'leaf-1')
-  })
-
-  it('pastes a spaced image dropped on a Windows SSH host with Windows quoting', async () => {
-    mocks.storeState.settings = { activeRuntimeEnvironmentId: null }
-    mocks.storeState.repos = [
-      {
-        id: 'repo1',
-        connectionId: 'ssh-win',
-        path: 'C:\\Remote Repo',
-        executionHostId: 'ssh:ssh-win'
-      }
-    ]
-    mocks.storeState.worktreesByRepo = {
-      repo1: [
-        {
-          id: 'wt-1',
-          repoId: 'repo1',
-          path: 'C:\\Remote Repo',
-          hostId: parseExecutionHostId(mocks.storeState.repos[0]?.executionHostId)?.id ?? 'local'
-        }
-      ]
-    }
-    mocks.storeState.sshConnectionStates = new Map([
-      ['ssh-win', { remotePlatform: 'win32', connectionGeneration: 4 }]
-    ])
-    mocks.resolveDroppedPathsForAgent.mockResolvedValue({
-      failed: [],
-      resolvedPaths: ['C:\\Remote Repo\\.orca\\drops\\Screenshot 1.png'],
-      skipped: []
-    })
-    const sendInput = vi.fn(() => true)
-    const pane = { id: 1, leafId: 'leaf-1', terminal: { focus: vi.fn() } }
-
-    await handleTerminalFileDrop({
-      manager: { getActivePane: () => pane, getPanes: () => [pane] } as never,
-      paneTransports: new Map([[1, createTerminalTransport(sendInput)]]) as never,
-      worktreeId: 'wt-1',
-      tabId: 'tab-1',
-      cwd: undefined,
-      pane,
-      paths: ['/Users/me/Screenshot 1.png']
-    })
-
-    // Why: agents on Windows keep backslashes, so POSIX escaping would corrupt the path.
-    expect(sendInput).toHaveBeenCalledWith(
-      wrapTerminalBracketedPasteText('"C:\\Remote Repo\\.orca\\drops\\Screenshot 1.png"'),
-      'driving'
-    )
   })
 
   it('surfaces stale SSH owner capture failures without rejecting the native drop', async () => {

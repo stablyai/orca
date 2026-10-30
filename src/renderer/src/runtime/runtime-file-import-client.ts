@@ -1,5 +1,6 @@
-import { basename, joinPath } from '@/lib/path'
+import { joinPath } from '@/lib/path'
 import type { ImportItemResult } from '../../../shared/filesystem-import-result-types'
+import { deconflictCopyName } from '../../../shared/import-copy-name'
 import { getRuntimeEnvironmentConnectionGeneration } from '@/store/slices/runtime-status'
 import type { RuntimeFileOperationArgs } from './runtime-file-client-types'
 import { captureRuntimeEnvironmentRequestRevision } from './runtime-environment-revision'
@@ -17,9 +18,9 @@ import {
 } from './runtime-file-routing'
 import {
   ensureRuntimeDirectory,
+  ensureRuntimeDropStagingIgnored,
   uploadRuntimeFileWithoutClobber
 } from './runtime-file-upload-client'
-import { getActiveRuntimeTarget } from './runtime-rpc-client'
 import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'
 import type { LocalFileAccess } from '../../../shared/local-file-access'
 import { localAccess } from './runtime-file-read-client'
@@ -33,9 +34,11 @@ export async function importExternalPathsToRuntime(
     assertCurrent?: () => void
     /** Local imports only; remote destinations stay root-relative. */
     access?: LocalFileAccess
+    /** Remote `.orca/drops` uploads: name an extensionless image by its bytes. */
+    nameExtensionlessImages?: boolean
   }
 ): Promise<{ results: ImportItemResult[] }> {
-  const target = getActiveRuntimeTarget(context.settings)
+  const target = context.target
   if (target.kind !== 'environment' || !context.worktreeId || !context.worktreePath) {
     return window.api.fs.importExternalPaths(
       withSshMutationExpectation(context, {
@@ -77,12 +80,18 @@ export async function importExternalPathsToRuntime(
     assertCurrent: assertImportSessionCurrent
   }
   importSession.assertCurrent()
-  const staged = await window.api.fs.stageExternalPathsForRuntimeUpload({ sourcePaths })
+  const staged = await window.api.fs.stageExternalPathsForRuntimeUpload({
+    sourcePaths,
+    nameExtensionlessImages: options?.nameExtensionlessImages
+  })
   importSession.assertCurrent()
   const results: ImportItemResult[] = []
   const reservedNames = new Set<string>()
 
   await ensureRuntimeDirectory(context, destinationDir, importSession)
+  await ensureRuntimeDropStagingIgnored(context, destinationDir, importSession)
+  // The ignore step swallows a stale session; re-check before results that never reach the host.
+  importSession.assertCurrent()
 
   for (const source of staged.sources) {
     if (source.status !== 'staged') {
@@ -91,13 +100,16 @@ export async function importExternalPathsToRuntime(
     }
     let createdDirectoryImportRoot: string | null = null
     try {
-      const finalName = await deconflictRuntimeImportName(
-        context,
-        destinationDir,
-        source.name,
-        reservedNames,
-        importSession
-      )
+      const finalName = await deconflictCopyName(source.name, async (n) => {
+        importSession.assertCurrent()
+        return (
+          (await runtimePathExists(
+            context,
+            joinPath(destinationDir, n),
+            importSession.expectedEnvironmentPairingRevision
+          )) || reservedNames.has(n)
+        )
+      })
       const destPath = joinPath(destinationDir, finalName)
       const destRelativePath = joinRuntimeRelativePath(destinationArgs.relativePath, finalName)
       for (const entry of source.entries) {
@@ -149,8 +161,7 @@ export async function importExternalPathsToRuntime(
       })
     } catch (error) {
       if (createdDirectoryImportRoot) {
-        // Why: match local directory imports by removing the no-clobber root
-        // Orca created when a nested runtime upload fails halfway through.
+        // Match local directory rollback: remove the no-clobber root after partial nested runtime upload failure.
         await callRuntimeFileImportMutation(
           importSession,
           'files.delete',
@@ -171,59 +182,4 @@ export async function importExternalPathsToRuntime(
   }
 
   return { results }
-}
-
-async function deconflictRuntimeImportName(
-  context: RuntimeFileOperationArgs,
-  destinationDir: string,
-  originalName: string,
-  reservedNames: Set<string>,
-  session: RuntimeFileImportSession
-): Promise<string> {
-  session.assertCurrent()
-  if (
-    !(await runtimePathExists(
-      context,
-      joinPath(destinationDir, originalName),
-      session.expectedEnvironmentPairingRevision
-    )) &&
-    !reservedNames.has(originalName)
-  ) {
-    return originalName
-  }
-
-  const dotIndex = originalName.lastIndexOf('.')
-  const hasMeaningfulExt = dotIndex > 0
-  const stem = hasMeaningfulExt ? originalName.slice(0, dotIndex) : originalName
-  const ext = hasMeaningfulExt ? originalName.slice(dotIndex) : ''
-  let candidate = `${stem} copy${ext}`
-  session.assertCurrent()
-  if (
-    !(await runtimePathExists(
-      context,
-      joinPath(destinationDir, candidate),
-      session.expectedEnvironmentPairingRevision
-    )) &&
-    !reservedNames.has(candidate)
-  ) {
-    return candidate
-  }
-
-  let counter = 2
-  while (counter < 10000) {
-    candidate = `${stem} copy ${counter}${ext}`
-    session.assertCurrent()
-    if (
-      !(await runtimePathExists(
-        context,
-        joinPath(destinationDir, candidate),
-        session.expectedEnvironmentPairingRevision
-      )) &&
-      !reservedNames.has(candidate)
-    ) {
-      return candidate
-    }
-    counter += 1
-  }
-  throw new Error(`Could not generate a unique name for '${basename(originalName)}'`)
 }

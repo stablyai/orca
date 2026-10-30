@@ -1,10 +1,9 @@
-// Astra pass 4 §2: with this desktop's relay connected and idle, its own and its earlier relays'
-// lists name only this target's instances. Desktop B's live shell, under another target id on the
-// same account, must still keep the host from converting.
+// Other desktops' live relays never prove exit. COMPAT(legacy-relay-bridge): convert with bridged verdict while leaving their relays untouched.
+import type * as ExecCommandModule from './remote-exec/remote-exec-command'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { SshConnection } from './ssh-connection'
-import { relaySocketNameForInstanceId } from './ssh-relay-instance-id'
-import { windowsRelayPipePathsForSocketName } from './ssh-relay-endpoints'
+import type { SshConnection } from './connection/ssh-connection'
+import { relaySocketNameForInstanceId } from './legacy-relay/ssh-relay-instance-id'
+import { windowsRelayPipePathsForSocketName } from './legacy-relay/ssh-relay-endpoints'
 import { getRemoteHostPlatform, joinRemotePath } from './ssh-remote-platform'
 
 const {
@@ -19,46 +18,44 @@ const {
   countRelayPtysOverBridge: vi.fn()
 }))
 
-vi.mock('./ssh-relay-deploy-helpers', () => ({ execCommand }))
-vi.mock('./ssh-relay-endpoint-incumbent', async (importOriginal) => ({
+vi.mock('./remote-exec/remote-exec-command', async (importOriginal) => ({
+  ...(await importOriginal<typeof ExecCommandModule>()),
+  execCommand
+}))
+vi.mock('./legacy-relay/ssh-relay-endpoint-incumbent', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   probeRelayEndpointIncumbent
 }))
-vi.mock('./ssh-relay-endpoint-pty-count', () => ({
+vi.mock('./legacy-relay/ssh-relay-endpoint-pty-count', () => ({
   countRelayEndpointPtys,
   countRelayPtysOverBridge
 }))
-vi.mock('./ssh-relay-endpoint-runtime', () => ({ readRelayDaemonRuntimes: async () => new Map() }))
+vi.mock('./legacy-relay/ssh-relay-endpoint-runtime', () => ({
+  readRelayDaemonRuntimes: async () => new Map()
+}))
 vi.mock('./ssh-remote-commands', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   listRemoteInstallBaseDirsCommand: () => 'LIST'
 }))
-vi.mock('./ssh-host-relay-windows-inventory', async (importOriginal) => ({
+vi.mock('./legacy-relay/ssh-host-relay-windows-inventory', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   windowsRelayInventoryCommand: () => 'INVENTORY',
   windowsPipeAccessCommand: () => 'ACCESS'
 }))
-vi.mock('./ssh-relay-windows-launch-command', () => ({
+vi.mock('./legacy-relay/ssh-relay-windows-launch-command', () => ({
   windowsRelayConnectCommand: (_h: unknown, _n: string, _d: string, pipe: string) =>
     `BRIDGE ${pipe}`
 }))
 
-import {
-  assessOrcadMigrationTerminals,
-  type ListRelayPtyIds
-} from './orcad-migration-terminal-gate'
-import { censusHostRelayEndpoints } from './ssh-host-relay-endpoint-census'
-import { censusWindowsHostRelays } from './ssh-host-relay-windows-census'
-import { hostTerminalProofFromCensus } from './ssh-host-relay-terminals-on-connect'
+import { assessOrcadMigrationTerminals } from './orcad-migration-terminal-gate'
+import { censusHostRelayEndpoints } from './legacy-relay/ssh-host-relay-endpoint-census'
+import { censusWindowsHostRelays } from './legacy-relay/ssh-host-relay-windows-census'
+import { hostTerminalProofFromCensus } from './legacy-relay/ssh-host-relay-terminals-on-connect'
 
-// The censuses only hand the connection to the mocked exec, probe and bridge.
 const conn: SshConnection = Object.create(null)
 const noLeases = { getSshRemotePtyLeases: () => [] }
-// Desktop A is connected: its relay and its earlier relays both answer that nothing runs.
-const desktopAConnectedIdle = (): ListRelayPtyIds =>
-  Object.assign(async () => [], { previous: async () => [] })
 
-describe('a connected desktop converting while another desktop runs a shell on the account', () => {
+describe('a desktop converting while another desktop runs a shell on the account', () => {
   beforeEach(() => {
     execCommand.mockReset()
     probeRelayEndpointIncumbent.mockReset()
@@ -66,16 +63,7 @@ describe('a connected desktop converting while another desktop runs a shell on t
     countRelayPtysOverBridge.mockReset()
   })
 
-  it('never proves exit from this target’s empty lists alone', async () => {
-    await expect(
-      assessOrcadMigrationTerminals(noLeases, 'desktop-a', desktopAConnectedIdle())
-    ).resolves.toMatchObject({
-      verdict: 'unverifiable',
-      reason: "no census of every relay on this host's account was taken"
-    })
-  })
-
-  it('stays live on a POSIX host where only desktop B’s socket runs a shell', async () => {
+  it('never reads exited on a POSIX host where only desktop B’s socket runs a shell', async () => {
     const host = getRemoteHostPlatform('linux-x64')
     const dir = '/home/dev/.orca-remote/relay-0.1.0+aaaaaaaaaaaa'
     const aSock = `${dir}/${relaySocketNameForInstanceId('desktop-a')}`
@@ -94,17 +82,21 @@ describe('a connected desktop converting while another desktop runs a shell on t
         })
       )
 
-    await expect(
-      assessOrcadMigrationTerminals(noLeases, 'desktop-a', desktopAConnectedIdle(), census)
-    ).resolves.toMatchObject({ verdict: 'live', hostTerminals: 1 })
+    await expect(assessOrcadMigrationTerminals(noLeases, 'desktop-a', census)).resolves.toEqual({
+      verdict: 'bridged',
+      relayVerdict: 'live',
+      bridgedPtyIds: [],
+      hostTerminals: 1
+    })
 
     countRelayEndpointPtys.mockResolvedValue(0)
-    await expect(
-      assessOrcadMigrationTerminals(noLeases, 'desktop-a', desktopAConnectedIdle(), census)
-    ).resolves.toEqual({ verdict: 'exited', provenPtyIds: [] })
+    await expect(assessOrcadMigrationTerminals(noLeases, 'desktop-a', census)).resolves.toEqual({
+      verdict: 'exited',
+      provenPtyIds: []
+    })
   })
 
-  it('stays live on a Windows host where only desktop B’s pipe runs a shell', async () => {
+  it('never reads exited on a Windows host where only desktop B’s pipe runs a shell', async () => {
     const host = getRemoteHostPlatform('win32-x64')
     const version = 'relay-0.1.0+aaaaaaaaaaaa'
     const dir = joinRemotePath(host, 'C:\\Users\\dev', '.orca-remote', version)
@@ -139,21 +131,25 @@ describe('a connected desktop converting while another desktop runs a shell on t
         })
       )
 
-    await expect(
-      assessOrcadMigrationTerminals(noLeases, 'desktop-a', desktopAConnectedIdle(), census)
-    ).resolves.toMatchObject({ verdict: 'live', hostTerminals: 1 })
+    await expect(assessOrcadMigrationTerminals(noLeases, 'desktop-a', census)).resolves.toEqual({
+      verdict: 'bridged',
+      relayVerdict: 'live',
+      bridgedPtyIds: [],
+      hostTerminals: 1
+    })
 
     countRelayPtysOverBridge.mockResolvedValue(0)
-    await expect(
-      assessOrcadMigrationTerminals(noLeases, 'desktop-a', desktopAConnectedIdle(), census)
-    ).resolves.toEqual({ verdict: 'exited', provenPtyIds: [] })
+    await expect(assessOrcadMigrationTerminals(noLeases, 'desktop-a', census)).resolves.toEqual({
+      verdict: 'exited',
+      provenPtyIds: []
+    })
   })
 
   it('is unverifiable when the host-wide census cannot answer', async () => {
     await expect(
-      assessOrcadMigrationTerminals(noLeases, 'desktop-a', desktopAConnectedIdle(), async () => {
+      assessOrcadMigrationTerminals(noLeases, 'desktop-a', async () => {
         throw new Error('connect refused')
       })
-    ).resolves.toMatchObject({ verdict: 'unverifiable' })
+    ).resolves.toMatchObject({ verdict: 'bridged', relayVerdict: 'unverifiable' })
   })
 })

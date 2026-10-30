@@ -1,7 +1,10 @@
 import { withSpan } from '../../../observability/tracer'
 import { SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
 import { defineMethod } from '../core'
-import { CloseLifecycleTab, CloseTab } from './session-tabs-schemas'
+import {
+  CloseLifecycleTab,
+  CloseTab
+} from '../../../../shared/rpc-contract/session-tabs-schemas-params'
 import { assertProjectedSessionTabVisible } from './session-tab-browser-placement-projection'
 import { assertAgentSessionTabDestructiveMutationSupported } from './session-tab-agent-status-projection'
 import { projectSessionTabsForClient } from './session-tabs-inventory'
@@ -38,7 +41,7 @@ export const SESSION_TAB_CLOSE_METHODS = [
       return withSpan(
         'runtime.session-tabs.close',
         async (span) => {
-          // Why: old runtime clicks and cleanup are wire-identical, so changing their behavior would regress mixed-version pairings.
+          // Preserve legacy runtime closes: user clicks and cleanup have identical wire shapes.
           if (!params.reason && requiresIntent) {
             const result = await context.runtime.refuseUnattributedMobileSessionTabClose(
               params.worktree,
@@ -52,6 +55,8 @@ export const SESSION_TAB_CLOSE_METHODS = [
             params.tabId,
             {
               reason: 'user',
+              // Only explicit reasons prove confirmation; legacy reasonless closes do not.
+              ...(params.force && params.reason !== undefined ? { force: true } : {}),
               ...(context.pairedDeviceId ? { clientNavigationId: context.pairedDeviceId } : {})
             }
           )

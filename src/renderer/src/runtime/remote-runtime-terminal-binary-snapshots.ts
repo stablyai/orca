@@ -15,8 +15,7 @@ import {
   clearResyncTimer,
   clearSnapshot,
   concatBytes,
-  decodeSnapshotInfo,
-  pushedSnapshotKeepsLocalScrollback
+  decodeSnapshotInfo
 } from './remote-runtime-terminal-snapshot-state'
 import type {
   RemoteRuntimeMultiplexedTerminalCallbacks,
@@ -39,6 +38,9 @@ export abstract class RemoteRuntimeTerminalBinarySnapshots extends RemoteRuntime
           : stream.initialSnapshotReceived
             ? 'recovery'
             : 'initial'
+      if (stream.snapshotTarget === 'recovery') {
+        this.noteResyncSnapshotProgress(stream)
+      }
       return
     }
     if (frame.opcode === TerminalStreamOpcode.SnapshotChunk) {
@@ -54,6 +56,9 @@ export abstract class RemoteRuntimeTerminalBinarySnapshots extends RemoteRuntime
         return
       }
       stream.snapshotChunks.push(frame.payload)
+      if (stream.snapshotTarget === 'recovery') {
+        this.noteResyncSnapshotProgress(stream)
+      }
       return
     }
     if (frame.opcode === TerminalStreamOpcode.SnapshotEnd) {
@@ -67,15 +72,17 @@ export abstract class RemoteRuntimeTerminalBinarySnapshots extends RemoteRuntime
         recordE2eRemoteTerminalInitialSnapshotTruncated()
       }
       // Initial truncation drops retained history, but the latest-screen image remains authoritative.
+      // Why: a recovery the host marks unavailable carries '' that is not the buffer; applying it erases the pane.
       const snapshotApplied =
-        !stream.snapshotOverflowed && (target === 'initial' || info?.truncated !== true)
+        target === 'recovery'
+          ? classifySnapshotAvailability(stream.snapshotOverflowed, info).kind === 'snapshot'
+          : !stream.snapshotOverflowed && (target === 'initial' || info?.truncated !== true)
       const matchesPendingRequest =
         target === 'request' &&
         pendingRequest &&
         (typeof info?.requestId === 'number'
           ? info.requestId === pendingRequest.requestId
           : stream.initialSnapshotReceived)
-      const keepsLocalScrollback = pushedSnapshotKeepsLocalScrollback(info)
       if (snapshotApplied) {
         const pushedMeta: NonNullable<
           Parameters<RemoteRuntimeMultiplexedTerminalCallbacks['onSnapshot']>[1]
@@ -85,16 +92,29 @@ export abstract class RemoteRuntimeTerminalBinarySnapshots extends RemoteRuntime
           kittyKeyboardFlags: info?.kittyKeyboardFlags,
           alternateScreen: info?.alternateScreen,
           terminalOwner: info?.terminalOwner,
-          // Why: the image encodes wraps and cursor moves against the host's
-          // grid, so the restorer must replay it there — the request path has
-          // always carried these; the pushes silently dropped them.
+          lastTitle: info?.lastTitle,
+          // Replay at host grid dimensions because wraps/cursor moves depend on it; pushes must carry the same dimensions as requests.
           cols: info?.cols,
           rows: info?.rows,
-          keepsLocalScrollback
+          // Absent counts as none: older hosts push desktop images screen-only.
+          carriesHistory: (info?.scrollbackRows ?? 0) > 0
         }
         if (matchesPendingRequest) {
+          const availability = classifySnapshotAvailability(stream.snapshotOverflowed, info)
+          if (
+            pendingRequest.repaintsPane &&
+            availability.kind === 'snapshot' &&
+            typeof info?.seq === 'number'
+          ) {
+            // Why: the repaint covers the announced pause gap; a later loss must still resync.
+            stream.pausedOutputGapExpected = false
+            if (typeof stream.expectedSeq === 'number' && info.seq > stream.expectedSeq) {
+              // Applied reveal image covers paused output through info.seq; stale baseline falsely resyncs and clears it (#22087).
+              stream.expectedSeq = info.seq
+            }
+          }
           pendingRequest.resolve({
-            availability: classifySnapshotAvailability(stream.snapshotOverflowed, info),
+            availability,
             snapshot: {
               data: data ?? '',
               cols: info?.cols ?? 80,
@@ -104,6 +124,7 @@ export abstract class RemoteRuntimeTerminalBinarySnapshots extends RemoteRuntime
               kittyKeyboardFlags: info?.kittyKeyboardFlags,
               alternateScreen: info?.alternateScreen,
               terminalOwner: info?.terminalOwner,
+              lastTitle: info?.lastTitle,
               pendingEscapeTailAnsi: info?.pendingEscapeTailAnsi,
               // The host folds the normal buffer into `data` (see terminal-snapshot-publication.ts).
               carriesNormalBuffer: true
@@ -113,15 +134,9 @@ export abstract class RemoteRuntimeTerminalBinarySnapshots extends RemoteRuntime
         } else if (target === 'initial') {
           stream.callbacks.onSnapshot(data ?? '', pushedMeta)
         } else if (target === 'recovery') {
-          // Why: a server-pushed recovery snapshot replaces terminal state
-          // mid-session; clear the screen, and the scrollback only when the
-          // image carries its own, before applying it.
-          // An empty snapshot is still applied so stale dropped output does
-          // not linger on a terminal the model says is blank.
-          // RELEASE_SYNCHRONIZED_OUTPUT: \x1b[2J does not clear mode 2026, so a pane
-          // holding an open latch would not paint this recovery snapshot at all.
+          // Pushed recovery replaces screen/scrollback, including empty images, because dropped output leaves an unsafe splice gap (P2-5). RELEASE_SYNCHRONIZED_OUTPUT clears mode 2026: erase-screen alone leaves its latch blocking paint.
           stream.callbacks.onSnapshot(
-            `${RELEASE_SYNCHRONIZED_OUTPUT}\x1b[2J${keepsLocalScrollback ? '' : '\x1b[3J'}\x1b[H${data ?? ''}`,
+            `${RELEASE_SYNCHRONIZED_OUTPUT}\x1b[2J\x1b[3J\x1b[H${data ?? ''}`,
             pushedMeta
           )
         }
@@ -142,22 +157,20 @@ export abstract class RemoteRuntimeTerminalBinarySnapshots extends RemoteRuntime
         stream.initialSnapshotReceived = true
         stream.callbacks.onSubscribed?.()
       } else if (target === 'recovery') {
-        // Why: only an applied recovery is authoritative; retaining the prior
-        // high-water after a discarded snapshot keeps the gap detectable.
+        // Only applied recovery advances authority; discarded images must leave the prior gap detectable.
         if (snapshotApplied) {
           clearResyncTimer(stream)
           stream.expectedSeq = typeof info?.seq === 'number' ? info.seq : undefined
           stream.commandProbeBaselineSeq = undefined
           stream.recoverySnapshotSeq = typeof info?.seq === 'number' ? info.seq : undefined
+          stream.pausedOutputGapExpected = false
           stream.resyncAttempts = 0
           stream.resyncInFlight = false
           stream.resyncPendingSend = false
         } else if (stream.resyncInFlight) {
           this.scheduleResyncRetry(stream)
         } else {
-          // Why: a discarded server-pushed recovery leaves dropped output
-          // unrepresented; pull a fresh snapshot now instead of waiting for
-          // the next chunk to expose the gap.
+          // Discarded pushed recovery leaves output missing; pull now instead of waiting for another chunk to expose it.
           this.requestResyncSnapshot(stream)
         }
       } else {

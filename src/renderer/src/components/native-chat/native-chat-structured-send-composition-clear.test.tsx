@@ -1,3 +1,4 @@
+import { endComposition } from '@/lib/ime-composition-event.test-support'
 import { changePrompt, promptValue } from './native-chat-prompt-editor.test-support'
 // @vitest-environment happy-dom
 
@@ -5,8 +6,10 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as nativeChatAgentProfiles from '../../../../shared/native-chat-agent-profiles'
 import type { NativeChatStructuredComposerTransport } from './native-chat-composer-types'
+import type * as RemoteRuntimePtyIdModule from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 
 vi.mock('@/i18n/i18n', () => ({
+  i18n: { language: 'en' },
   translate: (_key: string, fallback: string) => fallback
 }))
 const actions = vi.hoisted((): { sendDisabled: boolean | null } => ({ sendDisabled: null }))
@@ -35,11 +38,11 @@ vi.mock('../../store', () => {
   return { useAppStore }
 })
 vi.mock('@/runtime/runtime-terminal-inspection', () => ({
-  isRemoteRuntimePtyId: () => false,
   sendRuntimePtyInput: vi.fn()
 }))
-vi.mock('@/lib/agent-paste-draft', () => ({
-  getSettingsForAgentTabRuntimeOwner: () => ({})
+vi.mock('../../../../shared/remote-runtime/remote-runtime-pty-id', async (importOriginal) => ({
+  ...(await importOriginal<typeof RemoteRuntimePtyIdModule>()),
+  isRemoteRuntimePtyId: () => false
 }))
 vi.mock('./native-chat-runtime-send', () => ({
   sendNativeChatMessage: vi.fn(),
@@ -90,6 +93,7 @@ function transport(
   overrides: Partial<NativeChatStructuredComposerTransport> = {}
 ): NativeChatStructuredComposerTransport {
   return {
+    capturePresentation: () => () => true,
     send: vi.fn(() => true),
     dispatchCommand: vi.fn(async () => PASS_THROUGH),
     optionsSurface: {
@@ -143,28 +147,34 @@ beforeEach(() => {
 afterEach(() => cleanup())
 
 describe('structured send racing the next IME composition', () => {
-  // The regression: the RPC's clear lands while the NEXT composition is live, so the DOM sync
-  // drops it and settlement used to adopt the sent text back into the composer (#17359).
-  it('does not resurrect the sent message when the clear lands mid-composition', async () => {
+  // Replay accepted clears after the next IME composition; otherwise settlement can restore sent text (#17359).
+  it('preserves the next composition when a typed goal is accepted', async () => {
     const dispatch = deferred()
-    const structured = transport({ dispatchCommand: vi.fn(() => dispatch.promise) })
+    const structured = transport({
+      dispatchCommand: vi.fn(async () => PASS_THROUGH).mockReturnValueOnce(dispatch.promise),
+      threadGoal: { setObjective: vi.fn() }
+    })
     renderComposer(structured)
+    const pane = `tab-${paneCounter}:structured`
     const input = textarea()
 
-    changePrompt(input, '안녕')
+    changePrompt(input, '/goal 안녕')
     pressEnter(input)
-    expect(structured.dispatchCommand).toHaveBeenCalledWith('안녕')
+    expect(structured.dispatchCommand).toHaveBeenCalledWith('/goal 안녕')
 
     fireEvent.compositionStart(input)
-    changePrompt(input, '안녕하')
+    changePrompt(input, '/goal 안녕하')
 
     await act(async () => {
-      dispatch.resolve(PASS_THROUGH)
+      dispatch.resolve({ handled: true, accepted: true, error: null })
       await dispatch.promise
     })
+    expect(promptValue(input)).toBe('/goal 안녕하')
+    expect(structured.send).not.toHaveBeenCalled()
     fireEvent.compositionEnd(input, { data: '하' })
 
     expect(promptValue(input)).toBe('하')
+    expect(readNativeChatDraftCache(pane)).toBe('하')
 
     await act(async () => pressEnter(input))
     expect(structured.send).toHaveBeenLastCalledWith('하', [])
@@ -191,8 +201,7 @@ describe('structured send racing the next IME composition', () => {
     expect(promptValue(input)).toBe('가')
   })
 
-  // Clearing optimistically before the RPC would lose the draft here, which is why the clear
-  // stays on the acceptance path and is instead replayed at settlement.
+  // Clear only after acceptance so refusals retain drafts; replay the clear at IME settlement.
   it('keeps the draft when the send is rejected', async () => {
     const structured = transport({ send: vi.fn(() => false) })
     renderComposer(structured)
@@ -229,7 +238,6 @@ describe('structured send racing the next IME composition', () => {
     expect(promptValue(input)).toBe('안녕하')
   })
 
-  // A rejected command still reports its error, and the composer keeps the text to retry.
   it('keeps the draft when a handled command is rejected', async () => {
     const structured = transport({
       dispatchCommand: vi.fn(async () => ({ handled: true, accepted: false, error: 'nope' }))
@@ -247,8 +255,7 @@ describe('structured send racing the next IME composition', () => {
 })
 
 describe('a withdrawn message put back during an IME composition', () => {
-  // The field ignores a programmatic draft while the IME owns it, and the next composed keystroke
-  // wrote the draft without the text, after its outbox entry had already been dropped.
+  // IME skips programmatic draft sync; retain returned text after its outbox entry is removed.
   it('shows the text once the composition settles, after what was composed', () => {
     renderComposer(transport())
     const pane = `tab-${paneCounter}:structured`
@@ -265,7 +272,6 @@ describe('a withdrawn message put back during an IME composition', () => {
     expect(readNativeChatDraftCache(pane)).toBe('abc안녕\n\nwithdrawn')
   })
 
-  // Settling spends the held text; a later write or composition must not add it again.
   it('shows the text once, however much is typed or composed after', () => {
     renderComposer(transport())
     const pane = `tab-${paneCounter}:structured`
@@ -285,7 +291,7 @@ describe('a withdrawn message put back during an IME composition', () => {
     expect(readNativeChatDraftCache(pane)).toBe('abc안\n\nwithdrawn!가')
   })
 
-  // The settle first swaps in the composed value (dropping the sent text), then adds the held text.
+  // At settlement clear sent text before appending held returned text.
   it('keeps the text when a sent message is also cleared mid-composition', async () => {
     const dispatch = deferred()
     const structured = transport({ dispatchCommand: vi.fn(() => dispatch.promise) })
@@ -309,7 +315,24 @@ describe('a withdrawn message put back during an IME composition', () => {
   })
 })
 
-// One send per chat, as the common pattern: while it is out, Send is off and Enter keeps the text.
+// Regression (#30159): a message ending in a composing syllable needed a second Enter.
+describe('the Enter that commits a Hangul composition', () => {
+  it('sends the message once, with its last syllable', async () => {
+    const structured = transport()
+    renderComposer(structured)
+    const input = textarea()
+
+    fireEvent.compositionStart(input)
+    changePrompt(input, '안녕하세요')
+    fireEvent.keyDown(input, { key: 'Process', keyCode: 229, isComposing: true })
+    endComposition(input, '요')
+    await act(async () => pressEnter(input))
+
+    expect(structured.send).toHaveBeenCalledOnce()
+    expect(structured.send).toHaveBeenCalledWith('안녕하세요', [])
+  })
+})
+
 describe('a structured send while the chat has one out', () => {
   it('keeps the text in the box and Send disabled until the send settles', async () => {
     const structured = transport({ send: vi.fn(() => false), sendOut: true })

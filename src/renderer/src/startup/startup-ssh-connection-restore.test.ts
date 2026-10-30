@@ -66,6 +66,42 @@ afterEach(() => {
 })
 
 describe('restoreSshConnectionsForStartup', () => {
+  it('dials as an automatic connect, so a sign-in the user cancelled stays cancelled', async () => {
+    installWindowApi([target('ssh-eager'), target('ssh-background')])
+    const connectArgs: unknown[] = []
+    window.api.ssh.connect = async (args) => {
+      connectArgs.push(args)
+      return connectedState(args.targetId)
+    }
+
+    await restoreSshConnectionsForStartup({
+      connectionIds: ['ssh-eager', 'ssh-background'],
+      blockingConnectionIds: ['ssh-eager'],
+      setDeferredSshReconnectTargets: harness.setDeferredSshReconnectTargets,
+      removeDeferredSshReconnectTarget: harness.removeDeferredSshReconnectTarget,
+      publishSshConnectionState: harness.publishSshConnectionState
+    })
+
+    expect(connectArgs).toEqual([
+      { targetId: 'ssh-background', automatic: true },
+      { targetId: 'ssh-eager', automatic: true }
+    ])
+  })
+
+  it('leaves a host opted out of reconnect on launch disconnected', async () => {
+    installWindowApi([{ ...target('ssh-off'), reconnectOnLaunch: false }, target('ssh-on')])
+    harness.connect.mockImplementation(async (targetId: string) => connectedState(targetId))
+
+    await restoreSshConnectionsForStartup({
+      connectionIds: ['ssh-off', 'ssh-on'],
+      setDeferredSshReconnectTargets: harness.setDeferredSshReconnectTargets,
+      removeDeferredSshReconnectTarget: harness.removeDeferredSshReconnectTarget,
+      publishSshConnectionState: harness.publishSshConnectionState
+    })
+
+    expect(harness.connect.mock.calls).toEqual([['ssh-on']])
+  })
+
   it('does not wait on a target that owns no immediately-mounted pane', async () => {
     vi.useFakeTimers()
     installWindowApi([target('ssh-active'), target('ssh-asleep')])
@@ -167,8 +203,7 @@ describe('restoreSshConnectionsForStartup', () => {
     await restore
 
     expect(harness.removeDeferredSshReconnectTarget).toHaveBeenCalledWith('ssh-bg')
-    // The timed-out rewrite must not resurrect the reachable background target: a deferred
-    // connected target sends fresh panes down the cold-restore path instead of the normal one.
+    // Timeout rewrite must not redefer already connected background hosts or fresh panes take the cold-restore path.
     expect(harness.setDeferredSshReconnectTargets).toHaveBeenLastCalledWith(['ssh-active'])
   })
 

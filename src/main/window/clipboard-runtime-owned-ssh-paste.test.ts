@@ -1,6 +1,4 @@
-// Nested Remote Orca Server -> SSH image paste (#17679). The REAL ssh-filesystem-dispatch registry
-// is used on purpose: the runtime's SSH target is never registered in the client process, so any
-// route that consults the local registry fails exactly the way the report did.
+// #17679: nested Remote Server → SSH paste must resolve on the runtime; this process owns no SSH filesystem.
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { installFakeAppEnvironment } from '../../../config/scripts/vitest-host-ports-setup'
 
@@ -42,22 +40,20 @@ vi.mock('node:fs/promises', () => ({
   writeFile: fsWriteFileMock,
   default: { writeFile: fsWriteFileMock, mkdir: vi.fn() }
 }))
-vi.mock('../ipc/filesystem-auth', () => ({
+vi.mock('../ipc/filesystem/filesystem-auth', () => ({
   PATH_ACCESS_DENIED_MESSAGE: 'denied',
   resolveAuthorizedPath: vi.fn()
 }))
-vi.mock('../ipc/runtime-environment-transport-routing', () => ({
+vi.mock('../ipc/runtime-environments/runtime-environment-transport-routing', () => ({
   callRuntimeEnvironment: callRuntimeEnvironmentMock
 }))
 vi.mock('./dashboard-popout-window', () => ({ isDashboardPopoutRenderer: () => false }))
 
-import { registerClipboardHandlers } from './clipboard-ipc-handlers'
 import {
-  getSshFilesystemProvider,
-  registerSshFilesystemProvider,
-  SSH_FILESYSTEM_PROVIDER_UNAVAILABLE_MESSAGE,
-  unregisterSshFilesystemProvider
-} from '../providers/ssh-filesystem-dispatch'
+  registerClipboardHandlers,
+  setTrustedClipboardRendererWebContentsId
+} from './clipboard-ipc-handlers'
+import { SSH_HOST_NOT_SERVED_MESSAGE } from '../providers/ssh-host-not-served-error'
 
 type SaveImageHandler = (event: unknown, args?: unknown) => Promise<string | null>
 
@@ -113,16 +109,13 @@ function runtimeCall(method: string): unknown[] | undefined {
 describe('clipboard image paste for a runtime-owned SSH workspace', () => {
   beforeEach(() => {
     installFakeAppEnvironment({ getPath: () => '/tmp' })
+    setTrustedClipboardRendererWebContentsId(rendererEvent.sender.id)
     callRuntimeEnvironmentMock.mockReset()
     fsWriteFileMock.mockReset()
-    unregisterSshFilesystemProvider(RUNTIME_SSH_TARGET)
-    unregisterSshFilesystemProvider(CLIENT_SSH_TARGET)
   })
 
   it('sends the paste to the runtime and names the runtime SSH target, never this registry', async () => {
     mockRuntimeUpload()
-    expect(getSshFilesystemProvider(RUNTIME_SSH_TARGET)).toBeUndefined()
-    // Built the way the renderer builds it: both owner ids, verbatim.
     const nestedArgs = { connectionId: RUNTIME_SSH_TARGET, runtimeEnvironmentId: RUNTIME_ID }
 
     await expect(saveImageHandler()(rendererEvent, nestedArgs)).resolves.toBe(
@@ -188,25 +181,10 @@ describe('clipboard image paste for a runtime-owned SSH workspace', () => {
     })
   })
 
-  it('keeps a client-dialed SSH paste on this process registry without touching the runtime', async () => {
-    const writeFileBase64 = vi.fn().mockResolvedValue(undefined)
-    registerSshFilesystemProvider(CLIENT_SSH_TARGET, {
-      getTempDir: async () => '/var/tmp',
-      writeFileBase64
-    } as never)
-
+  it('reports the dropped-connection verdict for a client-dialed SSH target', async () => {
     await expect(
       saveImageHandler()(rendererEvent, { connectionId: CLIENT_SSH_TARGET })
-    ).resolves.toMatch(/^\/var\/tmp\/orca-paste-.*\.png$/)
-
-    expect(writeFileBase64).toHaveBeenCalledTimes(1)
-    expect(callRuntimeEnvironmentMock).not.toHaveBeenCalled()
-  })
-
-  it('still reports the dropped-connection verdict for a client-dialed SSH target that is gone', async () => {
-    await expect(
-      saveImageHandler()(rendererEvent, { connectionId: CLIENT_SSH_TARGET })
-    ).rejects.toThrow(SSH_FILESYSTEM_PROVIDER_UNAVAILABLE_MESSAGE)
+    ).rejects.toThrow(SSH_HOST_NOT_SERVED_MESSAGE)
     expect(callRuntimeEnvironmentMock).not.toHaveBeenCalled()
   })
 

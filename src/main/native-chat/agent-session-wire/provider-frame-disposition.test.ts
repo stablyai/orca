@@ -1,8 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { DEFAULT_JOURNAL_PAYLOAD_LIMITS } from '../agent-session-journal/journal-payload-bounds'
 import {
   classifyProviderFrame,
-  hasTypedProviderFrameTranslator,
   isDeltaProviderFrameKind,
   PROVIDER_FRAME_CLASSIFICATIONS
 } from './provider-frame-disposition'
@@ -43,7 +41,7 @@ describe('provider frame classification catalog', () => {
     )
   })
 
-  it('promotes payload failures over a benign catalog classification', () => {
+  it("surfaces a failed hook from the hook's own outcome field", () => {
     expect(
       classifyProviderFrame('codex', 'notification:hook/completed', {
         run: { status: 'failed' }
@@ -57,7 +55,25 @@ describe('provider frame classification catalog', () => {
     ).toBe('error-surface')
   })
 
-  it('keeps command queue bookkeeping off the transcript without hiding a failed one', () => {
+  it('surfaces a Claude authentication error from its declared field', () => {
+    const failure = unhandledProviderFrameJournalItem('claude', 'message:auth_status', {
+      type: 'auth_status',
+      isAuthenticating: false,
+      output: [],
+      error: 'Login timed out'
+    })
+    expect(failure?.classification).toBe('error-surface')
+    expect(failure?.body.text).toBe('Login timed out')
+    expect(
+      unhandledProviderFrameJournalItem('claude', 'message:auth_status', {
+        type: 'auth_status',
+        isAuthenticating: true,
+        output: []
+      })
+    ).toBeNull()
+  })
+
+  it('keeps command queue bookkeeping off the transcript', () => {
     expect(
       classifyProviderFrame('claude', 'message:command_lifecycle', {
         command_uuid: 'command-1',
@@ -70,14 +86,6 @@ describe('provider frame classification catalog', () => {
         state: 'cancelled'
       })
     ).toBe('status-chrome')
-    // Payload inspection outranks the catalogue, so suppressing the kind cannot
-    // swallow a state the provider reports as a failure.
-    expect(
-      classifyProviderFrame('claude', 'message:command_lifecycle', {
-        command_uuid: 'command-1',
-        state: 'failed'
-      })
-    ).toBe('error-surface')
   })
 
   it('keeps unknown future frames on the substantive bounded fallback path', () => {
@@ -95,25 +103,18 @@ describe('provider frame classification catalog', () => {
   })
 
   it('dispositions codex item-form frames, which the method catalog never matches', () => {
-    // Both provider generations reach the journal's compaction deduplication.
     expect(classifyProviderFrame('codex', 'item:contextCompaction', {})).toBe(
       'timeline-substantive'
     )
     expect(classifyProviderFrame('codex', 'notification:thread/compacted', {})).toBe(
       'timeline-substantive'
     )
-    // An item type nobody has dispositioned still falls through visibly.
     expect(classifyProviderFrame('codex', 'item:futureThing', {})).toBe('timeline-substantive')
   })
 
   it('chromes the one unmodelled codex item type that carries no content', () => {
     expect(classifyProviderFrame('codex', 'item:sleep', { id: 's', durationMs: 20_000 })).toBe(
       'status-chrome'
-    )
-    // Payload inspection still outranks the item catalog, so chroming a type
-    // cannot swallow one that reports a failure.
-    expect(classifyProviderFrame('codex', 'item:sleep', { id: 's', status: 'failed' })).toBe(
-      'error-surface'
     )
   })
 
@@ -125,8 +126,7 @@ describe('provider frame classification catalog', () => {
         agentThreadId: 'thread-child',
         agentPath: '/root/list_directory'
       })
-      // The spawn-group roster row renders this now, so a raw gray row beside it
-      // would duplicate it. Suppressing it was gated on that renderer existing.
+      // The roster already renders this lifecycle; raw fallback would duplicate it.
     ).toBe('status-chrome')
     expect(
       classifyProviderFrame('codex', 'item:collabAgentToolCall', {
@@ -141,8 +141,6 @@ describe('provider frame classification catalog', () => {
   })
 
   it('leaves content-bearing codex item types on the visible fallback', () => {
-    // Each carries text or a path a user would want: review output, the image
-    // the agent looked at or generated, injected hook prompt text.
     for (const type of [
       'imageView',
       'imageGeneration',
@@ -157,80 +155,36 @@ describe('provider frame classification catalog', () => {
   })
 })
 
-describe('typed translator coverage', () => {
-  it('emits no generic row for a covered kind, whatever the payload reports', () => {
-    // The catalogue calls these `status-chrome`, but `hasProviderError` promotes
-    // any of them that reports a failure — which is how a failed background task
-    // reached users as `claude · message:system:task_notification`. Coverage is
-    // the contract that stops it: the typed translator writes the row instead.
-    for (const kind of [
-      'message:system:task_started',
-      'message:system:task_updated',
-      'message:system:task_progress',
-      'message:system:task_notification',
-      'message:system:background_tasks_changed'
-    ]) {
-      expect(
-        unhandledProviderFrameJournalItem(
-          'claude',
-          kind,
-          {
-            task_id: 'byjnee2no',
-            status: 'failed',
-            summary: 'Background command "Wait" failed with exit code 1'
-          },
-          DEFAULT_JOURNAL_PAYLOAD_LIMITS,
-          { coveredByTypedTranslator: true }
-        ),
-        kind
-      ).toBeNull()
+describe('failure is decided by kind, never by searching the payload', () => {
+  it('writes no row for a Claude session start that lists MCP servers which failed to connect', () => {
+    // Captured Claude 2.1.289 init includes failed MCP servers, not a failed session (#25477).
+    const init = {
+      type: 'system',
+      subtype: 'init',
+      mcp_servers: [
+        { name: 'MCP_DOCKER', status: 'failed', source: 'user' },
+        { name: 'codegraph', status: 'connected', source: 'user' },
+        { name: 'jira', status: 'failed', source: 'user' }
+      ]
     }
+    expect(unhandledProviderFrameJournalItem('claude', 'message:system:init', init)).toBeNull()
   })
 
-  it('keeps malformed covered-kind failures eligible for the generic fallback', () => {
-    // Eligibility is all this layer decides. A frame naming no task is not
-    // claimed by the row owner, which withholds the coverage flag so the
-    // failure still reaches the user. The SENTENCE it leads with is Claude's to
-    // supply, through the fallback's display-text seam — proven in
-    // `claude-structured-journal-translation-background-tasks.test.ts`. Teaching
-    // `summary` to the shared key list here would re-rank the row text of every
-    // unmodelled frame on both providers to reach this one case.
+  it('never turns a nested failure-looking value into an error row', () => {
+    const failed = { task_id: 't-1', status: 'failed', error: 'exit code 1' }
     expect(
-      unhandledProviderFrameJournalItem('claude', 'message:system:task_notification', {
+      unhandledProviderFrameJournalItem('claude', 'message:system:task_notification', failed)
+    ).toBeNull()
+    expect(
+      unhandledProviderFrameJournalItem('codex', 'notification:mcpServer/startupStatus/updated', {
+        name: 'github',
         status: 'failed',
-        summary: 'Background command "Wait" failed with exit code 1'
-      })
-    ).toMatchObject({ classification: 'error-surface' })
-  })
-
-  it('covers the Codex thread status, which reports `systemError` beside the `error` row', () => {
-    const kind = 'notification:thread/status/changed'
-    const payload = { threadId: 'thread-1', status: { type: 'systemError' } }
-
-    expect(hasTypedProviderFrameTranslator('codex', kind)).toBe(true)
-    expect(
-      unhandledProviderFrameJournalItem('codex', kind, payload, DEFAULT_JOURNAL_PAYLOAD_LIMITS, {
-        coveredByTypedTranslator: true
+        error: 'auth expired'
       })
     ).toBeNull()
-    expect(unhandledProviderFrameJournalItem('codex', kind, payload)).toMatchObject({
-      classification: 'error-surface'
-    })
-  })
-
-  it('covers a kind only for its own provider — a Claude kind from Codex still falls back', () => {
-    expect(
-      unhandledProviderFrameJournalItem('codex', 'message:system:task_notification', {
-        status: 'failed'
-      })
-    ).not.toBeNull()
-  })
-
-  it('leaves an unmodelled Claude failure on the visible fallback', () => {
-    const item = unhandledProviderFrameJournalItem('claude', 'message:system:future_task', {
-      status: 'failed'
-    })
-    expect(item?.classification).toBe('error-surface')
+    const unknown = unhandledProviderFrameJournalItem('claude', 'message:system:future', failed)
+    expect(unknown?.classification).toBe('timeline-substantive')
+    expect(unknown?.body.tone).toBeUndefined()
   })
 })
 
@@ -262,8 +216,7 @@ describe('codex subagent item disposition', () => {
   })
 
   it('leaves collab tool calls substantive — they may be the only subagent signal', () => {
-    // A session that reports no `subAgentActivity` gets no roster row, so
-    // suppressing this too would render its fan-out blank.
+    // Without subAgentActivity, collab calls may be the only visible fan-out signal.
     expect(
       classifyProviderFrame('codex', 'item:collabAgentToolCall', {
         type: 'collabAgentToolCall',
@@ -279,14 +232,5 @@ describe('codex subagent item disposition', () => {
         agentThreadId: 'child-1'
       })
     ).toBeNull()
-  })
-
-  it('still surfaces a subagent frame that reports a failure', () => {
-    expect(
-      classifyProviderFrame('codex', 'item:collabAgentToolCall', {
-        type: 'collabAgentToolCall',
-        status: 'failed'
-      })
-    ).toBe('error-surface')
   })
 })

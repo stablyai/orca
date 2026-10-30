@@ -28,7 +28,6 @@ vi.mock('./gh-utils', () => ({
 vi.mock('./client/lookup/branch-lookup-resolution', () => ({
   resolvePRForBranchOutcome: mocks.resolve
 }))
-vi.mock('../providers/ssh-git-dispatch', () => ({ getSshGitProviderGeneration: () => 1 }))
 import { getPRForBranchOutcome } from './client/lookup/pr-for-branch-outcome'
 
 const outcome: PRRefreshOutcome = { kind: 'no-pr', fetchedAt: 1 }

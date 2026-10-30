@@ -120,8 +120,7 @@ describe('structured agent session reducer', () => {
   })
 
   it("republishes when only a row's stoppability changes", () => {
-    // A row losing its stop is the whole difference between an honest control
-    // and a dead one, so it must not be dropped as an equal state.
+    // A lost Stop button changes behavior and must invalidate equality.
     const backgroundTasks = {
       state: 'monitoring' as const,
       supportsTaskStop: true,
@@ -258,6 +257,49 @@ describe('structured agent session reducer', () => {
 
     expect(restored.items).toHaveLength(84)
     expect(restored.hasOlder).toBe(false)
+  })
+
+  it('stops offering older history once a /clear divider is loaded, live or paged in', () => {
+    const clearRow = (sequence: number): AgentJournalRenderItem => ({
+      ...item(`clear-${sequence}`, sequence),
+      body: {
+        kind: 'status',
+        text: 'Context cleared',
+        presentation: 'context-cleared',
+        contextClear: { operationId: `clear-${sequence}`, afterFence: 1, clearedAt: sequence }
+      }
+    })
+    const restored = reduceStructuredAgentSession(EMPTY_STRUCTURED_AGENT_SESSION, {
+      type: 'history-page',
+      page: { ...hydrationPage([item('old', 10)]), hasOlder: true }
+    })
+    expect(restored.hasOlder).toBe(true)
+    const cleared = reduceStructuredAgentSession(restored, {
+      type: 'event',
+      event: {
+        type: 'batch',
+        sessionId: 'session-a',
+        batch: {
+          cursor: { epoch: 'epoch-a', sequence: 11 },
+          items: [clearRow(11)],
+          removedItemIds: [],
+          submissions: []
+        }
+      }
+    })
+    expect(cleared.hasOlder).toBe(false)
+
+    const afterLongChat = reduceStructuredAgentSession(EMPTY_STRUCTURED_AGENT_SESSION, {
+      type: 'history-page',
+      page: { ...hydrationPage([item('new', 40)]), hasOlder: true }
+    })
+    const pagedBack = reduceStructuredAgentSession(afterLongChat, {
+      type: 'older-page',
+      requestedCursor: { epoch: 'epoch-a', sequence: 40 },
+      page: { ...hydrationPage([item('old', 10), clearRow(11)]), hasOlder: true }
+    })
+    expect(pagedBack.items.map(({ itemId }) => itemId)).toEqual(['old', 'clear-11', 'new'])
+    expect(pagedBack.hasOlder).toBe(false)
   })
 
   it('projects additive background task state without changing transcript identity', () => {
@@ -456,8 +498,7 @@ describe('structured agent session reducer', () => {
     expect(withoutCapability.backgroundTasks).toBeUndefined()
   })
 
-  // An older host omits the roster only when its records hold no running child; a pane resuming
-  // from its cursor must not keep the one it held while away (#24227).
+  // Old hosts omit empty rosters; a cursor resume must clear the detached client’s stale roster (#24227).
   it("drops the held roster on a resumed subscription's first batch that omits it", () => {
     const monitoring = reduceStructuredAgentSession(EMPTY_STRUCTURED_AGENT_SESSION, {
       type: 'event',
@@ -593,6 +634,60 @@ describe('structured agent session reducer', () => {
       expect(downgraded.latestTurn).toBeUndefined()
       expect(runningStructuredAgentSessionTurnId(downgraded)).toBeNull()
     })
+  })
+
+  it("keeps the host's working answer and prompts across a quiet frame, takes a row-less restatement, and drops them for rows that name none", () => {
+    const pending: AgentJournalRenderItem = {
+      itemId: 'prompt',
+      revision: 1,
+      sequence: 1,
+      observedAt: 1,
+      body: {
+        kind: 'approval',
+        title: 'Run command?',
+        detail: null,
+        options: [{ id: 'yes', label: 'Allow' }],
+        resolution: { state: 'pending', selectedOptionId: null, resolvedBy: null, resolvedAt: null }
+      }
+    }
+    const frame = (
+      items: AgentJournalRenderItem[],
+      host: { working?: boolean; actionablePromptIds?: string[] } = {}
+    ) => ({
+      type: 'event' as const,
+      event: {
+        type: 'batch' as const,
+        sessionId: 'session-a',
+        batch: {
+          cursor: { epoch: 'epoch-a', sequence: 1 },
+          items,
+          removedItemIds: [],
+          submissions: []
+        },
+        ...host
+      }
+    })
+    const opened = reduceStructuredAgentSession(EMPTY_STRUCTURED_AGENT_SESSION, {
+      type: 'event',
+      event: {
+        type: 'snapshot',
+        sessionId: 'session-a',
+        fence: 1,
+        page: { ...hydrationPage([pending]), working: true, actionablePromptIds: ['prompt'] }
+      }
+    })
+    const quiet = reduceStructuredAgentSession(opened, frame([]))
+    expect(quiet).toMatchObject({ working: true, actionablePromptIds: ['prompt'] })
+    // The generation ended with no row written: the host restates both.
+    const ended = reduceStructuredAgentSession(
+      quiet,
+      frame([], { working: false, actionablePromptIds: [] })
+    )
+    expect(ended).toMatchObject({ working: false, actionablePromptIds: [] })
+    // Rows from a downgraded host name neither: back to deriving from rows.
+    const downgraded = reduceStructuredAgentSession(ended, frame([{ ...pending, revision: 2 }]))
+    expect(downgraded.working).toBeUndefined()
+    expect(downgraded.actionablePromptIds).toBeUndefined()
   })
 
   it('records the host clock from frames that carry it and keeps it otherwise', () => {

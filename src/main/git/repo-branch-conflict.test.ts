@@ -55,6 +55,31 @@ describe('getBranchConflictKindViaExec', () => {
     ])
   })
 
+  it('ignores the same branch on another remote when the base is that remote branch (#26344)', async () => {
+    const calls: string[][] = []
+    const exec = async (argv: string[]): Promise<{ stdout: string }> => {
+      calls.push(argv)
+      if (argv[0] === 'for-each-ref') {
+        return { stdout: '' }
+      }
+      if (argv[0] === 'remote') {
+        return { stdout: 'origin\nupstream\n' }
+      }
+      if (argv[0] === 'show-ref') {
+        return { stdout: 'abc refs/remotes/upstream/feature/fix\n' }
+      }
+      throw new Error('the local branch is absent')
+    }
+
+    await expect(
+      getBranchConflictKindViaExec(exec, 'feature/fix', 'origin/feature/fix')
+    ).resolves.toBeNull()
+    expect(calls.some((argv) => argv[0] === 'show-ref')).toBe(false)
+    await expect(getBranchConflictKindViaExec(exec, 'feature/fix', 'origin/main')).resolves.toBe(
+      'remote'
+    )
+  })
+
   it('keeps longest configured remote-name matching semantics', async () => {
     const calls: string[][] = []
     const exec = async (argv: string[]): Promise<{ stdout: string }> => {
@@ -98,7 +123,6 @@ describe('getBranchConflictKindViaExec', () => {
         return { stdout: 'origin\n' }
       }
       if (argv[0] === 'show-ref') {
-        // The exact ref is absent even though a descendant exists.
         throw new Error('missing exact ref')
       }
       throw new Error(`unexpected git command: ${argv.join(' ')}`)
@@ -142,8 +166,7 @@ describe('getBranchConflictKindViaExec', () => {
 
     await expect(getBranchConflictKindViaExec(exec, 'feature')).resolves.toBeNull()
     expect(probeCount).toBe(12)
-    // Equality, not a ceiling: 12 candidates saturate the pool, so a regression
-    // to serial probing has to fail here.
+    // Require pool saturation so a regression to serial probing fails.
     expect(maxActiveProbes).toBe(8)
   })
 

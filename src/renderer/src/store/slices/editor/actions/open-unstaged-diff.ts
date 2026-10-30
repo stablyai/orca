@@ -1,6 +1,7 @@
 import type { EditorGet, EditorSet } from '../types/editor-set-get'
 import type { EditorSlice } from '../types/editor-slice'
-import type { DiffSource, OpenFile } from '../types/open-file'
+import type { OpenFile } from '../types/open-file'
+import type { DiffSource } from '../../../../../../shared/editor-tab-view-types'
 import { buildDiffEditorFileId, withDiffContentReloadRequest } from '../file-ids/editor-file-ids'
 import { resolveDiffRuntimeEnvironmentId } from '../git/diff-runtime-owner'
 import {
@@ -44,6 +45,7 @@ export function createOpenUnstagedDiff(
             ...existing,
             mode: 'diff' as const,
             diffSource,
+            branchOldPath: staged ? options?.oldPath : undefined,
             conflict: undefined,
             skippedConflicts: undefined,
             conflictReview: undefined,
@@ -64,6 +66,7 @@ export function createOpenUnstagedDiff(
           isDirty: false,
           mode: 'diff',
           diffSource,
+          branchOldPath: staged ? options?.oldPath : undefined,
           conflict: undefined,
           skippedConflicts: undefined,
           conflictReview: undefined,

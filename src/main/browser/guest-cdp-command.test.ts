@@ -1,10 +1,14 @@
 import { describe, expect, it, vi } from 'vitest'
 import { BrowserError } from './browser-error'
 import { sendGuestCdpCommand } from './guest-cdp-command'
+import { isAgentInjectingInput } from './agent-input-injection'
+import { runInRemoteCliBrowserScope } from '../runtime/desktop-browser-bridge/remote-cli-browser-scope'
 
 function makeGuest(state: { crashed?: boolean; destroyed?: boolean } = {}) {
   const sendCommand = vi.fn(async () => ({ ok: true }))
   const guest = {
+    id: 3,
+    setIgnoreMenuShortcuts: vi.fn(),
     isDestroyed: vi.fn(() => state.destroyed ?? false),
     isCrashed: vi.fn(() => {
       if (state.destroyed) {
@@ -53,5 +57,55 @@ describe('sendGuestCdpCommand', () => {
       ['Emulation.setVisibleSize', { width: 2, height: 3 }],
       ['DOM.enable', {}, 'iframe-session']
     ])
+  })
+
+  it('refuses a host the answer to a read that landed after its page moved to a desktop file', async () => {
+    let url = 'https://example.com/'
+    const { guest, sendCommand } = makeGuest()
+    sendCommand.mockImplementation(async () => {
+      url = 'file:///Users/me/private.txt'
+      return { ok: true }
+    })
+    const sent = runInRemoteCliBrowserScope(
+      'wt-1',
+      () => sendGuestCdpCommand({ ...guest, id: 7 }, 'DOM.getDocument', {}),
+      undefined,
+      () => url.startsWith('https:')
+    )
+    await expect(sent).rejects.toMatchObject({ code: 'desktop_browser_bridge_unrouted' })
+    expect(sendCommand).toHaveBeenCalledTimes(1)
+  })
+
+  it('marks input as agent input while it is in flight, so page handlers ignore it', async () => {
+    const { guest, sendCommand } = makeGuest()
+    let markedDuringSend = false
+    sendCommand.mockImplementation(async () => {
+      markedDuringSend = isAgentInjectingInput(guest)
+      return { ok: true }
+    })
+
+    await sendGuestCdpCommand(guest, 'Input.dispatchMouseEvent', { type: 'mousePressed' })
+
+    expect(markedDuringSend).toBe(true)
+    expect(isAgentInjectingInput(guest)).toBe(false)
+  })
+
+  it('keeps a host input that landed even when the host is revoked before it answers', async () => {
+    const revoked = new AbortController()
+    const { guest, sendCommand } = makeGuest()
+    sendCommand.mockImplementation(async () => {
+      revoked.abort()
+      return { ok: true }
+    })
+    const sent = runInRemoteCliBrowserScope(
+      'wt-1',
+      () =>
+        sendGuestCdpCommand({ ...guest, id: 7 }, 'Input.dispatchKeyEvent', {
+          type: 'keyDown',
+          key: 'a'
+        }),
+      revoked.signal
+    )
+    await expect(sent).resolves.toEqual({ ok: true })
   })
 })

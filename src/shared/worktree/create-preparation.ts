@@ -3,8 +3,29 @@ export const WORKTREE_CREATE_PREPARATION_LOCK_PREFIX = 'orca-create-preparation:
 const WORKTREE_CREATE_PREPARATION_ID_PATTERN =
   /^(\d+)-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
-export function createWorktreePreparationLockReason(sessionId: string): string {
-  return `${WORKTREE_CREATE_PREPARATION_LOCK_PREFIX}${process.pid}:${sessionId}`
+// Appended last so older builds, which read only the pid field, still parse the reason.
+const WORKTREE_CREATE_PREPARATION_MACHINE_FIELD = ':machine='
+
+/** Machine identity scopes a PID when several hosts see the same shared-disk repo. */
+export function createWorktreePreparationLockReason(
+  sessionId: string,
+  machineIdentity?: string | null
+): string {
+  const machine = machineIdentity
+    ? `${WORKTREE_CREATE_PREPARATION_MACHINE_FIELD}${machineIdentity}`
+    : ''
+  return `${WORKTREE_CREATE_PREPARATION_LOCK_PREFIX}${process.pid}:${sessionId}${machine}`
+}
+
+/** Null for reasons older builds wrote, or a writer that could not read its machine identity. */
+export function parseWorktreePreparationOwnerMachine(lockReason?: string): string | null {
+  if (!lockReason || parseWorktreePreparationOwnerPid(lockReason) === null) {
+    return null
+  }
+  const at = lockReason.indexOf(WORKTREE_CREATE_PREPARATION_MACHINE_FIELD)
+  return at === -1
+    ? null
+    : lockReason.slice(at + WORKTREE_CREATE_PREPARATION_MACHINE_FIELD.length) || null
 }
 
 export function parseWorktreePreparationOwnerPid(lockReason?: string): number | null {
@@ -34,9 +55,6 @@ export function isWorktreeCreatePreparation(worktree: {
   lockReason?: string
   branch?: string
 }): boolean {
-  // The Git lock reason is the durable ownership proof. A path can be chosen
-  // by a user (including for an uncommitted detached worktree), so path shape
-  // alone must never hide or force-remove it. A crash before locking may leave
-  // an unlocked detached entry for manual cleanup, but cannot delete user data.
+  // Only the Git lock reason proves preparation ownership; user-chosen paths must never authorize hiding or force-removal. A pre-lock crash leaves manual cleanup, not deletion authority.
   return parseWorktreePreparationOwnerPid(worktree.lockReason) !== null
 }

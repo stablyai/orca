@@ -2,8 +2,8 @@ import type {
   OrcadMigrationCatalogPayload,
   OrcadMigrationDormantStatePayload,
   OrcadMigrationManifestSource
-} from '../../../shared/orcad-migration-manifest'
-import type { OrcadMigrationDependencyKind } from '../../../shared/orcad-migration-preflight'
+} from '../../../shared/orcad-migration/orcad-migration-manifest'
+import type { OrcadMigrationDependencyKind } from '../../../shared/orcad-migration/orcad-migration-preflight'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import type { TerminalScrollbackSnapshotStorage } from '../../terminal-scrollback-snapshots'
 import { projectHostSetupProjectionFromRepos } from '../../../shared/project-host-setup-projection'
@@ -14,7 +14,7 @@ import { collectOrcadMigrationRetiredWorktreeNamespaces } from './orcad-source-r
 import { collectOrcadMigrationSourceAutomationState } from './orcad-source-automation-state'
 import { collectOrcadMigrationSourceWorkspaceSession } from './orcad-source-workspace-session'
 import {
-  createOrcadMigrationSourceScope,
+  createOrcadMigrationExportScope,
   orcadMigrationOwnerMatchesScope,
   unqualifyOrcadMigrationOwnerKey
 } from './orcad-source-scope'
@@ -41,6 +41,28 @@ type TransferredDormantKind = (typeof ORCAD_MIGRATION_TRANSFERRED_DORMANT_KINDS)
 export type OrcadMigrationSourceDormantInspection = {
   payload: OrcadMigrationDormantStatePayload
   blockedCounts: Record<TransferredDormantKind, number>
+  /** Session blockers and remedies. */
+  blockedSessionItems: string[]
+  /** Automations that move once their in-flight run finishes. */
+  runningAutomationItems: string[]
+  /** Retained on this desktop after confirmed "Move anyway". */
+  leftBehindItems: string[]
+  /** Automations a local WSL move carries disabled, to re-enable on the host once it commits. */
+  automationsEnabledAtSource: string[]
+}
+
+/** Confirmed "Move anyway" permits retaining unsupported state; unsaved-draft blockers still apply. */
+export function orcadMigrationLeavesBehind(
+  state: PersistedState,
+  targetId: string | null
+): boolean {
+  // A local WSL move has no "Move anyway": what can't move blocks it.
+  return (
+    targetId !== null &&
+    state.sshTargets.some(
+      (target) => target.id === targetId && target.managedServerLeaveBehind !== undefined
+    )
+  )
 }
 
 export function collectOrcadMigrationSourceDormantState(
@@ -48,9 +70,11 @@ export function collectOrcadMigrationSourceDormantState(
   source: OrcadMigrationManifestSource,
   catalog: OrcadMigrationCatalogPayload,
   storage?: TerminalScrollbackSnapshotStorage,
-  destinationEnvironmentId?: string
+  destinationEnvironmentId?: string,
+  /** A WSL move's slept panes; see `projectOrcadMigrationSessionScrollback`. */
+  daemonHistoryLeaf?: (tabId: string, leafId: string) => boolean
 ): OrcadMigrationSourceDormantInspection {
-  const scope = createOrcadMigrationSourceScope({ source, catalog, repos: state.repos })
+  const scope = createOrcadMigrationExportScope({ source, catalog, repos: state.repos })
   const blockedCounts = emptyBlockedCounts()
   const destinationRepos = catalog.repositories.map(toOrcadDestinationRepository)
   const setupByRepoId = new Map(
@@ -88,12 +112,15 @@ export function collectOrcadMigrationSourceDormantState(
         return []
       }
       const worktreeId = unqualifyOrcadMigrationOwnerKey(sourceKey)
+      if (worktreeId !== lineage.worktreeId) {
+        blockedCounts['worktree-lineage'] += 1
+        return []
+      }
+      // Cross-host history belongs to the desktop and stays in its retained source profile.
       if (
-        worktreeId !== lineage.worktreeId ||
         !orcadMigrationOwnerMatchesScope(lineage.worktreeId, scope) ||
         !orcadMigrationOwnerMatchesScope(lineage.parentWorktreeId, scope)
       ) {
-        blockedCounts['worktree-lineage'] += 1
         return []
       }
       return [{ sourceKey, worktreeId, lineage: structuredClone(lineage) }]
@@ -110,12 +137,14 @@ export function collectOrcadMigrationSourceDormantState(
         return []
       }
       const childWorkspaceKey = unqualifyOrcadMigrationOwnerKey(sourceKey)
+      if (childWorkspaceKey !== lineage.childWorkspaceKey) {
+        blockedCounts['workspace-lineage'] += 1
+        return []
+      }
       if (
-        childWorkspaceKey !== lineage.childWorkspaceKey ||
         !orcadMigrationOwnerMatchesScope(lineage.childWorkspaceKey, scope) ||
         !orcadMigrationOwnerMatchesScope(lineage.parentWorkspaceKey, scope)
       ) {
-        blockedCounts['workspace-lineage'] += 1
         return []
       }
       return [
@@ -133,7 +162,7 @@ export function collectOrcadMigrationSourceDormantState(
     (entry) => entry.childWorkspaceKey,
     () => (blockedCounts['workspace-lineage'] += 1)
   )
-  // A repo id another host shares keys one registry for both hosts: it stays where it is.
+  // Bare repo IDs shared across hosts cannot prove ownership.
   const ownedRepoIds = [...scope.repoIds].filter((repoId) => !scope.sharedRepoIds.has(repoId))
   const sparsePresets = ownedRepoIds
     .flatMap((repoId) => state.sparsePresetsByRepo[repoId] ?? [])
@@ -149,13 +178,16 @@ export function collectOrcadMigrationSourceDormantState(
         : []
     })
     .sort((left, right) => compareKeys(left.repoId, right.repoId))
+  const leaveBehind = orcadMigrationLeavesBehind(state, scope.targetId)
   const workspaceSession = collectOrcadMigrationSourceWorkspaceSession(
     state,
     source,
     catalog,
-    storage
+    storage,
+    leaveBehind,
+    daemonHistoryLeaf
   )
-  blockedCounts['workspace-session'] = workspaceSession.blockedCount
+  const blockedSessionItems = [...workspaceSession.blockedItems]
   const automationState = collectOrcadMigrationSourceAutomationState(state, source, catalog)
   blockedCounts.automation = automationState.blockedAutomationCount
   blockedCounts['automation-run'] = automationState.blockedRunCount
@@ -166,10 +198,28 @@ export function collectOrcadMigrationSourceDormantState(
     destinationEnvironmentId,
     workspaceSession.payload
   )
-  blockedCounts['mobile-tab-selection'] = clientState.blockedCounts['mobile-tab-selection']
-  blockedCounts['ui-routing'] = clientState.blockedCounts['ui-routing']
   blockedCounts['saved-port-forward'] = clientState.blockedCounts['saved-port-forward']
-  blockedCounts['workspace-session'] += clientState.blockedCount
+  const leftBehindItems = [...workspaceSession.leftBehindItems]
+  const duplicateCloses = Array.from(
+    { length: clientState.blockedCount },
+    () => 'a browser page close saved twice'
+  )
+  // Duplicate closes stay behind; unsaved drafts still block even after "Move anyway".
+  ;(leaveBehind ? leftBehindItems : blockedSessionItems).push(...duplicateCloses)
+  blockedCounts['workspace-session'] = blockedSessionItems.length
+  if (leaveBehind) {
+    // These rows are excluded already; saved port conflicts are checked by the server.
+    for (const kind of ORCAD_MIGRATION_TRANSFERRED_DORMANT_KINDS) {
+      if (
+        kind !== 'workspace-session' &&
+        kind !== 'saved-port-forward' &&
+        blockedCounts[kind] > 0
+      ) {
+        leftBehindItems.push(`${blockedCounts[kind]} saved ${kind} record(s)`)
+        blockedCounts[kind] = 0
+      }
+    }
+  }
   return {
     payload: {
       version: 1,
@@ -197,7 +247,15 @@ export function collectOrcadMigrationSourceDormantState(
         : {}),
       ...(clientState.payload ? { clientState: clientState.payload } : {})
     },
-    blockedCounts
+    blockedCounts,
+    blockedSessionItems,
+    runningAutomationItems: leaveBehind
+      ? []
+      : automationState.runningAutomationNames.map(
+          (name) => `${name} is running; wait for it to finish, then connect again`
+        ),
+    leftBehindItems,
+    automationsEnabledAtSource: automationState.enabledAtSourceIds
   }
 }
 

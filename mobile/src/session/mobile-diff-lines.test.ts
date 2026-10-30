@@ -49,4 +49,19 @@ describe('buildMobileDiffLines', () => {
       text: '... diff truncated for mobile preview ...'
     })
   })
+
+  it('hides a re-indent unless whitespace is shown, like desktop', () => {
+    const original = 'if (a) {\n  run()\n}\n'
+    const modified = 'if (a) {\n    run()\n}\n'
+    const kinds = (lines: { kind: string }[]) => lines.map((line) => line.kind)
+    expect(
+      kinds(buildMobileDiffLines(original, modified, { ignoreTrimWhitespace: true }).lines)
+    ).toEqual(['context', 'context', 'context'])
+    expect(kinds(buildMobileDiffLines(original, modified).lines)).toEqual([
+      'context',
+      'delete',
+      'add',
+      'context'
+    ])
+  })
 })

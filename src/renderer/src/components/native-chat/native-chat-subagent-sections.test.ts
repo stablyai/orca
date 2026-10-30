@@ -8,7 +8,7 @@ import type {
   NativeChatSubagentState
 } from '../../../../shared/native-chat-types'
 import { projectNativeChatTranscript } from '../../../../shared/native-chat-transcript-projection'
-import { nativeChatRowsInDrawOrder } from '../../../../shared/native-chat-turn-grouping'
+import { nativeChatRowsInDrawOrder } from '../../../../shared/native-chat/transcript/native-chat-turn-grouping'
 import {
   nativeChatTurnMembership,
   type NativeChatTurnJournal
@@ -68,8 +68,7 @@ function roster(id: string, agents: [string, string, NativeChatSubagentState][])
   )
 }
 
-/** The journal a scoped host writes for `rows`: each turn's record, then the rows it
- *  scopes to that turn; every other row belongs to none. */
+/** Write turn records then their scoped rows; all other rows remain unscoped. */
 function journalOf(
   rows: readonly NativeChatMessage[],
   turns: readonly [turnItemId: string, userItemId: string, rowIds: readonly string[]][]
@@ -120,13 +119,11 @@ function journalOf(
   return { items, submissions: [] }
 }
 
-/** `journal`: what places each row in its turn, as the list gets it. */
 function sectionsOf(rows: NativeChatMessage[], journal?: NativeChatTurnJournal) {
   const { conversation, subagentRows } = projectNativeChatTranscript(rows, compareMessages, journal)
   return { conversation, sections: nativeChatSubagentSections(conversation, subagentRows) }
 }
 
-/** The conversation's rows in draw order with their turns, as the list resolves them. */
 function turnRowsOf(conversation: readonly NativeChatMessage[], journal?: NativeChatTurnJournal) {
   const { turnKeys, liveTurnKey, drawOrder } = nativeChatTurnMembership(conversation, journal)
   return {
@@ -136,8 +133,6 @@ function turnRowsOf(conversation: readonly NativeChatMessage[], journal?: Native
   }
 }
 
-/** `choices` and `rosters`: the sections and roster lists the reader opened (true) or
- *  closed (false) by hand. */
 function slotsOf(
   rows: NativeChatMessage[],
   choices: Record<string, boolean> = {},
@@ -162,8 +157,7 @@ function slotsOf(
   })
 }
 
-/** One line per thing drawn: `>` per section it sits in, then a row id, `•agent` for a
- *  roster entry, or `[agent]` for a section head; ` open` when that agent's section is. */
+/** Compact outline: > for depth, row ids, •agent entries, [agent] heads, and open for expanded sections. */
 function outline(slots: readonly NativeChatTranscriptSlot[]): string[] {
   const entry = (agentId: string, open: boolean | undefined) => `•${agentId}${open ? ' open' : ''}`
   return slots.flatMap((slot) => {
@@ -184,7 +178,6 @@ function outline(slots: readonly NativeChatTranscriptSlot[]): string[] {
   })
 }
 
-/** The entries a roster row draws: none while its list is closed, else through its first open one. */
 function entriesInRow(slot: NativeChatMessageSlot): [string, boolean][] {
   const roster = slot.subagentRoster
   const drawn: [string, boolean][] = []
@@ -240,7 +233,34 @@ describe("a subagent's rows live in its own section", () => {
     expect(new Set(slots.map(nativeChatSlotKey)).size).toBe(slots.length)
   })
 
-  // The parent's live line speaks for the session's own agent only, so a child's open block draws.
+  it('opens each under the row its turn’s subagents draw as, from their own rows alike', () => {
+    const own = (agentId: string, label: string) =>
+      row(
+        `subagent:${agentId}`,
+        [
+          { type: 'text', text: `Ran subagent ${label}` },
+          { type: 'subagent', id: agentId, label, state: 'completed', groupId: 'turn-1' }
+        ],
+        { role: 'system' }
+      )
+    const rows = [
+      row('ask', say('review the PR'), { role: 'user' }),
+      own('task-1', 'explore'),
+      row('child-look', say('Looking at the diff.'), by('task-1')),
+      row('answer', say('Delegated.')),
+      own('task-2', 'explore'),
+      row('child-2-look', say('Me too.'), by('task-2'))
+    ]
+    expect(outline(slotsOf(rows, { 'task-2': true }))).toEqual([
+      'ask',
+      'subagent:task-1',
+      '•task-1',
+      '•task-2 open',
+      '>child-2-look',
+      'answer'
+    ])
+  })
+
   it("draws a working agent's open reasoning in its section", () => {
     const thinking = row('child-think', say('Comparing the two diffs'), {
       ...by('task-1'),
@@ -251,7 +271,6 @@ describe("a subagent's rows live in its own section", () => {
     expect(outline(slotsOf(rows, { 'task-1': true }, true))).toContain('>child-think')
   })
 
-  // The fold reads only the conversation, so a subagent's failure after the answer is its own.
   it("folds a settled turn to the session's own answer, not a subagent's later failure", () => {
     const failed = [{ type: 'text' as const, text: 'The subagent failed.', tone: 'error' as const }]
     const rows = [
@@ -325,7 +344,6 @@ describe("a subagent's rows live in its own section", () => {
       'answer'
     ])
     expect(new Set(both.map(nativeChatSlotKey)).size).toBe(both.length)
-    // The outline rail places the entries after an open section in the roster's turn.
     expect(
       both.flatMap((slot) => (slot.kind === 'subagent-entries' ? [slot.turnKey] : []))
     ).toEqual(['ask'])
@@ -454,7 +472,6 @@ describe("a subagent's rows live in its own section", () => {
 })
 
 describe("a subagent's section is open while it is the session's live frontier", () => {
-  // The parent waits on the agent: nothing it said or did comes after the roster.
   const waiting = (state: NativeChatSubagentState) => [
     row('ask', say('review the PR'), { role: 'user' }),
     roster('spawn', [['task-1', 'explore the lane', state]]),
@@ -559,7 +576,6 @@ describe("a subagent's section is open while it is the session's live frontier",
       row('grandchild-read', say('Reading one file.'), by('task-2', 'task-1'))
     ]
     expect(opened(rows)).toEqual(['task-1', 'task-2'])
-    // The session's own output still supersedes it.
     expect(opened([...rows, row('answer', say('Still waiting.'))])).toEqual([])
   })
 })
@@ -601,8 +617,7 @@ function collab(id: string, tool: string, receiverThreadIds: string[]): NativeCh
 }
 
 describe("a parent's spawn and wait calls are part of its subagents' delegation", () => {
-  // Claude: one roster row per turn, written at the first spawn and revised by the next. The
-  // second spawn call folds into the parent's text before it, a row drawn after the roster.
+  // Claude revises its first-spawn roster; later spawn calls may fold into a parent row drawn after it.
   const claudeTurn = [
     row('ask', say('review both lanes'), { role: 'user' }),
     row('spawn-call-a', call('Agent')),
@@ -621,7 +636,6 @@ describe("a parent's spawn and wait calls are part of its subagents' delegation"
 
   it("keeps the newest of a turn's spawns open while the parent only spawns", () => {
     expect(opened(claudeTurn)).toEqual(['task-b'])
-    // The roster itself at the frontier: its most recently added agent.
     const rosterLast = claudeTurn.filter(({ id }) => id !== 'then' && id !== 'spawn-call-b')
     expect(opened(rosterLast)).toEqual(['task-b'])
   })
@@ -644,7 +658,6 @@ describe("a parent's spawn and wait calls are part of its subagents' delegation"
     expect(opened(withChildren([row('spawn-call-b', call('Agent'))]))).toEqual(['task-b'])
   })
 
-  // Codex: every spawn, wait or message names its agents by thread id.
   const codexTurn = [
     row('ask', say('review both lanes'), { role: 'user' }),
     roster('spawn', [
@@ -708,8 +721,6 @@ describe("a subagent's edits in its turn's changed files", () => {
     ])
   })
 
-  // A send queued mid-turn lands among the running turn's rows; the host's turn
-  // records, not position, say the edit after it is still the running turn's.
   it("counts an edit made mid-turn in the host's turn, and heads its section there", () => {
     const rows = [
       row('ask-1', say('edit it'), { role: 'user' }),
@@ -732,8 +743,7 @@ describe("a subagent's edits in its turn's changed files", () => {
     )
     const diffs = nativeChatTurnDiffs(merged.messages, merged.turnKeys, sections.pathOf)
     expect(Array.from(diffs.keys())).toEqual(['ask-1'])
-    // No roster names it, so its head sits where its first row happened: among
-    // ask-1's rows, which draw ahead of the send that waited behind them.
+    // Without a roster, place the head in its first row’s turn, ahead of sends queued behind that turn.
     const turns = slotsOf(rows, {}, false, {}, journal).map((slot) => [
       slot.kind === 'subagent'
         ? `[${slot.agentId}]`

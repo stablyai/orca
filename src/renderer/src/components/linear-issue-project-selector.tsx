@@ -1,3 +1,4 @@
+import { taskProviderErrorMessage, taskProviderErrorText } from '@/lib/task-provider-error-copy'
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { Check, ChevronDown, FolderKanban, LoaderCircle } from 'lucide-react'
 import { toast } from 'sonner'
@@ -12,6 +13,7 @@ import { useAppStore } from '@/store'
 import type { LinearIssue } from '../../../shared/linear/issue-types'
 import type { LinearProjectSummary } from '../../../shared/linear/project-types'
 import type { TaskSourceContext } from '../../../shared/task-source-context'
+import { defaultScopeSource } from '@/lib/default-creation-host'
 
 export function LinearIssueProjectSelector({
   issue,
@@ -23,7 +25,7 @@ export function LinearIssueProjectSelector({
   sourceContext?: TaskSourceContext | null
 }): React.JSX.Element {
   const settings = useAppStore((state) => state.settings)
-  const providerSettings = sourceContext ?? settings
+  const providerSettings = sourceContext ?? defaultScopeSource(settings)
   const patchLinearIssue = useAppStore((state) => state.patchLinearIssue)
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
@@ -55,7 +57,7 @@ export function LinearIssueProjectSelector({
           if (mountedRef.current && requestId === searchRequestIdRef.current) {
             toast.error(
               error instanceof Error
-                ? error.message
+                ? taskProviderErrorText(error.message)
                 : translate(
                     'auto.components.LinearIssueWorkspace.38b80780c2',
                     'Failed to load projects'
@@ -93,12 +95,12 @@ export function LinearIssueProjectSelector({
           )
           setOpen(false)
         } else {
-          toast.error(result.error)
+          toast.error(taskProviderErrorMessage(result))
         }
       } catch (error) {
         toast.error(
           error instanceof Error
-            ? error.message
+            ? taskProviderErrorText(error.message)
             : translate(
                 'auto.components.LinearIssueWorkspace.8b5b593053',
                 'Failed to update project'

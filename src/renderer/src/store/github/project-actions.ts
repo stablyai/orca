@@ -1,8 +1,9 @@
+import { translate } from '@/i18n/i18n'
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import type { GitHubSlice } from './slice-types'
 import type { GetProjectViewTableResult } from '../../../../shared/github/project-result-types'
-import { callRuntimeRpc, getActiveRuntimeTarget } from '../../runtime/runtime-rpc-client'
+import { callRuntimeRpc } from '../../runtime/runtime-rpc-client'
 import {
   projectViewCacheKey,
   projectViewRequestKey,
@@ -25,9 +26,8 @@ export const createProjectActions = (
   GitHubSlice,
   'fetchProjectViewTable' | 'updateProjectFieldValue' | 'clearProjectFieldValue'
 > => ({
-  fetchProjectViewTable: async (args, options) => {
-    const target = getActiveRuntimeTarget(get().settings)
-    const sourceScope = projectViewSourceScope(get().settings)
+  fetchProjectViewTable: async (target, args, options) => {
+    const sourceScope = projectViewSourceScope(target)
     const requestKey = projectViewRequestKey(args, sourceScope)
 
     // Fast path: a caller-supplied `viewId` gives the resolved cache key up front, so serve a fresh entry directly.
@@ -55,11 +55,11 @@ export const createProjectActions = (
       if (!existing) {
         break
       }
-      // Why: a forcing caller must not dedupe to a non-forcing in-flight request; wait for it to settle, then issue a fresh forced call (mirrors fetchWorkItems).
+      // Forced callers must await weaker in-flight work then refetch, like fetchWorkItems.
       if (!options?.force || existing.force) {
         return existing.promise
       }
-      // Why: wait out one weaker request so peers can share the upgrade, but never twice — a steady stream of weaker callers would otherwise starve this one forever.
+      // Wait only once for weaker work so peers share upgrades without starvation.
       if (waitedForUpgrade) {
         break
       }
@@ -80,9 +80,7 @@ export const createProjectActions = (
                 { timeoutMs: 60_000 }
               )
             : await window.api.gh.getProjectViewTable(args)
-        // Why: the bounded upgrade wait can leave us running beside a stronger request for this
-        // key, so neither write below may land once it owns the key — a late non-OK reply would
-        // otherwise stamp its error over the fresher table (or over a newer error) at the known key.
+        // Bounded waits may overlap stronger requests; late non-OK results must not overwrite their newer data/errors.
         if (!ownsInflightRequest(inflightProjectViewRequests, requestKey, requestId)) {
           return envelope
         }
@@ -115,13 +113,16 @@ export const createProjectActions = (
         }
         return envelope
       } catch (err) {
-        // Why: the IPC boundary must not throw across the promise — wrap unexpected errors in the classified envelope for a single renderer shape.
+        // Classify unexpected IPC failures into the same envelope so renderer handles one error shape.
         console.error('Failed to fetch GitHub project view:', err)
         return {
           ok: false,
           error: {
             type: 'unknown',
-            message: err instanceof Error ? err.message : 'Failed to fetch project view'
+            message:
+              err instanceof Error
+                ? err.message
+                : translate('projectViews.picker.viewFailed', 'Failed to fetch project view')
           }
         }
       } finally {

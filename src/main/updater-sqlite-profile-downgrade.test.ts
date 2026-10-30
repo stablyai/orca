@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { loadUpdaterModule, warmUpdaterModule } from './updater-test-module-loader'
+import { updaterMainWindow } from './updater-test-main-window'
 
 const { appMock, autoUpdaterMock, chooseLocalBuildMock, moduleFactories, resetUpdaterMocks } =
   await vi.hoisted(async () => (await import('./updater-test-harness')).createUpdaterMocks())
@@ -7,8 +8,7 @@ const { appMock, autoUpdaterMock, chooseLocalBuildMock, moduleFactories, resetUp
 vi.mock('electron', () => moduleFactories.electron())
 vi.mock('electron-updater', () => moduleFactories.electronUpdater())
 vi.mock('./electron-updater-loader', () => moduleFactories.electronUpdaterLoader())
-vi.mock('@electron-toolkit/utils', () => moduleFactories.electronToolkitUtils())
-vi.mock('./ipc/pty', () => moduleFactories.ipcPty())
+vi.mock('./ipc/pty/kill-all', () => moduleFactories.ptyKillAll())
 vi.mock('./linux-update-package-type', () => moduleFactories.linuxUpdatePackageType())
 vi.mock('./updater-lifecycle-diagnostics', () => moduleFactories.updaterLifecycleDiagnostics())
 vi.mock('./updater-changelog', () => moduleFactories.updaterChangelog())
@@ -30,8 +30,7 @@ describe('updater SQLite downgrade protection', () => {
         appMock.getVersion.mockReturnValue('1.4.221')
         const send = vi.fn()
         const { setupAutoUpdater, checkForUpdatesFromMenu } = await loadUpdaterModule()
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The mocked updater only reads webContents.send from this window fixture.
-        setupAutoUpdater({ webContents: { send } } as never, {
+        setupAutoUpdater(updaterMainWindow(send), {
           getLastUpdateCheckAt: () => Date.now()
         })
         autoUpdaterMock.setFeedURL.mockClear()
@@ -59,8 +58,7 @@ describe('updater SQLite downgrade protection', () => {
       chooseLocalBuildMock.mockResolvedValue({ version: '1.4.213', close })
       const send = vi.fn()
       const { setupAutoUpdater, checkForUpdatesFromMenu } = await loadUpdaterModule()
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The mocked updater only reads webContents.send from this window fixture.
-      setupAutoUpdater({ webContents: { send } } as never, {
+      setupAutoUpdater(updaterMainWindow(send), {
         getLastUpdateCheckAt: () => Date.now()
       })
       checkForUpdatesFromMenu({ localBuild: true })
