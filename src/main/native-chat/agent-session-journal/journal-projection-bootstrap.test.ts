@@ -82,7 +82,10 @@ const legacyChat = (rows: number) =>
     projectionEpochRow,
     ...Array.from({ length: rows - 1 }, (_, index) => legacyItem(index + 2))
   ])
-const coverage = () => restoreJournal(database.db, sessionId)?.projectionThrough
+// Saved coverage straight from its row, so checks between timer windows read no journal rows.
+const coverage = (session = sessionId) =>
+  database.db.prepare('SELECT through_seq FROM journal_state WHERE session_id = ?').get(session)
+    ?.through_seq
 const nextItem = (ordinal: number): AgentJournalItemIdentity => ({
   provider: 'codex',
   threadId: 'thread-1',
@@ -320,19 +323,22 @@ it('keeps the pages before damage and parks a closed chat until its rows change,
       throw error
     }
   )
-  await vi.advanceTimersByTimeAsync(60_000)
+  // Each pass is measured on its own; the replay checks between passes read rows too.
+  const readDuring = async (ms: number) => {
+    const before = watched.rowsRead()
+    await vi.advanceTimersByTimeAsync(ms)
+    return watched.rowsRead() - before
+  }
   // Page one commits; page two holds the damage, so it writes nothing and the chat parks.
-  expect(watched.rowsRead()).toBe(64)
+  expect(await readDuring(60_000)).toBe(64)
   expect(coverage()).toBe(32)
   expect(restoreJournal(database.db, sessionId)?.damage).toStrictEqual(
     replayJournal(database.db, sessionId)?.damage
   )
-  await vi.advanceTimersByTimeAsync(6 * 60 * 60_000)
-  expect(watched.rowsRead()).toBe(64)
-  // A new row re-arms it; the retry starts from the kept page.
+  expect(await readDuring(6 * 60 * 60_000)).toBe(0)
+  // A new row re-arms it; the retry decodes the kept page's view and reads only the next page.
   database.transaction((db) => insertTestJournalRow(db, sessionId, legacyItem(101)))
-  await vi.advanceTimersByTimeAsync(6 * 60 * 60_000)
-  expect(watched.rowsRead()).toBe(96)
+  expect(await readDuring(6 * 60 * 60_000)).toBe(32)
   expect(coverage()).toBe(32)
 
   // An older build replaces the chat with a clean epoch ending at the same sequence; only the
