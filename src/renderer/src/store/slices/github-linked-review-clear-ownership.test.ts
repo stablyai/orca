@@ -125,6 +125,60 @@ describe('linked review clearing retains workspace and credential identities', (
     vi.useRealTimers()
   })
 
+  it.each([100, 1000])(
+    'bounds linked SSH request-start reads across %s workspaces',
+    async (population) => {
+      const { store, workspace, sibling, update, alias } = setup(true)
+      let reads = 0
+      const rows = Array.from({ length: population }, (_, index) => {
+        const id = index === 0 ? workspace.id : `project::/unrelated-${index}`
+        return {
+          ...workspace,
+          get id() {
+            reads++
+            return id
+          }
+        }
+      })
+      store.setState({ worktreesByRepo: { project: [...rows, sibling] } })
+      const start = (sequence: number) =>
+        store.getState().applyGitHubPRRefreshEvent({
+          sequence,
+          reason: 'swr',
+          aliases: [alias],
+          status: 'in-flight',
+          requestStartedAt: NOW
+        })
+      start(1)
+      expect(reads).toBeGreaterThanOrEqual(population)
+      expect(reads).toBeLessThanOrEqual(3 * population + 10)
+      reads = 0
+      for (let sequence = 2; sequence <= population + 1; sequence++) {
+        start(sequence)
+      }
+      expect(reads).toBeLessThanOrEqual(2 * population)
+      store.getState().applyGitHubPRRefreshEvent({
+        sequence: population + 1,
+        reason: 'swr',
+        aliases: [alias],
+        outcome: { kind: 'found', pr: diverged, fetchedAt: NOW }
+      })
+      await update.mock.results[0]?.value
+      expect(update).toHaveBeenCalledTimes(1)
+      expect(runtimeEnvironmentCall).toHaveBeenCalledWith(
+        expect.objectContaining({
+          selector: 'server',
+          method: 'worktree.set',
+          params: expect.objectContaining({ linkedPR: null })
+        })
+      )
+      expect(
+        findKnownWorktreeById(store.getState(), workspace.id, 'ssh:builder')?.linkedPR
+      ).toBeNull()
+      expect(findKnownWorktreeById(store.getState(), workspace.id, 'local')).toBe(sibling)
+    }
+  )
+
   for (const stamped of [false, true]) {
     it.each(['cache', 'lookup', 'coordinator'] as const)(
       `persists the paired copy through %s (stamp: ${stamped})`,

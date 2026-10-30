@@ -1,6 +1,7 @@
-import { createStore, type StoreApi } from 'zustand/vanilla'
+import type { StoreApi } from 'zustand/vanilla'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { createEditorSlice } from './editor'
+import { createEditorTabsStore } from './editor-slice-test-harness'
+import { makeWorktree, TEST_REPO } from './worktrees-slice-test-fixtures'
 import { createCheckRunDetailsRequestId } from '@/components/editor/check-run-details-tab'
 import type { AppState } from '../types'
 import type { PRCheckRunDetails } from '../../../../shared/github/check-types'
@@ -38,34 +39,32 @@ const details: PRCheckRunDetails = {
   annotations: [],
   jobs: []
 }
-const pairedRepo = {
+const pairedRepo: AppState['repos'][number] = {
+  ...TEST_REPO,
   id: 'repo-1',
   path: '/remote',
   executionHostId: 'runtime:server',
   connectionId: 'builder'
 }
-const pairedWorktree = {
+const pairedWorktree = makeWorktree({
   id: 'wt-1',
   repoId: 'repo-1',
   path: '/remote',
   hostId: 'ssh:builder',
   runtimeOwnerEnvironmentId: 'server'
-}
+})
 
-function createOwnerStore(state: Record<string, unknown>) {
+function createOwnerStore(state: Partial<AppState>) {
   const fetchPRCheckDetails = vi.fn().mockResolvedValue(details)
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const store = createStore<any>()((...args: any[]) => ({
+  const store = createEditorTabsStore()
+  store.setState({
     activeWorktreeId: 'wt-1',
     detectedWorktreesByRepo: {},
-    settings: { activeRuntimeEnvironmentId: null },
+    settings: null,
     fetchPRCheckDetails,
-    ...state,
-    ...createEditorSlice(...(args as Parameters<typeof createEditorSlice>))
-  })) as unknown as StoreApi<AppState>
-  // Catalog fixtures carry only the owner fields these lookups read.
-  const setCatalog = (catalog: Record<string, unknown>) =>
-    (store as unknown as StoreApi<Record<string, unknown>>).setState(catalog)
+    ...state
+  })
+  const setCatalog = (catalog: Partial<AppState>) => store.setState(catalog)
   return { store, fetchPRCheckDetails, setCatalog }
 }
 
@@ -86,7 +85,7 @@ describe('check-details tab owner', () => {
   it.each([
     {
       rival: 'a direct SSH listing',
-      repo: { id: 'repo-1', path: '/direct', connectionId: 'builder' },
+      repo: { ...pairedRepo, path: '/direct', executionHostId: undefined, connectionId: 'builder' },
       worktree: { ...pairedWorktree, path: '/direct', runtimeOwnerEnvironmentId: undefined }
     },
     {
@@ -94,7 +93,7 @@ describe('check-details tab owner', () => {
       repo: { ...pairedRepo, path: '/other', executionHostId: 'runtime:other' },
       worktree: { ...pairedWorktree, path: '/other', runtimeOwnerEnvironmentId: 'other' }
     }
-  ])(
+  ] as const)(
     'refuses to reload a paired SSH tab through $rival once its owner is gone',
     async ({ repo, worktree }) => {
       const { store, fetchPRCheckDetails, setCatalog } = createOwnerStore({
@@ -141,10 +140,12 @@ describe('check-details tab owner', () => {
   )
 
   it('refuses to reload an unpinned tab when a detected checkout rivals the tracked row', async () => {
-    const localRepo = { id: 'repo-1', path: '/repo' }
+    const localRepo = { ...TEST_REPO, id: 'repo-1', path: '/repo' }
     const { store, fetchPRCheckDetails } = createOwnerStore({
       repos: [localRepo, { ...localRepo, path: '/remote', executionHostId: 'runtime:server' }],
-      worktreesByRepo: { 'repo-1': [{ id: 'wt-1', repoId: 'repo-1', path: '/repo' }] },
+      worktreesByRepo: {
+        'repo-1': [makeWorktree({ id: 'wt-1', repoId: 'repo-1', path: '/repo' })]
+      },
       detectedWorktreesByRepo: {
         'repo-1': {
           repoId: 'repo-1',
@@ -152,11 +153,16 @@ describe('check-details tab owner', () => {
           source: 'git',
           worktrees: [
             {
-              id: 'wt-1',
-              repoId: 'repo-1',
-              path: '/remote',
-              hostId: 'runtime:server',
-              runtimeOwnerEnvironmentId: 'server'
+              ...makeWorktree({
+                id: 'wt-1',
+                repoId: 'repo-1',
+                path: '/remote',
+                hostId: 'runtime:server',
+                runtimeOwnerEnvironmentId: 'server'
+              }),
+              ownership: 'external',
+              selectedCheckout: false,
+              visible: true
             }
           ]
         }
@@ -174,9 +180,9 @@ describe('check-details tab owner', () => {
   })
 
   it('delivers a sidebar request to its tab after the user selects the local twin', async () => {
-    const localRepo = { id: 'repo-1', path: '/repo' }
-    const localWorktree = { id: 'wt-1', repoId: 'repo-1', path: '/repo' }
-    const remoteWorktree = {
+    const localRepo = { ...TEST_REPO, id: 'repo-1', path: '/repo' }
+    const localWorktree = makeWorktree({ id: 'wt-1', repoId: 'repo-1', path: '/repo' })
+    const remoteWorktree: typeof localWorktree = {
       ...localWorktree,
       path: '/remote',
       hostId: 'runtime:server',

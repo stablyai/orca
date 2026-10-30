@@ -447,6 +447,7 @@ it.each(
     })
     rows('compact', child('restored'))
     await act(async () => {})
+    expect(visits.worktrees).toBeGreaterThanOrEqual(population)
     visits.worktrees = 0
     visits.repos = 0
     await click(2)
@@ -461,11 +462,11 @@ it.each(
         takeAndSettle()
       })
     }
-    // Count real catalog reads before observation-driven renders; R stays fixed at one.
+    // Owner indexes are warm; clicks must not rescan either catalog.
     const passBound = fallback ? 8 : 6
-    expect(visits.worktrees).toBeGreaterThanOrEqual(population)
+    expect(visits.worktrees).toBe(0)
     expect(visits.worktrees).toBeLessThanOrEqual(passBound * population)
-    expect(visits.repos).toBeGreaterThan(0)
+    expect(visits.repos).toBe(0)
     expect(visits.repos).toBeLessThanOrEqual(passBound)
     expect(requests).toHaveLength(fallback ? 2 : 1)
     expect(bridge.receive({ ...identity(), action: 'take' })).toEqual({})

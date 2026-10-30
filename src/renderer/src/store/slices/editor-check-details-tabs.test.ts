@@ -1,8 +1,6 @@
-import { createStore, type StoreApi } from 'zustand/vanilla'
 import { describe, expect, it, vi } from 'vitest'
-import { createEditorSlice } from './editor'
 import { createEditorTabsStore } from './editor-slice-test-harness'
-import type { AppState } from '../types'
+import { makeWorktree, TEST_REPO } from './worktrees-slice-test-fixtures'
 import { drawTabsFromMain } from './tabs-drawn-from-main.test-fixture'
 import { layoutApplyTestTransport } from '@/runtime/layout-apply-test-transport.test-fixture'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
@@ -221,11 +219,16 @@ describe('createEditorSlice conflict status reconciliation', () => {
       const fetchPRCheckDetails = vi.fn().mockResolvedValue(null)
       const remote = executionHostId !== 'local'
       const repoPath = remote ? '/remote' : '/repo'
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const store = createStore<any>()((...args: any[]) => ({
+      const store = createEditorTabsStore()
+      store.setState({
         activeWorktreeId: 'wt-1',
         repos: [
-          { id: 'repo-1', path: repoPath, ...(remote ? { executionHostId: 'runtime:server' } : {}) }
+          {
+            ...TEST_REPO,
+            id: 'repo-1',
+            path: repoPath,
+            ...(remote ? { executionHostId: 'runtime:server' as const } : {})
+          }
         ],
         worktreesByRepo: {},
         detectedWorktreesByRepo: {
@@ -235,18 +238,24 @@ describe('createEditorSlice conflict status reconciliation', () => {
             source: 'git',
             worktrees: [
               {
-                id: 'wt-1',
-                repoId: 'repo-1',
-                path: repoPath,
-                ...(remote ? { hostId: 'runtime:server', runtimeOwnerEnvironmentId: 'server' } : {})
+                ...makeWorktree({
+                  id: 'wt-1',
+                  repoId: 'repo-1',
+                  path: repoPath,
+                  ...(remote
+                    ? { hostId: 'runtime:server' as const, runtimeOwnerEnvironmentId: 'server' }
+                    : {})
+                }),
+                ownership: 'external',
+                selectedCheckout: false,
+                visible: true
               }
             ]
           }
         },
-        settings: { activeRuntimeEnvironmentId: null },
-        fetchPRCheckDetails,
-        ...createEditorSlice(...(args as Parameters<typeof createEditorSlice>))
-      })) as unknown as StoreApi<AppState>
+        settings: null,
+        fetchPRCheckDetails
+      })
       const check = {
         name: 'verify',
         status: 'completed' as const,
@@ -278,14 +287,13 @@ describe('createEditorSlice conflict status reconciliation', () => {
 
   it('stops loading when an open check-details tab loses its repository', async () => {
     const fetchPRCheckDetails = vi.fn()
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const store = createStore<any>()((...args: any[]) => ({
+    const store = createEditorTabsStore()
+    store.setState({
       activeWorktreeId: 'wt-1',
       repos: [],
       worktreesByRepo: {},
-      fetchPRCheckDetails,
-      ...createEditorSlice(...(args as Parameters<typeof createEditorSlice>))
-    })) as unknown as StoreApi<AppState>
+      fetchPRCheckDetails
+    })
     const check = {
       name: 'verify',
       status: 'completed' as const,
@@ -350,15 +358,16 @@ describe('createEditorSlice conflict status reconciliation', () => {
       ]
     })
     const fetchPRCheckDetails = vi.fn().mockResolvedValue(null)
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const store = createStore<any>()((...args: any[]) => ({
+    const store = createEditorTabsStore()
+    store.setState({
       activeWorktreeId: 'wt-1',
-      repos: [{ id: 'repo-1', path: '/repo' }],
-      worktreesByRepo: { 'repo-1': [{ id: 'wt-1', repoId: 'repo-1', path: '/repo' }] },
-      settings: { activeRuntimeEnvironmentId: null },
-      fetchPRCheckDetails,
-      ...createEditorSlice(...(args as Parameters<typeof createEditorSlice>))
-    })) as unknown as StoreApi<AppState>
+      repos: [{ ...TEST_REPO, id: 'repo-1', path: '/repo' }],
+      worktreesByRepo: {
+        'repo-1': [makeWorktree({ id: 'wt-1', repoId: 'repo-1', path: '/repo' })]
+      },
+      settings: null,
+      fetchPRCheckDetails
+    })
     if (owner !== 'local') {
       const local = store.getState().worktreesByRepo['repo-1'][0]
       store.setState({
@@ -494,15 +503,16 @@ describe('createEditorSlice conflict status reconciliation', () => {
   it('reloads a fork MR job tab with the stored GitLab project ref', async () => {
     loadGitLabJobLogDetailsMock.mockReset()
     loadGitLabJobLogDetailsMock.mockResolvedValue(null)
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const store = createStore<any>()((...args: any[]) => ({
+    const store = createEditorTabsStore()
+    store.setState({
       activeWorktreeId: 'wt-1',
-      repos: [{ id: 'repo-1', path: '/repo' }],
-      worktreesByRepo: { 'repo-1': [{ id: 'wt-1', repoId: 'repo-1', path: '/repo' }] },
-      settings: { activeRuntimeEnvironmentId: null },
-      fetchPRCheckDetails: vi.fn().mockResolvedValue(null),
-      ...createEditorSlice(...(args as Parameters<typeof createEditorSlice>))
-    })) as unknown as StoreApi<AppState>
+      repos: [{ ...TEST_REPO, id: 'repo-1', path: '/repo' }],
+      worktreesByRepo: {
+        'repo-1': [makeWorktree({ id: 'wt-1', repoId: 'repo-1', path: '/repo' })]
+      },
+      settings: null,
+      fetchPRCheckDetails: vi.fn().mockResolvedValue(null)
+    })
     const check = {
       name: 'test: unit',
       status: 'completed' as const,
@@ -527,11 +537,7 @@ describe('createEditorSlice conflict status reconciliation', () => {
   })
 
   it('keeps a stored GitLab project ref when a patch omits it', () => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const store = createStore<any>()((...args: any[]) => ({
-      activeWorktreeId: 'wt-1',
-      ...createEditorSlice(...(args as Parameters<typeof createEditorSlice>))
-    })) as unknown as StoreApi<AppState>
+    const store = createEditorTabsStore()
     const check = {
       name: 'test: unit',
       status: 'completed' as const,

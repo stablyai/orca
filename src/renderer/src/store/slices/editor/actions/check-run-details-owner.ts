@@ -4,6 +4,7 @@ import type { OpenCheckRunDetailsState } from '../../../../../../shared/editor-t
 import { getCheckRunTabIdentity } from '@/components/editor/check-run-details-tab'
 import {
   LOCAL_EXECUTION_HOST_ID,
+  parseExecutionHostId,
   toRuntimeExecutionHostId
 } from '../../../../../../shared/execution-host'
 import {
@@ -11,6 +12,7 @@ import {
   hasOpenFileExecutionHostEvidence
 } from '@/lib/unified-tab-host-ownership'
 import { findIndexedDetectedWorktrees } from '@/lib/worktree-runtime-owner-index'
+import { layoutFrameWorkspace } from '@/runtime/layout-frame-workspaces'
 import {
   resolveWorktreeOperationRoute,
   type WorktreeOperationOwnerRecord,
@@ -19,6 +21,7 @@ import {
 import { resolveExactWorktreeRoute } from '@/lib/worktree-owner-route'
 import { onPairedWebClientHost } from '@/lib/paired-web-client-host'
 import { captureWorktreeOperationGenerationSnapshot } from '@/lib/worktree-operation-generation'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/layout-owner-switch'
 import {
   selectDetectedWorktreesByRepo,
   selectWorktreesByRepo
@@ -31,7 +34,7 @@ export type CheckRunDetailsOwnership = Pick<
 
 type CheckRunDetailsOwnerFile = Pick<
   OpenFile,
-  'externalSshTargetId' | 'operationProvenance' | 'runtimeEnvironmentId' | 'worktreeId'
+  'id' | 'externalSshTargetId' | 'operationProvenance' | 'runtimeEnvironmentId' | 'worktreeId'
 >
 
 export function resolveCheckRunDetailsOwnership(
@@ -115,6 +118,24 @@ function getTabRoute(file: CheckRunDetailsOwnerFile): WorktreeOperationRoute {
   )
 }
 
+function getFramedTabRoute(file: CheckRunDetailsOwnerFile): WorktreeOperationRoute | null {
+  if (!ORCA_LAYOUT_OWNER_IS_MAIN) {
+    return null
+  }
+  const tabs = layoutFrameWorkspace(file.worktreeId)?.tabs.filter(
+    (tab) => tab.kind === 'check-details' && tab.entityId === file.id
+  )
+  const hosts = new Set(tabs?.map((tab) => tab.executionHostId))
+  const host = hosts.size === 1 ? parseExecutionHostId(hosts.values().next().value) : null
+  return host
+    ? {
+        executionHostId: host.id,
+        runtimeEnvironmentId:
+          file.runtimeEnvironmentId?.trim() || (host.kind === 'runtime' ? host.environmentId : null)
+      }
+    : null
+}
+
 /** The route a listing row is reached through, with a legacy SSH row's server recovered from its repo. */
 function getRowRoute(state: AppState, row: WorktreeOperationOwnerRecord) {
   if (!row.hostId && !row.runtimeOwnerEnvironmentId?.trim()) {
@@ -144,7 +165,10 @@ export function findCheckRunDetailsWorktree(
   state: AppState,
   file: CheckRunDetailsOwnerFile
 ): WorktreeOperationOwnerRecord | null {
-  const tabRoute = hasOpenFileExecutionHostEvidence(file) ? getTabRoute(file) : null
+  // Rebuilt local/direct-SSH views lack provenance; main's published tab still qualifies their owner.
+  const tabRoute = hasOpenFileExecutionHostEvidence(file)
+    ? getTabRoute(file)
+    : getFramedTabRoute(file)
   const rows = [
     ...Object.values(selectWorktreesByRepo(state) ?? {}).flatMap((worktrees) =>
       worktrees.filter((worktree) => worktree.id === file.worktreeId)
