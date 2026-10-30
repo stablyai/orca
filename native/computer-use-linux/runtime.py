@@ -1000,7 +1000,7 @@ def key_name(raw):
 def press_key(raw):
     name = key_name(raw)
     if len(name) == 1:
-        Atspi.generate_keyboard_event(0, name, Atspi.KeySynthType.STRING)
+        type_text(name)
         return
     if Gdk is None:
         raise RuntimeError("GDK is required for non-character key synthesis")
@@ -1022,7 +1022,29 @@ def hotkey(raw):
 
 
 def type_text(value):
-    Atspi.generate_keyboard_event(0, str(value), Atspi.KeySynthType.STRING)
+    text = str(value)
+    if os.environ.get("XDG_SESSION_TYPE", "").lower() == "wayland":
+        Atspi.generate_keyboard_event(0, text, Atspi.KeySynthType.STRING)
+        return
+    xdotool = shutil.which("xdotool")
+    if not xdotool:
+        raise RuntimeError("unsupported capability: synthetic text requires xdotool on X11")
+    # Keep normal typing below both the child and provider watchdogs.
+    if len(text) > 1000:
+        raise RuntimeError("unsupported capability: synthetic text is limited to 1000 characters; split the text or use paste_text")
+    try:
+        # AT-SPI STRING reuses one key mapping before Chromium consumes earlier Unicode events.
+        subprocess.run(
+            [xdotool, "type", "--clearmodifiers", "--delay", "12", "--file", "-"],
+            input=text,
+            encoding="utf-8",
+            env={**os.environ, "LC_ALL": "C.UTF-8"},
+            check=True,
+            capture_output=True,
+            timeout=10,
+        )
+    except (subprocess.SubprocessError, OSError) as error:
+        raise RuntimeError("text_input_incomplete: text may be partially typed and keyboard modifiers may have changed; inspect state before retrying") from error
 
 
 def insert_focused_text(window, value):

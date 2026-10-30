@@ -415,6 +415,9 @@ class RuntimeRenderTest(unittest.TestCase):
                     if stage == "windowactivate":
                         activate(int(command[-1]))
                         return types.SimpleNamespace(returncode=int(bool(case.get("refused"))), stdout="")
+                    if stage == "type":
+                        keys.append(active[0])
+                        return types.SimpleNamespace(returncode=0)
                     raise AssertionError("unexpected native operation")
 
                 fixture.root.get_state_set = state
