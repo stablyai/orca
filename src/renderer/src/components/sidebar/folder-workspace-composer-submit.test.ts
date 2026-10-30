@@ -590,7 +590,7 @@ describe('submitFolderWorkspaceCreate', () => {
       'folder-workspace-1',
       expect.objectContaining({
         startup: expect.objectContaining({
-          command: `claude 'Use Bob'"'"'s POSIX startup'`
+          command: `claude -- 'Use Bob'"'"'s POSIX startup'`
         })
       })
     )
@@ -639,7 +639,7 @@ describe('submitFolderWorkspaceCreate', () => {
       'folder-workspace-1',
       expect.objectContaining({
         startup: expect.objectContaining({
-          command: "claude 'Use Bob''s Windows startup'"
+          command: "claude -- 'Use Bob''s Windows startup'"
         })
       })
     )
