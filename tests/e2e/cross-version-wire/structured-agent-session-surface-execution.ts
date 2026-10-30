@@ -1,4 +1,5 @@
 import { expect, vi } from 'vitest'
+import type { structuredHostStub } from './structured-agent-session-host-fixture'
 import { AGENT_SESSION_ITEM_DETAIL_RUNTIME_CAPABILITY } from '../../../src/shared/protocol-version'
 import type { OrcaRuntimeService } from '../../../src/main/runtime/orca-runtime'
 import type { StructuredSessionSurfaceRuntime } from '../../../src/main/runtime/agent-session/structured-agent-session-close'
@@ -114,7 +115,7 @@ export async function callBuild(
 // Require every declared method to reach its host and return its declared result in each build pairing.
 export async function expectDeclaredSurfaceExecutes(
   build: AgentSessionWireBuild,
-  hostCalls: Record<string, ReturnType<typeof vi.fn>>,
+  hostCalls: ReturnType<typeof structuredHostStub>,
   clientCapabilities: readonly string[]
 ): Promise<void> {
   const retirement = vi.fn()

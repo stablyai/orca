@@ -117,7 +117,7 @@ describe('cross-version structured agent sessions', () => {
   )
 
   describe('a client that never asked for structured sessions', () => {
-    let hostCalls: Record<string, ReturnType<typeof vi.fn>>
+    let hostCalls: ReturnType<typeof structuredHostStub>
 
     beforeEach(() => {
       resetOperationIds()

@@ -1,4 +1,4 @@
-import { vi } from 'vitest'
+import { vi, type Mock } from 'vitest'
 import type { StructuredAgentSessionAdapter } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-adapter'
 import { startsWhenPublished } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-instant-start.test-support'
 import type { AgentSessionRecordStore } from '../../../src/main/runtime/agent-session-record-store'
@@ -15,7 +15,11 @@ import {
 export function structuredHostStub(
   sessionId: string,
   workspaceId: string
-): Record<string, ReturnType<typeof vi.fn>> {
+): Record<string, ReturnType<typeof vi.fn>> & {
+  getSessionTabId: Mock<StructuredAgentSessionHost['getSessionTabId']>
+  setSessionTabVisibility: Mock<StructuredAgentSessionHost['setSessionTabVisibility']>
+  notifySessionTabHidden: Mock<StructuredAgentSessionHost['notifySessionTabHidden']>
+} {
   let tabId: string | null = `tab-${sessionId}`
   const tabs = {
     getSessionTabId: vi.fn<StructuredAgentSessionHost['getSessionTabId']>((id) =>
@@ -140,7 +144,7 @@ export function structuredHostStub(
 
 // Install the nested host shape, but assert against the flat spy map.
 export function installableHost(
-  hostCalls: Record<string, ReturnType<typeof vi.fn>>
+  hostCalls: ReturnType<typeof structuredHostStub>
 ): StructuredAgentSessionHost {
   const logger: StructuredAgentSessionHost['deps']['logger'] = { warn: vi.fn(), error: vi.fn() }
   const host = {
