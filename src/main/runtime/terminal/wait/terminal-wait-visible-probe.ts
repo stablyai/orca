@@ -117,11 +117,20 @@ export abstract class OrcaRuntimeWithStartTuiIdleVisibleReadProbe extends OrcaRu
     handle: string,
     signal?: AbortSignal
   ): Promise<{ exitCode: number | null }> {
-    const ptyId = this.getLivePtyForHandle(handle)?.pty.ptyId
-    if (!ptyId) {
+    const pty = this.getLivePtyForHandle(handle)?.pty
+    if (!pty) {
       throw new Error('terminal_handle_stale')
     }
+    const { ptyId } = pty
     const completionToken = this.setupCompletionTokenByPtyId.get(ptyId)
+    const observed = pty.observedSetupCompletion
+    if (
+      observed &&
+      observed.incarnationId === pty.incarnationId &&
+      (!completionToken || completionToken === observed.token)
+    ) {
+      return { exitCode: observed.exitCode }
+    }
     const exitAbort = new AbortController()
     return await new Promise<{ exitCode: number | null }>((resolve, reject) => {
       let settled = false
@@ -140,6 +149,13 @@ export abstract class OrcaRuntimeWithStartTuiIdleVisibleReadProbe extends OrcaRu
         }
         settled = true
         cleanup()
+        if (completionToken) {
+          pty.observedSetupCompletion = {
+            token: completionToken,
+            incarnationId: pty.incarnationId,
+            exitCode
+          }
+        }
         this.setupCompletionTokenByPtyId.delete(ptyId)
         resolve({ exitCode })
       }
@@ -173,7 +189,7 @@ export abstract class OrcaRuntimeWithStartTuiIdleVisibleReadProbe extends OrcaRu
         })
           .then((wait) => {
             if (wait.satisfied && wait.condition === 'exit' && wait.status === 'exited') {
-              finish(wait.exitCode)
+              finish(completionToken ? null : wait.exitCode)
             }
           })
           .catch(fail)

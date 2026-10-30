@@ -59,6 +59,11 @@ export type RuntimeLeafRecord = RuntimeSyncedLeaf &
 export type RuntimePtyWorktreeRecord = RuntimeTerminalTailState & {
   ptyId: string
   incarnationId: PtyIncarnationId | null
+  observedSetupCompletion?: {
+    token: string
+    incarnationId: PtyIncarnationId | null
+    exitCode: number | null
+  }
   worktreeId: string
   connectionId: string | null
   runtimeSessionOwned: boolean

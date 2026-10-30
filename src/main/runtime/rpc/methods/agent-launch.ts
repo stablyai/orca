@@ -13,6 +13,8 @@ import {
   WORKTREE_CREATE_COLLISION_CODE
 } from '../../../../shared/new-workspace/worktree-create-collision'
 import { executeAgentLaunch } from '../../../agent-launch/agent-launch-executor'
+import { AgentLaunchSetupError } from '../../../agent-launch/agent-launch-setup-error'
+import { dedupeLegacyAgentLaunch } from './agent-launch-legacy-create'
 import {
   trackTerminalSpawnDispatch,
   type TerminalSpawnDispatch
@@ -121,15 +123,7 @@ function runLegacyAgentLaunch(
         presentation: params.presentation
       }
     )
-  if (params.target.kind === 'create-worktree' && params.target.create.clientMutationId) {
-    const { repo, repoHostId } = params.target.create
-    return context.runtime.dedupeWorktreeCreate(
-      repoHostId ? { repo, repoHostId } : repo,
-      `agent.launch:${params.target.create.clientMutationId}`,
-      execute
-    )
-  }
-  return execute()
+  return dedupeLegacyAgentLaunch({ target: params.target, runtime: context.runtime, execute })
 }
 
 type ActiveAgentLaunch = {
@@ -218,15 +212,14 @@ async function executeAdmittedAgentLaunch(
     if (view.early?.closedByUser()) {
       await settleLaunchWhoseTabWasClosed(context, view.early, admission)
     }
-    const failedWithoutEffects = launchFailureWithoutEffectsCode(
-      error,
-      resolved.intent.target.kind,
-      terminalSpawn
-    )
-    if (failedWithoutEffects) {
-      await settleQuietly(admission.fail(failedWithoutEffects, error))
+    const failureCode =
+      error instanceof AgentLaunchSetupError
+        ? error.code
+        : launchFailureWithoutEffectsCode(error, resolved.intent.target.kind, terminalSpawn)
+    if (failureCode) {
+      await settleQuietly(admission.fail(failureCode, error))
     }
-    throw new AgentLaunchExecutionError(error, failedWithoutEffects)
+    throw new AgentLaunchExecutionError(error, failureCode)
   }
   if (view.early?.closedByUser()) {
     // The user closed its tab after the spawn left: the agent stops, as any closed tab's does.
@@ -287,7 +280,7 @@ export const AGENT_LAUNCH_METHODS = [
           if (error.cause instanceof AgentLaunchTabClosedError) {
             throw agentLaunchTabClosedAnswer(context)
           }
-          if (error.failedWithoutEffects) {
+          if (error.hasDefiniteFailure) {
             throw error.cause
           }
           throw new Error('agent_session_operation_unknown', { cause: error.cause })

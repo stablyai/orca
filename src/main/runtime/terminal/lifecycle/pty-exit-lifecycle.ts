@@ -13,6 +13,7 @@ import type { PtyLivenessVerdict } from '../../../../shared/pty-liveness-verdict
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import { exitedSplitPaneFacts } from './exited-split-pane-rule'
 import { closedPaneOfExitedPty, type ClosedPaneOfExit } from './closed-pane-of-exited-pty'
+import { createSetupCompletionScanner } from '../../orchestration/setup-completion-signal'
 import type {
   RuntimePtyWorktreeRecord,
   RuntimeLeafRecord
@@ -169,6 +170,18 @@ export abstract class OrcaRuntimeWithOnPtyExit extends OrcaRuntimeWithOnClientDi
       this.mobileDisplayModes.delete(ptyId)
       this.resizeListeners.delete(ptyId)
       this.lastRendererSizes.delete(ptyId)
+      const setupToken = this.setupCompletionTokenByPtyId.get(ptyId)
+      if (pty && setupToken) {
+        const completion: NonNullable<RuntimePtyWorktreeRecord['observedSetupCompletion']> = {
+          token: setupToken,
+          incarnationId: pty.incarnationId,
+          exitCode: null
+        }
+        createSetupCompletionScanner(setupToken, (code) => {
+          completion.exitCode = code
+        }).scan(this.recentPtyOutputById.get(ptyId)?.read() ?? '')
+        pty.observedSetupCompletion = completion
+      }
       this.recentPtyOutputById.delete(ptyId)
       this.setupCompletionTokenByPtyId.delete(ptyId)
       this.clearWaitBlockedCheckState(ptyId)

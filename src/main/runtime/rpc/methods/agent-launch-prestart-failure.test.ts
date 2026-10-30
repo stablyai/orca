@@ -124,6 +124,34 @@ describe('a launch whose terminal fails', () => {
     expect(response).toMatchObject({ ok: false, error: { code: 'runtime_unavailable' } })
   })
 
+  it('reports failed setup as a definite refusal and replays it without another workspace', async () => {
+    const runtime = runtimeStub({
+      setupReceipt: {
+        startupPolicy: 'wait-for-setup',
+        state: 'running',
+        terminalHandle: 'term_setup'
+      }
+    })
+    runtime.waitForSetupTerminalCompletion.mockResolvedValue({ exitCode: 23 })
+
+    const response = await replay(runtime, CREATE_LAUNCH)
+
+    expect(response).toMatchObject({
+      ok: false,
+      error: {
+        code: 'agent_setup_failed',
+        message: expect.stringContaining('workspace is retained')
+      }
+    })
+    expect(outcomeOf(OPERATION_ID)).toMatchObject({ status: 'failed', code: 'agent_setup_failed' })
+    expect(await replay(runtime, CREATE_LAUNCH)).toMatchObject(response)
+    expect(runtime.createManagedWorktree).toHaveBeenCalledTimes(1)
+    expect(runtime.createTerminal).not.toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ startupAgent: expect.anything() })
+    )
+  })
+
   it('answers a retry of the same operation from the record instead of launching again', async () => {
     const first = runtimeStub({ settings: {} })
     failingCreate(first, new Error(NO_LAUNCH_COMMAND), false)

@@ -216,6 +216,7 @@ async function resolveWorkspace(
   const created = await workspaces.createWorktree({
     // Reserved fields must come from the launch intent, not a stale create payload.
     create: withoutReservedAgentCreateFields(intent.target.create),
+    ...(execution.signal ? { signal: execution.signal } : {}),
     ...(onWorkspaceCreated ? { onWorkspaceCreated } : {}),
     ...(preflight.mode === 'structured' ? { promisedAgentChat: true } : {}),
     startupAgent: preflight.mode === 'structured' ? undefined : intent.agent,

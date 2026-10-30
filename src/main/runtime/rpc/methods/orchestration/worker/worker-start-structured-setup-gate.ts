@@ -1,5 +1,4 @@
-/** Structured chats have no startup command to sequence after setup, so wait explicitly within the start deadline.
- * Missing evidence never fails start: unavailable waits need no receipt; attempted waits that throw record wait_unevaluated. */
+/** Structured chats require confirmed setup completion within the start deadline before task delivery. */
 
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import type { WorkerEffect, WorkerSetupReceipt } from './worker-topology'
@@ -22,15 +21,18 @@ export async function awaitStructuredWorkerSetupGate(args: {
   }
   const setupTerminal = args.effects.find((effect) => effect.kind === 'setup')?.terminalId
   if (!setupTerminal) {
-    return null
+    return { satisfied: false, status: 'unverifiable' }
   }
+  const abort = new AbortController()
   let timer: ReturnType<typeof setTimeout> | undefined
   try {
     return await Promise.race([
-      args.runtime.waitForSetupTerminalCompletion(setupTerminal).then((completion) => ({
-        satisfied: completion.exitCode === 0,
-        status: 'exited'
-      })),
+      args.runtime
+        .waitForSetupTerminalCompletion(setupTerminal, abort.signal)
+        .then((completion) => ({
+          satisfied: completion.exitCode === 0,
+          status: completion.exitCode === null ? 'unverifiable' : 'exited'
+        })),
       new Promise<StructuredWorkerSetupGate>((resolve) => {
         timer = setTimeout(() => resolve({ satisfied: false, status: 'timeout' }), args.timeoutMs)
       })
@@ -42,8 +44,9 @@ export async function awaitStructuredWorkerSetupGate(args: {
       action: 'wait_unevaluated',
       state: error instanceof Error ? error.message : String(error)
     })
-    return null
+    return { satisfied: false, status: 'unverifiable' }
   } finally {
     clearTimeout(timer)
+    abort.abort()
   }
 }

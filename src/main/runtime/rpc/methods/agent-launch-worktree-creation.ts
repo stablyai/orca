@@ -19,13 +19,14 @@ import { toAgentLaunchPreferences } from '../../../../shared/agent-launch-prefer
 import type { AgentLaunchParams } from '../../../../shared/rpc-contract/agent-launch-params'
 import { agentLaunchFolderWorkspaceCreator } from './agent-launch-folder-workspace-creation'
 import { agentLaunchMovesHostWindow } from './agent-launch-tab-publication'
+import { DEFAULT_SETUP_WAIT_TIMEOUT_SECONDS } from '../../../../shared/setup-agent-startup-policy'
+import { assertAgentPromptRequestActive } from '../../orca-runtime-core'
+import { AgentLaunchSetupError } from '../../../agent-launch/agent-launch-setup-error'
 
 type WorktreeCreateParams = Extract<
   AgentLaunchParams['target'],
   { kind: 'create-worktree' }
 >['create']
-
-const STRUCTURED_SETUP_WAIT_TIMEOUT_MS = 60_000
 
 export function agentLaunchWorkspaceFactory(
   context: RpcContext,
@@ -47,7 +48,8 @@ export function agentLaunchWorkspaceFactory(
       launchSource,
       paneKey,
       options,
-      accountEnv
+      accountEnv,
+      signal
     }) => {
       const startupLaunchPreferences =
         startupAgent && toAgentLaunchPreferences(options, startupAgent)
@@ -109,8 +111,8 @@ export function agentLaunchWorkspaceFactory(
           awaitTerminalProvisioning: true,
           observeSetupCompletion: true
         })
-        if (!startupAgent) {
-          await waitForStructuredSetup(runtime, result.setupReceipt)
+        if (!startupAgent || !result.startupTerminal?.handle) {
+          await waitForStructuredSetup(runtime, result.setupReceipt, signal)
         }
         finishAutomationWorkspaceProvenanceRequest(params.automationProvenanceRequest)
         const warning =
@@ -149,31 +151,56 @@ function withoutHostActivation(params: WorktreeCreateParams): WorktreeCreatePara
 
 async function waitForStructuredSetup(
   runtime: Pick<OrcaRuntimeService, 'waitForSetupTerminalCompletion'>,
-  receipt: Awaited<ReturnType<OrcaRuntimeService['createManagedWorktree']>>['setupReceipt']
+  receipt: Awaited<ReturnType<OrcaRuntimeService['createManagedWorktree']>>['setupReceipt'],
+  signal?: AbortSignal
 ): Promise<void> {
+  assertAgentPromptRequestActive(signal)
   if (
     !receipt ||
     receipt.startupPolicy !== 'wait-for-setup' ||
-    receipt.state !== 'running' ||
-    !receipt.terminalHandle
+    receipt.state === 'skipped' ||
+    receipt.state === 'not_configured'
   ) {
     return
   }
+  if (receipt.state !== 'running' || !receipt.terminalHandle) {
+    throw new AgentLaunchSetupError(
+      'agent_setup_unconfirmed',
+      'Required setup did not start with a completion observer. The workspace is retained; complete setup before launching the agent.'
+    )
+  }
   const abort = new AbortController()
+  const setupSignal = signal ? AbortSignal.any([signal, abort.signal]) : abort.signal
   let timer: ReturnType<typeof setTimeout> | undefined
+  let completion: { exitCode: number | null }
   try {
-    await Promise.race([
-      runtime.waitForSetupTerminalCompletion(receipt.terminalHandle, abort.signal),
-      new Promise<void>((resolve) => {
+    completion = await Promise.race([
+      runtime.waitForSetupTerminalCompletion(receipt.terminalHandle, setupSignal),
+      new Promise<never>((_resolve, reject) => {
         timer = setTimeout(() => {
-          abort.abort(new Error('structured_setup_wait_timeout'))
-          resolve()
-        }, STRUCTURED_SETUP_WAIT_TIMEOUT_MS)
+          reject(new Error('structured_setup_wait_timeout'))
+          abort.abort()
+        }, DEFAULT_SETUP_WAIT_TIMEOUT_SECONDS * 1000)
       })
     ])
   } catch {
-    // Setup completion is evidence, not a reason to strand a launch when the PTY disappears.
+    assertAgentPromptRequestActive(signal)
+    throw new AgentLaunchSetupError(
+      abort.signal.aborted ? 'agent_setup_timeout' : 'agent_setup_unconfirmed',
+      abort.signal.aborted
+        ? 'Required setup did not finish before its deadline. The workspace is retained; complete setup before launching the agent.'
+        : 'Setup completion could not be verified. The workspace is retained; complete setup before launching the agent.'
+    )
   } finally {
     clearTimeout(timer)
+    abort.abort()
+  }
+  if (completion.exitCode !== 0) {
+    throw new AgentLaunchSetupError(
+      completion.exitCode === null ? 'agent_setup_unconfirmed' : 'agent_setup_failed',
+      completion.exitCode === null
+        ? 'Setup ended without a confirmed exit code. The workspace is retained; complete setup before launching the agent.'
+        : `Setup exited with code ${completion.exitCode}. The workspace is retained; fix setup before launching the agent.`
+    )
   }
 }

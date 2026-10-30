@@ -10,13 +10,13 @@ import { agentLaunchFailureCode } from './agent-launch-failure-code'
 export class AgentLaunchExecutionError extends Error {
   constructor(
     cause: unknown,
-    /** Decided by the executing launch: a recorded code proves no effects; later readers cannot re-derive that proof. */
+    /** A definite refusal: no effects, setup prevented the agent, or the launched tab was closed. */
     readonly failureCode: string | null
   ) {
     super('agent_session_operation_unknown', { cause })
   }
 
-  get failedWithoutEffects(): boolean {
+  get hasDefiniteFailure(): boolean {
     return this.failureCode !== null
   }
 }

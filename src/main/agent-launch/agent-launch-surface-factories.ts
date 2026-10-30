@@ -106,6 +106,7 @@ export type AgentLaunchWorkspaceFactory = {
     options?: Readonly<Record<string, unknown>>
     /** Account routing overrides merged over the startup agent environment. */
     accountEnv?: Readonly<Record<string, string>>
+    signal?: AbortSignal
   }): Promise<{
     worktreeId: string
     /** Host-resolved root, available only after creation. */

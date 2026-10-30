@@ -177,7 +177,8 @@ export abstract class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWi
       effectiveDecision,
       hookFound,
       shouldRunSetup,
-      didStartInProcessSetupHook
+      didStartInProcessSetupHook,
+      startupPolicy
     } = await prepareRuntimeLocalWorktreeSetup({
       request: args,
       repo,
@@ -198,6 +199,7 @@ export abstract class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWi
     invalidateAuthorizedRootsCacheForRepo(store, repo)
 
     notifyLineageRepos(this.notifyWorktreesChanged.bind(this), repo.id, lineage?.parentWorktreeId)
+    const requiredSetupUnavailable = shouldRunSetup && startupPolicy === 'wait-for-setup' && !setup
     const {
       warning: terminalWarning,
       returnedSetup,
@@ -214,7 +216,7 @@ export abstract class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWi
       worktree,
       setup,
       defaultTabs,
-      startup: effectiveStartup,
+      startup: requiredSetupUnavailable ? undefined : effectiveStartup,
       startupFollowup: effectiveStartupFollowup,
       startupLaunchRuntime,
       createdWithAgent: effectiveCreatedWithAgent,
@@ -258,7 +260,7 @@ export abstract class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWi
               hookFound,
               startupPolicy: setup?.waitForAgentStartup
                 ? ('wait-for-setup' as const)
-                : ('start-immediately' as const),
+                : startupPolicy,
               state: !hookFound
                 ? ('not_configured' as const)
                 : effectiveDecision === 'skip' || !shouldRunSetup

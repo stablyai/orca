@@ -103,6 +103,53 @@ describe('OrcaRuntimeService', () => {
     await expect(waiting).resolves.toEqual({ exitCode: 9 })
   })
 
+  it.each([true, false])(
+    'does not accept a zero shell exit without its setup marker (exit before observer: %s)',
+    async (exitBeforeObserver) => {
+      const runtime = new OrcaRuntimeService(store)
+      runtime.setPtyController({
+        spawn: vi.fn().mockResolvedValue({ id: 'pty-unconfirmed-setup' }),
+        write: () => true,
+        kill: () => true,
+        getForegroundProcess: async () => null
+      })
+      runtime.attachWindow(1)
+      runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+      const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`)
+      runtime['setupCompletionTokenByPtyId'].set('pty-unconfirmed-setup', 'token-required')
+      runtime.onPtyData('pty-unconfirmed-setup', '__ORCA_SETUP_COMPLETE__:wrong-token:0\r\n', 100)
+      if (exitBeforeObserver) {
+        runtime.onPtyExit('pty-unconfirmed-setup', 0)
+      }
+      const waiting = runtime.waitForSetupTerminalCompletion(handle)
+      if (!exitBeforeObserver) {
+        runtime.onPtyExit('pty-unconfirmed-setup', 0)
+      }
+      await expect(waiting).resolves.toEqual({ exitCode: null })
+    }
+  )
+
+  it.each([0, 17])('retains the actual setup result %s after its shell exits', async (exitCode) => {
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      spawn: vi.fn().mockResolvedValue({ id: 'pty-finished-setup' }),
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+    const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`)
+    runtime['setupCompletionTokenByPtyId'].set('pty-finished-setup', 'token-finished')
+    runtime.onPtyData(
+      'pty-finished-setup',
+      `__ORCA_SETUP_COMPLETE__:token-finished:${exitCode}\r\n`,
+      100
+    )
+    runtime.onPtyExit('pty-finished-setup', 0)
+    await expect(runtime.waitForSetupTerminalCompletion(handle)).resolves.toEqual({ exitCode })
+  })
+
   it('cancels setup completion observation when the caller aborts', async () => {
     const runtime = new OrcaRuntimeService(store)
     runtime.setPtyController({

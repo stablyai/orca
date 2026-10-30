@@ -1,5 +1,7 @@
 import type { CreateWorktreeResult, SetupDecision } from '../../shared/worktree/create-types'
 import type { Repo } from '../../shared/repo-types'
+import type { SetupAgentStartupPolicy } from '../../shared/orca-yaml-hook-types'
+import { shouldWaitForSetupBeforeAgentStartup } from '../../shared/setup-agent-startup-policy'
 import { getEffectiveHooks, loadHooks, runHook } from '../hooks'
 import { createSetupRunnerScript, resolveSetupRunnerShell } from '../worktree-runner-script'
 import { getDefaultTabsLaunch, shouldRunSetupForCreate } from '../effective-hook-config'
@@ -29,12 +31,19 @@ export async function prepareRuntimeLocalWorktreeSetup(args: {
   hookFound: boolean
   shouldRunSetup: boolean
   didStartInProcessSetupHook: boolean
+  startupPolicy: SetupAgentStartupPolicy
 }> {
   const { request, repo, worktreePath, settings } = args
   let warning = args.warning
   let setup: CreateWorktreeResult['setup']
   const yamlHooks = loadHooks(worktreePath)
   const hooks = getEffectiveHooks(repo, worktreePath)
+  const startupPolicy = shouldWaitForSetupBeforeAgentStartup(
+    repo.hookSettings?.setupAgentStartupPolicy,
+    yamlHooks?.setupAgentStartupPolicy
+  )
+    ? 'wait-for-setup'
+    : 'start-immediately'
   const effectiveDecision = resolveRuntimeSetupDecision(request)
   let defaultTabs: CreateWorktreeResult['defaultTabs']
   try {
@@ -88,6 +97,7 @@ export async function prepareRuntimeLocalWorktreeSetup(args: {
     effectiveDecision,
     hookFound: Boolean(hooks?.scripts.setup),
     shouldRunSetup,
-    didStartInProcessSetupHook
+    didStartInProcessSetupHook,
+    startupPolicy
   }
 }
