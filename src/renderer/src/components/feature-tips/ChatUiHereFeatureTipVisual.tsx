@@ -42,7 +42,7 @@ export function FlowDiagram({
   frame: Pick<ChatDemoFrame, 'nodes' | 'arrows'>
 }): JSX.Element {
   return (
-    <div className="flex items-end pt-[8px] pb-[10px]">
+    <div className="flex items-end pt-[2px] pb-[10px]">
       {flow.map((node, index) => (
         <div key={node.name} className="contents">
           <span
@@ -110,7 +110,7 @@ function Transcript({ copy, frame }: { copy: ChatDemoCopy; frame: ChatDemoFrame 
         </div>
       </Row>
       <Row on={frame.working}>
-        <div className="mt-5 flex min-h-6 items-center gap-1.5 text-chat-foreground-faint">
+        <div className="mt-3 flex min-h-6 items-center gap-1.5 text-chat-foreground-faint">
           <LoadingSpinner className="size-4 shrink-0" />
           <span className="text-chat-foreground">
             {translate('components.native-chat.status.working', 'Working…')}
@@ -118,7 +118,7 @@ function Transcript({ copy, frame }: { copy: ChatDemoCopy; frame: ChatDemoFrame 
         </div>
       </Row>
       <Row on={frame.words > 0}>
-        <p className="mt-5">
+        <p className="mt-3">
           {copy.reply.map((token, index) => (
             <span
               key={index}
@@ -135,7 +135,7 @@ function Transcript({ copy, frame }: { copy: ChatDemoCopy; frame: ChatDemoFrame 
         </p>
       </Row>
       <Row on={frame.visual}>
-        <div className="relative mt-2.5 mb-0.5">
+        <div className="relative mt-1 mb-0.5">
           <div
             data-on={!frame.page}
             className="absolute inset-0 rounded-md bg-muted/30 opacity-0 transition-opacity duration-300 data-[on=true]:opacity-100"
