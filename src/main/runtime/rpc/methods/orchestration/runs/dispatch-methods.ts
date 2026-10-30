@@ -2,6 +2,7 @@ import { defineMethod } from '../../../core'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import { buildDispatchPreamble } from '../../../../orchestration/preamble'
 import { sendAgentTurn } from '../../../../orchestration/send-agent-turn'
+import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import { resolveDispatchCreator } from './dispatch-creator'
 import {
   injectRejectedError,
@@ -21,6 +22,18 @@ import {
 } from '../chat-assignee-admission'
 import { sendChatTask } from '../chat-task-delivery'
 import { dispatchTaskSource } from '../../../../orchestration/dispatch-task-source'
+
+async function resolveDispatchWorktreePath(
+  runtime: OrcaRuntimeService,
+  terminalHandle: string,
+  authority = runtime.getOrchestrationDispatchAuthority(terminalHandle)
+): Promise<string | undefined> {
+  const worktreeId = authority?.worktreeId
+  if (!worktreeId) {
+    return undefined
+  }
+  return (await runtime.showTerminalWorkspaceLaunchScope(`id:${worktreeId}`)).path
+}
 
 export const ORCHESTRATION_DISPATCH_METHODS = [
   defineMethod({
@@ -72,6 +85,9 @@ export const ORCHESTRATION_DISPATCH_METHODS = [
           resolveDispatchCreator(runtime, params.from, orchestrationCaller),
           maxDepth
         )
+        const worktreePath = params.to
+          ? await resolveDispatchWorktreePath(runtime, params.to)
+          : undefined
         const preamble = buildDispatchPreamble({
           taskId: task.id,
           dispatchId: 'ctx_dryrun',
@@ -81,6 +97,7 @@ export const ORCHESTRATION_DISPATCH_METHODS = [
           coordinatorHandle: orcaSessionIdOrHandle(params.from ?? 'coordinator', db),
           workerHandle: assignee ? orcaSessionIdOrHandle(assignee, db) : 'worker',
           devMode: params.devMode,
+          ...(worktreePath ? { worktreePath } : {}),
           ...(assignee ? { cliCommand: runtime.getTerminalOrchestrationCliCommand(assignee) } : {})
         })
         return { dispatch: null, injected: false, dryRun: true, preamble }
@@ -148,6 +165,9 @@ export const ORCHESTRATION_DISPATCH_METHODS = [
         )
       }
 
+      // Why: resolve the target checkout before creating a dispatch so injected workers and their
+      // previews carry the same path guard as coordinator and worker-start dispatches.
+      const worktreePath = await resolveDispatchWorktreePath(runtime, to, dispatchAuthority)
       revalidateLegacyCoordinator?.()
       const ctx = db.createDispatchContext({
         taskId: params.task,
@@ -169,6 +189,7 @@ export const ORCHESTRATION_DISPATCH_METHODS = [
         coordinatorHandle: orcaSessionIdOrHandle(params.from ?? 'coordinator', db),
         workerHandle: orcaSessionIdOrHandle(to, db),
         devMode: params.devMode,
+        ...(worktreePath ? { worktreePath } : {}),
         cliCommand: runtime.getTerminalOrchestrationCliCommand(to)
       })
 
@@ -224,7 +245,7 @@ export const ORCHESTRATION_DISPATCH_METHODS = [
     name: 'orchestration.dispatchShow',
     permission: 'workspace',
     params: DispatchShowParams,
-    handler: (params, { runtime }) => {
+    handler: async (params, { runtime }) => {
       const db = runtime.getOrchestrationDb()
       if (!params.task) {
         throw new Error('Missing --task')
@@ -238,6 +259,9 @@ export const ORCHESTRATION_DISPATCH_METHODS = [
           throw new Error(`Task not found: ${params.task}`)
         }
         const workerHandle = ctx?.assignee_handle ?? 'worker'
+        const worktreePath = ctx
+          ? await resolveDispatchWorktreePath(runtime, workerHandle)
+          : undefined
         const preamble = buildDispatchPreamble({
           taskId: task.id,
           // Use the real Dispatch id for matching previews; use a placeholder before dispatch.
@@ -248,6 +272,7 @@ export const ORCHESTRATION_DISPATCH_METHODS = [
           coordinatorHandle: orcaSessionIdOrHandle(params.from ?? 'coordinator', db),
           workerHandle: orcaSessionIdOrHandle(workerHandle, db),
           devMode: params.devMode,
+          ...(worktreePath ? { worktreePath } : {}),
           ...(ctx ? { cliCommand: runtime.getTerminalOrchestrationCliCommand(workerHandle) } : {})
         })
         return { dispatch: ctx ?? null, preamble }

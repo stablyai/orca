@@ -12,6 +12,16 @@ import { isAgentPromptStalledError } from '../agent-prompt-submission-verificati
 /** `dispatched-unobserved`: the preamble landed but the worker's turn start was never observed. */
 export type TaskDispatchResult = 'dispatched' | 'dispatched-unobserved' | 'stale-base-refused'
 
+async function resolveDispatchWorktreePath(
+  runtime: CoordinatorRuntime,
+  worktree: string | undefined
+): Promise<string | undefined> {
+  if (!worktree || !runtime.showManagedWorktree) {
+    return undefined
+  }
+  return (await runtime.showManagedWorktree(worktree)).path
+}
+
 // Warn only: automatically failing a slow but healthy worker is worse than retaining a hung slot.
 export function warnStaleDispatches(
   db: OrchestrationDb,
@@ -98,6 +108,9 @@ export async function dispatchTaskToWorker(params: {
     return 'stale-base-refused'
   }
 
+  // Why: resolve the selector before creating a dispatch context so a missing or stale selector
+  // cannot send a worker back to an unspecified checkout with a misleading preamble.
+  const worktreePath = await resolveDispatchWorktreePath(runtime, params.worktree)
   const dispatchAuthority = runtime.getOrchestrationDispatchAuthority?.(targetHandle)
   const assigneePaneKey =
     dispatchAuthority?.paneKey ?? runtime.getTerminalPaneKey?.(targetHandle) ?? undefined
@@ -115,7 +128,6 @@ export async function dispatchTaskToWorker(params: {
     creator: { kind: 'system' },
     maxDepth: params.nestedWorkerMaxDepth
   })
-
   // Dev workers need orca-dev to reach the dev socket.
   const preamble = buildDispatchPreamble({
     taskId: task.id,
@@ -125,6 +137,7 @@ export async function dispatchTaskToWorker(params: {
     taskSpec: strippedSpec,
     coordinatorHandle: params.coordinatorHandle,
     workerHandle: targetHandle,
+    ...(worktreePath ? { worktreePath } : {}),
     devMode: process.env.ORCA_USER_DATA_PATH?.includes('orca-dev'),
     ...(runtime.getTerminalOrchestrationCliCommand
       ? { cliCommand: runtime.getTerminalOrchestrationCliCommand(targetHandle) }

@@ -35,6 +35,7 @@ export async function deliverWorkerDispatchPreamble(args: {
   taskId: string
   taskSpec: string
   coordinatorHandle: string
+  worktreePath?: string
   devMode: boolean | undefined
   requestId: string
   /** The agent this worker start launched into `terminalHandle`; absent for a caller's terminal. */
@@ -53,6 +54,7 @@ export async function deliverWorkerDispatchPreamble(args: {
     taskId: args.taskId,
     dispatchId: args.dispatchId,
     taskSpec: args.taskSpec,
+    ...(args.worktreePath ? { worktreePath: args.worktreePath } : {}),
     coordinatorHandle: orcaSessionIdOrHandle(args.coordinatorHandle, args.db),
     // Its mailbox stays keyed by the handle; its commands name its Orca session ID, which binds to it.
     workerHandle:

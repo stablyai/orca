@@ -153,6 +153,9 @@ describe('orchestration federation', () => {
       expect.stringContaining(`Your task ID is: ${task.id}`),
       expect.objectContaining(dispatchPreambleSendOptions(expect.any(String)))
     )
+    expect(vi.mocked(workerRuntime.sendTerminalAgentPrompt).mock.calls[0]?.[1]).toContain(
+      'Your worktree path is: /tmp/windows-worktree'
+    )
   })
 
   it('carries an explicit worker label as user display-name provenance', async () => {

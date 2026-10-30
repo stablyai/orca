@@ -23,7 +23,7 @@ import {
 import { createWorkerWorktree, type WorkerWorktreeCreationTarget } from './worker-worktree-creation'
 
 /** Name only the two required fields so untyped worktree accessors cannot introduce any into unions. */
-type PlacedWorktree = { id: string; repoId: string }
+type PlacedWorktree = { id: string; repoId: string; path?: string }
 type WorkerStructuredSession = Awaited<ReturnType<typeof createStructuredWorkerSessionForWorktree>>
 
 export type WorkerAgentPlacement = {

@@ -1,11 +1,30 @@
 import { vi } from 'vitest'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
+import type { CreateWorktreeResult } from '../../../../../../shared/worktree/create-types'
 
 export function configureFederationWorkerRuntime(runtime: OrcaRuntimeService): void {
   vi.spyOn(runtime, 'validateOrchestrationAgentLauncher').mockImplementation(() => {})
   vi.spyOn(runtime, 'showRepo').mockResolvedValue({ id: 'windows-repo', kind: 'git' } as never)
-  vi.spyOn(runtime, 'createManagedWorktree').mockResolvedValue({
-    worktree: { id: 'repo::windows-worktree', repoId: 'repo' },
+  const createResult: CreateWorktreeResult = {
+    worktree: {
+      id: 'repo::windows-worktree',
+      repoId: 'repo',
+      path: '/tmp/windows-worktree',
+      head: 'windows-head',
+      branch: 'windows-worker',
+      isBare: false,
+      isMainWorktree: false,
+      displayName: 'windows-worker',
+      comment: '',
+      linkedIssue: null,
+      linkedPR: null,
+      linkedLinearIssue: null,
+      isArchived: false,
+      isUnread: false,
+      isPinned: false,
+      sortOrder: 0,
+      lastActivityAt: 0
+    },
     startupTerminal: { spawned: true, handle: 'term_windows_worker' },
     setupReceipt: {
       requested: 'run',
@@ -13,7 +32,8 @@ export function configureFederationWorkerRuntime(runtime: OrcaRuntimeService): v
       startupPolicy: 'start-immediately',
       state: 'running'
     }
-  } as never)
+  }
+  vi.spyOn(runtime, 'createManagedWorktree').mockResolvedValue(createResult)
   vi.spyOn(runtime, 'listTerminals').mockResolvedValue({
     terminals: [
       { handle: 'term_windows_worker', title: 'Codex' },
