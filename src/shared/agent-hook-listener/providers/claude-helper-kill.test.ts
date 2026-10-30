@@ -103,6 +103,122 @@ async function drain(p: Awaited<ReturnType<typeof pane>>) {
 }
 
 describe('Claude helper provider evidence', () => {
+  it.each(['parent', 'child'])(
+    'preserves generations until %s framing completes through scheduled probes',
+    async (stream) => {
+      vi.useFakeTimers()
+      vi.setSystemTime(now)
+      const p = await pane(true)
+      const paneKey = p.row().paneKey
+      const due = vi.spyOn(p.poller, 'poll')
+      const tasks: ClaudeLaunchedBackgroundTasks = new Map()
+      const resumed = JSON.stringify({
+        type: 'user',
+        timestamp: stamp(20),
+        message: { content: [{ type: 'text', text: 'Resume the work' }] }
+      })
+      const preservation = () => ({
+        child: p.row().payload.subagents?.find((child) => child.id === 'a123')?.state ?? null,
+        waitOwner: p.state.claudeLeadStateByPaneKey.get(paneKey)?.waitingAgentId ?? null,
+        debt: { ...tasks.get('a123') },
+        endings: p.publish.mock.calls.length
+      })
+      const expected = {
+        child: 'working',
+        waitOwner: 'a123',
+        debt: { kind: 'agent', notificationOwedAt: now },
+        endings: 0
+      }
+      const probe = async (delay: number) => {
+        const before = due.mock.calls.length
+        await vi.advanceTimersByTimeAsync(delay)
+        expect(due.mock.calls.length).toBeGreaterThan(before)
+        await Promise.all(
+          due.mock.results
+            .slice(before)
+            .map((result) => (result.type === 'return' ? result.value : undefined))
+        )
+      }
+      try {
+        await appendFile(p.path, kill())
+        await appendFile(p.child('a123'), stream === 'child' ? resumed : `${resumed}\n`)
+        if (stream === 'parent') {
+          await appendFile(p.path, resumed)
+        }
+        await writeFile(p.child('acomplete'), `${resumed}\n`)
+        vi.setSystemTime(now + 25)
+        p.replace(p.post({ hook_event_name: 'SubagentStart', agent_id: 'acomplete' }))
+        p.replace(p.post({ hook_event_name: 'SubagentStart', agent_id: 'a123' }))
+        p.replace(
+          p.post({
+            hook_event_name: 'PermissionRequest',
+            agent_id: 'a123',
+            tool_name: 'Bash',
+            tool_use_id: 'partial-approval',
+            tool_input: { command: 'false' }
+          })
+        )
+        tasks.set('a123', { kind: 'agent', notificationOwedAt: now })
+        tasks.set('shell', { kind: 'shell', notificationOwedAt: now })
+        p.state.claudeLaunchedBackgroundTasksByPaneKey.set(paneKey, tasks)
+        expect(preservation()).toEqual(expected)
+        await probe(1_000)
+        expect(p.row().payload.subagents?.find((child) => child.id === 'acomplete')?.state).toBe(
+          'working'
+        )
+        expect(preservation()).toEqual(expected)
+        await probe(5_000)
+        expect(preservation()).toEqual(expected)
+
+        await appendFile(stream === 'child' ? p.child('a123') : p.path, '\n')
+        await probe(5_000)
+        expect(preservation()).toEqual(expected)
+        expect(p.row().payload.subagents?.find((child) => child.id === 'acomplete')?.state).toBe(
+          'working'
+        )
+
+        const blockedPaths =
+          stream === 'parent' ? [p.path] : [p.child('a123'), p.child('acomplete')]
+        await appendFile(p.path, kill(30))
+        for (const path of blockedPaths) {
+          await appendFile(path, 'x'.repeat(1024 * 1024 + 10))
+        }
+        // Byte progress enters bounded discard mode; no LF means no complete evidence frontier.
+        await probe(5_000)
+        expect(preservation()).toEqual(expected)
+        await probe(5_000)
+        expect(preservation()).toEqual(expected)
+        await probe(5_000)
+        expect(preservation()).toEqual(expected)
+        const owner = p.poller['observations'].get(paneKey)!
+        const cursors =
+          stream === 'parent' ? [owner.parent] : [...owner.children.values()].map((c) => c.cursor)
+        for (const cursor of cursors) {
+          expect(cursor.skipping).toBe(true)
+          expect(cursor.carry.length).toBe(0)
+        }
+        expect(vi.getTimerCount()).toBe(1)
+        for (const path of blockedPaths) {
+          await appendFile(path, '\n')
+        }
+        await probe(5_000)
+        expect(p.row().payload.subagents ?? []).toEqual([])
+        expect(tasks.get('a123')).toEqual({
+          kind: 'agent',
+          notificationOwedAt: undefined,
+          settled: true
+        })
+        expect(p.state.claudeLeadStateByPaneKey.get(paneKey)?.waitingAgentId).toBeUndefined()
+        expect(tasks.get('shell')?.notificationOwedAt).toBe(now)
+        expect(p.publish).toHaveBeenCalledTimes(1)
+        expect(vi.getTimerCount()).toBe(0)
+      } finally {
+        p.poller.clearAll()
+        vi.useRealTimers()
+      }
+    }
+  )
+
   it('retains evidence across same-owner row replacement and a drained-helper gap', async () => {
     const p = await pane(false, readClaudeTranscriptChunk, true)
     const before = p.row()

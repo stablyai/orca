@@ -64,7 +64,11 @@ export async function readClaudeTranscriptChunk(
     cursor.skipping ||= tail.length > LINE_BYTES
     cursor.carry = cursor.skipping ? Buffer.alloc(0) : Buffer.from(tail)
     cursor.offset += bytesRead
-    return { records, reset, caughtUp: cursor.offset >= stats.size }
+    return {
+      records,
+      reset,
+      caughtUp: cursor.offset >= stats.size && cursor.carry.length === 0 && !cursor.skipping
+    }
   } catch {
     return undefined
   } finally {
