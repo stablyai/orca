@@ -211,12 +211,7 @@ export function renderTabBarSurface({
       ) : null}
       <DropdownMenu
         open={newTabMenuOpen}
-        onOpenChange={(open) => {
-          setNewTabMenuOpen(open)
-          if (open) {
-            advanceAgentSessionsTourPastNewTab()
-          }
-        }}
+        onOpenChange={setNewTabMenuOpen}
         // Why: modal would disable body pointer events, making the Mobile Emulator "Hide" re-enable toast unclickable.
         modal={false}
       >
@@ -239,6 +234,7 @@ export function renderTabBarSurface({
             // Why: Radix restores focus to the "+" trigger on close, stealing it from the freshly-mounted terminal.
             event.preventDefault()
             runPendingNewTabMenuFocusAfterClose()
+            advanceAgentSessionsTourPastNewTab()
           }}
         >
           {!terminalOnly && onOpenEntry ? (

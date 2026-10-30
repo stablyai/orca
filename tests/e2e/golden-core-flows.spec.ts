@@ -371,7 +371,15 @@ async function requestAgentSessionsTour(page: Page): Promise<void> {
   })
   const newTabStep = page.getByRole('dialog', { name: 'New agents start here', exact: true })
   await expect(newTabStep).toBeVisible()
-  await newTabStep.getByRole('button', { name: 'Next', exact: true }).click()
+  await page.locator('[data-contextual-tour-target="tab-create-menu"]').click()
+  await expect(page.getByRole('menu')).toBeVisible()
+  await expect(newTabStep).toBeHidden()
+  await expect(page.getByRole('dialog', { name: /Split a terminal pane/i })).toBeHidden()
+  await expect
+    .poll(() => page.evaluate(() => window.__store?.getState().activeContextualTourStepIndex))
+    .toBe(0)
+  await page.getByRole('menuitem', { name: /^New Terminal/ }).click()
+  await expect(page.getByRole('menu')).toBeHidden()
   await expect(page.getByRole('dialog', { name: /Split a terminal pane/i })).toBeVisible()
 }
 

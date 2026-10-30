@@ -107,7 +107,9 @@ describe('setup guide default agent step', () => {
 
     expect(useAppStore.getState().settings?.experimentalNativeChat).toBe(true)
     expect(radio('Chat UI').getAttribute('aria-checked')).toBe('true')
-    expect(container.textContent).toContain('Available as terminal agents')
+    expect(
+      container.querySelector('[title="Aider"]')?.closest('.space-y-3')?.textContent
+    ).toContain('Available as terminal agents')
 
     act(() => radio('Terminal UI').click())
 

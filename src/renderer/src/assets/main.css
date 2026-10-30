@@ -3220,6 +3220,12 @@ html.native-shell .app-layout {
   animation: feature-wall-meta-pulse 1100ms ease-out 1;
 }
 
+/* Let users choose a tab before showing the next agent lesson. */
+body:has([data-contextual-tour-target='tab-create-menu'][data-state='open'])
+  [data-contextual-tour-overlay='workspace-agent-sessions'] {
+  display: none;
+}
+
 .orca-contextual-tour-target-rings {
   border-radius: 9999px;
   pointer-events: none;

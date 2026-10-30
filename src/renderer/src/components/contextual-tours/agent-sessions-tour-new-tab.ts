@@ -1,7 +1,7 @@
 import { useAppStore } from '@/store'
 import { getContextualTour } from '../../../../shared/contextual-tours'
 
-/** Opening the + menu is the new-tab step's lesson, so it completes that step. */
+/** Finish after the + menu closes so the next lesson follows the selected tab. */
 export function advanceAgentSessionsTourPastNewTab(): void {
   const state = useAppStore.getState()
   if (
