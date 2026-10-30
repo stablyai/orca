@@ -33,6 +33,7 @@ export const PLUGIN_COMMAND_ACTION_SINCE: Record<PluginCommandAliasActionId, str
   'tab.rename': PLUGIN_SCHEMA_SINCE_V1,
   'workspace.rename': PLUGIN_SCHEMA_SINCE_V1,
   'workspace.openBoard': PLUGIN_SCHEMA_SINCE_V1,
+  'workspace.openUrl': '1.4.246',
   'view.tasks': PLUGIN_SCHEMA_SINCE_V1,
   'sidebar.right.toggle': PLUGIN_SCHEMA_SINCE_V1,
   'sidebar.explorer.toggle': PLUGIN_SCHEMA_SINCE_V1,
