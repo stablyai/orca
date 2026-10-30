@@ -1,3 +1,4 @@
+import { withEditorPreviewReadSources } from './editor-preview-read-sources'
 import { useCallback } from 'react'
 import { translate } from '@/i18n/i18n'
 import { readEditorPanelFileContent } from './editor-panel-file-reads'
@@ -258,13 +259,7 @@ export function useEditorPanelFileContentLoader({
         ) {
           state.setTerminalArtifactGrant(id, servedGrantId)
         }
-        // Why: a bytes custom editor pages a binary file on the same route, a granted one through the grant that served it.
-        const byteSource = result.isBinary
-          ? servedGrantId
-            ? { ...readArgs, terminalArtifactGrantId: servedGrantId }
-            : readArgs
-          : null
-        const loaded = byteSource ? { ...result, byteSource } : result
+        const loaded = withEditorPreviewReadSources(result, readArgs)
         setFileContents((prev) => (requestCurrent() ? { ...prev, [id]: loaded } : prev))
         stampCleanTabDiskBaseline(id, result)
       } catch (err) {
