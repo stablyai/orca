@@ -1,8 +1,29 @@
 import type { MarkdownDocState, MobileSessionTab } from './mobile-session-route-types'
 import type { ActionSheetAction } from '../components/ActionSheetModal'
 import { selectBulkCloseTabs } from './mobile-tab-close-selection'
+import { getMobileSessionTabTitle } from './mobile-terminal-tab-agent'
 import { closeTabsAfterConfirmation } from '../../../src/shared/bulk-tab-close-confirmation'
 import { translate } from '../i18n/mobile-i18n'
+
+export type PendingBulkCloseConfirmation = {
+  anchor: MobileSessionTab
+  closeCount: number
+  targetIds: readonly string[]
+}
+
+export function describeBulkCloseConfirmation(pending: PendingBulkCloseConfirmation | null) {
+  const closeCount = pending?.targetIds.length ?? pending?.closeCount ?? 0
+  const anchorTitle = pending ? getMobileSessionTabTitle(pending.anchor) : 'this tab'
+  return {
+    title: closeCount === 1 ? 'Close 1 Other Tab?' : `Close ${closeCount} Other Tabs?`,
+    message: pending
+      ? `Keep "${anchorTitle}" open and close ${
+          closeCount === 1 ? '1 other tab' : `${closeCount} other tabs`
+        }?`
+      : undefined,
+    confirmLabel: closeCount === 1 ? 'Close 1 Tab' : `Close ${closeCount} Tabs`
+  }
+}
 
 type BulkCloseSheetDeps = {
   sessionTabsRef: { readonly current: readonly MobileSessionTab[] }
@@ -10,44 +31,80 @@ type BulkCloseSheetDeps = {
   activeSessionTabIdRef: { readonly current: string | null }
   switchSessionTab: (tab: MobileSessionTab) => void
   closeSessionTab: (tab: MobileSessionTab) => Promise<void>
-  confirmBulkClose: () => Promise<boolean>
+  onRequestConfirmBulkClose?: (pending: PendingBulkCloseConfirmation) => void
+  confirmBulkClose?: () => Promise<boolean>
+}
+
+export function selectClosableBulkTabs(
+  deps: Pick<BulkCloseSheetDeps, 'sessionTabsRef' | 'markdownDocs'>,
+  anchorTabId: string
+): MobileSessionTab[] {
+  return selectBulkCloseTabs(deps.sessionTabsRef.current, anchorTabId).filter((candidate) => {
+    if (candidate.type !== 'markdown') {
+      return true
+    }
+    // Why: the tab list's isDirty can lag behind a phone draft; the local
+    // markdown doc state is the authority on unsaved edits.
+    const doc = deps.markdownDocs.get(candidate.id)
+    return !(doc?.status === 'ready' && doc.isDirty)
+  })
+}
+
+export async function runBulkCloseSessionTabs(
+  deps: Omit<BulkCloseSheetDeps, 'onRequestConfirmBulkClose' | 'confirmBulkClose'>,
+  anchor: MobileSessionTab,
+  confirmedTargetIds?: readonly string[]
+): Promise<void> {
+  const confirmedIdSet = confirmedTargetIds ? new Set(confirmedTargetIds) : null
+  const targets = selectClosableBulkTabs(deps, anchor.id).filter((candidate) =>
+    confirmedIdSet ? confirmedIdSet.has(candidate.id) : true
+  )
+  const activeWasTargeted = targets.some(
+    (candidate) => candidate.id === deps.activeSessionTabIdRef.current
+  )
+  // Why: activate the anchor before the per-tab close round-trips so the user
+  // never sits on a dying tab or an empty pane while the loop runs.
+  if (activeWasTargeted) {
+    deps.switchSessionTab(anchor)
+  }
+  for (const target of targets) {
+    await deps.closeSessionTab(target)
+  }
 }
 
 // Pass tab ids so long-press sheets share bulk-close orchestration without retaining full tabs.
 export function createBulkCloseSheetActions(deps: BulkCloseSheetDeps) {
-  const selectClosable = (anchorTabId: string) =>
-    selectBulkCloseTabs(deps.sessionTabsRef.current, anchorTabId).filter((candidate) => {
-      if (candidate.type !== 'markdown') {
-        return true
-      }
-      // Why: the tab list's isDirty can lag behind a phone draft; the local
-      // markdown doc state is the authority on unsaved edits.
-      const doc = deps.markdownDocs.get(candidate.id)
-      return !(doc?.status === 'ready' && doc.isDirty)
-    })
+  const closableIds = (anchorTabId: string) =>
+    selectClosableBulkTabs(deps, anchorTabId).map((candidate) => candidate.id)
 
-  const bulkClose = async (anchor: MobileSessionTab, tabIds: readonly string[]) => {
-    const targets = deps.sessionTabsRef.current.filter((candidate) => tabIds.includes(candidate.id))
-    const activeWasTargeted = targets.some(
-      (candidate) => candidate.id === deps.activeSessionTabIdRef.current
-    )
-    // Why: activate the anchor before the per-tab close round-trips so the user
-    // never sits on a dying tab or an empty pane while the loop runs.
-    if (activeWasTargeted) {
-      deps.switchSessionTab(anchor)
-    }
-    for (const target of targets) {
-      await deps.closeSessionTab(target)
-    }
-  }
-
-  return (anchorTabId: string | null | undefined): ActionSheetAction[] => {
+  return (anchorTabId: string | null | undefined, dismiss?: () => void): ActionSheetAction[] => {
     const anchor =
       anchorTabId == null
         ? undefined
         : deps.sessionTabsRef.current.find((candidate) => candidate.id === anchorTabId)
-    if (!anchor || selectClosable(anchor.id).length === 0) {
+    if (!anchor) {
       return []
+    }
+    const closable = selectClosableBulkTabs(deps, anchor.id)
+    if (closable.length === 0) {
+      return []
+    }
+    const targetIds = closable.map((candidate) => candidate.id)
+    const closeCount = targetIds.length
+    const requestConfirm = deps.onRequestConfirmBulkClose
+    if (requestConfirm) {
+      return [
+        {
+          label: 'Close Other Tabs',
+          destructive: true,
+          // Why: wait for the action sheet's native Modal to unmount before
+          // presenting ConfirmModal (same dual-Modal race as Rename/Refresh, #10331).
+          closeBeforePress: true,
+          onPress: () => {
+            requestConfirm({ anchor, closeCount, targetIds })
+          }
+        }
+      ]
     }
     return [
       {
@@ -57,11 +114,16 @@ export function createBulkCloseSheetActions(deps: BulkCloseSheetDeps) {
         // Why: the confirm is its own native Modal; wait for this sheet to unmount (#10331).
         closeBeforePress: true,
         onPress: () => {
-          void closeTabsAfterConfirmation(
-            () => selectClosable(anchor.id).map((candidate) => candidate.id),
-            deps.confirmBulkClose,
-            (tabIds) => void bulkClose(anchor, tabIds)
-          )
+          if (deps.confirmBulkClose) {
+            void closeTabsAfterConfirmation(
+              () => closableIds(anchor.id),
+              deps.confirmBulkClose,
+              (tabIds) => void runBulkCloseSessionTabs(deps, anchor, tabIds)
+            )
+            return
+          }
+          dismiss?.()
+          void runBulkCloseSessionTabs(deps, anchor, targetIds)
         }
       }
     ]

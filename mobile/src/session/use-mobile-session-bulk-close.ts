@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react'
 import {
   createBulkCloseSheetActions,
-  createCloseWithBulkActions
+  createCloseWithBulkActions,
+  runBulkCloseSessionTabs,
+  type PendingBulkCloseConfirmation
 } from './mobile-bulk-close-sheet-actions'
 import type { RpcSuccess } from '../transport/types'
 import { mobileBulkTabCloseCopy } from './mobile-bulk-tab-close-copy'
@@ -32,31 +34,38 @@ export function useMobileSessionBulkClose(scope: MobileSessionCloseActionsModel)
     parkedPendingTerminalContext,
     retryPendingTerminalRecovery
   } = scope
-  const [answerBulkClose, setAnswerBulkClose] = useState<((confirmed: boolean) => void) | null>(
+  const [pendingBulkClose, setPendingBulkClose] = useState<PendingBulkCloseConfirmation | null>(
     null
   )
-  const resolveBulkCloseConfirm = (confirmed: boolean) => {
-    answerBulkClose?.(confirmed)
-    setAnswerBulkClose(null)
-  }
-  const bulkCloseConfirm = {
-    visible: answerBulkClose !== null,
-    title: copy.title.others,
-    message: copy.description,
-    confirmLabel: copy.confirm,
-    destructive: true,
-    onConfirm: () => resolveBulkCloseConfirm(true),
-    onCancel: () => resolveBulkCloseConfirm(false)
-  }
-  const bulkCloseActions = createBulkCloseSheetActions({
+  const bulkCloseDeps = {
     sessionTabsRef,
     markdownDocs,
     activeSessionTabIdRef,
     switchSessionTab,
-    closeSessionTab: handleCloseSessionTab,
-    confirmBulkClose: () => new Promise<boolean>((resolve) => setAnswerBulkClose(() => resolve))
+    closeSessionTab: handleCloseSessionTab
+  }
+  const bulkCloseActions = createBulkCloseSheetActions({
+    ...bulkCloseDeps,
+    onRequestConfirmBulkClose: setPendingBulkClose
   })
   const closeWithBulkActions = createCloseWithBulkActions(handleCloseSessionTab, bulkCloseActions)
+  const confirmBulkClose = () => {
+    const target = pendingBulkClose
+    setPendingBulkClose(null)
+    if (target) {
+      void runBulkCloseSessionTabs(bulkCloseDeps, target.anchor, target.targetIds)
+    }
+  }
+  const cancelBulkClose = () => setPendingBulkClose(null)
+  const bulkCloseConfirm = {
+    visible: false,
+    title: copy.title.others,
+    message: copy.description,
+    confirmLabel: copy.confirm,
+    destructive: true,
+    onConfirm: confirmBulkClose,
+    onCancel: cancelBulkClose
+  }
 
   const visibleTabs: MobileSessionTab[] = sessionTabs
   const activeMarkdownTab = activeSessionTab?.type === 'markdown' ? activeSessionTab : null
@@ -120,6 +129,9 @@ export function useMobileSessionBulkClose(scope: MobileSessionCloseActionsModel)
     bulkCloseActions,
     bulkCloseConfirm,
     closeWithBulkActions,
+    pendingBulkClose,
+    confirmBulkClose,
+    cancelBulkClose,
     visibleTabs,
     activeMarkdownTab,
     activeFileTab,
