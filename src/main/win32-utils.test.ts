@@ -143,7 +143,9 @@ describe('getSpawnArgsForWindows', () => {
         'C:\\Tools\\claude.cmd',
         'auth',
         'login',
-        '--claudeai'
+        '--claudeai',
+        '&',
+        'exit'
       ])
       expect(spawnArgs[3]).toBe('')
       expect(spawnArgs).not.toContain('/B')
