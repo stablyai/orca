@@ -79,6 +79,7 @@ describeOnWindows('native windows-security addon against a real filesystem', () 
     expect(() => addon.readFileWithDacl(root, 100)).toThrow()
   })
 
+  // Covers two cold Python starts, each allowed 30s on a fresh hosted Windows runner.
   it('preserves disposable-item metadata, counted UTF-8/subarrays, and the native cap', () => {
     const target = `orca-sta11846-test:${randomUUID()}`
     expect(target).not.toBe('gemini:antigravity')
