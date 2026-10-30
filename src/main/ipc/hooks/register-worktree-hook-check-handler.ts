@@ -45,7 +45,10 @@ export function registerWorktreeHookCheckHandler(context: WorktreeIpcContext): v
           hooks: null,
           mayNeedUpdate: false,
           // A stopped distro answers once it runs again; an unverifiable one is worth a retry.
-          ...(blocked.state === 'stopped' ? { unavailable: 'wsl-distro-stopped' as const } : {})
+          unavailable:
+            blocked.state === 'stopped'
+              ? ('wsl-distro-stopped' as const)
+              : ('wsl-distro-unverifiable' as const)
         }
       }
 

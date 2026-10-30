@@ -23,6 +23,7 @@ import {
 } from '../native-chat/agent-session-wire/structured-agent-session-host-test-data'
 import type { StructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-host'
 import {
+  closeTestJournalHostDatabases,
   liveTestJournalRows,
   openTestJournalHostDatabase
 } from '../native-chat/agent-session-journal/journal-host-database-test-support'
@@ -213,7 +214,7 @@ beforeEach(async () => {
     resolveWorkspacePath: async () => root,
     resolveLaunchArgs: () => [],
     resolveClaudeAuthPolicy: () => ({ account: 'managed' }),
-    resolveCodexCommand: () => 'codex',
+    resolveCodexCommand: () => ({ command: 'codex', prefixArgs: [] }),
     resolveEnvironment: async () => ({ PATH: process.env.PATH }),
     ...scriptedCodexTransport(openConnection)
   })
@@ -237,6 +238,7 @@ beforeEach(async () => {
 
 afterEach(async () => {
   await stopStructuredAgentSessionRuntime()
+  await closeTestJournalHostDatabases()
   await rm(root, { recursive: true, force: true })
 })
 

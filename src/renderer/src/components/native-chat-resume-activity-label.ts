@@ -59,17 +59,11 @@ export function resumeActivityLabel(
     )
   } else if (agents.length > 1) {
     parts.push(
-      agents.length === 1
-        ? translate(
-            'auto.components.NativeChatResumeOnRestartModal.activitySubagentCount_one',
-            '{{count}} subagent running',
-            { count: agents.length }
-          )
-        : translate(
-            'auto.components.NativeChatResumeOnRestartModal.activitySubagentCount_other',
-            '{{count}} subagents running',
-            { count: agents.length }
-          )
+      translate(
+        'auto.components.NativeChatResumeOnRestartModal.activitySubagentCount',
+        '{{count}} subagents running',
+        { count: agents.length, defaultValue_one: '{{count}} subagent running' }
+      )
     )
   }
   if (watches.length === 1 && onlyWatch) {
@@ -82,17 +76,11 @@ export function resumeActivityLabel(
     )
   } else if (watches.length > 1) {
     parts.push(
-      watches.length === 1
-        ? translate(
-            'auto.components.NativeChatResumeOnRestartModal.activityMonitorCount_one',
-            'Monitoring {{count}} background task',
-            { count: watches.length }
-          )
-        : translate(
-            'auto.components.NativeChatResumeOnRestartModal.activityMonitorCount_other',
-            'Monitoring {{count}} background tasks',
-            { count: watches.length }
-          )
+      translate(
+        'auto.components.NativeChatResumeOnRestartModal.activityMonitorCount',
+        'Monitoring {{count}} background tasks',
+        { count: watches.length, defaultValue_one: 'Monitoring {{count}} background task' }
+      )
     )
   }
   if (parts.length === 0) {

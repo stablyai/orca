@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import {
   readDisabledTerminalLiveInputHandlesPreference,
   saveDisabledTerminalLiveInputHandles
@@ -13,16 +13,47 @@ import {
 type UseTerminalLiveInputModePreferenceOptions = {
   readonly hostId: string
   readonly worktreeId: string
+  /** Terminals running an agent; they open in the composer instead of live keys. */
+  readonly agentHandles?: ReadonlySet<string>
 }
+
+const NO_AGENT_HANDLES: ReadonlySet<string> = new Set()
 
 export function useTerminalLiveInputModePreference({
   hostId,
-  worktreeId
+  worktreeId,
+  agentHandles = NO_AGENT_HANDLES
 }: UseTerminalLiveInputModePreferenceOptions) {
-  const [liveInputTerminalHandles, setLiveInputTerminalHandles] = useState<Set<string>>(
+  // The shell-level choice: live by default, minus persisted opt-outs.
+  const [shellLiveInputHandles, setLiveInputTerminalHandles] = useState<Set<string>>(
     () => new Set()
   )
-  const liveInputTerminalHandlesRef = useRef<Set<string>>(new Set())
+  const shellLiveInputHandlesRef = useRef<Set<string>>(new Set())
+  // Agent tabs where the user picked live keys; the pick ends when the agent quits.
+  const [agentLiveInputHandles, setAgentLiveInputHandles] = useState<ReadonlySet<string>>(
+    () => new Set()
+  )
+  const agentHandlesRef = useRef(agentHandles)
+  const liveInputTerminalHandles = useMemo(
+    () =>
+      new Set(
+        [...shellLiveInputHandles].filter(
+          (handle) => !agentHandles.has(handle) || agentLiveInputHandles.has(handle)
+        )
+      ),
+    [agentHandles, agentLiveInputHandles, shellLiveInputHandles]
+  )
+  const liveInputTerminalHandlesRef = useRef<Set<string>>(liveInputTerminalHandles)
+  useLayoutEffect(() => {
+    agentHandlesRef.current = agentHandles
+    liveInputTerminalHandlesRef.current = liveInputTerminalHandles
+  }, [agentHandles, liveInputTerminalHandles])
+  useEffect(() => {
+    setAgentLiveInputHandles((prev) => {
+      const kept = [...prev].filter((handle) => agentHandles.has(handle))
+      return kept.length === prev.size ? prev : new Set(kept)
+    })
+  }, [agentHandles])
   const defaultedLiveInputTerminalHandlesRef = useRef<Set<string>>(new Set())
   const disabledLiveInputTerminalHandlesRef = useRef<Set<string>>(new Set())
   const disabledLiveInputHydratedRef = useRef(false)
@@ -42,7 +73,7 @@ export function useTerminalLiveInputModePreference({
       disabledLiveInputTerminalHandlesRef.current
     )
     const result = defaultTerminalLiveInputHandles(
-      liveInputTerminalHandlesRef.current,
+      shellLiveInputHandlesRef.current,
       defaultedLiveInputTerminalHandlesRef.current,
       defaultableHandles
     )
@@ -51,7 +82,7 @@ export function useTerminalLiveInputModePreference({
     }
     const nextEnabledHandles = new Set(result.enabledHandles)
     const nextDefaultedHandles = new Set(result.defaultedHandles)
-    liveInputTerminalHandlesRef.current = nextEnabledHandles
+    shellLiveInputHandlesRef.current = nextEnabledHandles
     defaultedLiveInputTerminalHandlesRef.current = nextDefaultedHandles
     setLiveInputTerminalHandles(nextEnabledHandles)
   }, [])
@@ -67,7 +98,7 @@ export function useTerminalLiveInputModePreference({
   const pruneTerminalHandlesFromLiveInput = useCallback(
     (liveHandles: ReadonlySet<string>) => {
       const result = pruneTerminalLiveInputHandles(
-        liveInputTerminalHandlesRef.current,
+        shellLiveInputHandlesRef.current,
         defaultedLiveInputTerminalHandlesRef.current,
         liveHandles
       )
@@ -90,7 +121,7 @@ export function useTerminalLiveInputModePreference({
       }
       const nextEnabledHandles = new Set(result.enabledHandles)
       const nextDefaultedHandles = new Set(result.defaultedHandles)
-      liveInputTerminalHandlesRef.current = nextEnabledHandles
+      shellLiveInputHandlesRef.current = nextEnabledHandles
       defaultedLiveInputTerminalHandlesRef.current = nextDefaultedHandles
       setLiveInputTerminalHandles(nextEnabledHandles)
     },
@@ -100,7 +131,7 @@ export function useTerminalLiveInputModePreference({
   const clearTerminalLiveInputDefault = useCallback(
     (handle: string) => {
       const liveHandles = new Set([
-        ...liveInputTerminalHandlesRef.current,
+        ...shellLiveInputHandlesRef.current,
         ...defaultedLiveInputTerminalHandlesRef.current
       ])
       liveHandles.delete(handle)
@@ -119,7 +150,23 @@ export function useTerminalLiveInputModePreference({
 
   const toggleTerminalLiveInput = useCallback(
     (handle: string): boolean => {
-      const nextEnabled = !liveInputTerminalHandlesRef.current.has(handle)
+      if (agentHandlesRef.current.has(handle)) {
+        const nextEnabled = !liveInputTerminalHandlesRef.current.has(handle)
+        setAgentLiveInputHandles((prev) => {
+          const next = new Set(prev)
+          if (nextEnabled) {
+            next.add(handle)
+          } else {
+            next.delete(handle)
+          }
+          return next
+        })
+        // Live keys also need the shell-level choice on, or the pick would have no effect.
+        if (!nextEnabled || shellLiveInputHandlesRef.current.has(handle)) {
+          return nextEnabled
+        }
+      }
+      const nextEnabled = !shellLiveInputHandlesRef.current.has(handle)
       if (nextEnabled) {
         disabledLiveInputTerminalHandlesRef.current.delete(handle)
       } else {
@@ -133,29 +180,28 @@ export function useTerminalLiveInputModePreference({
       if (disabledLiveInputHydratedRef.current) {
         persistDisabledLiveInputHandles()
       }
-      setLiveInputTerminalHandles((prev) => {
-        const next = new Set(prev)
-        if (nextEnabled) {
-          next.add(handle)
-        } else {
-          next.delete(handle)
-        }
-        liveInputTerminalHandlesRef.current = next
-        return next
-      })
+      const next = new Set(shellLiveInputHandlesRef.current)
+      if (nextEnabled) {
+        next.add(handle)
+      } else {
+        next.delete(handle)
+      }
+      shellLiveInputHandlesRef.current = next
+      setLiveInputTerminalHandles(next)
       return nextEnabled
     },
     [persistDisabledLiveInputHandles]
   )
 
   useEffect(() => {
-    liveInputTerminalHandlesRef.current = new Set()
+    shellLiveInputHandlesRef.current = new Set()
     defaultedLiveInputTerminalHandlesRef.current = new Set()
     disabledLiveInputTerminalHandlesRef.current = new Set()
     disabledLiveInputHydratedRef.current = false
     pendingDisabledLiveInputHydrationEditsRef.current = new Map()
     pendingLiveInputDefaultHandlesRef.current = new Set()
     setLiveInputTerminalHandles(new Set())
+    setAgentLiveInputHandles(new Set())
 
     let disposed = false
     // Hydrate before subscriptions can default live-input mode over persisted choices.
@@ -179,13 +225,13 @@ export function useTerminalLiveInputModePreference({
         persistDisabledLiveInputHandles()
       }
       const result = applyDisabledTerminalLiveInputHandles(
-        liveInputTerminalHandlesRef.current,
+        shellLiveInputHandlesRef.current,
         defaultedLiveInputTerminalHandlesRef.current,
         hydratedDisabledHandles
       )
       const nextEnabledHandles = new Set(result.enabledHandles)
       const nextDefaultedHandles = new Set(result.defaultedHandles)
-      liveInputTerminalHandlesRef.current = nextEnabledHandles
+      shellLiveInputHandlesRef.current = nextEnabledHandles
       defaultedLiveInputTerminalHandlesRef.current = nextDefaultedHandles
       setLiveInputTerminalHandles(nextEnabledHandles)
       const pendingDefaultHandles = [...pendingLiveInputDefaultHandlesRef.current]

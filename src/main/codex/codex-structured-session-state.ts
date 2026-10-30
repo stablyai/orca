@@ -41,6 +41,7 @@ export type CodexSessionCatalogAccess = AgentModelCatalogSessionAccess & {
 }
 
 export type CodexStructuredLaunch = {
+  prefixArgs?: readonly string[]
   command: string
   args: string[]
   cwd: string

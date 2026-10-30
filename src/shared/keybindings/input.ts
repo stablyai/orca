@@ -13,6 +13,7 @@ import {
   normalizeOptionsForAction
 } from './normalization'
 import { hasModifier, normalizeKeyToken } from './parser'
+import { keybindingValidationFailure } from './keybinding-diagnostic-copy'
 
 const MODIFIER_KEYS = new Set([
   'Alt',
@@ -234,7 +235,7 @@ export function keybindingFromInputWithOptions(
   }
   const key = keyTokenFromInput(input, platform)
   if (!key) {
-    return { ok: false, error: 'Press a key, not only a modifier.' }
+    return keybindingValidationFailure('modifierOnly')
   }
 
   const isMac = getKeybindingPlatform(platform) === 'darwin'

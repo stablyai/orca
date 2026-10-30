@@ -1,4 +1,5 @@
 import { useState, useRef, useMemo } from 'react'
+import { useTerminalSplitLayout } from './use-terminal-split-layout'
 import { Animated, type ScrollView } from 'react-native'
 import type { MobileTerminalLinkOpenMode } from '../storage/preferences'
 import type { TerminalKeyboardAvoidanceMetrics } from '../terminal/terminal-webview-contract'
@@ -9,6 +10,7 @@ import {
 import type { CustomKey } from '../terminal/terminal-custom-keys'
 import type { MobileNewTabAgentOption } from './mobile-new-tab-agent-options'
 import { useTerminalLiveInputModePreference } from './use-terminal-live-input-mode-preference'
+import { listMobileTerminalAgentHandles } from './mobile-terminal-tab-agent'
 import type { AppliedSnapshotMarker } from './session-tab-snapshot-gate'
 import { useWorktreeSessionTabsLoaded } from './use-initial-session-terminal-autocreate'
 import { createMobileSessionCreateWarningState } from './mobile-session-create-warning-state'
@@ -28,6 +30,7 @@ import type { MobileSessionFoundationModel } from './use-mobile-session-foundati
 
 export function useMobileSessionScreenState(scope: MobileSessionFoundationModel) {
   const { worktreeId, hostId, initialCreateWarning } = scope
+  const terminalSplitLayout = useTerminalSplitLayout()
   const [terminals, setTerminals] = useState<Terminal[]>([])
   const terminalsRef = useRef<Terminal[]>([])
   const [sessionTabs, setSessionTabs] = useState<MobileSessionTab[]>([])
@@ -43,6 +46,11 @@ export function useMobileSessionScreenState(scope: MobileSessionFoundationModel)
   const [terminalLinkOpenMode, setTerminalLinkOpenMode] =
     useState<MobileTerminalLinkOpenMode>('orca-browser')
   const [liveInputCapture, setLiveInputCapture] = useState('')
+  const agentHandleKey = listMobileTerminalAgentHandles(sessionTabs).join('\n')
+  const agentHandles = useMemo(
+    () => new Set(agentHandleKey ? agentHandleKey.split('\n') : []),
+    [agentHandleKey]
+  )
   const {
     clearTerminalLiveInputDefault,
     defaultTerminalHandlesToLiveInput,
@@ -50,7 +58,7 @@ export function useMobileSessionScreenState(scope: MobileSessionFoundationModel)
     liveInputTerminalHandlesRef,
     pruneTerminalHandlesFromLiveInput,
     toggleTerminalLiveInput
-  } = useTerminalLiveInputModePreference({ hostId, worktreeId })
+  } = useTerminalLiveInputModePreference({ hostId, worktreeId, agentHandles })
   const [activeHandle, setActiveHandle] = useState<string | null>(null)
   const [coveredStreamRevision, setCoveredStreamRevision] = useState(0)
   const [activeSessionTabId, setActiveSessionTabId] = useState<string | null>(null)
@@ -86,6 +94,7 @@ export function useMobileSessionScreenState(scope: MobileSessionFoundationModel)
   const [createTabAgentOptions, setCreateTabAgentOptions] = useState<MobileNewTabAgentOption[]>([])
   const [showCreateBrowserModal, setShowCreateBrowserModal] = useState(false)
   const [showHeaderMoreActions, setShowHeaderMoreActions] = useState(false)
+  const [showTerminalLayout, setShowTerminalLayout] = useState(false)
   const sessionTabActionTargets = useMobileSessionTabActionTargets()
   const [discardMarkdownTarget, setDiscardMarkdownTarget] = useState<Extract<
     MobileSessionTab,
@@ -94,6 +103,7 @@ export function useMobileSessionScreenState(scope: MobileSessionFoundationModel)
   const [leaveDrafts, setLeaveDrafts] = useState<DirtyMarkdownDraft[] | null>(null)
   const [renameTarget, setRenameTarget] = useState<Terminal | null>(null)
   const [customKeys, setCustomKeys] = useState<CustomKey[]>([])
+  const [directionPadEnabled, setDirectionPadEnabled] = useState(true)
   const [visibleBuiltInIds, setVisibleBuiltInIds] = useState<string[]>(
     getDefaultTerminalAccessoryBuiltInIds
   )
@@ -120,6 +130,7 @@ export function useMobileSessionScreenState(scope: MobileSessionFoundationModel)
   const toastHideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const toastSeqRef = useRef(0)
   return {
+    ...terminalSplitLayout,
     terminals,
     setTerminals,
     terminalsRef,
@@ -196,6 +207,8 @@ export function useMobileSessionScreenState(scope: MobileSessionFoundationModel)
     setShowCreateBrowserModal,
     showHeaderMoreActions,
     setShowHeaderMoreActions,
+    showTerminalLayout,
+    setShowTerminalLayout,
     ...sessionTabActionTargets,
     discardMarkdownTarget,
     setDiscardMarkdownTarget,
@@ -205,6 +218,8 @@ export function useMobileSessionScreenState(scope: MobileSessionFoundationModel)
     setRenameTarget,
     customKeys,
     setCustomKeys,
+    directionPadEnabled,
+    setDirectionPadEnabled,
     visibleBuiltInIds,
     setVisibleBuiltInIds,
     showCustomKeyModal,

@@ -18,6 +18,8 @@ import { stampWslOrchestrationCompatibilityHost } from '../../pty/wsl-orca-env'
 import { getRuntimeSourceStamp } from '../../runtime/host-descriptor'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import { buildPtyHostEnv } from './host-env/assembly'
+import { blockedWslDistroForPath } from '../../wsl/wsl-unc-access-gate'
+import { runAsWslLaunchUserAct } from '../../wsl/wsl-background-exec-gate'
 import {
   codexHomePathsEqual,
   getCompatibleSelectedCodexHomePath,
@@ -86,6 +88,8 @@ type PtySpawnHostEnvArgs = {
   resumeOnSelectedAccount: boolean
   /** Host accepts empty IDs without host env; window rejects them. */
   emptySessionIdSkipsHostEnv: boolean
+  /** A restore no user act asked for (#35813): its prep must not start a stopped WSL distro. */
+  wslPassiveRestore?: boolean
   requestedAgentTeamsPath: string | undefined
   provider: IPtyProvider
   deps: PtySpawnCodexResumeDeps & {
@@ -96,7 +100,23 @@ type PtySpawnHostEnvArgs = {
   mark?: (phase: string) => void
 }
 
+/**
+ * Every spawn but a passive restore is a launch someone asked for, so its prep may start the WSL
+ * distro it runs in. A passive restore's prep goes through the E9 gates and skips on a stopped one.
+ */
 export async function resolvePtySpawnHostEnv(args: PtySpawnHostEnvArgs): Promise<PtySpawnHostEnv> {
+  const target = args.codexSelectionTarget
+  return runAsWslLaunchUserAct(
+    {
+      isWsl: target.runtime === 'wsl',
+      passiveRestore: args.wslPassiveRestore === true,
+      distro: args.expectedWslDistro || target.wslDistro?.trim() || null
+    },
+    () => resolvePtySpawnHostEnvForAct(args)
+  )
+}
+
+async function resolvePtySpawnHostEnvForAct(args: PtySpawnHostEnvArgs): Promise<PtySpawnHostEnv> {
   const { deps, codexSelectionTarget: target } = args
   const codexResumePreparation = args.preAdopted
     ? null
@@ -151,7 +171,12 @@ export async function resolvePtySpawnHostEnv(args: PtySpawnHostEnvArgs): Promise
     })
     selectedCodexHomePath = resolution instanceof Promise ? await resolution : resolution
   }
-  if (launchesCodex && selectedCodexHomePath) {
+  // Its pending check reads the home's state DB, which starts a stopped distro's UNC home (E9).
+  if (
+    launchesCodex &&
+    selectedCodexHomePath &&
+    !(await blockedWslDistroForPath(selectedCodexHomePath))
+  ) {
     await ensureCodexStateDbBackfillRecoveryStarted(selectedCodexHomePath)
   }
   args.mark?.('codex_home')

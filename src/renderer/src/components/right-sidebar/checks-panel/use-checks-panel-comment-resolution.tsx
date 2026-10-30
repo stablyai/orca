@@ -8,23 +8,28 @@ import { toast } from 'sonner'
 import {
   markPRCommentThreadResolved,
   restorePRCommentThreadSnapshot
-} from '../pr-comment-thread-resolution'
+} from '@/lib/pr-comment-thread-resolution'
 import type { ChecksPanelControllerState } from './use-checks-panel-controller-state'
 import type { ChecksPanelContextState } from './use-checks-panel-context-state'
-import type { ChecksPanelComposerState } from './use-checks-panel-composer-state'
 import type { ChecksPanelReviewState } from './use-checks-panel-review-state'
 import { checksPanelAsyncResultKey } from '../checks-panel-async-result-key'
 import { resolveGitLabMRDiscussionForChecks } from './gitlab-review-client'
-import { clearPendingPRCommentAiAck } from '../pr-comments-ai-launch-ack'
+import {
+  checksPanelReviewStableKey,
+  clearPendingPRCommentAiAck
+} from '../pr-comments-ai-launch-ack'
 import type { PRComment } from '../../../../../shared/github/comment-types'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
+import { isReviewThreadResolutionInFlight } from '@/store/github/review-thread-resolution-in-flight'
 import { worktreeLaunchWorkspace } from '@/lib/agent-launch-route-input'
+import { codeHostErrorText } from '@/lib/code-host-error-copy'
 
 type ChecksPanelCommentResolutionInput = Pick<
   ChecksPanelControllerState,
   | 'activeWorktree'
   | 'activeWorktreeId'
+  | 'asyncResultKeyRef'
   | 'branch'
   | 'claimedCommentResolutionRef'
   | 'commentResolutionAckBusy'
@@ -42,7 +47,6 @@ type ChecksPanelCommentResolutionInput = Pick<
     ChecksPanelContextState,
     'activeGitLabReview' | 'activeReview' | 'pr' | 'prCacheKey' | 'prNumber'
   > &
-  Pick<ChecksPanelComposerState, 'isCurrentAsyncResult'> &
   Pick<ChecksPanelReviewState, 'sourceControlAiActionsVisible'>
 
 export function useChecksPanelCommentResolution(model: ChecksPanelCommentResolutionInput) {
@@ -51,12 +55,12 @@ export function useChecksPanelCommentResolution(model: ChecksPanelCommentResolut
     activeReview,
     activeWorktree,
     activeWorktreeId,
+    asyncResultKeyRef,
     branch,
     claimedCommentResolutionRef,
     commentResolutionAckBusy,
     commentsLoading,
     detectedAgentIds,
-    isCurrentAsyncResult,
     pendingCommentResolutionRef,
     pr,
     prCacheKey,
@@ -95,7 +99,7 @@ export function useChecksPanelCommentResolution(model: ChecksPanelCommentResolut
         if (!result.ok) {
           rollbackThread(previousThreadComments)
           if (notifyOnFailure) {
-            toast.error(result.error)
+            toast.error(codeHostErrorText(result))
           }
           return false
         }
@@ -103,6 +107,10 @@ export function useChecksPanelCommentResolution(model: ChecksPanelCommentResolut
       }
       if (!repo || !prNumber) {
         return false
+      }
+      // Why: skip the local optimistic flip too; the store no-ops overlapping requests.
+      if (isReviewThreadResolutionInFlight(useAppStore.getState(), threadId)) {
+        return true
       }
       const requestKey = checksPanelAsyncResultKey(
         prCacheKey,
@@ -120,11 +128,14 @@ export function useChecksPanelCommentResolution(model: ChecksPanelCommentResolut
         repoId: repo.id,
         prRepo: pr?.prRepo
       })
-      if (!isCurrentAsyncResult(requestKey)) {
-        return ok
-      }
       if (!ok) {
-        rollbackThread(previousThreadComments)
+        // Why: a head push mid-request must not strand the optimistic state the cache re-read copied in.
+        if (
+          checksPanelReviewStableKey(asyncResultKeyRef.current) ===
+          checksPanelReviewStableKey(requestKey)
+        ) {
+          rollbackThread(previousThreadComments)
+        }
         if (notifyOnFailure) {
           toast.error(
             translate(
@@ -138,8 +149,8 @@ export function useChecksPanelCommentResolution(model: ChecksPanelCommentResolut
     },
     [
       activeGitLabReview,
+      asyncResultKeyRef,
       branch,
-      isCurrentAsyncResult,
       pr?.headSha,
       pr?.prRepo,
       prCacheKey,

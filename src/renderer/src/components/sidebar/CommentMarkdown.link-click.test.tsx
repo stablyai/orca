@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   NATIVE_CHAT_FILE_HREF_PREFIX,
   routeNativeChatHref
-} from '../../../../shared/native-chat-href-routing'
+} from '../../../../shared/native-chat/native-chat-href-routing'
 import CommentMarkdown from './CommentMarkdown'
 import type { FileLinkExists } from './comment-markdown-native-chat-file-links'
 

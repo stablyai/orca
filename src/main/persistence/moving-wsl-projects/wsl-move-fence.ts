@@ -4,6 +4,10 @@ import { WSL_MOVE_CUTOVER_PHASES } from '../../../shared/wsl-move/wsl-move-cutov
 import { scanWslMoveCutovers } from './wsl-move-cutover-journal'
 import { comparableWslPath } from './wsl-move-comparable-path'
 import { wslMoveScopeRootPaths } from './wsl-move-scope-roots'
+import {
+  listWslDriveUncConversions,
+  type WslDriveUncConversion
+} from '../../wsl/wsl-drive-unc-conversion-journal'
 
 export type WslMoveScopeIds = {
   repoIds: ReadonlySet<string>
@@ -36,7 +40,40 @@ const SESSION_FROZEN_FROM = phaseIndex('quiesced')
 
 /** Unreadable journals force callers to fence every WSL project. */
 export function resolveWslMoveFence(userDataPath: string): WslMoveFenceState {
-  return wslMoveFenceFromCutovers(scanWslMoveCutovers(userDataPath))
+  return withWslDriveUncConversions(
+    wslMoveFenceFromCutovers(scanWslMoveCutovers(userDataPath)),
+    listWslDriveUncConversions(userDataPath)
+  )
+}
+
+/**
+ * A Windows-drive conversion fences its projects from the pause until the next startup rewrites
+ * them: a terminal started in between would keep the old worktree id. After the profile rewrite
+ * the projects are ordinary again, even while another store retries.
+ */
+export function withWslDriveUncConversions(
+  fence: WslMoveFenceState,
+  conversions: readonly WslDriveUncConversion[]
+): WslMoveFenceState {
+  const pending = conversions.filter((conversion) => conversion.phase === 'prepared')
+  if (pending.length === 0) {
+    return fence
+  }
+  const fenced = {
+    repoIds: new Set([...fence.fenced.repoIds, ...pending.flatMap((entry) => entry.repoIds)]),
+    folderWorkspaceIds: new Set([
+      ...fence.fenced.folderWorkspaceIds,
+      ...pending.flatMap((entry) => entry.folderWorkspaceIds)
+    ])
+  }
+  const fencedRoots = [
+    ...fence.fencedRoots,
+    ...pending.map(({ distro, rootPaths }) => ({
+      distro,
+      roots: rootPaths.flatMap((root) => comparableWslPath(root, distro) ?? [])
+    }))
+  ]
+  return { ...fence, fenced, fencedRoots }
 }
 
 export function wslMoveFenceFromCutovers(

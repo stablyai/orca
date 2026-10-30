@@ -77,38 +77,22 @@ export function useWorktreeCardWorkspaceActions({
   const unreadTooltip = worktree.isUnread
     ? translate('auto.components.sidebar.useWorktreeCardWorkspaceActions.markRead', 'Mark read')
     : translate('auto.components.sidebar.useWorktreeCardWorkspaceActions.markUnread', 'Mark unread')
-  const lineageChildAriaLabel =
-    lineageChildCount === 1
-      ? lineageCollapsed
-        ? translate(
-            'auto.components.sidebar.WorktreeList.showChildWorkspaces_one',
-            'Show {{count}} child workspace',
-            { count: lineageChildCount }
-          )
-        : translate(
-            'auto.components.sidebar.WorktreeList.hideChildWorkspaces_one',
-            'Hide {{count}} child workspace',
-            { count: lineageChildCount }
-          )
-      : lineageCollapsed
-        ? translate(
-            'auto.components.sidebar.WorktreeList.showChildWorkspaces_other',
-            'Show {{count}} child workspaces',
-            { count: lineageChildCount }
-          )
-        : translate(
-            'auto.components.sidebar.WorktreeList.hideChildWorkspaces_other',
-            'Hide {{count}} child workspaces',
-            { count: lineageChildCount }
-          )
-  const childWorkspaceShortLabel =
-    lineageChildCount === 1
-      ? translate('auto.components.sidebar.WorktreeList.childCount_one', '{{count}} child', {
-          count: lineageChildCount
-        })
-      : translate('auto.components.sidebar.WorktreeList.childCount_other', '{{count}} children', {
-          count: lineageChildCount
-        })
+  const lineageChildAriaLabel = lineageCollapsed
+    ? translate(
+        'auto.components.sidebar.WorktreeList.showChildWorkspaces',
+        'Show {{count}} child workspaces',
+        { count: lineageChildCount, defaultValue_one: 'Show {{count}} child workspace' }
+      )
+    : translate(
+        'auto.components.sidebar.WorktreeList.hideChildWorkspaces',
+        'Hide {{count}} child workspaces',
+        { count: lineageChildCount, defaultValue_one: 'Hide {{count}} child workspace' }
+      )
+  const childWorkspaceShortLabel = translate(
+    'auto.components.sidebar.WorktreeList.childCount',
+    '{{count}} children',
+    { count: lineageChildCount, defaultValue_one: '{{count}} child' }
+  )
   const showLineageChildChip = lineageChildCount > 0 && onLineageToggle !== undefined
 
   const handleDragStart = useCallback(

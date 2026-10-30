@@ -28,7 +28,8 @@ export function mintStructuredAgentSessionStartupAttempt(input: {
   attemptId?: string
 }): StructuredAgentSessionStartupAttempt {
   const { record } = input
-  const options = input.startupOptions ?? record.options
+  const selected = input.startupOptions ?? record.options
+  const options = record.provider === 'claude' ? { fastMode: 'false', ...selected } : selected
   return {
     attemptId: input.attemptId ?? randomUUID(),
     identity: input.identity,

@@ -41,6 +41,7 @@ function mergeBatch(
   const working = hostWorkingAfterStructuredAgentSessionBatch(left.working, right)
   return {
     type: 'batch',
+    ...(left.commandsChanged || right.commandsChanged ? { commandsChanged: true as const } : {}),
     ...(right.commands !== undefined || left.commands !== undefined
       ? { commands: right.commands !== undefined ? right.commands : left.commands }
       : {}),

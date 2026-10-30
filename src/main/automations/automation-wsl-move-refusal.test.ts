@@ -122,7 +122,8 @@ describe('scheduled automations under a WSL move', () => {
     expect(runs).toHaveLength(1)
     expect(runs[0]).toMatchObject({
       status: 'skipped_unavailable',
-      error: WSL_MOVE_IN_PROGRESS
+      error: WSL_MOVE_IN_PROGRESS,
+      errorCode: 'wslMoveInProgress'
     })
     expect(WSL_MOVE_IN_PROGRESS).toBe(
       "This automation's project is moving to its WSL host, so Orca skipped this run. Runs resume when the move finishes."
@@ -228,6 +229,9 @@ describe('scheduled automations under a WSL move', () => {
 
     expect(runAutomationPrecheckMock).toHaveBeenCalledOnce()
     expect(dispatcher).not.toHaveBeenCalled()
-    expect(store.listAutomationRuns(automation.id)[0]?.error).toBe(WSL_MOVE_IN_PROGRESS)
+    expect(store.listAutomationRuns(automation.id)[0]).toMatchObject({
+      error: WSL_MOVE_IN_PROGRESS,
+      errorCode: 'wslMoveInProgress'
+    })
   })
 })

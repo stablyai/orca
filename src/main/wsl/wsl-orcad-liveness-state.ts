@@ -19,10 +19,15 @@ export type WslOrcadLivenessDependencies = {
     WslOrcadConnectionManager,
     'ensure' | 'get' | 'publish' | 'close' | 'retireListener'
   >
-  /** `afterExit`: answer only from a probe started once that exit's settle window has passed. */
-  readRunning: (afterExit?: {
+  /**
+   * A settled read for `distro`: never a list probed while it may still be stopping (E9). With
+   * `exitedAt`, also only a probe started once that exit's settle window has passed.
+   */
+  readRunning: (target: {
     distro: string
-    exitedAt: number | null
+    exitedAt?: number | null
+    /** Only a probe started at or after this instant (monotonic) may answer; a cached list won't. */
+    probedAfter?: number
   }) => Promise<WslRunningDistrosRead>
   readIdentity: (distro: string, orcadPid: number | null) => Promise<WslGuestIdentity | null>
   openWatch: (connection: WslOrcadConnection) => Promise<WslOrcadWatch>
@@ -122,5 +127,10 @@ export function isWatchOrHolderExit(trigger: Trigger): boolean {
 export function noteSupervisedExit(entry: Supervised, trigger: Trigger, nowMs: number): void {
   if (isWatchOrHolderExit(trigger)) {
     entry.lastExitMs = nowMs
+    // An exit during a recovery backoff ends that recovery, so the exit re-reads the list now.
+    if (entry.busy && entry.wakeWait) {
+      entry.generation += 1
+      entry.wakeWait()
+    }
   }
 }

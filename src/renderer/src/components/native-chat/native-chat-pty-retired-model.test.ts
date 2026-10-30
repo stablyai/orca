@@ -28,7 +28,7 @@ function createGrokSurface(
 ): {
   surface: NativeChatPtySessionOptionsSurface
   persisted: () => PersistedNativeChatSessionOptions
-  retireFutureDefault: () => void
+  applyLegacyCatalogClear: () => void
 } {
   let persisted = initial
   const surface = createNativeChatPtySessionOptions({
@@ -52,7 +52,7 @@ function createGrokSurface(
   return {
     surface,
     persisted: () => persisted,
-    retireFutureDefault: () => {
+    applyLegacyCatalogClear: () => {
       persisted =
         applyNativeChatSessionOptionSettingsMutation(persisted, {
           type: 'clear-model-if-missing',
@@ -66,15 +66,15 @@ function createGrokSurface(
 describe('current model retention beside future launch defaults', () => {
   beforeEach(() => clearNativeChatSessionOptionCacheForTests())
 
-  it('retains a picked model without adopting it again as a future launch default', async () => {
+  it('retains current and saved models through legacy catalog clearing and a later effort pick', async () => {
     seedNativeChatAppliedSessionOptions('pty-1', 'grok', { model: 'grok-4.5' })
-    const { surface, persisted, retireFutureDefault } = createGrokSurface(undefined, {
+    const { surface, persisted, applyLegacyCatalogClear } = createGrokSurface(undefined, {
       grok: { model: 'grok-4.5', valuesByModel: {} }
     })
 
     surface.replaceModels(discoveredGrok5())
-    retireFutureDefault()
-    expect(persisted().grok?.model).toBeUndefined()
+    applyLegacyCatalogClear()
+    expect(persisted().grok?.model).toBe('grok-4.5')
 
     // Discovery does not replace the current session selection.
     expect(surface.getSnapshot()[0].kind).toMatchObject({
@@ -83,9 +83,10 @@ describe('current model retention beside future launch defaults', () => {
     })
     expect(readNativeChatSessionOptionCache('pty-1')?.model?.value).toBe('grok-4.5')
 
-    // A later effort write must not adopt the omitted model as a launch default.
+    // A later effort write preserves the saved model and updates its scoped option.
     await surface.setOption('effort', 'low')
-    expect(persisted().grok?.model).toBeUndefined()
+    expect(persisted().grok?.model).toBe('grok-4.5')
+    expect(persisted().grok?.valuesByModel?.['grok-4.5']?.effort).toBe('low')
   })
 
   it('retains a cached model omitted before surface creation', () => {

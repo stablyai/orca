@@ -37,7 +37,32 @@
     "sortDescending": "Сортировать выбранный столбец по убыванию",
     "originalOrder": "Исходный порядок строк",
     "save": "Сохранить",
-    "inspectionOnly": "Только просмотр · Порядок строк в файле не меняется"
+    "inspectionOnly": "Только просмотр · Порядок строк в файле не меняется",
+    "error": {
+      "tooManyCells": "В CSV слишком много ячеек для безопасного предпросмотра.",
+      "recordTooLarge": "Запись CSV слишком велика для безопасного предпросмотра.",
+      "tooManyPages": "В CSV слишком много страниц для безопасного предпросмотра.",
+      "previewRecordLimit": "Запись CSV превышает лимит предпросмотра в 1 МБ.",
+      "binaryData": "Этот файл содержит двоичные данные.",
+      "previewColumnLimit": "CSV превышает лимит предпросмотра в 4 096 столбцов.",
+      "changedOnDisk": "CSV изменился на диске. Загрузите файл заново, чтобы обновить предпросмотр.",
+      "pageBoundaryMismatch": "Границы страниц CSV не совпадают. Загрузите предпросмотр заново.",
+      "canceled": "Предпросмотр CSV отменён",
+      "workerFailed": "Сбой фонового процесса предпросмотра CSV. Загрузите файл заново, чтобы повторить попытку.",
+      "workerUnreadableResponse": "Фоновый процесс предпросмотра CSV вернул нечитаемый ответ.",
+      "cellMissing": "Выбранная строка или столбец CSV больше не существует.",
+      "rowMissing": "Выбранная строка CSV больше не существует.",
+      "columnLimit": "CSV превышает лимит в 4 096 столбцов.",
+      "recordLimit": "Запись CSV превышает лимит в 1 МБ.",
+      "tableEditBudget": "Размер правок в таблице должен быть меньше 1 МиБ. Для более крупных изменений используйте режим «Исходный текст».",
+      "editConflict": "CSV изменился во время редактирования этой ячейки. Отмените редактирование и попробуйте снова.",
+      "saveFailed": "Не удалось сохранить CSV. Ваши правки остаются в черновике.",
+      "pasteConflict": "CSV изменился до завершения вставки. Попробуйте снова.",
+      "copyTooManyCells": "Выберите меньше ячеек для копирования за раз.",
+      "copyTooLarge": "Выбранные ячейки слишком велики для безопасного копирования.",
+      "pasteExceedsTable": "Вставляемые данные выходят за границы таблицы. Сначала добавьте строки или столбцы.",
+      "pasteTooManyCells": "Выберите меньше ячеек для вставки за раз."
+    }
   },
   "osDocumentOpen": {
     "failed": "Не удалось открыть файл."
@@ -67,6 +92,7 @@
       "useHereHostKeptForPeers": "Проект {{project}} перенесён на хост {{distro}}, который всё ещё работает для другого экземпляра Orca. Чтобы снова работать с ним здесь, добавьте хост повторно.",
       "useHereHostUnreachable": "Хост {{distro}} не отвечает, поэтому Orca не может остановить его копию этого проекта, и её агенты, возможно, всё ещё работают там. Подключите хост в настройках или удалите его, затем повторите попытку.",
       "useHereHostStillRunning": "В копии этого проекта на хосте {{distro}} ещё работают терминалы, поэтому её агенты могут запуститься дважды. Подождите немного и повторите попытку.",
+      "useHereHostTerminalsAsleep": "Его терминалы на хосте {{distro}} переведены в спящий режим. Откройте проект, чтобы возобновить их.",
       "useHereFailed": "Не удалось вернуть проект на этот компьютер.",
       "useHereHostRemovalPending": "Хост {{distro}} ещё удаляется, поэтому Orca его не трогает. Завершите удаление в настройках, затем повторите попытку.",
       "useHereHostAutomations": "Orca не удалось отключить автоматизации этого проекта на хосте {{distro}}, поэтому они могут запуститься дважды. Подключите хост в настройках, затем повторите попытку.",
@@ -76,6 +102,157 @@
       "quitDuringMoveTitle": "Выйти во время переноса проекта?",
       "quitDuringMoveDescription": "Проект переносится на свой хост WSL. Всё равно выйти? Перенос будет отменён при следующем запуске.",
       "quitDuringMoveConfirm": "Всё равно выйти"
+    },
+    "createProject": {
+      "errors": {
+        "nameEmpty": "Имя не может быть пустым",
+        "nameInvalid": "Имя не может содержать косые черты или быть \".\" / \"..\"",
+        "parentRequired": "Необходимо указать родительскую папку",
+        "parentNotAbsolute": "Путь к родительской папке должен быть абсолютным",
+        "targetInaccessible": "Не удалось получить доступ к целевому пути: {{detail}}",
+        "targetNotEmpty": "«{{name}}» уже существует в этом расположении и содержит данные.",
+        "targetNotFolder": "«{{name}}» уже существует в этом расположении и не является папкой.",
+        "readDirectoryFailed": "Не удалось прочитать содержимое папки: {{detail}}",
+        "createDirectoryFailed": "Не удалось создать папку: {{detail}}",
+        "prepareDirectoryFailed": "Не удалось подготовить папку: {{detail}}",
+        "gitIdentityMissing": "Не настроены данные автора коммитов Git. Выполните `git config --global user.name \"Your Name\"` и `git config --global user.email \"you@example.com\"`, затем повторите попытку.",
+        "gitInitFailed": "Не удалось инициализировать репозиторий Git: {{detail}}",
+        "initialCommitFailed": "Не удалось создать начальный коммит: {{detail}}"
+      }
+    },
+    "wslHosts": {
+      "addErrors": {
+        "alreadyAdded": "{{distro}} уже добавлен как сервер.",
+        "distroStopped": "{{distro}} остановился после чтения списка. Выберите «Запустить и добавить», чтобы запустить его.",
+        "wsl1": "{{distro}} использует WSL 1, которую Orca больше не поддерживает. Преобразуйте его в WSL 2 в терминале Windows командой: {{command}}",
+        "notRegistered": "{{distro}} не является установленным дистрибутивом WSL. Выполните {{command}} в терминале Windows, чтобы увидеть установленные дистрибутивы, или переустановите его и повторите попытку.",
+        "sshManaged": "В {{distro}} уже работает сервер Orca для «{{server}}», к которому этот компьютер подключается по SSH. Сначала удалите этот сервер; перенос на сервер WSL пока не поддерживается."
+      },
+      "statusDetails": {
+        "runningListUnavailable": "Windows не сообщила, запущен ли дистрибутив.",
+        "guestUnanswered": "Дистрибутив запущен, но не ответил на проверочный запрос Orca.",
+        "orcadUnanswered": "Сервер Orca в дистрибутиве не ответил.",
+        "restartGaveUp_one": "Не удалось перезапустить сервер Orca в {{distro}} после {{count}} попытки",
+        "restartGaveUp_other": "Не удалось перезапустить сервер Orca в {{distro}} после {{count}} попытки",
+        "serviceUnconfirmed": "Служба WSL не подтвердила, запущен ли дистрибутив.",
+        "peerCheckFailed": "Orca не удалось спросить у сервера WSL, использует ли его ещё другой экземпляр Orca на этом компьютере: {{detail}}",
+        "removalUnrecorded": "Orca не удалось записать, что осталось работать после этого удаления: {{detail}}",
+        "restartGaveUp_few": "Не удалось перезапустить сервер Orca в {{distro}} после {{count}} попыток",
+        "restartGaveUp_many": "Не удалось перезапустить сервер Orca в {{distro}} после {{count}} попыток"
+      }
+    },
+    "agentSummary": {
+      "state": {
+        "waiting": "ожидание",
+        "blocked": "заблокирован",
+        "interrupted": "прерван",
+        "failed": "ошибка",
+        "working": "в работе",
+        "monitoring": "наблюдение",
+        "done": "готово",
+        "idle": "бездействует",
+        "notReporting": "нет данных о статусе",
+        "unconfirmed": "не подтверждён",
+        "needsAttention": "требует внимания"
+      },
+      "mixedStates": "{{subject}}: {{states}}",
+      "agentIdentityState": "{{agent}}: {{status}}",
+      "agentCount_one": "{{count}} агент",
+      "agentCount_other": "{{count}} агента",
+      "agentCount_few": "{{count}} агента",
+      "agentCount_many": "{{count}} агентов",
+      "stateCount": {
+        "waiting_one": "{{count}} ожидает",
+        "waiting_other": "{{count}} ожидают",
+        "blocked_one": "{{count}} заблокирован",
+        "blocked_other": "{{count}} заблокированы",
+        "interrupted_one": "{{count}} прерван",
+        "interrupted_other": "{{count}} прерваны",
+        "failed_one": "{{count}} дал сбой",
+        "failed_other": "{{count}} дали сбой",
+        "working_one": "{{count}} работает",
+        "working_other": "{{count}} работают",
+        "monitoring_one": "{{count}} наблюдает",
+        "monitoring_other": "{{count}} наблюдают",
+        "done_one": "{{count}} завершил работу",
+        "done_other": "{{count}} завершили работу",
+        "idle_one": "{{count}} бездействует",
+        "idle_other": "{{count}} бездействуют",
+        "notReporting_one": "{{count}} не сообщает статус",
+        "notReporting_other": "{{count}} не сообщают статус",
+        "unconfirmed_one": "{{count}} не подтверждён",
+        "unconfirmed_other": "{{count}} не подтверждены",
+        "needsAttention_one": "{{count}} требует внимания",
+        "needsAttention_other": "{{count}} требуют внимания",
+        "waiting_few": "{{count}} ожидают",
+        "waiting_many": "{{count}} ожидают",
+        "blocked_few": "{{count}} заблокированы",
+        "blocked_many": "{{count}} заблокированы",
+        "interrupted_few": "{{count}} прерваны",
+        "interrupted_many": "{{count}} прерваны",
+        "failed_few": "{{count}} дали сбой",
+        "failed_many": "{{count}} дали сбой",
+        "working_few": "{{count}} работают",
+        "working_many": "{{count}} работают",
+        "monitoring_few": "{{count}} наблюдают",
+        "monitoring_many": "{{count}} наблюдают",
+        "done_few": "{{count}} завершили работу",
+        "done_many": "{{count}} завершили работу",
+        "idle_few": "{{count}} бездействуют",
+        "idle_many": "{{count}} бездействуют",
+        "notReporting_few": "{{count}} не сообщают статус",
+        "notReporting_many": "{{count}} не сообщают статус",
+        "unconfirmed_few": "{{count}} не подтверждены",
+        "unconfirmed_many": "{{count}} не подтверждены",
+        "needsAttention_few": "{{count}} требуют внимания",
+        "needsAttention_many": "{{count}} требуют внимания"
+      },
+      "allInState": {
+        "waiting_one": "{{count}} агент ожидает",
+        "waiting_other": "Все {{count}} агента ожидают",
+        "blocked_one": "{{count}} агент заблокирован",
+        "blocked_other": "Все {{count}} агента заблокированы",
+        "interrupted_one": "{{count}} агент прерван",
+        "interrupted_other": "Все {{count}} агента прерваны",
+        "failed_one": "{{count}} агент дал сбой",
+        "failed_other": "Все {{count}} агента дали сбой",
+        "working_one": "{{count}} агент работает",
+        "working_other": "Все {{count}} агента работают",
+        "monitoring_one": "{{count}} агент наблюдает",
+        "monitoring_other": "Все {{count}} агента наблюдают",
+        "done_one": "{{count}} агент завершил работу",
+        "done_other": "Все {{count}} агента завершили работу",
+        "idle_one": "{{count}} агент бездействует",
+        "idle_other": "Все {{count}} агента бездействуют",
+        "notReporting_one": "{{count}} агент не сообщает статус",
+        "notReporting_other": "Все {{count}} агента не сообщают статус",
+        "unconfirmed_one": "{{count}} агент не подтверждён",
+        "unconfirmed_other": "Все {{count}} агента не подтверждены",
+        "needsAttention_one": "{{count}} агент требует внимания",
+        "needsAttention_other": "Все {{count}} агента требуют внимания",
+        "waiting_few": "Все {{count}} агента ожидают",
+        "waiting_many": "Все {{count}} агентов ожидают",
+        "blocked_few": "Все {{count}} агента заблокированы",
+        "blocked_many": "Все {{count}} агентов заблокированы",
+        "interrupted_few": "Все {{count}} агента прерваны",
+        "interrupted_many": "Все {{count}} агентов прерваны",
+        "failed_few": "Все {{count}} агента дали сбой",
+        "failed_many": "Все {{count}} агентов дали сбой",
+        "working_few": "Все {{count}} агента работают",
+        "working_many": "Все {{count}} агентов работают",
+        "monitoring_few": "Все {{count}} агента наблюдают",
+        "monitoring_many": "Все {{count}} агентов наблюдают",
+        "done_few": "Все {{count}} агента завершили работу",
+        "done_many": "Все {{count}} агентов завершили работу",
+        "idle_few": "Все {{count}} агента бездействуют",
+        "idle_many": "Все {{count}} агентов бездействуют",
+        "notReporting_few": "Все {{count}} агента не сообщают статус",
+        "notReporting_many": "Все {{count}} агентов не сообщают статус",
+        "unconfirmed_few": "Все {{count}} агента не подтверждены",
+        "unconfirmed_many": "Все {{count}} агентов не подтверждены",
+        "needsAttention_few": "Все {{count}} агента требуют внимания",
+        "needsAttention_many": "Все {{count}} агентов требуют внимания"
+      }
     }
   },
   "app": {
@@ -270,6 +447,47 @@
       "mobile-m": "Мобильное устройство M — 375 × 667",
       "mobile-s": "Мобильное устройство S — 320 × 568",
       "tablet": "Планшет — 768 × 1024"
+    },
+    "cookieImport": {
+      "errors": {
+        "notAuthorized": "Нет доступа",
+        "profileNotFound": "Профиль сессии не найден.",
+        "invalidBrowserProfile": "Недопустимое имя профиля браузера.",
+        "browserNotFound": "Браузер не найден в этой системе.",
+        "browserProfileDatabaseMissing": "База данных файлов cookie для профиля «{{profile}}» не найдена.",
+        "fileUnreadable": "Не удалось прочитать выбранный файл.",
+        "fileInvalidJson": "Файл содержит некорректный JSON.",
+        "fileNotArray": "Ожидался JSON-массив объектов cookie.",
+        "fileEmpty": "Файл cookie пуст.",
+        "fileNoValidCookies_one": "Не найдено корректных файлов cookie. Пропущена {{count}} запись из-за отсутствующих или некорректных полей.",
+        "fileNoValidCookies_other": "Не найдено корректных файлов cookie. Пропущено {{count}} записи из-за отсутствующих или некорректных полей.",
+        "databaseNotFound": "База данных файлов cookie браузера {{browser}} не найдена.",
+        "databaseCopyFailed": "Не удалось скопировать базу данных файлов cookie браузера {{browser}}. Попробуйте сначала закрыть {{browser}}.",
+        "noCookies": "В {{browser}} не найдены файлы cookie.",
+        "noValidCookies": "В {{browser}} не найдены корректные файлы cookie.",
+        "allCookiesExpired": "Срок действия всех файлов cookie браузера {{browser}} истёк.",
+        "encryptionKeyDenied": "Не удалось получить доступ к ключу шифрования {{browser}}. Возможно, ОС отказала в доступе.",
+        "readFailed": "Не удалось прочитать файлы cookie браузера {{browser}}.",
+        "importFailed": "Не удалось импортировать файлы cookie из {{browser}}.",
+        "importFailedTryClosing": "Не удалось импортировать файлы cookie из {{browser}}. Попробуйте сначала закрыть {{browser}}.",
+        "importFailedWithLog": "Не удалось импортировать файлы cookie из {{browser}}: {{detail}}. Подробности записаны в {{logPath}}.",
+        "safariFullDiskAccess": "macOS отказала в доступе к файлам cookie Safari. Предоставьте Orca полный доступ к диску в разделе «Системные настройки» → «Конфиденциальность и безопасность» → «Полный доступ к диску».",
+        "connectionEnded": "Соединение с этим сервером прервалось во время импорта. Подключитесь заново и повторите попытку.",
+        "serverRepaired": "Во время импорта было выполнено повторное сопряжение с этим сервером. Повторите попытку.",
+        "fileNoValidCookies_few": "Не найдено корректных файлов cookie. Пропущены {{count}} записи из-за отсутствующих или некорректных полей.",
+        "fileNoValidCookies_many": "Не найдено корректных файлов cookie. Пропущено {{count}} записей из-за отсутствующих или некорректных полей."
+      },
+      "notice": {
+        "importedMore_one": "Импортирован {{count}} файл cookie для {{domains}} и ещё {{more}}. Перезагрузите страницу, чтобы использовать его.",
+        "importedMore_other": "Импортировано {{count}} файла cookie для {{domains}} и ещё {{more}}. Перезагрузите страницу, чтобы использовать их.",
+        "imported_one": "Импортирован {{count}} файл cookie для {{domains}}. Перезагрузите страницу, чтобы использовать его.",
+        "imported_other": "Импортировано {{count}} файла cookie для {{domains}}. Перезагрузите страницу, чтобы использовать их.",
+        "failed": "Не удалось импортировать файлы cookie: {{reason}}",
+        "importedMore_few": "Импортировано {{count}} файла cookie для {{domains}} и ещё {{more}}. Перезагрузите страницу, чтобы использовать их.",
+        "importedMore_many": "Импортировано {{count}} файлов cookie для {{domains}} и ещё {{more}}. Перезагрузите страницу, чтобы использовать их.",
+        "imported_few": "Импортировано {{count}} файла cookie для {{domains}}. Перезагрузите страницу, чтобы использовать их.",
+        "imported_many": "Импортировано {{count}} файлов cookie для {{domains}}. Перезагрузите страницу, чтобы использовать их."
+      }
     }
   },
   "editor": {
@@ -291,6 +509,12 @@
     "fileLoad": {
       "hostUnresolved": "Сервер не смог найти рабочее пространство этого файла. Возможно, оно удалено или ещё не известно серверу. Повторите попытку или закройте эту вкладку на панели вкладок.",
       "remoteTooLarge": "Этот файл слишком велик для открытия с его сервера."
+    },
+    "pdfExport": {
+      "errors": {
+        "noContent": "Нет содержимого для экспорта",
+        "timedOut": "Время ожидания экспорта истекло"
+      }
     }
   },
   "githubChecks": {
@@ -322,15 +546,9 @@
       },
       "providers": {
         "title": "Провайдеры",
-        "description": "Выберите агентов, которые открываются в чате. Если выключено, установленный агент открывается в терминале.",
         "searchAgents": "агенты",
         "searchCli": "командная строка",
         "searchTerminal": "терминал",
-        "agentDisabled": "Выключено в настройках агентов",
-        "installed": "Установлено",
-        "notInstalled": "Не установлено",
-        "install": "Установить",
-        "toggleLabel": "Открывать {{value0}} в чате",
         "antigravityDescription": "Для чатов Antigravity Orca загружает на этот сервер отдельный серверный компонент, независимый от agy CLI.",
         "antigravityNotSignedIn": "Вход не выполнен. Для чатов нужен отдельный вход в Antigravity, независимо от учётной записи agy в терминале.",
         "antigravityAccount": "Учётная запись",
@@ -579,10 +797,8 @@
       "defaultOpensAs": "Открывать {{value0}} как",
       "defaultOpensAsChat": "Чат",
       "defaultOpensAsCli": "Командная строка",
-      "defaultOpensAsScope": "Для новых сессий {{value0}}, запускаемых с этого компьютера, в том числе на подключённых серверах. Соответствует переключателю в разделе «Провайдеры».",
       "save": "Сохранить",
       "clearDefault": "Сбросить агента по умолчанию",
-      "autoPermissions": "Автоматически",
       "autoUnsupported": "Для автоматического режима нужна более новая версия Orca на этом сервере.",
       "permissionsDescription": "Что агенты могут делать без вашего разрешения. Агенты с собственными аргументами запуска сохраняют их.",
       "permissionsAutoDescription": "<agents>Поддерживаемые агенты</agents> самостоятельно одобряют безопасные действия.",
@@ -615,12 +831,10 @@
       "permissionSameAsAll": "Как у всех агентов",
       "permissionChipRemove": "Удалить {{flag}} и использовать собственные настройки {{agent}}",
       "permissionChipTooltip": "Добавлено настройкой разрешений. Удалите, чтобы использовать собственные настройки {{agent}}.",
-      "permissionOverridesKept": "{{count}} агентов по-прежнему используют свои настройки разрешений:",
       "permissionOverridesKept_one": "{{count}} агент по-прежнему использует свои настройки разрешений:",
       "permissionOverridesKept_few": "{{count}} агента по-прежнему используют свои настройки разрешений:",
       "permissionOverridesKept_many": "{{count}} агентов по-прежнему используют свои настройки разрешений:",
       "permissionOverridesKept_other": "{{count}} агента по-прежнему используют свои настройки разрешений:",
-      "permissionOverridesFollow": "{{count}} агентов теперь используют настройки «{{mode}}»",
       "permissionOverridesFollow_one": "{{count}} агент теперь использует настройки «{{mode}}»",
       "permissionOverridesFollow_few": "{{count}} агента теперь используют настройки «{{mode}}»",
       "permissionOverridesFollow_many": "{{count}} агентов теперь используют настройки «{{mode}}»",
@@ -632,7 +846,17 @@
       "permissionOverrideMore_many": "и ещё {{count}}",
       "permissionOverrideMore_other": "и ещё {{count}}",
       "permissionOverridesUse": "Использовать настройки «{{mode}}»",
-      "approveForMe": "одобрять за меня"
+      "approveForMe": "одобрять за меня",
+      "codexHistorySharing": {
+        "title": "Общая история Codex для всех аккаунтов",
+        "description": "Позволяет каждому аккаунту Codex и вашему собственному ~/.codex продолжать разговоры, начатые в других. Выключите, чтобы история каждого аккаунта оставалась отдельной. При выключении ничего из уже общего не удаляется.",
+        "unsupported": "Обновите Orca на {{host}}, чтобы изменить там эту настройку.",
+        "updateFailed": "Не удалось обновить настройку на {{host}}."
+      },
+      "installCliForTerminal": "Установите CLI {{value0}}, чтобы открывать его в терминале.",
+      "chatRuntime": "Среда чата",
+      "chatChoiceTitle": "Открывать как чат или CLI",
+      "chatChoiceDescription": "Выберите, открывается ли каждый агент как чат или в своём CLI."
     },
     "followSymlinkedDirectoriesKeywords": {
       "symlink": "символическая ссылка",
@@ -681,7 +905,26 @@
       "serverCount_many": "{{count}} серверов"
     },
     "shortcuts": {
-      "parseFailed": "Не удалось распознать сочетание клавиш."
+      "parseFailed": "Не удалось распознать сочетание клавиш.",
+      "validation": {
+        "invalidFormat": "Используйте сочетание клавиш, например Ctrl+Shift+P или Cmd+K.",
+        "mixedModifiers": "Используйте либо Mod, либо модификатор для конкретной платформы, но не оба сразу.",
+        "modifierRequired": "Добавьте хотя бы одну клавишу-модификатор.",
+        "digitKeyRequired": "Выберите цифровую клавишу 1–9 с модификатором, например Cmd+1 или Ctrl+1.",
+        "modifierOnly": "Нажмите клавишу, а не только модификатор.",
+        "invalidBindingValue": "Укажите строку, массив строк, null или false.",
+        "stringArrayRequired": "Укажите массив строк.",
+        "fileNotObject": "Файл сочетаний клавиш должен содержать объект JSON."
+      },
+      "diagnostics": {
+        "sectionNotObject": "{{section}} должен быть объектом.",
+        "unknownAction": "Неизвестное действие сочетания клавиш «{{actionId}}» пропущено.",
+        "shortcutIgnored": "Сочетание клавиш для «{{actionId}}» пропущено: {{reason}}",
+        "platformsNotObject": "platforms должен быть объектом с разделами darwin, linux или win32.",
+        "unknownPlatform": "Неизвестная платформа «{{platform}}» пропущена.",
+        "conflictingOverrides": "Конфликтующие пользовательские сочетания клавиш пропущены: {{actions}}.",
+        "readFailed": "Не удалось прочитать файл сочетаний клавиш: {{reason}}"
+      }
     },
     "ssh": {
       "status": {
@@ -692,6 +935,53 @@
         "disconnected": "Отключён",
         "reconnecting": "Повторное подключение…",
         "reconnection-failed": "Не удалось восстановить подключение"
+      }
+    },
+    "network": {
+      "proxyUrlErrors": {
+        "tooLong": "Слишком длинный URL прокси.",
+        "invalid": "Введите корректный URL прокси.",
+        "unsupportedProtocol": "Используйте URL прокси с протоколом http, https, socks, socks4 или socks5.",
+        "missingHost": "URL прокси должен содержать адрес сервера."
+      }
+    },
+    "voice": {
+      "modelDescriptions": {
+        "parakeetV3": "Наивысшая точность для 25 европейских языков. Пунктуация, регистр букв и временные метки для каждого слова.",
+        "parakeetV2": "Только английский. Быстрее v3 при схожей точности. Пунктуация и регистр букв.",
+        "zipformerBilingual": "Китайский + английский с переключением языков. Потоковая обработка в реальном времени с низкой задержкой.",
+        "paraformerBilingual": "Китайский (путунхуа + диалекты) + английский. Хорошо распознаёт китайскую речь с акцентами и региональными особенностями.",
+        "zipformerStreamingEn": "Только английский. Лёгкая модель с 20 млн параметров и хорошим балансом скорости и размера.",
+        "zipformerStreamingZh": "Только китайский. Сверхлёгкая модель с 14 млн параметров, идеальна для устройств с ограниченными ресурсами.",
+        "zipformerStreamingKo": "Только корейский. Потоковая обработка в реальном времени с низкой задержкой.",
+        "parakeetJa": "Только японский. Обучена на более чем 35 тыс. часов естественной речи. Поддерживает пунктуацию.",
+        "whisperTiny": "Более 90 языков. Точность ниже, чем у Parakeet, но самый широкий охват языков.",
+        "senseVoice": "Китайский, английский, японский, корейский и кантонский с автоматическим определением языка.",
+        "gpt4oMiniTranscribe": "Облачная расшифровка с высокой точностью и низкой стоимостью. Требуется API-ключ OpenAI.",
+        "gpt4oTranscribe": "Облачная расшифровка с более высокой точностью. Требуется API-ключ OpenAI."
+      }
+    },
+    "diagnostics": {
+      "errors": {
+        "creatingDisabled": "создание файлов для проверки отключено",
+        "sendingDisabled": "отправка диагностики отключена",
+        "sendingNotConfigured": "отправка диагностики не настроена для этой сборки",
+        "expiredBeforeSending": "срок действия файла для проверки истёк; перед отправкой создайте новый",
+        "expiredBeforeOpening": "срок действия файла для проверки истёк; перед открытием создайте новый",
+        "previewNotOpened": "откройте файл для проверки перед отправкой",
+        "previewOpenFailed": "не удалось открыть файл для проверки",
+        "deleteNotConfigured": "конечная точка отправки диагностики не настроена для этой сборки",
+        "createFailed": "Не удалось создать файл для проверки",
+        "openFailed": "Не удалось открыть файл для проверки",
+        "sendFailed": "Не удалось отправить диагностику",
+        "discardFailed": "Не удалось удалить файл для проверки",
+        "deleteFailed": "Не удалось удалить отправленную диагностику"
+      }
+    },
+    "repository": {
+      "iconPickErrors": {
+        "notPng": "Значки репозитория должны быть файлами PNG.",
+        "tooLarge": "Размер изображения значка репозитория не должен превышать 256 КБ."
       }
     }
   },
@@ -780,8 +1070,11 @@
       "clearHosts": "Очистить выбор серверов",
       "clearProjects": "Очистить выбор проектов",
       "back": "Назад",
-      "ariaActive": "Фильтр: активных — {{value0}}.",
-      "scopedTo": "Область поиска"
+      "scopedTo": "Область поиска",
+      "ariaActiveCount_one": "Фильтр: активен {{count}} фильтр.",
+      "ariaActiveCount_other": "Фильтр: {{count}} активного фильтра.",
+      "ariaActiveCount_few": "Фильтр: активны {{count}} фильтра.",
+      "ariaActiveCount_many": "Фильтр: активны {{count}} фильтров."
     },
     "taskUrl": {
       "loadingHint": "Загрузка {{value0}}…",
@@ -867,14 +1160,7 @@
             "b8a1618172": "Создание описания пул-реквеста недоступно в веб-клиенте.",
             "e57c82d276": "Поиск моделей для сообщений коммитов недоступен в веб-клиенте.",
             "9fc90740b6": "Создание сообщения коммита недоступно в веб-клиенте.",
-            "52bee9d8a0": "Конфликтующие сочетания клавиш пропущены: {{value0}}.",
-            "32f15bdb0f": "Неизвестная платформа «{{value0}}» пропущена.",
-            "0a69fcd8bc": "platforms должен быть объектом с разделами darwin, linux или win32.",
-            "10898045f3": "Сочетание клавиш для «{{value0}}» пропущено: укажите массив строк.",
-            "36761d9604": "Неизвестное действие сочетания клавиш «{{value0}}» пропущено.",
-            "d2e43e426a": "{{value0}} должен быть объектом.",
-            "fb290366b2": "Недоступно в веб-версии.",
-            "76122208ca": "Сочетание клавиш для «{{value0}}» пропущено: {{value1}}"
+            "fb290366b2": "Недоступно в веб-версии."
           }
         },
         "runtime": {
@@ -1034,9 +1320,7 @@
         "jira": {
           "856083302c": "Запрос подключения Jira заменён более новым."
         },
-        "linear": {
-          "37d36984d0": "Запрос подключения Linear заменён более новым."
-        },
+        "linear": {},
         "orca": {
           "profiles": {
             "612f7f6861": "Не удалось создать профиль",
@@ -1073,6 +1357,10 @@
             }
           }
         }
+      },
+      "pluginNewFile": {
+        "unavailable": "{{value0}} больше недоступен. Снова включите его плагин.",
+        "failed": "Не удалось создать файл."
       }
     },
     "lib": {
@@ -1574,9 +1862,6 @@
       },
       "claudeAgentRowView": {
         "permissionPrompt": "Ответьте на запрос разрешения Claude, прежде чем переключать агентов.",
-        "agentUnavailable": "Claude не может открыть этого агента. Возможно, он больше недоступен.",
-        "closeDialog": "Claude не переключил представление. Закройте открытые диалоги и повторите попытку.",
-        "hostUnavailable": "Переход к подагентам недоступен на этом сервере. Обновите Orca и перезапустите Claude в этой панели.",
         "subagentNavigationSetup": "Включите переход к подагентам Claude в разделе «Настройки → Агенты», затем запустите Claude 2.1.300+ в Orca. Убедитесь, что в keybindings.json сочетания Ctrl+Alt+G, H или V по-прежнему привязаны к command:orca-agent-view."
       },
       "wslHostWindowsDriveRefusal": {
@@ -1603,7 +1888,6 @@
         "folderWorkspaceCreateFailedMessage": "Не удалось создать рабочее пространство папки. Проверьте сведения об ошибке выше и повторите попытку.",
         "setupAgentStartupPolicySaveFailed": "Не удалось сохранить поведение при запуске настройки.",
         "5f3d2c8a1b": "Не удалось определить базовую ветку MR.",
-        "dropPartiallyAttached": "Не удалось прикрепить {{failureCount}} из {{count}} элементов.",
         "dropPartiallyAttached_one": "Не удалось прикрепить {{failureCount}} из {{count}} элемента.",
         "dropPartiallyAttached_few": "Не удалось прикрепить {{failureCount}} из {{count}} элементов.",
         "dropPartiallyAttached_many": "Не удалось прикрепить {{failureCount}} из {{count}} элементов.",
@@ -1622,7 +1906,6 @@
         "workspaceOpenFailed": "Не удалось открыть {{fileName}}. Откройте файл из его исходного рабочего пространства и повторите попытку.",
         "nativeDropUnresolvedPathsDescription": "Сначала сохраните файлы на диск, затем перетащите сохранённые файлы.",
         "nativeDropUnresolvedPaths": "Orca не удалось прочитать пути перетащенных файлов.",
-        "nativeDropTempCopyFailed": "Orca не удалось скопировать перетащенные файлы: {{count}}.",
         "nativeDropTempCopyFailed_one": "Orca не удалось скопировать {{count}} перетащенный файл.",
         "nativeDropTempCopyFailed_few": "Orca не удалось скопировать {{count}} перетащенных файла.",
         "nativeDropTempCopyFailed_many": "Orca не удалось скопировать {{count}} перетащенных файлов.",
@@ -1932,22 +2215,30 @@
         "5c1c973855": "Удалить рецензента",
         "commentTooLarge": "Комментарий слишком большой для безопасной отправки.",
         "timeline": {
-          "completed": "как выполненное",
-          "notPlanned": "как незапланированное",
           "someone": "кто-то",
-          "assigned": "назначил",
-          "unassigned": "снял назначение",
-          "mentioned": "упомянул",
-          "in": "в",
-          "closed": "закрыл",
-          "reopened": "открыл снова",
-          "moved": "переместил",
-          "from": "из",
-          "to": "в",
           "activity": "События",
           "noActivity": "Пока нет событий.",
           "pullRequestReference": "PR #{{number}}",
-          "issueReference": "задача #{{number}}"
+          "issueReference": "задача #{{number}}",
+          "movedFromToInProject": "<actor/> переместил это из <from/> в <to/> в проекте <project/>",
+          "movedFromTo": "<actor/> переместил это из <from/> в <to/>",
+          "movedToInProject": "<actor/> переместил это в <to/> в проекте <project/>",
+          "movedTo": "<actor/> переместил это в <to/>",
+          "movedFromInProject": "<actor/> переместил это из <from/> в проекте <project/>",
+          "movedFrom": "<actor/> переместил это из <from/>",
+          "movedInProject": "<actor/> переместил это в проекте <project/>",
+          "movedThis": "<actor/> переместил это",
+          "closedCompletedIn": "<actor/> закрыл это как выполненное в <target/>",
+          "closedCompleted": "<actor/> закрыл это как выполненное",
+          "closedNotPlannedIn": "<actor/> закрыл эту задачу со статусом «Не планируется» в <target/>",
+          "closedNotPlanned": "<actor/> закрыл эту задачу со статусом «Не планируется»",
+          "closedIn": "<actor/> закрыл это в <target/>",
+          "closedThis": "<actor/> закрыл это",
+          "assignedUser": "<actor/> назначил <assignee/>",
+          "unassignedUser": "<actor/> снял назначение <assignee/>",
+          "mentionedIn": "<actor/> упомянул это в <target/>",
+          "mentionedThis": "<actor/> упомянул это",
+          "reopenedThis": "<actor/> открыл это снова"
         },
         "e15a8b77ef": "Для этой проверки нет подробностей в интерфейсе.",
         "e45324fbed": "Не удалось загрузить сведения о проверке.",
@@ -2202,8 +2493,7 @@
         "estimateValue": "Оценка {{estimate}}"
       },
       "NewWorkspaceComposerCard": {
-        "reuseExistingBranch": "Использовать существующую ветку",
-        "reuseExistingBranchHint": "Переключиться на существующую ветку вместо создания новой на её основе.",
+        "openExistingWorkspace": "Открыть существующее рабочее пространство",
         "createMultiple": "Создать ещё",
         "cbb47ee0dc": "Доступно только для локальных Git-проектов.",
         "d861de981b": "Выборочная выгрузка",
@@ -3472,7 +3762,6 @@
         "cleanup": {
           "WorkspaceCleanupDialog": {
             "3828408538": "Удалить {{value0}}",
-            "352f15d6fc": "Последняя активность",
             "b6bae1eed1": "Отмена",
             "38ca0b1400": "Локальные файлы будут удалены навсегда. Это действие нельзя отменить.",
             "e97e4580c7": "Есть изменения",
@@ -4213,7 +4502,9 @@
             "f395c9a685": "Не удалось импортировать файл",
             "e6234bcc17": "Для загрузки своего питомца нужен полный перезапуск приложения, простого обновления окна недостаточно.",
             "6d0a8cd179": "Показать питомца",
-            "1fbc51cc77": "Скрыть питомца"
+            "1fbc51cc77": "Скрыть питомца",
+            "petFallbackLabel": "Питомец",
+            "petHiddenLabel": "{{pet}} не отображается"
           },
           "PortsStatusSegment": {
             "4ebf90c12e": "Внешние порты не обнаружены",
@@ -5229,7 +5520,8 @@
           "updateMany": "Обновить навыки",
           "title_few": "{{count}} установленных навыка Orca устарели",
           "title_many": "{{count}} установленных навыков Orca устарели",
-          "title_other": "Устаревшие установленные навыки Orca: {{count}}"
+          "title_other": "Устаревшие установленные навыки Orca: {{count}}",
+          "title_one": "Устаревшие установленные навыки Orca: {{count}}"
         },
         "SkillFreshnessUpdateDialog": {
           "title": "Обновить навыки",
@@ -5254,6 +5546,7 @@
           "upToDate_few": "{{count}} навыка актуальны.",
           "upToDate_many": "{{count}} навыков актуальны.",
           "upToDate_other": "Актуальных навыков: {{count}}.",
+          "upToDate_one": "Актуальных навыков: {{count}}.",
           "update_one": "Доступно {{count}} обновление",
           "update_few": "Доступно {{count}} обновления",
           "update_many": "Доступно {{count}} обновлений",
@@ -5664,7 +5957,8 @@
           "retainedSource": "Сам навык останется в {{path}}.",
           "nothing_few": "Нельзя удалить отсюда ни один из выбранных навыков ({{count}}).",
           "nothing_many": "Нельзя удалить отсюда ни один из выбранных навыков ({{count}}).",
-          "nothing_other": "Нельзя удалить отсюда ни один из выбранных навыков ({{count}})."
+          "nothing_other": "Нельзя удалить отсюда ни один из выбранных навыков ({{count}}).",
+          "nothing_one": "Нельзя удалить отсюда ни один из выбранных навыков ({{count}})."
         },
         "skillPlanOpCopy": {
           "busy": "Другая установка ещё выполняется",
@@ -5867,8 +6161,6 @@
           "b589b77997": "Перейдите в нужную папку и нажмите «Выбрать»."
         },
         "DeleteWorktreeDialog": {
-          "ff2a74ac0e": "и",
-          "91492c9ad6": "Удалить",
           "4f6750ca7b": "Не удалось удалить рабочее пространство",
           "42e610d6cf": "Не удалось принудительно удалить",
           "5cc1a6701c": "Открыть настройки",
@@ -5877,7 +6169,33 @@
           "fc23c4cbdf": "Удалить рабочее пространство",
           "86f0ae1257": "Удалить рабочие пространства",
           "removeFolderProjectInstead": "Удалите проект папки из списка вместо удаления этого рабочего пространства.",
-          "gitBlocksMainWorktree": "Git не позволяет удалить основное рабочее дерево."
+          "gitBlocksMainWorktree": "Git не позволяет удалить основное рабочее дерево.",
+          "removeBatchFolder_one": "Удалить <target>{{count}} рабочее пространство</target> из Orca. Папки проектов на диске не будут удалены.",
+          "removeBatchFolder_other": "Удалить <target>{{count}} рабочего пространства</target> из Orca. Папки проектов на диске не будут удалены.",
+          "removeBatchMixed_one": "Удалить <target>{{count}} рабочее пространство</target> из Orca. Рабочие деревья Git также будут удалены из git и с диска; для рабочих пространств на основе папок будет удалена только запись в Orca.",
+          "removeBatchMixed_other": "Удалить <target>{{count}} рабочего пространства</target> из Orca. Рабочие деревья Git также будут удалены из git и с диска; для рабочих пространств на основе папок будет удалена только запись в Orca.",
+          "removeBatchGit_one": "Удалить <target>{{count}} рабочее пространство</target> из git и удалить соответствующие папки рабочих пространств.",
+          "removeBatchGit_other": "Удалить <target>{{count}} рабочего пространства</target> из git и удалить соответствующие папки рабочих пространств.",
+          "removeSingleFolder": "Удалить <target/> из Orca. Папка проекта на диске не будет удалена.",
+          "removeSingleGit": "Удалить <target/> из git и удалить его папку рабочего пространства.",
+          "removeWithChildrenFolder_one": "Удалить <target/> и <descendants>{{count}} дочернее рабочее пространство</descendants> из Orca. Папки проектов на диске не будут удалены.",
+          "removeWithChildrenFolder_other": "Удалить <target/> и <descendants>{{count}} дочернего рабочего пространства</descendants> из Orca. Папки проектов на диске не будут удалены.",
+          "removeWithChildrenMixed_one": "Удалить <target/> и <descendants>{{count}} дочернее рабочее пространство</descendants> из Orca. Рабочие деревья Git также будут удалены из git и с диска; для рабочих пространств на основе папок будет удалена только запись в Orca.",
+          "removeWithChildrenMixed_other": "Удалить <target/> и <descendants>{{count}} дочернего рабочего пространства</descendants> из Orca. Рабочие деревья Git также будут удалены из git и с диска; для рабочих пространств на основе папок будет удалена только запись в Orca.",
+          "removeWithChildrenGit_one": "Удалить <target/> и <descendants>{{count}} дочернее рабочее пространство</descendants> из git и удалить их папки рабочих пространств.",
+          "removeWithChildrenGit_other": "Удалить <target/> и <descendants>{{count}} дочернего рабочего пространства</descendants> из git и удалить их папки рабочих пространств.",
+          "removeBatchFolder_few": "Удалить <target>{{count}} рабочих пространства</target> из Orca. Папки проектов на диске не будут удалены.",
+          "removeBatchFolder_many": "Удалить <target>{{count}} рабочих пространств</target> из Orca. Папки проектов на диске не будут удалены.",
+          "removeBatchMixed_few": "Удалить <target>{{count}} рабочих пространства</target> из Orca. Рабочие деревья Git также будут удалены из git и с диска; для рабочих пространств на основе папок будет удалена только запись в Orca.",
+          "removeBatchMixed_many": "Удалить <target>{{count}} рабочих пространств</target> из Orca. Рабочие деревья Git также будут удалены из git и с диска; для рабочих пространств на основе папок будет удалена только запись в Orca.",
+          "removeBatchGit_few": "Удалить <target>{{count}} рабочих пространства</target> из git и удалить соответствующие папки рабочих пространств.",
+          "removeBatchGit_many": "Удалить <target>{{count}} рабочих пространств</target> из git и удалить соответствующие папки рабочих пространств.",
+          "removeWithChildrenFolder_few": "Удалить <target/> и <descendants>{{count}} дочерних рабочих пространства</descendants> из Orca. Папки проектов на диске не будут удалены.",
+          "removeWithChildrenFolder_many": "Удалить <target/> и <descendants>{{count}} дочерних рабочих пространств</descendants> из Orca. Папки проектов на диске не будут удалены.",
+          "removeWithChildrenMixed_few": "Удалить <target/> и <descendants>{{count}} дочерних рабочих пространства</descendants> из Orca. Рабочие деревья Git также будут удалены из git и с диска; для рабочих пространств на основе папок будет удалена только запись в Orca.",
+          "removeWithChildrenMixed_many": "Удалить <target/> и <descendants>{{count}} дочерних рабочих пространств</descendants> из Orca. Рабочие деревья Git также будут удалены из git и с диска; для рабочих пространств на основе папок будет удалена только запись в Orca.",
+          "removeWithChildrenGit_few": "Удалить <target/> и <descendants>{{count}} дочерних рабочих пространства</descendants> из git и удалить их папки рабочих пространств.",
+          "removeWithChildrenGit_many": "Удалить <target/> и <descendants>{{count}} дочерних рабочих пространств</descendants> из git и удалить их папки рабочих пространств."
         },
         "DeleteWorktreeDirtyChangeHint": {
           "showLoadedPaths": "Показать загруженные пути",
@@ -5947,22 +6265,38 @@
           "c49fb13492": "Не удалось добавить папку на этом компьютере",
           "9a766f33ac": "Этот путь проверен на SSH-сервере.",
           "79fd02cf5f": "Этот путь проверен на {{hostName}}.",
-          "8851b77327": "Этот путь проверен локально."
+          "8851b77327": "Этот путь проверен локально.",
+          "sshConnectionUnavailable": "SSH-соединение «{{connection}}» не найдено или не подключено"
         },
         "OrcaYamlTrustDialog": {
           "f3e2b868fb": "Выполнить хуки",
           "43b7bec4cd": "Не выполнять",
-          "c494b3ccb1": "в",
-          "79afc6772b": "orca.yaml",
-          "531689199b": "Всегда доверять",
-          "bf800b7e04": ". Запускайте, только если доверяете",
-          "831f2cd9f0": "выполняется на вашем компьютере",
-          "aa3ffb33fb": "В этом репозитории файл",
-          "c55beddbf8": "изменился с последнего одобрения. Проверьте его перед запуском",
-          "95bf974a1a": "Скрипт {{value0}}",
-          "9e52effffd": "Новый скрипт {{value0}}",
-          "e4a51dc4b3": "Запустить {{value0}} из {{value1}}?",
-          "02b0ede5ad": "Скрипт {{value1}} в {{value0}} изменился — запустить новую версию?"
+          "setupChangedTitle": "Скрипт настройки {{repo}} изменился — запустить новую версию?",
+          "archiveChangedTitle": "Скрипт архивации {{repo}} изменился — запустить новую версию?",
+          "issueCommandChangedTitle": "Команда задачи {{repo}} изменилась — запустить новую версию?",
+          "vmRecipeChangedTitle": "Рецепт ВМ {{repo}} изменился — запустить новую версию?",
+          "setupRunTitle": "Запустить скрипт настройки из {{repo}}?",
+          "archiveRunTitle": "Запустить скрипт архивации из {{repo}}?",
+          "issueCommandRunTitle": "Выполнить команду задачи из {{repo}}?",
+          "vmRecipeRunTitle": "Запустить рецепт ВМ из {{repo}}?",
+          "setupChangedBody": "<code>orca.yaml</code> изменился с последнего одобрения. Проверьте его перед запуском при создании этого рабочего пространства.",
+          "archiveChangedBody": "<code>orca.yaml</code> изменился с последнего одобрения. Проверьте его перед запуском при удалении этого рабочего пространства.",
+          "issueCommandChangedBody": "<code>orca.yaml</code> изменился с момента вашего последнего одобрения. Проверьте его ещё раз перед выполнением при запуске этого рабочего пространства со связанной задачей.",
+          "vmRecipeChangedBody": "<code>orca.yaml</code> изменился с последнего одобрения. Проверьте его перед выполнением, которое предшествует подготовке ВМ.",
+          "setupRunBody": "Файл <code>orca.yaml</code> этого репозитория выполняется на вашем компьютере при создании этого рабочего пространства. Запускайте, только если доверяете <repo/>.",
+          "archiveRunBody": "Файл <code>orca.yaml</code> этого репозитория выполняется на вашем компьютере при удалении этого рабочего пространства. Запускайте, только если доверяете <repo/>.",
+          "issueCommandRunBody": "Файл <code>orca.yaml</code> этого репозитория выполняется на вашем компьютере при запуске этого рабочего пространства со связанной задачей. Запускайте, только если доверяете <repo/>.",
+          "vmRecipeRunBody": "Файл <code>orca.yaml</code> этого репозитория выполняется на вашем компьютере перед подготовкой ВМ. Запускайте, только если доверяете <repo/>.",
+          "newSetupScript": "Новый скрипт настройки",
+          "setupScript": "Скрипт настройки",
+          "newArchiveScript": "Новый скрипт архивации",
+          "archiveScript": "Скрипт архивации",
+          "newIssueCommand": "Новая команда задачи",
+          "issueCommand": "Команда задачи",
+          "newVmRecipe": "Новый рецепт ВМ",
+          "vmRecipe": "Рецепт ВМ",
+          "thisRepository": "этот репозиторий",
+          "alwaysTrustRepo": "Всегда доверять <code>orca.yaml</code> в <repo/>"
         },
         "PendingWorktreeRow": {
           "af21e953d1": "Отмена создания рабочего дерева",
@@ -6022,8 +6356,10 @@
           "removeDescriptionSsh": "Это только уберёт {{name}} из Orca. Файлы останутся на {{host}} — добавьте этот SSH-сервер заново, чтобы восстановить доступ.",
           "removeDescriptionLocal": "Это только уберёт {{name}} из Orca. Папка останется на диске.",
           "removeDescriptionVmRecipe": "Это уберёт {{name}} из Orca. Будут ли окружение и его файлы удалены навсегда, зависит от рецепта ВМ.",
-          "openTerminalWarningOne": "1 открытый терминал этого проекта будет закрыт.",
-          "openTerminalWarningMany": "Будут закрыты открытые терминалы этого проекта: {{count}}."
+          "openTerminalWarning_one": "В этом проекте будет закрыт {{count}} открытый терминал.",
+          "openTerminalWarning_other": "В этом проекте будет закрыто {{count}} открытого терминала.",
+          "openTerminalWarning_few": "В этом проекте будут закрыты {{count}} открытых терминала.",
+          "openTerminalWarning_many": "В этом проекте будут закрыты {{count}} открытых терминалов."
         },
         "ScrollToCurrentWorkspaceToolbarButton": {
           "23989bb663": "Показать активное рабочее пространство"
@@ -6135,7 +6471,10 @@
           "4815c70605": "Нет подходящих проектов",
           "bbbc6e8e3b": "Подходящих невыбранных проектов нет",
           "allProjects": "Все проекты",
-          "selectedProjectsCount": "Проектов: {{value0}}"
+          "selectedProjects_one": "{{count}} проект",
+          "selectedProjects_other": "{{count}} проекта",
+          "selectedProjects_few": "{{count}} проекта",
+          "selectedProjects_many": "{{count}} проектов"
         },
         "SidebarSettingsHelpMenu": {
           "ad3d3ed7f1": "Перезапустить Orca",
@@ -6198,7 +6537,6 @@
           "7bada3b1ab": "Сортировать по",
           "dc0bb670bc": "Группировать по",
           "9919ae1082": "Параметры рабочих пространств",
-          "bc96dbd041": "Параметры рабочих пространств ({{value0}})",
           "af9249c505": "Недавняя активность рабочих пространств",
           "b451c8b162": "Недавние",
           "6664282a7b": "Перетаскивайте проекты, чтобы менять их порядок",
@@ -6233,7 +6571,14 @@
           "folderPathIdentity": "Ветка / путь папки",
           "cli": "Orca CLI",
           "workspaceOptions": "Параметры рабочих пространств",
-          "optionsActiveLabel": "Параметры рабочего пространства (активно: {{value0}})"
+          "optionsActiveFilters_one": "Параметры рабочих пространств ({{count}} активный фильтр)",
+          "optionsActiveFilters_other": "Параметры рабочих пространств ({{count}} активного фильтра)",
+          "optionsFilterCount_one": "Параметры рабочих пространств ({{count}} фильтр)",
+          "optionsFilterCount_other": "Параметры рабочих пространств ({{count}} фильтра)",
+          "optionsActiveFilters_few": "Параметры рабочих пространств ({{count}} активных фильтра)",
+          "optionsActiveFilters_many": "Параметры рабочих пространств ({{count}} активных фильтров)",
+          "optionsFilterCount_few": "Параметры рабочих пространств ({{count}} фильтра)",
+          "optionsFilterCount_many": "Параметры рабочих пространств ({{count}} фильтров)"
         },
         "SshTargetRow": {
           "4677394048": "Подключение…",
@@ -6305,7 +6650,8 @@
         },
         "WorktreeCardAgents": {
           "1b0a156717": "Агенты",
-          "agentUnavailable": "Агент недоступен"
+          "agentUnavailable": "Агент недоступен",
+          "sendingTarget": "Отправка…"
         },
         "WorktreeCardMeta": {
           "3e65e11cc6": "Метаданные рабочего пространства",
@@ -6973,22 +7319,18 @@
           "branch": {
             "batch": {
               "toast": {
-                "a3cdd9d9e6": "Git сохранил локальные ветки ({{count}}), поскольку в них могут быть неслитые коммиты. Папки рабочих пространств при этом не сохраняются; коммиты остаются в репозитории. Orca может продолжать освобождать место рабочих пространств в фоне.",
                 "a3cdd9d9e6_one": "Git сохранил {{count}} локальную ветку, поскольку в ней могут быть неслитые коммиты. Папки рабочих пространств при этом не сохраняются; коммиты остаются в репозитории. Orca может продолжать освобождать место рабочих пространств в фоне.",
                 "a3cdd9d9e6_few": "Git сохранил {{count}} локальные ветки, поскольку в них могут быть неслитые коммиты. Папки рабочих пространств при этом не сохраняются; коммиты остаются в репозитории. Orca может продолжать освобождать место рабочих пространств в фоне.",
                 "a3cdd9d9e6_many": "Git сохранил {{count}} локальных веток, поскольку в них могут быть неслитые коммиты. Папки рабочих пространств при этом не сохраняются; коммиты остаются в репозитории. Orca может продолжать освобождать место рабочих пространств в фоне.",
                 "a3cdd9d9e6_other": "Git сохранил локальные ветки ({{count}}), поскольку в них могут быть неслитые коммиты. Папки рабочих пространств при этом не сохраняются; коммиты остаются в репозитории. Orca может продолжать освобождать место рабочих пространств в фоне.",
-                "6310412304": "Проверить ветки: {{count}}",
                 "6310412304_one": "Проверить {{count}} ветку",
                 "6310412304_few": "Проверить {{count}} ветки",
                 "6310412304_many": "Проверить {{count}} веток",
                 "6310412304_other": "Проверить ветки: {{count}}",
-                "cea24c2b7d": "Удалено рабочих пространств: {{count}}",
                 "cea24c2b7d_one": "Удалено {{count}} рабочее пространство",
                 "cea24c2b7d_few": "Удалено {{count}} рабочих пространства",
                 "cea24c2b7d_many": "Удалено {{count}} рабочих пространств",
                 "cea24c2b7d_other": "Удалено рабочих пространств: {{count}}",
-                "0e0379f24a": "Сохранено веток: {{count}}",
                 "0e0379f24a_one": "Сохранена {{count}} ветка",
                 "0e0379f24a_few": "Сохранены {{count}} ветки",
                 "0e0379f24a_many": "Сохранено {{count}} веток",
@@ -6997,7 +7339,6 @@
                 "e61d78054f": "Удаление локальных веток: {{value0}}",
                 "1e1a5f6763": "Удалено локальных веток: {{value0}}",
                 "43d9395605": "Удалено: {{value0}}, не удалено: {{value1}}",
-                "d42f1f14e0": "Повторить для веток: {{count}}",
                 "d42f1f14e0_one": "Повторить для {{count}} ветки",
                 "d42f1f14e0_few": "Повторить для {{count}} веток",
                 "d42f1f14e0_many": "Повторить для {{count}} веток",
@@ -7014,7 +7355,6 @@
           "ee39e872d5": "Возможно, ветка не слита",
           "676db406fd": "Вершина ветки недоступна",
           "285e1e4882": "Отмена",
-          "a0f9863597": "Принудительно удалить ветки: {{count}}",
           "a0f9863597_one": "Принудительно удалить {{count}} ветку",
           "a0f9863597_few": "Принудительно удалить {{count}} ветки",
           "a0f9863597_many": "Принудительно удалить {{count}} веток",
@@ -7056,7 +7396,12 @@
           "xcodeLicense": "Для работы Git нужно принять лицензию инструментов разработки Apple.",
           "developerTools": "Инструменты командной строки Apple для разработки отсутствуют или недоступны.",
           "architectureMismatch": "Не удалось запустить исполняемый файл, связанный с Git: его архитектура несовместима с архитектурой процессора этого сервера. Установите Git и связанные инструменты для архитектуры этого сервера.",
-          "copyDiagnostics": "Копировать диагностику"
+          "copyDiagnostics": "Копировать диагностику",
+          "wslStoppedTitle": "Дистрибутив WSL {{value0}} остановлен",
+          "wslUnverifiableTitle": "Не удалось подтвердить, что дистрибутив WSL {{value0}} запущен",
+          "wslRetained": "Показаны рабочие деревья, уже известные Orca. Они обновятся, когда Orca увидит, что дистрибутив запущен.",
+          "wslStartAndScan": "Запустить дистрибутив и сканировать",
+          "wslStartAndScanHint": "Нажмите на значок, чтобы запустить дистрибутив и выполнить сканирование снова."
         },
         "LocalGitToolchainScanBanner": {
           "xcodeLicenseTitle": "Примите лицензию Xcode для работы Git",
@@ -7498,8 +7843,6 @@
           "8fbe1f37c1": "Переменные окружения",
           "2d133152fa": "Нет переменных окружения по умолчанию",
           "agentPermissions": "Разрешения агентов",
-          "agentPermissionsYolo": "Yolo",
-          "agentPermissionsManual": "Вручную",
           "3f1bdf3cb4": "Текст переменных окружения слишком велик для безопасного разбора.",
           "codexSessionSource": "Домашняя папка Codex для импорта",
           "codexSessionSourceInfo": "Об импорте истории Codex",
@@ -8378,19 +8721,6 @@
           "191ac34567": "Оркестрация агентов",
           "nestedWorkerDepthTitle": "Глубина вложенности исполнителей",
           "nestedWorkerDepthDescription": "Сколько поколений назначенных исполнителей могут запускать собственных исполнителей. Значение 1 сохраняет плоское дерево: координатор назначает исполнителей, а они больше никого не назначают.",
-          "chatErrorEscalationTitle": "Сообщать координатору об ошибках чатов",
-          "chatErrorEscalationDescription": "Если назначенный агент сталкивается с ошибкой, завершающей его ход, отправлять точный текст ошибки назначившему его координатору. Задача остаётся назначенной агенту. Работает только для агентов в интерфейсе чата.",
-          "chatErrorEscalationNeedsChat": "Для использования включите интерфейс чата в экспериментальных настройках.",
-          "chatErrorEscalationKeywordError": "ошибка",
-          "chatErrorEscalationKeywordChat": "чат",
-          "heartbeatTitle": "Сигналы активности агентов",
-          "heartbeatDescription": "Агенты сообщают о своей активности каждые несколько минут, чтобы координатор мог отличить работающего агента от зависшего. При отключении сообщений будет меньше, но координатор перестанет получать этот сигнал. Изменение действует на агентов, запущенных после него.",
-          "heartbeatKeywordHeartbeat": "сигнал активности",
-          "heartbeatKeywordStalled": "завис",
-          "heartbeatKeywordInterval": "интервал",
-          "heartbeatIntervalTitle": "Интервал сообщений о работе",
-          "heartbeatIntervalDescription": "При коротком интервале координатор чаще получает сообщения о работе агентов. Длинный интервал сокращает число сообщений, но увеличивает паузы между ними. Применяется к агентам, запущенным после изменения.",
-          "heartbeatIntervalSuffix": "минут",
           "7bc082f4de": "Копировать команду установки"
         },
         "OrchestrationSetupCard": {
@@ -8560,7 +8890,8 @@
           "issueCommandDescription": "Необязательное переопределение. Используйте <artifactUrl>{{artifact_url}}</artifactUrl> для URL связанной задачи или PR.",
           "issueCommandSharedDefault": "Оставьте пустым, чтобы использовать настройки репозитория из <yaml>orca.yaml</yaml>.",
           "issueCommandOptionalDefault": "Оставьте пустым, чтобы использовать настройки репозитория из <yaml>orca.yaml</yaml>, если они заданы.",
-          "commandSourceDescription": "Если есть и <yaml>orca.yaml</yaml>, и локальные команды, выберите, что запускать."
+          "commandSourceDescription": "Если есть и <yaml>orca.yaml</yaml>, и локальные команды, выберите, что запускать.",
+          "issueCommandWslStopped": "Дистрибутив WSL {{distro}} остановлен. Откройте в нём терминал, чтобы просмотреть или изменить эту команду."
         },
         "RepositoryIconPicker": {
           "2b7d27b93c": "Использовать цвет репозитория {{value0}}",
@@ -11845,8 +12176,8 @@
           "managedOverSshHelp": "Это приложение обновляет сервер по SSH. Нажмите «Обновить» в его строке в разделе удалённых серверов Orca."
         },
         "BrowserLinkRoutingSetting": {
-          "description": "Открывать ссылки http(s) из терминала, Markdown и редактора во встроенном браузере Orca. {{shortcut}} всегда использует системный браузер.",
-          "descriptionBase": "Открывать ссылки http(s) из терминала, Markdown и редактора во встроенном браузере Orca."
+          "description": "Открывать ссылки http(s) из любого места Orca во встроенном браузере. Страницы входа и {{shortcut}} всегда используют системный браузер.",
+          "descriptionBase": "Открывать ссылки http(s) из любого места Orca во встроенном браузере. Страницы входа по-прежнему открываются в системном браузере."
         },
         "BrowserLinkRoutingModifierSetting": {
           "titleSystem": "Удерживайте Shift для открытия в системном браузере",
@@ -11872,37 +12203,20 @@
           "leaveToTerminalLabel": "Передать терминалу"
         },
         "PluginConsentDialog": {
-          "workerTrust": "Фоновый процесс — запускается отдельно",
-          "instructionalTrust": "Инструкции — выполняются позже с полномочиями пользователя или агента",
-          "declarativeTrust": "Декларативное содержимое — без кода плагина",
-          "panelTrust": "Панель или содержимое, встроенное в Orca, — без фонового процесса",
-          "trustShortWorker": "Процесс",
-          "trustShortInstructional": "Инструкции",
-          "trustShortPanel": "Панель",
-          "trustShortDeclarative": "Декларативное",
-          "reviewTitle": "Проверить плагин",
-          "title": "Проверить разрешения",
-          "mixedTitle": "Проверить доступ и содержимое",
-          "instructionalTitle": "Проверить содержимое плагина",
-          "subtitle": "{{value0}} v{{value1}} · {{value2}}",
           "reconsent": "После последней проверки изменились разрешения, уровень доверия фонового процесса или инструкции плагина. Проверьте плагин снова перед запуском.",
-          "capabilities": "Этот плагин может",
-          "warning": "Эти разрешения ограничивают использование API Orca плагином. Его фоновый процесс всё равно работает как обычный процесс на компьютере с полным доступом к файлам, сети и другим процессам.",
           "instructionalWarning": "У этого плагина нет фонового процесса. Его инструкции всё равно могут вызывать действия при использовании вами или агентом. Перед включением проверьте инструкции и команды ниже.",
-          "panelWarning": "Эти разрешения ограничивают использование API Orca плагином. У плагина нет фонового процесса.",
           "declarativeWarning": "Этот плагин добавляет только проверенное содержимое. Он не запускает фоновый процесс и не получает доступ к API Orca.",
-          "keepDisabled": "Оставить выключенным",
           "enable": "Включить плагин",
           "capability": {
             "workspaceRead": "Читать имя, ветку и список терминалов активного рабочего дерева",
-            "terminalSend": "Вводить текст в видимый вам терминал (всегда в конкретный терминал)",
             "notificationsShow": "Показывать системные уведомления с именем плагина",
             "storage": "Хранить данные в собственной папке плагина",
             "secrets": "Хранить и читать секреты в собственном зашифрованном хранилище плагина",
-            "eventsSubscribe": "Получать уведомления о создании и удалении рабочих деревьев и изменениях статуса агентов",
             "settingsOwn": "Читать и менять собственные настройки плагина"
           },
-          "decisionFailed": "Не удалось сохранить решение о разрешениях. Повторите попытку."
+          "decisionFailed": "Не удалось сохранить решение о разрешениях. Повторите попытку.",
+          "fullAccessWarning": "Полный доступ: работает как обычная программа и может читать ваши файлы, использовать сеть и запускать другие программы.",
+          "uiWarning": "Запускает код издателя внутри Orca, чтобы отрисовать своё представление. Orca показывает, к чему у него есть доступ, и спрашивает перед включением."
         },
         "PluginConsentProvenance": {
           "official": "Официальный",
@@ -11919,7 +12233,6 @@
           "saveFailed": "Не удалось сохранить пути плагинов разработки.",
           "pathRequired": "Введите путь папки плагина.",
           "title": "Разработка",
-          "help": "Загружайте плагины прямо из папок этого компьютера во время разработки. Они также требуют проверки разрешений. Фоновые процессы выполняются на этом компьютере; действия рабочих пространств SSH идут через Orca, поэтому здесь указываются пути этого компьютера.",
           "remove": "Удалить",
           "pathLabel": "Путь папки плагина разработки",
           "placeholder": "/Users/you/plugins/my-plugin или C:\\Users\\you\\plugins\\my-plugin",
@@ -11947,16 +12260,11 @@
           "installFailed": "Не удалось установить плагин. Проверьте источник и повторите попытку."
         },
         "PluginKeybindingConsentPreview": {
-          "heading": "Сочетания клавиш",
-          "worktree": "Работает, только пока активно рабочее пространство.",
-          "global": "Работает в приложении без активного рабочего пространства.",
-          "shadows": "Заменяет: {{value0}}"
+          "worktree": "Работает, только пока активно рабочее пространство."
         },
         "PluginMarketplaceBrowser": {
           "loadFailed": "Не удалось загрузить плагины каталога.",
           "refreshFailed": "Не удалось обновить каталоги. Сохранённые списки остаются доступны.",
-          "previewFailed": "Не удалось подготовить плагин к проверке. Обновите каталог и повторите попытку.",
-          "installFailed": "Не удалось установить плагин. Проверенный источник мог измениться.",
           "manageSources": "Управление источниками",
           "refreshing": "Обновление…",
           "refresh": "Обновить",
@@ -11965,7 +12273,6 @@
           "loading": "Загрузка плагинов каталога…",
           "tryAgain": "Повторить попытку",
           "noSourcesTitle": "Каталоги не настроены",
-          "noSources": "Добавьте официальный, общественный или приватный Git-каталог для просмотра плагинов.",
           "addSource": "Добавить каталог",
           "noResultsTitle": "Подходящие плагины не найдены",
           "noResults": "По этому запросу в каталогах плагины не найдены.",
@@ -11974,39 +12281,8 @@
           "empty": "В настроенных каталогах нет плагинов."
         },
         "PluginMarketplaceListingRow": {
-          "official": "Официальный",
-          "installed": "Установлено",
-          "noDescription": "Описание не добавлено.",
           "blocked": "Заблокировано списком блокировок Orca: {{value0}}",
-          "blockedAction": "Заблокировано",
-          "checkUpdate": "Проверить обновление",
           "install": "Установить"
-        },
-        "PluginMarketplacePreviewDialog": {
-          "languagePacksOne": "Языковых пакетов: 1",
-          "languagePacks": "Языковых пакетов: {{value0}}",
-          "commandsOne": "Команд: 1",
-          "commands": "Команд: {{value0}}",
-          "keybindingsOne": "Сочетаний клавиш: 1",
-          "keybindings": "Сочетаний клавиш: {{value0}}",
-          "vmRecipesOne": "Рецептов ВМ: 1",
-          "vmRecipes": "Рецептов ВМ: {{value0}}",
-          "panelsOne": "Панелей: 1",
-          "panels": "Панелей: {{value0}}",
-          "eventsOne": "Подписок на события: 1",
-          "events": "Подписок на события: {{value0}}",
-          "worker": "Фоновый процесс",
-          "versionLine": "v{{value0}} · {{value1}}",
-          "includes": "Включает",
-          "noContributions": "Только метаданные манифеста",
-          "capabilities": "Запрошенный доступ",
-          "workerWarning": "Возможности ограничивают использование API Orca плагином. Его фоновый процесс всё равно работает как обычный процесс на компьютере с полным доступом к файлам, сети и другим процессам.",
-          "blocked": "Список блокировок Orca блокирует этот плагин: {{value0}}",
-          "current": "Именно это содержимое плагина уже установлено.",
-          "close": "Закрыть",
-          "cancel": "Отмена",
-          "update": "Обновить плагин",
-          "install": "Установить плагин"
         },
         "PluginMarketplaceSourceDialog": {
           "addFailed": "Не удалось добавить каталог. Проверьте URL Git, ссылку и учётные данные Git.",
@@ -12032,21 +12308,15 @@
           "done": "Готово"
         },
         "PluginRemoveDialog": {
-          "title": "Удалить плагин?",
-          "description": "{{value0}} и сохранённые данные плагина будут удалены с этого компьютера. Позже плагин можно установить снова.",
           "cancel": "Отмена",
           "remove": "Удалить плагин"
         },
         "PluginRollbackDialog": {
-          "title": "Откатить плагин?",
-          "description": "{{value0}} будет отключён, и восстановится его предыдущая неизменяемая версия. Если её разрешения или инструкции отличаются от текущих, Orca потребует повторной проверки.",
           "cancel": "Отмена",
           "confirm": "Откатить плагин"
         },
         "PluginsSettingsSection": {
           "systemLabel": "Система плагинов",
-          "systemDescription": "Находит установленные плагины и позволяет включать их по отдельности. Ничего не запускается до проверки и включения. Фоновые процессы всегда работают на этом компьютере; действия рабочих пространств SSH идут через Orca.",
-          "featureOff": "Включите систему плагинов для просмотра и управления установленными плагинами. Пока система выключена, установленные плагины остаются на диске и неактивны.",
           "loading": "Загрузка плагинов…",
           "noInstalledResultsTitle": "Подходящие плагины не найдены",
           "noInstalledResults": "По этому запросу установленные плагины не найдены.",
@@ -12056,37 +12326,18 @@
           "settingsUpdateFailed": "Не удалось сохранить настройки плагинов.",
           "install": "Установить плагин",
           "title": "Плагины",
-          "experimental": "Экспериментальные",
           "description": "Устанавливайте плагины Orca и управляйте ими. Плагины работают на этом компьютере даже для рабочих пространств SSH.",
           "logsFailed": "Не удалось загрузить журналы плагина.",
           "rollbackFailed": "Не удалось откатить плагин. Возможно, предыдущая неизменяемая версия недоступна."
         },
         "PluginSettingsRow": {
-          "blocked": "Заблокировано",
-          "needsReview": "Нужна проверка",
-          "restarting": "Перезапуск",
-          "invalid": "Некорректен",
-          "error": "Ошибка",
-          "disabled": "Выключен",
-          "running": "Работает",
-          "enabled": "Включено",
           "loadingLogs": "Загрузка журналов…",
           "noLogs": "Строк журнала не записано.",
           "logCount": "Последние строки журнала: {{value0}} (хранится до 200 строк)",
-          "reviewAndEnable": "Проверить и включить",
-          "official": "Официальный",
-          "dev": "Разработка",
           "bundled": "В комплекте",
-          "noDescription": "Описание не добавлено.",
           "killListMessage": "Список блокировок Orca отключил плагин: {{value0}}",
-          "viewAdvisory": "Открыть уведомление о безопасности",
-          "runtimeError": "Плагин остановлен после ошибки активации или фонового процесса.",
-          "restartCount": " · перезапусков: {{value0}}",
           "moreActions": "Другие действия для {{value0}}",
-          "hideLogs": "Скрыть журналы",
           "viewLogs": "Показать журналы",
-          "rollback": "Откатить",
-          "remove": "Удалить",
           "disableLabel": "Выключить {{value0}}",
           "enableLabel": "Включить {{value0}}",
           "invalidPluginError": "Манифест или установленные файлы плагина некорректны. Исправьте плагин и обновите список."
@@ -12108,6 +12359,7 @@
           "installGit": "Orca не удалось загрузить закреплённую ревизию Git. Проверьте URL, #ref, доступ и системную настройку Git.",
           "invalidManifestMissing": "В корне плагина нет orca-plugin.json. Добавьте его и обновите плагины.",
           "invalidManifest": "Некорректный orca-plugin.json. Исправьте его и обновите плагины.",
+          "installedManifestUnloadable": "Эта версия не загружается в этой версии Orca. Обновите или переустановите её.",
           "invalidArtifact": "Заявленный файл фонового процесса или панели отсутствует либо небезопасен. Исправьте файлы плагина и обновите список.",
           "consentChanged": "Плагин изменился во время проверки. Закройте диалог и проверьте обновлённые разрешения."
         },
@@ -12672,12 +12924,10 @@
           "olderTerminals_few": "На сервере ещё работают {{count}} терминала старой версии Orca. Сами они не остановятся. Закройте их в той версии Orca или завершите на сервере и подключитесь снова.",
           "olderTerminals_many": "На сервере ещё работают {{count}} терминалов старой версии Orca. Сами они не остановятся. Закройте их в той версии Orca или завершите на сервере и подключитесь снова.",
           "olderTerminals_other": "На сервере ещё работают терминалы старой версии Orca: {{count}}. Сами они не остановятся. Закройте их в той версии Orca или завершите на сервере и подключитесь снова.",
-          "olderTerminals": "На сервере ещё работают терминалы старой версии Orca: {{count}}. Сами они не остановятся. Закройте их в той версии Orca или завершите на сервере и подключитесь снова.",
           "linkedProjects_one": "В Orca на этом сервере уже были {{paths}}, поэтому теперь приложение использует серверную копию. Вкладки этого приложения и автоматизации там ({{count}}) не перенесены. Созданные им рабочие деревья показаны как внешние.",
           "linkedProjects_few": "В Orca на этом сервере уже были {{paths}}, поэтому теперь приложение использует серверную копию. Вкладки этого приложения и автоматизации там ({{count}}) не перенесены. Созданные им рабочие деревья показаны как внешние.",
           "linkedProjects_many": "В Orca на этом сервере уже были {{paths}}, поэтому теперь приложение использует серверную копию. Вкладки этого приложения и автоматизации там ({{count}}) не перенесены. Созданные им рабочие деревья показаны как внешние.",
           "linkedProjects_other": "В Orca на этом сервере уже были {{paths}}, поэтому теперь приложение использует серверную копию. Вкладки этого приложения и автоматизации там ({{count}}) не перенесены. Созданные им рабочие деревья показаны как внешние.",
-          "linkedProjects": "В Orca на этом сервере уже были {{paths}}, поэтому теперь приложение использует серверную копию. Вкладки этого приложения и автоматизации там ({{count}}) не перенесены. Созданные им рабочие деревья показаны как внешние.",
           "linkedProjectsNoAutomations": "В Orca на этом сервере уже были {{paths}}, поэтому теперь приложение использует серверную копию. Вкладки этого приложения там не перенесены. Созданные им рабочие деревья показаны как внешние.",
           "automationsLeftDisabled_one": "Сервер Orca этого хоста принял автоматизацию ({{count}}), но не смог снова включить её. Включите её в разделе «Автоматизации».",
           "automationsLeftDisabled_few": "Сервер Orca этого хоста принял автоматизации ({{count}}), но не смог снова включить их. Включите их в разделе «Автоматизации».",
@@ -12698,8 +12948,7 @@
           "refusedLeaveBehind": "Некоторые сохранённые данные этого хоста нельзя перенести на его сервер Orca: {{items}}. При продолжении хост подключится, а эти данные останутся на этом компьютере.",
           "refusedLeaveBehindUnnamed": "Некоторые сохранённые данные этого хоста нельзя перенести на его сервер Orca. При продолжении хост подключится, а эти данные останутся на этом компьютере.",
           "windowsBuildUnsupported": "На этом сервере установлена версия Windows старше Windows 10 и Windows Server 2016, поэтому сервер Orca на нём работать не сможет. Используйте компьютер с более новой версией Windows либо с Linux или macOS.",
-          "windowsNoExtractor": "На этом сервере Windows нет ни tar.exe, ни команды Expand-Archive в PowerShell, поэтому Orca не может распаковать свой сервер. Установите на нём Windows PowerShell 5.1 и подключитесь снова.",
-          "automationsLeftDisabled": "Сервер Orca этого хоста принял автоматизации ({{count}}), но не смог снова включить их. Включите их в разделе «Автоматизации»."
+          "windowsNoExtractor": "На этом сервере Windows нет ни tar.exe, ни команды Expand-Archive в PowerShell, поэтому Orca не может распаковать свой сервер. Установите на нём Windows PowerShell 5.1 и подключитесь снова."
         },
         "ZcodeCliSetupSection": {
           "title": "Использовать GLM с ZCode",
@@ -13065,6 +13314,178 @@
               "windowsFailureDescription": "Включите уведомления для Orca в настройках Windows."
             }
           }
+        },
+        "PluginUpdateAllDialog": {
+          "review": "Проверить"
+        },
+        "PluginUpdateReview": {
+          "title": "Проверка обновления {{value0}}",
+          "back": "Назад",
+          "approve": "Одобрить и обновить",
+          "explain": "Это обновление запрашивает больше, чем одобренная вами версия. Оно установится, только если вы одобрите его здесь.",
+          "before": "До",
+          "after": "После"
+        },
+        "PluginNotOfficialWarning": {
+          "unknownPublisher": "его издателю",
+          "install": "Перед установкой убедитесь, что доверяете {{value0}}. Этот плагин выполняет код издателя внутри Orca.",
+          "update": "Перед обновлением убедитесь, что доверяете {{value0}}. Этот плагин выполняет код издателя внутри Orca.",
+          "installed": "Убедитесь, что доверяете {{value0}}. Этот плагин выполняет код издателя внутри Orca.",
+          "label": "Неофициальный плагин:",
+          "translations": "Переводы могут изменить любой текст в Orca. Убедитесь, что доверяете {{value0}}."
+        },
+        "PluginCardAction": {
+          "installed": "Установлен",
+          "installing": "Установка…",
+          "reviewLabel": "Проверить и установить {{value0}}",
+          "review": "Проверить и установить",
+          "retry": "Повторить"
+        },
+        "PluginContributionActionLanguage": {
+          "switch": "Сменить язык",
+          "switchTo": "Сменить язык на {{value0}}",
+          "switchBack": "Вернуть",
+          "switchBackFrom": "Отменить переключение на {{value0}}",
+          "failed": "Не удалось сменить язык"
+        },
+        "PluginContributionActionPanel": {
+          "open": "Открыть панель",
+          "openName": "Открыть панель: {{value0}}"
+        },
+        "PluginContributionActionSyntax": {
+          "openExtension": "Открыть любой файл {{value0}}",
+          "openFilename": "Открыть {{value0}}"
+        },
+        "PluginDetailInfo": {
+          "previous": "Предыдущая",
+          "updated": "Обновлено",
+          "license": "Лицензия",
+          "whatsNew": "Что нового"
+        },
+        "PluginDetailPage": {
+          "back": "Плагины",
+          "info": "Сведения",
+          "version": "Версия",
+          "latest": "Последняя",
+          "requires": "Требуется",
+          "requiresValue": "Orca {{value0}} или новее",
+          "categories": "Категории",
+          "pluginId": "ID плагина",
+          "repository": "Репозиторий"
+        },
+        "PluginDetailSections": {
+          "typeLanguagePack": "Язык интерфейса",
+          "typeAppTheme": "Тема приложения",
+          "typeTerminalTheme": "Тема терминала",
+          "typeIconTheme": "Тема значков файлов",
+          "typeSyntax": "Подсветка синтаксиса",
+          "typeInstructions": "Инструкции для агентов",
+          "typePanel": "Боковая панель",
+          "typeWorker": "Фоновый код",
+          "adds": "Добавляет в Orca",
+          "replaces": "Заменяет ваше сочетание клавиш для «{{value0}}»",
+          "changeShortcuts": "Изменить в разделе «Сочетания клавиш»",
+          "command": "Команда",
+          "access": "Имеет доступ к",
+          "accessLoading": "Чтение плагина…",
+          "accessFailed": "Не удалось прочитать доступ",
+          "retry": "Повторить",
+          "customEditor": "Редактор"
+        },
+        "PluginFilterPopover": {
+          "kind": "Категория",
+          "catalog": "Каталог",
+          "clear": "Сбросить фильтры",
+          "themes": "Темы",
+          "languages": "Языки",
+          "icons": "Значки",
+          "commands": "Команды и панели",
+          "catalogLabel": "Фильтр по каталогу",
+          "editors": "Редакторы",
+          "remoteVms": "Удалённые/ВМ",
+          "games": "Игры",
+          "agents": "Агенты",
+          "integrations": "Интеграции"
+        },
+        "PluginInUseAction": {
+          "inUseDark": "Используется · Тёмная",
+          "inUseLight": "Используется · Светлая",
+          "inUse": "Используется",
+          "useName": "Использовать {{value0}}",
+          "use": "Использовать"
+        },
+        "PluginInstallConsent": {
+          "noOtherAccess": "Другого доступа нет",
+          "replacesShortcut": "{{value0}} ({{value1}}) заменяет ваше сочетание клавиш для «{{value2}}».",
+          "updatesKeepApproval": "Обновления спрашивают снова только о новом доступе",
+          "fullAccessUpdates": "Обновления могут менять его код без запроса",
+          "editsFileTypes": "Открывает и редактирует файлы {{value0}} в Orca. Может читать открытые им файлы."
+        },
+        "PluginListEmptyStates": {
+          "noFilterMatches": "Нет плагинов, подходящих под эти фильтры",
+          "clearBoth": "Сбросить поиск и фильтры",
+          "pageGone": "Этот плагин больше не установлен и не указан в каталоге."
+        },
+        "PluginManager": {
+          "retry": "Повторить",
+          "installed": "Установленные",
+          "installedFailedTitle": "Не удалось прочитать установленные плагины.",
+          "updatesTitle": "Обновления",
+          "refreshLabel": "Обновить каталоги",
+          "noResultsTitle": "Нет плагинов по запросу «{{value0}}»",
+          "noneInstalledTitle": "Плагины не установлены",
+          "browseAll": "Все плагины",
+          "resultCount": "Найдено плагинов: {{value0}}",
+          "resultCountOne": "Найден 1 плагин",
+          "updateAll": "Обновить все…",
+          "notFromCatalog": "не из каталога",
+          "allInstalledTitle": "Все плагины из каталога установлены",
+          "showInstalled": "Показать установленные плагины"
+        },
+        "PluginManagerRows": {
+          "reinstall": "Переустановить",
+          "crashedCount": "Сбоев подряд: {{value0}}",
+          "crashed": "Сбой при запуске",
+          "remove": "Удалить…",
+          "review": "Проверить",
+          "restart": "Перезапустить",
+          "viewError": "Показать ошибку",
+          "copyId": "Копировать ID плагина",
+          "checkUpdate": "Проверить обновления",
+          "bundledWithOrca": "В комплекте Orca",
+          "installName": "Установить {{value0}}",
+          "crashedOnce": "Один сбой",
+          "updateLabel": "Обновить {{value0}} до {{value1}}",
+          "update": "Обновить до {{value0}}",
+          "needsOrca": "Требуется Orca {{value0}}",
+          "rollbackTo": "Откатить до {{value0}}…",
+          "copyContentHash": "Копировать хеш содержимого",
+          "reviewUpdate": "Проверить обновление",
+          "dataLoadFailed": "Не удалось загрузить его файлы"
+        },
+        "pluginInstallAction": {
+          "installed": "{{value0}} установлен",
+          "tryIt": "Попробовать",
+          "mismatch": "Загрузка не совпала с каталогом. Ничего не установлено.",
+          "catalogChanged": "Каталог изменился. Обновите и повторите попытку.",
+          "blocked": "Список безопасности Orca блокирует этот плагин.",
+          "downloadFailed": "Не удалось скачать. Проверьте подключение."
+        },
+        "pluginThemeApply": {
+          "nowUsing": "Сейчас используется {{value0}}",
+          "switchBack": "Вернуть"
+        },
+        "pluginConsentCopy": {
+          "addsCommands": "Добавляет команды",
+          "addsPanel": "Добавляет панель",
+          "contentOnly": "Только контент",
+          "fullAccess": "Полный доступ",
+          "addsVmRecipes": "Добавляет рецепты ВМ",
+          "opensAndEditsFiles": "Открывает и редактирует файлы",
+          "runsPluginCode": "Запускает код плагина"
+        },
+        "pluginTryAction": {
+          "incompleteLanguage": "Этот языковой пакет слишком неполный, чтобы переключиться на него."
         }
       },
       "right": {
@@ -13178,7 +13599,8 @@
             "31b4c3195d": "Другие действия проводника",
             "d95e30fe28": "Обновить проводник",
             "6026b16950": "Свернуть всё",
-            "c1f3f3ec70": "Поиск по содержимому файлов"
+            "c1f3f3ec70": "Поиск по содержимому файлов",
+            "openInApp": "Открыть в {{app}}"
           },
           "FileExplorerTreeStatus": {
             "ce03835e1f": "В этом рабочем пространстве нет файлов",
@@ -13196,7 +13618,6 @@
             "6d1e0a7c3b": "Не удалось загрузить файлы коммита"
           },
           "HostedReviewActions": {
-            "4d5fb5a284": "Закрыть",
             "9845a71e17": "Другие действия",
             "2bfaf4379c": "Другие действия с {{value0}}",
             "377269db6f": "{{value0}} открыт заново",
@@ -13217,8 +13638,15 @@
             "markingReady": "Подготовка к ревью…",
             "markReady": "Отметить готовым к ревью",
             "draftMoreActions": "Другие действия с {{value0}}",
-            "closeDraft": "Закрыть",
-            "readyToast": "{{value0}} отмечен готовым к ревью"
+            "readyToast": "{{value0}} отмечен готовым к ревью",
+            "closeReview": "Закрыть {{review}}",
+            "closeReviewConfirmTitle": "Закрыть {{review}}?",
+            "reopenReviewConfirmTitle": "Открыть {{review}} снова?",
+            "closeConfirm": "Закрыть",
+            "reopenConfirm": "Открыть снова",
+            "closeReviewFailed": "Не удалось закрыть {{review}}",
+            "reopenReviewFailed": "Не удалось открыть {{review}} снова",
+            "markReadyFailed": "Не удалось отметить {{review}} как готовый к проверке"
           },
           "PortsPanel": {
             "3ea4a02a8f": "Отмена",
@@ -14268,8 +14696,7 @@
             "permanentlyDeleteItems_many": "Безвозвратно удалить {{count}} элементов?"
           },
           "useFileExplorerHandlers": {
-            "32cd9fd991": "Не удалось открыть цель символической ссылки",
-            "folderLinksOutsideProject": "Эта папка ссылается за пределы проекта, поэтому её нельзя открыть здесь."
+            "32cd9fd991": "Не удалось открыть цель символической ссылки"
           },
           "useFileExplorerImport": {
             "importFailedCount_one": "Не удалось импортировать {{count}} файл.",
@@ -15020,8 +15447,8 @@
           "aa97420ba4": "Копировать ссылку установки",
           "ac1eb64952": "Android",
           "711e6f4b47": "iOS",
-          "e75647ace0": "Отсканируйте QR-код телефоном или откройте ссылку установки, чтобы скачать Orca Mobile.",
-          "0d9b33299e": "Установите приложение.",
+          "e75647ace0": "Отсканируйте этот QR-код для скачивания камерой телефона. Orca Mobile уже установлен? Перейдите к шагу 2, чтобы увидеть QR-код сопряжения.",
+          "0d9b33299e": "Скачайте приложение.",
           "92ddfdfa1f": "Шаг 1 из 2",
           "ff48d9d520": "Подключить другое устройство",
           "f9cbf4bb53": "Отозвать доступ устройства",
@@ -15038,11 +15465,6 @@
           "e59a252eca": "Создать новый код",
           "d0b52871ce": "Ваши телефоны подключены.",
           "051978a785": "Ваш телефон подключён.",
-          "channel": {
-            "group": "Канал выпуска",
-            "preview": "Предварительный",
-            "stable": "Стабильный"
-          },
           "pairingQrError": "Не удалось представить этот код сопряжения как QR-код. Вместо этого скопируйте его в Orca Mobile.",
           "noRelayCode": "Код сопряжения недоступен",
           "noPairingCode": "Код сопряжения недоступен",
@@ -15089,14 +15511,7 @@
         "mobile": {
           "platform": {
             "copy": {
-              "preview": {
-                "tagline": "Новые возможности, обновления каждый день."
-              },
-              "stable": {
-                "tagline": "Общедоступный выпуск, обновления каждую неделю."
-              },
               "downloadApk": "Скачать APK",
-              "openTestFlight": "Открыть TestFlight",
               "openAppStore": "Открыть App Store"
             }
           }
@@ -15220,6 +15635,9 @@
           "reconnectBody": "Войдите снова для использования Orca Relay или выберите LAN для сопряжения через Tailscale либо общую сеть Wi‑Fi.",
           "notEntitledTitle": "Для этой учётной записи Orca доступ к Orca Relay не предусмотрен.",
           "rateLimitedBody": "Orca Relay занят. Подождите минуту и повторите попытку или используйте LAN для сопряжения через Tailscale либо общую сеть Wi‑Fi."
+        },
+        "relayClockSkewMessage": {
+          "message": "Часы компьютера отклоняются примерно на {{seconds}} сек. Включите автоматическую настройку времени и повторите попытку."
         }
       },
       "gitlab": {
@@ -15831,7 +16249,6 @@
           "0f806a2ab1": "Отмена",
           "b6c3b84476": "Показать дерево файлов",
           "39f8007549": "Просмотреть конфликты",
-          "skippedConflictsExcluded": "Неразрешённые конфликты, исключённые из сравнения: {{count}}.",
           "skippedConflictsExcluded_one": "Из сравнения исключён {{count}} неразрешённый конфликт.",
           "skippedConflictsExcluded_few": "Из сравнения исключено {{count}} неразрешённых конфликта.",
           "skippedConflictsExcluded_many": "Из сравнения исключено {{count}} неразрешённых конфликтов.",
@@ -17196,7 +17613,8 @@
                     "annotations": {
                       "0c7b9b2b7a": "Скопировано",
                       "c937229f19": "Снимок сделан",
-                      "1f5cb19034": "Заметка добавлена"
+                      "1f5cb19034": "Заметка добавлена",
+                      "limitReached": "Достигнут лимит в {{limit}} аннотаций. Отправьте, удалите или очистите часть из них, чтобы добавить новые."
                     }
                   }
                 }
@@ -17211,7 +17629,10 @@
                     "024467ceac": "Отмена",
                     "449d2c2629": "Цель заметки",
                     "38d320108c": "Свернуть заметки",
-                    "9f209891a7": "Развернуть заметки"
+                    "9f209891a7": "Развернуть заметки",
+                    "includePageDetails": "Включить сведения о странице",
+                    "copyFeedback": "Копировать отзыв",
+                    "copyFeedbackWithPageDetails": "Копировать отзыв со сведениями о странице"
                   }
                 }
               }
@@ -17601,9 +18022,6 @@
           "sortedAscending": "{{value0}}, по возрастанию",
           "sortedDescending": "{{value0}}, по убыванию"
         },
-        "hostSummary": {
-          "partialFailure": "Не удалось загрузить серверы: {{failed}} из {{total}}"
-        },
         "emptyState": {
           "unknownHost": "этот сервер",
           "hostLoading": "Загрузка сервера…",
@@ -17719,8 +18137,6 @@
           "failed24h": "Неуспешно · 24 ч",
           "successful7d": "Успешно · 7 дн",
           "failed7d": "Неуспешно · 7 дн",
-          "historyUnavailableOne": "История запусков недоступна для 1 автоматизации. В счётчиках учтена только доступная история.",
-          "historyUnavailableMany": "История запусков недоступна для автоматизаций: {{count}}. В счётчиках учтена только доступная история.",
           "automation": "Автоматизация",
           "triggered": "Запущено",
           "trigger": "Триггер",
@@ -17729,7 +18145,11 @@
           "emptyDescription": "После срабатывания автоматизации её запуски появятся здесь.",
           "runs": "Запуски",
           "local": "Локально",
-          "remote": "Удалённо"
+          "remote": "Удалённо",
+          "historyUnavailable_one": "История запусков недоступна для {{count}} автоматизации. В подсчётах учитывается только доступная история.",
+          "historyUnavailable_other": "История запусков недоступна для {{count}} автоматизации. В подсчётах учитывается только доступная история.",
+          "historyUnavailable_few": "История запусков недоступна для {{count}} автоматизаций. В подсчётах учитывается только доступная история.",
+          "historyUnavailable_many": "История запусков недоступна для {{count}} автоматизаций. В подсчётах учитывается только доступная история."
         },
         "AutomationsPageBreadcrumb": {
           "ariaLabel": "Путь раздела автоматизаций",
@@ -17805,7 +18225,8 @@
           "tokensAndCost_one": "{{tokens}} токен · {{cost}}",
           "tokensAndCost_few": "{{tokens}} токена · {{cost}}",
           "tokensAndCost_many": "{{tokens}} токенов · {{cost}}",
-          "tokensAndCost_other": "{{tokens}} токена · {{cost}}"
+          "tokensAndCost_other": "{{tokens}} токена · {{cost}}",
+          "costUnavailable": "нет данных"
         },
         "externalDisplay": {
           "sshHost": "SSH-сервер",
@@ -17817,6 +18238,12 @@
           "connectSshHost": "Подключите этот SSH-сервер перед управлением автоматизациями {{provider}}.",
           "cannotManageOnSshHost": "{{provider}} не может управлять автоматизациями на этом SSH-сервере.",
           "cannotManageLocally": "{{provider}} не может управлять автоматизациями на этом компьютере."
+        },
+        "hostSummary": {
+          "partialFailureOfHosts_one": "Не удалось загрузить {{failed}} из {{count}} сервера",
+          "partialFailureOfHosts_other": "Не удалось загрузить {{failed}} из {{count}} сервера",
+          "partialFailureOfHosts_few": "Не удалось загрузить {{failed}} из {{count}} серверов",
+          "partialFailureOfHosts_many": "Не удалось загрузить {{failed}} из {{count}} серверов"
         }
       },
       "agent": {
@@ -17881,9 +18308,15 @@
           },
           "filtersSection": "Фильтры",
           "viewSection": "Вид",
-          "threadListOptionsActive": "Параметры списка обсуждений (активно: {{value0}})",
-          "activityOptionsActive": "Параметры событий ({{value0}})",
-          "groupAgentActivityBy": "Группировать события агентов по"
+          "groupAgentActivityBy": "Группировать события агентов по",
+          "threadListOptionsActiveFilters_one": "Параметры списка обсуждений ({{count}} активный фильтр)",
+          "threadListOptionsActiveFilters_other": "Параметры списка обсуждений ({{count}} активного фильтра)",
+          "activityOptionsFilterCount_one": "Параметры событий ({{count}} фильтр)",
+          "activityOptionsFilterCount_other": "Параметры событий ({{count}} фильтра)",
+          "threadListOptionsActiveFilters_few": "Параметры списка обсуждений ({{count}} активных фильтра)",
+          "threadListOptionsActiveFilters_many": "Параметры списка обсуждений ({{count}} активных фильтров)",
+          "activityOptionsFilterCount_few": "Параметры событий ({{count}} фильтра)",
+          "activityOptionsFilterCount_many": "Параметры событий ({{count}} фильтров)"
         },
         "clearCompleted": {
           "undo": "Отменить действие",
@@ -17941,10 +18374,7 @@
           "clearMany_one": "Убрать агента из списка ({{count}})",
           "clearMany_few": "Убрать агентов из списка: {{count}}",
           "clearMany_many": "Убрать агентов из списка: {{count}}",
-          "clearMany_other": "Убрать агентов из списка: {{count}}",
-          "markManyRead": "Отметить агентов прочитанными: {{count}}",
-          "markManyUnread": "Отметить агентов непрочитанными: {{count}}",
-          "clearMany": "Убрать агентов из списка: {{count}}"
+          "clearMany_other": "Убрать агентов из списка: {{count}}"
         }
       },
       "confirmation": {
@@ -18303,7 +18733,13 @@
           "all": "Все",
           "installed": "Установлено",
           "searchLabel": "Поиск плагинов",
-          "searchPlaceholder": "Поиск плагинов, категорий или издателей"
+          "searchPlaceholder": "Поиск плагинов, категорий или издателей",
+          "updates": "Обновления",
+          "clearSearch": "Очистить поиск",
+          "notInstalled": "Не установлены"
+        },
+        "PluginListRow": {
+          "official": "Официальный"
         }
       },
       "terminalPane": {
@@ -18501,6 +18937,13 @@
           "password": "Пароль",
           "confirm": "Войти",
           "cancel": "Отмена"
+        },
+        "javaScriptDialog": {
+          "title": "{{origin}} сообщает",
+          "anonymousTitle": "Эта страница сообщает",
+          "confirm": "ОК",
+          "cancel": "Отмена",
+          "answer": "Ответ"
         },
         "sitePermission": {
           "label": {
@@ -18932,6 +19375,7 @@
         "codexManagedNotSignedIn": "Вход в эту учётную запись Codex не выполнен. Войдите снова в настройках учётных записей Codex.",
         "antigravityNotSignedIn": "Вход в Antigravity не выполнен. Выполните вход в разделе «Настройки → Учётные записи → Antigravity». Затем отправьте сообщение снова.",
         "cliMissing": "{{agent}} не найден на компьютере с этим чатом. Установите его или проверьте поле «Команда» в разделе «Настройки → Агенты».",
+        "cliMissingInWslDistro": "{{agent}} не установлен в дистрибутиве WSL {{distro}}. Установите его внутри {{distro}} или проверьте поле «Команда» в разделе «Настройки → Агенты».",
         "signInFirst": "Сначала выполните вход.",
         "signInThenRunCommand": "Войдите, затем выполните /{{command}} снова.",
         "signInThenSend": "Войдите, затем отправьте сообщение снова.",
@@ -19348,6 +19792,7 @@
         "runBrowser_few": "Браузер использован {{count}} раза",
         "runBrowser_many": "Браузер использован {{count}} раз",
         "runBrowser_other": "Браузер использован {{count}} раза",
+        "runBrowser_one": "Браузер использован {{count}} раз",
         "runIntegration_one": "Использована {{count}} интеграция",
         "runIntegration_few": "Использовано {{count}} интеграции",
         "runIntegration_many": "Использовано {{count}} интеграций",
@@ -19359,6 +19804,7 @@
         "runPlan_few": "План обновлён {{count}} раза",
         "runPlan_many": "План обновлён {{count}} раз",
         "runPlan_other": "План обновлён {{count}} раза",
+        "runPlan_one": "План обновлён {{count}} раз",
         "runTool_one": "Использован {{count}} инструмент",
         "runTool_few": "Использовано {{count}} инструмента",
         "runTool_many": "Использовано {{count}} инструментов",
@@ -19390,6 +19836,7 @@
         "runLiveBrowser_few": "Использует браузер {{count}} раза",
         "runLiveBrowser_many": "Использует браузер {{count}} раз",
         "runLiveBrowser_other": "Использует браузер {{count}} раза",
+        "runLiveBrowser_one": "Использует браузер {{count}} раз",
         "runLiveIntegration_one": "Использует {{count}} интеграцию",
         "runLiveIntegration_few": "Использует {{count}} интеграции",
         "runLiveIntegration_many": "Использует {{count}} интеграций",
@@ -19401,6 +19848,7 @@
         "runLivePlan_few": "Обновляет план {{count}} раза",
         "runLivePlan_many": "Обновляет план {{count}} раз",
         "runLivePlan_other": "Обновляет план {{count}} раза",
+        "runLivePlan_one": "Обновляет план {{count}} раз",
         "runLiveTool_one": "Использует {{count}} инструмент",
         "runLiveTool_few": "Использует {{count}} инструмента",
         "runLiveTool_many": "Использует {{count}} инструментов",
@@ -19437,39 +19885,73 @@
         "task": "Фоновая задача",
         "outputFile": "Вывод: {{value0}}",
         "detailsUnavailable": "Подробности задач в этой сессии недоступны.",
-        "countAgentsOne": "1 агент",
-        "countAgentsMany": "Агентов: {{value0}}",
-        "countShellOne": "1 оболочка",
-        "countShellMany": "Оболочек: {{value0}}",
         "countShellCommandOne": "1 команда оболочки",
-        "countMonitorsOne": "1 наблюдение",
-        "countMonitorsMany": "Наблюдений: {{value0}}",
-        "countWorkflowsOne": "1 процесс",
-        "countWorkflowsMany": "Процессов: {{value0}}",
-        "countTasksOne": "1 задача",
-        "countTasksMany": "Задач: {{value0}}",
-        "headerTotal": "Фоновых задач: {{value0}}",
         "stateWorking": "в работе",
-        "stateWorkingCount": "В работе: {{value0}}",
         "stateMonitoring": "наблюдает",
-        "stateMonitoringCount": "Наблюдают: {{value0}}",
         "stateWaiting": "ожидает",
-        "stateWaitingCount": "Ожидают: {{value0}}",
         "stateBlocked": "заблокировано",
-        "stateBlockedCount": "Заблокировано: {{value0}}",
         "stateDone": "готово",
-        "stateDoneCount": "Готово: {{value0}}",
         "stateIdle": "остановлено",
-        "stateIdleCount": "Остановлено: {{value0}}",
         "stateUnverifiable": "статус недоступен",
-        "stateUnverifiableCount": "Статус недоступен: {{value0}}",
         "reasonWaiting": "нужно разрешение",
         "reasonBlocked": "ошибка",
         "groupAgents": "Агенты",
         "groupShell": "Оболочка",
         "groupMonitors": "Наблюдения",
         "groupWorkflows": "Процессы",
-        "groupTasks": "Задачи"
+        "groupTasks": "Задачи",
+        "countAgents_one": "{{count}} агент",
+        "countAgents_other": "{{count}} агента",
+        "countShell_one": "{{count}} оболочка",
+        "countShell_other": "{{count}} оболочки",
+        "countMonitors_one": "{{count}} наблюдение",
+        "countMonitors_other": "{{count}} наблюдения",
+        "countWorkflows_one": "{{count}} процесс",
+        "countWorkflows_other": "{{count}} процесса",
+        "countTasks_one": "{{count}} задача",
+        "countTasks_other": "{{count}} задачи",
+        "headerTotal_one": "{{count}} фоновая задача",
+        "headerTotal_other": "{{count}} фоновой задачи",
+        "stateWorkingCount_one": "В работе: {{value0}}",
+        "stateWorkingCount_other": "В работе: {{value0}}",
+        "stateMonitoringCount_one": "Наблюдение: {{value0}}",
+        "stateMonitoringCount_other": "Наблюдение: {{value0}}",
+        "stateWaitingCount_one": "В ожидании: {{value0}}",
+        "stateWaitingCount_other": "В ожидании: {{value0}}",
+        "stateBlockedCount_one": "Заблокировано: {{value0}}",
+        "stateBlockedCount_other": "Заблокировано: {{value0}}",
+        "stateDoneCount_one": "Готово: {{value0}}",
+        "stateDoneCount_other": "Готово: {{value0}}",
+        "stateIdleCount_one": "Остановлено: {{value0}}",
+        "stateIdleCount_other": "Остановлено: {{value0}}",
+        "stateUnverifiableCount_one": "Статус недоступен: {{value0}}",
+        "stateUnverifiableCount_other": "Статус недоступен: {{value0}}",
+        "countAgents_few": "{{count}} агента",
+        "countAgents_many": "{{count}} агентов",
+        "countShell_few": "{{count}} оболочки",
+        "countShell_many": "{{count}} оболочек",
+        "countMonitors_few": "{{count}} наблюдения",
+        "countMonitors_many": "{{count}} наблюдений",
+        "countWorkflows_few": "{{count}} процесса",
+        "countWorkflows_many": "{{count}} процессов",
+        "countTasks_few": "{{count}} задачи",
+        "countTasks_many": "{{count}} задач",
+        "headerTotal_few": "{{count}} фоновые задачи",
+        "headerTotal_many": "{{count}} фоновых задач",
+        "stateWorkingCount_few": "В работе: {{value0}}",
+        "stateWorkingCount_many": "В работе: {{value0}}",
+        "stateMonitoringCount_few": "Наблюдение: {{value0}}",
+        "stateMonitoringCount_many": "Наблюдение: {{value0}}",
+        "stateWaitingCount_few": "В ожидании: {{value0}}",
+        "stateWaitingCount_many": "В ожидании: {{value0}}",
+        "stateBlockedCount_few": "Заблокировано: {{value0}}",
+        "stateBlockedCount_many": "Заблокировано: {{value0}}",
+        "stateDoneCount_few": "Готово: {{value0}}",
+        "stateDoneCount_many": "Готово: {{value0}}",
+        "stateIdleCount_few": "Остановлено: {{value0}}",
+        "stateIdleCount_many": "Остановлено: {{value0}}",
+        "stateUnverifiableCount_few": "Статус недоступен: {{value0}}",
+        "stateUnverifiableCount_many": "Статус недоступен: {{value0}}"
       },
       "jumpToLatest": "К последним сообщениям",
       "newRowsAnnouncement": "Пока вас не было, появились новые сообщения",
@@ -19570,18 +20052,37 @@
           "failed": "ошибка",
           "stopped": "остановлен",
           "unverifiable": "статус недоступен",
-          "workingCount": "Работают: {{value0}}",
-          "idleCount": "Бездействуют: {{value0}}",
-          "failedCount": "С ошибками: {{value0}}",
-          "stoppedCount": "Остановлены: {{value0}}",
-          "unverifiableCount": "Статус недоступен: {{value0}}"
+          "workingCount_one": "Работает: {{count}}",
+          "workingCount_other": "Работают: {{count}}",
+          "idleCount_one": "Бездействует: {{count}}",
+          "idleCount_other": "Бездействуют: {{count}}",
+          "failedCount_one": "С ошибками: {{count}}",
+          "failedCount_other": "С ошибками: {{count}}",
+          "stoppedCount_one": "Остановлен: {{count}}",
+          "stoppedCount_other": "Остановлены: {{count}}",
+          "unverifiableCount_one": "Статус недоступен: {{count}}",
+          "unverifiableCount_other": "Статус недоступен: {{count}}",
+          "workingCount_few": "Работают: {{count}}",
+          "workingCount_many": "Работают: {{count}}",
+          "idleCount_few": "Бездействуют: {{count}}",
+          "idleCount_many": "Бездействуют: {{count}}",
+          "failedCount_few": "С ошибками: {{count}}",
+          "failedCount_many": "С ошибками: {{count}}",
+          "stoppedCount_few": "Остановлены: {{count}}",
+          "stoppedCount_many": "Остановлены: {{count}}",
+          "unverifiableCount_few": "Статус недоступен: {{count}}",
+          "unverifiableCount_many": "Статус недоступен: {{count}}"
         },
-        "startedOne": "Запущен 1 дочерний агент",
-        "startedN": "Запущено дочерних агентов: {{value0}}",
-        "ranOne": "Работал 1 дочерний агент",
-        "ranN": "Работало дочерних агентов: {{value0}}",
         "tokens": "Токенов: {{value0}}",
-        "unnamed": "Дочерний агент"
+        "unnamed": "Дочерний агент",
+        "started_one": "Запущен {{count}} дочерний агент",
+        "started_other": "Запущено {{count}} дочернего агента",
+        "ran_one": "Работал {{count}} дочерний агент",
+        "ran_other": "Работало {{count}} дочернего агента",
+        "started_few": "Запущено {{count}} дочерних агента",
+        "started_many": "Запущено {{count}} дочерних агентов",
+        "ran_few": "Работали {{count}} дочерних агента",
+        "ran_many": "Работали {{count}} дочерних агентов"
       },
       "rewind": {
         "unsupported": "В этом чате нельзя вернуться к предыдущему сообщению.",
@@ -19698,7 +20199,6 @@
         "editFailed": "Это сообщение нельзя изменить.",
         "editGone": "Это сообщение уже отправлено или удалено. Ваш текст перенесён в поле ввода.",
         "editGonePrompt": "Это сообщение уже отправлено или удалено. Ваш текст появится в поле ввода после ответа агенту.",
-        "imageCount": "Изображений: {{count}}",
         "imageCount_one": "{{count}} изображение",
         "imageCount_few": "{{count}} изображения",
         "imageCount_many": "{{count}} изображений",
@@ -19721,7 +20221,11 @@
       "hostOutage": {
         "offline": "{{hostName}} не в сети",
         "reconnecting": "Повторное подключение к {{hostName}}…",
-        "reconnect": "Подключиться снова"
+        "reconnect": "Подключиться снова",
+        "stopped": "{{distro}} остановлен",
+        "start": "Запустить",
+        "unverifiable": "Orca не удалось проверить, запущен ли {{distro}}",
+        "startToSend": "Запустите {{distro}}, чтобы отправить."
       },
       "interruptedContinue": {
         "continue": "Продолжить",
@@ -19860,6 +20364,27 @@
         "noLiveTerminal": "Нет доступного активного терминала.",
         "commandCanceled": "Команда интерфейса чата отменена, так как поле ввода было закрыто.",
         "commandRejected": "Терминал не принял команду."
+      },
+      "sessionOptionErrors": {
+        "startOnly": "Этот параметр можно задать только при запуске сессии.",
+        "modelRejected": "Claude сохранил текущую модель.",
+        "modelUnverified": "Не удалось подтвердить смену модели; откройте терминал для проверки.",
+        "unknownOption": "Неизвестный параметр сессии: {{id}}",
+        "agentPickerOnly": "Этот параметр нужно изменить в списке выбора агента.",
+        "toggleBaselineUnknown": "Текущее значение неизвестно; используйте действие «Переключить».",
+        "afterStartOnly": "Этот параметр доступен только после запуска сессии.",
+        "valueRequired": "Для этого параметра требуется значение.",
+        "toggleValueKnown": "Значение этого параметра известно; выберите «Включено» или «Выключено»."
+      },
+      "composerErrors": {
+        "goalObjectiveMissing": "Опишите цель после /goal.",
+        "commandUnavailable": "/{{name}} недоступна в сессиях чата. Используйте меню слеш-команд, чтобы увидеть доступные команды.",
+        "commandTakesNoArguments": "Используйте /{{name}} без аргументов.",
+        "commandUnsupportedByHost": "/{{name}} не поддерживается этим сервером чата.",
+        "modelPickerFailed": "Не удалось открыть меню выбора модели.",
+        "effortPickerFailed": "Не удалось открыть меню выбора глубины рассуждений.",
+        "modelApplyFailed": "Не удалось применить модель {{value}}.",
+        "effortApplyFailed": "Не удалось применить глубину рассуждений {{value}}."
       }
     },
     "tab": {
@@ -20098,7 +20623,8 @@
           "selectAllSafetyChecked_one": "Выбрать {{count}} рабочее пространство, прошедшее проверку безопасности",
           "selectAllSafetyChecked_few": "Выбрать все {{count}} рабочих пространства, прошедших проверку безопасности",
           "selectAllSafetyChecked_many": "Выбрать все {{count}} рабочих пространств, прошедших проверку безопасности",
-          "selectAllSafetyChecked_other": "Выбрать все рабочие пространства, прошедшие проверку безопасности ({{count}})"
+          "selectAllSafetyChecked_other": "Выбрать все рабочие пространства, прошедшие проверку безопасности ({{count}})",
+          "lastActive": "Последняя активность: {{value0}}"
         },
         "scan": {
           "progress": "Сканирование рабочих пространств ({{value0}}/{{value1}})",
@@ -20137,6 +20663,14 @@
           "descriptionMany": "Удаление остановит текущую работу этих агентов.",
           "confirm": "Остановить агентов и удалить",
           "confirmOne": "Остановить агента и удалить"
+        },
+        "candidateRow": {
+          "gitChip": {
+            "clean": "Без изменений",
+            "dirty": "Есть изменения",
+            "unpushed": "Не отправлено",
+            "unknown": "Неизвестно"
+          }
         }
       },
       "creation": {
@@ -20353,7 +20887,7 @@
       "heroBody": "Однократная загрузка {{size}} МБ. Эта копия общая для чатов {{agent}} на компьютере, где работает этот чат.",
       "heroBodyNoSize": "Однократная загрузка. Эта копия общая для чатов {{agent}} на компьютере, где работает этот чат.",
       "stripSize": "Загрузка {{size}} МБ на компьютере, где работает этот чат",
-      "settingsHint": "Также в разделе «Настройки › Чат › Провайдеры»",
+      "settingsHint": "Также в разделе «Настройки › Агенты»",
       "installShort": "Установить",
       "tryAgain": "Повторить попытку",
       "cancelShort": "Отмена",
@@ -20492,7 +21026,10 @@
       "listening": "Прослушивание…",
       "unassignedInstruction": "Назначьте сочетание клавиш для диктовки перед её запуском в выбранной панели.",
       "shortcutInstruction": "Установите фокус на терминал, редактор или поле запроса агента, затем нажмите <shortcut/>, чтобы начать голосовую диктовку. Нажмите <shortcut/> ещё раз, чтобы остановить её.",
-      "changeInSettings": "Модель, режим диктовки и сочетание клавиш можно изменить в любое время в разделе <link>Настройки → Голос</link>."
+      "changeInSettings": "Модель, режим диктовки и сочетание клавиш можно изменить в любое время в разделе <link>Настройки → Голос</link>.",
+      "title": "Диктуйте в любой панели",
+      "description": "Начните голосовую диктовку в панели с фокусом, затем нажмите то же сочетание клавиш ещё раз, чтобы остановить её.",
+      "cta": "Настроить голосовую диктовку"
     },
     "sessionSearch": {
       "enableFailed": "Не удалось включить поиск сессий. Повторите попытку.",
@@ -20537,8 +21074,23 @@
       "demoHit6Age": "1 мес.",
       "readyToast": "Поиск сессий готов",
       "readyToastOpen": "Открыть",
-      "changeInSettings": "Изменить или отключить функцию можно в любое время в разделе <link>Настройки → Поиск сессий агентов</link>."
-    }
+      "changeInSettings": "Изменить или отключить функцию можно в любое время в разделе <link>Настройки → Поиск сессий агентов</link>.",
+      "title": "Поиск по всем сессиям агентов",
+      "description": "Находите любые прошлые разговоры по их содержанию и продолжайте с того места, где остановился агент.",
+      "cta": "Включить поиск сессий"
+    },
+    "eyebrowNew": "Новое",
+    "eyebrowTip": "Совет",
+    "orcaCli": {
+      "title": "Позвольте агентам управлять Orca через Orca CLI",
+      "description": "Позвольте агентам координировать дочерние рабочие деревья и обмениваться сообщениями между рабочими деревьями.",
+      "cta": "Установить CLI и навыки"
+    },
+    "cmdJPalette": {
+      "title": "Переход к рабочему дереву с <shortcut>",
+      "description": "Ищите рабочие деревья, переключайте вкладки, меняйте настройки или создавайте рабочие деревья, не отрывая рук от клавиатуры."
+    },
+    "gotIt": "Понятно"
   },
   "quickOpen": {
     "moreMatchesAvailable": "Возможны другие совпадения. Уточните запрос, чтобы сузить результаты.",
@@ -20558,10 +21110,14 @@
     "discard": {
       "deleteUntrackedFileDescription": "Этот неотслеживаемый файл будет безвозвратно удалён. Это действие нельзя отменить.",
       "deleteUntrackedFilesDescription_other": "Неотслеживаемые файлы ({{count}}) будут безвозвратно удалены. Это действие нельзя отменить.",
+      "deleteUntrackedFilesDescription_few": "Неотслеживаемые файлы ({{count}}) будут безвозвратно удалены. Это действие нельзя отменить.",
+      "deleteUntrackedFilesDescription_many": "Неотслеживаемые файлы ({{count}}) будут безвозвратно удалены. Это действие нельзя отменить.",
       "restoreStagedVersionDescription": "Будет восстановлена последняя версия из индекса, а удаление отменено. Это действие нельзя отменить.",
       "unstagedChangesDescription": "Изменения этого файла вне индекса будут отменены. Это действие нельзя отменить.",
       "unstagedSelectionIncludingUntrackedDescription": "Изменения вне индекса будут отменены, а неотслеживаемые файлы среди выбранных — безвозвратно удалены. Это действие нельзя отменить.",
       "unstagedFilesIncludingUntrackedDescription_other": "Изменения вне индекса будут отменены, а неотслеживаемые файлы среди выбранных ({{count}}) — безвозвратно удалены. Это действие нельзя отменить.",
+      "unstagedFilesIncludingUntrackedDescription_few": "Изменения вне индекса будут отменены, а неотслеживаемые файлы среди выбранных ({{count}}) — безвозвратно удалены. Это действие нельзя отменить.",
+      "unstagedFilesIncludingUntrackedDescription_many": "Изменения вне индекса будут отменены, а неотслеживаемые файлы среди выбранных ({{count}}) — безвозвратно удалены. Это действие нельзя отменить.",
       "delete": "Удалить",
       "deleteCount": "Удалить {{count}}",
       "deleteUntrackedFilesDescription_one": "Будет безвозвратно удалён {{count}} неотслеживаемый файл. Это действие нельзя отменить.",
@@ -20605,7 +21161,26 @@
       "signInHintCommand": "Выполните {{command}} в этом окружении",
       "signInHintVariable": "Задайте {{variable}} в этом окружении",
       "unsupportedProvider": "Чтобы создать {{reviewLabel}}, нужен удалённый репозиторий на {{providerName}}.",
-      "withDetail": "Не удалось создать {{shortLabel}}: {{detail}}"
+      "withDetail": "Не удалось создать {{shortLabel}}: {{detail}}",
+      "stacked": {
+        "stackGithubOnly": "Создание пул-реквестов в стеке доступно только для репозиториев GitHub.",
+        "stackGithubComOnly": "Пул-реквесты в стеках GitHub доступны только на GitHub.com.",
+        "stackSameParent": "Выберите другую родительскую ветку перед созданием пул-реквеста в стеке.",
+        "stackParentWithoutReview": "У родительской ветки {{base}} нет открытого пул-реквеста. Сначала создайте этот пул-реквест.",
+        "stackParentAmbiguous": "Orca обнаружила несколько открытых пул-реквестов для родительской ветки {{base}}.",
+        "stackHeadAmbiguous": "Orca обнаружила несколько открытых пул-реквестов для текущей ветки {{head}}.",
+        "stackParentMultipleStacks": "Выбранный родительский пул-реквест входит в несколько стеков.",
+        "stackParentClosed": "Выбранный родительский пул-реквест входит в закрытый стек.",
+        "stackParentNotTop": "Перед добавлением ещё одного уровня выберите верхний пул-реквест стека в качестве базовой ветки.",
+        "stackConflict": "Пул-реквест уже входит в другой стек GitHub.",
+        "stacksUnavailable": "Пул-реквесты в стеках GitHub недоступны для этого репозитория.",
+        "stackParentUnverified": "Orca не удалось проверить родительский пул-реквест. Повторите попытку чуть позже.",
+        "stackExistingReviewOtherBase": "Для этой ветки уже есть открытый пул-реквест, но он нацелен не на выбранную родительскую ветку.",
+        "stackCreationUnconfirmed": "Возможно, пул-реквест уже создан. Повторите попытку, чтобы завершить регистрацию в стеке.",
+        "stackRegistrationUnavailable": "Пул-реквест создан, но стеки GitHub недоступны для этого репозитория.",
+        "stackRegistrationFailed": "Пул-реквест создан, но GitHub не удалось добавить его в стек. Повторите попытку, чтобы завершить регистрацию в стеке."
+      },
+      "baseHeadTitleRequired": "обязательны базовая ветка, исходная ветка и заголовок."
     },
     "model": {
       "auto": "Автоматически",
@@ -20634,6 +21209,176 @@
       "patch": "Различия ветки относительно базовой ветки для генерации сведений о PR.",
       "stagedFiles": "Список файлов в индексе, по одному в строке, для создания сообщения коммита.",
       "stagedPatch": "Патч Git с изменениями в индексе для создания сообщения коммита."
+    },
+    "textGeneration": {
+      "errors": {
+        "promptTooLargeForWindows": "Запрос для {{label}} слишком большой для командной строки Windows. Добавьте в индекс меньше изменений и повторите попытку.",
+        "promptTooLargeForArgument": "Запрос для {{label}} слишком большой для передачи одним аргументом командной строки. Добавьте в индекс меньше изменений и повторите попытку.",
+        "agentCouldNotStart": "Не удалось запустить {{label}}. Проверьте команду агента в разделе «Настройки» и повторите попытку.",
+        "agentFailedToStart": "Запуск {{label}} завершился ошибкой. Проверьте команду агента в разделе «Настройки» и повторите попытку.",
+        "agentBinaryNotFound": "{{binary}} не найден в PATH. Установите {{label}} для генерации сообщений коммитов с помощью ИИ.",
+        "timedOut": "Время ожидания генерации истекло через {{seconds}} с.",
+        "outputTooLarge": "Команда CLI {{label}} вывела слишком много данных. Проверьте настройки CLI агента и повторите попытку.",
+        "windowsBatchUnsafeArguments": "{{label}} запускается через пакетный скрипт Windows, который не может принять многострочный запрос как аргумент. В разделе «Настройки» укажите исполняемый файл агента или используйте свою команду без {prompt}, чтобы Orca передавала запрос через stdin.",
+        "cliTerminated": "Команда CLI {{label}} была принудительно остановлена до завершения.",
+        "cliTerminatedWithDetail": "Команда CLI {{label}} была принудительно остановлена до завершения: {{detail}}",
+        "cliFailed": "Команда CLI {{label}} завершилась с ошибкой и кодом {{exitCode}}.",
+        "cliFailedWithDetail": "Команда CLI {{label}} завершилась с ошибкой и кодом {{exitCode}}: {{detail}}",
+        "agentReportedError": "{{label}} сообщил об ошибке.",
+        "emptyCommitMessage": "{{label}} вернул пустое сообщение.",
+        "emptyCommitMessageWithDetail": "{{label}} вернул пустое сообщение. Вывод CLI: {{detail}}",
+        "emptyPullRequestDetails": "{{label}} не вернул никаких сведений.",
+        "emptyPullRequestDetailsWithDetail": "{{label}} не вернул никаких сведений. Вывод CLI: {{detail}}",
+        "emptyJiraSummary": "{{label}} вернул пустое краткое описание.",
+        "emptyJiraSummaryWithDetail": "{{label}} вернул пустое краткое описание. Вывод CLI: {{detail}}",
+        "commitMessageUnparseable": "Не удалось разобрать сгенерированное сообщение коммита.",
+        "pullRequestDetailsUnparseable": "Не удалось разобрать сгенерированные сведения о пул-реквесте.",
+        "jiraSummaryEmptyAfterSanitization": "После очистки сгенерированное краткое описание оказалось пустым.",
+        "jiraDescriptionRequired": "Описание обязательно.",
+        "jiraAccountDisconnected": "Повторно подключите выбранную учётную запись Jira на этом сервере.",
+        "jiraSummaryBusyInOtherDraft": "Заголовок Jira уже генерируется в другом черновике.",
+        "stagedChangesReadFailed": "Не удалось прочитать изменения в индексе.",
+        "noStagedChanges": "Нет изменений в индексе для составления сводки.",
+        "noBranchChanges": "Нет изменений в ветке для составления сводки.",
+        "commandTemplateEmptyCommitMessage": "Шаблон команды для сообщений коммитов пуст.",
+        "commandTemplateEmptyPullRequest": "Шаблон команды для сведений о пул-реквестах пуст.",
+        "commandTemplateEmptyBranchName": "Шаблон команды для названий веток пуст.",
+        "commandTemplateEmptyChatName": "Шаблон команды для названий чатов пуст.",
+        "sourceControlAgentUnsupported": "Выберите поддерживаемого агента для этого действия в разделе «Настройки -> Git -> ИИ для управления версиями». Поддерживаемые агенты: {{agents}} или «Своя команда».",
+        "chatNameAgentUnsupported": "Выберите поддерживаемого агента для названий чатов в разделе «Настройки -> Чат -> Названия чатов». Поддерживаемые агенты: {{agents}} или «Своя команда».",
+        "sourceControlCustomCommandEmpty": "Своя команда не задана. Добавьте её в разделе «Настройки -> Git -> ИИ для управления версиями».",
+        "chatNameCustomCommandEmpty": "Своя команда не задана. Добавьте её в разделе «Настройки -> Чат -> Названия чатов».",
+        "agentCannotGenerateCommitMessage": "Агент «{{agent}}» не поддерживает сообщения коммитов в ИИ для управления версиями. Поддерживаемые агенты: {{agents}} или «Своя команда».",
+        "agentCannotGeneratePullRequest": "Агент «{{agent}}» не поддерживает сведения о пул-реквестах в ИИ для управления версиями. Поддерживаемые агенты: {{agents}} или «Своя команда».",
+        "agentCannotGenerateBranchName": "Агент «{{agent}}» не поддерживает названия веток в ИИ для управления версиями. Поддерживаемые агенты: {{agents}} или «Своя команда».",
+        "agentCannotGenerateChatName": "Агент «{{agent}}» не поддерживает названия чатов. Поддерживаемые агенты: {{agents}} или «Своя команда».",
+        "noModelForAgent": "Для {{label}} нет доступных моделей.",
+        "planCustomCommandEmpty": "Своя команда не задана. Добавьте её в разделе «Настройки → Git → Сообщения коммитов с ИИ».",
+        "planAgentUnsupported": "Агент «{{agent}}» не поддерживает сообщения коммитов с помощью ИИ.",
+        "planModelUnavailable": "Модель «{{model}}» недоступна для {{label}}.",
+        "planModelWithoutThinking": "Модель «{{model}}» не поддерживает настройку глубины рассуждений.",
+        "planThinkingLevelInvalid": "Глубина рассуждений «{{level}}» недопустима для {{model}}.",
+        "openCodeInvalidEvents": "OpenCode вернул некорректные события JSON.",
+        "antigravityInvalidEvents": "Antigravity вернул некорректные события JSON.",
+        "antigravityInvalidResult": "Antigravity вернул некорректный результат.",
+        "antigravityNoFinalResult": "Antigravity не вернул итоговый результат.",
+        "kimiUnreadableOutput": "Kimi вернул вывод, который Orca не удалось прочитать. Повторите попытку.",
+        "kimiSessionOccupied": "Kimi не удалось использовать эту сессию, поскольку она активна в другом клиенте. Остановите сессию там или закройте тот клиент, затем повторите попытку.",
+        "kimiInterrupted": "Kimi был прерван до завершения создания текста. Повторите попытку.",
+        "kimiFailed": "Kimi не удалось завершить создание текста. Перед повторной попыткой откройте Kimi на сервере выполнения и проверьте причину сбоя.",
+        "kimiAgentOptionsConflict": "Kimi получил конфликтующие или повторяющиеся параметры агента. Оставьте только один параметр --agent или --agent-file в рецепте создания текста или аргументах CLI и повторите попытку.",
+        "kimiOptionRejected": "Kimi отклонил параметр или аргумент. Исправьте рецепт создания текста или аргументы CLI и повторите попытку.",
+        "kimiSessionNotFound": "Kimi не удалось найти запрошенную сессию. Используйте существующую сессию или начните новую.",
+        "kimiSessionOtherDirectory": "Эта сессия Kimi относится к другому каталогу. Возобновите её там или используйте сессию, созданную для этого рабочего пространства.",
+        "kimiCredentialVariableMissing": "Kimi не хватает настроенной переменной окружения с учётными данными. Задайте её на сервере выполнения перед повторной попыткой.",
+        "kimiCredentialsRequired": "Kimi нужны учётные данные провайдера. Откройте Kimi на сервере выполнения, настройте провайдера или войдите в учётную запись, затем повторите попытку.",
+        "kimiModelMissing": "В Kimi не настроена доступная для использования модель. Откройте Kimi на сервере выполнения, настройте или выберите модель, затем повторите попытку.",
+        "kimiPromptHookBlocked": "Хук запроса Kimi заблокировал запрос или не удалось начать ход. Проверьте хуки и настройки Kimi перед повторной попыткой.",
+        "kimiCancelled": "Kimi отменил запрос до завершения создания текста. Повторите попытку.",
+        "kimiEmptyPrompt": "Kimi получил пустой запрос. Исправьте эти входные данные в рецепте создания текста или аргументах CLI и повторите попытку.",
+        "kimiEmptyModel": "Kimi получил пустое значение модели. Исправьте эти входные данные в рецепте создания текста или аргументах CLI и повторите попытку.",
+        "kimiEmptyAgent": "Kimi получил пустое значение агента. Исправьте эти входные данные в рецепте создания текста или аргументах CLI и повторите попытку.",
+        "kimiEmptyAgentFilePath": "Kimi получил пустой путь к файлу агента. Исправьте эти входные данные в рецепте создания текста или аргументах CLI и повторите попытку.",
+        "kimiOutputFormatInvalid": "Формат вывода Kimi требует режима запросов и поддерживаемого значения text или stream-json. Исправьте рецепт создания текста или аргументы CLI перед повторной попыткой.",
+        "kimiSessionIdRequired": "Kimi нужен идентификатор сессии для возобновления в режиме запросов. Исправьте рецепт создания текста или аргументы CLI и повторите попытку.",
+        "kimiConflictingOptions": "Kimi получил конфликтующие параметры: {{option}} и {{otherOption}}. Исправьте рецепт создания текста или аргументы CLI перед повторной попыткой.",
+        "kimiAgentChangeOnResume": "Kimi не может сменить агента при возобновлении сессии. Уберите переопределение агента или начните новую сессию в рецепте создания текста или аргументах CLI.",
+        "kimiResponseBlocked": "Kimi не удалось вернуть ответ, поскольку он был заблокирован. Измените запрос или настройки модели перед повторной попыткой.",
+        "kimiAuthFailed": "Kimi не удалось пройти аутентификацию. Войдите в учётную запись или исправьте учётные данные провайдера на сервере выполнения и повторите попытку.",
+        "kimiConnectionFailed": "Kimi не удалось подключиться к провайдеру. Проверьте сеть на сервере выполнения и повторите попытку.",
+        "kimiProviderLimited": "Kimi достиг лимита провайдера, либо провайдер занят. Подождите перед повторной попыткой или уменьшите частоту запросов.",
+        "kimiContextOverflow": "Kimi исчерпал контекст. Сократите запрос или начните новую сессию, затем повторите попытку.",
+        "kimiConfigInvalid": "В Kimi некорректные настройки. Проверьте настройки модели и провайдера на сервере выполнения перед повторной попыткой.",
+        "kimiContinueSessionConflict": "Kimi получил конфликтующие параметры: --continue, --session. Исправьте рецепт создания текста или аргументы CLI перед повторной попыткой."
+      },
+      "enableSourceControlAi": "Включите ИИ для управления версиями в разделе «Настройки -> Git».",
+      "chooseBaseBranch": "Перед генерацией выберите базовую ветку.",
+      "savedCommitRecipeRepo": "Рецепт сообщения коммита сохранён для этого репозитория.",
+      "savedCommitRecipeGlobal": "Рецепт сообщения коммита сохранён как глобальный вариант по умолчанию.",
+      "savedReviewRecipeRepo": "Рецепт для PR и MR сохранён для этого репозитория.",
+      "savedReviewRecipeGlobal": "Рецепт для PR и MR сохранён как глобальный вариант по умолчанию.",
+      "savedBranchRecipeRepo": "Рецепт названия ветки сохранён для этого репозитория.",
+      "savedBranchRecipeGlobal": "Рецепт названия ветки сохранён как глобальный вариант по умолчанию."
+    },
+    "remoteError": {
+      "submodule": {
+        "namedRemoteChanged": "В подмодуле «{{name}}» есть изменения в удалённом репозитории. Получите и слейте изменения внутри подмодуля, затем повторите попытку.",
+        "remoteChanged": "В одном из подмодулей есть изменения в удалённом репозитории. Получите и слейте изменения внутри подмодуля, затем повторите попытку.",
+        "namedPushFailed": "Не удалось отправить подмодуль «{{name}}». Устраните ошибку отправки подмодуля, затем повторите попытку.",
+        "pushFailed": "Не удалось отправить один из подмодулей. Устраните ошибку отправки подмодуля, затем повторите попытку."
+      },
+      "failedWithDetail": {
+        "publish": "Не удалось опубликовать ветку. {{detail}}",
+        "sync": "Не удалось выполнить синхронизацию. {{detail}}",
+        "forcePush": "Не удалось выполнить принудительную отправку. {{detail}}",
+        "push": "Не удалось отправить изменения. {{detail}}",
+        "fetch": "Не удалось получить изменения. {{detail}}",
+        "fastForward": "Не удалось выполнить перемотку вперёд. {{detail}}",
+        "rebase": "Не удалось выполнить перебазирование. {{detail}}",
+        "pull": "Не удалось получить и слить изменения. {{detail}}"
+      },
+      "hookBlocked": {
+        "lint": {
+          "publish": "Публикация ветки заблокирована — при отправке не пройдена проверка lint.",
+          "sync": "Синхронизация заблокирована — при отправке не пройдена проверка lint.",
+          "forcePush": "Принудительная отправка заблокирована — при отправке не пройдена проверка lint.",
+          "push": "Отправка заблокирована — при отправке не пройдена проверка lint."
+        },
+        "prePush": {
+          "publish": "Публикация ветки заблокирована — хук pre-push завершился с ошибкой.",
+          "sync": "Синхронизация заблокирована — хук pre-push завершился с ошибкой.",
+          "forcePush": "Принудительная отправка заблокирована — хук pre-push завершился с ошибкой.",
+          "push": "Отправка заблокирована — хук pre-push завершился с ошибкой."
+        },
+        "detail": {
+          "publish": "Публикация ветки заблокирована — {{detail}}",
+          "sync": "Синхронизация заблокирована — {{detail}}",
+          "forcePush": "Принудительная отправка заблокирована — {{detail}}",
+          "push": "Отправка заблокирована — {{detail}}"
+        }
+      },
+      "remoteAccessWithDetail": {
+        "publish": "Не удалось опубликовать ветку. {{detail}}. Проверьте доступ к удалённому репозиторию и повторите попытку.",
+        "sync": "Не удалось выполнить синхронизацию. {{detail}}. Проверьте доступ к удалённому репозиторию и повторите попытку.",
+        "forcePush": "Не удалось выполнить принудительную отправку. {{detail}}. Проверьте доступ к удалённому репозиторию и повторите попытку.",
+        "push": "Не удалось отправить изменения. {{detail}}. Проверьте доступ к удалённому репозиторию и повторите попытку."
+      },
+      "publishFailed": "Не удалось опубликовать ветку. Проверьте доступ к удалённому репозиторию и повторите попытку.",
+      "syncFailed": "Не удалось выполнить синхронизацию. Проверьте соединение и повторите попытку.",
+      "forcePushFailed": "Не удалось выполнить принудительную отправку. Проверьте соединение и повторите попытку.",
+      "pushFailed": "Не удалось отправить изменения. Проверьте соединение и повторите попытку.",
+      "localChangesBlocked": {
+        "rebase": "Перебазирование заблокировано — сначала создайте коммит с локальными изменениями или уберите их в stash.",
+        "fastForward": "Перемотка вперёд заблокирована — сначала создайте коммит с локальными изменениями или уберите их в stash.",
+        "pull": "Получение и слияние заблокированы — сначала создайте коммит с локальными изменениями или уберите их в stash."
+      },
+      "operationFailed": "Ошибка удалённой операции",
+      "unconcludedMerge": {
+        "rebase": "Перебазирование заблокировано — сначала разрешите существующие конфликты.",
+        "sync": "Синхронизация заблокирована — сначала разрешите существующие конфликты слияния.",
+        "pull": "Получение и слияние заблокированы — сначала разрешите существующие конфликты слияния."
+      },
+      "mergeConflicts": {
+        "rebase": "Перебазирование остановлено из-за конфликтов. Разрешите их в разделе «Управление версиями», затем продолжите перебазирование.",
+        "sync": "Синхронизация остановлена из-за конфликтов слияния. Разрешите их в разделе «Управление версиями», затем создайте коммит слияния.",
+        "pull": "Получение и слияние остановлены из-за конфликтов слияния. Разрешите их в разделе «Управление версиями», затем создайте коммит слияния."
+      },
+      "syncRemoteMoved": "Синхронизация не удалась — во время неё удалённый репозиторий изменился. Повторите попытку.",
+      "forcePushRejected": "Принудительная отправка отклонена — удалённый репозиторий изменился с момента последнего получения изменений. Сначала получите изменения, затем повторите попытку.",
+      "pushRejected": "Отправка отклонена — в удалённом репозитории есть изменения. Сначала получите и слейте их, затем повторите попытку.",
+      "untrackedFilesBlocked": {
+        "rebase": "Перебазирование заблокировано — сначала переместите, удалите или добавьте неотслеживаемые файлы.",
+        "fastForward": "Перемотка вперёд заблокирована — сначала переместите, удалите или добавьте неотслеживаемые файлы.",
+        "pull": "Получение и слияние заблокированы — сначала переместите, удалите или добавьте неотслеживаемые файлы."
+      },
+      "authenticationFailed": "Ошибка аутентификации. Проверьте учётные данные для удалённого репозитория."
+    },
+    "submodule": {
+      "worktreeOnlyLabel": "Добавить в индекс внутри подмодуля",
+      "worktreeOnlyTooltip": "Родительский репозиторий (включая «Добавить всё в индекс») не может добавлять в индекс изменения файлов внутри подмодуля",
+      "loading": "Загрузка изменений подмодуля…",
+      "empty": "В подмодуле нет изменений",
+      "loadFailed": "Не удалось загрузить изменения подмодуля"
     }
   },
   "agentsSidebarIntro": {
@@ -20805,6 +21550,35 @@
       "loading": "Загрузка дочерних агентов…",
       "loadError": "Не удалось загрузить всех дочерних агентов.",
       "empty": "Дочерние агенты не найдены."
+    },
+    "scanIssues": {
+      "issuesOmitted": "Дополнительные проблемы сканирования не показаны.",
+      "sessionMetadataUnreadable": "Не удалось прочитать метаданные сессий при этом сканировании.",
+      "openCodeScannerUnavailable": "История OpenCode пропущена, так как не удалось запустить фоновый сканер; приложение по-прежнему реагирует на действия.",
+      "openCodeScanIncomplete": "Сканирование истории OpenCode не завершено: {{detail}}",
+      "openCodeWslReaderPreparing": "Подготовка модуля чтения SQLite в WSL. Обновите Vault после завершения настройки.",
+      "openCodeWslReaderNotPrepared": "Модуль чтения SQLite в WSL не подготовлен. Обновите Vault, чтобы повторить попытку.",
+      "openCodeDatabaseBusy": "{{label}} сейчас выполняет запись в {{name}}, поэтому история пропущена. Она будет прочитана повторно при следующем обновлении.",
+      "openCodeDatabaseUnreadable": "Не удалось прочитать историю {{label}} в {{name}}: {{detail}}",
+      "openCodeWslDatabaseUnsupported": "Поиск сессий {{label}} внутри WSL из Windows пока недоступен.",
+      "openCodeWriteAheadLogUnreadable": "Не удалось прочитать историю {{label}} в {{name}}. Журнал упреждающей записи нельзя открыть только для чтения в этой файловой системе. Корректно завершите работу {{label}}, чтобы сбросить журнал.",
+      "wslTranscriptFsSlow": "Файлы истории WSL временно недоступны, так как доступ к файловой системе занимает слишком много времени. Повторите попытку чуть позже или перезапустите Orca, если проблема сохраняется.",
+      "wslTranscriptFsCapacity": "Поиск файлов истории WSL временно недоступен, так как слишком много запросов к файловой системе уже ожидают обработки. Повторите попытку чуть позже или перезапустите Orca, если проблема сохраняется.",
+      "wslTranscriptFsProcessFailed": "Файлы истории WSL временно недоступны из-за сбоя вспомогательного процесса файловой системы ({{detail}}). Повторите попытку чуть позже или перезапустите Orca, если проблема сохраняется.",
+      "wslDistroNotRunning": "Файлы истории WSL недоступны, так как дистрибутив WSL «{{distro}}» не запущен. Откройте в нём терминал, чтобы запустить его.",
+      "wslDistroUnverifiable": "Файлы истории WSL недоступны, так как WSL не ответила, запущен ли «{{distro}}». Повторите попытку чуть позже.",
+      "wslSessionsFromLastScan": "Не удалось проверить WSL; сеансы взяты из последнего сканирования.",
+      "scopePathsTruncated": "Сканирование выполнено только для первых {{limit}} путей к проектам.",
+      "invalidResultsSkipped_one": "Пропущена {{count}} некорректная запись в результатах истории сессий агентов.",
+      "invalidResultsSkipped_other": "Пропущено {{count}} некорректной записи в результатах истории сессий агентов.",
+      "scanTimedOutOnSshHost": "Время сканирования сессий на этом SSH-сервере истекло через {{seconds}} с. Обновите, чтобы повторить попытку.",
+      "scanTimedOut": "Время сканирования сессий истекло через {{seconds}} с — возможно, компьютер занят. Обновите, чтобы повторить попытку.",
+      "scannerPaused": "После повторных сбоев сканирование сессий приостановлено. Обновите, чтобы повторить попытку.",
+      "scannerBusy": "Одновременно выполняется слишком много сканирований сессий. Подождите немного, затем обновите.",
+      "scannerMissing": "В этой установке Orca отсутствует сканер сессий. Переустановка Orca восстановит его.",
+      "scannerStopped": "Сканер сессий неожиданно остановился. Обновите, чтобы повторить попытку.",
+      "invalidResultsSkipped_few": "Пропущены {{count}} некорректные записи в результатах истории сессий агентов.",
+      "invalidResultsSkipped_many": "Пропущено {{count}} некорректных записей в результатах истории сессий агентов."
     }
   },
   "common": {
@@ -20824,7 +21598,8 @@
     },
     "codexSharedSettingsNotice": {
       "title": "Codex в Orca теперь использует ~/.codex",
-      "description": "Codex может снова запросить доверие к папкам или одобрение команд. Заново добавьте MCP-серверы, которые добавляли только в Orca."
+      "description": "Codex может снова запросить доверие к папкам или одобрение команд. Заново добавьте MCP-серверы, которые добавляли только в Orca.",
+      "dismiss": "Скрыть"
     },
     "codexSharedServerBanner": {
       "title": "Этот Codex использует общий сервер с другими вкладками Codex",
@@ -20883,17 +21658,14 @@
       "resumableBody": "Откройте его заново здесь, чтобы продолжить работу. Сессия агента возобновится.",
       "reopening": "Повторное открытие…",
       "tryAgain": "Повторить попытку",
-      "reopenTerminal": "Открыть терминалы заново: {{count}}",
       "reopenTerminal_one": "Открыть терминал заново",
       "reopenTerminal_few": "Открыть {{count}} терминала заново",
       "reopenTerminal_many": "Открыть {{count}} терминалов заново",
       "reopenTerminal_other": "Открыть терминалы заново: {{count}}",
-      "reopened": "Заново открыто терминалов: {{count}}",
       "reopened_one": "Заново открыт {{count}} терминал",
       "reopened_few": "Заново открыто {{count}} терминала",
       "reopened_many": "Заново открыто {{count}} терминалов",
       "reopened_other": "Заново открыто терминалов: {{count}}",
-      "resumed": "Возобновлено сессий агентов: {{count}}.",
       "resumed_one": "Возобновлена {{count}} сессия агента.",
       "resumed_few": "Возобновлены {{count}} сессии агентов.",
       "resumed_many": "Возобновлено {{count}} сессий агентов.",
@@ -20906,7 +21678,6 @@
     },
     "severedDaemonBanner": {
       "unknownCount": "работающие терминалы",
-      "count": "работающие терминалы ({{count}})",
       "unverifiable": "Orca не удалось проверить процесс службы терминалов, поэтому ничего не остановлено.",
       "alreadyReplaced": "Служба терминалов уже заменена; ничего не остановлено.",
       "restarted": "Служба терминалов перезапущена.",
@@ -20924,7 +21695,8 @@
       "count_few": "{{count}} работающих терминала",
       "count_many": "{{count}} работающих терминалов"
     },
-    "restartedInputNotSent": "Терминал перезапустился во время ввода, поэтому часть текста могла не дойти. Проверьте новую оболочку, прежде чем вводить текст снова."
+    "restartedInputNotSent": "Терминал перезапустился во время ввода, поэтому часть текста могла не дойти. Проверьте новую оболочку, прежде чем вводить текст снова.",
+    "typingBeforeStartNotSent": "Часть клавиш, нажатых во время запуска терминала, не была отправлена."
   },
   "fileExplorer": {
     "root": {
@@ -21131,7 +21903,12 @@
       "enterCode": "Введите этот код на той странице:",
       "copyCode": "Копировать код",
       "cancelFailed": "Пока не удалось связаться с сервером для отмены.",
-      "cancel": "Отмена"
+      "cancel": "Отмена",
+      "errors": {
+        "ownerSilent": "Устройство, на котором был начат этот вход, перестало отвечать.",
+        "superseded": "Вход прерван из-за смены учётной записи на этом сервере. Начните заново.",
+        "failed": "Не удалось войти. Повторите попытку."
+      }
     },
     "remoteScopeAccountsAddHere": "Показаны учётные записи под управлением {{value0}}. Новые учётные записи выполняют вход там; завершите вход в браузере этого устройства."
   },
@@ -21265,6 +22042,15 @@
     "openDefault": "Открыть приложением по умолчанию"
   },
   "workspace": {
+    "branchChoice": {
+      "title": "Ветка для этого рабочего дерева",
+      "existing": "Существующая ветка",
+      "existingHint": "Новые коммиты добавляются в эту ветку.",
+      "new": "Новая ветка",
+      "newHint": "Создать новую локальную ветку",
+      "newName": "Имя новой ветки",
+      "automaticName": "Автоматическое имя"
+    },
     "links": {
       "foreignReview": "Это ревью относится к другому репозиторию. Добавляйте ревью из репозитория этого рабочего пространства.",
       "repositoryLoading": "Данные репозитория ещё загружаются. Повторите попытку после загрузки.",
@@ -21378,7 +22164,14 @@
       "settings": "Настройки",
       "dialogTitle": "Не удалось автоматически назвать чат",
       "dialogDescriptionStart": "Orca не удалось создать название для",
-      "dialogDescriptionEnd": "по его первому сообщению."
+      "dialogDescriptionEnd": "по его первому сообщению.",
+      "errors": {
+        "noName": "Агент названия чата не вернул название.",
+        "agentNotRun": "Orca не удалось запустить агента названия чата.",
+        "noAgentAvailable": "В этом рабочем пространстве нельзя запустить ни одного агента названия чата.",
+        "grokFailed": "Grok не удалось назвать этот чат. Попробуйте сгенерировать название ещё раз.",
+        "antigravityFailed": "Antigravity не удалось назвать этот чат. Попробуйте сгенерировать название ещё раз."
+      }
     }
   },
   "updates": {
@@ -21414,7 +22207,41 @@
       "preparingAriaLabel": "Подготовка обновления. Нажмите, чтобы развернуть."
     },
     "wslMoveInstallHeld": "Проект переносится на свой хост WSL. Установите обновление, когда перенос завершится.",
-    "wslMoveUndoInstallHeld": "Проект возвращается со своего хоста WSL. Установите обновление, когда это завершится."
+    "wslMoveUndoInstallHeld": "Проект возвращается со своего хоста WSL. Установите обновление, когда это завершится.",
+    "failure": {
+      "releaseNotReady": "Более новый выпуск пока недоступен для этого устройства. Проверьте позже.",
+      "updateServerUnreachable": "Не удалось связаться с сервером обновлений. Повторите попытку через несколько минут.",
+      "channelUnsupportedPlatform": "Сборки {{channel}} выпускаются только для macOS и Windows.",
+      "unsignedDevChannel": "Сборки {{channel}} не подписаны, а эта подписанная сборка устанавливает только обновления с подписью издателя Orca. Скачайте установщик со страницы выпусков и запустите его один раз — после этого обновления будут работать как обычно, включая возврат на Stable.",
+      "linuxPackageMissing": "Загруженного пакета больше нет в кэше обновлений. Загрузите обновление ещё раз или получите его на официальной странице выпусков.",
+      "linuxPackageNotRegular": "Загруженный пакет больше не является допустимым файлом в кэше обновлений. Загрузите обновление ещё раз или получите его на официальной странице выпусков.",
+      "linuxPackageHashMismatch": "Загруженный пакет больше не соответствует проверенному выпуску, поэтому Orca не передаст его менеджеру пакетов. Загрузите обновление ещё раз или получите его на официальной странице выпусков.",
+      "linuxPackageReadFailed": "Orca не удалось прочитать загруженный пакет. Загрузите обновление ещё раз или получите его на официальной странице выпусков.",
+      "linuxPackageNoSudo": "Команда sudo не найдена в системных каталогах, поэтому Orca не может сформировать безопасную команду установки. Покажите пакет и установите его через менеджер пакетов.",
+      "linuxPackageNoPackageManager": "В системных каталогах не найден поддерживаемый менеджер пакетов, поэтому Orca не может сформировать безопасную команду установки. Покажите пакет и установите его через менеджер пакетов.",
+      "linuxPackageInvalidPath": "Путь к загруженному пакету непригоден для использования, поэтому Orca не может сформировать безопасную команду установки. Покажите пакет и установите его через менеджер пакетов.",
+      "linuxPackageMarkerUnusable": "Orca не удалось проверить формат установленного пакета Linux, поэтому это обновление не будет установлено автоматически. Загрузите обновление с официальной страницы выпусков и установите его вручную.",
+      "linuxPackageExternallyManaged": "Эта копия Orca управляется системным менеджером пакетов, поэтому Orca не может устанавливать обновления самостоятельно. Обновите Orca средствами вашего дистрибутива.",
+      "linuxPackageManualInstall": "Завершите работу Orca перед выполнением системной команды установки пакета.",
+      "linuxPackageMetadataUnusable": "Не удалось проверить метаданные загруженного пакета. Завершите работу Orca перед загрузкой и установкой обновления с официальной страницы выпусков.",
+      "unknownReleaseChannel": "Неизвестный канал выпусков «{{channel}}».",
+      "invalidReleaseTag": "«{{tag}}» не является допустимым тегом выпуска.",
+      "releaseRepoNotFound": "Репозиторий выпусков по адресу {{repo}} не найден.",
+      "releaseListFailed": "Не удалось получить список сборок {{channel}} (HTTP {{status}}).",
+      "releaseListUnreadable": "Не удалось прочитать список выпусков {{channel}}.",
+      "rateLimitedSoon": "Достигнут лимит запросов GitHub. Повторите попытку через несколько минут.",
+      "rateLimitedSoonSignedOut": "Достигнут лимит запросов GitHub. Повторите попытку через несколько минут или выполните `gh auth login`, чтобы Orca могла использовать более высокий лимит вашей учётной записи.",
+      "rateLimitedInMinute": "Достигнут лимит запросов GitHub. Повторите попытку примерно через минуту.",
+      "rateLimitedInMinuteSignedOut": "Достигнут лимит запросов GitHub. Повторите попытку примерно через минуту или выполните `gh auth login`, чтобы Orca могла использовать более высокий лимит вашей учётной записи.",
+      "rateLimitedInMinutes_one": "Достигнут лимит запросов GitHub. Повторите попытку примерно через {{count}} минуту.",
+      "rateLimitedInMinutes_other": "Достигнут лимит запросов GitHub. Повторите попытку примерно через {{count}} минуты.",
+      "rateLimitedInMinutesSignedOut_one": "Достигнут лимит запросов GitHub. Повторите попытку примерно через {{count}} минуту или выполните `gh auth login`, чтобы Orca могла использовать более высокий лимит вашей учётной записи.",
+      "rateLimitedInMinutesSignedOut_other": "Достигнут лимит запросов GitHub. Повторите попытку примерно через {{count}} минуты или выполните `gh auth login`, чтобы Orca могла использовать более высокий лимит вашей учётной записи.",
+      "rateLimitedInMinutes_few": "Достигнут лимит запросов GitHub. Повторите попытку примерно через {{count}} минуты.",
+      "rateLimitedInMinutes_many": "Достигнут лимит запросов GitHub. Повторите попытку примерно через {{count}} минут.",
+      "rateLimitedInMinutesSignedOut_few": "Достигнут лимит запросов GitHub. Повторите попытку примерно через {{count}} минуты или выполните `gh auth login`, чтобы Orca могла использовать более высокий лимит вашей учётной записи.",
+      "rateLimitedInMinutesSignedOut_many": "Достигнут лимит запросов GitHub. Повторите попытку примерно через {{count}} минут или выполните `gh auth login`, чтобы Orca могла использовать более высокий лимит вашей учётной записи."
+    }
   },
   "jira": {
     "connect": {
@@ -21896,6 +22723,32 @@
       "okButton": "ОК",
       "safeDetail": "Изменения, сохранённые до этого момента, в безопасности. Новые изменения не будут сохраняться, пока вы не перезапустите Orca.",
       "title": "Сохранение остановлено"
+    },
+    "startupFailure": {
+      "noneFound": "(не найдено)",
+      "sqlitePath": "Путь к SQLite: {{path}}",
+      "sectionsDamaged": "Часть сохранённого состояния этого профиля повреждена: {{sections}}. Всё остальное не повреждено.",
+      "repairCommand": "Закройте Orca, затем выполните `{{command}}`, чтобы заменить только повреждённые части из резервных копий и сохранить всё остальное. Orca сохраняет копию повреждённого файла.",
+      "restoreWholeBackup": "Чтобы вместо этого восстановить резервную копию целиком, выполните `{{exportsCommand}}`, затем `{{rollbackCommand}}`.",
+      "sqliteUnreadable": "Orca не может безопасно открыть активный профиль, так как его состояние SQLite недоступно для чтения.",
+      "legacyJsonPath": "Путь к устаревшему JSON: {{path}}",
+      "retainedBackups": "Сохранённые резервные копии SQLite:",
+      "retainedExports": "Сохранённые экспорты JSON:",
+      "chooseRecoveryArtifact": "Закройте Orca, затем выполните `{{command}}` и выберите заведомо исправные данные для восстановления.",
+      "restoreCommands": "Восстановите SQLite с помощью `{{backupCommand}}` или экспорт JSON с помощью `{{revisionCommand}}`.",
+      "authorityAmbiguous": "Orca не может безопасно выбрать основной источник состояния профиля: {{detail}}",
+      "authorityBothPreserved": "Более старая сборка могла изменить файл JSON. Обе копии сохранены; ни одна не выбирается автоматически.",
+      "authorityCopyFirst": "Закройте Orca и скопируйте каталог профиля, прежде чем выбирать, какое состояние сохранить.",
+      "authorityKeepJson": "Чтобы сохранить текущий JSON, включая изменения из более старой сборки, выполните `{{command}}`. Обе копии будут архивированы без объединения их содержимого.",
+      "authorityInspect": "Выполните `{{command}}`, чтобы просмотреть сохранённые точки восстановления.",
+      "authorityRestore": "Используйте `{{backupCommand}}` или `{{revisionCommand}}` только после выбора состояния, которое хотите восстановить.",
+      "newerSchema": "Этот профиль сохранён в более новой версии Orca. Откройте его в той же или более новой версии. Ваш профиль не был изменён.",
+      "revisionConflict": "Активный профиль изменился во время запуска Orca. Закройте другие процессы Orca, использующие этот профиль, затем перезапустите Orca.",
+      "writerUnavailable": "Orca не удалось начать сохранение профиля. Перезапустите Orca; если проблема повторится, восстановите или переустановите эту сборку.",
+      "publicationUnavailable": "Orca не удалось безопасно сохранить состояние профиля в {{directory}}.",
+      "publicationNeedsHardLinks": "Это расположение должно поддерживать жёсткие ссылки, а Orca нужны права на их создание.",
+      "publicationMoveData": "Закройте Orca и orcad, прежде чем проверять права доступа к папке или переносить весь каталог данных Orca на доступную для записи локальную файловую систему с поддержкой жёстких ссылок, например APFS, NTFS или ext4.",
+      "publicationKeepFiles": "Сохраните исходный каталог и все файлы восстановления."
     }
   },
   "gpuFallback": {
@@ -21931,7 +22784,8 @@
     "useButton": "Использовать локальную сборку"
   },
   "startupFailure": {
-    "title": "Не удалось запустить Orca"
+    "title": "Не удалось запустить Orca",
+    "finishFailed": "Orca не удалось завершить запуск: {{detail}}"
   },
   "native": {
     "about": {
@@ -21978,6 +22832,26 @@
       "mixed": "Разные состояния",
       "repair": "Требуется повторное сопряжение",
       "update": "Требуется обновление"
+    },
+    "remoteServerPairingErrors": {
+      "invalidPairingCode": "Неверный код сопряжения. Ожидается URL вида orca://pair?... или данные сопряжения без ссылки.",
+      "selfPairingCode": "Этот код сопряжения относится к этому же экземпляру Orca. Создайте код на другом компьютере.",
+      "managedDeployment": "Orca запускает этот сервер для вас на SSH-сервере; здесь нельзя заменить или удалить его сопряжение. Чтобы вывести его из эксплуатации, выполните `orca environment stop --environment <name> --yes` или откройте Настройки > Orca на ваших SSH-серверах; если SSH-сервер больше не существует, выполните `orca environment forget --environment <name> --yes`.",
+      "sshAccessChangePending": "Изменение доступа SSH к этому серверу не завершено. Повторите попытку или отмените изменение в разделе Настройки > Удалённые серверы Orca > Доступ SSH к сопряжённым серверам, прежде чем заменять сопряжение или удалять сервер.",
+      "sshAccessLinked": "Отвяжите доступ SSH к этому серверу в разделе Настройки > Удалённые серверы Orca > Доступ SSH к сопряжённым серверам, прежде чем заменять сопряжение или удалять сервер.",
+      "alreadyPairedCloudWorkspace": "Этот сервер уже сопряжён как «{{name}}». Он принадлежит облачному рабочему пространству, которое повторно сопрягает его при возобновлении работы.",
+      "alreadyPairedCloudIdentity": "Этот сервер уже сопряжён как «{{name}}». Сервер облачного рабочего пространства повторно использует идентификатор этого сервера, поэтому он не был сохранён.",
+      "alreadyPairedWslHost": "Этот сервер уже сопряжён как «{{name}}». Orca управляет им как сервером WSL, поэтому здесь нельзя заменить его сопряжение.",
+      "alreadyPairedManagedDeployment": "Этот сервер уже сопряжён как «{{name}}». Orca запускает этот сервер для вас на SSH-сервере; здесь нельзя заменить или удалить его сопряжение. Чтобы вывести его из эксплуатации, выполните `orca environment stop --environment <name> --yes` или откройте Настройки > Orca на ваших SSH-серверах; если SSH-сервер больше не существует, выполните `orca environment forget --environment <name> --yes`.",
+      "alreadyPairedSshAccessChangePending": "Этот сервер уже сопряжён как «{{name}}». Изменение доступа SSH к этому серверу не завершено. Повторите попытку или отмените изменение в разделе Настройки > Удалённые серверы Orca > Доступ SSH к сопряжённым серверам, прежде чем заменять сопряжение или удалять сервер.",
+      "alreadyPairedSshAccessLinked": "Этот сервер уже сопряжён как «{{name}}». Отвяжите доступ SSH к этому серверу в разделе Настройки > Удалённые серверы Orca > Доступ SSH к сопряжённым серверам, прежде чем заменять сопряжение или удалять сервер.",
+      "alreadyPairedAddAgain": "Этот сервер уже сопряжён как «{{name}}». Чтобы обновить подключение, добавьте его снова в разделе Настройки > Удалённые серверы Orca.",
+      "alreadyPairedUnreadable": "Этот сервер уже сопряжён как «{{name}}», но эта версия Orca не может прочитать его сохранённые настройки.",
+      "nameTaken": "Сервер с именем «{{name}}» уже существует.",
+      "idNeedsNewerOrca": "Сервер с этим идентификатором уже существует в формате, для которого нужна более новая версия Orca.",
+      "hostSaveFailed": "Orca проверила сервер, но не смогла сохранить его. Проверьте локальное хранилище настроек и повторите попытку.",
+      "repairSaveFailed": "Orca проверила сервер, но не смогла сохранить новое сопряжение. Проверьте локальное хранилище настроек и повторите попытку.",
+      "repairCloudWorkspace": "Этот сервер принадлежит облачному рабочему пространству, которое повторно сопрягает его при возобновлении работы."
     }
   },
   "taskProviders": {
@@ -22044,10 +22918,7 @@
       "issuesLoadFailed": "Не удалось загрузить задачи Linear.",
       "listLabel": "Список Linear",
       "localKeyStorage": "Ключи локальной среды выполнения хранятся на этом устройстве с использованием зашифрованного хранилища Electron, если оно доступно.",
-      "projectIssuesLoadFailed": "Не удалось загрузить задачи проекта.",
-      "projectLoadFailed": "Не удалось загрузить проект.",
       "projectNotFound": "Проект не найден.",
-      "projectsLoadFailed": "Не удалось загрузить проекты.",
       "remoteKeyStorage": "Этот ключ хранится в активной удалённой среде выполнения.",
       "titleUpdateFailed": "Не удалось обновить заголовок",
       "truncated": {
@@ -22074,16 +22945,8 @@
       },
       "updateAccess": "Обновить доступ",
       "updateWorkspaceAccess": "Обновить доступ к Linear для {{workspace}}",
-      "viewContentsLoadFailed": "Не удалось загрузить содержимое представления.",
-      "viewsLoadFailed": "Не удалось загрузить представления.",
       "workspaceApiKeyHint": "Вставьте личный API-ключ для {{workspace}}. Если это рабочее пространство уже подключено, Orca заменит его сохранённый ключ."
     }
-  },
-  "workspaceOptions": {
-    "activeFilterCount_one": "{{count}} фильтр",
-    "activeFilterCount_other": "{{count}} фильтра",
-    "activeFilterCount_few": "{{count}} фильтра",
-    "activeFilterCount_many": "{{count}} фильтров"
   },
   "stats": {
     "usageBreakdown": {
@@ -22286,5 +23149,353 @@
       },
       "finishPending": "Предыдущий перенос на хост {{distro}} там уже завершён. Orca завершит его здесь при перезапуске или сейчас — по кнопке «Проверить снова»."
     }
+  },
+  "automations": {
+    "runFailures": {
+      "noDispatchHost": "Для запуска автоматизации не было доступного окна Orca.",
+      "unevaluableSchedule": "Orca не удалось оценить эту автоматизацию, поэтому этот запуск был пропущен.",
+      "noRunnableHost": "У этой автоматизации нет сервера выполнения.",
+      "wslMoveInProgress": "Проект этой автоматизации переносится на свой сервер WSL, поэтому Orca пришлось пропустить этот запуск. Запуски возобновятся после завершения переноса.",
+      "wslMoveOwnedByHost": "Проект этой автоматизации теперь работает на своём сервере WSL, который выполняет эту автоматизацию там. Orca больше не запускает эту локальную копию.",
+      "missedGraceWindow": "При следующей проверке Orca допустимая задержка для этого пропущенного запуска уже была превышена.",
+      "targetMissing": "Сервер автоматизации больше не зарегистрирован, поэтому эту автоматизацию негде запускать.",
+      "targetReplaced": "Сервер автоматизации был удалён и зарегистрирован заново, поэтому перед запуском эту автоматизацию нужно повторно привязать.",
+      "workspaceHostAmbiguous": "Рабочее пространство автоматизации охватывает несколько серверов, поэтому Orca не может определить, на каком из них её запускать.",
+      "legacyTwinHosts": "Эта автоматизация была сохранена до того, как Orca начала отслеживать сервер её выполнения, а её проект находится на нескольких серверах. Откройте автоматизацию и выберите сервер, на котором она должна запускаться.",
+      "targetUnavailable": "Место запуска автоматизации больше недоступно.",
+      "remoteSchedulingUnavailable": "Планирование автоматизаций на удалённом сервере пока недоступно из этого клиента Orca. Запустите эту автоматизацию на удалённом сервере или обновите Orca, когда станет доступно удалённое планирование с сохранением состояния.",
+      "projectSetupMissing": "Проект больше не настроен на выбранном сервере автоматизации.",
+      "targetSetupMismatch": "Место запуска автоматизации больше не соответствует конфигурации сервера, выбранного для проекта.",
+      "repoUnavailable": "Репозиторий выбранного сервера автоматизации больше недоступен.",
+      "repoDetached": "Репозиторий больше не привязан к выбранному серверу автоматизации.",
+      "projectPathChanged": "Путь к проекту на выбранном сервере автоматизации изменился.",
+      "automationChanged": "Автоматизация изменилась до начала этого запуска.",
+      "destinationChanged": "Место запуска автоматизации изменилось до начала этого запуска.",
+      "hooksReviewBlocked": "Агент ждёт, пока кто-нибудь проверит новые или изменённые хуки («Hooks need review»). Откройте этот запуск и разрешите выполнение этих хуков или удалите их. Запланированные запуски продолжаются и будут успешными, когда больше ничего не будет требовать проверки.",
+      "agentNeverStarted": "Агент автоматизации так и не запустился после отправки запроса.",
+      "agentNoCompletion": "Агент автоматизации не сообщил о завершении.",
+      "watchTimedOut": "После 6 часов без сигнала о завершении Orca больше не отслеживает этот запуск.",
+      "wslDistroStopped": "Дистрибутив WSL {{distro}} остановлен, поэтому этот запуск по расписанию его не запустил. Запустите дистрибутив или используйте «Запустить сейчас»; следующие запуски пройдут, пока он работает.",
+      "projectSetupState": {
+        "notSetUp": "Проект не настроен на выбранном сервере автоматизации.",
+        "settingUp": "На выбранном сервере автоматизации ещё идёт настройка проекта.",
+        "error": "Не удалось настроить проект на выбранном сервере автоматизации.",
+        "unsupported": "Выбранный сервер автоматизации не поддерживает этот проект."
+      }
+    },
+    "extraAgentArgs": {
+      "errors": {
+        "tooLarge": "Размер дополнительных аргументов не должен превышать 4 КБ.",
+        "controlCharacters": "Дополнительные аргументы не могут содержать управляющие символы или переносы строк.",
+        "invalid": "Недопустимые дополнительные аргументы: {{detail}}",
+        "shellSyntax": "{{text}} использует синтаксис оболочки, недопустимый в дополнительных аргументах.",
+        "terminator": "«--» недопустим в дополнительных аргументах.",
+        "notAnOption": "«{{token}}» — не параметр. Дополнительные аргументы для {{agent}} допускают только: {{allowed}}.",
+        "optionNotAllowed": "«{{option}}» недопустим в дополнительных аргументах для {{agent}}. Разрешены: {{allowed}}.",
+        "missingValue": "Для «{{option}}» требуется значение.",
+        "valueNotAllowed": "«{{option}} {{value}}» недопустим. Дополнительные аргументы для {{agent}} допускают только «{{option}} {{prefix}}<level>».",
+        "modelRepeated": "В дополнительных аргументах модель задана несколько раз.",
+        "effortRepeated": "В дополнительных аргументах глубина рассуждений задана несколько раз."
+      },
+      "hostUpdateRequired": "Обновите Orca на этом сервере, чтобы использовать дополнительные аргументы."
+    }
+  },
+  "codeHost": {
+    "errors": {
+      "titleRequired": "Укажите название",
+      "networkError": "Ошибка сети — проверьте подключение.",
+      "invalidUpdate": "Некорректное обновление — {{detail}}",
+      "invalidRequest": "Некорректный запрос — {{detail}}",
+      "issueNotFound": "Задача не найдена — возможно, она была удалена.",
+      "issueUpdateFailed": "Не удалось обновить задачу: {{detail}}",
+      "github": {
+        "repoUnresolved": "Не удалось определить owner/repo на GitHub для этого репозитория",
+        "unexpectedResponse": "Неожиданный ответ от GitHub",
+        "pullRequestIdUnresolved": "Не удалось определить ID пул-реквеста GitHub",
+        "reviewerRequired": "Укажите хотя бы одного рецензента",
+        "stackAutoMergeUnsupported": "GitHub не поддерживает автослияние пул-реквестов в стеке.",
+        "autoMergeAlreadyMergeable": "Этот пул-реквест уже можно слить. Используйте «Слить» вместо автослияния.",
+        "noFailedChecks": "Нет неуспешных проверок GitHub Actions для повторного запуска.",
+        "noRerunnableChecks": "Проверки для повторного запуска не найдены.",
+        "stackMergeInvalidResponse": "GitHub вернул некорректный ответ на слияние стека.",
+        "stackMergePending": "GitHub ещё выполняет слияние этого стека. Обновите, чтобы проверить статус.",
+        "rateLimited": "Достигнут лимит запросов GitHub. Повторите попытку через несколько минут.",
+        "issuePermissionDenied": "У вас нет разрешения на редактирование этой задачи. Проверьте права токена GitHub.",
+        "issuesDisabled": "Задачи в этом репозитории отключены.",
+        "pullRequestPermissionDenied": "У вас нет разрешения на редактирование этого пул-реквеста. Проверьте права токена GitHub.",
+        "pullRequestNotFound": "Пул-реквест не найден — возможно, он был удалён.",
+        "pullRequestUpdateFailed": "Не удалось обновить пул-реквест: {{detail}}",
+        "autoMergeEnableFailed": "Не удалось включить автослияние пул-реквеста: {{detail}}",
+        "autoMergeDisableFailed": "Не удалось отключить автослияние пул-реквеста: {{detail}}",
+        "mergeQueueAddFailed": "Не удалось добавить пул-реквест в очередь слияния: {{detail}}",
+        "rerunPermissionDenied": "У вас нет разрешения на повторный запуск проверок в этом репозитории. Проверьте права токена GitHub.",
+        "rerunTargetNotFound": "Ресурс GitHub для повторного запуска не найден — возможно, срок его действия истёк или он был удалён.",
+        "rerunRejected": "Не удалось повторно запустить проверки — {{detail}}",
+        "rerunFailed": "Не удалось повторно запустить проверки: {{detail}}"
+      },
+      "gitlab": {
+        "projectUnresolved": "Не удалось определить проект GitLab для этого репозитория",
+        "unexpectedResponse": "Неожиданный ответ от GitLab",
+        "commentBodyRequired": "Необходимо ввести текст комментария",
+        "discussionIdRequired": "Требуется ID обсуждения",
+        "readyTitleConflict": "Нельзя обновить название и одновременно отметить запрос на слияние как готовый",
+        "mergeRequestTitleUnreadable": "Не удалось прочитать текущее название запроса на слияние",
+        "rateLimited": "Достигнут лимит запросов GitLab. Повторите попытку через несколько минут.",
+        "issuePermissionDenied": "У вас нет разрешения на редактирование этой задачи. Проверьте права токена GitLab.",
+        "jobLogPermissionDenied": "У вас нет разрешения на чтение журнала этого задания. Проверьте права токена GitLab.",
+        "jobProjectNotFound": "Не удалось найти проект GitLab для этого задания.",
+        "jobLogFailed": "Не удалось загрузить журнал задания: {{detail}}"
+      }
+    },
+    "startPoint": {
+      "repoNotFound": "Репозиторий не найден",
+      "folderUnsupported": "В режиме папки нельзя создавать рабочие деревья.",
+      "fetchFailed": "Не удалось получить {{ref}}: {{detail}}",
+      "remoteRefMissing": "Удалённая ссылка {{ref}} отсутствует после получения изменений.",
+      "github": {
+        "prNotFound": "PR #{{number}} не найден.",
+        "prHeadBranchMissing": "У PR #{{number}} нет исходной ветки.",
+        "forkHeadUnresolved": "Не удалось определить вершину PR #{{number}} из форка после получения изменений.",
+        "headShaEmpty": "При определении вершины PR #{{number}} получен пустой SHA."
+      },
+      "gitlab": {
+        "projectNotFound": "Для этого репозитория не найден проект GitLab.",
+        "mrNotFound": "MR !{{number}} не найден.",
+        "mrSourceBranchMissing": "У MR !{{number}} нет исходной ветки.",
+        "forkHeadUnresolved": "Не удалось определить вершину MR !{{number}} из форка после получения изменений."
+      }
+    },
+    "bitbucketConnect": {
+      "invalidInput": "Неверные учётные данные Bitbucket",
+      "accessTokenRequired": "Введите токен доступа.",
+      "emailAndApiTokenRequired": "Введите и адрес электронной почты, и API-токен.",
+      "rejected": "Bitbucket отклонил эти учётные данные. Проверьте адрес электронной почты и токен, затем повторите попытку.",
+      "unreachable": "Не удалось связаться с Bitbucket. Проверьте подключение или базовый URL API и повторите попытку."
+    }
+  },
+  "featureWall": {
+    "workflows": {
+      "workspaces": {
+        "title": "Рабочие пространства",
+        "lede": "Orca выделяет каждой задаче изолированное рабочее пространство, чтобы агенты могли работать параллельно."
+      },
+      "tasks": {
+        "title": "Задачи",
+        "lede": "Начинайте работу прямо из GitHub или Linear."
+      },
+      "agents": {
+        "title": "Агенты",
+        "lede": "Запускайте несколько агентов одновременно, следите за их работой и используйте автоматизацию для управления Orca, когда это полезно."
+      },
+      "workbench": {
+        "title": "Рабочая область",
+        "lede": "Перенесите привычные настройки терминала в Orca, затем разделите панели, чтобы запускать серверы, тесты и агентов и просматривать журналы в соседних панелях."
+      },
+      "review": {
+        "title": "Проверка кода",
+        "lede": "Проверяйте изменения, оставляйте конкретные замечания и отправляйте их агенту."
+      }
+    },
+    "steps": {
+      "statuses": {
+        "name": "Видимость",
+        "subtitle": "Видимость агентов",
+        "description": "Знайте, какие агенты работают, ожидают, активны или заблокированы."
+      },
+      "orchestration": {
+        "name": "Оркестрация",
+        "description": "Позвольте агентам управлять рабочими пространствами Orca и координировать их для выполнения более крупных задач."
+      },
+      "usage": {
+        "name": "Использование",
+        "description": "Следите за использованием и лимитами запросов всех подключённых учётных записей, чтобы знать, когда переключаться."
+      },
+      "terminal": {
+        "name": "Терминал",
+        "description": "Держите агентов, тесты и журналы разработки в поле зрения одновременно."
+      },
+      "editor": {
+        "name": "Редактор",
+        "description": "Пишите заметки в нашем редакторе Markdown в стиле Notion, не выходя из Orca."
+      },
+      "browser": {
+        "name": "Браузер",
+        "description": "Запускайте приложение в браузере Orca, отправляйте выбранные элементы интерфейса агентам и позволяйте им взаимодействовать с вашей веб-страницей."
+      },
+      "notes": {
+        "name": "Заметки",
+        "subtitle": "Заметки и различия",
+        "description": "Отправляйте агенту конкретные замечания по результатам проверки."
+      },
+      "prView": {
+        "name": "Проверки PR",
+        "subtitle": "Проверки и комментарии PR",
+        "description": "Смотрите статус PR на вкладке «Проверки»."
+      },
+      "ship": {
+        "name": "Выпуск с ИИ",
+        "description": "Поручите ИИ подготовить черновики коммитов и PR."
+      }
+    },
+    "tiles": {
+      "tile01": {
+        "title": "Параллельная оркестрация рабочих пространств"
+      },
+      "tile02": {
+        "title": "Терминал уровня Ghostty"
+      },
+      "tile03": {
+        "title": "Нативная интеграция с GitHub и Linear"
+      },
+      "tile04": {
+        "title": "Поддерживаемые CLI-агенты"
+      },
+      "tile05": {
+        "title": "Встроенный браузер + Режим дизайна"
+      },
+      "tile06": {
+        "title": "Удалённые рабочие пространства"
+      },
+      "tile07": {
+        "title": "Редактор Monaco: отправка агенту перетаскиванием"
+      },
+      "tile08": {
+        "title": "Проверка по строкам с отправкой агенту"
+      },
+      "tile09": {
+        "title": "Orca CLI"
+      },
+      "tile10": {
+        "title": "Управление с клавиатуры"
+      },
+      "tile11": {
+        "title": "Учёт использования и лимитов запросов"
+      },
+      "tile12": {
+        "title": "PDF, изображения, CSV, Markdown"
+      }
+    }
+  },
+  "setupScriptPrompt": {
+    "candidateLabels": {
+      "codexEnvironment": "Окружение Codex",
+      "packageManager": "менеджер пакетов"
+    }
+  },
+  "emulator": {
+    "errors": {
+      "disabled": "Мобильный эмулятор отключён в настройках.",
+      "notAvailable": "Мобильный эмулятор недоступен.",
+      "noSession": "Нет активной сессии эмулятора",
+      "noDeviceSpecified": "Устройство эмулятора не указано. Выберите устройство по умолчанию в разделе «Настройки > Мобильный эмулятор» или укажите устройство.",
+      "workspaceChanged": "Рабочее пространство изменилось во время запуска эмулятора. Подключите эмулятор заново.",
+      "noIosSimulators": "Симуляторы iOS не найдены. Добавьте симулятор в Xcode Settings > Platforms.",
+      "simctlUnavailable": "Команда xcrun simctl недоступна.",
+      "simulatorToolsUnavailable": "Инструменты Xcode Simulator недоступны. Установите полную версию Xcode, откройте её один раз, затем выберите её командой `sudo xcode-select --switch /Applications/Xcode.app/Contents/Developer`.",
+      "requiresMacosXcode": "Симулятор iOS требует macOS с Xcode Command Line Tools.",
+      "simulatorNotFound": "Симулятор {{udid}} не найден. Создайте симулятор через Xcode > Window > Devices and Simulators.",
+      "serveSimUnavailable": "serve-sim недоступен.",
+      "serveSimNoEndpoints": "serve-sim не вернул конечные точки потоковой передачи.",
+      "serveSimEndpointUnreachable": "serve-sim запущен, но его конечная точка потоковой передачи недоступна.",
+      "androidSdkMissing": "Android SDK не найден. Установите Android Studio и задайте ANDROID_HOME.",
+      "adbUnavailable": "adb недоступен.",
+      "noAndroidDevices": "Устройства Android и AVD не найдены. Создайте устройство в Android Studio.",
+      "androidDeviceNotRunning": "Устройство Android «{{device}}» не запущено. Сначала запустите его.",
+      "unknownDeviceOrAvd": "«{{device}}» не является ни запущенным устройством, ни известным AVD.",
+      "avdBootTimeout": "AVD «{{avdName}}» не завершил загрузку вовремя.",
+      "scrcpyDownloadFailed": "Не удалось скачать сервер scrcpy: {{detail}}",
+      "scrcpyServerInvalid": "Скачанный сервер scrcpy оказался некорректным или неполным."
+    },
+    "pane": {
+      "listDevicesFailed": "Не удалось получить список устройств эмулятора.",
+      "noDevices": "Устройства эмулятора не найдены. Добавьте симулятор iOS в Xcode или виртуальное устройство Android в Android Studio.",
+      "startFailed": "Не удалось запустить эмулятор. Убедитесь, что Xcode (iOS) или Android Studio (Android) настроены, затем попробуйте другое устройство.",
+      "shutdownFailed": "Не удалось выключить эмулятор. Повторите попытку или остановите его через менеджер эмуляторов."
+    },
+    "settings": {
+      "availabilityCheckFailed": "Не удалось проверить доступность эмулятора."
+    }
+  },
+  "ephemeralVm": {
+    "errors": {
+      "repoNotFound": "Репозиторий не найден: {{repoId}}",
+      "remoteRepoUnsupported": "В v1 рецепты временных ВМ запускаются на локальном компьютере с настольным приложением.",
+      "recipeNotFound": "Рецепт не найден: {{recipeId}}",
+      "runtimeNotFound": "Неизвестная среда выполнения временной ВМ: {{runtimeId}}",
+      "runtimeRepoMissing": "У среды выполнения временной ВМ нет идентификатора репозитория: {{runtimeId}}",
+      "provisionCancelled": "Подготовка отменена.",
+      "startRefUnresolved": "Не удалось определить начальную ссылку для подготовленного корня проекта: {{ref}}",
+      "defaultStartRefUnresolved": "Не удалось определить начальную ссылку по умолчанию для подготовленного корня проекта.",
+      "recipeExited": "Рецепт завершился с кодом {{exitCode}}.",
+      "recipeResultMissing": "Рецепт не вернул результат JSON.",
+      "recipeResultNotJsonObject": "stdout рецепта должен содержать ровно один объект JSON.",
+      "recipeResultPairingCodeInvalid": "Поле pairingCode в результате рецепта не является допустимым кодом сопряжения Orca.",
+      "recipeResultProjectRootNotAbsolute": "Поле projectRoot в результате рецепта должно содержать абсолютный путь в среде выполнения.",
+      "provisionedRootResultRequired": "Рецепты с подготовкой корня проекта должны возвращать schemaVersion 2 с checkoutMode \"provisioned-root\".",
+      "provisionedRootNotConfigured": "Результат рецепта запрашивает режим работы с подготовленным корнем проекта, но рецепт для этого не настроен.",
+      "destroyExited": "Уничтожение завершилось с кодом {{exitCode}}.",
+      "destroyFailed": "Уничтожение завершилось ошибкой.",
+      "destroyDisabled": "Уничтожение отключено для этого рецепта.",
+      "cleanupStopped": "Очистка остановлена пользователем.",
+      "cleanupInterrupted": "Очистка прервана. Повторите очистку, чтобы продолжить.",
+      "sshTargetRemoveFailed": "Не удалось удалить скрытую цель SSH-подключения.",
+      "recipeExitedWithoutCode": "Рецепт завершился с неизвестным кодом.",
+      "destroyExitedWithoutCode": "Уничтожение завершилось с неизвестным кодом."
+    }
+  },
+  "installDirAcl": {
+    "cause": "Права доступа Windows к папке установки Orca не позволяют собственным процессам Orca в изолированной среде читать файлы, поставляемые с приложением.",
+    "repaired": "Orca исправила права доступа. Перезагрузите окно, чтобы применить их.",
+    "repairing": "Orca исправляет права доступа.",
+    "repairFailed": "Orca не удалось их исправить. Обычно это означает, что для изменения прав доступа к папке нужны права администратора.",
+    "runCommands": "Выполните эти команды в командной строке от имени администратора, затем снова запустите Orca:"
+  },
+  "pet": {
+    "importErrors": {
+      "unsupportedFile": "Неподдерживаемый файл. Выберите PNG, APNG, JPG, GIF, WebP или SVG.",
+      "fileUnreadable": "Не удалось прочитать выбранный файл.",
+      "notAFile": "Выбранный путь не указывает на файл",
+      "fileTooLarge": "Файл слишком большой ({{size}} МБ). Максимум — {{max}} МБ.",
+      "saveFailed": "Не удалось сохранить питомца.",
+      "pathUnreadable": "Не удалось прочитать выбранный путь.",
+      "manifestMissing": "В пакете отсутствует pet.json.",
+      "manifestInvalid": "Файл pet.json некорректен.",
+      "manifestSymlink": "pet.json не должен быть символической ссылкой.",
+      "manifestParseFailed": "Некорректный pet.json: {{detail}}",
+      "bundleSaveFailed": "Не удалось сохранить пакет питомца.",
+      "sheetPathNotRelative": "spritesheetPath должен быть путём относительно пакета.",
+      "sheetPathIsRoot": "spritesheetPath должен указывать на файл, а не на корневую папку пакета.",
+      "sheetPathEscapes": "spritesheetPath выходит за пределы пакета.",
+      "sheetSymlink": "Спрайт-лист не должен быть символической ссылкой.",
+      "sheetUnsupportedType": "Спрайт-лист должен быть файлом PNG, APNG, JPG, GIF или WebP.",
+      "sheetNotFound": "Файл спрайт-листа не найден.",
+      "sheetNotAFile": "Путь к спрайт-листу не указывает на файл.",
+      "sheetTooLarge": "Спрайт-лист слишком большой ({{size}} МБ).",
+      "sheetSizeLimitExceeded": "Размер спрайт-листа превышает допустимый предел.",
+      "sheetUndecodable": "Не удалось декодировать изображение спрайт-листа.",
+      "sheetFrameMismatch": "Размер спрайт-листа {{sheetWidth}}×{{sheetHeight}} не кратен размеру кадра {{frameWidth}}×{{frameHeight}}.",
+      "animationRowOutOfRange": "Анимация «{{name}}» ссылается на строку {{row}}, но число строк в спрайт-листе — {{rows}}.",
+      "animationTooManyFrames": "В анимации «{{name}}» кадров: {{frames}}, но в спрайт-листе столбцов всего {{columns}}.",
+      "animationDurationMismatch": "В анимации «{{name}}» число длительностей кадров — {{durations}}, а число кадров — {{frames}}.",
+      "defaultAnimationMissing": "defaultAnimation «{{name}}» отсутствует в animations."
+    },
+    "defaultLabels": {
+      "image": "Пользовательский питомец",
+      "bundle": "Пакет питомца"
+    }
+  },
+  "diffComments": {
+    "lineRangeMeta": "строки {{start}}-{{end}}",
+    "lineMeta": "строка {{line}}"
+  },
+  "agentSendTargets": {
+    "disabledReason": {
+      "needsPermission": "Агенту требуется разрешение",
+      "statusStale": "Статус агента устарел"
+    }
+  },
+  "wslDistroHold": {
+    "terminalStopped": "Дистрибутив WSL {{distro}} остановлен, поэтому Orca не запустила этот терминал. Запустите дистрибутив и повторите попытку.",
+    "terminalUnverifiable": "Orca не удалось проверить, запущен ли дистрибутив WSL {{distro}}, поэтому этот терминал не запущен. Запустите дистрибутив и повторите попытку."
   }
 }

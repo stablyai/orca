@@ -61,7 +61,7 @@ export async function bringWslMovedProjectBack(
       title: translate('sidebar.wslMoved.useHereRefusedTitle', "Can't use {{name}} here yet", {
         name: project.displayName
       }),
-      description: wslMoveUseHereRefusalMessage(result, project.distro, project.displayName),
+      description: wslMoveUseHereRefusalDescription(result, project.distro, project.displayName),
       confirmLabel: translate('sidebar.wslMoved.useHereRefusedOk', 'OK'),
       acknowledgeOnly: true,
       initialFocus: 'confirm'
@@ -82,6 +82,24 @@ function newerMoveNames(
       (moved.kind === 'repo' ? newerMove.repoIds : newerMove.folderWorkspaceIds).includes(moved.id)
     )
     .map((moved) => moved.displayName)
+}
+
+/** The refusal, and where the host's terminals are when the refusal came after their stop. */
+function wslMoveUseHereRefusalDescription(
+  result: Extract<WslMoveUseLocallyResult, { released: false }>,
+  distro: string,
+  projectName: string
+): string {
+  const message = wslMoveUseHereRefusalMessage(result, distro, projectName)
+  if (!result.hostTerminalsAsleep) {
+    return message
+  }
+  const asleep = translate(
+    'sidebar.wslMoved.useHereHostTerminalsAsleep',
+    'Its terminals on the {{distro}} host were put to sleep. Open the project to resume them.',
+    { distro }
+  )
+  return `${message} ${asleep}`
 }
 
 function wslMoveUseHereRefusalMessage(

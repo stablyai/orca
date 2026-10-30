@@ -93,6 +93,8 @@ describe('OrcaRuntimeService', () => {
     const runtime = new OrcaRuntimeService(store)
     const workerLeafId = '77777777-7777-4777-8777-777777777777'
     const workerHandle = runtime.preAllocateHandleForPty('pty-worker')
+    // Fixed before the sync so its `now` is never older than this timestamp.
+    const staleCompletedAt = new Date(Date.now() - AGENT_STATUS_STALE_AFTER_MS - 1).toISOString()
     const orchestrationDb = makeRuntimeOrchestrationDb()
     vi.spyOn(orchestrationDb, 'listSessionDispatchesForPresentation').mockImplementation(() => [])
     vi.spyOn(orchestrationDb, 'getActiveDispatchForTerminal').mockImplementation(() => undefined)
@@ -104,7 +106,7 @@ describe('OrcaRuntimeService', () => {
               task_id: 'task-stale',
               assignee_handle: workerHandle,
               status: 'completed',
-              completed_at: new Date(Date.now() - AGENT_STATUS_STALE_AFTER_MS - 1).toISOString()
+              completed_at: staleCompletedAt
             })
           : undefined
     )

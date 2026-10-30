@@ -39,19 +39,11 @@ export function WorktreeCardPortsTrigger({
     <button
       type="button"
       className="inline-flex size-3.5 shrink-0 items-center justify-center rounded text-muted-foreground/70 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-worktree-sidebar-ring"
-      aria-label={
-        ports.length === 1
-          ? translate(
-              'auto.components.sidebar.WorktreeCardPorts.livePorts_one',
-              '{{count}} live port',
-              { count: ports.length }
-            )
-          : translate(
-              'auto.components.sidebar.WorktreeCardPorts.livePorts_other',
-              '{{count}} live ports',
-              { count: ports.length }
-            )
-      }
+      aria-label={translate(
+        'auto.components.sidebar.WorktreeCardPorts.livePorts',
+        '{{count}} live ports',
+        { count: ports.length, defaultValue_one: '{{count}} live port' }
+      )}
       onClick={(event) => {
         event.stopPropagation()
         recordFeatureInteraction('ports')

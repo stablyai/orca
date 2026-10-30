@@ -103,6 +103,8 @@ export type TerminalCreateOptions = {
   agentSessionCreateOperationId?: string
   /** The paired client's declared intent; the host's fork gate validates and may defer it. */
   spawnIntent?: SpawnIntent
+  /** The user's own act (a CLI command, a paired client's create, a launch); without it a stopped WSL distro holds the start. */
+  wslUserAct?: true
   signal?: AbortSignal
   /** Refuse (`worktree_terminals_sleeping`) instead of waking a worktree the host has put to sleep. */
   refuseSleptWorktree?: boolean
@@ -242,6 +244,8 @@ export type OrchestrationCompatibilitySshTerminal = Readonly<{
 
 export type TerminalWaiter = {
   handle: string
+  /** The terminal the handle named when the wait began; the wait follows it, not the handle. */
+  ptyId: string
   condition: RuntimeTerminalWaitCondition
   resolve: (result: RuntimeTerminalWait) => void
   reject: (error: Error) => void

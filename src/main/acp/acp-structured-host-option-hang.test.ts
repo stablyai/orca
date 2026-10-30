@@ -7,13 +7,7 @@ import {
 } from '../native-chat/agent-session-wire/structured-agent-session-host-test-harness'
 import { HOST_TEST_SESSION as SESSION } from '../native-chat/agent-session-wire/structured-agent-session-host-test-data'
 import { GROK_CONFIG_OPTIONS, waitFor } from './acp-structured-adapter.test-support'
-import {
-  framesOf,
-  hello,
-  openAttachedHostRig,
-  send,
-  stop
-} from './acp-structured-host.test-support'
+import { framesOf, hello, openAttachedHostRig, send } from './acp-structured-host.test-support'
 import type { StructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-host'
 import { STOP_NOTE_CANCELLATION_REQUESTED } from '../native-chat/agent-session-wire/structured-agent-session-turn-stop-notes'
 
@@ -32,6 +26,7 @@ describe('a Grok model pick Grok never answers during send', () => {
     const { rig, host, rows } = await openAttachedHostRig({
       script: (agent) => agent.on('session/set_config_option', () => {})
     })
+    vi.spyOn(rig.adapter, 'canSetOptionWhileIdle').mockReturnValue(false)
     expect(await pick(host, 'grok-4.6')).toMatchObject({ ok: true })
     await send(host, 'hello')
     await waitFor(() => expect(framesOf(rig.child(), 'session/set_config_option')).toHaveLength(1))
@@ -62,6 +57,7 @@ describe('a Grok model pick Grok never answers during send', () => {
     const { rig, host } = await openAttachedHostRig({
       script: (agent) => agent.on('session/set_config_option', () => {})
     })
+    vi.spyOn(rig.adapter, 'canSetOptionWhileIdle').mockReturnValue(false)
     expect(await pick(host, 'grok-4.6')).toMatchObject({ ok: true })
     const dispatch = vi.spyOn(rig.adapter, 'dispatch')
     const sending = await host.send(CALLER, {
@@ -96,17 +92,20 @@ describe('a Grok model pick Grok never answers during send', () => {
     })
   })
 
-  it('re-establishes opening A after uncertain B without adopting B’s late reply', async () => {
-    const { rig, host, store, fence } = await openAttachedHostRig({
+  it('retires an unanswered dispatch control and retains the saved model and conversation', async () => {
+    const { rig, host, store } = await openAttachedHostRig({
       optionWriteTimeoutMs: 100,
       script: (agent) => agent.on('session/set_config_option', () => {})
     })
+    vi.spyOn(rig.adapter, 'canSetOptionWhileIdle').mockReturnValue(false)
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
     expect(await pick(host, 'grok-4.6')).toMatchObject({ ok: true })
     const savedModel = store.getRecord(SESSION)?.options?.model
     expect(savedModel).toBe('grok-4.6')
     await send(host, 'hello')
     await waitFor(() => expect(framesOf(rig.child(), 'session/set_config_option')).toHaveLength(1))
+    const child = rig.child()
+    const [old] = framesOf(child, 'session/set_config_option')
     await vi.advanceTimersByTimeAsync(100)
     await waitFor(() =>
       expect(
@@ -114,55 +113,24 @@ describe('a Grok model pick Grok never answers during send', () => {
       ).toBe('rejected')
     )
     vi.useRealTimers()
+    await waitFor(() => expect(child.exited).toBe(true))
     expect(framesOf(rig.child(), 'session/prompt')).toEqual([])
     await expect(host.readOptions(SESSION)).resolves.toMatchObject({
       current: { model: savedModel }
     })
-    const restore = rig.adapter.dispatch({
-      sessionId: SESSION,
-      fence: fence(),
-      clientMessageId: 'restore-A',
-      executionOptions: { model: 'grok-4.7' },
-      body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'A again' }] }
-    })
-    await waitFor(() => expect(framesOf(rig.child(), 'session/set_config_option')).toHaveLength(2))
-    const [old, current] = framesOf(rig.child(), 'session/set_config_option')
-    rig.child().agent.reply(current!, { configOptions: GROK_CONFIG_OPTIONS })
-    await restore
-    expect(framesOf(rig.child(), 'session/set_config_option')).toHaveLength(2)
-    expect([old?.params, current?.params]).toEqual([
-      { sessionId: expect.any(String), configId: 'model', value: 'grok-4.6' },
-      { sessionId: expect.any(String), configId: 'model', value: 'grok-4.7' }
-    ])
-    expect(framesOf(rig.child(), 'session/prompt')).toHaveLength(1)
     rig.child().agent.reply(old!, {
       configOptions: GROK_CONFIG_OPTIONS.map((option) =>
-        option.id === 'model' ? { ...option, currentValue: 'grok-4.6' } : option
+        option.id === 'model' ? { ...option, currentValue: 'grok-4.7' } : option
       )
     })
     await rig.settle()
+    expect(framesOf(child, 'session/prompt')).toHaveLength(0)
     expect(
-      (await rig.adapter.readOptions({ sessionId: SESSION, fence: fence() })).current.model
-    ).toBe('grok-4.7')
+      host.collaboratorsForTests().sessions.get(SESSION)?.journal.submissions()[0]?.dispatchState
+    ).toBe('rejected')
     expect((await host.readOptions(SESSION)).current.model).toBe(savedModel)
     expect(store.getRecord(SESSION)?.options?.model).toBe(savedModel)
+    expect(store.getRecord(SESSION)?.providerHandleChain.length).toBeGreaterThan(0)
     await host.close(SESSION, 'user-close')
   })
-})
-
-describe('a saved Grok pick', () => {
-  it.each(['Stop', 'Close'] as const)(
-    'never contacts Grok or holds %s behind a setter',
-    async (ending) => {
-      const { rig, host, store } = await openAttachedHostRig({
-        script: (agent) => agent.on('session/set_config_option', () => {})
-      })
-      await expect(pick(host, 'grok-4.6')).resolves.toMatchObject({ ok: true })
-      expect(store.getRecord(SESSION)?.options?.model).toBe('grok-4.6')
-      expect(framesOf(rig.child(), 'session/set_config_option')).toEqual([])
-      const ended = ending === 'Stop' ? stop(host) : host.close(SESSION, 'user-close')
-      await ended
-      await host.close(SESSION, 'user-close')
-    }
-  )
 })

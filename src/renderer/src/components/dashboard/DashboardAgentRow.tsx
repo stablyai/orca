@@ -1,6 +1,6 @@
 import React, { useState, useCallback } from 'react'
 import { cn } from '@/lib/utils'
-import { viewClaudeAgentFromRow } from '@/lib/claude-agent-row-view'
+import { opensClaudeParentConversation, viewClaudeAgentFromRow } from '@/lib/claude-agent-row-view'
 import { useClaudeAgentRowView } from './use-claude-agent-row-view'
 import {
   AgentStateDot,
@@ -66,6 +66,7 @@ function stateDotTooltipLabel(
 }
 
 type Props = {
+  showModel?: boolean
   agent: DashboardAgentRowData
   onDismiss: (paneKey: string) => void
   /** Navigate to this agent's tab; paneKey lets the caller mark-visit the exact clicked row. */
@@ -95,6 +96,7 @@ type Props = {
 
 const DashboardAgentRow = React.memo(function DashboardAgentRow({
   agent,
+  showModel = true,
   onDismiss,
   onActivate,
   now,
@@ -184,23 +186,15 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
   const participatesInLineage = isLineageChild || lineageChildCount > 0
   const identityTitle =
     lineageChildCount > 0
-      ? lineageChildCount === 1
-        ? translate(
-            'auto.components.dashboard.DashboardAgentRow.dispatchedAgents_one',
-            '{{agentType}} - dispatched {{count}} agent',
-            {
-              agentType: formatAgentTypeLabel(agent.agentType),
-              count: lineageChildCount
-            }
-          )
-        : translate(
-            'auto.components.dashboard.DashboardAgentRow.dispatchedAgents_other',
-            '{{agentType}} - dispatched {{count}} agents',
-            {
-              agentType: formatAgentTypeLabel(agent.agentType),
-              count: lineageChildCount
-            }
-          )
+      ? translate(
+          'auto.components.dashboard.DashboardAgentRow.dispatchedAgents',
+          '{{agentType}} - dispatched {{count}} agents',
+          {
+            agentType: formatAgentTypeLabel(agent.agentType),
+            count: lineageChildCount,
+            defaultValue_one: '{{agentType}} - dispatched {{count}} agent'
+          }
+        )
       : [formatAgentTypeLabel(agent.agentType), model].filter(Boolean).join(' · ')
   // Surface failed main-agent outcomes even while subagents continue running.
   const dotState: AgentDotState = dotStateOverride ?? agentRowDisplayDotState(agent)
@@ -252,6 +246,14 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
       data-focused-agent-pane={highlighted ? 'true' : undefined}
       data-current={view?.current ? 'true' : undefined}
       aria-current={view?.current ? 'true' : undefined}
+      aria-description={
+        opensClaudeParentConversation(agent)
+          ? translate(
+              'auto.lib.claudeAgentRowView.openParentConversation',
+              'Open parent conversation'
+            )
+          : undefined
+      }
       data-agent-send-target={sendTargetStatus}
       title={titleParts.length > 0 ? titleParts.join(' • ') : undefined}
       role={participatesInLineage ? 'treeitem' : undefined}
@@ -324,7 +326,7 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
         >
           {displayLabel}
         </span>
-        {model && (
+        {showModel && model && (
           <span
             className={cn(
               'max-w-24',
@@ -332,7 +334,7 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
               sendTargetStatus === 'eligible' || sendTargetStatus === 'sending'
                 ? 'min-w-0'
                 : 'shrink-0',
-              'truncate font-mono text-[10px] text-muted-foreground/70'
+              'truncate font-mono text-3xs text-muted-foreground/70'
             )}
             title={model}
           >

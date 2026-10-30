@@ -3,8 +3,16 @@ import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 import type { DirCache } from './file-explorer-types'
 import { useFileExplorerTreeLoadEffects } from './use-file-explorer-tree-load-effects'
+import {
+  noteUserWorkspaceSwitch,
+  resetWorkspaceSwitchUserActsForTests,
+  WORKSPACE_SWITCH_MOUNT_WINDOW_MS
+} from '@/lib/workspace-switch-user-act'
 
-afterEach(cleanup)
+afterEach(() => {
+  cleanup()
+  resetWorkspaceSwitchUserActsForTests()
+})
 function pendingRefresh() {
   let resolve!: () => void
   const promise = new Promise<void>((finish) => {
@@ -20,6 +28,7 @@ function params(path = '/repo') {
   return {
     stale,
     props: {
+      workspaceKey: `repo-1::${path}`,
       visibleFilesWorktreePath: path,
       expanded: new Set([dir]),
       dirCache,
@@ -127,8 +136,35 @@ it('does not let an old workspace completion release a new workspace retry', asy
   })
   expect(second.props.refreshTree).toHaveBeenCalledTimes(1)
 })
-it('opening a workspace is a user act, so its read may start a stopped WSL distro', () => {
+it("only the user's own switch to a workspace lets its open read start a stopped WSL distro", () => {
   const { props } = params()
+  noteUserWorkspaceSwitch(props.workspaceKey)
   renderHook(useFileExplorerTreeLoadEffects, { initialProps: props })
   expect(props.resetAndLoad).toHaveBeenCalledExactlyOnceWith({ wakeWslDistro: true })
+})
+it('an old switch no consumer used is not redeemed by a later mount (E9)', () => {
+  vi.useFakeTimers()
+  try {
+    const { props } = params()
+    // The user switched here with the sidebar closed; the explorer mounts long after.
+    noteUserWorkspaceSwitch(props.workspaceKey)
+    vi.advanceTimersByTime(WORKSPACE_SWITCH_MOUNT_WINDOW_MS + 1)
+    renderHook(useFileExplorerTreeLoadEffects, { initialProps: props })
+    expect(props.resetAndLoad).toHaveBeenCalledExactlyOnceWith(undefined)
+  } finally {
+    vi.useRealTimers()
+  }
+})
+it('a restore, remount or re-open with no new switch never wakes WSL', () => {
+  const { props } = params()
+  renderHook(useFileExplorerTreeLoadEffects, { initialProps: props })
+  expect(props.resetAndLoad).toHaveBeenCalledExactlyOnceWith(undefined)
+
+  noteUserWorkspaceSwitch(props.workspaceKey)
+  const first = renderHook(useFileExplorerTreeLoadEffects, { initialProps: props })
+  first.unmount()
+  const remount = renderHook(useFileExplorerTreeLoadEffects, { initialProps: props })
+  expect(props.resetAndLoad).toHaveBeenNthCalledWith(2, { wakeWslDistro: true })
+  expect(props.resetAndLoad).toHaveBeenNthCalledWith(3, undefined)
+  remount.unmount()
 })

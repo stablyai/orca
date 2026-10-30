@@ -40,6 +40,8 @@ export type GitHubWorkItemsListArgs = {
   query?: string
   page?: number
   noCache?: true
+  /** Local IPC only: a remote host gates its own reads. */
+  wakeWslDistro?: boolean
 }
 
 export function settingsForGitHubRepoOwner(
@@ -197,12 +199,13 @@ export function listGitHubWorkItemsForRepo(
   args: GitHubWorkItemsListArgs
 ): Promise<ListWorkItemsResult<Omit<GitHubWorkItem, 'repoId'>>> {
   if (context.target.kind === 'environment') {
+    const { wakeWslDistro: _wake, ...remoteArgs } = args
     return callRuntimeRpc<ListWorkItemsResult<Omit<GitHubWorkItem, 'repoId'>>>(
       { kind: 'environment', environmentId: context.target.environmentId },
       'github.listWorkItems',
       {
         repo: context.target.runtimeRepoId,
-        ...args
+        ...remoteArgs
       },
       { timeoutMs: 30_000 }
     )
@@ -216,15 +219,16 @@ export function listGitHubWorkItemsForRepo(
 
 export function countGitHubWorkItemsForRepo(
   context: GitHubWorkItemRequestContext,
-  args: { query?: string }
+  args: { query?: string; wakeWslDistro?: boolean }
 ): Promise<number> {
   if (context.target.kind === 'environment') {
+    const { wakeWslDistro: _wake, ...remoteArgs } = args
     return callRuntimeRpc<number>(
       { kind: 'environment', environmentId: context.target.environmentId },
       'github.countWorkItems',
       {
         repo: context.target.runtimeRepoId,
-        ...args
+        ...remoteArgs
       },
       { timeoutMs: 30_000 }
     )

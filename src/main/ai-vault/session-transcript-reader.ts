@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import { readTranscriptSlice } from '../native-chat/wsl-transcript-fs-access'
 import type { AiVaultSession } from '../../shared/ai-vault-types'
 import { parseAgentSessionFile } from './session-scanner-agent-parser'
@@ -8,6 +9,7 @@ import {
   type SessionParseResumePoint
 } from './session-parse-cache-store'
 import { TranscriptMessageChannel } from './session-transcript-channel'
+import { hasTranscriptConsumers, transcriptResumableOffsets } from './session-transcript-consumers'
 import { mergeSkippedTranscriptRecords } from './session-transcript-record-budget'
 import { throwIfAiVaultScanCancelled } from './ai-vault-scan-cancellation'
 
@@ -74,16 +76,30 @@ export async function readResumableTranscript(
     }
   }
 
+  // Hash only for consumers: they compare prefixes after a restart drops this resume point.
+  const prefixHash = canResume
+    ? (resume.prefixHash?.copy() ?? null)
+    : hasTranscriptConsumers()
+      ? createHash('sha256')
+      : null
+  const prefixOffsets =
+    !canResume && prefixHash ? nonEmpty(transcriptResumableOffsets(args.candidate)) : undefined
   channel.beginRead({
     candidate: args.candidate,
     mode: canResume ? 'append' : 'replace',
     previousByteOffset: startOffset,
-    identity: () => state.identity?.() ?? null
+    identity: () => state.identity?.() ?? null,
+    prefixOffsets
   })
   try {
     const readResult = await consumeCompleteJsonlLines({
       path: file.path,
       start: startOffset,
+      prefixHash,
+      prefixCheckpoints: prefixOffsets && {
+        offsets: prefixOffsets,
+        reached: (offset, digest) => channel.prefixReached(offset, digest)
+      },
       onLine: (line) => state.consumeLine(line),
       // Preserve `this` for parsers that implement these hooks as methods.
       onLineBytes: state.consumeLineBytes?.bind(state),
@@ -112,7 +128,8 @@ export async function readResumableTranscript(
     channel.finishRead({
       session: consumerSession,
       byteOffset: readResult.consumedThrough,
-      incomplete: false
+      incomplete: false,
+      prefixHash: readResult.prefixHash?.copy().digest('hex')
     })
     return {
       session,
@@ -126,7 +143,8 @@ export async function readResumableTranscript(
         skippedRecords: mergeSkippedTranscriptRecords(
           canResume ? resume.skippedRecords : [],
           readResult.skippedRecords
-        )
+        ),
+        prefixHash: readResult.prefixHash ?? null
       }
     }
   } catch (error) {
@@ -177,6 +195,10 @@ export async function readWholeTranscript(
     })
     throw error
   }
+}
+
+function nonEmpty(offsets: ReadonlySet<number>): ReadonlySet<number> | undefined {
+  return offsets.size > 0 ? offsets : undefined
 }
 
 // Heuristic: a growing rewrite can preserve this newline and evade detection until cache invalidation.

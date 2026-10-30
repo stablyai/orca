@@ -141,7 +141,7 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
           />
         </DropdownMenuTrigger>
         <DropdownMenuContent
-          className={cn(lineageDescendantCount > 0 ? 'w-60' : 'w-52', contentClassName)}
+          className={cn(lineageDescendantCount > 0 ? 'min-w-60' : 'min-w-52', contentClassName)}
           sideOffset={0}
           align="start"
           onPointerUpCapture={suppressOpeningPointerEvent}

@@ -17,7 +17,7 @@ const browserMocks = vi.hoisted(() => ({
 
 vi.mock('electron', () => ({
   app: {
-    prependOnceListener: vi.fn(),
+    prependListener: vi.fn(),
     off: vi.fn(),
     getPath: browserMocks.appGetPathMock
   },

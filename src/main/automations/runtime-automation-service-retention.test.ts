@@ -62,7 +62,9 @@ function build(headless: boolean) {
     listAutomationRuns: vi.fn(() => finishedRuns(5)),
     listAutomations: () => [],
     getWorktreeMeta: vi.fn(
-      (_worktreeId: string): { automationProvenance: { automationRunId: string } } | undefined =>
+      (
+        _worktreeId: string
+      ): { automationProvenance: { automationRunId: string; origin?: 'client' } } | undefined =>
         undefined
     )
   }
@@ -163,6 +165,23 @@ describe('headless automation service run terminal retention', () => {
       'handle:tab-3:1',
       'handle:tab-4:1'
     ])
+  })
+
+  // Why: a client-origin label names another owner's run, even if its id matches one of ours.
+  it('does not let a client-origin label claim a host run’s workspace', async () => {
+    const { runtime, service, store } = build(true)
+    store.getWorktreeMeta.mockImplementation((worktreeId: string) =>
+      worktreeId === 'wt-0'
+        ? { automationProvenance: { automationRunId: 'r0', origin: 'client' } }
+        : undefined
+    )
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the mocked service exposes the drain hook it was given.
+    const drain = (service as unknown as { releaseFinishedRunTerminals: () => Promise<number> })
+      .releaseFinishedRunTerminals
+    await drain()
+
+    expect(runtime.sleepTerminalsForWorktree).not.toHaveBeenCalled()
+    expect(runtime.closeTerminal).toHaveBeenCalledWith('handle:tab-0:1')
   })
 
   it.each([

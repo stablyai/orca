@@ -1,3 +1,6 @@
+import { parseWslUncPath } from '../../shared/wsl-paths'
+import { wasWslDistroLastSeenRunningSettled } from '../wsl-background-distro-gate'
+import { WSL_TRANSCRIPT_RUNNING_LEASE_MS } from '../native-chat/wsl-transcript-running-admission'
 import { AsyncLocalStorage } from 'node:async_hooks'
 import { dirname, join } from 'node:path'
 import { wslGatedStat } from '../native-chat/wsl-transcript-fs-access'
@@ -94,6 +97,15 @@ export function devinSessionsIndexForSidecar(sidecar: SessionSidecarObservation 
     indexCache.delete(dbPath)
     indexCache.set(dbPath, cached)
     return { index: cached.index, unreadable: false }
+  }
+  // Opening the database over 9P boots a stopped distro; this read is synchronous, so it trusts only
+  // a running list from the transcript lease (the sidecar stat just before took one).
+  const distro = process.platform === 'win32' ? parseWslUncPath(dbPath)?.distro : undefined
+  if (
+    distro &&
+    !wasWslDistroLastSeenRunningSettled(distro, { maxAgeMs: WSL_TRANSCRIPT_RUNNING_LEASE_MS })
+  ) {
+    return { index: null, unreadable: true }
   }
   try {
     const index = readDevinSessionsIndex(dbPath)

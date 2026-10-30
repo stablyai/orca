@@ -149,17 +149,22 @@ function mergedModels(
     // Coarser probe menus must not discard a chat-confirmed effort unless a newer chat menu does.
     const keepsChatMenu =
       older === live && !offersConfigured(model.efforts) && offersConfigured(olderEfforts)
-    const efforts = model.efforts.length > 0 && !keepsChatMenu ? model.efforts : olderEfforts
+    const { efforts, effortsKnown } =
+      olderModel && model.effortsKnown !== olderModel.effortsKnown
+        ? model.effortsKnown === false
+          ? olderModel
+          : model
+        : model.efforts.length > 0 && !keepsChatMenu
+          ? model
+          : (olderModel ?? model)
     const defaultEffort = [configuredEffort, listed?.defaultEffort, reported?.defaultEffort].find(
       (effort) => effort !== undefined && efforts.some((choice) => choice.value === effort)
     )
-    const { defaultEffort: _own, effortsKnown, ...rest } = model
+    const { defaultEffort: _own, effortsKnown: _known, ...rest } = model
     return {
       ...rest,
       // Efforts stay unknown only when neither listing knows this model's menu.
-      ...(effortsKnown === false && (!olderModel || olderModel.effortsKnown === false)
-        ? { effortsKnown }
-        : {}),
+      ...(effortsKnown === false ? { effortsKnown } : {}),
       // Without discovery/configuration, live flags are the only available default evidence.
       isDefault: configured
         ? model.id === configured.modelId
@@ -260,7 +265,15 @@ export function agentModelCatalogEntryWithSuccess(
     at
   }
   const { agent, fingerprint } = identity
-  const configured = previous?.configured ?? null
+  let configured = previous?.configured ?? null
+  if (agent === 'pi' && source === 'discovery') {
+    const { model, effort } = success.configured ?? {}
+    if (model) {
+      const facts = configuredDefaultFacts({ modelId: model, effort }, configured)
+      configured = facts && { ...facts, at }
+    }
+    return agentModelCatalogEntry(agent, fingerprint, listing, null, configured)
+  }
   return source === 'discovery'
     ? agentModelCatalogEntry(agent, fingerprint, listing, previous?.live ?? null, configured)
     : agentModelCatalogEntry(agent, fingerprint, previous?.discovered ?? null, listing, configured)
@@ -299,13 +312,8 @@ export function entryWithConfiguredDefault(
   if (JSON.stringify(next) === JSON.stringify(configuredDefaultFacts(entry.configured))) {
     return null
   }
-  return agentModelCatalogEntry(
-    entry.agent,
-    entry.fingerprint,
-    entry.discovered,
-    entry.live,
-    next && { ...next, at }
-  )
+  const { agent, fingerprint, discovered, live } = entry
+  return agentModelCatalogEntry(agent, fingerprint, discovered, live, next && { ...next, at })
 }
 
 /** Exclude clocks so unchanged catalog facts do not trigger disk writes. */

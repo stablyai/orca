@@ -7,6 +7,7 @@ import {
   EDITOR_NOT_UTF8_SAVE_MESSAGE,
   EDITOR_STALE_SAVE_MESSAGE
 } from './editor-save-disk-precondition'
+import { FILE_BYTES_SAVE_UPDATE_REQUIRED_MESSAGE } from '../../../../shared/file-bytes-write'
 
 /** Asks before an explicit save rewrites a non-UTF-8 file as UTF-8, which can't be undone. */
 export function confirmEditorUtf8Conversion(
@@ -59,10 +60,15 @@ export async function attemptEditorFileSave(
               'auto.components.editor.editor.save.notUtf8.refused',
               EDITOR_NOT_UTF8_SAVE_MESSAGE
             )
-          : translate(
-              'auto.components.editor.editor.save.failure.notice.8c59ce5075',
-              'Failed to save the file. Please try again.'
-            )
+          : error instanceof Error && error.message === FILE_BYTES_SAVE_UPDATE_REQUIRED_MESSAGE
+            ? translate(
+                'auto.components.editor.editor.save.bytesUpdateRequired',
+                FILE_BYTES_SAVE_UPDATE_REQUIRED_MESSAGE
+              )
+            : translate(
+                'auto.components.editor.editor.save.failure.notice.8c59ce5075',
+                'Failed to save the file. Please try again.'
+              )
     )
     return false
   }

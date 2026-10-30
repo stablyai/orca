@@ -41,14 +41,16 @@ export function nativeChatTurnFoldRow(
     turnKey,
     role: message.role,
     rendersProse: nativeChatRowRendersProse(message),
-    draws: hasReceipt || nativeChatRowRendersContent(message.blocks),
+    draws: hasReceipt || message.agentStart === true || nativeChatRowRendersContent(message.blocks),
     // Use raw roster blocks: empty rosters render no block, making their plain-text twin the sole spawn record.
-    outlivesTurn: message.blocks.some(
-      (block) =>
-        isSubagentGroupBlock(block) ||
-        isBackgroundTaskBlock(block) ||
-        isStoppedBeforeStartBlock(block)
-    ),
+    outlivesTurn:
+      message.agentStart === true ||
+      message.blocks.some(
+        (block) =>
+          isSubagentGroupBlock(block) ||
+          isBackgroundTaskBlock(block) ||
+          isStoppedBeforeStartBlock(block)
+      ),
     // A row about Orca's own stop is stored red for clients that predate it; it reports no failure.
     reportsFailure: message.blocks.some(
       (block) =>

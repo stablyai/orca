@@ -31,6 +31,7 @@ const prCheckDetails = vi.fn()
 const runtimeCall = vi.fn()
 
 vi.mock('@/i18n/i18n', () => ({
+  getIntlLocale: () => 'en',
   i18n: { language: 'en' },
   translate: (_key: string, fallback: string, values?: Record<string, unknown>) =>
     fallback.replace(/{{(\w+)}}/g, (_match, key) => String(values?.[key] ?? ''))

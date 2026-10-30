@@ -102,7 +102,7 @@ export async function htmlToPdf(html: string, signal?: AbortSignal): Promise<Buf
 
         await Promise.all([win.loadFile(tempPath), loadPromise])
         signal?.throwIfAborted()
-        await win.webContents.executeJavaScript(WAIT_FOR_IMAGES_SCRIPT, true)
+        await win.webContents.mainFrame.executeJavaScript(WAIT_FOR_IMAGES_SCRIPT, true)
         signal?.throwIfAborted()
         return win.webContents.printToPDF({
           printBackground: true,

@@ -26,6 +26,7 @@ describe('installed catalog invocation identity', () => {
       let catalogFile = '/catalog/A.json'
       const overlay = () => ({ CATALOG_FILE: catalogFile })
       let command = '/installed/agent'
+      let prefixArgs: string[] = []
       const launchArgs = (name: string) =>
         agent === 'claude'
           ? ['--settings', JSON.stringify({ model: name })]
@@ -35,14 +36,14 @@ describe('installed catalog invocation identity', () => {
       const probe =
         agent === 'claude'
           ? createClaudeModelCatalogProbe({
-              resolveCommand: () => command,
+              resolveCommand: () => ({ command, prefixArgs }),
               resolveInheritedEnv: async () => environment(),
               resolveEnv: overlay,
               resolveAuthPolicy: () => ({ account: 'system' }),
               resolveLaunchArgs: () => args
             })
           : createCodexModelCatalogProbe({
-              resolveCommand: () => command,
+              resolveCommand: () => ({ command, prefixArgs }),
               resolveEnvironment: async () => environment(),
               resolveEnv: overlay,
               resolveLaunchArgs: () => args
@@ -58,6 +59,9 @@ describe('installed catalog invocation identity', () => {
         return agentModelCatalogScopeFingerprint(base, cwd, resolved?.identity)
       }
       const first = await key()
+      prefixArgs = ['run', '--', agent]
+      expect(await key()).not.toBe(first)
+      prefixArgs = []
       capture = 'second'
       expect(await key()).toBe(first)
       catalogFile = '/catalog/B.json'
@@ -103,7 +107,7 @@ describe('original operation through actual nested resolution', () => {
         },
         resolveCommand: () => {
           stages.push('lookup')
-          return '/fixture/claude'
+          return { command: '/fixture/claude', prefixArgs: [] }
         },
         resolveAuthPolicy: async () => {
           await stage('auth')
@@ -189,7 +193,10 @@ describe('a picker read with the CLI missing', () => {
         resolveAccountHome: async () => ({ variable: 'CLAUDE_CONFIG_DIR', path: root }),
         probes: {
           claude: createClaudeModelCatalogProbe({
-            resolveCommand: (options) => resolveCliCommand(name, options),
+            resolveCommand: (options) => ({
+              command: resolveCliCommand(name, options),
+              prefixArgs: []
+            }),
             resolveInheritedEnv: async () => ({ PATH: served, HOME: root }),
             refreshEnvironmentAfterMiss: reruns,
             resolveAuthPolicy: () => ({ account: 'system' }),

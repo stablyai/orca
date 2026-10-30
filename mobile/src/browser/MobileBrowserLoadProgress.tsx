@@ -121,7 +121,7 @@ export function MobileBrowserLoadProgress({
 const styles = themedStyleSheet(() => ({
   clip: {
     ...StyleSheet.absoluteFillObject,
-    borderRadius: radii.input,
+    borderRadius: radii.composerItem,
     overflow: 'hidden'
   },
   line: {

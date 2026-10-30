@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, type MutableRefObject } from 'react'
 import type { RpcClient } from '../transport/rpc-client'
 import { triggerError } from '../platform/haptics'
+import { translate } from '../i18n/mobile-i18n'
 import type { MobileGitStatusResult } from './mobile-git-status'
 import type { LoadStatusOptions } from './mobile-source-control-screen-state'
 import {
@@ -68,7 +69,12 @@ export function useMobileCreatePrRunner({
       const branch = status?.branch
       if (!client || !branch) {
         triggerError()
-        setActionError('Check out a branch before creating a pull request.')
+        setActionError(
+          translate(
+            'sourceControl.useMobileCreatePrRunner.branchRequired',
+            'Check out a branch before creating a pull request.'
+          )
+        )
         return
       }
       const created: { current: MobileHostedReviewCreateIntentRunOutcome | null } = {

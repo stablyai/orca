@@ -102,6 +102,13 @@ describe('WorktreeCardAutomationDetailSection host resolution', () => {
     expect(container.textContent).toContain('Automation no longer available.')
   })
 
+  it('reports a client-origin miss as uncheckable, since another desktop may own it (#34433)', async () => {
+    const container = await render(provenance({ hostId: 'local', origin: 'client' }))
+
+    expect(container.textContent).toContain('Automation availability could not be checked.')
+    expect(container.textContent).not.toContain('Automation no longer available.')
+  })
+
   it('offers both affordances when a record with no recorded host is found anyway', async () => {
     // A positive desktop result remains evidence even when recorded host provenance is missing.
     mocks.listAutomationsForTarget.mockResolvedValue([{ id: 'a-1' }])

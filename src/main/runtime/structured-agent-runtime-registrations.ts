@@ -15,6 +15,7 @@ import { createStructuredClaudeRuntimeAdapter } from './structured-claude-runtim
 import type { AcpLaunchSpec } from '../acp/acp-launch-specs'
 import { acpStructuredAgentDefinition } from '../acp/acp-structured-agent-definitions'
 import { createAcpAgentConnection } from '../acp/acp-agent-connection'
+import { createOpenCodeAcpConnection } from '../opencode/opencode-acp-connection'
 import { acpStructuredLaunchPart } from '../acp/acp-structured-launch-resolution'
 import { AcpStructuredSessionAdapter } from '../acp/acp-structured-session-adapter'
 import { PI_RPC_RUNTIME_REGISTRATION } from '../pi/rpc-runtime-registration'
@@ -151,6 +152,14 @@ function createAcpAdapter(
     })
     return new AcpStructuredSessionAdapter({
       spec,
+      textTaskLaunch: {
+        resolveEnvironment: sources.resolveBaseEnvironment,
+        resolveLaunchEnv: sources.resolveAgentLaunchEnv,
+        resolveCommandSettings: sources.resolveCommandSettings,
+        refreshEnvironmentAfterMiss: sources.refreshAfterMissingProgram,
+        ...deps.acpLaunchCommand,
+        dataDirectory: deps.stateDirectory
+      },
       ...(spec.agent === 'omp'
         ? {
             atRestCommands: new AcpAtRestCommandCatalog(spec, {
@@ -173,7 +182,11 @@ function createAcpAdapter(
       readLaunch: composeStructuredLaunchRead(definition, sources, part),
       dataDirectory: deps.stateDirectory,
       resolveLaunchArgs: () => deps.resolveLaunchArgs(spec.agent),
-      connect: deps.openAcpConnection ?? createAcpAgentConnection,
+      connect:
+        deps.openAcpConnection ??
+        (spec.agent === 'opencode' || spec.agent === 'opencode2'
+          ? createOpenCodeAcpConnection
+          : createAcpAgentConnection),
       onChildWorkEvidence: (sessionId, evidence, producer) =>
         context.host()?.publishChildWorkEvidence(sessionId, evidence, producer),
       ...(deps.readProcessStartTime ? { readProcessStartTime: deps.readProcessStartTime } : {}),

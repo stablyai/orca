@@ -31,7 +31,7 @@ import { filesystemPathToFileUri } from '../../../../shared/file-uri-path'
 import {
   createNativeChatFileHref,
   routeNativeChatHref
-} from '../../../../shared/native-chat-href-routing'
+} from '../../../../shared/native-chat/native-chat-href-routing'
 import { NativeChatMarkdownImageOwnerContext } from './native-chat-markdown-image-owner'
 import { nativeChatLinkActions } from './native-chat-link-target-actions'
 import { copyableNativeChatImageSrc, keepPreviewOpenForChatMenu } from './native-chat-image-copy'

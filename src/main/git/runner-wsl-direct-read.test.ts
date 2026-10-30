@@ -283,7 +283,6 @@ describe('WSL direct Git reads', () => {
           cwd: String.raw`C:\repo`,
           env: { GIT_CONFIG_GLOBAL: '/home/user/custom.gitconfig' },
           wslDistro: DISTRO,
-          captureWslLoginShellOutput: true,
           terminationBarrier: true
         })
       ).resolves.toEqual({ stdout: 'fork-point\n', stderr: '' })
@@ -308,7 +307,13 @@ describe('WSL direct Git reads', () => {
           return command
         }
         const terminator = createMockChild()
-        queueMicrotask(() => terminator.emit('close', 0, null))
+        queueMicrotask(() => {
+          // The kill first confirms the distro still runs, so it cannot boot a stopped one (E9).
+          if (args?.includes('--running')) {
+            terminator.stdout.emit('data', Buffer.from(`${DISTRO}\n`))
+          }
+          terminator.emit('close', 0, null)
+        })
         return terminator
       })
       const controller = new AbortController()
@@ -326,8 +331,10 @@ describe('WSL direct Git reads', () => {
 
       await expect(pending).rejects.toMatchObject({ name: 'AbortError' })
       expect(command.kill).not.toHaveBeenCalled()
-      expect(spawnMock.mock.calls[1]?.[1]?.join(' ')).toContain('kill -TERM')
-      expect(spawnMock.mock.calls[1]?.[1]).toContain('4321')
+      const kill = spawnMock.mock.calls.find(([, args]) =>
+        String(args?.join(' ')).includes('kill -TERM')
+      )
+      expect(kill?.[1]).toContain('4321')
     })
   })
 

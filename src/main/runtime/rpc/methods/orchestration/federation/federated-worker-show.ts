@@ -1,6 +1,7 @@
 import type { OrchestrationFleetWorker } from '../../../../../../shared/orchestration-fleet-projection'
 import type { OrchestrationDb } from '../../../../orchestration/db'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
+import { liveFederatedHomeAutoReleaseAt } from '../../../../orchestration/worker-terminal-ownership'
 import type { DispatchContextRow, FederatedDispatchRow } from '../../../../orchestration/types'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import {
@@ -12,6 +13,7 @@ import {
   resolvePinnedFederatedServer
 } from '../worker/worker-observation'
 import { applyFederatedFleetObservations } from './federated-fleet-snapshot'
+import { applyConfirmedFederatedReleaseHomeProjection } from './federated-worker-release'
 
 /** Query host evidence: push-fed fleet snapshots cover only local panes and would fabricate unverifiable for federated workers. */
 export function projectFederatedFleetWorker(args: {
@@ -20,6 +22,7 @@ export function projectFederatedFleetWorker(args: {
   dispatchId: string
   environmentId: string
   observation: { status?: string; exactWorker: boolean; reason?: string }
+  autoReleaseAt: string | null
 }): OrchestrationFleetWorker | null {
   const fleet = projectFleetWorkerPage(args.runtime, args.db, args.dispatchId)
   if (!fleet) {
@@ -39,7 +42,8 @@ export function projectFederatedFleetWorker(args: {
                 ? observed.status
                 : ('unverifiable' as const),
             exactWorker: observed.exactWorker,
-            ...(observed.reason ? { reason: observed.reason } : {})
+            ...(observed.reason ? { reason: observed.reason } : {}),
+            ...(args.autoReleaseAt ? { autoReleaseAt: args.autoReleaseAt } : {})
           }
         ]
       ]),
@@ -93,6 +97,10 @@ export async function showFederatedWorker(args: {
     )
   }
   const observation = exposeFederatedWorkerObservation(remote.observation, observationProjected)
+  // A deadline from an observation the fence rejected is as stale as the observation.
+  const autoReleaseAt =
+    (observationProjected ? remote.autoReleaseAt : null) ??
+    liveFederatedHomeAutoReleaseAt(db.getFederatedDispatch(dispatchId))
   return {
     dispatch: exposeDispatchContext(db.getDispatchContextById(dispatchId) ?? args.dispatch),
     worker: exposeWorker(worker),
@@ -101,14 +109,16 @@ export async function showFederatedWorker(args: {
       db,
       dispatchId,
       environmentId: server.environmentId,
-      observation
+      observation,
+      autoReleaseAt
     }),
     server: { environmentId: server.environmentId, name: server.name },
     remoteRuntimeEpoch:
       db.getFederatedDispatch(dispatchId)?.remote_runtime_epoch ??
       (observationProjected ? remote.runtimeEpoch : null),
     terminal: observationProjected ? remote.terminal : null,
-    observation
+    observation,
+    autoReleaseAt
   }
 }
 
@@ -142,6 +152,9 @@ function reconcileFederatedAttachment(args: {
       effects: attachment.effects,
       residualResources: attachment.residualResources
     })
+  }
+  if (attachment.stage === 'released') {
+    applyConfirmedFederatedReleaseHomeProjection(db, dispatchId)
   }
   if (attachment.state === 'ready' && attachment.worktree_id && attachment.terminal_handle) {
     db.updateFederatedDispatchResources({

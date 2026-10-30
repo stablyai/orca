@@ -1,4 +1,7 @@
-import type { WorkerTerminalResourceRow } from '../../worker-terminal-ownership'
+import {
+  isUserKeptWorkerTerminal,
+  type WorkerTerminalResourceRow
+} from '../../worker-terminal-ownership'
 import { OrchestrationError } from '../../orchestration-error'
 import { isEquivalentPaneKey } from '../pane-key-match'
 import type { OrchestrationDb } from '../orchestration-db'
@@ -39,6 +42,12 @@ export function findTransferableWorkerTerminalResource(
     throw new OrchestrationError(
       'terminal_release_in_progress',
       `Terminal ${params.terminalHandle} has a release in progress; wait for cleanup or use another terminal.`
+    )
+  }
+  if (exact.some(isUserKeptWorkerTerminal)) {
+    throw new OrchestrationError(
+      'terminal_kept_open',
+      `Terminal ${params.terminalHandle} was kept open by the user; start the worker in another terminal.`
     )
   }
   return exact.find(

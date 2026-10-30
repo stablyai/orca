@@ -266,11 +266,11 @@ export function useMobileStructuredQueuedEdit(args: MobileStructuredQueuedEditAr
               shown.body,
               serializeMobileQueuedEdit(shown, args.imagesCapable, args.skillsCapable)
             ).ok,
-          insertDictation: (text) => {
+          insertDictation: (insert) => {
             const inserted =
               editing &&
               inputDestination &&
-              insertMobileQueuedEditDictation(editing, inputDestination, text)
+              insertMobileQueuedEditDictation(editing, inputDestination, insert)
             if (inserted && active.current === editing) {
               render(editing)
             }

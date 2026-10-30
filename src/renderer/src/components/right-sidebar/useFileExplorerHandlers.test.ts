@@ -76,25 +76,62 @@ describe('activateFileExplorerNode', () => {
     expect(openFile).not.toHaveBeenCalled()
   })
 
-  it('does not follow a folder link that leads out of the project', async () => {
-    const loadDir = vi.fn()
-    const openFile = vi.fn()
+  it('follows a folder link that leads out of the project', async () => {
+    const loadDir = vi.fn().mockResolvedValue(true)
+    const toggleDir = vi.fn()
 
     await activateFileExplorerNode({
       node: { ...symlinkNode, operationOwner: { kind: 'local' } },
       activeWorktreeId: 'wt-1',
-      openFile,
-      toggleDir: vi.fn(),
+      openFile: vi.fn(),
+      toggleDir,
       loadDir,
       statPath: vi.fn().mockResolvedValue({ isDirectory: true, escapesWorktree: true }),
       markPathAsDirectory: vi.fn(),
       setSelectedPath: vi.fn()
     })
 
-    expect(loadDir).not.toHaveBeenCalled()
-    expect(openFile).not.toHaveBeenCalled()
-    expect(toastError).toHaveBeenCalledWith(
-      "This folder links outside the project, so it can't be opened here."
+    expect(loadDir).toHaveBeenCalledTimes(1)
+    expect(toggleDir).toHaveBeenCalledWith('wt-1', '/repo/linked-docs')
+    expect(toastError).not.toHaveBeenCalled()
+  })
+
+  it('opens a file listed through an outside folder link by its absolute path', async () => {
+    const openFile = vi.fn()
+    const statPath = vi.fn()
+    useAppStore.setState({
+      worktreesByRepo: {
+        'repo-1': [{ id: 'wt-1', repoId: 'repo-1', path: '/repo', hostId: 'local' } as never]
+      }
+    })
+
+    await activateFileExplorerNode({
+      node: {
+        name: 'notes.md',
+        path: '/repo/linked-docs/notes.md',
+        relativePath: 'linked-docs/notes.md',
+        isDirectory: false,
+        depth: 1,
+        outsideProject: true,
+        operationOwner: { kind: 'local' }
+      },
+      activeWorktreeId: 'wt-1',
+      runtimeEnvironmentId: null,
+      openFile,
+      toggleDir: vi.fn(),
+      loadDir: vi.fn(),
+      statPath,
+      markPathAsDirectory: vi.fn(),
+      setSelectedPath: vi.fn()
+    })
+
+    expect(statPath).not.toHaveBeenCalled()
+    expect(openFile).toHaveBeenCalledWith(
+      expect.objectContaining({
+        filePath: '/repo/linked-docs/notes.md',
+        relativePath: '/repo/linked-docs/notes.md'
+      }),
+      expect.anything()
     )
   })
 

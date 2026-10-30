@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react'
+import { translate } from '../i18n/mobile-i18n'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { useMobileSourceControlSettings } from '../source-control/mobile-source-control-settings'
 import type { FlatList } from 'react-native'
 import type { DiffComment } from '../../../src/shared/diff-comment-types'
@@ -48,6 +50,7 @@ type ControllerInput = {
 }
 
 export function useMobileDiffReviewController(input: ControllerInput) {
+  useMobileTranslation()
   const {
     client,
     connState,
@@ -84,14 +87,25 @@ export function useMobileDiffReviewController(input: ControllerInput) {
     loadGenerationRef.current = generation
     const isCurrent = () => generation === loadGenerationRef.current
     if (!worktreeId) {
-      setScreenState({ kind: 'error', message: 'Missing worktree' })
+      setScreenState({
+        kind: 'error',
+        message: translate('session.useDiffReviewController.missingWorktree', 'Missing worktree')
+      })
       return
     }
     // Keep an existing review through disconnects; only empty screens need the waiting state.
     const keepReady = (fallback: ReviewScreenState) => (prev: ReviewScreenState) =>
       prev.kind === 'ready' ? prev : fallback
     if (!client || connState !== 'connected') {
-      setScreenState(keepReady({ kind: 'error', message: 'Waiting for desktop...' }))
+      setScreenState(
+        keepReady({
+          kind: 'error',
+          message: translate(
+            'session.useDiffReviewController.waitingForDesktop',
+            'Waiting for desktop...'
+          )
+        })
+      )
       return
     }
     setScreenState(keepReady({ kind: 'loading' }))
@@ -112,7 +126,10 @@ export function useMobileDiffReviewController(input: ControllerInput) {
         setScreenState(
           keepReady({
             kind: 'error',
-            message: err instanceof Error ? err.message : 'Unable to load review'
+            message:
+              err instanceof Error
+                ? err.message
+                : translate('session.useDiffReviewController.loadFailed', 'Unable to load review')
           })
         )
       }

@@ -1,4 +1,4 @@
-import { PANEL_DESIGN_TOKEN_ALLOWLIST } from '../plugins/plugin-panel-shell'
+import { PANEL_DESIGN_TOKEN_ALLOWLIST } from '../plugins/frames/plugin-panel-shell'
 
 /** Shared Electron-free sandbox document. Parse CSP before visual markup so later HTML cannot loosen it.
  * Allow pinned-CDN scripts/styles/fonts/images only; block fetch/sockets/frames/forms. Allowed-CDN requests can still carry data: disclosed accepted risk, not a no-egress guarantee. */

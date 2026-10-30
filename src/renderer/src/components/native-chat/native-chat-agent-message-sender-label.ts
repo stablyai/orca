@@ -1,3 +1,4 @@
+import { agentMessageSenderLabel } from '../../../../shared/agent-session/agent-message-presentation'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
@@ -8,6 +9,7 @@ import {
 import { useStructuredChatTabConversationName } from '@/runtime/structured-conversation-name'
 import {
   structuredAgentSessionOwnerForTab,
+  structuredAgentSessionOwnerInputs,
   resolveStructuredAgentSessionOwner,
   executionHostIdForStructuredTarget
 } from '@/runtime/structured-agent-session-owner'
@@ -20,7 +22,46 @@ export function unnamedSenderLabel(): string {
   return translate('components.native-chat.agentMessage.unnamedSender', 'an agent')
 }
 
-function findChatTab(
+const qualifiedTabs = new WeakMap<
+  AppState['unifiedTabsByWorktree'],
+  {
+    inputs: unknown[]
+    tabs: Map<string, Map<string | null, Tab>>
+  }
+>()
+function qualifiedSenderTab(
+  state: AppState,
+  sessionId: string,
+  host: string | null
+): Tab | undefined {
+  const source = state.unifiedTabsByWorktree
+  const inputs = structuredAgentSessionOwnerInputs(state)
+  let cached = qualifiedTabs.get(source)
+  if (!cached || inputs.some((value, index) => value !== cached?.inputs[index])) {
+    const tabs = new Map<string, Map<string | null, Tab>>()
+    for (const bucket of Object.values(source)) {
+      for (const tab of bucket) {
+        if (tab.contentType !== 'agent-session') {
+          continue
+        }
+        const owner = structuredAgentSessionOwnerForTab(state, tab)
+        let byHost = tabs.get(tab.entityId)
+        if (!byHost) {
+          byHost = new Map()
+          tabs.set(tab.entityId, byHost)
+        }
+        if (!byHost.has(owner)) {
+          byHost.set(owner, tab)
+        }
+      }
+    }
+    cached = { inputs, tabs }
+    qualifiedTabs.set(source, cached)
+  }
+  return cached.tabs.get(sessionId)?.get(host)
+}
+
+export function findAgentMessageSenderChatTab(
   state: AppState,
   sessionId: string,
   executionHostId: string | null
@@ -32,19 +73,24 @@ function findChatTab(
       return tab
     }
     // A workspace bucket can mirror identical session ids from two hosts.
-    const qualified =
-      tab &&
-      tabsByWorktree[worktreeId]?.find(
-        (candidate) =>
-          candidate.contentType === 'agent-session' &&
-          candidate.entityId === sessionId &&
-          structuredAgentSessionOwnerForTab(state, candidate) === executionHostId
-      )
+    const qualified = tab && qualifiedSenderTab(state, sessionId, executionHostId)
     if (qualified) {
       return qualified
     }
   }
   return undefined
+}
+
+export function agentMessageSenderOwner(
+  state: AppState,
+  chatWorktreeId: string | null,
+  target?: RuntimeClientTarget
+): string | null {
+  return target
+    ? executionHostIdForStructuredTarget(target)
+    : chatWorktreeId && getKnownExecutionHostIdForWorktree(state, chatWorktreeId)
+      ? resolveStructuredAgentSessionOwner(state, chatWorktreeId)
+      : null
 }
 
 /** Live chat names follow the sender's chat on the receiving chat's host; CLI names stay as recorded. */
@@ -55,17 +101,19 @@ export function useAgentMessageSenderLabel(
 ): string {
   const { address, orcaSessionId } = sender.party
   const local = !address.startsWith('dispatch:')
-  const owner = useAppStore((state) =>
-    target
-      ? executionHostIdForStructuredTarget(target)
-      : chatWorktreeId && getKnownExecutionHostIdForWorktree(state, chatWorktreeId)
-        ? resolveStructuredAgentSessionOwner(state, chatWorktreeId)
-        : null
-  )
+  const owner = useAppStore((state) => agentMessageSenderOwner(state, chatWorktreeId, target))
   const chatTab = useAppStore((state) =>
-    local && orcaSessionId ? findChatTab(state, orcaSessionId, owner) : undefined
+    local && owner && orcaSessionId
+      ? findAgentMessageSenderChatTab(state, orcaSessionId, owner)
+      : undefined
   )
   const conversationName = useStructuredChatTabConversationName(chatTab)
-  const ownName = chatTab ? chatTab.customLabel?.trim() || conversationName : null
-  return ownName || sender.name || chatTab?.label.trim() || unnamedSenderLabel()
+  return agentMessageSenderLabel({
+    localChat: Boolean(local && chatTab),
+    customLabel: chatTab?.customLabel,
+    conversationName,
+    snapshotName: sender.name,
+    tabLabel: chatTab?.label,
+    fallback: unnamedSenderLabel()
+  })
 }

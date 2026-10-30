@@ -6,6 +6,7 @@ import { useShortcutKeyDetails } from '@/hooks/useShortcutLabel'
 import { i18n, translate } from '@/i18n/i18n'
 import { Trans } from 'react-i18next'
 import { FeatureTipActions } from './FeatureTipActions'
+import { getLocalizedFeatureTipCopy } from './feature-tip-localized-copy'
 import {
   FeatureTipDialogFrame,
   FeatureTipEyebrow,
@@ -32,6 +33,7 @@ export function VoiceDictationTipDialog({
 }): JSX.Element {
   const shortcut = useShortcutKeyDetails('voice.dictation')
   const primaryButtonRef = useRef<HTMLButtonElement>(null)
+  const copy = getLocalizedFeatureTipCopy(tip)
 
   return (
     <FeatureTipDialogFrame
@@ -45,9 +47,9 @@ export function VoiceDictationTipDialog({
     >
       <DialogHeader className="gap-4 text-left">
         <div>
-          <FeatureTipEyebrow label={tip.eyebrow} />
+          <FeatureTipEyebrow label={copy.eyebrow} />
           <DialogTitle className="text-2xl font-semibold leading-tight tracking-tight md:text-[1.75rem]">
-            {tip.title}
+            {copy.title}
           </DialogTitle>
           <DialogDescription className="mt-3 max-w-2xl space-y-3 text-sm leading-relaxed">
             {shortcut.keys.length > 0 ? (

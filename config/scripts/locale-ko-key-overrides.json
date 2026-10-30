@@ -3524,12 +3524,6 @@
   "auto.components.sidebar.OrcaYamlTrustDialog.43b7bec4cd": {
     "ko": "실행 안 함"
   },
-  "auto.components.sidebar.OrcaYamlTrustDialog.531689199b": {
-    "ko": "항상 신뢰"
-  },
-  "auto.components.sidebar.OrcaYamlTrustDialog.831f2cd9f0": {
-    "ko": "내 컴퓨터에서 실행"
-  },
   "auto.components.sidebar.PendingWorktreeRow.af21e953d1": {
     "ko": "워크트리 만들기 취소"
   },
@@ -4141,9 +4135,6 @@
   },
   "auto.store.slices.jira.856083302c": {
     "ko": "더 새로운 요청이 있어 Jira 연결 요청을 건너뛰었습니다."
-  },
-  "auto.store.slices.linear.37d36984d0": {
-    "ko": "더 새로운 요청이 있어 Linear 연결 요청을 건너뛰었습니다."
   },
   "auto.store.slices.repos.e649269645": {
     "ko": "선택한 호스트에 경로를 입력하려면 프로젝트 추가를 사용하세요."

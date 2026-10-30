@@ -1,3 +1,8 @@
+import { journalQueueAdoptionPlan } from './journal-queue-adoption-plan'
+import {
+  journalAttachmentClaimReceipt,
+  journalAttachmentClaimsReceipt
+} from './journal-submission-hook'
 // Fold cards from journal rows, without a second mutable copy. Drafts never count as active work.
 
 import type { AgentJournalMessageItem } from '../../../shared/agent-session-journal-types'
@@ -7,11 +12,7 @@ import type {
   AgentSessionQueuedMessageUpdateResult
 } from '../../../shared/agent-session-wire'
 import type { AgentSessionExecutionOptions } from '../../../shared/agent-session-execution-options'
-import {
-  journalQueueRowBuilder,
-  type JournalQueueCardChange,
-  type JournalQueueRow
-} from './journal-queue-events'
+import type { JournalQueueCardChange, JournalQueueRow } from './journal-queue-events'
 import { LegacyQueuedCards } from './journal-queue-import'
 import { retainedQueueFacts } from './journal-queue-retention'
 import { composeJournalOperationReceipts, type JournalOperationReceipt } from './journal-row-writer'
@@ -95,10 +96,9 @@ export class JournalQueuedMessages {
     receipt?: JournalOperationReceipt
   ): Promise<QueuedMessageRow> {
     const { messageId, body } = input
-    const claims: JournalOperationReceipt = {
-      write: (db) => this.deps.claimAttachments(db, body, input.requireAttachments === true),
-      committed: () => {}
-    }
+    const claims = journalAttachmentClaimReceipt((db) =>
+      this.deps.claimAttachments(db, body, input.requireAttachments === true)
+    )
     return this.write(
       () => {
         // Existing IDs are duplicate admission of the same accepted card, never new queue work.
@@ -130,14 +130,10 @@ export class JournalQueuedMessages {
   /** Edits invalidate old leases; require only newly referenced uploads so swept images cannot block text fixes. */
   update(input: QueuedMessageUpdate): Promise<AgentSessionQueuedMessageUpdateResult> {
     let edit: { body: AgentJournalMessageItem; previous: AgentJournalMessageItem } | undefined
-    const receipt: JournalOperationReceipt = {
-      write: (db) => {
-        if (edit) {
-          this.deps.claimAttachments(db, edit.body, true, edit.previous)
-        }
-      },
-      committed: () => this.editLeases.retire(input.messageId)
-    }
+    const receipt = journalAttachmentClaimReceipt(
+      (db) => (edit ? this.deps.claimAttachments(db, edit.body, true, edit.previous) : undefined),
+      () => this.editLeases.retire(input.messageId)
+    )
     return this.write<AgentSessionQueuedMessageUpdateResult>(() => {
       edit = undefined
       const decision = queuedMessageUpdateDecision(
@@ -200,20 +196,7 @@ export class JournalQueuedMessages {
 
   /** Plan on the journal lane; adopt/delete legacy cards in the same transaction before changing them. */
   plan(changes: readonly JournalQueueCardChange[]): JournalQueuePlan {
-    const rows: JournalQueuePlan['rows'] = []
-    const adopted: string[] = []
-    for (const { messageId, change } of changes) {
-      const own = this.deps.state().queue.cards.has(messageId) || adopted.includes(messageId)
-      const adoption = own ? null : this.legacy.adoption(messageId)
-      if (adoption) {
-        rows.push(journalQueueRowBuilder(this.deps.state, messageId, adoption))
-        adopted.push(messageId)
-      }
-      if (change) {
-        rows.push(journalQueueRowBuilder(this.deps.state, messageId, change))
-      }
-    }
-    return { rows, receipt: this.legacy.deletion(adopted) }
+    return journalQueueAdoptionPlan(this.deps, this.legacy, changes)
   }
 
   /** Validate the acted-on card on the lane; automatic drain must still own the next queued card. */
@@ -240,16 +223,23 @@ export class JournalQueuedMessages {
   }
 
   restatement(): JournalQueueRestatement {
+    const cards = retainedQueueFacts(this.list(), this.deps.state().submissions)
     return {
-      cards: retainedQueueFacts(this.list(), this.deps.state().submissions),
-      receipt: this.legacy.deletionOfAll()
+      cards,
+      receipt: journalAttachmentClaimsReceipt(
+        this.deps.claimAttachments,
+        cards.flatMap(({ change }) => (change?.op === 'queued' ? [change.body] : [])),
+        this.legacy.deletionOfAll()
+      )
     }
   }
 
   /** Latch legacy card outcomes before retiring their handoff rows. */
   adoptionOfAll(): JournalQueuePlan {
-    const { rows } = this.plan(this.legacy.messageIds().map((messageId) => ({ messageId })))
-    return { rows, receipt: this.legacy.deletionOfAll() }
+    const { rows, receipt } = this.plan(
+      this.legacy.messageIds().map((messageId) => ({ messageId }))
+    )
+    return { rows, receipt: composeJournalOperationReceipts(receipt, this.legacy.deletionOfAll()) }
   }
 
   importAtOpen(): Promise<void> {

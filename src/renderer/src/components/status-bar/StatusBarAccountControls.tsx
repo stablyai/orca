@@ -30,17 +30,14 @@ export function CodexRestartStatusPrompt(): React.JSX.Element | null {
       <div className="px-2 py-2">
         <div className="text-[11px] text-muted-foreground">
           {/* Why: notices are per-PTY-session but restart is per-pane; show both counts so split panes don't look wrong. */}
-          {staleCodexStatus.staleSessionCount === 1
-            ? translate(
-                'auto.components.status.bar.StatusBar.staleCodexSessions_one',
-                '{{count}} Codex session is still on the old account.',
-                { count: staleCodexStatus.staleSessionCount }
-              )
-            : translate(
-                'auto.components.status.bar.StatusBar.staleCodexSessions_other',
-                '{{count}} Codex sessions are still on the old account.',
-                { count: staleCodexStatus.staleSessionCount }
-              )}
+          {translate(
+            'auto.components.status.bar.StatusBar.staleCodexSessions',
+            '{{count}} Codex sessions are still on the old account.',
+            {
+              count: staleCodexStatus.staleSessionCount,
+              defaultValue_one: '{{count}} Codex session is still on the old account.'
+            }
+          )}
           {staleCodexStatus.staleWorktreeCount > 1 ? (
             <span className="mt-0.5 block">
               {translate(

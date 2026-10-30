@@ -290,7 +290,8 @@ it('carries Claude effort validation through the SDK queue and saved desktop/pho
     expect(nativeWrite.mock.calls.map(([flags]) => flags)).toEqual([
       { effortLevel: 'medium' },
       { effortLevel: 'low' },
-      { effortLevel: 'high' }
+      { effortLevel: 'high' },
+      { fastMode: false }
     ])
     expect(prompts).toHaveLength(1)
     expect(prompts[0]?.message.content).toEqual([{ type: 'text', text: 'valid effort' }])

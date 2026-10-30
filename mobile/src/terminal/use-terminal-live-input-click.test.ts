@@ -36,9 +36,9 @@ function createClickHarness(sender?: TerminalLiveInputSender): ClickHarness {
   }
   const sent: string[] = []
   const sendLiveTerminalInputRef: RefObject<TerminalLiveInputSender> = {
-    current: async (handle, bytes) => {
+    current: async (handle, bytes, origin) => {
       sent.push(bytes)
-      return sender ? sender(handle, bytes) : true
+      return sender ? sender(handle, bytes, origin) : true
     }
   }
   let handlers: Handlers | null = null
@@ -150,7 +150,30 @@ describe('terminal live input around a click', () => {
 
       release()
       expect(await clicked).toBe(true)
-      await vi.waitFor(() => expect(sent).toEqual(['abc', CLICK + 'X']))
+      await vi.waitFor(() => expect(sent.join('')).toBe(`abc${CLICK}X`))
+    } finally {
+      unmount()
+    }
+  })
+
+  it('retires a queued click and later text when their prefix fails', async () => {
+    let fail = (): void => {}
+    const { handlers, sent, unmount } = createClickHarness((_handle, bytes) =>
+      bytes === 'abc'
+        ? new Promise<boolean>((resolve) => {
+            fail = () => resolve(false)
+          })
+        : Promise.resolve(true)
+    )
+    try {
+      change(handlers, 'abc')
+      const clicked = handlers.sendLiveInputClick('terminal-a', CLICK)
+      change(handlers, 'X')
+      fail()
+      expect(await clicked).toBe(false)
+      expect(sent).toEqual(['abc'])
+      change(handlers, 'fresh')
+      await vi.waitFor(() => expect(sent).toEqual(['abc', 'fresh']))
     } finally {
       unmount()
     }

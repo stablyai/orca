@@ -14,6 +14,8 @@ import { getCanonicalUserDataPath } from '../persistence'
 import { getAppEnvironment } from '../../shared/app-environment'
 import { loadWslMoveFence } from '../persistence/moving-wsl-projects/wsl-move-scope-guard'
 import { startWslMoveStartup } from '../persistence/moving-wsl-projects/wsl-move-startup'
+import { startWslHostsPolicyLiveUpdates } from '../wsl/wsl-hosts-policy-live-update'
+import { runPendingWslDriveUncConversions } from '../wsl/wsl-drive-unc-conversion-startup'
 import { createProfileStateStoreForStartup } from '../persistence/profile-state/profile-state-startup-authority'
 import { getProfileUserDataPath } from '../orca-profiles/profile-storage-paths'
 import { initializeBrowserClientHostId } from '../browser/browser-client-host-id'
@@ -62,6 +64,7 @@ import { agentHookServer } from '../agent-hooks/server'
 import { isAgentStatusHooksEnabled } from '../agent-hooks/managed-agent-hook-controls'
 import { reportProfileStateWriteFailure } from './profile-state-write-failure'
 import { reportProfileStateSaveDelay } from './profile-state-save-delay'
+import { preloadSsh2 } from '../ssh/ssh2-module-load'
 
 export async function initializeReadyFoundation(): Promise<void> {
   logStartupMilestone('app-ready')
@@ -141,6 +144,13 @@ export async function initializeReadyFoundation(): Promise<void> {
   state.activeOrcaProfile = profile
   // Read durable browser hosting ID before window argv stamps it or renderer and lease ownership diverge.
   initializeBrowserClientHostId(profile.profileDirectory)
+  // Before the profile store and the fence: a conversion that rewrites the profile here leaves
+  // nothing to fence.
+  runPendingWslDriveUncConversions({
+    userDataPath: getAppEnvironment().getPath('userData'),
+    profileUserDataPath: getProfileUserDataPath(),
+    profileId: profile.profile.id
+  })
   // Why before the store loads: its pane normalization tells a moved project's retained rows from
   // a rival host's, and no handler or runtime may give a moving project a new terminal.
   loadWslMoveFence(getAppEnvironment().getPath('userData'))
@@ -162,6 +172,10 @@ export async function initializeReadyFoundation(): Promise<void> {
   }
   const store = profileState.store
   state.store = store
+  // SSH users keep ssh2 loaded before interactive use, as before #35731; others load it on first connect.
+  if (store.getSshTargets().length > 0) {
+    preloadSsh2()
+  }
   setNodeDistMirrorSettingReader(() => store.getSettings().nodeDistMirrorUrl)
   // Main-process-ready waits on interrupted moves being reset or finished, bounded.
   state.wslMoveStartupRewriteReady = startWslMoveStartup(
@@ -181,6 +195,9 @@ export async function initializeReadyFoundation(): Promise<void> {
     }
   )
   installElectronProxyRequestGuard(session.defaultSession)
+  if (!state.isServeMode) {
+    void state.initialProxyApplicationReady.then(startWslHostsPolicyLiveUpdates)
+  }
   // Wait for profile-sidecar location, then defer potentially blocking OS-keyring probes past first paint (STA-5765).
   scheduleSecretProtectionGapReport({
     dataFile: profile.dataFile,

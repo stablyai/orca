@@ -190,7 +190,7 @@ async function acquired(
       store: { getRecord: () => record, pinLaunchDirectory: vi.fn() },
       resolveWorkspacePath: async () => '/work/repo',
       resolveEnvironment: async () => launch.env ?? {},
-      resolveCommand: () => 'codex',
+      resolveCommand: () => ({ command: 'codex', prefixArgs: [] }),
       resolveLaunchArgs: () => [],
       prepareVisuals: async () => launch.visuals ?? null
     })

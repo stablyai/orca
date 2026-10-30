@@ -1,3 +1,4 @@
+import { AcpLaunchGate } from './acp-launch-gate'
 import { PassThrough } from 'node:stream'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { PipedProcessSpawner } from '@orca/process-host/process-spec'
@@ -11,6 +12,8 @@ import {
   type AcpAgentConnectionOptions
 } from './acp-agent-connection'
 import { AcpAuthRequiredError } from './acp-errors'
+import { PROVIDER_SPAWN_FAILURE_MARKER } from '../provider-process/provider-spawn-failure-report'
+import { providerExecutableMissing } from '../provider-process/provider-executable-missing'
 import { AcpScriptedAgent, deferred, tick } from './acp-scripted-agent.test-support'
 
 const teardown = vi.hoisted(() =>
@@ -20,15 +23,25 @@ vi.mock('../provider-process/provider-process-teardown', () => ({
   terminateProviderProcessTree: teardown
 }))
 
+const actual = await vi.importActual<{
+  terminateProviderProcessTree: typeof terminateProviderProcessTree
+}>('../provider-process/provider-process-teardown')
+
 const opened: { connection: AcpAgentConnection; exit: () => void }[] = []
 const grace =
   process.platform === 'win32' ? ROOT_ONLY_GRACEFUL_EXIT_MS : PROVIDER_SUPERVISOR_MAX_STOP_MS
 const start = { cwd: '/execution-host/folder', mcpServers: [] }
 const prompt = [{ type: 'text', text: 'hello' }] as const
+/** What the supervisor writes when it cannot spawn the agent's CLI. */
+const SPAWN_ENOENT_REPORT = `${PROVIDER_SPAWN_FAILURE_MARKER}${JSON.stringify({
+  thrown: false,
+  code: 'ENOENT',
+  message: 'spawn fixture-acp-agent ENOENT'
+})}\n`
 
 function fixture(
   options: AcpAgentConnectionOptions = {},
-  behavior: { pid?: number | null; exitOnEnd?: boolean } = {}
+  behavior: { pid?: number | null; exitOnEnd?: boolean; cwd?: string } = {}
 ) {
   const agent = new AcpScriptedAgent()
   const child = Object.assign(createFakePipedChild(), {
@@ -50,7 +63,7 @@ function fixture(
     {
       command: 'fixture-acp-agent',
       args: ['--acp'],
-      cwd: start.cwd,
+      cwd: behavior.cwd ?? start.cwd,
       env: { ACP_ACCOUNT_HOME: '/host/account', STRIPPED: 'overlay' },
       envToDelete: ['STRIPPED']
     },
@@ -71,6 +84,22 @@ afterEach(async () => {
 })
 
 describe('ACP process-owning connection', () => {
+  // The supervisor (POSIX only) reports the failed spawn on stderr and exits 127.
+  it.skipIf(process.platform === 'win32')(
+    'marks the exit of a CLI the supervisor could not spawn as a missing executable',
+    async () => {
+      const onExit = vi.fn()
+      const { connection, child } = fixture({ onExit }, { cwd: process.cwd() })
+      child.stderr.write(SPAWN_ENOENT_REPORT)
+      await tick()
+      child.emit('exit', 127, null)
+      child.emit('close', 127, null)
+      await vi.waitFor(() => expect(onExit).toHaveBeenCalledOnce())
+      expect(providerExecutableMissing(onExit.mock.calls[0][0])).toBe(true)
+      expect(connection.spawnAbsence).toBe('executable')
+    }
+  )
+
   it('spawns through the supervisor with the host launch and exposes typed session calls', async () => {
     const { connection, spawn, child, agent } = fixture()
     await connection.spawned
@@ -386,3 +415,78 @@ it('closes a recognized stdout prompt over 16 MiB without inventing a signed-out
   await vi.waitFor(() => expect(connection.closed).toBe(true))
   expect(answered).toHaveBeenCalledTimes(1)
 })
+
+it.each([true, false])(
+  'runs setup through the retained launch gate with initial kill delivery=%s',
+  async (initialDelivery) => {
+    vi.useFakeTimers()
+    const { connection, child } = fixture({}, { exitOnEnd: false })
+    let permitted = initialDelivery
+    let writerGone = false
+    const deliver = () => {
+      if (!permitted || writerGone) {
+        throw Object.assign(new Error('writer group unavailable'), { code: 'ESRCH' })
+      }
+      writerGone = true
+    }
+    teardown.mockImplementation((held, deps) =>
+      actual.terminateProviderProcessTree(held, {
+        ...deps,
+        captureDescendants: async () => ({
+          rootPgid: null,
+          capturedAtMs: 1,
+          descendants: [
+            {
+              pid: child.pid! + 1,
+              ppid: child.pid!,
+              pgid: child.pid! + 1,
+              startedAt: 'Mon Jan 1 00:00:00 2026'
+            }
+          ]
+        }),
+        terminateDescendants: async () => 'unverifiable',
+        signalProcessGroup: deliver,
+        signalProcess: () => {},
+        terminateWindowsTree: async () => {
+          try {
+            deliver()
+            return true
+          } catch {
+            return false
+          }
+        }
+      })
+    )
+    const gate = new AcpLaunchGate('Antigravity')
+    gate.retain(connection)
+    const first = connection.close()
+    await vi.advanceTimersByTimeAsync(grace + 1000)
+    expect(await first).toBe(initialDelivery)
+    const work = vi.fn(async () => 'setup completed')
+    if (!initialDelivery) {
+      const denied = expect(gate.run(async () => {}, work)).rejects.toThrow('could not be stopped')
+      await vi.advanceTimersByTimeAsync(grace + 1000)
+      await denied
+      expect(work).not.toHaveBeenCalled()
+      permitted = true
+      const retry = gate.run(async () => {}, work)
+      await vi.advanceTimersByTimeAsync(grace + 1000)
+      await expect(retry).resolves.toBe('setup completed')
+    } else {
+      await expect(gate.run(async () => {}, work)).resolves.toBe('setup completed')
+    }
+    expect(work).toHaveBeenCalledOnce()
+    const attempts = initialDelivery ? 1 : 3
+    expect(teardown).toHaveBeenCalledTimes(attempts)
+    await expect(gate.run(async () => {}, work)).resolves.toBe('setup completed')
+    expect(work).toHaveBeenCalledTimes(2)
+    expect(teardown).toHaveBeenCalledTimes(attempts)
+    const next = gate.enter(undefined)
+    expect(next.signal.aborted).toBe(false)
+    next.leave()
+    expect(connection.lastCloseResult).toMatchObject({
+      root: 'live',
+      killDelivered: true
+    })
+  }
+)

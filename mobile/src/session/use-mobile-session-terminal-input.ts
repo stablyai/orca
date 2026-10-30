@@ -1,5 +1,5 @@
-import { reportWorkerTerminalUserInput } from '../terminal/worker-terminal-takeover-report'
 import { useCallback } from 'react'
+import { translate } from '../i18n/mobile-i18n'
 import { terminalBufferClear, terminalInputSend } from '../terminal/mobile-terminal-operations'
 import {
   clearTerminalLiveInputFocusTimer,
@@ -36,6 +36,8 @@ export function useMobileSessionTerminalInput(scope: MobileSessionFileActionsMod
     clientRef,
     connStateRef,
     liveInputRef,
+    commandInputRef,
+    keyboardHeight,
     liveInputFocusTimerRef,
     terminalUnsubsRef,
     activeHandleRef,
@@ -54,15 +56,22 @@ export function useMobileSessionTerminalInput(scope: MobileSessionFileActionsMod
     if (!activeHandle) {
       return
     }
+    const keepKeyboard =
+      keyboardHeight > 0 ||
+      liveInputRef.current?.isFocused() === true ||
+      commandInputRef.current?.isFocused() === true
+    clearTerminalLiveInputFocusTimer(liveInputFocusTimerRef)
     const nextEnabled = toggleTerminalLiveInput(activeHandle)
     clearPendingLiveInputCommit()
-    if (nextEnabled) {
+    if (keepKeyboard) {
+      const target = nextEnabled ? liveInputRef : commandInputRef
+      target.current?.focus()
+    } else if (nextEnabled) {
       scheduleTerminalLiveInputFocus(liveInputFocusTimerRef, () => liveInputRef.current?.focus())
     } else {
-      clearTerminalLiveInputFocusTimer(liveInputFocusTimerRef)
       liveInputRef.current?.blur()
     }
-  }, [activeHandle, clearPendingLiveInputCommit, toggleTerminalLiveInput])
+  }, [activeHandle, clearPendingLiveInputCommit, keyboardHeight, toggleTerminalLiveInput])
 
   const allowTerminalGestureInput = useCallback(
     (handle: string, sequenceCount: number): boolean => {
@@ -117,7 +126,7 @@ export function useMobileSessionTerminalInput(scope: MobileSessionFileActionsMod
     terminalGestureInputInFlightRef.current.add(handle)
     try {
       // Drop queued gesture arrows on disconnect so reconnect cannot move the TUI long after the swipe.
-      const response = await terminalInputSend.request(
+      await terminalInputSend.request(
         rpc,
         buildTerminalSendParams({
           terminal: handle,
@@ -127,9 +136,6 @@ export function useMobileSessionTerminalInput(scope: MobileSessionFileActionsMod
         }),
         TERMINAL_INPUT_SEND_OPTIONS
       )
-      if (terminalInputSend.interpret(response) === true) {
-        reportWorkerTerminalUserInput(rpc, handle)
-      }
     } catch {
       // Transient failure
     } finally {
@@ -215,7 +221,7 @@ export function useMobileSessionTerminalInput(scope: MobileSessionFileActionsMod
         // A deliberate click must survive wheel limits and follow text queued for the old cursor.
         void (liveInputTerminalHandlesRef.current.has(handle)
           ? sendLiveInputClick(handle, bytes)
-          : sendLiveTerminalInputRef.current(handle, bytes))
+          : sendLiveTerminalInputRef.current(handle, bytes, 'pointer'))
         return
       }
       if (!allowTerminalGestureInput(handle, sequenceCount)) {
@@ -255,7 +261,10 @@ export function useMobileSessionTerminalInput(scope: MobileSessionFileActionsMod
         return
       }
       if (terminalBufferClear.interpret(response) !== true) {
-        showToast("Couldn't clear terminal", 1500)
+        showToast(
+          translate('session.useTerminalInput.clearFailed', "Couldn't clear terminal"),
+          1500
+        )
         return
       }
       // Why: an unsubscribed tab draws a fresh snapshot when it next subscribes; subscribing it here would leak a background stream.
@@ -263,10 +272,13 @@ export function useMobileSessionTerminalInput(scope: MobileSessionFileActionsMod
         unsubscribeTerminal(target.handle)
         subscribeToTerminal(target.handle)
       }
-      showToast('Terminal cleared')
+      showToast(translate('session.useTerminalInput.cleared', 'Terminal cleared'))
     } catch {
       if (isCurrent()) {
-        showToast("Couldn't clear terminal", 1500)
+        showToast(
+          translate('session.useTerminalInput.clearFailed', "Couldn't clear terminal"),
+          1500
+        )
       }
     }
   }

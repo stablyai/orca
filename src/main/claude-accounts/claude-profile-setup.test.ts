@@ -18,6 +18,7 @@ vi.mock('node:os', async (original) => ({
   homedir: () => state.home
 }))
 vi.mock('electron', () => ({ app: { getPath: () => state.home } }))
+import { parseClaudeCliVersionOutput } from '../claude/claude-hook-event-versions'
 import { ClaudeHookService } from '../claude/hook-service'
 import { describeClaudeProfile } from './claude-profile-paths'
 import { provisionClaudeAccountProfile } from './claude-profile-setup'
@@ -81,6 +82,16 @@ describe('Claude account profile setup', () => {
     })
     expect(realpathSync(join(home, 'projects'))).toBe(realpathSync(join(f.defaultHome, 'projects')))
     expect(existsSync(join(home, '.credentials.json'))).toBe(false)
+    const unknown = parseClaudeCliVersionOutput('11.17.0') ?? undefined
+    const refreshed = await provisionClaudeAccountProfile({
+      dataRoot: f.dataRoot,
+      profile: describeClaudeProfile(f.dataRoot, 'a', local),
+      userHome: state.home,
+      installHooks: (target) => f.service.install({ ...target, claudeVersion: unknown }),
+      platform: 'linux'
+    })
+    expect(refreshed.warnings).toEqual([])
+    expect(JSON.parse(readFileSync(join(home, 'settings.json'), 'utf8'))).toEqual(settings)
     expect((await f.setup()).warnings).toEqual([])
   })
   itLinks('shares plugins Claude wrote into the folder before its first setup', async () => {

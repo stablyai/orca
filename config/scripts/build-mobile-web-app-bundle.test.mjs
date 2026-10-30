@@ -383,13 +383,20 @@ describe('the Phase C budget', () => {
   itBundling(
     'is not already exceeded by the current bundle',
     async () => {
-      const { manifest, chunkCount, entryStaticBytes, imageCount, routeKeys } =
-        await readWrittenBundle()
-      expect(mobileWebAppBundleBudgetBytes(manifest)).toBeLessThanOrEqual(
+      const {
+        manifest,
+        chunkCount,
+        catalogChunkCount,
+        catalogBytes,
+        entryStaticBytes,
+        imageCount,
+        routeKeys
+      } = await readWrittenBundle()
+      expect(mobileWebAppBundleBudgetBytes(manifest) - catalogBytes).toBeLessThanOrEqual(
         MOBILE_WEB_APP_BUNDLE_MAX_TOTAL_BYTES
       )
       expect(manifest.assets.length).toBeLessThanOrEqual(
-        mobileWebAppBundleMaxAssets(routeKeys.length, imageCount)
+        mobileWebAppBundleMaxAssets(routeKeys.length, imageCount, catalogChunkCount)
       )
       expect(chunkCount).toBeLessThanOrEqual(mobileWebAppBundleMaxChunks(routeKeys.length))
       // Excess unused envelope margin means stale measurement; remeasure instead of adding headroom.
@@ -464,13 +471,15 @@ describe('the Phase C budget', () => {
   itBundling(
     'keeps the derived ceiling under the map the phone actually holds',
     async () => {
-      const { manifest, routeKeys, imageCount } = await readWrittenBundle()
-      const ceiling = mobileWebAppBundleMaxAssets(routeKeys.length, imageCount)
+      const { manifest, routeKeys, imageCount, catalogChunkCount } = await readWrittenBundle()
+      const ceiling = mobileWebAppBundleMaxAssets(routeKeys.length, imageCount, catalogChunkCount)
       expect(manifest.assets.length).toBeLessThanOrEqual(ceiling)
       // The native side refuses a manifest past this, so the derived ceiling has to stay inside it.
       expect(ceiling).toBeLessThanOrEqual(MOBILE_WEB_BUNDLE_MAX_ASSETS)
       const shellCeiling = await readMobileWebBundleMaxAssets()
-      expect(assertAssetCeilingFitsShell(routeKeys.length, imageCount, shellCeiling)).toBe(ceiling)
+      expect(
+        assertAssetCeilingFitsShell(routeKeys.length, imageCount, shellCeiling, catalogChunkCount)
+      ).toBe(ceiling)
     },
     120_000
   )

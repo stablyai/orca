@@ -1,3 +1,4 @@
+import { openTestChats } from './structured-agent-session-open-test-chats.test-support'
 import './structured-agent-session-codex-input-admission.spec'
 import {
   continuingStructuredAgentSessionInput,
@@ -162,7 +163,7 @@ afterEach(async () => {
   vi.restoreAllMocks()
   await adapter.closeAll()
   await host.flushAllStreamedEvents()
-  closeTestJournalHostDatabase(root)
+  await closeTestJournalHostDatabase(root)
   Object.defineProperty(process, 'platform', { configurable: true, value: platform })
   await rm(root, { recursive: true, force: true })
 })
@@ -759,7 +760,7 @@ async function assertInputRecoveredAfterSnapshot(id: string): Promise<void> {
     probeOwner: async () => ({ outcome: 'pid-absent' })
   })
   try {
-    await restarted.restoreReadableSessions()
+    await openTestChats(restarted)
     const recovered = await restarted.journalSnapshot(SESSION)
     const reopened = restarted.collaboratorsForTests().sessions.get(SESSION)!.journal
     expect(reopened).not.toBe(journal)
@@ -772,7 +773,7 @@ async function assertInputRecoveredAfterSnapshot(id: string): Promise<void> {
   } finally {
     await restarted.flushAllStreamedEvents()
     await restartedAdapter.closeAll()
-    closeTestJournalHostDatabase(snapshotRoot)
+    await closeTestJournalHostDatabase(snapshotRoot)
   }
 }
 

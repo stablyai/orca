@@ -104,8 +104,11 @@ export function useWorktreeJumpPaletteSelectionLifecycle({
           ? document.activeElement
           : null
       skipRestoreFocusRef.current = false
-      latestQueryRef.current = ''
-      setQuery('')
+      // Why: an opener may seed the search, e.g. a plugin's Try it shows its commands.
+      const seededQuery = appState.modalData.query
+      const initialQuery = typeof seededQuery === 'string' ? seededQuery : ''
+      latestQueryRef.current = initialQuery
+      setQuery(initialQuery)
       setSelectedItemId('')
       setExpandedSectionCaps({})
       selectionMovedByUserRef.current = false
