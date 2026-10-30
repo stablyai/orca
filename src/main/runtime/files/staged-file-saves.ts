@@ -104,6 +104,10 @@ export class StagedFileSaves {
 
   async append(owner: string, saveId: string, offset: number, bytes: Buffer): Promise<void> {
     const save = this.require(owner, saveId)
+    // Commit has queued the delete. A later chunk would recreate the temp with nothing left to remove it.
+    if (save.committing) {
+      throw new Error('staged_save_commit_in_progress')
+    }
     this.touch(owner, saveId, save)
     return this.queue(save, async () => {
       // In order only: a retried or reordered chunk can't land twice or leave a gap.
@@ -157,6 +161,10 @@ export class StagedFileSaves {
   async abort(owner: string, saveId: string): Promise<void> {
     const save = this.saves.get(saveId)
     if (!save || save.owner !== owner) {
+      return
+    }
+    // Commit releases this save after the guarded write. Dropping it now frees capacity early.
+    if (save.committing) {
       return
     }
     this.release(saveId, save)

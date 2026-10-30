@@ -277,6 +277,65 @@ describe('a staged save', () => {
     await staged.abortConnection('conn-1')
   })
 
+  it('rejects a chunk once commit has started, and leaves no temp behind', async () => {
+    const target = join(root, 'commit.txt')
+    const staged = saves()
+    const { saveId } = await staged.begin('conn-1', at(target), 3)
+    await staged.append('conn-1', saveId, 0, Buffer.from('abc'))
+    let release: (() => void) | undefined
+    const committing = staged.commit(
+      'conn-1',
+      saveId,
+      undefined,
+      () =>
+        new Promise<string>((resolve) => {
+          release = () => resolve(target)
+        })
+    )
+    await vi.waitFor(() => expect(release).toBeDefined())
+
+    await expect(staged.append('conn-1', saveId, 3, Buffer.from('xyz'))).rejects.toThrow(
+      'staged_save_commit_in_progress'
+    )
+
+    release!()
+    await expect(committing).resolves.toEqual({ ok: true })
+    expect(readFileSync(target, 'utf8')).toBe('abc')
+    expect(temps()).toEqual([])
+  })
+
+  it('keeps a committing save charged when abort runs before commit settles', async () => {
+    const staged = saves({ maxSavesPerConnection: 1, maxSavesPerHost: 1 })
+    const target = join(root, 'commit.txt')
+    const first = await staged.begin('conn-1', at(target), 3)
+    await staged.append('conn-1', first.saveId, 0, Buffer.from('abc'))
+    let release: (() => void) | undefined
+    const committing = staged.commit(
+      'conn-1',
+      first.saveId,
+      undefined,
+      () =>
+        new Promise<string>((resolve) => {
+          release = () => resolve(target)
+        })
+    )
+    await vi.waitFor(() => expect(release).toBeDefined())
+
+    await staged.abort('conn-1', first.saveId)
+    await expect(staged.begin('conn-1', at(join(root, 'second.txt')), 1)).rejects.toThrow(
+      'staged_save_limit'
+    )
+
+    release!()
+    await expect(committing).resolves.toEqual({ ok: true })
+    expect(readFileSync(target, 'utf8')).toBe('abc')
+    expect(temps()).toEqual([])
+    await expect(staged.begin('conn-1', at(join(root, 'second.txt')), 1)).resolves.toEqual(
+      expect.objectContaining({ saveId: expect.any(String) })
+    )
+    await staged.abortConnection('conn-1')
+  })
+
   it('drops a save no chunk touched within the idle window, with its temp', async () => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
     const staged = saves({ idleMs: 1_000 })
