@@ -21,6 +21,11 @@ import {
 } from './BoardColumnHeaders'
 import { AzureDevOpsBoardCard } from './BoardCard'
 import { AzureDevOpsBoardNotices } from './BoardNotices'
+import { VirtualizedList } from '@/components/virtualized-list'
+
+/** Azure DevOps cards measure 164–233px tall; windowing starts once a stack is a few viewports deep. */
+export const BOARD_CARD_STACK_MIN_ROWS = 16
+const BOARD_CARD_ESTIMATED_HEIGHT_PX = 196
 
 export type AzureDevOpsBoardProps = {
   layout: BoardLayout
@@ -37,7 +42,8 @@ export type AzureDevOpsBoardProps = {
   onUseItem: (item: AzureDevOpsWorkItem) => void
 }
 
-const CELL_CLASS = 'flex min-w-0 flex-col gap-1.5 border-l border-border/50 bg-muted/20 p-1.5'
+// Card spacing lives on each card's wrapper, not as a cell gap, so windowed rows keep it once absolutely positioned.
+const CELL_CLASS = 'flex min-w-0 flex-col border-l border-border/50 bg-muted/20 p-1.5'
 
 function laneLabel(lane: BoardLaneModel): string {
   return (
@@ -50,12 +56,14 @@ function CardStack({
   spanLanes,
   gridColumn,
   gridRow,
+  scrollElement,
   props
 }: {
   cell: BoardCell | undefined
   spanLanes: boolean
   gridColumn: number
   gridRow: string | number
+  scrollElement: HTMLDivElement | null
   props: AzureDevOpsBoardProps
 }): React.JSX.Element {
   const items = cell?.items ?? []
@@ -68,22 +76,30 @@ function CardStack({
       className={cn(CELL_CLASS, 'min-h-16')}
       style={{ gridColumn, gridRow }}
     >
-      {items.map((item) => {
-        const parent = item.parentId === null ? null : (props.parentsById[item.parentId] ?? null)
-        return (
-          <AzureDevOpsBoardCard
-            key={item.id}
-            item={item}
-            configuration={props.configuration}
-            typeMetadata={metadataFor(item.workItemType)}
-            parent={parent}
-            parentTypeMetadata={parent ? metadataFor(parent.workItemType) : null}
-            unplaced={props.layout.unplacedIds.includes(item.id)}
-            onOpen={() => props.onOpenItem(item.id)}
-            onUse={() => props.onUseItem(item)}
-          />
-        )
-      })}
+      <VirtualizedList
+        rows={items}
+        getRowKey={(item) => String(item.id)}
+        scrollElement={scrollElement}
+        estimateRowHeightPx={BOARD_CARD_ESTIMATED_HEIGHT_PX}
+        minimumRows={BOARD_CARD_STACK_MIN_ROWS}
+        renderRow={(item) => {
+          const parent = item.parentId === null ? null : (props.parentsById[item.parentId] ?? null)
+          return (
+            <div key={item.id} className="pb-1.5">
+              <AzureDevOpsBoardCard
+                item={item}
+                configuration={props.configuration}
+                typeMetadata={metadataFor(item.workItemType)}
+                parent={parent}
+                parentTypeMetadata={parent ? metadataFor(parent.workItemType) : null}
+                unplaced={props.layout.unplacedIds.includes(item.id)}
+                onOpen={() => props.onOpenItem(item.id)}
+                onUse={() => props.onUseItem(item)}
+              />
+            </div>
+          )
+        }}
+      />
     </div>
   )
 }
@@ -180,7 +196,8 @@ function BoardRegion({
     <div
       className="grid content-start"
       style={{
-        gridTemplateColumns: slots.map(() => 'minmax(16rem, 20rem)').join(' '),
+        // Azure DevOps' own board column is 251px wide; keep our tracks within reach of it.
+        gridTemplateColumns: slots.map(() => 'minmax(14rem, 16rem)').join(' '),
         gridTemplateRows: rows
       }}
     >
@@ -192,6 +209,8 @@ function BoardRegion({
 
 export function AzureDevOpsBoard(props: AzureDevOpsBoardProps): React.JSX.Element {
   const { layout } = props
+  // State, not a ref: every stack virtualizes against this one scroller and must re-render on attachment.
+  const [scrollElement, setScrollElement] = React.useState<HTMLDivElement | null>(null)
   const slots = buildBoardSlots(layout.columns)
   const anySplit = layout.columns.some((model) => model.column.isSplit)
   const firstInProgress = slots.findIndex((slot) => slot.model.column.columnType === 'inProgress')
@@ -218,6 +237,7 @@ export function AzureDevOpsBoard(props: AzureDevOpsBoardProps): React.JSX.Elemen
       spanLanes
       gridColumn={slot.track}
       gridRow={bodyStart}
+      scrollElement={scrollElement}
       props={props}
     />
   )
@@ -228,7 +248,7 @@ export function AzureDevOpsBoard(props: AzureDevOpsBoardProps): React.JSX.Elemen
         unhydratedItemCount={props.unhydratedItemCount}
         unhydratedParentCount={props.unhydratedParentCount}
       />
-      <div className="min-h-0 flex-1 overflow-auto scrollbar-sleek">
+      <div ref={setScrollElement} className="min-h-0 flex-1 overflow-auto scrollbar-sleek">
         <div className="flex w-max min-w-full items-stretch text-[13px]">
           <BoardRegion slots={leading} showSubHeaders={anySplit} rows={`${headerRows} 1fr`}>
             {leading.map(sideStack)}
@@ -264,6 +284,7 @@ export function AzureDevOpsBoard(props: AzureDevOpsBoardProps): React.JSX.Elemen
                           spanLanes={false}
                           gridColumn={slot.track}
                           gridRow={headerRow + 1}
+                          scrollElement={scrollElement}
                           props={props}
                         />
                       ))}

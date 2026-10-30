@@ -9,11 +9,32 @@ import type {
 } from '../../../shared/azure-devops/boards-types'
 import {
   AzureDevOpsBoard,
+  BOARD_CARD_STACK_MIN_ROWS,
   type AzureDevOpsBoardProps
 } from '@/components/task-page/azure-devops/Board'
 import { buildAzureDevOpsBoardLayout } from './task-page-azure-devops-board-layout'
 
-afterEach(() => cleanup())
+afterEach(() => {
+  cleanup()
+  vi.restoreAllMocks()
+})
+
+const BOARD_CARD_HEIGHT_PX = 196
+const BOARD_VIEWPORT_HEIGHT_PX = 600
+
+/** happy-dom has no layout, and a zero-height scroller windows every stack down to nothing. */
+function stubBoardLayout(): void {
+  const heightOf = (element: Element): number =>
+    element.classList.contains('overflow-auto') ? BOARD_VIEWPORT_HEIGHT_PX : BOARD_CARD_HEIGHT_PX
+  vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockImplementation(function (
+    this: HTMLElement
+  ) {
+    return heightOf(this)
+  })
+  vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (this: Element) {
+    return new DOMRect(0, 0, 240, heightOf(this))
+  })
+}
 
 const COLUMN_FIELD = 'WEF_1_Kanban.Column'
 const LANE_FIELD = 'WEF_1_Kanban.Lane'
@@ -282,6 +303,32 @@ describe('AzureDevOpsBoard', () => {
     expect(container.querySelector('[data-board-notice="unhydrated-parents"]')).toHaveTextContent(
       '1 parent work item couldn’t be loaded'
     )
+  })
+
+  it('keeps a short stack in natural flow', () => {
+    const { container } = renderBoard()
+    expect(container.querySelector('[data-testid="virtualized-list"]')).toBeNull()
+    expect(container.querySelectorAll('[data-board-card]')).toHaveLength(defaultItems.length)
+  })
+
+  it('windows a stack past the threshold while short stacks stay whole', () => {
+    stubBoardLayout()
+    const crowd = Array.from({ length: BOARD_CARD_STACK_MIN_ROWS * 3 }, (_, index) =>
+      item(200 + index, { [COLUMN_FIELD]: 'New' })
+    )
+    const { container } = renderBoard({}, { items: [...defaultItems, ...crowd] })
+    const incoming = container.querySelector('[data-board-cell^="c1|"]')
+    const windowed = incoming?.querySelector('[data-testid="virtualized-list"]')
+    expect(windowed).not.toBeNull()
+    const stackSize = crowd.length + 1
+    const mounted = incoming!.querySelectorAll('[data-board-card]').length
+    expect(mounted).toBeGreaterThan(0)
+    expect(mounted).toBeLessThan(stackSize / 2)
+    // The spacer still reserves every card's height, so the board keeps its full scroll range.
+    expect(windowed).toHaveStyle({ height: `${stackSize * BOARD_CARD_HEIGHT_PX}px` })
+    // The in-progress lanes stay under the threshold, so their cards are all still mounted.
+    expect(screen.getByText('Item 101')).toBeInTheDocument()
+    expect(screen.getByText('Item 102')).toBeInTheDocument()
   })
 
   it('calls onOpenItem with the work item id when a card is clicked', () => {
