@@ -1,9 +1,17 @@
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
+import { PANEL_MESSAGE_MAX_BYTES } from '../../../shared/plugins/frames/plugin-frame-bridge'
 import { PLUGIN_WORKSPACE_TERMINAL_LIMIT } from '../../../shared/plugins/workers/plugin-host-api'
 import { bindPluginHostServices, type PluginRuntimeDelegate } from './plugin-host-service-bindings'
 import { executePluginHostCall, type PluginHostServices } from './plugin-host-methods'
+
+function fakePanels(): PluginHostServices['panels'] {
+  return {
+    post: vi.fn().mockResolvedValue({ delivered: true }),
+    action: vi.fn().mockResolvedValue(undefined)
+  }
+}
 
 function createServices(storageSet: PluginHostServices['storage']['set']): PluginHostServices {
   return {
@@ -25,7 +33,8 @@ function createServices(storageSet: PluginHostServices['storage']['set']): Plugi
     settings: {
       getAll: vi.fn().mockReturnValue({}),
       set: vi.fn().mockReturnValue({ ok: true })
-    }
+    },
+    panels: fakePanels()
   }
 }
 
@@ -139,7 +148,8 @@ function createTerminalHarness(terminalHandles: string[]): {
     delegate,
     services: bindPluginHostServices({
       delegate,
-      pluginsDataDir: join(tmpdir(), 'plugin-host-methods-test')
+      pluginsDataDir: join(tmpdir(), 'plugin-host-methods-test'),
+      panels: fakePanels()
     })
   }
 }
@@ -294,5 +304,78 @@ describe('terminal.sendText', () => {
 
     expect(outcome).toEqual({ ok: true, value: { accepted: true } })
     expect(delegate.sendTerminal).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('executePluginHostCall panel messaging', () => {
+  const run = (
+    method: string,
+    params: unknown,
+    surface: 'worker' | 'panel',
+    granted: ('panel:own' | 'storage:own')[]
+  ) => {
+    const services = createServices(vi.fn().mockReturnValue({ ok: true }))
+    return {
+      services,
+      outcome: executePluginHostCall({
+        pluginId: 'samples.demo',
+        method,
+        params,
+        surface,
+        grantedCapabilities: granted,
+        services,
+        audit: { record: vi.fn().mockResolvedValue(undefined) }
+      })
+    }
+  }
+
+  it('lets a worker post to its panel and returns the delivery flag', async () => {
+    const { services, outcome } = run(
+      'panel.post',
+      { panelId: 'board', payload: { n: 1 } },
+      'worker',
+      ['panel:own']
+    )
+    await expect(outcome).resolves.toEqual({ ok: true, value: { delivered: true } })
+    expect(services.panels.post).toHaveBeenCalledWith('samples.demo', 'board', { n: 1 })
+  })
+
+  it('refuses panel.post from a panel and panel.action from a worker', async () => {
+    await expect(
+      run('panel.post', { panelId: 'board', payload: 1 }, 'panel', ['panel:own']).outcome
+    ).resolves.toMatchObject({ ok: false, code: 'not_permitted' })
+    await expect(
+      run('panel.action', { panelId: 'board', action: 'next' }, 'worker', ['panel:own']).outcome
+    ).resolves.toMatchObject({ ok: false, code: 'not_permitted' })
+  })
+
+  it('refuses without the panel:own grant', async () => {
+    await expect(
+      run('panel.post', { panelId: 'board', payload: 1 }, 'worker', ['storage:own']).outcome
+    ).resolves.toMatchObject({ ok: false, code: 'capability_denied' })
+  })
+
+  it('refuses a payload larger than one panel message', async () => {
+    const { services, outcome } = run(
+      'panel.post',
+      { panelId: 'board', payload: 'x'.repeat(PANEL_MESSAGE_MAX_BYTES + 1) },
+      'worker',
+      ['panel:own']
+    )
+    await expect(outcome).resolves.toMatchObject({ ok: false, code: 'invalid_params' })
+    expect(services.panels.post).not.toHaveBeenCalled()
+  })
+
+  it('lets a panel send an action to its worker', async () => {
+    const { services, outcome } = run(
+      'panel.action',
+      { panelId: 'board', action: 'next', params: { index: 2 } },
+      'panel',
+      ['panel:own']
+    )
+    await expect(outcome).resolves.toEqual({ ok: true, value: { ok: true } })
+    expect(services.panels.action).toHaveBeenCalledWith('samples.demo', 'board', 'next', {
+      index: 2
+    })
   })
 })
