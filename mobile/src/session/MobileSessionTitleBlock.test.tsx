@@ -101,6 +101,7 @@ vi.mock('./MobileSessionHeaderMoreActionsSheet', () => ({
 }))
 vi.mock('./MobileSessionContentRow', () => ({ MobileSessionContentRow: () => null }))
 vi.mock('./MobileSessionSheets', () => ({ MobileSessionSheets: () => null }))
+vi.mock('./MobileWorkerAutoCloseStrip', () => ({ MobileWorkerAutoCloseStrip: () => null }))
 vi.mock('../transport/use-workspace-client', () => ({
   WorkspaceServerContext: createContext(null)
 }))

@@ -7,6 +7,7 @@ import type { MobileSessionController } from './use-mobile-session-controller'
 import { MobileSessionContentRow } from './MobileSessionContentRow'
 import { MobileSessionHeader } from './MobileSessionHeader'
 import { MobileSessionSheets } from './MobileSessionSheets'
+import { MobileWorkerAutoCloseStrip } from './MobileWorkerAutoCloseStrip'
 import { DetailCardLayer } from '../components/detail-card-host'
 import { AnchoredDetailCard } from '../components/AnchoredDetailCard'
 import { StatusDot } from '../components/StatusDot'
@@ -58,7 +59,7 @@ export function MobileSessionSurface({ controller }: { controller: MobileSession
     <View ref={setMobileSessionRootRef} style={styles.container}>
       <View style={styles.kavInner}>
         <MobileSessionHeader controller={controller} details={details} />
-        {}
+        <MobileWorkerAutoCloseStrip controller={controller} />
         <MobileSessionContentRow controller={controller} />
       </View>
       <DetailCardLayer>

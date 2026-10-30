@@ -297,6 +297,8 @@ describe('orchestration worker-start prompt contract', () => {
         result: { state: 'ready', stage: 'settled', workerOutcome: outcome }
       })
       expect(response.ok && response.result).not.toHaveProperty('lastError')
+      // Its report is already mail to act on, so the receipt does not say to stop.
+      expect(response.ok && response.result).not.toHaveProperty('next')
       expect(teardown).not.toHaveBeenCalled()
       expect(harness.db.getTask(harness.taskId)?.status).toBe(
         outcome === 'succeeded' ? 'completed' : 'failed'
