@@ -1,5 +1,6 @@
 import type { LegacyRelayBridgeApi } from '../../../../preload/api/legacy-relay-bridge-api'
-import { createPtyInputSourceBinding, type PtyInputSource } from './pty-input-source'
+import type { PtyInputSource, PtyInputSourceObserver } from './pty-input-source'
+import { projectLegacyRelayInnerInputSource } from './legacy-relay-inner-input-source'
 import type { PtyTransport } from './pty-transport-types'
 
 export function disposeLegacyRelayViewer(
@@ -28,67 +29,154 @@ export function disposeLegacyRelayViewer(
   }
 }
 
-/** The bridge owns its writer; its unused managed-runtime transport cannot represent it. */
+/** Route lifetime qualifies identity; the selected inner remains the authority for its current token. */
 export function createLegacyRelayInputSource(args: {
   ptyId: string
   api: LegacyRelayBridgeApi | undefined
   inner: PtyTransport
-  isInner: () => boolean
   isBridgeWritable: () => boolean
 }) {
-  const source = createPtyInputSourceBinding<'bridge' | PtyInputSource>({
-    same: (a, b) => a === b,
-    refine: (_, next) => next,
-    create: (endpoint, owns) => {
-      const target = endpoint()
-      if (target === 'bridge') {
-        const isCurrent = (): boolean => owns() && args.isBridgeWritable() && !!args.api
-        const write = (data: string): boolean => {
-          if (!isCurrent() || !args.api) {
-            return false
-          }
-          args.api.write({ ptyId: args.ptyId, data })
-          return true
-        }
-        return {
-          ptyId: args.ptyId,
-          isCurrent,
-          sendInput: write,
-          sendInputImmediate: write,
-          sendInputAccepted: async (data) => write(data) && isCurrent()
-        }
+  type Lifetime = {
+    route: 'bridge' | 'inner'
+    live: boolean
+    owns: () => boolean
+    target?: PtyInputSource
+    view?: PtyInputSource
+  }
+  let lifetime: Lifetime | null = null
+  let version = 0
+  let observer: { value: PtyInputSourceObserver } | null = null
+  let observation: { dispose?: () => void } | null = null
+  const notify = (callback: () => void): void => {
+    try {
+      callback()
+    } catch (error) {
+      console.warn('Terminal input source observer failed', error)
+    }
+  }
+  const current = (): PtyInputSource | null => {
+    const selected = lifetime
+    if (!selected?.live) {
+      return null
+    }
+    if (selected.route === 'inner') {
+      const target = args.inner.getInputSource?.()
+      if (!target) {
+        return null
       }
-      const isCurrent = (): boolean => owns() && target.isCurrent()
-      const accepted = target.sendInputAccepted
-      return {
-        ptyId: target.ptyId,
-        get endpoint() {
-          return target.endpoint
-        },
+      if (selected.target !== target) {
+        selected.target = target
+        selected.view = projectLegacyRelayInnerInputSource(target, selected.owns)
+      }
+    } else if (!selected.view) {
+      const isCurrent = (): boolean => selected.owns() && args.isBridgeWritable() && !!args.api
+      const write = (data: string): boolean => {
+        if (!isCurrent() || !args.api) {
+          return false
+        }
+        args.api.write({ ptyId: args.ptyId, data })
+        return true
+      }
+      selected.view = {
+        ptyId: args.ptyId,
         isCurrent,
-        sendInput: (data, kind) => isCurrent() && target.sendInput(data, kind),
-        sendInputImmediate: (data) => isCurrent() && target.sendInputImmediate(data),
-        ...(accepted
-          ? {
-              sendInputAccepted: async (...params: Parameters<typeof accepted>) =>
-                isCurrent() && (await accepted.call(target, ...params)) && isCurrent()
-            }
-          : {}),
-        claimViewport: (cols, rows) => isCurrent() && (target.claimViewport?.(cols, rows) ?? false)
+        sendInput: write,
+        sendInputImmediate: write,
+        sendInputAccepted: async (data) => write(data) && isCurrent()
       }
     }
-  })
-  args.inner.observeInputSource?.({
-    beforeChange: () => {
-      if (args.isInner()) {
-        source.change(null, () => {})
+    return selected.view ?? null
+  }
+  const publish = (): void => notify(() => observer?.value.afterChange(current()))
+  const observeInner = (): void => {
+    if (observation || !args.inner.observeInputSource) {
+      return
+    }
+    const registration: { dispose?: () => void } = {}
+    observation = registration
+    const handle = args.inner.observeInputSource({
+      beforeChange: () => {
+        if (observation === registration && lifetime?.route === 'inner') {
+          notify(() => observer?.value.beforeChange())
+        }
+      },
+      afterChange: () => {
+        if (observation === registration && lifetime?.route === 'inner') {
+          publish()
+        }
+      }
+    })
+    if (observation === registration) {
+      registration.dispose = () => handle.dispose()
+    } else {
+      handle.dispose()
+    }
+  }
+  observeInner()
+  return {
+    current,
+    version: () => version,
+    change(next: Lifetime['route'] | null, adopt: () => void, unavailable = false): boolean {
+      if (next) {
+        observeInner()
+      }
+      const previous = lifetime
+      const at = ++version
+      const compatible = previous?.live === true && previous.route === next
+      if (!compatible && unavailable && previous) {
+        previous.live = false
+      }
+      if (!compatible && previous) {
+        notify(() => observer?.value.beforeChange())
+      }
+      if (at !== version) {
+        return false
+      }
+      if (!compatible && previous) {
+        previous.live = false
+      }
+      let adopted = false
+      try {
+        adopt()
+        adopted = true
+      } finally {
+        if (at === version) {
+          if (adopted && next && !compatible) {
+            const selected: Lifetime = {
+              route: next,
+              live: true,
+              owns: () => selected.live && lifetime === selected
+            }
+            lifetime = selected
+          } else {
+            lifetime = adopted && compatible ? previous : null
+          }
+          if (!adopted && previous) {
+            previous.live = false
+          }
+          if (!compatible) {
+            publish()
+          }
+        }
+      }
+      return adopted && at === version
+    },
+    observe(next: PtyInputSourceObserver) {
+      const registration = { value: next }
+      observer = registration
+      notify(() => next.afterChange(current()))
+      return {
+        dispose: () => {
+          if (observer === registration) {
+            observer = null
+          }
+        }
       }
     },
-    afterChange: (next) => {
-      if (args.isInner()) {
-        source.change(next, () => {})
-      }
+    takeObservation: () => {
+      const previous = observation
+      observation = null
+      return () => previous?.dispose?.()
     }
-  })
-  return source
+  }
 }

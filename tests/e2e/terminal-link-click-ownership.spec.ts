@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs'
 import path from 'node:path'
-import type { Page, TestInfo } from '@playwright/test'
+import type { Locator, Page, TestInfo } from '@playwright/test'
 import { test, expect } from './helpers/orca-app'
 import {
   execInTerminal,
@@ -24,7 +24,6 @@ const FIXTURE_PATH = path.join(
 const LINK = 'https://example.com/sta-3888'
 const OSC_LINK_TEXT = 'STA_3888_OSC_LINK'
 
-type LinkTarget = { x: number; y: number; mouseTrackingMode: string }
 type LinkMode = 'http' | 'osc'
 
 async function startMouseAwareLinkFixture(
@@ -32,10 +31,14 @@ async function startMouseAwareLinkFixture(
   testInfo: TestInfo,
   linkMode: LinkMode = 'http',
   inputLogPath?: string
-): Promise<{ mouseLogPath: string; ptyId: string; target: LinkTarget }> {
+): Promise<{ mouseLogPath: string; ptyId: string; target: Locator }> {
   await waitForSessionReady(orcaPage)
   await waitForActiveWorktree(orcaPage)
   await ensureTerminalVisible(orcaPage)
+  // DOM rendering exposes the actual terminal labels for semantic pointer delivery.
+  await orcaPage.evaluate(async () => {
+    await window.__store?.getState().updateSettings({ terminalGpuAcceleration: 'off' })
+  })
   await waitForActiveTerminalManager(orcaPage)
   await waitForPaneCount(orcaPage, 1)
 
@@ -49,39 +52,49 @@ async function startMouseAwareLinkFixture(
   const renderedLinkText = linkMode === 'osc' ? OSC_LINK_TEXT : LINK
   await waitForTerminalOutput(orcaPage, 'LINK_MOUSE_READY')
 
-  const target = await orcaPage.evaluate((linkText) => {
+  const target = orcaPage
+    .locator('.xterm:visible .xterm-rows > div')
+    .filter({ hasText: renderedLinkText })
+    .locator('span')
+    .filter({ hasText: renderedLinkText })
+    .first()
+  await expect(target).toBeVisible()
+  await expect.poll(() => waitForActivePanePtyId(orcaPage)).toBe(ptyId)
+  const tracking = await target.evaluate((label, linkText) => {
     const state = window.__store?.getState()
     const worktreeId = state?.activeWorktreeId
     const tabId = worktreeId ? state?.activeTabIdByWorktree?.[worktreeId] : null
     const manager = tabId ? window.__paneManagers?.get(tabId) : null
-    const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
-    const screen = pane?.terminal.element?.querySelector<HTMLElement>('.xterm-screen') ?? null
-    if (!pane || !screen) {
-      throw new Error('Active terminal screen unavailable')
+    const pane = manager?.getActivePane?.() ?? null
+    const terminal = pane?.terminal
+    const screen = terminal?.element?.querySelector('.xterm-screen')
+    if (!terminal || !screen || !label.isConnected || !terminal.element?.contains(label)) {
+      throw new Error('Intended connected terminal label unavailable')
     }
-
-    const buffer = pane.terminal.buffer.active
-    for (let viewportRow = 0; viewportRow < pane.terminal.rows; viewportRow += 1) {
-      const text = buffer.getLine(buffer.viewportY + viewportRow)?.translateToString(false)
-      const column = text?.indexOf(linkText) ?? -1
-      if (column < 0) {
-        continue
-      }
-      const rect = screen.getBoundingClientRect()
-      const cell = pane.terminal.dimensions?.css.cell
-      if (!cell?.width || !cell.height) {
-        throw new Error('Active terminal cell dimensions unavailable')
-      }
-      return {
-        x: rect.left + (column + linkText.length / 2) * cell.width,
-        y: rect.top + (viewportRow + 0.5) * cell.height,
-        mouseTrackingMode: pane.terminal.modes.mouseTrackingMode
-      }
+    const labelRect = label.getBoundingClientRect()
+    const rect = screen.getBoundingClientRect()
+    const column = Math.floor(
+      (labelRect.left + labelRect.width / 2 - rect.left) / (rect.width / terminal.cols)
+    )
+    const row = Math.floor(
+      (labelRect.top + labelRect.height / 2 - rect.top) / (rect.height / terminal.rows)
+    )
+    const text = terminal.buffer.active
+      .getLine(terminal.buffer.active.viewportY + row)
+      ?.translateToString(false)
+    const start = text?.indexOf(linkText) ?? -1
+    if (
+      row < 0 ||
+      row >= terminal.rows ||
+      start < 0 ||
+      column < start ||
+      column >= start + linkText.length
+    ) {
+      throw new Error('Semantic label center is outside the actual rendered link range')
     }
-    throw new Error('Rendered fixture link unavailable')
+    return terminal.modes.mouseTrackingMode
   }, renderedLinkText)
-
-  expect(target.mouseTrackingMode).not.toBe('none')
+  expect(tracking).not.toBe('none')
   return { mouseLogPath, ptyId, target }
 }
 
@@ -154,7 +167,7 @@ test.describe('terminal link click ownership', () => {
     await orcaPage.screenshot({ path: testInfo.outputPath('actions-selected-after.png') })
     await orcaPage.evaluate(() => window.__store?.getState().closeSettingsPage())
     await waitForActiveTerminalManager(orcaPage)
-    await orcaPage.mouse.click(target.x, target.y)
+    await target.click()
     await expect(orcaPage.locator('[data-terminal-link-action-popover]')).toBeVisible()
     await expect(orcaPage.locator('[data-terminal-link-destination]')).toHaveText(LINK)
     await expectOrcaOwnedMouseOutcome(mouseLogPath)
@@ -176,7 +189,7 @@ test.describe('terminal link click ownership', () => {
       'true'
     )
     await orcaPage.evaluate(() => window.__store?.getState().closeSettingsPage())
-    await orcaPage.mouse.click(target.x, target.y)
+    await target.click()
     await expect
       .poll(async () => (await readPanelNavigationObserver(electronApp)).externalUrls)
       .toEqual([LINK])
@@ -192,14 +205,14 @@ test.describe('terminal link click ownership', () => {
       choices.getByRole('radio', { name: 'Leave to terminal', exact: true })
     ).toHaveAttribute('aria-checked', 'true')
     await orcaPage.evaluate(() => window.__store?.getState().closeSettingsPage())
-    await orcaPage.mouse.click(target.x, target.y)
+    await target.click()
     await expectChildMouseReports(mouseLogPath)
     expect((await readPanelNavigationObserver(electronApp)).externalUrls).toEqual([LINK])
 
     const reportsBeforeModifiedClick = childMouseReportCount(mouseLogPath)
     const modifier = process.platform === 'darwin' ? 'Meta' : 'Control'
     await orcaPage.keyboard.down(modifier)
-    await orcaPage.mouse.click(target.x, target.y)
+    await target.click()
     await orcaPage.keyboard.up(modifier)
     await expect
       .poll(async () => (await readPanelNavigationObserver(electronApp)).externalUrls)
@@ -213,7 +226,7 @@ test.describe('terminal link click ownership', () => {
     orcaPage
   }, testInfo) => {
     const { mouseLogPath, ptyId, target } = await startMouseAwareLinkFixture(orcaPage, testInfo)
-    await orcaPage.mouse.click(target.x, target.y)
+    await target.click()
 
     await expect(orcaPage.locator('[data-terminal-link-action-popover]')).toBeVisible()
     await expect(orcaPage.locator('[data-terminal-link-destination]')).toHaveText(LINK)
@@ -231,9 +244,9 @@ test.describe('terminal link click ownership', () => {
       testInfo,
       'osc'
     )
-    await orcaPage.mouse.move(target.x, target.y)
+    await target.hover()
     await expect(orcaPage.locator('.xterm-hover')).toHaveCount(1)
-    await orcaPage.mouse.click(target.x, target.y)
+    await target.click()
 
     await expect(orcaPage.locator('[data-terminal-link-action-popover]')).toBeVisible()
     await expect(orcaPage.locator('[data-terminal-link-destination]')).toHaveText(LINK)
@@ -250,7 +263,7 @@ test.describe('terminal link click ownership', () => {
       await window.__store?.getState().updateSettings({ terminalLinkActionPopoverEnabled: false })
     })
 
-    await orcaPage.mouse.click(target.x, target.y)
+    await target.click()
 
     await expect(orcaPage.locator('[data-terminal-link-action-popover]')).toHaveCount(0)
     await expectChildMouseReports(mouseLogPath)
@@ -260,10 +273,13 @@ test.describe('terminal link click ownership', () => {
   test('a drag across a link stays child-owned', async ({ orcaPage }, testInfo) => {
     const { mouseLogPath, ptyId, target } = await startMouseAwareLinkFixture(orcaPage, testInfo)
 
-    await orcaPage.mouse.move(target.x, target.y)
-    await orcaPage.mouse.down()
-    await orcaPage.mouse.move(target.x + 12, target.y + 12, { steps: 3 })
-    await orcaPage.mouse.up()
+    const control = orcaPage
+      .locator('.xterm:visible .xterm-rows > div')
+      .filter({ hasText: 'CHILD_CONTROL' })
+      .locator('span')
+      .first()
+    await expect(control).toBeVisible()
+    await target.dragTo(control)
 
     await expect(orcaPage.locator('[data-terminal-link-action-popover]')).toHaveCount(0)
     await expectChildMouseReports(mouseLogPath)
@@ -318,23 +334,23 @@ for (const mode of ['http', 'osc'] as const) {
       .filter({ hasText: label })
       .first()
     const menu = orcaPage.locator('[data-terminal-link-action-popover]')
-    await link.hover({ force: true })
+    await link.hover()
     const before = childMouseReportCount(mouseLogPath)
-    await link.click({ force: true })
+    await link.click()
     await expect(menu).toBeVisible()
     await expect(orcaPage.locator('[data-terminal-link-destination]')).toHaveText(LINK)
     await expectOrcaOwnedMouseOutcome(mouseLogPath, before)
     await orcaPage.keyboard.press('Escape')
 
     // Preview middle belongs to the child even when plain actions are enabled.
-    await link.click({ force: true, button: 'middle' })
+    await link.click({ button: 'middle' })
     await expect(menu).toHaveCount(0)
     await expect.poll(() => childMouseReportCount(mouseLogPath)).toBeGreaterThan(before)
     await orcaPage.evaluate(async () => {
       await window.__store?.getState().updateSettings({ terminalLinkClickBehavior: 'none' })
     })
     const beforeNone = childMouseReportCount(mouseLogPath)
-    await link.click({ force: true })
+    await link.click()
     await expect(menu).toHaveCount(0)
     await expect.poll(() => childMouseReportCount(mouseLogPath)).toBeGreaterThan(beforeNone)
 
@@ -344,19 +360,19 @@ for (const mode of ['http', 'osc'] as const) {
       .locator('span')
       .first()
     const beforeControl = childMouseReportCount(mouseLogPath)
-    await control.click({ force: true })
+    await control.click()
     await expect.poll(() => childMouseReportCount(mouseLogPath)).toBeGreaterThan(beforeControl)
     if (process.platform === 'darwin') {
       await orcaPage.evaluate(async () => {
         await window.__store?.getState().updateSettings({ terminalLinkClickBehavior: 'actions' })
       })
-      await link.hover({ force: true })
+      await link.hover()
       const beforeNative = childMouseReportCount(mouseLogPath)
-      await link.click({ force: true, modifiers: ['Control', 'Alt'] })
+      await link.click({ modifiers: ['Control', 'Alt'] })
       await expect(menu).toBeVisible()
       await expectOrcaOwnedMouseOutcome(mouseLogPath, beforeNative)
       await orcaPage.keyboard.press('Escape')
-      await control.click({ force: true })
+      await control.click()
       const rawBefore = existsSync(rawInputLog) ? readFileSync(rawInputLog, 'utf8').length : 0
       await preview.locator('.xterm-helper-textarea').press('Control+Alt+ArrowUp')
       await expect

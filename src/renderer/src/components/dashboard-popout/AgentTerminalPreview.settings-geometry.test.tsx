@@ -8,7 +8,6 @@ import type { TerminalPreviewConnectResult } from '../../../../shared/terminal-p
 import { createGlobalSettingsFixture } from '../../../../shared/global-settings-test-fixture'
 import { useAppStore } from '@/store'
 import { AgentTerminalPreview } from './AgentTerminalPreview'
-import { createPreviewCompatibilityTestDisposer } from './preview-terminal-emulator-test-fixture'
 
 type PreviewInstance = {
   options: ITerminalOptions
@@ -71,9 +70,11 @@ vi.mock('@/lib/keyboard-layout/use-effective-mac-option-as-alt', () => ({
   useEffectiveMacOptionAsAlt: (value: string) => value
 }))
 vi.mock('./preview-terminal-ligatures', () => ({ syncPreviewTerminalLigatures: vi.fn() }))
-vi.mock('./preview-terminal-compatibility', () => ({
-  installPreviewTerminalCompatibility: createPreviewCompatibilityTestDisposer
-}))
+vi.mock('./preview-terminal-compatibility', async () => {
+  const { createPreviewCompatibilityTestDisposer } =
+    await import('./preview-terminal-emulator-test-fixture')
+  return { installPreviewTerminalCompatibility: createPreviewCompatibilityTestDisposer }
+})
 vi.mock('./preview-terminal-ime-bridge', () => ({
   installPreviewImeBridge: () => ({ claimKeyEvent: () => false, dispose: vi.fn() })
 }))

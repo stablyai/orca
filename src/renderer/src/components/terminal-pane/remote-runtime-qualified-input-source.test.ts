@@ -3,6 +3,11 @@ import { Terminal } from '@xterm/xterm'
 import type * as InputSourceModule from './pty-input-source'
 import type * as QualifiedInputModule from './pty-connection/pty-qualified-input-forwarder'
 import { afterEach, expect, it, vi } from 'vitest'
+import {
+  decodeTerminalStreamFrame,
+  decodeTerminalStreamText,
+  TerminalStreamOpcode
+} from '../../../../shared/terminal-stream-protocol'
 import { CLIPBOARD_TEXT_MEASURE_YIELD_CODE_UNITS } from '../../../../shared/clipboard-text'
 import {
   createRemoteRuntimeTransportMocks,
@@ -112,10 +117,21 @@ it.each(['same', 'replace'] as const)(
     })
     await vi.waitFor(() => expect(h.subscribeFrameCount()).toBe(2))
     vi.useFakeTimers()
-    h.runtimeCall.mockImplementation(async () => ({
-      ok: true,
-      result: { send: { accepted: true } }
-    }))
+    const delivered: string[] = []
+    h.subscriptionSendBinary.mockImplementation((bytes) => {
+      const frame = decodeTerminalStreamFrame(bytes)
+      if (frame?.opcode === TerminalStreamOpcode.Input) {
+        delivered.push(decodeTerminalStreamText(frame.payload))
+      }
+    })
+    h.runtimeCall.mockImplementation(
+      async (request: { method: string; params?: { text?: string } }) => {
+        if (request.method === 'terminal.send' && request.params?.text) {
+          delivered.push(request.params.text)
+        }
+        return { ok: true, result: { send: { accepted: true } } }
+      }
+    )
     const { createQualifiedPtyInputForwarder } =
       await import('./pty-connection/pty-qualified-input-forwarder')
     const emulator = new Terminal({ allowProposedApi: true })
@@ -199,7 +215,7 @@ it.each(['same', 'replace'] as const)(
     }
     const text = 'v'.repeat(CLIPBOARD_TEXT_MEASURE_YIELD_CODE_UNITS + 1)
     a.sendInput(text, 'driving')
-    a.sendInputImmediate('immediate-A')
+    expect(a.sendInputImmediate('blocked-immediate-A')).toBe(false)
     const accepted = a.sendInputAccepted?.('accepted-A', 'driving')
     element.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, buttons: 1 }))
     // Actual current response reconciles byte identity while launch attribution remains i1.
@@ -207,11 +223,16 @@ it.each(['same', 'replace'] as const)(
     h.emitSnapshot(h.latestSubscribePayload().streamId, 'current screen')
     element.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }))
     await vi.advanceTimersByTimeAsync(30)
+    const rpcTexts = (): string[] =>
+      h.runtimeCall.mock.calls.flatMap(([request]) =>
+        request.method === 'terminal.send' ? [request.params.text] : []
+      )
     const bytes = h.inputFrameTexts().join('')
     if (mode === 'replace') {
       expect(a.isCurrent()).toBe(false)
       await expect(accepted).resolves.toBe(false)
       expect(bytes).toBe('')
+      expect(rpcTexts()).toEqual([])
       expect(session.clearPendingTerminalInputIntent).not.toHaveBeenCalled()
       expect(session.claimViewportForUserActivity).not.toHaveBeenCalled()
       expect(session.markAcceptedTerminalInputSent).not.toHaveBeenCalled()
@@ -219,12 +240,17 @@ it.each(['same', 'replace'] as const)(
     } else {
       expect(transport.getInputSource?.()).toBe(a)
       await expect(accepted).resolves.toBe(true)
-      expect(bytes).toContain(text)
-      expect(bytes).toContain('immediate-A')
+      expect(delivered.join('')).toContain(text + 'accepted-A')
+      expect(delivered.join('')).not.toContain('blocked-immediate-A')
+      expect(a.sendInputImmediate('immediate-A')).toBe(true)
+      expect(h.inputFrameTexts().join('')).toContain('immediate-A')
       expect(h.runtimeCall).toHaveBeenCalledWith(
         expect.objectContaining({
           method: 'terminal.send',
-          params: expect.objectContaining({ terminal: handle, text: 'accepted-A' })
+          params: expect.objectContaining({
+            terminal: handle,
+            text: expect.stringContaining('accepted-A')
+          })
         })
       )
       expect(bytes).toContain(down + up)

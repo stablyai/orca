@@ -9,6 +9,7 @@
  */
 import type { LegacyRelayBridgeAttachResult } from '../../../../shared/legacy-relay-bridge-contract'
 import type { PtyConnectResult, PtyTransport } from './pty-transport-types'
+import { legacyRelayTransportLifecycle } from './legacy-relay-transport-lifecycle'
 import { legacyRelayTransportRouting } from './legacy-relay-transport-routing'
 import { SSH_SESSION_EXPIRED_ERROR } from './pty-connection/pty-connect-limits'
 import { createLegacyRelayInputSource, disposeLegacyRelayViewer } from './legacy-relay-input-source'
@@ -39,7 +40,6 @@ export function createLegacyRelayBridgeTransport(ptyId: string, inner: PtyTransp
     ptyId,
     api,
     inner,
-    isInner: () => mode === 'inner',
     isBridgeWritable: () => mode === 'bridge' && viewer !== null
   })
 
@@ -78,11 +78,16 @@ export function createLegacyRelayBridgeTransport(ptyId: string, inner: PtyTransp
     return owns && version === inputSource.version()
   }
 
-  const release = (nextMode = mode, unavailable = false): boolean => {
+  const release = (
+    nextMode = mode,
+    unavailable = false,
+    endObservation = false,
+    finish?: () => void
+  ): boolean => {
     let previous: number | null = null
     let disposers: (() => void)[] = []
     const owns = inputSource.change(
-      null,
+      !endObservation && nextMode === 'inner' ? 'inner' : null,
       () => {
         epoch += 1
         mode = nextMode
@@ -90,11 +95,20 @@ export function createLegacyRelayBridgeTransport(ptyId: string, inner: PtyTransp
         viewer = null
         disposers = unsubscribe
         unsubscribe = []
+        if (endObservation) {
+          disposers.push(inputSource.takeObservation())
+        }
       },
       unavailable
     )
     const version = inputSource.version()
-    disposeLegacyRelayViewer(api, ptyId, previous, disposers)
+    try {
+      disposeLegacyRelayViewer(api, ptyId, previous, disposers)
+    } finally {
+      if (owns && version === inputSource.version()) {
+        finish?.()
+      }
+    }
     return owns && version === inputSource.version()
   }
 
@@ -279,55 +293,15 @@ export function createLegacyRelayBridgeTransport(ptyId: string, inner: PtyTransp
     ...legacyRelayTransportRouting(ptyId, api, inner, bridged, () => viewer),
     getInputSource: inputSource.current,
     observeInputSource: inputSource.observe,
-    connect: (options) => {
-      if (options.sessionId === ptyId) {
-        return connectBridged(options.callbacks)
-      }
-      if (!release('inner')) {
-        return
-      }
-      return inner.connect(options)
-    },
-    attach: (options) => {
-      if (options.existingPtyId === ptyId) {
-        void connectBridged(options.callbacks)
-        return
-      }
-      if (!release('inner')) {
-        return
-      }
-      inner.attach(options)
-    },
-    disconnect: () => {
-      if (bridged()) {
-        if (release()) {
-          callbacks?.onDisconnect?.()
-        }
-        return
-      }
-      inner.disconnect()
-    },
-    detach: (options) => {
-      if (bridged()) {
-        release()
-        return
-      }
-      inner.detach?.(options)
-    },
-    destroy: (options) => {
-      const wasBridged = bridged()
-      if (wasBridged || mode === 'pending') {
-        try {
-          release('pending')
-        } finally {
-          if (wasBridged) {
-            // An explicit close still owes the captured old shell's stop after reentry.
-            void api?.close({ ptyId }).catch(() => {})
-          }
-        }
-        return
-      }
-      return inner.destroy?.(options)
-    }
+    ...legacyRelayTransportLifecycle({
+      ptyId,
+      api,
+      inner,
+      bridged,
+      getMode: () => mode,
+      connectBridged,
+      release,
+      onDisconnect: () => callbacks?.onDisconnect?.()
+    })
   }
 }

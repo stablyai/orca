@@ -9,7 +9,6 @@ import { createGlobalSettingsFixture } from '../../../../shared/global-settings-
 import { makeCustomTerminalThemeSelection } from '../../../../shared/terminal-custom-themes'
 import { useAppStore } from '@/store'
 import { AgentTerminalPreview } from './AgentTerminalPreview'
-import { createPreviewCompatibilityTestDisposer } from './preview-terminal-emulator-test-fixture'
 
 type PreviewInstance = {
   options: ITerminalOptions
@@ -57,9 +56,11 @@ vi.mock('./preview-terminal-box-fit', () => ({
   createPreviewBoxFit: () => ({ schedule: vi.fn(), dispose: vi.fn() })
 }))
 vi.mock('./preview-terminal-ligatures', () => ({ syncPreviewTerminalLigatures: vi.fn() }))
-vi.mock('./preview-terminal-compatibility', () => ({
-  installPreviewTerminalCompatibility: createPreviewCompatibilityTestDisposer
-}))
+vi.mock('./preview-terminal-compatibility', async () => {
+  const { createPreviewCompatibilityTestDisposer } =
+    await import('./preview-terminal-emulator-test-fixture')
+  return { installPreviewTerminalCompatibility: createPreviewCompatibilityTestDisposer }
+})
 vi.mock('./preview-terminal-ime-bridge', () => ({
   installPreviewImeBridge: () => ({ claimKeyEvent: () => false, dispose: vi.fn() })
 }))

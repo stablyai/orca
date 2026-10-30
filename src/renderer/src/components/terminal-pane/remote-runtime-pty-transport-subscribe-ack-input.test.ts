@@ -286,6 +286,7 @@ it('reconciles contradictory current ACK proof without adopting launch metadata 
   const launches = vi.fn()
   const unavailable = vi.fn()
   const defaultCall = runtimeCall.getMockImplementation()
+  let resolvedIncarnation = 'i1'
   runtimeCall.mockImplementation(async (request: { method: string; params?: unknown }) =>
     request.method === 'terminal.resolvePane'
       ? {
@@ -296,7 +297,7 @@ it('reconciles contradictory current ACK proof without adopting launch metadata 
               tabId: 'tab-1',
               leafId: 'pane:1',
               worktreeId: 'wt-1',
-              incarnationId: 'i1'
+              incarnationId: resolvedIncarnation
             }
           }
         }
@@ -373,6 +374,7 @@ it('reconciles contradictory current ACK proof without adopting launch metadata 
     expect(inputFrameTexts().join('')).not.toContain('\x1b[<')
     b.sendInput('i2-live', 'driving')
     await vi.waitFor(() => expect(inputFrameTexts().join('')).toContain('i2-live'))
+    resolvedIncarnation = 'i2'
     emitSnapshot(latestSubscribePayload().streamId, 'i2 prompt$ ')
     subscriptionCallbacks?.onError?.({
       code: 'remote_runtime_unavailable',

@@ -1,5 +1,3 @@
-import { vi } from 'vitest'
-
 /** Observe real record reads and native array movement, including reference-only indexOf/splice work. */
 export function observeRetainedInputWork() {
   const iterator = Array.prototype[Symbol.iterator]
@@ -8,6 +6,17 @@ export function observeRetainedInputWork() {
   const splice = Array.prototype.splice
   const shift = Array.prototype.shift
   const indexOf = Array.prototype.indexOf
+  const properties = ['push', Symbol.iterator, 'slice', 'indexOf', 'shift', 'splice'] as const
+  const descriptors = properties.map((key) => {
+    const descriptor = Object.getOwnPropertyDescriptor(Array.prototype, key)
+    if (!descriptor) {
+      throw new Error('Missing native array operation')
+    }
+    return { key, descriptor }
+  })
+  const replace = (key: PropertyKey, value: unknown): void => {
+    Object.defineProperty(Array.prototype, key, { configurable: true, writable: true, value })
+  }
   const observed = new WeakSet<object>()
   let counting = false
   let reads = 0
@@ -44,10 +53,7 @@ export function observeRetainedInputWork() {
     }
   }
   const isRecords = (array: unknown[]): boolean => array.length > 0 && record(array[0])
-  const pushSpy = vi.spyOn(Array.prototype, 'push').mockImplementation(function (
-    this: unknown[],
-    ...items: unknown[]
-  ) {
+  replace('push', function (this: unknown[], ...items: unknown[]) {
     for (const item of items) {
       observe(item)
     }
@@ -56,9 +62,7 @@ export function observeRetainedInputWork() {
     }
     return push.apply(this, items)
   })
-  const iteratorSpy = vi.spyOn(Array.prototype, Symbol.iterator).mockImplementation(function* (
-    this: unknown[]
-  ) {
+  replace(Symbol.iterator, function* (this: unknown[]) {
     const current = iterator.call(this)
     for (let step = current.next(); !step.done; step = current.next()) {
       observe(step.value)
@@ -68,52 +72,53 @@ export function observeRetainedInputWork() {
       yield step.value
     }
   })
-  const sliceSpy = vi.spyOn(Array.prototype, 'slice').mockImplementation(function (
-    this: unknown[],
-    start?: number,
-    end?: number
-  ) {
+  replace('slice', function (this: unknown[], start?: number, end?: number) {
     const result = slice.call(this, start, end)
     if (counting && isRecords(this)) {
       copies += result.length
     }
     return result
   })
-  const indexSpy = vi.spyOn(Array.prototype, 'indexOf').mockImplementation(function (
-    this: unknown[],
-    value: unknown,
-    from = 0
-  ) {
+  replace('indexOf', function (this: unknown[], value: unknown, from = 0) {
     const result = indexOf.call(this, value, from)
     if (counting && isRecords(this)) {
-      const offset = from < 0 ? Math.max(0, this.length + from) : from
+      const integer = Math.trunc(from) || 0
+      const offset = integer < 0 ? Math.max(0, this.length + integer) : integer
       searches += Math.max(0, (result < 0 ? this.length : result + 1) - offset)
     }
     return result
   })
-  const shiftSpy = vi.spyOn(Array.prototype, 'shift').mockImplementation(function (
-    this: unknown[]
-  ) {
+  replace('shift', function (this: unknown[]) {
     if (counting && isRecords(this)) {
       copies += 1 + 2 * (this.length - 1)
     }
     return shift.call(this)
   })
-  const spliceSpy = vi.spyOn(Array.prototype, 'splice').mockImplementation(function (
-    this: unknown[],
-    ...args: [start: number, deleteCount?: number, ...items: unknown[]]
-  ) {
-    const [start, deleteCount, ...items] = args
-    if (counting && isRecords(this)) {
-      const offset = start < 0 ? Math.max(0, this.length + start) : Math.min(start, this.length)
-      const removed =
-        args.length === 1
-          ? this.length - offset
-          : Math.min(Math.max(0, deleteCount ?? 0), this.length - offset)
-      copies += removed + (removed === items.length ? 0 : 2 * (this.length - offset - removed))
+  replace(
+    'splice',
+    function (
+      this: unknown[],
+      ...args: [start?: number, deleteCount?: number, ...items: unknown[]]
+    ) {
+      const [start, deleteCount, ...items] = args
+      if (counting && isRecords(this)) {
+        const from = Math.trunc(start ?? 0) || 0
+        const offset = from < 0 ? Math.max(0, this.length + from) : Math.min(from, this.length)
+        const removed =
+          args.length === 1
+            ? this.length - offset
+            : Math.min(Math.max(0, Math.trunc(deleteCount ?? 0) || 0), this.length - offset)
+        copies += removed + (removed === items.length ? 0 : 2 * (this.length - offset - removed))
+      }
+      if (args.length === 0) {
+        return splice.call(this, 0, 0)
+      }
+      if (args.length === 1) {
+        return splice.call(this, start ?? 0, this.length)
+      }
+      return splice.call(this, start ?? 0, deleteCount ?? 0, ...items)
     }
-    return Reflect.apply(splice, this, args)
-  })
+  )
   return {
     measure: (operation: () => void) => {
       reads = visits = searches = copies = 0
@@ -126,12 +131,9 @@ export function observeRetainedInputWork() {
       return { reads, visits, searches, copies, total: reads + visits + searches + copies }
     },
     dispose: () => {
-      spliceSpy.mockRestore()
-      shiftSpy.mockRestore()
-      indexSpy.mockRestore()
-      sliceSpy.mockRestore()
-      iteratorSpy.mockRestore()
-      pushSpy.mockRestore()
+      for (const { key, descriptor } of descriptors) {
+        Object.defineProperty(Array.prototype, key, descriptor)
+      }
     }
   }
 }

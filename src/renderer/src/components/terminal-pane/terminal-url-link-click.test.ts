@@ -461,6 +461,7 @@ describe('hard-wrapped terminal HTTP clicks', () => {
       handleTerminalWebLinkClick('https://example.com/osc', event, {
         terminal,
         worktreeId: 'wt-1',
+        worktreePath: '/tmp',
         commit: disposable.ptyMouseSuppression.commit
       })
     })

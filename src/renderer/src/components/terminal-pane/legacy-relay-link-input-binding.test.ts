@@ -19,12 +19,39 @@ import type { StoreState } from './pty-connection-test-store-state'
 import { PANE_PTY_RESIZE_HOLD_FLUSH_EVENT } from '@/lib/pane-manager/pane-pty-resize-hold'
 import { createInitialStoreState } from './pty-connection-test-store-fixtures'
 import { createUnservedSshRowTransport } from './pty-connection/unserved-ssh-pane-connect'
+import type * as InnerProjection from './legacy-relay-inner-input-source'
+import type * as QualifiedForwarder from './pty-connection/pty-qualified-input-forwarder'
 import type { LegacyRelayBridgedPane } from '../../../../shared/legacy-relay-bridge-contract'
 import {
   createRemoteRuntimeTransportMocks,
   type MultiplexSubscriptionCallbacks
 } from './remote-runtime-pty-transport-test-harness'
 
+const allocation = vi.hoisted(() => ({ views: 0, forwarders: 0 }))
+vi.mock('./legacy-relay-inner-input-source', async (original) => {
+  const actual = await original<typeof InnerProjection>()
+  return {
+    ...actual,
+    projectLegacyRelayInnerInputSource: (
+      ...args: Parameters<typeof actual.projectLegacyRelayInnerInputSource>
+    ) => {
+      allocation.views++
+      return actual.projectLegacyRelayInnerInputSource(...args)
+    }
+  }
+})
+vi.mock('./pty-connection/pty-qualified-input-forwarder', async (original) => {
+  const actual = await original<typeof QualifiedForwarder>()
+  return {
+    ...actual,
+    createQualifiedPtyInputForwarder: (
+      ...args: Parameters<typeof actual.createQualifiedPtyInputForwarder>
+    ) => {
+      allocation.forwarders++
+      return actual.createQualifiedPtyInputForwarder(...args)
+    }
+  }
+})
 const state = vi.hoisted(() => ({
   codexRestartNoticeByPtyId: {},
   agentStatusByPaneKey: {},
@@ -197,6 +224,7 @@ it.each(['managed', 'unserved', 'recovered-inner'])(
     })
     if (wrapper === 'recovered-inner') {
       const sourceA = inner.getInputSource?.()
+      const stableAllocation = { ...allocation }
       emulator.input('before-recovery', true)
       await vi.waitFor(() => expect(runtime.inputFrameTexts().join('')).toBe('before-recovery'))
       subscription.callbacks?.onError?.({
@@ -209,6 +237,7 @@ it.each(['managed', 'unserved', 'recovered-inner'])(
       expect(inner.getInputSource?.()).toBe(sourceA)
       expect(sourceA?.isCurrent()).toBe(true)
       expect(sourceA?.endpoint?.incarnationId).toBe('i1')
+      expect(allocation).toEqual(stableAllocation)
       runtime.subscriptionSendBinary.mockClear()
       emulator.input('ordinary-positive', true)
       await vi.waitFor(() => expect(runtime.inputFrameTexts().join('')).toBe('ordinary-positive'))
@@ -255,5 +284,33 @@ it.each(['managed', 'unserved', 'recovered-inner'])(
     expect(doubles.openUrlMock).toHaveBeenCalledExactlyOnceWith(url)
     expect(bridgeWrite).not.toHaveBeenCalled()
     expect(runtime.inputFrameTexts()).toEqual([])
+    if (wrapper === 'recovered-inner') {
+      const source = transport.getInputSource?.()
+      const id = inner.getPtyId()
+      if (!id) {
+        throw new Error('Missing live remote pane')
+      }
+      const stableAllocation = { ...allocation }
+      transport.attach({ existingPtyId: id, callbacks: {} })
+      await vi.waitFor(() => expect(runtime.subscribeFrameCount()).toBe(1))
+      ack()
+      runtime.emitSnapshot(runtime.latestSubscribePayload().streamId, url)
+      expect(transport.getInputSource?.()).toBe(source)
+      expect(allocation).toEqual(stableAllocation)
+      const readSource = vi.spyOn(inner, 'getInputSource')
+      for (const n of [10, 100]) {
+        runtime.subscriptionSendBinary.mockClear()
+        readSource.mockClear()
+        for (let i = 0; i < n; i++) {
+          emulator.input('ordinary', true)
+        }
+        await vi.waitFor(() =>
+          expect(runtime.inputFrameTexts().join('')).toBe('ordinary'.repeat(n))
+        )
+        expect(runtime.inputFrameTexts()).toHaveLength(1)
+        expect(readSource).not.toHaveBeenCalled()
+        expect(allocation).toEqual(stableAllocation)
+      }
+    }
   }
 )
