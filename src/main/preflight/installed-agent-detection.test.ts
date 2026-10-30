@@ -64,4 +64,21 @@ describe('detectInstalledAgents disabled-agent filtering', () => {
       context: undefined
     })
   })
+
+  it('preserves strict probe failures while filtering disabled agents', async () => {
+    const error = Object.assign(new Error('WSL unavailable'), {
+      code: 'remote_runtime_unavailable'
+    })
+    detectCommandsMock.mockRejectedValueOnce(error)
+    await expect(
+      detectInstalledAgents(undefined, {
+        disabledTuiAgents: ['codex'],
+        failOnProbeError: true
+      })
+    ).rejects.toBe(error)
+    expect(detectCommandsMock).toHaveBeenLastCalledWith(expect.not.arrayContaining(['codex']), {
+      context: undefined,
+      failOnProbeError: true
+    })
+  })
 })

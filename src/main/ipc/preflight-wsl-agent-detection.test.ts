@@ -119,6 +119,22 @@ describe('detectWslCommandsOnPath', () => {
     expect(found).toEqual(new Set())
   })
 
+  it.each([
+    { environmentResolved: false, code: 0, timedOut: false },
+    { environmentResolved: true, code: 1, timedOut: false },
+    { environmentResolved: true, code: null, timedOut: true }
+  ])('preserves an unverifiable strict probe despite partial output: %j', async (result) => {
+    runWslProcessMock.mockResolvedValue({
+      ...result,
+      stdout: '__ORCA_AGENT_PATH__claude\t/usr/bin/claude\n',
+      stderr: ''
+    })
+
+    await expect(
+      detectWslCommandsOnPath({ distro: 'Ubuntu' }, ['claude'], { failOnProbeError: true })
+    ).rejects.toMatchObject({ code: 'remote_runtime_unavailable' })
+  })
+
   it('skips the probe entirely when no commands are requested', async () => {
     const found = await detectWslCommandsOnPath({ distro: 'Ubuntu' }, [])
 

@@ -62,7 +62,8 @@ it('leaves the preamble only what the setup gate did not use of the caller’s t
   vi.useFakeTimers({ toFake: ['Date'] })
   const runtime = {
     showTerminal: async () => ({ worktreeId: 'wt_1' }),
-    showManagedTerminalWorkspace: async () => ({ id: 'wt_1' }),
+    showManagedTerminalWorkspace: async () => ({ id: 'wt_1', repoId: 'repo-1' }),
+    validateOrchestrationAgentLauncherForRepo: async () => {},
     getNestedWorkerMaxDepth: () => 3,
     getOrchestrationHeartbeatMinutes: () => 5,
     getRuntimeId: () => 'epoch-1',

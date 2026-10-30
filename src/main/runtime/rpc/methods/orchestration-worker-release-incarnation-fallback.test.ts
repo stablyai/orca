@@ -77,6 +77,7 @@ describe('orchestration worker release incarnation fallback', () => {
       handle === 'term_worker' || handle === 'term_reminted' ? workerAuthority(handle) : null
     )
     vi.spyOn(runtime, 'validateOrchestrationAgentLauncher').mockImplementation(() => {})
+    vi.spyOn(runtime, 'validateOrchestrationAgentLauncherForRepo').mockResolvedValue()
     vi.spyOn(runtime, 'showTerminal').mockImplementation(async (handle) => workerTerminal(handle))
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: worker start reads only the managed worktree's id.
     vi.spyOn(runtime, 'showManagedTerminalWorkspace').mockResolvedValue({

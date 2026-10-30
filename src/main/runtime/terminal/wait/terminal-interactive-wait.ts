@@ -13,6 +13,10 @@ import type {
   TerminalWaitStatusEvidence
 } from './terminal-wait-permission'
 
+import {
+  validateWorkerAgentEnabled,
+  validateWorkerAgentForRepo
+} from '../../worker-agent-availability'
 import type { AgentLaunchScope } from '../../session-tabs/structured-session-tab-restoration'
 import { withTimeout } from '../../runtime-async-boundaries'
 import { TERMINAL_INTERACTIVE_WAIT_PROBE_TIMEOUT_MS } from '../../orca-runtime-core'
@@ -20,8 +24,6 @@ import { parsePaneKey } from '../../../../shared/stable-pane-id'
 import type { ExactWorkerProviderSession } from '../../../../shared/orchestration-worker-output'
 import { selectExactWorkerProviderSession } from '../../orchestration/worker-provider-session'
 import type { TuiAgent } from '../../../../shared/tui-agent'
-import { isTuiAgentEnabled } from '../../../../shared/tui-agent-selection'
-import { OrchestrationError } from '../../orchestration/orchestration-error'
 import { resolveLocalWindowsAgentStartupShell } from '../../../../shared/windows-terminal-shell'
 import {
   resolveStartupShell,
@@ -228,6 +230,14 @@ export abstract class OrcaRuntimeWithGetTerminalInteractiveWait extends OrcaRunt
     })
   }
 
+  async validateOrchestrationAgentLauncherForRepo(
+    agent: TuiAgent,
+    repoSelector: string,
+    mode?: Parameters<typeof validateWorkerAgentForRepo>[4]
+  ): Promise<void> {
+    await validateWorkerAgentForRepo(this, this.requireStore(), agent, repoSelector, mode)
+  }
+
   resolveOrchestrationAgentLauncher(
     selector: string,
     platform: NodeJS.Platform = process.platform,
@@ -315,15 +325,6 @@ export abstract class OrcaRuntimeWithGetTerminalInteractiveWait extends OrcaRunt
   }
 
   validateOrchestrationAgentLauncher(agent: TuiAgent): void {
-    const settings = this.store?.getSettings()
-    if (!settings) {
-      throw new Error('runtime_unavailable')
-    }
-    if (!isTuiAgentEnabled(agent, settings.disabledTuiAgents)) {
-      throw new OrchestrationError(
-        'agent_unconfigured',
-        `Agent launcher ${agent} is disabled or unavailable.`
-      )
-    }
+    validateWorkerAgentEnabled(agent, this.store?.getSettings())
   }
 }

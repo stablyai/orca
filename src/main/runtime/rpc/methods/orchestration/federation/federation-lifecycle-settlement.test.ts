@@ -86,6 +86,7 @@ describe('orchestration federation lifecycle settlement', () => {
 
   function configureWorkerRuntime(): void {
     vi.spyOn(workerRuntime, 'validateOrchestrationAgentLauncher').mockImplementation(() => {})
+    vi.spyOn(workerRuntime, 'validateOrchestrationAgentLauncherForRepo').mockResolvedValue()
     vi.spyOn(workerRuntime, 'showRepo').mockResolvedValue({
       id: 'windows-repo',
       kind: 'git'

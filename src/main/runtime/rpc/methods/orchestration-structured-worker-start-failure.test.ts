@@ -81,7 +81,8 @@ function fakes() {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this partial runtime fixture implements the methods called by the failing start path.
   const runtime = {
     showTerminal: async () => ({ worktreeId: WORKTREE }),
-    showManagedTerminalWorkspace: async () => ({ id: WORKTREE }),
+    showManagedTerminalWorkspace: async () => ({ id: WORKTREE, repoId: 'repo-1' }),
+    validateOrchestrationAgentLauncherForRepo: vi.fn().mockResolvedValue(undefined),
     getNestedWorkerMaxDepth: () => 3,
     getOrchestrationHeartbeatMinutes: () => 5,
     getRuntimeId: () => 'epoch-1',

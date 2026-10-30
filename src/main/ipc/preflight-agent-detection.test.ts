@@ -140,6 +140,34 @@ describe('preflight', () => {
     })
   })
 
+  it('forwards strict WSL probe failures through the extracted installed-agent detector', async () => {
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+    runWslProcessMock.mockResolvedValue({
+      environmentResolved: false,
+      code: 0,
+      stdout: '',
+      stderr: '',
+      timedOut: false
+    })
+    const context = {
+      projectRuntime: {
+        status: 'resolved',
+        runtime: {
+          kind: 'wsl',
+          hostPlatform: 'wsl',
+          projectId: 'repo-1',
+          distro: 'Ubuntu',
+          reason: 'project-override',
+          cacheKey: 'repo-1'
+        }
+      }
+    } as const
+
+    await expect(
+      detectInstalledAgentsWithShellPathHydration(context, { failOnProbeError: true })
+    ).rejects.toMatchObject({ code: 'remote_runtime_unavailable' })
+  })
+
   it.each(['win32', 'darwin', 'linux'])(
     'skips disabled probes on automatic %s detection and refresh while Settings stays complete',
     async (platform) => {

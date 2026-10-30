@@ -183,6 +183,7 @@ describe('orchestration federated worker output', () => {
 
   function configureWorkerRuntime(runtime: OrcaRuntimeService): void {
     vi.spyOn(runtime, 'validateOrchestrationAgentLauncher').mockImplementation(() => {})
+    vi.spyOn(runtime, 'validateOrchestrationAgentLauncherForRepo').mockResolvedValue()
     vi.spyOn(runtime, 'showRepo').mockResolvedValue({
       id: 'windows-repo',
       kind: 'git'

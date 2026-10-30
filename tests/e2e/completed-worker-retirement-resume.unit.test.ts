@@ -6,7 +6,7 @@ import type { SleepingAgentSessionRecord } from '../../src/shared/agent-session-
 import { makePaneKey } from '../../src/shared/stable-pane-id'
 import { parseWorkspaceSession } from '../../src/shared/workspace-session-schema'
 import type { TerminalTab } from '../../src/shared/terminal-tab-types'
-import type { Worktree } from '../../src/shared/worktree/types'
+import type { ResolvedWorktree } from '../../src/main/runtime/runtime-worktree-path-identity'
 import { OrchestrationDb } from '../../src/main/runtime/orchestration/db'
 import { OrcaRuntimeService } from '../../src/main/runtime/orca-runtime'
 import type { RpcContext } from '../../src/main/runtime/rpc/core'
@@ -40,7 +40,7 @@ const HELPER_PANE_KEY = makePaneKey(HELPER_TAB_ID, HELPER_LEAF_ID)
 const TERMINAL_HANDLE = 'terminal-background-worker'
 const initialAppStoreState = useAppStore.getState()
 
-function makeWorktree(id: string, workspacePath: string): Worktree {
+function makeWorktree(id: string, workspacePath: string): ResolvedWorktree {
   return {
     id,
     repoId: REPO_ID,
@@ -61,7 +61,17 @@ function makeWorktree(id: string, workspacePath: string): Worktree {
     isPinned: false,
     sortOrder: 0,
     lastActivityAt: 0,
-    hostId: 'local'
+    hostId: 'local',
+    parentWorktreeId: null,
+    childWorktreeIds: [],
+    lineage: null,
+    git: {
+      path: workspacePath,
+      head: 'abc123',
+      branch: 'refs/heads/review',
+      isBare: false,
+      isMainWorktree: false
+    }
   }
 }
 
@@ -273,7 +283,10 @@ async function releaseCompletedWorker(terminalState: 'running' | 'exited'): Prom
       : null
   )
   vi.spyOn(runtime, 'validateOrchestrationAgentLauncher').mockImplementation(() => {})
-  vi.spyOn(runtime, 'showManagedTerminalWorkspace').mockResolvedValue({ id: WORKTREE_ID } as never)
+  vi.spyOn(runtime, 'validateOrchestrationAgentLauncherForRepo').mockResolvedValue()
+  vi.spyOn(runtime, 'showManagedTerminalWorkspace').mockResolvedValue(
+    makeWorktree(WORKTREE_ID, WORKTREE_PATH)
+  )
   vi.spyOn(runtime, 'createTerminal').mockResolvedValue({
     handle: TERMINAL_HANDLE,
     worktreeId: WORKTREE_ID,

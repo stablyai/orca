@@ -1,5 +1,5 @@
 import '../../../unused-default-rpc-methods.test-fixture'
-import { mkdtempSync, rmSync } from 'node:fs'
+import { chmodSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -10,10 +10,12 @@ import {
   createAgentPromptSubmissionRuntime
 } from '../../../../agent-prompt-submission-runtime-test-fixture'
 import { OrchestrationDb } from '../../../../orchestration/db'
+import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import type { RpcRequest } from '../../../core'
 import { RpcDispatcher } from '../../../dispatcher'
 import { ORCHESTRATION_METHODS } from '../../orchestration'
 import * as FailedStartTeardown from './failed-worker-start-teardown'
+import * as AgentDetection from '../../../../../preflight/agent-detection'
 
 vi.mock('../../../../../git/worktree', () => ({
   listWorktrees: vi.fn().mockResolvedValue([
@@ -112,6 +114,7 @@ async function createPromptContractHarness(
     candidate === handle ? `runtime_test:${handle}:1` : null
   )
   vi.spyOn(runtime, 'validateOrchestrationAgentLauncher').mockImplementation(() => {})
+  vi.spyOn(runtime, 'validateOrchestrationAgentLauncherForRepo').mockResolvedValue()
   vi.spyOn(runtime, 'showTerminal').mockResolvedValue({
     handle: 'term_coord',
     worktreeId: 'repo::parent',
@@ -185,6 +188,71 @@ describe('orchestration worker-start prompt contract', () => {
     vi.useRealTimers()
     vi.restoreAllMocks()
   })
+
+  it('rejects an unavailable creation-target agent before dispatch or launch side effects', async () => {
+    const harness = await createPromptContractHarness('accepted')
+    vi.mocked(harness.runtime.validateOrchestrationAgentLauncherForRepo).mockRejectedValue(
+      new OrchestrationError('agent_not_available', 'Agent is absent on the execution host')
+    )
+    const createDispatch = vi.spyOn(harness.db, 'createStartingWorkerDispatch')
+    const createTerminal = vi.spyOn(harness.runtime, 'createTerminal')
+    const response = await harness.dispatcher.dispatch({
+      ...harness.request,
+      params: {
+        task: harness.taskId,
+        from: 'term_coord',
+        worktree: 'new-top-level',
+        repo: 'id:target-repo',
+        name: 'unavailable-agent',
+        agent: 'codex'
+      }
+    })
+
+    expect(response).toMatchObject({ ok: false, error: { code: 'agent_not_available' } })
+    expect(harness.runtime.validateOrchestrationAgentLauncherForRepo).toHaveBeenCalledWith(
+      'codex',
+      'id:target-repo',
+      'terminal'
+    )
+    expect(createDispatch).not.toHaveBeenCalled()
+    expect(harness.runtime.createManagedWorktree).not.toHaveBeenCalled()
+    expect(createTerminal).not.toHaveBeenCalled()
+    expect(harness.db.getTask(harness.taskId)?.status).toBe('ready')
+    expect(harness.submittedTurns()).toBe(0)
+    expect(harness.startedTurns()).toBe(0)
+  })
+
+  it.each(['wrapper --flag', 'npx codex'])(
+    'rejects a structured Command line before durable dispatch: %s',
+    async (command) => {
+      const harness = await createPromptContractHarness('accepted')
+      const root = mkdtempSync(join(tmpdir(), 'orca-worker-command-'))
+      temporaryRoots.push(root)
+      for (const name of ['wrapper', 'npx']) {
+        const executable = join(root, name)
+        writeFileSync(executable, '#!/bin/sh\nexit 0\n')
+        chmodSync(executable, 0o755)
+      }
+      const store = harness.runtime.requireStore()
+      vi.spyOn(store, 'getSettings').mockReturnValue({
+        ...store.getSettings(),
+        experimentalNativeChat: true,
+        agentCmdOverrides: { codex: command },
+        agentDefaultEnv: { codex: { PATH: root } }
+      })
+      vi.mocked(harness.runtime.validateOrchestrationAgentLauncherForRepo).mockRestore()
+      vi.spyOn(AgentDetection, 'detectInstalledAgentsWithShellPathHydration').mockResolvedValue([
+        'codex'
+      ])
+      const createDispatch = vi.spyOn(harness.db, 'createStartingWorkerDispatch')
+      const response = await harness.dispatcher.dispatch(harness.request)
+
+      expect(response).toMatchObject({ ok: false, error: { code: 'agent_not_available' } })
+      expect(createDispatch).not.toHaveBeenCalled()
+      expect(harness.runtime.createManagedWorktree).not.toHaveBeenCalled()
+      expect(reopenPromptContractDb(harness).getTask(harness.taskId)?.status).toBe('ready')
+    }
+  )
 
   it('durably accepts exactly one submitted and started turn', async () => {
     vi.useFakeTimers()
