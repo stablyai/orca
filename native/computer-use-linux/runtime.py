@@ -1105,6 +1105,7 @@ def synthetic_text_receipt(window, value):
     original = attempt(lambda: Atspi.Text.get_text(text, 0, count))
     if original is None or len(original) != count:
         return None
+    sys.stderr.write("RECEIPT " + json.dumps({"original": original, "start": start, "end": end, "count": count, "expected_caret": start + len(value)}, ensure_ascii=False) + "\n")
     return node, text, original[:start] + value + original[end:], start + len(value)
 
 
@@ -1119,6 +1120,7 @@ def wait_for_typed_text(receipt):
                 and attempt(lambda: Atspi.Text.get_n_selections(text)) == 0):
             return
         time.sleep(0.02)
+    sys.stderr.write("ACK_FAILED " + json.dumps({"expected": expected, "expected_caret": caret, "actual": attempt(lambda: Atspi.Text.get_text(text, 0, -1)), "actual_caret": attempt(lambda: Atspi.Text.get_caret_offset(text)), "selections": attempt(lambda: Atspi.Text.get_n_selections(text)), "focused": has_state(node, Atspi.StateType.FOCUSED)}, ensure_ascii=False) + "\n")
     raise RuntimeError("text_input_incomplete: typed text or caret did not match; inspect state before retrying")
 
 
