@@ -1,6 +1,5 @@
 import {
   captureEditorFileOperationProvenance,
-  assertEditorFileOperationCurrent,
   getExpectedSshConnectionGeneration,
   OWNER_CHANGED_MESSAGE,
   type EditorFileOperationProvenance
@@ -23,9 +22,13 @@ import { captureWorktreeOperationGenerationSnapshot } from './worktree-operation
 import {
   editorFileChildRoute,
   editorFileChildAuthority,
-  assertEditorFileOwnerCurrent
+  assertEditorFileOwnerCurrent,
+  captureEditorFileOperationForOwner
 } from './editor-file-child-owner'
-export { assertEditorFileOwnerCurrent } from './editor-file-child-owner'
+export {
+  assertEditorFileOwnerCurrent,
+  captureEditorFileOperationForOwner
+} from './editor-file-child-owner'
 import {
   selectDetectedWorktreesByRepo,
   selectFolderWorkspaces,
@@ -64,23 +67,15 @@ export function getEditorFileReadContext(
   expectedSshConnectionGeneration?: number
   expectedExecutionHostId?: 'local' | `ssh:${string}`
 } {
-  const provenance =
-    file.operationProvenance ??
-    captureEditorFileOperationProvenance(
-      state,
-      file.worktreeId,
-      file.runtimeEnvironmentId,
-      file.runtimeEnvironmentId !== undefined
-    )
-  const route = file.operationProvenance
-    ? file.filePath
-      ? assertEditorFileOwnerCurrent(
-          state,
-          { worktreeId: file.worktreeId, filePath: file.filePath },
-          provenance
-        )
-      : assertEditorFileOperationCurrent(state, file.worktreeId, provenance)
-    : provenance.generation.route
+  const provenance = file.operationProvenance
+    ? captureEditorFileOperationForOwner(state, file, file.operationProvenance)
+    : captureEditorFileOperationProvenance(
+        state,
+        file.worktreeId,
+        file.runtimeEnvironmentId,
+        file.runtimeEnvironmentId !== undefined
+      )
+  const route = provenance.generation.route
   const workspaceScope = parseWorkspaceKey(file.worktreeId)
   const resolvedWorktreePath =
     (worktreePath?.trim() ? worktreePath : null) ??
@@ -172,18 +167,23 @@ export function acquireEditorFileOperation(
     child && !resource
       ? getState().acquireEditorFileOperationProvenance(selectedFile, selectedProvenance)
       : selectedFile
-  const provenance =
+  const ownerProvenance =
     resource && resource.filePath !== captured.filePath
       ? (selectedProvenance ?? captured.operationProvenance)
       : (captured.operationProvenance ?? selectedProvenance)
   if (
-    !provenance ||
+    !ownerProvenance ||
     (child &&
       captured.runtimeEnvironmentId !== undefined &&
-      captured.runtimeEnvironmentId !== provenance.generation.route.runtimeEnvironmentId)
+      captured.runtimeEnvironmentId !== ownerProvenance.generation.route.runtimeEnvironmentId)
   ) {
     throw new Error(OWNER_CHANGED_MESSAGE)
   }
+  const provenance = captureEditorFileOperationForOwner(
+    state,
+    { worktreeId: captured.worktreeId, filePath: resource?.filePath ?? captured.filePath },
+    ownerProvenance
+  )
   const resolveOwnerDirectory = (current: AppState): string | null => {
     const scope = parseWorkspaceKey(captured.worktreeId)
     if (provenance.childRepo && scope?.type === 'folder') {

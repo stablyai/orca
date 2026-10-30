@@ -2,7 +2,7 @@ import { editorSaveResourceKey } from '@/store/slices/editor/buffers/editor-buff
 import type { AppState } from '@/store'
 import type { OpenFile } from '@/store/slices/editor'
 import {
-  assertEditorFileOwnerCurrent,
+  captureEditorFileOperationForOwner,
   acquireEditorFileOperation
 } from '@/lib/editor-file-operation-owner'
 import { editorTabFileAccess } from '@/lib/local-file-access'
@@ -22,7 +22,7 @@ function hasCurrentProvenance(state: AppState, file: OpenFile): boolean {
     return true
   }
   try {
-    assertEditorFileOwnerCurrent(state, file, file.operationProvenance)
+    captureEditorFileOperationForOwner(state, file, file.operationProvenance)
     return true
   } catch {
     return false

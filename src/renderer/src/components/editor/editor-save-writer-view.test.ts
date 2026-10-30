@@ -17,7 +17,7 @@ const STALE: EditorFileOperationProvenance = {
 }
 
 vi.mock('@/lib/editor-file-operation-owner', () => ({
-  assertEditorFileOwnerCurrent: (
+  captureEditorFileOperationForOwner: (
     _state: unknown,
     _file: OpenFile,
     provenance: EditorFileOperationProvenance

@@ -247,7 +247,7 @@ export function useEditorPanelFileContentLoader({
           ...(options?.wakeWslDistro ? { wakeWslDistro: true } : {})
         }
         const readPathKey = `${readScope ?? ''}::${filePath}`
-        const key = `${readPathKey}::${JSON.stringify(acquisition?.file.operationProvenance)}::${access?.kind ?? ''}${allowPagedPreview ? '' : '::editable'}${options?.wakeWslDistro ? '::wake' : ''}`
+        const key = `${readPathKey}::${JSON.stringify(acquisition?.provenance)}::${access?.kind ?? ''}${allowPagedPreview ? '' : '::editable'}${options?.wakeWslDistro ? '::wake' : ''}`
         const result = await readEditorPanelFileContent(key, options, () =>
           readEditorCsvFileContent(readArgs, allowPagedPreview)
         )

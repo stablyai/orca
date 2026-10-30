@@ -14,8 +14,44 @@ import {
   OWNER_CHANGED_MESSAGE,
   type EditorFileOperationProvenance
 } from './editor-file-operation-provenance'
-import { assertWorktreeOperationGenerationSnapshotCurrent } from './worktree-operation-generation'
+import {
+  assertWorktreeOperationGenerationSnapshotCurrent,
+  captureWorktreeOperationGenerationSnapshot
+} from './worktree-operation-generation'
 import type { WorktreeOperationRoute } from './worktree-operation-route'
+import { resolveContinuedRuntimeEnvironmentRevision } from '@/runtime/runtime-environment-revision'
+
+/** A tab retains its owner; a new operation uses that paired host's current session. */
+export function captureEditorFileOperationForOwner(
+  state: AppState,
+  file: { worktreeId: string; filePath?: string },
+  provenance: EditorFileOperationProvenance
+): EditorFileOperationProvenance {
+  const previous = provenance.generation
+  const current = captureWorktreeOperationGenerationSnapshot(previous.route, previous.authority)
+  const environmentId = previous.route.runtimeEnvironmentId
+  const captured = {
+    ...provenance,
+    generation: {
+      ...previous,
+      runtimeConnectionGeneration: current.runtimeConnectionGeneration,
+      runtimeSshGeneration: current.runtimeSshGeneration,
+      runtimePairingRevision:
+        environmentId && previous.runtimePairingRevision !== undefined
+          ? resolveContinuedRuntimeEnvironmentRevision(
+              environmentId,
+              previous.runtimePairingRevision
+            )
+          : previous.runtimePairingRevision
+    }
+  }
+  if (file.filePath !== undefined) {
+    assertEditorFileOwnerCurrent(state, { ...file, filePath: file.filePath }, captured)
+  } else {
+    assertEditorFileOperationCurrent(state, file.worktreeId, captured)
+  }
+  return captured
+}
 
 export function editorFileChildRoute(repo: Repo | undefined): WorktreeOperationRoute | null {
   if (!repo) {
