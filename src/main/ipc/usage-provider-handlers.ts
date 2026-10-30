@@ -3,12 +3,14 @@ import type { ClaudeUsageStore } from '../claude-usage/store'
 import type { CodexUsageStore } from '../codex-usage/store'
 import type { OpenCodeUsageStore } from '../opencode-usage/store'
 import type { MuseUsageStore } from '../muse-usage/store'
+import type { OmpUsageStore } from '../omp-usage/store'
 
 type UsageProviderStores = {
   claudeUsage: ClaudeUsageStore
   codexUsage: CodexUsageStore
   openCodeUsage: OpenCodeUsageStore
   museUsage: MuseUsageStore
+  ompUsage: OmpUsageStore
 }
 
 type UsageProviderChannelPrefix = keyof UsageProviderStores
@@ -75,4 +77,5 @@ export function registerUsageProviderHandlers(stores: UsageProviderStores): void
   registerProviderHandlers('codexUsage', stores.codexUsage)
   registerProviderHandlers('openCodeUsage', stores.openCodeUsage)
   registerProviderHandlers('museUsage', stores.museUsage)
+  registerProviderHandlers('ompUsage', stores.ompUsage)
 }

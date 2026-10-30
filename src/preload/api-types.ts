@@ -14,6 +14,7 @@ import type {
   ClaudeUsageApi,
   CodexUsageApi,
   MuseUsageApi,
+  OmpUsageApi,
   OpenCodeUsageApi,
   RateLimitsApi
 } from './api/agent-usage-api'
@@ -140,6 +141,7 @@ export type PreloadApi = {
   codexUsage: CodexUsageApi
   openCodeUsage: OpenCodeUsageApi
   museUsage: MuseUsageApi
+  ompUsage: OmpUsageApi
   aiVault: AiVaultApi
   nativeChat: NativeChatApi
   fs: FilesystemApi['fs']
@@ -179,6 +181,7 @@ export type {
   ClaudeUsageApi,
   CodexUsageApi,
   MuseUsageApi,
+  OmpUsageApi,
   OpenCodeUsageApi
 } from './api/agent-usage-api'
 export type { AiVaultApi } from './api/ai-vault-api'

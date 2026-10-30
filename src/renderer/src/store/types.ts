@@ -21,6 +21,7 @@ import type {
   MuseUsageSlice,
   OpenCodeUsageSlice
 } from './slices/usage-provider-slices'
+import type { OmpUsageSlice } from './slices/usage-provider-slices-omp'
 import type { BrowserSlice } from './slices/browser'
 import type { RateLimitSlice } from './slices/rate-limits'
 import type { SshSlice } from './slices/ssh'
@@ -71,6 +72,7 @@ export type AppState = RepoSlice &
   CodexUsageSlice &
   OpenCodeUsageSlice &
   MuseUsageSlice &
+  OmpUsageSlice &
   BrowserSlice &
   RateLimitSlice &
   SshSlice &
