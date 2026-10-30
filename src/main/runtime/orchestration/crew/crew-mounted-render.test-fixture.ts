@@ -66,11 +66,14 @@ export const createMountedCrewProducer: MountedCrewProducerModule['createMounted
           })
         create()
         restoreRun = create().id
-        f.db.unbindOtherRunsForCoordinator({
-          terminalHandle: null,
-          paneKey: null,
-          orcaSessionId: sessionId
-        })
+        f.db.unbindOtherRunsForCoordinator(
+          {
+            terminalHandle: null,
+            paneKey: null,
+            orcaSessionId: sessionId
+          },
+          f.run.id
+        )
       },
       restoreAddress: () => {
         if (!restoreRun) {

@@ -33,7 +33,7 @@ beforeEach(async () => {
 afterEach(async () => {
   vi.restoreAllMocks()
   await journals.closeAll()
-  closeTestJournalHostDatabases()
+  await closeTestJournalHostDatabases()
   await rm(root, { recursive: true, force: true })
 })
 

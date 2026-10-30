@@ -1,3 +1,4 @@
+import { EventEmitter } from 'node:events'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 const { execFileMock, webContentsFromIdMock, existsSyncMock, readFileSyncMock, stdinWrites } =
@@ -78,7 +79,11 @@ import {
   resetAgentBrowserBridgeMocks,
   type MockWebContents
 } from './agent-browser-bridge-test-harness'
-import { FILL_ELEMENT_FUNCTION } from './browser-element-functions'
+import {
+  FILE_INPUT_FRAME_URL_FUNCTION,
+  FILE_UPLOAD_TARGET_FUNCTION,
+  FILL_ELEMENT_FUNCTION
+} from './browser-element-functions'
 
 overrideBridgeWebContentsLookup(AgentBrowserBridge.prototype, webContentsFromIdMock)
 
@@ -189,7 +194,59 @@ describe('AgentBrowserBridge', () => {
     await expect(bridge.upload('@e19', ['/nonexistent/orca-upload.txt'])).rejects.toMatchObject({
       code: 'invalid_argument'
     })
-    expect(agentBrowserCommandsIn(stdinWrites).map(([name]) => name)).not.toContain('upload')
+    expect(agentBrowserCommandsIn(stdinWrites)).toEqual([])
+  })
+
+  it.each([
+    ['its cross-site frame', 'frame-session'],
+    ['the page its cross-site frame messages', undefined]
+  ])('sets the files on the input a picker button opens in %s', async (_case, chooserSession) => {
+    const file = import.meta.filename
+    const debuggerEvents = new EventEmitter()
+    wc.debugger.on.mockImplementation((event, listener) => void debuggerEvents.on(event, listener))
+    wc.debugger.removeListener.mockImplementation(
+      (event, listener) => void debuggerEvents.removeListener(event, listener)
+    )
+    wc.debugger.sendCommand.mockImplementation(async (method, params) => {
+      const declaration =
+        typeof params === 'object' && params !== null && 'functionDeclaration' in params
+          ? params.functionDeclaration
+          : null
+      if (declaration === FILE_UPLOAD_TARGET_FUNCTION) {
+        // The page reports the picker its click opened on the frame's own session.
+        const session = chooserSession ?? ''
+        debuggerEvents.emit('message', {}, 'Page.fileChooserOpened', { backendNodeId: 7 }, session)
+        return { result: { value: false } }
+      }
+      if (method === 'DOM.resolveNode') {
+        return { object: { objectId: 'input-7' } }
+      }
+      if (declaration === FILE_INPUT_FRAME_URL_FUNCTION) {
+        return { result: { value: 'https://widgets.example/picker' } }
+      }
+      return {}
+    })
+    succeedWith({ value: null })
+
+    await expect(bridge.upload('@e6', [file])).resolves.toEqual({
+      uploaded: 1,
+      frameUrl: 'https://widgets.example/picker'
+    })
+
+    const sent = wc.debugger.sendCommand.mock.calls
+    expect(sent).toContainEqual([
+      'DOM.setFileInputFiles',
+      { files: [file], objectId: 'input-7' },
+      // The page session is Electron's default, so its commands carry no session id.
+      ...(chooserSession ? [chooserSession] : [])
+    ])
+    expect(sent).toContainEqual(['Page.setInterceptFileChooserDialog', { enabled: false }])
+    expect(sent).toContainEqual([
+      'Page.setInterceptFileChooserDialog',
+      { enabled: false },
+      'frame-session'
+    ])
+    expect(debuggerEvents.listenerCount('message')).toBe(0)
   })
 
   it.each([

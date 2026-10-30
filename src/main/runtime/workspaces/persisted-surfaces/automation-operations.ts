@@ -6,8 +6,9 @@ import {
 import { CrewReadModel } from '../../orchestration/crew/crew-read-model'
 import { getPublishedHostDescriptor } from '../../host-descriptor'
 import type { AutomationsChangedPayload } from '../../../../shared/runtime-client-events'
+import { getWorkerTerminalAutoReleaseScheduler } from '../../orchestration/worker-terminal-auto-release-scheduler'
 import type { ResolvedWorktree } from '../../runtime-worktree-path-identity'
-import { OrcaRuntimeWithPtyForegroundProcessReads } from '../../client/runtime-client-state'
+import { OrcaRuntimeWithOrchestrationDatabaseBinding } from './orchestration-database-binding'
 import type {
   AutomationOwnerPrecondition,
   AutomationDestination
@@ -23,19 +24,17 @@ import {
   type AutomationListResult
 } from '../../../../shared/automation-list-scope'
 import { OrchestrationDb } from '../../orchestration/db'
-import { orchestrationDbFile } from '../../orchestration/db/orchestration-db-file'
 import {
   committedHandBackTypes,
   type MailHandBack
 } from '../../orchestration/db/messages/helper-mailbox-hand-back'
 import { existsSync } from 'node:fs'
-import { getAppEnvironment } from '../../../../shared/app-environment'
 import type { LegacyWorkerTerminalRecoveryPlan } from '../../orchestration/orchestration-legacy-worker-terminal-recovery'
 import type { LegacyWorkerTerminalRecoveryResult } from '../../runtime-legacy-worker-terminal-recovery-types'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { worktreeIdsEqual } from '../../../../shared/worktree/id'
 
-export abstract class OrcaRuntimeWithAutomationOperations extends OrcaRuntimeWithPtyForegroundProcessReads {
+export abstract class OrcaRuntimeWithAutomationOperations extends OrcaRuntimeWithOrchestrationDatabaseBinding {
   abstract readonly agentTransitions: Pick<AgentTransitionDetector, 'subscribe'>
 
   abstract notifyAutomationsChanged(payload?: AutomationsChangedPayload): void
@@ -165,6 +164,9 @@ export abstract class OrcaRuntimeWithAutomationOperations extends OrcaRuntimeWit
       this.bindCrewChanges(this._orchestrationDb)
       this.ensureOrchestrationFederationRelay()
       this.scheduleRestoredMessageRepoints()
+      this.bindWorkerTerminalAutoRelease(this._orchestrationDb)
+      // Recover deadlines armed before a restart.
+      getWorkerTerminalAutoReleaseScheduler(this).rearm()
     }
     return this._orchestrationDb
   }
@@ -176,10 +178,6 @@ export abstract class OrcaRuntimeWithAutomationOperations extends OrcaRuntimeWit
       : null
   }
 
-  private orchestrationDbPath(): string {
-    return orchestrationDbFile(getAppEnvironment().getPath('userData'))
-  }
-
   setOrchestrationDb(db: OrchestrationDb): void {
     this.orchestrationFederation.resetForDatabaseChange()
     this.mailPointerRepointScheduler.clear()
@@ -188,6 +186,7 @@ export abstract class OrcaRuntimeWithAutomationOperations extends OrcaRuntimeWit
     this.bindCrewChanges(db)
     this.ensureOrchestrationFederationRelay()
     this.scheduleRestoredMessageRepoints()
+    this.bindWorkerTerminalAutoRelease(db)
   }
 
   private unwatchCrewDb: (() => void) | undefined

@@ -5,6 +5,7 @@ import type {
 } from '../../runtime-terminal-state-records'
 import type { TerminalHandleRecord } from '../../runtime-terminal-contracts'
 import type { PtyIncarnationHandleRecord } from '../../orca-runtime-core'
+import { TerminalIncarnationCandidates } from './terminal-incarnation-candidates'
 
 type Mutable<T> = { -readonly [K in keyof T]: T[K] }
 /** Canonical terminal facts; semantic operations retain selection, callbacks and failure policy. */
@@ -16,6 +17,7 @@ export class TerminalIdentitySource {
   private readonly ptyBindings = new Map<string, string>()
   private readonly leafBindings = new Map<string, string>()
   private readonly incarnationBindings = new Map<string, Mutable<PtyIncarnationHandleRecord>>()
+  private readonly incarnationCandidates = new TerminalIncarnationCandidates()
   private readonly syntheticHandles = new Set<string>()
   // Weak ownership links preserve detached canonical records without retaining their lifetime.
   private readonly ownedPtys = new WeakMap<object, Mutable<RuntimePtyWorktreeRecord>>()
@@ -242,6 +244,7 @@ export class TerminalIdentitySource {
     const owned = { ...input }
     this.ownedIncarnations.set(owned, owned)
     this.incarnationBindings.set(id, owned)
+    this.incarnationCandidates.set(id, owned.handle)
     if (
       !previous ||
       previous.handle !== owned.handle ||
@@ -266,10 +269,15 @@ export class TerminalIdentitySource {
     }
   }
   removeIncarnation(id: string): boolean {
+    this.incarnationCandidates.delete(id)
     return this.remove(this.incarnationBindings, id)
   }
   clearIncarnations(): void {
+    this.incarnationCandidates.clear()
     this.clear(this.incarnationBindings)
+  }
+  firstIncarnationPtyId(handle: string): string | undefined {
+    return this.incarnationCandidates.first(handle)
   }
 
   addSynthetic(handle: string): void {

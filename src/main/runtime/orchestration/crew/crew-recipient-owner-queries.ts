@@ -125,7 +125,7 @@ export function crewRecipientOwnerQueries(db: OrchestrationDb) {
       UNION
       SELECT requested.key, r.rowid AS ordinal, ${runColumns} FROM requested CROSS JOIN runs r
       WHERE r.legacy = 0 AND r.coordinator_pane_key IS NOT NULL AND ${RUN_PANE_KEY_MATCH_SUFFIX_SQL.replaceAll('coordinator_pane_key', 'r.coordinator_pane_key')} = requested.suffix
-    ) SELECT * FROM candidates ORDER BY ordinal`)
+    ) SELECT * FROM candidates ORDER BY ordinal DESC`)
           .all(JSON.stringify(requested))
       )
   }

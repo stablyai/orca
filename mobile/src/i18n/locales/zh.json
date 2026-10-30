@@ -1388,14 +1388,6 @@
     "hostPendingCreationRow": {
       "creatingWorkspace": "正在创建工作区…"
     },
-    "hostRailActions": {
-      "accounts": "账户",
-      "closeSearch": "关闭搜索",
-      "floatingWorkspace": "浮动工作区",
-      "newWorkspace": "新工作区",
-      "searchWorkspaces": "搜索工作区",
-      "tasks": "任务"
-    },
     "hostScreenHeader": {
       "accounts": "账户",
       "activeFilters_one": "工作区选项（已启用 {{count}} 个筛选条件）",
@@ -2328,9 +2320,6 @@
       "terminalName": "终端名称",
       "unsavedMarkdown": "未保存的 Markdown 更改",
       "urlPrompt": "输入 URL，或留空以新建标签页。"
-    },
-    "sideRail": {
-      "backToWorktrees": "返回工作树列表"
     },
     "sourceControlLaunchAgent": {
       "noEnabledAgent": "此工作区主机上未检测到已启用的 AI 智能体。",

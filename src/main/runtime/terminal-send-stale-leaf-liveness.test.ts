@@ -438,6 +438,7 @@ function makeOrchestrationDbStub(toHandle: () => string) {
       ],
       getActiveCoordinatorRun: () => null,
       getCurrentRunForPane: () => ({ id: 'run_test' }),
+      runsBoundToPane: () => [{ id: 'run_test' }],
       getRun: () => ({ id: 'run_test', coordinator_handle: toHandle() }),
       hasUndeliveredDirectMessageForRun: (runId: string, handle: string) =>
         rows.some(
@@ -463,6 +464,7 @@ function makeOrchestrationDbStub(toHandle: () => string) {
         ),
       // Consulted by onPtyExit's dispatch-failure path.
       getActiveDispatchForTerminal: () => null,
+      findActiveRemoteAttachmentForPane: () => undefined,
       stageMailboxPointerEnter,
       markMailboxPointerWriteAttempted,
       markMailboxPointerEnterAttempted,

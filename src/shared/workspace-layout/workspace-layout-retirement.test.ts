@@ -670,7 +670,7 @@ it('counts the compatible kernel work on balanced and skew N/10N trees and keeps
   }
   const cyclic = paneSplit(paneLeaf('a'), paneLeaf('b'))
   if (cyclic.type === 'split') {
-    cyclic.second = cyclic
+    cyclic.first = cyclic
   }
   expect(() => old(cyclic)).toThrow(RangeError)
   expect(() => collectLayoutLeafIdsInOrder(cyclic)).toThrow(RangeError)

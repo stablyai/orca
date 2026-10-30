@@ -38,12 +38,8 @@ export type FirstPartyAgentStatus = {
 } | null
 
 /** Tier 1: an idle marker the agent put in a title itself. */
-export function hasExplicitIdleTitle(
-  record: TuiIdleEvidenceRecord,
-  rendererTitle?: string | null
-): boolean {
-  // Renderer titles may be display-only decay; native evidence takes precedence.
-  const title = record.lastOscTitle ?? rendererTitle
+export function hasExplicitIdleTitle(record: TuiIdleEvidenceRecord): boolean {
+  const title = record.lastOscTitle
   return Boolean(title && detectExplicitIdleStatusFromTitle(title) === 'idle')
 }
 
@@ -122,8 +118,6 @@ export type TuiIdleEvaluationInput = {
   record: TuiIdleEvidenceRecord
   /** Tier 0: a blocking prompt in the line tail. */
   readTailBlockedReason: () => RuntimeTerminalWaitBlockedReason | null
-  /** Renderer-synced pane/tab title, when one exists. */
-  rendererTitle?: string | null
   /** Defer multi-KB body scans until the cheaper memoized title check fails. */
   readPositiveBodyEvidence: () => boolean
   /** Tier 1b body evidence: a Muse ready screen, or a rule-file one held to quiet. Thunk, as above. */
@@ -217,7 +211,7 @@ function rankTuiIdleEvidence(input: TuiIdleEvaluationInput): TuiIdleVerdict {
       : { kind: 'pending', quietForeground: 'closed' }
   }
   // Both settle at tier 1; prefer memoized title lookup over a multi-KB body scan.
-  if (hasExplicitIdleTitle(input.record, input.rendererTitle) || input.readPositiveBodyEvidence()) {
+  if (hasExplicitIdleTitle(input.record) || input.readPositiveBodyEvidence()) {
     return READY_STRONG
   }
   // Why beside the title lane, not after the veto: both are tier 1, and a first-party `done`

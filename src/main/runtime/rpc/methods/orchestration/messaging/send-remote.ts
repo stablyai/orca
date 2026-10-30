@@ -9,6 +9,7 @@ import type { z } from 'zod'
 import { parseRemoteWorkerPayload } from '../schemas'
 import type { SendParams } from '../schemas'
 import { rejectFederatedExplicitTarget } from '../routing'
+import { WORKER_DONE_RECORDED_NEXT } from '../receipt-next'
 import { assertWorkerCanReport } from '../../../../orchestration/worker-report-admission'
 
 type SendParamsInput = z.infer<typeof SendParams>
@@ -109,6 +110,7 @@ export async function sendRemoteMessage(args: {
       destination: 'run_home',
       accepted: true
     },
-    ...(lifecycle ? { lifecycle } : {})
+    ...(lifecycle ? { lifecycle } : {}),
+    ...(lifecycle && lifecycle.action !== 'rejected' ? { next: WORKER_DONE_RECORDED_NEXT } : {})
   }
 }

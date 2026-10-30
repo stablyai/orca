@@ -47,7 +47,7 @@ export function registerJournalRowWriterTests(): void {
 
     afterEach(async () => {
       try {
-        database.close()
+        await database.close()
       } catch {}
       await rm(root, { recursive: true, force: true })
     })

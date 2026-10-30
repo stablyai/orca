@@ -1,7 +1,17 @@
-import { Node, NodeViewWrapper, ReactNodeViewRenderer, type NodeViewProps } from '@tiptap/react'
+import {
+  Node,
+  NodeViewWrapper,
+  ReactNodeViewRenderer,
+  type Editor,
+  type NodeViewProps
+} from '@tiptap/react'
 import { Users } from 'lucide-react'
 import { NativeChatPromptPill } from './NativeChatPromptPill'
-import { agentReferenceToken } from '../../../../shared/orchestration-agent-reference'
+import {
+  agentReferenceToken,
+  type OrchestrationAgentReference
+} from '../../../../shared/orchestration-agent-reference'
+import { closeHistory } from '@tiptap/pm/history'
 
 function AgentReferencePill({ node, selected }: NodeViewProps): React.JSX.Element {
   return (
@@ -40,3 +50,20 @@ export const NativeChatAgentReference = Node.create({
     `@${node.attrs.label}`
   ]
 })
+
+export function insertAgentReferences(
+  editor: Editor,
+  references: OrchestrationAgentReference[]
+): void {
+  if (!editor.isEditable) {
+    return
+  }
+  editor.view.dispatch(closeHistory(editor.state.tr))
+  editor.commands.insertContent(
+    references.flatMap((attrs) => [
+      { type: NativeChatAgentReference.name, attrs },
+      { type: 'text', text: ' ' }
+    ])
+  )
+  editor.view.dispatch(closeHistory(editor.state.tr))
+}
