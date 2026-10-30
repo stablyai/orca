@@ -72,7 +72,7 @@ export function PluginThemeUseNow({
       icon: null,
       update: { pluginIconTheme: theme.id }
     })),
-    ...terminals.map((stored) => {
+    ...terminals.map((stored): Chip => {
       // Why: light mode shows the dark slot unless it uses separate light themes.
       const shownSlot =
         dark || !settings.terminalUseSeparateLightTheme ? 'terminalThemeDark' : 'terminalThemeLight'
@@ -89,9 +89,9 @@ export function PluginThemeUseNow({
         label: theme.label,
         mode: shownNow
           ? mode
-          : ((terminalThemeSlot(theme.mode, dark) === 'terminalThemeDark'
-              ? 'dark'
-              : 'light') as Mode),
+          : terminalThemeSlot(theme.mode, dark) === 'terminalThemeDark'
+            ? 'dark'
+            : 'light',
         selected: isPluginTerminalThemeSelected(settings, theme, dark),
         // Why an icon: a plugin's terminal themes often share their app themes' names.
         icon: <SquareTerminal aria-hidden="true" />,
@@ -106,11 +106,11 @@ export function PluginThemeUseNow({
     }
     // Why switch modes: a theme for the other mode would otherwise change nothing on screen.
     const next: Partial<GlobalSettings> = { ...chip.update, theme: chip.mode }
-    const snapshot = themeSettingsSnapshot(settings)
+    const snapshot: Readonly<Record<string, unknown>> = themeSettingsSnapshot(settings)
     // Why only these keys: Switch back must not undo picks made while the toast is still up.
-    const previous = Object.fromEntries(
-      Object.keys(next).map((key) => [key, snapshot[key as keyof GlobalSettings]])
-    ) as Partial<GlobalSettings>
+    const previous: Partial<GlobalSettings> = Object.fromEntries(
+      Object.keys(next).map((key) => [key, snapshot[key]])
+    )
     void updateSettings(next)
     showThemeAppliedToast(chip.label, previous)
   }

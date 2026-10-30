@@ -99,7 +99,7 @@ it('switches back only the settings the pick changed', () => {
   state.app = [appTheme('Dawn', 'light')]
   render(<PluginThemeUseNow pluginKey={pluginKey} />)
   fireEvent.click(screen.getByRole('button', { name: 'Use for light: Dawn' }))
-  const action = toast.success.mock.calls[0]?.[1]?.action as { onClick: () => void }
+  const action: { onClick: () => void } = toast.success.mock.calls[0]?.[1]?.action
   action.onClick()
   expect(state.updateSettings).toHaveBeenLastCalledWith({
     pluginAppThemeLight: 'plugin:previous/light',
