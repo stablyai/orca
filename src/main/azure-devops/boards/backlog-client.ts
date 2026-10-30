@@ -166,5 +166,15 @@ export async function loadAzureDevOpsBacklogPage(
   )
   const ancestors = await hydrateAzureDevOpsWorkItems(repo, ancestorIds, [])
 
-  return { level, items, childrenByParent, children, parents, ancestors }
+  return {
+    level,
+    items,
+    // Why: `errorPolicy=omit` drops an item the batch could not read; the view says so
+    // rather than presenting a short list as the whole level.
+    unhydratedItemCount: orderedIds.length - items.length,
+    childrenByParent,
+    children,
+    parents,
+    ancestors
+  }
 }

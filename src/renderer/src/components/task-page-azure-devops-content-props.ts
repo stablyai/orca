@@ -85,6 +85,8 @@ export function buildAzureDevOpsContentProps(args: {
   selectView: (view: AzureDevOpsTaskView) => void
   boardAvailable: boolean
   boardPage: AzureDevOpsBoardPage | null
+  /** Level items the host could not load, shown as a notice above the table. */
+  backlogUnhydratedItemCount: number
   boardErrorStatus: AzureDevOpsContentProps['boardErrorStatus']
   boardErrorMessage: string | null
   collapsedLaneIds: ReadonlySet<string>
@@ -146,6 +148,7 @@ export function buildAzureDevOpsContentProps(args: {
       options: args.filterOptions,
       onChange: args.setFilters
     },
+    backlogUnhydratedItemCount: args.backlogUnhydratedItemCount,
     table: {
       rows: args.rows,
       columnFields: args.columnWidths.columns,

@@ -5,6 +5,7 @@ import { translate } from '@/i18n/i18n'
 import type { AzureDevOpsContentProps } from '@/components/use-task-page-azure-devops-state'
 import { TaskPageAzureDevOpsFilters } from './Filters'
 import { AzureDevOpsBacklogTable } from './BacklogTable'
+import { AzureDevOpsBacklogNotices } from './BacklogNotices'
 import { AzureDevOpsBoard } from './Board'
 import { AzureDevOpsToolbar } from './Toolbar'
 
@@ -105,13 +106,16 @@ export function TaskPageAzureDevOpsContent({
           {props.view === 'board' ? (
             <AzureDevOpsBoardArea {...props} />
           ) : (
-            <div className="min-h-0 flex-1 overflow-auto scrollbar-sleek">
-              {props.status === 'loading' && props.table.rows.length === 0 ? (
-                <Spinner />
-              ) : (
-                <AzureDevOpsBacklogTable {...props.table} />
-              )}
-            </div>
+            <>
+              <AzureDevOpsBacklogNotices unhydratedItemCount={props.backlogUnhydratedItemCount} />
+              <div className="min-h-0 flex-1 overflow-auto scrollbar-sleek">
+                {props.status === 'loading' && props.table.rows.length === 0 ? (
+                  <Spinner />
+                ) : (
+                  <AzureDevOpsBacklogTable {...props.table} />
+                )}
+              </div>
+            </>
           )}
         </>
       )}

@@ -92,6 +92,8 @@ export type AzureDevOpsBacklogPage = {
   level: AzureDevOpsBacklogLevel
   /** Level items in stack-rank order. */
   items: AzureDevOpsWorkItem[]
+  /** Level items the host could not load, so the list is short of what the level holds. */
+  unhydratedItemCount?: number
   /** One level down, keyed by parent id, in stack-rank order. */
   childrenByParent: Record<number, number[]>
   /** Items referenced by `childrenByParent` values. */

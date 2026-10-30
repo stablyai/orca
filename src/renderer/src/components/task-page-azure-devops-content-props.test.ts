@@ -151,6 +151,7 @@ function props(
     detailError: null,
     parent: null,
     childItems: [],
+    backlogUnhydratedItemCount: 0,
     useItem: vi.fn()
   })
 }

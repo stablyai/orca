@@ -62,6 +62,8 @@ export type AzureDevOpsContentProps = {
   view: AzureDevOpsTaskView
   /** Null until the board for the selected level is loaded, or when the backlog is shown. */
   board: AzureDevOpsBoardProps | null
+  /** Level items the host could not load, shown as a notice above the table. */
+  backlogUnhydratedItemCount: number
   /** How the board load failed, so the page reuses the backlog's host notices. */
   boardErrorStatus: AzureDevOpsBoardErrorStatus | null
   boardErrorMessage: string | null
@@ -275,6 +277,7 @@ export function useTaskPageAzureDevOpsState(model: TaskPageRuntimeHostsModel) {
     selectView,
     boardAvailable,
     boardPage: board,
+    backlogUnhydratedItemCount: page?.unhydratedItemCount ?? 0,
     boardErrorStatus,
     boardErrorMessage,
     collapsedLaneIds,

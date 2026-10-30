@@ -165,6 +165,20 @@ describe('backlog client', () => {
     ])
   })
 
+  it('counts the level items the batch omitted, and keeps the ones that loaded', async () => {
+    // Why: errorPolicy=omit drops a deleted or now-invisible item; the list says so.
+    installAzureDevOpsFetchFixture({
+      '/acme/Project/Mobile/_apis/work/backlogs/Microsoft.RequirementCategory/workItems': {
+        workItems: [{ target: { id: 10 } }, { target: { id: 11 } }]
+      },
+      [`${WIT}/workitems`]: { value: [pbi(10, null, 1)] },
+      [`${WIT}/wiql`]: { workItemRelations: [] }
+    })
+    const page = await loadAzureDevOpsBacklogPage(CLOUD_REPO, 'Mobile', LEVEL)
+    expect(page.items.map((i) => i.id)).toEqual([10])
+    expect(page.unhydratedItemCount).toBe(1)
+  })
+
   it('throws when the level items cannot be hydrated, rather than reading as an empty level', async () => {
     installAzureDevOpsFetchFixture({
       '/acme/Project/Mobile/_apis/work/backlogs/Microsoft.RequirementCategory/workItems': {

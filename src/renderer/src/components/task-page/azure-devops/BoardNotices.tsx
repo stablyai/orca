@@ -1,6 +1,6 @@
 import React from 'react'
-import { AlertCircle } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
+import { AzureDevOpsLoadNoticeLine, AzureDevOpsLoadNotices } from './LoadNotice'
 
 /**
  * What the board is NOT showing faithfully: Azure DevOps itself prompts about
@@ -16,31 +16,13 @@ export type AzureDevOpsBoardNoticesProps = {
   unhydratedParentCount: number
 }
 
-const NOTICE_CLASS =
-  'flex items-center gap-2 rounded-md border border-status-warning-border bg-status-warning-background px-2 py-1 text-[11px] text-status-warning-text'
-
-function NoticeLine({
-  kind,
-  children
-}: {
-  kind: string
-  children: React.ReactNode
-}): React.JSX.Element {
-  return (
-    <div data-board-notice={kind} className={NOTICE_CLASS}>
-      <AlertCircle className="size-3.5 shrink-0" />
-      <span className="min-w-0">{children}</span>
-    </div>
-  )
-}
-
 export function AzureDevOpsBoardNotices(
   props: AzureDevOpsBoardNoticesProps
 ): React.JSX.Element | null {
   const lines: React.JSX.Element[] = []
   if (props.unplacedCount > 0) {
     lines.push(
-      <NoticeLine key="unmapped" kind="unmapped">
+      <AzureDevOpsLoadNoticeLine key="unmapped" kind="unmapped">
         {translate(
           'auto.components.TaskPage.azureDevOps.board.unmappedCards',
           '{{count}} cards are not mapped to a column, so they are shown in the first in-progress column.',
@@ -50,12 +32,12 @@ export function AzureDevOpsBoardNotices(
               '{{count}} card is not mapped to a column, so it is shown in the first in-progress column.'
           }
         )}
-      </NoticeLine>
+      </AzureDevOpsLoadNoticeLine>
     )
   }
   if (props.unhydratedItemCount > 0) {
     lines.push(
-      <NoticeLine key="unhydrated-items" kind="unhydrated-items">
+      <AzureDevOpsLoadNoticeLine key="unhydrated-items" kind="unhydrated-items">
         {translate(
           'auto.components.TaskPage.azureDevOps.board.unhydratedCards',
           '{{count}} cards couldn’t be loaded and are missing from the board. Refresh to try again.',
@@ -65,12 +47,12 @@ export function AzureDevOpsBoardNotices(
               '{{count}} card couldn’t be loaded and is missing from the board. Refresh to try again.'
           }
         )}
-      </NoticeLine>
+      </AzureDevOpsLoadNoticeLine>
     )
   }
   if (props.unhydratedParentCount > 0) {
     lines.push(
-      <NoticeLine key="unhydrated-parents" kind="unhydrated-parents">
+      <AzureDevOpsLoadNoticeLine key="unhydrated-parents" kind="unhydrated-parents">
         {translate(
           'auto.components.TaskPage.azureDevOps.board.unhydratedParents',
           '{{count}} parent work items couldn’t be loaded, so some cards show no parent.',
@@ -80,12 +62,8 @@ export function AzureDevOpsBoardNotices(
               '{{count}} parent work item couldn’t be loaded, so some cards show no parent.'
           }
         )}
-      </NoticeLine>
+      </AzureDevOpsLoadNoticeLine>
     )
   }
-  return lines.length === 0 ? null : (
-    <div data-board-notices className="flex shrink-0 flex-col gap-1 px-2 pt-2">
-      {lines}
-    </div>
-  )
+  return lines.length === 0 ? null : <AzureDevOpsLoadNotices>{lines}</AzureDevOpsLoadNotices>
 }

@@ -3222,6 +3222,10 @@
             "unhydratedCards_other": "{{count}} cards couldn’t be loaded and are missing from the board. Refresh to try again.",
             "unhydratedParents_one": "{{count}} parent work item couldn’t be loaded, so some cards show no parent.",
             "unhydratedParents_other": "{{count}} parent work items couldn’t be loaded, so some cards show no parent."
+          },
+          "backlog": {
+            "unhydratedItems_one": "{{count}} work item couldn’t be loaded and is missing from this list. Refresh to try again.",
+            "unhydratedItems_other": "{{count}} work items couldn’t be loaded and are missing from this list. Refresh to try again."
           }
         }
       },
