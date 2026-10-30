@@ -45,7 +45,8 @@ describe('resolveTerminalOrchestrationCliCommand', () => {
       resolveTerminalOrchestrationCliCommand({
         connectionId: null,
         isWsl: false,
-        worktreeId: 'repo::/home/alice/repo'
+        worktreeId: 'repo::/Users/alice/repo',
+        hostPlatform: 'darwin'
       })
     ).toBe('orca')
     expect(
@@ -55,6 +56,17 @@ describe('resolveTerminalOrchestrationCliCommand', () => {
         worktreeId: 'repo::\\\\wsl.localhost\\Ubuntu\\home\\alice\\repo'
       })
     ).toBe('orca')
+  })
+
+  it('uses orca-ide for native Linux hosts', () => {
+    expect(
+      resolveTerminalOrchestrationCliCommand({
+        connectionId: null,
+        isWsl: false,
+        worktreeId: 'repo::/home/alice/repo',
+        hostPlatform: 'linux'
+      })
+    ).toBe('orca-ide')
   })
 
   it('uses the runtime-provided command locally but never leaks it to SSH', () => {
