@@ -522,6 +522,13 @@
       "disconnected": "Anhängen fehlgeschlagen (nicht verbunden)",
       "imageTooLarge": "Bild zum Anhängen zu groß",
       "permissionDenied": "Zugriff auf Fotos verweigert"
+    },
+    "dictationAutoSend": {
+      "announcement_one": "Die Nachricht wird in {{count}} Sekunde gesendet. Auf „Abbrechen“ tippen, um sie als Entwurf zu behalten.",
+      "announcement_other": "Die Nachricht wird in {{count}} Sekunden gesendet. Auf „Abbrechen“ tippen, um sie als Entwurf zu behalten.",
+      "sendingIn": "Senden in {{seconds}} s",
+      "cancelSending": "Senden abbrechen",
+      "cancel": "Abbrechen"
     }
   },
   "common": {

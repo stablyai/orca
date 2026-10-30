@@ -522,6 +522,13 @@
       "disconnected": "Eklenemedi (bağlantı yok)",
       "imageTooLarge": "Görsel eklenemeyecek kadar büyük",
       "permissionDenied": "Fotoğraf erişim izni reddedildi"
+    },
+    "dictationAutoSend": {
+      "announcement_one": "Mesaj {{count}} saniye içinde gönderilecek. Taslak olarak tutmak için İptal'e dokunun.",
+      "announcement_other": "Mesaj {{count}} saniye içinde gönderilecek. Taslak olarak tutmak için İptal'e dokunun.",
+      "sendingIn": "{{seconds}} sn içinde gönderiliyor",
+      "cancelSending": "Göndermeyi iptal et",
+      "cancel": "İptal"
     }
   },
   "common": {

@@ -2856,6 +2856,13 @@
       "ran_one": "Ran {{count}} subagent",
       "ran_other": "Ran {{count}} subagents",
       "tokens": "{{value0}} tokens"
+    },
+    "dictationAutoSend": {
+      "announcement_one": "Sending message in {{count}} second. Tap Cancel to keep it as a draft.",
+      "announcement_other": "Sending message in {{count}} seconds. Tap Cancel to keep it as a draft.",
+      "sendingIn": "Sending in {{seconds}}s",
+      "cancelSending": "Cancel sending",
+      "cancel": "Cancel"
     }
   },
   "sourceControl": {

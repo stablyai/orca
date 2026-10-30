@@ -518,6 +518,13 @@
       "disconnected": "첨부 실패(연결 끊김)",
       "imageTooLarge": "이미지가 너무 커서 첨부할 수 없습니다.",
       "permissionDenied": "사진 접근 권한 거부됨"
+    },
+    "dictationAutoSend": {
+      "announcement_one": "{{count}}초 후에 메시지를 보냅니다. 초안으로 남기려면 취소를 탭하세요.",
+      "announcement_other": "{{count}}초 후에 메시지를 보냅니다. 초안으로 남기려면 취소를 탭하세요.",
+      "sendingIn": "{{seconds}}초 후 전송",
+      "cancelSending": "전송 취소",
+      "cancel": "취소"
     }
   },
   "common": {

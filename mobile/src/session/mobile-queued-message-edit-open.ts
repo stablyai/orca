@@ -17,6 +17,8 @@ import {
   type MobileStructuredQueuedEditArgs
 } from './mobile-queued-message-edit-draft'
 
+export const MOBILE_QUEUED_EDIT_SCOPE_PREFIX = 'queued-edit:'
+
 export function createMobileQueuedEdit(
   args: MobileStructuredQueuedEditArgs,
   messageId: string,
@@ -33,7 +35,7 @@ export function createMobileQueuedEdit(
     return null
   }
   const fingerprint = agentSessionSendBodyFingerprint(sessionId, message.body)
-  const scopeKey = `queued-edit:${createUuidV4()}`
+  const scopeKey = `${MOBILE_QUEUED_EDIT_SCOPE_PREFIX}${createUuidV4()}`
   seedMobileQueuedEditInputs(scopeKey, message.body)
   const edit: Edit = {
     scope: sessionKey,

@@ -518,6 +518,13 @@
       "disconnected": "添加失败（连接已断开）",
       "imageTooLarge": "图片过大，无法添加",
       "permissionDenied": "照片访问权限被拒绝"
+    },
+    "dictationAutoSend": {
+      "announcement_one": "将在 {{count}} 秒后发送消息。点按“取消”可保留为草稿。",
+      "announcement_other": "将在 {{count}} 秒后发送消息。点按“取消”可保留为草稿。",
+      "sendingIn": "{{seconds}} 秒后发送",
+      "cancelSending": "取消发送",
+      "cancel": "取消"
     }
   },
   "common": {

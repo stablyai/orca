@@ -557,6 +557,14 @@
       "disconnected": "Falha ao anexar (desconectado)",
       "imageTooLarge": "Imagem grande demais para anexar",
       "permissionDenied": "Permissão de acesso às fotos negada"
+    },
+    "dictationAutoSend": {
+      "announcement_one": "A mensagem será enviada em {{count}} segundo. Toque em Cancelar para mantê-la como rascunho.",
+      "announcement_many": "A mensagem será enviada em {{count}} segundos. Toque em Cancelar para mantê-la como rascunho.",
+      "announcement_other": "A mensagem será enviada em {{count}} segundos. Toque em Cancelar para mantê-la como rascunho.",
+      "sendingIn": "Enviando em {{seconds}} s",
+      "cancelSending": "Cancelar envio",
+      "cancel": "Cancelar"
     }
   },
   "common": {

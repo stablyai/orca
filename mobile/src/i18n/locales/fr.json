@@ -557,6 +557,14 @@
       "disconnected": "Échec de l'ajout (déconnecté)",
       "imageTooLarge": "Image trop volumineuse pour être jointe",
       "permissionDenied": "Accès aux photos refusé"
+    },
+    "dictationAutoSend": {
+      "announcement_one": "Envoi du message dans {{count}} seconde. Touchez Annuler pour le garder en brouillon.",
+      "announcement_many": "Envoi du message dans {{count}} secondes. Touchez Annuler pour le garder en brouillon.",
+      "announcement_other": "Envoi du message dans {{count}} secondes. Touchez Annuler pour le garder en brouillon.",
+      "sendingIn": "Envoi dans {{seconds}} s",
+      "cancelSending": "Annuler l'envoi",
+      "cancel": "Annuler"
     }
   },
   "common": {

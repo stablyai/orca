@@ -518,6 +518,13 @@
       "disconnected": "附加失敗（連線已中斷）",
       "imageTooLarge": "圖片太大，無法附加",
       "permissionDenied": "照片存取權限遭拒"
+    },
+    "dictationAutoSend": {
+      "announcement_one": "將在 {{count}} 秒後傳送訊息。點一下「取消」即可保留為草稿。",
+      "announcement_other": "將在 {{count}} 秒後傳送訊息。點一下「取消」即可保留為草稿。",
+      "sendingIn": "{{seconds}} 秒後傳送",
+      "cancelSending": "取消傳送",
+      "cancel": "取消"
     }
   },
   "common": {

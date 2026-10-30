@@ -164,6 +164,9 @@ export function registerMobileNativeChatTextDestination(
 export function focusMobileNativeChatTextDestination(scope: string): void {
   focusedScope = scope
 }
+export function readFocusedMobileNativeChatTextScope(): string | null {
+  return focusedScope && textDestinations.has(focusedScope) ? focusedScope : null
+}
 export function captureMobileNativeChatTextDestination():
   | MobileNativeChatTextDestination
   | undefined {

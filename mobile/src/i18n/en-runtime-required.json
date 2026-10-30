@@ -18,6 +18,10 @@
     }
   },
   "chat": {
+    "dictationAutoSend": {
+      "announcement_one": "Sending message in {{count}} second. Tap Cancel to keep it as a draft.",
+      "announcement_other": "Sending message in {{count}} seconds. Tap Cancel to keep it as a draft."
+    },
     "subagentGroup": {
       "ran_one": "Ran {{count}} subagent",
       "ran_other": "Ran {{count}} subagents",

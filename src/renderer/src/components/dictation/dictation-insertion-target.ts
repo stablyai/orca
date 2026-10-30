@@ -76,10 +76,11 @@ function readFocusedInsertionTarget(): DictationInsertionTarget | null {
   return null
 }
 
-export function insertText(text: string, target: DictationInsertionTarget): void {
+// Resolves true only after confirmed delivery; terminal and queued-edit inserts land elsewhere, unconfirmed.
+export function insertText(text: string, target: DictationInsertionTarget): Promise<boolean> {
   if (target.kind === 'composer') {
     target.insert(text)
-    return
+    return Promise.resolve(false)
   }
   if (target.kind === 'terminal') {
     document.dispatchEvent(
@@ -87,25 +88,25 @@ export function insertText(text: string, target: DictationInsertionTarget): void
         detail: { text, tabId: target.tabId, paneId: target.paneId }
       })
     )
-    return
+    return Promise.resolve(false)
   }
 
   if (target.kind === 'text') {
     const element = target.element
     if (!element.isConnected) {
-      return
+      return Promise.resolve(false)
     }
-    void pasteTextIntoTextControl(element, text, {
+    return pasteTextIntoTextControl(element, text, {
       source: 'programmatic',
       inputType: 'insertText',
       canContinue: (candidate) => candidate.ownerDocument.activeElement === candidate
-    }).catch(() => {})
-    return
+    }).then(
+      (result) => result.status === 'pasted',
+      () => false
+    )
   }
 
-  if (target.kind === 'contentEditable') {
-    void insertTextIntoContentEditableTarget(target.element, text).catch(() => {})
-  }
+  return insertTextIntoContentEditableTarget(target.element, text).catch(() => false)
 }
 
 function findClosestEditorElement(element: HTMLElement): HTMLElement | null {
@@ -115,46 +116,46 @@ function findClosestEditorElement(element: HTMLElement): HTMLElement | null {
 async function insertTextIntoContentEditableTarget(
   element: HTMLElement,
   text: string
-): Promise<void> {
+): Promise<boolean> {
   const directByteLength = measureTextControlPasteByteLength(text, {
     stopAfterBytes: TEXT_CONTROL_PASTE_DIRECT_MAX_BYTES
   })
   if (directByteLength.byteLength === 0) {
-    return
+    return false
   }
   if (!isContentEditableDictationTargetCurrent(element)) {
-    return
+    return false
   }
   const editorElement = findClosestEditorElement(element) ?? element
   if (!directByteLength.exceededLimit) {
-    insertContentEditableDictationChunk(element, editorElement, text)
-    return
+    return insertContentEditableDictationChunk(element, editorElement, text)
   }
 
   const maxByteLength = await measureTextControlPasteByteLengthWithYield(text, {
     stopAfterBytes: TEXT_CONTROL_PASTE_MAX_BYTES
   })
   if (maxByteLength.exceededLimit) {
-    return
+    return false
   }
 
   let textIndex = 0
   // Chunk paste-sized dictation while preserving editor beforeinput/input semantics.
   while (textIndex < text.length) {
     if (!isContentEditableDictationTargetCurrent(element)) {
-      return
+      return false
     }
     const nextIndex = getUtf8ChunkEndIndex(text, textIndex, TEXT_CONTROL_PASTE_CHUNK_MAX_BYTES)
     if (
       !insertContentEditableDictationChunk(element, editorElement, text.slice(textIndex, nextIndex))
     ) {
-      return
+      return false
     }
     textIndex = nextIndex
     if (textIndex < text.length) {
       await yieldToEventLoop()
     }
   }
+  return true
 }
 
 function insertContentEditableDictationChunk(
@@ -175,16 +176,17 @@ function insertContentEditableDictationChunk(
     return true
   }
   const selection = element.ownerDocument.getSelection()
-  if (selection && selection.rangeCount > 0) {
-    const range = selection.getRangeAt(0)
-    range.deleteContents()
-    const textNode = element.ownerDocument.createTextNode(text)
-    range.insertNode(textNode)
-    range.setStartAfter(textNode)
-    range.collapse(true)
-    selection.removeAllRanges()
-    selection.addRange(range)
+  const range = selection && selection.rangeCount > 0 ? selection.getRangeAt(0) : null
+  if (!selection || !range || !element.contains(range.commonAncestorContainer)) {
+    return false
   }
+  range.deleteContents()
+  const textNode = element.ownerDocument.createTextNode(text)
+  range.insertNode(textNode)
+  range.setStartAfter(textNode)
+  range.collapse(true)
+  selection.removeAllRanges()
+  selection.addRange(range)
   editorElement.dispatchEvent(
     new InputEvent('input', { bubbles: true, inputType: 'insertText', data: text })
   )

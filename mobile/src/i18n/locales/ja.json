@@ -518,6 +518,13 @@
       "disconnected": "添付に失敗しました（接続切断）。",
       "imageTooLarge": "画像が大きすぎて添付できません。",
       "permissionDenied": "写真へのアクセスが拒否されました。"
+    },
+    "dictationAutoSend": {
+      "announcement_one": "{{count}} 秒後にメッセージを送信します。下書きとして残すには「キャンセル」をタップしてください。",
+      "announcement_other": "{{count}} 秒後にメッセージを送信します。下書きとして残すには「キャンセル」をタップしてください。",
+      "sendingIn": "{{seconds}} 秒後に送信",
+      "cancelSending": "送信をキャンセル",
+      "cancel": "キャンセル"
     }
   },
   "common": {

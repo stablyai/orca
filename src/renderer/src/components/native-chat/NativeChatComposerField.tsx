@@ -28,6 +28,7 @@ import { NativeChatImageAttachmentPreview } from './NativeChatImageAttachmentPre
 import type { NativeChatComposerGoalMode } from './use-native-chat-composer-submit'
 import { translate } from '@/i18n/i18n'
 import { useNativeChatComposerDraftUnsaved } from './use-native-chat-draft-unsaved'
+import { useNativeChatDictationSubmit } from './use-native-chat-dictation-submit'
 import { useLatestHandler } from '@/lib/use-latest-handler'
 
 function noop(): void {}
@@ -170,6 +171,7 @@ export function NativeChatComposerField({
   agent
 }: NativeChatComposerFieldProps): React.JSX.Element {
   const draftNotSaved = useNativeChatComposerDraftUnsaved(draftScopeKey)
+  useNativeChatDictationSubmit(textareaRef, onSend)
   const optionCount =
     autocomplete.mode === 'slash'
       ? autocomplete.items.length
@@ -322,6 +324,7 @@ export function NativeChatComposerField({
               inputRef={textareaRef}
               initialValue={draft}
               disabled={disabled}
+              dictationAutoSend
               onChange={editorChange}
               onKeyDownCapture={editorKeyDownCapture}
               onKeyUp={editorKeyUp}

@@ -58,6 +58,7 @@ export function MobileSessionActiveContent({
     handleDictationToggle,
     handleDictationPressIn,
     handleDictationPressOut,
+    dictationAutoSend,
     readMarkdownTab,
     addDiffCommentForFile,
     deleteDiffCommentForFile,
@@ -278,6 +279,7 @@ export function MobileSessionActiveContent({
             micStarting={dictation.isStarting}
             micProcessing={dictation.isProcessing}
             dictationMode={dictationMode}
+            dictationAutoSend={dictationAutoSend}
             onMicPressIn={handleDictationPressIn}
             onMicPressOut={handleDictationPressOut}
             inputLockReason={nativeChatOverlayInputLockReason}

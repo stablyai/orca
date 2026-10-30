@@ -557,6 +557,14 @@
       "disconnected": "No se pudo adjuntar (sin conexión)",
       "imageTooLarge": "Imagen demasiado grande para adjuntarla",
       "permissionDenied": "Permiso de acceso a las fotos denegado"
+    },
+    "dictationAutoSend": {
+      "announcement_one": "El mensaje se enviará en {{count}} segundo. Toca Cancelar para guardarlo como borrador.",
+      "announcement_many": "El mensaje se enviará en {{count}} segundos. Toca Cancelar para guardarlo como borrador.",
+      "announcement_other": "El mensaje se enviará en {{count}} segundos. Toca Cancelar para guardarlo como borrador.",
+      "sendingIn": "Enviando en {{seconds}} s",
+      "cancelSending": "Cancelar envío",
+      "cancel": "Cancelar"
     }
   },
   "common": {

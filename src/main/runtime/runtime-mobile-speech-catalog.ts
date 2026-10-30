@@ -1,6 +1,10 @@
 import type { VoiceSettings } from '../../shared/speech-types'
 import type { RuntimeSpeechModelSummary, RuntimeSpeechSetupState } from '../../shared/runtime-types'
-import { getDefaultVoiceSettings } from '../../shared/constants'
+import {
+  DEFAULT_DICTATION_AUTO_SEND_DELAY_MS,
+  DICTATION_AUTO_SEND_DELAYS_MS,
+  getDefaultVoiceSettings
+} from '../../shared/constants'
 import { getCatalogModel, isLocalSpeechModel, SPEECH_MODEL_CATALOG } from '../speech/model-catalog'
 import { getSpeechModelManager, getSpeechSttService } from '../speech/speech-runtime-service'
 import { hasLocalSpeechRecognizer } from '../speech/stt-worker-paths'
@@ -50,6 +54,10 @@ export class RuntimeMobileSpeechCatalog {
       enabled: voice.enabled === true,
       selectedModelId: voice.sttModel ?? '',
       dictationMode: voice.dictationMode === 'hold' ? 'hold' : 'toggle',
+      autoSendAfterDictation: voice.autoSendAfterDictation === true,
+      autoSendDelayMs:
+        DICTATION_AUTO_SEND_DELAYS_MS.find((delayMs) => delayMs === voice.autoSendDelayMs) ??
+        DEFAULT_DICTATION_AUTO_SEND_DELAY_MS,
       models
     }
   }
