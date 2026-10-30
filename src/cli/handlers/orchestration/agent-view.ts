@@ -115,7 +115,6 @@ export function renderOrchestrationArgv(argv: readonly string[]): string | undef
 
 /** Only Orca's own `[Reply: ...]` hint lines name a command; message text is left as written. */
 export function resolveOrcaReplyHints(text: string): string {
-  return text.replace(/^\[Reply: orca(?= orchestration )/gm, () =>
-    resolveOrcaCommandsInText('[Reply: orca')
-  )
+  const executable = renderCommand([resolveOrchestrationCliExecutable()])
+  return text.replace(/^\[Reply: orca(?= orchestration )/gm, () => `[Reply: ${executable}`)
 }

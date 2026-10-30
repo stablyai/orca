@@ -331,4 +331,22 @@ describe('orchestration agent views', () => {
     )
     expect(process.exitCode).toBe(1)
   })
+
+  it('names the resolved executable in a legacy check reply hint', async () => {
+    const { stdout } = await run('check', [['run', 'run_1']], {
+      messages: [
+        {
+          id: 'msg_q',
+          from_handle: 'term_worker',
+          to_handle: 'run:run_1',
+          subject: 'Question',
+          body: 'Proceed?',
+          type: 'question'
+        }
+      ],
+      count: 1,
+      legacyCompatibility: { recovery: false }
+    })
+    expect(stdout).toContain('[Reply: orca-dev orchestration reply --id msg_q --body "..."]')
+  })
 })
