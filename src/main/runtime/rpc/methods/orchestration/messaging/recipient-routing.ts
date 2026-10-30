@@ -6,6 +6,7 @@ import { resolveOrchestrationParty } from '../../../../orchestration/orchestrati
 import { isEquivalentPaneKey } from '../../../../orchestration/db/pane-key-match'
 import { CURRENT_CONTRACT_VERSION } from '../../../../orchestration/db/contract-constants'
 import { readAgentSessionRecordStore } from '../../../../orchestration/structured-session-lineage'
+import { finishedWorkerFollowUp } from './finished-worker-follow-up'
 import {
   readSessionRecipient,
   refuseUndeliverableSessionRecipient,
@@ -27,7 +28,7 @@ export function assertDispatchMailboxDeliverable(
   const recipientRun = currentDispatchAssigneeRun(runtime, db, dispatch)?.id ?? dispatch.run_id
   throw new OrchestrationError(
     'dispatch_inactive',
-    `Dispatch ${dispatchId} is ${dispatch.status}; its worker will never read that mailbox. Send to run:${recipientRun} instead, or start a new Dispatch for follow-up work.`
+    `Dispatch ${dispatchId} is ${dispatch.status}; its worker will never read that mailbox. Send to run:${recipientRun} instead, or ${finishedWorkerFollowUp(runtime, db, dispatch)}.`
   )
 }
 

@@ -232,10 +232,11 @@ export async function startLocalWorker(args: {
         )
       }
     }
-    // A chat has no pane or process; its Dispatch names it by its Orca session ID alone.
-    const terminalAuthority = chat
-      ? CHAT_WORKER_AUTHORITY
-      : requireWorkerAuthority(runtime, terminalHandle)
+    // A structured worker's chat keeps the pane and process its custody is held under.
+    const terminalAuthority =
+      terminal && terminal.terminalHandle === null
+        ? CHAT_WORKER_AUTHORITY
+        : requireWorkerAuthority(runtime, terminalHandle)
     db.prepareStartingWorkerAuthority({
       dispatchId: started.dispatch.id,
       handle: terminalHandle,
