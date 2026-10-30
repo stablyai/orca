@@ -13381,6 +13381,15 @@
           "installed": "Make sure you trust {{value0}}. This plugin runs the publisher’s code inside Orca.",
           "label": "Not an official plugin:",
           "translations": "Translations can change any text in Orca. Make sure you trust {{value0}}."
+        },
+        "PluginUpdateReviewToast": {
+          "movedTitle": "{{value0}} {{value1}} comes from a different repository",
+          "accessTitle": "{{value0}} {{value1}} wants more access",
+          "manyTitle": "{{value0}} plugin updates need your review",
+          "oneDescription": "Published by {{value0}}. It won’t update until you review it.",
+          "manyDescription": "They won’t update until you review them.",
+          "review": "Review",
+          "dismiss": "Dismiss"
         }
       },
       "right": {

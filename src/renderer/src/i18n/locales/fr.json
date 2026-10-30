@@ -13159,6 +13159,15 @@
         },
         "pluginTryAction": {
           "incompleteLanguage": "Ce pack de langue est trop incomplet pour l’utiliser."
+        },
+        "PluginUpdateReviewToast": {
+          "movedTitle": "{{value0}} {{value1}} provient d’un autre dépôt",
+          "accessTitle": "{{value0}} {{value1}} demande plus d’accès",
+          "manyTitle": "{{value0}} mises à jour de plugins attendent votre vérification",
+          "oneDescription": "Publié par {{value0}}. Il ne sera pas mis à jour tant que vous ne l’aurez pas vérifié.",
+          "manyDescription": "Elles ne seront pas installées tant que vous ne les aurez pas vérifiées.",
+          "review": "Vérifier",
+          "dismiss": "Ignorer"
         }
       },
       "right": {

@@ -151,7 +151,7 @@ const styles = themedStyleSheet(() => ({
     minHeight: 44,
     justifyContent: 'center',
     backgroundColor: colors.surfaceBright,
-    borderRadius: radii.button,
+    borderRadius: radii.control,
     paddingHorizontal: spacing.md
   },
   terminalButtonText: {

@@ -12649,6 +12649,15 @@
         },
         "pluginTryAction": {
           "incompleteLanguage": "이 언어 팩은 번역이 너무 불완전해서 전환할 수 없습니다."
+        },
+        "PluginUpdateReviewToast": {
+          "movedTitle": "{{value0}} {{value1}}이(가) 다른 저장소에서 제공됩니다",
+          "accessTitle": "{{value0}} {{value1}}이(가) 더 많은 접근 권한을 요청합니다",
+          "manyTitle": "플러그인 업데이트 {{value0}}개가 검토를 기다리고 있습니다",
+          "oneDescription": "게시자: {{value0}}. 검토하기 전까지 업데이트되지 않습니다.",
+          "manyDescription": "검토하기 전까지 업데이트되지 않습니다.",
+          "review": "검토",
+          "dismiss": "닫기"
         }
       },
       "right": {

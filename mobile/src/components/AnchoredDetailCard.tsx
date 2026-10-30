@@ -148,7 +148,7 @@ const styles = themedStyleSheet(() => ({
     backgroundColor: colors.bgRaised,
     borderWidth: 1,
     borderColor: colors.borderSubtle,
-    borderRadius: radii.row,
+    borderRadius: radii.surface,
     shadowColor: '#000',
     shadowOpacity: 0.35,
     shadowRadius: 12,

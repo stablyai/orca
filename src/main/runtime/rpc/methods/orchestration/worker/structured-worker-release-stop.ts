@@ -20,7 +20,6 @@ export async function stopStructuredWorkerForRelease(args: {
   // Only an automatic release can be refused; an explicit one keeps cutting through a hung start.
   const stop = await stopStructuredWorker(
     structured,
-    dispatchId,
     runtime,
     resource.auto_release_at
       ? () => db.admitWorkerChatReleaseClose(resource.id, (row) => runtime.isWorkerAgentInTurn(row))

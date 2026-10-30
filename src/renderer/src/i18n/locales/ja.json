@@ -12649,6 +12649,15 @@
         },
         "pluginTryAction": {
           "incompleteLanguage": "この言語パックは未完成の部分が多いため、切り替えられません。"
+        },
+        "PluginUpdateReviewToast": {
+          "movedTitle": "{{value0}} {{value1}} は別のリポジトリから提供されています",
+          "accessTitle": "{{value0}} {{value1}} がより多くのアクセスを求めています",
+          "manyTitle": "{{value0}} 件のプラグイン更新が確認待ちです",
+          "oneDescription": "公開元: {{value0}}。確認するまで更新されません。",
+          "manyDescription": "確認するまで更新されません。",
+          "review": "確認",
+          "dismiss": "閉じる"
         }
       },
       "right": {

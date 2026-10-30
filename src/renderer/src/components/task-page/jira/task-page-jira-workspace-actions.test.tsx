@@ -4,9 +4,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { TooltipProvider } from '@/components/ui/tooltip'
-import { TaskPageJiraIssueList } from './task-page-jira-issue-list'
-import { defaultJiraListColumnIds, visibleJiraListColumns } from './jira-list-columns'
-import type { JiraIssue } from '../../../shared/jira/jira-types'
+import { TaskPageJiraIssueList } from '../../task-page-jira-issue-list'
+import { defaultJiraListColumnIds, visibleJiraListColumns } from '../../jira-list-columns'
+import type { JiraIssue } from '../../../../../shared/jira/jira-types'
 import { makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
 
 const issue: JiraIssue = {
