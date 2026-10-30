@@ -36,6 +36,7 @@ import { prepareLocalWorkerStart } from './worker-start-validation'
 import { deliverAndSettleWorkerStartReadiness } from './worker-start-readiness-settlement'
 import type { WorkerStartMutation } from './worker-start-mutation'
 import { prepareWorkerStartCard } from '../../../../orchestration/worker-start-card'
+import { rebindReusedStructuredWorker } from '../../orchestration-structured-worker-session'
 
 export async function startLocalWorker(args: {
   params: WorkerStartInput
@@ -246,6 +247,9 @@ export async function startLocalWorker(args: {
       setupState: setupReceipt.state,
       terminalOwnership: params.terminal ? 'external' : 'created'
     })
+    if (chat) {
+      rebindReusedStructuredWorker(runtime, terminalHandle, db)
+    }
 
     result = await deliverAndSettleWorkerStartReadiness({
       runtime,

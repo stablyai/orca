@@ -80,16 +80,18 @@ function reportDone(sessionId: string, taskId: string, dispatchId: string) {
 }
 
 /** A worker created as worker-start creates one, after its first Dispatch reported done. */
-async function finishedStructuredWorker(taskId: string) {
+async function finishedStructuredWorker(taskId: string, settle: 'done' | 'abandon' = 'done') {
   const disposed = vi.fn()
   const observe = host.observeJournalPublications.bind(host)
-  vi.spyOn(host, 'observeJournalPublications').mockImplementation((id, listener) => {
-    const dispose = observe(id, listener)
-    return () => {
-      disposed()
-      dispose()
-    }
-  })
+  const observed = vi
+    .spyOn(host, 'observeJournalPublications')
+    .mockImplementation((id, listener) => {
+      const dispose = observe(id, listener)
+      return () => {
+        disposed()
+        dispose()
+      }
+    })
   const started = db.createStartingWorkerDispatch({
     creator: { kind: 'session', orcaSessionId: testOrcaSessionId(COORDINATOR) },
     maxDepth: 9,
@@ -115,11 +117,19 @@ async function finishedStructuredWorker(taskId: string) {
     terminalOwnership: 'created'
   })
   db.markWorkerDispatchReady(started.dispatch.id)
-  expect(await reportDone(identity.sessionId, taskId, started.dispatch.id)).toMatchObject({
-    ok: true,
-    result: { lifecycle: { action: 'completed' } }
-  })
-  return { identity, disposed, firstDispatchId: started.dispatch.id }
+  if (settle === 'abandon') {
+    await call(
+      'orchestration.workerAbandon',
+      { dispatch: started.dispatch.id },
+      { sessionId: COORDINATOR }
+    )
+  } else {
+    expect(await reportDone(identity.sessionId, taskId, started.dispatch.id)).toMatchObject({
+      ok: true,
+      result: { lifecycle: { action: 'completed' } }
+    })
+  }
+  return { identity, observed, disposed, firstDispatchId: started.dispatch.id }
 }
 
 async function followUpTask(): Promise<string> {
@@ -171,6 +181,31 @@ describe('a finished structured worker', () => {
     expect(disposed).not.toHaveBeenCalled()
     await call('orchestration.workerRelease', { dispatch: dispatchId }, { sessionId: COORDINATOR })
     await vi.waitFor(() => expect(disposed).toHaveBeenCalledTimes(1), WAIT)
+  })
+
+  it('given new work after abandon, watches its journal again so parked mail is retried', async () => {
+    await openChat(COORDINATOR)
+    const { taskId } = await coordinatorRunAndTask()
+    const { identity, observed, disposed } = await finishedStructuredWorker(taskId, 'abandon')
+    expect(disposed).toHaveBeenCalledTimes(1)
+    const worker = connectionFor(identity.sessionId)
+    const watches = () => observed.mock.calls.filter(([id]) => id === identity.sessionId).length
+    expect(watches()).toBe(1)
+
+    const followUp = await followUpTask()
+    const started = call(
+      'orchestration.workerStart',
+      { task: followUp, terminal: identity.handle },
+      { sessionId: COORDINATOR }
+    )
+    await vi.waitFor(() => expect(worker.turns).toHaveLength(1), WAIT)
+    await settleTurn(identity.sessionId, 0)
+    const dispatchId = String((await started).dispatchId)
+    expect(watches()).toBe(2)
+
+    expect(await reportDone(identity.sessionId, followUp, dispatchId)).toMatchObject({ ok: true })
+    await call('orchestration.workerRelease', { dispatch: dispatchId }, { sessionId: COORDINATOR })
+    await vi.waitFor(() => expect(disposed).toHaveBeenCalledTimes(2), WAIT)
   })
 
   it('kept open by the user is refused, as a kept terminal is', async () => {

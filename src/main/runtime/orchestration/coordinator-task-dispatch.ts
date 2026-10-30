@@ -8,9 +8,25 @@ import {
   parseAllowStaleBaseFromSpec
 } from './coordinator-stale-base-flag'
 import { isAgentPromptStalledError } from '../agent-prompt-submission-verification'
+import { takesNewWork } from './db/worker-terminal/worker-terminal-transfer'
 
 /** `dispatched-unobserved`: the preamble landed but the worker's turn start was never observed. */
 export type TaskDispatchResult = 'dispatched' | 'dispatched-unobserved' | 'stale-base-refused'
+
+/** The pane, process and host a Dispatch to `handle` records; the census reads the same. */
+function assigneeAuthority(runtime: CoordinatorRuntime, handle: string) {
+  const dispatchAuthority = runtime.getOrchestrationDispatchAuthority?.(handle)
+  return {
+    assigneePaneKey:
+      dispatchAuthority?.paneKey ?? runtime.getTerminalPaneKey?.(handle) ?? undefined,
+    launchTokenHash: dispatchAuthority?.launchTokenHash ?? undefined,
+    processIncarnation:
+      dispatchAuthority?.paneKey && dispatchAuthority.processIncarnation
+        ? dispatchAuthority.processIncarnation
+        : undefined,
+    hostScope: dispatchAuthority?.hostScope ? JSON.stringify(dispatchAuthority.hostScope) : null
+  }
+}
 
 export async function listAvailableWorkerTerminals(
   db: OrchestrationDb,
@@ -32,11 +48,15 @@ export async function listAvailableWorkerTerminals(
       }
     }
 
-    // The dispatch lock enforces correctness; filtering merely skips busy or disconnected terminals.
+    // The dispatch lock enforces correctness; filtering skips busy, disconnected or still-held terminals.
     return result.terminals
       .filter(
         (t) =>
-          t.handle !== coordinatorHandle && !busyHandles.has(t.handle) && t.connected && t.writable
+          t.handle !== coordinatorHandle &&
+          !busyHandles.has(t.handle) &&
+          t.connected &&
+          t.writable &&
+          takesNewWork(db, { assigneeHandle: t.handle, ...assigneeAuthority(runtime, t.handle) })
       )
       .map((t) => t.handle)
   } catch {
@@ -76,20 +96,10 @@ export async function dispatchTaskToWorker(params: {
     return 'stale-base-refused'
   }
 
-  const dispatchAuthority = runtime.getOrchestrationDispatchAuthority?.(targetHandle)
-  const assigneePaneKey =
-    dispatchAuthority?.paneKey ?? runtime.getTerminalPaneKey?.(targetHandle) ?? undefined
-  const processIncarnation =
-    dispatchAuthority?.paneKey && dispatchAuthority.processIncarnation
-      ? dispatchAuthority.processIncarnation
-      : undefined
   const dispatch = db.createDispatchContext({
     taskId: task.id,
     assigneeHandle: targetHandle,
-    assigneePaneKey,
-    launchTokenHash: dispatchAuthority?.launchTokenHash ?? undefined,
-    processIncarnation,
-    hostScope: dispatchAuthority?.hostScope ? JSON.stringify(dispatchAuthority.hostScope) : null,
+    ...assigneeAuthority(runtime, targetHandle),
     // This authenticated host-local loop is a system root, independent of CLI callers.
     creator: { kind: 'system' },
     maxDepth: params.nestedWorkerMaxDepth

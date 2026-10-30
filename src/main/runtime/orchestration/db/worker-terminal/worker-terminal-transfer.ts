@@ -62,6 +62,50 @@ export function findTransferableWorkerTerminalResource(
   )
 }
 
+/** The pane and process a new Dispatch would claim, as its custody row records them. */
+export type NewWorkAssignee = {
+  assigneeHandle: string
+  assigneePaneKey?: string
+  processIncarnation?: string
+  hostScope?: string | null
+}
+
+/** Refuse new work on a terminal or chat whose finished Dispatch still holds it; only worker-start transfers that custody. */
+export function assertTakesNewWork(
+  db: OrchestrationDb,
+  assignee: NewWorkAssignee,
+  taskId: string
+): void {
+  const held =
+    assignee.assigneePaneKey && assignee.processIncarnation
+      ? db.findTransferableWorkerTerminalResource({
+          terminalHandle: assignee.assigneeHandle,
+          paneKey: assignee.assigneePaneKey,
+          processIncarnation: assignee.processIncarnation,
+          hostScope: assignee.hostScope ?? null
+        })
+      : undefined
+  if (held) {
+    throw new OrchestrationError(
+      'invalid_argument',
+      `Terminal ${assignee.assigneeHandle} is still held by finished Dispatch ${held.owner_dispatch_id}. Start this Task on it with \`orca orchestration worker-start --task ${taskId} --terminal ${assignee.assigneeHandle}\`.`
+    )
+  }
+}
+
+/** The same rule as a census filter, so the coordinator never selects what dispatch refuses. */
+export function takesNewWork(db: OrchestrationDb, assignee: NewWorkAssignee): boolean {
+  try {
+    assertTakesNewWork(db, assignee, '<task_id>')
+    return true
+  } catch (error) {
+    if (error instanceof OrchestrationError) {
+      return false
+    }
+    throw error
+  }
+}
+
 export function workerTerminalResourceHasIdentityConflict(
   this: OrchestrationDb,
   resourceId: string

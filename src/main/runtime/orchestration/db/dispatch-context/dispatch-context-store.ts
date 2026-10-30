@@ -10,6 +10,7 @@ import type { OrchestrationDb } from '../orchestration-db'
 import { transitionLifecycleWithDb } from '../lifecycle-transition'
 import { taskNotFoundError, taskNotStartableError } from '../../task-dispatch-refusal'
 import { dispatchAssigneeOrcaSessionId } from '../../dispatch-assignee-orca-session-id'
+import { assertTakesNewWork } from '../worker-terminal/worker-terminal-transfer'
 
 export function createDispatchContext(
   this: OrchestrationDb,
@@ -50,22 +51,7 @@ export function createDispatchContext(
     )
   }
 
-  // A finished worker's terminal stays in its Dispatch's custody; only worker-start transfers it.
-  const held =
-    assigneePaneKey && processIncarnation
-      ? this.findTransferableWorkerTerminalResource({
-          terminalHandle: assigneeHandle,
-          paneKey: assigneePaneKey,
-          processIncarnation,
-          hostScope: params.hostScope ?? null
-        })
-      : undefined
-  if (held) {
-    throw new OrchestrationError(
-      'invalid_argument',
-      `Terminal ${assigneeHandle} is still held by finished Dispatch ${held.owner_dispatch_id}. Start this Task on it with \`orca orchestration worker-start --task ${taskId} --terminal ${assigneeHandle}\`.`
-    )
-  }
+  assertTakesNewWork(this, params, taskId)
 
   // Accumulate failure_count across task retries.
   const prior = this.db
