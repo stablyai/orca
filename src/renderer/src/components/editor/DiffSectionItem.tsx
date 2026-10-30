@@ -70,6 +70,11 @@ export function DiffSectionItem({
       `diff-section:${encodeURIComponent(worktreeId ?? 'review')}:${encodeURIComponent(section.key)}:${section.contentGeneration ?? 0}`,
     [section.contentGeneration, section.key, worktreeId]
   )
+  const draftRetentionKey = useMemo(
+    () =>
+      `diff-section:${encodeURIComponent(worktreeId ?? 'review')}:${encodeURIComponent(section.key)}`,
+    [section.key, worktreeId]
+  )
 
   const [modifiedEditor, setModifiedEditor] = useState<monacoEditor.ICodeEditor | null>(null)
   const diffEditorRef = useRef<monacoEditor.IStandaloneDiffEditor | null>(null)
@@ -120,7 +125,7 @@ export function DiffSectionItem({
   useDiffCommentDecorator({
     editor: hasLineCommentAction ? modifiedEditor : null,
     monacoModelIdentity: `${modelPathBase}:modified`,
-    draftRetentionKey: modelPathBase,
+    draftRetentionKey,
     filePath: section.path,
     worktreeId: worktreeId ?? '',
     comments: inlineComments ?? (worktreeId ? diffComments : []),
