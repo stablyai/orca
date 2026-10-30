@@ -119,7 +119,7 @@ export async function createReopenRig(
   const context = {
     list: {
       runTargetFor: (recorded) => ({
-        worktree: makeWorktree({ id: rig.workspace, hostId }),
+        worktree: makeWorktree({ id: rig.workspace, repoId: repo.id, hostId }),
         ownerEnvironmentId: paired ? 'reopen-host' : null,
         expectedPairingRevision: undefined,
         terminalTarget: null,

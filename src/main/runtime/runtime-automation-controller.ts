@@ -257,7 +257,7 @@ export class RuntimeAutomationController {
     current?: Automation
   ): Promise<{
     projectId: string
-    workspaceMode: AutomationWorkspaceMode
+    workspaceMode: Automation['workspaceMode']
     workspaceId?: string | null
     repo: Repo | null
   }> {

@@ -13,7 +13,8 @@ import { SESSION_TAB_METHODS } from '../../../src/main/runtime/rpc/methods/sessi
 import { OrcaRuntimeService } from '../../../src/main/runtime/orca-runtime'
 import {
   createTestStore,
-  makeWorktree
+  makeWorktree,
+  TEST_REPO
 } from '../../../src/renderer/src/store/slices/store-test-helpers'
 import type { SessionTabsStreamEvent } from '../../../src/renderer/src/runtime/web-session-tabs-sync/state'
 import { applyStructuredSessionTabSnapshots } from '../../../src/renderer/src/runtime/local-structured-session-tabs-sync/snapshot-apply'
@@ -149,7 +150,7 @@ export async function exerciseRecordedChatOpen(
   const context = {
     list: {
       runTargetFor: (recorded) => ({
-        worktree: makeWorktree({ id: workspaceId, hostId: 'local' }),
+        worktree: makeWorktree({ id: workspaceId, repoId: TEST_REPO.id, hostId: 'local' }),
         ownerEnvironmentId: null,
         expectedPairingRevision: undefined,
         terminalTarget: null,
