@@ -12,7 +12,11 @@ import type { PluginMarketplaceService } from '../plugins/catalog/plugin-marketp
 import { PLUGIN_MARKETPLACE_SOURCE_ID_PATTERN } from '../plugins/catalog/plugin-marketplace-store'
 import type { PluginService } from '../plugins/plugin-service'
 import type { PluginAutoUpdater } from '../plugins/catalog/plugin-auto-updater'
-import type { PluginAutoUpdateState } from '../../shared/plugins/catalog/plugin-update-policy'
+import type { PluginUpdateReviewNotices } from '../plugins/catalog/plugin-update-review-notices'
+import type {
+  PluginAutoUpdateState,
+  PluginUpdateReviewNotice
+} from '../../shared/plugins/catalog/plugin-update-policy'
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import { pluginFileTypeSchema } from '../../shared/plugins/contributions/plugin-file-type'
 import { findPluginFileTypeSuggestion } from '../plugins/catalog/plugin-file-type-suggestion'
@@ -21,6 +25,7 @@ export type PluginMarketplaceHandlerServices = {
   marketplace: PluginMarketplaceService
   installer: PluginMarketplaceInstaller
   autoUpdater?: Pick<PluginAutoUpdater, 'getState'>
+  reviewNotices?: Pick<PluginUpdateReviewNotices, 'take'>
 }
 
 /** The consent write path (applyPluginConsent), bound to the store by the caller. */
@@ -136,6 +141,10 @@ export function registerPluginMarketplaceHandlers(
     'plugins:getAutoUpdateState',
     (): PluginAutoUpdateState =>
       services.autoUpdater?.getState() ?? { updated: {}, needsReview: {} }
+  )
+  ipcMain.handle(
+    'plugins:takeUpdateReviewNotices',
+    (): Promise<PluginUpdateReviewNotice[]> => services.reviewNotices?.take() ?? Promise.resolve([])
   )
   ipcMain.handle('plugins:getRollbackVersion', (_event, args: unknown) => {
     const { pluginKey } = installedPluginSchema.parse(args)
