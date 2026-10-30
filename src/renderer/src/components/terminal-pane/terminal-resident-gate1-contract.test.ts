@@ -279,42 +279,62 @@ it('routes full-screen keyboard actions with passive equal to absent and indepen
   expect(runtime.resolveShortcutEvent(event)).toEqual({ type: 'sendInput', data: '\x1bd' })
 })
 
-it('atomically retracts a removed rowless leaf, rejects its held response and preserves sibling and execution', async () => {
-  const owner = resident()
-  owner.policy.acceptInput('alias\r')
-  await vi.advanceTimersByTimeAsync(350)
-  const original = state.paneForegroundAgentByPaneKey[paneKey]
-  let resolve!: (value: RuntimeTerminalProcessInspection) => void
-  read.mockImplementationOnce(
-    () =>
-      new Promise((done) => {
-        resolve = done
-      })
-  )
-  owner.policy.acceptInput('next\r')
-  await vi.advanceTimersByTimeAsync(350)
-  const sibling = '22222222-2222-4222-8222-222222222222'
-  const siblingKey = makePaneKey('tab-1', sibling)
-  const siblingEntry = { agent: 'codex' as const, shellForeground: false }
-  state.setPaneForegroundAgent(siblingKey, siblingEntry)
-  // SAFETY: The real layout action only reads/writes the supplied terminal and foreground slices.
-  const actions = createTerminalLayoutActions(
-    (update) => {
-      Object.assign(state, typeof update === 'function' ? update(state as never) : update)
-    },
-    () => state as never
-  )
-  actions.setTabLayout('tab-1', {
-    root: { type: 'leaf', leafId: sibling },
-    activeLeafId: sibling,
-    expandedLeafId: null
-  })
-  expect(state.paneForegroundAgentByPaneKey[paneKey]).toBeUndefined()
-  expect(state.paneForegroundAgentByPaneKey[siblingKey]).toBe(siblingEntry)
-  expect(owner.isLive).toBe(true)
-  resolve(hostRead('pi'))
-  await vi.advanceTimersByTimeAsync(10_000)
-  expect(state.paneForegroundAgentByPaneKey[paneKey]).toBeUndefined()
-  expect(owner.policy.foreground.paneForegroundAgentTracker.hasReadInFlight()).toBe(false)
-  expect(original?.agentEvidence).toBe('process-read')
-})
+it.each(['absent', 'partial'] as const)(
+  'atomically retracts a removed rowless leaf with %s inventory, rejects its held response and preserves sibling and execution',
+  async (inventory) => {
+    const owner = resident()
+    owner.policy.acceptInput('alias\r')
+    await vi.advanceTimersByTimeAsync(350)
+    const original = state.paneForegroundAgentByPaneKey[paneKey]
+    let resolve!: (value: RuntimeTerminalProcessInspection) => void
+    read.mockImplementationOnce(
+      () =>
+        new Promise((done) => {
+          resolve = done
+        })
+    )
+    owner.policy.acceptInput('next\r')
+    await vi.advanceTimersByTimeAsync(350)
+    const sibling = '22222222-2222-4222-8222-222222222222'
+    const siblingKey = makePaneKey('tab-1', sibling)
+    const siblingEntry = { agent: 'codex' as const, shellForeground: false }
+    state.setPaneForegroundAgent(siblingKey, siblingEntry)
+    const tracker = owner.policy.foreground.paneForegroundAgentTracker
+    expect(read).toHaveBeenCalledTimes(2)
+    expect(tracker.hasReadInFlight()).toBe(true)
+    expect(original?.context?.execution).toBeDefined()
+    if (inventory === 'absent') {
+      delete state.terminalLayoutsByTabId!['tab-1']
+    } else {
+      state.terminalLayoutsByTabId!['tab-1'] = {
+        root: { type: 'leaf', leafId: sibling },
+        activeLeafId: sibling,
+        expandedLeafId: null
+      }
+    }
+    // SAFETY: The real layout action only reads/writes the supplied terminal and foreground slices.
+    const actions = createTerminalLayoutActions(
+      (update) => {
+        Object.assign(state, typeof update === 'function' ? update(state as never) : update)
+      },
+      () => state as never
+    )
+    actions.setTabLayout('tab-1', {
+      root: { type: 'leaf', leafId: sibling },
+      activeLeafId: sibling,
+      expandedLeafId: sibling
+    })
+    expect(state.paneForegroundAgentByPaneKey[paneKey]).toBeUndefined()
+    expect(state.paneForegroundAgentByPaneKey[siblingKey]).toBe(siblingEntry)
+    expect(owner.isLive).toBe(true)
+    resolve(hostRead('pi'))
+    await vi.advanceTimersByTimeAsync(10_000)
+    expect(state.paneForegroundAgentByPaneKey[paneKey]).toBeUndefined()
+    expect(owner.policy.foreground.paneForegroundAgentTracker.hasReadInFlight()).toBe(false)
+    expect(original?.agentEvidence).toBe('process-read')
+    expect(owner.isLive).toBe(true)
+    expect(owner.policy.foreground.paneForegroundAgentTracker).toBe(tracker)
+    expect(state.paneForegroundAgentByPaneKey[siblingKey]).toBe(siblingEntry)
+    expect(read).toHaveBeenCalledTimes(2)
+  }
+)

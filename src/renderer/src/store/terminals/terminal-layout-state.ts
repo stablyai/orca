@@ -1,7 +1,6 @@
 import { buildForegroundLayoutRetractionPatch } from '../slices/pane-foreground-agent'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
-import { collectLeafIds } from '../../../../shared/terminal-pane-layout-tree'
 import { terminalLayoutEqual } from '../../../../shared/terminal-layout-equality'
 import {
   normalizeTerminalLayoutPtyOwnership,
@@ -112,20 +111,7 @@ export function createTerminalLayoutActions(
           ...buildForegroundLayoutRetractionPatch(
             s.paneForegroundAgentByPaneKey,
             nextLayouts,
-            new Set([tabId]),
-            undefined,
-            {
-              paneKeys: new Set(
-                [existing, normalized.snapshot].flatMap((snapshot) =>
-                  snapshot
-                    ? [
-                        ...collectLeafIds(snapshot.root),
-                        ...Object.keys(snapshot.ptyIdsByLeafId ?? {})
-                      ].map((leafId) => `${tabId}:${leafId}`)
-                    : []
-                )
-              )
-            }
+            new Set([tabId])
           )
         }
       })
