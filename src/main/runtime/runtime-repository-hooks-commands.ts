@@ -118,6 +118,10 @@ function archiveTrust(
   repo: Repo,
   sharedHooks: OrcaHooks | null
 ): { contentHash: string; scriptContent: string } | null {
+  // Folder removal never runs hooks.
+  if (isFolderRepo(repo)) {
+    return null
+  }
   const localArchive = repo.hookSettings?.scripts.archive?.trim()
   const policy = resolveHookCommandSourcePolicy(repo.hookSettings?.commandSourcePolicy, {
     hasLocalScript: Boolean(localArchive)

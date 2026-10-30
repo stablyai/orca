@@ -4,56 +4,14 @@
   "family": "host.worktree-actions",
   "namedDeltas": [],
   "values": {
-    "1609dcc186db": {
-      "name": "worktrees",
-      "ordinal": 3,
+    "18996856522a": {
+      "name": "lastKnownWorktrees",
+      "ordinal": 6,
       "value": []
     },
-    "2bf4cead94ad": {
-      "name": "worktree.rm#1",
-      "ordinal": 6,
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.rm\",\"params\":{\"worktree\":\"id:wt-1\",\"force\":true,\"runHooks\":true}}"
-    },
-    "79deedc9f2ed": {
-      "name": "repo.hooks#1",
-      "ordinal": 2,
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"repo.hooks\",\"params\":{\"repo\":\"id:repo-1\"}}"
-    },
-    "8410c6d6ba23": {
-      "name": "worktree.rm#1",
-      "ordinal": 5,
-      "args": [
-        {
-          "name": "method",
-          "value": "worktree.rm"
-        },
-        {
-          "name": "params",
-          "value": {
-            "force": true,
-            "runHooks": true,
-            "worktree": "id:wt-1"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "timeoutMs": 300000
-          }
-        }
-      ],
-      "settlement": {
-        "status": "pending",
-        "startedAt": 0
-      }
-    },
-    "9270aeb7d9c6": {
-      "status": "pending",
-      "startedAt": 0
-    },
-    "944daaa29677": {
+    "369bd9771b51": {
       "name": "lastKnownWorktrees",
-      "ordinal": 8,
+      "ordinal": 10,
       "value": [
         {
           "branch": "feature/pin",
@@ -73,48 +31,24 @@
         }
       ]
     },
-    "a8121a8c3cea": {
-      "name": "worktrees",
-      "ordinal": 7,
-      "value": [
-        {
-          "branch": "feature/pin",
-          "displayName": "marlin",
-          "hasAttachedPty": false,
-          "isPinned": false,
-          "linkedPR": {
-            "$rpc": "null"
-          },
-          "liveTerminalCount": 0,
-          "path": "/repos/marlin/wt-1",
-          "preview": "",
-          "repo": "marlin",
-          "repoId": "repo-1",
-          "unread": false,
-          "worktreeId": "wt-1"
-        }
-      ]
-    },
-    "b34f0f184dee": {
-      "name": "worktree.rm#1",
-      "ordinal": 5,
+    "464cf0ce3697": {
+      "name": "repo.hooks#1",
+      "ordinal": 3,
       "args": [
         {
           "name": "method",
-          "value": "worktree.rm"
+          "value": "repo.hooks"
         },
         {
           "name": "params",
           "value": {
-            "force": true,
-            "runHooks": true,
-            "worktree": "id:wt-1"
+            "repo": "id:repo-1"
           }
         },
         {
           "name": "options",
           "value": {
-            "timeoutMs": 300000
+            "$rpc": "absent"
           }
         }
       ],
@@ -123,14 +57,72 @@
         "startedAt": 0,
         "settledAt": 0,
         "value": {
-          "error": {
-            "code": "worktree_busy",
-            "message": "Worktree is busy"
-          },
-          "id": "frame-2",
-          "ok": false
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "archiveTrust": {
+              "$rpc": "null"
+            },
+            "hasHooksFile": false,
+            "hooks": {
+              "$rpc": "null"
+            },
+            "setupConfig": {
+              "$rpc": "null"
+            },
+            "setupRunPolicy": "run-by-default",
+            "source": {
+              "$rpc": "null"
+            }
+          }
         }
       }
+    },
+    "569eb8f7aee5": {
+      "name": "worktree.rm#1",
+      "ordinal": 8,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.rm\",\"params\":{\"worktree\":\"id:wt-1\",\"force\":true,\"runHooks\":true}}"
+    },
+    "7a68c6ea2c44": {
+      "name": "lastKnownWorktrees",
+      "ordinal": 2,
+      "value": []
+    },
+    "83e3e0d1a554": {
+      "name": "worktrees",
+      "ordinal": 5,
+      "value": []
+    },
+    "8f27c443230b": {
+      "name": "worktrees",
+      "ordinal": 1,
+      "value": []
+    },
+    "9270aeb7d9c6": {
+      "status": "pending",
+      "startedAt": 0
+    },
+    "960e985c770d": {
+      "name": "worktrees",
+      "ordinal": 9,
+      "value": [
+        {
+          "branch": "feature/pin",
+          "displayName": "marlin",
+          "hasAttachedPty": false,
+          "isPinned": false,
+          "linkedPR": {
+            "$rpc": "null"
+          },
+          "liveTerminalCount": 0,
+          "path": "/repos/marlin/wt-1",
+          "preview": "",
+          "repo": "marlin",
+          "repoId": "repo-1",
+          "unread": false,
+          "worktreeId": "wt-1"
+        }
+      ]
     },
     "b8a1fe46c55b": {
       "actionError": "",
@@ -191,6 +183,34 @@
         }
       ]
     },
+    "ba1352a3c9a2": {
+      "name": "worktree.rm#1",
+      "ordinal": 7,
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.rm"
+        },
+        {
+          "name": "params",
+          "value": {
+            "force": true,
+            "runHooks": true,
+            "worktree": "id:wt-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 300000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
     "bbc069d0d206": {
       "actionError": "",
       "archiveHookFailure": {
@@ -216,24 +236,26 @@
       },
       "worktrees": []
     },
-    "c320d18b1429": {
-      "name": "repo.hooks#1",
-      "ordinal": 1,
+    "e0a8dfe3ec89": {
+      "name": "worktree.rm#1",
+      "ordinal": 7,
       "args": [
         {
           "name": "method",
-          "value": "repo.hooks"
+          "value": "worktree.rm"
         },
         {
           "name": "params",
           "value": {
-            "repo": "id:repo-1"
+            "force": true,
+            "runHooks": true,
+            "worktree": "id:wt-1"
           }
         },
         {
           "name": "options",
           "value": {
-            "$rpc": "absent"
+            "timeoutMs": 300000
           }
         }
       ],
@@ -242,31 +264,14 @@
         "startedAt": 0,
         "settledAt": 0,
         "value": {
-          "id": "frame-1",
-          "ok": true,
-          "result": {
-            "archiveTrust": {
-              "$rpc": "null"
-            },
-            "hasHooksFile": false,
-            "hooks": {
-              "$rpc": "null"
-            },
-            "setupConfig": {
-              "$rpc": "null"
-            },
-            "setupRunPolicy": "run-by-default",
-            "source": {
-              "$rpc": "null"
-            }
-          }
+          "error": {
+            "code": "worktree_busy",
+            "message": "Worktree is busy"
+          },
+          "id": "frame-2",
+          "ok": false
         }
       }
-    },
-    "d75adc90786f": {
-      "name": "lastKnownWorktrees",
-      "ordinal": 4,
-      "value": []
     },
     "eb79a9b3682a": {
       "status": "fulfilled",
@@ -275,6 +280,11 @@
       "value": {
         "$rpc": "undefined"
       }
+    },
+    "f95f2f51091a": {
+      "name": "repo.hooks#1",
+      "ordinal": 4,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"repo.hooks\",\"params\":{\"repo\":\"id:repo-1\"}}"
     }
   },
   "recording": {
@@ -283,27 +293,34 @@
       {
         "id": "delete-optimistic",
         "observation": {
-          "sender": ["c320d18b1429", "8410c6d6ba23"],
-          "payloads": ["79deedc9f2ed", "2bf4cead94ad"],
+          "sender": ["464cf0ce3697", "ba1352a3c9a2"],
+          "payloads": ["f95f2f51091a", "569eb8f7aee5"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "delete": "9270aeb7d9c6"
           },
           "state": "bbc069d0d206",
-          "effects": ["1609dcc186db", "d75adc90786f"]
+          "effects": ["8f27c443230b", "7a68c6ea2c44", "83e3e0d1a554", "18996856522a"]
         }
       },
       {
         "id": "restored",
         "observation": {
-          "sender": ["c320d18b1429", "b34f0f184dee"],
-          "payloads": ["79deedc9f2ed", "2bf4cead94ad"],
+          "sender": ["464cf0ce3697", "e0a8dfe3ec89"],
+          "payloads": ["f95f2f51091a", "569eb8f7aee5"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "delete": "eb79a9b3682a"
           },
           "state": "b8a1fe46c55b",
-          "effects": ["1609dcc186db", "d75adc90786f", "a8121a8c3cea", "944daaa29677"]
+          "effects": [
+            "8f27c443230b",
+            "7a68c6ea2c44",
+            "83e3e0d1a554",
+            "18996856522a",
+            "960e985c770d",
+            "369bd9771b51"
+          ]
         }
       }
     ]
