@@ -55,6 +55,7 @@ export type RunSourceControlAgentActionStartArgs = {
     agentArgs?: string
     /** The action's saved choice, on either route. */
     sessionOptions?: Readonly<Record<string, string>>
+    chatSessionOptions?: Readonly<Record<string, string>>
     launchChoice?: AgentLaunchChoice
     sessionOptionsYieldToAgentArgs?: true
   }) => boolean | Promise<boolean>
@@ -75,7 +76,7 @@ export async function runSourceControlAgentActionStart({
   selectedAgent,
   trimmedCommandInput,
   launchChoice,
-  recipe,
+  recipe: submittedRecipe,
   saveTargetValue,
   actionId,
   repoId,
@@ -96,6 +97,7 @@ export async function runSourceControlAgentActionStart({
   onLaunched,
   onClose
 }: RunSourceControlAgentActionStartArgs): Promise<boolean> {
+  const recipe = structuredClone(submittedRecipe)
   // Detection and delivery planning can outlive the state that opened the composer.
   if (signal?.aborted) {
     return false

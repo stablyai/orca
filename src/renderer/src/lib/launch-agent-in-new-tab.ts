@@ -44,6 +44,13 @@ export function launchAgentInNewTabWithOutcome(
   args: LaunchAgentInNewTabArgs,
   notifyFailure = true
 ): AgentTabLaunchOutcome {
+  args = {
+    ...args,
+    ...(args.sessionOptions !== undefined ? { sessionOptions: { ...args.sessionOptions } } : {}),
+    ...(args.chatSessionOptions !== undefined
+      ? { chatSessionOptions: { ...args.chatSessionOptions } }
+      : {})
+  }
   const {
     agent,
     worktreeId,
@@ -85,6 +92,9 @@ export function launchAgentInNewTabWithOutcome(
     promptDelivery: routePromptDelivery,
     tuiCustomization: { cwd: initialCwd },
     ...(sessionOptions ? { launchOptions: sessionOptions } : {}),
+    ...(args.chatSessionOptions !== undefined
+      ? { chatLaunchOptions: args.chatSessionOptions }
+      : {}),
     onPromptDelivered,
     ...(args.promptKeptByCaller ? { promptKeptByCaller: true as const } : {})
   })

@@ -94,14 +94,16 @@ export function resolveAgentSessionOptionLaunch(
   values: Record<string, SessionOptionValue> | null | undefined,
   trailingAgentArgs: readonly string[] = [],
   includeCatalogDefaults = true,
-  permissionTrailingArgs = trailingAgentArgs
+  permissionTrailingArgs = trailingAgentArgs,
+  modelContext?: string
 ): ResolvedSessionOptionLaunch {
   const resolved = resolveModelOptionLaunch(
     agent,
     values,
     trailingAgentArgs,
     includeCatalogDefaults,
-    permissionTrailingArgs
+    permissionTrailingArgs,
+    modelContext
   )
   const permission = readLaunchPermissionChoice(values)
   if (!permission || !isTuiAgent(agent) || !agentPermissionHasTerminalChoice(agent, permission)) {
@@ -126,13 +128,15 @@ function resolveModelOptionLaunch(
   values: Record<string, SessionOptionValue> | null | undefined,
   trailingAgentArgs: readonly string[],
   includeCatalogDefaults: boolean,
-  originalArgs: readonly string[]
+  originalArgs: readonly string[],
+  modelContext?: string
 ): ResolvedSessionOptionLaunch {
   if (!hasAgentModelOptionValues(values)) {
     return { args: [], appliedValues: {} }
   }
   const catalog = getAgentSessionOptionLaunchCatalog(agent)
-  const modelId = typeof values?.model === 'string' ? values.model : null
+  const requestedModelId = typeof values?.model === 'string' ? values.model : null
+  const modelId = requestedModelId ?? modelContext ?? null
   if (!catalog || !values) {
     return { args: [], appliedValues: {} }
   }
@@ -144,12 +148,20 @@ function resolveModelOptionLaunch(
     agent,
     {
       ...launchModelValues(model, modelOptions, values, includeCatalogDefaults),
-      ...(modelId ? { model: modelId } : {})
+      ...(requestedModelId ? { model: requestedModelId } : {})
     },
     trailingAgentArgs
   )
-  const modelOverridden = modelId !== null && modelValues.model === undefined
-  const appliesModel = Boolean(modelId && catalog.modelApply.launchArgs && !modelOverridden)
+  const modelOverridden = requestedModelId !== null && modelValues.model === undefined
+  const composedRequest = modelOptions.some(
+    (option) => option.apply.composedIntoModel && modelValues[option.id] !== undefined
+  )
+  const appliesModel = Boolean(
+    modelId &&
+    (requestedModelId || composedRequest) &&
+    catalog.modelApply.launchArgs &&
+    !modelOverridden
+  )
 
   // Why: a repeated model flag can prevent the CLI from starting.
   if (modelId && appliesModel && catalog.modelApply.launchArgs) {

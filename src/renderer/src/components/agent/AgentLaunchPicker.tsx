@@ -16,10 +16,10 @@ import { AgentLaunchPickerMenu } from './AgentLaunchPickerMenu'
 import { useAgentLaunchPickerInventory } from './use-agent-launch-picker-inventory'
 import {
   agentPickerDraft,
-  agentPickerEffectiveChoices,
   type AgentPickerDraft,
   type AgentPickerEntry
 } from '../../../../shared/agent-launch-picker'
+import { agentPickerPanelArguments } from '../../../../shared/agent-launch-picker-arguments'
 
 /** Forms own selection and dispatch; rows and setup remain the same as the new-tab menu. */
 export function AgentLaunchPicker({
@@ -66,7 +66,7 @@ export function AgentLaunchPicker({
   const entry = entries.find((entry) => entry.agent === agent)
   const draft = entry ? (value ?? draftForEntry?.(entry)) : undefined
   const choices = entry
-    ? agentPickerEffectiveChoices(entry, draft ?? agentPickerDraft(entry))
+    ? agentPickerPanelArguments(entry, draft ?? agentPickerDraft(entry)).choices
     : undefined
   const modelLabel =
     (entry && entry.catalog.origin !== 'unknown'

@@ -73,8 +73,7 @@ export function acceptAgentPickerArguments(
         catalog?.unknownModelOptions?.some(
           (option) => option.id === item.key && option.apply.launchArgs
         )) &&
-      (draft.arguments !== undefined ||
-        draft.literalKeys?.includes(item.key) ||
+      (draft.literalKeys?.includes(item.key) ||
         (item.key === 'model'
           ? draft.choices.model === undefined
           : draft.choices.options?.[item.key] === undefined)) &&
@@ -173,6 +172,7 @@ export function applyAgentPickerEdit(
   const keys = new Set(patchKeys(patch))
   const source = agentPickerArgumentsText(entry, draft) ?? ''
   const visible = agentPickerPanelArguments(entry, draft)
+  draft = { ...draft, literalKeys: visible.context.literalKeys }
   const catalog = getAgentSessionOptionLaunchCatalog(entry.agent)
   const model = findCatalogModel(
     catalog ?? { models: [], modelApply: {} },

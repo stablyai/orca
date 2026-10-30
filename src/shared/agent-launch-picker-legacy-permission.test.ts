@@ -36,7 +36,17 @@ it('retains inherited raw permission precedence despite a typed choice; removal 
     value: 'full-access',
     choice: 'full-access',
     opaque: false,
-    ranges: [{ key: 'permissionMode', value: '', start: 0, end: 30, lift: false, owned: false }]
+    ranges: [
+      {
+        key: 'permissionMode',
+        value: '',
+        words: ['--dangerously-skip-permissions'],
+        start: 0,
+        end: 30,
+        lift: false,
+        owned: false
+      }
+    ]
   })
   expect(
     projectAgentLaunchProfile('claude', settings, { target: 'terminal', choices: draft.choices })
@@ -71,7 +81,17 @@ it('shows unliftable launch-owned permission bytes without guessing a native cho
     value: 'plan',
     choice: undefined,
     opaque: false,
-    ranges: [{ key: 'permissionMode', value: '', start: 0, end: 22, lift: false, owned: false }]
+    ranges: [
+      {
+        key: 'permissionMode',
+        value: '',
+        words: ['--permission-mode', 'plan'],
+        start: 0,
+        end: 22,
+        lift: false,
+        owned: false
+      }
+    ]
   })
   const removed = editAgentPickerArguments(draft, permission?.remainingArguments ?? '')
   expect(removed.arguments).toBe('--add-dir docs')
@@ -89,7 +109,17 @@ it('keeps shell-ambiguous Arguments together rather than inventing a removable p
     choice: undefined,
     remainingArguments: draft.arguments,
     opaque: true,
-    ranges: [{ key: 'permissionMode', value: '', start: 16, end: 33, lift: false, owned: false }]
+    ranges: [
+      {
+        key: 'permissionMode',
+        value: '',
+        words: ['--permission-mode'],
+        start: 16,
+        end: 33,
+        lift: false,
+        owned: false
+      }
+    ]
   })
 })
 

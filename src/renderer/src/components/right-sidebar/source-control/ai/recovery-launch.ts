@@ -117,7 +117,7 @@ export async function launchSourceControlRecoveryAgentWithDefault({
     return false
   }
 
-  const savedRecipe = getLaunchActionRecipe(actionId)
+  const savedRecipe = structuredClone(getLaunchActionRecipe(actionId))
   const workspace = worktreeLaunchWorkspace(activeWorktreeId)
   const inventory = await Promise.all([
     acquireAgentLaunchChoices(workspace, () =>

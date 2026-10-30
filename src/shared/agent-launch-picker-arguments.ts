@@ -18,6 +18,7 @@ export type AgentArgsProjectionContext = {
   readonly snapshot: object
   readonly literalKeys: readonly string[]
   readonly source: string
+  readonly result: ReturnType<typeof reconcileAgentChoiceArgsDetailed>
   readonly analysis: ReturnType<typeof analyzeAgentChoiceArgs>
   readonly occurrences: ReturnType<typeof reconcileAgentChoiceArgsDetailed>['recognized']
   readonly permission: ReturnType<typeof agentPickerArgumentPermission>
@@ -54,6 +55,23 @@ export function agentPickerPanelArguments(entry: AgentPickerEntry, draft: AgentP
   })
   const permission = agentPickerArgumentPermission(entry, draft)
   const carriers = result.recognized
+  const choices = { ...result.sourceChoices, options: { ...result.sourceChoices.options } }
+  const effective = agentPickerEffectiveChoices(entry, draft)
+  for (const carrier of carriers) {
+    if (draft.literalKeys === undefined || draft.literalKeys.includes(carrier.key)) {
+      continue
+    }
+    if (carrier.key === 'model') {
+      choices.model = effective.model
+    } else if (carrier.key !== 'permissionMode') {
+      const value = effective.options?.[carrier.key]
+      if (value === undefined) {
+        delete choices.options[carrier.key]
+      } else {
+        choices.options[carrier.key] = value
+      }
+    }
+  }
   const literal = result.analysis.cut(carriers)
   const displayed =
     permission && !permission.opaque
@@ -64,25 +82,23 @@ export function agentPickerPanelArguments(entry: AgentPickerEntry, draft: AgentP
       : literal
   return {
     text: draft.pendingArguments ?? displayed ?? result.userArgs,
-    choices: result.sourceChoices,
+    choices,
     context: {
       agent: entry.agent,
       snapshot: draft,
-      literalKeys: [
-        ...new Set([
-          ...(draft.literalKeys ?? []),
-          ...carriers.flatMap((item) =>
-            (item.key === 'model'
-              ? draft.choices.model
-              : item.key === 'permissionMode'
-                ? draft.choices.permissionMode
-                : draft.choices.options?.[item.key]) === undefined
-              ? [item.key]
-              : []
-          )
-        ])
-      ],
+      literalKeys:
+        draft.literalKeys ??
+        carriers.flatMap((item) =>
+          (item.key === 'model'
+            ? draft.choices.model
+            : item.key === 'permissionMode'
+              ? draft.choices.permissionMode
+              : draft.choices.options?.[item.key]) === undefined
+            ? [item.key]
+            : []
+        ),
       source: text,
+      result,
       analysis: result.analysis,
       occurrences: literal === null ? [] : carriers,
       permission:

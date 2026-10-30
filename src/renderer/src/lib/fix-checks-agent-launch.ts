@@ -40,9 +40,7 @@ import type { LaunchSource } from '../../../shared/telemetry-events'
 import { translate } from '@/i18n/i18n'
 import {
   projectSourceControlActionLaunch,
-  resolveSourceControlActionRequestedSurface,
-  resolveSourceControlActionSessionOptions,
-  sourceControlActionAgentArgs
+  resolveSourceControlActionRequestedSurface
 } from '../../../shared/source-control-action-launch-preferences'
 
 type StartFixChecksAgentArgs = {
@@ -152,16 +150,17 @@ export function startFixChecksAgent(args: StartFixChecksAgentArgs): Promise<bool
 async function launchFixChecksAgent(args: StartFixChecksAgentArgs): Promise<boolean> {
   const store = useAppStore.getState()
   const repo = store.repos.find((candidate) => candidate.id === args.repoId) ?? null
-  const recipe = () =>
+  const recipe = structuredClone(
     resolveSourceControlActionRecipe({
-      settings: useAppStore.getState().settings,
-      repo: useAppStore.getState().repos.find((entry) => entry.id === args.repoId),
+      settings: store.settings,
+      repo,
       actionId: 'fixChecks'
     })
-  const savedAgentId = () => readSourceControlLaunchRecipeAgentId(recipe())
+  )
+  const savedAgentId = () => readSourceControlLaunchRecipeAgentId(recipe)
   const commandInput = (): string => {
     const prompt = renderSourceControlActionCommandTemplate(
-      recipe().commandInputTemplate ?? DEFAULT_SOURCE_CONTROL_ACTION_COMMAND_TEMPLATES.fixChecks,
+      recipe.commandInputTemplate ?? DEFAULT_SOURCE_CONTROL_ACTION_COMMAND_TEMPLATES.fixChecks,
       { basePrompt: args.basePrompt }
     ).trim()
     if (!prompt) {
@@ -218,9 +217,9 @@ async function launchFixChecksAgent(args: StartFixChecksAgentArgs): Promise<bool
       return false
     }
     const { commandInput: projectedPrompt, ...projection } = projectSourceControlActionLaunch(
-      recipe(),
+      recipe,
       agent,
-      { renderedPrompt: prompt, settings: useAppStore.getState().settings }
+      { renderedPrompt: prompt, settings: store.settings }
     )
     let revealFailed = false
     const result = launchAgentInNewTab({
@@ -291,16 +290,17 @@ async function launchFixChecksAgent(args: StartFixChecksAgentArgs): Promise<bool
     launchSource: args.launchSource,
     telemetrySource: args.telemetrySource,
     promptDelivery: 'submit-after-ready',
-    agentArgs: recipe().agentArgs,
-    resolveAgentArgs: (agent) =>
-      sourceControlActionAgentArgs(recipe(), agent, useAppStore.getState().settings),
-    resolveSessionOptions: (agent) => resolveSourceControlActionSessionOptions(recipe(), agent),
+    resolveLaunchInputs: (agent) =>
+      projectSourceControlActionLaunch(recipe, agent, {
+        renderedPrompt: prompt,
+        settings: store.settings
+      }),
     ...(agentOverride.kind === 'agent'
       ? {
           agentOverride: agentOverride.agent,
           launchChoice: {
             requestedSurface: resolveSourceControlActionRequestedSurface(
-              recipe(),
+              recipe,
               agentOverride.agent
             )
           }

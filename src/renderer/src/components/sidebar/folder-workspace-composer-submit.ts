@@ -64,6 +64,7 @@ type SubmitFolderWorkspaceCreateParams = {
   quickAgent: TuiAgent | null
   launchChoice?: AgentLaunchChoice
   sessionOptions?: Record<string, string>
+  chatSessionOptions?: Readonly<Record<string, string>>
   autoRenameBranchFromWork: boolean | undefined
   settings?: AgentStartupSettings
   agentCmdOverrides: Record<string, string> | undefined
@@ -87,6 +88,7 @@ export async function submitFolderWorkspaceCreate({
   quickAgent,
   launchChoice,
   sessionOptions,
+  chatSessionOptions,
   autoRenameBranchFromWork,
   settings,
   agentCmdOverrides,
@@ -176,6 +178,7 @@ export async function submitFolderWorkspaceCreate({
         requestId: newAgentLaunchRequestId(),
         agent: quickAgent,
         ...(sessionOptions ? { launchOptions: sessionOptions } : {}),
+        ...(chatSessionOptions !== undefined ? { chatLaunchOptions: chatSessionOptions } : {}),
         workspace: {
           kind: 'folder' as const,
           runtimeEnvironmentId,

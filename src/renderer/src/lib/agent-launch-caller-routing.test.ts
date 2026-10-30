@@ -14,11 +14,15 @@ import {
 } from './agent-launch-funnel-test-harness'
 
 import type * as LaunchAdmissionModule from './structured-agent-session-launch-admission'
+import { projectSourceControlActionLaunch } from '../../../shared/source-control-action-launch-preferences'
+import { queuedStartupPayload } from './agent-launch-funnel-test-harness'
+import { tokenizeStartupCommand } from '../../../shared/tui-agent-startup-shell'
 const store = createLaunchFunnelStore()
 const mockIsWebRuntimeSessionActive = vi.fn(() => false)
 const mockLaunchAgentInWebHostTab = vi.fn()
 const mockBeginHostAdmittedStructuredLaunch = vi.fn()
 const mockCreateSupport = vi.fn()
+const mockAwaitCapabilities = vi.fn()
 const mockHostCapabilities = vi.fn<() => readonly string[] | null>(() => [])
 const mockExecutionHostId = vi.fn(() => 'local')
 
@@ -64,7 +68,8 @@ vi.mock('@/lib/structured-agent-session-launch-admission', async (importOriginal
   beginHostAdmittedStructuredLaunch: mockBeginHostAdmittedStructuredLaunch
 }))
 vi.mock('@/runtime/local-runtime-capabilities', () => ({
-  readLocalRuntimeCapabilitiesOrUnknown: () => mockHostCapabilities()
+  readLocalRuntimeCapabilitiesOrUnknown: () => mockHostCapabilities(),
+  awaitLocalRuntimeCapabilities: () => mockAwaitCapabilities()
 }))
 function serverReports(capabilities: readonly string[] | null): void {
   Object.assign(store, {
@@ -113,6 +118,152 @@ describe('agent launch caller routing', () => {
       failureNotified: false,
       outcome: { status: 'created' }
     })
+  })
+
+  it.each(['new-tab', 'default-no-callback'] as const)(
+    'settles delayed saved-source decline through %s with the captured Terminal base and exact Args',
+    async (consumer) => {
+      store.settings = {
+        ...store.settings,
+        ...CHAT_DEFAULT_SETTINGS,
+        agentCmdOverrides: { codex: 'cx' }
+      }
+      await useActualAdmission()
+      let answer!: (value: { supported: boolean }) => void
+      mockCreateSupport.mockReturnValue(
+        new Promise((resolve) => {
+          answer = resolve
+        })
+      )
+      const projection = projectSourceControlActionLaunch(
+        {
+          agentId: 'codex',
+          agentArgs: `-c 'model="true"'`,
+          launchPreferences: {
+            agentId: 'codex',
+            modelSelection: {
+              base: 'default',
+              options: { effort: { agentId: 'codex', value: 'high' } }
+            }
+          }
+        },
+        'codex',
+        { basePrompt: 'Fix checks' }
+      )
+      expect(projection.sessionOptions).toEqual({ effort: 'high' })
+      expect(projection.chatSessionOptions).toEqual({ model: 'true', effort: 'high' })
+      const { useAppStore } = await import('@/store')
+      const { planAgentSessionLaunch } = await import('./agent-session-launch-plan')
+      const { beginStructuredAgentSessionProvisionalLaunch } =
+        await import('./agent-session/structured-agent-session-provisional-tab')
+      const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
+      const result =
+        consumer === 'new-tab'
+          ? launchAgentInNewTab({
+              requestId: 'delayed-q',
+              agent: 'codex',
+              worktreeId: 'wt-1',
+              launchPlatform: 'linux',
+              ...projection
+            })
+          : beginStructuredAgentSessionProvisionalLaunch({
+              plan: planAgentSessionLaunch(useAppStore.getState(), {
+                requestId: 'delayed-q',
+                agent: 'codex',
+                workspace: { kind: 'git-worktree', worktreeId: 'wt-1' },
+                launchOptions: projection.sessionOptions,
+                chatLaunchOptions: projection.chatSessionOptions
+              }),
+              hooks: {},
+              declinedTerminal: { agentArgs: projection.agentArgs, launchPlatform: 'linux' }
+            })
+      expect(store.createTab).not.toHaveBeenCalled()
+      expect(mockCreateSupport).toHaveBeenCalledOnce()
+      // The form can change while the host owns the outstanding admission.
+      Object.assign(projection.sessionOptions!, { effort: 'low' })
+      Object.assign(projection.chatSessionOptions!, { model: 'later-form', effort: 'low' })
+      projection.agentArgs = '--search'
+      answer({ supported: false })
+      const settlement =
+        result &&
+        ('structuredSettlement' in result
+          ? result.structuredSettlement
+          : 'settlement' in result
+            ? result.settlement
+            : undefined)
+      await expect(settlement).resolves.toEqual({ kind: 'terminal' })
+      expect(store.createTab).toHaveBeenCalledOnce()
+      const startup = queuedStartupPayload(store)
+      expect(tokenizeStartupCommand(String(startup?.command), 'posix')).toEqual(
+        expect.objectContaining({
+          ok: true,
+          tokens: ['cx', '-c', 'model="true"', '-c', 'model_reasoning_effort=high']
+        })
+      )
+      expect(startup?.launchConfig).toEqual({
+        agentCommand: `cx '-c' 'model="true"'`,
+        agentArgs: `-c 'model="true"'`,
+        agentEnv: {}
+      })
+      expect(JSON.stringify(startup)).not.toContain('chatSessionOptions')
+      expect(JSON.stringify(startup)).not.toContain('chatLaunchOptions')
+      expect(JSON.stringify(startup)).not.toContain('later-form')
+      expect(mockCreateSupport).toHaveBeenCalledOnce()
+    }
+  )
+
+  it('settles actual host-answer re-entry and Chat decline from the same captured source', async () => {
+    store.settings = {
+      ...store.settings,
+      ...CHAT_DEFAULT_SETTINGS,
+      agentCmdOverrides: { codex: 'cx' }
+    }
+    mockHostCapabilities.mockReturnValue(null)
+    const known = Promise.withResolvers<readonly string[]>()
+    const stop = vi.fn()
+    mockAwaitCapabilities.mockReturnValue({ known: known.promise, stop })
+    mockCreateSupport.mockResolvedValue({ supported: false })
+    await useActualAdmission()
+    const projection = projectSourceControlActionLaunch(
+      {
+        agentArgs: `-c 'model="true"'`,
+        launchPreferences: {
+          agentId: 'codex',
+          modelSelection: {
+            base: 'default',
+            options: { effort: { agentId: 'codex', value: 'high' } }
+          }
+        }
+      },
+      'codex',
+      { basePrompt: 'Fix checks' }
+    )
+    const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
+    const result = launchAgentInNewTab({
+      requestId: 'wait-q',
+      agent: 'codex',
+      worktreeId: 'wt-1',
+      ...projection
+    })
+    expect(result?.surface.kind).toBe('host-published')
+    expect(mockCreateSupport).not.toHaveBeenCalled()
+    projection.agentArgs = '--model later-form'
+    projection.sessionOptions!.effort = 'low'
+    projection.chatSessionOptions!.model = 'later-form'
+    const capabilities = [STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY]
+    mockHostCapabilities.mockReturnValue(capabilities)
+    known.resolve(capabilities)
+    await expect(result?.structuredSettlement).resolves.toEqual({ kind: 'terminal' })
+    expect(mockAwaitCapabilities).toHaveBeenCalledOnce()
+    expect(stop).toHaveBeenCalledOnce()
+    expect(mockCreateSupport).toHaveBeenCalledOnce()
+    expect(
+      tokenizeStartupCommand(String(queuedStartupPayload(store)?.command), 'posix')
+    ).toMatchObject({
+      ok: true,
+      tokens: ['cx', '-c', 'model="true"', '-c', 'model_reasoning_effort=high']
+    })
+    expect(queuedStartupPayload(store)?.launchConfig?.agentArgs).toBe(`-c 'model="true"'`)
   })
 
   it.each(cases)('routes %s to a local terminal under default settings', async (_id, profile) => {

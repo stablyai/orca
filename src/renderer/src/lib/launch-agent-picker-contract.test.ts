@@ -643,7 +643,7 @@ it('conserves quoted Codex string sources through common acceptance and the term
     const semanticKey = key === 'model' ? 'model' : 'effort'
     expect(agentPickerPanelArguments(own, draft).text).toBe('--search')
     expect(
-      agentPickerLaunchInputs({ ...draft, surface: 'chat' }, own).sessionOptions?.[semanticKey]
+      agentPickerLaunchInputs({ ...draft, surface: 'chat' }, own).chatSessionOptions?.[semanticKey]
     ).toBe(scalar)
     for (const command of ['codex', 'cx']) {
       store.settings.agentCmdOverrides = { codex: command }

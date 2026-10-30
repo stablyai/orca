@@ -1,3 +1,4 @@
+import type { AgentLaunchInputViews } from '../../../shared/agent-launch-choices'
 import type { AgentLaunchPreferences } from '@/components/settings/use-host-agent-launch-preferences'
 import type { LinkedWorkItemContext } from '@/lib/linked-work-item-context'
 import type { TaskProvider } from '../../../shared/task-providers'
@@ -35,6 +36,8 @@ export type LaunchWorkItemDirectArgs = {
   agentArgs?: string | null
   /** The saved choice for `agentOverride`; a chat seeds it and a terminal applies it as flags. */
   sessionOptions?: Readonly<Record<string, string>>
+  chatSessionOptions?: Readonly<Record<string, string>>
+  resolveLaunchInputs?: (agent: TuiAgent) => AgentLaunchInputViews
   /** On terminals, a flag `agentArgs` sets itself wins over the inherited saved choice. */
   sessionOptionsYieldToAgentArgs?: true
   resolveAgentArgs?: (agent: TuiAgent) => string | null | undefined

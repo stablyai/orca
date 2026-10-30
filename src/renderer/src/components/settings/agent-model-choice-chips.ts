@@ -29,11 +29,15 @@ export function agentModelChoiceChips(
   for (const option of model?.options ?? []) {
     options.set(option.id, option)
   }
-  const projected = projectAgentLaunchProfile(agent, undefined, {
-    target: 'terminal',
-    userArgs: '',
-    choices: selected
-  })
+  const projected = projectAgentLaunchProfile(
+    agent,
+    { agentPermissionDefault: 'own' },
+    {
+      target: 'terminal',
+      userArgs: '',
+      choices: selected
+    }
+  )
   const analysis = analyzeAgentChoiceArgs(agent, projected.args)
   const carriers = new Map<string, string[]>()
   for (const occurrence of analysis.occurrences) {
@@ -43,8 +47,8 @@ export function agentModelChoiceChips(
       !occurrence.source ||
       (key === 'permissionMode' && context?.permission?.opaque) ||
       (key !== 'permissionMode' && !apply?.cli?.length) ||
-      (key === 'fastMode' && selected.options?.fastMode === 'false') ||
-      (key === 'serviceTier' && selected.options?.serviceTier === 'default')
+      (context && key === 'fastMode' && selected.options?.fastMode === 'false') ||
+      (context && key === 'serviceTier' && selected.options?.serviceTier === 'default')
     ) {
       continue
     }
@@ -70,25 +74,27 @@ export function agentModelChoiceChips(
   for (const [key, flags] of literalCarriers) {
     carriers.set(key, flags)
   }
-  return [...carriers].map(([key, flags]) => ({
-    key,
-    label,
-    flag: [...new Set(flags)].join(' '),
-    ...(literalCarriers.has(key) || context?.literalKeys.includes(key)
-      ? { source: 'arguments' as const }
-      : {}),
-    onRemove: (text) =>
-      onRemove(
-        key === 'model'
-          ? { model: null }
-          : key === 'permissionMode'
-            ? { permissionMode: 'own' }
-            : {
-                options: {
-                  [key]: key === 'fastMode' ? 'false' : key === 'serviceTier' ? 'default' : null
-                }
-              },
-        text
-      )
-  }))
+  return [...carriers]
+    .sort(([a], [b]) => Number(b === 'permissionMode') - Number(a === 'permissionMode'))
+    .map(([key, flags]) => ({
+      key,
+      label,
+      flag: [...new Set(flags)].join(' '),
+      ...(literalCarriers.has(key) || context?.literalKeys.includes(key)
+        ? { source: 'arguments' as const }
+        : {}),
+      onRemove: (text) =>
+        onRemove(
+          key === 'model'
+            ? { model: null }
+            : key === 'permissionMode'
+              ? { permissionMode: 'own' }
+              : {
+                  options: {
+                    [key]: key === 'fastMode' ? 'false' : key === 'serviceTier' ? 'default' : null
+                  }
+                },
+          text
+        )
+    }))
 }

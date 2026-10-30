@@ -277,3 +277,47 @@ it('isolates equal-baseline row buffers and delegation, retains them on close, a
   expect(screen.getByRole('textbox', { name: 'Arguments' })).toHaveProperty('value', '--saved')
   expect(screen.getByRole('button', { name: 'Remove --model sonnet' })).toBeDefined()
 })
+
+it('labels an own raw Sonnet recipe from the same source as its setup chips', async () => {
+  configure({
+    experimentalNativeChat: false,
+    agentPermissionDefault: 'own',
+    agentLaunchChoices: { claude: { model: 'claude-opus-5-5' } }
+  })
+  const recipe = { agentArgs: '--model claude-sonnet-5-5', commandInputTemplate: 'Do the work' }
+  render(
+    <TooltipProvider>
+      <SourceControlActionRecipeRow
+        actionId="fixChecks"
+        selectedAgent="claude"
+        defaultTuiAgent="claude"
+        draftValue={recipe}
+        baseValue={recipe}
+        isSavingTemplate={false}
+        onAgentChange={unused}
+        onTemplateChange={unused}
+        onAgentArgsChange={unused}
+        onAppendVariable={unused}
+        onDiscard={unused}
+        onSave={unused}
+      />
+    </TooltipProvider>
+  )
+  await waitFor(() =>
+    expect(screen.getByRole('button', { name: 'Select agent' }).textContent).toMatch(
+      /Sonnet|claude-sonnet-5-5/
+    )
+  )
+  expect(screen.getByRole('button', { name: 'Select agent' }).textContent).not.toContain('opus')
+  fireEvent.pointerDown(screen.getByRole('button', { name: 'Select agent' }), {
+    button: 0,
+    ctrlKey: false
+  })
+  await waitFor(() =>
+    expect(screen.getByRole('button', { name: 'Configure Claude' })).toBeDefined()
+  )
+  fireEvent.click(screen.getByRole('button', { name: 'Configure Claude' }))
+  await waitFor(() =>
+    expect(screen.getByRole('button', { name: 'Remove --model claude-sonnet-5-5' })).toBeDefined()
+  )
+})

@@ -1,6 +1,10 @@
+import type { AgentLaunchInputViews } from '../../../shared/agent-launch-choices'
 import { readAgentLaunchPreferencesForWorkspace } from '@/components/settings/use-host-agent-launch-preferences'
 import { useAppStore, type AppState } from '@/store'
-import { ensureDetectedAgentsForRepo } from './agent-detection-target-inventory'
+import {
+  ensureDetectedAgentsForRepo,
+  loadProjectLaunchContext
+} from './agent-detection-target-inventory'
 import { isTuiAgentEnabled } from '../../../shared/tui-agent-selection'
 import { resolveDefaultAgentForWorkspace } from './agent-tab-shortcuts'
 import { isTuiAgent } from '../../../shared/tui-agent-config'
@@ -101,15 +105,22 @@ export async function planDirectWorkItemLaunch(args: {
   promptDelivery: 'draft' | 'submit-after-ready'
   resolveSessionOptions?: (agent: TuiAgent) => Readonly<Record<string, string>> | undefined
   sessionOptions?: Readonly<Record<string, string>>
+  chatSessionOptions?: Readonly<Record<string, string>>
+  launchInputs?: AgentLaunchInputViews
   launchChoice?: LaunchWorkItemDirectArgs['launchChoice']
 }) {
   const { prospectiveAgent, projectContext } = args
   if (!prospectiveAgent) {
     return undefined
   }
-  const sessionOptions = args.resolveSessionOptions
-    ? args.resolveSessionOptions(prospectiveAgent)
-    : args.sessionOptions
+  const sessionOptions = args.launchInputs
+    ? args.launchInputs.sessionOptions
+    : args.resolveSessionOptions
+      ? args.resolveSessionOptions(prospectiveAgent)
+      : args.sessionOptions
+  const chatSessionOptions = args.launchInputs
+    ? args.launchInputs.chatSessionOptions
+    : args.chatSessionOptions
   const request: AgentSessionLaunchRequest = {
     requestId: args.requestId,
     agent: prospectiveAgent,
@@ -122,6 +133,7 @@ export async function planDirectWorkItemLaunch(args: {
     prompt: args.draftContent,
     promptDelivery: args.promptDelivery,
     ...(sessionOptions ? { launchOptions: sessionOptions } : {}),
+    ...(chatSessionOptions !== undefined ? { chatLaunchOptions: chatSessionOptions } : {}),
     ...directLaunchSurfaceRequest(args.launchChoice)
   }
   await awaitStructuredRouteHostAnswer(useAppStore.getState(), request, 3000)
@@ -174,4 +186,23 @@ export async function resolveDirectProspectiveAgent(
     !isTuiAgentEnabled(agentOverride, agentLaunchPreferences.disabledTuiAgents)
   )
   return { prospectiveAgent, unavailable }
+}
+
+export function captureDirectWorkItemLaunchArgs(
+  args: LaunchWorkItemDirectArgs
+): LaunchWorkItemDirectArgs {
+  return {
+    ...args,
+    ...(args.sessionOptions ? { sessionOptions: { ...args.sessionOptions } } : {}),
+    ...(args.chatSessionOptions !== undefined
+      ? { chatSessionOptions: { ...args.chatSessionOptions } }
+      : {})
+  }
+}
+
+export function loadDirectWorkItemProjectPreflight(target: RuntimeClientTarget, repoId: string) {
+  return loadProjectLaunchContext(target, repoId).then(
+    (context) => ({ context }),
+    () => null
+  )
 }

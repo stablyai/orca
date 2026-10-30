@@ -1,3 +1,4 @@
+import type { AgentLaunchInputViews } from '../../../shared/agent-launch-choices'
 import { ensureAgentLaunchPreferences } from '@/components/settings/use-host-agent-launch-preferences'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import type { AppState } from '@/store/types'
@@ -89,6 +90,9 @@ export async function prepareDirectWorkItemAgentLaunch(args: {
   agentOverride?: TuiAgent
   agentArgs?: string | null
   sessionOptions?: Readonly<Record<string, string>>
+  chatSessionOptions?: Readonly<Record<string, string>>
+  resolveLaunchInputs?: LaunchWorkItemDirectArgs['resolveLaunchInputs']
+  preflightInputs?: AgentLaunchInputViews
   resolveAgentArgs?: (agent: TuiAgent) => string | null | undefined
   resolveSessionOptions?: (agent: TuiAgent) => Readonly<Record<string, string>> | undefined
   launchChoice?: LaunchWorkItemDirectArgs['launchChoice']
@@ -139,13 +143,25 @@ export async function prepareDirectWorkItemAgentLaunch(args: {
         // Non-critical: activation still has the explicit startup below.
       })
   }
-  const agentArgs =
-    effectiveAgent && args.resolveAgentArgs ? args.resolveAgentArgs(effectiveAgent) : args.agentArgs
-  const sessionOptions = effectiveAgent
-    ? args.resolveSessionOptions
-      ? args.resolveSessionOptions(effectiveAgent)
-      : args.sessionOptions
-    : undefined
+  const inputs =
+    effectiveAgent && args.resolveLaunchInputs
+      ? args.preflightPlan?.agent === effectiveAgent && args.preflightInputs
+        ? args.preflightInputs
+        : structuredClone(args.resolveLaunchInputs(effectiveAgent))
+      : undefined
+  const agentArgs = inputs
+    ? inputs.agentArgs
+    : effectiveAgent && args.resolveAgentArgs
+      ? args.resolveAgentArgs(effectiveAgent)
+      : args.agentArgs
+  const sessionOptions = inputs
+    ? inputs.sessionOptions
+    : effectiveAgent
+      ? args.resolveSessionOptions
+        ? args.resolveSessionOptions(effectiveAgent)
+        : args.sessionOptions
+      : undefined
+  const chatSessionOptions = inputs ? inputs.chatSessionOptions : args.chatSessionOptions
   const plan =
     effectiveAgent === null
       ? null
@@ -158,6 +174,7 @@ export async function prepareDirectWorkItemAgentLaunch(args: {
             prompt: args.draftContent,
             promptDelivery: args.promptDelivery,
             ...(sessionOptions ? { launchOptions: sessionOptions } : {}),
+            ...(chatSessionOptions !== undefined ? { chatLaunchOptions: chatSessionOptions } : {}),
             ...directLaunchSurfaceRequest(args.launchChoice)
           })
   const structuredLaunch = plan?.route === 'structured-native-chat'

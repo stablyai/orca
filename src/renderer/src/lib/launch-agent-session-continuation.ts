@@ -33,7 +33,8 @@ type LaunchAgentSessionContinuationArgs = {
   launchChoice?: AgentLaunchChoice
   launchSource: LaunchSource
   signal?: AbortSignal
-  sessionOptions?: Record<string, string>
+  sessionOptions?: Readonly<Record<string, string>>
+  chatSessionOptions?: Readonly<Record<string, string>>
   agentArgs?: string | null
 }
 
@@ -105,6 +106,7 @@ export async function launchAgentSessionContinuation({
   launchSource,
   signal,
   sessionOptions,
+  chatSessionOptions,
   agentArgs
 }: LaunchAgentSessionContinuationArgs): Promise<boolean> {
   const label = getAgentLabel(agent)
@@ -113,7 +115,8 @@ export async function launchAgentSessionContinuation({
   const delivery = {
     agent,
     worktreeId,
-    ...(sessionOptions ? { sessionOptions } : {}),
+    ...(sessionOptions ? { sessionOptions: { ...sessionOptions } } : {}),
+    ...(chatSessionOptions !== undefined ? { chatSessionOptions: { ...chatSessionOptions } } : {}),
     ...(agentArgs !== undefined ? { agentArgs } : {}),
     ...(groupId ? { groupId } : {}),
     prompt,
@@ -148,7 +151,10 @@ export async function launchAgentSessionContinuation({
   }
   const request = {
     ...delivery,
-    ...(sessionOptions ? { launchOptions: sessionOptions } : {}),
+    ...(delivery.sessionOptions ? { launchOptions: delivery.sessionOptions } : {}),
+    ...(delivery.chatSessionOptions !== undefined
+      ? { chatLaunchOptions: delivery.chatSessionOptions }
+      : {}),
     requestId: newAgentLaunchRequestId(),
     workspace: worktreeLaunchWorkspace(worktreeId),
     tuiCustomization: { cwd: initialCwd }

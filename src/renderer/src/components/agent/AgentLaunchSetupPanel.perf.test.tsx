@@ -3,6 +3,10 @@ import { act } from 'react'
 import { fireEvent } from '@testing-library/react'
 import { expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
+import {
+  resolveAgentLaunchCommand,
+  terminalSessionOptionInputs
+} from '../../../../shared/tui-agent-launch-command'
 import { tokenizeStartupCommand } from '../../../../shared/tui-agent-startup-shell'
 import * as choiceAnalysis from '../../../../shared/agent-choice-args'
 import * as choiceSettings from '../../../../shared/agent-choice-settings'
@@ -307,7 +311,18 @@ it('bounds catalog projection independently of raw model operands and retains Co
           [...host.querySelectorAll('button')].find((b) => b.textContent === 'Launch terminal')!
         )
         const launch = agentPickerLaunchInputs(onUse.mock.calls.at(-1)![0], own)
-        expect(launch.agentArgs).toContain(`service_tier=${tier}`)
+        const compiled = resolveAgentLaunchCommand({
+          agent: 'codex',
+          cmdOverrides: { codex: 'cx' },
+          platform: 'linux',
+          shell: 'posix',
+          ...terminalSessionOptionInputs({ agent: 'codex', ...launch, shell: 'posix' })
+        })
+        expect(compiled.ok).toBe(true)
+        if (!compiled.ok) {
+          throw new Error(compiled.error)
+        }
+        expect(compiled.command).toContain(`service_tier=${tier}`)
         expect(launch.agentArgs?.match(/--model raw/g)).toHaveLength(operands)
       }
     }
@@ -336,9 +351,22 @@ it('bounds catalog projection independently of raw model operands and retains Co
       [...host.querySelectorAll('button')].find((b) => b.textContent === 'Launch terminal')!
     )
     const launch = agentPickerLaunchInputs(onUse.mock.calls.at(-1)![0], own)
-    expect(launch.agentArgs).toContain('--model claude-opus-4-8')
-    expect(launch.agentArgs).not.toContain('-fast')
-    expect(launch.agentArgs?.match(/--model/g)).toHaveLength(1)
+    const compiled = resolveAgentLaunchCommand({
+      agent: 'cursor',
+      cmdOverrides: { cursor: 'cursor-agent' },
+      platform: 'linux',
+      shell: 'posix',
+      ...terminalSessionOptionInputs({ agent: 'cursor', ...launch, shell: 'posix' })
+    })
+    expect(compiled.ok).toBe(true)
+    if (!compiled.ok) {
+      throw new Error(compiled.error)
+    }
+    expect(compiled.command).toContain('--model')
+    expect(compiled.command).toContain('claude-opus-4-8')
+    expect(compiled.command).not.toContain('-fast')
+    expect(compiled.command.match(/--model/g)).toHaveLength(1)
+    expect(launch.agentArgs).toBe('--verbose')
   } finally {
     projection.mockRestore()
   }

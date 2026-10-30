@@ -58,7 +58,7 @@ export function useSavedSourceControlActionStart() {
       signal?.throwIfAborted()
       const store = useAppStore.getState()
       const { worktreeId } = args
-      const recipe = selectSourceControlActionRecipe(args.selection)
+      const recipe = structuredClone(selectSourceControlActionRecipe(args.selection))
       const agent = recipe.agentId
       if (!isTuiAgent(agent) || !worktreeId) {
         onFallback()

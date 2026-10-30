@@ -1,8 +1,5 @@
-import { analyzeAgentChoiceArgs } from './agent-choice-args'
-import {
-  agentPickerArgumentsKnown,
-  agentPickerArgumentsText
-} from './agent-launch-picker-authority'
+import { agentPickerPanelArguments } from './agent-launch-picker-arguments'
+import { agentPickerArgumentsKnown } from './agent-launch-picker-authority'
 export {
   agentPickerArgumentsKnown,
   agentPickerArgumentsText
@@ -18,7 +15,7 @@ export {
   agentPickerEntryOptions,
   agentPickerPermissions
 } from './agent-launch-picker-catalog'
-import { projectAgentLaunchProfile } from './agent-launch-profile'
+import { projectAgentLaunchInputViews } from './agent-launch-profile'
 import type { AgentChoicePatch, AgentDedicatedChoices } from './agent-launch-choices'
 import {
   reconcileAgentChoiceArgs,
@@ -210,42 +207,40 @@ function agentPickerLaunchChoices(draft: AgentPickerDraft) {
 
 export function agentPickerLaunchInputs(draft: AgentPickerDraft, entry?: AgentPickerEntry) {
   const authorized = !entry || agentPickerArgumentsKnown(entry, draft)
-  const { choices: launchChoices, userArgs } = agentPickerLaunchChoices(
-    authorized ? draft : { ...draft, arguments: undefined }
-  )
-  const choices = {
-    ...launchChoices,
-    ...(launchChoices.options ? { options: { ...launchChoices.options } } : {})
+  const current = entry ? agentPickerPanelArguments(entry, draft) : undefined
+  const choices = { ...draft.choices, options: { ...draft.choices.options } }
+  for (const occurrence of current?.context.occurrences ?? []) {
+    if (!draft.literalKeys?.includes(occurrence.key)) {
+      continue
+    }
+    if (occurrence.key === 'model') {
+      delete choices.model
+    } else if (occurrence.key === 'permissionMode') {
+      delete choices.permissionMode
+    } else {
+      delete choices.options[occurrence.key]
+    }
   }
-  const text = entry ? agentPickerArgumentsText(entry, draft) : draft.arguments
-  if (
-    text &&
-    analyzeAgentChoiceArgs(draft.agent, text).opaqueKeys.has('fastMode') &&
-    choices.options
-  ) {
-    choices.options = Object.fromEntries(
-      Object.entries(choices.options).filter(([key]) => key !== 'fastMode')
-    )
-  }
-  // The existing dispatcher treats an Arguments override as the complete terminal profile.
-  const sessionOptions = agentPickerSessionOptions(choices)
-  return {
-    ...(Object.keys(sessionOptions).length ? { sessionOptions } : {}),
-    ...(draft.surface === 'terminal' && userArgs !== undefined
-      ? {
-          agentArgs: projectAgentLaunchProfile(draft.agent, undefined, {
-            target: 'terminal',
-            userArgs: userArgs ?? '',
-            choices: {
-              ...(entry?.terminal.permissionMode
-                ? { permissionMode: entry.terminal.permissionMode }
-                : {}),
-              ...choices
-            }
-          }).args
-        }
-      : {})
-  }
+  const result =
+    current?.context.result ??
+    reconcileAgentChoiceArgsDetailed({
+      agent: draft.agent,
+      userArgs: authorized ? (draft.arguments ?? '') : '',
+      choices,
+      mode: 'load',
+      keys: new Set([
+        'model',
+        'permissionMode',
+        ...Object.keys(choices.options ?? {}),
+        ...agentPickerOptions(draft.agent, choices.model, 'terminal').map((option) => option.id)
+      ])
+    })
+  return projectAgentLaunchInputViews(draft.agent, choices, result, {
+    ...(authorized && draft.arguments !== undefined ? { agentArgs: draft.arguments } : {}),
+    modelContext: entry?.terminal.model,
+    sourceKeys: current?.context.literalKeys,
+    permissionContext: entry?.terminal.permissionMode
+  })
 }
 
 export function agentPickerButtonOrder(entry: AgentPickerEntry): AgentPickerSurface[] {

@@ -7,6 +7,10 @@ import { expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { AgentLaunchSetupPanel } from './AgentLaunchSetupPanel'
 import * as shell from '../../../../shared/tui-agent-startup-shell'
+import {
+  resolveAgentLaunchCommand,
+  terminalSessionOptionInputs
+} from '../../../../shared/tui-agent-launch-command'
 
 import { fetchCodexModelCatalogListing } from '../../lib/codex-model-catalog-reader-test-fixture'
 import {
@@ -471,11 +475,25 @@ it.each(['chat', 'terminal'] as const)(
       const launch = agentPickerLaunchInputs(onUse.mock.calls[0][0], own)
       if (way === 'chat') {
         expect(launch).toEqual({
+          agentArgs: '--dangerously-skip-permissions',
           sessionOptions: { model: 'haiku', permissionMode: 'full-access' }
         })
       } else {
-        expect(launch.agentArgs).toContain('--model haiku')
-        expect(launch.agentArgs).toContain('--dangerously-skip-permissions')
+        const compiled = resolveAgentLaunchCommand({
+          agent: 'claude',
+          cmdOverrides: { claude: 'claude' },
+          platform: 'linux',
+          shell: 'posix',
+          ...terminalSessionOptionInputs({ agent: 'claude', ...launch, shell: 'posix' })
+        })
+        expect(compiled.ok).toBe(true)
+        if (!compiled.ok) {
+          throw new Error(compiled.error)
+        }
+        expect(shell.tokenizeStartupCommand(compiled.command, 'posix')).toMatchObject({
+          ok: true,
+          tokens: ['claude', '--dangerously-skip-permissions', '--model', 'haiku']
+        })
       }
     }
     onUse.mockClear()
@@ -648,9 +666,11 @@ it.each(['chat', 'terminal'] as const)(
     fireEvent.keyDown(input, { key: 'Enter' })
     expect(onUse).toHaveBeenCalledOnce()
     expect(onUse.mock.calls[0][0].surface).toBe(surface)
-    expect(agentPickerLaunchInputs(onUse.mock.calls[0][0], own).sessionOptions?.fastMode).toBe(
-      'true'
-    )
+    const rawLaunch = agentPickerLaunchInputs(onUse.mock.calls[0][0], own)
+    expect(rawLaunch.chatSessionOptions?.fastMode).toBe('true')
+    expect(rawLaunch.sessionOptions?.fastMode).toBeUndefined()
+    expect(rawLaunch.agentArgs).toContain('"fastMode":true')
+    expect(rawLaunch.agentArgs).toContain('"theme":"light"')
   }
 )
 
@@ -705,9 +725,21 @@ it.each([
       const launch = agentPickerLaunchInputs(onUse.mock.calls[0][0], own)
       expect(launch.sessionOptions?.fastMode).toBe('false')
       if (way === 'Launch terminal') {
-        expect(shell.tokenizeStartupCommand(launch.agentArgs ?? '', 'posix')).toMatchObject({
+        const compiled = resolveAgentLaunchCommand({
+          agent: 'claude',
+          cmdOverrides: { claude: 'claude' },
+          platform: 'linux',
+          shell: 'posix',
+          ...terminalSessionOptionInputs({ agent: 'claude', ...launch, shell: 'posix' })
+        })
+        expect(compiled.ok).toBe(true)
+        if (!compiled.ok) {
+          throw new Error(compiled.error)
+        }
+        expect(shell.tokenizeStartupCommand(compiled.command, 'posix')).toMatchObject({
           ok: true,
           tokens: [
+            'claude',
             '--model',
             model,
             '--settings',
@@ -774,7 +806,9 @@ it('enables recorded Codex tier choices after defaults become known without inve
   const terminal = launch('Launch terminal')
   expect(terminal.sessionOptions?.serviceTier).toBe(tier.value)
   expect(terminal.agentArgs).toContain(`service_tier=${tier.value}`)
-  expect(terminal.sessionOptions?.permissionMode).toBe('ask')
+  expect(terminal.sessionOptions?.permissionMode).toBeUndefined()
+  expect(terminal.chatSessionOptions?.permissionMode).toBeUndefined()
+  expect(terminal.agentArgs).toContain('-a on-request -s read-only -c approvals_reviewer=user')
   fireEvent.click(standard())
   expect(standard().getAttribute('aria-checked')).toBe('true')
   expect(launch('Launch chat').sessionOptions?.serviceTier).toBe('default')

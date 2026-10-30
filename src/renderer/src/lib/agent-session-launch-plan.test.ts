@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { projectSourceControlActionLaunch } from '../../../shared/source-control-action-launch-preferences'
 import type { AgentLaunchRouteStore } from './agent-launch-route-input'
 
 const mocks = vi.hoisted(() => ({
@@ -65,6 +66,58 @@ describe('planAgentSessionLaunch', () => {
     expect(mocks.buildAgentLaunchRouteInput).toHaveBeenCalledOnce()
     expect(mocks.resolveAgentLaunchRoute).toHaveBeenCalledOnce()
   })
+
+  it.each([undefined, {}, { model: 'true', effort: 'high' }])(
+    'captures the owner route views and selects a complete Chat replacement (%j)',
+    async (alternative) => {
+      const projection = projectSourceControlActionLaunch(
+        {
+          agentId: 'codex',
+          agentArgs: `-c 'model="true"'`,
+          launchPreferences: {
+            agentId: 'codex',
+            modelSelection: {
+              base: 'default',
+              options: { effort: { agentId: 'codex', value: 'high' } }
+            }
+          }
+        },
+        'codex',
+        { basePrompt: 'Fix checks' }
+      )
+      expect(projection.agentArgs).toBe(`-c 'model="true"'`)
+      expect(projection.sessionOptions).toEqual({ effort: 'high' })
+      expect(projection.chatSessionOptions).toEqual({ model: 'true', effort: 'high' })
+      const base = { ...projection.sessionOptions }
+      const chat = alternative === undefined ? undefined : { ...alternative }
+      const plan = planAgentSessionLaunch(store, {
+        requestId: 'route-views',
+        agent: 'codex',
+        workspace: { kind: 'git-worktree', worktreeId: 'wt-1' },
+        launchOptions: base,
+        ...(chat !== undefined ? { chatLaunchOptions: chat } : {})
+      })
+      base.effort = 'low'
+      if (chat && 'model' in chat) {
+        chat.model = 'later-model'
+      }
+      expect(plan.launchOptions).toEqual({ effort: 'high' })
+      await plan.launch(hooks)
+      expect(mocks.beginStructuredAgentLaunchSettlement).toHaveBeenCalledWith(
+        'wt-1',
+        'codex',
+        {
+          requestId: 'route-views',
+          executionHostId: 'local',
+          launchOptions: alternative ?? { effort: 'high' }
+        },
+        hooks
+      )
+      const request = mocks.beginStructuredAgentLaunchSettlement.mock.calls[0][2]
+      expect(request).not.toHaveProperty('chatLaunchOptions')
+      expect(request).not.toHaveProperty('chatSessionOptions')
+    }
+  )
 
   it('hands the settle loop exactly the request, prompt, mode, resume source, and delivery hook it planned on', async () => {
     const onPromptDelivered = vi.fn()

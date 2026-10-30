@@ -23,6 +23,8 @@ import * as chatAcquisition from './host-chat-program-acquisition'
 import { resolveDirectProspectiveAgent } from './launch-work-item-direct-preflight'
 import * as availability from '@/runtime/host-structured-agent-availability'
 import { RUNTIME_CAPABILITIES } from '../../../shared/protocol-version'
+import { projectSourceControlActionLaunch } from '../../../shared/source-control-action-launch-preferences'
+import { tokenizeStartupCommand } from '../../../shared/tui-agent-startup-shell'
 import { launchWorkItemDirect } from './launch-work-item-direct'
 import { beginDirectWorkItemStructuredLaunch } from './launch-work-item-direct-agent-routing'
 
@@ -238,6 +240,70 @@ describe('direct workspace defaults', () => {
       vi.mocked(beginDirectWorkItemStructuredLaunch).mock.calls.at(-1)?.[0].plan?.launchOptions
     ).toEqual({ model: 'chosen' })
   })
+  it('reprojects one captured saved source for the actual agent after delayed workspace creation', async () => {
+    localCapabilities.setLocalRuntimeCapabilitiesForTests([])
+    mocks.store.settings = { defaultTuiAgent: 'claude', experimentalNativeChat: false }
+    vi.spyOn(inventory, 'loadProjectLaunchContext').mockResolvedValue({
+      agents: ['claude'],
+      workspaceKind: 'git-worktree',
+      executionContext: {
+        kind: 'host',
+        projectRuntime: resolveProjectExecutionRuntime({
+          appPlatform: 'darwin',
+          projectId: 'repo-1'
+        })
+      }
+    })
+    const live = {
+      agentArgs: `-c 'model="true"'`,
+      launchPreferences: {
+        agentId: 'codex' as const,
+        modelSelection: {
+          base: 'default' as const,
+          options: { effort: { agentId: 'codex' as const, value: 'high' } }
+        }
+      }
+    }
+    const captured = structuredClone(live)
+    const created = Promise.withResolvers<Awaited<ReturnType<typeof mocks.createWorktree>>>()
+    mocks.createWorktree.mockReturnValueOnce(created.promise)
+    const agents: string[] = []
+    const action = launch({
+      resolveLaunchInputs: (agent) => {
+        agents.push(agent)
+        return projectSourceControlActionLaunch(captured, agent, { basePrompt: item.url })
+      }
+    })
+    await vi.waitFor(() => expect(mocks.createWorktree).toHaveBeenCalledOnce())
+    live.agentArgs = '--model later-form'
+    live.launchPreferences.modelSelection.options.effort.value = 'low'
+    const worktree = makeWorktree({
+      id: 'repo-1::/repo/worktree',
+      path: '/repo/worktree',
+      repoId: 'repo-1'
+    })
+    mocks.store.settings = {
+      defaultTuiAgent: 'codex',
+      experimentalNativeChat: false,
+      agentCmdOverrides: { codex: 'cx' }
+    }
+    mocks.ensureDetectedAgents.mockResolvedValue(['codex'])
+    useAppStore.setState({ worktreesByRepo: { 'repo-1': [worktree] } })
+    created.resolve({ worktree })
+    await expect(action).resolves.toBe(true)
+    expect(agents).toEqual(['claude', 'codex'])
+    const startup = mocks.activateAndRevealWorktree.mock.lastCall?.[1].startup
+    const parsed = tokenizeStartupCommand(startup.command, 'posix')
+    expect(parsed).toMatchObject({
+      ok: true,
+      tokens: ['cx', '-c', 'model="true"', '-c', 'model_reasoning_effort=high']
+    })
+    expect(startup.launchConfig.agentArgs).toBe(`-c 'model="true"'`)
+    expect(JSON.stringify(startup)).not.toContain('later-form')
+    expect(JSON.stringify(startup)).not.toContain('chatSessionOptions')
+    expect(JSON.stringify(startup)).not.toContain('chatLaunchOptions')
+  })
+
   it.each([undefined, 'codex'] as const)(
     'uses actual WSL inventory after native project preflight (override %s)',
     async (agentOverride) => {
