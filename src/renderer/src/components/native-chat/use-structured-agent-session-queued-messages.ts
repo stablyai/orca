@@ -80,7 +80,7 @@ function alreadySentNotice(): void {
 }
 
 export function useStructuredAgentSessionQueuedMessages(args: {
-  /** Host advertises `agent-session.queued-messages.v1` and the transport has a fence. */
+  /** Host advertises `agent-session.queued-messages.v2` and the transport has a fence. */
   enabled: boolean
   queuedMessages: readonly AgentSessionQueuedMessage[] | null
   queuePause: AgentSessionQueuePause | null
