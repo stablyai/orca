@@ -10,6 +10,36 @@ import { installTerminalLinkPtyMouseSuppression } from './terminal-link-pty-mous
 import { installTerminalLinkPointerGesture } from './terminal-link-pointer-gesture'
 import { subscribeToTerminalInputData } from './terminal-user-input-signal'
 import type { QualifiedPtyInputSession } from './pty-connection/pty-qualified-input-forwarder'
+const allocation = vi.hoisted(() => ({ sources: 0, forwarders: 0 }))
+vi.mock('./pty-input-source', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./pty-input-source')>()
+  return {
+    ...actual,
+    createPtyInputSourceBinding: <T>(
+      options: Parameters<typeof actual.createPtyInputSourceBinding<T>>[0]
+    ) =>
+      actual.createPtyInputSourceBinding<T>({
+        ...options,
+        create: (...args) => {
+          allocation.sources += 1
+          return options.create(...args)
+        }
+      })
+  }
+})
+vi.mock('./pty-connection/pty-qualified-input-forwarder', async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import('./pty-connection/pty-qualified-input-forwarder')>()
+  return {
+    ...actual,
+    createQualifiedPtyInputForwarder: (
+      ...args: Parameters<typeof actual.createQualifiedPtyInputForwarder>
+    ) => {
+      allocation.forwarders += 1
+      return actual.createQualifiedPtyInputForwarder(...args)
+    }
+  }
+})
 const store = vi.hoisted(() => ({
   getState: vi.fn(() => ({ codexRestartNoticeByPtyId: {}, agentStatusByPaneKey: {} }))
 }))
@@ -201,6 +231,19 @@ it.each(['same', 'replace'] as const)(
     await vi.waitFor(() => expect(h.inputFrameTexts().join('')).toContain(down + up + 'ordinary-B'))
     expect(session.markAcceptedTerminalInputSent).toHaveBeenCalled()
     expect(session.requestRecoveryForUndeliverableInput).not.toHaveBeenCalled()
+    const records = { ...allocation }
+    expect(records.sources).toBeGreaterThan(0)
+    expect(records.forwarders).toBeGreaterThanOrEqual(2)
+    for (const n of [10, 100]) {
+      h.subscriptionSendBinary.mockClear()
+      for (let i = 0; i < n; i += 1) {
+        emulator.input('ordinary', true)
+        b.sendInput('scoped', 'driving')
+      }
+      await vi.waitFor(() => expect(h.inputFrameTexts().join('')).toBe('ordinaryscoped'.repeat(n)))
+      expect(h.inputFrameTexts()).toHaveLength(2 * n)
+      expect(allocation).toEqual(records)
+    }
   }
 )
 
