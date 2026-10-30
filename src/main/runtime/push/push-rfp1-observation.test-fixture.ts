@@ -29,9 +29,8 @@ import {
 } from '../../../../cloud/apps/push/src/push-owner-integration.test-fixture'
 
 type Actor = Awaited<ReturnType<typeof observationRuntime>>
-function redacted(value: unknown): unknown {
-  const credentials = new Set<string>()
-  const sensitive = /token|authorization|credential|secret|pairingUrl/i
+function redacted(value: unknown, credentials: Set<string>): unknown {
+  const sensitive = /token|authorization|credential|secret|privateKey|pairingUrl|pairingCode/i
   const collect = (input: unknown): void => {
     if (typeof input === 'string') {
       try {
@@ -85,6 +84,65 @@ export async function runRfp1Observation() {
     process.env.ORCA_PUSH_OWNER_CAPTURE_DIR ?? 'test-results/pr35901-rfp1'
   )
   mkdirSync(captureRoot, { recursive: true })
+  let leg = 'old-C'
+  const captures: unknown[] = []
+  const credentials = new Set<string>()
+  const retentionErrors: unknown[] = []
+  let ownerHead: string | undefined
+  let primary: { failed: true; error: unknown } | undefined
+  let completed = false
+  let failed = false
+  const capture = (value: Record<string, unknown>) => {
+    captures.push({ leg, ...value })
+  }
+  const retainAggregate = () => {
+    const raw = JSON.stringify(
+      redacted(
+        {
+          sourcePins: { old: RFP1_OLD, A: RFP1_A, owner: ownerHead },
+          captures,
+          cleanupFailed: failed || !!primary || retentionErrors.length > 0,
+          coverage: {
+            E1: completed ? 'initial-cut both C legs' : 'see finite captures; no pass claim',
+            E2: completed ? 'initial-cut both C legs' : 'see finite captures; no pass claim',
+            E6: completed ? 'initial-cut' : 'see finite captures; no pass claim',
+            E8: completed ? 'initial-cut' : 'see finite captures; no pass claim',
+            others: 'UNRUN',
+            Android: 'UNRUN',
+            completeObservationSufficiency: 'NOT ESTABLISHED'
+          }
+        },
+        credentials
+      ),
+      null,
+      2
+    )
+    const digest = createHash('sha256').update(raw).digest('hex')
+    writeFileSync(join(captureRoot, `${digest}.json`), raw)
+    return digest
+  }
+  const checkpoint = (stage: string, phase: 'entered' | 'settled') => {
+    capture({ boundary: 'stage-checkpoint', stage, phase })
+    try {
+      retainAggregate()
+    } catch (error) {
+      retentionErrors.push(error)
+      capture({ boundary: 'capture-retention-failure', stage, phase, error: String(error) })
+    }
+  }
+  const at = async <T>(stage: string, action: () => T | Promise<T>): Promise<T> => {
+    checkpoint(stage, 'entered')
+    try {
+      return await action()
+    } catch (error) {
+      failed = true
+      capture({ boundary: 'stage-error', stage, error: String(error) })
+      throw error
+    } finally {
+      checkpoint(stage, 'settled')
+    }
+  }
+  checkpoint('experiment initialization', 'entered')
   const cacheRoot = resolve(import.meta.dirname, '../../../../tests/e2e/.cross-version-checkouts')
   const longestProfile = join(tmpdir(), 'rfp1-XXXXXX', 'capable-C', 'B', 'profile')
   const socket = createRuntimeTransportMetadata(
@@ -101,8 +159,18 @@ export async function runRfp1Observation() {
     mkdirSync(cacheRoot, { recursive: true })
     archiveRoot = mkdtempSync(join(cacheRoot, 'pr35901-rfp1-'))
   } catch (error) {
-    const cleanup = ownerCleanup({ failed: true, error })
-    await cleanup.run(() => rmSync(scratch, { recursive: true, force: true }))
+    primary = { failed: true, error }
+    capture({ boundary: 'SETUP-OR-EXECUTION-FAILURE', error: String(error) })
+    checkpoint('archive allocation failure before teardown', 'settled')
+    const cleanup = ownerCleanup(primary)
+    await cleanup.run(() =>
+      at('cleanup partial runtime root', () => rmSync(scratch, { recursive: true, force: true }))
+    )
+    for (const retentionError of retentionErrors) {
+      await cleanup.run(() => {
+        throw retentionError
+      })
+    }
     cleanup.finish()
     throw error
   }
@@ -111,25 +179,20 @@ export async function runRfp1Observation() {
   let base = ''
   const abort = new AbortController()
   const closed = new Set<string>()
+  checkpoint('experiment initialization', 'settled')
   const cloud = (op: string, data: Record<string, unknown> = {}) =>
     deadline(bridge.call('cloud', op, data), `observation cloud ${op}`)
   const mobile = (op: string, data: Record<string, unknown> = {}) =>
-    deadline(bridge.call('mobile', op, data), `observation phone ${op}`)
-  let leg = 'old-C'
+    at(`phone ${op}`, () => deadline(bridge.call('mobile', op, data), `observation phone ${op}`))
   let clock = 1_700_000_000_000
   vi.spyOn(Date, 'now').mockImplementation(() => clock)
-  const captures: unknown[] = []
   const httpTasks: Promise<Response>[] = []
   const observations: Record<string, unknown>[] = []
-  const capture = (value: Record<string, unknown>) => {
-    captures.push({ leg, ...value })
-  }
   let removalPending = false
   let holdC = Promise.withResolvers<void>()
   let replacement = Promise.withResolvers<void>()
   let sends: string[] = []
   let sendAttempts: string[] = []
-  let ownerHead: string | undefined
   const performGateway: typeof fetch = async (input, init) => {
     const request = new Request(input, init)
     const url = request.url
@@ -217,54 +280,58 @@ export async function runRfp1Observation() {
   const actors: Actor[] = []
   const renderers: Awaited<ReturnType<typeof observationRenderer>>[] = []
   const relays: Awaited<ReturnType<typeof observationRelay>>[] = []
-  let primary: { failed: true; error: unknown } | undefined
   const start = async (id: string, pin: string, path: string, port?: number) => {
     const profile = join(path, id, 'profile')
-    const actor = await native.run(profile, () =>
-      observationRuntime({
-        scratch: path,
-        archiveRoot: join(archiveRoot, leg),
-        id,
-        pin,
-        port,
-        fetch: actorFetch(id),
-        capture
-      })
+    const actor = await at(`construct actor ${id}@${pin}`, () =>
+      native.run(profile, () =>
+        observationRuntime({
+          scratch: path,
+          archiveRoot: join(archiveRoot, leg),
+          id,
+          pin,
+          port,
+          fetch: actorFetch(id),
+          capture
+        })
+      )
     )
     actors.push(actor)
+    credentials.add(Buffer.from(actor.keypair.secretKey).toString('base64'))
+    credentials.add(Buffer.from(actor.keypair.secretKey).toString('hex'))
     capture({
       boundary: 'materialized-actor',
       actor: id,
       pin: actor.checkout.commit,
       runtimeId: actor.runtime.getRuntimeId()
     })
+    checkpoint(`actor ${id} provenance captured`, 'settled')
     return actor
   }
   const drainProvider = async () => {
-    await cloud('flush')
+    await at('provider flush', () => cloud('flush'))
     clock += 1000
-    await cloud('advance', { delta: 1000 })
+    await at('provider advance', () => cloud('advance', { delta: 1000 }))
     await mobile('advance', { delta: 1000 })
-    await cloud('flush')
-    return record(await cloud('snapshot'))
+    await at('provider flush', () => cloud('flush'))
+    return record(await at('provider snapshot', () => cloud('snapshot')))
   }
   const closeLeg = async () => {
     const cleanup = ownerCleanup()
     await cleanup.run(() => mobile('end-leg'))
-    for (const relay of relays) {
-      await cleanup.run(() => relay.release())
+    for (const [index, relay] of relays.entries()) {
+      await cleanup.run(() => at(`cleanup leg relay release ${index}`, () => relay.release()))
     }
-    for (const renderer of renderers.toReversed()) {
-      await cleanup.run(() => renderer.close())
+    for (const [index, renderer] of renderers.toReversed().entries()) {
+      await cleanup.run(() => at(`cleanup leg renderer ${index}`, () => renderer.close()))
     }
     for (const actor of actors.toReversed()) {
-      await cleanup.run(() => actor.close())
+      await cleanup.run(() => at(`cleanup leg actor ${actor.profile}`, () => actor.close()))
     }
-    for (const relay of relays) {
-      await cleanup.run(() => relay.close())
+    for (const [index, relay] of relays.entries()) {
+      await cleanup.run(() => at(`cleanup leg relay close ${index}`, () => relay.close()))
     }
-    for (const work of httpTasks) {
-      await cleanup.run(() => work)
+    for (const [index, work] of httpTasks.entries()) {
+      await cleanup.run(() => at(`cleanup leg HTTP task ${index}`, () => work))
     }
     renderers.length = 0
     actors.length = 0
@@ -285,14 +352,16 @@ export async function runRfp1Observation() {
   try {
     ownerHead = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim()
     capture({ boundary: 'current-owner-source-pin', ownerHead })
-    base = await bridge.start()
+    base = await at('bridge start', () => bridge.start())
     resultsPromise = Promise.allSettled(
       launchOwnerCompanions(resolve('.'), base, abort, closed, true)
     )
-    await deadline(
-      Promise.all([bridge.ready('cloud'), bridge.ready('mobile')]),
-      'observation companions ready',
-      45_000
+    await at('companions ready', () =>
+      deadline(
+        Promise.all([bridge.ready('cloud'), bridge.ready('mobile')]),
+        'observation companions ready',
+        45_000
+      )
     )
     for (const capable of [false, true]) {
       leg = capable ? 'capable-C' : 'old-C'
@@ -305,17 +374,23 @@ export async function runRfp1Observation() {
       const B = await start('B', RFP1_OLD, path)
       const A = await start('A', RFP1_A, path)
       const C = await start('C', capable ? RFP1_A : RFP1_OLD, path)
-      const aRelay = await observationRelay(A, native, capture)
+      const aRelay = await at('A relay construction', () => observationRelay(A, native, capture))
       relays.push(aRelay)
-      const cRelay = await observationRelay(C, native, capture)
+      const cRelay = await at('C relay construction', () => observationRelay(C, native, capture))
       relays.push(cRelay)
+      checkpoint('A/C authenticated B pairing', 'entered')
       const RA = aRelay.pair(B)
       const RC = cRelay.pair(B)
-      const aView = await observationRenderer(A, RA.id, native, capture)
+      checkpoint('A/C authenticated B pairing', 'settled')
+      const aView = await at('A renderer activation', () =>
+        observationRenderer(A, RA.id, native, capture)
+      )
       renderers.push(aView)
-      const cView = await observationRenderer(C, RC.id, native, capture)
+      const cView = await at('C renderer activation', () =>
+        observationRenderer(C, RC.id, native, capture)
+      )
       renderers.push(cView)
-      const prior = record(await cloud('snapshot'))
+      const prior = record(await at('prior gateway snapshot', () => cloud('snapshot')))
       await mobile('pair', {
         leg,
         offers: {
@@ -324,15 +399,21 @@ export async function runRfp1Observation() {
           C: C.offer('mobile', 'Phone')
         }
       })
-      await deadline(bridge.wait(`initial-route:${leg}`), 'real initial signed membership')
-      await deadline(
-        Promise.all(['A', 'B', 'C'].map((id) => bridge.wait(`phone-registered:${leg}:${id}`))),
-        'actual keyed or legacy enrollments consumed'
+      await at('initial signed membership', () =>
+        deadline(bridge.wait(`initial-route:${leg}`), 'real initial signed membership')
+      )
+      await at('actual enrollments consumed', () =>
+        deadline(
+          Promise.all(['A', 'B', 'C'].map((id) => bridge.wait(`phone-registered:${leg}:${id}`))),
+          'actual keyed or legacy enrollments consumed'
+        )
       )
       await mobile('select', { environmentId: RC.id, archiveRoot: C.checkout.root })
-      const initialA = currentStatus(await aView.status(), B)
+      const initialA = currentStatus(await at('A authenticated B status', () => aView.status()), B)
       capture({ boundary: 'A-authenticated-source-status', frame: initialA })
-      const sourceProjection = record(await aView.projection())
+      const sourceProjection = record(
+        await at('A authenticated B projection', () => aView.projection())
+      )
       capture({
         boundary: 'A-authenticated-source-session-projection',
         callerPin: A.checkout.commit,
@@ -342,6 +423,7 @@ export async function runRfp1Observation() {
         params: { worktree: `id:${RFP1_WORKSPACE}` },
         frame: sourceProjection
       })
+      checkpoint('A projection captured before assertion', 'settled')
       expect(sourceProjection.ok).toBe(true)
       capture({
         boundary: 'initial-phone-view',
@@ -351,15 +433,21 @@ export async function runRfp1Observation() {
       clock++
       await mobile('advance', { delta: 1 })
       await mobile('remove-A')
-      await deadline(
-        bridge.wait(`replacement-pending:${leg}`),
-        'post-removal declaration held before commit'
+      await at('removal replace held before commit', () =>
+        deadline(
+          bridge.wait(`replacement-pending:${leg}`),
+          'post-removal declaration held before commit'
+        )
       )
       // Await actual subscribed source selection before committing new journal work.
-      await deadline(B.subscribed, 'real renderer source feeds ready')
-      const cursor = await B.commit(`observed-${leg}`)
+      await at('source feeds ready', () =>
+        deadline(B.subscribed, 'real renderer source feeds ready')
+      )
+      const cursor = await at('B journal commit', () => B.commit(`observed-${leg}`))
       capture({ boundary: 'actual-B-journal-commit', pin: RFP1_OLD, cursor })
-      await deadline(bridge.wait(`send:${leg}:A`), 'source-produced A send')
+      await at('source A send', () =>
+        deadline(bridge.wait(`send:${leg}:A`), 'source-produced A send')
+      )
       const queued = await drainProvider()
       const provider = rows(queued.providers).at(-1)
       if (!provider || rows(queued.providers).length !== rows(prior.providers).length + 1) {
@@ -382,6 +470,7 @@ export async function runRfp1Observation() {
         sourceCursor: cursor,
         sourcePin: B.checkout.commit
       })
+      checkpoint('E1/E2 baseline', 'entered')
       const V = record(await mobile('present', { payload, workspace: RFP1_WORKSPACE, case: 'E1' }))
       const U = record(
         await mobile('present', { payload, workspace: 'observation::/observation/w2', case: 'E2' })
@@ -397,8 +486,11 @@ export async function runRfp1Observation() {
             ? 'initial pair meets viewing requirement; full coverage UNRUN'
             : 'OPEN: observed V does not meet quiet requirement'
       })
+      checkpoint('E1/E2 baseline', 'settled')
       holdC.resolve()
-      await deadline(bridge.wait(`send:${leg}:C`), 'real independently eligible C send')
+      await at('independent C send', () =>
+        deadline(bridge.wait(`send:${leg}:C`), 'real independently eligible C send')
+      )
       const settled = await drainProvider()
       expect(rows(settled.pending)).toEqual([])
       expect(sendAttempts.filter((id) => id === 'B')).toEqual([])
@@ -434,17 +526,21 @@ export async function runRfp1Observation() {
       }
       capture({ boundary: 'fenced-settlement', snapshot: settled })
       {
+        checkpoint('E8 same-B restart schedule', 'entered')
         const endpoint = B.server.getWebSocketEndpoint()
         if (!endpoint) {
           throw new Error('B has no actual restart endpoint')
         }
         const port = Number(new URL(endpoint).port)
         const before = B.runtime.getRuntimeId()
-        await B.close()
+        await at('E8 close original B', () => B.close())
         const restarted = await start('B', RFP1_OLD, path, port)
         expect(restarted.keypair.publicKey).toEqual(B.keypair.publicKey)
         expect(restarted.runtime.getRuntimeId()).not.toBe(before)
-        const healthyA = currentStatus(await aView.status(), restarted)
+        const healthyA = currentStatus(
+          await at('E8 restarted B status', () => aView.status()),
+          restarted
+        )
         expect(record(record(healthyA.result).hostDescriptor).installationId).toBe(
           record(record(initialA.result).hostDescriptor).installationId
         )
@@ -452,12 +548,16 @@ export async function runRfp1Observation() {
         const healthyPhone = record(await mobile('sample', { workspace: RFP1_WORKSPACE }))
         currentStatus(healthyPhone.frame, restarted)
         capture({ boundary: 'E8-healthy-restart-current-phone', sample: healthyPhone })
-        await restarted.close()
+        await at('E8 close healthy restart', () => restarted.close())
         const installation = join(restarted.profile, 'host-installation.json')
         renameSync(installation, `${installation}.healthy`)
         mkdirSync(installation)
         const unavailable = await start('B', RFP1_OLD, path, port)
-        const currentA = currentStatus(await aView.status(), unavailable, true)
+        const currentA = currentStatus(
+          await at('E8 descriptor failure status', () => aView.status()),
+          unavailable,
+          true
+        )
         const currentPhone = record(
           await mobile('sample', { workspace: RFP1_WORKSPACE, descriptorUnavailable: true })
         )
@@ -477,14 +577,15 @@ export async function runRfp1Observation() {
           boundary: 'E8-original-queued-payload-presentation',
           result: await mobile('present', { payload, workspace: RFP1_WORKSPACE, case: 'E8' })
         })
+        checkpoint('E8 same-B restart schedule', 'settled')
+        checkpoint('E6 same-RC different-D schedule', 'entered')
         const D = await start('D', RFP1_OLD, path)
         const held = cRelay.holdStatus()
         await mobile('held-status')
-        await deadline(held, 'E6 actual raw old B reply held')
-        await cRelay.replace(RC.id, D)
-        const retired = await deadline(
-          bridge.wait('held-status-settled'),
-          'real retired request outcome'
+        await at('E6 old B reply held', () => deadline(held, 'E6 actual raw old B reply held'))
+        await at('E6 replace same RC with D', () => cRelay.replace(RC.id, D))
+        const retired = await at('E6 retired request outcome', () =>
+          deadline(bridge.wait('held-status-settled'), 'real retired request outcome')
         )
         cRelay.release()
         const currentD = record(await mobile('sample', { workspace: RFP1_WORKSPACE }))
@@ -501,9 +602,10 @@ export async function runRfp1Observation() {
           candidateJoin: 'UNSELECTED; no cached alias made into authority'
         })
         capture({ boundary: 'E6-current-D-phone-view', sample: currentD })
-        await unavailable.close()
+        await at('E6 close descriptor-unavailable B', () => unavailable.close())
         rmdirSync(installation)
         renameSync(`${installation}.healthy`, installation)
+        checkpoint('E6 same-RC different-D schedule', 'settled')
       }
       replacement.resolve()
       removalPending = false
@@ -524,6 +626,8 @@ export async function runRfp1Observation() {
       },
       production: 'HELD'
     })
+    completed = true
+    checkpoint('initial cut completed', 'settled')
   } catch (error) {
     primary = { failed: true, error }
     capture({
@@ -531,58 +635,58 @@ export async function runRfp1Observation() {
       error: String(error),
       observationSufficiency: 'UNRUN; not incompatibility proof'
     })
+    checkpoint('caught primary before teardown', 'settled')
   }
   const cleanup = ownerCleanup(primary)
-  await cleanup.run(() => holdC.resolve())
-  await cleanup.run(() => replacement.resolve())
-  await cleanup.run(closeLeg)
-  for (const action of [() => mobile('stop'), () => cloud('stop')]) {
-    await cleanup.run(action)
+  await cleanup.run(() => at('cleanup release held C', () => holdC.resolve()))
+  await cleanup.run(() => at('cleanup release held replacement', () => replacement.resolve()))
+  await cleanup.run(() => at('cleanup remaining leg', closeLeg))
+  for (const [index, action] of [() => mobile('stop'), () => cloud('stop')].entries()) {
+    await cleanup.run(() => at(`cleanup companion stop ${index}`, action))
   }
   if (cleanup.failed) {
-    await cleanup.run(() => abort.abort())
+    await cleanup.run(() => at('cleanup abort failed companions', () => abort.abort()))
   }
-  for (const result of await resultsPromise) {
-    await cleanup.run(() => {
-      if (result.status === 'rejected') {
-        throw result.reason
-      }
-      expect(result.value.code).toBe(0)
+  for (const [index, result] of (
+    await at('cleanup physical companion results', () => resultsPromise)
+  ).entries()) {
+    await cleanup.run(() =>
+      at(`cleanup companion result ${index}`, () => {
+        if (result.status === 'rejected') {
+          throw result.reason
+        }
+        expect(result.value.code).toBe(0)
+      })
+    )
+  }
+  await cleanup.run(() => at('cleanup bridge close', () => bridge.close()))
+  await cleanup.run(() => at('cleanup native close', () => native.close()))
+  await cleanup.run(() => at('cleanup restore mocks', () => vi.restoreAllMocks()))
+  await cleanup.run(() => at('cleanup restore globals', () => vi.unstubAllGlobals()))
+  let digest: string | undefined
+  await cleanup.run(() =>
+    at('cleanup final aggregate', () => {
+      digest = retainAggregate()
     })
+  )
+  if (digest) {
+    console.log(
+      `RFP1 finite capture ${digest}: ${cleanup.failed || retentionErrors.length ? 'execution FAIL, observation UNRUN' : 'execution complete, observation HOLD; production HELD'}; ${captureRoot}`
+    )
   }
-  await cleanup.run(() => bridge.close())
-  await cleanup.run(() => native.close())
-  await cleanup.run(() => vi.restoreAllMocks())
-  await cleanup.run(() => vi.unstubAllGlobals())
-  const raw = JSON.stringify(
-    redacted({
-      sourcePins: { old: RFP1_OLD, A: RFP1_A, owner: ownerHead },
-      captures,
-      cleanupFailed: cleanup.failed,
-      coverage: {
-        E1: primary ? 'see finite captures; no pass claim' : 'initial-cut both C legs',
-        E2: primary ? 'see finite captures; no pass claim' : 'initial-cut both C legs',
-        E6: primary ? 'see finite captures; no pass claim' : 'initial-cut',
-        E8: primary ? 'see finite captures; no pass claim' : 'initial-cut',
-        others: 'UNRUN',
-        Android: 'UNRUN',
-        completeObservationSufficiency: 'NOT ESTABLISHED'
-      }
-    }),
-    null,
-    2
-  )
-  const digest = createHash('sha256').update(raw).digest('hex')
-  await cleanup.run(() => writeFileSync(join(captureRoot, `${digest}.json`), raw))
-  console.log(
-    `RFP1 finite capture ${digest}: ${primary ? 'execution FAIL, observation UNRUN' : 'execution complete, observation HOLD; production HELD'}; ${captureRoot}`
-  )
   for (const root of [scratch, archiveRoot]) {
+    await cleanup.run(() =>
+      at(`cleanup owned root ${root}`, () => {
+        if (closed.size !== 2) {
+          throw new Error(`Companion closure unverified; retained ${root}`)
+        }
+        rmSync(root, { recursive: true, force: true })
+      })
+    )
+  }
+  for (const error of retentionErrors) {
     await cleanup.run(() => {
-      if (closed.size !== 2) {
-        throw new Error(`Companion closure unverified; retained ${root}`)
-      }
-      rmSync(root, { recursive: true, force: true })
+      throw error
     })
   }
   cleanup.finish()
