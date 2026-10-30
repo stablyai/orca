@@ -78,13 +78,14 @@ it.each(
     )
     await mount(false, outputs, query, true)
     await act(async () => {
-      await store
+      const updated = await store
         .getState()
         .updateRepo(
           repo.id,
           { ghAccount: { host: 'github.com', user: 'bob' } },
           { hostId: 'local' }
         )
+      expect(updated).toBe(true)
     })
     const openingReads = direct.mock.calls.length
     const bob = Promise.withResolvers<{ ok: boolean }>()

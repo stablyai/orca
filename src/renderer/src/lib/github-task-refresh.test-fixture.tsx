@@ -202,6 +202,8 @@ function fixture(n = 1) {
         settings: null,
         endpointProjects: [],
         endpointProjectHostSetups: [],
+        projects: [],
+        projectHostSetups: [],
         runtimeStatusByEnvironmentId: new Map(),
         taskPageData: { openGitHubWorkItem: seed, openGitHubSourceContext: source },
         githubTaskDrawerWorkItem: seed,
