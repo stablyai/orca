@@ -230,7 +230,8 @@ function renderList(
         (options.eligible?.(s) ?? true)
           ? {
               available: true,
-              workspaceId: options.resumeHere?.workspaceId ?? `own-${s.sessionId}`
+              workspaceId: options.resumeHere?.workspaceId ?? `own-${s.sessionId}`,
+              route: 'structured'
             }
           : { available: false, reason: 'remote' }
       }

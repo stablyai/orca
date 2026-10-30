@@ -1,10 +1,17 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type * as ZcodeCliInvocation from '../zcode/zcode-cli-invocation'
 import { detectAgentCommandsOnHost } from '../preflight/agent-detection'
 import { resolveAgentTerminalCreateOptions } from './runtime-agent-terminal-startup'
 import { _resetWslCachesForTests, _setWslCachesForTests } from '../wsl'
 
+const resolveZcodeCliInvocationMock = vi.hoisted(() => vi.fn())
+
 vi.mock('../preflight/agent-detection', () => ({
   detectAgentCommandsOnHost: vi.fn(async () => new Set(['qoder']))
+}))
+vi.mock('../zcode/zcode-cli-invocation', async (importOriginal) => ({
+  ...(await importOriginal<typeof ZcodeCliInvocation>()),
+  resolveZcodeCliInvocation: resolveZcodeCliInvocationMock
 }))
 
 const workspace = { id: 'w', path: '/repo', connectionId: null, repo: null, folderWorkspace: null }
@@ -17,7 +24,10 @@ const host = {
 const original = process.platform
 const setPlatform = (value: string) =>
   Object.defineProperty(process, 'platform', { configurable: true, value })
-beforeEach(() => setPlatform('win32'))
+beforeEach(() => {
+  setPlatform('win32')
+  resolveZcodeCliInvocationMock.mockReset()
+})
 afterEach(() => {
   setPlatform(original)
   _resetWslCachesForTests()
@@ -25,6 +35,31 @@ afterEach(() => {
 
 // The host planner's inputs. Relied on by C2, whose pane spawns run this plan.
 describe('host agent planner', () => {
+  it('refuses a Desktop bundle as a terminal agent', async () => {
+    resolveZcodeCliInvocationMock.mockReturnValue({
+      command: 'C:\\Users\\test\\AppData\\Local\\Programs\\ZCode\\ZCode.exe',
+      prefixArgs: ['C:\\Users\\test\\AppData\\Local\\Programs\\ZCode\\resources\\glm\\zcode.cjs'],
+      envOverlay: { ELECTRON_RUN_AS_NODE: '1' },
+      identity: 'desktop',
+      source: 'desktop-bundle'
+    })
+
+    await expect(
+      resolveAgentTerminalCreateOptions(
+        workspace,
+        {
+          startupAgent: 'zcode',
+          launchRuntime: {
+            platform: 'win32',
+            pty: { shellOverride: 'cmd.exe', terminalWindowsWslDistro: null }
+          }
+        },
+        host
+      )
+    ).rejects.toThrow('ZCode Desktop does not include the terminal TUI')
+    expect(resolveZcodeCliInvocationMock).toHaveBeenCalledOnce()
+  })
+
   it("quotes for the fact's shell and hands that same fact to the spawn", async () => {
     const launch = await resolveAgentTerminalCreateOptions(
       workspace,

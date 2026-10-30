@@ -62,20 +62,32 @@ export function buildNewTabAgentMenuRows(args: {
   const { settings } = args
   const defaultAgent = settings?.defaultTuiAgent
   const installed = filterEnabledTuiAgents(args.detectedOnHost ?? [], settings?.disabledTuiAgents)
-  if (!isNativeChatEnabled(settings) || args.hostChatAnswer('claude') === 'no-chats') {
-    return orderAgentLaunchPickerAgents(defaultAgent, installed).map((agent) => ({
-      kind: 'terminal',
-      agent
-    }))
-  }
-  const runnable: TuiAgent[] = []
-  const unavailable = new Map<TuiAgent, ChatUnavailableReason>()
   const chatAgents = filterEnabledTuiAgents(args.chatAgents, settings?.disabledTuiAgents)
-  // An unchosen provider is on wherever its chat program is, whether or not its CLI is.
   const canOpen = (agent: TuiAgent): boolean =>
     chatProgramOffered(args.chatProgram(agent)) ||
     (args.chatProgram(agent) === 'unknown' && installed.includes(agent))
   const providedHere = chatAgents.filter(canOpen)
+  if (!isNativeChatEnabled(settings) || args.hostChatAnswer('claude') === 'no-chats') {
+    const chatOnly = chatAgents.filter(
+      (agent) =>
+        !installed.includes(agent) &&
+        canOpen(agent) &&
+        args.hostChatAnswer(agent) === 'yes' &&
+        isNativeChatProviderDisplayedOn(settings, agent, providedHere)
+    )
+    return [
+      ...orderAgentLaunchPickerAgents(defaultAgent, chatOnly).map((agent) => ({
+        kind: 'chat' as const,
+        agent
+      })),
+      ...orderAgentLaunchPickerAgents(
+        defaultAgent,
+        installed.filter((agent) => !chatOnly.includes(agent))
+      ).map((agent) => ({ kind: 'terminal' as const, agent }))
+    ]
+  }
+  const runnable: TuiAgent[] = []
+  const unavailable = new Map<TuiAgent, ChatUnavailableReason>()
   const chatToo = new Set<TuiAgent>()
   for (const agent of chatAgents) {
     const displayed = isNativeChatProviderDisplayedOn(settings, agent, providedHere)

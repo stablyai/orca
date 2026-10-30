@@ -9,6 +9,7 @@ import {
   isAiVaultSessionResumableContent,
   type AiVaultSession
 } from '../../../../shared/ai-vault-types'
+import { canOpenAiVaultSessionHistoryChat } from './ai-vault-session-history-chat'
 
 export type AiVaultResumeInChatBlockedReason =
   | 'agent'
@@ -17,8 +18,10 @@ export type AiVaultResumeInChatBlockedReason =
   | 'already-structured'
   | 'workspace'
 
+export type AiVaultResumeInChatRoute = 'structured' | 'history'
+
 export type AiVaultResumeInChatEligibility =
-  | { available: true; workspaceId: string }
+  | { available: true; workspaceId: string; route: AiVaultResumeInChatRoute }
   | { available: false; reason: AiVaultResumeInChatBlockedReason }
 
 /** Codex can resume anywhere; other providers require the original cwd or silently miss/refuse/fork the conversation. */
@@ -75,6 +78,21 @@ export function resolveAiVaultSessionResumeInChatEligibility(args: {
     return { available: false, reason: 'already-structured' }
   }
   const recordingHost = parseRoutableExecutionHostId(session.executionHostId)
+  const route: AiVaultResumeInChatRoute =
+    canOpenAiVaultSessionHistoryChat(session) && !zcodeAdoptionAvailable(session)
+      ? 'history'
+      : 'structured'
+  if (route === 'history') {
+    if (!recordingHost || recordingHost.kind !== 'local') {
+      return { available: false, reason: 'remote' }
+    }
+    if (!isAiVaultSessionResumableContent(session)) {
+      return { available: false, reason: 'empty' }
+    }
+    return args.targetWorkspaceId
+      ? { available: true, workspaceId: args.targetWorkspaceId, route }
+      : { available: false, reason: 'workspace' }
+  }
   if (
     !recordingHost ||
     (recordingHost.kind !== 'local' && recordingHost.kind !== 'runtime') ||
@@ -94,5 +112,12 @@ export function resolveAiVaultSessionResumeInChatEligibility(args: {
   ) {
     return { available: false, reason: 'workspace' }
   }
-  return { available: true, workspaceId: args.targetWorkspaceId }
+  return { available: true, workspaceId: args.targetWorkspaceId, route }
+}
+
+function zcodeAdoptionAvailable(session: {
+  executionHostId: AiVaultSession['executionHostId']
+  filePath: AiVaultSession['filePath']
+}): boolean {
+  return session.executionHostId === 'local' && !isWslStoredAiVaultSessionFile(session.filePath)
 }

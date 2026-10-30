@@ -152,7 +152,7 @@ export function useAgentMenuObservation(
     open
   )
   const chatEnabled = isNativeChatEnabled(settings)
-  const plain = !chatEnabled || hostChatAnswer(input) === 'no-chats'
+  const plain = hostChatAnswer(input) === 'no-chats'
   const local = facts.executionHostId === LOCAL_EXECUTION_HOST_ID
   // Use published host-wide availability when supported; older hosts defer final admission to the launch request.
   const published =
@@ -216,7 +216,8 @@ export function useAgentMenuObservation(
     !unresolvedTarget &&
     (preferencesPending ||
       (detection.detectedIds === null && detectionTarget !== undefined && !inventoryFailed) ||
-      (!plain &&
+      (chatEnabled &&
+        !plain &&
         (capabilityPending ||
           (!local && localAcquiring) ||
           availability?.state === 'pending' ||

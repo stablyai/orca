@@ -45,7 +45,7 @@ function actions(overrides: Partial<Parameters<typeof resolveAiVaultSessionRowCh
     originalPaneTarget: null,
     structuredSessionOpen: false,
     resumeState: { blocked: false, worktreeId: 'wt-1', usesSessionWorktree: true },
-    resumeInChat: { available: true, workspaceId: 'wt-own' },
+    resumeInChat: { available: true, workspaceId: 'wt-own', route: 'structured' },
     searchHit: undefined,
     ...overrides
   })
@@ -74,6 +74,7 @@ describe('session row chat actions', () => {
       resumeDisabled: true,
       resumeWorktreeId: null,
       resumeInNewChatWorkspaceId: null,
+      resumeInNewChatRoute: null,
       resumeInNewCliWorktreeId: null
     })
   })

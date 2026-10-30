@@ -45,6 +45,38 @@ describe('resolveAiVaultSessionResumeInChatEligibility', () => {
     ).toEqual({ available: false, reason: 'already-structured' })
   })
 
+  it('routes an unadopted local ZCode row into structured adoption', () => {
+    expect(
+      eligibility({ session: session({ agent: 'zcode', filePath: undefined }) })
+    ).toMatchObject({ available: true, route: 'structured' })
+  })
+
+  it('routes a WSL-stored ZCode row to the read-only history tab', () => {
+    expect(
+      eligibility({
+        session: session({
+          agent: 'zcode',
+          filePath: '//wsl.localhost/Ubuntu/home/dev/.zcode/cli/db/db.sqlite'
+        })
+      })
+    ).toEqual({
+      available: true,
+      workspaceId: 'repo-1::/repo/orca',
+      route: 'history'
+    })
+  })
+
+  it('keeps WSL-stored non-ZCode rows off the read-only path', () => {
+    expect(
+      eligibility({
+        session: session({
+          agent: 'claude',
+          filePath: '//wsl.localhost/Ubuntu/home/dev/.claude/projects/p/session.jsonl'
+        })
+      })
+    ).toEqual({ available: false, reason: 'remote' })
+  })
+
   it.each(['ssh:build-box', 'runtime:unresolved-owner'] as const)(
     'refuses a row recorded on %s',
     (executionHostId) => {

@@ -427,6 +427,15 @@ it('keeps offered host Chat independent of preference through the actual row bui
       defaultSurface: 'terminal'
     },
     {
+      enabled: false,
+      preferred: true,
+      answer: 'yes',
+      program: 'available',
+      detected: [],
+      surfaces: ['chat'],
+      defaultSurface: 'chat'
+    },
+    {
       enabled: true,
       preferred: false,
       answer: 'ssh',

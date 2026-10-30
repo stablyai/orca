@@ -19,6 +19,7 @@ import { createOpenCodeAcpConnection } from '../opencode/opencode-acp-connection
 import { acpStructuredLaunchPart } from '../acp/acp-structured-launch-resolution'
 import { AcpStructuredSessionAdapter } from '../acp/acp-structured-session-adapter'
 import { PI_RPC_RUNTIME_REGISTRATION } from '../pi/rpc-runtime-registration'
+import { createZcodeAdapter } from '../zcode/zcode-runtime-registration'
 import {
   claudeLaunchEnvOverlay,
   claudeListingDeps
@@ -210,6 +211,8 @@ function registrationWithAdapter(
       return Object.assign(entry.metadata, { createAdapter: createClaudeAdapter })
     case 'acp':
       return Object.assign(entry.metadata, { createAdapter: createAcpAdapter(entry.spec) })
+    case 'zcode':
+      return Object.assign(entry.metadata, { createAdapter: createZcodeAdapter })
   }
 }
 

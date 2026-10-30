@@ -13,6 +13,10 @@ import {
 import { detectAgentCommandsOnHost } from './agent-command-detection'
 import { normalizeDisabledTuiAgents } from '../../shared/tui-agent-selection'
 import type { TuiAgent } from '../../shared/tui-agent'
+import {
+  resolveZcodeCliInvocation,
+  zcodeDesktopTerminalRefusal
+} from '../zcode/zcode-cli-invocation'
 
 export type InstalledAgentDetectionOptions = {
   /** Agents disabled in Settings → Agents. Background callers skip probing them entirely. */
@@ -34,14 +38,24 @@ export async function detectInstalledAgents(
   context?: PreflightRuntimeContext,
   options?: InstalledAgentDetectionOptions
 ): Promise<string[]> {
-  const runtime = getPreflightWslTarget(context) ? 'wsl' : process.platform
+  const wslTarget = getPreflightWslTarget(context)
+  const runtime = wslTarget ? 'wsl' : process.platform
   const commands = activeDetectionCommands(options)
   const probeCommands = getTuiAgentDetectionProbeCommands(commands, runtime)
-  return resolveDetectedTuiAgentIds(
+  const detected = resolveDetectedTuiAgentIds(
     commands,
     await detectAgentCommandsOnHost(probeCommands, { context }),
     runtime
   )
+  if (wslTarget || !detected.includes('zcode')) {
+    return detected
+  }
+  const invocation = resolveZcodeCliInvocation({
+    pathEnv: process.env.PATH ?? process.env.Path
+  })
+  return zcodeDesktopTerminalRefusal(invocation)
+    ? detected.filter((agent) => agent !== 'zcode')
+    : detected
 }
 
 export async function detectInstalledAgentsWithShellPathHydration(

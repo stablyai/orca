@@ -543,7 +543,7 @@ it('holds initial capability acquisition, then exposes truthful failure and know
   expect(getStatus).toHaveBeenCalledTimes(1)
 })
 
-// Last: the host's published snapshot is module state that later cases would read.
+// The host's published snapshot is module state that later cases would read.
 it('preserves per-agent published answers and direct route inputs across context changes', async () => {
   mocks.realRoutes = true
   mocks.publishing = true
@@ -649,4 +649,31 @@ it('preserves per-agent published answers and direct route inputs across context
       }
     }
   }
+})
+
+it('offers a Desktop-only ZCode chat while Chat UI is off', () => {
+  mocks.publishing = true
+  mocks.catalog.mockReturnValue(
+    ['claude', 'codex', 'opencode', 'zcode'].map((agent) => ({ agent, capabilities: {} }))
+  )
+  useAppStore.setState({
+    settings: {
+      ...getDefaultSettings('/home/me'),
+      experimentalNativeChat: false,
+      disabledTuiAgents: []
+    }
+  })
+  const hook = renderHook(() => useNewTabAgentMenuRows('one', true, { kind: 'local' }))
+  const stream = mocks.subscribe.mock.calls.findLast((call) => call[0].kind === 'local')
+  expect(stream).toBeDefined()
+  act(() =>
+    stream![3].onEvent({
+      type: 'availability',
+      agents: [{ agent: 'zcode', state: 'available', chatProgram: 'available' }]
+    })
+  )
+  expect(
+    hook.result.current.state === 'settled' &&
+      hook.result.current.rows.find((row) => row.agent === 'zcode')
+  ).toMatchObject({ kind: 'chat', executionHostId: 'local' })
 })
