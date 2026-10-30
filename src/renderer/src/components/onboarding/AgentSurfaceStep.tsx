@@ -146,16 +146,17 @@ function SurfaceOption({
 const PREVIEW_FILE = 'api.ts'
 const TERMINAL_TITLE = 'zsh — claude'
 const TERMINAL_LINES: {
+  id: string
   tone: 'prompt' | 'input' | 'step' | 'detail' | 'removed' | 'added'
   text: string
 }[] = [
-  { tone: 'prompt', text: 'claude' },
-  { tone: 'input', text: '> add retry to fetchUser' },
-  { tone: 'step', text: 'Update(src/api.ts)' },
-  { tone: 'detail', text: '⎿ 1 addition, 1 removal' },
-  { tone: 'removed', text: '12 - return fetch(url)' },
-  { tone: 'added', text: '12 + return withRetry(fetch, url)' },
-  { tone: 'step', text: 'Done. Retries capped at 3.' }
+  { id: 'launch', tone: 'prompt', text: 'claude' },
+  { id: 'request', tone: 'input', text: '> add retry to fetchUser' },
+  { id: 'update', tone: 'step', text: 'Update(src/api.ts)' },
+  { id: 'diff-summary', tone: 'detail', text: '⎿ 1 addition, 1 removal' },
+  { id: 'removed-line', tone: 'removed', text: '12 - return fetch(url)' },
+  { id: 'added-line', tone: 'added', text: '12 + return withRetry(fetch, url)' },
+  { id: 'complete', tone: 'step', text: 'Done. Retries capped at 3.' }
 ]
 
 // The previews contrast on purpose: chat is proportional type, bubbles and cards with no raw
@@ -224,8 +225,8 @@ function TerminalPreview() {
         <span className="mx-auto pr-6 text-muted-foreground">{TERMINAL_TITLE}</span>
       </div>
       <div className="px-3 pt-1.5">
-        {TERMINAL_LINES.map((line, index) => (
-          <div key={index} className={cn('truncate', TERMINAL_TONE_CLASS[line.tone])}>
+        {TERMINAL_LINES.map((line) => (
+          <div key={line.id} className={cn('truncate', TERMINAL_TONE_CLASS[line.tone])}>
             {line.tone === 'prompt' ? <span className="text-status-success">❯ </span> : null}
             {line.tone === 'step' ? <span className="text-status-success">● </span> : null}
             {line.text}

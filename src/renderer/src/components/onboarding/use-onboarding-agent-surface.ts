@@ -7,10 +7,7 @@ import { chatProviderAgents, useHostStructuredAgentsVersion } from '@/lib/chat-p
 import type { ProspectiveWorkspace } from '@/lib/agent-launch-route-input'
 import { readChatProgram, resolveChatProgramContext } from '@/lib/host-chat-program'
 import { useChatProgramFacts } from '@/lib/host-chat-program-acquisition'
-import {
-  readHostStructuredAgents,
-  relearnHostStructuredAgents
-} from '@/runtime/host-structured-agents'
+import { relearnHostStructuredAgents } from '@/runtime/host-structured-agents'
 import { useAppStore } from '@/store'
 import { readNativeDetectedAgents } from '@/store/slices/local-detected-agent-store-state'
 import type { AgentSurface } from './use-onboarding-flow-types'
@@ -47,16 +44,11 @@ export function useChatAgentDetection() {
   )
   // Claude and Codex, then the agents this computer's host registered for chat.
   const chatAgents = chatProviderAgents(LOCAL_EXECUTION_HOST_ID, undefined)
-  // A runtime Orca downloaded runs the chat without the agent's CLI on PATH.
-  const managedReady = useAppStore((state) => {
-    const managed = readHostStructuredAgents(LOCAL_EXECUTION_HOST_ID, undefined)
+  // Custom commands and downloaded runtimes can run Chat without a CLI on PATH.
+  const chatReady = useAppStore((state) => {
     const context = resolveChatProgramContext(state, CHAT_HOST)
     return chatAgents
-      .filter(
-        (agent) =>
-          managed?.some((row) => row.agent === agent && row.managedRuntime) &&
-          readChatProgram(state, agent, context, nativeDetected) === 'available'
-      )
+      .filter((agent) => readChatProgram(state, agent, context, nativeDetected) === 'available')
       .join(',')
   })
   // Chat never runs in WSL, so only native installs count; null while detection is pending.
@@ -64,7 +56,7 @@ export function useChatAgentDetection() {
     nativeDetected === null
       ? null
       : chatAgents.filter(
-          (agent) => nativeDetected.includes(agent) || managedReady.split(',').includes(agent)
+          (agent) => nativeDetected.includes(agent) || chatReady.split(',').includes(agent)
         )
   return { chatAgents, chatDetected, refreshDetectedAgents }
 }

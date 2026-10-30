@@ -290,6 +290,33 @@ it('counts a downloaded Chat runtime without the CLI on PATH', async () => {
   expect(container.querySelector('output')?.textContent).toBe('antigravity')
 })
 
+it.each(['claude', 'codex'] as const)(
+  'selects a ready custom %s Chat command without the CLI on PATH',
+  async (agent) => {
+    setLocalRuntimeCapabilitiesForTests([CHAT, CATALOG, HEALTH])
+    rpc.call.mockResolvedValue({ agents: [{ agent, capabilities: {} }] })
+    useAppStore.setState({ localDetectedAgentIdsByContext: { host: ['aider'] } })
+    await act(async () => root.render(<Probe />))
+    act(() =>
+      rpc.subscribe.mock.calls.at(-1)?.[3].onEvent({
+        type: 'availability',
+        agents: [{ agent, state: 'available', chatProgram: 'missing' }]
+      })
+    )
+    choose('Chat')
+    expect(container.querySelector('output')?.textContent).toBe('aider')
+
+    act(() =>
+      rpc.subscribe.mock.calls.at(-1)?.[3].onEvent({
+        type: 'availability',
+        agents: [{ agent, state: 'available', chatProgram: 'available' }]
+      })
+    )
+
+    expect(container.querySelector('output')?.textContent).toBe(agent)
+  }
+)
+
 it('does not count a managed Chat runtime that is only installable', async () => {
   setLocalRuntimeCapabilitiesForTests([CHAT, CATALOG, HEALTH])
   rpc.call.mockResolvedValue({
