@@ -26,7 +26,9 @@ export const WORKER_EVENTS = {
 /** host → worker requests; the worker answers each with a `res`. */
 export const WORKER_METHODS = {
   invokeCommand: 'command.invoke',
-  deliverEvent: 'event.deliver'
+  deliverEvent: 'event.deliver',
+  /** A panel's message for the handler its worker registered under that panel id. */
+  deliverPanelMessage: 'panel.message'
 } as const
 
 export const pluginWorkerInitSchema = z.object({
@@ -46,6 +48,12 @@ export const pluginWorkerInvokeParamsSchema = z.object({
 export const pluginWorkerDeliverParamsSchema = z.object({
   event: z.enum(PLUGIN_EVENT_NAMES),
   payload: z.unknown()
+})
+
+export const pluginWorkerPanelMessageParamsSchema = z.object({
+  /** Bound by the host from the panel session, never read from the frame's own message. */
+  panelId: z.string().min(1),
+  message: z.unknown()
 })
 
 export const pluginWorkerReadySchema = z.object({
@@ -86,6 +94,8 @@ export function pluginWorkerFatal(error: string): PluginEvent {
 
 export const PLUGIN_WORKER_READY_TIMEOUT_MS = 10_000
 export const PLUGIN_WORKER_INVOKE_TIMEOUT_MS = 30_000
+/** Concurrent panel messages one worker may have unanswered before more are refused. */
+export const PLUGIN_WORKER_MAX_PENDING_PANEL_MESSAGES = 16
 /** Dispose idle workers and refork on their next trigger. */
 export const PLUGIN_WORKER_IDLE_REAP_MS = 5 * 60_000
 /** Default cap on concurrently-active workers; excess activations queue. */

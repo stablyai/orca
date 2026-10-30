@@ -15,7 +15,10 @@ class FakeChild extends EventEmitter {
   kill = vi.fn()
 }
 
-function start(child: FakeChild, options: { eventTimeoutMs?: number } = {}) {
+function start(
+  child: FakeChild,
+  options: { eventTimeoutMs?: number; invokeTimeoutMs?: number } = {}
+) {
   processMocks.fork.mockReturnValue(child)
   return startPluginWorker({
     pluginId: 'samples.demo',
@@ -202,5 +205,93 @@ describe('startPluginWorker', () => {
     await vi.advanceTimersByTimeAsync(25)
     await rejected
     expect(child.send).toHaveBeenLastCalledWith({ orca: 1, kind: 'cancel', id: 0 })
+  })
+
+  describe('deliverPanelMessage', () => {
+    async function startReady(options: { invokeTimeoutMs?: number } = {}) {
+      const child = new FakeChild()
+      const pending = start(child, options)
+      child.emit('message', ready([]))
+      return { child, handle: await pending }
+    }
+
+    it('sends the panel id and message and resolves with the worker reply', async () => {
+      const { child, handle } = await startReady()
+      const reply = handle.deliverPanelMessage('player', { type: 'getState' })
+      expect(child.send).toHaveBeenLastCalledWith({
+        orca: 1,
+        kind: 'req',
+        id: 0,
+        method: 'panel.message',
+        params: { panelId: 'player', message: { type: 'getState' } }
+      })
+      expect(handle.inFlightCount()).toBe(1)
+      child.emit('message', { orca: 1, kind: 'res', id: 0, result: { playing: true } })
+      await expect(reply).resolves.toEqual({ ok: true, value: { playing: true } })
+      expect(handle.inFlightCount()).toBe(0)
+    })
+
+    it('keeps the code of a worker failure and turns a missing result into null', async () => {
+      const { child, handle } = await startReady()
+      const missing = handle.deliverPanelMessage('settings', {})
+      const failed = handle.deliverPanelMessage('player', {})
+      const quiet = handle.deliverPanelMessage('player', {})
+      child.emit('message', {
+        orca: 1,
+        kind: 'res',
+        id: 0,
+        error: { code: 'unknown_method', message: 'no handler', retryable: false }
+      })
+      child.emit('message', {
+        orca: 1,
+        kind: 'res',
+        id: 1,
+        error: { code: 'from_the_future', message: 'boom', retryable: false }
+      })
+      child.emit('message', { orca: 1, kind: 'res', id: 2 })
+      await expect(missing).resolves.toEqual({
+        ok: false,
+        code: 'unknown_method',
+        error: 'no handler'
+      })
+      await expect(failed).resolves.toEqual({ ok: false, code: 'action_failed', error: 'boom' })
+      await expect(quiet).resolves.toEqual({ ok: true, value: null })
+    })
+
+    it('answers unavailable to messages in flight when the worker exits, and to later ones', async () => {
+      const { child, handle } = await startReady()
+      const reply = handle.deliverPanelMessage('player', {})
+      child.emit('exit', 1)
+      await expect(reply).resolves.toMatchObject({ ok: false, code: 'unavailable' })
+      await expect(handle.deliverPanelMessage('player', {})).resolves.toMatchObject({
+        ok: false,
+        code: 'unavailable'
+      })
+      expect(handle.inFlightCount()).toBe(0)
+    })
+
+    it('times out a handler that never answers and cancels it in the worker', async () => {
+      vi.useFakeTimers()
+      const { child, handle } = await startReady({ invokeTimeoutMs: 25 })
+      const reply = handle.deliverPanelMessage('player', {})
+      await vi.advanceTimersByTimeAsync(25)
+      await expect(reply).resolves.toMatchObject({ ok: false, code: 'timeout' })
+      expect(child.send).toHaveBeenLastCalledWith({ orca: 1, kind: 'cancel', id: 0 })
+      expect(handle.inFlightCount()).toBe(0)
+    })
+
+    it('refuses messages past the pending cap without killing the worker', async () => {
+      const { child, handle } = await startReady()
+      const waiting = Array.from({ length: 16 }, () => handle.deliverPanelMessage('player', {}))
+      await expect(handle.deliverPanelMessage('player', {})).resolves.toMatchObject({
+        ok: false,
+        code: 'rate_limited'
+      })
+      expect(child.kill).not.toHaveBeenCalled()
+      child.emit('message', { orca: 1, kind: 'res', id: 0, result: 'done' })
+      await expect(waiting[0]).resolves.toEqual({ ok: true, value: 'done' })
+      handle.deliverPanelMessage('player', {})
+      expect(handle.inFlightCount()).toBe(16)
+    })
   })
 })

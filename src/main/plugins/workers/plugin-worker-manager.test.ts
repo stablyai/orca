@@ -17,6 +17,7 @@ function worker(lastActivity = Date.now()): TestWorker {
     commands: ['run'],
     invokeCommand: vi.fn(async () => null),
     deliverEvent: vi.fn(),
+    deliverPanelMessage: vi.fn(async () => ({ ok: true as const, value: null })),
     lastActivityAt: () => lastActivity,
     inFlightCount: () => 0,
     dispose: vi.fn(async () => undefined),

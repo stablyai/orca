@@ -181,3 +181,102 @@ describe('worker orca API parity with frames', () => {
     expect(current).toHaveBeenCalledWith({ workspaceId: 'w1' })
   })
 })
+
+describe('worker panel messages', () => {
+  const panelMessage = (id: number, panelId: string, message: unknown) => ({
+    orca: 1,
+    kind: 'req',
+    id,
+    method: 'panel.message',
+    params: { panelId, message }
+  })
+
+  async function activateWith(activate: (orca: PluginWorkerOrcaApi) => void) {
+    const send = vi.fn()
+    const runtime = createPluginWorkerRuntime({
+      send,
+      exit: vi.fn(),
+      importModule: async () => ({ default: activate })
+    })
+    await runtime.handleMessage(init())
+    return { send, runtime }
+  }
+
+  it('answers with the handler of that panel id, null for an undefined reply', async () => {
+    const { send, runtime } = await activateWith((orca) => {
+      orca.panels.onMessage('player', async (message) => ({ echoed: message }))
+      orca.panels.onMessage('quiet', () => undefined)
+    })
+    await runtime.handleMessage(panelMessage(1, 'player', { type: 'getState' }))
+    await runtime.handleMessage(panelMessage(2, 'quiet', 'x'))
+    expect(send).toHaveBeenCalledWith({
+      orca: 1,
+      kind: 'res',
+      id: 1,
+      result: { echoed: { type: 'getState' } }
+    })
+    expect(send).toHaveBeenLastCalledWith({ orca: 1, kind: 'res', id: 2, result: null })
+  })
+
+  it('answers unknown_method at once when no handler is registered for the panel', async () => {
+    const { send, runtime } = await activateWith((orca) => {
+      orca.panels.onMessage('player', () => 'pong')
+    })
+    await runtime.handleMessage(panelMessage(1, 'settings', {}))
+    expect(send).toHaveBeenLastCalledWith({
+      orca: 1,
+      kind: 'res',
+      id: 1,
+      error: {
+        code: 'unknown_method',
+        message: 'no message handler registered for panel settings',
+        retryable: false
+      }
+    })
+  })
+
+  it('reports a thrown error as action_failed with its message and no stack', async () => {
+    const { send, runtime } = await activateWith((orca) => {
+      orca.panels.onMessage('player', () => {
+        throw new Error('no active device')
+      })
+    })
+    await runtime.handleMessage(panelMessage(1, 'player', {}))
+    expect(send).toHaveBeenLastCalledWith({
+      orca: 1,
+      kind: 'res',
+      id: 1,
+      error: { code: 'action_failed', message: 'no active device', retryable: false }
+    })
+  })
+
+  it('keeps one handler per panel id and frees the id on dispose', async () => {
+    let orca!: PluginWorkerOrcaApi
+    const { send, runtime } = await activateWith((api) => (orca = api))
+    const first = orca.panels.onMessage('player', () => 'first')
+    expect(() => orca.panels.onMessage('player', () => 'second')).toThrow('already registered')
+    first.dispose()
+    orca.panels.onMessage('player', () => 'second')
+    // A stale subscription must not remove its successor's handler.
+    first.dispose()
+    await runtime.handleMessage(panelMessage(1, 'player', {}))
+    expect(send).toHaveBeenLastCalledWith({ orca: 1, kind: 'res', id: 1, result: 'second' })
+    expect(() => orca.panels.onMessage('', () => null)).toThrow(TypeError)
+  })
+
+  it('hands the handler a signal the host aborts', async () => {
+    const seen: { signal?: AbortSignal } = {}
+    let finish!: () => void
+    const { runtime } = await activateWith((orca) => {
+      orca.panels.onMessage('player', (_message, context) => {
+        seen.signal = context.signal
+        return new Promise<void>((resolve) => (finish = resolve))
+      })
+    })
+    const running = runtime.handleMessage(panelMessage(9, 'player', {}))
+    await runtime.handleMessage({ orca: 1, kind: 'cancel', id: 9 })
+    expect(seen.signal?.aborted).toBe(true)
+    finish()
+    await running
+  })
+})
