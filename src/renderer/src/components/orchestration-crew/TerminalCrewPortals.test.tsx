@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
-import { act, cleanup, fireEvent, render, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, within, waitFor } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
+import userEvent from '@testing-library/user-event'
 import { toast } from 'sonner'
 import { PaneManager } from '@/lib/pane-manager/pane-manager'
 import type { PtyTransport } from '../terminal-pane/pty-transport-types'
@@ -83,8 +84,8 @@ function fixture(acceptance: boolean | Promise<boolean> | undefined) {
     ...(acceptance === undefined ? {} : { sendInputAccepted: accepted })
   }
   const transports = new Map([[pane.id, transport]])
-  vi.spyOn(manager, 'setActivePane').mockImplementation((id) => {
-    if (id === pane.id) {
+  vi.spyOn(manager, 'setActivePane').mockImplementation((id, options) => {
+    if (id === pane.id && options?.focus !== false) {
       input.focus()
     }
   })
@@ -109,6 +110,7 @@ function fixture(acceptance: boolean | Promise<boolean> | undefined) {
     pane,
     input,
     mention,
+    more: within(container).getByRole('button', { name: 'More for Worker' }),
     manager,
     transports,
     transport,
@@ -175,6 +177,101 @@ it('shows one refusal toast and never focuses replaced captured pane, PTY or tra
     expect(test.manager.setActivePane).not.toHaveBeenCalled()
     expect(toast.error).not.toHaveBeenCalled()
     expect(test.accepted).toHaveBeenCalledTimes(1)
+    resetFixture()
+    vi.clearAllMocks()
+  }
+})
+
+it('keeps accepted real menu Mention on the captured terminal across close and pending delivery', async () => {
+  for (const pending of [false, true]) {
+    const user = userEvent.setup()
+    const delivery = Promise.withResolvers<boolean>()
+    const test = fixture(pending ? delivery.promise : true)
+    await user.click(test.more)
+    expect(test.manager.setActivePane).toHaveBeenCalledExactlyOnceWith(test.pane.id, {
+      focus: false
+    })
+    expect(document.activeElement).not.toBe(test.input)
+    vi.mocked(test.manager.setActivePane).mockClear()
+    const popup = within(document.body).getByRole('menu')
+    const closed = vi.fn()
+    popup.addEventListener('focusScope.autoFocusOnUnmount', closed)
+    const returned = vi.spyOn(test.more, 'focus')
+    await user.click(within(document.body).getByRole('menuitem', { name: 'Mention in message' }))
+    await waitFor(() => expect(within(document.body).queryByRole('menu')).toBeNull())
+    await waitFor(() => expect(closed).toHaveBeenCalledOnce())
+    expect(closed.mock.calls[0][0].target).toBe(popup)
+    if (pending) {
+      await waitFor(() => expect(document.activeElement).toBe(test.more))
+      expect(test.manager.setActivePane).not.toHaveBeenCalled()
+      returned.mockClear()
+      await act(async () => delivery.resolve(true))
+    }
+    await waitFor(() => expect(document.activeElement).toBe(test.input))
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(returned).not.toHaveBeenCalled()
+    expect(test.manager.setActivePane).toHaveBeenCalledExactlyOnceWith(test.pane.id)
+    expect(test.accepted).toHaveBeenCalledExactlyOnceWith(
+      'Worker (Orca agent term_worker) ',
+      'driving'
+    )
+    expect(test.sendInput).not.toHaveBeenCalled()
+    expect(test.input.selectionStart).toBe(8)
+    expect(test.input.value).toBe('existing suffix')
+    expect(toast.error).not.toHaveBeenCalled()
+    resetFixture()
+    vi.clearAllMocks()
+  }
+})
+
+it('dismisses real menu Mention without inventing delivery on refusal, rejection or captured transport replacement', async () => {
+  for (const outcome of ['refused', 'rejected', 'replaced-before', 'replaced-after'] as const) {
+    const user = userEvent.setup()
+    const delivery = Promise.withResolvers<boolean>()
+    const test = fixture(delivery.promise)
+    await user.click(test.more)
+    expect(test.manager.setActivePane).toHaveBeenCalledExactlyOnceWith(test.pane.id, {
+      focus: false
+    })
+    expect(document.activeElement).not.toBe(test.input)
+    vi.mocked(test.manager.setActivePane).mockClear()
+    if (outcome === 'replaced-before') {
+      test.transports.set(test.pane.id, { ...test.transport })
+    }
+    await user.click(within(document.body).getByRole('menuitem', { name: 'Mention in message' }))
+    await waitFor(() => expect(within(document.body).queryByRole('menu')).toBeNull())
+    await waitFor(() => expect(document.activeElement).toBe(test.more))
+    if (outcome === 'replaced-after') {
+      test.transports.set(test.pane.id, { ...test.transport })
+    }
+    await act(async () => {
+      if (outcome === 'rejected') {
+        delivery.reject(new Error('transport rejected'))
+      } else {
+        delivery.resolve(outcome === 'replaced-before' || outcome === 'replaced-after')
+      }
+    })
+    expect(test.manager.setActivePane).not.toHaveBeenCalled()
+    expect(document.activeElement).toBe(test.more)
+    if (outcome === 'replaced-before') {
+      expect(test.accepted).not.toHaveBeenCalled()
+      expect(toast.error).toHaveBeenCalledExactlyOnceWith(
+        'The terminal did not accept the agent reference. Try again.'
+      )
+      await act(async () => test.mention())
+      expect(test.accepted).not.toHaveBeenCalled()
+      expect(test.manager.setActivePane).not.toHaveBeenCalled()
+      expect(toast.error).toHaveBeenCalledTimes(2)
+      expect(vi.mocked(toast.error).mock.calls[1]).toEqual(vi.mocked(toast.error).mock.calls[0])
+    } else {
+      expect(test.accepted).toHaveBeenCalledExactlyOnceWith(
+        'Worker (Orca agent term_worker) ',
+        'driving'
+      )
+      expect(toast.error).toHaveBeenCalledTimes(outcome === 'replaced-after' ? 0 : 1)
+    }
+    expect(test.sendInput).not.toHaveBeenCalled()
+    expect(test.input.value).toBe('existing suffix')
     resetFixture()
     vi.clearAllMocks()
   }

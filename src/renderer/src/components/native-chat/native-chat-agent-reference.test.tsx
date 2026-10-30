@@ -10,16 +10,29 @@ import { useNativeChatComposerKeyDown } from './use-native-chat-composer-keydown
 import { dispatchStructuredAgentSessionComposerCommand } from '../../../../shared/structured-agent-session-composer'
 import { nativeChatPastedTextToken } from './native-chat-pasted-text-reference'
 import { CrewPanelContent } from '../orchestration-crew/OrchestrationCrewPanel'
+import { NativeChatCrewPanel } from '../orchestration-crew/NativeChatCrewPanel'
+import { useNativeChatComposerHandle } from './use-native-chat-composer-handle'
 import { TooltipProvider } from '../ui/tooltip'
 import { emptyCrew, type OrchestrationCrewRow } from '../../../../shared/orchestration-crew'
 import { openOrchestrationCrewAgent } from '@/lib/open-agent-message-sender'
 import { createRef, useRef, useState } from 'react'
-import { act, cleanup, render, renderHook, within, fireEvent } from '@testing-library/react'
+import {
+  act,
+  cleanup,
+  render,
+  renderHook,
+  within,
+  fireEvent,
+  waitFor
+} from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, expect, it, vi } from 'vitest'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import type { PtyTransport } from '../terminal-pane/pty-transport-types'
-import type { NativeChatStructuredComposerTransport } from './native-chat-composer-types'
+import type {
+  NativeChatComposerHandle,
+  NativeChatStructuredComposerTransport
+} from './native-chat-composer-types'
 import type { NativeChatComposerInput } from './native-chat-composer-input'
 import { NativeChatPromptEditor } from './NativeChatPromptEditor'
 import { promptEditor } from './native-chat-prompt-editor.test-support'
@@ -44,6 +57,13 @@ import {
   noteStructuredAgentSessionFence
 } from './structured-agent-session-send-attempt'
 
+const crewRows = vi.hoisted(() => new Array<OrchestrationCrewRow>())
+vi.mock('./use-orchestration-crew', () => ({
+  useOrchestrationCrew: () => ({
+    ...emptyCrew('ok'),
+    sections: { managedBy: [], managing: crewRows, talkingWith: [] }
+  })
+}))
 const queuedRuntime = vi.hoisted(() => ({ call: vi.fn() }))
 vi.mock('@/runtime/structured-agent-session-client', () => ({
   callStructuredAgentSession: queuedRuntime.call
@@ -61,6 +81,7 @@ vi.mock('@/lib/worker-terminal-takeover-report', () => ({
 }))
 afterEach(() => {
   cleanup()
+  crewRows.length = 0
   clearNativeChatComposerDraftsForTests()
   clearStructuredAgentSessionPendingSends('test-session')
   vi.restoreAllMocks()
@@ -611,4 +632,171 @@ it('applies structured UTF-8 admission to the expanded final body before any sen
   expect(structured.send).not.toHaveBeenCalled()
   expect(structured.onError).toHaveBeenCalledTimes(1)
   expect(readNativeChatComposerDraft('size').text).toBe(raw.text)
+})
+
+type MentionInput = 'ready' | 'disabled' | 'ime' | 'none' | 'plain' | 'missing-handle'
+function mountedMention() {
+  crewRows.push({
+    partyKey: 'worker',
+    role: 'worker',
+    label: first.label,
+    agentKind: 'codex',
+    status: 'working',
+    sendAddress: first.address
+  })
+  const input = createRef<NativeChatComposerInput>()
+  const handle = createRef<NativeChatComposerHandle>()
+  const absent = createRef<NativeChatComposerHandle>()
+  function Pane({ mode }: { mode: MentionInput }) {
+    useNativeChatComposerHandle(handle, {
+      textareaRef: input,
+      isComposing: () => mode === 'ime',
+      setDraft: () => {},
+      setCaret: () => {},
+      setActiveSuggestion: () => {},
+      attachmentScopeKey: 'menu',
+      targetKey: 'menu',
+      disabled: mode === 'disabled',
+      caret: 6,
+      resolveAttachmentOwner: () => ({ kind: 'local' }),
+      attachResolvedPaths: () => {},
+      attachCopiedFiles: () => {},
+      captureCopiedFiles: () => async () => {},
+      beginPendingImageAttachment: () => null,
+      resolvePendingImageAttachment: () => {},
+      dropPendingImageAttachment: () => {},
+      setNotice: () => {},
+      pastedTextEditor: () => input.current
+    })
+    return (
+      <TooltipProvider>
+        <div data-native-chat-root>
+          <NativeChatCrewPanel
+            target={{ kind: 'environment', environmentId: 'captured-host' }}
+            party="term_self"
+            canMention
+            composerRef={mode === 'missing-handle' ? absent : handle}
+          />
+          {mode === 'none' ? null : mode === 'plain' ? (
+            <textarea
+              aria-label="Current input"
+              defaultValue="Hello suffix"
+              ref={(node) => {
+                input.current = node
+              }}
+            />
+          ) : (
+            <NativeChatPromptEditor
+              scopeKey="menu"
+              inputRef={input}
+              initialValue="Hello suffix"
+              disabled={mode === 'disabled'}
+              placeholder="Current input"
+              onChange={() => {}}
+              onSelect={() => {}}
+            />
+          )}
+        </div>
+      </TooltipProvider>
+    )
+  }
+  const view = render(<Pane mode="ready" />)
+  return {
+    ...view,
+    input,
+    handle,
+    setMode: (mode: MentionInput) => view.rerender(<Pane mode={mode} />)
+  }
+}
+
+it('keeps direct and real menu Mention on the current native handle, caret and captured host after dismissal', async () => {
+  for (const route of ['direct', 'menu']) {
+    const user = userEvent.setup()
+    const view = mountedMention()
+    const input = view.input.current!
+    act(() => {
+      input.focus()
+      input.setSelectionRange(6, 6)
+    })
+    await user.click(view.getByRole('button', { name: 'Show crew: 1 workers' }))
+    const more = view.getByRole('button', { name: `More for ${first.label}` })
+    const insert = vi.spyOn(view.handle.current!, 'insertAgentReferences')
+    if (route === 'menu') {
+      await user.click(more)
+    }
+    const popup = within(document.body).queryByRole('menu')
+    const closed = vi.fn()
+    popup?.addEventListener('focusScope.autoFocusOnUnmount', closed)
+    const returnFocus = vi.spyOn(more, 'focus')
+    await user.click(
+      route === 'menu'
+        ? within(document.body).getByRole('menuitem', { name: 'Mention in message' })
+        : view.getByRole('button', { name: new RegExp(`${first.label} No shared task`) })
+    )
+    expect(insert).toHaveBeenCalledExactlyOnceWith([{ ...first, hostKey: 'captured-host' }])
+    expect(insert.mock.results[0]?.value).toBe(true)
+    await waitFor(() => expect(within(document.body).queryByRole('menu')).toBeNull())
+    if (popup) {
+      await waitFor(() => expect(closed).toHaveBeenCalledOnce())
+      expect(closed.mock.calls[0][0].target).toBe(popup)
+    }
+    expect(input.value).toBe(`Hello ${agentReferenceToken(first)} suffix`)
+    expect(input.selectionStart).toBe(`Hello ${agentReferenceToken(first)} `.length)
+    expect(input.contains?.(document.activeElement)).toBe(true)
+    expect(returnFocus).not.toHaveBeenCalled()
+    expect(readNativeChatComposerDraft('menu').document?.content?.[0]?.content).toEqual([
+      { type: 'text', text: 'Hello ' },
+      { type: 'nativeChatAgentReference', attrs: { ...first, hostKey: 'captured-host' } },
+      { type: 'text', text: ' suffix' }
+    ])
+    view.unmount()
+    clearNativeChatComposerDraftsForTests()
+    crewRows.length = 0
+  }
+})
+
+it('rechecks the actual native input at menu selection and never fabricates insertion at refusal boundaries', async () => {
+  for (const mode of ['none', 'disabled', 'plain', 'ime', 'missing-handle'] as const) {
+    const user = userEvent.setup()
+    const view = mountedMention()
+    const original = view.input.current!
+    act(() => {
+      original.focus()
+      original.setSelectionRange(6, 6)
+    })
+    await user.click(view.getByRole('button', { name: 'Show crew: 1 workers' }))
+    await user.click(view.getByRole('button', { name: `More for ${first.label}` }))
+    view.setMode(mode)
+    const current = view.input.current
+    const focus = current && vi.spyOn(current, 'focus')
+    const insert = vi.spyOn(view.handle.current!, 'insertAgentReferences')
+    const before = readNativeChatComposerDraft('menu')
+    await user.click(within(document.body).getByRole('menuitem', { name: 'Mention in message' }))
+    await waitFor(() => expect(within(document.body).queryByRole('menu')).toBeNull())
+    await waitFor(() =>
+      expect(document.activeElement).toBe(
+        view.getByRole('button', { name: `More for ${first.label}` })
+      )
+    )
+    expect(readNativeChatComposerDraft('menu')).toEqual(before)
+    expect(view.container.querySelector('[data-native-chat-agent-reference]')).toBeNull()
+    expect(current?.value ?? original.value).toBe('Hello suffix')
+    expect(focus ? focus.mock.calls.length : 0).toBe(0)
+    if (mode === 'missing-handle') {
+      expect(insert).not.toHaveBeenCalled()
+    } else {
+      expect(insert).toHaveBeenCalledOnce()
+      expect(insert.mock.results[0]?.value).toBe(false)
+    }
+    if (mode === 'none') {
+      await user.click(
+        view.getByRole('button', { name: new RegExp(`${first.label} No shared task`) })
+      )
+      expect(insert.mock.results.at(-1)?.value).toBe(false)
+      expect(readNativeChatComposerDraft('menu')).toEqual(before)
+    }
+    view.unmount()
+    clearNativeChatComposerDraftsForTests()
+    crewRows.length = 0
+  }
 })
