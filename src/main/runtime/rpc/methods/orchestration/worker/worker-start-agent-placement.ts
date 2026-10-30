@@ -21,6 +21,7 @@ import {
   type WorkerSetupReceipt
 } from './worker-topology'
 import { createWorkerWorktree, type WorkerWorktreeCreationTarget } from './worker-worktree-creation'
+import type { ReopenedWorker } from './worker-follow-up-placement'
 
 /** Name only the two required fields so untyped worktree accessors cannot introduce any into unions. */
 type PlacedWorktree = { id: string; repoId: string }
@@ -34,6 +35,8 @@ export type WorkerAgentPlacement = {
   structuredSession: WorkerStructuredSession | null
   setupReceipt: WorkerSetupReceipt
   warning?: string
+  /** Set when a follow-up brought a closed worker back instead of launching one. */
+  reopened?: ReopenedWorker
 }
 
 type WorkerAgentPlacementArgs = {
@@ -54,6 +57,8 @@ type WorkerAgentPlacementArgs = {
   effects: WorkerEffect[]
   /** Attributes a throw to the step that was running, the way the caller's own stages do. */
   onStage: (stage: string) => void
+  /** A follow-up's closed worker, brought back in place of a launch. */
+  reopen?: (() => Promise<ReopenedWorker>) | undefined
 }
 
 /** Setup evidence for existing placements and failures before placement creation. */
@@ -83,6 +88,24 @@ export async function placeWorkerAgent(
       terminalHandle: args.params.terminal,
       structuredSession: null,
       setupReceipt: EXISTING_WORKTREE_SETUP
+    }
+  }
+  if (existing && args.reopen) {
+    const reopened = await args.reopen()
+    args.effects.push({
+      kind: 'terminal',
+      role: 'agent',
+      // Only a resumed tab is Orca's to clean up; a chat keeps its conversation.
+      action: reopened.chat ? 'reused' : 'created',
+      id: reopened.handle
+    })
+    return {
+      mode: args.mode,
+      worktree: existing,
+      terminalHandle: reopened.handle,
+      structuredSession: null,
+      setupReceipt: EXISTING_WORKTREE_SETUP,
+      reopened
     }
   }
   return launchWorkerAgent(args, existing)

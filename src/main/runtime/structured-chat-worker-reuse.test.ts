@@ -1,5 +1,5 @@
 import './rpc/unused-default-rpc-methods.test-fixture'
-// A finished structured worker takes follow-up work in its own chat only through worker-start --terminal <handle>.
+// A finished structured worker takes follow-up work in its own chat through worker-start --terminal <handle>, or a send to its Dispatch.
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ORCA_SESSION_ADDRESS_PREFIX } from '../../shared/orca-session-address'
@@ -80,7 +80,10 @@ function reportDone(sessionId: string, taskId: string, dispatchId: string) {
 }
 
 /** A worker created as worker-start creates one, after its first Dispatch reported done. */
-async function finishedStructuredWorker(taskId: string, settle: 'done' | 'abandon' = 'done') {
+async function finishedStructuredWorker(
+  taskId: string,
+  settle: 'done' | 'abandon' | 'none' = 'done'
+) {
   const disposed = vi.fn()
   const observe = host.observeJournalPublications.bind(host)
   const observed = vi
@@ -96,7 +99,7 @@ async function finishedStructuredWorker(taskId: string, settle: 'done' | 'abando
     creator: { kind: 'session', orcaSessionId: testOrcaSessionId(COORDINATOR) },
     maxDepth: 9,
     taskId,
-    startOptions: {}
+    startOptions: { agent: 'codex' }
   })
   const { identity } = await createStructuredWorkerSession({
     runtime,
@@ -123,7 +126,7 @@ async function finishedStructuredWorker(taskId: string, settle: 'done' | 'abando
       { dispatch: started.dispatch.id },
       { sessionId: COORDINATOR }
     )
-  } else {
+  } else if (settle === 'done') {
     expect(await reportDone(identity.sessionId, taskId, started.dispatch.id)).toMatchObject({
       ok: true,
       result: { lifecycle: { action: 'completed' } }
@@ -208,27 +211,30 @@ describe('a finished structured worker', () => {
     await vi.waitFor(() => expect(disposed).toHaveBeenCalledTimes(2), WAIT)
   })
 
-  it('kept open by the user is refused, as a kept terminal is', async () => {
+  it('kept open by the user takes follow-up work and stays kept', async () => {
     await openChat(COORDINATOR)
     const { taskId } = await coordinatorRunAndTask()
     const { identity, firstDispatchId } = await finishedStructuredWorker(taskId)
     const worker = connectionFor(identity.sessionId)
     expect(db.keepWorkerTerminalOpen(identity.paneKey)).toBe(1)
 
-    const receipt = await call(
+    const followUp = await followUpTask()
+    const started = call(
       'orchestration.workerStart',
-      { task: await followUpTask(), terminal: identity.handle },
+      { task: followUp, terminal: identity.handle },
       { sessionId: COORDINATOR }
     )
+    await vi.waitFor(() => expect(worker.turns).toHaveLength(1), WAIT)
+    await settleTurn(identity.sessionId, 0)
+    const dispatchId = String((await started).dispatchId)
+    expect(await reportDone(identity.sessionId, followUp, dispatchId)).toMatchObject({ ok: true })
 
-    expect(receipt).toMatchObject({
-      state: 'failed',
-      lastError: expect.stringContaining('was kept open by the user')
+    expect(db.getWorkerTerminalResourceByOwner(dispatchId)).toMatchObject({
+      prior_owner_dispatch_ids: JSON.stringify([firstDispatchId]),
+      release_state: 'retained',
+      retained_reason: 'user_kept',
+      auto_release_at: null
     })
-    expect(worker.turns).toHaveLength(0)
-    expect(db.getWorkerTerminalResourceByOwner(firstDispatchId)?.terminal_handle).toBe(
-      identity.handle
-    )
   })
 
   it("is not handed a Dispatch that would leave it in the finished one's custody", async () => {
@@ -255,9 +261,95 @@ describe('a finished structured worker', () => {
       }
     })
     db.keepWorkerTerminalOpen(identity.paneKey)
-    expect(await dispatch()).toMatchObject({ ok: false, error: { code: 'terminal_kept_open' } })
+    expect(await dispatch()).toMatchObject({ ok: false, error: { code: 'invalid_argument' } })
     expect(worker.turns).toHaveLength(0)
     expect(db.getWorkerTerminalResourceByOwner(firstDispatchId)).toBeDefined()
+  })
+})
+
+function sendTo(dispatchId: string, body: string) {
+  return call(
+    'orchestration.send',
+    { to: `dispatch:${dispatchId}`, subject: 'Follow-up', body },
+    { sessionId: COORDINATOR }
+  )
+}
+
+describe('a send to a finished structured worker', () => {
+  it('becomes one follow-up on that worker; a racing send steers it', async () => {
+    await openChat(COORDINATOR)
+    const { taskId } = await coordinatorRunAndTask()
+    const { identity, firstDispatchId } = await finishedStructuredWorker(taskId)
+    const worker = connectionFor(identity.sessionId)
+
+    const first = sendTo(firstDispatchId, 'and the docs')
+    const second = sendTo(firstDispatchId, 'also the changelog')
+    await vi.waitFor(() => expect(worker.turns).toHaveLength(1), WAIT)
+    await settleTurn(identity.sessionId, 0)
+    const [followUp, steered] = await Promise.all([first, second])
+
+    expect(followUp).toMatchObject({
+      delivery: 'follow_up',
+      followUpOf: firstDispatchId,
+      worker: identity.handle,
+      state: 'ready'
+    })
+    expect(turnText(worker.turns[0]!)).toContain('and the docs')
+    expect(steered).toMatchObject({
+      message: { to_handle: `dispatch:${String(followUp.dispatchId)}` }
+    })
+    expect(db.getDispatchContextById(String(followUp.dispatchId))).toMatchObject({
+      follow_up_of_dispatch_id: firstDispatchId,
+      assignee_orca_session_id: identity.sessionId
+    })
+  })
+
+  it('after it was closed, reopens its chat in the same conversation', async () => {
+    await openChat(COORDINATOR)
+    const { taskId } = await coordinatorRunAndTask()
+    const { identity, firstDispatchId } = await finishedStructuredWorker(taskId)
+    // The rig has no settings store; reopening validates the worker's agent against it.
+    vi.spyOn(runtime, 'validateOrchestrationAgentLauncher').mockImplementation(() => {})
+    await call(
+      'orchestration.workerRelease',
+      { dispatch: firstDispatchId },
+      { sessionId: COORDINATOR }
+    )
+    expect(host.isSessionTabVisible(identity.sessionId)).toBe(false)
+
+    const followUp = sendTo(firstDispatchId, 'and the docs')
+    await vi.waitFor(() => expect(connectionFor(identity.sessionId).turns).toHaveLength(1), WAIT)
+    await settleTurn(identity.sessionId, 0)
+
+    expect(await followUp).toMatchObject({ delivery: 'reopened', state: 'ready' })
+    expect(host.isSessionTabVisible(identity.sessionId)).toBe(true)
+    expect(db.getWorkerTerminalResourceByOwner(String((await followUp).dispatchId))).toMatchObject({
+      terminal_handle: identity.handle,
+      ownership_state: 'owned'
+    })
+  })
+
+  it('that it never read before reporting becomes its follow-up', async () => {
+    await openChat(COORDINATOR)
+    const { taskId } = await coordinatorRunAndTask()
+    const { identity, firstDispatchId } = await finishedStructuredWorker(taskId, 'none')
+    const worker = connectionFor(identity.sessionId)
+    await sendTo(firstDispatchId, 'and the docs')
+    // The mail pointer arrives; the worker reports without reading it.
+    await vi.waitFor(() => expect(worker.turns).toHaveLength(1), WAIT)
+    await settleTurn(identity.sessionId, 0)
+
+    expect(await reportDone(identity.sessionId, taskId, firstDispatchId)).toMatchObject({
+      ok: true
+    })
+    await vi.waitFor(() => expect(worker.turns).toHaveLength(2), WAIT)
+    await settleTurn(identity.sessionId, 1)
+
+    expect(turnText(worker.turns[1]!)).toContain('and the docs')
+    await vi.waitFor(
+      () => expect(db.getUnreadMessages(`dispatch:${firstDispatchId}`)).toHaveLength(0),
+      WAIT
+    )
   })
 })
 

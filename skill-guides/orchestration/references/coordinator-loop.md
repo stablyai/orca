@@ -19,13 +19,3 @@ On every wake, start the Tasks `task-list --ready` shows.
 A later `run-create` keeps your earlier Runs: their mail still wakes you, but
 commands without `--run` use the newest Run, so pass `--run <id>` for an earlier
 one. `run-use` keeps only the Run it names.
-
-## Reusing a worker
-
-To give a finished worker follow-up work, create the Task, then start it on the
-terminal handle and workspace from that worker's earlier `worker-start` receipt:
-
-```text
-ORCA orchestration task-create --spec "<follow-up>" --json
-ORCA orchestration worker-start --task <task_id> --terminal <agent_terminal_handle> --worktree <its_workspace> --json
-```

@@ -62,7 +62,8 @@ export const DISPATCH_CONTEXT_COLUMNS = [
   'dispatched_at',
   'completed_at',
   'created_at',
-  'last_heartbeat_at'
+  'last_heartbeat_at',
+  'follow_up_of_dispatch_id'
 ] as const satisfies readonly (keyof DispatchContextRow)[]
 
 export const ATTEMPT_OBSERVATION_FACT_COLUMNS = [

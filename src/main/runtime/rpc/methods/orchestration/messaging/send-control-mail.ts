@@ -47,9 +47,10 @@ export function sendFederatedControlMail(args: {
     )
   }
   if (db.getWorkerDispatch(dispatchId)?.state !== 'ready') {
+    // Paired servers cannot continue a finished worker yet; steering a running one still works.
     throw new OrchestrationError(
       'dispatch_inactive',
-      `Federated Dispatch ${dispatchId} is not active.`
+      `Dispatch ${dispatchId} finished on ${federatedTarget.environment_name}, which cannot take follow-ups for finished workers yet. Start a new worker there with \`orca orchestration worker-start --on ${federatedTarget.environment_name}\`.`
     )
   }
   if (params.type === 'worker_done' || params.type === 'heartbeat') {

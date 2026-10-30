@@ -42,6 +42,15 @@ type OrchestrationSendResult = { next?: string } & (
       warnings?: SendRecipientWarning[]
     }
   | {
+      /** A finished worker took this message as its next Task (follow-up Dispatch). */
+      delivery: 'follow_up' | 'reopened' | 'started_fresh'
+      followUpOf: string
+      dispatchId: string
+      state: string
+      lastError?: string
+      warnings?: SendRecipientWarning[]
+    }
+  | {
       relay: {
         messageId: string
         sequence: number
@@ -122,6 +131,9 @@ export const ORCHESTRATION_SEND_HANDLER: Record<string, CommandHandler> = {
     if ('lifecycle' in result.result && result.result.lifecycle?.action === 'rejected') {
       throw new RuntimeClientError(result.result.lifecycle.code, result.result.lifecycle.reason)
     }
+    if ('delivery' in result.result && result.result.state !== 'ready') {
+      process.exitCode = 1
+    }
     printResult(result, json, (value) => {
       const warnings = 'warnings' in value ? (value.warnings ?? []) : []
       const withWarnings = (line: string): string =>
@@ -136,6 +148,9 @@ export const ORCHESTRATION_SEND_HANDLER: Record<string, CommandHandler> = {
             ? ` (terminal auto-release at ${lifecycle.autoReleaseAt})`
             : ''
         return withWarnings(`Sent ${value.message.id}${autoRelease}`)
+      }
+      if ('delivery' in value) {
+        return withWarnings(formatFollowUp(value))
       }
       if ('relay' in value) {
         if (value.relay.destination === 'worker') {
@@ -152,4 +167,27 @@ export const ORCHESTRATION_SEND_HANDLER: Record<string, CommandHandler> = {
       )
     })
   }
+}
+
+const FOLLOW_UP_LEADS = {
+  follow_up: 'Worker had finished',
+  reopened: 'Worker was closed: reopened it in its conversation',
+  started_fresh:
+    'Worker was closed and kept no conversation: started a fresh one with the earlier task and report'
+} as const
+
+function formatFollowUp(value: {
+  delivery: keyof typeof FOLLOW_UP_LEADS
+  dispatchId: string
+  state: string
+  lastError?: string
+}): string {
+  const line = `${FOLLOW_UP_LEADS[value.delivery]}; follow-up dispatch:${value.dispatchId}.`
+  if (value.state === 'ready') {
+    return line
+  }
+  const reason = value.lastError ?? 'unknown error'
+  return value.state === 'outcome_unknown'
+    ? `${line}\nIts start is not confirmed yet: ${reason}`
+    : `${line}\nIt did not start (${value.state}): ${reason}`
 }

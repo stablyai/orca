@@ -8,6 +8,7 @@ import { insertStartingDispatchContextRow } from '../dispatch-row-writer'
 import { recordedCreatorIdentity, type DispatchCreator } from '../dispatch-depth'
 import { transitionLifecycleWithDb } from '../lifecycle-transition'
 import { taskNotFoundError, taskNotStartableError } from '../../task-dispatch-refusal'
+import { getFollowUpDispatch } from '../dispatch-context/worker-follow-up-lineage'
 
 export function createStartingWorkerDispatch(
   this: OrchestrationDb,
@@ -43,6 +44,8 @@ export function createStartingWorkerDispatch(
     maxDepth: number
     /** A worker's own Dispatch that authorized this helper; it must still be the creator here. */
     requiredCreatorDispatchId?: string
+    /** The settled Dispatch whose worker this follow-up continues; only one follow-up claims it. */
+    followUpOf?: string
   }
 ): { dispatch: DispatchContextRow; worker: WorkerDispatchRow; task: TaskRow } {
   this.db.exec('BEGIN IMMEDIATE')
@@ -70,6 +73,14 @@ export function createStartingWorkerDispatch(
            ) VALUES (?, ?, ?, ?, 'pending')`
         )
         .run(receipt.callerFingerprint, receipt.requestId, receipt.method, receipt.payloadHash)
+    }
+    const claimedFollowUp = params.followUpOf ? getFollowUpDispatch(this, params.followUpOf) : null
+    if (claimedFollowUp) {
+      throw new OrchestrationError(
+        'follow_up_claimed',
+        `Dispatch ${params.followUpOf} already continues as Dispatch ${claimedFollowUp.id}.`,
+        { followUpDispatchId: claimedFollowUp.id }
+      )
     }
     const task = params.taskId
       ? this.getTask(params.taskId)
@@ -168,6 +179,7 @@ export function createStartingWorkerDispatch(
       retryOfDispatchId: params.retryOf ?? null,
       priorFailures,
       creatorDispatchId,
+      followUpOfDispatchId: params.followUpOf ?? null,
       ...recordedCreatorIdentity(params.creator)
     })
     this.db

@@ -33,6 +33,9 @@ import { sendGroupMessage } from './send-group'
 import { sendFederatedControlMail } from './send-control-mail'
 import { orchestrationCallerIdentity } from '../runs/run-scope'
 import { assertLifecycleCallerIsNotAnotherParty } from './lifecycle-caller-fence'
+import { sendWorkerFollowUp } from './worker-follow-up'
+import { followUpUnreadCoordinatorMail } from './settled-worker-follow-through'
+import { captureWorkerResumeSession } from '../worker/worker-resume-session-capture'
 
 export const ORCHESTRATION_SEND_METHODS = [
   defineMethod({
@@ -189,7 +192,7 @@ export const ORCHESTRATION_SEND_METHODS = [
         sendWarnings.length > 0 ? { ...receipt, warnings: sendWarnings } : receipt
 
       if (!isGroupAddress(to)) {
-        const addressedDispatchId = to.startsWith('dispatch:')
+        let addressedDispatchId = to.startsWith('dispatch:')
           ? to.slice('dispatch:'.length)
           : undefined
         const federatedTarget =
@@ -198,6 +201,23 @@ export const ORCHESTRATION_SEND_METHODS = [
             : undefined
         // Federated targets perform their own liveness check before relaying.
         if (addressedDispatchId && !federatedTarget) {
+          const followUp = await sendWorkerFollowUp({
+            ctx: { runtime, orchestrationCompatibilityEvidence, orchestrationCaller },
+            db,
+            dispatchId: addressedDispatchId,
+            from,
+            type: params.type ?? 'status',
+            subject: params.subject,
+            body: params.body
+          })
+          if (followUp?.kind === 'started') {
+            const { next, ...receipt } = followUp.receipt
+            return { ...withSendWarnings(receipt), ...(next ? { next } : {}) }
+          }
+          if (followUp) {
+            addressedDispatchId = followUp.dispatchId
+            to = `dispatch:${addressedDispatchId}`
+          }
           assertDispatchMailboxDeliverable(runtime, db, addressedDispatchId)
           const runBound = resolveRunBoundDispatchRecipient(
             runtime,
@@ -225,7 +245,7 @@ export const ORCHESTRATION_SEND_METHODS = [
         if (federatedControl !== undefined) {
           return federatedControl
         }
-        return sendPointToPointMessage({
+        const sent = sendPointToPointMessage({
           params,
           runtime,
           db,
@@ -244,6 +264,12 @@ export const ORCHESTRATION_SEND_METHODS = [
           markWorkerDoneMutationEffectFree,
           withSendWarnings
         })
+        const settled = params.type === 'worker_done' ? settledDispatchId(sent) : undefined
+        if (settled) {
+          captureWorkerResumeSession(runtime, db, settled)
+          followUpUnreadCoordinatorMail(runtime, db, settled)
+        }
+        return sent
       }
       return sendGroupMessage({
         params,
