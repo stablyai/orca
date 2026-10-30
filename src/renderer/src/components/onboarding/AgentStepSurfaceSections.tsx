@@ -1,7 +1,6 @@
 import { Info, MessagesSquare, SquareTerminal } from 'lucide-react'
 import { Trans } from 'react-i18next'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
@@ -11,27 +10,14 @@ import { TerminalLaunchDemo } from './TerminalLaunchDemo'
 
 const emphasis = { em: <span className="font-medium text-foreground" /> }
 
-/** Where a tile's agent opens; Terminal mode only labels the difference. */
-export function agentSurfaceDetail(surface: AgentSurface, opensAsChat: boolean): React.ReactNode {
-  if (surface === 'terminal') {
-    return opensAsChat ? (
-      <>
-        <MessagesSquare />
-        {translate('components.onboarding.agentStep.chatAvailable', 'Chat available')}
-      </>
-    ) : undefined
-  }
+/** Terminal mode marks which agents could also open in Chat UI. */
+export function chatAvailableDetail(opensAsChat: boolean): React.ReactNode {
   return opensAsChat ? (
     <>
       <MessagesSquare />
-      {translate('components.onboarding.agentStep.opensAsChat', 'Chat')}
+      {translate('components.onboarding.agentStep.chatAvailable', 'Chat available')}
     </>
-  ) : (
-    <>
-      <SquareTerminal />
-      {translate('components.onboarding.agentStep.opensInTerminal', 'Terminal')}
-    </>
-  )
+  ) : undefined
 }
 
 const surfacePillClass =
@@ -42,9 +28,6 @@ function AgentSurfaceLabel({ surface }: { surface: AgentSurface }) {
     <>
       <MessagesSquare className="size-3.5" />
       {translate('components.onboarding.agentSurface.chat.label', 'Chat UI')}
-      <Badge variant="outline">
-        {translate('components.onboarding.agentSurface.chat.badge', 'Experimental')}
-      </Badge>
     </>
   ) : (
     <>
@@ -258,7 +241,7 @@ export function TerminalModeChatTip({ onUseChat }: { onUseChat: () => void }) {
           i18n={i18n}
           defaults={translate(
             'components.onboarding.agentStep.chatTip',
-            'Want chat too? Turn on <em>Chat UI</em> in <em>Settings → Experimental</em> any time.'
+            'Want chat too? Turn it on any time in <em>Settings → Chat UI</em>.'
           )}
           components={emphasis}
         />

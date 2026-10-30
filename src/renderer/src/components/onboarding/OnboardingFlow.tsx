@@ -17,6 +17,7 @@ import { shouldRequestOnboardingSkipConfirmation } from './onboarding-dismiss-ta
 import logo from '../../../../../resources/logo.svg'
 import { translate } from '@/i18n/i18n'
 import { addAppKeyListener, removeAppKeyListener } from '@/lib/app-keyboard-router'
+import { useScrollEdgeFades } from '@/lib/use-scroll-edge-fades'
 import { AgentSurfaceStep } from './AgentSurfaceStep'
 import { stepCopy, stepTooltipLabels } from './onboarding-step-copy'
 
@@ -30,6 +31,7 @@ export default function OnboardingFlow({
   onOnboardingChange
 }: OnboardingFlowProps): React.JSX.Element {
   const flow = useOnboardingFlow(onboarding, onOnboardingChange)
+  const stepFades = useScrollEdgeFades<HTMLDivElement>()
   const continueShortcutModifierLabel = getScreenSubmitModifierLabel()
   const { currentStep, stepIndex, busyLabel } = flow
   const copy =
@@ -211,12 +213,13 @@ export default function OnboardingFlow({
             </div>
 
             <div
+              ref={stepFades.ref}
               className={cn(
                 'min-h-0 flex-1 transition-[margin-top] duration-[760ms] ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none',
                 // Agent permissions stay outside the capped grid scroll; other steps use the outer scroller.
                 currentStep.id === 'agent'
                   ? 'mt-10 flex flex-col overflow-hidden'
-                  : cn('scrollbar-sleek overflow-y-auto pr-1', 'mt-10')
+                  : cn('scrollbar-sleek overflow-y-auto pr-1', 'mt-10', stepFades.className)
               )}
             >
               {currentStep.id === 'agent_surface' && (

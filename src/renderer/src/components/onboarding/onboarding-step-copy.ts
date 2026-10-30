@@ -24,8 +24,8 @@ export const stepCopy = {
     },
     get subtitle() {
       return translate(
-        'components.onboarding.flow.agentChat.markedChat',
-        'Agents marked Chat open in Chat UI. The rest open in a terminal.'
+        'components.onboarding.flow.agentChat.subtitle',
+        'Pick a Chat UI agent. Agents without chat support open in a terminal instead.'
       )
     }
   },

@@ -2,11 +2,23 @@ import { Check } from 'lucide-react'
 import { AgentIcon, type AgentCatalogEntry } from '@/lib/agent-catalog'
 import { cn } from '@/lib/utils'
 
-export function AgentSectionHeader({ label, count }: { label: string; count: number }) {
+export function AgentSectionHeader({
+  label,
+  count,
+  hint
+}: {
+  label: string
+  count: number
+  /** Muted line under the label, e.g. how this group opens. */
+  hint?: React.ReactNode
+}) {
   return (
-    <div className="flex shrink-0 items-center gap-1.5 text-xs font-medium text-muted-foreground">
-      <span>{label}</span>
-      <span className="tabular-nums text-muted-foreground/70">{count}</span>
+    <div className="shrink-0 space-y-0.5">
+      <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+        <span>{label}</span>
+        <span className="tabular-nums text-muted-foreground/70">{count}</span>
+      </div>
+      {hint ? <p className="text-[11px] text-muted-foreground/80">{hint}</p> : null}
     </div>
   )
 }

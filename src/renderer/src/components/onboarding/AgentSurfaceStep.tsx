@@ -1,12 +1,16 @@
 import {
   ArrowLeftRight,
+  ArrowUp,
   Check,
+  ChevronRight,
+  FileCode2,
   MessagesSquare,
+  Sparkles,
   SquareTerminal,
   type LucideIcon
 } from 'lucide-react'
 import { Trans } from 'react-i18next'
-import { Badge } from '@/components/ui/badge'
+import { cn } from '@/lib/utils'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { i18n, translate } from '@/i18n/i18n'
 import type { AgentSurface } from './use-onboarding-flow-types'
@@ -24,7 +28,7 @@ export function AgentSurfaceStep({
   noChatAgentDetected = false
 }: AgentSurfaceStepProps) {
   return (
-    <div className="space-y-5">
+    <div className="space-y-6">
       <RadioGroup
         value={agentSurface}
         onValueChange={(value) => {
@@ -38,10 +42,13 @@ export function AgentSurfaceStep({
           value="chat"
           icon={MessagesSquare}
           label={translate('components.onboarding.agentSurface.chat.label', 'Chat UI')}
-          badge={translate('components.onboarding.agentSurface.chat.badge', 'Experimental')}
           description={translate(
-            'components.onboarding.agentSurface.chat.opensInChat',
-            'Agents open in a chat with rendered messages and diffs. Agents without chat support, and SSH or WSL projects, open in a terminal.'
+            'components.onboarding.agentSurface.chat.description',
+            'Agents reply in a chat, with rendered messages and diffs.'
+          )}
+          note={translate(
+            'components.onboarding.agentSurface.chat.terminalFallback',
+            'Agents without chat support, and SSH or WSL projects, still open in a terminal.'
           )}
           warning={
             noChatAgentDetected
@@ -60,35 +67,27 @@ export function AgentSurfaceStep({
           label={translate('components.onboarding.agentSurface.terminal.label', 'Terminal')}
           description={translate(
             'components.onboarding.agentSurface.terminal.description',
-            "Each agent's own CLI in a terminal, exactly as it ships. Works with every CLI agent."
+            "Each agent's own CLI, exactly as it ships. Works with every CLI agent."
           )}
           preview={<TerminalPreview />}
           selected={agentSurface === 'terminal'}
         />
       </RadioGroup>
-      <div className="flex items-start gap-3 rounded-lg border border-border px-4 py-3">
-        <span className="grid size-8 shrink-0 place-items-center rounded-md bg-muted text-foreground">
-          <ArrowLeftRight className="size-4" />
-        </span>
-        <div className="min-w-0 space-y-0.5">
-          <div className="text-sm font-medium text-foreground">
-            {translate(
-              'components.onboarding.agentSurface.switchAnyTime',
-              'Not a permanent choice. Switch any time.'
+      <p className="flex items-center gap-2 px-1 text-xs text-muted-foreground">
+        <ArrowLeftRight className="size-3.5 shrink-0" />
+        <span>
+          <Trans
+            i18n={i18n}
+            defaults={translate(
+              'components.onboarding.agentSurface.switchNote',
+              'Not a permanent choice. Switch any time in <em>Settings → Chat UI</em>.'
             )}
-          </div>
-          <p className="text-xs leading-relaxed text-muted-foreground">
-            <Trans
-              i18n={i18n}
-              defaults={translate(
-                'components.onboarding.agentSurface.switchHow',
-                'Flip between Chat UI and Terminal in <em>Settings → Experimental</em>. Whichever you pick, any agent can still open in a terminal from the <em>+</em> menu.'
-              )}
-              components={{ em: <span className="font-medium text-foreground" /> }}
-            />
-          </p>
-        </div>
-      </div>
+            components={{
+              em: <span className="font-medium text-foreground" />
+            }}
+          />
+        </span>
+      </p>
     </div>
   )
 }
@@ -97,8 +96,8 @@ function SurfaceOption({
   value,
   icon: Icon,
   label,
-  badge,
   description,
+  note,
   warning,
   preview,
   selected
@@ -106,70 +105,133 @@ function SurfaceOption({
   value: AgentSurface
   icon: LucideIcon
   label: string
-  badge?: string
   description: string
+  note?: string
   warning?: string
   preview: React.ReactNode
   selected: boolean
 }) {
   return (
-    <RadioGroupItem value={value} variant="card">
+    <RadioGroupItem value={value} variant="media">
       <div
         aria-hidden
-        className="relative mb-3 h-32 overflow-hidden rounded-lg border border-border"
+        className="h-52 border-b border-border bg-muted/40 p-5 transition-colors group-data-[state=checked]:bg-muted/70"
       >
-        {preview}
-        {selected && (
-          <div className="absolute right-1.5 top-1.5 grid size-5 place-items-center rounded-full bg-foreground text-background shadow-sm">
-            <Check className="size-3" strokeWidth={3} />
-          </div>
-        )}
+        <div className="size-full overflow-hidden rounded-lg border border-border shadow-lg">
+          {preview}
+        </div>
       </div>
-      <div className="flex items-center gap-2 text-sm font-medium text-foreground">
-        <Icon className="size-4 text-muted-foreground" />
-        {label}
-        {badge ? <Badge variant="outline">{badge}</Badge> : null}
+      <div className="flex flex-1 flex-col gap-1.5 px-5 pt-4 pb-5">
+        <div className="flex items-center gap-2 text-sm font-medium text-foreground">
+          <Icon className="size-4 text-muted-foreground" />
+          {label}
+          <span
+            className={cn(
+              'ml-auto grid size-4 shrink-0 place-items-center rounded-full border transition-colors',
+              selected ? 'border-foreground bg-foreground text-background' : 'border-input'
+            )}
+          >
+            {selected ? <Check className="size-2.5" strokeWidth={3.5} /> : null}
+          </span>
+        </div>
+        <p className="text-xs leading-relaxed text-muted-foreground">{description}</p>
+        {note ? <p className="text-xs leading-relaxed text-muted-foreground/70">{note}</p> : null}
+        {warning ? <p className="text-xs text-status-warning-text">{warning}</p> : null}
       </div>
-      <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">{description}</p>
-      {warning ? <p className="mt-1.5 text-xs text-status-warning-text">{warning}</p> : null}
     </RadioGroupItem>
   )
 }
 
+// Code and CLI output, not prose: they stay untranslated, like the source and tools they mimic.
+const PREVIEW_FILE = 'api.ts'
+const TERMINAL_TITLE = 'zsh — claude'
+const TERMINAL_LINES: {
+  tone: 'prompt' | 'input' | 'step' | 'detail' | 'removed' | 'added'
+  text: string
+}[] = [
+  { tone: 'prompt', text: 'claude' },
+  { tone: 'input', text: '> add retry to fetchUser' },
+  { tone: 'step', text: 'Update(src/api.ts)' },
+  { tone: 'detail', text: '⎿ 1 addition, 1 removal' },
+  { tone: 'removed', text: '12 - return fetch(url)' },
+  { tone: 'added', text: '12 + return withRetry(fetch, url)' },
+  { tone: 'step', text: 'Done. Retries capped at 3.' }
+]
+
+// The previews contrast on purpose: chat is proportional type, bubbles and cards with no raw
+// code, while the terminal is nothing but monospace output.
 function ChatPreview() {
   return (
-    <div className="flex size-full flex-col gap-2 bg-chat-canvas p-3">
-      <div className="ml-auto h-4 w-2/5 rounded-md border border-chat-user-border bg-chat-user-surface" />
-      <div className="space-y-1.5">
-        <div className="h-1.5 w-11/12 rounded-sm bg-foreground/15" />
-        <div className="h-1.5 w-3/4 rounded-sm bg-foreground/15" />
+    <div className="flex size-full flex-col gap-3 bg-chat-canvas p-3.5 text-xs leading-snug">
+      <div className="ml-auto max-w-[80%] rounded-2xl rounded-br-md bg-foreground px-3 py-1.5 text-background">
+        {translate(
+          'components.onboarding.agentSurface.preview.userMessage',
+          'Add retry to fetchUser'
+        )}
       </div>
-      <div className="space-y-1 rounded-md border border-chat-code-border bg-chat-code-surface p-1.5">
-        <div className="h-1 w-2/3 rounded-sm bg-chat-diff-removed" />
-        <div className="h-1 w-4/5 rounded-sm bg-chat-diff-added" />
+      <div className="flex items-start gap-2">
+        <span className="grid size-5 shrink-0 place-items-center rounded-full bg-muted text-foreground">
+          <Sparkles className="size-3" />
+        </span>
+        <div className="min-w-0 flex-1 space-y-2">
+          <div className="pt-0.5 text-foreground">
+            {translate(
+              'components.onboarding.agentSurface.preview.agentMessage',
+              'Failed requests now retry up to 3 times.'
+            )}
+          </div>
+          <div className="flex w-fit items-center gap-1.5 rounded-full border border-chat-code-border bg-chat-code-surface py-1 pr-2 pl-2.5">
+            <FileCode2 className="size-3 text-muted-foreground" />
+            <span className="font-medium text-foreground">{PREVIEW_FILE}</span>
+            <span className="text-status-success">+1</span>
+            <span className="text-destructive">−1</span>
+            <ChevronRight className="size-3 text-muted-foreground" />
+          </div>
+        </div>
       </div>
-      <div className="mt-auto flex h-5 items-center gap-1.5 rounded-md border border-chat-composer-border bg-chat-composer-surface px-2">
-        <span className="h-1 flex-1 rounded-sm bg-foreground/10" />
-        <span className="size-2 rounded-full bg-foreground/40" />
+      <div className="mt-auto flex items-center gap-2 rounded-xl border border-chat-composer-border bg-chat-composer-surface py-1.5 pr-1.5 pl-3">
+        <span className="truncate text-muted-foreground">
+          {translate(
+            'components.onboarding.agentSurface.preview.composerPlaceholder',
+            'Ask a follow-up…'
+          )}
+        </span>
+        <span className="ml-auto grid size-5 place-items-center rounded-full bg-foreground text-background">
+          <ArrowUp className="size-3" strokeWidth={2.5} />
+        </span>
       </div>
     </div>
   )
 }
 
+const TERMINAL_TONE_CLASS: Record<(typeof TERMINAL_LINES)[number]['tone'], string> = {
+  prompt: '',
+  input: 'text-foreground',
+  step: '',
+  detail: 'pl-3 text-muted-foreground',
+  removed: 'pl-5 text-destructive',
+  added: 'pl-5 text-status-success'
+}
+
 function TerminalPreview() {
+  // Forced dark: a terminal reads as a terminal in either app theme.
   return (
-    <div className="flex size-full flex-col gap-1.5 bg-editor-surface p-3">
-      <div className="flex items-center gap-1.5">
-        <span className="size-1.5 rounded-full bg-status-success" />
-        <span className="h-1.5 w-1/4 rounded-sm bg-foreground/30" />
+    <div className="dark flex size-full flex-col bg-background font-mono text-[10px] leading-[1.6] text-foreground/75">
+      <div className="flex items-center gap-1 border-b border-border px-3 py-1.5">
+        <span className="size-1.5 rounded-full bg-foreground/25" />
+        <span className="size-1.5 rounded-full bg-foreground/25" />
+        <span className="size-1.5 rounded-full bg-foreground/25" />
+        <span className="mx-auto pr-6 text-muted-foreground">{TERMINAL_TITLE}</span>
       </div>
-      <div className="h-1.5 w-5/6 rounded-sm bg-foreground/15" />
-      <div className="h-1.5 w-2/3 rounded-sm bg-foreground/15" />
-      <div className="h-1.5 w-3/4 rounded-sm bg-foreground/15" />
-      <div className="h-1.5 w-1/2 rounded-sm bg-foreground/15" />
-      <div className="mt-auto flex items-center gap-1.5">
-        <span className="h-1.5 w-2 rounded-sm bg-foreground/40" />
-        <span className="h-2.5 w-1 bg-foreground/60" />
+      <div className="px-3 pt-1.5">
+        {TERMINAL_LINES.map((line, index) => (
+          <div key={index} className={cn('truncate', TERMINAL_TONE_CLASS[line.tone])}>
+            {line.tone === 'prompt' ? <span className="text-status-success">❯ </span> : null}
+            {line.tone === 'step' ? <span className="text-status-success">● </span> : null}
+            {line.text}
+          </div>
+        ))}
+        <span className="mt-0.5 inline-block h-2.5 w-1.5 bg-foreground/80" />
       </div>
     </div>
   )

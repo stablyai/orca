@@ -19383,7 +19383,7 @@
           "pickWhereAgentsOpen": "Pick where new agents open."
         },
         "agentChat": {
-          "markedChat": "Agents marked Chat open in Chat UI. The rest open in a terminal."
+          "subtitle": "Pick a Chat UI agent. Agents without chat support open in a terminal instead."
         },
         "agentTerminal": {
           "subtitle": "Orca works with every CLI agent. Choose the one you'll reach for most."
@@ -19442,10 +19442,11 @@
         "ownSettingsDescription": "Off uses each agent’s own settings. Individual agent permissions can override this switch."
       },
       "agentStep": {
-        "opensInTerminal": "Terminal",
         "worksInChat": "Works in Chat UI",
+        "chatAgents": "Chat UI agents",
+        "terminalAgents": "Available as terminal agents",
+        "terminalAgentsHint": "No Chat UI support, so these fall back to a terminal.",
         "chatAvailable": "Chat available",
-        "opensAsChat": "Chat",
         "agentsOpenIn": "Agents open in",
         "terminalUi": "Terminal UI",
         "noAgentsForChat": "<em>No agents found on your PATH.</em> Chat UI works with {{agents}}. Install one, or continue and add an agent later.",
@@ -19455,22 +19456,26 @@
         "terminalTipHow": "Show how to start an agent in a terminal",
         "terminalTip": "You can also start any agent in a terminal from the <em>+</em> menu.",
         "terminalTipCaption": "Click <em>+</em> in the tab bar, then pick an agent marked <em>(CLI)</em>. If a chat agent's CLI is installed, hover its row and click the terminal icon to use the CLI.",
-        "chatTip": "Want chat too? Turn on <em>Chat UI</em> in <em>Settings → Experimental</em> any time.",
+        "chatTip": "Want chat too? Turn it on any time in <em>Settings → Chat UI</em>.",
         "turnOnChat": "Turn on now"
       },
       "agentSurface": {
         "chat": {
-          "badge": "Experimental",
           "label": "Chat UI",
-          "opensInChat": "Agents open in a chat with rendered messages and diffs. Agents without chat support, and SSH or WSL projects, open in a terminal.",
+          "description": "Agents reply in a chat, with rendered messages and diffs.",
+          "terminalFallback": "Agents without chat support, and SSH or WSL projects, still open in a terminal.",
           "noneDetected": "None of your detected agents work in Chat UI."
         },
         "terminal": {
           "label": "Terminal",
-          "description": "Each agent's own CLI in a terminal, exactly as it ships. Works with every CLI agent."
+          "description": "Each agent's own CLI, exactly as it ships. Works with every CLI agent."
         },
-        "switchAnyTime": "Not a permanent choice. Switch any time.",
-        "switchHow": "Flip between Chat UI and Terminal in <em>Settings → Experimental</em>. Whichever you pick, any agent can still open in a terminal from the <em>+</em> menu."
+        "switchNote": "Not a permanent choice. Switch any time in <em>Settings → Chat UI</em>.",
+        "preview": {
+          "userMessage": "Add retry to fetchUser",
+          "agentMessage": "Failed requests now retry up to 3 times.",
+          "composerPlaceholder": "Ask a follow-up…"
+        }
       },
       "launchDemo": {
         "userMessage": "Fix the flaky upload test",

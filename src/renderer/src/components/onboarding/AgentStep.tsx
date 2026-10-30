@@ -9,6 +9,8 @@ import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { isNativeChatDefaultFor } from '../../../../shared/structured-native-chat-launch-route'
 import { i18n, translate } from '@/i18n/i18n'
 import { openAppHttpLink } from '@/lib/app-http-link-open'
+import { useScrollEdgeFades } from '@/lib/use-scroll-edge-fades'
+import { cn } from '@/lib/utils'
 import type { AgentSurface } from './use-onboarding-flow-types'
 import { AgentPickerButton, AgentSectionHeader } from './AgentPickerButton'
 import { YoloPermissionsControl } from './YoloPermissionsControl'
@@ -18,7 +20,7 @@ import {
   NoChatAgentsNotice,
   TerminalFitNotice,
   TerminalModeChatTip,
-  agentSurfaceDetail
+  chatAvailableDetail
 } from './AgentStepSurfaceSections'
 
 const NO_CHAT_AGENTS: readonly TuiAgent[] = []
@@ -56,6 +58,7 @@ export function AgentStep({
   onYoloPermissionsChange
 }: AgentStepProps) {
   const agentCatalog = getAgentCatalog()
+  const gridFades = useScrollEdgeFades<HTMLElement>()
   const chatMode = agentSurface === 'chat'
   // Chat runs only on native installs; an agent found only in WSL opens in a terminal.
   const opensAsChat = (id: TuiAgent): boolean =>
@@ -79,8 +82,15 @@ export function AgentStep({
         (agent) => chatAgents.includes(agent.id) && !availableDetected.has(agent.id)
       )
     : []
-  const primary = hasDetected ? detected : chatMode ? [] : agentCatalog.slice(0, 6)
-  const listed = new Set([...primary, ...worksInChat].map((agent) => agent.id))
+  // Chat UI mode groups agents by where they open instead of labeling every tile.
+  const chatSection = chatMode
+    ? noChatAgents
+      ? worksInChat
+      : detected.filter((agent) => opensAsChat(agent.id))
+    : []
+  const terminalSection = chatMode ? detected.filter((agent) => !opensAsChat(agent.id)) : []
+  const primary = chatMode ? [] : hasDetected ? detected : agentCatalog.slice(0, 6)
+  const listed = new Set([...primary, ...chatSection, ...terminalSection].map((agent) => agent.id))
   const fallbackRest = agentCatalog.filter((agent) => !listed.has(agent.id))
   // Placeholders until detection settles, so labels and the auto-pick don't flip under the pointer.
   const showSkeleton = agentSurface !== undefined && isDetecting && !hasDetected
@@ -119,7 +129,7 @@ export function AgentStep({
       key={agent.id}
       agent={agent}
       selected={selectedAgent === agent.id}
-      detail={agentSurface ? agentSurfaceDetail(agentSurface, opensAsChat(agent.id)) : undefined}
+      detail={agentSurface === 'terminal' ? chatAvailableDetail(opensAsChat(agent.id)) : undefined}
       onClick={() => onSelect(agent.id, fromCollapsedSection)}
     />
   )
@@ -178,8 +188,12 @@ export function AgentStep({
         </div>
       )}
       <section
+        ref={gridFades.ref}
         data-agent-grid-scroll
-        className="scrollbar-sleek min-h-0 space-y-5 overflow-y-auto pr-1"
+        className={cn(
+          'scrollbar-sleek min-h-0 space-y-5 overflow-y-auto pr-1',
+          gridFades.className
+        )}
       >
         {showSkeleton ? (
           <div className="grid grid-cols-2 gap-2.5 md:grid-cols-3" aria-busy="true">
@@ -213,17 +227,36 @@ export function AgentStep({
                 </div>
               </div>
             )}
-            {worksInChat.length > 0 && (
+            {chatSection.length > 0 && (
+              <div className="space-y-3">
+                <AgentSectionHeader
+                  label={
+                    noChatAgents
+                      ? translate('components.onboarding.agentStep.worksInChat', 'Works in Chat UI')
+                      : translate('components.onboarding.agentStep.chatAgents', 'Chat UI agents')
+                  }
+                  count={chatSection.length}
+                />
+                <div className="grid grid-cols-2 gap-2.5 md:grid-cols-3">
+                  {chatSection.map((agent) => renderTile(agent, false))}
+                </div>
+              </div>
+            )}
+            {terminalSection.length > 0 && (
               <div className="space-y-3">
                 <AgentSectionHeader
                   label={translate(
-                    'components.onboarding.agentStep.worksInChat',
-                    'Works in Chat UI'
+                    'components.onboarding.agentStep.terminalAgents',
+                    'Available as terminal agents'
                   )}
-                  count={worksInChat.length}
+                  hint={translate(
+                    'components.onboarding.agentStep.terminalAgentsHint',
+                    'No Chat UI support, so these fall back to a terminal.'
+                  )}
+                  count={terminalSection.length}
                 />
                 <div className="grid grid-cols-2 gap-2.5 md:grid-cols-3">
-                  {worksInChat.map((agent) => renderTile(agent, false))}
+                  {terminalSection.map((agent) => renderTile(agent, false))}
                 </div>
               </div>
             )}

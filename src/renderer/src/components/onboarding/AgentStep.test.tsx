@@ -30,17 +30,27 @@ function render(
   )
 }
 
+const TERMINAL_SECTION = 'Available as terminal agents'
+
+/** Which Chat UI mode section a tile sits in. */
+function section(html: string, label: string): 'chat' | 'terminal' {
+  const at = html.indexOf(`title="${label}"`)
+  const terminalAt = html.indexOf(TERMINAL_SECTION)
+  return terminalAt !== -1 && at > terminalAt ? 'terminal' : 'chat'
+}
+
 function tile(html: string, label: string): string {
   const start = html.indexOf(`title="${label}"`)
   return html.slice(start, html.indexOf('</button>', start))
 }
 
 describe('AgentStep agent surfaces', () => {
-  it('labels where each detected agent opens in Chat UI mode', () => {
+  it('groups detected agents by where they open in Chat UI mode', () => {
     const html = render('chat', ['claude', 'aider'])
 
-    expect(tile(html, 'Claude')).toContain('Chat')
-    expect(tile(html, 'Aider')).toContain('Terminal')
+    expect(html).toContain('Chat UI agents')
+    expect(section(html, 'Claude')).toBe('chat')
+    expect(section(html, 'Aider')).toBe('terminal')
     expect(html).toContain('Agents open in')
   })
 
@@ -55,7 +65,9 @@ describe('AgentStep agent surfaces', () => {
     const html = render('chat', ['aider'])
 
     expect(html).toContain('None of your agents work in Chat UI')
-    expect(tile(html, 'Codex')).toContain('Chat')
+    expect(html).toContain('Works in Chat UI')
+    expect(section(html, 'Codex')).toBe('chat')
+    expect(section(html, 'Aider')).toBe('terminal')
     // One warning at a time: the per-agent note stays hidden.
     expect(html).not.toContain('Aider</span> opens in a terminal')
   })
@@ -71,7 +83,7 @@ describe('AgentStep agent surfaces', () => {
   it('uses native Chat installations even when the terminal inventory belongs to WSL', () => {
     const html = render('chat', ['aider'], 'claude', ['claude'])
 
-    expect(tile(html, 'Claude')).toContain('Chat')
+    expect(section(html, 'Claude')).toBe('chat')
     expect(html).not.toContain('None of your agents work in Chat UI')
     expect(html).not.toContain('isn&#x27;t on your PATH')
     expect(html).not.toContain('Install instructions')
@@ -91,7 +103,7 @@ describe('AgentStep agent surfaces', () => {
     })
 
     expect(route).toBe('terminal-tui')
-    expect(tile(html, 'Claude')).toContain('Terminal')
+    expect(section(html, 'Claude')).toBe('terminal')
     expect(html).toContain('opens in a terminal')
     expect(html).not.toContain('None of your agents work in Chat UI')
   })
@@ -99,7 +111,6 @@ describe('AgentStep agent surfaces', () => {
   it('keeps missing WSL installation guidance for a native-only provider set to Terminal', () => {
     const html = render('chat', ['aider'], 'claude', ['claude'], { claude: false })
 
-    expect(tile(html, 'Claude')).toContain('Terminal')
     expect(html).toContain('Install instructions')
     expect(html).not.toContain('None of your agents work in Chat UI')
   })
