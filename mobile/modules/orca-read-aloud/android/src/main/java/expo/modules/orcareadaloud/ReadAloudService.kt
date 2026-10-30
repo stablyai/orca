@@ -150,9 +150,9 @@ class ReadAloudService : Service() {
         action(R.drawable.orca_read_aloud_stop_off, "Nothing to stop", null)
       },
       if (autoReadPaused) {
-        action(R.drawable.orca_read_aloud_auto_read_off, "Resume auto-read", controlIntent(1, ACTION_TOGGLE_AUTO_READ))
+        action(R.drawable.orca_read_aloud_auto_read_play, "Resume auto-read", controlIntent(1, ACTION_TOGGLE_AUTO_READ))
       } else {
-        action(R.drawable.orca_read_aloud_auto_read, "Pause auto-read", controlIntent(1, ACTION_TOGGLE_AUTO_READ))
+        action(R.drawable.orca_read_aloud_auto_read_pause, "Pause auto-read", controlIntent(1, ACTION_TOGGLE_AUTO_READ))
       }
     )
     // The monochrome icon expo-notifications generates from app.json, else the launcher icon.
