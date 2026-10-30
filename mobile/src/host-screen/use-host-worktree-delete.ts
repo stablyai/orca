@@ -24,13 +24,17 @@ type ArchiveHookDecision =
 // Keep the clients the delete started on, so a host switch cannot redirect a pending approval.
 type RowClients = { rowClient: RpcClient; desktopClient: RpcClient }
 
+// Delete Anyway's explicit waiver for a failed hook, carried through the trust prompt.
+type ArchiveHookWaiver = { allowFailedArchiveHook?: true }
+
 export type ArchiveHookTrustRequest = RowClients & {
   item: Worktree
   prompt: OrcaHookTrustPrompt
   trust: PersistedTrustedOrcaHooks
+  waiver: ArchiveHookWaiver
 }
 
-export type ArchiveHookFailure = { item: Worktree; message: string; rowClient: RpcClient }
+export type ArchiveHookFailure = RowClients & { item: Worktree; message: string }
 
 // Desktop's ensureHooksConfirmed('archive'): a script that cannot be inspected or checked against trust does not run.
 async function decideArchiveHookRun(
@@ -102,20 +106,25 @@ export function useHostWorktreeDelete(args: {
     setLastKnownWorktrees(removeFromList)
   }, [])
   const restoreRow = useCallback((item: Worktree) => {
-    setWorktrees((prev) => [...prev, item])
-    setLastKnownWorktrees((prev) => [...prev, item])
+    // Server rows live in serverWorkspaces, not the desktop's lists; a poll may also have re-added the row.
+    if (item.hostId?.startsWith('runtime:')) {
+      return
+    }
+    const putBack = (list: Worktree[]) => [...removeWorktreeRow(list, item), item]
+    setWorktrees(putBack)
+    setLastKnownWorktrees(putBack)
   }, [])
 
   const removeWorktree = useCallback(
     async (
       item: Worktree,
-      rowClient: RpcClient,
-      hooks: { runHooks: boolean; allowFailedArchiveHook?: true }
+      clients: RowClients,
+      hooks: ArchiveHookWaiver & { runHooks: boolean }
     ) => {
       hideRow(item)
       try {
         const reply = await worktreeRemove.request(
-          rowClient,
+          clients.rowClient,
           { worktree: `id:${item.worktreeId}`, force: true, ...hooks },
           // The host runs the archive hook before it replies; outlast it as desktop does (#19334).
           { timeoutMs: worktreeRemovalReplyTimeoutMs(hooks.runHooks) }
@@ -123,7 +132,12 @@ export function useHostWorktreeDelete(args: {
         if (!worktreeRemove.interpret(reply).accepted) {
           restoreRow(item)
           if (!reply.ok && reply.error.code === ARCHIVE_HOOK_FAILED_REMOVAL_CODE) {
-            setArchiveHookFailure({ item, message: reply.error.message, rowClient })
+            setArchiveHookFailure({
+              rowClient: clients.rowClient,
+              desktopClient: clients.desktopClient,
+              item,
+              message: reply.error.message
+            })
           }
         }
         void fetchWorktrees()
@@ -134,23 +148,25 @@ export function useHostWorktreeDelete(args: {
     [fetchWorktrees, hideRow, restoreRow]
   )
 
-  const handleDeleteWorktree = useCallback(
-    async (item: Worktree) => {
-      const rowClient = clientForRow(item)
-      if (!client || !rowClient) {
-        return
-      }
+  // Every attempt, Delete Anyway included, re-reads the script: it may have changed since approval.
+  const deleteWithArchiveTrust = useCallback(
+    async (item: Worktree, clients: RowClients, waiver: ArchiveHookWaiver) => {
       // Hide at once, as before trust was asked; the row returns if the delete is cancelled.
       hideRow(item)
+      // Count each server-owned repo once: an always-trust must not cover a same-id repo on another host.
+      const serverRepos = new Map(
+        serverWorkspaces.worktrees.map((row) => [
+          `${row.hostId}\0${row.repoId}`,
+          { id: row.repoId }
+        ])
+      )
       const decision = await decideArchiveHookRun({
-        rowClient,
-        desktopClient: client,
-        // Count server-owned copies too: an always-trust must not cover a same-id repo on another host.
-        repos: [...desktopRepos, ...serverWorkspaces.worktrees.map((row) => ({ id: row.repoId }))],
+        ...clients,
+        repos: [...desktopRepos, ...serverRepos.values()],
         item
       })
       if (decision.kind !== 'ask') {
-        await removeWorktree(item, rowClient, { runHooks: decision.kind === 'run' })
+        await removeWorktree(item, clients, { runHooks: decision.kind === 'run', ...waiver })
         return
       }
       // One prompt at a time; a later delete waiting on trust is left undone.
@@ -159,23 +175,24 @@ export function useHostWorktreeDelete(args: {
         return
       }
       setArchiveTrustRequest({
+        ...clients,
         item,
         prompt: decision.prompt,
         trust: decision.trust,
-        rowClient,
-        desktopClient: client
+        waiver
       })
     },
-    [
-      client,
-      clientForRow,
-      desktopRepos,
-      hideRow,
-      removeWorktree,
-      restoreRow,
-      serverWorkspaces,
-      setArchiveTrustRequest
-    ]
+    [desktopRepos, hideRow, removeWorktree, restoreRow, serverWorkspaces, setArchiveTrustRequest]
+  )
+
+  const handleDeleteWorktree = useCallback(
+    async (item: Worktree) => {
+      const rowClient = clientForRow(item)
+      if (client && rowClient) {
+        await deleteWithArchiveTrust(item, { rowClient, desktopClient: client }, {})
+      }
+    },
+    [client, clientForRow, deleteWithArchiveTrust]
   )
 
   const approveArchiveTrust = useCallback(
@@ -202,7 +219,7 @@ export function useHostWorktreeDelete(args: {
         setArchiveTrustBusy(false)
         setArchiveTrustRequest(null)
       }
-      await removeWorktree(request.item, request.rowClient, { runHooks: true })
+      await removeWorktree(request.item, request, { runHooks: true, ...request.waiver })
     },
     [
       archiveTrustBusy,
@@ -220,7 +237,7 @@ export function useHostWorktreeDelete(args: {
       return
     }
     setArchiveTrustRequest(null)
-    void removeWorktree(request.item, request.rowClient, { runHooks: false })
+    void removeWorktree(request.item, request, { runHooks: false })
   }, [archiveTrustBusy, archiveTrustRequest, removeWorktree, setArchiveTrustRequest])
 
   const cancelArchiveTrust = useCallback(() => {
@@ -230,15 +247,14 @@ export function useHostWorktreeDelete(args: {
     }
   }, [archiveTrustBusy, archiveTrustRequest, restoreRow, setArchiveTrustRequest])
 
-  // Desktop's Delete Anyway: rerun the hook with an explicit waiver for its failure.
+  // Desktop's Delete Anyway: rerun the trusted hook with an explicit waiver for its failure.
   const deleteDespiteArchiveHookFailure = useCallback(() => {
     if (archiveHookFailure) {
-      void removeWorktree(archiveHookFailure.item, archiveHookFailure.rowClient, {
-        runHooks: true,
+      void deleteWithArchiveTrust(archiveHookFailure.item, archiveHookFailure, {
         allowFailedArchiveHook: true
       })
     }
-  }, [archiveHookFailure, removeWorktree])
+  }, [archiveHookFailure, deleteWithArchiveTrust])
 
   const dismissArchiveHookFailure = useCallback(() => setArchiveHookFailure(null), [])
 

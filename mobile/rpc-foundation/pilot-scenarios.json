@@ -8058,6 +8058,51 @@
           "id": "delete-anyway"
         },
         {
+          "complete": "repo.hooks#2",
+          "params": {
+            "repo": "id:repo-1"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "hasHooksFile": true,
+              "hooks": {
+                "scripts": {
+                  "archive": "make clean"
+                }
+              },
+              "setupRunPolicy": "run-by-default",
+              "source": "orca.yaml",
+              "setupConfig": null,
+              "archiveTrust": {
+                "contentHash": "archive-hash-1",
+                "scriptContent": "make clean"
+              }
+            }
+          }
+        },
+        {
+          "complete": "ui.get#2",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "ui": {
+                "trustedOrcaHooks": {
+                  "repo-1": {
+                    "archive": {
+                      "contentHash": "archive-hash-1",
+                      "approvedAt": 1767225600000
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
           "complete": "worktree.rm#2",
           "params": {
             "worktree": "id:wt-1",
