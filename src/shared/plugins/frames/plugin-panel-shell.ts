@@ -1,4 +1,4 @@
-import { EDITOR_METHODS, FRAME_EVENTS } from './plugin-frame-bridge'
+import { EDITOR_METHODS, FRAME_EVENTS, PANEL_METHODS } from './plugin-frame-bridge'
 import { PLUGIN_ERROR_CODES, PLUGIN_PROTOCOL_VERSION } from './plugin-protocol'
 import { PLUGIN_HOST_API_MAJOR } from '../workers/plugin-host-api-major'
 import { PLUGIN_HOST_API_MINOR, pluginHostMethodsFor } from '../workers/plugin-host-api'
@@ -66,6 +66,7 @@ function frameApiScript(surface: PluginFrameSurface): string {
     codes: PLUGIN_ERROR_CODES,
     events: FRAME_EVENTS,
     editor: EDITOR_METHODS,
+    panel: PANEL_METHODS,
     tokensStyleId: PANEL_SHELL_TOKENS_STYLE_ID
   }).replaceAll('<', '\\u003c')
   return `;(function (C) {
@@ -163,6 +164,16 @@ function frameApiScript(surface: PluginFrameSurface): string {
     on: on
   }
   Object.defineProperty(orca, 'api', { get: function () { return api }, enumerable: true })
+  if (C.surface === 'panel') {
+    orca.panel = Object.freeze({
+      postMessage: function (message, options) {
+        try { structuredClone(message) } catch (e) {
+          return Promise.reject(failure({ code: 'invalid_params', message: 'message cannot be sent: it is not cloneable JSON' }))
+        }
+        return call(C.panel.postMessage, message, options)
+      }
+    })
+  }
   if (C.surface === 'editor') {
     orca.document = Object.freeze({
       get: function () {

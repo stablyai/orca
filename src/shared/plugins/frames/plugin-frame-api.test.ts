@@ -14,6 +14,9 @@ type FrameOrca = {
     has: (method: string) => boolean
   }
   on: (event: string, handler: (payload: unknown) => unknown) => { dispose: () => void }
+  panel?: {
+    postMessage: (message: unknown, options?: { signal?: AbortSignal }) => Promise<unknown>
+  }
   document?: {
     get: () => Promise<unknown>
     onDidChange: (handler: (document: unknown) => void) => { dispose: () => void }
@@ -136,6 +139,70 @@ describe('window.orca', () => {
     })
     expect(onTheme).toHaveBeenCalledTimes(1)
     expect(onTheme).toHaveBeenCalledWith({ colorScheme: 'dark' })
+  })
+})
+
+describe('window.orca.panel', () => {
+  it('posts the message as a panel.postMessage request and resolves with the worker reply', async () => {
+    const { orca, fromHost, posted } = mountShell()
+    expect(Object.isFrozen(orca.panel)).toBe(true)
+    const reply = orca.panel!.postMessage({ type: 'getState' })
+    expect(posted().at(-1)).toEqual({
+      orca: 1,
+      kind: 'req',
+      id: 0,
+      method: 'panel.postMessage',
+      params: { type: 'getState' }
+    })
+    fromHost({ orca: 1, kind: 'res', id: 0, result: { playing: true } })
+    await expect(reply).resolves.toEqual({ playing: true })
+  })
+
+  it('rejects with the host error shape, including a worker-less plugin', async () => {
+    const { orca, fromHost } = mountShell()
+    const limited = orca.panel!.postMessage({ type: 'next' })
+    const missing = orca.panel!.postMessage({ type: 'next' })
+    fromHost({
+      orca: 1,
+      kind: 'res',
+      id: 0,
+      error: { code: 'rate_limited', message: 'slow', retryable: true, retryAfterMs: 250 }
+    })
+    fromHost({
+      orca: 1,
+      kind: 'res',
+      id: 1,
+      error: { code: 'unknown_method', message: 'no worker', retryable: false }
+    })
+    await expect(limited).rejects.toMatchObject({
+      code: 'rate_limited',
+      retryable: true,
+      retryAfterMs: 250
+    })
+    await expect(missing).rejects.toMatchObject({ code: 'unknown_method', retryable: false })
+  })
+
+  it('refuses a message that cannot be cloned before anything is sent', async () => {
+    const { orca, posted } = mountShell()
+    const sent = posted().length
+    await expect(orca.panel!.postMessage({ run: () => 1 })).rejects.toMatchObject({
+      code: 'invalid_params',
+      retryable: false
+    })
+    expect(posted()).toHaveLength(sent)
+  })
+
+  it('cancels through an AbortSignal like host calls', async () => {
+    const { orca, posted } = mountShell()
+    const controller = new AbortController()
+    const reply = orca.panel!.postMessage({ type: 'getState' }, { signal: controller.signal })
+    controller.abort()
+    await expect(reply).rejects.toMatchObject({ code: 'cancelled' })
+    expect(posted().at(-1)).toEqual({ orca: 1, kind: 'cancel', id: 0 })
+  })
+
+  it('is not offered to custom editors', () => {
+    expect(mountShell('editor').orca.panel).toBeUndefined()
   })
 })
 
