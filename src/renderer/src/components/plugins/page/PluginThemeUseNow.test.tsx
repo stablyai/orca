@@ -3,12 +3,12 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { normalizePluginThemeSettings } from '../../../../../shared/plugin-theme-settings'
 import { getDefaultSettings } from '../../../../../shared/constants'
-import { DEFAULT_TERMINAL_THEME_DARK } from '../../../../../shared/terminal-theme-selection'
 import type { GlobalSettings } from '../../../../../shared/global-settings-types'
 import type { PluginThemeRegistration } from '../../../../../shared/plugins/artifacts/plugin-theme-artifact'
 import type { PluginTerminalThemeRegistration } from '../../../../../shared/plugins/artifacts/plugin-terminal-theme-artifact'
 import type { PluginIconThemeMetadata } from '../../../../../shared/plugins/artifacts/plugin-icon-theme-artifact'
 import {
+  DEFAULT_TERMINAL_THEME_DARK,
   resolveConfiguredTerminalColors,
   selectTerminalTheme
 } from '../../../../../shared/terminal-theme-selection'
